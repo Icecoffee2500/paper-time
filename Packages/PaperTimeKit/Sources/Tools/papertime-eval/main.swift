@@ -52,6 +52,7 @@ guard arguments.count > 1 else {
 }
 let root = URL(fileURLWithPath: arguments[1])
 let online = arguments.contains("--online")
+let explain = arguments.contains("--explain")
 let email = arguments.firstIndex(of: "--email").flatMap { index -> String? in
     index + 1 < arguments.count ? arguments[index + 1] : nil
 }
@@ -104,6 +105,24 @@ for (index, url) in files.enumerated() {
         row.provenance = "\(result.provenance.source.rawValue): \(result.provenance.detail ?? "")"
         row.explanation = result.assessment?.explanation ?? ""
         row.bibKey = CitationKey.make(for: result.csl)
+        if explain, result.confidence != .verified {
+            print("      extracted: \(headers.first?.title ?? "-")")
+            if result.candidates.isEmpty {
+                print("      candidates: none")
+            }
+            for candidate in result.candidates.prefix(4) {
+                let similarity = candidate.csl.fullTitle.map {
+                    StringSimilarity.titleSimilarity($0, headers.first?.title ?? "")
+                } ?? 0
+                print(String(
+                    format: "      cand %.2f sim=%.2f [%@] %@",
+                    candidate.score,
+                    similarity,
+                    candidate.provenance.source.rawValue,
+                    candidate.csl.fullTitle ?? "-"
+                ))
+            }
+        }
         if let resolved = result.csl.fullTitle, let embedded = signals.embeddedTitle {
             row.disagreement = StringSimilarity.titleSimilarity(resolved, embedded)
         }

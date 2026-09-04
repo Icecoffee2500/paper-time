@@ -214,12 +214,37 @@ public actor MetadataResolver {
             )
         }
 
-        var pool: [(item: CSLItem, identifiers: Identifiers, source: Provenance.Source)] = []
-        var transient: (any Error)?
+        /// A registrar result, kept next to the guess that produced it.
+        ///
+        /// Scoring a result against a *different* guess is meaningless, and it
+        /// used to happen whenever the best guess's lookup failed and a weaker
+        /// one's succeeded: unrelated papers were then reported as "title match
+        /// 63%" against a title they had never been compared to.
+        struct Found {
+            var item: CSLItem
+            var identifiers: Identifiers
+            var source: Provenance.Source
+            var header: ExtractedHeader
+
+            init(
+                _ item: CSLItem,
+                _ identifiers: Identifiers,
+                _ source: Provenance.Source,
+                _ header: ExtractedHeader
+            ) {
+                self.item = item
+                self.identifiers = identifiers
+                self.source = source
+                self.header = header
+            }
+        }
+
+        var pool: [Found] = []
+        var transientByHeader: [Int: any Error] = [:]
 
         // Only the two strongest guesses are searched: every extra query costs
-        // a second of rate limit and adds candidates that dilute the ranking.
-        for header in headers.prefix(2) {
+        // a second of rate limit and adds noise to the ranking.
+        for (index, header) in headers.prefix(2).enumerated() {
             let authorHint = header.authors.first?.sortingSurname
             do {
                 let matches = try await crossref.search(
@@ -227,87 +252,82 @@ public actor MetadataResolver {
                     author: authorHint
                 )
                 pool += matches.map {
-                    ($0, Identifiers(doi: $0.doi), Provenance.Source.crossref)
+                    Found($0, Identifiers(doi: $0.doi), .crossref, header)
                 }
             } catch let error as NetworkService.Failure where error.isTransient {
-                transient = error
+                transientByHeader[index] = error
             } catch {}
 
             do {
                 let matches = try await openAlex.search(title: header.title)
                 pool += matches.map {
-                    ($0, Identifiers(doi: $0.doi, pmid: $0.pmid), Provenance.Source.openAlex)
+                    Found($0, Identifiers(doi: $0.doi, pmid: $0.pmid), .openAlex, header)
                 }
             } catch let error as NetworkService.Failure where error.isTransient {
-                transient = error
+                transientByHeader[index] = transientByHeader[index] ?? error
             } catch {}
 
-            if pool.contains(where: {
+            let confirmed = pool.contains { found in
                 MetadataVerifier.assess(
-                    candidate: $0.item,
-                    against: header,
+                    candidate: found.item,
+                    against: found.header,
                     identifierCameFromDocument: false
                 ).verdict == .verified
-            }) {
-                break
             }
+            if confirmed { break }
         }
 
-        guard let best = MetadataVerifier.best(
-            among: pool,
-            header: primary,
-            identifierCameFromDocument: false
-        ) else {
-            return ResolutionResult(
-                csl: fallbackItem(from: primary),
-                identifiers: Identifiers(),
-                confidence: .needsReview,
-                provenance: Provenance(
-                    source: primary.source,
-                    detail: transient == nil
-                        ? "no registrar match for the extracted title"
-                        : "could not reach the metadata services"
-                ),
-                transientFailure: transient
-            )
-        }
-
-        // Prefer the registrar record when confirmed; otherwise keep what was
-        // read from the paper and offer the registrar rows as candidates.
-        let ranked = pool
-            .map { entry in
+        let assessed = pool
+            .map { found in
                 (
-                    entry: entry,
+                    found: found,
                     assessment: MetadataVerifier.assess(
-                        candidate: entry.item,
-                        against: primary,
+                        candidate: found.item,
+                        against: found.header,
                         identifierCameFromDocument: false
                     )
                 )
             }
-            .sorted { $0.assessment.score > $1.assessment.score }
-            .prefix(4)
+            .sorted { MetadataVerifier.rank($0.assessment) > MetadataVerifier.rank($1.assessment) }
 
-        if best.assessment.verdict == .verified {
+        if let best = assessed.first, best.assessment.verdict == .verified {
             return ResolutionResult(
-                csl: best.item,
-                identifiers: best.identifiers,
+                csl: best.found.item,
+                identifiers: best.found.identifiers,
                 confidence: .verified,
-                provenance: Provenance(source: best.source, detail: "title match"),
+                provenance: Provenance(source: best.found.source, detail: "title match"),
                 assessment: best.assessment
             )
+        }
+
+        // Anything this far from the title is noise, not a candidate. Offering
+        // four unrelated papers to confirm is worse than offering none.
+        let plausible = assessed.filter {
+            $0.assessment.titleSimilarity >= MetadataVerifier.candidateFloor
+        }
+
+        // A lookup that failed for the strongest guess is the honest
+        // explanation, and it means the paper should be retried later rather
+        // than treated as unmatchable.
+        let primaryFailure = transientByHeader[0]
+        let detail: String = if plausible.isEmpty, let primaryFailure {
+            "could not reach the metadata services: \(primaryFailure.localizedDescription)"
+        } else if plausible.isEmpty {
+            "no registrar match for the extracted title"
+        } else {
+            "extracted from the document; a match needs confirming"
         }
 
         return ResolutionResult(
             csl: fallbackItem(from: primary),
             identifiers: Identifiers(),
             confidence: .needsReview,
-            provenance: Provenance(source: primary.source, detail: "extracted from the document"),
-            candidates: ranked.map {
-                candidate($0.entry.item, $0.entry.identifiers, $0.entry.source, $0.assessment)
+            provenance: Provenance(source: primary.source, detail: detail),
+            candidates: plausible.prefix(4).map {
+                candidate($0.found.item, $0.found.identifiers, $0.found.source, $0.assessment)
             },
-            assessment: best.assessment,
-            transientFailure: transient
+            assessment: plausible.first?.assessment,
+            transientFailure: plausible.isEmpty ? primaryFailure : nil
         )
     }
 

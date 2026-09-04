@@ -143,7 +143,7 @@ Paper Time/                         ← 사용자가 고른 클라우드 폴더
 | 파일 접근 | `FileManager`, `NSFileCoordinator`, security-scoped bookmark, `NSFileVersion` | iOS 폴더 접근은 `UIDocumentPickerViewController(forOpeningContentTypes: [.folder])` |
 | LLM | Foundation Models(온디바이스, 4096토큰) | 입력은 1페이지 상단 40줄로 제한. `SystemLanguageModel.default.availability` 확인 후 미지원이면 휴리스틱 |
 | OCR(v1) | Vision `RecognizeDocumentsRequest` | 온디바이스 |
-| 서지 API | doi.org, Crossref, OpenAlex, arXiv | 전부 무료·키 불필요. 직렬 큐 + 캐시 + 오프라인 재시도. `User-Agent`에 연락 메일 포함(Crossref polite pool) |
+| 서지 API | doi.org 콘텐츠 협상(무료), Crossref REST(무료, 익명은 초당 1회·과다 사용 시 429), arXiv(무료, 3초당 1회), **OpenAlex(2026년부터 검색 요청 종량제 — 무료 일일 한도 소진 시 429)** | doi.org·Crossref가 1차. OpenAlex는 보조로만 사용하고 한도 초과를 정상 상황으로 처리한다. 설정의 연락처 이메일을 채우면 Crossref polite pool로 라우팅되어 한도가 완화된다 |
 | BibTeX | 자체 직렬화(Bibliography 패키지) | 골든 파일 테스트 |
 | 배포 | Xcode 직접 설치(무료 계정) → 추후 TestFlight | iOS 7일 재서명 유의 |
 
@@ -243,6 +243,15 @@ collections.json    { collections: [{id,name,parentID,rule?}] }
 3. Bookends에서 `File > Export…`로 BibTeX 한 번 내보내 주면(첨부 경로 포함) 1주차에 정답 데이터 씨앗과 이전 기능 테스트에 바로 사용.
 
 ---
+
+## 8.4 서지 API에 관한 실측 주의사항 (2026-09-04)
+
+코퍼스 62편을 반복 측정하면서 확인된 사실이다. 계획 단계의 "전부 무료" 가정은 더 이상 정확하지 않다.
+
+- **OpenAlex 검색은 종량제로 전환되었다.** 무료 일일 예산을 소진하면 `429 Insufficient budget`을 반환하며 UTC 자정에 초기화된다. 따라서 OpenAlex는 보조 경로로만 쓰고, 한도 초과를 오류가 아닌 정상 상황으로 다뤄야 한다.
+- **Crossref는 익명 사용자를 공격적으로 스로틀한다.** 짧은 시간에 여러 번 전체 코퍼스를 돌리면 429가 지속된다. 설정에 연락처 이메일을 넣으면 polite pool로 라우팅되어 완화된다.
+- **arXiv API는 3초당 1회**이며 초과 시 즉시 "Rate exceeded"를 반환한다. 프리프린트는 arXiv API 대신 DataCite DOI(`10.48550/arXiv.<id>`)를 doi.org로 조회해 우회한다.
+- 위 세 가지 때문에 **정확도 측정은 API 한도가 회복된 상태에서만 유효하다.** 한도에 걸린 실행은 실제보다 낮은 확정률을 보고한다.
 
 ## 8.5 구현 현황 (2026-09-04 기준)
 

@@ -41,6 +41,9 @@ public enum MetadataVerifier {
     public static let strongTitleThreshold = 0.98
     /// A DOI printed on the paper only needs the title to be plausible.
     public static let identifierTitleThreshold = 0.80
+    /// Below this a search result is not a weaker candidate, it is a different
+    /// paper that happened to share some words.
+    public static let candidateFloor = 0.80
 
     public static func assess(
         candidate: CSLItem,
