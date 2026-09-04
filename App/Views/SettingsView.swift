@@ -75,7 +75,7 @@ struct SettingsView: View {
     // MARK: - Metadata
 
     private func metadataSection(settings: AppSettings) -> some View {
-        Section("Metadata") {
+        Section {
             Toggle("Resolve Metadata on Import", isOn: Bindable(settings).resolvesMetadataOnImport)
             LabeledContent("On-Device Extraction") {
                 Label {
@@ -85,6 +85,28 @@ struct SettingsView: View {
                         .accessibilityLabel("Information")
                 }
             }
+
+            TextField(
+                "Contact Email",
+                text: Bindable(settings).metadataContactEmail,
+                prompt: Text("optional")
+            )
+            #if os(iOS)
+            .textInputAutocapitalization(.never)
+            .keyboardType(.emailAddress)
+            #endif
+            .autocorrectionDisabled()
+        } header: {
+            Text("Metadata")
+        } footer: {
+            Text(
+                """
+                Crossref and OpenAlex give faster, more reliable service to \
+                requests that identify a contact address. Leaving this empty \
+                still works; lookups are just slower when many papers resolve \
+                at once. Your address is sent only to those services.
+                """
+            )
         }
     }
 

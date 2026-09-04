@@ -62,12 +62,14 @@ public final class LibraryModel {
         self.store = store
         self.location = location
         self.manifest = manifest
-        let network = NetworkService()
+        let contact = UserDefaults.standard.string(forKey: "metadataContactEmail")
+        let network = NetworkService(contactEmail: contact?.isEmpty == false ? contact : nil)
         // The on-device model is tried first where it exists and simply reports
         // itself unavailable elsewhere, so the same code path serves every
         // device the user owns.
         self.resolver = MetadataResolver(
             network: network,
+            contactEmail: contact?.isEmpty == false ? contact : nil,
             headerExtractor: CompositeHeaderExtractor([
                 OnDeviceHeaderExtractor(),
                 HeuristicHeaderExtractor(),

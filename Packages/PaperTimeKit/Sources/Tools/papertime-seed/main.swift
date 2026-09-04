@@ -10,6 +10,9 @@ import PaperCore
 //
 //   swift run papertime-seed <library folder> <pdf folder> [--offline]
 
+// Line-buffer so progress is visible when the output is redirected to a file.
+setvbuf(stdout, nil, _IOLBF, 0)
+
 let arguments = CommandLine.arguments
 guard arguments.count > 2 else {
     print("usage: papertime-seed <library folder> <pdf folder> [--offline]")

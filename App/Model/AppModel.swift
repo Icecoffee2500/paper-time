@@ -85,6 +85,13 @@ public final class AppModel {
 public final class AppSettings {
     @ObservationIgnored
     @AppStorage("resolveMetadataOnImport") public var resolvesMetadataOnImport = true
+    /// Optional address sent to Crossref and OpenAlex.
+    ///
+    /// Both services route requests that identify a contact into a faster,
+    /// more forgiving pool. Empty by default: the app must work without ever
+    /// disclosing who is using it.
+    @ObservationIgnored
+    @AppStorage("metadataContactEmail") public var metadataContactEmail = ""
     @ObservationIgnored
     @AppStorage("preferredPreprintStyle") public var preferredPreprintStyle = "eprint"
     @ObservationIgnored

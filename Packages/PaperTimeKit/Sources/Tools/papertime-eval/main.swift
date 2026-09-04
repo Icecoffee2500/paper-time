@@ -10,6 +10,11 @@ import PaperCore
 //
 //   swift run papertime-eval <folder> [--online] [--email you@example.com]
 
+// Swift block-buffers stdout when it is not a terminal, so a run redirected to
+// a log file shows nothing at all until it exits — which is exactly when the
+// progress would have been useful. Line buffering costs nothing here.
+setvbuf(stdout, nil, _IOLBF, 0)
+
 struct Row {
     var fileName: String
     var doi: String?
