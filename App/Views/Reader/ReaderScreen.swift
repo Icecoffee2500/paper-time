@@ -72,22 +72,23 @@ struct ReaderScreen: View {
     @ToolbarContentBuilder
     private func toolbar(_ session: DocumentSession) -> some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
-            Picker("Mode", selection: Binding(
-                get: { configuration.mode },
-                set: { newValue in
-                    configuration.mode = newValue
-                    configuration.showsToolPicker = newValue == .draw
-                }
-            )) {
-                ForEach(ReaderConfiguration.Mode.allCases) { mode in
-                    Label(mode.label, systemImage: mode.symbolName).tag(mode)
-                }
+            // A single toggle rather than a segmented control: there are only
+            // two states, and on an iPad's toolbar a two-segment picker with
+            // hidden labels reads as two unrelated icons.
+            Button {
+                configuration.mode = configuration.mode == .draw ? .read : .draw
+                configuration.showsToolPicker = configuration.mode == .draw
+            } label: {
+                Label(
+                    configuration.mode == .draw ? "Stop Drawing" : "Draw",
+                    systemImage: "pencil.tip.crop.circle"
+                )
+                .symbolVariant(configuration.mode == .draw ? .fill : .none)
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+            .help(configuration.mode == .draw ? "Switch back to reading" : "Draw with Apple Pencil")
             #if os(macOS)
-            // PencilKit has no canvas on the Mac, so the drawing mode would be
-            // a control that does nothing.
+            // PencilKit has no canvas on the Mac, so the control would do
+            // nothing there.
             .hidden()
             #endif
         }

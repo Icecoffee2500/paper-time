@@ -244,6 +244,27 @@ collections.json    { collections: [{id,name,parentID,rule?}] }
 
 ---
 
+## 8.5 구현 현황 (2026-09-04 기준)
+
+MVP 로드맵 1~7주차 항목이 구현되어 macOS/iOS 양쪽에서 빌드·실행되며, 패키지 테스트 98개가 통과한다.
+
+| 로드맵 | 상태 | 비고 |
+|---|---|---|
+| 1주 폴더 라이브러리·온보딩 | 완료 | 폴더 선택, 북마크, 스캔, 원자적 저장, 충돌 병합, 클라우드 감지 |
+| 2주 리더 | 완료 | PDFView 래퍼, 연속/단면/2쪽, 종이 톤, 페이지 위치 복원, Mac 메뉴·단축키 |
+| 3주 텍스트 마크업 | 완료 | 표준 PDF 주석으로 기록, iOS 꾹 눌러 메뉴, 노트 목록(외부 앱 주석도 표시) |
+| 4주 필기 | 완료 | 페이지별 PencilKit 오버레이, 좌표 변환(테스트 포함), Ink 주석 + 사이드카, 지연 저장, 평탄화 |
+| 5~6주 서지 파이프라인 | 완료 | 식별자 우선 → 내장 제목 → 타이포그래피 → 온디바이스 모델, 단방향 검증 |
+| 7주 BibTeX·이전 | 완료 | 대소문자 보호·이스케이프·키 규칙·미리보기, Bookends/Zotero 이전, 인용 스타일 7종 |
+| 8주 안정화 | 진행 중 | iPad 시뮬레이터 실사용 확인 완료, 실기기 검증 남음 |
+
+미구현(v1 이후로 이월): 참고문헌·그림 팝업, 포털/분할 보기, 주석 Markdown 내보내기, 스캔본 OCR.
+
+### 실기기에서 확인이 필요한 것
+- Apple Pencil 실제 필기감과 지연(시뮬레이터로는 검증 불가)
+- Google Drive iOS File Provider의 실제 동기화 지연과 오프라인 파일 동작
+- 두 기기 동시 편집 시 충돌 UI
+
 ## 8. 참고 자료
 
 - PDFKit/PencilKit: [Apryse PDFKit annotations](https://apryse.com/blog/ios/how-to-add-annotations-using-swift-and-pdfkit), [PDFKit Ink Annotations Tutorial](https://medium.com/better-programming/ios-pdfkit-ink-annotations-tutorial-4ba19b474dce), [Apple PDFAnnotationEditor sample](https://github.com/AppTyrant/PDFAnnotationEditor), [PencilKit→PDF 발표자료](https://speakerdeck.com/ras0q/handwritten-annotations-to-pdf-with-pencilkit)
