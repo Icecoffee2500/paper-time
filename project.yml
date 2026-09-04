@@ -1,0 +1,85 @@
+name: PaperTime
+options:
+  bundleIdPrefix: com.imtaeheon
+  createIntermediateGroups: true
+  deploymentTarget:
+    iOS: "26.0"
+    macOS: "26.0"
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_EMIT_LOC_STRINGS: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+
+packages:
+  PaperTimeKit:
+    path: Packages/PaperTimeKit
+
+targets:
+  PaperTime:
+    type: application
+    supportedDestinations: [iOS, macOS]
+    sources:
+      - path: App
+    dependencies:
+      - package: PaperTimeKit
+        product: PaperCore
+      - package: PaperTimeKit
+        product: LibraryStore
+      - package: PaperTimeKit
+        product: Bibliography
+      - package: PaperTimeKit
+        product: MetadataPipeline
+      - package: PaperTimeKit
+        product: InkEngine
+      - package: PaperTimeKit
+        product: PDFReader
+      - package: PaperTimeKit
+        product: Importers
+    info:
+      path: App/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: Paper Time
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        ITSAppUsesNonExemptEncryption: false
+        LSSupportsOpeningDocumentsInPlace: true
+        UIFileSharingEnabled: true
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~iphone:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: PDF Document
+            LSItemContentTypes: [com.adobe.pdf]
+            CFBundleTypeRole: Editor
+            LSHandlerRank: Alternate
+    entitlements:
+      path: App/Resources/PaperTime.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.files.user-selected.read-write: true
+        com.apple.security.network.client: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.imtaeheon.PaperTime
+        PRODUCT_NAME: Paper Time
+        GENERATE_INFOPLIST_FILE: NO
+        ENABLE_PREVIEWS: YES
+        SUPPORTS_MACCATALYST: NO
+        INFOPLIST_KEY_NSHumanReadableCopyright: ""
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor

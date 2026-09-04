@@ -1,0 +1,216 @@
+import LibraryStore
+import PaperCore
+import SwiftUI
+
+#if os(macOS)
+import AppKit
+#else
+import UIKit
+#endif
+
+/// The middle column: every paper in the current scope, searchable and sortable.
+struct PaperListView: View {
+    @Bindable var model: LibraryModel
+
+    var body: some View {
+        content
+            .searchable(text: $model.searchText, prompt: "Search titles, authors, venues")
+            .toolbar {
+                ToolbarItem(placement: .automatic) {
+                    sortMenu
+                }
+            }
+            .dropDestination(for: URL.self) { urls, _ in
+                let pdfURLs = urls.filter { $0.pathExtension.lowercased() == "pdf" }
+                guard !pdfURLs.isEmpty else { return false }
+                Task { await model.importDocuments(at: pdfURLs) }
+                return true
+            }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if model.papers.isEmpty {
+            ContentUnavailableView(
+                "No Papers Yet",
+                systemImage: "doc.badge.plus",
+                description: Text("Drag PDFs here, or use Add PDFs to build your library.")
+            )
+        } else if model.visiblePapers.isEmpty {
+            ContentUnavailableView.search(text: model.searchText)
+        } else {
+            List(model.visiblePapers, selection: $model.selectedPaperID) { paper in
+                PaperRow(paper: paper, model: model)
+            }
+        }
+    }
+
+    private var sortMenu: some View {
+        Menu {
+            Picker("Sort By", selection: $model.sortOrder) {
+                ForEach(LibraryModel.SortOrder.allCases) { order in
+                    Text(order.displayName).tag(order)
+                }
+            }
+            Divider()
+            Toggle("Ascending", isOn: $model.sortAscending)
+        } label: {
+            Label("Sort", systemImage: "arrow.up.arrow.down")
+        }
+    }
+}
+
+/// One row in the paper list.
+struct PaperRow: View {
+    let paper: LoadedPaper
+    let model: LibraryModel
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(paper.meta.displayTitle)
+                    .font(.headline)
+                    .lineLimit(2)
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                if !tags.isEmpty {
+                    HStack(spacing: 4) {
+                        ForEach(tags) { tag in
+                            Text(tag.name)
+                                .font(.footnote)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(tag.color.swiftUIColor.opacity(0.18), in: Capsule())
+                                .foregroundStyle(tag.color.swiftUIColor)
+                        }
+                    }
+                }
+            }
+            Spacer(minLength: 8)
+            trailingAccessories
+        }
+        .contextMenu { contextMenuContent }
+    }
+
+    private var subtitle: String {
+        var parts: [String] = []
+        if !paper.meta.displayAuthors.isEmpty { parts.append(paper.meta.displayAuthors) }
+        if let year = paper.meta.csl.year { parts.append(String(year)) }
+        if let venue = paper.meta.csl.containerTitle, !venue.isEmpty { parts.append(venue) }
+        return parts.joined(separator: " · ")
+    }
+
+    private var tags: [Tag] {
+        paper.meta.tagIDs.compactMap { model.tag(for: $0) }
+    }
+
+    @ViewBuilder
+    private var trailingAccessories: some View {
+        HStack(spacing: 6) {
+            Image(systemName: paper.state.readingStatus.symbolName)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel(readingStatusLabel)
+
+            if paper.state.isFavorite {
+                Image(systemName: "star.fill")
+                    .foregroundStyle(.yellow)
+                    .accessibilityLabel("Favorite")
+            }
+
+            if model.resolving.contains(paper.id) {
+                ProgressView()
+                    .controlSize(.small)
+                    .accessibilityLabel("Resolving metadata")
+            } else if needsReview {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .help("Metadata needs review")
+                    .accessibilityLabel("Metadata needs review")
+            }
+        }
+        .font(.subheadline)
+    }
+
+    private var needsReview: Bool {
+        paper.meta.confidence == .needsReview || paper.meta.confidence == .unparsed
+    }
+
+    private var readingStatusLabel: String {
+        switch paper.state.readingStatus {
+        case .unread: "Unread"
+        case .reading: "Reading"
+        case .read: "Read"
+        }
+    }
+
+    @ViewBuilder
+    private var contextMenuContent: some View {
+        Button {
+            model.selectedPaperID = paper.id
+        } label: {
+            Label("Open", systemImage: "book")
+        }
+
+        Button {
+            var state = paper.state
+            state.readingStatus = state.readingStatus == .read ? .unread : .read
+            Task { await model.update(state: state, for: paper.id) }
+        } label: {
+            Label(
+                paper.state.readingStatus == .read ? "Mark as Unread" : "Mark as Read",
+                systemImage: "checkmark.circle"
+            )
+        }
+
+        Button {
+            var state = paper.state
+            state.isFavorite.toggle()
+            Task { await model.update(state: state, for: paper.id) }
+        } label: {
+            Label(
+                paper.state.isFavorite ? "Remove from Favorites" : "Add to Favorites",
+                systemImage: "star"
+            )
+        }
+
+        Button {
+            copyToPasteboard(paper.meta.bibKey)
+        } label: {
+            Label("Copy BibTeX Key", systemImage: "doc.on.doc")
+        }
+
+        #if os(macOS)
+        Button {
+            NSWorkspace.shared.activateFileViewerSelecting([paper.documentURL])
+        } label: {
+            Label("Reveal in Finder", systemImage: "folder")
+        }
+        #endif
+
+        Button {
+            Task { await model.resolveMetadata(for: paper.id) }
+        } label: {
+            Label("Re-run Metadata", systemImage: "arrow.triangle.2.circlepath")
+        }
+
+        Divider()
+
+        Button(role: .destructive) {
+            Task { await model.moveToTrash(paper.id) }
+        } label: {
+            Label("Move to Trash", systemImage: "trash")
+        }
+    }
+
+    private func copyToPasteboard(_ string: String) {
+        #if os(macOS)
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(string, forType: .string)
+        #else
+        UIPasteboard.general.string = string
+        #endif
+    }
+}

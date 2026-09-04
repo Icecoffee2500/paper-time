@@ -1,0 +1,100 @@
+import Foundation
+import LibraryStore
+import PaperCore
+import SwiftUI
+
+/// Top-level application state: which library folder is open, and the model
+/// that reads it.
+///
+/// The app deliberately has no account and no server. A library is a folder the
+/// user chose, so "signing in" is picking that folder once per device.
+@MainActor
+@Observable
+public final class AppModel {
+    public enum Phase: Equatable {
+        case launching
+        case needsLibraryFolder
+        case ready
+        case failed(String)
+    }
+
+    public private(set) var phase: Phase = .launching
+    public private(set) var library: LibraryModel?
+    public var settings = AppSettings()
+
+    private let preference = LibraryLocationPreference()
+
+    public init() {}
+
+    /// Reopens the folder chosen on this device, if there is one.
+    public func restore() async {
+        guard let result = preference.load() else {
+            phase = .needsLibraryFolder
+            return
+        }
+        switch result {
+        case let .resolved(location), let .resolvedStale(location, _):
+            await open(location)
+        case let .unavailable(error):
+            // The folder may simply not be mounted yet, so this is a prompt to
+            // reconnect rather than a reason to forget the choice.
+            phase = .failed(
+                """
+                Paper Time can't reach its library folder\
+                \(preference.pathHint.map { " at \($0)" } ?? "").
+                \(error.localizedDescription)
+                """
+            )
+        }
+    }
+
+    /// Adopts a folder the user just picked.
+    public func adopt(folderAt url: URL) async {
+        let location = LibraryLocation.adopting(url)
+        do {
+            try preference.store(location)
+        } catch {
+            phase = .failed("That folder could not be remembered: \(error.localizedDescription)")
+            return
+        }
+        await open(location)
+    }
+
+    public func forgetLibrary() {
+        preference.clear()
+        library = nil
+        phase = .needsLibraryFolder
+    }
+
+    private func open(_ location: LibraryLocation) async {
+        let store = LibraryStore(location: location)
+        do {
+            let manifest = try await store.bootstrap()
+            let model = LibraryModel(store: store, location: location, manifest: manifest)
+            library = model
+            phase = .ready
+            await model.refresh()
+        } catch {
+            phase = .failed(error.localizedDescription)
+        }
+    }
+}
+
+/// User preferences that are per-device rather than per-library.
+@Observable
+public final class AppSettings {
+    @ObservationIgnored
+    @AppStorage("resolveMetadataOnImport") public var resolvesMetadataOnImport = true
+    @ObservationIgnored
+    @AppStorage("preferredPreprintStyle") public var preferredPreprintStyle = "eprint"
+    @ObservationIgnored
+    @AppStorage("protectCaseInBibTeX") public var protectsCase = true
+    @ObservationIgnored
+    @AppStorage("includeUnverifiedInExport") public var includesUnverifiedInExport = false
+    @ObservationIgnored
+    @AppStorage("readerPageMode") public var readerPageMode = "continuous"
+    @ObservationIgnored
+    @AppStorage("readerTint") public var readerTint = "none"
+
+    public init() {}
+}
