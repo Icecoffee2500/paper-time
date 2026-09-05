@@ -31,18 +31,59 @@ struct PaperListView: View {
     @ViewBuilder
     private var content: some View {
         if model.papers.isEmpty {
-            ContentUnavailableView(
-                "No Papers Yet",
-                systemImage: "doc.badge.plus",
-                description: Text("Drag PDFs here, or use Add PDFs to build your library.")
-            )
+            if model.looseDocuments.isEmpty {
+                ContentUnavailableView(
+                    "No Papers Yet",
+                    systemImage: "doc.badge.plus",
+                    description: Text("Drag PDFs here, or use Add PDFs to build your library.")
+                )
+            } else {
+                // Pointing the app at a folder that already holds PDFs is the
+                // obvious thing to do; landing on an empty library after doing
+                // it is not.
+                ContentUnavailableView {
+                    Label("Papers Found in This Folder", systemImage: "tray.and.arrow.down")
+                } description: {
+                    Text(looseDescription)
+                } actions: {
+                    Button("Add \(model.looseDocuments.count) PDFs") {
+                        Task { await model.adoptLooseDocuments() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+            }
         } else if model.visiblePapers.isEmpty {
             ContentUnavailableView.search(text: model.searchText)
         } else {
-            List(model.visiblePapers, selection: $model.selectedPaperID) { paper in
-                PaperRow(paper: paper, model: model)
+            List(selection: $model.selectedPaperID) {
+                if !model.looseDocuments.isEmpty {
+                    Section {
+                        Button {
+                            Task { await model.adoptLooseDocuments() }
+                        } label: {
+                            Label(
+                                "Add \(model.looseDocuments.count) more PDFs from this folder",
+                                systemImage: "tray.and.arrow.down"
+                            )
+                        }
+                    }
+                }
+                ForEach(model.visiblePapers) { paper in
+                    PaperRow(paper: paper, model: model)
+                        .tag(paper.id)
+                }
             }
         }
+    }
+
+    private var looseDescription: String {
+        let count = model.looseDocuments.count
+        let noun = count == 1 ? "PDF" : "PDFs"
+        return """
+            This folder already holds \(count) \(noun). Adding them files each one \
+            into its own folder here, with its bibliographic record beside it. \
+            The files stay in this folder — nothing is copied elsewhere or deleted.
+            """
     }
 
     private var sortMenu: some View {

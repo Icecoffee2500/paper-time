@@ -194,7 +194,8 @@ public actor LibraryStore {
     /// succeed offline and instantly, and the pipeline runs afterwards.
     public func importDocument(
         at source: URL,
-        knownDigests: [String: PaperFolder] = [:]
+        knownDigests: [String: PaperFolder] = [:],
+        movingSource: Bool = false
     ) throws -> ImportOutcome {
         let data = try FileOperations.read(contentsOf: source)
         let digest = FileOperations.sha256(of: data)
@@ -216,6 +217,12 @@ public actor LibraryStore {
         let pdfName = LibraryLayout.pdfFileName(originalFileName: originalName)
         let destination = folder.documentURL(fileName: pdfName)
         try FileOperations.write(data, to: destination)
+        if movingSource {
+            // The file was already inside this library, so copying it would
+            // leave two identical PDFs in the same tree. Nothing is deleted:
+            // the document now lives in its own paper folder.
+            try? FileManager.default.removeItem(at: source)
+        }
 
         let pageCount = PDFDocument(data: data)?.pageCount ?? 0
         var meta = PaperMeta(
@@ -237,6 +244,44 @@ public actor LibraryStore {
         try FileOperations.encodeAndWrite(state, to: folder.stateURL)
 
         return .imported(LoadedPaper(folder: folder, meta: meta, state: state))
+    }
+
+    /// PDFs that are inside the library folder but not yet part of a paper.
+    ///
+    /// Choosing a folder that already holds papers is the obvious thing to do,
+    /// and doing it used to produce an empty library: the folder became a
+    /// library root and its documents were left where they were.
+    public func looseDocumentURLs() -> [URL] {
+        // Symlinks make string prefixes unreliable: a temporary directory
+        // reached as /var/... is enumerated as /private/var/..., and the
+        // library's own documents were then reported as loose.
+        func normalised(_ url: URL) -> String {
+            url.resolvingSymlinksInPath().standardizedFileURL.path(percentEncoded: false)
+        }
+
+        let excluded = [
+            normalised(LibraryLayout.papersDirectoryURL(inLibrary: root)),
+            normalised(root.appending(path: "Trash", directoryHint: .isDirectory)),
+        ].map { $0.hasSuffix("/") ? $0 : $0 + "/" }
+
+        guard let enumerator = FileManager.default.enumerator(
+            at: root,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else { return [] }
+
+        var found: [URL] = []
+        while let item = enumerator.nextObject() as? URL {
+            let path = normalised(item)
+            let isExcluded = excluded.contains { path == String($0.dropLast()) || path.hasPrefix($0) }
+            if isExcluded {
+                enumerator.skipDescendants()
+                continue
+            }
+            guard item.pathExtension.lowercased() == "pdf" else { continue }
+            found.append(item)
+        }
+        return found.sorted { $0.lastPathComponent < $1.lastPathComponent }
     }
 
     // MARK: - Removal

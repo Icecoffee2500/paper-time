@@ -43,6 +43,8 @@ public final class LibraryModel {
     public private(set) var collections = CollectionSet()
     public private(set) var loadFailures: [String] = []
     public private(set) var isScanning = false
+    /// PDFs sitting in the library folder that are not part of a paper yet.
+    public private(set) var looseDocuments: [URL] = []
 
     public var scope: Scope = .all
     public var searchText = ""
@@ -91,6 +93,38 @@ public final class LibraryModel {
         }
         collections = (try? await store.loadCollections()) ?? CollectionSet()
         manifest = (try? await store.loadManifest()) ?? manifest
+        looseDocuments = await store.looseDocumentURLs()
+    }
+
+    /// Brings the PDFs already sitting in the library folder into the library.
+    ///
+    /// They are moved rather than copied: the file is already inside this
+    /// folder, so copying would leave two of everything.
+    @discardableResult
+    public func adoptLooseDocuments() async -> Int {
+        var digests: [String: PaperFolder] = [:]
+        for paper in papers where !paper.meta.file.importDigest.isEmpty {
+            digests[paper.meta.file.importDigest] = paper.folder
+        }
+
+        var added: [LoadedPaper] = []
+        for url in looseDocuments {
+            guard let outcome = try? await store.importDocument(
+                at: url,
+                knownDigests: digests,
+                movingSource: true
+            ) else { continue }
+            if case let .imported(paper) = outcome {
+                papers.append(paper)
+                added.append(paper)
+                digests[paper.meta.file.importDigest] = paper.folder
+            }
+        }
+        looseDocuments = await store.looseDocumentURLs()
+        for paper in added {
+            Task { await resolveMetadata(for: paper.id) }
+        }
+        return added.count
     }
 
     // MARK: - Presentation
