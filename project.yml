@@ -67,15 +67,13 @@ targets:
             LSItemContentTypes: [com.adobe.pdf]
             CFBundleTypeRole: Editor
             LSHandlerRank: Alternate
-    entitlements:
-      path: App/Resources/PaperTime.entitlements
-      properties:
-        com.apple.security.app-sandbox: true
-        com.apple.security.files.user-selected.read-write: true
-        com.apple.security.network.client: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.imtaeheon.PaperTime
+        # The sandbox keys are macOS-only. Applying them to an iOS build makes
+        # signing with a free Apple ID fail for no reason: iOS apps are always
+        # sandboxed and need no entitlement for the document picker or network.
+        CODE_SIGN_ENTITLEMENTS[sdk=macosx*]: App/Resources/PaperTime-macOS.entitlements
         PRODUCT_NAME: Paper Time
         GENERATE_INFOPLIST_FILE: NO
         ENABLE_PREVIEWS: YES
