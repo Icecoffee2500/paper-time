@@ -150,9 +150,19 @@ struct PaperRow: View {
     @ViewBuilder
     private var trailingAccessories: some View {
         HStack(spacing: 6) {
-            Image(systemName: paper.state.readingStatus.symbolName)
-                .foregroundStyle(.secondary)
-                .accessibilityLabel(readingStatusLabel)
+            // A button, not a label: the app should never decide on the user's
+            // behalf that opening a paper means they are reading it.
+            Button {
+                Task { await advanceReadingStatus() }
+            } label: {
+                Image(systemName: paper.state.readingStatus.symbolName)
+                    .foregroundStyle(paper.state.readingStatus == .read ? .green : .secondary)
+                    .contentTransition(.symbolEffect(.replace))
+            }
+            .buttonStyle(.plain)
+            .help("\(readingStatusLabel) — click to change")
+            .accessibilityLabel("Reading status: \(readingStatusLabel)")
+            .accessibilityHint("Changes to the next status")
 
             if paper.state.isFavorite {
                 Image(systemName: "star.fill")
@@ -184,6 +194,17 @@ struct PaperRow: View {
         case .reading: "Reading"
         case .read: "Read"
         }
+    }
+
+    /// Unread → Reading → Read → Unread.
+    private func advanceReadingStatus() async {
+        var state = paper.state
+        state.readingStatus = switch state.readingStatus {
+        case .unread: .reading
+        case .reading: .read
+        case .read: .unread
+        }
+        await model.update(state: state, for: paper.id)
     }
 
     @ViewBuilder

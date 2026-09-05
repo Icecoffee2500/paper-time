@@ -29,6 +29,10 @@ struct LibrarySidebar: View {
                     .tag(LibraryModel.Scope.all)
                 Label("Unread", systemImage: "circle")
                     .tag(LibraryModel.Scope.unread)
+                Label("Reading", systemImage: "circle.lefthalf.filled")
+                    .tag(LibraryModel.Scope.reading)
+                Label("Read", systemImage: "checkmark.circle")
+                    .tag(LibraryModel.Scope.read)
                 Label("Favorites", systemImage: "star")
                     .tag(LibraryModel.Scope.favorites)
                 if model.reviewCount > 0 {

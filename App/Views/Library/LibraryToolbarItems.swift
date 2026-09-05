@@ -1,7 +1,12 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// The library window's toolbar: import, bulk metadata resolution, refresh.
+/// The list column's toolbar.
+///
+/// Deliberately one button. Refreshing and re-running metadata resolution are
+/// occasional, already carry keyboard shortcuts, and live in the Library menu;
+/// keeping them here made a five-button row where the eye had nothing to
+/// latch on to.
 struct LibraryToolbarItems: ToolbarContent {
     let model: LibraryModel
 
@@ -24,27 +29,5 @@ struct LibraryToolbarItems: ToolbarContent {
             }
         }
 
-        ToolbarItem(placement: .automatic) {
-            Button {
-                Task { await model.resolveAllPending() }
-            } label: {
-                if model.resolutionQueueDepth > 0 {
-                    ProgressView()
-                        .controlSize(.small)
-                } else {
-                    Label("Resolve Metadata", systemImage: "wand.and.stars")
-                }
-            }
-            .accessibilityLabel("Resolve Metadata")
-            .disabled(model.resolutionQueueDepth > 0)
-        }
-
-        ToolbarItem(placement: .automatic) {
-            Button {
-                Task { await model.refresh() }
-            } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
-            }
-        }
     }
 }

@@ -9,13 +9,12 @@ import SwiftUI
 struct ReaderScreen: View {
     let library: LibraryModel
     let paper: LoadedPaper
+    let configuration: ReaderConfiguration
+    let link: ReaderLink
 
     @State private var session: DocumentSession?
-    @State private var configuration = ReaderConfiguration()
     @State private var currentPageIndex = 0
-    @State private var selection: PDFSelection?
     @State private var loadError: String?
-    @State private var showsMarkupList = false
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -37,6 +36,8 @@ struct ReaderScreen: View {
         }
         .task { await load() }
         .onDisappear {
+            link.session = nil
+            link.selection = nil
             Task { await saveAndClose() }
         }
         .onChange(of: scenePhase) { _, phase in
@@ -51,98 +52,16 @@ struct ReaderScreen: View {
             session: session,
             configuration: configuration,
             currentPageIndex: $currentPageIndex,
-            onSelectionChange: { selection = $0 }
+            onSelectionChange: { link.selection = $0 }
         )
         .ignoresSafeArea(edges: .bottom)
         .navigationTitle(paper.meta.displayTitle)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .toolbar { toolbar(session) }
         .safeAreaInset(edge: .bottom) { statusBar(session) }
-        .inspector(isPresented: $showsMarkupList) {
-            MarkupListView(session: session)
-                .inspectorColumnWidth(min: 260, ideal: 320)
-        }
         .onChange(of: currentPageIndex) { _, index in
             Task { await recordPosition(index) }
-        }
-    }
-
-    @ToolbarContentBuilder
-    private func toolbar(_ session: DocumentSession) -> some ToolbarContent {
-        ToolbarItem(placement: .primaryAction) {
-            // A single toggle rather than a segmented control: there are only
-            // two states, and on an iPad's toolbar a two-segment picker with
-            // hidden labels reads as two unrelated icons.
-            Button {
-                configuration.mode = configuration.mode == .draw ? .read : .draw
-                configuration.showsToolPicker = configuration.mode == .draw
-            } label: {
-                Label(
-                    configuration.mode == .draw ? "Stop Drawing" : "Draw",
-                    systemImage: "pencil.tip.crop.circle"
-                )
-                .symbolVariant(configuration.mode == .draw ? .fill : .none)
-            }
-            .help(configuration.mode == .draw ? "Switch back to reading" : "Draw with Apple Pencil")
-            #if os(macOS)
-            // PencilKit has no canvas on the Mac, so the control would do
-            // nothing there.
-            .hidden()
-            #endif
-        }
-
-        ToolbarItem {
-            Menu {
-                if selection != nil {
-                    Section("Selected Text") {
-                        ForEach(MarkupColor.allCases, id: \.self) { color in
-                            Button {
-                                addMarkup(.highlight, color: color, session: session)
-                            } label: {
-                                Label("Highlight \(color.displayName)", systemImage: "highlighter")
-                            }
-                        }
-                        Button {
-                            addMarkup(.underline, color: configuration.markupColor, session: session)
-                        } label: {
-                            Label("Underline", systemImage: "underline")
-                        }
-                        Button {
-                            addMarkup(
-                                .strikethrough,
-                                color: configuration.markupColor,
-                                session: session
-                            )
-                        } label: {
-                            Label("Strikethrough", systemImage: "strikethrough")
-                        }
-                    }
-                }
-                Section {
-                    Picker("Page Layout", selection: $configuration.layout) {
-                        ForEach(ReaderConfiguration.PageLayout.allCases) { layout in
-                            Label(layout.label, systemImage: layout.symbolName).tag(layout)
-                        }
-                    }
-                    Picker("Page Tint", selection: $configuration.tint) {
-                        ForEach(ReaderConfiguration.PageTint.allCases) { tint in
-                            Text(tint.label).tag(tint)
-                        }
-                    }
-                    Toggle("Draw with Finger", isOn: $configuration.fingerDrawing)
-                }
-                Section {
-                    Button {
-                        showsMarkupList.toggle()
-                    } label: {
-                        Label("Notes & Highlights", systemImage: "list.bullet.rectangle")
-                    }
-                }
-            } label: {
-                Label("Reader Options", systemImage: "textformat.size")
-            }
         }
     }
 
@@ -195,24 +114,18 @@ struct ReaderScreen: View {
 
     // MARK: - Actions
 
-    private func addMarkup(
-        _ kind: MarkupDescriptor.Kind,
-        color: MarkupColor,
-        session: DocumentSession
-    ) {
-        guard let selection else { return }
-        session.addMarkup(for: selection, kind: kind, color: color)
-        self.selection = nil
-    }
-
     private func load() async {
         loadError = nil
         do {
-            session = try await DocumentSession.open(paper: paper, store: library.store)
+            let opened = try await DocumentSession.open(paper: paper, store: library.store)
+            session = opened
+            link.session = opened
             currentPageIndex = paper.state.lastPageIndex
+            // Opening a paper records that it was opened, and nothing else.
+            // Whether it counts as "reading" is the user's call, made with the
+            // status button in the list.
             var state = paper.state
             state.lastOpenedAt = .now
-            if state.readingStatus == .unread { state.readingStatus = .reading }
             await library.update(state: state, for: paper.id)
         } catch {
             loadError = error.localizedDescription

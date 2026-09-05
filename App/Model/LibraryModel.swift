@@ -29,6 +29,8 @@ public final class LibraryModel {
     public enum Scope: Hashable, Sendable {
         case all
         case unread
+        case reading
+        case read
         case favorites
         case needsReview
         case collection(UUID)
@@ -164,7 +166,9 @@ public final class LibraryModel {
     private func matchesScope(_ paper: LoadedPaper) -> Bool {
         switch scope {
         case .all: true
-        case .unread: paper.state.readingStatus != .read
+        case .unread: paper.state.readingStatus == .unread
+        case .reading: paper.state.readingStatus == .reading
+        case .read: paper.state.readingStatus == .read
         case .favorites: paper.state.isFavorite
         case .needsReview:
             paper.meta.confidence == .needsReview || paper.meta.confidence == .unparsed

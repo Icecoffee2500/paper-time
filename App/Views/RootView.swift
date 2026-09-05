@@ -1,3 +1,4 @@
+import InkEngine
 import LibraryStore
 import SwiftUI
 #if canImport(UIKit)
@@ -41,10 +42,12 @@ struct RootView: View {
 /// app does not branch on device idiom here.
 struct LibraryWindow: View {
     let model: LibraryModel
-    @State private var columnVisibility = NavigationSplitViewVisibility.all
+    @Environment(AppModel.self) private var app
 
     var body: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
+        @Bindable var app = app
+
+        NavigationSplitView(columnVisibility: $app.columnVisibility) {
             LibrarySidebar(model: model)
                 .navigationTitle(model.manifest.displayName)
         } content: {
@@ -64,6 +67,8 @@ struct LibraryWindow: View {
         switch model.scope {
         case .all: "All Papers"
         case .unread: "Unread"
+        case .reading: "Reading"
+        case .read: "Read"
         case .favorites: "Favorites"
         case .needsReview: "Needs Review"
         case let .collection(id):
@@ -74,27 +79,47 @@ struct LibraryWindow: View {
     }
 }
 
-/// The reader, plus the bibliographic inspector and the actions that act on one
-/// paper at a time.
+/// The reader, plus the inspector and the actions that act on one paper.
+///
+/// Every toolbar control for this column is declared here, in the order it
+/// should appear: what you are doing to the page, then what you are doing with
+/// the paper, then the panel toggle at the trailing edge. Spreading them across
+/// nested views is what made the window look like a collection of unrelated
+/// buttons.
 struct PaperDetailColumn: View {
     let model: LibraryModel
+    @Environment(AppModel.self) private var app
 
-    // A Mac window is wide enough to show the details permanently; an iPad is
-    // not, so there the inspector opens on request.
-    #if os(macOS)
-    @State private var showsInspector = true
-    #else
-    @State private var showsInspector = false
-    #endif
+    @State private var configuration = ReaderConfiguration()
+    @State private var link = ReaderLink()
+    @State private var inspectorTab = InspectorTab.details
     @State private var showsExport = false
     @State private var showsMigration = false
     @State private var showsCitationStyles = false
 
+    enum InspectorTab: String, CaseIterable, Identifiable {
+        case details, notes
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .details: "Details"
+            case .notes: "Notes"
+            }
+        }
+    }
+
     var body: some View {
+        @Bindable var app = app
+
         Group {
             if let paper = model.selectedPaper {
-                ReaderScreen(library: model, paper: paper)
-                    .id(paper.id)
+                ReaderScreen(
+                    library: model,
+                    paper: paper,
+                    configuration: configuration,
+                    link: link
+                )
+                .id(paper.id)
             } else {
                 ContentUnavailableView(
                     "No Paper Selected",
@@ -103,56 +128,13 @@ struct PaperDetailColumn: View {
                 )
             }
         }
-        .inspector(isPresented: $showsInspector) {
-            if model.selectedPaper != nil {
-                PaperInspector(model: model)
-                    .inspectorColumnWidth(min: 280, ideal: 340, max: 460)
-            } else {
-                ContentUnavailableView("Nothing Selected", systemImage: "sidebar.right")
-            }
+        .inspector(isPresented: $app.showsInspector) {
+            inspector
+                .inspectorColumnWidth(min: 280, ideal: 340, max: 460)
         }
-        .toolbar {
-            ToolbarItem {
-                Menu {
-                    Button {
-                        showsExport = true
-                    } label: {
-                        Label("Export BibTeX…", systemImage: "square.and.arrow.up")
-                    }
-                    Button {
-                        showsCitationStyles = true
-                    } label: {
-                        Label("Citation Styles…", systemImage: "text.quote")
-                    }
-                    .disabled(model.selectedPaper == nil)
-                    Divider()
-                    Button {
-                        showsMigration = true
-                    } label: {
-                        Label(
-                            "Import Existing Library…",
-                            systemImage: "square.and.arrow.down.on.square"
-                        )
-                    }
-                } label: {
-                    Label("Share", systemImage: "square.and.arrow.up")
-                }
-            }
-            ToolbarItem {
-                Button {
-                    showsInspector.toggle()
-                } label: {
-                    Label("Bibliographic Details", systemImage: "sidebar.trailing")
-                }
-                .help("Show or hide bibliographic details")
-            }
-        }
-        .sheet(isPresented: $showsExport) {
-            BibTeXExportView()
-        }
-        .sheet(isPresented: $showsMigration) {
-            MigrationView(model: model)
-        }
+        .toolbar { toolbarContent }
+        .sheet(isPresented: $showsExport) { BibTeXExportView() }
+        .sheet(isPresented: $showsMigration) { MigrationView(model: model) }
         .sheet(isPresented: $showsCitationStyles) {
             if let paper = model.selectedPaper {
                 NavigationStack {
@@ -171,6 +153,147 @@ struct PaperDetailColumn: View {
         .onReceive(NotificationCenter.default.publisher(for: .paperTimeCopyCitationKey)) { _ in
             copySelectedCitationKey()
         }
+    }
+
+    // MARK: - Inspector
+
+    @ViewBuilder
+    private var inspector: some View {
+        if model.selectedPaper != nil {
+            VStack(spacing: 0) {
+                Picker("Inspector", selection: $inspectorTab) {
+                    ForEach(InspectorTab.allCases) { tab in
+                        Text(tab.label).tag(tab)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+
+                Divider()
+
+                switch inspectorTab {
+                case .details:
+                    PaperInspector(model: model)
+                case .notes:
+                    if let session = link.session {
+                        MarkupListView(session: session)
+                    } else {
+                        ContentUnavailableView(
+                            "Opening the Paper",
+                            systemImage: "hourglass"
+                        )
+                    }
+                }
+            }
+        } else {
+            ContentUnavailableView("Nothing Selected", systemImage: "sidebar.right")
+        }
+    }
+
+    // MARK: - Toolbar
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        #if os(iOS)
+        ToolbarItem {
+            Button {
+                configuration.mode = configuration.mode == .draw ? .read : .draw
+                configuration.showsToolPicker = configuration.mode == .draw
+            } label: {
+                Label(
+                    configuration.mode == .draw ? "Stop Drawing" : "Draw",
+                    systemImage: "pencil.tip.crop.circle"
+                )
+                .symbolVariant(configuration.mode == .draw ? .fill : .none)
+            }
+            .disabled(model.selectedPaper == nil)
+        }
+        #endif
+
+        ToolbarItem {
+            Menu {
+                Section("Highlight") {
+                    ForEach(MarkupColor.allCases, id: \.self) { color in
+                        Button(color.displayName) { addMarkup(.highlight, color: color) }
+                    }
+                }
+                Button("Underline") { addMarkup(.underline, color: configuration.markupColor) }
+                Button("Strikethrough") {
+                    addMarkup(.strikethrough, color: configuration.markupColor)
+                }
+            } label: {
+                Label("Mark Up", systemImage: "highlighter")
+            }
+            .disabled(!link.hasSelection)
+            .help("Mark up the selected text")
+        }
+
+        ToolbarItem {
+            Menu {
+                Picker("Page Layout", selection: $configuration.layout) {
+                    ForEach(ReaderConfiguration.PageLayout.allCases) { layout in
+                        Label(layout.label, systemImage: layout.symbolName).tag(layout)
+                    }
+                }
+                Picker("Page Tint", selection: $configuration.tint) {
+                    ForEach(ReaderConfiguration.PageTint.allCases) { tint in
+                        Text(tint.label).tag(tint)
+                    }
+                }
+                #if os(iOS)
+                Toggle("Draw with Finger", isOn: $configuration.fingerDrawing)
+                #endif
+            } label: {
+                Label("View Options", systemImage: "textformat.size")
+            }
+            .disabled(model.selectedPaper == nil)
+        }
+
+        ToolbarItem {
+            Menu {
+                Button {
+                    showsExport = true
+                } label: {
+                    Label("Export BibTeX…", systemImage: "square.and.arrow.up")
+                }
+                Button {
+                    showsCitationStyles = true
+                } label: {
+                    Label("Citation Styles…", systemImage: "text.quote")
+                }
+                .disabled(model.selectedPaper == nil)
+                Divider()
+                Button {
+                    showsMigration = true
+                } label: {
+                    Label(
+                        "Import Existing Library…",
+                        systemImage: "square.and.arrow.down.on.square"
+                    )
+                }
+            } label: {
+                Label("Share", systemImage: "square.and.arrow.up")
+            }
+        }
+
+        ToolbarItem(placement: .primaryAction) {
+            Button {
+                app.showsInspector.toggle()
+            } label: {
+                Label("Inspector", systemImage: "sidebar.trailing")
+            }
+            .help("Show or hide the inspector (Command-])")
+        }
+    }
+
+    // MARK: - Actions
+
+    private func addMarkup(_ kind: MarkupDescriptor.Kind, color: MarkupColor) {
+        guard let session = link.session, let selection = link.selection else { return }
+        session.addMarkup(for: selection, kind: kind, color: color)
+        link.selection = nil
     }
 
     /// Copies the citation key so it can be pasted straight into a manuscript.

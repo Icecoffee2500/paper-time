@@ -49,6 +49,18 @@ struct PaperTimeCommands: Commands {
         }
 
         CommandGroup(after: .toolbar) {
+            Button(model.isSidebarVisible ? "Hide Sidebar" : "Show Sidebar") {
+                model.toggleSidebar()
+            }
+            .keyboardShortcut("[", modifiers: .command)
+
+            Button(model.showsInspector ? "Hide Inspector" : "Show Inspector") {
+                model.showsInspector.toggle()
+            }
+            .keyboardShortcut("]", modifiers: .command)
+
+            Divider()
+
             Button("Next Page") {
                 NotificationCenter.default.post(name: .paperTimeNextPage, object: nil)
             }
@@ -59,15 +71,17 @@ struct PaperTimeCommands: Commands {
             }
             .keyboardShortcut(.upArrow, modifiers: .command)
 
+            // Back and forward through followed links. Command-bracket belongs
+            // to the sidebars here, so these take the option variant.
             Button("Back") {
                 NotificationCenter.default.post(name: .paperTimeGoBack, object: nil)
             }
-            .keyboardShortcut("[", modifiers: .command)
+            .keyboardShortcut("[", modifiers: [.command, .option])
 
             Button("Forward") {
                 NotificationCenter.default.post(name: .paperTimeGoForward, object: nil)
             }
-            .keyboardShortcut("]", modifiers: .command)
+            .keyboardShortcut("]", modifiers: [.command, .option])
         }
     }
 }

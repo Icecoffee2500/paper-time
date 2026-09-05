@@ -22,6 +22,23 @@ public final class AppModel {
     public private(set) var library: LibraryModel?
     public var settings = AppSettings()
 
+    /// Panel visibility lives here so the View menu can toggle it. A window's
+    /// own `@State` is unreachable from `Commands`.
+    public var columnVisibility = NavigationSplitViewVisibility.all
+    #if os(macOS)
+    public var showsInspector = true
+    #else
+    public var showsInspector = false
+    #endif
+
+    /// Hides the scope sidebar only. The paper list stays put: collapsing both
+    /// columns at once is a different, rarer intent than "give me more room".
+    public func toggleSidebar() {
+        columnVisibility = columnVisibility == .all ? .doubleColumn : .all
+    }
+
+    public var isSidebarVisible: Bool { columnVisibility == .all }
+
     private let preference = LibraryLocationPreference()
 
     public init() {}
