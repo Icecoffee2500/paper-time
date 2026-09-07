@@ -43,5 +43,6 @@ let package = Package(
         ),
         .testTarget(name: "ImportersTests", dependencies: ["Importers"]),
         .testTarget(name: "InkEngineTests", dependencies: ["InkEngine"]),
+        .testTarget(name: "PDFReaderTests", dependencies: ["PDFReader"]),
     ]
 )

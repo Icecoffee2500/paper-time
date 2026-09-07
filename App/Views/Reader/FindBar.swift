@@ -1,4 +1,5 @@
 import PDFKit
+import PDFReader
 import SwiftUI
 
 /// A Preview-style find bar: floats over the reader, searches `document`
@@ -97,6 +98,9 @@ struct FindBar: View {
         Binding(
             get: { finder.query },
             set: { newValue in
+                // A text field re-commits its value on submit, so Return would
+                // otherwise start a fresh search for text that has not changed.
+                guard newValue != finder.query else { return }
                 finder.query = newValue
                 Task { await finder.search(newValue, in: document) }
             }
