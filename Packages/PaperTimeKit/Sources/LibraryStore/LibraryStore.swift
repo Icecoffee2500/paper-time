@@ -2,19 +2,22 @@ import Foundation
 import PDFKit
 import PaperCore
 
-/// One paper as it exists on disk.
+/// One paper as it exists on disk: its record, and the PDF the record points at.
 public struct LoadedPaper: Hashable, Sendable, Identifiable {
     public var folder: PaperFolder
     public var meta: PaperMeta
     public var state: PaperState
+    /// Resolved when the paper is loaded, because the PDF lives beside the
+    /// library's other PDFs rather than inside the record folder.
+    public var documentURL: URL
 
     public var id: UUID { meta.id }
-    public var documentURL: URL { folder.documentURL(fileName: meta.file.name) }
 
-    public init(folder: PaperFolder, meta: PaperMeta, state: PaperState) {
+    public init(folder: PaperFolder, meta: PaperMeta, state: PaperState, documentURL: URL) {
         self.folder = folder
         self.meta = meta
         self.state = state
+        self.documentURL = documentURL
     }
 }
 
@@ -46,7 +49,9 @@ public actor LibraryStore {
     @discardableResult
     public func bootstrap(displayName: String = "Paper Time") throws -> LibraryManifest {
         try FileOperations.ensureDirectory(at: root)
-        try FileOperations.ensureDirectory(at: LibraryLayout.papersDirectoryURL(inLibrary: root))
+        try migrateFromFoldersPerPaperIfNeeded()
+        try FileOperations.ensureDirectory(at: LibraryLayout.supportDirectoryURL(inLibrary: root))
+        try FileOperations.ensureDirectory(at: LibraryLayout.recordsDirectoryURL(inLibrary: root))
 
         let manifestURL = LibraryLayout.manifestURL(inLibrary: root)
         if FileManager.default.fileExists(atPath: manifestURL.path(percentEncoded: false)) {
@@ -63,9 +68,12 @@ public actor LibraryStore {
 
     /// Whether the folder already contains a Paper Time library.
     public static func containsLibrary(at url: URL) -> Bool {
-        FileManager.default.fileExists(
+        let manager = FileManager.default
+        if manager.fileExists(
             atPath: LibraryLayout.manifestURL(inLibrary: url).path(percentEncoded: false)
-        )
+        ) { return true }
+        // A library written before the flat layout.
+        return manager.fileExists(atPath: url.appending(path: "library.json").path(percentEncoded: false))
     }
 
     public func loadManifest() throws -> LibraryManifest {
@@ -100,25 +108,90 @@ public actor LibraryStore {
         )
     }
 
-    // MARK: - Scanning
+    // MARK: - Migration
 
-    public func paperFolders() throws -> [PaperFolder] {
-        let papersURL = LibraryLayout.papersDirectoryURL(inLibrary: root)
-        guard FileManager.default.fileExists(atPath: papersURL.path(percentEncoded: false)) else {
-            return []
+    /// Moves a library written in the old shape — one folder per paper, each
+    /// holding the PDF — into the flat one.
+    ///
+    /// The PDFs come up to the library root under the names they were imported
+    /// with, and their records move into `.papertime`. Runs once; afterwards
+    /// there is no `papers/` directory at the root to find.
+    private func migrateFromFoldersPerPaperIfNeeded() throws {
+        let manager = FileManager.default
+        let oldPapers = root.appending(path: "papers", directoryHint: .isDirectory)
+        var isDirectory: ObjCBool = false
+        guard manager.fileExists(
+            atPath: oldPapers.path(percentEncoded: false),
+            isDirectory: &isDirectory
+        ), isDirectory.boolValue else { return }
+
+        try FileOperations.ensureDirectory(at: LibraryLayout.supportDirectoryURL(inLibrary: root))
+        try FileOperations.ensureDirectory(at: LibraryLayout.recordsDirectoryURL(inLibrary: root))
+
+        for oldFolder in (try? FileOperations.subdirectories(of: oldPapers)) ?? [] {
+            let contents = (try? manager.contentsOfDirectory(
+                at: oldFolder,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+            )) ?? []
+
+            guard let metaURL = contents.first(where: { $0.lastPathComponent == "meta.json" }),
+                  var meta = try? FileOperations.decode(PaperMeta.self, at: metaURL)
+            else { continue }
+
+            if let pdf = contents.first(where: { $0.pathExtension.lowercased() == "pdf" }) {
+                let preferred = meta.file.originalName.isEmpty
+                    ? pdf.lastPathComponent
+                    : meta.file.originalName
+                let name = LibraryLayout.availableFileName(for: preferred, inLibrary: root)
+                try? manager.moveItem(at: pdf, to: root.appending(path: name))
+                meta.file.relativePath = name
+                if meta.file.originalName.isEmpty { meta.file.originalName = name }
+            }
+
+            let record = PaperFolder(
+                url: LibraryLayout.recordURL(forPaper: meta.id, inLibrary: root)
+            )
+            try FileOperations.ensureDirectory(at: record.url)
+            try FileOperations.encodeAndWrite(meta, to: record.metadataURL)
+
+            if let stateURL = contents.first(where: { $0.lastPathComponent == "state.json" }) {
+                try? manager.moveItem(at: stateURL, to: record.stateURL)
+            }
+            if let inkURL = contents.first(where: { $0.lastPathComponent == "ink" }) {
+                try? manager.moveItem(at: inkURL, to: record.inkDirectoryURL)
+            }
+            try? manager.removeItem(at: oldFolder)
         }
-        return try FileOperations.subdirectories(of: papersURL).map(PaperFolder.init(url:))
+
+        // Move the old top-level manifests in, then drop the empty directory.
+        for name in [LibraryLayout.manifestFileName, LibraryLayout.collectionsFileName] {
+            let old = root.appending(path: name)
+            let new = LibraryLayout.supportDirectoryURL(inLibrary: root).appending(path: name)
+            guard manager.fileExists(atPath: old.path(percentEncoded: false)),
+                  !manager.fileExists(atPath: new.path(percentEncoded: false))
+            else { continue }
+            try? manager.moveItem(at: old, to: new)
+        }
+        try? manager.removeItem(at: oldPapers)
     }
 
-    /// Loads every paper, skipping folders that cannot be read.
-    ///
-    /// A folder still syncing, or one a person dropped in by hand, must not
-    /// stop the rest of the library from opening — the failures are reported
-    /// rather than thrown.
+    // MARK: - Scanning
+
+    /// Every record in the library.
+    public func recordFolders() throws -> [PaperFolder] {
+        let records = LibraryLayout.recordsDirectoryURL(inLibrary: root)
+        guard FileManager.default.fileExists(atPath: records.path(percentEncoded: false)) else {
+            return []
+        }
+        return try FileOperations.subdirectories(of: records).map(PaperFolder.init(url:))
+    }
+
+    /// Loads every paper, skipping records that cannot be read.
     public func loadAll() throws -> (papers: [LoadedPaper], failures: [(URL, any Error)]) {
         var papers: [LoadedPaper] = []
         var failures: [(URL, any Error)] = []
-        for folder in try paperFolders() {
+        for folder in try recordFolders() {
             do {
                 papers.append(try load(folder))
             } catch {
@@ -129,9 +202,19 @@ public actor LibraryStore {
     }
 
     public func load(_ folder: PaperFolder) throws -> LoadedPaper {
-        let meta = try loadMeta(folder)
+        var meta = try loadMeta(folder)
         let state = (try? loadState(folder)) ?? PaperState()
-        return LoadedPaper(folder: folder, meta: meta, state: state)
+
+        var url = root.appending(path: meta.file.relativePath)
+        if !FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) {
+            // Renamed or moved outside the app. The digest still identifies it.
+            if let recovered = findDocument(matching: meta.file.importDigest) {
+                url = recovered
+                meta.file.relativePath = relativePath(of: recovered)
+                try? FileOperations.encodeAndWrite(meta, to: folder.metadataURL)
+            }
+        }
+        return LoadedPaper(folder: folder, meta: meta, state: state, documentURL: url)
     }
 
     public func loadMeta(_ folder: PaperFolder) throws -> PaperMeta {
@@ -142,6 +225,68 @@ public actor LibraryStore {
         try FileOperations.decode(PaperState.self, at: folder.stateURL)
     }
 
+    /// Every PDF in the library, wherever it sits under the root.
+    public func documentURLs() -> [URL] {
+        let support = Self.normalizedPath(LibraryLayout.supportDirectoryURL(inLibrary: root))
+        let trash = Self.normalizedPath(LibraryLayout.trashURL(inLibrary: root))
+
+        guard let enumerator = FileManager.default.enumerator(
+            at: root,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else { return [] }
+
+        var found: [URL] = []
+        while let item = enumerator.nextObject() as? URL {
+            let path = Self.normalizedPath(item)
+            if path == support || path.hasPrefix(support + "/")
+                || path == trash || path.hasPrefix(trash + "/") {
+                enumerator.skipDescendants()
+                continue
+            }
+            guard item.pathExtension.lowercased() == "pdf" else { continue }
+            found.append(item)
+        }
+        return found.sorted { $0.lastPathComponent < $1.lastPathComponent }
+    }
+
+    /// PDFs in the library that no record points at yet.
+    public func looseDocumentURLs() -> [URL] {
+        let claimed = Set(
+            ((try? recordFolders()) ?? [])
+                .compactMap { try? loadMeta($0) }
+                .map(\.file.relativePath)
+        )
+        return documentURLs().filter { !claimed.contains(relativePath(of: $0)) }
+    }
+
+    private func findDocument(matching digest: String) -> URL? {
+        guard !digest.isEmpty else { return nil }
+        return documentURLs().first { url in
+            (try? FileOperations.sha256(ofFileAt: url)) == digest
+        }
+    }
+
+    private func relativePath(of url: URL) -> String {
+        let rootPath = Self.normalizedPath(root)
+        let path = Self.normalizedPath(url)
+        guard path.hasPrefix(rootPath + "/") else { return url.lastPathComponent }
+        return String(path.dropFirst(rootPath.count + 1))
+    }
+
+    /// A comparable path: symlinks resolved, no trailing separator.
+    ///
+    /// A URL built with `directoryHint: .isDirectory` carries a trailing
+    /// slash, and comparing it against a file's path with a plain prefix test
+    /// silently fails — which is how a PDF already inside the library came to
+    /// be copied in again as "paper 2.pdf".
+    static func normalizedPath(_ url: URL) -> String {
+        var path = url.resolvingSymlinksInPath().standardizedFileURL
+            .path(percentEncoded: false)
+        while path.count > 1, path.hasSuffix("/") { path.removeLast() }
+        return path
+    }
+
     // MARK: - Saving with conflict resolution
 
     /// Saves metadata.
@@ -150,11 +295,6 @@ public actor LibraryStore {
     /// still matches it, nothing else has touched the record and the new value
     /// is written as-is. Only when disk and baseline differ has another device
     /// written concurrently, and only then is a merge appropriate.
-    ///
-    /// Comparing against the *outgoing* value instead — as this did at first —
-    /// means the merge runs on every save, because the caller has just changed
-    /// something. Combined with merge rules that could only add, that made it
-    /// impossible to clear a tag or unset a flag.
     @discardableResult
     public func save(
         meta: PaperMeta,
@@ -203,14 +343,15 @@ public actor LibraryStore {
         case duplicate(existing: LoadedPaper)
     }
 
-    /// Copies a PDF into the library and creates its folder.
+    /// Brings a PDF into the library.
     ///
-    /// Metadata resolution is deliberately not part of this step: importing must
-    /// succeed offline and instantly, and the pipeline runs afterwards.
+    /// A file from outside is copied in under its own name; the original is
+    /// left alone. A file already inside the library is left exactly where it
+    /// is — only a record is created for it. Nothing is ever moved or renamed
+    /// on the user's behalf.
     public func importDocument(
         at source: URL,
-        knownDigests: [String: PaperFolder] = [:],
-        movingSource: Bool = false
+        knownDigests: [String: PaperFolder] = [:]
     ) throws -> ImportOutcome {
         let data = try FileOperations.read(contentsOf: source)
         let digest = FileOperations.sha256(of: data)
@@ -219,25 +360,24 @@ public actor LibraryStore {
             return .duplicate(existing: existing)
         }
 
-        let id = UUID()
-        let originalName = source.lastPathComponent
-        let folderURL = LibraryLayout.papersDirectoryURL(inLibrary: root)
-            .appending(
-                path: LibraryLayout.folderName(id: id, originalFileName: originalName),
-                directoryHint: .isDirectory
-            )
-        try FileOperations.ensureDirectory(at: folderURL)
-        let folder = PaperFolder(url: folderURL)
+        let alreadyInside = Self.normalizedPath(source)
+            .hasPrefix(Self.normalizedPath(root) + "/")
 
-        let pdfName = LibraryLayout.pdfFileName(originalFileName: originalName)
-        let destination = folder.documentURL(fileName: pdfName)
-        try FileOperations.write(data, to: destination)
-        if movingSource {
-            // The file was already inside this library, so copying it would
-            // leave two identical PDFs in the same tree. Nothing is deleted:
-            // the document now lives in its own paper folder.
-            try? FileManager.default.removeItem(at: source)
+        let destination: URL
+        if alreadyInside {
+            destination = source
+        } else {
+            let name = LibraryLayout.availableFileName(
+                for: source.lastPathComponent,
+                inLibrary: root
+            )
+            destination = root.appending(path: name)
+            try FileOperations.write(data, to: destination)
         }
+
+        let id = UUID()
+        let record = PaperFolder(url: LibraryLayout.recordURL(forPaper: id, inLibrary: root))
+        try FileOperations.ensureDirectory(at: record.url)
 
         let pageCount = PDFDocument(data: data)?.pageCount ?? 0
         var meta = PaperMeta(
@@ -245,83 +385,46 @@ public actor LibraryStore {
             confidence: .unparsed,
             provenance: Provenance(source: .heuristic, detail: "awaiting resolution"),
             file: PaperMeta.FileInfo(
-                name: pdfName,
+                relativePath: relativePath(of: destination),
                 byteSize: Int64(data.count),
                 pageCount: pageCount,
                 importDigest: digest,
-                originalName: originalName
+                originalName: source.lastPathComponent
             )
         )
         meta.csl.id = ""
-        try FileOperations.encodeAndWrite(meta, to: folder.metadataURL)
+        try FileOperations.encodeAndWrite(meta, to: record.metadataURL)
 
         let state = PaperState()
-        try FileOperations.encodeAndWrite(state, to: folder.stateURL)
+        try FileOperations.encodeAndWrite(state, to: record.stateURL)
 
-        return .imported(LoadedPaper(folder: folder, meta: meta, state: state))
-    }
-
-    /// PDFs that are inside the library folder but not yet part of a paper.
-    ///
-    /// Choosing a folder that already holds papers is the obvious thing to do,
-    /// and doing it used to produce an empty library: the folder became a
-    /// library root and its documents were left where they were.
-    public func looseDocumentURLs() -> [URL] {
-        // Symlinks make string prefixes unreliable: a temporary directory
-        // reached as /var/... is enumerated as /private/var/..., and the
-        // library's own documents were then reported as loose.
-        func normalised(_ url: URL) -> String {
-            url.resolvingSymlinksInPath().standardizedFileURL.path(percentEncoded: false)
-        }
-
-        let excluded = [
-            normalised(LibraryLayout.papersDirectoryURL(inLibrary: root)),
-            normalised(root.appending(path: "Trash", directoryHint: .isDirectory)),
-        ].map { $0.hasSuffix("/") ? $0 : $0 + "/" }
-
-        guard let enumerator = FileManager.default.enumerator(
-            at: root,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles, .skipsPackageDescendants]
-        ) else { return [] }
-
-        var found: [URL] = []
-        while let item = enumerator.nextObject() as? URL {
-            let path = normalised(item)
-            let isExcluded = excluded.contains { path == String($0.dropLast()) || path.hasPrefix($0) }
-            if isExcluded {
-                enumerator.skipDescendants()
-                continue
-            }
-            guard item.pathExtension.lowercased() == "pdf" else { continue }
-            found.append(item)
-        }
-        return found.sorted { $0.lastPathComponent < $1.lastPathComponent }
+        return .imported(
+            LoadedPaper(folder: record, meta: meta, state: state, documentURL: destination)
+        )
     }
 
     // MARK: - Removal
 
-    /// Moves a paper to the library's Trash folder.
+    /// Moves a paper's PDF to the library's Trash folder and drops its record.
     ///
     /// Never unlinks: annotations represent hours of a person's reading, and a
     /// mis-tap in a list must be recoverable without a backup.
-    public func moveToTrash(_ folder: PaperFolder) throws -> URL {
-        let trashURL = root.appending(path: "Trash", directoryHint: .isDirectory)
-        try FileOperations.ensureDirectory(at: trashURL)
+    @discardableResult
+    public func moveToTrash(_ paper: LoadedPaper) throws -> URL {
+        let trash = LibraryLayout.trashURL(inLibrary: root)
+        try FileOperations.ensureDirectory(at: trash)
 
-        var destination = trashURL.appending(
-            path: folder.url.lastPathComponent,
-            directoryHint: .isDirectory
+        let name = LibraryLayout.availableFileName(
+            for: paper.documentURL.lastPathComponent,
+            inLibrary: trash
         )
-        var attempt = 2
-        while FileManager.default.fileExists(atPath: destination.path(percentEncoded: false)) {
-            destination = trashURL.appending(
-                path: "\(folder.url.lastPathComponent) \(attempt)",
-                directoryHint: .isDirectory
-            )
-            attempt += 1
+        let destination = trash.appending(path: name)
+        if FileManager.default.fileExists(
+            atPath: paper.documentURL.path(percentEncoded: false)
+        ) {
+            try FileManager.default.moveItem(at: paper.documentURL, to: destination)
         }
-        try FileManager.default.moveItem(at: folder.url, to: destination)
+        try? FileManager.default.removeItem(at: paper.folder.url)
         return destination
     }
 
@@ -348,8 +451,7 @@ public actor LibraryStore {
         try FileManager.default.removeItem(at: url)
     }
 
-    /// Page indices that have a stored drawing, used to decide which pages need
-    /// a canvas when the reader opens.
+    /// Page indices that have a stored drawing.
     public func inkPageIndices(in folder: PaperFolder) -> [Int] {
         let contents = try? FileManager.default.contentsOfDirectory(
             at: folder.inkDirectoryURL,

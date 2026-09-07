@@ -21,36 +21,76 @@ public struct PaperMeta: Codable, Hashable, Sendable, Identifiable {
     public var file: FileInfo
     public var tagIDs: [UUID]
     public var collectionIDs: [UUID]
+    /// Set when this document belongs to another one — a supplement, an
+    /// appendix, a dataset sheet. It then travels with its parent instead of
+    /// standing in the library as a paper of its own.
+    public var parentID: UUID?
     public var addedAt: Date
     public var updatedAt: Date
     public var updatedBy: String
 
     public struct FileInfo: Codable, Hashable, Sendable {
-        /// File name inside the paper folder. Normally `paper.pdf`.
-        public var name: String
+        /// Where the PDF sits, relative to the library folder.
+        ///
+        /// The PDF keeps its own name in the library rather than being filed
+        /// into a folder named after its record, so this is how a record finds
+        /// its document. When it stops matching — the file was renamed or moved
+        /// outside the app — `importDigest` finds it again.
+        public var relativePath: String
         public var byteSize: Int64
         public var pageCount: Int
         /// SHA-256 of the file as it was imported.
         ///
-        /// Deliberately not refreshed when annotations are written: its only
-        /// job is to detect that the same PDF was imported twice.
+        /// Deliberately not refreshed when annotations are written: its jobs
+        /// are spotting the same PDF imported twice, and re-linking a record to
+        /// its document after a rename.
         public var importDigest: String
-        /// The name the file had when the user imported it, for display and
-        /// for matching against an existing reference-manager export.
+        /// The name the file had when it was imported, for display.
         public var originalName: String
 
         public init(
-            name: String = "paper.pdf",
+            relativePath: String = "",
             byteSize: Int64 = 0,
             pageCount: Int = 0,
             importDigest: String = "",
             originalName: String = ""
         ) {
-            self.name = name
+            self.relativePath = relativePath
             self.byteSize = byteSize
             self.pageCount = pageCount
             self.importDigest = importDigest
             self.originalName = originalName
+        }
+
+        /// Libraries written before the flat layout stored `name`, the file
+        /// name inside a per-paper folder.
+        private enum CodingKeys: String, CodingKey {
+            case relativePath, byteSize, pageCount, importDigest, originalName
+            case legacyName = "name"
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            byteSize = (try? container.decode(Int64.self, forKey: .byteSize)) ?? 0
+            pageCount = (try? container.decode(Int.self, forKey: .pageCount)) ?? 0
+            importDigest = (try? container.decode(String.self, forKey: .importDigest)) ?? ""
+            originalName = (try? container.decode(String.self, forKey: .originalName)) ?? ""
+            if let path = try? container.decode(String.self, forKey: .relativePath) {
+                relativePath = path
+            } else {
+                relativePath = (try? container.decode(String.self, forKey: .legacyName)) ?? ""
+            }
+        }
+
+        /// Written without the legacy key: a library that has been read once
+        /// is written back in the current shape.
+        public func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(relativePath, forKey: .relativePath)
+            try container.encode(byteSize, forKey: .byteSize)
+            try container.encode(pageCount, forKey: .pageCount)
+            try container.encode(importDigest, forKey: .importDigest)
+            try container.encode(originalName, forKey: .originalName)
         }
     }
 
@@ -66,6 +106,7 @@ public struct PaperMeta: Codable, Hashable, Sendable, Identifiable {
         file: FileInfo = FileInfo(),
         tagIDs: [UUID] = [],
         collectionIDs: [UUID] = [],
+        parentID: UUID? = nil,
         addedAt: Date = .now,
         updatedAt: Date = .now,
         updatedBy: String = DeviceIdentity.current
@@ -81,6 +122,7 @@ public struct PaperMeta: Codable, Hashable, Sendable, Identifiable {
         self.file = file
         self.tagIDs = tagIDs
         self.collectionIDs = collectionIDs
+        self.parentID = parentID
         self.addedAt = addedAt
         self.updatedAt = updatedAt
         self.updatedBy = updatedBy

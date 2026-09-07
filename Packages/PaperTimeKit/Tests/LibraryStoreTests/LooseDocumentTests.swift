@@ -45,7 +45,7 @@ struct LooseDocumentTests {
         #expect(loose.map(\.lastPathComponent) == ["first.pdf", "second.pdf"])
     }
 
-    @Test("PDFs in subfolders are found too, but the library's own files are not")
+    @Test("A PDF that already has a record is no longer offered")
     func searchesSubfoldersOnly() async throws {
         let root = try Self.makeTemporaryFolder()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -67,12 +67,11 @@ struct LooseDocumentTests {
         }
 
         let loose = await store.looseDocumentURLs()
-        #expect(loose.map(\.lastPathComponent) == ["nested.pdf", "top.pdf"])
-        #expect(!loose.contains { $0.path.contains("/papers/") })
+        #expect(loose.map(\.lastPathComponent) == ["nested.pdf"])
     }
 
-    @Test("Adopting a loose document moves it instead of leaving a duplicate")
-    func adoptingMovesTheFile() async throws {
+    @Test("Adopting a document already in the library leaves the file where it is")
+    func adoptingLeavesTheFileAlone() async throws {
         let root = try Self.makeTemporaryFolder()
         defer { try? FileManager.default.removeItem(at: root) }
 
@@ -81,18 +80,15 @@ struct LooseDocumentTests {
 
         let store = LibraryStore(root: root)
         try await store.bootstrap()
-        let outcome = try await store.importDocument(at: original, movingSource: true)
+        let outcome = try await store.importDocument(at: original)
 
         guard case let .imported(paper) = outcome else {
             Issue.record("expected the document to import")
             return
         }
-        #expect(!FileManager.default.fileExists(atPath: original.path(percentEncoded: false)))
-        #expect(
-            FileManager.default.fileExists(
-                atPath: paper.documentURL.path(percentEncoded: false)
-            )
-        )
+        // The point of the flat layout: the PDF is not filed away anywhere.
+        #expect(FileManager.default.fileExists(atPath: original.path(percentEncoded: false)))
+        #expect(paper.documentURL.lastPathComponent == "paper.pdf")
         #expect(paper.meta.file.pageCount == 1)
 
         let loose = await store.looseDocumentURLs()
@@ -113,8 +109,14 @@ struct LooseDocumentTests {
 
         let store = LibraryStore(root: root)
         try await store.bootstrap()
-        _ = try await store.importDocument(at: source)
+        let outcome = try await store.importDocument(at: source)
 
         #expect(FileManager.default.fileExists(atPath: source.path(percentEncoded: false)))
+        // Copied in under its own name, at the top of the library.
+        guard case let .imported(paper) = outcome else {
+            Issue.record("expected the document to import")
+            return
+        }
+        #expect(paper.documentURL == root.appending(path: "external.pdf"))
     }
 }

@@ -5,41 +5,59 @@ import PaperCore
 ///
 /// ```
 /// <library root>/
-/// ├── library.json
-/// ├── collections.json
-/// └── papers/
-///     └── 4F3A1C08-attention-is-all-you-need/
-///         ├── attention-is-all-you-need.pdf
-///         ├── meta.json
-///         ├── state.json
-///         └── ink/
-///             └── p0003.drawing
+/// ├── Attention Is All You Need.pdf     ← your PDFs, under their own names
+/// ├── 2403.18293v1.pdf
+/// └── .papertime/                        ← everything the app adds, out of sight
+///     ├── library.json
+///     ├── collections.json
+///     └── papers/
+///         └── 4F3A1C08-…/
+///             ├── meta.json
+///             ├── state.json
+///             └── ink/p0003.drawing
 /// ```
 ///
-/// The folder name is fixed when the paper is imported and is never changed
-/// afterwards, even when better metadata arrives. Renaming a folder reads as
-/// delete-plus-create to most sync engines, which risks losing annotations for
-/// a purely cosmetic gain; the display name comes from `meta.json` instead.
+/// The PDFs stay where a person would put them, under the names they already
+/// had. That is possible because highlights and ink are written into the PDF
+/// itself: the file alone carries everything you can see on the page, and the
+/// sidecars hold only what the app adds on top — the bibliographic record,
+/// reading state, and the pressure-accurate original of each drawing.
 public enum LibraryLayout {
+    /// Everything the app writes lives under this one hidden folder.
+    public static let supportDirectoryName = ".papertime"
     public static let manifestFileName = "library.json"
     public static let collectionsFileName = "collections.json"
     public static let papersDirectoryName = "papers"
     public static let metadataFileName = "meta.json"
     public static let stateFileName = "state.json"
     public static let inkDirectoryName = "ink"
-    /// Per-device scratch space. Never synced content the app depends on.
-    public static let supportDirectoryName = ".papertime"
+    public static let trashDirectoryName = "Trash"
+
+    public static func supportDirectoryURL(inLibrary root: URL) -> URL {
+        root.appending(path: supportDirectoryName, directoryHint: .isDirectory)
+    }
 
     public static func manifestURL(inLibrary root: URL) -> URL {
-        root.appending(path: manifestFileName)
+        supportDirectoryURL(inLibrary: root).appending(path: manifestFileName)
     }
 
     public static func collectionsURL(inLibrary root: URL) -> URL {
-        root.appending(path: collectionsFileName)
+        supportDirectoryURL(inLibrary: root).appending(path: collectionsFileName)
     }
 
-    public static func papersDirectoryURL(inLibrary root: URL) -> URL {
-        root.appending(path: papersDirectoryName, directoryHint: .isDirectory)
+    /// Where the per-paper records live.
+    public static func recordsDirectoryURL(inLibrary root: URL) -> URL {
+        supportDirectoryURL(inLibrary: root)
+            .appending(path: papersDirectoryName, directoryHint: .isDirectory)
+    }
+
+    public static func recordURL(forPaper id: UUID, inLibrary root: URL) -> URL {
+        recordsDirectoryURL(inLibrary: root)
+            .appending(path: id.uuidString, directoryHint: .isDirectory)
+    }
+
+    public static func trashURL(inLibrary root: URL) -> URL {
+        root.appending(path: trashDirectoryName, directoryHint: .isDirectory)
     }
 
     public static func inkFileName(pageIndex: Int) -> String {
@@ -48,34 +66,57 @@ public enum LibraryLayout {
 
     public static func pageIndex(fromInkFileName name: String) -> Int? {
         guard name.hasPrefix("p"), name.hasSuffix(".drawing") else { return nil }
-        let digits = name.dropFirst().dropLast(".drawing".count)
-        return Int(digits)
+        return Int(name.dropFirst().dropLast(".drawing".count))
     }
 
-    /// Builds the immutable folder name for a newly imported paper.
-    public static func folderName(id: UUID, originalFileName: String) -> String {
-        let prefix = id.uuidString.prefix(8)
-        let stem = (originalFileName as NSString).deletingPathExtension
-        let slug = Slug.make(from: stem, maxLength: 60)
-        return slug.isEmpty ? String(prefix) : "\(prefix)-\(slug)"
-    }
-
-    /// Builds the PDF's file name inside its folder.
+    /// The name a newly imported PDF takes inside the library.
     ///
-    /// A readable name matters because the user will meet this file in Finder,
-    /// the Files app, and any other PDF app they open it with.
-    public static func pdfFileName(originalFileName: String) -> String {
-        let stem = (originalFileName as NSString).deletingPathExtension
-        let slug = Slug.make(from: stem, maxLength: 80)
-        return slug.isEmpty ? "paper.pdf" : "\(slug).pdf"
+    /// The file keeps the name it arrived with. Only a collision forces a
+    /// change, and then it gains a numeric suffix the way Finder does, so the
+    /// name you recognise is still the name you see.
+    public static func availableFileName(
+        for originalName: String,
+        inLibrary root: URL,
+        fileManager: FileManager = .default
+    ) -> String {
+        let stem = (originalName as NSString).deletingPathExtension
+        let ext = (originalName as NSString).pathExtension
+        let suffix = ext.isEmpty ? "" : ".\(ext)"
+
+        var candidate = originalName
+        var counter = 2
+        while fileManager.fileExists(
+            atPath: root.appending(path: candidate).path(percentEncoded: false)
+        ) {
+            candidate = "\(stem) \(counter)\(suffix)"
+            counter += 1
+        }
+        return candidate
     }
 }
 
-/// Filesystem-safe name generation.
+/// One paper's record: the folder under `.papertime/papers/` that holds
+/// everything about a paper except the PDF itself.
+public struct PaperFolder: Hashable, Sendable {
+    public let url: URL
+
+    public init(url: URL) {
+        self.url = url
+    }
+
+    public var metadataURL: URL { url.appending(path: LibraryLayout.metadataFileName) }
+    public var stateURL: URL { url.appending(path: LibraryLayout.stateFileName) }
+    public var inkDirectoryURL: URL {
+        url.appending(path: LibraryLayout.inkDirectoryName, directoryHint: .isDirectory)
+    }
+
+    public func inkURL(pageIndex: Int) -> URL {
+        inkDirectoryURL.appending(path: LibraryLayout.inkFileName(pageIndex: pageIndex))
+    }
+}
+
+/// Filesystem-safe name generation, still used for the record folders.
 public enum Slug {
-    /// Lowercases, strips accents, and replaces every run of non-alphanumerics
-    /// with a single hyphen. Keeps the result short enough that the full path
-    /// stays well inside the limits of every sync provider we support.
     public static func make(from raw: String, maxLength: Int) -> String {
         let folded = raw.folding(
             options: [.diacriticInsensitive, .caseInsensitive, .widthInsensitive],
@@ -95,39 +136,5 @@ public enum Slug {
         }
         while result.hasSuffix("-") { result.removeLast() }
         return result
-    }
-}
-
-/// A single paper's folder, with the paths that live inside it.
-public struct PaperFolder: Hashable, Sendable {
-    public let url: URL
-
-    public init(url: URL) {
-        self.url = url
-    }
-
-    public var metadataURL: URL { url.appending(path: LibraryLayout.metadataFileName) }
-    public var stateURL: URL { url.appending(path: LibraryLayout.stateFileName) }
-    public var inkDirectoryURL: URL {
-        url.appending(path: LibraryLayout.inkDirectoryName, directoryHint: .isDirectory)
-    }
-
-    public func inkURL(pageIndex: Int) -> URL {
-        inkDirectoryURL.appending(path: LibraryLayout.inkFileName(pageIndex: pageIndex))
-    }
-
-    public func documentURL(fileName: String) -> URL {
-        url.appending(path: fileName)
-    }
-
-    /// Finds the PDF without trusting `meta.json`, used when the metadata file
-    /// is missing or unreadable.
-    public func discoverDocumentURL() -> URL? {
-        let contents = try? FileManager.default.contentsOfDirectory(
-            at: url,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
-        )
-        return contents?.first { $0.pathExtension.lowercased() == "pdf" }
     }
 }

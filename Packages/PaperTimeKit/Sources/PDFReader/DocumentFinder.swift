@@ -1,5 +1,5 @@
+import Observation
 import PDFKit
-import SwiftUI
 
 #if canImport(UIKit)
 import UIKit

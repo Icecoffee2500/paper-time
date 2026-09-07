@@ -129,6 +129,17 @@ struct PaperRow: View {
 
             Spacer(minLength: 8)
 
+            if !model.attachments(of: paper.id).isEmpty {
+                Label(
+                    "\(model.attachments(of: paper.id).count)",
+                    systemImage: "paperclip"
+                )
+                .labelStyle(.titleAndIcon)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .help("Has supplementary material")
+            }
+
             favoriteButton(paper)
 
             if model.resolving.contains(paper.id) {
@@ -145,8 +156,14 @@ struct PaperRow: View {
         .padding(.vertical, 2)
         .contentShape(.rect)
         .contextMenu { contextMenuContent(paper) }
-        // Dragging a paper onto a sidebar row files it there.
+        // Dragging a paper onto a sidebar row files it there; dropping one
+        // paper onto another attaches it as supplementary material.
         .draggable(PaperTransfer(id: paper.id, title: paper.meta.displayTitle))
+        .dropDestination(for: PaperTransfer.self) { items, _ in
+            guard let dropped = items.first, dropped.id != paper.id else { return false }
+            Task { await model.attach(dropped.id, to: paper.id) }
+            return true
+        }
     }
 
     /// A menu, not a cycling button: three states in a fixed order means two
@@ -244,6 +261,19 @@ struct PaperRow: View {
                 systemImage: paper.state.isFavorite ? "star.slash" : "star"
             )
         }
+
+        Menu("Attach To") {
+            ForEach(model.attachmentCandidates(for: paper.id).prefix(30)) { candidate in
+                Button(candidate.meta.displayTitle) {
+                    Task { await model.attach(paper.id, to: candidate.id) }
+                }
+            }
+        }
+        .disabled(
+            paper.meta.parentID != nil
+                || !model.attachments(of: paper.id).isEmpty
+                || model.attachmentCandidates(for: paper.id).isEmpty
+        )
 
         Divider()
 

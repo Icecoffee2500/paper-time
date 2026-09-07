@@ -63,6 +63,7 @@ private struct PaperInspectorForm: View {
                     candidatesSection(for: paper)
                 }
 
+                supplementsSection(for: paper)
                 detailsSection
                 AuthorListEditor(authors: $draft.author)
                 saveRevertSection
@@ -151,6 +152,66 @@ private struct PaperInspectorForm: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(.plain)
+            }
+        }
+    }
+
+    // MARK: - Supplements
+
+    @ViewBuilder
+    private func supplementsSection(for paper: LoadedPaper) -> some View {
+        if let parent = model.parent(of: paperID) {
+            Section("Belongs To") {
+                Button {
+                    model.selectedPaperID = parent.id
+                } label: {
+                    Label(parent.meta.displayTitle, systemImage: "doc.text")
+                }
+                .buttonStyle(.plain)
+                Button("Make a Paper of Its Own") {
+                    Task { await model.detach(paperID) }
+                }
+            }
+        } else {
+            let attachments = model.attachments(of: paperID)
+            if !attachments.isEmpty {
+                Section("Supplementary Material") {
+                    ForEach(attachments) { attachment in
+                        HStack {
+                            Button {
+                                model.selectedPaperID = attachment.id
+                            } label: {
+                                Label(
+                                    attachment.meta.displayTitle,
+                                    systemImage: "paperclip"
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            Spacer()
+                            Button("Detach") {
+                                Task { await model.detach(attachment.id) }
+                            }
+                            .buttonStyle(.borderless)
+                        }
+                    }
+                }
+            }
+
+            if let suggested = model.suggestedParent(for: paperID) {
+                Section {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("This looks like supplementary material.")
+                            .font(.subheadline)
+                        Text(suggested.meta.displayTitle)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        Button("Attach to This Paper") {
+                            Task { await model.attach(paperID, to: suggested.id) }
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                    .padding(.vertical, 2)
+                }
             }
         }
     }

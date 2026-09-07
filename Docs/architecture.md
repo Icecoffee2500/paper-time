@@ -3,20 +3,24 @@
 Companion to `PLAN.md`. This file records the decisions that are not obvious
 from reading the code, and the measurements behind them.
 
-## 1. The library is a folder, not a database
+## 1. The library is a folder of PDFs
 
-A Paper Time library is a directory the user picks once per device:
+A Paper Time library is a directory the user picks once per device. Their PDFs
+sit in it under their own names; everything the app adds lives in one hidden
+folder beside them.
 
 ```
 <library>/
-├── library.json          identity, tags
-├── collections.json      manual and smart collections
-└── papers/
-    └── 4F3A1C08-attention-is-all-you-need/
-        ├── attention-is-all-you-need.pdf
-        ├── meta.json     CSL-JSON record, confidence, identifiers
-        ├── state.json    reading position, status, rating, note
-        └── ink/p0003.drawing
+├── Attention Is All You Need.pdf
+├── 2403.18293v1.pdf
+└── .papertime/
+    ├── library.json          identity, tags
+    ├── collections.json      manual and smart collections
+    └── papers/
+        └── 4F3A1C08-…/       one record per paper
+            ├── meta.json     CSL-JSON record, confidence, identifiers, parent
+            ├── state.json    reading position, status, rating, note
+            └── ink/p0003.drawing
 ```
 
 Why a folder rather than SwiftData + CloudKit:
@@ -24,14 +28,23 @@ Why a folder rather than SwiftData + CloudKit:
 - A free Apple Developer account cannot use CloudKit entitlements at all.
 - The same code then supports iCloud Drive, Google Drive, Dropbox and anything
   else that presents a folder, with no per-provider integration.
-- The PDFs stay visible in Finder and Files, so the user is never locked in.
-  Deleting the app does not delete the library.
+- Opened in Finder the library looks like what it is — a folder of papers. The
+  app can be deleted and the reading survives.
+
+The first version filed each PDF into its own folder named after its record.
+That kept a paper's pieces together, but it meant the library no longer looked
+like a folder of papers, which is most of the reason for using files at all. It
+was replaced because highlights and ink are written into the PDF itself: the
+file alone carries everything visible on the page, so the sidecars hold only
+what the app adds on top and can live out of the way. A library in the old
+shape is migrated on open.
+
+A record finds its PDF through `meta.file.relativePath`. When that stops
+matching — the file was renamed or moved outside the app — the SHA-256 taken at
+import finds it again and the path is repaired.
 
 Consequences the code has to handle, and does:
 
-- **Folder names never change.** They are minted at import from the original
-  file name. Renaming reads as delete-plus-create to most sync engines, which
-  risks losing the ink sidecars for a cosmetic gain.
 - **Metadata and reading state are separate files.** `meta.json` changes rarely;
   `state.json` changes constantly. Splitting them means two devices rarely write
   the same bytes at the same time.
@@ -39,10 +52,15 @@ Consequences the code has to handle, and does:
   temporary file and `replaceItemAt`. A coordinated *read* is also what makes a
   cloud provider materialise a file that has been evicted — the same call works
   for iCloud and for any File Provider, which is why there is no provider code.
-- **Nothing is silently overwritten.** `save(meta:)` re-reads the file first and
-  merges: a hand-edited record beats an automatic one regardless of timestamps,
-  tags and collections are unioned rather than replaced, and reading progress
-  never moves backwards.
+- **A save is not a merge.** `save` takes the baseline the caller started from
+  and writes straight through when the file on disk still matches it. Comparing
+  against the outgoing value instead — as the first version did — makes every
+  save look like a conflict; combined with merge rules that could only add, that
+  made unfavouriting, un-reading and removing a tag impossible. On a real
+  conflict the newer write wins the record, except that a hand-edited record
+  beats an automatic one.
+- **Supplements belong to their paper.** A record can carry a `parentID`, and
+  the library lists only the papers that stand on their own.
 
 ## 2. Annotations are written into the PDF
 

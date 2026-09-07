@@ -115,8 +115,19 @@ public enum LibraryMigrator {
                     source: .importedBibTeX,
                     detail: "imported from your previous library"
                 )
-                let saved = try await store.save(meta: meta, in: paper.folder)
-                imported.append(LoadedPaper(folder: paper.folder, meta: saved, state: paper.state))
+                let saved = try await store.save(
+                    meta: meta,
+                    in: paper.folder,
+                    baseline: paper.meta
+                )
+                imported.append(
+                    LoadedPaper(
+                        folder: paper.folder,
+                        meta: saved,
+                        state: paper.state,
+                        documentURL: paper.documentURL
+                    )
+                )
             } catch {
                 failures.append("\(url.lastPathComponent): \(error.localizedDescription)")
             }

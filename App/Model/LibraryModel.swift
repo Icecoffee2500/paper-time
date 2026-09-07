@@ -98,10 +98,10 @@ public final class LibraryModel {
         looseDocuments = await store.looseDocumentURLs()
     }
 
-    /// Brings the PDFs already sitting in the library folder into the library.
+    /// Gives the PDFs already sitting in the library folder a record.
     ///
-    /// They are moved rather than copied: the file is already inside this
-    /// folder, so copying would leave two of everything.
+    /// Nothing is moved or renamed: the file stays exactly where it is, and
+    /// only the bibliographic record beside it is new.
     @discardableResult
     public func adoptLooseDocuments() async -> Int {
         var digests: [String: PaperFolder] = [:]
@@ -113,8 +113,7 @@ public final class LibraryModel {
         for url in looseDocuments {
             guard let outcome = try? await store.importDocument(
                 at: url,
-                knownDigests: digests,
-                movingSource: true
+                knownDigests: digests
             ) else { continue }
             if case let .imported(paper) = outcome {
                 papers.append(paper)
@@ -131,8 +130,10 @@ public final class LibraryModel {
 
     // MARK: - Presentation
 
+    /// Supplements travel with their parent, so the library lists only the
+    /// papers that stand on their own.
     public var visiblePapers: [LoadedPaper] {
-        var result = papers.filter { matchesScope($0) }
+        var result = papers.filter { $0.meta.parentID == nil && matchesScope($0) }
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         if !query.isEmpty {
             let folded = TextNormalization.foldedTitle(query)
@@ -157,6 +158,81 @@ public final class LibraryModel {
     public var selectedPaper: LoadedPaper? {
         guard let selectedPaperID else { return nil }
         return papers.first { $0.id == selectedPaperID }
+    }
+
+    // MARK: - Supplements
+
+    public func attachments(of paperID: UUID) -> [LoadedPaper] {
+        papers
+            .filter { $0.meta.parentID == paperID }
+            .sorted { $0.meta.displayTitle < $1.meta.displayTitle }
+    }
+
+    public func parent(of paperID: UUID) -> LoadedPaper? {
+        guard let parentID = papers.first(where: { $0.id == paperID })?.meta.parentID else {
+            return nil
+        }
+        return papers.first { $0.id == parentID }
+    }
+
+    /// Papers a given document could be attached to.
+    ///
+    /// Only top-level papers, and never itself: a supplement of a supplement
+    /// would be unreachable in a list that shows neither.
+    public func attachmentCandidates(for paperID: UUID) -> [LoadedPaper] {
+        papers
+            .filter { $0.id != paperID && $0.meta.parentID == nil }
+            .filter { attachments(of: $0.id).isEmpty || true }
+            .sorted { $0.meta.displayTitle < $1.meta.displayTitle }
+    }
+
+    public func attach(_ childID: UUID, to parentID: UUID) async {
+        guard childID != parentID else { return }
+        guard let child = papers.first(where: { $0.id == childID }),
+              let parent = papers.first(where: { $0.id == parentID })
+        else { return }
+        // Attaching a paper that already has supplements would orphan them.
+        guard attachments(of: childID).isEmpty, parent.meta.parentID == nil else { return }
+
+        var meta = child.meta
+        meta.parentID = parentID
+        if let saved = try? await store.save(meta: meta, in: child.folder, baseline: child.meta) {
+            applyLocally(meta: saved, to: childID)
+        }
+        if selectedPaperID == childID { selectedPaperID = parentID }
+    }
+
+    public func detach(_ childID: UUID) async {
+        guard let child = papers.first(where: { $0.id == childID }),
+              child.meta.parentID != nil
+        else { return }
+        var meta = child.meta
+        meta.parentID = nil
+        if let saved = try? await store.save(meta: meta, in: child.folder, baseline: child.meta) {
+            applyLocally(meta: saved, to: childID)
+        }
+    }
+
+    /// The paper a document looks like a supplement to, if any.
+    public func suggestedParent(for paperID: UUID) -> LoadedPaper? {
+        guard let paper = papers.first(where: { $0.id == paperID }),
+              paper.meta.parentID == nil,
+              attachments(of: paperID).isEmpty,
+              SupplementDetector.looksLikeSupplement(
+                  fileName: paper.meta.file.originalName,
+                  title: paper.meta.csl.fullTitle
+              )
+        else { return nil }
+
+        let candidates = papers
+            .filter { $0.id != paperID && $0.meta.parentID == nil }
+            .map { (id: $0.id, title: $0.meta.displayTitle) }
+        guard let parentID = SupplementDetector.bestParent(
+            forFileName: paper.meta.file.originalName,
+            title: paper.meta.csl.fullTitle,
+            among: candidates
+        ) else { return nil }
+        return papers.first { $0.id == parentID }
     }
 
     public func tag(for id: UUID) -> Tag? {
@@ -403,7 +479,7 @@ public final class LibraryModel {
 
     public func moveToTrash(_ paperID: UUID) async {
         guard let paper = papers.first(where: { $0.id == paperID }) else { return }
-        _ = try? await store.moveToTrash(paper.folder)
+        _ = try? await store.moveToTrash(paper)
         papers.removeAll { $0.id == paperID }
         if selectedPaperID == paperID { selectedPaperID = nil }
     }
