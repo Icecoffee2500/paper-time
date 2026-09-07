@@ -260,6 +260,24 @@ public actor LibraryStore {
         return documentURLs().filter { !claimed.contains(relativePath(of: $0)) }
     }
 
+    /// PDFs in the library that the given records do not account for.
+    ///
+    /// The cheap counterpart to `looseDocumentURLs()`: it lists the folder and
+    /// compares, without reading every record from disk. Used when the folder
+    /// reports a change and the answer is usually "nothing new".
+    public func unclaimedDocumentURLs(claiming claimed: Set<String>) -> [URL] {
+        documentURLs().filter { !claimed.contains(relativePath(of: $0)) }
+    }
+
+    /// Whether every one of these relative paths still names a file.
+    public func documentsAreMissing(among relativePaths: Set<String>) -> Bool {
+        relativePaths.contains { path in
+            !FileManager.default.fileExists(
+                atPath: root.appending(path: path).path(percentEncoded: false)
+            )
+        }
+    }
+
     private func findDocument(matching digest: String) -> URL? {
         guard !digest.isEmpty else { return nil }
         return documentURLs().first { url in

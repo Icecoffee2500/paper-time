@@ -61,6 +61,15 @@ public final class LibraryModel {
 
     private let resolver: MetadataResolver
     private let onDeviceExtractor = OnDeviceHeaderExtractor()
+    /// Watches the library folder so a PDF put there from outside the app
+    /// shows up without the user having to ask for it.
+    private var watcher: FolderWatcher?
+    private var folderCheck: Task<Void, Never>?
+
+    /// Whether metadata is looked up automatically for papers as they arrive.
+    private var resolvesOnImport: Bool {
+        UserDefaults.standard.object(forKey: "resolveMetadataOnImport") as? Bool ?? true
+    }
 
     public init(store: LibraryStore, location: LibraryLocation, manifest: LibraryManifest) {
         self.store = store
@@ -96,6 +105,62 @@ public final class LibraryModel {
         collections = (try? await store.loadCollections()) ?? CollectionSet()
         manifest = (try? await store.loadManifest()) ?? manifest
         looseDocuments = await store.looseDocumentURLs()
+        startWatchingFolder()
+    }
+
+    // MARK: - Watching the folder
+
+    /// Starts reacting to changes made to the library folder from outside.
+    public func startWatchingFolder() {
+        guard watcher == nil else { return }
+        let watcher = FolderWatcher(url: location.url) { [weak self] in
+            Task { @MainActor [weak self] in await self?.folderDidChange() }
+        }
+        self.watcher = watcher
+        watcher.start()
+    }
+
+    public func stopWatchingFolder() {
+        watcher?.stop()
+        watcher = nil
+        folderCheck?.cancel()
+        folderCheck = nil
+    }
+
+    /// Brings the library back in line with the folder.
+    ///
+    /// A PDF that appears in the library folder is a paper in the library —
+    /// that is what choosing a folder means — so it is taken in rather than
+    /// queued behind a prompt. Nothing is moved, renamed or rewritten: the new
+    /// paper is a record beside the file that arrived.
+    ///
+    /// Papers that were sitting in the folder when it was first opened are a
+    /// different matter and still wait to be offered, because the user has not
+    /// yet said that folder full of PDFs is their library.
+    public func folderDidChange() async {
+        folderCheck?.cancel()
+        folderCheck = Task { [weak self] in
+            guard let self else { return }
+            let claimed = Set(papers.map(\.meta.file.relativePath))
+            let unclaimed = await store.unclaimedDocumentURLs(claiming: claimed)
+            guard !Task.isCancelled else { return }
+
+            if await store.documentsAreMissing(among: claimed) {
+                // Something was renamed, moved or removed outside the app. A
+                // full reload relinks records to their files by content.
+                await refresh()
+                return
+            }
+            guard !unclaimed.isEmpty else { return }
+
+            if papers.isEmpty {
+                // Still the opening offer, not an arrival.
+                looseDocuments = unclaimed
+                return
+            }
+            await adopt(unclaimed)
+        }
+        await folderCheck?.value
     }
 
     /// Gives the PDFs already sitting in the library folder a record.
@@ -104,13 +169,18 @@ public final class LibraryModel {
     /// only the bibliographic record beside it is new.
     @discardableResult
     public func adoptLooseDocuments() async -> Int {
+        await adopt(looseDocuments)
+    }
+
+    @discardableResult
+    private func adopt(_ urls: [URL]) async -> Int {
         var digests: [String: PaperFolder] = [:]
         for paper in papers where !paper.meta.file.importDigest.isEmpty {
             digests[paper.meta.file.importDigest] = paper.folder
         }
 
         var added: [LoadedPaper] = []
-        for url in looseDocuments {
+        for url in urls {
             guard let outcome = try? await store.importDocument(
                 at: url,
                 knownDigests: digests
@@ -121,9 +191,13 @@ public final class LibraryModel {
                 digests[paper.meta.file.importDigest] = paper.folder
             }
         }
-        looseDocuments = await store.looseDocumentURLs()
-        for paper in added {
-            Task { await resolveMetadata(for: paper.id) }
+
+        let adopted = Set(urls.map { $0.lastPathComponent })
+        looseDocuments.removeAll { adopted.contains($0.lastPathComponent) }
+        if resolvesOnImport {
+            for paper in added {
+                Task { await resolveMetadata(for: paper.id) }
+            }
         }
         return added.count
     }
@@ -312,8 +386,10 @@ public final class LibraryModel {
                 duplicates += 1
             }
         }
-        for paper in added {
-            Task { await resolveMetadata(for: paper.id) }
+        if resolvesOnImport {
+            for paper in added {
+                Task { await resolveMetadata(for: paper.id) }
+            }
         }
         return (added.count, duplicates)
     }

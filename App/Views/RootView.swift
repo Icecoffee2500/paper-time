@@ -11,6 +11,7 @@ import AppKit
 /// the library folder cannot be reached.
 struct RootView: View {
     @Environment(AppModel.self) private var app
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Group {
@@ -33,6 +34,14 @@ struct RootView: View {
         .task {
             guard app.phase == .launching else { return }
             await app.restore()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // The folder is watched while the app runs, but a Mac that was
+            // asleep or an iPhone that suspended the app will have missed
+            // whatever arrived meanwhile. Coming back to the app is the
+            // moment to look again.
+            guard phase == .active, let library = app.library else { return }
+            Task { await library.folderDidChange() }
         }
     }
 }

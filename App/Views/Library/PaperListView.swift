@@ -74,9 +74,9 @@ struct PaperListView: View {
         let count = model.looseDocuments.count
         let noun = count == 1 ? "PDF" : "PDFs"
         return """
-            This folder already holds \(count) \(noun). Adding them files each one \
-            into its own folder here, with its bibliographic record beside it. \
-            The files stay in this folder — nothing is copied elsewhere or deleted.
+            This folder already holds \(count) \(noun). Adding them looks each one \
+            up and gives it a record. The PDFs are not moved, renamed or copied — \
+            they stay exactly where they are.
             """
     }
 
