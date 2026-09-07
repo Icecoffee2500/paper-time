@@ -72,7 +72,6 @@ struct PaperListView: View {
                         subtitleFields: SubtitleField.parse(app.settings.listSubtitleFields),
                         model: model
                     )
-                    .equatable()
                     .tag(paper.id)
                 }
             }

@@ -87,30 +87,79 @@ struct LibraryWindow: View {
     private var splitView: some View {
         @Bindable var app = app
 
-        return NavigationSplitView(columnVisibility: $app.columnVisibility) {
-            sidebarColumn
-        } content: {
-            listColumn
-                // Hidden by collapsing the column, not by building a different
-                // split view. Swapping the tree tore down and rebuilt the PDF
-                // view every time, which is what made Command-\\ crawl — and it
-                // forgot the column's width on the way back.
-                .navigationSplitViewColumnWidth(
-                    min: app.showsPaperList ? 260 : 0,
-                    ideal: app.showsPaperList ? 320 : 0,
-                    max: app.showsPaperList ? 480 : 0
-                )
-        } detail: {
-            PaperDetailColumn(model: model, configuration: configuration, link: link)
-        }
+        // Both columns are ours.
+        //
+        // `NavigationSplitView` cannot express "hide the middle column": there
+        // is no such visibility case, and collapsing it by width is one-way.
+        // Rebuilding the view tree does work, but it tears down the PDF view
+        // every time, which is what made the shortcut crawl. And on a
+        // two-column split view the visibility binding is inert — SwiftUI's own
+        // Hide Sidebar command cannot move it either. Owning the widths means
+        // both shortcuts work, both animate, both give the width back, and the
+        // reader never moves.
+        #if os(macOS)
+        return AnyView(macColumns)
+        #else
+        // iPhone and iPad keep the system split view: it is what gives them
+        // the sliding sidebar, the back button and the compact layout.
+        return AnyView(
+            NavigationSplitView(columnVisibility: $app.columnVisibility) {
+                sidebarColumn
+            } content: {
+                listColumn
+            } detail: {
+                PaperDetailColumn(model: model, configuration: configuration, link: link)
+            }
+        )
+        #endif
     }
 
+    #if os(macOS)
+    private var macColumns: some View {
+        @Bindable var app = app
+
+        return HStack(spacing: 0) {
+            sidebarColumn
+                .frame(width: app.isSidebarVisible ? app.settings.sidebarWidth : 0)
+                .opacity(app.isSidebarVisible ? 1 : 0)
+                .clipped()
+
+            if app.isSidebarVisible {
+                ColumnDivider(width: Bindable(app.settings).sidebarWidth, range: 200...360)
+            }
+
+            listColumn
+                .frame(width: app.showsPaperList ? app.settings.paperListWidth : 0)
+                .opacity(app.showsPaperList ? 1 : 0)
+                .clipped()
+
+            if app.showsPaperList {
+                ColumnDivider(width: Bindable(app.settings).paperListWidth, range: 240...560)
+            }
+
+            PaperDetailColumn(model: model, configuration: configuration, link: link)
+                .frame(maxWidth: .infinity)
+        }
+        .animation(.snappy(duration: 0.22), value: app.showsPaperList)
+        .animation(.snappy(duration: 0.22), value: app.isSidebarVisible)
+    }
+    #endif
+
     private var sidebarColumn: some View {
-        LibrarySidebar(model: model)
-            .navigationTitle(model.displayName)
-            // Wide enough for "Needs Review" and "New Collection…", which the
-            // default width was cutting to "Needs…" and "New Coll…".
-            .navigationSplitViewColumnWidth(min: 216, ideal: 232, max: 320)
+        VStack(alignment: .leading, spacing: 0) {
+            #if os(macOS)
+            Text(model.displayName)
+                .font(.headline)
+                .lineLimit(1)
+                .padding(.horizontal, 16)
+                .padding(.top, 10)
+                .padding(.bottom, 6)
+            #endif
+            LibrarySidebar(model: model)
+        }
+        #if os(macOS)
+        .background(.ultraThinMaterial)
+        #endif
     }
 
     private var windowBody: some View {
@@ -231,8 +280,17 @@ struct LibraryWindow: View {
     @ViewBuilder
     private var listColumn: some View {
         #if os(macOS)
-        PaperListView(model: model)
-            .navigationTitle(scopeTitle)
+        VStack(spacing: 0) {
+            HStack {
+                Text(scopeTitle)
+                    .font(.headline)
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 10)
+            .padding(.bottom, 6)
+            PaperListView(model: model)
+        }
         #else
         PaperListView(model: model)
             .navigationTitle(scopeTitle)
@@ -558,3 +616,40 @@ extension View {
         #endif
     }
 }
+
+
+#if os(macOS)
+/// The line between two columns, which can be dragged to resize the one to its
+/// left. The split view used to provide this; owning it is the price of columns
+/// that can actually be hidden and brought back.
+private struct ColumnDivider: View {
+    @Binding var width: Double
+    var range: ClosedRange<Double>
+    @State private var startWidth: Double?
+
+    var body: some View {
+        Divider()
+            .overlay(alignment: .center) {
+                Rectangle()
+                    .fill(.clear)
+                    .frame(width: 10)
+                    .contentShape(.rect)
+                    .onHover { hovering in
+                        if hovering { NSCursor.resizeLeftRight.set() } else { NSCursor.arrow.set() }
+                    }
+                    .gesture(
+                        DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                            .onChanged { value in
+                                let start = startWidth ?? width
+                                startWidth = start
+                                width = min(
+                                    max(start + value.translation.width, range.lowerBound),
+                                    range.upperBound
+                                )
+                            }
+                            .onEnded { _ in startWidth = nil }
+                    )
+            }
+    }
+}
+#endif

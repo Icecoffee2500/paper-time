@@ -67,6 +67,7 @@ struct PaperTimeCommands: Commands {
                 model.toggleSidebar()
             }
             .keyboardShortcut("[", modifiers: .command)
+            .disabled(model.library == nil)
 
             Button(model.showsPaperList ? "Hide Paper List" : "Show Paper List") {
                 model.togglePaperList()

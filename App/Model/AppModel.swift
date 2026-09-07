@@ -2,6 +2,9 @@ import Foundation
 import LibraryStore
 import PaperCore
 import SwiftUI
+#if os(macOS)
+import AppKit
+#endif
 
 /// Top-level application state: which library folder is open, and the model
 /// that reads it.
@@ -24,7 +27,10 @@ public final class AppModel {
 
     /// Panel visibility lives here so the View menu can toggle it. A window's
     /// own `@State` is unreachable from `Commands`.
-    public var columnVisibility = NavigationSplitViewVisibility.all
+    /// `.doubleColumn` rather than `.all`: this is a two-column split view, and
+    /// `.all` is not one of the states it understands — starting there left
+    /// every later change to the binding being ignored.
+    public var columnVisibility = NavigationSplitViewVisibility.doubleColumn
     #if os(macOS)
     public var showsInspector = true
     #else
@@ -42,7 +48,7 @@ public final class AppModel {
     /// occupying a column, so the page keeps the whole window.
     public var showsFloatingList = false
 
-    private var restoredColumnVisibility = NavigationSplitViewVisibility.all
+    private var restoredColumnVisibility = NavigationSplitViewVisibility.doubleColumn
     private var restoredInspector = false
     private var restoredPaperList = true
 
@@ -61,15 +67,12 @@ public final class AppModel {
                 restoredColumnVisibility = columnVisibility
                 restoredInspector = showsInspector
                 restoredPaperList = showsPaperList
-                // `.detailOnly` is ignored by a three-column split view on the
-                // Mac; `.doubleColumn` does hide the source list, and the paper
-                // list collapses by width.
-                columnVisibility = .doubleColumn
+                if isSidebarVisible { toggleSidebar() }
                 showsPaperList = false
                 showsInspector = false
                 isFocusMode = true
             } else {
-                columnVisibility = restoredColumnVisibility
+                if !isSidebarVisible { toggleSidebar() }
                 showsInspector = restoredInspector
                 showsPaperList = restoredPaperList
                 showsFloatingList = false
@@ -88,15 +91,7 @@ public final class AppModel {
     /// Hides the scope sidebar only. The paper list stays put: collapsing both
     /// columns at once is a different, rarer intent than "give me more room".
     public func toggleSidebar() {
-        // The inspector animates because `.inspector` animates its own
-        // presentation; a column-visibility change does not, so it has to be
-        // asked for explicitly or the sidebar snaps in and out.
-        withAnimation(.snappy(duration: 0.25)) {
-            // `.all` and `.doubleColumn` both show the source list; only
-            // `.detailOnly` hides it. Comparing against `.all` alone left the
-            // shortcut doing nothing once anything else had moved a column.
-            columnVisibility = isSidebarVisible ? .detailOnly : .all
-        }
+        withAnimation(.snappy(duration: 0.25)) { sidebarHidden.toggle() }
     }
 
     /// Hides the paper list, leaving the source list and the reader.
@@ -110,7 +105,17 @@ public final class AppModel {
         }
     }
 
-    public var isSidebarVisible: Bool { columnVisibility != .detailOnly }
+    /// Whether the source list is showing. On the Mac the split view owns the
+    /// truth, so this follows our own toggling.
+    public private(set) var sidebarHidden = false
+
+    public var isSidebarVisible: Bool {
+        #if os(macOS)
+        !sidebarHidden
+        #else
+        columnVisibility != .detailOnly
+        #endif
+    }
 
     private let preference = LibraryLocationPreference()
 
@@ -195,6 +200,12 @@ public final class AppSettings {
     /// Which fields appear under a paper's title in the list, in order.
     @ObservationIgnored
     @AppStorage("listSubtitleFields") public var listSubtitleFields = "authors,year,venue"
+    /// How wide the paper list is, remembered so hiding and showing it gives
+    /// back the column you had rather than a default.
+    @ObservationIgnored
+    @AppStorage("paperListWidth") public var paperListWidth = 320.0
+    @ObservationIgnored
+    @AppStorage("sidebarWidth") public var sidebarWidth = 232.0
 
     public init() {}
 }
