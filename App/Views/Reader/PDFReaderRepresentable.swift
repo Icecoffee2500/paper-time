@@ -100,6 +100,7 @@ final class ReaderCoordinator: NSObject {
     private let markupPanel = MarkupPanelController()
     private var markupTask: Task<Void, Never>?
     private var scrollMonitor: Any?
+    private var clickMonitor: Any?
     private var scrolled: CGFloat = 0
     #endif
     #if canImport(UIKit)
@@ -157,9 +158,18 @@ final class ReaderCoordinator: NSObject {
             guard let self, let selection = view.currentSelection else { return }
             showMarkupPanel(for: selection, in: view, composing: true)
         }
-        view.onMarkTapped = { [weak self] annotation, _ in
-            self?.showMarkEditor(for: annotation, in: view)
+        view.onRemoveMark = { [weak self] annotation in
+            guard let self, let id = Self.markID(of: annotation),
+                  let descriptor = session.markup(withID: id)
+            else { return }
+            session.removeMarkup(id: id)
+            registerUndo([descriptor], name: "Remove Mark", in: view)
         }
+        view.onRecolorMark = { [weak self] annotation, color in
+            guard let self, let id = Self.markID(of: annotation) else { return }
+            session.recolor(id: id, to: color)
+        }
+
         #endif
         view.document = session.document
         view.autoScales = true
@@ -180,6 +190,8 @@ final class ReaderCoordinator: NSObject {
             object: view
         )
         #if os(macOS)
+        // PDFKit tells us when a mark is clicked; overriding `mouseDown` does
+        // not, because the click lands on its inner document view.
         // The controls belong to one selection on one page. Scrolling, turning
         // the page, zooming or leaving the window all end that.
         for name in [
@@ -232,6 +244,9 @@ final class ReaderCoordinator: NSObject {
         #endif
 
         pdfView = view
+        #if os(macOS)
+        installMarkClickMonitor(in: view)
+        #endif
         restoreReadingPosition(in: view)
         return view
     }
@@ -312,10 +327,11 @@ final class ReaderCoordinator: NSObject {
         NotificationCenter.default.removeObserver(self)
         #if os(macOS)
         hideMarkupPanel()
-        if let scrollMonitor {
-            NSEvent.removeMonitor(scrollMonitor)
-            self.scrollMonitor = nil
+        for monitor in [scrollMonitor, clickMonitor].compactMap({ $0 }) {
+            NSEvent.removeMonitor(monitor)
         }
+        scrollMonitor = nil
+        clickMonitor = nil
         #endif
         #if canImport(UIKit)
         toolPicker.setVisible(false, forFirstResponder: PKCanvasView())
@@ -576,6 +592,35 @@ final class ReaderCoordinator: NSObject {
     }
 
     #if os(macOS)
+    /// Notices a click on a mark already on the page.
+    ///
+    /// Neither overriding `mouseDown` nor `PDFViewAnnotationHit` sees it: the
+    /// click lands on PDFKit's inner document view, and the notification is
+    /// only posted for the annotations PDFKit handles itself.
+    private func installMarkClickMonitor(in view: PDFView) {
+        clickMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.leftMouseDown]
+        ) { [weak self, weak view] event in
+            guard let self, let view, view.window != nil, event.clickCount == 1 else {
+                return event
+            }
+            let inView = view.convert(event.locationInWindow, from: nil)
+            guard view.bounds.contains(inView),
+                  let page = view.page(for: inView, nearest: false)
+            else { return event }
+
+            let onPage = view.convert(inView, to: page)
+            let hit = page.annotations.first {
+                ["Highlight", "Underline", "StrikeOut", "Text"].contains($0.type ?? "")
+                    && $0.bounds.insetBy(dx: -3, dy: -3).contains(onPage)
+            }
+            guard let hit else { return event }
+            view.clearSelection()
+            showMarkEditor(for: hit, in: view)
+            return nil
+        }
+    }
+
     /// Turns the page instead of scrolling, while the reader is a book.
     ///
     /// A local event monitor rather than an override on the view: the scroll
@@ -619,6 +664,13 @@ final class ReaderCoordinator: NSObject {
         return true
     }
     #endif
+
+    static func markID(of annotation: PDFAnnotation) -> UUID? {
+        guard let raw = annotation.value(
+            forAnnotationKey: PDFAnnotationKey(rawValue: "/PTMarkupID")
+        ) as? String else { return nil }
+        return UUID(uuidString: raw)
+    }
 
     private func markupActionName(_ kind: MarkupDescriptor.Kind) -> String {
         switch kind {

@@ -84,29 +84,56 @@ import AppKit
 final class MarkupCapablePDFView: PDFView {
     var onMarkup: ((MarkupDescriptor.Kind, MarkupColor) -> Void)?
     var onNote: (() -> Void)?
-    /// Called when a mark already on the page is clicked.
-    var onMarkTapped: ((PDFAnnotation, NSPoint) -> Void)?
-    /// A click on an existing mark selects the mark rather than the text, so it
-    /// can be recoloured or taken off the page where it actually is.
-    override func mouseDown(with event: NSEvent) {
-        let inView = convert(event.locationInWindow, from: nil)
-        if let page = page(for: inView, nearest: false) {
-            let onPage = convert(inView, to: page)
-            let hit = page.annotations.first {
-                ["Highlight", "Underline", "StrikeOut", "Text"].contains($0.type ?? "")
-                    && $0.bounds.insetBy(dx: -2, dy: -2).contains(onPage)
-            }
-            if let hit {
-                clearSelection()
-                onMarkTapped?(hit, event.locationInWindow)
-                return
-            }
+    /// Called to take a mark off the page, and to recolour one.
+    var onRemoveMark: ((PDFAnnotation) -> Void)?
+    var onRecolorMark: ((PDFAnnotation, MarkupColor) -> Void)?
+    private var hitMark: PDFAnnotation?
+
+    /// The mark under a click, if there is one.
+    func mark(at locationInWindow: NSPoint) -> PDFAnnotation? {
+        let inView = convert(locationInWindow, from: nil)
+        guard let page = page(for: inView, nearest: true) else { return nil }
+        let onPage = convert(inView, to: page)
+        return page.annotations.first {
+            ["Highlight", "Underline", "StrikeOut", "Text"].contains($0.type ?? "")
+                && $0.bounds.insetBy(dx: -3, dy: -3).contains(onPage)
         }
-        super.mouseDown(with: event)
     }
 
     override func menu(for event: NSEvent) -> NSMenu? {
         let menu = super.menu(for: event) ?? NSMenu()
+
+        // Control-clicking a mark offers to change or remove it, which is the
+        // one place a reader looks when a highlight was a mistake.
+        if let mark = mark(at: event.locationInWindow) {
+            hitMark = mark
+            let colors = NSMenu()
+            for (index, color) in MarkupColor.allCases.enumerated() {
+                let item = NSMenuItem(
+                    title: color.displayName,
+                    action: #selector(recolorMarkFromMenu(_:)),
+                    keyEquivalent: ""
+                )
+                item.target = self
+                item.tag = index
+                colors.addItem(item)
+            }
+            let colorItem = NSMenuItem(title: "Mark Colour", action: nil, keyEquivalent: "")
+            colorItem.submenu = colors
+
+            let remove = NSMenuItem(
+                title: "Remove Mark",
+                action: #selector(removeMarkFromMenu),
+                keyEquivalent: ""
+            )
+            remove.target = self
+
+            menu.insertItem(NSMenuItem.separator(), at: 0)
+            menu.insertItem(remove, at: 0)
+            menu.insertItem(colorItem, at: 0)
+            return menu
+        }
+
         guard currentSelection?.string?.isEmpty == false else { return menu }
 
         let markup = NSMenu()
@@ -161,6 +188,18 @@ final class MarkupCapablePDFView: PDFView {
 
     @objc private func noteFromMenu() {
         onNote?()
+    }
+
+    @objc private func removeMarkFromMenu() {
+        guard let hitMark else { return }
+        onRemoveMark?(hitMark)
+        self.hitMark = nil
+    }
+
+    @objc private func recolorMarkFromMenu(_ sender: NSMenuItem) {
+        guard let hitMark else { return }
+        onRecolorMark?(hitMark, MarkupColor.allCases[min(sender.tag, MarkupColor.allCases.count - 1)])
+        self.hitMark = nil
     }
 }
 #endif
