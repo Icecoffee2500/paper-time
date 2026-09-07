@@ -14,12 +14,6 @@ struct PaperListView: View {
 
     var body: some View {
         content
-            .searchable(text: $model.searchText, prompt: "Search titles, authors, venues")
-            .toolbar {
-                ToolbarItem(placement: .automatic) {
-                    sortMenu
-                }
-            }
             .dropDestination(for: URL.self) { urls, _ in
                 let pdfURLs = urls.filter { $0.pathExtension.lowercased() == "pdf" }
                 guard !pdfURLs.isEmpty else { return false }
@@ -69,7 +63,7 @@ struct PaperListView: View {
                     }
                 }
                 ForEach(model.visiblePapers) { paper in
-                    PaperRow(paper: paper, model: model)
+                    PaperRow(paperID: paper.id, model: model)
                         .tag(paper.id)
                 }
             }
@@ -86,39 +80,42 @@ struct PaperListView: View {
             """
     }
 
-    private var sortMenu: some View {
-        Menu {
-            Picker("Sort By", selection: $model.sortOrder) {
-                ForEach(LibraryModel.SortOrder.allCases) { order in
-                    Text(order.displayName).tag(order)
-                }
-            }
-            Divider()
-            Toggle("Ascending", isOn: $model.sortAscending)
-        } label: {
-            Label("Sort", systemImage: "arrow.up.arrow.down")
-        }
-    }
 }
 
 /// One row in the paper list.
 struct PaperRow: View {
-    let paper: LoadedPaper
+    let paperID: UUID
     let model: LibraryModel
 
+    /// Read from the model on every redraw rather than captured once. A row
+    /// that holds its own copy of the paper keeps showing stale state after
+    /// anything else in the window changes it.
+    private var paper: LoadedPaper? {
+        model.papers.first { $0.id == paperID }
+    }
+
     var body: some View {
+        if let paper {
+            row(paper)
+        }
+    }
+
+    @ViewBuilder
+    private func row(_ paper: LoadedPaper) -> some View {
         HStack(alignment: .top, spacing: 8) {
+            statusButton(paper)
+
             VStack(alignment: .leading, spacing: 4) {
                 Text(paper.meta.displayTitle)
                     .font(.headline)
                     .lineLimit(2)
-                Text(subtitle)
+                Text(subtitle(paper))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                if !tags.isEmpty {
+                if !tags(paper).isEmpty {
                     HStack(spacing: 4) {
-                        ForEach(tags) { tag in
+                        ForEach(tags(paper)) { tag in
                             Text(tag.name)
                                 .font(.footnote)
                                 .padding(.horizontal, 6)
@@ -129,13 +126,79 @@ struct PaperRow: View {
                     }
                 }
             }
+
             Spacer(minLength: 8)
-            trailingAccessories
+
+            favoriteButton(paper)
+
+            if model.resolving.contains(paper.id) {
+                ProgressView()
+                    .controlSize(.small)
+                    .accessibilityLabel("Resolving metadata")
+            } else if needsReview(paper) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .help("Metadata needs review")
+                    .accessibilityLabel("Metadata needs review")
+            }
         }
-        .contextMenu { contextMenuContent }
+        .padding(.vertical, 2)
+        .contentShape(.rect)
+        .contextMenu { contextMenuContent(paper) }
+        // Dragging a paper onto a sidebar row files it there.
+        .draggable(PaperTransfer(id: paper.id, title: paper.meta.displayTitle))
     }
 
-    private var subtitle: String {
+    /// A menu, not a cycling button: three states in a fixed order means two
+    /// wrong guesses before the right one, and no way to see what the options
+    /// were.
+    @ViewBuilder
+    private func statusButton(_ paper: LoadedPaper) -> some View {
+        Menu {
+            Picker("Reading Status", selection: statusBinding(paper)) {
+                ForEach(PaperState.ReadingStatus.allCases, id: \.self) { status in
+                    Label(label(for: status), systemImage: status.symbolName)
+                        .tag(status)
+                }
+            }
+            .pickerStyle(.inline)
+        } label: {
+            Image(systemName: paper.state.readingStatus.symbolName)
+                .foregroundStyle(paper.state.readingStatus == .read ? .green : .secondary)
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Reading status: \(label(for: paper.state.readingStatus))")
+        .accessibilityLabel("Reading status: \(label(for: paper.state.readingStatus))")
+    }
+
+    private func statusBinding(_ paper: LoadedPaper) -> Binding<PaperState.ReadingStatus> {
+        Binding(
+            get: { paper.state.readingStatus },
+            set: { newValue in
+                Task { await model.setReadingStatus(newValue, for: paper.id) }
+            }
+        )
+    }
+
+    @ViewBuilder
+    private func favoriteButton(_ paper: LoadedPaper) -> some View {
+        Button {
+            Task { await model.toggleFavorite(for: paper.id) }
+        } label: {
+            Image(systemName: paper.state.isFavorite ? "star.fill" : "star")
+                .foregroundStyle(paper.state.isFavorite ? AnyShapeStyle(.yellow) : AnyShapeStyle(.tertiary))
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(.plain)
+        .help(paper.state.isFavorite ? "Remove from Favorites" : "Add to Favorites")
+        .accessibilityLabel(paper.state.isFavorite ? "Favorite" : "Not a favorite")
+        .accessibilityAddTraits(paper.state.isFavorite ? [.isSelected] : [])
+    }
+
+    private func subtitle(_ paper: LoadedPaper) -> String {
         var parts: [String] = []
         if !paper.meta.displayAuthors.isEmpty { parts.append(paper.meta.displayAuthors) }
         if let year = paper.meta.csl.year { parts.append(String(year)) }
@@ -143,99 +206,46 @@ struct PaperRow: View {
         return parts.joined(separator: " · ")
     }
 
-    private var tags: [Tag] {
+    private func tags(_ paper: LoadedPaper) -> [Tag] {
         paper.meta.tagIDs.compactMap { model.tag(for: $0) }
     }
 
-    @ViewBuilder
-    private var trailingAccessories: some View {
-        HStack(spacing: 6) {
-            // A button, not a label: the app should never decide on the user's
-            // behalf that opening a paper means they are reading it.
-            Button {
-                Task { await advanceReadingStatus() }
-            } label: {
-                Image(systemName: paper.state.readingStatus.symbolName)
-                    .foregroundStyle(paper.state.readingStatus == .read ? .green : .secondary)
-                    .contentTransition(.symbolEffect(.replace))
-            }
-            .buttonStyle(.plain)
-            .help("\(readingStatusLabel) — click to change")
-            .accessibilityLabel("Reading status: \(readingStatusLabel)")
-            .accessibilityHint("Changes to the next status")
-
-            if paper.state.isFavorite {
-                Image(systemName: "star.fill")
-                    .foregroundStyle(.yellow)
-                    .accessibilityLabel("Favorite")
-            }
-
-            if model.resolving.contains(paper.id) {
-                ProgressView()
-                    .controlSize(.small)
-                    .accessibilityLabel("Resolving metadata")
-            } else if needsReview {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
-                    .help("Metadata needs review")
-                    .accessibilityLabel("Metadata needs review")
-            }
-        }
-        .font(.subheadline)
-    }
-
-    private var needsReview: Bool {
+    private func needsReview(_ paper: LoadedPaper) -> Bool {
         paper.meta.confidence == .needsReview || paper.meta.confidence == .unparsed
     }
 
-    private var readingStatusLabel: String {
-        switch paper.state.readingStatus {
+    private func label(for status: PaperState.ReadingStatus) -> String {
+        switch status {
         case .unread: "Unread"
         case .reading: "Reading"
         case .read: "Read"
         }
     }
 
-    /// Unread → Reading → Read → Unread.
-    private func advanceReadingStatus() async {
-        var state = paper.state
-        state.readingStatus = switch state.readingStatus {
-        case .unread: .reading
-        case .reading: .read
-        case .read: .unread
-        }
-        await model.update(state: state, for: paper.id)
-    }
-
     @ViewBuilder
-    private var contextMenuContent: some View {
+    private func contextMenuContent(_ paper: LoadedPaper) -> some View {
         Button {
             model.selectedPaperID = paper.id
         } label: {
             Label("Open", systemImage: "book")
         }
 
-        Button {
-            var state = paper.state
-            state.readingStatus = state.readingStatus == .read ? .unread : .read
-            Task { await model.update(state: state, for: paper.id) }
-        } label: {
-            Label(
-                paper.state.readingStatus == .read ? "Mark as Unread" : "Mark as Read",
-                systemImage: "checkmark.circle"
-            )
+        Picker("Reading Status", selection: statusBinding(paper)) {
+            ForEach(PaperState.ReadingStatus.allCases, id: \.self) { status in
+                Label(label(for: status), systemImage: status.symbolName).tag(status)
+            }
         }
 
         Button {
-            var state = paper.state
-            state.isFavorite.toggle()
-            Task { await model.update(state: state, for: paper.id) }
+            Task { await model.toggleFavorite(for: paper.id) }
         } label: {
             Label(
                 paper.state.isFavorite ? "Remove from Favorites" : "Add to Favorites",
-                systemImage: "star"
+                systemImage: paper.state.isFavorite ? "star.slash" : "star"
             )
         }
+
+        Divider()
 
         Button {
             copyToPasteboard(paper.meta.bibKey)

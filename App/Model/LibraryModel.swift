@@ -274,7 +274,11 @@ public final class LibraryModel {
         meta.bibKey = CitationKey.make(for: result.csl, fallback: meta.file.originalName)
         meta.csl.id = meta.bibKey
 
-        if let saved = try? await store.save(meta: meta, in: paper.folder) {
+        if let saved = try? await store.save(
+            meta: meta,
+            in: paper.folder,
+            baseline: paper.meta
+        ) {
             applyLocally(meta: saved, to: paperID)
         }
     }
@@ -303,7 +307,7 @@ public final class LibraryModel {
         meta.candidates = []
         meta.bibKey = CitationKey.make(for: candidate.csl, fallback: meta.file.originalName)
         meta.csl.id = meta.bibKey
-        if let saved = try? await store.save(meta: meta, in: paper.folder) {
+        if let saved = try? await store.save(meta: meta, in: paper.folder, baseline: paper.meta) {
             applyLocally(meta: saved, to: paperID)
         }
     }
@@ -313,17 +317,87 @@ public final class LibraryModel {
         var edited = meta
         edited.confidence = .manual
         edited.candidates = []
-        if let saved = try? await store.save(meta: edited, in: paper.folder) {
+        if let saved = try? await store.save(meta: edited, in: paper.folder, baseline: paper.meta) {
             applyLocally(meta: saved, to: paperID)
         }
     }
 
+    // MARK: - Reading state
+    //
+    // Every one of these reads the current value out of `papers` rather than
+    // trusting a copy the caller is holding. A view keeps a snapshot of a paper
+    // for as long as it is on screen, and writing a change derived from a stale
+    // snapshot quietly reverts whatever else changed in the meantime.
+
+    public func setReadingStatus(_ status: PaperState.ReadingStatus, for paperID: UUID) async {
+        await mutateState(paperID) { $0.readingStatus = status }
+    }
+
+    public func setFavorite(_ isFavorite: Bool, for paperID: UUID) async {
+        await mutateState(paperID) { $0.isFavorite = isFavorite }
+    }
+
+    public func toggleFavorite(for paperID: UUID) async {
+        await mutateState(paperID) { $0.isFavorite.toggle() }
+    }
+
+    public func setRating(_ rating: Int?, for paperID: UUID) async {
+        await mutateState(paperID) { $0.rating = rating }
+    }
+
+    public func setSummaryNote(_ note: String, for paperID: UUID) async {
+        await mutateState(paperID) { $0.summaryNote = note }
+    }
+
+    public func recordOpened(_ paperID: UUID) async {
+        await mutateState(paperID) { $0.lastOpenedAt = .now }
+    }
+
+    public func recordReadingPosition(page: Int, for paperID: UUID) async {
+        await mutateState(paperID) {
+            $0.lastPageIndex = page
+            $0.lastOpenedAt = .now
+        }
+    }
+
+    /// Applies a change to the paper's current state and writes it, passing the
+    /// version it started from so an ordinary save is never mistaken for a
+    /// conflict.
+    private func mutateState(
+        _ paperID: UUID,
+        _ change: (inout PaperState) -> Void
+    ) async {
+        guard let index = papers.firstIndex(where: { $0.id == paperID }) else { return }
+        let paper = papers[index]
+        var updated = paper.state
+        change(&updated)
+        guard updated != paper.state else { return }
+
+        // Show the change straight away; the write is a few milliseconds of
+        // file I/O and the interface should not wait on it.
+        papers[index].state = updated
+
+        if let saved = try? await store.save(
+            state: updated,
+            in: paper.folder,
+            baseline: paper.state
+        ), let currentIndex = papers.firstIndex(where: { $0.id == paperID }) {
+            papers[currentIndex].state = saved
+        }
+    }
+
+    /// Kept for the inspector, which edits several fields at once.
     public func update(state: PaperState, for paperID: UUID) async {
-        guard let paper = papers.first(where: { $0.id == paperID }) else { return }
-        if let saved = try? await store.save(state: state, in: paper.folder) {
-            if let index = papers.firstIndex(where: { $0.id == paperID }) {
-                papers[index].state = saved
-            }
+        guard let index = papers.firstIndex(where: { $0.id == paperID }) else { return }
+        let paper = papers[index]
+        guard state != paper.state else { return }
+        papers[index].state = state
+        if let saved = try? await store.save(
+            state: state,
+            in: paper.folder,
+            baseline: paper.state
+        ), let currentIndex = papers.firstIndex(where: { $0.id == paperID }) {
+            papers[currentIndex].state = saved
         }
     }
 
@@ -352,7 +426,11 @@ public final class LibraryModel {
         guard let paper = papers.first(where: { $0.id == paperID }) else { return }
         var meta = paper.meta
         meta.tagIDs = ids
-        if let saved = try? await store.save(meta: meta, in: paper.folder) {
+        if let saved = try? await store.save(
+            meta: meta,
+            in: paper.folder,
+            baseline: paper.meta
+        ) {
             applyLocally(meta: saved, to: paperID)
         }
     }
@@ -366,11 +444,44 @@ public final class LibraryModel {
         try? await store.saveCollections(set)
     }
 
+    /// Adds one paper to one collection, leaving its other memberships alone.
+    public func addToCollection(_ collectionID: UUID, paperID: UUID) async {
+        guard let paper = papers.first(where: { $0.id == paperID }) else { return }
+        guard !paper.meta.collectionIDs.contains(collectionID) else { return }
+        var meta = paper.meta
+        meta.collectionIDs.append(collectionID)
+        if let saved = try? await store.save(
+            meta: meta,
+            in: paper.folder,
+            baseline: paper.meta
+        ) {
+            applyLocally(meta: saved, to: paperID)
+        }
+    }
+
+    public func addTag(_ tagID: UUID, to paperID: UUID) async {
+        guard let paper = papers.first(where: { $0.id == paperID }) else { return }
+        guard !paper.meta.tagIDs.contains(tagID) else { return }
+        var meta = paper.meta
+        meta.tagIDs.append(tagID)
+        if let saved = try? await store.save(
+            meta: meta,
+            in: paper.folder,
+            baseline: paper.meta
+        ) {
+            applyLocally(meta: saved, to: paperID)
+        }
+    }
+
     public func setCollections(_ ids: [UUID], for paperID: UUID) async {
         guard let paper = papers.first(where: { $0.id == paperID }) else { return }
         var meta = paper.meta
         meta.collectionIDs = ids
-        if let saved = try? await store.save(meta: meta, in: paper.folder) {
+        if let saved = try? await store.save(
+            meta: meta,
+            in: paper.folder,
+            baseline: paper.meta
+        ) {
             applyLocally(meta: saved, to: paperID)
         }
     }

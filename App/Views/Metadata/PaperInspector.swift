@@ -35,14 +35,14 @@ private struct PaperInspectorForm: View {
     let paperID: UUID
 
     @State private var draft: CSLItem
-    @State private var stateDraft: PaperState
+    @State private var noteDraft: String
 
     init(model: LibraryModel, paperID: UUID) {
         self.model = model
         self.paperID = paperID
         let paper = model.papers.first { $0.id == paperID }
         _draft = State(initialValue: paper?.meta.csl ?? CSLItem())
-        _stateDraft = State(initialValue: paper?.state ?? PaperState())
+        _noteDraft = State(initialValue: paper?.state.summaryNote ?? "")
     }
 
     private var paper: LoadedPaper? {
@@ -244,42 +244,68 @@ private struct PaperInspectorForm: View {
 
     // MARK: - Reading state
 
+    /// Reading state binds straight through to the model.
+    ///
+    /// It used to be edited in a local copy taken when the inspector appeared,
+    /// which meant a change made anywhere else — the list, a drag onto the
+    /// sidebar — never showed here, and a change made here was written from a
+    /// snapshot that had since gone stale.
     private var readingStateSection: some View {
         Section("Reading") {
-            Picker("Status", selection: $stateDraft.readingStatus) {
+            Picker("Status", selection: readingStatusBinding) {
                 ForEach(PaperState.ReadingStatus.allCases, id: \.self) { status in
                     Label(readingStatusLabel(status), systemImage: status.symbolName)
                         .tag(status)
                 }
             }
-            .onChange(of: stateDraft.readingStatus) { saveState() }
 
-            Toggle("Favorite", isOn: $stateDraft.isFavorite)
-                .onChange(of: stateDraft.isFavorite) { saveState() }
+            Toggle("Favorite", isOn: favoriteBinding)
 
             ratingControl
 
-            TextField("Notes", text: $stateDraft.summaryNote, axis: .vertical)
+            TextField("Notes", text: $noteDraft, axis: .vertical)
                 .lineLimit(3 ... 8)
-                .onSubmit { saveState() }
+                .onSubmit { saveNoteIfNeeded() }
         }
     }
 
+    private var readingStatusBinding: Binding<PaperState.ReadingStatus> {
+        Binding(
+            get: { paper?.state.readingStatus ?? .unread },
+            set: { newValue in
+                Task { await model.setReadingStatus(newValue, for: paperID) }
+            }
+        )
+    }
+
+    private var favoriteBinding: Binding<Bool> {
+        Binding(
+            get: { paper?.state.isFavorite ?? false },
+            set: { newValue in
+                Task { await model.setFavorite(newValue, for: paperID) }
+            }
+        )
+    }
+
     private var ratingControl: some View {
-        HStack {
+        let rating = paper?.state.rating ?? 0
+        return HStack {
             Text("Rating")
             Spacer()
             HStack(spacing: 2) {
                 ForEach(1 ... 5, id: \.self) { value in
                     Button {
-                        stateDraft.rating = (stateDraft.rating == value) ? nil : value
-                        saveState()
+                        // Tapping the current rating clears it, which is the
+                        // only way to get back to "no rating".
+                        let newValue = rating == value ? nil : value
+                        Task { await model.setRating(newValue, for: paperID) }
                     } label: {
-                        Image(systemName: (stateDraft.rating ?? 0) >= value ? "star.fill" : "star")
+                        Image(systemName: rating >= value ? "star.fill" : "star")
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle((stateDraft.rating ?? 0) >= value ? .yellow : .secondary)
+                    .foregroundStyle(rating >= value ? .yellow : .secondary)
                     .accessibilityLabel("\(value) star\(value == 1 ? "" : "s")")
+                    .accessibilityAddTraits(rating >= value ? [.isSelected] : [])
                 }
             }
         }
@@ -293,15 +319,11 @@ private struct PaperInspectorForm: View {
         }
     }
 
-    private func saveState() {
-        Task { await model.update(state: stateDraft, for: paperID) }
-    }
-
     /// The note is the one field that must not save on every keystroke, so it
     /// only flushes on submit and when the inspector goes away.
     private func saveNoteIfNeeded() {
-        guard let paper, stateDraft.summaryNote != paper.state.summaryNote else { return }
-        saveState()
+        guard let paper, noteDraft != paper.state.summaryNote else { return }
+        Task { await model.setSummaryNote(noteDraft, for: paperID) }
     }
 
     // MARK: - Identifiers

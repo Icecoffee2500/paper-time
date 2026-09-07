@@ -13,6 +13,7 @@ struct ReaderScreen: View {
     let link: ReaderLink
 
     @State private var session: DocumentSession?
+    @State private var finder = DocumentFinder()
     @State private var currentPageIndex = 0
     @State private var loadError: String?
     @Environment(\.scenePhase) private var scenePhase
@@ -51,6 +52,7 @@ struct ReaderScreen: View {
         PDFReaderRepresentable(
             session: session,
             configuration: configuration,
+            link: link,
             currentPageIndex: $currentPageIndex,
             onSelectionChange: { link.selection = $0 }
         )
@@ -59,6 +61,25 @@ struct ReaderScreen: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        .overlay(alignment: .topTrailing) {
+            if link.isFinding {
+                FindBar(
+                    finder: finder,
+                    document: session.document,
+                    isPresented: Binding(
+                        get: { link.isFinding },
+                        set: { link.isFinding = $0 }
+                    ),
+                    onNavigate: { selection in
+                        guard let selection else { return }
+                        link.scrollRequest = selection
+                    }
+                )
+                .padding(12)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.snappy(duration: 0.2), value: link.isFinding)
         .safeAreaInset(edge: .bottom) { statusBar(session) }
         .onChange(of: currentPageIndex) { _, index in
             Task { await recordPosition(index) }

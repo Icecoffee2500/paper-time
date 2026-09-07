@@ -54,22 +54,17 @@ public struct PaperState: Codable, Hashable, Sendable {
         self.updatedBy = updatedBy
     }
 
-    /// Newest write wins, except that a non-empty note is never replaced by an
-    /// empty one and progress never moves backwards.
+    /// Resolves two versions of this file that were written independently.
+    ///
+    /// Newest write wins, whole record. An earlier version tried to be clever
+    /// — keeping a favourite that either side had set, never letting a paper
+    /// move back from Read — and the result was that turning either one *off*
+    /// was impossible: the old value was merged back in every time. A merge
+    /// rule that can only ever add is not a merge rule, it is a ratchet.
+    ///
+    /// This runs only when another device genuinely wrote the file while this
+    /// one held it; an ordinary save does not go through here.
     public static func resolve(local: PaperState, remote: PaperState) -> PaperState {
-        var winner = local.updatedAt >= remote.updatedAt ? local : remote
-        let loser = local.updatedAt >= remote.updatedAt ? remote : local
-
-        if winner.summaryNote.isEmpty, !loser.summaryNote.isEmpty {
-            winner.summaryNote = loser.summaryNote
-        }
-        if loser.readingStatus == .read, winner.readingStatus != .read {
-            winner.readingStatus = .read
-        }
-        winner.isFavorite = winner.isFavorite || loser.isFavorite
-        if let loserDate = loser.lastOpenedAt {
-            winner.lastOpenedAt = max(winner.lastOpenedAt ?? loserDate, loserDate)
-        }
-        return winner
+        local.updatedAt >= remote.updatedAt ? local : remote
     }
 }

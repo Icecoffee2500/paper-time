@@ -109,26 +109,18 @@ public struct PaperMeta: Codable, Hashable, Sendable, Identifiable {
 
     /// Resolves two versions of the same `meta.json` seen on different devices.
     ///
-    /// Rule: a hand-edited record always wins over an automatic one, regardless
-    /// of timestamps, because the user's correction is the whole point. Between
-    /// records of equal standing, the newer write wins.
+    /// A hand-edited record beats an automatic one regardless of timestamps,
+    /// because the user's correction is the whole point. Otherwise the newer
+    /// write wins outright — including when it *removed* a tag. Unioning the
+    /// tag lists, as an earlier version did, made removing one impossible.
+    ///
+    /// Only reached when another device wrote the file concurrently.
     public static func resolve(local: PaperMeta, remote: PaperMeta) -> PaperMeta {
         if local.confidence == .manual, remote.confidence != .manual { return local }
         if remote.confidence == .manual, local.confidence != .manual { return remote }
         if local.confidence.sortRank != remote.confidence.sortRank {
             return local.confidence.sortRank > remote.confidence.sortRank ? local : remote
         }
-        var winner = local.updatedAt >= remote.updatedAt ? local : remote
-        let loser = local.updatedAt >= remote.updatedAt ? remote : local
-        // Tags and collections are additive: losing a tag because another
-        // device happened to save later would look like data loss.
-        winner.tagIDs = Self.union(winner.tagIDs, loser.tagIDs)
-        winner.collectionIDs = Self.union(winner.collectionIDs, loser.collectionIDs)
-        return winner
-    }
-
-    private static func union(_ first: [UUID], _ second: [UUID]) -> [UUID] {
-        var seen = Set<UUID>()
-        return (first + second).filter { seen.insert($0).inserted }
+        return local.updatedAt >= remote.updatedAt ? local : remote
     }
 }

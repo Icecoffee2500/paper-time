@@ -144,19 +144,28 @@ public actor LibraryStore {
 
     // MARK: - Saving with conflict resolution
 
-    /// Saves metadata, merging with whatever another device may have written
-    /// since this copy was loaded.
+    /// Saves metadata.
     ///
-    /// Reading immediately before writing is cheap and removes the most common
-    /// way a synced folder loses an edit: two devices each saving a record they
-    /// loaded minutes ago.
+    /// `baseline` is the version the caller started from. When the file on disk
+    /// still matches it, nothing else has touched the record and the new value
+    /// is written as-is. Only when disk and baseline differ has another device
+    /// written concurrently, and only then is a merge appropriate.
+    ///
+    /// Comparing against the *outgoing* value instead — as this did at first —
+    /// means the merge runs on every save, because the caller has just changed
+    /// something. Combined with merge rules that could only add, that made it
+    /// impossible to clear a tag or unset a flag.
     @discardableResult
-    public func save(meta: PaperMeta, in folder: PaperFolder) throws -> PaperMeta {
+    public func save(
+        meta: PaperMeta,
+        in folder: PaperFolder,
+        baseline: PaperMeta? = nil
+    ) throws -> PaperMeta {
         var outgoing = meta
         outgoing.updatedAt = .now
         outgoing.updatedBy = DeviceIdentity.current
 
-        if let onDisk = try? loadMeta(folder), onDisk != meta {
+        if let onDisk = try? loadMeta(folder), onDisk != baseline {
             outgoing = PaperMeta.resolve(local: outgoing, remote: onDisk)
             outgoing.updatedAt = .now
             outgoing.updatedBy = DeviceIdentity.current
@@ -165,13 +174,19 @@ public actor LibraryStore {
         return outgoing
     }
 
+    /// Saves reading state. See `save(meta:in:baseline:)` for why the baseline
+    /// matters.
     @discardableResult
-    public func save(state: PaperState, in folder: PaperFolder) throws -> PaperState {
+    public func save(
+        state: PaperState,
+        in folder: PaperFolder,
+        baseline: PaperState? = nil
+    ) throws -> PaperState {
         var outgoing = state
         outgoing.updatedAt = .now
         outgoing.updatedBy = DeviceIdentity.current
 
-        if let onDisk = try? loadState(folder), onDisk != state {
+        if let onDisk = try? loadState(folder), onDisk != baseline {
             outgoing = PaperState.resolve(local: outgoing, remote: onDisk)
             outgoing.updatedAt = .now
             outgoing.updatedBy = DeviceIdentity.current

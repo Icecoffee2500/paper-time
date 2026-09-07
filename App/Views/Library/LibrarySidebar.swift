@@ -29,12 +29,16 @@ struct LibrarySidebar: View {
                     .tag(LibraryModel.Scope.all)
                 Label("Unread", systemImage: "circle")
                     .tag(LibraryModel.Scope.unread)
+                    .dropTarget { await model.setReadingStatus(.unread, for: $0) }
                 Label("Reading", systemImage: "circle.lefthalf.filled")
                     .tag(LibraryModel.Scope.reading)
+                    .dropTarget { await model.setReadingStatus(.reading, for: $0) }
                 Label("Read", systemImage: "checkmark.circle")
                     .tag(LibraryModel.Scope.read)
+                    .dropTarget { await model.setReadingStatus(.read, for: $0) }
                 Label("Favorites", systemImage: "star")
                     .tag(LibraryModel.Scope.favorites)
+                    .dropTarget { await model.setFavorite(true, for: $0) }
                 if model.reviewCount > 0 {
                     Label("Needs Review", systemImage: "exclamationmark.triangle")
                         .badge(model.reviewCount)
@@ -46,6 +50,9 @@ struct LibrarySidebar: View {
                 ForEach(model.collections.collections) { collection in
                     Label(collection.name, systemImage: symbolName(for: collection))
                         .tag(LibraryModel.Scope.collection(collection.id))
+                        .dropTarget(isEnabled: !collection.isSmart) { paperID in
+                            await model.addToCollection(collection.id, paperID: paperID)
+                        }
                 }
                 Button {
                     newCollectionName = ""
@@ -66,6 +73,7 @@ struct LibrarySidebar: View {
                             .accessibilityHidden(true)
                     }
                     .tag(LibraryModel.Scope.tag(tag.id))
+                    .dropTarget { await model.addTag(tag.id, to: $0) }
                 }
             }
         }
@@ -140,5 +148,45 @@ extension Tag.Color {
         case .pink: .pink
         case .gray: .gray
         }
+    }
+}
+
+/// Makes a sidebar row accept a dragged paper.
+///
+/// Filing a paper by dragging it onto the thing you want it filed under is the
+/// gesture people already know from Finder and Mail, and it is faster than
+/// finding the same action in a menu.
+private struct PaperDropTarget: ViewModifier {
+    let isEnabled: Bool
+    let handle: (UUID) async -> Void
+
+    @State private var isTargeted = false
+
+    func body(content: Content) -> some View {
+        content
+            .listRowBackground(
+                isTargeted
+                    ? RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(Color.accentColor.opacity(0.2))
+                    : nil
+            )
+            .dropDestination(for: PaperTransfer.self) { items, _ in
+                guard isEnabled, !items.isEmpty else { return false }
+                Task {
+                    for item in items { await handle(item.id) }
+                }
+                return true
+            } isTargeted: { targeted in
+                isTargeted = isEnabled && targeted
+            }
+    }
+}
+
+extension View {
+    func dropTarget(
+        isEnabled: Bool = true,
+        handle: @escaping (UUID) async -> Void
+    ) -> some View {
+        modifier(PaperDropTarget(isEnabled: isEnabled, handle: handle))
     }
 }

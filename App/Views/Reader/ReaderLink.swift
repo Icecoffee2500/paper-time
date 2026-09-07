@@ -14,6 +14,11 @@ import SwiftUI
 final class ReaderLink {
     var session: DocumentSession?
     var selection: PDFSelection?
+    /// Whether the in-document find bar is showing.
+    var isFinding = false
+    /// A selection the reader should scroll to and highlight. Cleared by the
+    /// reader once it has acted on it.
+    var scrollRequest: PDFSelection?
 
     var hasSelection: Bool { selection?.string?.isEmpty == false }
 

@@ -48,6 +48,20 @@ struct PaperTimeCommands: Commands {
             }
         }
 
+        CommandGroup(after: .textEditing) {
+            Button("Search Everything…") {
+                model.showsSearchPalette = true
+            }
+            .keyboardShortcut("k", modifiers: .command)
+            .disabled(model.library == nil)
+
+            Button("Find in Document…") {
+                NotificationCenter.default.post(name: .paperTimeFindInDocument, object: nil)
+            }
+            .keyboardShortcut("f", modifiers: .command)
+            .disabled(model.library?.selectedPaperID == nil)
+        }
+
         CommandGroup(after: .toolbar) {
             Button(model.isSidebarVisible ? "Hide Sidebar" : "Show Sidebar") {
                 model.toggleSidebar()
@@ -55,7 +69,7 @@ struct PaperTimeCommands: Commands {
             .keyboardShortcut("[", modifiers: .command)
 
             Button(model.showsInspector ? "Hide Inspector" : "Show Inspector") {
-                model.showsInspector.toggle()
+                model.toggleInspector()
             }
             .keyboardShortcut("]", modifiers: .command)
 
@@ -96,4 +110,5 @@ extension Notification.Name {
     static let paperTimePreviousPage = Notification.Name("PaperTime.previousPage")
     static let paperTimeGoBack = Notification.Name("PaperTime.goBack")
     static let paperTimeGoForward = Notification.Name("PaperTime.goForward")
+    static let paperTimeFindInDocument = Notification.Name("PaperTime.findInDocument")
 }

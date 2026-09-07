@@ -24,6 +24,7 @@ typealias PlatformViewRepresentable = NSViewRepresentable
 struct PDFReaderRepresentable: PlatformViewRepresentable {
     let session: DocumentSession
     let configuration: ReaderConfiguration
+    let link: ReaderLink
     @Binding var currentPageIndex: Int
     var onSelectionChange: (PDFSelection?) -> Void
 
@@ -31,6 +32,7 @@ struct PDFReaderRepresentable: PlatformViewRepresentable {
         ReaderCoordinator(
             session: session,
             configuration: configuration,
+            link: link,
             onPageChange: { currentPageIndex = $0 },
             onSelectionChange: onSelectionChange
         )
@@ -59,6 +61,7 @@ struct PDFReaderRepresentable: PlatformViewRepresentable {
 final class ReaderCoordinator: NSObject {
     private let session: DocumentSession
     private let configuration: ReaderConfiguration
+    private let link: ReaderLink
     private let onPageChange: (Int) -> Void
     private let onSelectionChange: (PDFSelection?) -> Void
 
@@ -71,11 +74,13 @@ final class ReaderCoordinator: NSObject {
     init(
         session: DocumentSession,
         configuration: ReaderConfiguration,
+        link: ReaderLink,
         onPageChange: @escaping (Int) -> Void,
         onSelectionChange: @escaping (PDFSelection?) -> Void
     ) {
         self.session = session
         self.configuration = configuration
+        self.link = link
         self.onPageChange = onPageChange
         self.onSelectionChange = onSelectionChange
         super.init()
@@ -124,6 +129,14 @@ final class ReaderCoordinator: NSObject {
         apply(layout: configuration.layout, to: view)
         applyTint(to: view)
         updateCanvasInteraction()
+
+        // A find result asks the reader to bring it into view; acting on it
+        // here keeps the PDF view the only thing that knows how to scroll.
+        if let requested = link.scrollRequest {
+            view.setCurrentSelection(requested, animate: true)
+            view.scrollSelectionToVisible(nil)
+            link.scrollRequest = nil
+        }
     }
 
     func tearDown() {

@@ -37,30 +37,278 @@ struct RootView: View {
     }
 }
 
-/// The three-column layout used on Mac and iPad, collapsing to a stack on
-/// iPhone. `NavigationSplitView` handles that collapse itself, which is why the
-/// app does not branch on device idiom here.
+/// The library window.
+///
+/// Every toolbar control is declared here, on the split view itself, rather
+/// than on the individual columns. Per-column toolbars are what put dividers
+/// between groups of buttons and made the order look accidental; one toolbar
+/// gives one row, centred, in a deliberate order.
 struct LibraryWindow: View {
     let model: LibraryModel
     @Environment(AppModel.self) private var app
 
+    @State private var configuration = ReaderConfiguration()
+    @State private var link = ReaderLink()
+    @State private var isImportingPDFs = false
+    @State private var showsExport = false
+    @State private var showsMigration = false
+    @State private var showsCitationStyles = false
+
     var body: some View {
+        decorated
+    }
+
+    /// The Mac hangs the toolbar off the split view itself, which is what makes
+    /// it one centred row with no dividers between column groups. iOS has no
+    /// such toolbar on a split view, so there it belongs to the list column's
+    /// navigation bar.
+    @ViewBuilder
+    private var decorated: some View {
+        #if os(macOS)
+        windowBody.toolbar(id: "library") { toolbarContent }
+        #else
+        windowBody
+        #endif
+    }
+
+    private var windowBody: some View {
         @Bindable var app = app
 
-        NavigationSplitView(columnVisibility: $app.columnVisibility) {
+        return NavigationSplitView(columnVisibility: $app.columnVisibility) {
             LibrarySidebar(model: model)
                 .navigationTitle(model.manifest.displayName)
         } content: {
-            PaperListView(model: model)
-                .navigationTitle(scopeTitle)
-                .toolbar { LibraryToolbarItems(model: model) }
+            listColumn
         } detail: {
-            // The inspector lives on the detail column rather than on the split
-            // view itself. Attaching it to the whole view adds a fourth pane
-            // beside three columns, which on an 11-inch iPad squeezes the
-            // reader down to a sliver and duplicates the toolbar.
-            PaperDetailColumn(model: model)
+            PaperDetailColumn(model: model, configuration: configuration, link: link)
         }
+        .searchPalette(model: model, isPresented: $app.showsSearchPalette) { action in
+            perform(action)
+        }
+        .fileImporter(
+            isPresented: $isImportingPDFs,
+            allowedContentTypes: [.pdf],
+            allowsMultipleSelection: true
+        ) { result in
+            guard case let .success(urls) = result else { return }
+            Task { await model.importDocuments(at: urls) }
+        }
+        .sheet(isPresented: $showsExport) { BibTeXExportView() }
+        .sheet(isPresented: $showsMigration) { MigrationView(model: model) }
+        .sheet(isPresented: $showsCitationStyles) {
+            if let paper = model.selectedPaper {
+                NavigationStack {
+                    CitationStyleView(item: paper.meta.csl)
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("Done") { showsCitationStyles = false }
+                            }
+                        }
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .paperTimeAddPapers)) { _ in
+            isImportingPDFs = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .paperTimeExportBibTeX)) { _ in
+            showsExport = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .paperTimeCopyCitationKey)) { _ in
+            copySelectedCitationKey()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .paperTimeFindInDocument)) { _ in
+            link.isFinding = true
+        }
+    }
+
+    @ViewBuilder
+    private var listColumn: some View {
+        #if os(macOS)
+        PaperListView(model: model)
+            .navigationTitle(scopeTitle)
+        #else
+        PaperListView(model: model)
+            .navigationTitle(scopeTitle)
+            .toolbar(id: "library") { toolbarContent }
+        #endif
+    }
+
+    // MARK: - Toolbar
+
+    /// The Mac centres its toolbar with `.principal`; iOS allows only one
+    /// principal item, so there the controls sit in the trailing group.
+    private var barPlacement: ToolbarItemPlacement {
+        #if os(macOS)
+        .principal
+        #else
+        .topBarTrailing
+        #endif
+    }
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some CustomizableToolbarContent {
+        ToolbarItem(id: "add", placement: barPlacement) {
+            Button {
+                isImportingPDFs = true
+            } label: {
+                Label("Add PDFs", systemImage: "plus")
+            }
+            .help("Add PDFs to the library (Command-O)")
+        }
+
+        ToolbarItem(id: "search", placement: barPlacement) {
+            Button {
+                app.showsSearchPalette = true
+            } label: {
+                Label("Search", systemImage: "magnifyingglass")
+            }
+            .help("Search everything (Command-K)")
+        }
+
+        ToolbarItem(id: "sort", placement: barPlacement) {
+            Menu {
+                Picker("Sort By", selection: sortOrderBinding) {
+                    ForEach(LibraryModel.SortOrder.allCases) { order in
+                        Text(order.displayName).tag(order)
+                    }
+                }
+                Divider()
+                Toggle("Ascending", isOn: sortAscendingBinding)
+            } label: {
+                Label("Sort", systemImage: "arrow.up.arrow.down")
+            }
+        }
+
+        ToolbarItem(id: "markup", placement: barPlacement) {
+            Menu {
+                Section("Highlight") {
+                    ForEach(MarkupColor.allCases, id: \.self) { color in
+                        Button(color.displayName) { addMarkup(.highlight, color: color) }
+                    }
+                }
+                Button("Underline") { addMarkup(.underline, color: configuration.markupColor) }
+                Button("Strikethrough") {
+                    addMarkup(.strikethrough, color: configuration.markupColor)
+                }
+            } label: {
+                Label("Mark Up", systemImage: "highlighter")
+            }
+            .disabled(!link.hasSelection)
+            .help("Mark up the selected text")
+        }
+
+        #if os(iOS)
+        ToolbarItem(id: "draw", placement: barPlacement) {
+            Button {
+                configuration.mode = configuration.mode == .draw ? .read : .draw
+                configuration.showsToolPicker = configuration.mode == .draw
+            } label: {
+                Label(
+                    configuration.mode == .draw ? "Stop Drawing" : "Draw",
+                    systemImage: "pencil.tip.crop.circle"
+                )
+                .symbolVariant(configuration.mode == .draw ? .fill : .none)
+            }
+            .disabled(model.selectedPaper == nil)
+        }
+        #endif
+
+        ToolbarItem(id: "view", placement: barPlacement) {
+            Menu {
+                Picker("Page Layout", selection: $configuration.layout) {
+                    ForEach(ReaderConfiguration.PageLayout.allCases) { layout in
+                        Label(layout.label, systemImage: layout.symbolName).tag(layout)
+                    }
+                }
+                Picker("Page Tint", selection: $configuration.tint) {
+                    ForEach(ReaderConfiguration.PageTint.allCases) { tint in
+                        Text(tint.label).tag(tint)
+                    }
+                }
+                #if os(iOS)
+                Toggle("Draw with Finger", isOn: $configuration.fingerDrawing)
+                #endif
+            } label: {
+                Label("View Options", systemImage: "textformat.size")
+            }
+            .disabled(model.selectedPaper == nil)
+        }
+
+        ToolbarItem(id: "share", placement: barPlacement) {
+            Menu {
+                Button {
+                    showsExport = true
+                } label: {
+                    Label("Export BibTeX…", systemImage: "square.and.arrow.up")
+                }
+                Button {
+                    showsCitationStyles = true
+                } label: {
+                    Label("Citation Styles…", systemImage: "text.quote")
+                }
+                .disabled(model.selectedPaper == nil)
+                Divider()
+                Button {
+                    showsMigration = true
+                } label: {
+                    Label(
+                        "Import Existing Library…",
+                        systemImage: "square.and.arrow.down.on.square"
+                    )
+                }
+            } label: {
+                Label("Share", systemImage: "square.and.arrow.up")
+            }
+        }
+
+        ToolbarItem(id: "inspector", placement: .primaryAction) {
+            Button {
+                app.toggleInspector()
+            } label: {
+                Label("Inspector", systemImage: "sidebar.trailing")
+            }
+            .help("Show or hide the inspector (Command-])")
+        }
+    }
+
+    // MARK: - Actions
+
+    private var sortOrderBinding: Binding<LibraryModel.SortOrder> {
+        Binding(get: { model.sortOrder }, set: { model.sortOrder = $0 })
+    }
+
+    private var sortAscendingBinding: Binding<Bool> {
+        Binding(get: { model.sortAscending }, set: { model.sortAscending = $0 })
+    }
+
+    private func addMarkup(_ kind: MarkupDescriptor.Kind, color: MarkupColor) {
+        guard let session = link.session, let selection = link.selection else { return }
+        session.addMarkup(for: selection, kind: kind, color: color)
+        link.selection = nil
+    }
+
+    private func perform(_ action: SearchResult.Action) {
+        switch action {
+        case .addPDFs: isImportingPDFs = true
+        case .exportBibTeX: showsExport = true
+        case .resolveMetadata: Task { await model.resolveAllPending() }
+        case .refresh: Task { await model.refresh() }
+        case .importLibrary: showsMigration = true
+        case .settings:
+            #if os(macOS)
+            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+            #endif
+        }
+    }
+
+    private func copySelectedCitationKey() {
+        guard let key = model.selectedPaper?.meta.bibKey, !key.isEmpty else { return }
+        #if os(macOS)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(key, forType: .string)
+        #else
+        UIPasteboard.general.string = key
+        #endif
     }
 
     private var scopeTitle: String {
@@ -79,23 +327,14 @@ struct LibraryWindow: View {
     }
 }
 
-/// The reader, plus the inspector and the actions that act on one paper.
-///
-/// Every toolbar control for this column is declared here, in the order it
-/// should appear: what you are doing to the page, then what you are doing with
-/// the paper, then the panel toggle at the trailing edge. Spreading them across
-/// nested views is what made the window look like a collection of unrelated
-/// buttons.
+/// The reader and the inspector.
 struct PaperDetailColumn: View {
     let model: LibraryModel
+    let configuration: ReaderConfiguration
+    let link: ReaderLink
     @Environment(AppModel.self) private var app
 
-    @State private var configuration = ReaderConfiguration()
-    @State private var link = ReaderLink()
     @State private var inspectorTab = InspectorTab.details
-    @State private var showsExport = false
-    @State private var showsMigration = false
-    @State private var showsCitationStyles = false
 
     enum InspectorTab: String, CaseIterable, Identifiable {
         case details, notes
@@ -132,30 +371,7 @@ struct PaperDetailColumn: View {
             inspector
                 .inspectorColumnWidth(min: 280, ideal: 340, max: 460)
         }
-        .toolbar { toolbarContent }
-        .sheet(isPresented: $showsExport) { BibTeXExportView() }
-        .sheet(isPresented: $showsMigration) { MigrationView(model: model) }
-        .sheet(isPresented: $showsCitationStyles) {
-            if let paper = model.selectedPaper {
-                NavigationStack {
-                    CitationStyleView(item: paper.meta.csl)
-                        .toolbar {
-                            ToolbarItem(placement: .confirmationAction) {
-                                Button("Done") { showsCitationStyles = false }
-                            }
-                        }
-                }
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .paperTimeExportBibTeX)) { _ in
-            showsExport = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .paperTimeCopyCitationKey)) { _ in
-            copySelectedCitationKey()
-        }
     }
-
-    // MARK: - Inspector
 
     @ViewBuilder
     private var inspector: some View {
@@ -180,131 +396,13 @@ struct PaperDetailColumn: View {
                     if let session = link.session {
                         MarkupListView(session: session)
                     } else {
-                        ContentUnavailableView(
-                            "Opening the Paper",
-                            systemImage: "hourglass"
-                        )
+                        ContentUnavailableView("Opening the Paper", systemImage: "hourglass")
                     }
                 }
             }
         } else {
             ContentUnavailableView("Nothing Selected", systemImage: "sidebar.right")
         }
-    }
-
-    // MARK: - Toolbar
-
-    @ToolbarContentBuilder
-    private var toolbarContent: some ToolbarContent {
-        #if os(iOS)
-        ToolbarItem {
-            Button {
-                configuration.mode = configuration.mode == .draw ? .read : .draw
-                configuration.showsToolPicker = configuration.mode == .draw
-            } label: {
-                Label(
-                    configuration.mode == .draw ? "Stop Drawing" : "Draw",
-                    systemImage: "pencil.tip.crop.circle"
-                )
-                .symbolVariant(configuration.mode == .draw ? .fill : .none)
-            }
-            .disabled(model.selectedPaper == nil)
-        }
-        #endif
-
-        ToolbarItem {
-            Menu {
-                Section("Highlight") {
-                    ForEach(MarkupColor.allCases, id: \.self) { color in
-                        Button(color.displayName) { addMarkup(.highlight, color: color) }
-                    }
-                }
-                Button("Underline") { addMarkup(.underline, color: configuration.markupColor) }
-                Button("Strikethrough") {
-                    addMarkup(.strikethrough, color: configuration.markupColor)
-                }
-            } label: {
-                Label("Mark Up", systemImage: "highlighter")
-            }
-            .disabled(!link.hasSelection)
-            .help("Mark up the selected text")
-        }
-
-        ToolbarItem {
-            Menu {
-                Picker("Page Layout", selection: $configuration.layout) {
-                    ForEach(ReaderConfiguration.PageLayout.allCases) { layout in
-                        Label(layout.label, systemImage: layout.symbolName).tag(layout)
-                    }
-                }
-                Picker("Page Tint", selection: $configuration.tint) {
-                    ForEach(ReaderConfiguration.PageTint.allCases) { tint in
-                        Text(tint.label).tag(tint)
-                    }
-                }
-                #if os(iOS)
-                Toggle("Draw with Finger", isOn: $configuration.fingerDrawing)
-                #endif
-            } label: {
-                Label("View Options", systemImage: "textformat.size")
-            }
-            .disabled(model.selectedPaper == nil)
-        }
-
-        ToolbarItem {
-            Menu {
-                Button {
-                    showsExport = true
-                } label: {
-                    Label("Export BibTeX…", systemImage: "square.and.arrow.up")
-                }
-                Button {
-                    showsCitationStyles = true
-                } label: {
-                    Label("Citation Styles…", systemImage: "text.quote")
-                }
-                .disabled(model.selectedPaper == nil)
-                Divider()
-                Button {
-                    showsMigration = true
-                } label: {
-                    Label(
-                        "Import Existing Library…",
-                        systemImage: "square.and.arrow.down.on.square"
-                    )
-                }
-            } label: {
-                Label("Share", systemImage: "square.and.arrow.up")
-            }
-        }
-
-        ToolbarItem(placement: .primaryAction) {
-            Button {
-                app.showsInspector.toggle()
-            } label: {
-                Label("Inspector", systemImage: "sidebar.trailing")
-            }
-            .help("Show or hide the inspector (Command-])")
-        }
-    }
-
-    // MARK: - Actions
-
-    private func addMarkup(_ kind: MarkupDescriptor.Kind, color: MarkupColor) {
-        guard let session = link.session, let selection = link.selection else { return }
-        session.addMarkup(for: selection, kind: kind, color: color)
-        link.selection = nil
-    }
-
-    /// Copies the citation key so it can be pasted straight into a manuscript.
-    private func copySelectedCitationKey() {
-        guard let key = model.selectedPaper?.meta.bibKey, !key.isEmpty else { return }
-        #if os(macOS)
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(key, forType: .string)
-        #else
-        UIPasteboard.general.string = key
-        #endif
     }
 }
 

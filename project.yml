@@ -62,6 +62,11 @@ targets:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: com.imtaeheon.PaperTime.paper
+            UTTypeDescription: Paper Time Paper
+            UTTypeConformsTo: [public.data]
+            UTTypeTagSpecification: {}
         CFBundleDocumentTypes:
           - CFBundleTypeName: PDF Document
             LSItemContentTypes: [com.adobe.pdf]

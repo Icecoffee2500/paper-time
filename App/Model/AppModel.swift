@@ -30,11 +30,24 @@ public final class AppModel {
     #else
     public var showsInspector = false
     #endif
+    /// The Spotlight-style search overlay.
+    public var showsSearchPalette = false
 
     /// Hides the scope sidebar only. The paper list stays put: collapsing both
     /// columns at once is a different, rarer intent than "give me more room".
     public func toggleSidebar() {
-        columnVisibility = columnVisibility == .all ? .doubleColumn : .all
+        // The inspector animates because `.inspector` animates its own
+        // presentation; a column-visibility change does not, so it has to be
+        // asked for explicitly or the sidebar snaps in and out.
+        withAnimation(.snappy(duration: 0.25)) {
+            columnVisibility = columnVisibility == .all ? .doubleColumn : .all
+        }
+    }
+
+    public func toggleInspector() {
+        withAnimation(.snappy(duration: 0.25)) {
+            showsInspector.toggle()
+        }
     }
 
     public var isSidebarVisible: Bool { columnVisibility == .all }
