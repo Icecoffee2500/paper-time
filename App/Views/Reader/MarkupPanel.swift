@@ -18,6 +18,8 @@ final class MarkupPanelController {
     /// cleared the moment the panel takes focus; that is the panel opening,
     /// not the reader letting go, and must not close what just opened.
     private(set) var isShowing = false
+    /// True while the note editor is up, which must survive a scroll.
+    var isComposingNote: Bool { composer != nil }
 
     private var onMark: ((MarkupDescriptor.Kind, MarkupColor) -> Void)?
     private var onRecolor: ((MarkupColor) -> Void)?
@@ -168,6 +170,10 @@ final class MarkupBarView: NSVisualEffectView {
     private let onMark: (MarkupDescriptor.Kind, MarkupColor) -> Void
     private let onNote: () -> Void
     private let onCopy: () -> Void
+    private var armed = MarkupDescriptor.Kind.highlight
+    private var colorButtons: [NSButton] = []
+    private var underlineButton: NSButton?
+    private var strikeButton: NSButton?
 
     init(
         onMark: @escaping (MarkupDescriptor.Kind, MarkupColor) -> Void,
@@ -187,17 +193,26 @@ final class MarkupBarView: NSVisualEffectView {
         layer?.cornerCurve = .continuous
         layer?.masksToBounds = true
 
-        var views: [NSView] = MarkupColor.allCases.map { color in
-            let button = NSButton(image: Self.swatch(for: color), target: self, action: #selector(highlight(_:)))
+        var views: [NSView] = MarkupColor.allCases.enumerated().map { index, color in
+            let button = NSButton(
+                image: Self.swatch(for: color),
+                target: self,
+                action: #selector(applyColor(_:))
+            )
             button.isBordered = false
-            button.tag = MarkupColor.allCases.firstIndex(of: color) ?? 0
-            button.toolTip = "Highlight \(color.displayName)"
-            button.setAccessibilityLabel("Highlight \(color.displayName)")
+            button.tag = index
+            button.toolTip = color.displayName
+            button.setAccessibilityLabel("\(color.displayName)")
+            colorButtons.append(button)
             return button
         }
         views.append(Self.divider())
-        views.append(symbolButton("underline", "Underline", #selector(underline)))
-        views.append(symbolButton("strikethrough", "Strikethrough", #selector(strikethrough)))
+        let underline = symbolButton("underline", "Underline", #selector(armUnderline))
+        let strike = symbolButton("strikethrough", "Strikethrough", #selector(armStrikethrough))
+        underlineButton = underline
+        strikeButton = strike
+        views.append(underline)
+        views.append(strike)
         views.append(Self.divider())
         views.append(symbolButton("note.text.badge.plus", "Add Note", #selector(note)))
         views.append(symbolButton("doc.on.doc", "Copy", #selector(copyText)))
@@ -242,26 +257,63 @@ final class MarkupBarView: NSVisualEffectView {
         return line
     }
 
-    static func swatch(for color: MarkupColor) -> NSImage {
+    /// A colour swatch that shows what it will do: a filled dot for a
+    /// highlight, a bar under or through the dot for the other two.
+    static func swatch(
+        for color: MarkupColor,
+        kind: MarkupDescriptor.Kind = .highlight
+    ) -> NSImage {
         let size = NSSize(width: 20, height: 20)
         return NSImage(size: size, flipped: false) { rect in
+            let circle = rect.insetBy(dx: 0.5, dy: kind == .highlight ? 0.5 : 2.5)
             color.platformColor.setFill()
-            NSBezierPath(ovalIn: rect.insetBy(dx: 0.5, dy: 0.5)).fill()
+            switch kind {
+            case .highlight, .note:
+                NSBezierPath(ovalIn: circle).fill()
+            case .underline:
+                NSBezierPath(ovalIn: circle.offsetBy(dx: 0, dy: 2)).fill()
+                NSBezierPath(rect: NSRect(x: rect.minX + 2, y: rect.minY + 1,
+                                          width: rect.width - 4, height: 2)).fill()
+            case .strikethrough:
+                NSBezierPath(ovalIn: circle).fill()
+                NSColor.labelColor.setFill()
+                NSBezierPath(rect: NSRect(x: rect.minX + 1, y: rect.midY - 1,
+                                          width: rect.width - 2, height: 2)).fill()
+            }
             NSColor.labelColor.withAlphaComponent(0.12).setStroke()
-            let ring = NSBezierPath(ovalIn: rect.insetBy(dx: 0.5, dy: 0.5))
+            let ring = NSBezierPath(ovalIn: circle)
             ring.lineWidth = 1
             ring.stroke()
             return true
         }
     }
 
-    @objc private func highlight(_ sender: NSButton) {
+    /// A colour applies the armed kind, which is a highlight unless the reader
+    /// has said otherwise. One click for the common case, two when you want a
+    /// green underline — and the armed button says which you are about to get.
+    @objc private func applyColor(_ sender: NSButton) {
         let color = MarkupColor.allCases[min(sender.tag, MarkupColor.allCases.count - 1)]
-        onMark(.highlight, color)
+        onMark(armed, color)
     }
 
-    @objc private func underline() { onMark(.underline, .yellow) }
-    @objc private func strikethrough() { onMark(.strikethrough, .yellow) }
+    @objc private func armUnderline() { arm(.underline) }
+    @objc private func armStrikethrough() { arm(.strikethrough) }
+
+    private func arm(_ kind: MarkupDescriptor.Kind) {
+        armed = armed == kind ? .highlight : kind
+        for button in [underlineButton, strikeButton] {
+            button?.contentTintColor = .labelColor
+        }
+        switch armed {
+        case .underline: underlineButton?.contentTintColor = .controlAccentColor
+        case .strikethrough: strikeButton?.contentTintColor = .controlAccentColor
+        default: break
+        }
+        for (index, button) in colorButtons.enumerated() {
+            let color = MarkupColor.allCases[index]
+            button.image = Self.swatch(for: color, kind: armed)
+        }
+    }
     @objc private func note() { onNote() }
     @objc private func copyText() { onCopy() }
 }

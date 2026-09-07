@@ -30,6 +30,7 @@ struct SettingsView: View {
             librarySection
             metadataSection(settings: settings)
             bibTeXSection(settings: settings)
+            listSection(settings: settings)
             readingSection(settings: settings)
             aboutSection
         }
@@ -121,6 +122,37 @@ struct SettingsView: View {
             }
             Toggle("Protect Case in Titles", isOn: Bindable(settings).protectsCase)
             Toggle("Include Unverified Records in Export", isOn: Bindable(settings).includesUnverifiedInExport)
+        }
+    }
+
+    // MARK: - The list
+
+    /// Which fields appear under a title in the paper list.
+    ///
+    /// Order follows the order they are switched on, so the reader chooses
+    /// both what is shown and what comes first.
+    private func listSection(settings: AppSettings) -> some View {
+        let chosen = SubtitleField.parse(settings.listSubtitleFields)
+        return Section {
+            ForEach(SubtitleField.allCases) { field in
+                Toggle(
+                    field.displayName,
+                    isOn: Binding(
+                        get: { chosen.contains(field) },
+                        set: { isOn in
+                            var updated = chosen.filter { $0 != field }
+                            if isOn { updated.append(field) }
+                            settings.listSubtitleFields = SubtitleField.encode(updated)
+                        }
+                    )
+                )
+            }
+        } header: {
+            Text("Under the Title")
+        } footer: {
+            Text(chosen.map(\.displayName).joined(separator: " · "))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
         }
     }
 

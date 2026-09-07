@@ -93,6 +93,9 @@ final class ReaderCoordinator: NSObject {
     private weak var pdfView: PDFView?
     private var shownRevision = 0
     private var appliedLayout: ReaderConfiguration.PageLayout?
+    private var appliedTint: ReaderConfiguration.PageTint?
+    private var appliedMode: ReaderConfiguration.Mode?
+    private var appliedFingerDrawing: Bool?
     #if os(macOS)
     private let markupPanel = MarkupPanelController()
     private var markupTask: Task<Void, Never>?
@@ -176,6 +179,23 @@ final class ReaderCoordinator: NSObject {
             name: .PDFViewPageChanged,
             object: view
         )
+        #if os(macOS)
+        // The controls belong to one selection on one page. Scrolling, turning
+        // the page, zooming or leaving the window all end that.
+        for name in [
+            Notification.Name.PDFViewScaleChanged,
+            .PDFViewPageChanged,
+            NSScrollView.didLiveScrollNotification,
+            NSWindow.didResignKeyNotification,
+        ] {
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(dismissMarkupPanel),
+                name: name,
+                object: nil
+            )
+        }
+        #endif
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(selectionChanged),
@@ -228,8 +248,15 @@ final class ReaderCoordinator: NSObject {
             appliedLayout = configuration.layout
             apply(layout: configuration.layout, to: view)
         }
-        applyTint(to: view)
-        updateCanvasInteraction()
+        if appliedTint != configuration.tint {
+            appliedTint = configuration.tint
+            applyTint(to: view)
+        }
+        if appliedMode != configuration.mode || appliedFingerDrawing != configuration.fingerDrawing {
+            appliedMode = configuration.mode
+            appliedFingerDrawing = configuration.fingerDrawing
+            updateCanvasInteraction()
+        }
 
         // A find result asks the reader to bring it into view; acting on it
         // here keeps the PDF view the only thing that knows how to scroll.
@@ -600,6 +627,11 @@ final class ReaderCoordinator: NSObject {
         case .strikethrough: "Strikethrough"
         case .note: "Note"
         }
+    }
+
+    @objc private func dismissMarkupPanel() {
+        guard !markupPanel.isComposingNote else { return }
+        hideMarkupPanel()
     }
 
     private func hideMarkupPanel() {

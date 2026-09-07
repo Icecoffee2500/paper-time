@@ -50,6 +50,10 @@ public final class LibraryModel {
 
     /// Row lookups by identifier, so a list of sixty papers does not do sixty
     /// linear scans every time one of them changes.
+    /// The list the middle column shows, filtered and sorted once per change
+    /// rather than once per redraw. `@ObservationIgnored` because filling a
+    /// cache while a view is being built must not invalidate that view.
+    @ObservationIgnored private var visibleCache: [LoadedPaper]?
     private var indexByID: [UUID: Int] = [:]
     private var attachmentIDsByParent: [UUID: [UUID]] = [:]
     public private(set) var counts = ScopeCounts()
@@ -77,13 +81,13 @@ public final class LibraryModel {
     /// PDFs sitting in the library folder that are not part of a paper yet.
     public private(set) var looseDocuments: [URL] = []
 
-    public var scope: Scope = .all
-    public var searchText = ""
+    public var scope: Scope = .all { didSet { invalidateVisibleCache() } }
+    public var searchText = "" { didSet { invalidateVisibleCache() } }
     /// The query behind the `searchResults` scope, kept apart from the list's
     /// own filter field so leaving the scope does not silently keep filtering.
     public private(set) var searchQuery = ""
-    public var sortOrder: SortOrder = .dateAdded
-    public var sortAscending = false
+    public var sortOrder: SortOrder = .dateAdded { didSet { invalidateVisibleCache() } }
+    public var sortAscending = false { didSet { invalidateVisibleCache() } }
     public var selectedPaperID: UUID?
 
     /// Papers currently being resolved, so rows can show a spinner.
@@ -236,6 +240,7 @@ public final class LibraryModel {
     // MARK: - Derived indexes
 
     private func rebuildDerivedIndexes() {
+        visibleCache = nil
         var index: [UUID: Int] = [:]
         index.reserveCapacity(papers.count)
         var attachments: [UUID: [UUID]] = [:]
@@ -283,7 +288,16 @@ public final class LibraryModel {
 
     /// Supplements travel with their parent, so the library lists only the
     /// papers that stand on their own.
+    private func invalidateVisibleCache() { visibleCache = nil }
+
     public var visiblePapers: [LoadedPaper] {
+        if let visibleCache { return visibleCache }
+        let result = computeVisiblePapers()
+        visibleCache = result
+        return result
+    }
+
+    private func computeVisiblePapers() -> [LoadedPaper] {
         var result = papers.filter { $0.meta.parentID == nil && matchesScope($0) }
         let query = scope == .searchResults
             ? searchQuery
@@ -328,11 +342,13 @@ public final class LibraryModel {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         searchQuery = trimmed
+        invalidateVisibleCache()
         withAnimation(.snappy(duration: 0.2)) { scope = .searchResults }
     }
 
     public func clearSearchResults() {
         searchQuery = ""
+        invalidateVisibleCache()
         if scope == .searchResults {
             withAnimation(.snappy(duration: 0.2)) { scope = .all }
         }

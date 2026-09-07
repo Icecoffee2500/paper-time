@@ -47,6 +47,7 @@ public final class DocumentSession {
     private var drawings: [Int: PKDrawing] = [:]
     private var pagesNeedingInkRewrite: Set<Int> = []
     private var markupsSinceLastFlush: [MarkupDescriptor] = []
+    private var removalsSinceLastFlush: [UUID] = []
     private var flushTask: Task<Void, Never>?
     private var fileFingerprint: FileFingerprint?
 
@@ -265,6 +266,7 @@ public final class DocumentSession {
         }
         markups.removeAll { $0.id == id }
         markupsSinceLastFlush.removeAll { $0.id == id }
+        removalsSinceLastFlush.append(id)
         revision += 1
         saveState = .pending
         scheduleFlush(delay: .seconds(2))
@@ -297,34 +299,88 @@ public final class DocumentSession {
 
     /// Writes the PDF. Called on a delay, when the reader closes, and whenever
     /// the app goes to the background.
+    ///
+    /// The file is rebuilt from disk on a background thread rather than
+    /// serialised from the open document. `PDFDocument.dataRepresentation()`
+    /// takes between a third and three quarters of a second on a real paper,
+    /// and doing that on the main actor froze the window every couple of
+    /// seconds while marking one up. Starting from the file also means another
+    /// device's changes are merged rather than overwritten, and the document on
+    /// screen is never touched by the writer.
     public func flush() async {
         flushTask?.cancel()
         flushTask = nil
         guard saveState == .pending || !pagesNeedingInkRewrite.isEmpty else { return }
         saveState = .saving
 
-        let currentFingerprint = FileFingerprint(url: paper.documentURL)
-        var merged = false
-        if let fileFingerprint, let currentFingerprint, currentFingerprint != fileFingerprint {
-            // Somebody else wrote this file while it was open here. Rebuild on
-            // top of their version instead of replacing it.
-            merged = reloadAndReapply()
+        let url = paper.documentURL
+        let additions = markupsSinceLastFlush
+        let removals = removalsSinceLastFlush
+        var inks: [Int: Data] = [:]
+        for index in pagesNeedingInkRewrite {
+            inks[index] = (drawings[index] ?? PKDrawing()).dataRepresentation()
         }
+        let baseline = fileFingerprint
 
-        applyPendingInk()
+        let outcome = await Task.detached(priority: .utility) {
+            Self.write(
+                to: url,
+                additions: additions,
+                removals: removals,
+                ink: inks
+            )
+        }.value
 
-        guard let data = document.dataRepresentation() else {
-            saveState = .failed("The document could not be prepared for saving.")
-            return
-        }
-        do {
-            try FileOperations.write(data, to: paper.documentURL)
-            fileFingerprint = FileFingerprint(url: paper.documentURL)
+        switch outcome {
+        case .success:
+            // Whether another device had also written is no longer something
+            // to report: the file is rebuilt from whatever is on disk, so
+            // their marks and ours both survive.
+            _ = baseline
+            fileFingerprint = FileFingerprint(url: url)
             markupsSinceLastFlush.removeAll()
+            removalsSinceLastFlush.removeAll()
             pagesNeedingInkRewrite.removeAll()
-            saveState = merged ? .mergedExternalChanges : .idle
-        } catch {
+            saveState = .idle
+        case let .failure(error):
             saveState = .failed(error.localizedDescription)
+        }
+    }
+
+    /// Applies this session's pending changes to the file, off the main actor.
+    nonisolated static func write(
+        to url: URL,
+        additions: [MarkupDescriptor],
+        removals: [UUID],
+        ink: [Int: Data]
+    ) -> Result<Void, any Error> {
+        do {
+            let data = try FileOperations.read(contentsOf: url)
+            guard let document = PDFDocument(data: data) else {
+                throw FileOperations.Failure.documentMissing(url)
+            }
+            for index in 0..<document.pageCount {
+                guard let page = document.page(at: index) else { continue }
+                for id in removals { TextMarkupWriter.remove(id: id, from: page) }
+            }
+            for descriptor in additions {
+                guard let page = document.page(at: descriptor.pageIndex) else { continue }
+                TextMarkupWriter.remove(id: descriptor.id, from: page)
+                TextMarkupWriter.apply(descriptor, to: page)
+            }
+            for (index, drawingData) in ink {
+                guard let page = document.page(at: index),
+                      let drawing = try? PKDrawing(data: drawingData)
+                else { continue }
+                InkConverter.apply(drawing, to: page)
+            }
+            guard let out = document.dataRepresentation() else {
+                throw FileOperations.Failure.writeVerificationFailed(url)
+            }
+            try FileOperations.write(out, to: url)
+            return .success(())
+        } catch {
+            return .failure(error)
         }
     }
 
@@ -333,31 +389,6 @@ public final class DocumentSession {
             guard let page = document.page(at: index) else { continue }
             InkConverter.apply(drawings[index] ?? PKDrawing(), to: page)
         }
-    }
-
-    /// Replaces the in-memory document with the one on disk and puts our own
-    /// marks back on top of it.
-    private func reloadAndReapply() -> Bool {
-        guard let data = try? FileOperations.read(contentsOf: paper.documentURL),
-              let reloaded = PDFDocument(data: data)
-        else { return false }
-
-        document = reloaded
-        // Every page with a sidecar is regenerated, so ink is never lost even
-        // if the other device's copy predates it.
-        for (index, drawing) in drawings {
-            guard let page = reloaded.page(at: index) else { continue }
-            InkConverter.apply(drawing, to: page)
-        }
-        for descriptor in markupsSinceLastFlush {
-            guard let page = reloaded.page(at: descriptor.pageIndex) else { continue }
-            TextMarkupWriter.remove(id: descriptor.id, from: page)
-            TextMarkupWriter.apply(descriptor, to: page)
-        }
-        markups = TextMarkupWriter.descriptors(in: reloaded)
-        sortMarkups()
-        revision += 1
-        return true
     }
 
     // MARK: - Export

@@ -44,6 +44,7 @@ public final class AppModel {
 
     private var restoredColumnVisibility = NavigationSplitViewVisibility.all
     private var restoredInspector = false
+    private var restoredPaperList = true
 
     public func toggleFocusMode() {
         setFocusMode(!isFocusMode)
@@ -59,12 +60,18 @@ public final class AppModel {
             if isOn {
                 restoredColumnVisibility = columnVisibility
                 restoredInspector = showsInspector
-                columnVisibility = .detailOnly
+                restoredPaperList = showsPaperList
+                // `.detailOnly` is ignored by a three-column split view on the
+                // Mac; `.doubleColumn` does hide the source list, and the paper
+                // list collapses by width.
+                columnVisibility = .doubleColumn
+                showsPaperList = false
                 showsInspector = false
                 isFocusMode = true
             } else {
                 columnVisibility = restoredColumnVisibility
                 showsInspector = restoredInspector
+                showsPaperList = restoredPaperList
                 showsFloatingList = false
                 isFocusMode = false
             }
@@ -85,7 +92,10 @@ public final class AppModel {
         // presentation; a column-visibility change does not, so it has to be
         // asked for explicitly or the sidebar snaps in and out.
         withAnimation(.snappy(duration: 0.25)) {
-            columnVisibility = columnVisibility == .all ? .doubleColumn : .all
+            // `.all` and `.doubleColumn` both show the source list; only
+            // `.detailOnly` hides it. Comparing against `.all` alone left the
+            // shortcut doing nothing once anything else had moved a column.
+            columnVisibility = isSidebarVisible ? .detailOnly : .all
         }
     }
 
@@ -100,7 +110,7 @@ public final class AppModel {
         }
     }
 
-    public var isSidebarVisible: Bool { columnVisibility == .all }
+    public var isSidebarVisible: Bool { columnVisibility != .detailOnly }
 
     private let preference = LibraryLocationPreference()
 
@@ -182,6 +192,9 @@ public final class AppSettings {
     @AppStorage("readerPageMode") public var readerPageMode = "continuous"
     @ObservationIgnored
     @AppStorage("readerTint") public var readerTint = "none"
+    /// Which fields appear under a paper's title in the list, in order.
+    @ObservationIgnored
+    @AppStorage("listSubtitleFields") public var listSubtitleFields = "authors,year,venue"
 
     public init() {}
 }

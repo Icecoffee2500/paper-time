@@ -11,6 +11,7 @@ import UIKit
 /// The middle column: every paper in the current scope, searchable and sortable.
 struct PaperListView: View {
     @Bindable var model: LibraryModel
+    @Environment(AppModel.self) private var app
 
     var body: some View {
         content
@@ -63,8 +64,16 @@ struct PaperListView: View {
                     }
                 }
                 ForEach(model.visiblePapers) { paper in
-                    PaperRow(paperID: paper.id, model: model)
-                        .tag(paper.id)
+                    PaperRow(
+                        paper: paper,
+                        tags: paper.meta.tagIDs.compactMap { model.tag(for: $0) },
+                        attachmentCount: model.attachmentCount(of: paper.id),
+                        isResolving: model.resolving.contains(paper.id),
+                        subtitleFields: SubtitleField.parse(app.settings.listSubtitleFields),
+                        model: model
+                    )
+                    .equatable()
+                    .tag(paper.id)
                 }
             }
         }
@@ -83,22 +92,33 @@ struct PaperListView: View {
 }
 
 /// One row in the paper list.
-struct PaperRow: View {
-    let paperID: UUID
+///
+/// Everything it draws arrives as a value, and it is `Equatable`, so changing
+/// one paper redraws one row. Reading the model from inside the row made all
+/// of them depend on the whole library: resolving metadata for a fresh import
+/// rebuilt every row in the list, twice per paper.
+struct PaperRow: View, Equatable {
+    let paper: LoadedPaper
+    let tags: [Tag]
+    let attachmentCount: Int
+    let isResolving: Bool
+    let subtitleFields: [SubtitleField]
+    /// Actions only; never read for display.
     let model: LibraryModel
 
-    /// Read from the model on every redraw rather than captured once. A row
-    /// that holds its own copy of the paper keeps showing stale state after
-    /// anything else in the window changes it.
-    private var paper: LoadedPaper? { model.paper(paperID) }
+    nonisolated static func == (lhs: PaperRow, rhs: PaperRow) -> Bool {
+        lhs.paper == rhs.paper
+            && lhs.tags == rhs.tags
+            && lhs.attachmentCount == rhs.attachmentCount
+            && lhs.isResolving == rhs.isResolving
+            && lhs.subtitleFields == rhs.subtitleFields
+    }
 
     /// Whether the supplement popover is open for this row.
     @State private var showsAttachments = false
 
     var body: some View {
-        if let paper {
-            row(paper)
-        }
+        row(paper)
     }
 
     @ViewBuilder
@@ -110,13 +130,16 @@ struct PaperRow: View {
                 Text(paper.meta.displayTitle)
                     .font(.headline)
                     .lineLimit(2)
-                Text(subtitle(paper))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                if !tags(paper).isEmpty {
+                let subtitle = subtitle(paper)
+                if !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                if !tags.isEmpty {
                     HStack(spacing: 4) {
-                        ForEach(tags(paper)) { tag in
+                        ForEach(tags) { tag in
                             Text(tag.name)
                                 .font(.footnote)
                                 .padding(.horizontal, 6)
@@ -134,7 +157,7 @@ struct PaperRow: View {
 
             favoriteButton(paper)
 
-            if model.resolving.contains(paper.id) {
+            if isResolving {
                 ProgressView()
                     .controlSize(.small)
                     .accessibilityLabel("Resolving metadata")
@@ -164,14 +187,13 @@ struct PaperRow: View {
     /// way to reach it. This is a button, and it opens the list.
     @ViewBuilder
     private func attachmentsButton(_ paper: LoadedPaper) -> some View {
-        let attachments = model.attachments(of: paper.id)
-        if !attachments.isEmpty {
+        if attachmentCount > 0 {
             Button {
                 showsAttachments = true
             } label: {
                 HStack(spacing: 3) {
                     Image(systemName: "paperclip")
-                    Text("\(attachments.count)")
+                    Text("\(attachmentCount)")
                         .monospacedDigit()
                 }
                 .font(.caption)
@@ -180,11 +202,11 @@ struct PaperRow: View {
             .buttonBorderShape(.capsule)
             .controlSize(.small)
             .help("Supplementary material")
-            .accessibilityLabel("\(attachments.count) supplementary files")
+            .accessibilityLabel("\(attachmentCount) supplementary files")
             .popover(isPresented: $showsAttachments, arrowEdge: .bottom) {
                 AttachmentPopover(
                     parent: paper,
-                    attachments: attachments,
+                    attachments: model.attachments(of: paper.id),
                     model: model,
                     isPresented: $showsAttachments
                 )
@@ -242,15 +264,7 @@ struct PaperRow: View {
     }
 
     private func subtitle(_ paper: LoadedPaper) -> String {
-        var parts: [String] = []
-        if !paper.meta.displayAuthors.isEmpty { parts.append(paper.meta.displayAuthors) }
-        if let year = paper.meta.csl.year { parts.append(String(year)) }
-        if let venue = paper.meta.csl.containerTitle, !venue.isEmpty { parts.append(venue) }
-        return parts.joined(separator: " · ")
-    }
-
-    private func tags(_ paper: LoadedPaper) -> [Tag] {
-        paper.meta.tagIDs.compactMap { model.tag(for: $0) }
+        subtitleFields.compactMap { $0.value(for: paper) }.joined(separator: " · ")
     }
 
     private func needsReview(_ paper: LoadedPaper) -> Bool {

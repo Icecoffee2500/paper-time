@@ -78,6 +78,7 @@ struct LibraryWindow: View {
             .toolbar(id: "library") { toolbarContent }
             .toolbar(id: "inspector-toggle") { inspectorToolbarContent }
             .toolbarBackground(.ultraThinMaterial, for: .windowToolbar)
+            .toolbarBackgroundVisibility(.visible, for: .windowToolbar)
         #else
         windowBody
         #endif
@@ -86,25 +87,21 @@ struct LibraryWindow: View {
     private var splitView: some View {
         @Bindable var app = app
 
-        return Group {
-            if app.showsPaperList {
-                NavigationSplitView(columnVisibility: $app.columnVisibility) {
-                    sidebarColumn
-                } content: {
-                    listColumn
-                } detail: {
-                    PaperDetailColumn(model: model, configuration: configuration, link: link)
-                }
-            } else {
-                // Two columns rather than three. `NavigationSplitView` will not
-                // collapse its middle column on request, so the middle column
-                // has to not be there.
-                NavigationSplitView(columnVisibility: $app.columnVisibility) {
-                    sidebarColumn
-                } detail: {
-                    PaperDetailColumn(model: model, configuration: configuration, link: link)
-                }
-            }
+        return NavigationSplitView(columnVisibility: $app.columnVisibility) {
+            sidebarColumn
+        } content: {
+            listColumn
+                // Hidden by collapsing the column, not by building a different
+                // split view. Swapping the tree tore down and rebuilt the PDF
+                // view every time, which is what made Command-\\ crawl — and it
+                // forgot the column's width on the way back.
+                .navigationSplitViewColumnWidth(
+                    min: app.showsPaperList ? 260 : 0,
+                    ideal: app.showsPaperList ? 320 : 0,
+                    max: app.showsPaperList ? 480 : 0
+                )
+        } detail: {
+            PaperDetailColumn(model: model, configuration: configuration, link: link)
         }
     }
 
@@ -119,18 +116,7 @@ struct LibraryWindow: View {
     private var windowBody: some View {
         @Bindable var app = app
 
-        return Group {
-            if app.isFocusMode {
-                // `NavigationSplitViewVisibility.detailOnly` does not actually
-                // collapse a three-column split view on the Mac, so focus mode
-                // stands the reader up on its own instead of asking the split
-                // view for something it will not do. The session lives on the
-                // reader link, so rebuilding the reader reopens nothing.
-                PaperDetailColumn(model: model, configuration: configuration, link: link)
-            } else {
-                splitView
-            }
-        }
+        return splitView
 
         .overlay(alignment: .topLeading) { floatingList }
         .onChange(of: configuration.layout) { _, layout in
