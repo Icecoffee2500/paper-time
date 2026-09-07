@@ -101,6 +101,52 @@ struct TextMarkupTests {
         #expect(readBack.contains { $0.kind == .highlight })
     }
 
+    @Test("A note keeps the user's words apart from the quoted text")
+    func commentsRoundTrip() throws {
+        let document = try Self.makeDocument(text: "the crucial claim here")
+        let selection = try #require(document.findString("crucial claim", withOptions: []).first)
+        let page = try #require(document.page(at: 0))
+
+        var descriptor = try #require(
+            TextMarkupWriter.descriptor(
+                for: selection,
+                kind: .highlight,
+                color: .yellow,
+                in: document
+            ).first
+        )
+        descriptor.comment = "Check this against Table 2"
+        TextMarkupWriter.apply(descriptor, to: page)
+
+        let saved = try #require(document.dataRepresentation())
+        let reloaded = try #require(PDFDocument(data: saved))
+        let readBack = try #require(TextMarkupWriter.descriptors(in: reloaded).first)
+        #expect(readBack.comment == "Check this against Table 2")
+        #expect(readBack.quotedText.contains("crucial"))
+    }
+
+    @Test("A plain highlight has no comment, whatever it stores in contents")
+    func plainHighlightHasNoComment() throws {
+        let document = try Self.makeDocument(text: "ordinary sentence here")
+        let selection = try #require(document.findString("ordinary", withOptions: []).first)
+        let page = try #require(document.page(at: 0))
+
+        let descriptor = try #require(
+            TextMarkupWriter.descriptor(
+                for: selection,
+                kind: .highlight,
+                color: .yellow,
+                in: document
+            ).first
+        )
+        TextMarkupWriter.apply(descriptor, to: page)
+
+        let saved = try #require(document.dataRepresentation())
+        let reloaded = try #require(PDFDocument(data: saved))
+        let readBack = try #require(TextMarkupWriter.descriptors(in: reloaded).first)
+        #expect(readBack.comment.isEmpty)
+    }
+
     @Test("Removing a markup takes it out of the page")
     func removal() throws {
         let document = try Self.makeDocument(text: "remove this word")

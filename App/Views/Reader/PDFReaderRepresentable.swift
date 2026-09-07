@@ -25,8 +25,14 @@ struct PDFReaderRepresentable: PlatformViewRepresentable {
     let session: DocumentSession
     let configuration: ReaderConfiguration
     let link: ReaderLink
+    /// Read here so that a change to the document's marks re-runs `update`,
+    /// which is where the view is told to repaint.
+    var revision: Int
     @Binding var currentPageIndex: Int
     var onSelectionChange: (PDFSelection?, CGRect) -> Void
+    /// The system edit menu's "Add Note", which the reader turns into the
+    /// note editor.
+    var onNoteRequested: () -> Void
 
     func makeCoordinator() -> ReaderCoordinator {
         ReaderCoordinator(
@@ -34,14 +40,15 @@ struct PDFReaderRepresentable: PlatformViewRepresentable {
             configuration: configuration,
             link: link,
             onPageChange: { currentPageIndex = $0 },
-            onSelectionChange: onSelectionChange
+            onSelectionChange: onSelectionChange,
+            onNoteRequested: onNoteRequested
         )
     }
 
     #if canImport(UIKit)
     func makeUIView(context: Context) -> PDFView { context.coordinator.makePDFView() }
     func updateUIView(_ view: PDFView, context: Context) {
-        context.coordinator.update(view)
+        context.coordinator.update(view, revision: revision)
     }
     static func dismantleUIView(_ view: PDFView, coordinator: ReaderCoordinator) {
         coordinator.tearDown()
@@ -49,7 +56,7 @@ struct PDFReaderRepresentable: PlatformViewRepresentable {
     #else
     func makeNSView(context: Context) -> PDFView { context.coordinator.makePDFView() }
     func updateNSView(_ view: PDFView, context: Context) {
-        context.coordinator.update(view)
+        context.coordinator.update(view, revision: revision)
     }
     static func dismantleNSView(_ view: PDFView, coordinator: ReaderCoordinator) {
         coordinator.tearDown()
@@ -64,8 +71,11 @@ final class ReaderCoordinator: NSObject {
     private let link: ReaderLink
     private let onPageChange: (Int) -> Void
     private let onSelectionChange: (PDFSelection?, CGRect) -> Void
+    private let onNoteRequested: () -> Void
 
     private weak var pdfView: PDFView?
+    private var shownRevision = 0
+    private var appliedLayout: ReaderConfiguration.PageLayout?
     #if canImport(UIKit)
     private var canvases: [Int: PKCanvasView] = [:]
     private let toolPicker = PKToolPicker()
@@ -76,13 +86,15 @@ final class ReaderCoordinator: NSObject {
         configuration: ReaderConfiguration,
         link: ReaderLink,
         onPageChange: @escaping (Int) -> Void,
-        onSelectionChange: @escaping (PDFSelection?, CGRect) -> Void
+        onSelectionChange: @escaping (PDFSelection?, CGRect) -> Void,
+        onNoteRequested: @escaping () -> Void
     ) {
         self.session = session
         self.configuration = configuration
         self.link = link
         self.onPageChange = onPageChange
         self.onSelectionChange = onSelectionChange
+        self.onNoteRequested = onNoteRequested
         super.init()
     }
 
@@ -93,6 +105,7 @@ final class ReaderCoordinator: NSObject {
             guard let self, let selection = view.currentSelection else { return }
             self.session.addMarkup(for: selection, kind: kind, color: color)
         }
+        view.onNote = { [weak self] in self?.onNoteRequested() }
         #else
         let view = PDFView()
         #endif
@@ -105,6 +118,8 @@ final class ReaderCoordinator: NSObject {
         view.usePageViewController(false)
         #endif
         apply(layout: configuration.layout, to: view)
+        appliedLayout = configuration.layout
+        shownRevision = session.revision
 
         NotificationCenter.default.addObserver(
             self,
@@ -152,9 +167,18 @@ final class ReaderCoordinator: NSObject {
         return view
     }
 
-    func update(_ view: PDFView) {
-        if view.document !== session.document { view.document = session.document }
-        apply(layout: configuration.layout, to: view)
+    func update(_ view: PDFView, revision: Int) {
+        if view.document !== session.document {
+            view.document = session.document
+            shownRevision = revision
+        } else if revision != shownRevision {
+            shownRevision = revision
+            redraw(view)
+        }
+        if appliedLayout != configuration.layout {
+            appliedLayout = configuration.layout
+            apply(layout: configuration.layout, to: view)
+        }
         applyTint(to: view)
         updateCanvasInteraction()
 
@@ -164,6 +188,47 @@ final class ReaderCoordinator: NSObject {
             view.setCurrentSelection(requested, animate: true)
             view.scrollSelectionToVisible(nil)
             link.scrollRequest = nil
+        }
+
+        if let anchor = link.anchorRequest {
+            reveal(anchor, in: view)
+            link.anchorRequest = nil
+        }
+    }
+
+    /// Forces PDFKit to re-render the pages it has cached.
+    ///
+    /// Adding an annotation changes the page but not the image PDFKit already
+    /// drew from it, so without this a new highlight only shows up after the
+    /// page is scrolled away and back.
+    private func redraw(_ view: PDFView) {
+        #if canImport(UIKit)
+        view.clearSelection()
+        for page in visiblePages(of: view) {
+            view.setNeedsDisplay(view.convert(page.bounds(for: view.displayBox), from: page))
+        }
+        view.layoutDocumentView()
+        #else
+        view.clearSelection()
+        view.layoutDocumentView()
+        view.needsDisplay = true
+        #endif
+    }
+
+    private func visiblePages(of view: PDFView) -> [PDFPage] {
+        guard let current = view.currentPage else { return [] }
+        return [current]
+    }
+
+    /// Scrolls a mark into view and flashes the text under it.
+    private func reveal(_ anchor: ReaderLink.Anchor, in view: PDFView) {
+        guard let page = session.document.page(at: anchor.pageIndex) else { return }
+        // A little room around the mark, so it lands inside the page rather
+        // than jammed against the top edge.
+        let padded = anchor.rect.insetBy(dx: -24, dy: -80)
+        view.go(to: padded, on: page)
+        if let selection = page.selection(for: anchor.rect) {
+            view.setCurrentSelection(selection, animate: true)
         }
     }
 

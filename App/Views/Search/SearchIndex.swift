@@ -6,6 +6,9 @@ import PaperCore
 /// or a fixed action.
 struct SearchResult: Identifiable, Hashable {
     enum Kind: Hashable {
+        /// Show every paper that matches, in the library list, rather than
+        /// jumping to one of them.
+        case showAll(String)
         case paper(UUID)
         case collection(UUID)
         case tag(UUID)
@@ -63,6 +66,24 @@ enum SearchIndex {
         guard !foldedQuery.isEmpty else { return [] }
 
         var results: [SearchResult] = []
+        var matchedPapers = 0
+
+        for paper in model.papers where paper.meta.parentID == nil {
+            if LibraryModel.matches(folded: foldedQuery, paper: paper) { matchedPapers += 1 }
+        }
+        if matchedPapers > 1 {
+            // Searching for an author is searching for a body of work, not for
+            // one paper. This row is what turns a lookup into a place.
+            results.append(
+                SearchResult(
+                    kind: .showAll(trimmed),
+                    title: "Show All Results for \u{201C}\(trimmed)\u{201D}",
+                    subtitle: "\(matchedPapers) papers",
+                    symbolName: "line.3.horizontal.decrease.circle",
+                    score: 2
+                )
+            )
+        }
 
         for paper in model.papers {
             guard let score = paperScore(foldedQuery: foldedQuery, paper: paper) else { continue }

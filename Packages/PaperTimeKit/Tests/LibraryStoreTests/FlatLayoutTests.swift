@@ -182,3 +182,33 @@ struct FlatLayoutTests {
         #expect(try await store.loadAll().papers.isEmpty)
     }
 }
+
+/// Collections are the user's own filing. They live in the library folder, so
+/// reinstalling the app cannot lose them — and neither can upgrading it.
+@Suite("Collections survive a layout change")
+struct CollectionMigrationTests {
+    @Test("A collection written at the top level is adopted, papers or not")
+    func adoptsTopLevelCollections() async throws {
+        let root = try FlatLayoutTests.makeRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        var set = CollectionSet()
+        set.collections = [Collection(name: "비전", sortIndex: 0)]
+        try FileOperations.encodeAndWrite(set, to: root.appending(path: "collections.json"))
+        try FileOperations.encodeAndWrite(
+            LibraryManifest(displayName: "vla"), to: root.appending(path: "library.json")
+        )
+
+        let store = LibraryStore(root: root)
+        try await store.bootstrap()
+
+        let loaded = try await store.loadCollections()
+        #expect(loaded.collections.map(\.name) == ["비전"])
+        #expect(try await store.loadManifest().displayName == "vla")
+        #expect(
+            !FileManager.default.fileExists(
+                atPath: root.appending(path: "collections.json").path(percentEncoded: false)
+            )
+        )
+    }
+}

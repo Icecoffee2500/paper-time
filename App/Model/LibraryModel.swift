@@ -28,6 +28,10 @@ public final class LibraryModel {
 
     public enum Scope: Hashable, Sendable {
         case all
+        /// The results of a library-wide search, shown as its own source-list
+        /// row so a search is somewhere you can be rather than a filter you
+        /// have to remember you left on.
+        case searchResults
         case unread
         case reading
         case read
@@ -40,7 +44,28 @@ public final class LibraryModel {
     public let store: LibraryStore
     public let location: LibraryLocation
 
-    public private(set) var papers: [LoadedPaper] = []
+    public private(set) var papers: [LoadedPaper] = [] {
+        didSet { rebuildDerivedIndexes() }
+    }
+
+    /// Row lookups by identifier, so a list of sixty papers does not do sixty
+    /// linear scans every time one of them changes.
+    private var indexByID: [UUID: Int] = [:]
+    private var attachmentIDsByParent: [UUID: [UUID]] = [:]
+    public private(set) var counts = ScopeCounts()
+
+    /// How many papers each source-list row stands for.
+    ///
+    /// Computed once per change to `papers` rather than per row, and counted
+    /// over exactly the papers the list would show — supplements travel with
+    /// their parent, so counting them would promise rows that never appear.
+    public struct ScopeCounts: Equatable, Sendable {
+        public var unread = 0
+        public var reading = 0
+        public var read = 0
+        public var favorites = 0
+        public var needsReview = 0
+    }
     public private(set) var manifest: LibraryManifest
     public private(set) var collections = CollectionSet()
     public private(set) var loadFailures: [String] = []
@@ -50,6 +75,9 @@ public final class LibraryModel {
 
     public var scope: Scope = .all
     public var searchText = ""
+    /// The query behind the `searchResults` scope, kept apart from the list's
+    /// own filter field so leaving the scope does not silently keep filtering.
+    public private(set) var searchQuery = ""
     public var sortOrder: SortOrder = .dateAdded
     public var sortAscending = false
     public var selectedPaperID: UUID?
@@ -65,6 +93,8 @@ public final class LibraryModel {
     /// shows up without the user having to ask for it.
     private var watcher: FolderWatcher?
     private var folderCheck: Task<Void, Never>?
+    private var pendingPositions: [UUID: Int] = [:]
+    private var positionFlush: Task<Void, Never>?
 
     /// Whether metadata is looked up automatically for papers as they arrive.
     private var resolvesOnImport: Bool {
@@ -194,12 +224,44 @@ public final class LibraryModel {
 
         let adopted = Set(urls.map { $0.lastPathComponent })
         looseDocuments.removeAll { adopted.contains($0.lastPathComponent) }
-        if resolvesOnImport {
-            for paper in added {
-                Task { await resolveMetadata(for: paper.id) }
+        resolveInBackground(added.map(\.id))
+        return added.count
+    }
+
+    // MARK: - Derived indexes
+
+    private func rebuildDerivedIndexes() {
+        var index: [UUID: Int] = [:]
+        index.reserveCapacity(papers.count)
+        var attachments: [UUID: [UUID]] = [:]
+        var counts = ScopeCounts()
+
+        for (position, paper) in papers.enumerated() {
+            index[paper.id] = position
+            if let parentID = paper.meta.parentID {
+                attachments[parentID, default: []].append(paper.id)
+                continue
+            }
+            switch paper.state.readingStatus {
+            case .unread: counts.unread += 1
+            case .reading: counts.reading += 1
+            case .read: counts.read += 1
+            }
+            if paper.state.isFavorite { counts.favorites += 1 }
+            if paper.meta.confidence == .needsReview || paper.meta.confidence == .unparsed {
+                counts.needsReview += 1
             }
         }
-        return added.count
+
+        indexByID = index
+        attachmentIDsByParent = attachments
+        self.counts = counts
+    }
+
+    /// One paper by identifier, without scanning the library.
+    public func paper(_ id: UUID) -> LoadedPaper? {
+        guard let position = indexByID[id], position < papers.count else { return nil }
+        return papers[position]
     }
 
     // MARK: - Presentation
@@ -208,45 +270,82 @@ public final class LibraryModel {
     /// papers that stand on their own.
     public var visiblePapers: [LoadedPaper] {
         var result = papers.filter { $0.meta.parentID == nil && matchesScope($0) }
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let query = scope == .searchResults
+            ? searchQuery
+            : searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         if !query.isEmpty {
             let folded = TextNormalization.foldedTitle(query)
-            result = result.filter { paper in
-                let haystack = [
-                    paper.meta.displayTitle,
-                    paper.meta.csl.author.map(\.displayName).joined(separator: " "),
-                    paper.meta.csl.containerTitle ?? "",
-                    String(paper.meta.csl.year ?? 0),
-                    paper.meta.file.originalName,
-                ].joined(separator: " ")
-                return TextNormalization.foldedTitle(haystack).contains(folded)
-            }
+            result = result.filter { Self.matches(folded: folded, paper: $0) }
         }
         return result.sorted(by: comparator)
     }
 
-    public var reviewCount: Int {
-        papers.filter { $0.meta.confidence == .needsReview || $0.meta.confidence == .unparsed }.count
+    /// Everything a person might type when they are looking for a paper they
+    /// remember. Authors go in both orders because "LeCun Yann" is how a
+    /// citation prints the same name the reader thinks of as "Yann LeCun".
+    static func matches(folded query: String, paper: LoadedPaper) -> Bool {
+        var haystack = [
+            paper.meta.displayTitle,
+            paper.meta.csl.containerTitle ?? "",
+            paper.meta.csl.year.map(String.init) ?? "",
+            paper.meta.bibKey,
+            paper.meta.file.originalName,
+        ]
+        for author in paper.meta.csl.author {
+            haystack.append(author.displayName)
+            haystack.append("\(author.family ?? "") \(author.given ?? "")")
+        }
+        return TextNormalization.foldedTitle(haystack.joined(separator: " ")).contains(query)
     }
+
+    public var reviewCount: Int { counts.needsReview }
 
     public var selectedPaper: LoadedPaper? {
         guard let selectedPaperID else { return nil }
-        return papers.first { $0.id == selectedPaperID }
+        return paper(selectedPaperID)
+    }
+
+    // MARK: - Searching
+
+    /// Puts the library into the search scope, which the sidebar shows as its
+    /// own row.
+    public func showSearchResults(for query: String) {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        searchQuery = trimmed
+        withAnimation(.snappy(duration: 0.2)) { scope = .searchResults }
+    }
+
+    public func clearSearchResults() {
+        searchQuery = ""
+        if scope == .searchResults {
+            withAnimation(.snappy(duration: 0.2)) { scope = .all }
+        }
+    }
+
+    /// How many papers the current search would show, for the sidebar badge.
+    public var searchResultCount: Int {
+        guard !searchQuery.isEmpty else { return 0 }
+        let folded = TextNormalization.foldedTitle(searchQuery)
+        return papers.filter { $0.meta.parentID == nil && Self.matches(folded: folded, paper: $0) }
+            .count
     }
 
     // MARK: - Supplements
 
     public func attachments(of paperID: UUID) -> [LoadedPaper] {
-        papers
-            .filter { $0.meta.parentID == paperID }
+        (attachmentIDsByParent[paperID] ?? [])
+            .compactMap { paper($0) }
             .sorted { $0.meta.displayTitle < $1.meta.displayTitle }
     }
 
+    public func attachmentCount(of paperID: UUID) -> Int {
+        attachmentIDsByParent[paperID]?.count ?? 0
+    }
+
     public func parent(of paperID: UUID) -> LoadedPaper? {
-        guard let parentID = papers.first(where: { $0.id == paperID })?.meta.parentID else {
-            return nil
-        }
-        return papers.first { $0.id == parentID }
+        guard let parentID = paper(paperID)?.meta.parentID else { return nil }
+        return paper(parentID)
     }
 
     /// Papers a given document could be attached to.
@@ -315,7 +414,7 @@ public final class LibraryModel {
 
     private func matchesScope(_ paper: LoadedPaper) -> Bool {
         switch scope {
-        case .all: true
+        case .all, .searchResults: true
         case .unread: paper.state.readingStatus == .unread
         case .reading: paper.state.readingStatus == .reading
         case .read: paper.state.readingStatus == .read
@@ -386,15 +485,26 @@ public final class LibraryModel {
                 duplicates += 1
             }
         }
-        if resolvesOnImport {
-            for paper in added {
-                Task { await resolveMetadata(for: paper.id) }
-            }
-        }
+        resolveInBackground(added.map(\.id))
         return (added.count, duplicates)
     }
 
     // MARK: - Metadata
+
+    /// Looks papers up one after another, off the back of the current action.
+    ///
+    /// One task rather than one per paper: sixty concurrent lookups saturate
+    /// both the network services (which then rate-limit us) and the main actor
+    /// they report back to, and the list stutters for a minute.
+    private func resolveInBackground(_ ids: [UUID]) {
+        guard resolvesOnImport, !ids.isEmpty else { return }
+        Task { [weak self] in
+            for id in ids {
+                guard let self else { return }
+                await resolveMetadata(for: id)
+            }
+        }
+    }
 
     /// Runs the resolution pipeline for one paper and stores the outcome.
     public func resolveMetadata(for paperID: UUID) async {
@@ -411,7 +521,13 @@ public final class LibraryModel {
         }
 
         let url = paper.documentURL
-        guard let signals = DocumentSignalsExtractor.extract(fromFileAt: url) else { return }
+        // Opening a PDF and pulling text out of its first pages takes long
+        // enough to drop frames, and this runs once per paper on a fresh
+        // library. It has no business on the main actor.
+        let extraction = Task.detached(priority: .utility) {
+            DocumentSignalsExtractor.extract(fromFileAt: url)
+        }
+        guard let signals = await extraction.value else { return }
         let result = await resolver.resolve(
             signals: signals,
             originalFileName: paper.meta.file.originalName
@@ -539,6 +655,36 @@ public final class LibraryModel {
     }
 
     /// Kept for the inspector, which edits several fields at once.
+    /// Remembers where the reader is, without writing a file per page turn.
+    ///
+    /// Turning a page used to save immediately, which meant a JSON write and a
+    /// full list refresh for every flick of the wrist. The position only has to
+    /// be right by the time the paper is closed or the app leaves the screen.
+    public func recordReadingPosition(_ index: Int, for paperID: UUID) {
+        pendingPositions[paperID] = index
+        positionFlush?.cancel()
+        positionFlush = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(1.5))
+            guard !Task.isCancelled else { return }
+            await self?.flushReadingPositions()
+        }
+    }
+
+    /// Writes any remembered position now. Called when a paper closes.
+    public func flushReadingPositions() async {
+        positionFlush?.cancel()
+        positionFlush = nil
+        let pending = pendingPositions
+        pendingPositions.removeAll()
+        for (paperID, index) in pending {
+            guard let paper = paper(paperID) else { continue }
+            var state = paper.state
+            state.lastPageIndex = index
+            state.lastOpenedAt = .now
+            await update(state: state, for: paperID)
+        }
+    }
+
     public func update(state: PaperState, for paperID: UUID) async {
         guard let index = papers.firstIndex(where: { $0.id == paperID }) else { return }
         let paper = papers[index]

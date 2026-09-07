@@ -90,9 +90,10 @@ struct PaperRow: View {
     /// Read from the model on every redraw rather than captured once. A row
     /// that holds its own copy of the paper keeps showing stale state after
     /// anything else in the window changes it.
-    private var paper: LoadedPaper? {
-        model.papers.first { $0.id == paperID }
-    }
+    private var paper: LoadedPaper? { model.paper(paperID) }
+
+    /// Whether the supplement popover is open for this row.
+    @State private var showsAttachments = false
 
     var body: some View {
         if let paper {
@@ -129,16 +130,7 @@ struct PaperRow: View {
 
             Spacer(minLength: 8)
 
-            if !model.attachments(of: paper.id).isEmpty {
-                Label(
-                    "\(model.attachments(of: paper.id).count)",
-                    systemImage: "paperclip"
-                )
-                .labelStyle(.titleAndIcon)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .help("Has supplementary material")
-            }
+            attachmentsButton(paper)
 
             favoriteButton(paper)
 
@@ -163,6 +155,40 @@ struct PaperRow: View {
             guard let dropped = items.first, dropped.id != paper.id else { return false }
             Task { await model.attach(dropped.id, to: paper.id) }
             return true
+        }
+    }
+
+    /// The paperclip: how many supplements a paper has, and a way into them.
+    ///
+    /// A badge alone told the reader that something existed and gave them no
+    /// way to reach it. This is a button, and it opens the list.
+    @ViewBuilder
+    private func attachmentsButton(_ paper: LoadedPaper) -> some View {
+        let attachments = model.attachments(of: paper.id)
+        if !attachments.isEmpty {
+            Button {
+                showsAttachments = true
+            } label: {
+                HStack(spacing: 3) {
+                    Image(systemName: "paperclip")
+                    Text("\(attachments.count)")
+                        .monospacedDigit()
+                }
+                .font(.caption)
+            }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
+            .controlSize(.small)
+            .help("Supplementary material")
+            .accessibilityLabel("\(attachments.count) supplementary files")
+            .popover(isPresented: $showsAttachments, arrowEdge: .bottom) {
+                AttachmentPopover(
+                    parent: paper,
+                    attachments: attachments,
+                    model: model,
+                    isPresented: $showsAttachments
+                )
+            }
         }
     }
 
@@ -275,6 +301,14 @@ struct PaperRow: View {
                 || model.attachmentCandidates(for: paper.id).isEmpty
         )
 
+        if paper.meta.parentID != nil {
+            Button {
+                Task { await model.detach(paper.id) }
+            } label: {
+                Label("Detach from Paper", systemImage: "paperclip.badge.ellipsis")
+            }
+        }
+
         Divider()
 
         Button {
@@ -314,5 +348,81 @@ struct PaperRow: View {
         #else
         UIPasteboard.general.string = string
         #endif
+    }
+}
+
+/// The supplements attached to one paper.
+///
+/// Opening one puts it in the reader, which is the whole point of attaching it:
+/// a supplement you cannot read is a supplement you have lost.
+private struct AttachmentPopover: View {
+    let parent: LoadedPaper
+    let attachments: [LoadedPaper]
+    let model: LibraryModel
+    @Binding var isPresented: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Supplementary Material")
+                .font(.subheadline.weight(.semibold))
+                .padding(.horizontal, 14)
+                .padding(.top, 12)
+                .padding(.bottom, 6)
+
+            Divider()
+
+            ForEach(attachments) { attachment in
+                Button {
+                    model.selectedPaperID = attachment.id
+                    isPresented = false
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "doc.text")
+                            .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(attachment.meta.displayTitle)
+                                .lineLimit(2)
+                                .multilineTextAlignment(.leading)
+                            Text(attachment.meta.file.originalName)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                        Spacer(minLength: 0)
+                        if model.selectedPaperID == attachment.id {
+                            Image(systemName: "checkmark")
+                                .foregroundStyle(.tint)
+                        }
+                    }
+                    .contentShape(.rect)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                }
+                .buttonStyle(.plain)
+                .contextMenu {
+                    Button {
+                        Task { await model.detach(attachment.id) }
+                        isPresented = false
+                    } label: {
+                        Label("Detach from Paper", systemImage: "paperclip.badge.ellipsis")
+                    }
+                }
+            }
+
+            Divider()
+
+            Button {
+                model.selectedPaperID = parent.id
+                isPresented = false
+            } label: {
+                Label("Back to the Paper", systemImage: "arrow.uturn.backward")
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .padding(.bottom, 6)
+        }
+        .frame(width: 300)
     }
 }

@@ -85,6 +85,9 @@ public struct MarkupDescriptor: Codable, Hashable, Sendable, Identifiable {
 /// file shows exactly what the user marked.
 public enum TextMarkupWriter {
     static let idKey = PDFAnnotationKey(rawValue: "/PTMarkupID")
+    /// The user's own words, kept apart from `contents` so a comment can be
+    /// told from the quoted text every reader puts there by default.
+    static let commentKey = PDFAnnotationKey(rawValue: "/PTComment")
 
     /// Builds a descriptor from a text selection.
     public static func descriptor(
@@ -136,6 +139,9 @@ public enum TextMarkupWriter {
                     ? descriptor.quotedText
                     : descriptor.comment
                 annotation.setValue(descriptor.id.uuidString, forAnnotationKey: idKey)
+                if !descriptor.comment.isEmpty {
+                    annotation.setValue(descriptor.comment, forAnnotationKey: commentKey)
+                }
                 page.addAnnotation(annotation)
                 created.append(annotation)
             }
@@ -187,7 +193,7 @@ public enum TextMarkupWriter {
                         rects: [annotation.bounds],
                         color: nearestColor(annotation.color),
                         quotedText: quotedText(for: annotation, on: page),
-                        comment: annotation.contents ?? ""
+                        comment: comment(for: annotation, on: page)
                     )
                 }
             }
@@ -196,6 +202,22 @@ public enum TextMarkupWriter {
             }
         }
         return result
+    }
+
+    /// What the user wrote, as opposed to what they marked.
+    ///
+    /// Marks made in this app carry the comment in their own key. Marks made
+    /// elsewhere only have `contents`, which readers fill with the quoted text
+    /// by default — so that counts as a comment only when it differs from what
+    /// is actually under the mark.
+    static func comment(for annotation: PDFAnnotation, on page: PDFPage) -> String {
+        if let own = annotation.value(forAnnotationKey: commentKey) as? String, !own.isEmpty {
+            return own
+        }
+        let contents = (annotation.contents ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !contents.isEmpty else { return "" }
+        if annotation.type == "Text" { return contents }
+        return contents == quotedText(for: annotation, on: page) ? "" : contents
     }
 
     static func quotedText(for annotation: PDFAnnotation, on page: PDFPage) -> String {

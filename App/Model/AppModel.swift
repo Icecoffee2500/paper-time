@@ -43,18 +43,27 @@ public final class AppModel {
     private var restoredInspector = false
 
     public func toggleFocusMode() {
+        setFocusMode(!isFocusMode)
+    }
+
+    /// Puts the window into, or takes it out of, the paper-only mode.
+    ///
+    /// What was open before is remembered, because leaving focus should give
+    /// back the window the reader had rather than some default.
+    public func setFocusMode(_ isOn: Bool) {
+        guard isOn != isFocusMode else { return }
         withAnimation(.snappy(duration: 0.28)) {
-            if isFocusMode {
-                columnVisibility = restoredColumnVisibility
-                showsInspector = restoredInspector
-                showsFloatingList = false
-                isFocusMode = false
-            } else {
+            if isOn {
                 restoredColumnVisibility = columnVisibility
                 restoredInspector = showsInspector
                 columnVisibility = .detailOnly
                 showsInspector = false
                 isFocusMode = true
+            } else {
+                columnVisibility = restoredColumnVisibility
+                showsInspector = restoredInspector
+                showsFloatingList = false
+                isFocusMode = false
             }
         }
     }

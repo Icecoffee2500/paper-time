@@ -18,6 +18,7 @@ struct SearchPalette: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private enum ResultGroup: String, CaseIterable {
+        case library = "Library"
         case papers = "Papers"
         case collections = "Collections"
         case tags = "Tags"
@@ -198,6 +199,7 @@ struct SearchPalette: View {
 
     private func sectionForKind(_ kind: SearchResult.Kind) -> ResultGroup {
         switch kind {
+        case .showAll: .library
         case .paper: .papers
         case .collection: .collections
         case .tag: .tags
@@ -218,6 +220,8 @@ struct SearchPalette: View {
 
     private func activate(_ result: SearchResult) {
         switch result.kind {
+        case let .showAll(query):
+            model.showSearchResults(for: query)
         case let .paper(id):
             model.selectedPaperID = id
         case let .collection(id):

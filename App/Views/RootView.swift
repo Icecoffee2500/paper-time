@@ -92,6 +92,12 @@ struct LibraryWindow: View {
             PaperDetailColumn(model: model, configuration: configuration, link: link)
         }
         .overlay(alignment: .topLeading) { floatingList }
+        .onChange(of: configuration.layout) { _, layout in
+            // A spread wants the whole window. Choosing Book is the clearest
+            // statement a reader can make that they are here to read, so the
+            // columns step aside and the list becomes something summoned.
+            app.setFocusMode(layout == .book)
+        }
         .searchPalette(model: model, isPresented: $app.showsSearchPalette) { action in
             perform(action)
         }
@@ -142,7 +148,25 @@ struct LibraryWindow: View {
         if app.isFocusMode {
             HStack(alignment: .top, spacing: 0) {
                 if app.showsFloatingList {
-                    PaperListView(model: model)
+                    VStack(alignment: .leading, spacing: 0) {
+                        HStack {
+                            Text(scopeTitle)
+                                .font(.headline)
+                            Spacer()
+                            Button {
+                                app.toggleFloatingList()
+                            } label: {
+                                Image(systemName: "chevron.left")
+                            }
+                            .buttonStyle(.plain)
+                            .help("Hide papers (Command-L)")
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.top, 12)
+                        .padding(.bottom, 8)
+                        Divider()
+                        PaperListView(model: model)
+                    }
                         .frame(width: 320)
                         .frame(maxHeight: 620)
                         .background(.regularMaterial, in: .rect(cornerRadius: 16, style: .continuous))
@@ -157,16 +181,21 @@ struct LibraryWindow: View {
                     Button {
                         app.toggleFloatingList()
                     } label: {
-                        Image(systemName: "sidebar.leading")
-                            .font(.title3)
-                            .padding(10)
-                            .background(.regularMaterial, in: .circle)
+                        Label("Papers", systemImage: "sidebar.leading")
+                            .font(.callout.weight(.medium))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(.regularMaterial, in: .capsule)
+                            .overlay(
+                                Capsule().strokeBorder(.primary.opacity(0.08), lineWidth: 0.5)
+                            )
+                            .shadow(radius: 6, y: 2)
                     }
                     .buttonStyle(.plain)
                     .help("Show papers (Command-L)")
                     .padding(.leading, 12)
                     .padding(.top, 12)
-                    .transition(.opacity)
+                    .transition(.opacity.combined(with: .move(edge: .leading)))
                 }
             }
         }
@@ -261,6 +290,12 @@ struct LibraryWindow: View {
                 #if os(iOS)
                 Toggle("Draw with Finger", isOn: $configuration.fingerDrawing)
                 #endif
+                Divider()
+                Toggle(
+                    "Focus on the Paper",
+                    isOn: Binding(get: { app.isFocusMode }, set: { app.setFocusMode($0) })
+                )
+                .keyboardShortcut("f", modifiers: [.command, .control])
             } label: {
                 Label("View Options", systemImage: "textformat.size")
             }
@@ -292,21 +327,6 @@ struct LibraryWindow: View {
             } label: {
                 Label("Share", systemImage: "square.and.arrow.up")
             }
-        }
-
-        ToolbarItem(id: "focus", placement: .primaryAction) {
-            Button {
-                app.toggleFocusMode()
-            } label: {
-                Label(
-                    app.isFocusMode ? "Leave Focus" : "Focus",
-                    systemImage: app.isFocusMode
-                        ? "arrow.down.right.and.arrow.up.left"
-                        : "arrow.up.left.and.arrow.down.right"
-                )
-            }
-            .help("Show only the paper (Control-Command-F)")
-            .disabled(model.selectedPaper == nil)
         }
 
         ToolbarItem(id: "inspector", placement: .primaryAction) {
@@ -357,6 +377,7 @@ struct LibraryWindow: View {
     private var scopeTitle: String {
         switch model.scope {
         case .all: "All Papers"
+        case .searchResults: "Search Results"
         case .unread: "Unread"
         case .reading: "Reading"
         case .read: "Read"
@@ -437,7 +458,7 @@ struct PaperDetailColumn: View {
                     PaperInspector(model: model)
                 case .notes:
                     if let session = link.session {
-                        MarkupListView(session: session)
+                        MarkupListView(session: session, link: link)
                     } else {
                         ContentUnavailableView("Opening the Paper", systemImage: "hourglass")
                     }

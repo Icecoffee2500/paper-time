@@ -13,6 +13,8 @@ import UIKit
 final class MarkupCapablePDFView: PDFView {
     /// Called with the chosen markup for the current selection.
     var onMarkup: ((MarkupDescriptor.Kind, MarkupColor) -> Void)?
+    /// Called when the user wants to write a note about the selection.
+    var onNote: (() -> Void)?
     /// Called when the user asks to look up a reference or a term.
     var onLookUp: ((String) -> Void)?
 
@@ -48,10 +50,17 @@ final class MarkupCapablePDFView: PDFView {
             self?.perform(.strikethrough, .yellow)
         }
 
+        let note = UIAction(
+            title: String(localized: "Add Note"),
+            image: UIImage(systemName: "note.text.badge.plus")
+        ) { [weak self] _ in
+            self?.onNote?()
+        }
+
         let markup = UIMenu(
             title: "",
             options: .displayInline,
-            children: [highlightMenu, underline, strikethrough]
+            children: [highlightMenu, underline, strikethrough, note]
         )
         builder.insertChild(markup, atStartOfMenu: .standardEdit)
     }

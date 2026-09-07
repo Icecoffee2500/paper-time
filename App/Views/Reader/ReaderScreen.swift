@@ -23,6 +23,13 @@ struct ReaderScreen: View {
     @State private var selection: PDFSelection?
     @State private var currentPageIndex = 0
     @State private var loadError: String?
+    /// A selection the user is writing a note about, and what they have typed.
+    @State private var noteSelection: PDFSelection?
+    @State private var noteDraft = ""
+    /// A short-lived confirmation, so an action that changes nothing on screen
+    /// still says that it happened.
+    @State private var toast: String?
+    @State private var toastTask: Task<Void, Never>?
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -50,7 +57,12 @@ struct ReaderScreen: View {
         }
         .onChange(of: scenePhase) { _, phase in
             // Backgrounding is the last reliable moment to write the file.
-            if phase != .active { Task { await session?.flush() } }
+            if phase != .active {
+                Task {
+                    await library.flushReadingPositions()
+                    await session?.flush()
+                }
+            }
         }
     }
 
@@ -60,11 +72,20 @@ struct ReaderScreen: View {
             session: session,
             configuration: configuration,
             link: link,
+            revision: session.revision,
             currentPageIndex: $currentPageIndex,
             onSelectionChange: { newSelection, frame in
+                // While a note is being written the selection it belongs to
+                // must not be pulled out from under the editor.
+                guard noteSelection == nil else { return }
                 selection = newSelection
                 selectionFrame = frame
                 link.selection = newSelection
+            },
+            onNoteRequested: {
+                guard let selection else { return }
+                noteDraft = ""
+                noteSelection = selection
             }
         )
         .ignoresSafeArea(edges: .bottom)
@@ -72,26 +93,24 @@ struct ReaderScreen: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .overlay(alignment: .topLeading) {
-            // Anchored to the text rather than parked in the toolbar: the
-            // action belongs where the user just dragged.
-            if let selection, !selectionFrame.isEmpty {
-                SelectionMarkupBar { kind, color in
-                    session.addMarkup(for: selection, kind: kind, color: color)
-                    self.selection = nil
-                    link.selection = nil
-                    selectionFrame = .zero
-                } onCopy: {
-                    copy(selection.string ?? "")
-                }
-                .offset(
-                    x: max(8, selectionFrame.midX - 150),
-                    y: max(8, selectionFrame.minY - 52)
-                )
-                .transition(.scale(scale: 0.9, anchor: .bottom).combined(with: .opacity))
+        .overlay(alignment: .topLeading) { selectionControls(session) }
+        .animation(.snappy(duration: 0.16), value: selectionFrame)
+        .overlay(alignment: .bottom) {
+            if let toast {
+                Text(toast)
+                    .font(.callout.weight(.medium))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(.regularMaterial, in: .capsule)
+                    .overlay(Capsule().strokeBorder(.primary.opacity(0.08), lineWidth: 0.5))
+                    .shadow(radius: 8, y: 2)
+                    .padding(.bottom, 56)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .allowsHitTesting(false)
             }
         }
-        .animation(.snappy(duration: 0.16), value: selectionFrame)
+        .animation(.snappy(duration: 0.22), value: toast)
+        .overlay { pageTurnZones }
         .overlay(alignment: .topTrailing) {
             if link.isFinding {
                 FindBar(
@@ -113,7 +132,7 @@ struct ReaderScreen: View {
         .animation(.snappy(duration: 0.2), value: link.isFinding)
         .safeAreaInset(edge: .bottom) { statusBar(session) }
         .onChange(of: currentPageIndex) { _, index in
-            Task { await recordPosition(index) }
+            library.recordReadingPosition(index, for: paper.id)
         }
     }
 
@@ -164,6 +183,102 @@ struct ReaderScreen: View {
         .background(.bar)
     }
 
+    /// The markup controls, and the note editor they turn into.
+    ///
+    /// Anchored to the text rather than parked in the toolbar: the action
+    /// belongs where the user just dragged.
+    @ViewBuilder
+    private func selectionControls(_ session: DocumentSession) -> some View {
+        if let noteSelection {
+            NoteComposer(
+                quotedText: noteSelection.string ?? "",
+                text: $noteDraft,
+                onCancel: { dismissSelectionControls() },
+                onSave: {
+                    let trimmed = noteDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmed.isEmpty else { dismissSelectionControls(); return }
+                    session.addNote(for: noteSelection, comment: trimmed)
+                    dismissSelectionControls()
+                    show(toast: "Note added")
+                }
+            )
+            .frame(width: 300)
+            .offset(anchoredTo: selectionFrame, width: 300)
+            .transition(.scale(scale: 0.94, anchor: .bottom).combined(with: .opacity))
+        } else if let selection, !selectionFrame.isEmpty, Self.usesFloatingMarkupBar {
+            SelectionMarkupBar { kind, color in
+                session.addMarkup(for: selection, kind: kind, color: color)
+                dismissSelectionControls()
+            } onNote: {
+                noteDraft = ""
+                noteSelection = selection
+            } onCopy: {
+                copy(selection.string ?? "")
+                show(toast: "Copied")
+                dismissSelectionControls()
+            }
+            .offset(anchoredTo: selectionFrame, width: 300)
+            .transition(.scale(scale: 0.9, anchor: .bottom).combined(with: .opacity))
+        }
+    }
+
+    /// Whether markup controls float next to the selection.
+    ///
+    /// The Mac has no selection menu of its own, so the bar is the only place
+    /// these actions can live. iPhone and iPad already put them in the system
+    /// edit menu, right where the finger lifted; a second bar beside it would
+    /// be the app talking over the platform.
+    static var usesFloatingMarkupBar: Bool {
+        #if os(macOS)
+        true
+        #else
+        false
+        #endif
+    }
+
+    /// Invisible strips down the left and right edges that turn the page.
+    ///
+    /// A book turns by its edges. In the paged layouts this is the gesture
+    /// people already make; in continuous scrolling it would fight the scroll,
+    /// so it is not offered there.
+    @ViewBuilder
+    private var pageTurnZones: some View {
+        // Only where there is no swipe: iPhone and iPad turn pages with a
+        // finger already.
+        #if os(macOS)
+        if configuration.layout != .continuous {
+            HStack(spacing: 0) {
+                PageTurnZone(edge: .leading) {
+                    NotificationCenter.default.post(name: .paperTimePreviousPage, object: nil)
+                }
+                Spacer(minLength: 0)
+                PageTurnZone(edge: .trailing) {
+                    NotificationCenter.default.post(name: .paperTimeNextPage, object: nil)
+                }
+            }
+            .allowsHitTesting(selection == nil && noteSelection == nil)
+        }
+        #endif
+    }
+
+    private func dismissSelectionControls() {
+        selection = nil
+        link.selection = nil
+        selectionFrame = .zero
+        noteSelection = nil
+        noteDraft = ""
+    }
+
+    private func show(toast message: String) {
+        toastTask?.cancel()
+        toast = message
+        toastTask = Task {
+            try? await Task.sleep(for: .seconds(1.6))
+            guard !Task.isCancelled else { return }
+            toast = nil
+        }
+    }
+
     // MARK: - Actions
 
     private func copy(_ text: String) {
@@ -194,14 +309,8 @@ struct ReaderScreen: View {
         }
     }
 
-    private func recordPosition(_ index: Int) async {
-        var state = paper.state
-        state.lastPageIndex = index
-        state.lastOpenedAt = .now
-        await library.update(state: state, for: paper.id)
-    }
-
     private func saveAndClose() async {
+        await library.flushReadingPositions()
         await session?.flush()
     }
 }

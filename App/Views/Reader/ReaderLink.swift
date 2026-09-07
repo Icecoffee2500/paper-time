@@ -19,6 +19,15 @@ final class ReaderLink {
     /// A selection the reader should scroll to and highlight. Cleared by the
     /// reader once it has acted on it.
     var scrollRequest: PDFSelection?
+    /// A place in the document the reader should reveal: a mark chosen in the
+    /// notes list. Cleared once the reader has scrolled there.
+    var anchorRequest: Anchor?
+
+    /// Somewhere on a page, in page coordinates.
+    struct Anchor: Equatable {
+        var pageIndex: Int
+        var rect: CGRect
+    }
 
     var hasSelection: Bool { selection?.string?.isEmpty == false }
 

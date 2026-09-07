@@ -24,10 +24,35 @@ struct LibrarySidebar: View {
 
     var body: some View {
         List(selection: scopeSelection) {
+            if !model.searchQuery.isEmpty {
+                // A search is somewhere you can be, not a filter left switched
+                // on somewhere off-screen — so it gets a row of its own, at the
+                // top, and it can be dismissed from there.
+                Section {
+                    Label {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Search Results")
+                            Text(model.searchQuery)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    } icon: {
+                        Image(systemName: "magnifyingglass")
+                    }
+                    .badge(model.searchResultCount)
+                    .tag(LibraryModel.Scope.searchResults)
+                    .contextMenu {
+                        Button("Clear Search") { model.clearSearchResults() }
+                    }
+                }
+            }
+
             Section("Library") {
                 Label("All Papers", systemImage: "tray.full")
                     .tag(LibraryModel.Scope.all)
                 Label("Unread", systemImage: "circle")
+                    .badge(model.counts.unread)
                     .tag(LibraryModel.Scope.unread)
                     .dropTarget { await model.setReadingStatus(.unread, for: $0) }
                 Label("Reading", systemImage: "circle.lefthalf.filled")
@@ -39,9 +64,9 @@ struct LibrarySidebar: View {
                 Label("Favorites", systemImage: "star")
                     .tag(LibraryModel.Scope.favorites)
                     .dropTarget { await model.setFavorite(true, for: $0) }
-                if model.reviewCount > 0 {
+                if model.counts.needsReview > 0 {
                     Label("Needs Review", systemImage: "exclamationmark.triangle")
-                        .badge(model.reviewCount)
+                        .badge(model.counts.needsReview)
                         .tag(LibraryModel.Scope.needsReview)
                 }
             }

@@ -2,25 +2,106 @@ import InkEngine
 import PDFReader
 import SwiftUI
 
-/// Every highlight, underline and note in the open paper, newest page first.
+#if os(macOS)
+import AppKit
+#else
+import UIKit
+#endif
+
+/// Every highlight, underline and note in the open paper, in reading order.
 ///
 /// Reads from the PDF rather than from a private store, so marks made in
 /// Preview or any other reader appear here too.
 struct MarkupListView: View {
     let session: DocumentSession
+    let link: ReaderLink
+
+    @State private var filter = Filter.all
     @State private var editingID: UUID?
     @State private var commentDraft = ""
 
-    var body: some View {
-        List {
-            if session.markups.isEmpty {
-                ContentUnavailableView(
-                    "No Marks Yet",
-                    systemImage: "highlighter",
-                    description: Text("Select text to highlight it, or draw with your pencil.")
-                )
+    /// What the list is showing. A reader looking for "what did I write about
+    /// this paper" should not have to read past sixty highlights to find it.
+    enum Filter: String, CaseIterable, Identifiable {
+        case all, highlights, underlines, strikethroughs, notes
+        var id: String { rawValue }
+
+        var label: String {
+            switch self {
+            case .all: "All"
+            case .highlights: "Highlights"
+            case .underlines: "Underlines"
+            case .strikethroughs: "Strikethroughs"
+            case .notes: "Notes"
             }
-            ForEach(session.markups) { markup in
+        }
+
+        var symbolName: String {
+            switch self {
+            case .all: "list.bullet"
+            case .highlights: "highlighter"
+            case .underlines: "underline"
+            case .strikethroughs: "strikethrough"
+            case .notes: "note.text"
+            }
+        }
+
+        func matches(_ markup: MarkupDescriptor) -> Bool {
+            switch self {
+            case .all: true
+            case .highlights: markup.kind == .highlight
+            case .underlines: markup.kind == .underline
+            case .strikethroughs: markup.kind == .strikethrough
+            case .notes: markup.kind == .note || !markup.comment.isEmpty
+            }
+        }
+    }
+
+    private var shown: [MarkupDescriptor] {
+        session.markups.filter(filter.matches)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Picker("Show", selection: $filter) {
+                ForEach(Filter.allCases) { option in
+                    Label(option.label, systemImage: option.symbolName)
+                        .labelStyle(.iconOnly)
+                        .tag(option)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.horizontal)
+            .padding(.bottom, 8)
+            .help(filter.label)
+
+            if shown.isEmpty {
+                ContentUnavailableView {
+                    Label(emptyTitle, systemImage: filter.symbolName)
+                } description: {
+                    Text(emptyMessage)
+                }
+            } else {
+                List {
+                    ForEach(shown) { markup in
+                        row(markup)
+                    }
+                }
+                .listStyle(.inset)
+            }
+        }
+        // No navigation title here: this list is presented inside the reader's
+        // inspector, and a title set on it replaces the paper's own title in
+        // the toolbar.
+    }
+
+    @ViewBuilder
+    private func row(_ markup: MarkupDescriptor) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Button {
+                reveal(markup)
+            } label: {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 6) {
                         Circle()
@@ -31,7 +112,7 @@ struct MarkupListView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Spacer()
-                        Image(systemName: symbol(for: markup.kind))
+                        Image(systemName: symbol(for: markup))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .accessibilityHidden(true)
@@ -40,34 +121,124 @@ struct MarkupListView: View {
                         Text(markup.quotedText)
                             .font(.callout)
                             .lineLimit(4)
+                            .multilineTextAlignment(.leading)
                     }
-                    if !markup.comment.isEmpty, markup.comment != markup.quotedText {
+                    if !markup.comment.isEmpty {
                         Text(markup.comment)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
+                            .padding(.leading, 8)
+                            .overlay(alignment: .leading) {
+                                Capsule().fill(.tint).frame(width: 3)
+                            }
+                            .multilineTextAlignment(.leading)
                     }
                 }
-                .padding(.vertical, 2)
-                .swipeActions {
-                    Button(role: .destructive) {
-                        session.removeMarkup(id: markup.id)
-                    } label: {
-                        Label("Delete", systemImage: "trash")
-                    }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+
+            if editingID == markup.id {
+                HStack(spacing: 8) {
+                    TextField("Note", text: $commentDraft, axis: .vertical)
+                        .textFieldStyle(.roundedBorder)
+                        .lineLimit(1...4)
+                        .onSubmit { commitComment(for: markup) }
+                    Button("Done") { commitComment(for: markup) }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
                 }
+                .transition(.opacity)
             }
         }
-        // No navigation title here: this list is presented inside the reader's
-        // inspector, and a title set on it replaces the paper's own title in
-        // the toolbar.
+        .padding(.vertical, 2)
+        .contextMenu {
+            Button {
+                startEditing(markup)
+            } label: {
+                Label(
+                    markup.comment.isEmpty ? "Add Note…" : "Edit Note…",
+                    systemImage: "square.and.pencil"
+                )
+            }
+            Button {
+                copy(markup.quotedText)
+            } label: {
+                Label("Copy Text", systemImage: "doc.on.doc")
+            }
+            Divider()
+            Button(role: .destructive) {
+                session.removeMarkup(id: markup.id)
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
+        .swipeActions {
+            Button(role: .destructive) {
+                session.removeMarkup(id: markup.id)
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+            Button {
+                startEditing(markup)
+            } label: {
+                Label("Note", systemImage: "square.and.pencil")
+            }
+            .tint(.accentColor)
+        }
+        .animation(.snappy(duration: 0.18), value: editingID)
     }
 
-    private func symbol(for kind: MarkupDescriptor.Kind) -> String {
-        switch kind {
-        case .highlight: "highlighter"
-        case .underline: "underline"
-        case .strikethrough: "strikethrough"
-        case .note: "note.text"
+    private var emptyTitle: String {
+        filter == .all ? "No Marks Yet" : "Nothing \(filter.label) Yet"
+    }
+
+    private var emptyMessage: String {
+        switch filter {
+        case .all: "Select text to highlight it, or draw with your pencil."
+        case .notes: "Select a passage and choose the note button to write about it."
+        default: "Select text in the paper and pick \(filter.label.lowercased()) from the bar."
+        }
+    }
+
+    private func reveal(_ markup: MarkupDescriptor) {
+        guard let first = markup.rects.first else { return }
+        let rect = markup.rects.dropFirst().reduce(first) { $0.union($1) }
+        link.anchorRequest = ReaderLink.Anchor(pageIndex: markup.pageIndex, rect: rect)
+    }
+
+    private func startEditing(_ markup: MarkupDescriptor) {
+        commentDraft = markup.comment
+        editingID = markup.id
+    }
+
+    private func commitComment(for markup: MarkupDescriptor) {
+        session.updateComment(
+            commentDraft.trimmingCharacters(in: .whitespacesAndNewlines),
+            forMarkup: markup.id
+        )
+        editingID = nil
+        commentDraft = ""
+    }
+
+    private func copy(_ text: String) {
+        guard !text.isEmpty else { return }
+        #if os(macOS)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        #else
+        UIPasteboard.general.string = text
+        #endif
+    }
+
+    private func symbol(for markup: MarkupDescriptor) -> String {
+        if !markup.comment.isEmpty { return "note.text" }
+        switch markup.kind {
+        case .highlight: return "highlighter"
+        case .underline: return "underline"
+        case .strikethrough: return "strikethrough"
+        case .note: return "note.text"
         }
     }
 

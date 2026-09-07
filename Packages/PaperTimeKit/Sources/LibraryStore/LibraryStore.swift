@@ -118,6 +118,12 @@ public actor LibraryStore {
     /// there is no `papers/` directory at the root to find.
     private func migrateFromFoldersPerPaperIfNeeded() throws {
         let manager = FileManager.default
+        // The library list and the collections are the user's own filing, and
+        // they are adopted whether or not there are papers to migrate beside
+        // them — losing a collection because the papers had already moved
+        // would be the worst kind of quiet data loss.
+        try adoptTopLevelManifests()
+
         let oldPapers = root.appending(path: "papers", directoryHint: .isDirectory)
         var isDirectory: ObjCBool = false
         guard manager.fileExists(
@@ -164,16 +170,32 @@ public actor LibraryStore {
             try? manager.removeItem(at: oldFolder)
         }
 
-        // Move the old top-level manifests in, then drop the empty directory.
-        for name in [LibraryLayout.manifestFileName, LibraryLayout.collectionsFileName] {
+        try? manager.removeItem(at: oldPapers)
+    }
+
+    /// Moves a first-version library's `library.json` and `collections.json`
+    /// out of the way of the user's PDFs, keeping what they hold.
+    private func adoptTopLevelManifests() throws {
+        let manager = FileManager.default
+        let names = [LibraryLayout.manifestFileName, LibraryLayout.collectionsFileName]
+        var present: [String] = []
+        for name in names
+        where manager.fileExists(atPath: root.appending(path: name).path(percentEncoded: false)) {
+            present.append(name)
+        }
+        guard !present.isEmpty else { return }
+
+        try FileOperations.ensureDirectory(at: LibraryLayout.supportDirectoryURL(inLibrary: root))
+        for name in present {
             let old = root.appending(path: name)
             let new = LibraryLayout.supportDirectoryURL(inLibrary: root).appending(path: name)
-            guard manager.fileExists(atPath: old.path(percentEncoded: false)),
-                  !manager.fileExists(atPath: new.path(percentEncoded: false))
-            else { continue }
-            try? manager.moveItem(at: old, to: new)
+            if manager.fileExists(atPath: new.path(percentEncoded: false)) {
+                // The new location already has one; the old file is a leftover.
+                try? manager.removeItem(at: old)
+            } else {
+                try? manager.moveItem(at: old, to: new)
+            }
         }
-        try? manager.removeItem(at: oldPapers)
     }
 
     // MARK: - Scanning

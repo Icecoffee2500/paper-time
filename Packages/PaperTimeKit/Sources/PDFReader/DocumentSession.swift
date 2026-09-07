@@ -35,6 +35,13 @@ public final class DocumentSession {
     /// True when the file contains ink drawn in another app, which this app
     /// would replace if it regenerated the page.
     public private(set) var hasForeignInk = false
+    /// Bumped whenever the pages themselves change.
+    ///
+    /// PDFKit caches rendered pages, so adding an annotation to the document
+    /// does not by itself repaint the view showing it. The view watches this
+    /// and redraws — which is the difference between a highlight that appears
+    /// and one that only exists in the file.
+    public private(set) var revision = 0
 
     private let store: LibraryStore
     private var drawings: [Int: PKDrawing] = [:]
@@ -61,27 +68,67 @@ public final class DocumentSession {
         }
     }
 
-    public init(paper: LoadedPaper, document: PDFDocument, store: LibraryStore) {
+    public init(
+        paper: LoadedPaper,
+        document: PDFDocument,
+        store: LibraryStore,
+        markups: [MarkupDescriptor]? = nil,
+        hasForeignInk: Bool? = nil
+    ) {
         self.paper = paper
         self.document = document
         self.store = store
         self.fileFingerprint = FileFingerprint(url: paper.documentURL)
-        self.markups = TextMarkupWriter.descriptors(in: document)
-        self.hasForeignInk = (0..<document.pageCount)
+        self.markups = markups ?? TextMarkupWriter.descriptors(in: document)
+        self.hasForeignInk = hasForeignInk ?? Self.scanForForeignInk(in: document)
+        sortMarkups()
+    }
+
+    nonisolated static func scanForForeignInk(in document: PDFDocument) -> Bool {
+        (0..<document.pageCount)
             .compactMap { document.page(at: $0) }
             .contains(where: InkConverter.hasForeignInk(on:))
     }
 
+    /// Reads the file, parses it, and reads back what is already marked in it
+    /// — all of it away from the main actor.
+    ///
+    /// A paper is tens of megabytes and PDFKit parses eagerly; doing this
+    /// where the interface lives is the difference between a reader that opens
+    /// and a window that freezes.
     public static func open(paper: LoadedPaper, store: LibraryStore) async throws -> DocumentSession {
         let url = paper.documentURL
-        FileOperations.requestDownload(of: url)
-        let data = try FileOperations.read(contentsOf: url)
-        guard let document = PDFDocument(data: data) else {
-            throw FileOperations.Failure.documentMissing(url)
-        }
-        let session = DocumentSession(paper: paper, document: document, store: store)
+        let prepared = try await Task.detached(priority: .userInitiated) {
+            FileOperations.requestDownload(of: url)
+            let data = try FileOperations.read(contentsOf: url)
+            guard let document = PDFDocument(data: data) else {
+                throw FileOperations.Failure.documentMissing(url)
+            }
+            return Prepared(
+                document: document,
+                markups: TextMarkupWriter.descriptors(in: document),
+                hasForeignInk: scanForForeignInk(in: document)
+            )
+        }.value
+
+        let session = DocumentSession(
+            paper: paper,
+            document: prepared.document,
+            store: store,
+            markups: prepared.markups,
+            hasForeignInk: prepared.hasForeignInk
+        )
         await session.loadDrawings()
         return session
+    }
+
+    /// A parsed document on its way from a background task to the main actor.
+    /// `PDFDocument` is not `Sendable`; nothing else refers to this one until
+    /// the session takes it, which is what makes the hand-off safe.
+    private struct Prepared: @unchecked Sendable {
+        var document: PDFDocument
+        var markups: [MarkupDescriptor]
+        var hasForeignInk: Bool
     }
 
     // MARK: - Ink
@@ -125,23 +172,52 @@ public final class DocumentSession {
     public func addMarkup(
         for selection: PDFSelection,
         kind: MarkupDescriptor.Kind,
-        color: MarkupColor
+        color: MarkupColor,
+        comment: String = ""
     ) -> [MarkupDescriptor] {
-        let descriptors = TextMarkupWriter.descriptor(
+        var descriptors = TextMarkupWriter.descriptor(
             for: selection,
             kind: kind,
             color: color,
             in: document
         )
+        guard !descriptors.isEmpty else { return [] }
+
+        for index in descriptors.indices { descriptors[index].comment = comment }
         for descriptor in descriptors {
             guard let page = document.page(at: descriptor.pageIndex) else { continue }
             TextMarkupWriter.apply(descriptor, to: page)
             markups.append(descriptor)
             markupsSinceLastFlush.append(descriptor)
         }
+        sortMarkups()
+        revision += 1
         saveState = .pending
         scheduleFlush(delay: .seconds(2))
         return descriptors
+    }
+
+    /// A note is a highlight with something written on it.
+    ///
+    /// Not a bare sticky note: a comment that does not show you what it is
+    /// about is useless a week later, and every other reader displays a
+    /// commented highlight the same way.
+    @discardableResult
+    public func addNote(
+        for selection: PDFSelection,
+        comment: String,
+        color: MarkupColor = .yellow
+    ) -> [MarkupDescriptor] {
+        addMarkup(for: selection, kind: .highlight, color: color, comment: comment)
+    }
+
+    /// Marks are listed in reading order, which is where the eye looks for them.
+    private func sortMarkups() {
+        markups.sort { lhs, rhs in
+            lhs.pageIndex != rhs.pageIndex
+                ? lhs.pageIndex < rhs.pageIndex
+                : (lhs.rects.first?.maxY ?? 0) > (rhs.rects.first?.maxY ?? 0)
+        }
     }
 
     public func removeMarkup(id: UUID) {
@@ -151,6 +227,7 @@ public final class DocumentSession {
         }
         markups.removeAll { $0.id == id }
         markupsSinceLastFlush.removeAll { $0.id == id }
+        revision += 1
         saveState = .pending
         scheduleFlush(delay: .seconds(2))
     }
@@ -163,6 +240,7 @@ public final class DocumentSession {
             TextMarkupWriter.apply(markups[index], to: page)
         }
         markupsSinceLastFlush.append(markups[index])
+        revision += 1
         saveState = .pending
         scheduleFlush(delay: .seconds(2))
     }
@@ -239,6 +317,8 @@ public final class DocumentSession {
             TextMarkupWriter.apply(descriptor, to: page)
         }
         markups = TextMarkupWriter.descriptors(in: reloaded)
+        sortMarkups()
+        revision += 1
         return true
     }
 
