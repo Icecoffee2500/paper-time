@@ -106,7 +106,7 @@ struct LibrarySidebar: View {
                 }
             }
         }
-        .navigationTitle(model.manifest.displayName)
+        .navigationTitle(model.displayName)
         .sheet(isPresented: $isPresentingNewCollection) {
             NewCollectionSheet(
                 name: $newCollectionName,

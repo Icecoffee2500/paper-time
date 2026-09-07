@@ -107,7 +107,7 @@ struct LibraryWindow: View {
 
     private var sidebarColumn: some View {
         LibrarySidebar(model: model)
-            .navigationTitle(model.manifest.displayName)
+            .navigationTitle(model.displayName)
             // Wide enough for "Needs Review" and "New Collection…", which the
             // default width was cutting to "Needs…" and "New Coll…".
             .navigationSplitViewColumnWidth(min: 216, ideal: 232, max: 320)

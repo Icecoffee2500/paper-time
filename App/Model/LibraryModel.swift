@@ -329,6 +329,17 @@ public final class LibraryModel {
 
     public var reviewCount: Int { counts.needsReview }
 
+    /// What to call the open library.
+    ///
+    /// The folder's own name, because every library is called "Paper Time"
+    /// otherwise — which makes two different libraries look like one, and a
+    /// collection that lives in the other one look like a collection that has
+    /// been lost.
+    public var displayName: String {
+        let folder = location.url.lastPathComponent
+        return folder.isEmpty ? manifest.displayName : folder
+    }
+
     public var selectedPaper: LoadedPaper? {
         guard let selectedPaperID else { return nil }
         return paper(selectedPaperID)
