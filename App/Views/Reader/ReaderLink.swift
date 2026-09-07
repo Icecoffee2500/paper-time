@@ -21,6 +21,9 @@ final class ReaderLink {
     /// written from the second, which is to say lost. Keeping the session here,
     /// keyed by paper, means a paper is opened exactly once.
     private(set) var sessionPaperID: UUID?
+    /// The paper currently being opened, so two readers built for the same
+    /// selection do not both read the file.
+    var loadingPaperID: UUID?
 
     func session(for paperID: UUID) -> DocumentSession? {
         sessionPaperID == paperID ? session : nil

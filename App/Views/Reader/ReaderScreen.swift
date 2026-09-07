@@ -49,7 +49,7 @@ struct ReaderScreen: View {
                     .controlSize(.large)
             }
         }
-        .task { await load() }
+        .task(id: paper.id) { await load() }
         .onDisappear {
             // Only write; the session itself stays with the link until another
             // paper takes its place. A reader that is rebuilt — which SwiftUI
@@ -282,6 +282,17 @@ struct ReaderScreen: View {
 
     private func load() async {
         loadError = nil
+        // A different paper: forget what belonged to the last one, but keep its
+        // session in place until the new document is ready. Dropping it would
+        // take the PDF view out of the view tree, and building another one is
+        // most of what opening a paper costs.
+        if session?.paper.id != paper.id {
+            selection = nil
+            selectionFrame = .zero
+            noteSelection = nil
+            currentPageIndex = paper.state.lastPageIndex
+        }
+        guard link.loadingPaperID != paper.id else { return }
         // Reuse the session this paper already has. Opening it a second time
         // would give the view one document and the saver another.
         if let existing = link.session(for: paper.id) {
@@ -289,6 +300,8 @@ struct ReaderScreen: View {
             currentPageIndex = paper.state.lastPageIndex
             return
         }
+        link.loadingPaperID = paper.id
+        defer { if link.loadingPaperID == paper.id { link.loadingPaperID = nil } }
         do {
             let opened = try await DocumentSession.open(paper: paper, store: library.store)
             session = opened
@@ -299,7 +312,10 @@ struct ReaderScreen: View {
             // status button in the list.
             var state = paper.state
             state.lastOpenedAt = .now
-            await library.update(state: state, for: paper.id)
+            // Not awaited: writing "you opened this" is a file write plus a
+            // reload of the whole list, and the reader has no reason to wait
+            // for either before showing the page.
+            Task { await library.update(state: state, for: paper.id) }
         } catch {
             loadError = error.localizedDescription
         }

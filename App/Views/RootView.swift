@@ -512,13 +512,17 @@ struct PaperDetailColumn: View {
 
         Group {
             if let paper = model.selectedPaper {
+                // Deliberately not `.id(paper.id)`: giving each paper its own
+                // identity threw away the PDF view and built another one for
+                // every selection, and creating a `PDFView` is most of what
+                // opening a paper used to cost. The reader reloads itself when
+                // the paper changes instead.
                 ReaderScreen(
                     library: model,
                     paper: paper,
                     configuration: configuration,
                     link: link
                 )
-                .id(paper.id)
             } else {
                 ContentUnavailableView(
                     "No Paper Selected",

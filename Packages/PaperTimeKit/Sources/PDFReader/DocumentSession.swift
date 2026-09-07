@@ -85,6 +85,34 @@ public final class DocumentSession {
         sortMarkups()
     }
 
+    /// Fills in the marks already in the file, just after opening.
+    private func readBackExistingMarks() {
+        let box = DocumentBox(document: document)
+        Task { [weak self] in
+            let found = await Task.detached(priority: .utility) { () -> ReadBack in
+                ReadBack(
+                    markups: TextMarkupWriter.descriptors(in: box.document),
+                    hasForeignInk: Self.scanForForeignInk(in: box.document)
+                )
+            }.value
+            guard let self, markups.isEmpty else { return }
+            markups = found.markups
+            hasForeignInk = found.hasForeignInk
+            sortMarkups()
+        }
+    }
+
+    /// The open document, handed to a reader on another thread. Nothing writes
+    /// to it there.
+    private struct DocumentBox: @unchecked Sendable {
+        var document: PDFDocument
+    }
+
+    private struct ReadBack: @unchecked Sendable {
+        var markups: [MarkupDescriptor]
+        var hasForeignInk: Bool
+    }
+
     nonisolated static func scanForForeignInk(in document: PDFDocument) -> Bool {
         (0..<document.pageCount)
             .compactMap { document.page(at: $0) }
@@ -105,11 +133,10 @@ public final class DocumentSession {
             guard let document = PDFDocument(data: data) else {
                 throw FileOperations.Failure.documentMissing(url)
             }
-            return Prepared(
-                document: document,
-                markups: TextMarkupWriter.descriptors(in: document),
-                hasForeignInk: scanForForeignInk(in: document)
-            )
+            // Reading back the marks means a text extraction per annotation,
+            // which on a well-marked paper is most of the wait. The page can be
+            // on screen before the notes list is populated.
+            return Prepared(document: document, markups: [], hasForeignInk: false)
         }.value
 
         let session = DocumentSession(
@@ -120,6 +147,7 @@ public final class DocumentSession {
             hasForeignInk: prepared.hasForeignInk
         )
         await session.loadDrawings()
+        session.readBackExistingMarks()
         return session
     }
 

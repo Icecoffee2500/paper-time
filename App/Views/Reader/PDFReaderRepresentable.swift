@@ -255,6 +255,10 @@ final class ReaderCoordinator: NSObject {
         if view.document !== session.document {
             view.document = session.document
             shownRevision = revision
+            #if os(macOS)
+            hideMarkupPanel()
+            #endif
+            restoreReadingPosition(in: view)
         } else if revision != shownRevision {
             shownRevision = revision
             redraw(view)
