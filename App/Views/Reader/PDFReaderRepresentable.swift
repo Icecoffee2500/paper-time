@@ -263,6 +263,11 @@ final class ReaderCoordinator: NSObject {
             shownRevision = revision
             redraw(view)
         }
+        #if os(macOS)
+        // The monitor is installed when the view is made, but the view now
+        // outlives individual papers and a teardown would leave it without one.
+        if clickMonitor == nil { installMarkClickMonitor(in: view) }
+        #endif
         if appliedLayout != configuration.layout {
             appliedLayout = configuration.layout
             apply(layout: configuration.layout, to: view)
@@ -608,17 +613,24 @@ final class ReaderCoordinator: NSObject {
             guard let self, let view, view.window != nil, event.clickCount == 1 else {
                 return event
             }
+            // Any click in the page puts the controls away: they are about one
+            // selection, and this click ends it.
+            if markupPanel.isShowing, !markupPanel.isComposingNote {
+                hideMarkupPanel()
+            }
+
             let inView = view.convert(event.locationInWindow, from: nil)
             guard view.bounds.contains(inView),
                   let page = view.page(for: inView, nearest: false)
             else { return event }
 
+            // PDFKit's own hit test, which knows a text markup is a set of
+            // quadrilaterals rather than the box that encloses them.
             let onPage = view.convert(inView, to: page)
-            let hit = page.annotations.first {
-                ["Highlight", "Underline", "StrikeOut", "Text"].contains($0.type ?? "")
-                    && $0.bounds.insetBy(dx: -3, dy: -3).contains(onPage)
-            }
-            guard let hit else { return event }
+            guard let hit = page.annotation(at: onPage),
+                  ["Highlight", "Underline", "StrikeOut", "Text"].contains(hit.type ?? "")
+            else { return event }
+
             view.clearSelection()
             showMarkEditor(for: hit, in: view)
             return nil

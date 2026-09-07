@@ -106,6 +106,13 @@ struct LibrarySidebar: View {
                 }
             }
         }
+        // The source list used to get this from being a split view's sidebar.
+        // Laying the columns out ourselves means asking for it: without it the
+        // rows come back with separator lines under them.
+        #if os(macOS)
+        .listStyle(.sidebar)
+        .scrollContentBackground(.hidden)
+        #endif
         .navigationTitle(model.displayName)
         .sheet(isPresented: $isPresentingNewCollection) {
             NewCollectionSheet(
