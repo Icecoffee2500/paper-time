@@ -246,7 +246,10 @@ struct ReaderScreen: View {
         // Only where there is no swipe: iPhone and iPad turn pages with a
         // finger already.
         #if os(macOS)
-        if configuration.layout != .continuous {
+        // Book only: the spread leaves margins for the strips to sit in, while
+        // a single page fills the window and the strips would swallow clicks
+        // meant for the text.
+        if configuration.layout == .book {
             HStack(spacing: 0) {
                 PageTurnZone(edge: .leading) {
                     NotificationCenter.default.post(name: .paperTimePreviousPage, object: nil)
