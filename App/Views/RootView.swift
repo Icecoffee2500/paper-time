@@ -82,8 +82,12 @@ struct LibraryWindow: View {
         } detail: {
             PaperDetailColumn(model: model, configuration: configuration, link: link)
         }
+        .overlay(alignment: .topLeading) { floatingList }
         .searchPalette(model: model, isPresented: $app.showsSearchPalette) { action in
             perform(action)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .paperTimeToggleFocus)) { _ in
+            app.toggleFocusMode()
         }
         .fileImporter(
             isPresented: $isImportingPDFs,
@@ -118,6 +122,44 @@ struct LibraryWindow: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .paperTimeFindInDocument)) { _ in
             link.isFinding = true
+        }
+    }
+
+    /// In focus mode the list is summoned over the page rather than pinned to
+    /// a column, so a glance at the library costs nothing and leaves nothing
+    /// behind.
+    @ViewBuilder
+    private var floatingList: some View {
+        if app.isFocusMode {
+            HStack(alignment: .top, spacing: 0) {
+                if app.showsFloatingList {
+                    PaperListView(model: model)
+                        .frame(width: 320)
+                        .frame(maxHeight: 620)
+                        .background(.regularMaterial, in: .rect(cornerRadius: 16, style: .continuous))
+                        .shadow(radius: 18, y: 6)
+                        .padding(.leading, 16)
+                        .padding(.top, 16)
+                        .transition(.move(edge: .leading).combined(with: .opacity))
+                        .onChange(of: model.selectedPaperID) { _, _ in
+                            app.toggleFloatingList()
+                        }
+                } else {
+                    Button {
+                        app.toggleFloatingList()
+                    } label: {
+                        Image(systemName: "sidebar.leading")
+                            .font(.title3)
+                            .padding(10)
+                            .background(.regularMaterial, in: .circle)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Show papers (Command-L)")
+                    .padding(.leading, 12)
+                    .padding(.top, 12)
+                    .transition(.opacity)
+                }
+            }
         }
     }
 
@@ -177,24 +219,6 @@ struct LibraryWindow: View {
             } label: {
                 Label("Sort", systemImage: "arrow.up.arrow.down")
             }
-        }
-
-        ToolbarItem(id: "markup", placement: barPlacement) {
-            Menu {
-                Section("Highlight") {
-                    ForEach(MarkupColor.allCases, id: \.self) { color in
-                        Button(color.displayName) { addMarkup(.highlight, color: color) }
-                    }
-                }
-                Button("Underline") { addMarkup(.underline, color: configuration.markupColor) }
-                Button("Strikethrough") {
-                    addMarkup(.strikethrough, color: configuration.markupColor)
-                }
-            } label: {
-                Label("Mark Up", systemImage: "highlighter")
-            }
-            .disabled(!link.hasSelection)
-            .help("Mark up the selected text")
         }
 
         #if os(iOS)
@@ -261,6 +285,21 @@ struct LibraryWindow: View {
             }
         }
 
+        ToolbarItem(id: "focus", placement: .primaryAction) {
+            Button {
+                app.toggleFocusMode()
+            } label: {
+                Label(
+                    app.isFocusMode ? "Leave Focus" : "Focus",
+                    systemImage: app.isFocusMode
+                        ? "arrow.down.right.and.arrow.up.left"
+                        : "arrow.up.left.and.arrow.down.right"
+                )
+            }
+            .help("Show only the paper (Control-Command-F)")
+            .disabled(model.selectedPaper == nil)
+        }
+
         ToolbarItem(id: "inspector", placement: .primaryAction) {
             Button {
                 app.toggleInspector()
@@ -281,11 +320,6 @@ struct LibraryWindow: View {
         Binding(get: { model.sortAscending }, set: { model.sortAscending = $0 })
     }
 
-    private func addMarkup(_ kind: MarkupDescriptor.Kind, color: MarkupColor) {
-        guard let session = link.session, let selection = link.selection else { return }
-        session.addMarkup(for: selection, kind: kind, color: color)
-        link.selection = nil
-    }
 
     private func perform(_ action: SearchResult.Action) {
         switch action {

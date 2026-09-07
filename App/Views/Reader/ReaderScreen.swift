@@ -3,6 +3,11 @@ import LibraryStore
 import PDFKit
 import PDFReader
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#else
+import AppKit
+#endif
 
 /// The reading surface: the page, the drawing tools, and the small set of
 /// actions that belong on top of a paper rather than in the library.
@@ -14,6 +19,8 @@ struct ReaderScreen: View {
 
     @State private var session: DocumentSession?
     @State private var finder = DocumentFinder()
+    @State private var selectionFrame: CGRect = .zero
+    @State private var selection: PDFSelection?
     @State private var currentPageIndex = 0
     @State private var loadError: String?
     @Environment(\.scenePhase) private var scenePhase
@@ -54,13 +61,37 @@ struct ReaderScreen: View {
             configuration: configuration,
             link: link,
             currentPageIndex: $currentPageIndex,
-            onSelectionChange: { link.selection = $0 }
+            onSelectionChange: { newSelection, frame in
+                selection = newSelection
+                selectionFrame = frame
+                link.selection = newSelection
+            }
         )
         .ignoresSafeArea(edges: .bottom)
         .navigationTitle(paper.meta.displayTitle)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        .overlay(alignment: .topLeading) {
+            // Anchored to the text rather than parked in the toolbar: the
+            // action belongs where the user just dragged.
+            if let selection, !selectionFrame.isEmpty {
+                SelectionMarkupBar { kind, color in
+                    session.addMarkup(for: selection, kind: kind, color: color)
+                    self.selection = nil
+                    link.selection = nil
+                    selectionFrame = .zero
+                } onCopy: {
+                    copy(selection.string ?? "")
+                }
+                .offset(
+                    x: max(8, selectionFrame.midX - 150),
+                    y: max(8, selectionFrame.minY - 52)
+                )
+                .transition(.scale(scale: 0.9, anchor: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.snappy(duration: 0.16), value: selectionFrame)
         .overlay(alignment: .topTrailing) {
             if link.isFinding {
                 FindBar(
@@ -134,6 +165,16 @@ struct ReaderScreen: View {
     }
 
     // MARK: - Actions
+
+    private func copy(_ text: String) {
+        guard !text.isEmpty else { return }
+        #if os(macOS)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        #else
+        UIPasteboard.general.string = text
+        #endif
+    }
 
     private func load() async {
         loadError = nil

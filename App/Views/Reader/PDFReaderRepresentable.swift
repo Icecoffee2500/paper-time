@@ -26,7 +26,7 @@ struct PDFReaderRepresentable: PlatformViewRepresentable {
     let configuration: ReaderConfiguration
     let link: ReaderLink
     @Binding var currentPageIndex: Int
-    var onSelectionChange: (PDFSelection?) -> Void
+    var onSelectionChange: (PDFSelection?, CGRect) -> Void
 
     func makeCoordinator() -> ReaderCoordinator {
         ReaderCoordinator(
@@ -63,7 +63,7 @@ final class ReaderCoordinator: NSObject {
     private let configuration: ReaderConfiguration
     private let link: ReaderLink
     private let onPageChange: (Int) -> Void
-    private let onSelectionChange: (PDFSelection?) -> Void
+    private let onSelectionChange: (PDFSelection?, CGRect) -> Void
 
     private weak var pdfView: PDFView?
     #if canImport(UIKit)
@@ -76,7 +76,7 @@ final class ReaderCoordinator: NSObject {
         configuration: ReaderConfiguration,
         link: ReaderLink,
         onPageChange: @escaping (Int) -> Void,
-        onSelectionChange: @escaping (PDFSelection?) -> Void
+        onSelectionChange: @escaping (PDFSelection?, CGRect) -> Void
     ) {
         self.session = session
         self.configuration = configuration
@@ -119,6 +119,34 @@ final class ReaderCoordinator: NSObject {
             object: view
         )
 
+        // These menu commands used to post notifications nobody listened for.
+        for (name, selector) in [
+            (Notification.Name.paperTimeNextPage, #selector(goToNextPage)),
+            (.paperTimePreviousPage, #selector(goToPreviousPage)),
+            (.paperTimeGoBack, #selector(goBackInHistory)),
+            (.paperTimeGoForward, #selector(goForwardInHistory)),
+        ] {
+            NotificationCenter.default.addObserver(
+                self,
+                selector: selector,
+                name: name,
+                object: nil
+            )
+        }
+
+        #if canImport(UIKit)
+        // Two fingers, two taps: nothing in PDFKit claims that combination, so
+        // it cannot be confused with selecting text, turning a page, or the
+        // double-tap that zooms.
+        let focusGesture = UITapGestureRecognizer(
+            target: self,
+            action: #selector(toggleFocusRequested)
+        )
+        focusGesture.numberOfTouchesRequired = 2
+        focusGesture.numberOfTapsRequired = 2
+        view.addGestureRecognizer(focusGesture)
+        #endif
+
         pdfView = view
         restoreReadingPosition(in: view)
         return view
@@ -149,18 +177,32 @@ final class ReaderCoordinator: NSObject {
 
     // MARK: - Layout
 
+    /// Two-up used to mean `twoUpContinuous` down a vertical scroll, which is
+    /// two columns of a scrolling document rather than a book. A spread should
+    /// turn, not scroll: `twoUp` horizontally, with `displaysAsBook` so the
+    /// first page sits alone on the right the way a cover does.
     private func apply(layout: ReaderConfiguration.PageLayout, to view: PDFView) {
         switch layout {
         case .continuous:
             view.displayMode = .singlePageContinuous
             view.displayDirection = .vertical
+            view.displaysAsBook = false
         case .singlePage:
             view.displayMode = .singlePage
             view.displayDirection = .horizontal
-        case .twoUp:
-            view.displayMode = .twoUpContinuous
-            view.displayDirection = .vertical
+            view.displaysAsBook = false
+        case .book:
+            view.displayMode = .twoUp
+            view.displayDirection = .horizontal
+            view.displaysAsBook = true
         }
+
+        #if canImport(UIKit)
+        // The page view controller gives the paged modes a real swipe-to-turn
+        // gesture with the curl-free horizontal transition Books uses. It has
+        // to be off for continuous scrolling or the scroll is taken over.
+        view.usePageViewController(layout != .continuous, withViewOptions: nil)
+        #endif
     }
 
     private func applyTint(to view: PDFView) {
@@ -200,9 +242,59 @@ final class ReaderCoordinator: NSObject {
         onPageChange(session.document.index(for: page))
     }
 
+    #if canImport(UIKit)
+    @objc private func toggleFocusRequested() {
+        NotificationCenter.default.post(name: .paperTimeToggleFocus, object: nil)
+    }
+    #endif
+
+    @objc private func goToNextPage() {
+        guard let view = pdfView, view.canGoToNextPage else { return }
+        view.goToNextPage(nil)
+    }
+
+    @objc private func goToPreviousPage() {
+        guard let view = pdfView, view.canGoToPreviousPage else { return }
+        view.goToPreviousPage(nil)
+    }
+
+    @objc private func goBackInHistory() {
+        guard let view = pdfView, view.canGoBack else { return }
+        view.goBack(nil)
+    }
+
+    @objc private func goForwardInHistory() {
+        guard let view = pdfView, view.canGoForward else { return }
+        view.goForward(nil)
+    }
+
     @objc private func selectionChanged(_ notification: Notification) {
-        let selection = pdfView?.currentSelection
-        onSelectionChange(selection?.string?.isEmpty == false ? selection : nil)
+        guard let view = pdfView,
+              let selection = view.currentSelection,
+              selection.string?.isEmpty == false
+        else {
+            onSelectionChange(nil, .zero)
+            return
+        }
+
+        // Where the selection sits inside the reader, so the markup controls
+        // can appear next to the text instead of at the top of the window.
+        var frame = CGRect.zero
+        for page in selection.pages {
+            let bounds = view.convert(selection.bounds(for: page), from: page)
+            frame = frame.isEmpty ? bounds : frame.union(bounds)
+        }
+
+        #if os(macOS)
+        // AppKit views are bottom-left origin unless flipped, while the SwiftUI
+        // overlay that draws the markup controls is top-left. Without this the
+        // controls appear mirrored about the middle of the page.
+        if !view.isFlipped {
+            frame.origin.y = view.bounds.height - frame.maxY
+        }
+        #endif
+
+        onSelectionChange(selection, frame)
     }
 
     // MARK: - Canvases

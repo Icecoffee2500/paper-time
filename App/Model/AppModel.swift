@@ -33,6 +33,39 @@ public final class AppModel {
     /// The Spotlight-style search overlay.
     public var showsSearchPalette = false
 
+    /// Hides everything except the paper.
+    public private(set) var isFocusMode = false
+    /// In focus mode the paper list is summoned as a floating panel instead of
+    /// occupying a column, so the page keeps the whole window.
+    public var showsFloatingList = false
+
+    private var restoredColumnVisibility = NavigationSplitViewVisibility.all
+    private var restoredInspector = false
+
+    public func toggleFocusMode() {
+        withAnimation(.snappy(duration: 0.28)) {
+            if isFocusMode {
+                columnVisibility = restoredColumnVisibility
+                showsInspector = restoredInspector
+                showsFloatingList = false
+                isFocusMode = false
+            } else {
+                restoredColumnVisibility = columnVisibility
+                restoredInspector = showsInspector
+                columnVisibility = .detailOnly
+                showsInspector = false
+                isFocusMode = true
+            }
+        }
+    }
+
+    public func toggleFloatingList() {
+        guard isFocusMode else { return }
+        withAnimation(.snappy(duration: 0.22)) {
+            showsFloatingList.toggle()
+        }
+    }
+
     /// Hides the scope sidebar only. The paper list stays put: collapsing both
     /// columns at once is a different, rarer intent than "give me more room".
     public func toggleSidebar() {

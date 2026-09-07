@@ -131,7 +131,7 @@ struct SettingsView: View {
             Picker("Page Layout", selection: Bindable(settings).readerPageMode) {
                 Text("Continuous").tag("continuous")
                 Text("Single Page").tag("singlePage")
-                Text("Two-Up").tag("twoUp")
+                Text("Book").tag("book")
             }
             Picker("Page Tint", selection: Bindable(settings).readerTint) {
                 Text("None").tag("none")

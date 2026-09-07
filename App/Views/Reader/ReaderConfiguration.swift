@@ -27,21 +27,21 @@ public final class ReaderConfiguration {
     }
 
     public enum PageLayout: String, CaseIterable, Identifiable, Sendable {
-        case continuous, singlePage, twoUp
+        case continuous, singlePage, book
         public var id: String { rawValue }
 
         public var label: String {
             switch self {
             case .continuous: "Continuous"
             case .singlePage: "Single Page"
-            case .twoUp: "Two Pages"
+            case .book: "Book"
             }
         }
         public var symbolName: String {
             switch self {
             case .continuous: "scroll"
             case .singlePage: "doc"
-            case .twoUp: "book.pages"
+            case .book: "book.pages"
             }
         }
     }

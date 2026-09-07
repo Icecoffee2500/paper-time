@@ -73,6 +73,18 @@ struct PaperTimeCommands: Commands {
             }
             .keyboardShortcut("]", modifiers: .command)
 
+            Button(model.isFocusMode ? "Leave Focus" : "Focus on the Paper") {
+                model.toggleFocusMode()
+            }
+            .keyboardShortcut("f", modifiers: [.command, .control])
+            .disabled(model.library == nil)
+
+            Button("Show Papers") {
+                model.toggleFloatingList()
+            }
+            .keyboardShortcut("l", modifiers: .command)
+            .disabled(!model.isFocusMode)
+
             Divider()
 
             Button("Next Page") {
@@ -111,4 +123,5 @@ extension Notification.Name {
     static let paperTimeGoBack = Notification.Name("PaperTime.goBack")
     static let paperTimeGoForward = Notification.Name("PaperTime.goForward")
     static let paperTimeFindInDocument = Notification.Name("PaperTime.findInDocument")
+    static let paperTimeToggleFocus = Notification.Name("PaperTime.toggleFocus")
 }
