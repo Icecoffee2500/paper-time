@@ -30,6 +30,9 @@ public final class AppModel {
     #else
     public var showsInspector = false
     #endif
+    /// Whether the paper list — the column between the source list and the
+    /// reader — is showing.
+    public var showsPaperList = true
     /// The Spotlight-style search overlay.
     public var showsSearchPalette = false
 
@@ -84,6 +87,11 @@ public final class AppModel {
         withAnimation(.snappy(duration: 0.25)) {
             columnVisibility = columnVisibility == .all ? .doubleColumn : .all
         }
+    }
+
+    /// Hides the paper list, leaving the source list and the reader.
+    public func togglePaperList() {
+        withAnimation(.snappy(duration: 0.25)) { showsPaperList.toggle() }
     }
 
     public func toggleInspector() {

@@ -60,11 +60,15 @@ public final class LibraryModel {
     /// over exactly the papers the list would show — supplements travel with
     /// their parent, so counting them would promise rows that never appear.
     public struct ScopeCounts: Equatable, Sendable {
+        public var all = 0
         public var unread = 0
         public var reading = 0
         public var read = 0
         public var favorites = 0
         public var needsReview = 0
+        /// Per collection and per tag, keyed by identifier.
+        public var collections: [UUID: Int] = [:]
+        public var tags: [UUID: Int] = [:]
     }
     public private(set) var manifest: LibraryManifest
     public private(set) var collections = CollectionSet()
@@ -133,6 +137,7 @@ public final class LibraryModel {
             "\($0.0.lastPathComponent): \($0.1.localizedDescription)"
         }
         collections = (try? await store.loadCollections()) ?? CollectionSet()
+        rebuildDerivedIndexes()
         manifest = (try? await store.loadManifest()) ?? manifest
         looseDocuments = await store.looseDocumentURLs()
         startWatchingFolder()
@@ -242,6 +247,7 @@ public final class LibraryModel {
                 attachments[parentID, default: []].append(paper.id)
                 continue
             }
+            counts.all += 1
             switch paper.state.readingStatus {
             case .unread: counts.unread += 1
             case .reading: counts.reading += 1
@@ -251,6 +257,15 @@ public final class LibraryModel {
             if paper.meta.confidence == .needsReview || paper.meta.confidence == .unparsed {
                 counts.needsReview += 1
             }
+            for id in paper.meta.tagIDs { counts.tags[id, default: 0] += 1 }
+        }
+
+        // Smart collections are a rule over the whole library, so they are
+        // counted by asking the rule rather than by reading memberships.
+        for collection in collections.collections {
+            counts.collections[collection.id] = papers.filter {
+                $0.meta.parentID == nil && matchesCollection(collection.id, paper: $0)
+            }.count
         }
 
         indexByID = index
@@ -739,6 +754,7 @@ public final class LibraryModel {
             Collection(name: name, rule: rule, sortIndex: set.collections.count)
         )
         collections = set
+        rebuildDerivedIndexes()
         try? await store.saveCollections(set)
     }
 

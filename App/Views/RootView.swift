@@ -74,7 +74,10 @@ struct LibraryWindow: View {
     @ViewBuilder
     private var decorated: some View {
         #if os(macOS)
-        windowBody.toolbar(id: "library") { toolbarContent }
+        windowBody
+            .toolbar(id: "library") { toolbarContent }
+            .toolbar(id: "inspector-toggle") { inspectorToolbarContent }
+            .toolbarBackground(.ultraThinMaterial, for: .windowToolbar)
         #else
         windowBody
         #endif
@@ -83,17 +86,34 @@ struct LibraryWindow: View {
     private var splitView: some View {
         @Bindable var app = app
 
-        return NavigationSplitView(columnVisibility: $app.columnVisibility) {
-            LibrarySidebar(model: model)
-                .navigationTitle(model.manifest.displayName)
-                // Wide enough for "Needs Review" and "New Collection…", which
-                // the default width was cutting to "Needs…" and "New Coll…".
-                .navigationSplitViewColumnWidth(min: 216, ideal: 232, max: 320)
-        } content: {
-            listColumn
-        } detail: {
-            PaperDetailColumn(model: model, configuration: configuration, link: link)
+        return Group {
+            if app.showsPaperList {
+                NavigationSplitView(columnVisibility: $app.columnVisibility) {
+                    sidebarColumn
+                } content: {
+                    listColumn
+                } detail: {
+                    PaperDetailColumn(model: model, configuration: configuration, link: link)
+                }
+            } else {
+                // Two columns rather than three. `NavigationSplitView` will not
+                // collapse its middle column on request, so the middle column
+                // has to not be there.
+                NavigationSplitView(columnVisibility: $app.columnVisibility) {
+                    sidebarColumn
+                } detail: {
+                    PaperDetailColumn(model: model, configuration: configuration, link: link)
+                }
+            }
         }
+    }
+
+    private var sidebarColumn: some View {
+        LibrarySidebar(model: model)
+            .navigationTitle(model.manifest.displayName)
+            // Wide enough for "Needs Review" and "New Collection…", which the
+            // default width was cutting to "Needs…" and "New Coll…".
+            .navigationSplitViewColumnWidth(min: 216, ideal: 232, max: 320)
     }
 
     private var windowBody: some View {
@@ -248,56 +268,51 @@ struct LibraryWindow: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some CustomizableToolbarContent {
-        ToolbarItem(id: "add", placement: barPlacement) {
-            Button {
-                isImportingPDFs = true
-            } label: {
-                Label("Add PDFs", systemImage: "plus")
-            }
-            .help("Add PDFs to the library (Command-O)")
-        }
-
-        ToolbarItem(id: "search", placement: barPlacement) {
-            Button {
-                app.showsSearchPalette = true
-            } label: {
-                Label("Search", systemImage: "magnifyingglass")
-            }
-            .help("Search everything (Command-K)")
-        }
-
-        ToolbarItem(id: "sort", placement: barPlacement) {
-            Menu {
-                Picker("Sort By", selection: sortOrderBinding) {
-                    ForEach(LibraryModel.SortOrder.allCases) { order in
-                        Text(order.displayName).tag(order)
-                    }
+        // One group rather than one item each: separate toolbar items are what
+        // drew the little vertical rules between the buttons.
+        ToolbarItem(id: "actions", placement: barPlacement) {
+            HStack(spacing: 2) {
+                Button {
+                    isImportingPDFs = true
+                } label: {
+                    Label("Add PDFs", systemImage: "plus")
                 }
-                Divider()
-                Toggle("Ascending", isOn: sortAscendingBinding)
-            } label: {
-                Label("Sort", systemImage: "arrow.up.arrow.down")
-            }
-        }
+                .help("Add PDFs to the library (Command-O)")
 
-        #if os(iOS)
-        ToolbarItem(id: "draw", placement: barPlacement) {
-            Button {
-                configuration.mode = configuration.mode == .draw ? .read : .draw
-                configuration.showsToolPicker = configuration.mode == .draw
-            } label: {
-                Label(
-                    configuration.mode == .draw ? "Stop Drawing" : "Draw",
-                    systemImage: "pencil.tip.crop.circle"
-                )
-                .symbolVariant(configuration.mode == .draw ? .fill : .none)
-            }
-            .disabled(model.selectedPaper == nil)
-        }
-        #endif
+                Button {
+                    app.showsSearchPalette = true
+                } label: {
+                    Label("Search", systemImage: "magnifyingglass")
+                }
+                .help("Search everything (Command-K)")
 
-        ToolbarItem(id: "view", placement: barPlacement) {
-            Menu {
+                sortMenu
+                viewMenu
+                shareMenu
+            }
+            .toolbarButtons()
+        }
+    }
+
+    @ViewBuilder
+    private var sortMenu: some View {
+        Menu {
+            Picker("Sort By", selection: sortOrderBinding) {
+                ForEach(LibraryModel.SortOrder.allCases) { order in
+                    Text(order.displayName).tag(order)
+                }
+            }
+            Divider()
+            Toggle("Ascending", isOn: sortAscendingBinding)
+        } label: {
+            Label("Sort", systemImage: "arrow.up.arrow.down")
+        }
+        .help("Sort the list")
+    }
+
+    @ViewBuilder
+    private var viewMenu: some View {
+        Menu {
                 Picker("Page Layout", selection: $configuration.layout) {
                     ForEach(ReaderConfiguration.PageLayout.allCases) { layout in
                         Label(layout.label, systemImage: layout.symbolName).tag(layout)
@@ -308,23 +323,35 @@ struct LibraryWindow: View {
                         Text(tint.label).tag(tint)
                     }
                 }
-                #if os(iOS)
-                Toggle("Draw with Finger", isOn: $configuration.fingerDrawing)
-                #endif
-                Divider()
-                Toggle(
-                    "Focus on the Paper",
-                    isOn: Binding(get: { app.isFocusMode }, set: { app.setFocusMode($0) })
+            #if os(iOS)
+            Toggle("Draw with Finger", isOn: $configuration.fingerDrawing)
+            Toggle(
+                "Draw",
+                isOn: Binding(
+                    get: { configuration.mode == .draw },
+                    set: { on in
+                        configuration.mode = on ? .draw : .read
+                        configuration.showsToolPicker = on
+                    }
                 )
-                .keyboardShortcut("f", modifiers: [.command, .control])
-            } label: {
-                Label("View Options", systemImage: "textformat.size")
-            }
-            .disabled(model.selectedPaper == nil)
+            )
+            #endif
+            Divider()
+            Toggle(
+                "Focus on the Paper",
+                isOn: Binding(get: { app.isFocusMode }, set: { app.setFocusMode($0) })
+            )
+            .keyboardShortcut("f", modifiers: [.command, .control])
+        } label: {
+            Label("View Options", systemImage: "textformat.size")
         }
+        .help("Page layout and tint")
+        .disabled(model.selectedPaper == nil)
+    }
 
-        ToolbarItem(id: "share", placement: barPlacement) {
-            Menu {
+    @ViewBuilder
+    private var shareMenu: some View {
+        Menu {
                 Button {
                     showsExport = true
                 } label: {
@@ -337,25 +364,29 @@ struct LibraryWindow: View {
                 }
                 .disabled(model.selectedPaper == nil)
                 Divider()
-                Button {
-                    showsMigration = true
-                } label: {
-                    Label(
-                        "Import Existing Library…",
-                        systemImage: "square.and.arrow.down.on.square"
-                    )
-                }
+            Button {
+                showsMigration = true
             } label: {
-                Label("Share", systemImage: "square.and.arrow.up")
+                Label(
+                    "Import Existing Library…",
+                    systemImage: "square.and.arrow.down.on.square"
+                )
             }
+        } label: {
+            Label("Share", systemImage: "square.and.arrow.up")
         }
+        .help("Export and import")
+    }
 
+    @ToolbarContentBuilder
+    private var inspectorToolbarContent: some CustomizableToolbarContent {
         ToolbarItem(id: "inspector", placement: .primaryAction) {
             Button {
                 app.toggleInspector()
             } label: {
                 Label("Inspector", systemImage: "sidebar.trailing")
             }
+            .toolbarButtons()
             .help("Show or hide the inspector (Command-])")
         }
     }
@@ -460,8 +491,11 @@ struct PaperDetailColumn: View {
 
     @ViewBuilder
     private var inspector: some View {
-        if model.selectedPaper != nil {
-            VStack(spacing: 0) {
+        // Everything is pinned to the top and told to fill the column. Without
+        // it SwiftUI centres the whole stack, which left the tab picker
+        // floating halfway down an empty inspector.
+        VStack(spacing: 0) {
+            if model.selectedPaper != nil {
                 Picker("Inspector", selection: $inspectorTab) {
                     ForEach(InspectorTab.allCases) { tab in
                         Text(tab.label).tag(tab)
@@ -470,24 +504,30 @@ struct PaperDetailColumn: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .padding(.horizontal)
-                .padding(.vertical, 8)
+                .padding(.top, 10)
+                .padding(.bottom, 8)
 
                 Divider()
 
                 switch inspectorTab {
                 case .details:
                     PaperInspector(model: model)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 case .notes:
                     if let session = link.session {
                         MarkupListView(session: session, link: link)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     } else {
                         ContentUnavailableView("Opening the Paper", systemImage: "hourglass")
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
+            } else {
+                ContentUnavailableView("Nothing Selected", systemImage: "sidebar.right")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-        } else {
-            ContentUnavailableView("Nothing Selected", systemImage: "sidebar.right")
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 }
 
@@ -512,5 +552,23 @@ struct LibraryUnavailableView: View {
                 app.forgetLibrary()
             }
         }
+    }
+}
+
+
+extension View {
+    /// The toolbar's own button look: no bezel, no separators, icon only.
+    ///
+    /// `.accessoryBar` is the Mac's flat toolbar style; iOS toolbars are
+    /// already flat and do not have it.
+    @ViewBuilder
+    func toolbarButtons() -> some View {
+        #if os(macOS)
+        buttonStyle(.accessoryBar)
+            .menuStyle(.borderlessButton)
+            .labelStyle(.iconOnly)
+        #else
+        labelStyle(.iconOnly)
+        #endif
     }
 }

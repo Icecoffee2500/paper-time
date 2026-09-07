@@ -50,30 +50,33 @@ struct LibrarySidebar: View {
 
             Section("Library") {
                 Label("All Papers", systemImage: "tray.full")
+                    .badge(model.counts.all)
                     .tag(LibraryModel.Scope.all)
                 Label("Unread", systemImage: "circle")
                     .badge(model.counts.unread)
                     .tag(LibraryModel.Scope.unread)
                     .dropTarget { await model.setReadingStatus(.unread, for: $0) }
                 Label("Reading", systemImage: "circle.lefthalf.filled")
+                    .badge(model.counts.reading)
                     .tag(LibraryModel.Scope.reading)
                     .dropTarget { await model.setReadingStatus(.reading, for: $0) }
                 Label("Read", systemImage: "checkmark.circle")
+                    .badge(model.counts.read)
                     .tag(LibraryModel.Scope.read)
                     .dropTarget { await model.setReadingStatus(.read, for: $0) }
                 Label("Favorites", systemImage: "star")
+                    .badge(model.counts.favorites)
                     .tag(LibraryModel.Scope.favorites)
                     .dropTarget { await model.setFavorite(true, for: $0) }
-                if model.counts.needsReview > 0 {
-                    Label("Needs Review", systemImage: "exclamationmark.triangle")
-                        .badge(model.counts.needsReview)
-                        .tag(LibraryModel.Scope.needsReview)
-                }
+                Label("Needs Review", systemImage: "exclamationmark.triangle")
+                    .badge(model.counts.needsReview)
+                    .tag(LibraryModel.Scope.needsReview)
             }
 
             Section("Collections") {
                 ForEach(model.collections.collections) { collection in
                     Label(collection.name, systemImage: symbolName(for: collection))
+                        .badge(model.counts.collections[collection.id] ?? 0)
                         .tag(LibraryModel.Scope.collection(collection.id))
                         .dropTarget(isEnabled: !collection.isSmart) { paperID in
                             await model.addToCollection(collection.id, paperID: paperID)
@@ -97,6 +100,7 @@ struct LibrarySidebar: View {
                             .frame(width: 10, height: 10)
                             .accessibilityHidden(true)
                     }
+                    .badge(model.counts.tags[tag.id] ?? 0)
                     .tag(LibraryModel.Scope.tag(tag.id))
                     .dropTarget { await model.addTag(tag.id, to: $0) }
                 }

@@ -20,6 +20,8 @@ final class MarkupPanelController {
     private(set) var isShowing = false
 
     private var onMark: ((MarkupDescriptor.Kind, MarkupColor) -> Void)?
+    private var onRecolor: ((MarkupColor) -> Void)?
+    private var onDelete: (() -> Void)?
     private var onNote: ((String) -> Void)?
     private var onCopy: (() -> Void)?
     private var onDismiss: (() -> Void)?
@@ -47,6 +49,35 @@ final class MarkupPanelController {
         self.panel = panel
         if panel.parent == nil { host.addChildWindow(panel, ordered: .above) }
         if composing { presentComposer() } else { presentBar() }
+        panel.orderFront(nil)
+        isShowing = true
+    }
+
+    /// The controls for a mark that is already on the page: change its colour,
+    /// or take it off. Reached by clicking the mark itself, because that is
+    /// where a reader looks for it.
+    func showEditor(
+        anchor: NSRect,
+        over host: NSWindow,
+        onRecolor: @escaping (MarkupColor) -> Void,
+        onDelete: @escaping () -> Void,
+        onDismiss: @escaping () -> Void
+    ) {
+        self.onRecolor = onRecolor
+        self.onDelete = onDelete
+        self.onDismiss = onDismiss
+        self.anchor = anchor
+
+        let panel = panel ?? makePanel()
+        self.panel = panel
+        if panel.parent == nil { host.addChildWindow(panel, ordered: .above) }
+        let editor = MarkEditorView(
+            onRecolor: { [weak self] color in self?.onRecolor?(color) },
+            onDelete: { [weak self] in self?.onDelete?() }
+        )
+        bar = nil
+        composer = nil
+        install(editor, makeKey: false)
         panel.orderFront(nil)
         isShowing = true
     }
@@ -133,7 +164,7 @@ private final class MarkupPanel: NSPanel {
 }
 
 /// The row of markup actions.
-private final class MarkupBarView: NSVisualEffectView {
+final class MarkupBarView: NSVisualEffectView {
     private let onMark: (MarkupDescriptor.Kind, MarkupColor) -> Void
     private let onNote: () -> Void
     private let onCopy: () -> Void
@@ -211,7 +242,7 @@ private final class MarkupBarView: NSVisualEffectView {
         return line
     }
 
-    private static func swatch(for color: MarkupColor) -> NSImage {
+    static func swatch(for color: MarkupColor) -> NSImage {
         let size = NSSize(width: 20, height: 20)
         return NSImage(size: size, flipped: false) { rect in
             color.platformColor.setFill()
@@ -233,6 +264,81 @@ private final class MarkupBarView: NSVisualEffectView {
     @objc private func strikethrough() { onMark(.strikethrough, .yellow) }
     @objc private func note() { onNote() }
     @objc private func copyText() { onCopy() }
+}
+
+/// The controls for a mark already on the page.
+private final class MarkEditorView: NSVisualEffectView {
+    private let onRecolor: (MarkupColor) -> Void
+    private let onDelete: () -> Void
+
+    init(onRecolor: @escaping (MarkupColor) -> Void, onDelete: @escaping () -> Void) {
+        self.onRecolor = onRecolor
+        self.onDelete = onDelete
+        super.init(frame: .zero)
+
+        material = .popover
+        blendingMode = .behindWindow
+        state = .active
+        wantsLayer = true
+        layer?.cornerRadius = 20
+        layer?.cornerCurve = .continuous
+        layer?.masksToBounds = true
+
+        var views: [NSView] = MarkupColor.allCases.enumerated().map { index, color in
+            let button = NSButton(
+                image: MarkupBarView.swatch(for: color),
+                target: self,
+                action: #selector(recolor(_:))
+            )
+            button.isBordered = false
+            button.tag = index
+            button.toolTip = color.displayName
+            button.setAccessibilityLabel("Change to \(color.displayName)")
+            return button
+        }
+        let separator = NSBox()
+        separator.boxType = .separator
+        separator.translatesAutoresizingMaskIntoConstraints = false
+        separator.heightAnchor.constraint(equalToConstant: 18).isActive = true
+        views.append(separator)
+
+        let trash = NSButton(
+            image: NSImage(systemSymbolName: "trash", accessibilityDescription: "Remove Mark")
+                ?? NSImage(),
+            target: self,
+            action: #selector(delete)
+        )
+        trash.isBordered = false
+        trash.contentTintColor = .systemRed
+        trash.toolTip = "Remove Mark"
+        trash.setAccessibilityLabel("Remove Mark")
+        views.append(trash)
+
+        let stack = NSStackView(views: views)
+        stack.orientation = .horizontal
+        stack.alignment = .centerY
+        stack.spacing = 10
+        stack.edgeInsets = NSEdgeInsets(top: 8, left: 14, bottom: 8, right: 14)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor),
+            stack.topAnchor.constraint(equalTo: topAnchor),
+            stack.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    @objc private func recolor(_ sender: NSButton) {
+        onRecolor(MarkupColor.allCases[min(sender.tag, MarkupColor.allCases.count - 1)])
+    }
+
+    @objc private func delete() { onDelete() }
 }
 
 /// Writing a note about the selected passage.

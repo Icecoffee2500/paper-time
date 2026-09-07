@@ -68,6 +68,12 @@ struct PaperTimeCommands: Commands {
             }
             .keyboardShortcut("[", modifiers: .command)
 
+            Button(model.showsPaperList ? "Hide Paper List" : "Show Paper List") {
+                model.togglePaperList()
+            }
+            .keyboardShortcut("\\", modifiers: .command)
+            .disabled(model.library == nil)
+
             Button(model.showsInspector ? "Hide Inspector" : "Show Inspector") {
                 model.toggleInspector()
             }

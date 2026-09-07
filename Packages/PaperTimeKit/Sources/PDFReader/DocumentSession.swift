@@ -220,6 +220,44 @@ public final class DocumentSession {
         }
     }
 
+    /// Puts a set of marks back, used when an undo is undone.
+    public func restore(_ descriptors: [MarkupDescriptor]) {
+        for descriptor in descriptors {
+            guard let page = document.page(at: descriptor.pageIndex) else { continue }
+            TextMarkupWriter.apply(descriptor, to: page)
+            markups.append(descriptor)
+            markupsSinceLastFlush.append(descriptor)
+        }
+        sortMarkups()
+        revision += 1
+        saveState = .pending
+        scheduleFlush(delay: .seconds(2))
+    }
+
+    /// Takes several marks off the page at once.
+    public func removeMarkups(ids: [UUID]) {
+        for id in ids { removeMarkup(id: id) }
+    }
+
+    /// The mark covering a point on a page, if there is one.
+    public func markup(withID id: UUID) -> MarkupDescriptor? {
+        markups.first { $0.id == id }
+    }
+
+    /// Changes a mark's colour in place.
+    public func recolor(id: UUID, to color: MarkupColor) {
+        guard let index = markups.firstIndex(where: { $0.id == id }) else { return }
+        markups[index].color = color
+        if let page = document.page(at: markups[index].pageIndex) {
+            TextMarkupWriter.remove(id: id, from: page)
+            TextMarkupWriter.apply(markups[index], to: page)
+        }
+        markupsSinceLastFlush.append(markups[index])
+        revision += 1
+        saveState = .pending
+        scheduleFlush(delay: .seconds(2))
+    }
+
     public func removeMarkup(id: UUID) {
         guard let descriptor = markups.first(where: { $0.id == id }) else { return }
         if let page = document.page(at: descriptor.pageIndex) {

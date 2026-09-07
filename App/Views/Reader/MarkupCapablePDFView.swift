@@ -84,6 +84,26 @@ import AppKit
 final class MarkupCapablePDFView: PDFView {
     var onMarkup: ((MarkupDescriptor.Kind, MarkupColor) -> Void)?
     var onNote: (() -> Void)?
+    /// Called when a mark already on the page is clicked.
+    var onMarkTapped: ((PDFAnnotation, NSPoint) -> Void)?
+    /// A click on an existing mark selects the mark rather than the text, so it
+    /// can be recoloured or taken off the page where it actually is.
+    override func mouseDown(with event: NSEvent) {
+        let inView = convert(event.locationInWindow, from: nil)
+        if let page = page(for: inView, nearest: false) {
+            let onPage = convert(inView, to: page)
+            let hit = page.annotations.first {
+                ["Highlight", "Underline", "StrikeOut", "Text"].contains($0.type ?? "")
+                    && $0.bounds.insetBy(dx: -2, dy: -2).contains(onPage)
+            }
+            if let hit {
+                clearSelection()
+                onMarkTapped?(hit, event.locationInWindow)
+                return
+            }
+        }
+        super.mouseDown(with: event)
+    }
 
     override func menu(for event: NSEvent) -> NSMenu? {
         let menu = super.menu(for: event) ?? NSMenu()

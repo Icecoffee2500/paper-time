@@ -96,6 +96,8 @@ final class ReaderCoordinator: NSObject {
     #if os(macOS)
     private let markupPanel = MarkupPanelController()
     private var markupTask: Task<Void, Never>?
+    private var scrollMonitor: Any?
+    private var scrolled: CGFloat = 0
     #endif
     #if canImport(UIKit)
     private var canvases: [Int: PKCanvasView] = [:]
@@ -144,12 +146,16 @@ final class ReaderCoordinator: NSObject {
         let view = MarkupCapablePDFView()
         view.onMarkup = { [weak self] kind, color in
             guard let self, let selection = view.currentSelection else { return }
-            session.addMarkup(for: selection, kind: kind, color: color)
+            let made = session.addMarkup(for: selection, kind: kind, color: color)
+            registerUndo(made, name: markupActionName(kind), in: view)
             hideMarkupPanel()
         }
         view.onNote = { [weak self] in
             guard let self, let selection = view.currentSelection else { return }
             showMarkupPanel(for: selection, in: view, composing: true)
+        }
+        view.onMarkTapped = { [weak self] annotation, _ in
+            self?.showMarkEditor(for: annotation, in: view)
         }
         #endif
         view.document = session.document
@@ -279,6 +285,10 @@ final class ReaderCoordinator: NSObject {
         NotificationCenter.default.removeObserver(self)
         #if os(macOS)
         hideMarkupPanel()
+        if let scrollMonitor {
+            NSEvent.removeMonitor(scrollMonitor)
+            self.scrollMonitor = nil
+        }
         #endif
         #if canImport(UIKit)
         toolPicker.setVisible(false, forFirstResponder: PKCanvasView())
@@ -307,6 +317,10 @@ final class ReaderCoordinator: NSObject {
             view.displayDirection = .horizontal
             view.displaysAsBook = true
         }
+
+        #if os(macOS)
+        setBookScrolling(layout == .book, in: view)
+        #endif
 
         #if canImport(UIKit)
         // The page view controller gives the paged modes a real swipe-to-turn
@@ -452,12 +466,14 @@ final class ReaderCoordinator: NSObject {
             quotedText: selection.string ?? "",
             onMark: { [weak self] kind, color in
                 guard let self else { return }
-                session.addMarkup(for: selection, kind: kind, color: color)
+                let made = session.addMarkup(for: selection, kind: kind, color: color)
+                registerUndo(made, name: markupActionName(kind), in: view)
                 finishMarkup(in: view)
             },
             onNote: { [weak self] comment in
                 guard let self else { return }
-                session.addNote(for: selection, comment: comment)
+                let made = session.addNote(for: selection, comment: comment)
+                registerUndo(made, name: "Add Note", in: view)
                 finishMarkup(in: view)
             },
             onCopy: { [weak self] in
@@ -475,10 +491,115 @@ final class ReaderCoordinator: NSObject {
         )
     }
 
+    /// Records a markup so Command-Z takes it back.
+    ///
+    /// Registered with the window's own undo manager rather than a stack of
+    /// our own, so it behaves like undo everywhere else on the Mac and does
+    /// not steal Command-Z from a text field that has focus.
+    private func registerUndo(_ descriptors: [MarkupDescriptor], name: String, in view: PDFView) {
+        guard !descriptors.isEmpty, let undoManager = view.window?.undoManager else { return }
+        let session = session
+        undoManager.setActionName(name)
+        undoManager.registerUndo(withTarget: session) { session in
+            MainActor.assumeIsolated {
+                session.removeMarkups(ids: descriptors.map(\.id))
+                undoManager.registerUndo(withTarget: session) { session in
+                    MainActor.assumeIsolated { session.restore(descriptors) }
+                }
+                undoManager.setActionName(name)
+            }
+        }
+    }
+
+    /// The controls for a mark that is already on the page.
+    private func showMarkEditor(for annotation: PDFAnnotation, in view: PDFView) {
+        guard let window = view.window,
+              let raw = annotation.value(
+                  forAnnotationKey: PDFAnnotationKey(rawValue: "/PTMarkupID")
+              ) as? String,
+              let id = UUID(uuidString: raw),
+              let descriptor = session.markup(withID: id)
+        else { return }
+
+        guard let page = annotation.page else { return }
+        let inView = view.convert(annotation.bounds, from: page)
+        let onScreen = window.convertToScreen(view.convert(inView, to: nil))
+        markupPanel.showEditor(
+            anchor: onScreen,
+            over: window,
+            onRecolor: { [weak self] color in
+                guard let self else { return }
+                session.recolor(id: id, to: color)
+                hideMarkupPanel()
+            },
+            onDelete: { [weak self] in
+                guard let self else { return }
+                session.removeMarkup(id: id)
+                registerUndo([descriptor], name: "Delete Mark", in: view)
+                hideMarkupPanel()
+            },
+            onDismiss: { [weak self] in self?.hideMarkupPanel() }
+        )
+    }
+
     private func finishMarkup(in view: PDFView) {
         hideMarkupPanel()
         view.clearSelection()
         onSelectionChange(nil, .zero)
+    }
+
+    #if os(macOS)
+    /// Turns the page instead of scrolling, while the reader is a book.
+    ///
+    /// A local event monitor rather than an override on the view: the scroll
+    /// lands on PDFKit's own inner document view, which never gives the
+    /// `PDFView` subclass a chance at it.
+    private func setBookScrolling(_ isOn: Bool, in view: PDFView) {
+        if let monitor = scrollMonitor {
+            NSEvent.removeMonitor(monitor)
+            scrollMonitor = nil
+        }
+        guard isOn else { return }
+        scrollMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.scrollWheel]
+        ) { [weak self, weak view] event in
+            guard let self, let view, let window = view.window,
+                  event.window === window,
+                  view.hitTest(view.superview?.convert(event.locationInWindow, from: nil)
+                      ?? event.locationInWindow) != nil || view.bounds.contains(
+                          view.convert(event.locationInWindow, from: nil)
+                      )
+            else { return event }
+            return turnPage(with: event, in: view) ? nil : event
+        }
+    }
+
+    /// Accumulates a gesture and turns a page once it is decisive.
+    private func turnPage(with event: NSEvent, in view: PDFView) -> Bool {
+        if event.phase == .began || event.phase == .mayBegin { scrolled = 0 }
+        let delta = abs(event.scrollingDeltaX) > abs(event.scrollingDeltaY)
+            ? -event.scrollingDeltaX
+            : -event.scrollingDeltaY
+        scrolled += delta
+        let threshold: CGFloat = event.hasPreciseScrollingDeltas ? 60 : 3
+        if scrolled > threshold {
+            scrolled = 0
+            if view.canGoToNextPage { view.goToNextPage(nil) }
+        } else if scrolled < -threshold {
+            scrolled = 0
+            if view.canGoToPreviousPage { view.goToPreviousPage(nil) }
+        }
+        return true
+    }
+    #endif
+
+    private func markupActionName(_ kind: MarkupDescriptor.Kind) -> String {
+        switch kind {
+        case .highlight: "Highlight"
+        case .underline: "Underline"
+        case .strikethrough: "Strikethrough"
+        case .note: "Note"
+        }
     }
 
     private func hideMarkupPanel() {
