@@ -13,6 +13,27 @@ import SwiftUI
 @Observable
 final class ReaderLink {
     var session: DocumentSession?
+    /// Which paper the open session belongs to.
+    ///
+    /// The reader is rebuilt whenever SwiftUI feels like it, and opening the
+    /// same paper twice would leave two documents in play: one shown by the
+    /// PDF view, one saved by the session. Marks made on the first would be
+    /// written from the second, which is to say lost. Keeping the session here,
+    /// keyed by paper, means a paper is opened exactly once.
+    private(set) var sessionPaperID: UUID?
+
+    func session(for paperID: UUID) -> DocumentSession? {
+        sessionPaperID == paperID ? session : nil
+    }
+
+    /// Takes over as the open paper, writing out whatever was open before.
+    func adopt(_ session: DocumentSession, for paperID: UUID) {
+        if let previous = self.session, previous !== session {
+            Task { await previous.flush() }
+        }
+        self.session = session
+        self.sessionPaperID = paperID
+    }
     var selection: PDFSelection?
     /// Whether the in-document find bar is showing.
     var isFinding = false

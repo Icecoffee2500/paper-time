@@ -51,7 +51,10 @@ struct ReaderScreen: View {
         }
         .task { await load() }
         .onDisappear {
-            link.session = nil
+            // Only write; the session itself stays with the link until another
+            // paper takes its place. A reader that is rebuilt — which SwiftUI
+            // does freely — must find the session it had, or the inspector
+            // spends the rest of the session saying "Opening the Paper".
             link.selection = nil
             Task { await saveAndClose() }
         }
@@ -75,8 +78,6 @@ struct ReaderScreen: View {
             revision: session.revision,
             currentPageIndex: $currentPageIndex,
             onSelectionChange: { newSelection, frame in
-                // While a note is being written the selection it belongs to
-                // must not be pulled out from under the editor.
                 guard noteSelection == nil else { return }
                 selection = newSelection
                 selectionFrame = frame
@@ -86,14 +87,15 @@ struct ReaderScreen: View {
                 guard let selection else { return }
                 noteDraft = ""
                 noteSelection = selection
-            }
+            },
+            onToast: { show(toast: $0) }
         )
         .ignoresSafeArea(edges: .bottom)
         .navigationTitle(paper.meta.displayTitle)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .overlay(alignment: .topLeading) { selectionControls(session) }
+        .overlay(alignment: .topLeading) { touchSelectionControls(session) }
         .animation(.snappy(duration: 0.16), value: selectionFrame)
         .overlay(alignment: .bottom) {
             if let toast {
@@ -183,13 +185,11 @@ struct ReaderScreen: View {
         .background(.bar)
     }
 
-    /// The markup controls, and the note editor they turn into.
-    ///
-    /// Anchored to the text rather than parked in the toolbar: the action
-    /// belongs where the user just dragged.
+    /// The note editor on iPhone and iPad, where the markup actions themselves
+    /// live in the system edit menu and only the editor needs a place to sit.
     @ViewBuilder
-    private func selectionControls(_ session: DocumentSession) -> some View {
-        if let noteSelection {
+    private func touchSelectionControls(_ session: DocumentSession) -> some View {
+        if !Self.usesFloatingMarkupBar, let noteSelection {
             NoteComposer(
                 quotedText: noteSelection.string ?? "",
                 text: $noteDraft,
@@ -205,20 +205,6 @@ struct ReaderScreen: View {
             .frame(width: 300)
             .offset(anchoredTo: selectionFrame, width: 300)
             .transition(.scale(scale: 0.94, anchor: .bottom).combined(with: .opacity))
-        } else if let selection, !selectionFrame.isEmpty, Self.usesFloatingMarkupBar {
-            SelectionMarkupBar { kind, color in
-                session.addMarkup(for: selection, kind: kind, color: color)
-                dismissSelectionControls()
-            } onNote: {
-                noteDraft = ""
-                noteSelection = selection
-            } onCopy: {
-                copy(selection.string ?? "")
-                show(toast: "Copied")
-                dismissSelectionControls()
-            }
-            .offset(anchoredTo: selectionFrame, width: 300)
-            .transition(.scale(scale: 0.9, anchor: .bottom).combined(with: .opacity))
         }
     }
 
@@ -296,10 +282,17 @@ struct ReaderScreen: View {
 
     private func load() async {
         loadError = nil
+        // Reuse the session this paper already has. Opening it a second time
+        // would give the view one document and the saver another.
+        if let existing = link.session(for: paper.id) {
+            session = existing
+            currentPageIndex = paper.state.lastPageIndex
+            return
+        }
         do {
             let opened = try await DocumentSession.open(paper: paper, store: library.store)
             session = opened
-            link.session = opened
+            link.adopt(opened, for: paper.id)
             currentPageIndex = paper.state.lastPageIndex
             // Opening a paper records that it was opened, and nothing else.
             // Whether it counts as "reading" is the user's call, made with the

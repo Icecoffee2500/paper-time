@@ -72,4 +72,75 @@ final class MarkupCapablePDFView: PDFView {
         clearSelection()
     }
 }
+
+#else
+import AppKit
+
+/// A `PDFView` that offers the markup actions on a Control-click.
+///
+/// The floating panel is the way this is meant to be reached, but a menu on
+/// the selection is what a Mac user tries when a control does not respond, and
+/// it goes through AppKit's own menu machinery rather than anything of ours.
+final class MarkupCapablePDFView: PDFView {
+    var onMarkup: ((MarkupDescriptor.Kind, MarkupColor) -> Void)?
+    var onNote: (() -> Void)?
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let menu = super.menu(for: event) ?? NSMenu()
+        guard currentSelection?.string?.isEmpty == false else { return menu }
+
+        let markup = NSMenu()
+        let highlights = NSMenu()
+        for color in MarkupColor.allCases {
+            let item = NSMenuItem(
+                title: color.displayName,
+                action: #selector(highlightFromMenu(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.representedObject = color.rawValue
+            highlights.addItem(item)
+        }
+        let highlightItem = NSMenuItem(title: "Highlight", action: nil, keyEquivalent: "")
+        highlightItem.submenu = highlights
+        markup.addItem(highlightItem)
+
+        for (title, selector) in [
+            ("Underline", #selector(underlineFromMenu)),
+            ("Strikethrough", #selector(strikethroughFromMenu)),
+            ("Add Note…", #selector(noteFromMenu)),
+        ] {
+            let item = NSMenuItem(title: title, action: selector, keyEquivalent: "")
+            item.target = self
+            markup.addItem(item)
+        }
+
+        menu.insertItem(NSMenuItem.separator(), at: 0)
+        for item in markup.items.reversed() {
+            markup.removeItem(item)
+            menu.insertItem(item, at: 0)
+        }
+        return menu
+    }
+
+    @objc private func highlightFromMenu(_ sender: NSMenuItem) {
+        let color = (sender.representedObject as? String).flatMap(MarkupColor.init(rawValue:))
+        onMarkup?(.highlight, color ?? .yellow)
+        clearSelection()
+    }
+
+    @objc private func underlineFromMenu() {
+        onMarkup?(.underline, .yellow)
+        clearSelection()
+    }
+
+    @objc private func strikethroughFromMenu() {
+        onMarkup?(.strikethrough, .yellow)
+        clearSelection()
+    }
+
+    @objc private func noteFromMenu() {
+        onNote?()
+    }
+}
 #endif

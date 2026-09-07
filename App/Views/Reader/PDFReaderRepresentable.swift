@@ -33,6 +33,8 @@ struct PDFReaderRepresentable: PlatformViewRepresentable {
     /// The system edit menu's "Add Note", which the reader turns into the
     /// note editor.
     var onNoteRequested: () -> Void
+    /// Shows a short confirmation for actions that leave nothing on screen.
+    var onToast: (String) -> Void
 
     func makeCoordinator() -> ReaderCoordinator {
         ReaderCoordinator(
@@ -41,13 +43,19 @@ struct PDFReaderRepresentable: PlatformViewRepresentable {
             link: link,
             onPageChange: { currentPageIndex = $0 },
             onSelectionChange: onSelectionChange,
-            onNoteRequested: onNoteRequested
+            onNoteRequested: onNoteRequested,
+            onToast: onToast
         )
     }
 
     #if canImport(UIKit)
     func makeUIView(context: Context) -> PDFView { context.coordinator.makePDFView() }
     func updateUIView(_ view: PDFView, context: Context) {
+        context.coordinator.adopt(
+            session: session,
+            onSelectionChange: onSelectionChange,
+            onToast: onToast
+        )
         context.coordinator.update(view, revision: revision)
     }
     static func dismantleUIView(_ view: PDFView, coordinator: ReaderCoordinator) {
@@ -56,6 +64,11 @@ struct PDFReaderRepresentable: PlatformViewRepresentable {
     #else
     func makeNSView(context: Context) -> PDFView { context.coordinator.makePDFView() }
     func updateNSView(_ view: PDFView, context: Context) {
+        context.coordinator.adopt(
+            session: session,
+            onSelectionChange: onSelectionChange,
+            onToast: onToast
+        )
         context.coordinator.update(view, revision: revision)
     }
     static func dismantleNSView(_ view: PDFView, coordinator: ReaderCoordinator) {
@@ -66,16 +79,24 @@ struct PDFReaderRepresentable: PlatformViewRepresentable {
 
 @MainActor
 final class ReaderCoordinator: NSObject {
-    private let session: DocumentSession
+    /// Not `let`: the coordinator outlives any one pass of the view tree, and
+    /// a coordinator holding last week's session would show one document and
+    /// write another.
+    private var session: DocumentSession
     private let configuration: ReaderConfiguration
     private let link: ReaderLink
     private let onPageChange: (Int) -> Void
-    private let onSelectionChange: (PDFSelection?, CGRect) -> Void
+    private var onSelectionChange: (PDFSelection?, CGRect) -> Void
     private let onNoteRequested: () -> Void
+    private var onToast: (String) -> Void
 
     private weak var pdfView: PDFView?
     private var shownRevision = 0
     private var appliedLayout: ReaderConfiguration.PageLayout?
+    #if os(macOS)
+    private let markupPanel = MarkupPanelController()
+    private var markupTask: Task<Void, Never>?
+    #endif
     #if canImport(UIKit)
     private var canvases: [Int: PKCanvasView] = [:]
     private let toolPicker = PKToolPicker()
@@ -87,7 +108,8 @@ final class ReaderCoordinator: NSObject {
         link: ReaderLink,
         onPageChange: @escaping (Int) -> Void,
         onSelectionChange: @escaping (PDFSelection?, CGRect) -> Void,
-        onNoteRequested: @escaping () -> Void
+        onNoteRequested: @escaping () -> Void,
+        onToast: @escaping (String) -> Void
     ) {
         self.session = session
         self.configuration = configuration
@@ -95,7 +117,19 @@ final class ReaderCoordinator: NSObject {
         self.onPageChange = onPageChange
         self.onSelectionChange = onSelectionChange
         self.onNoteRequested = onNoteRequested
+        self.onToast = onToast
         super.init()
+    }
+
+    /// Takes the values from the latest pass of the view tree.
+    func adopt(
+        session: DocumentSession,
+        onSelectionChange: @escaping (PDFSelection?, CGRect) -> Void,
+        onToast: @escaping (String) -> Void
+    ) {
+        self.session = session
+        self.onSelectionChange = onSelectionChange
+        self.onToast = onToast
     }
 
     func makePDFView() -> PDFView {
@@ -107,7 +141,16 @@ final class ReaderCoordinator: NSObject {
         }
         view.onNote = { [weak self] in self?.onNoteRequested() }
         #else
-        let view = PDFView()
+        let view = MarkupCapablePDFView()
+        view.onMarkup = { [weak self] kind, color in
+            guard let self, let selection = view.currentSelection else { return }
+            session.addMarkup(for: selection, kind: kind, color: color)
+            hideMarkupPanel()
+        }
+        view.onNote = { [weak self] in
+            guard let self, let selection = view.currentSelection else { return }
+            showMarkupPanel(for: selection, in: view, composing: true)
+        }
         #endif
         view.document = session.document
         view.autoScales = true
@@ -234,6 +277,9 @@ final class ReaderCoordinator: NSObject {
 
     func tearDown() {
         NotificationCenter.default.removeObserver(self)
+        #if os(macOS)
+        hideMarkupPanel()
+        #endif
         #if canImport(UIKit)
         toolPicker.setVisible(false, forFirstResponder: PKCanvasView())
         canvases.removeAll()
@@ -339,6 +385,11 @@ final class ReaderCoordinator: NSObject {
               selection.string?.isEmpty == false
         else {
             onSelectionChange(nil, .zero)
+            #if os(macOS)
+            // A selection cleared while the note editor is open is the editor
+            // taking focus, not the reader letting go.
+            if !markupPanel.isShowing { hideMarkupPanel() }
+            #endif
             return
         }
 
@@ -360,7 +411,82 @@ final class ReaderCoordinator: NSObject {
         #endif
 
         onSelectionChange(selection, frame)
+        #if os(macOS)
+        scheduleMarkupPanel(for: selection, in: view)
+        #endif
     }
+
+    // MARK: - Markup panel
+
+    #if os(macOS)
+    /// Waits for the drag to finish before showing anything. A selection
+    /// reports itself once per character crossed; opening on the first would
+    /// anchor the controls to one letter.
+    private func scheduleMarkupPanel(for selection: PDFSelection, in view: PDFView) {
+        markupTask?.cancel()
+        markupTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(220))
+            guard !Task.isCancelled, let self else { return }
+            showMarkupPanel(for: selection, in: view)
+        }
+    }
+
+    private func showMarkupPanel(
+        for selection: PDFSelection,
+        in view: PDFView,
+        composing: Bool = false
+    ) {
+        guard let window = view.window else { return }
+        var frame = CGRect.zero
+        for page in selection.pages {
+            let bounds = view.convert(selection.bounds(for: page), from: page)
+            frame = frame.isEmpty ? bounds : frame.union(bounds)
+        }
+        guard !frame.isEmpty else { return }
+        let inWindow = view.convert(frame, to: nil)
+        let onScreen = window.convertToScreen(inWindow)
+
+        markupPanel.show(
+            anchor: onScreen,
+            over: window,
+            quotedText: selection.string ?? "",
+            onMark: { [weak self] kind, color in
+                guard let self else { return }
+                session.addMarkup(for: selection, kind: kind, color: color)
+                finishMarkup(in: view)
+            },
+            onNote: { [weak self] comment in
+                guard let self else { return }
+                session.addNote(for: selection, comment: comment)
+                finishMarkup(in: view)
+            },
+            onCopy: { [weak self] in
+                guard let self else { return }
+                let text = selection.string ?? ""
+                if !text.isEmpty {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(text, forType: .string)
+                }
+                onToast("Copied")
+                finishMarkup(in: view)
+            },
+            onDismiss: { [weak self] in self?.finishMarkup(in: view) },
+            composing: composing
+        )
+    }
+
+    private func finishMarkup(in view: PDFView) {
+        hideMarkupPanel()
+        view.clearSelection()
+        onSelectionChange(nil, .zero)
+    }
+
+    private func hideMarkupPanel() {
+        markupTask?.cancel()
+        markupTask = nil
+        markupPanel.hide()
+    }
+    #endif
 
     // MARK: - Canvases
 

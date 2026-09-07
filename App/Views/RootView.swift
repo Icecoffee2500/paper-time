@@ -80,17 +80,38 @@ struct LibraryWindow: View {
         #endif
     }
 
-    private var windowBody: some View {
+    private var splitView: some View {
         @Bindable var app = app
 
         return NavigationSplitView(columnVisibility: $app.columnVisibility) {
             LibrarySidebar(model: model)
                 .navigationTitle(model.manifest.displayName)
+                // Wide enough for "Needs Review" and "New Collection…", which
+                // the default width was cutting to "Needs…" and "New Coll…".
+                .navigationSplitViewColumnWidth(min: 216, ideal: 232, max: 320)
         } content: {
             listColumn
         } detail: {
             PaperDetailColumn(model: model, configuration: configuration, link: link)
         }
+    }
+
+    private var windowBody: some View {
+        @Bindable var app = app
+
+        return Group {
+            if app.isFocusMode {
+                // `NavigationSplitViewVisibility.detailOnly` does not actually
+                // collapse a three-column split view on the Mac, so focus mode
+                // stands the reader up on its own instead of asking the split
+                // view for something it will not do. The session lives on the
+                // reader link, so rebuilding the reader reopens nothing.
+                PaperDetailColumn(model: model, configuration: configuration, link: link)
+            } else {
+                splitView
+            }
+        }
+
         .overlay(alignment: .topLeading) { floatingList }
         .onChange(of: configuration.layout) { _, layout in
             // A spread wants the whole window. Choosing Book is the clearest
