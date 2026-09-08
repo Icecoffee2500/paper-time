@@ -140,6 +140,9 @@ public enum TextMarkupWriter {
     /// instead was trimming every line in a densely set paper.
     struct LineMetrics {
         private let typicalLine: CGFloat
+        /// How far an ordinary line's box drops below the text's baseline on
+        /// this page, so a trimmed line sits where the others sit.
+        private let descender: CGFloat
         private let boxes: [CGRect]
 
         init(page: PDFPage) {
@@ -154,9 +157,8 @@ public enum TextMarkupWriter {
 
             let lines = page.selection(for: page.bounds(for: .cropBox))?
                 .selectionsByLine() ?? []
-            let heights = lines.map { $0.bounds(for: page).height }
-                .filter { $0 > 0 }
-                .sorted()
+            let rects = lines.map { $0.bounds(for: page) }.filter { $0.height > 0 }
+            let heights = rects.map(\.height).sorted()
             if heights.count >= 4 {
                 typicalLine = heights[heights.count / 2]
             } else if !found.isEmpty {
@@ -166,6 +168,22 @@ public enum TextMarkupWriter {
             } else {
                 typicalLine = 0
             }
+
+            // Measure the offset on the page's own ordinary lines rather than
+            // guessing a fraction: it is what makes a trimmed line line up
+            // with the untrimmed ones above and below it.
+            var drops: [CGFloat] = []
+            for rect in rects where abs(rect.height - typicalLine) <= typicalLine * 0.15 {
+                let onLine = found.filter {
+                    rect.intersects($0) && $0.midX >= rect.minX && $0.midX <= rect.maxX
+                }
+                guard onLine.count >= 4 else { continue }
+                let sorted = onLine.map(\.minY).sorted()
+                drops.append(sorted[sorted.count / 2] - rect.minY)
+            }
+            descender = drops.isEmpty
+                ? typicalLine * 0.16
+                : drops.sorted()[drops.count / 2]
         }
 
         func tightened(_ rect: CGRect) -> CGRect {
@@ -189,7 +207,7 @@ public enum TextMarkupWriter {
 
             return CGRect(
                 x: rect.minX,
-                y: baseline - typicalLine * 0.22,
+                y: baseline - descender,
                 width: rect.width,
                 height: typicalLine
             )

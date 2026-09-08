@@ -94,6 +94,23 @@ struct PaperTimeCommands: Commands {
 
             Divider()
 
+            Button("Zoom In") {
+                NotificationCenter.default.post(name: .paperTimeZoomIn, object: nil)
+            }
+            .keyboardShortcut("+", modifiers: .command)
+
+            Button("Zoom Out") {
+                NotificationCenter.default.post(name: .paperTimeZoomOut, object: nil)
+            }
+            .keyboardShortcut("-", modifiers: .command)
+
+            Button("Actual Size") {
+                NotificationCenter.default.post(name: .paperTimeActualSize, object: nil)
+            }
+            .keyboardShortcut("0", modifiers: .command)
+
+            Divider()
+
             Button("Next Page") {
                 NotificationCenter.default.post(name: .paperTimeNextPage, object: nil)
             }
@@ -131,4 +148,7 @@ extension Notification.Name {
     static let paperTimeGoForward = Notification.Name("PaperTime.goForward")
     static let paperTimeFindInDocument = Notification.Name("PaperTime.findInDocument")
     static let paperTimeToggleFocus = Notification.Name("PaperTime.toggleFocus")
+    static let paperTimeZoomIn = Notification.Name("PaperTime.zoomIn")
+    static let paperTimeZoomOut = Notification.Name("PaperTime.zoomOut")
+    static let paperTimeActualSize = Notification.Name("PaperTime.actualSize")
 }

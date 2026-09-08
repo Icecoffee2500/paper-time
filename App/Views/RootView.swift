@@ -169,6 +169,7 @@ struct LibraryWindow: View {
 
         .overlay(alignment: .topLeading) { floatingList }
         .onChange(of: configuration.layout) { _, layout in
+            app.settings.readerPageMode = layout.rawValue
             // A spread wants the whole window. Choosing Book is the clearest
             // statement a reader can make that they are here to read, so the
             // columns step aside and the list becomes something summoned.
@@ -366,6 +367,9 @@ struct LibraryWindow: View {
                     ForEach(ReaderConfiguration.PageTint.allCases) { tint in
                         Text(tint.label).tag(tint)
                     }
+                }
+                .onChange(of: configuration.tint) { _, tint in
+                    app.settings.readerTint = tint.rawValue
                 }
             #if os(iOS)
             Toggle("Draw with Finger", isOn: $configuration.fingerDrawing)

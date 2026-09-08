@@ -221,6 +221,9 @@ final class ReaderCoordinator: NSObject {
             (.paperTimePreviousPage, #selector(goToPreviousPage)),
             (.paperTimeGoBack, #selector(goBackInHistory)),
             (.paperTimeGoForward, #selector(goForwardInHistory)),
+            (.paperTimeZoomIn, #selector(zoomIn)),
+            (.paperTimeZoomOut, #selector(zoomOut)),
+            (.paperTimeActualSize, #selector(actualSize)),
         ] {
             NotificationCenter.default.addObserver(
                 self,
@@ -438,6 +441,22 @@ final class ReaderCoordinator: NSObject {
     @objc private func goBackInHistory() {
         guard let view = pdfView, view.canGoBack else { return }
         view.goBack(nil)
+    }
+
+    @objc private func zoomIn() {
+        guard let view = pdfView, view.canZoomIn else { return }
+        view.zoomIn(nil)
+    }
+
+    @objc private func zoomOut() {
+        guard let view = pdfView, view.canZoomOut else { return }
+        view.zoomOut(nil)
+    }
+
+    /// Back to fitting the window, which is where the reader starts.
+    @objc private func actualSize() {
+        guard let view = pdfView else { return }
+        view.autoScales = true
     }
 
     @objc private func goForwardInHistory() {

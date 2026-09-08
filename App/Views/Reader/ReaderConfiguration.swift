@@ -62,8 +62,14 @@ public final class ReaderConfiguration {
     }
 
     public var mode: Mode = .read
-    public var layout: PageLayout = .continuous
-    public var tint: PageTint = .none
+    /// Both start from the setting, so what Settings says is what the reader
+    /// does — the picker there used to write a preference nothing read.
+    public var layout: PageLayout = PageLayout(
+        rawValue: UserDefaults.standard.string(forKey: "readerPageMode") ?? ""
+    ) ?? .continuous
+    public var tint: PageTint = PageTint(
+        rawValue: UserDefaults.standard.string(forKey: "readerTint") ?? ""
+    ) ?? .none
     public var markupColor: MarkupColor = .yellow
     /// Allow a finger to draw as well as the pencil. Off by default so the page
     /// still scrolls under a resting hand.
