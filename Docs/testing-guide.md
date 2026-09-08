@@ -49,31 +49,55 @@ Mac에서는 **펜 필기가 없다.** PencilKit 캔버스가 macOS에 존재하
 
 ## 2. iPad / iPhone — Xcode로 설치 (무료 계정)
 
-무료 Apple ID로 설치하면 **7일 후 서명이 만료**되어 앱이 실행되지 않는다.
-그때는 같은 절차로 다시 설치하면 되고, 라이브러리는 클라우드 폴더에 있으므로 데이터는 그대로다.
+무료 Apple ID로도 **자기 기기에는** 설치할 수 있다. 대신 서명이 **7일 후 만료**되어
+앱이 실행되지 않으므로, 계속 쓰려면 주에 한 번 다시 설치해야 한다.
 
-### 설치 절차
+### 먼저 확인할 것
 
-1. Xcode에서 프로젝트를 연다.
-   ```
-   open /Users/imtaeheon/Documents/__paper_tool/PaperTime.xcodeproj
-   ```
-2. 왼쪽 파일 목록 맨 위 **PaperTime** 프로젝트 클릭 → TARGETS의 **PaperTime** 선택
-   → **Signing & Capabilities** 탭.
-3. **Team** 드롭다운 → **Add an Account…** → 본인 Apple ID로 로그인.
-   로그인 후 Team에서 `<이름> (Personal Team)`을 선택한다.
-4. **Automatically manage signing** 이 켜져 있는지 확인한다.
-   - Bundle Identifier가 이미 사용 중이라는 오류가 나면
-     `com.imtaeheon.PaperTime2` 처럼 뒤에 아무 문자나 붙여 바꾼다.
-5. iPad를 케이블로 연결하고 잠금을 푼다. iPad에 **"이 컴퓨터를 신뢰하시겠습니까?"** 가
-   뜨면 **신뢰**를 누른다.
-6. Xcode 상단 중앙의 실행 대상(스킴 옆)에서 **연결한 iPad**를 선택하고 **⌘R**.
-7. 첫 설치 후 iPad에서 앱이 "신뢰되지 않은 개발자"로 막히면:
-   **설정 → 일반 → VPN 및 기기 관리 → 개발자 앱** 에서 본인 Apple ID를 **신뢰**.
-8. iPhone도 같은 절차를 반복한다.
+- 기기가 **iOS 26 / iPadOS 26** 이상이어야 한다. 앱의 최소 버전이 26.0이라
+  그 아래에서는 설치 자체가 되지 않는다.
+  (iPhone 12 Pro와 iPad Air 4세대 모두 26을 지원한다. 설정 ▸ 일반 ▸ 정보에서 확인.)
+- Mac과 기기가 **같은 Apple ID**로 로그인되어 있으면 편하다.
 
-케이블 없이 하고 싶으면, 한 번 유선으로 연결한 뒤 Xcode의
-**Window ▸ Devices and Simulators** 에서 **Connect via network**를 체크하면 된다.
+### 팀 식별자 한 번만 넣기
+
+Xcode에서 팀을 골라도, 프로젝트 파일을 다시 만들 때(`xcodegen generate`)
+그 설정이 지워진다. 그래서 파일에 적어두면 두 번 다시 건드릴 일이 없다.
+
+`Config/Signing.local.xcconfig` 파일을 만들고 한 줄을 넣는다:
+
+```
+DEVELOPMENT_TEAM = ABCDE12345
+```
+
+열 자리 식별자는 **Xcode ▸ Settings ▸ Accounts**에서 자기 Apple ID를 고르면
+팀 목록에 보인다. 이 파일은 git이 무시하므로 저장소에 올라가지 않는다.
+
+### 설치
+
+1. Xcode로 `PaperTime.xcodeproj`를 연다.
+2. 왼쪽에서 **PaperTime** 타겟 ▸ **Signing & Capabilities** 탭.
+   - **Automatically manage signing** 체크.
+   - **Team**에 자기 Apple ID가 잡혀 있는지 확인 (위 파일을 넣었으면 이미 잡혀 있다).
+   - 처음이라면 Xcode가 Apple ID 로그인을 요구한다. Settings ▸ Accounts ▸ **+**.
+3. 기기를 케이블로 연결하고 **잠금을 푼다**.
+   기기에 **"이 컴퓨터를 신뢰하시겠습니까?"** 가 뜨면 **신뢰**.
+4. Xcode 상단 중앙의 실행 대상에서 **연결한 기기**를 고르고 **⌘R**.
+5. 첫 설치 후 기기에서 "신뢰되지 않은 개발자"로 막히면:
+   **설정 ▸ 일반 ▸ VPN 및 기기 관리 ▸ 자기 Apple ID ▸ 신뢰**.
+6. iPhone도 같은 절차를 반복한다.
+
+케이블 없이 하려면, 한 번 유선으로 연결한 뒤
+**Window ▸ Devices and Simulators**에서 그 기기의
+**Connect via network**를 켠다. 이후로는 같은 Wi-Fi에서 무선으로 설치된다.
+
+### 7일마다
+
+서명이 만료되면 앱을 열 때 바로 닫힌다. 기기를 연결하고 **⌘R**을 다시 누르면
+된다. 지우고 다시 깔 필요는 없고, 라이브러리 폴더는 기기 밖에 있으므로
+필기와 서지 정보는 그대로다.
+
+무료 계정의 다른 제약: 한 기기에 이런 방식으로 설치할 수 있는 앱은 **3개까지**다.
 
 ### iPad에서 확인할 것
 
