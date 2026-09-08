@@ -210,9 +210,10 @@ struct TextMarkupTests {
         #expect(marked.maxY <= reported.maxY)
     }
 
-    @Test("The baseline is found where the text was drawn")
-    func baselineFromInk() throws {
-        // Drawn with its baseline at exactly y = 700.
+    @Test("The ink is found where the text was drawn")
+    func inkExtentFromRendering() throws {
+        // Drawn with its baseline at exactly y = 700, 18 point Helvetica, so
+        // the ink runs from roughly the baseline to about 13 points above it.
         let document = try Self.makeDocument(text: "handwriting sample")
         let page = try #require(document.page(at: 0))
         let line = try #require(
@@ -220,8 +221,13 @@ struct TextMarkupTests {
                 .selectionsByLine().first
         )
         let rect = line.bounds(for: page)
-        let baseline = try #require(TextMarkupWriter.LineMetrics.baseline(of: rect, on: page))
-        #expect(abs(baseline - 700) < 1.5)
+        let ink = try #require(TextMarkupWriter.LineMetrics.inkExtent(of: rect, on: page))
+
+        // The descender of "g" reaches a little below the baseline.
+        #expect(ink.minY < 700)
+        #expect(ink.minY > 690)
+        #expect(ink.minY + ink.height > 708)
+        #expect(ink.height < rect.height)
     }
 
     @Test("A trimmed line stays on its own line")

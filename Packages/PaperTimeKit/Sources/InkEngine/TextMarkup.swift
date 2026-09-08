@@ -128,70 +128,55 @@ public enum TextMarkupWriter {
         }
     }
 
-    /// Where a line's words actually sit, found by looking at the ink.
+    /// Where a line's words actually are, found by looking at the ink.
     ///
-    /// A line carrying inline mathematics reports a box tall enough for its
-    /// tallest glyph, so a highlight drawn on that box stands two or three
-    /// times the height of the words around it.
+    /// A highlight should cover the letters, not the box PDFKit draws around
+    /// them: that box is a typographic line, tall enough for the tallest glyph
+    /// on the line, and on a line carrying inline mathematics it stands two or
+    /// three times the height of the words. Asking PDFKit where the glyphs sit
+    /// is no help — `characterBounds(at:)` disagrees with the line's own
+    /// rectangle by whole lines on some documents and reports 4-point heights
+    /// for 10-point text, and a per-character selection just reports the whole
+    /// line again.
     ///
-    /// PDFKit will not say where within a line its glyphs are:
-    /// `characterBounds(at:)` disagrees with the line's own rectangle by whole
-    /// lines on some documents and reports 4-point heights for 10-point text,
-    /// and a per-character selection just reports the whole line again. So the
-    /// line is drawn into a small bitmap and the rows of pixels are counted.
-    /// The band with the most ink is the body text; its bottom is the
-    /// baseline. The offset from a baseline to the bottom of an ordinary line's
-    /// box is measured the same way, on the same page, so a trimmed line lands
-    /// exactly where its neighbours do.
+    /// So the line is drawn into a small greyscale bitmap and its rows of
+    /// pixels are counted. The rows with ink are the letters; the mark covers
+    /// exactly those, with a hair of margin. The result is clamped inside the
+    /// reported rectangle, so it cannot stray onto a neighbouring line.
     struct LineMetrics {
         private let typicalLine: CGFloat
-        private let descender: CGFloat
 
         init(page: PDFPage) {
-            let lines = page.selection(for: page.bounds(for: .cropBox))?
-                .selectionsByLine() ?? []
-            let rects = lines.map { $0.bounds(for: page) }.filter { $0.height > 0 }
-            let heights = rects.map(\.height).sorted()
-            // Fewer than a handful of lines is not enough to say what this
-            // page's ordinary line looks like, so nothing is trimmed.
+            let heights = (page.selection(for: page.bounds(for: .cropBox))?
+                .selectionsByLine() ?? [])
+                .map { $0.bounds(for: page).height }
+                .filter { $0 > 0 }
+                .sorted()
             typicalLine = heights.count >= 4 ? heights[heights.count / 2] : 0
-
-            guard typicalLine > 0 else {
-                descender = 0
-                return
-            }
-            var drops: [CGFloat] = []
-            for rect in rects
-            where abs(rect.height - typicalLine) <= typicalLine * 0.1 && rect.width > 40 {
-                guard let baseline = Self.baseline(of: rect, on: page) else { continue }
-                drops.append(baseline - rect.minY)
-                if drops.count == 6 { break }
-            }
-            descender = drops.isEmpty
-                ? typicalLine * 0.2
-                : drops.sorted()[drops.count / 2]
         }
 
         func tightened(_ rect: CGRect, on page: PDFPage) -> CGRect {
-            guard typicalLine > 0, rect.height > typicalLine * 1.4 else { return rect }
+            guard let ink = Self.inkExtent(of: rect, on: page) else { return rect }
 
+            // Something too thin to be a line of text — a rule, a fragment of a
+            // figure — is left alone.
+            let floor = typicalLine > 0 ? typicalLine * 0.25 : 2
+            guard ink.height >= floor else { return rect }
+
+            let padding = max(ink.height * 0.16, 0.6)
             var band = CGRect(
                 x: rect.minX,
-                y: (Self.baseline(of: rect, on: page) ?? (rect.midY + typicalLine / 2 - descender))
-                    - descender,
+                y: ink.minY - padding,
                 width: rect.width,
-                height: typicalLine
+                height: ink.height + padding * 2
             )
-            // Never leave the line it belongs to, whatever the ink said.
+            guard band.height < rect.height else { return rect }
             band.origin.y = min(max(band.minY, rect.minY), rect.maxY - band.height)
             return band
         }
 
-        /// The baseline of the body text inside a line's rectangle.
-        ///
-        /// Returns nil when there is nothing to measure — a blank strip, or a
-        /// rectangle too large to be worth rasterising.
-        static func baseline(of rect: CGRect, on page: PDFPage) -> CGFloat? {
+        /// The top and bottom of the ink belonging to this line.
+        static func inkExtent(of rect: CGRect, on page: PDFPage) -> (minY: CGFloat, height: CGFloat)? {
             let scale: CGFloat = 3
             let width = Int((rect.width * scale).rounded(.up))
             let height = Int((rect.height * scale).rounded(.up))
@@ -227,16 +212,15 @@ public enum TextMarkupWriter {
             guard let densest = ink.max(), densest > 0 else { return nil }
 
             // A stretched line's rectangle reaches into its neighbours, so the
-            // strip usually holds more than one band of text — and the densest
-            // band is often the neighbour's, which is how a mark ended up a
-            // whole line away. The band belonging to this line is the one
-            // nearest the middle of its own rectangle, because that is what the
-            // rectangle was drawn around.
-            let threshold = max(1, densest / 4)
+            // strip usually holds more than one band of text — and the
+            // neighbour's is often the darker. The one belonging to this line
+            // is the one nearest the middle of its own rectangle, because that
+            // is what the rectangle was drawn around.
+            let solid = max(1, densest / 4)
             var bands: [(first: Int, last: Int)] = []
             var start: Int?
             for row in 0..<height {
-                if ink[row] >= threshold {
+                if ink[row] >= solid {
                     if start == nil { start = row }
                 } else if let began = start {
                     bands.append((began, row - 1))
@@ -244,16 +228,37 @@ public enum TextMarkupWriter {
                 }
             }
             if let began = start { bands.append((began, height - 1)) }
-            guard !bands.isEmpty else { return nil }
+            guard let core = bands.min(by: {
+                abs(Double($0.first + $0.last) / 2 - Double(height) / 2)
+                    < abs(Double($1.first + $1.last) / 2 - Double(height) / 2)
+            }) else { return nil }
 
-            let middle = Double(height) / 2
-            let band = bands.min {
-                abs(Double($0.first + $0.last) / 2 - middle)
-                    < abs(Double($1.first + $1.last) / 2 - middle)
-            }!
+            // Reach out from the body of the line to take in its ascenders and
+            // descenders, which are far fainter, and stop at the white space
+            // that separates this line from the next.
+            let faint = max(1, densest / 40)
+            let gap = 3
+            var top = core.first
+            var blank = 0
+            var row = core.first - 1
+            while row >= 0, blank < gap {
+                blank = ink[row] >= faint ? 0 : blank + 1
+                if ink[row] >= faint { top = row }
+                row -= 1
+            }
+            var bottom = core.last
+            blank = 0
+            row = core.last + 1
+            while row < height, blank < gap {
+                blank = ink[row] >= faint ? 0 : blank + 1
+                if ink[row] >= faint { bottom = row }
+                row += 1
+            }
 
             // Row 0 of the bitmap is the top of the rectangle.
-            return rect.maxY - CGFloat(band.last + 1) / scale
+            let maxY = rect.maxY - CGFloat(top) / scale
+            let minY = rect.maxY - CGFloat(bottom + 1) / scale
+            return (minY, maxY - minY)
         }
     }
 
