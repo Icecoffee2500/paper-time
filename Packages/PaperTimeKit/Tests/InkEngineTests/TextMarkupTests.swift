@@ -147,8 +147,8 @@ struct TextMarkupTests {
         #expect(readBack.comment.isEmpty)
     }
 
-    /// A line with a tall glyph on it — an integral sign, a big parenthesis —
-    /// must not be marked at the height of that glyph.
+    /// A page of ordinary lines with one stretched by a tall glyph, which is
+    /// the shape of a paper with inline mathematics in it.
     static func makeMathDocument() throws -> PDFDocument {
         let data = NSMutableData()
         let consumer = try #require(CGDataConsumer(data: data))
@@ -158,13 +158,29 @@ struct TextMarkupTests {
         context.beginPDFPage(nil)
         let body = CTFontCreateWithName("Helvetica" as CFString, 12, nil)
         let tall = CTFontCreateWithName("Helvetica" as CFString, 40, nil)
+
+        for (offset, text) in [
+            "first ordinary line of the paragraph",
+            "second ordinary line of the paragraph",
+            "third ordinary line of the paragraph",
+            "fourth ordinary line of the paragraph",
+        ].enumerated() {
+            context.textPosition = CGPoint(x: 40, y: 700 - Double(offset) * 16)
+            CTLineDraw(
+                CTLineCreateWithAttributedString(
+                    NSAttributedString(string: text, attributes: [.font: body as Any])
+                ),
+                context
+            )
+        }
+
         let line = NSMutableAttributedString(
             string: "the encoder ", attributes: [.font: body as Any]
         )
         line.append(NSAttributedString(string: "(", attributes: [.font: tall as Any]))
         line.append(NSAttributedString(string: " and predictor are parameterized",
                                        attributes: [.font: body as Any]))
-        context.textPosition = CGPoint(x: 40, y: 700)
+        context.textPosition = CGPoint(x: 40, y: 636)
         CTLineDraw(CTLineCreateWithAttributedString(line), context)
         context.endPDFPage()
         context.closePDF()
@@ -181,17 +197,17 @@ struct TextMarkupTests {
         )
         let reported = selection.bounds(for: page)
 
-        let whole = try #require(page.selection(for: page.bounds(for: .cropBox)))
         let descriptor = try #require(
             TextMarkupWriter.descriptor(
-                for: whole, kind: .highlight, color: .yellow, in: document
+                for: selection, kind: .highlight, color: .yellow, in: document
             ).first
         )
         let marked = try #require(descriptor.rects.first)
 
-        // The line's own box is as tall as the 40pt glyph; the mark is not.
         #expect(marked.height < reported.height)
-        #expect(marked.height < 22)
+        // Never outside the line it belongs to.
+        #expect(marked.minY >= reported.minY)
+        #expect(marked.maxY <= reported.maxY)
     }
 
     @Test("A trimmed line stays on its own line")

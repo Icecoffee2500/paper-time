@@ -107,9 +107,7 @@ public enum TextMarkupWriter {
                 let index = document.index(for: page)
                 let metrics = metricsByPage[index] ?? LineMetrics(page: page)
                 metricsByPage[index] = metrics
-                byPage[index, default: []].append(
-                    metrics.tightened(line.bounds(for: page), of: line, on: page)
-                )
+                byPage[index, default: []].append(metrics.tightened(line.bounds(for: page)))
                 let existing = textByPage[index] ?? ""
                 let addition = line.string ?? ""
                 textByPage[index] = existing.isEmpty ? addition : "\(existing) \(addition)"
@@ -128,105 +126,38 @@ public enum TextMarkupWriter {
         }
     }
 
-    /// What the ordinary text on a page measures, so a line can be marked at
-    /// the height of its words.
+    /// What an ordinary line on a page measures, so a stretched one can be
+    /// marked at the same height.
     ///
-    /// A line with inline mathematics reports a box tall enough for its tallest
-    /// glyph — a fraction, a big parenthesis, a subscripted subscript — and a
-    /// highlight drawn on that box stands two or three times the height of the
-    /// words around it.
+    /// A line carrying inline mathematics reports a box tall enough for its
+    /// tallest glyph — a fraction, a big parenthesis, a subscripted subscript
+    /// — and a highlight drawn on that box stands two or three times the
+    /// height of the words around it.
     ///
-    /// The test is the page's own typography: a line is only trimmed when it
-    /// is taller than most of the other lines on the same page, and it is
-    /// trimmed to what those lines measure. Comparing against glyph heights
-    /// instead was trimming every line in a densely set paper.
+    /// The band is centred in the reported box and never leaves it. PDFKit
+    /// will not say where within a line its glyphs actually sit:
+    /// `characterBounds(at:)` disagrees with the line's own rectangle by whole
+    /// lines on some documents, and a per-character selection simply reports
+    /// the whole line again. Deriving a baseline from the first of those put
+    /// marks on the wrong line entirely; staying inside the box makes that
+    /// impossible.
     struct LineMetrics {
         private let typicalLine: CGFloat
-        /// How far an ordinary line's box drops below the text's baseline on
-        /// this page, so a trimmed line sits where the others sit.
-        private let descender: CGFloat
-        private let boxes: [CGRect]
 
         init(page: PDFPage) {
-            var found: [CGRect] = []
-            let count = page.numberOfCharacters
-            found.reserveCapacity(count)
-            for index in 0..<count {
-                let box = page.characterBounds(at: index)
-                if box.width > 0, box.height > 0 { found.append(box) }
-            }
-            boxes = found
-
             let lines = page.selection(for: page.bounds(for: .cropBox))?
                 .selectionsByLine() ?? []
-            let rects = lines.map { $0.bounds(for: page) }.filter { $0.height > 0 }
-            let heights = rects.map(\.height).sorted()
-            if heights.count >= 4 {
-                typicalLine = heights[heights.count / 2]
-            } else if !found.isEmpty {
-                // Too few lines to compare against — fall back to the glyphs.
-                let glyphs = found.map(\.height).sorted()
-                typicalLine = glyphs[glyphs.count / 2] * 1.65
-            } else {
-                typicalLine = 0
-            }
-
-            // Measure the offset on the page's own ordinary lines rather than
-            // guessing a fraction: it is what makes a trimmed line line up
-            // with the untrimmed ones above and below it.
-            var drops: [CGFloat] = []
-            for rect in rects where abs(rect.height - typicalLine) <= typicalLine * 0.15 {
-                let onLine = found.filter {
-                    rect.intersects($0) && $0.midX >= rect.minX && $0.midX <= rect.maxX
-                }
-                guard onLine.count >= 4 else { continue }
-                let sorted = onLine.map(\.minY).sorted()
-                drops.append(sorted[sorted.count / 2] - rect.minY)
-            }
-            descender = drops.isEmpty
-                ? typicalLine * 0.16
-                : drops.sorted()[drops.count / 2]
+            let heights = lines.map { $0.bounds(for: page).height }
+                .filter { $0 > 0 }
+                .sorted()
+            // Fewer than a handful of lines is not enough to say what this
+            // page's ordinary line looks like, so nothing is trimmed.
+            typicalLine = heights.count >= 4 ? heights[heights.count / 2] : 0
         }
 
-        /// The rectangle to mark for one line of a selection.
-        ///
-        /// Measured from the characters the selection actually covers, asked
-        /// for by their own indices. Picking them out of a tall rectangle by
-        /// intersection instead swept in the line below — enough of it to move
-        /// the baseline, and with it the mark, onto the wrong line.
-        func tightened(_ rect: CGRect, of line: PDFSelection, on page: PDFPage) -> CGRect {
+        func tightened(_ rect: CGRect) -> CGRect {
             guard typicalLine > 0, rect.height > typicalLine * 1.4 else { return rect }
-
-            let own = characterBoxes(of: line, on: page)
-            guard own.count >= 2 else { return rect }
-
-            let glyphHeights = own.map(\.height).sorted()
-            let typicalGlyph = glyphHeights[glyphHeights.count / 2]
-            let ordinary = own.filter { abs($0.height - typicalGlyph) <= typicalGlyph * 0.4 }
-            let baselines = (ordinary.isEmpty ? own : ordinary).map(\.minY).sorted()
-            let baseline = baselines[baselines.count / 2]
-
-            return CGRect(
-                x: rect.minX,
-                y: baseline - descender,
-                width: rect.width,
-                height: typicalLine
-            )
-        }
-
-        /// The boxes of exactly the characters in this selection on this page.
-        private func characterBoxes(of line: PDFSelection, on page: PDFPage) -> [CGRect] {
-            var found: [CGRect] = []
-            let count = page.numberOfCharacters
-            for rangeIndex in 0..<line.numberOfTextRanges(on: page) {
-                let range = line.range(at: rangeIndex, on: page)
-                guard range.location != NSNotFound else { continue }
-                for index in range.location..<min(range.location + range.length, count) {
-                    let box = page.characterBounds(at: index)
-                    if box.width > 0, box.height > 0 { found.append(box) }
-                }
-            }
-            return found
+            return rect.insetBy(dx: 0, dy: (rect.height - typicalLine) / 2)
         }
     }
 
