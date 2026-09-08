@@ -107,7 +107,9 @@ public enum TextMarkupWriter {
                 let index = document.index(for: page)
                 let metrics = metricsByPage[index] ?? LineMetrics(page: page)
                 metricsByPage[index] = metrics
-                byPage[index, default: []].append(metrics.tightened(line.bounds(for: page)))
+                byPage[index, default: []].append(
+                    metrics.tightened(line.bounds(for: page), on: page)
+                )
                 let existing = textByPage[index] ?? ""
                 let addition = line.string ?? ""
                 textByPage[index] = existing.isEmpty ? addition : "\(existing) \(addition)"
@@ -126,38 +128,112 @@ public enum TextMarkupWriter {
         }
     }
 
-    /// What an ordinary line on a page measures, so a stretched one can be
-    /// marked at the same height.
+    /// Where a line's words actually sit, found by looking at the ink.
     ///
     /// A line carrying inline mathematics reports a box tall enough for its
-    /// tallest glyph — a fraction, a big parenthesis, a subscripted subscript
-    /// — and a highlight drawn on that box stands two or three times the
-    /// height of the words around it.
+    /// tallest glyph, so a highlight drawn on that box stands two or three
+    /// times the height of the words around it.
     ///
-    /// The band is centred in the reported box and never leaves it. PDFKit
-    /// will not say where within a line its glyphs actually sit:
+    /// PDFKit will not say where within a line its glyphs are:
     /// `characterBounds(at:)` disagrees with the line's own rectangle by whole
-    /// lines on some documents, and a per-character selection simply reports
-    /// the whole line again. Deriving a baseline from the first of those put
-    /// marks on the wrong line entirely; staying inside the box makes that
-    /// impossible.
+    /// lines on some documents and reports 4-point heights for 10-point text,
+    /// and a per-character selection just reports the whole line again. So the
+    /// line is drawn into a small bitmap and the rows of pixels are counted.
+    /// The band with the most ink is the body text; its bottom is the
+    /// baseline. The offset from a baseline to the bottom of an ordinary line's
+    /// box is measured the same way, on the same page, so a trimmed line lands
+    /// exactly where its neighbours do.
     struct LineMetrics {
         private let typicalLine: CGFloat
+        private let descender: CGFloat
 
         init(page: PDFPage) {
             let lines = page.selection(for: page.bounds(for: .cropBox))?
                 .selectionsByLine() ?? []
-            let heights = lines.map { $0.bounds(for: page).height }
-                .filter { $0 > 0 }
-                .sorted()
+            let rects = lines.map { $0.bounds(for: page) }.filter { $0.height > 0 }
+            let heights = rects.map(\.height).sorted()
             // Fewer than a handful of lines is not enough to say what this
             // page's ordinary line looks like, so nothing is trimmed.
             typicalLine = heights.count >= 4 ? heights[heights.count / 2] : 0
+
+            guard typicalLine > 0 else {
+                descender = 0
+                return
+            }
+            var drops: [CGFloat] = []
+            for rect in rects
+            where abs(rect.height - typicalLine) <= typicalLine * 0.1 && rect.width > 40 {
+                guard let baseline = Self.baseline(of: rect, on: page) else { continue }
+                drops.append(baseline - rect.minY)
+                if drops.count == 6 { break }
+            }
+            descender = drops.isEmpty
+                ? typicalLine * 0.2
+                : drops.sorted()[drops.count / 2]
         }
 
-        func tightened(_ rect: CGRect) -> CGRect {
+        func tightened(_ rect: CGRect, on page: PDFPage) -> CGRect {
             guard typicalLine > 0, rect.height > typicalLine * 1.4 else { return rect }
-            return rect.insetBy(dx: 0, dy: (rect.height - typicalLine) / 2)
+
+            var band = CGRect(
+                x: rect.minX,
+                y: (Self.baseline(of: rect, on: page) ?? (rect.midY + typicalLine / 2 - descender))
+                    - descender,
+                width: rect.width,
+                height: typicalLine
+            )
+            // Never leave the line it belongs to, whatever the ink said.
+            band.origin.y = min(max(band.minY, rect.minY), rect.maxY - band.height)
+            return band
+        }
+
+        /// The baseline of the body text inside a line's rectangle.
+        ///
+        /// Returns nil when there is nothing to measure — a blank strip, or a
+        /// rectangle too large to be worth rasterising.
+        static func baseline(of rect: CGRect, on page: PDFPage) -> CGFloat? {
+            let scale: CGFloat = 3
+            let width = Int((rect.width * scale).rounded(.up))
+            let height = Int((rect.height * scale).rounded(.up))
+            guard width > 0, height > 2, width * height <= 4_000_000 else { return nil }
+
+            guard let context = CGContext(
+                data: nil,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: width,
+                space: CGColorSpaceCreateDeviceGray(),
+                bitmapInfo: CGImageAlphaInfo.none.rawValue
+            ) else { return nil }
+
+            context.setFillColor(gray: 1, alpha: 1)
+            context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+            context.scaleBy(x: scale, y: scale)
+            let box = page.bounds(for: .cropBox)
+            context.translateBy(x: -(rect.minX - box.minX), y: -(rect.minY - box.minY))
+            page.draw(with: .cropBox, to: context)
+
+            guard let data = context.data else { return nil }
+            let pixels = data.assumingMemoryBound(to: UInt8.self)
+            var ink = [Int](repeating: 0, count: height)
+            for row in 0..<height {
+                let start = row * width
+                var count = 0
+                for column in 0..<width where pixels[start + column] < 160 { count += 1 }
+                ink[row] = count
+            }
+
+            guard let peak = ink.indices.max(by: { ink[$0] < ink[$1] }), ink[peak] > 0
+            else { return nil }
+            // The rows around the densest one are the body text; the tall
+            // glyphs that stretched the line are sparse by comparison.
+            let threshold = max(1, ink[peak] / 4)
+            var bottom = peak
+            while bottom + 1 < height, ink[bottom + 1] >= threshold { bottom += 1 }
+
+            // Row 0 of the bitmap is the top of the rectangle.
+            return rect.maxY - CGFloat(bottom + 1) / scale
         }
     }
 
