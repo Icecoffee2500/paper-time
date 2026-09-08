@@ -107,7 +107,9 @@ public enum TextMarkupWriter {
                 let index = document.index(for: page)
                 let metrics = metricsByPage[index] ?? LineMetrics(page: page)
                 metricsByPage[index] = metrics
-                byPage[index, default: []].append(metrics.tightened(line.bounds(for: page)))
+                byPage[index, default: []].append(
+                    metrics.tightened(line.bounds(for: page), of: line, on: page)
+                )
                 let existing = textByPage[index] ?? ""
                 let addition = line.string ?? ""
                 textByPage[index] = existing.isEmpty ? addition : "\(existing) \(addition)"
@@ -186,23 +188,22 @@ public enum TextMarkupWriter {
                 : drops.sorted()[drops.count / 2]
         }
 
-        func tightened(_ rect: CGRect) -> CGRect {
+        /// The rectangle to mark for one line of a selection.
+        ///
+        /// Measured from the characters the selection actually covers, asked
+        /// for by their own indices. Picking them out of a tall rectangle by
+        /// intersection instead swept in the line below — enough of it to move
+        /// the baseline, and with it the mark, onto the wrong line.
+        func tightened(_ rect: CGRect, of line: PDFSelection, on page: PDFPage) -> CGRect {
             guard typicalLine > 0, rect.height > typicalLine * 1.4 else { return rect }
 
-            let onLine = boxes.filter {
-                rect.intersects($0) && $0.midX >= rect.minX && $0.midX <= rect.maxX
-            }
-            guard !onLine.isEmpty else { return rect }
+            let own = characterBoxes(of: line, on: page)
+            guard own.count >= 2 else { return rect }
 
-            // Sit on the baseline the ordinary characters share, ignoring the
-            // tall ones that caused the trouble.
-            let glyphHeights = onLine.map(\.height).sorted()
+            let glyphHeights = own.map(\.height).sorted()
             let typicalGlyph = glyphHeights[glyphHeights.count / 2]
-            let baselines = onLine
-                .filter { abs($0.height - typicalGlyph) <= typicalGlyph * 0.4 }
-                .map(\.minY)
-                .sorted()
-            guard !baselines.isEmpty else { return rect }
+            let ordinary = own.filter { abs($0.height - typicalGlyph) <= typicalGlyph * 0.4 }
+            let baselines = (ordinary.isEmpty ? own : ordinary).map(\.minY).sorted()
             let baseline = baselines[baselines.count / 2]
 
             return CGRect(
@@ -211,6 +212,21 @@ public enum TextMarkupWriter {
                 width: rect.width,
                 height: typicalLine
             )
+        }
+
+        /// The boxes of exactly the characters in this selection on this page.
+        private func characterBoxes(of line: PDFSelection, on page: PDFPage) -> [CGRect] {
+            var found: [CGRect] = []
+            let count = page.numberOfCharacters
+            for rangeIndex in 0..<line.numberOfTextRanges(on: page) {
+                let range = line.range(at: rangeIndex, on: page)
+                guard range.location != NSNotFound else { continue }
+                for index in range.location..<min(range.location + range.length, count) {
+                    let box = page.characterBounds(at: index)
+                    if box.width > 0, box.height > 0 { found.append(box) }
+                }
+            }
+            return found
         }
     }
 

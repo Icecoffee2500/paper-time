@@ -101,6 +101,7 @@ final class ReaderCoordinator: NSObject {
     private var markupTask: Task<Void, Never>?
     private var scrollMonitor: Any?
     private var clickMonitor: Any?
+    private var pinchMonitor: Any?
     private var scrolled: CGFloat = 0
     #endif
     #if canImport(UIKit)
@@ -249,6 +250,7 @@ final class ReaderCoordinator: NSObject {
         pdfView = view
         #if os(macOS)
         installMarkClickMonitor(in: view)
+        installPinchMonitor(in: view)
         #endif
         restoreReadingPosition(in: view)
         return view
@@ -267,9 +269,10 @@ final class ReaderCoordinator: NSObject {
             redraw(view)
         }
         #if os(macOS)
-        // The monitor is installed when the view is made, but the view now
+        // The monitors are installed when the view is made, but the view now
         // outlives individual papers and a teardown would leave it without one.
         if clickMonitor == nil { installMarkClickMonitor(in: view) }
+        if pinchMonitor == nil { installPinchMonitor(in: view) }
         #endif
         if appliedLayout != configuration.layout {
             appliedLayout = configuration.layout
@@ -339,11 +342,12 @@ final class ReaderCoordinator: NSObject {
         NotificationCenter.default.removeObserver(self)
         #if os(macOS)
         hideMarkupPanel()
-        for monitor in [scrollMonitor, clickMonitor].compactMap({ $0 }) {
+        for monitor in [scrollMonitor, clickMonitor, pinchMonitor].compactMap({ $0 }) {
             NSEvent.removeMonitor(monitor)
         }
         scrollMonitor = nil
         clickMonitor = nil
+        pinchMonitor = nil
         #endif
         #if canImport(UIKit)
         toolPicker.setVisible(false, forFirstResponder: PKCanvasView())
@@ -663,6 +667,23 @@ final class ReaderCoordinator: NSObject {
             view.clearSelection()
             showMarkEditor(for: hit, in: view)
             return nil
+        }
+    }
+
+    /// Lets a pinch stick.
+    ///
+    /// `autoScales` means "keep the page fitted to the view", and PDFKit
+    /// re-applies that fit when the gesture ends — the page grows under the
+    /// fingers and springs back the moment they lift. Zooming by hand is a
+    /// statement that the reader no longer wants the fit, so the first pinch
+    /// turns it off. Actual Size (Command-0) turns it back on.
+    private func installPinchMonitor(in view: PDFView) {
+        pinchMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.magnify]
+        ) { [weak view] event in
+            guard let view, event.window === view.window, view.autoScales else { return event }
+            view.autoScales = false
+            return event
         }
     }
 

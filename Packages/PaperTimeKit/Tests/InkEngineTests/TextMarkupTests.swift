@@ -194,6 +194,56 @@ struct TextMarkupTests {
         #expect(marked.height < 22)
     }
 
+    @Test("A trimmed line stays on its own line")
+    func trimmedLineStaysPut() throws {
+        // Two lines, the first stretched by a tall glyph. Trimming used to
+        // take its baseline from whatever characters fell inside the tall box,
+        // which included the line below — and moved the mark down onto it.
+        let data = NSMutableData()
+        let consumer = try #require(CGDataConsumer(data: data))
+        var mediaBox = CGRect(x: 0, y: 0, width: 612, height: 792)
+        let context = try #require(CGContext(consumer: consumer, mediaBox: &mediaBox, nil))
+        context.beginPDFPage(nil)
+        let body = CTFontCreateWithName("Helvetica" as CFString, 12, nil)
+        let tall = CTFontCreateWithName("Helvetica" as CFString, 34, nil)
+
+        let first = NSMutableAttributedString(
+            string: "upper line with ", attributes: [.font: body as Any]
+        )
+        first.append(NSAttributedString(string: "(", attributes: [.font: tall as Any]))
+        first.append(NSAttributedString(string: " a tall glyph in it",
+                                        attributes: [.font: body as Any]))
+        context.textPosition = CGPoint(x: 40, y: 700)
+        CTLineDraw(CTLineCreateWithAttributedString(first), context)
+
+        context.textPosition = CGPoint(x: 40, y: 686)
+        CTLineDraw(
+            CTLineCreateWithAttributedString(
+                NSAttributedString(string: "lower line of plain words",
+                                   attributes: [.font: body as Any])
+            ),
+            context
+        )
+        context.endPDFPage()
+        context.closePDF()
+
+        let document = try #require(PDFDocument(data: data as Data))
+        let page = try #require(document.page(at: 0))
+        let upper = try #require(document.findString("tall glyph", withOptions: []).first)
+        let lower = try #require(document.findString("plain words", withOptions: []).first)
+        let lowerBounds = lower.bounds(for: page)
+
+        let descriptor = try #require(
+            TextMarkupWriter.descriptor(
+                for: upper, kind: .highlight, color: .yellow, in: document
+            ).first
+        )
+        let marked = try #require(descriptor.rects.first)
+
+        // The mark belongs to the upper line: above the lower line's text.
+        #expect(marked.minY > lowerBounds.midY)
+    }
+
     @Test("An ordinary line is marked exactly where PDFKit says")
     func ordinaryLineIsUntouched() throws {
         let document = try Self.makeDocument(text: "plain words only here")
