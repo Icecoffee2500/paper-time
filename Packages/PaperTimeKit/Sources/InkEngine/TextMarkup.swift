@@ -224,16 +224,36 @@ public enum TextMarkupWriter {
                 ink[row] = count
             }
 
-            guard let peak = ink.indices.max(by: { ink[$0] < ink[$1] }), ink[peak] > 0
-            else { return nil }
-            // The rows around the densest one are the body text; the tall
-            // glyphs that stretched the line are sparse by comparison.
-            let threshold = max(1, ink[peak] / 4)
-            var bottom = peak
-            while bottom + 1 < height, ink[bottom + 1] >= threshold { bottom += 1 }
+            guard let densest = ink.max(), densest > 0 else { return nil }
+
+            // A stretched line's rectangle reaches into its neighbours, so the
+            // strip usually holds more than one band of text — and the densest
+            // band is often the neighbour's, which is how a mark ended up a
+            // whole line away. The band belonging to this line is the one
+            // nearest the middle of its own rectangle, because that is what the
+            // rectangle was drawn around.
+            let threshold = max(1, densest / 4)
+            var bands: [(first: Int, last: Int)] = []
+            var start: Int?
+            for row in 0..<height {
+                if ink[row] >= threshold {
+                    if start == nil { start = row }
+                } else if let began = start {
+                    bands.append((began, row - 1))
+                    start = nil
+                }
+            }
+            if let began = start { bands.append((began, height - 1)) }
+            guard !bands.isEmpty else { return nil }
+
+            let middle = Double(height) / 2
+            let band = bands.min {
+                abs(Double($0.first + $0.last) / 2 - middle)
+                    < abs(Double($1.first + $1.last) / 2 - middle)
+            }!
 
             // Row 0 of the bitmap is the top of the rectangle.
-            return rect.maxY - CGFloat(bottom + 1) / scale
+            return rect.maxY - CGFloat(band.last + 1) / scale
         }
     }
 

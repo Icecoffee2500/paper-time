@@ -238,19 +238,23 @@ struct TextMarkupTests {
         let tall = CTFontCreateWithName("Helvetica" as CFString, 34, nil)
 
         let first = NSMutableAttributedString(
-            string: "upper line with ", attributes: [.font: body as Any]
+            string: "upper ", attributes: [.font: body as Any]
         )
         first.append(NSAttributedString(string: "(", attributes: [.font: tall as Any]))
-        first.append(NSAttributedString(string: " a tall glyph in it",
-                                        attributes: [.font: body as Any]))
+        first.append(NSAttributedString(string: " tall", attributes: [.font: body as Any]))
         context.textPosition = CGPoint(x: 40, y: 700)
         CTLineDraw(CTLineCreateWithAttributedString(first), context)
 
+        // Deliberately longer, so it carries more ink than the line above it:
+        // choosing the densest band rather than the nearest one put the mark
+        // down here instead.
         context.textPosition = CGPoint(x: 40, y: 686)
         CTLineDraw(
             CTLineCreateWithAttributedString(
-                NSAttributedString(string: "lower line of plain words",
-                                   attributes: [.font: body as Any])
+                NSAttributedString(
+                    string: "lower line of plain words running much further across the page",
+                    attributes: [.font: body as Any]
+                )
             ),
             context
         )
@@ -259,7 +263,7 @@ struct TextMarkupTests {
 
         let document = try #require(PDFDocument(data: data as Data))
         let page = try #require(document.page(at: 0))
-        let upper = try #require(document.findString("tall glyph", withOptions: []).first)
+        let upper = try #require(document.findString("upper", withOptions: []).first)
         let lower = try #require(document.findString("plain words", withOptions: []).first)
         let lowerBounds = lower.bounds(for: page)
 
