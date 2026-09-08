@@ -249,6 +249,12 @@ final class ReaderCoordinator: NSObject {
 
         pdfView = view
         #if os(macOS)
+        // The reader's own scrollers: thin and fading, so nothing sits in the
+        // margin of the page while it is being read.
+        for scrollView in view.subviews.compactMap({ $0 as? NSScrollView }) {
+            scrollView.scrollerStyle = .overlay
+            scrollView.verticalScroller?.controlSize = .small
+        }
         installMarkClickMonitor(in: view)
         installPinchMonitor(in: view)
         #endif

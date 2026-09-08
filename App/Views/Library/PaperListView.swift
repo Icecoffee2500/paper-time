@@ -50,7 +50,7 @@ struct PaperListView: View {
         } else if model.visiblePapers.isEmpty {
             ContentUnavailableView.search(text: model.searchText)
         } else {
-            List(selection: $model.selectedPaperID) {
+            List(selection: $model.selection) {
                 if !model.looseDocuments.isEmpty {
                     Section {
                         Button {
@@ -75,6 +75,7 @@ struct PaperListView: View {
                     .tag(paper.id)
                 }
             }
+            .thinScrollers()
         }
     }
 
@@ -174,8 +175,10 @@ struct PaperRow: View, Equatable {
         // paper onto another attaches it as supplementary material.
         .draggable(PaperTransfer(id: paper.id, title: paper.meta.displayTitle))
         .dropDestination(for: PaperTransfer.self) { items, _ in
-            guard let dropped = items.first, dropped.id != paper.id else { return false }
-            Task { await model.attach(dropped.id, to: paper.id) }
+            guard let dropped = items.first else { return false }
+            let ids = model.draggedPapers(startingAt: dropped.id).filter { $0 != paper.id }
+            guard !ids.isEmpty else { return false }
+            Task { for id in ids { await model.attach(id, to: paper.id) } }
             return true
         }
     }

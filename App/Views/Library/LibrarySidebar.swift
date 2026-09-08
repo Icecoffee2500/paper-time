@@ -55,19 +55,19 @@ struct LibrarySidebar: View {
                 Label("Unread", systemImage: "circle")
                     .count(model.counts.unread)
                     .tag(LibraryModel.Scope.unread)
-                    .dropTarget { await model.setReadingStatus(.unread, for: $0) }
+                    .dropTarget(in: model) { await model.setReadingStatus(.unread, for: $0) }
                 Label("Reading", systemImage: "circle.lefthalf.filled")
                     .count(model.counts.reading)
                     .tag(LibraryModel.Scope.reading)
-                    .dropTarget { await model.setReadingStatus(.reading, for: $0) }
+                    .dropTarget(in: model) { await model.setReadingStatus(.reading, for: $0) }
                 Label("Read", systemImage: "checkmark.circle")
                     .count(model.counts.read)
                     .tag(LibraryModel.Scope.read)
-                    .dropTarget { await model.setReadingStatus(.read, for: $0) }
+                    .dropTarget(in: model) { await model.setReadingStatus(.read, for: $0) }
                 Label("Favorites", systemImage: "star")
                     .count(model.counts.favorites)
                     .tag(LibraryModel.Scope.favorites)
-                    .dropTarget { await model.setFavorite(true, for: $0) }
+                    .dropTarget(in: model) { await model.setFavorite(true, for: $0) }
                 Label("Needs Review", systemImage: "exclamationmark.triangle")
                     .count(model.counts.needsReview)
                     .tag(LibraryModel.Scope.needsReview)
@@ -78,7 +78,7 @@ struct LibrarySidebar: View {
                     Label(collection.name, systemImage: symbolName(for: collection))
                         .count(model.counts.collections[collection.id] ?? 0)
                         .tag(LibraryModel.Scope.collection(collection.id))
-                        .dropTarget(isEnabled: !collection.isSmart) { paperID in
+                        .dropTarget(in: model, isEnabled: !collection.isSmart) { paperID in
                             await model.addToCollection(collection.id, paperID: paperID)
                         }
                 }
@@ -87,7 +87,12 @@ struct LibrarySidebar: View {
                     isPresentingNewCollection = true
                 } label: {
                     Label("New Collection…", systemImage: "plus.circle")
+                        .foregroundStyle(.secondary)
+                        .contentShape(.rect)
                 }
+                // Plain, or SwiftUI gives it a bezel and it sits in the source
+                // list looking like the one thing that is not a row.
+                .buttonStyle(.plain)
             }
 
             Section("Tags") {
@@ -102,10 +107,11 @@ struct LibrarySidebar: View {
                     }
                     .count(model.counts.tags[tag.id] ?? 0)
                     .tag(LibraryModel.Scope.tag(tag.id))
-                    .dropTarget { await model.addTag(tag.id, to: $0) }
+                    .dropTarget(in: model) { await model.addTag(tag.id, to: $0) }
                 }
             }
         }
+        .thinScrollers()
         // The source list used to get this from being a split view's sidebar.
         // Laying the columns out ourselves means asking for it: without it the
         // rows come back with separator lines under them.
@@ -193,6 +199,7 @@ extension Tag.Color {
 /// gesture people already know from Finder and Mail, and it is faster than
 /// finding the same action in a menu.
 private struct PaperDropTarget: ViewModifier {
+    let model: LibraryModel
     let isEnabled: Bool
     let handle: (UUID) async -> Void
 
@@ -208,8 +215,16 @@ private struct PaperDropTarget: ViewModifier {
             )
             .dropDestination(for: PaperTransfer.self) { items, _ in
                 guard isEnabled, !items.isEmpty else { return false }
+                // A drag that started on one of several selected rows brings
+                // all of them.
                 Task {
-                    for item in items { await handle(item.id) }
+                    var seen: Set<UUID> = []
+                    for item in items {
+                        for id in model.draggedPapers(startingAt: item.id)
+                        where seen.insert(id).inserted {
+                            await handle(id)
+                        }
+                    }
                 }
                 return true
             } isTargeted: { targeted in
@@ -220,10 +235,11 @@ private struct PaperDropTarget: ViewModifier {
 
 extension View {
     func dropTarget(
+        in model: LibraryModel,
         isEnabled: Bool = true,
         handle: @escaping (UUID) async -> Void
     ) -> some View {
-        modifier(PaperDropTarget(isEnabled: isEnabled, handle: handle))
+        modifier(PaperDropTarget(model: model, isEnabled: isEnabled, handle: handle))
     }
 }
 

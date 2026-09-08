@@ -88,7 +88,37 @@ public final class LibraryModel {
     public private(set) var searchQuery = ""
     public var sortOrder: SortOrder = .dateAdded { didSet { invalidateVisibleCache() } }
     public var sortAscending = false { didSet { invalidateVisibleCache() } }
-    public var selectedPaperID: UUID?
+    /// Every paper picked out in the list.
+    ///
+    /// A set rather than one identifier, so the list can offer the selection a
+    /// Mac user expects — shift for a run, command for one at a time — and so a
+    /// drag can carry all of them into a collection at once.
+    public var selection: Set<UUID> = [] {
+        didSet {
+            guard selection != oldValue else { return }
+            if selection.count == 1 {
+                openPaperID = selection.first
+            } else if selection.isEmpty {
+                openPaperID = nil
+            } else if let open = openPaperID, !selection.contains(open) {
+                openPaperID = selection.first
+            }
+        }
+    }
+
+    private var openPaperID: UUID?
+
+    /// The paper the reader is showing. Setting it is how everything outside
+    /// the list — the search palette, a supplement, a menu — opens a paper.
+    public var selectedPaperID: UUID? {
+        get { openPaperID }
+        set {
+            openPaperID = newValue
+            let wanted = newValue.map { Set([$0]) } ?? []
+            if selection != wanted { selection = wanted }
+            openPaperID = newValue
+        }
+    }
 
     /// Papers currently being resolved, so rows can show a spinner.
     public private(set) var resolving: Set<UUID> = []
@@ -276,6 +306,14 @@ public final class LibraryModel {
         indexByID = index
         attachmentIDsByParent = attachments
         self.counts = counts
+    }
+
+    /// The papers a drag beginning on `id` carries.
+    ///
+    /// Dragging one of several selected rows takes the whole selection, which
+    /// is what makes filing a dozen papers into a collection one gesture.
+    public func draggedPapers(startingAt id: UUID) -> [UUID] {
+        selection.contains(id) ? Array(selection) : [id]
     }
 
     /// One paper by identifier, without scanning the library.

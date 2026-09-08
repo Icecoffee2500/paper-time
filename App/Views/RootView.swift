@@ -120,21 +120,21 @@ struct LibraryWindow: View {
 
         return HStack(spacing: 0) {
             sidebarColumn
-                .frame(width: app.isSidebarVisible ? app.settings.sidebarWidth : 0)
+                .frame(width: app.isSidebarVisible ? app.sidebarWidth : 0)
                 .opacity(app.isSidebarVisible ? 1 : 0)
                 .clipped()
 
             if app.isSidebarVisible {
-                ColumnDivider(width: Bindable(app.settings).sidebarWidth, range: 200...360)
+                ColumnDivider(width: $app.sidebarWidth, range: 200...360)
             }
 
             listColumn
-                .frame(width: app.showsPaperList ? app.settings.paperListWidth : 0)
+                .frame(width: app.showsPaperList ? app.paperListWidth : 0)
                 .opacity(app.showsPaperList ? 1 : 0)
                 .clipped()
 
             if app.showsPaperList {
-                ColumnDivider(width: Bindable(app.settings).paperListWidth, range: 240...560)
+                ColumnDivider(width: $app.paperListWidth, range: 240...560)
             }
 
             PaperDetailColumn(model: model, configuration: configuration, link: link)
@@ -636,28 +636,29 @@ private struct ColumnDivider: View {
     @State private var startWidth: Double?
 
     var body: some View {
-        Divider()
-            .overlay(alignment: .center) {
-                Rectangle()
-                    .fill(.clear)
-                    .frame(width: 10)
-                    .contentShape(.rect)
-                    .onHover { hovering in
-                        if hovering { NSCursor.resizeLeftRight.set() } else { NSCursor.arrow.set() }
-                    }
-                    .gesture(
-                        DragGesture(minimumDistance: 1, coordinateSpace: .global)
-                            .onChanged { value in
-                                let start = startWidth ?? width
-                                startWidth = start
-                                width = min(
-                                    max(start + value.translation.width, range.lowerBound),
-                                    range.upperBound
-                                )
-                            }
-                            .onEnded { _ in startWidth = nil }
-                    )
+        // A hairline to look at, inside a strip wide enough to catch. A bare
+        // `Divider` is one point across, which is not something a pointer can
+        // reasonably be asked to hit.
+        Rectangle()
+            .fill(Color(nsColor: .separatorColor))
+            .frame(width: 1)
+            .frame(width: 9)
+            .contentShape(.rect)
+            .onHover { hovering in
+                if hovering { NSCursor.resizeLeftRight.set() } else { NSCursor.arrow.set() }
             }
+            .gesture(
+                DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                    .onChanged { value in
+                        let start = startWidth ?? width
+                        startWidth = start
+                        width = min(
+                            max(start + value.translation.width, range.lowerBound),
+                            range.upperBound
+                        )
+                    }
+                    .onEnded { _ in startWidth = nil }
+            )
     }
 }
 #endif

@@ -89,6 +89,7 @@ struct MarkupListView: View {
                     }
                 }
                 .listStyle(.inset)
+                .thinScrollers()
             }
         }
         // No navigation title here: this list is presented inside the reader's

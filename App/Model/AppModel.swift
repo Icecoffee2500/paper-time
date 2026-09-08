@@ -39,6 +39,24 @@ public final class AppModel {
     /// Whether the paper list — the column between the source list and the
     /// reader — is showing.
     public var showsPaperList = true
+
+    /// How wide the two columns are.
+    ///
+    /// Observed properties rather than `@AppStorage`: an `@ObservationIgnored`
+    /// property tells nobody when it changes, so dragging a divider wrote the
+    /// new width and the layout, which had never been asked to watch it, went
+    /// on drawing the old one. They persist themselves on the way past.
+    public var sidebarWidth: Double = AppModel.storedWidth("sidebarWidth", default: 232) {
+        didSet { UserDefaults.standard.set(sidebarWidth, forKey: "sidebarWidth") }
+    }
+    public var paperListWidth: Double = AppModel.storedWidth("paperListWidth", default: 320) {
+        didSet { UserDefaults.standard.set(paperListWidth, forKey: "paperListWidth") }
+    }
+
+    private static func storedWidth(_ key: String, default fallback: Double) -> Double {
+        let stored = UserDefaults.standard.double(forKey: key)
+        return stored > 0 ? stored : fallback
+    }
     /// The Spotlight-style search overlay.
     public var showsSearchPalette = false
 
@@ -202,10 +220,6 @@ public final class AppSettings {
     @AppStorage("listSubtitleFields") public var listSubtitleFields = "authors,year,venue"
     /// How wide the paper list is, remembered so hiding and showing it gives
     /// back the column you had rather than a default.
-    @ObservationIgnored
-    @AppStorage("paperListWidth") public var paperListWidth = 320.0
-    @ObservationIgnored
-    @AppStorage("sidebarWidth") public var sidebarWidth = 232.0
 
     public init() {}
 }
