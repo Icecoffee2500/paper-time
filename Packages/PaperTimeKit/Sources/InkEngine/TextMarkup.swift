@@ -98,13 +98,16 @@ public enum TextMarkupWriter {
     ) -> [MarkupDescriptor] {
         var byPage: [Int: [CGRect]] = [:]
         var textByPage: [Int: String] = [:]
+        var metricsByPage: [Int: LineMetrics] = [:]
 
         // A selection spanning several lines has to become one rectangle per
         // line, or the highlight covers the whole block including its margins.
         for line in selection.selectionsByLine() {
             for page in line.pages {
                 let index = document.index(for: page)
-                byPage[index, default: []].append(line.bounds(for: page))
+                let metrics = metricsByPage[index] ?? LineMetrics(page: page)
+                metricsByPage[index] = metrics
+                byPage[index, default: []].append(metrics.tightened(line.bounds(for: page)))
                 let existing = textByPage[index] ?? ""
                 let addition = line.string ?? ""
                 textByPage[index] = existing.isEmpty ? addition : "\(existing) \(addition)"
@@ -119,6 +122,76 @@ public enum TextMarkupWriter {
                 color: color,
                 quotedText: (textByPage[index] ?? "")
                     .trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+        }
+    }
+
+    /// What the ordinary text on a page measures, so a line can be marked at
+    /// the height of its words.
+    ///
+    /// A line with inline mathematics reports a box tall enough for its tallest
+    /// glyph — a fraction, a big parenthesis, a subscripted subscript — and a
+    /// highlight drawn on that box stands two or three times the height of the
+    /// words around it.
+    ///
+    /// The test is the page's own typography: a line is only trimmed when it
+    /// is taller than most of the other lines on the same page, and it is
+    /// trimmed to what those lines measure. Comparing against glyph heights
+    /// instead was trimming every line in a densely set paper.
+    struct LineMetrics {
+        private let typicalLine: CGFloat
+        private let boxes: [CGRect]
+
+        init(page: PDFPage) {
+            var found: [CGRect] = []
+            let count = page.numberOfCharacters
+            found.reserveCapacity(count)
+            for index in 0..<count {
+                let box = page.characterBounds(at: index)
+                if box.width > 0, box.height > 0 { found.append(box) }
+            }
+            boxes = found
+
+            let lines = page.selection(for: page.bounds(for: .cropBox))?
+                .selectionsByLine() ?? []
+            let heights = lines.map { $0.bounds(for: page).height }
+                .filter { $0 > 0 }
+                .sorted()
+            if heights.count >= 4 {
+                typicalLine = heights[heights.count / 2]
+            } else if !found.isEmpty {
+                // Too few lines to compare against — fall back to the glyphs.
+                let glyphs = found.map(\.height).sorted()
+                typicalLine = glyphs[glyphs.count / 2] * 1.65
+            } else {
+                typicalLine = 0
+            }
+        }
+
+        func tightened(_ rect: CGRect) -> CGRect {
+            guard typicalLine > 0, rect.height > typicalLine * 1.4 else { return rect }
+
+            let onLine = boxes.filter {
+                rect.intersects($0) && $0.midX >= rect.minX && $0.midX <= rect.maxX
+            }
+            guard !onLine.isEmpty else { return rect }
+
+            // Sit on the baseline the ordinary characters share, ignoring the
+            // tall ones that caused the trouble.
+            let glyphHeights = onLine.map(\.height).sorted()
+            let typicalGlyph = glyphHeights[glyphHeights.count / 2]
+            let baselines = onLine
+                .filter { abs($0.height - typicalGlyph) <= typicalGlyph * 0.4 }
+                .map(\.minY)
+                .sorted()
+            guard !baselines.isEmpty else { return rect }
+            let baseline = baselines[baselines.count / 2]
+
+            return CGRect(
+                x: rect.minX,
+                y: baseline - typicalLine * 0.22,
+                width: rect.width,
+                height: typicalLine
             )
         }
     }

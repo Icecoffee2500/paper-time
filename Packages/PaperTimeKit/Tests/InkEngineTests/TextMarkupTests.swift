@@ -147,6 +147,70 @@ struct TextMarkupTests {
         #expect(readBack.comment.isEmpty)
     }
 
+    /// A line with a tall glyph on it — an integral sign, a big parenthesis —
+    /// must not be marked at the height of that glyph.
+    static func makeMathDocument() throws -> PDFDocument {
+        let data = NSMutableData()
+        let consumer = try #require(CGDataConsumer(data: data))
+        var mediaBox = CGRect(x: 0, y: 0, width: 612, height: 792)
+        let context = try #require(CGContext(consumer: consumer, mediaBox: &mediaBox, nil))
+
+        context.beginPDFPage(nil)
+        let body = CTFontCreateWithName("Helvetica" as CFString, 12, nil)
+        let tall = CTFontCreateWithName("Helvetica" as CFString, 40, nil)
+        let line = NSMutableAttributedString(
+            string: "the encoder ", attributes: [.font: body as Any]
+        )
+        line.append(NSAttributedString(string: "(", attributes: [.font: tall as Any]))
+        line.append(NSAttributedString(string: " and predictor are parameterized",
+                                       attributes: [.font: body as Any]))
+        context.textPosition = CGPoint(x: 40, y: 700)
+        CTLineDraw(CTLineCreateWithAttributedString(line), context)
+        context.endPDFPage()
+        context.closePDF()
+
+        return try #require(PDFDocument(data: data as Data))
+    }
+
+    @Test("A line with a tall glyph is marked at the height of its text")
+    func mathLineStaysTight() throws {
+        let document = try Self.makeMathDocument()
+        let page = try #require(document.page(at: 0))
+        let selection = try #require(
+            document.findString("and predictor", withOptions: []).first
+        )
+        let reported = selection.bounds(for: page)
+
+        let whole = try #require(page.selection(for: page.bounds(for: .cropBox)))
+        let descriptor = try #require(
+            TextMarkupWriter.descriptor(
+                for: whole, kind: .highlight, color: .yellow, in: document
+            ).first
+        )
+        let marked = try #require(descriptor.rects.first)
+
+        // The line's own box is as tall as the 40pt glyph; the mark is not.
+        #expect(marked.height < reported.height)
+        #expect(marked.height < 22)
+    }
+
+    @Test("An ordinary line is marked exactly where PDFKit says")
+    func ordinaryLineIsUntouched() throws {
+        let document = try Self.makeDocument(text: "plain words only here")
+        let page = try #require(document.page(at: 0))
+        let selection = try #require(document.findString("words only", withOptions: []).first)
+        let line = try #require(selection.selectionsByLine().first)
+        let reported = line.bounds(for: page)
+
+        let descriptor = try #require(
+            TextMarkupWriter.descriptor(
+                for: selection, kind: .highlight, color: .yellow, in: document
+            ).first
+        )
+        let marked = try #require(descriptor.rects.first)
+        #expect(abs(marked.height - reported.height) < 0.01)
+    }
+
     @Test("Removing a markup takes it out of the page")
     func removal() throws {
         let document = try Self.makeDocument(text: "remove this word")

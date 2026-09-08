@@ -610,11 +610,15 @@ final class ReaderCoordinator: NSObject {
         clickMonitor = NSEvent.addLocalMonitorForEvents(
             matching: [.leftMouseDown]
         ) { [weak self, weak view] event in
-            guard let self, let view, view.window != nil, event.clickCount == 1 else {
+            guard let self, let view, let window = view.window, event.clickCount == 1 else {
                 return event
             }
-            // Any click in the page puts the controls away: they are about one
-            // selection, and this click ends it.
+            // A click inside the controls is theirs. Treating it as a click on
+            // the page closed them before their own button could act, which is
+            // why picking a colour stopped making a highlight.
+            if markupPanel.owns(event.window) { return event }
+            guard event.window === window else { return event }
+
             if markupPanel.isShowing, !markupPanel.isComposingNote {
                 hideMarkupPanel()
             }
@@ -624,12 +628,18 @@ final class ReaderCoordinator: NSObject {
                   let page = view.page(for: inView, nearest: false)
             else { return event }
 
-            // PDFKit's own hit test, which knows a text markup is a set of
-            // quadrilaterals rather than the box that encloses them.
+            // PDFKit's own hit test knows a text markup is a set of
+            // quadrilaterals rather than the box that encloses them; the
+            // bounding box is the fallback for marks it declines to report.
             let onPage = view.convert(inView, to: page)
-            guard let hit = page.annotation(at: onPage),
-                  ["Highlight", "Underline", "StrikeOut", "Text"].contains(hit.type ?? "")
-            else { return event }
+            let kinds = ["Highlight", "Underline", "StrikeOut", "Text"]
+            let byAPI = page.annotation(at: onPage)
+            let byBounds = page.annotations.first {
+                kinds.contains($0.type ?? "") && $0.bounds.insetBy(dx: -4, dy: -4).contains(onPage)
+            }
+            guard let hit = byAPI.flatMap({ a in
+                ["Highlight", "Underline", "StrikeOut", "Text"].contains(a.type ?? "") ? a : nil
+            }) ?? byBounds else { return event }
 
             view.clearSelection()
             showMarkEditor(for: hit, in: view)

@@ -21,6 +21,14 @@ final class MarkupPanelController {
     /// True while the note editor is up, which must survive a scroll.
     var isComposingNote: Bool { composer != nil }
 
+    /// Whether an event belongs to the controls themselves.
+    ///
+    /// The panel is its own window, so a click inside it arrives with the
+    /// panel's coordinates — and must not be treated as a click on the page.
+    func owns(_ window: NSWindow?) -> Bool {
+        window != nil && window === panel
+    }
+
     private var onMark: ((MarkupDescriptor.Kind, MarkupColor) -> Void)?
     private var onRecolor: ((MarkupColor) -> Void)?
     private var onDelete: (() -> Void)?
