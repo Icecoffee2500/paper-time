@@ -119,84 +119,55 @@ func draw(size: CGFloat, rounded: Bool, into context: CGContext) {
 
     // What is written on it: a title, some lines, and one of them marked —
     // which is the whole point of the app.
-    // Below about forty pixels the byline and the gaps between words are
-    // smaller than a pixel, and drawing them anyway turns the sheet to mush.
-    // Apple draws small icons as their own picture; so does this one.
+    // Below about forty pixels the finer strokes are smaller than a pixel, so
+    // the small icon is drawn as its own, plainer picture.
     let simple = size <= 40
 
-    let margin = sheet.width * (simple ? 0.16 : 0.135)
+    let margin = sheet.width * (simple ? 0.17 : 0.155)
     let inner = sheet.insetBy(dx: margin, dy: 0)
-    let ruleHeight = sheet.height * (simple ? 0.062 : 0.036)
-    let step = sheet.height * (simple ? 0.165 : 0.096)
-    var y = sheet.maxY - sheet.height * (simple ? 0.17 : 0.135)
 
-    let titleHeight = sheet.height * (simple ? 0.10 : 0.060)
+    // Four marks on a page: a title, two lines of text, and one line struck
+    // through with a highlighter. Anything more reads as clutter at the size
+    // an icon is actually looked at.
+    let ruleHeight = sheet.height * (simple ? 0.052 : 0.034)
+    let titleHeight = ruleHeight * (simple ? 1.5 : 1.75)
+    let markHeight = ruleHeight * (simple ? 2.0 : 2.3)
+    let afterTitle = sheet.height * (simple ? 0.135 : 0.105)
+    let between = sheet.height * (simple ? 0.135 : 0.100)
+
+    // The marked line is simply the marked colour, and thicker: a highlighter
+    // stroke is broader than the words it covers, and saying it that way needs
+    // no second shape stacked on the first.
+    let lines: [(width: CGFloat, marked: Bool)] = simple
+        ? [(0.96, false), (0.88, true)]
+        : [(0.96, false), (0.88, true), (0.72, false)]
+
+    let block = titleHeight + afterTitle
+        + lines.reduce(0) { $0 + ($1.marked ? markHeight : ruleHeight) }
+        + between * CGFloat(lines.count - 1)
+    // Centred on the page, nudged up: type set dead centre reads low.
+    var y = sheet.midY + block / 2 + sheet.height * 0.012
+
     context.setFillColor(Palette.title)
     context.addPath(CGPath(
         roundedRect: CGRect(x: inner.minX, y: y - titleHeight,
-                            width: inner.width * 0.72, height: titleHeight),
+                            width: inner.width * 0.70, height: titleHeight),
         cornerWidth: titleHeight / 2, cornerHeight: titleHeight / 2, transform: nil
     ))
     context.fillPath()
-    y -= titleHeight + sheet.height * (simple ? 0.115 : 0.042)
+    y -= titleHeight + afterTitle
 
-    if !simple {
-        let bylineHeight = sheet.height * 0.030
-        context.setFillColor(Palette.byline)
+    for (index, line) in lines.enumerated() {
+        let height = line.marked ? markHeight : ruleHeight
+        context.setFillColor(line.marked ? Palette.highlight : Palette.rule)
         context.addPath(CGPath(
-            roundedRect: CGRect(x: inner.minX, y: y - bylineHeight,
-                                width: inner.width * 0.42, height: bylineHeight),
-            cornerWidth: bylineHeight / 2, cornerHeight: bylineHeight / 2, transform: nil
+            roundedRect: CGRect(x: inner.minX, y: y - height,
+                                width: inner.width * line.width, height: height),
+            cornerWidth: height / 2, cornerHeight: height / 2, transform: nil
         ))
         context.fillPath()
-        y -= bylineHeight + sheet.height * 0.075
-    }
-
-    let widths: [CGFloat] = simple ? [1.0, 0.95, 0.78] : [1.0, 0.94, 0.99, 0.87, 0.68]
-    let marked = simple ? 1 : 2
-    for (index, width) in widths.enumerated() {
-        let line = CGRect(x: inner.minX, y: y - ruleHeight,
-                          width: inner.width * width, height: ruleHeight)
-        if index == marked {
-            // A highlighter stroke over words, not a ring around a bar: the
-            // colour has to show between the words or it reads as an outline.
-            let band = CGRect(
-                x: line.minX - ruleHeight * 0.5,
-                y: line.midY - ruleHeight * 1.35,
-                width: line.width + ruleHeight,
-                height: ruleHeight * 2.7
-            )
-            context.setFillColor(Palette.highlight)
-            context.addPath(CGPath(
-                roundedRect: band,
-                cornerWidth: ruleHeight * 0.55, cornerHeight: ruleHeight * 0.55, transform: nil
-            ))
-            context.fillPath()
-
-            context.setFillColor(Palette.markedRule)
-            let gap = ruleHeight * 0.85
-            let shares: [CGFloat] = simple ? [1.0] : [0.36, 0.22, 0.42]
-            let text = line.width - gap * CGFloat(shares.count - 1)
-            var x = line.minX
-            for share in shares {
-                let word = CGRect(x: x, y: line.midY - ruleHeight * 0.42,
-                                  width: text * share, height: ruleHeight * 0.84)
-                context.addPath(CGPath(
-                    roundedRect: word,
-                    cornerWidth: word.height / 2, cornerHeight: word.height / 2, transform: nil
-                ))
-                context.fillPath()
-                x = word.maxX + gap
-            }
-        } else {
-            context.setFillColor(Palette.rule)
-            context.addPath(CGPath(
-                roundedRect: line,
-                cornerWidth: ruleHeight / 2, cornerHeight: ruleHeight / 2, transform: nil
-            ))
-            context.fillPath()
-        }
-        y -= step
+        y -= height
+        if index < lines.count - 1 { y -= between }
     }
 }
 
