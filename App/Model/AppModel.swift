@@ -39,6 +39,12 @@ public final class AppModel {
     /// Whether the paper list — the column between the source list and the
     /// reader — is showing.
     public var showsPaperList = true
+    /// Whether the paper itself is showing.
+    ///
+    /// Closing it leaves the library: the source list and the titles, with the
+    /// width the page was using. Worth having when you are sorting a shelf
+    /// rather than reading from it.
+    public var showsReader = true
 
     /// How wide the two columns are.
     ///
@@ -51,6 +57,42 @@ public final class AppModel {
     }
     public var paperListWidth: Double = AppModel.storedWidth("paperListWidth", default: 320) {
         didSet { UserDefaults.standard.set(paperListWidth, forKey: "paperListWidth") }
+    }
+
+    /// The keys that open and close the panes.
+    ///
+    /// Persists itself on the way past, the same as the column widths: an
+    /// `@AppStorage` property that nothing observes would change the defaults
+    /// without the menu ever hearing about it, and the menu is where these are
+    /// actually used.
+    public var paneShortcuts: [String: String] =
+        UserDefaults.standard.dictionary(forKey: "paneShortcuts") as? [String: String] ?? [:] {
+        didSet { UserDefaults.standard.set(paneShortcuts, forKey: "paneShortcuts") }
+    }
+
+    public func shortcut(for pane: PaneShortcut) -> Shortcut {
+        paneShortcuts[pane.rawValue].flatMap(Shortcut.init(stored:)) ?? pane.fallback
+    }
+
+    public func setShortcut(_ shortcut: Shortcut, for pane: PaneShortcut) {
+        // One key, one pane: whoever else had it gives it up.
+        for other in PaneShortcut.allCases where other != pane {
+            if self.shortcut(for: other) == shortcut {
+                paneShortcuts[other.rawValue] = ""
+            }
+        }
+        paneShortcuts[pane.rawValue] = shortcut.stored
+    }
+
+    public func resetShortcuts() {
+        paneShortcuts = [:]
+    }
+
+    /// True when a pane has been left with no key at all, because another took
+    /// the one it had.
+    public func hasShortcut(_ pane: PaneShortcut) -> Bool {
+        guard let stored = paneShortcuts[pane.rawValue] else { return true }
+        return Shortcut(stored: stored) != nil
     }
 
     private static func storedWidth(_ key: String, default fallback: Double) -> Double {
@@ -88,6 +130,7 @@ public final class AppModel {
                 if isSidebarVisible { toggleSidebar() }
                 showsPaperList = false
                 showsInspector = false
+                showsReader = true
                 isFocusMode = true
             } else {
                 if !isSidebarVisible { toggleSidebar() }
@@ -114,7 +157,28 @@ public final class AppModel {
 
     /// Hides the paper list, leaving the source list and the reader.
     public func togglePaperList() {
-        withAnimation(.snappy(duration: 0.25)) { showsPaperList.toggle() }
+        withAnimation(.snappy(duration: 0.25)) {
+            showsPaperList.toggle()
+            // Something has to be left to look at.
+            if !showsPaperList, !showsReader, !isSidebarVisible { showsReader = true }
+        }
+    }
+
+    /// Hides the paper, leaving the library around it.
+    ///
+    /// Focus mode is the paper and nothing else, so the two cannot both be on:
+    /// asking for one leaves the other.
+    public func toggleReader() {
+        withAnimation(.snappy(duration: 0.25)) {
+            if isFocusMode {
+                setFocusMode(false)
+                return
+            }
+            showsReader.toggle()
+            // A window with every column closed is a window with nothing in
+            // it, so the last one to be closed opens the list instead.
+            if !showsReader, !showsPaperList, !isSidebarVisible { showsPaperList = true }
+        }
     }
 
     public func toggleInspector() {

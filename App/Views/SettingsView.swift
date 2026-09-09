@@ -32,6 +32,7 @@ struct SettingsView: View {
             bibTeXSection(settings: settings)
             listSection(settings: settings)
             readingSection(settings: settings)
+            shortcutsSection
             aboutSection
         }
         .formStyle(.grouped)
@@ -157,6 +158,34 @@ struct SettingsView: View {
     }
 
     // MARK: - Reading
+
+    /// Which key opens which pane.
+    ///
+    /// Habits come from whatever the reader used before this, so the defaults
+    /// are a starting point rather than a rule. A key can only belong to one
+    /// pane: giving it to a second takes it from the first, which is then left
+    /// with no shortcut until it is given one.
+    @ViewBuilder
+    private var shortcutsSection: some View {
+        #if os(macOS)
+        @Bindable var app = app
+        Section("Keyboard Shortcuts") {
+            ForEach(PaneShortcut.allCases) { pane in
+                LabeledContent(pane.title) {
+                    ShortcutRecorder(
+                        shortcut: app.shortcut(for: pane),
+                        isUnset: !app.hasShortcut(pane)
+                    ) { app.setShortcut($0, for: pane) }
+                }
+            }
+            HStack {
+                Spacer()
+                Button("Restore Defaults") { app.resetShortcuts() }
+                    .disabled(app.paneShortcuts.isEmpty)
+            }
+        }
+        #endif
+    }
 
     private func readingSection(settings: AppSettings) -> some View {
         Section("Reading") {

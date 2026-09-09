@@ -39,6 +39,29 @@ VAE(`auto-encoding variational bayes.pdf`, 단단 조판, 식 1·3·5·7·8·10)
 V-JEPA 2(식 2·3·4), `5308_The_Forgetting_Retention_`(2단, 단 사이 간격 14pt),
 `Fast Machine Unlearning…`(다른 앱이 남긴 하이라이트 105개).
 
+## 단축키
+
+창을 여닫는 단축키는 사용자가 바꿀 수 있다. 기본값은:
+
+| 창 | 기본 단축키 |
+| --- | --- |
+| 사이드바 | `⌘[` |
+| 논문 목록 | `⌘P` |
+| 논문(리더) | `⌘\` |
+| 인스펙터 | `⌘]` |
+| 논문에 집중 | `⌃⌘F` |
+
+정의는 `App/Model/PaneShortcuts.swift`(`PaneShortcut` 열거형과 기본값),
+저장은 `AppModel.paneShortcuts`(UserDefaults, 바뀔 때마다 스스로 기록),
+메뉴 적용은 `PaperTimeCommands.paneButton`, 설정 UI는
+`App/Views/ShortcutRecorder.swift`.
+
+한 키는 한 창에만 붙는다. 다른 창에 이미 있는 키를 주면 원래 주인은 단축키가
+없는 상태(`—`)가 되고, 메뉴 항목은 남되 키만 빠진다.
+
+`⌘P`는 원래 시스템 Print 항목이 가져가므로 `CommandGroup(replacing: .printItem) {}`
+로 비워뒀다. Print를 다시 넣을 일이 생기면 그 충돌부터 풀어야 한다.
+
 ## 지금 상태
 
 브랜치 `reading-the-page`가 `main`보다 6커밋 앞서 있다. **원격이 없다.**

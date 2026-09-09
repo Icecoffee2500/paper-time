@@ -128,12 +128,25 @@ struct LibraryWindow: View {
                 ColumnDivider(width: $app.sidebarWidth, range: 200...360)
             }
 
+            // With the paper closed the list is the only thing left to look
+            // at, so it takes the room rather than leaving the window half
+            // empty. Its own width comes back when the paper does.
+            let listFills = app.showsPaperList && !app.showsReader
+            let listWidth: CGFloat? = if !app.showsPaperList {
+                0
+            } else if listFills {
+                nil
+            } else {
+                app.paperListWidth
+            }
             listColumn
-                .frame(width: app.showsPaperList ? app.paperListWidth : 0)
+                .frame(width: listWidth)
+                .frame(maxWidth: listFills ? .infinity : nil)
                 .opacity(app.showsPaperList ? 1 : 0)
                 .clipped()
 
-            if app.showsPaperList {
+            // Nothing to drag against when there is no paper beside it.
+            if app.showsPaperList, app.showsReader {
                 ColumnDivider(width: $app.paperListWidth, range: 240...560)
             }
 
@@ -147,10 +160,16 @@ struct LibraryWindow: View {
                     PaperDetailColumn(model: model, configuration: configuration, link: link)
                 }
             }
-            .frame(maxWidth: .infinity)
+            // Closed by width rather than by taking it out of the tree: the
+            // reader is expensive to build, and tearing the PDF view down and
+            // back up is what made the other column toggles crawl.
+            .frame(maxWidth: app.showsReader ? .infinity : 0)
+            .opacity(app.showsReader ? 1 : 0)
+            .clipped()
         }
         .animation(.snappy(duration: 0.22), value: app.showsPaperList)
         .animation(.snappy(duration: 0.22), value: app.isSidebarVisible)
+        .animation(.snappy(duration: 0.22), value: app.showsReader)
     }
     #endif
 

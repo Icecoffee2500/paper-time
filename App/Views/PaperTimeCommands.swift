@@ -5,6 +5,23 @@ import SwiftUI
 struct PaperTimeCommands: Commands {
     let model: AppModel
 
+    /// A pane toggle, carrying whichever key the reader has given it.
+    ///
+    /// A pane whose key was taken by another still gets its menu item; it just
+    /// has no shortcut on it.
+    @ViewBuilder
+    private func paneButton(
+        _ title: String, _ pane: PaneShortcut, action: @escaping () -> Void
+    ) -> some View {
+        let shortcut = model.shortcut(for: pane)
+        if model.hasShortcut(pane) {
+            Button(title, action: action)
+                .keyboardShortcut(shortcut.keyEquivalent, modifiers: shortcut.modifiers)
+        } else {
+            Button(title, action: action)
+        }
+    }
+
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
             Button("Add Papers…") {
@@ -75,29 +92,34 @@ struct PaperTimeCommands: Commands {
             .disabled(model.library?.selectedPaperID == nil)
         }
 
+        // The paper list answers to Command-P, so the system's own Print item
+        // does not get to keep it.
+        CommandGroup(replacing: .printItem) {}
+
         CommandGroup(after: .toolbar) {
-            Button(model.isSidebarVisible ? "Hide Sidebar" : "Show Sidebar") {
-                model.toggleSidebar()
-            }
-            .keyboardShortcut("[", modifiers: .command)
-            .disabled(model.library == nil)
+            paneButton(
+                model.isSidebarVisible ? "Hide Sidebar" : "Show Sidebar", .sidebar
+            ) { model.toggleSidebar() }
+                .disabled(model.library == nil)
 
-            Button(model.showsPaperList ? "Hide Paper List" : "Show Paper List") {
-                model.togglePaperList()
-            }
-            .keyboardShortcut("\\", modifiers: .command)
-            .disabled(model.library == nil)
+            paneButton(
+                model.showsPaperList ? "Hide Paper List" : "Show Paper List", .paperList
+            ) { model.togglePaperList() }
+                .disabled(model.library == nil)
 
-            Button(model.showsInspector ? "Hide Inspector" : "Show Inspector") {
-                model.toggleInspector()
-            }
-            .keyboardShortcut("]", modifiers: .command)
+            paneButton(
+                model.showsReader && !model.isFocusMode ? "Hide Paper" : "Show Paper", .reader
+            ) { model.toggleReader() }
+                .disabled(model.library == nil)
 
-            Button(model.isFocusMode ? "Leave Focus" : "Focus on the Paper") {
-                model.toggleFocusMode()
-            }
-            .keyboardShortcut("f", modifiers: [.command, .control])
-            .disabled(model.library == nil)
+            paneButton(
+                model.showsInspector ? "Hide Inspector" : "Show Inspector", .inspector
+            ) { model.toggleInspector() }
+
+            paneButton(
+                model.isFocusMode ? "Leave Focus" : "Focus on the Paper", .focus
+            ) { model.toggleFocusMode() }
+                .disabled(model.library == nil)
 
             Button("Show Papers") {
                 model.toggleFloatingList()
