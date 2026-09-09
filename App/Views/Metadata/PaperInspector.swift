@@ -209,6 +209,7 @@ private struct PaperInspectorForm: View {
                             Task { await model.attach(paperID, to: suggested.id) }
                         }
                         .buttonStyle(.borderedProminent)
+                        .buttonBorderShape(.capsule)
                     }
                     .padding(.vertical, 2)
                 }
@@ -257,6 +258,7 @@ private struct PaperInspectorForm: View {
                     Task { await model.update(meta: meta, for: paperID) }
                 }
                 .buttonStyle(.borderedProminent)
+                .buttonBorderShape(.capsule)
                 .disabled(!isDirty)
             }
         }

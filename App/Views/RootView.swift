@@ -137,8 +137,17 @@ struct LibraryWindow: View {
                 ColumnDivider(width: $app.paperListWidth, range: 240...560)
             }
 
-            PaperDetailColumn(model: model, configuration: configuration, link: link)
-                .frame(maxWidth: .infinity)
+            Group {
+                switch model.scope {
+                case .notes:
+                    SlipBoxDetail(model: model)
+                case .graph:
+                    PaperGraphView(model: model, graph: model.graph)
+                default:
+                    PaperDetailColumn(model: model, configuration: configuration, link: link)
+                }
+            }
+            .frame(maxWidth: .infinity)
         }
         .animation(.snappy(duration: 0.22), value: app.showsPaperList)
         .animation(.snappy(duration: 0.22), value: app.isSidebarVisible)
@@ -246,7 +255,7 @@ struct LibraryWindow: View {
                     }
                         .frame(width: 320)
                         .frame(maxHeight: 620)
-                        .background(.regularMaterial, in: .rect(cornerRadius: 16, style: .continuous))
+                        .background(.regularMaterial, in: .rect(cornerRadius: Corner.panel, style: .continuous))
                         .shadow(radius: 18, y: 6)
                         .padding(.leading, 16)
                         .padding(.top, 16)
@@ -280,6 +289,14 @@ struct LibraryWindow: View {
 
     @ViewBuilder
     private var listColumn: some View {
+        switch model.scope {
+        case .notes: SlipBoxList(model: model)
+        case .graph: GraphSidePanel(model: model, graph: model.graph)
+        default: paperListColumn
+        }
+    }
+
+    private var paperListColumn: some View {
         #if os(macOS)
         VStack(spacing: 0) {
             HStack {
@@ -477,6 +494,8 @@ struct LibraryWindow: View {
     private var scopeTitle: String {
         switch model.scope {
         case .all: "All Papers"
+        case .notes: "Notes"
+        case .graph: "Graph"
         case .searchResults: "Search Results"
         case .unread: "Unread"
         case .reading: "Reading"
@@ -487,6 +506,8 @@ struct LibraryWindow: View {
             model.collections.collections.first { $0.id == id }?.name ?? "Collection"
         case let .tag(id):
             model.manifest.tags.first { $0.id == id }?.name ?? "Tag"
+        case let .author(key):
+            model.authorRanking.first { $0.key == key }?.name ?? "Author"
         }
     }
 }
@@ -500,13 +521,16 @@ struct PaperDetailColumn: View {
 
     @State private var inspectorTab = InspectorTab.details
 
+    /// What the inspector is showing. "Notes" used to mean the list of marks,
+    /// which is not what a note is; the two are separate now and say so.
     enum InspectorTab: String, CaseIterable, Identifiable {
-        case details, notes
+        case details, marks, note
         var id: String { rawValue }
         var label: String {
             switch self {
             case .details: "Details"
-            case .notes: "Notes"
+            case .marks: "Marks"
+            case .note: "Note"
             }
         }
     }
@@ -537,7 +561,20 @@ struct PaperDetailColumn: View {
         }
         .inspector(isPresented: $app.showsInspector) {
             inspector
-                .inspectorColumnWidth(min: 280, ideal: 340, max: 460)
+                .inspectorColumnWidth(min: 280, ideal: 360, max: 520)
+        }
+        // Clicking a mark on the page opens the list it lives in.
+        .onChange(of: link.revealedMarkID) { _, id in
+            guard id != nil else { return }
+            app.showsInspector = true
+            inspectorTab = .marks
+        }
+        // Command-L: the passage goes to the note, and the note comes forward.
+        .onReceive(NotificationCenter.default.publisher(for: .paperTimeLinkToNote)) { _ in
+            guard let anchor = link.selectionAnchor() else { return }
+            app.showsInspector = true
+            inspectorTab = .note
+            link.pendingNoteAnchor = anchor
         }
     }
 
@@ -548,13 +585,10 @@ struct PaperDetailColumn: View {
         // floating halfway down an empty inspector.
         VStack(spacing: 0) {
             if model.selectedPaper != nil {
-                Picker("Inspector", selection: $inspectorTab) {
-                    ForEach(InspectorTab.allCases) { tab in
-                        Text(tab.label).tag(tab)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
+                CapsulePicker(
+                    options: InspectorTab.allCases.map { ($0, $0.label) },
+                    selection: $inspectorTab
+                )
                 .padding(.horizontal)
                 .padding(.top, 10)
                 .padding(.bottom, 8)
@@ -565,13 +599,18 @@ struct PaperDetailColumn: View {
                 case .details:
                     PaperInspector(model: model)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                case .notes:
+                case .marks:
                     if let session = link.session {
                         MarkupListView(session: session, link: link)
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     } else {
                         ContentUnavailableView("Opening the Paper", systemImage: "hourglass")
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                case .note:
+                    if let paper = model.selectedPaper {
+                        PaperNotesView(model: model, paperID: paper.id, link: link)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     }
                 }
             } else {
@@ -599,6 +638,7 @@ struct LibraryUnavailableView: View {
                 Task { await app.restore() }
             }
             .buttonStyle(.borderedProminent)
+            .buttonBorderShape(.capsule)
 
             Button("Choose a Different Folder…") {
                 app.forgetLibrary()

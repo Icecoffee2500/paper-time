@@ -55,6 +55,19 @@ struct PaperTimeCommands: Commands {
             .keyboardShortcut("k", modifiers: .command)
             .disabled(model.library == nil)
 
+            Button("Ultracopy") {
+                NotificationCenter.default.post(name: .paperTimeUltraCopy, object: nil)
+            }
+            .keyboardShortcut("c", modifiers: [.command, .shift])
+            .disabled(model.library?.selectedPaperID == nil)
+            .help("Copy the selection, with formulas as LaTeX")
+
+            Button("Link Selection to Note") {
+                NotificationCenter.default.post(name: .paperTimeLinkToNote, object: nil)
+            }
+            .keyboardShortcut("l", modifiers: .command)
+            .disabled(model.library?.selectedPaperID == nil)
+
             Button("Find in Document…") {
                 NotificationCenter.default.post(name: .paperTimeFindInDocument, object: nil)
             }
@@ -89,7 +102,9 @@ struct PaperTimeCommands: Commands {
             Button("Show Papers") {
                 model.toggleFloatingList()
             }
-            .keyboardShortcut("l", modifiers: .command)
+            // Command-L belongs to linking a passage into the note; the
+            // floating list takes the variant.
+            .keyboardShortcut("l", modifiers: [.command, .option])
             .disabled(!model.isFocusMode)
 
             Divider()
@@ -147,6 +162,8 @@ extension Notification.Name {
     static let paperTimeGoBack = Notification.Name("PaperTime.goBack")
     static let paperTimeGoForward = Notification.Name("PaperTime.goForward")
     static let paperTimeFindInDocument = Notification.Name("PaperTime.findInDocument")
+    static let paperTimeLinkToNote = Notification.Name("PaperTime.linkToNote")
+    static let paperTimeUltraCopy = Notification.Name("PaperTime.ultraCopy")
     static let paperTimeToggleFocus = Notification.Name("PaperTime.toggleFocus")
     static let paperTimeZoomIn = Notification.Name("PaperTime.zoomIn")
     static let paperTimeZoomOut = Notification.Name("PaperTime.zoomOut")

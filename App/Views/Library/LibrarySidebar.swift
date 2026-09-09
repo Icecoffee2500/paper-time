@@ -8,6 +8,8 @@ import SwiftUI
 /// two with a small computed binding rather than adding an optional to the
 /// model just for this view.
 struct LibrarySidebar: View {
+    @State private var showsAllAuthors = false
+    @State private var authorsAreShown = true
     @Bindable var model: LibraryModel
 
     @State private var isPresentingNewCollection = false
@@ -73,6 +75,12 @@ struct LibrarySidebar: View {
                     .tag(LibraryModel.Scope.needsReview)
             }
 
+            Section("Slip-Box") {
+                Label("Notes", systemImage: "tray.full")
+                    .count(model.notes.notes.count)
+                    .tag(LibraryModel.Scope.notes)
+            }
+
             Section("Collections") {
                 ForEach(model.collections.collections) { collection in
                     Label(collection.name, systemImage: symbolName(for: collection))
@@ -110,6 +118,13 @@ struct LibrarySidebar: View {
                     .dropTarget(in: model) { await model.addTag(tag.id, to: $0) }
                 }
             }
+
+            authorsSection
+
+            Section {
+                Label("Graph", systemImage: "point.3.connected.trianglepath.dotted")
+                    .tag(LibraryModel.Scope.graph)
+            }
         }
         .thinScrollers()
         // The source list used to get this from being a split view's sidebar.
@@ -127,6 +142,33 @@ struct LibrarySidebar: View {
                     Task { await model.addCollection(named: name) }
                 }
             )
+        }
+    }
+
+    /// Who is on the most papers here.
+    ///
+    /// A shelf has a shape, and this is it: the names that keep coming back.
+    /// Ten of them fit without turning the source list into a directory; the
+    /// rest are one click away.
+    @ViewBuilder
+    private var authorsSection: some View {
+        let ranking = model.authorRanking
+        if !ranking.isEmpty {
+            Section("Authors", isExpanded: $authorsAreShown) {
+                ForEach(showsAllAuthors ? ranking : Array(ranking.prefix(10))) { author in
+                    Label(author.name, systemImage: "person")
+                        .count(author.count)
+                        .tag(LibraryModel.Scope.author(author.key))
+                }
+                if ranking.count > 10 {
+                    Button(showsAllAuthors ? "Show Fewer" : "Show All \(ranking.count)") {
+                        withAnimation(.snappy(duration: 0.2)) { showsAllAuthors.toggle() }
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .font(.callout)
+                }
+            }
         }
     }
 
@@ -209,7 +251,7 @@ private struct PaperDropTarget: ViewModifier {
         content
             .listRowBackground(
                 isTargeted
-                    ? RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    ? RoundedRectangle(cornerRadius: Corner.row, style: .continuous)
                         .fill(Color.accentColor.opacity(0.2))
                     : nil
             )

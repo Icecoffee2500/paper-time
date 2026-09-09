@@ -68,6 +68,7 @@ struct LibrarySetupView: View {
                                     }
                                 }
                                 .buttonStyle(.bordered)
+                                .buttonBorderShape(.capsule)
                             }
                         }
                         .frame(maxWidth: 460, alignment: .leading)
@@ -75,6 +76,7 @@ struct LibrarySetupView: View {
 
                     Button("Choose Folder…") { isChoosingFolder = true }
                         .buttonStyle(.borderedProminent)
+                        .buttonBorderShape(.capsule)
                         .controlSize(.large)
 
                     Text("Your papers stay in that folder. Deleting the app never deletes them.")

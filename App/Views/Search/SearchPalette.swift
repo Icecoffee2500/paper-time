@@ -92,8 +92,8 @@ struct SearchPalette: View {
                 resultsList
             }
         }
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Corner.panel, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: Corner.panel, style: .continuous))
         .shadow(color: .black.opacity(0.25), radius: 24, y: 12)
         .onKeyPress(.upArrow) {
             moveHighlight(by: -1)
@@ -185,7 +185,7 @@ struct SearchPalette: View {
         .padding(.horizontal, 12)
         .frame(height: rowHeight)
         .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            RoundedRectangle(cornerRadius: Corner.row, style: .continuous)
                 .fill(isHighlighted ? Color.accentColor.opacity(0.15) : Color.clear)
         )
         .padding(.horizontal, 8)

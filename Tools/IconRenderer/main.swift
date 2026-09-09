@@ -11,14 +11,21 @@ import Foundation
 // Three bars on a tile: two lines of a paper and one struck through with a
 // highlighter. No sheet, no border, no text — at the size an icon is looked at,
 // the mark is the whole idea and everything else is noise around it.
+//
+// Black and white only: the tile is the sheet, the two grey bars are lines of
+// text, and the black one is the line that was marked.
 
 enum Palette {
-    static let top = CGColor(red: 0.180, green: 0.365, blue: 0.549, alpha: 1)
-    static let bottom = CGColor(red: 0.090, green: 0.216, blue: 0.361, alpha: 1)
-    static let line = CGColor(red: 1, green: 1, blue: 1, alpha: 0.92)
-    static let mark = CGColor(red: 1.0, green: 0.812, blue: 0.243, alpha: 1)
-    static let rim = CGColor(red: 1, green: 1, blue: 1, alpha: 0.22)
-    static let shadow = CGColor(red: 0.055, green: 0.098, blue: 0.157, alpha: 0.38)
+    static let strokeInk = CGColor(red: 0.110, green: 0.110, blue: 0.118, alpha: 1)
+    static let textLine = CGColor(red: 0.557, green: 0.557, blue: 0.576, alpha: 1)
+    // Black and white, the way a page is: a white sheet, grey lines of text,
+    // and the one line that was marked in solid black.
+    static let top = CGColor(red: 1, green: 1, blue: 1, alpha: 1)
+    static let bottom = CGColor(red: 0.949, green: 0.949, blue: 0.969, alpha: 1)
+    static let line = CGColor(red: 0.557, green: 0.557, blue: 0.576, alpha: 1)
+    static let mark = CGColor(red: 0.110, green: 0.110, blue: 0.118, alpha: 1)
+    static let rim = CGColor(red: 0.780, green: 0.780, blue: 0.800, alpha: 0.55)
+    static let shadow = CGColor(red: 0, green: 0, blue: 0, alpha: 0.28)
 }
 
 /// The rounded shape macOS icons live in. Apple's grid puts the artwork in a
@@ -73,7 +80,8 @@ func draw(size: CGFloat, rounded: Bool, into context: CGContext) {
         options: []
     )
     if rounded {
-        // A hint of light along the edge, the way every icon on the dock has.
+        // A hairline along the edge, so a white tile still has a shape of its
+        // own against a light background.
         context.setStrokeColor(Palette.rim)
         context.setLineWidth(max(size * 0.006, 0.75))
         context.addPath(squircle(in: plate.insetBy(dx: size * 0.004, dy: size * 0.004)))
@@ -81,31 +89,43 @@ func draw(size: CGFloat, rounded: Bool, into context: CGContext) {
     }
     context.restoreGState()
 
-    // Two lines and the mark. The marked one is shorter, thicker and the only
-    // thing that is not white: one point of colour, which is what it is for.
+    // Two lines of text and, across them, the stroke of a marker. The line the
+    // stroke covers is not drawn at all: a line nobody can see is a line that
+    // should not be there.
     let side = plate.width
     let small = size <= 40
-    let inner = plate.insetBy(dx: side * (small ? 0.175 : 0.19), dy: 0)
-    let lineHeight = side * (small ? 0.085 : 0.075)
-    let markHeight = lineHeight * 1.55
-    let gap = side * (small ? 0.115 : 0.105)
-
-    let rows: [(width: CGFloat, marked: Bool)] = [(1.0, false), (0.80, true), (0.62, false)]
-    let block = rows.reduce(0) { $0 + ($1.marked ? markHeight : lineHeight) }
-        + gap * CGFloat(rows.count - 1)
+    let inner = plate.insetBy(dx: side * 0.185, dy: 0)
+    let lineHeight = side * (small ? 0.080 : 0.068)
+    let gap = side * 0.115
+    let block = lineHeight * 3 + gap * 2
     var y = plate.midY + block / 2
 
-    for row in rows {
-        let height = row.marked ? markHeight : lineHeight
-        context.setFillColor(row.marked ? Palette.mark : Palette.line)
-        context.addPath(CGPath(
-            roundedRect: CGRect(x: inner.minX, y: y - height,
-                                width: inner.width * row.width, height: height),
-            cornerWidth: height / 2, cornerHeight: height / 2, transform: nil
-        ))
-        context.fillPath()
-        y -= height + gap
+    // Three slots, of which the middle one is left empty for the stroke.
+    for width in [1.0, nil, 0.70] as [CGFloat?] {
+        if let width {
+            context.setFillColor(Palette.textLine)
+            context.addPath(CGPath(
+                roundedRect: CGRect(x: inner.minX, y: y - lineHeight,
+                                    width: inner.width * width, height: lineHeight),
+                cornerWidth: lineHeight / 2, cornerHeight: lineHeight / 2, transform: nil
+            ))
+            context.fillPath()
+        }
+        y -= lineHeight + gap
     }
+
+    context.saveGState()
+    context.translateBy(x: plate.midX, y: plate.midY)
+    context.rotate(by: -0.20)
+    let strokeHalf = side * (small ? 0.090 : 0.0815)
+    context.setFillColor(Palette.strokeInk)
+    context.addPath(CGPath(
+        roundedRect: CGRect(x: -inner.width * 0.51, y: -strokeHalf,
+                            width: inner.width * 1.02, height: strokeHalf * 2),
+        cornerWidth: strokeHalf, cornerHeight: strokeHalf, transform: nil
+    ))
+    context.fillPath()
+    context.restoreGState()
 }
 
 func render(size: Int, rounded: Bool, to url: URL) throws {

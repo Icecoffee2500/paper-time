@@ -28,6 +28,9 @@ public final class LibraryModel {
 
     public enum Scope: Hashable, Sendable {
         case all
+        /// The slip-box, which is not a filter over papers but a place of its
+        /// own: all the notes, whichever paper they came from.
+        case notes
         /// The results of a library-wide search, shown as its own source-list
         /// row so a search is somewhere you can be rather than a filter you
         /// have to remember you left on.
@@ -39,10 +42,19 @@ public final class LibraryModel {
         case needsReview
         case collection(UUID)
         case tag(UUID)
+        /// Everything by one author, who is named rather than numbered because
+        /// a person is not a record in this app — they are the name on a paper.
+        case author(String)
+        /// The library drawn as what is connected to what.
+        case graph
     }
 
     public let store: LibraryStore
     public let location: LibraryLocation
+    /// Every note in the library, and what points at what.
+    public let notes: NotesModel
+    /// What is connected to what.
+    public let graph = GraphModel()
 
     public private(set) var papers: [LoadedPaper] = [] {
         didSet { rebuildDerivedIndexes() }
@@ -143,6 +155,7 @@ public final class LibraryModel {
         self.store = store
         self.location = location
         self.manifest = manifest
+        self.notes = NotesModel(store: store)
         let contact = UserDefaults.standard.string(forKey: "metadataContactEmail")
         let network = NetworkService(contactEmail: contact?.isEmpty == false ? contact : nil)
         // The on-device model is tried first where it exists and simply reports
@@ -174,6 +187,7 @@ public final class LibraryModel {
         rebuildDerivedIndexes()
         manifest = (try? await store.loadManifest()) ?? manifest
         looseDocuments = await store.looseDocumentURLs()
+        await notes.load()
         startWatchingFolder()
     }
 
@@ -306,6 +320,10 @@ public final class LibraryModel {
         indexByID = index
         attachmentIDsByParent = attachments
         self.counts = counts
+        rebuildAuthorRanking()
+        // A new paper is a new node and, once its references are read, new
+        // connections: the graph should not have to be asked.
+        graph.markStale()
     }
 
     /// The papers a drag beginning on `id` carries.
@@ -488,6 +506,51 @@ public final class LibraryModel {
         return papers.first { $0.id == parentID }
     }
 
+    /// Who appears on the most papers in this library.
+    ///
+    /// Counted over papers rather than authorships, so a name is ranked by how
+    /// much of the shelf it is on, and the same person written two ways —
+    /// "Yann LeCun" and "Y. LeCun" — is counted once, by surname and initial.
+    public struct AuthorRank: Identifiable, Hashable, Sendable {
+        public var key: String
+        public var name: String
+        public var count: Int
+        public var id: String { key }
+    }
+
+    public private(set) var authorRanking: [AuthorRank] = []
+
+    /// The keys a paper contributes: one per distinct author on it.
+    nonisolated static func authorKeys(of paper: LoadedPaper) -> Set<String> {
+        Set(paper.meta.csl.author.compactMap(authorKey))
+    }
+
+    /// One person, however their name was written on the paper.
+    nonisolated static func authorKey(_ name: CSLName) -> String? {
+        PaperGraphBuilder.authorKey(name)
+    }
+
+    private func rebuildAuthorRanking() {
+        var counts: [String: Int] = [:]
+        var names: [String: String] = [:]
+        for paper in papers where paper.meta.parentID == nil {
+            for author in paper.meta.csl.author {
+                guard let key = Self.authorKey(author) else { continue }
+                counts[key, default: 0] += 1
+                let display = author.displayName
+                // Keep the fullest spelling seen: "Yann LeCun" over "Y. LeCun".
+                if display.count > (names[key]?.count ?? 0) { names[key] = display }
+            }
+        }
+        authorRanking = counts
+            .map { AuthorRank(key: $0.key, name: names[$0.key] ?? $0.key, count: $0.value) }
+            .sorted {
+                $0.count == $1.count
+                    ? $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+                    : $0.count > $1.count
+            }
+    }
+
     public func tag(for id: UUID) -> Tag? {
         manifest.tags.first { $0.id == id }
     }
@@ -495,6 +558,8 @@ public final class LibraryModel {
     private func matchesScope(_ paper: LoadedPaper) -> Bool {
         switch scope {
         case .all, .searchResults: true
+        // These two are places of their own, not filters over papers.
+        case .notes, .graph: false
         case .unread: paper.state.readingStatus == .unread
         case .reading: paper.state.readingStatus == .reading
         case .read: paper.state.readingStatus == .read
@@ -503,6 +568,7 @@ public final class LibraryModel {
             paper.meta.confidence == .needsReview || paper.meta.confidence == .unparsed
         case let .collection(id): matchesCollection(id, paper: paper)
         case let .tag(id): paper.meta.tagIDs.contains(id)
+        case let .author(key): Self.authorKeys(of: paper).contains(key)
         }
     }
 

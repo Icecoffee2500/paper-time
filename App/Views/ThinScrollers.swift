@@ -18,7 +18,9 @@ private struct ThinScrollers: NSViewRepresentable {
     }
 
     func updateNSView(_ view: NSView, context: Context) {
-        (view as? ProbeView)?.applyToEnclosingScrollView()
+        // Rows come and go as the library changes, and a scroll view made
+        // after the last sweep would keep the wide bars.
+        DispatchQueue.main.async { (view as? ProbeView)?.applyToEnclosingScrollView() }
     }
 
     /// A zero-sized view that reaches for the scroll view it was put inside.
@@ -29,16 +31,23 @@ private struct ThinScrollers: NSViewRepresentable {
         }
 
         func applyToEnclosingScrollView() {
-            var ancestor = superview
-            while let view = ancestor {
-                if let scrollView = view as? NSScrollView {
-                    scrollView.scrollerStyle = .overlay
-                    scrollView.verticalScroller?.controlSize = .small
-                    scrollView.horizontalScroller?.controlSize = .small
-                    return
-                }
-                ancestor = view.superview
+            // Walking up finds nothing: the background of a List sits outside
+            // the scroll view that List is made of. Sweep the window instead —
+            // there are a handful of scroll views in it and every one of them
+            // wants the same treatment.
+            guard let root = window?.contentView else { return }
+            Self.apply(under: root)
+        }
+
+        static func apply(under view: NSView) {
+            if let scrollView = view as? NSScrollView {
+                scrollView.scrollerStyle = .overlay
+                scrollView.verticalScrollElasticity = .allowed
+                scrollView.verticalScroller?.controlSize = .small
+                scrollView.horizontalScroller?.controlSize = .small
+                scrollView.autohidesScrollers = true
             }
+            for subview in view.subviews { apply(under: subview) }
         }
     }
 }
