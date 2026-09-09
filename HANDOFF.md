@@ -59,6 +59,18 @@ V-JEPA 2(식 2·3·4), `5308_The_Forgetting_Retention_`(2단, 단 사이 간격 
 한 키는 한 창에만 붙는다. 다른 창에 이미 있는 키를 주면 원래 주인은 단축키가
 없는 상태(`—`)가 되고, 메뉴 항목은 남되 키만 빠진다.
 
+단축키를 받는 필드(`ShortcutRecorder`)에는 두 개의 함정이 있었다. 둘 다
+다시 만나기 쉬운 종류다.
+
+- `keyDown`으로는 ⌘ 조합을 못 받는다. 창이 먼저 뷰들에게 key equivalent로
+  물어보고, 아무도 안 가져가면 메뉴 막대로 넘어간다 — ⌘P와 ⌘\가 이미 사는 곳이
+  거기다. `performKeyEquivalent`로 들어야 한다.
+- `charactersIgnoringModifiers`는 입력 소스를 거친다. **한글 입력 상태에서 J를
+  누르면 "ㅓ"가 돌아오고**, "ㅓ"에 걸린 메뉴 단축키는 한글 상태에서만 작동한다.
+  `TISCopyCurrentASCIICapableKeyboardLayoutInputSource` + `UCKeyTranslate`로
+  물리 키를 읽어야 한다. Carbon이 `EventModifiers`를 따로 정의하므로 SwiftUI 쪽은
+  `SwiftUI.EventModifiers`로 명시해야 한다.
+
 `⌘P`는 원래 시스템 Print 항목이 가져가므로 `CommandGroup(replacing: .printItem) {}`
 로 비워뒀다. Print를 다시 넣을 일이 생기면 그 충돌부터 풀어야 한다.
 

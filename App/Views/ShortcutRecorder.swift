@@ -2,6 +2,7 @@ import SwiftUI
 
 #if os(macOS)
 import AppKit
+import Carbon.HIToolbox
 
 /// A field that shows a shortcut and, when clicked, takes the next one pressed.
 ///
@@ -45,67 +46,106 @@ struct ShortcutRecorder: View {
                 onRecord(Shortcut(key, modifiers))
                 isRecording = false
             }
-            .frame(width: 0, height: 0)
+            .allowsHitTesting(false)
         )
         .help("Click, then press the keys you want")
     }
 }
 
 /// The bit that actually hears the keyboard.
+///
+/// It listens through `performKeyEquivalent`, not `keyDown`. A combination
+/// with Command in it never reaches `keyDown`: the window offers it to its
+/// views as a key equivalent first, and whatever does not claim it there goes
+/// to the menu bar — which is exactly where ⌘P and ⌘\\ already live. Listening
+/// for `keyDown` meant listening for something that had already been taken.
 private struct KeyCatcher: NSViewRepresentable {
     @Binding var isRecording: Bool
-    let onKey: (Character, EventModifiers) -> Void
+    let onKey: (Character, SwiftUI.EventModifiers) -> Void
 
     func makeNSView(context: Context) -> CatchingView {
         let view = CatchingView()
-        view.onKey = onKey
-        view.onCancel = { isRecording = false }
+        view.recorder = self
         return view
     }
 
     func updateNSView(_ view: CatchingView, context: Context) {
-        view.onKey = onKey
-        view.onCancel = { isRecording = false }
-        if isRecording, view.window?.firstResponder !== view {
-            DispatchQueue.main.async { view.window?.makeFirstResponder(view) }
-        } else if !isRecording, view.window?.firstResponder === view {
-            DispatchQueue.main.async { view.window?.makeFirstResponder(nil) }
-        }
+        view.recorder = self
     }
 
+    /// The combinations the system needs more than we do. Taking ⌘Q for a pane
+    /// would leave no way to quit.
+    static let reserved: Set<String> = ["q", "w", "h", "m", ",", "`"]
+
     final class CatchingView: NSView {
-        var onKey: ((Character, EventModifiers) -> Void)?
-        var onCancel: (() -> Void)?
+        var recorder: KeyCatcher?
 
-        override var acceptsFirstResponder: Bool { true }
+        /// Which key was pressed, as the key *is* rather than as it types.
+        ///
+        /// `charactersIgnoringModifiers` still goes through the input source,
+        /// so pressing J with a Korean layout on gives back "ㅓ" — and a menu
+        /// shortcut on "ㅓ" only fires while that layout is active. The key
+        /// has to be read through a layout that can spell ASCII, which is
+        /// what every Mac app that records shortcuts does.
+        static func key(for event: NSEvent) -> Character? {
+            if let translated = asciiKey(for: event.keyCode) { return translated }
+            return event.charactersIgnoringModifiers?.lowercased().first
+        }
 
-        override func keyDown(with event: NSEvent) {
-            // Escape gives up without changing anything.
-            guard event.keyCode != 53 else {
-                onCancel?()
-                return
+        private static func asciiKey(for keyCode: UInt16) -> Character? {
+            guard let source = TISCopyCurrentASCIICapableKeyboardLayoutInputSource()?
+                .takeRetainedValue(),
+                let raw = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData)
+            else { return nil }
+            let data = Unmanaged<CFData>.fromOpaque(raw).takeUnretainedValue() as Data
+            return data.withUnsafeBytes { buffer -> Character? in
+                guard let layout = buffer.baseAddress?
+                    .assumingMemoryBound(to: UCKeyboardLayout.self)
+                else { return nil }
+                var deadKeys: UInt32 = 0
+                var length = 0
+                var characters = [UniChar](repeating: 0, count: 4)
+                let status = UCKeyTranslate(
+                    layout, keyCode, UInt16(kUCKeyActionDisplay), 0,
+                    UInt32(LMGetKbdType()), OptionBits(kUCKeyTranslateNoDeadKeysBit),
+                    &deadKeys, characters.count, &length, &characters
+                )
+                guard status == noErr, length > 0 else { return nil }
+                return String(utf16CodeUnits: characters, count: length).lowercased().first
             }
+        }
+
+        override func performKeyEquivalent(with event: NSEvent) -> Bool {
+            guard let recorder, recorder.isRecording else { return false }
+
+            // Escape gives up without changing anything.
+            if event.keyCode == 53 {
+                recorder.isRecording = false
+                return true
+            }
+
             let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-            var modifiers = EventModifiers()
+            var modifiers = SwiftUI.EventModifiers()
             if flags.contains(.command) { modifiers.insert(.command) }
             if flags.contains(.shift) { modifiers.insert(.shift) }
             if flags.contains(.option) { modifiers.insert(.option) }
             if flags.contains(.control) { modifiers.insert(.control) }
 
             // A shortcut with no modifier would swallow ordinary typing, and
-            // shift alone is not a modifier for this purpose.
+            // Shift alone is not a modifier for this purpose.
             guard !modifiers.intersection([.command, .control, .option]).isEmpty,
-                  let character = event.charactersIgnoringModifiers?.lowercased().first,
+                  let character = CatchingView.key(for: event),
                   !character.isWhitespace
             else {
                 NSSound.beep()
-                return
+                return true
             }
-            onKey?(character, modifiers)
-        }
+            if modifiers == .command, KeyCatcher.reserved.contains(String(character)) {
+                NSSound.beep()
+                return true
+            }
 
-        override func resignFirstResponder() -> Bool {
-            onCancel?()
+            recorder.onKey(character, modifiers)
             return true
         }
     }
