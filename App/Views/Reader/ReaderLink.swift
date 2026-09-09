@@ -1,5 +1,6 @@
 import PDFKit
 import PDFReader
+import PaperCore
 import SwiftUI
 
 /// A handle the detail column holds on whatever paper is open.
@@ -44,8 +45,13 @@ final class ReaderLink {
     /// reader once it has acted on it.
     var scrollRequest: PDFSelection?
     /// A place in the document the reader should reveal: a mark chosen in the
-    /// notes list. Cleared once the reader has scrolled there.
+    /// notes list, or a link followed out of a note. Cleared once the reader
+    /// has scrolled there.
     var anchorRequest: Anchor?
+    /// A mark just clicked on the page, so the marks list can show which one.
+    var revealedMarkID: UUID?
+    /// A passage waiting to be dropped into the note at the cursor.
+    var pendingNoteAnchor: NoteAnchor?
 
     /// Somewhere on a page, in page coordinates.
     struct Anchor: Equatable {
@@ -54,6 +60,22 @@ final class ReaderLink {
     }
 
     var hasSelection: Bool { selection?.string?.isEmpty == false }
+
+    /// The place the current selection points at, ready to be written into a
+    /// note. Nil when nothing is selected.
+    func selectionAnchor() -> NoteAnchor? {
+        guard let selection, let session,
+              let page = selection.pages.first,
+              selection.string?.isEmpty == false
+        else { return nil }
+        let index = session.document.index(for: page)
+        guard index != NSNotFound else { return nil }
+        return NoteAnchor(
+            pageIndex: index,
+            rect: selection.bounds(for: page),
+            quotedText: selection.string ?? ""
+        )
+    }
 
     init() {}
 }

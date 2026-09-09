@@ -243,6 +243,136 @@ public actor LibraryStore {
         try FileOperations.decode(PaperMeta.self, at: folder.metadataURL)
     }
 
+    /// The reader's own notes on a paper.
+    ///
+    /// Markdown in a file of its own rather than a field in the record: notes
+    /// grow, and a note is worth being able to open, search and keep without
+    /// this app.
+    // MARK: - Sidecars
+
+    /// Something the app works out from the library and would rather not work
+    /// out again — an index, a cache — kept beside the library so it travels
+    /// with it and can be deleted without losing anything.
+    public func loadSidecar<T: Decodable>(_ type: T.Type, named name: String) throws -> T {
+        try FileOperations.decode(
+            type, at: LibraryLayout.supportDirectoryURL(inLibrary: root).appending(path: name)
+        )
+    }
+
+    public func saveSidecar(_ value: some Encodable, named name: String) throws {
+        try FileOperations.encodeAndWrite(
+            value, to: LibraryLayout.supportDirectoryURL(inLibrary: root).appending(path: name)
+        )
+    }
+
+    // MARK: - The slip-box
+
+    /// Every note in the library, newest first.
+    ///
+    /// Notes written before the box existed — one file per paper — are moved
+    /// in on the first read, keeping the paper they were written against.
+    public func loadNotes() -> [Zettel] {
+        migrateNotesIntoSlipBox()
+        let directory = LibraryLayout.slipBoxURL(inLibrary: root)
+        let urls = (try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.contentModificationDateKey],
+            options: [.skipsHiddenFiles]
+        )) ?? []
+
+        return urls
+            .filter { $0.pathExtension == "md" }
+            .compactMap { url in
+                guard let text = try? String(contentsOf: url, encoding: .utf8) else { return nil }
+                let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?
+                    .contentModificationDate ?? .distantPast
+                return ZettelFile.note(
+                    from: text,
+                    id: url.deletingPathExtension().lastPathComponent,
+                    modified: modified
+                )
+            }
+            .sorted { $0.modified > $1.modified }
+    }
+
+    public func saveNote(_ note: Zettel) throws {
+        let url = noteURL(note.id)
+        if note.isEmpty {
+            try? FileManager.default.removeItem(at: url)
+            return
+        }
+        try FileOperations.write(Data(ZettelFile.text(of: note).utf8), to: url)
+    }
+
+    public func deleteNote(_ id: String) throws {
+        let url = noteURL(id)
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        try FileManager.default.removeItem(at: url)
+    }
+
+    public func noteURL(_ id: String) -> URL {
+        LibraryLayout.slipBoxURL(inLibrary: root).appending(path: "\(id).md")
+    }
+
+    /// Moves the notes of the one-note-per-paper days into the box.
+    private func migrateNotesIntoSlipBox() {
+        let manager = FileManager.default
+        let recordsDirectory = LibraryLayout.recordsDirectoryURL(inLibrary: root)
+        guard let records = try? manager.contentsOfDirectory(
+            at: recordsDirectory, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]
+        ) else { return }
+
+        var taken = Set(
+            ((try? manager.contentsOfDirectory(
+                at: LibraryLayout.slipBoxURL(inLibrary: root),
+                includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]
+            )) ?? []).map { $0.deletingPathExtension().lastPathComponent }
+        )
+
+        for record in records {
+            let paperID = UUID(uuidString: record.lastPathComponent)
+            let folder = PaperFolder(url: record)
+            var sources: [URL] = []
+            if manager.fileExists(atPath: folder.legacyNoteURL.path) {
+                sources.append(folder.legacyNoteURL)
+            }
+            sources += ((try? manager.contentsOfDirectory(
+                at: folder.notesDirectoryURL, includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+            )) ?? []).filter { $0.pathExtension == "md" }
+
+            for source in sources {
+                guard let text = try? String(contentsOf: source, encoding: .utf8) else { continue }
+                let modified = (try? source.resourceValues(forKeys: [.contentModificationDateKey]))?
+                    .contentModificationDate ?? .now
+                let id = Zettel.makeID(at: modified, avoiding: taken)
+                taken.insert(id)
+                var note = ZettelFile.note(from: text, id: id, modified: modified)
+                note.id = id
+                note.paperID = note.paperID ?? paperID
+                if note.title.isEmpty { note.title = Self.firstHeading(in: note.body) }
+                guard !note.isEmpty else {
+                    try? manager.removeItem(at: source)
+                    continue
+                }
+                try? FileOperations.write(Data(ZettelFile.text(of: note).utf8), to: noteURL(id))
+                try? manager.removeItem(at: source)
+            }
+            try? manager.removeItem(at: folder.notesDirectoryURL)
+        }
+    }
+
+    /// The first line of a note, used as its title when it has none.
+    static func firstHeading(in body: String) -> String {
+        for line in body.split(separator: "\n", omittingEmptySubsequences: false) {
+            var text = String(line)
+            while text.hasPrefix("#") { text.removeFirst() }
+            text = text.trimmingCharacters(in: .whitespaces)
+            if !text.isEmpty { return String(text.prefix(80)) }
+        }
+        return ""
+    }
+
     public func loadState(_ folder: PaperFolder) throws -> PaperState {
         try FileOperations.decode(PaperState.self, at: folder.stateURL)
     }
