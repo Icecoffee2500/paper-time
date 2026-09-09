@@ -164,7 +164,7 @@ final class ReaderCoordinator: NSObject {
                   let descriptor = session.markup(withID: id)
             else { return }
             session.removeMarkup(id: id)
-            registerUndo([descriptor], name: "Remove Mark", in: view)
+            registerRemovalUndo([descriptor], name: "Remove Mark", in: view)
         }
         view.onRecolorMark = { [weak self] annotation, color in
             guard let self, let id = Self.markID(of: annotation) else { return }
@@ -190,6 +190,14 @@ final class ReaderCoordinator: NSObject {
             name: .PDFViewPageChanged,
             object: view
         )
+        #if os(macOS)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(ultraCopySelection),
+            name: .paperTimeUltraCopy,
+            object: nil
+        )
+        #endif
         #if os(macOS)
         // PDFKit tells us when a mark is clicked; overriding `mouseDown` does
         // not, because the click lands on its inner document view.
@@ -559,17 +567,41 @@ final class ReaderCoordinator: NSObject {
             },
             onCopy: { [weak self] in
                 guard let self else { return }
-                let text = selection.string ?? ""
-                if !text.isEmpty {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(text, forType: .string)
-                }
-                onToast("Copied")
+                copy(selection, asLaTeX: false)
+                finishMarkup(in: view)
+            },
+            onUltraCopy: { [weak self] in
+                guard let self else { return }
+                copy(selection, asLaTeX: true)
                 finishMarkup(in: view)
             },
             onDismiss: { [weak self] in self?.finishMarkup(in: view) },
             composing: composing
         )
+    }
+
+    #if os(macOS)
+    /// Command-Shift-C, for when the hand is on the keyboard rather than on
+    /// the bar that floats over the selection.
+    @objc func ultraCopySelection() {
+        guard let selection = pdfView?.currentSelection, selection.string?.isEmpty == false else {
+            return
+        }
+        copy(selection, asLaTeX: true)
+    }
+    #endif
+
+    /// Copies the passage. Ultracopy reads the mathematics back out of the
+    /// page and writes it as LaTeX, so a formula survives the trip into a note
+    /// instead of arriving as "p" with its subscript missing.
+    func copy(_ selection: PDFSelection, asLaTeX: Bool) {
+        let text = asLaTeX
+            ? MathReader.latex(from: selection)
+            : (selection.string ?? "")
+        guard !text.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        onToast(asLaTeX ? "Copied with formulas" : "Copied")
     }
 
     /// Records a markup so Command-Z takes it back.
@@ -578,18 +610,17 @@ final class ReaderCoordinator: NSObject {
     /// our own, so it behaves like undo everywhere else on the Mac and does
     /// not steal Command-Z from a text field that has focus.
     private func registerUndo(_ descriptors: [MarkupDescriptor], name: String, in view: PDFView) {
-        guard !descriptors.isEmpty, let undoManager = view.window?.undoManager else { return }
-        let session = session
-        undoManager.setActionName(name)
-        undoManager.registerUndo(withTarget: session) { session in
-            MainActor.assumeIsolated {
-                session.removeMarkups(ids: descriptors.map(\.id))
-                undoManager.registerUndo(withTarget: session) { session in
-                    MainActor.assumeIsolated { session.restore(descriptors) }
-                }
-                undoManager.setActionName(name)
-            }
-        }
+        MarkupUndo.registerCreation(
+            descriptors, name: name, in: session, with: view.window?.undoManager
+        )
+    }
+
+    private func registerRemovalUndo(
+        _ descriptors: [MarkupDescriptor], name: String, in view: PDFView
+    ) {
+        MarkupUndo.registerRemoval(
+            descriptors, name: name, in: session, with: view.window?.undoManager
+        )
     }
 
     /// The controls for a mark that is already on the page.
@@ -616,7 +647,7 @@ final class ReaderCoordinator: NSObject {
             onDelete: { [weak self] in
                 guard let self else { return }
                 session.removeMarkup(id: id)
-                registerUndo([descriptor], name: "Delete Mark", in: view)
+                registerRemovalUndo([descriptor], name: "Delete Mark", in: view)
                 hideMarkupPanel()
             },
             onDismiss: { [weak self] in self?.hideMarkupPanel() }
@@ -672,6 +703,7 @@ final class ReaderCoordinator: NSObject {
 
             view.clearSelection()
             showMarkEditor(for: hit, in: view)
+            if let id = Self.markID(of: hit) { link.revealedMarkID = id }
             return nil
         }
     }
@@ -737,11 +769,14 @@ final class ReaderCoordinator: NSObject {
     }
     #endif
 
+    /// The identifier of a mark under the pointer.
+    ///
+    /// A mark made in Preview or on an iPad carries no identifier of ours, and
+    /// for a long time that was the same as not existing: the reader found it,
+    /// then every action on it stopped here. It has one now, derived from
+    /// where it sits, so it can be recoloured and removed like any other.
     static func markID(of annotation: PDFAnnotation) -> UUID? {
-        guard let raw = annotation.value(
-            forAnnotationKey: PDFAnnotationKey(rawValue: "/PTMarkupID")
-        ) as? String else { return nil }
-        return UUID(uuidString: raw)
+        TextMarkupWriter.identifier(of: annotation)
     }
 
     private func markupActionName(_ kind: MarkupDescriptor.Kind) -> String {

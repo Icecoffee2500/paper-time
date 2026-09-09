@@ -16,9 +16,11 @@ struct MarkupListView: View {
     let session: DocumentSession
     let link: ReaderLink
 
+    @Environment(\.undoManager) private var undoManager
     @State private var filter = Filter.all
     @State private var editingID: UUID?
     @State private var commentDraft = ""
+    @State private var flashID: UUID?
 
     /// What the list is showing. A reader looking for "what did I write about
     /// this paper" should not have to read past sixty highlights to find it.
@@ -42,7 +44,7 @@ struct MarkupListView: View {
             case .highlights: "highlighter"
             case .underlines: "underline"
             case .strikethroughs: "strikethrough"
-            case .notes: "note.text"
+            case .notes: "text.bubble"
             }
         }
 
@@ -63,19 +65,7 @@ struct MarkupListView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Picker("Show", selection: $filter) {
-                ForEach(Filter.allCases) { option in
-                    Label(option.label, systemImage: option.symbolName)
-                        .labelStyle(.iconOnly)
-                        .tag(option)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .padding(.horizontal)
-            .padding(.bottom, 8)
-            .help(filter.label)
-
+            header
             if shown.isEmpty {
                 ContentUnavailableView {
                     Label(emptyTitle, systemImage: filter.symbolName)
@@ -83,18 +73,97 @@ struct MarkupListView: View {
                     Text(emptyMessage)
                 }
             } else {
-                List {
-                    ForEach(shown) { markup in
-                        row(markup)
+                ScrollViewReader { scroller in
+                    List {
+                        ForEach(shown) { markup in
+                            row(markup)
+                                .id(markup.id)
+                        }
+                    }
+                    .listStyle(.inset)
+                    .thinScrollers()
+                    .onChange(of: link.revealedMarkID) { _, id in
+                        guard let id else { return }
+                        reveal(inList: id, using: scroller)
+                    }
+                    .onAppear {
+                        guard let id = link.revealedMarkID else { return }
+                        reveal(inList: id, using: scroller)
                     }
                 }
-                .listStyle(.inset)
-                .thinScrollers()
             }
         }
         // No navigation title here: this list is presented inside the reader's
         // inspector, and a title set on it replaces the paper's own title in
         // the toolbar.
+    }
+
+    /// Says in words what is being shown and how much of it, so the choice
+    /// never rests on an icon alone. Laid out across, one press per filter.
+    private var header: some View {
+        VStack(spacing: 0) {
+            ScrollView(.horizontal) {
+                HStack(spacing: 6) {
+                    ForEach(Filter.allCases) { option in
+                        chip(option)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+            }
+            .scrollIndicators(.never)
+            Divider()
+        }
+    }
+
+    private func chip(_ option: Filter) -> some View {
+        let isOn = filter == option
+        let total = count(of: option)
+        return Button {
+            withAnimation(.snappy(duration: 0.15)) { filter = option }
+        } label: {
+            HStack(spacing: 5) {
+                Text(option.label)
+                Text(total, format: .number)
+                    .monospacedDigit()
+                    .foregroundStyle(isOn ? .white.opacity(0.75) : .secondary)
+            }
+            .font(.subheadline)
+            .foregroundStyle(isOn ? Color.white : .primary)
+            .padding(.horizontal, 11)
+            .padding(.vertical, 5)
+            .background {
+                Capsule().fill(isOn ? AnyShapeStyle(Color.accentColor)
+                                    : AnyShapeStyle(.quaternary))
+            }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(total == 0 && option != .all)
+        .opacity(total == 0 && option != .all ? 0.45 : 1)
+        .help("\(option.label): \(total)")
+    }
+
+    private func count(of filter: Filter) -> Int {
+        session.markups.count(where: filter.matches)
+    }
+
+    /// Brings a mark clicked on the page into view here, and pulses it so the
+    /// eye finds it without hunting.
+    private func reveal(inList id: UUID, using scroller: ScrollViewProxy) {
+        guard shown.contains(where: { $0.id == id }) else {
+            // The mark is filtered out; show everything rather than nothing.
+            filter = .all
+            DispatchQueue.main.async { reveal(inList: id, using: scroller) }
+            return
+        }
+        withAnimation(.snappy) { scroller.scrollTo(id, anchor: .center) }
+        flashID = id
+        Task {
+            try? await Task.sleep(for: .milliseconds(1400))
+            guard flashID == id else { return }
+            withAnimation(.easeOut(duration: 0.4)) { flashID = nil }
+        }
     }
 
     @ViewBuilder
@@ -113,25 +182,16 @@ struct MarkupListView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Spacer()
-                        Image(systemName: symbol(for: markup))
+                        Label(name(for: markup), systemImage: symbol(for: markup))
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                            .accessibilityHidden(true)
+                            .labelStyle(.titleAndIcon)
                     }
-                    if !markup.quotedText.isEmpty {
-                        Text(markup.quotedText)
+                    if !text(of: markup).isEmpty {
+                        Text(text(of: markup))
                             .font(.callout)
-                            .lineLimit(4)
-                            .multilineTextAlignment(.leading)
-                    }
-                    if !markup.comment.isEmpty {
-                        Text(markup.comment)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .padding(.leading, 8)
-                            .overlay(alignment: .leading) {
-                                Capsule().fill(.tint).frame(width: 3)
-                            }
+                            .foregroundStyle(.primary)
+                            .lineLimit(5)
                             .multilineTextAlignment(.leading)
                     }
                 }
@@ -148,12 +208,18 @@ struct MarkupListView: View {
                         .onSubmit { commitComment(for: markup) }
                     Button("Done") { commitComment(for: markup) }
                         .buttonStyle(.borderedProminent)
+                        .buttonBorderShape(.capsule)
                         .controlSize(.small)
                 }
                 .transition(.opacity)
             }
         }
         .padding(.vertical, 2)
+        .listRowBackground(
+            RoundedRectangle(cornerRadius: Corner.row, style: .continuous)
+                .fill(flashID == markup.id ? Color.accentColor.opacity(0.16) : .clear)
+                .padding(.horizontal, -4)
+        )
         .contextMenu {
             Button {
                 startEditing(markup)
@@ -170,14 +236,14 @@ struct MarkupListView: View {
             }
             Divider()
             Button(role: .destructive) {
-                session.removeMarkup(id: markup.id)
+                delete(markup)
             } label: {
                 Label("Delete", systemImage: "trash")
             }
         }
         .swipeActions {
             Button(role: .destructive) {
-                session.removeMarkup(id: markup.id)
+                delete(markup)
             } label: {
                 Label("Delete", systemImage: "trash")
             }
@@ -189,6 +255,13 @@ struct MarkupListView: View {
             .tint(.accentColor)
         }
         .animation(.snappy(duration: 0.18), value: editingID)
+        .animation(.easeOut(duration: 0.2), value: flashID)
+    }
+
+    /// What a row reads as: what the reader wrote about the mark, or failing
+    /// that the words they marked.
+    private func text(of markup: MarkupDescriptor) -> String {
+        markup.comment.isEmpty ? markup.quotedText : markup.comment
     }
 
     private var emptyTitle: String {
@@ -223,6 +296,14 @@ struct MarkupListView: View {
         commentDraft = ""
     }
 
+    /// Takes a mark off the page, and remembers it so ⌘Z brings it back.
+    private func delete(_ markup: MarkupDescriptor) {
+        session.removeMarkup(id: markup.id)
+        MarkupUndo.registerRemoval(
+            [markup], name: "Delete Mark", in: session, with: undoManager
+        )
+    }
+
     private func copy(_ text: String) {
         guard !text.isEmpty else { return }
         #if os(macOS)
@@ -233,8 +314,17 @@ struct MarkupListView: View {
         #endif
     }
 
+    private func name(for markup: MarkupDescriptor) -> String {
+        switch markup.kind {
+        case .highlight: return "Highlight"
+        case .underline: return "Underline"
+        case .strikethrough: return "Strikethrough"
+        case .note: return "Note"
+        }
+    }
+
     private func symbol(for markup: MarkupDescriptor) -> String {
-        if !markup.comment.isEmpty { return "note.text" }
+        if !markup.comment.isEmpty { return "text.bubble" }
         switch markup.kind {
         case .highlight: return "highlighter"
         case .underline: return "underline"
