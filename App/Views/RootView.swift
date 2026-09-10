@@ -40,7 +40,6 @@ struct RootView: View {
         // view's own environment, not in the one it hands to its children.
         .measuringWindowToolbarBand()
         .translucentWindow()
-        .frameMeter()
         #endif
         .task {
             guard app.phase == .launching else { return }
@@ -148,8 +147,15 @@ struct LibraryWindow: View {
         @Bindable var app = app
 
         return HStack(spacing: 0) {
+            // Two frames, and the inner one never moves. A column closing by
+            // width drags its content's width with it, and the content here is
+            // a `List` — an `NSTableView` that re-lays out every row on every
+            // frame of the animation. Held at its own width inside a frame
+            // that animates, the list is revealed rather than resized, and
+            // lays out once.
             sidebarColumn
-                .frame(width: app.isSidebarVisible ? app.sidebarWidth : 0)
+                .frame(width: app.sidebarWidth)
+                .frame(width: app.isSidebarVisible ? app.sidebarWidth : 0, alignment: .leading)
                 .columnPanel()
                 .opacity(app.isSidebarVisible ? 1 : 0)
                 .clipped()
@@ -169,8 +175,11 @@ struct LibraryWindow: View {
             } else {
                 app.paperListWidth
             }
+            // The same, except when the list is the only thing left, where it
+            // is meant to take the room and so has to be laid out for it.
             listColumn
-                .frame(width: listWidth)
+                .frame(width: listFills ? nil : app.paperListWidth)
+                .frame(width: listWidth, alignment: .leading)
                 .frame(maxWidth: listFills ? .infinity : nil)
                 .columnPanel()
                 .opacity(app.showsPaperList ? 1 : 0)
