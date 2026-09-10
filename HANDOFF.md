@@ -77,6 +77,31 @@ V-JEPA 2(식 2·3·4), `5308_The_Forgetting_Retention_`(2단, 단 사이 간격 
 그리고 Xcode에서 실행한 빌드가 백그라운드에 살아 있으면 그쪽 메뉴를 읽게 된다 —
 `pgrep -lf "Paper Time.app/Contents/MacOS"`로 몇 개가 떠 있는지 먼저 보라.
 
+## 배포용 dmg 만들기
+
+```sh
+./Tools/make-dmg.sh
+```
+
+Release로 빌드하고, 디버그용 entitlement(`get-task-allow`)를 떼기 위해 우리가
+선언한 entitlements로 다시 서명한 뒤, `Paper Time <버전>.dmg`를 만든다.
+버전은 `project.yml`의 `MARKETING_VERSION`에서 읽는다.
+
+**서명은 애드혹이다.** 무료 개발자 계정으로는 Developer ID를 받을 수 없고,
+공증(notarization)은 Developer ID가 있어야 한다. 그래서 다른 Mac에서 처음 열 때는
+앱을 **우클릭 → 열기**를 해야 하거나
+
+```sh
+xattr -dr com.apple.quarantine "/Applications/Paper Time.app"
+```
+
+가 필요하다. 빌드가 잘못된 게 아니라 계정이 그런 것이다. 배포를 제대로 하려면
+유료 계정으로 Developer ID 서명 + 공증을 붙이면 되고, 그 외에는 이 스크립트가
+그대로 쓰인다.
+
+앱은 arm64 전용이다 — macOS 26이 Apple Silicon만 지원하므로 universal로 만들
+이유가 없다.
+
 ## 지금 상태
 
 브랜치 `reading-the-page`가 `main`보다 6커밋 앞서 있다. **원격이 없다.**
