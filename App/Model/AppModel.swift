@@ -141,18 +141,20 @@ public final class AppModel {
     /// back the window the reader had rather than some default.
     public func setFocusMode(_ isOn: Bool) {
         guard isOn != isFocusMode else { return }
-        withAnimation(.snappy(duration: 0.28)) {
+        withAnimation(AppModel.paneMotion) {
             if isOn {
                 restoredColumnVisibility = columnVisibility
                 restoredInspector = showsInspector
                 restoredPaperList = showsPaperList
-                if isSidebarVisible { toggleSidebar() }
+                // Set directly rather than through `toggleSidebar`, which
+                // would open a second transaction inside this one.
+                if isSidebarVisible { sidebarHidden = true }
                 showsPaperList = false
                 showsInspector = false
                 showsReader = true
                 isFocusMode = true
             } else {
-                if !isSidebarVisible { toggleSidebar() }
+                if !isSidebarVisible { sidebarHidden = false }
                 showsInspector = restoredInspector
                 showsPaperList = restoredPaperList
                 showsFloatingList = false
@@ -163,20 +165,28 @@ public final class AppModel {
 
     public func toggleFloatingList() {
         guard isFocusMode else { return }
-        withAnimation(.snappy(duration: 0.22)) {
+        withAnimation(AppModel.paneMotion) {
             showsFloatingList.toggle()
         }
     }
 
+    /// How a pane opens and closes.
+    ///
+    /// One curve, in one place. There were three — 0.22 declared on the
+    /// columns, 0.25 here, 0.28 for focus mode — and they were all animating
+    /// the same widths, so a toggle was interpolated two ways at once and the
+    /// motion came out stepped.
+    public static let paneMotion: Animation = .snappy(duration: 0.25)
+
     /// Hides the scope sidebar only. The paper list stays put: collapsing both
     /// columns at once is a different, rarer intent than "give me more room".
     public func toggleSidebar() {
-        withAnimation(.snappy(duration: 0.25)) { sidebarHidden.toggle() }
+        withAnimation(AppModel.paneMotion) { sidebarHidden.toggle() }
     }
 
     /// Hides the paper list, leaving the source list and the reader.
     public func togglePaperList() {
-        withAnimation(.snappy(duration: 0.25)) {
+        withAnimation(AppModel.paneMotion) {
             showsPaperList.toggle()
             // Something has to be left to look at.
             if !showsPaperList, !showsReader, !isSidebarVisible { showsReader = true }
@@ -188,7 +198,7 @@ public final class AppModel {
     /// Focus mode is the paper and nothing else, so the two cannot both be on:
     /// asking for one leaves the other.
     public func toggleReader() {
-        withAnimation(.snappy(duration: 0.25)) {
+        withAnimation(AppModel.paneMotion) {
             if isFocusMode {
                 setFocusMode(false)
                 return
@@ -201,7 +211,7 @@ public final class AppModel {
     }
 
     public func toggleInspector() {
-        withAnimation(.snappy(duration: 0.25)) {
+        withAnimation(AppModel.paneMotion) {
             showsInspector.toggle()
         }
     }

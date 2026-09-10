@@ -40,6 +40,7 @@ struct RootView: View {
         // view's own environment, not in the one it hands to its children.
         .measuringWindowToolbarBand()
         .translucentWindow()
+        .frameMeter()
         #endif
         .task {
             guard app.phase == .launching else { return }
@@ -210,9 +211,11 @@ struct LibraryWindow: View {
         .padding(.bottom, Column.margin)
         .padding(.top, max(toolbarBand - Column.underToolbar, Column.margin))
         .background { Column.ground }
-        .animation(.snappy(duration: 0.22), value: app.showsPaperList)
-        .animation(.snappy(duration: 0.22), value: app.isSidebarVisible)
-        .animation(.snappy(duration: 0.22), value: app.showsReader)
+        // No `.animation(value:)` here. The toggles already declare the motion
+        // with `withAnimation`, and declaring it a second time with a
+        // different duration meant every pane change was interpolated twice —
+        // 0.22 against 0.25, on the same widths, which is what the stutter
+        // was. The transaction the model opens is the one animation now.
     }
     #endif
 
@@ -684,7 +687,7 @@ struct PaperDetailColumn: View {
                 .opacity(app.showsInspector ? 1 : 0)
                 .clipped()
         }
-        .animation(.snappy(duration: 0.25), value: app.showsInspector)
+        // Likewise: `toggleInspector` opens the transaction.
         #else
         // iPhone and iPad keep the system inspector: there it is a sheet, and
         // there is no window toolbar for it to collide with.
