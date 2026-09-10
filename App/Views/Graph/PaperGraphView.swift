@@ -32,7 +32,10 @@ struct PaperGraphView: View {
             Canvas { context, size in
                 draw(in: &context, size: size, transform: transform)
             }
-            .background(.background)
+            // No background of its own: the canvas was an opaque white
+            // rectangle sitting inside a glass panel, the same way the lists
+            // were. `contentShape` is what makes it catch the gestures, so
+            // nothing is lost by taking the fill away.
             .contentShape(.rect)
             .gesture(panGesture)
             .simultaneousGesture(magnifyGesture)
@@ -99,13 +102,27 @@ struct PaperGraphView: View {
                 x: point.x - radius, y: point.y - radius,
                 width: radius * 2, height: radius * 2
             ))
+            // A halo first, in the colour of the surface, so the dot sits on
+            // the lines rather than in them. Without it a node in a dense
+            // patch is a smudge where several edges cross.
+            context.fill(
+                Path(ellipseIn: CGRect(
+                    x: point.x - radius - 2, y: point.y - radius - 2,
+                    width: (radius + 2) * 2, height: (radius + 2) * 2
+                )),
+                with: .color(Color(nsColor: .textBackgroundColor).opacity(dim ? 0.35 : 0.9))
+            )
             context.fill(
                 circle,
                 with: .color(isFocus ? Color.accentColor
-                             : Color.primary.opacity(dim ? 0.18 : 0.55))
+                             : Color.primary.opacity(dim ? 0.16 : 0.42))
             )
             if isFocus || isNear {
-                context.stroke(circle, with: .color(Color.accentColor.opacity(0.5)), lineWidth: 2)
+                context.stroke(
+                    circle,
+                    with: .color(Color.accentColor.opacity(isFocus ? 0.9 : 0.45)),
+                    lineWidth: isFocus ? 2.5 : 1.5
+                )
             }
 
             // Names appear when there is room for them. Everything a hub
@@ -144,29 +161,50 @@ struct PaperGraphView: View {
 
     // MARK: - Chrome
 
+    /// The legend, which is also the filter.
+    ///
+    /// One panel rather than four pills stacked in a corner. They were four
+    /// separate floating things that happened to be near each other, and they
+    /// read as clutter over the drawing; grouped, they read as a legend, which
+    /// is what they are — and it is clearer that a line in it can be switched
+    /// off, which is the whole use of the thing.
     private var controls: some View {
-        VStack(alignment: .trailing, spacing: 8) {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("SHOWING")
+                .font(.caption2.weight(.semibold))
+                .tracking(0.6)
+                .foregroundStyle(.tertiary)
+                .padding(.horizontal, 8)
+                .padding(.bottom, 4)
+
             ForEach(GraphModel.EdgeKind.allCases, id: \.self) { kind in
                 let isOn = graph.shownKinds.contains(kind)
                 Button {
                     if isOn { graph.shownKinds.remove(kind) } else { graph.shownKinds.insert(kind) }
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: 8) {
                         Capsule()
-                            .fill(color(for: kind))
-                            .frame(width: 14, height: 3)
+                            .fill(isOn ? color(for: kind) : Color.secondary.opacity(0.35))
+                            .frame(width: 16, height: 3)
                         Text(kind.label)
                             .font(.caption)
+                        Spacer(minLength: 8)
+                        Image(systemName: isOn ? "checkmark" : "")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 10)
                     }
                     .foregroundStyle(isOn ? .primary : .tertiary)
-                    .padding(.horizontal, 10)
+                    .padding(.horizontal, 8)
                     .padding(.vertical, 5)
-                    .background(Capsule().fill(.thinMaterial))
-                    .contentShape(Capsule())
+                    .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
             }
         }
+        .padding(8)
+        .frame(width: 172)
+        .liquidGlass(.floating, in: RoundedRectangle(cornerRadius: Corner.popover, style: .continuous))
         .padding(12)
     }
 
@@ -185,7 +223,7 @@ struct PaperGraphView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .frame(maxWidth: 420)
-            .background(.thinMaterial, in: Capsule())
+            .liquidGlass(.floating, in: Capsule(style: .continuous))
             .padding(.bottom, 16)
         }
     }

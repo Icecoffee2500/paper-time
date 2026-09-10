@@ -39,7 +39,11 @@ struct GraphSidePanel: View {
                 .padding(.bottom, 10)
                 .disabled(graph.selection == nil)
 
-            Divider()
+            // Shown only until something is picked. What the graph is made of
+            // was already written down; what it is *for* was not, and a
+            // picture of sixty dots does not explain itself. Once you are
+            // working it goes away, because by then you know.
+            if graph.selection == nil { howToUse }
 
             List {
                 Section("Most connected") {
@@ -99,6 +103,53 @@ struct GraphSidePanel: View {
             .hiddenScrollers()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    /// What to do with it.
+    ///
+    /// Four things, in the order you would do them, each naming the gesture
+    /// rather than describing the idea: a graph is only useful if you know
+    /// which part of it answers a question you have.
+    private var howToUse: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Text("HOW TO USE IT")
+                .font(.caption2.weight(.semibold))
+                .tracking(0.6)
+                .foregroundStyle(.tertiary)
+
+            step("hand.tap", "Click a dot",
+                 "Its neighbours light up, and this panel lists every one with the reason they are joined.")
+            step("scope", "Turn on Focus on selection",
+                 "Everything unrelated drops away, so one paper's neighbourhood is all that is left.")
+            step("line.3.horizontal.decrease", "Switch a line off in the legend",
+                 "Hide citations to see only what your own notes have joined — that is your reading, not the literature's.")
+            step("arrow.up.left.and.arrow.down.right", "Pinch to zoom, drag to pan",
+                 "Titles appear as you go in. Double-click a dot to open the paper.")
+
+            Text("Start below: the most connected papers are the ones the rest of your library hangs off.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .padding(.top, 2)
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 12)
+    }
+
+    private func step(_ symbol: String, _ title: String, _ detail: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: symbol)
+                .font(.caption)
+                .foregroundStyle(.tint)
+                .frame(width: 16)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 
     /// A row in the connections list. It carries its own identity because the
