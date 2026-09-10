@@ -92,7 +92,7 @@ struct GraphSidePanel: View {
                 }
             }
             .listStyle(.inset)
-            .thinScrollers()
+            .hiddenScrollers()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }

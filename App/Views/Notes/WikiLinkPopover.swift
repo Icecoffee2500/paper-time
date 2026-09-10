@@ -125,7 +125,7 @@ final class WikiLinkPopover {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Corner.popover,
+            .liquidGlass(.floating, in: RoundedRectangle(cornerRadius: Corner.popover,
                                                                style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: Corner.popover, style: .continuous)

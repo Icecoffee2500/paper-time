@@ -90,6 +90,13 @@ struct ReaderScreen: View {
             },
             onToast: { show(toast: $0) }
         )
+        // Glass paper: multiplied against what is behind it, so the page's
+        // white falls away to whatever the panel is showing and the ink stays
+        // ink. Highlights multiply too, which is what a highlighter does.
+        //
+        // Only under the glass tint. Multiplied over a dark ground the text
+        // would go with the paper, which is why the other tints keep their
+        // own opaque background instead.
         .ignoresSafeArea(edges: .bottom)
         .navigationTitle(paper.meta.displayTitle)
         #if os(iOS)
@@ -103,7 +110,7 @@ struct ReaderScreen: View {
                     .font(.callout.weight(.medium))
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
-                    .background(.regularMaterial, in: .capsule)
+                    .liquidGlass(.floating)
                     .overlay(Capsule().strokeBorder(.primary.opacity(0.08), lineWidth: 0.5))
                     .shadow(radius: 8, y: 2)
                     .padding(.bottom, 56)
@@ -182,7 +189,10 @@ struct ReaderScreen: View {
         }
         .padding(.horizontal)
         .padding(.vertical, 6)
-        .background(.bar)
+        // A rectangle, not a capsule: the bar spans the panel and the panel's
+        // own clip is what rounds the two corners it shares with it. `.bar`
+        // was opaque, which left a white strip across the foot of the page.
+        .liquidGlass(.floating, in: Rectangle())
     }
 
     /// The note editor on iPhone and iPad, where the markup actions themselves

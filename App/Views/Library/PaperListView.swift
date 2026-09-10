@@ -82,7 +82,7 @@ struct PaperListView: View {
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
             #endif
-            .thinScrollers()
+            .hiddenScrollers()
         }
     }
 

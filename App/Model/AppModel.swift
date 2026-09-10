@@ -58,6 +58,13 @@ public final class AppModel {
     public var paperListWidth: Double = AppModel.storedWidth("paperListWidth", default: 320) {
         didSet { UserDefaults.standard.set(paperListWidth, forKey: "paperListWidth") }
     }
+    /// The inspector's, for the same reason the other two are here: it is a
+    /// column of ours now rather than SwiftUI's. `.inspector` brought its own
+    /// background with a square corner on it, which no amount of clipping from
+    /// outside would round off.
+    public var inspectorWidth: Double = AppModel.storedWidth("inspectorWidth", default: 360) {
+        didSet { UserDefaults.standard.set(inspectorWidth, forKey: "inspectorWidth") }
+    }
 
     /// The keys that open and close the panes.
     ///

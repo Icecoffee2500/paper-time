@@ -81,7 +81,7 @@ struct MarkupListView: View {
                         }
                     }
                     .listStyle(.inset)
-                    .thinScrollers()
+                    .hiddenScrollers()
                     .onChange(of: link.revealedMarkID) { _, id in
                         guard let id else { return }
                         reveal(inList: id, using: scroller)

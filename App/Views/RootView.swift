@@ -31,6 +31,16 @@ struct RootView: View {
                 LibraryUnavailableView(message: message)
             }
         }
+        // Every scroll view in the window, in one place: the indicator is an
+        // environment value, so the whole tree inherits it.
+        .scrollIndicators(.hidden)
+        #if os(macOS)
+        // Published from above the window's own content, so `LibraryWindow`
+        // can read it: an `@Environment` property on a view resolves in that
+        // view's own environment, not in the one it hands to its children.
+        .measuringWindowToolbarBand()
+        .translucentWindow()
+        #endif
         .task {
             guard app.phase == .launching else { return }
             await app.restore()
@@ -56,8 +66,14 @@ struct LibraryWindow: View {
     let model: LibraryModel
     @Environment(AppModel.self) private var app
 
+    @Environment(\.windowToolbarBand) private var toolbarBand
+
     @State private var configuration = ReaderConfiguration()
     @State private var link = ReaderLink()
+    /// Which of the inspector's tabs is showing. Owned here rather than by the
+    /// column, because on a Mac the picker for it lives in the toolbar and the
+    /// toolbar is declared here.
+    @State private var inspectorTab = InspectorTab.details
     @State private var isImportingPDFs = false
     @State private var showsExport = false
     @State private var showsMigration = false
@@ -75,10 +91,19 @@ struct LibraryWindow: View {
     private var decorated: some View {
         #if os(macOS)
         windowBody
-            .toolbar(id: "library") { toolbarContent }
-            .toolbar(id: "inspector-toggle") { inspectorToolbarContent }
-            .toolbarBackground(.ultraThinMaterial, for: .windowToolbar)
-            .toolbarBackgroundVisibility(.visible, for: .windowToolbar)
+            // One toolbar with a flexible spacer in it, rather than two.
+            // Without the title holding them apart the two groups packed
+            // against the leading edge together; the spacer is what macOS 26
+            // gives you to say "these belong at the other end".
+            .toolbar(id: "library") {
+                toolbarContent.sharedBackgroundVisibility(.hidden)
+                ToolbarSpacer(.flexible)
+                inspectorToolbarContent.sharedBackgroundVisibility(.hidden)
+            }
+            // Hidden, so the toolbar has no colour of its own: the window's
+            // ground runs straight up through it and there is no edge left
+            // where the two used to meet. The controls carry their own glass.
+            .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         #else
         windowBody
         #endif
@@ -108,7 +133,10 @@ struct LibraryWindow: View {
             } content: {
                 listColumn
             } detail: {
-                PaperDetailColumn(model: model, configuration: configuration, link: link)
+                PaperDetailColumn(
+                    model: model, configuration: configuration,
+                    link: link, inspectorTab: $inspectorTab
+                )
             }
         )
         #endif
@@ -121,6 +149,7 @@ struct LibraryWindow: View {
         return HStack(spacing: 0) {
             sidebarColumn
                 .frame(width: app.isSidebarVisible ? app.sidebarWidth : 0)
+                .columnPanel()
                 .opacity(app.isSidebarVisible ? 1 : 0)
                 .clipped()
 
@@ -142,6 +171,7 @@ struct LibraryWindow: View {
             listColumn
                 .frame(width: listWidth)
                 .frame(maxWidth: listFills ? .infinity : nil)
+                .columnPanel()
                 .opacity(app.showsPaperList ? 1 : 0)
                 .clipped()
 
@@ -153,11 +183,16 @@ struct LibraryWindow: View {
             Group {
                 switch model.scope {
                 case .notes:
-                    SlipBoxDetail(model: model)
+                    SlipBoxDetail(model: model).columnPanel()
                 case .graph:
-                    PaperGraphView(model: model, graph: model.graph)
+                    PaperGraphView(model: model, graph: model.graph).columnPanel()
                 default:
-                    PaperDetailColumn(model: model, configuration: configuration, link: link)
+                    // Panels its own two halves: the page and the inspector are
+                    // each a panel, with the ground between them.
+                    PaperDetailColumn(
+                        model: model, configuration: configuration,
+                        link: link, inspectorTab: $inspectorTab
+                    )
                 }
             }
             // Closed by width rather than by taking it out of the tree: the
@@ -167,6 +202,14 @@ struct LibraryWindow: View {
             .opacity(app.showsReader ? 1 : 0)
             .clipped()
         }
+        // The panels float clear of the window's edges and of the toolbar, so
+        // every boundary in the window is a curve and a gap rather than a
+        // straight line drawn where two flat backgrounds happen to meet. The
+        // gap between two of them is the drag strip that resizes them.
+        .padding(.horizontal, Column.margin)
+        .padding(.bottom, Column.margin)
+        .padding(.top, max(toolbarBand - Column.underToolbar, Column.margin))
+        .background { Column.ground }
         .animation(.snappy(duration: 0.22), value: app.showsPaperList)
         .animation(.snappy(duration: 0.22), value: app.isSidebarVisible)
         .animation(.snappy(duration: 0.22), value: app.showsReader)
@@ -185,9 +228,6 @@ struct LibraryWindow: View {
             #endif
             LibrarySidebar(model: model)
         }
-        #if os(macOS)
-        .background(.ultraThinMaterial)
-        #endif
     }
 
     private var windowBody: some View {
@@ -301,7 +341,7 @@ struct LibraryWindow: View {
                     }
                         .frame(width: 320)
                         .frame(maxHeight: 620)
-                        .background(.regularMaterial, in: .rect(cornerRadius: Corner.panel, style: .continuous))
+                        .liquidGlass(.floating, in: RoundedRectangle(cornerRadius: Corner.panel, style: .continuous))
                         .shadow(radius: 18, y: 6)
                         .padding(.leading, 16)
                         .padding(.top, 16)
@@ -317,7 +357,7 @@ struct LibraryWindow: View {
                             .font(.callout.weight(.medium))
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
-                            .background(.regularMaterial, in: .capsule)
+                            .liquidGlass(.floating)
                             .overlay(
                                 Capsule().strokeBorder(.primary.opacity(0.08), lineWidth: 0.5)
                             )
@@ -368,7 +408,9 @@ struct LibraryWindow: View {
     /// principal item, so there the controls sit in the trailing group.
     private var barPlacement: ToolbarItemPlacement {
         #if os(macOS)
-        .principal
+        // Leading, after the title. Centred, the cluster sat at no edge and
+        // belonged to neither side of the window.
+        .navigation
         #else
         .topBarTrailing
         #endif
@@ -379,18 +421,18 @@ struct LibraryWindow: View {
         // One group rather than one item each: separate toolbar items are what
         // drew the little vertical rules between the buttons.
         ToolbarItem(id: "actions", placement: barPlacement) {
-            HStack(spacing: 2) {
+            HStack(spacing: 4) {
                 Button {
                     isImportingPDFs = true
                 } label: {
-                    Label("Add PDFs", systemImage: "plus")
+                    Label("Add PDFs", systemImage: "plus").toolbarIcon()
                 }
                 .help("Add PDFs to the library (Command-O)")
 
                 Button {
                     app.showsSearchPalette = true
                 } label: {
-                    Label("Search", systemImage: "magnifyingglass")
+                    Label("Search", systemImage: "magnifyingglass").toolbarIcon()
                 }
                 .help("Search everything (Command-K)")
 
@@ -413,7 +455,7 @@ struct LibraryWindow: View {
             Divider()
             Toggle("Ascending", isOn: sortAscendingBinding)
         } label: {
-            Label("Sort", systemImage: "arrow.up.arrow.down")
+            Label("Sort", systemImage: "arrow.up.arrow.down").toolbarIcon()
         }
         .help("Sort the list")
     }
@@ -454,7 +496,7 @@ struct LibraryWindow: View {
             )
             .keyboardShortcut("f", modifiers: [.command, .control])
         } label: {
-            Label("View Options", systemImage: "textformat.size")
+            Label("View Options", systemImage: "textformat.size").toolbarIcon()
         }
         .help("Page layout and tint")
         .disabled(model.selectedPaper == nil)
@@ -484,13 +526,31 @@ struct LibraryWindow: View {
                 )
             }
         } label: {
-            Label("Share", systemImage: "square.and.arrow.up")
+            Label("Share", systemImage: "square.and.arrow.up").toolbarIcon()
         }
         .help("Export and import")
     }
 
     @ToolbarContentBuilder
     private var inspectorToolbarContent: some CustomizableToolbarContent {
+        // The inspector's tabs belong up here rather than at the top of the
+        // column: the column is laid out from the very top of the window, so a
+        // picker pinned to it sits behind the toolbar instead of below it —
+        // which read as the buttons having been taken away. A segmented picker
+        // is also what a Mac uses for this, where the column had a bespoke one.
+        ToolbarItem(id: "inspector-tab", placement: .primaryAction) {
+            if app.showsInspector, model.selectedPaper != nil {
+                Picker("Inspector", selection: $inspectorTab) {
+                    ForEach(InspectorTab.allCases) { tab in
+                        Text(tab.label).tag(tab)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .help("What the inspector shows")
+            }
+        }
+
         ToolbarItem(id: "inspector", placement: .primaryAction) {
             Button {
                 app.toggleInspector()
@@ -558,6 +618,20 @@ struct LibraryWindow: View {
     }
 }
 
+/// What the inspector is showing. "Notes" used to mean the list of marks,
+/// which is not what a note is; the two are separate now and say so.
+enum InspectorTab: String, CaseIterable, Identifiable {
+    case details, marks, note
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .details: "Details"
+        case .marks: "Marks"
+        case .note: "Note"
+        }
+    }
+}
+
 /// The reader and the inspector.
 struct PaperDetailColumn: View {
     let model: LibraryModel
@@ -565,25 +639,63 @@ struct PaperDetailColumn: View {
     let link: ReaderLink
     @Environment(AppModel.self) private var app
 
-    @State private var inspectorTab = InspectorTab.details
+    @Binding var inspectorTab: InspectorTab
 
-    /// What the inspector is showing. "Notes" used to mean the list of marks,
-    /// which is not what a note is; the two are separate now and say so.
-    enum InspectorTab: String, CaseIterable, Identifiable {
-        case details, marks, note
-        var id: String { rawValue }
-        var label: String {
-            switch self {
-            case .details: "Details"
-            case .marks: "Marks"
-            case .note: "Note"
-            }
+    var body: some View {
+        columns
+        // Clicking a mark on the page opens the list it lives in.
+        .onChange(of: link.revealedMarkID) { _, id in
+            guard id != nil else { return }
+            app.showsInspector = true
+            inspectorTab = .marks
+        }
+        // Command-L: the passage goes to the note, and the note comes forward.
+        .onReceive(NotificationCenter.default.publisher(for: .paperTimeLinkToNote)) { _ in
+            guard let anchor = link.selectionAnchor() else { return }
+            app.showsInspector = true
+            inspectorTab = .note
+            link.pendingNoteAnchor = anchor
         }
     }
 
-    var body: some View {
+    /// The page and the inspector, side by side.
+    ///
+    /// Hand-rolled on the Mac rather than left to `.inspector`, which brought
+    /// its own column background — square-cornered, and drawn where nothing
+    /// outside it could round it off. Owning the column is what the sidebar
+    /// and the list already do, and it makes the inspector a panel like them.
+    private var columns: some View {
         @Bindable var app = app
 
+        #if os(macOS)
+        return HStack(spacing: 0) {
+            page.columnPanel()
+
+            // Nothing to drag against when the inspector is closed.
+            if app.showsInspector {
+                ColumnDivider(width: $app.inspectorWidth, range: 280...520)
+            }
+
+            // Closed by width, the same as the other columns, so it slides
+            // rather than blinking in and out.
+            inspector
+                .frame(width: app.showsInspector ? app.inspectorWidth : 0)
+                .columnPanel()
+                .opacity(app.showsInspector ? 1 : 0)
+                .clipped()
+        }
+        .animation(.snappy(duration: 0.25), value: app.showsInspector)
+        #else
+        // iPhone and iPad keep the system inspector: there it is a sheet, and
+        // there is no window toolbar for it to collide with.
+        return page.inspector(isPresented: $app.showsInspector) {
+            inspector
+                .inspectorColumnWidth(min: 280, ideal: 360, max: 520)
+        }
+        #endif
+    }
+
+    private var page: some View {
         Group {
             if let paper = model.selectedPaper {
                 // Deliberately not `.id(paper.id)`: giving each paper its own
@@ -605,32 +717,16 @@ struct PaperDetailColumn: View {
                 )
             }
         }
-        .inspector(isPresented: $app.showsInspector) {
-            inspector
-                .inspectorColumnWidth(min: 280, ideal: 360, max: 520)
-        }
-        // Clicking a mark on the page opens the list it lives in.
-        .onChange(of: link.revealedMarkID) { _, id in
-            guard id != nil else { return }
-            app.showsInspector = true
-            inspectorTab = .marks
-        }
-        // Command-L: the passage goes to the note, and the note comes forward.
-        .onReceive(NotificationCenter.default.publisher(for: .paperTimeLinkToNote)) { _ in
-            guard let anchor = link.selectionAnchor() else { return }
-            app.showsInspector = true
-            inspectorTab = .note
-            link.pendingNoteAnchor = anchor
-        }
     }
 
     @ViewBuilder
     private var inspector: some View {
         // Everything is pinned to the top and told to fill the column. Without
-        // it SwiftUI centres the whole stack, which left the tab picker
-        // floating halfway down an empty inspector.
+        // it SwiftUI centres the whole stack, which left the contents floating
+        // halfway down an empty inspector.
         VStack(spacing: 0) {
             if model.selectedPaper != nil {
+                #if !os(macOS)
                 CapsulePicker(
                     options: InspectorTab.allCases.map { ($0, $0.label) },
                     selection: $inspectorTab
@@ -640,6 +736,7 @@ struct PaperDetailColumn: View {
                 .padding(.bottom, 8)
 
                 Divider()
+                #endif
 
                 switch inspectorTab {
                 case .details:
@@ -702,18 +799,85 @@ extension View {
     @ViewBuilder
     func toolbarButtons() -> some View {
         #if os(macOS)
-        buttonStyle(.accessoryBar)
+        // Borderless and unadorned. A chevron on three of the five made the
+        // row ragged, and the glass capsules made five separate pills out of
+        // what is one group of actions.
+        buttonStyle(.borderless)
             .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
             .labelStyle(.iconOnly)
         #else
         labelStyle(.iconOnly)
         #endif
     }
+
+    /// One size for every icon in the toolbar, so the row is a row.
+    func toolbarIcon() -> some View {
+        font(.system(size: 14, weight: .medium))
+            .frame(width: 22, height: 22)
+            .contentShape(.rect)
+    }
 }
 
 
 #if os(macOS)
-/// The line between two columns, which can be dragged to resize the one to its
+/// How the window's columns sit in it.
+///
+/// The window has rounded corners, and every surface inside it is a rung on
+/// the `Corner` ladder — so the columns are rounded panels too, laid on one
+/// ground with a gap between them. What was there before was flat backgrounds
+/// butted against each other: the boundaries came out as straight lines ruled
+/// across a rounded window, which is the one shape the rest of the app never
+/// uses.
+enum Column {
+    /// How far the panels stay clear of the window's edges, and of each other.
+    static let margin: CGFloat = 8
+    /// The gap between two panels. Also the strip that resizes them: wide
+    /// enough for a pointer, which a hairline never was.
+    static let gap: CGFloat = 10
+
+    /// How much of the toolbar's height the panels are allowed to reclaim.
+    ///
+    /// The band AppKit reports is the toolbar plus the room it leaves under
+    /// its own controls, and that room is more than a gap: measured against
+    /// it, the panels sat a good inch below the buttons. This is empirical —
+    /// there is no API for where the controls stop, only for where the band
+    /// does.
+    static let underToolbar: CGFloat = 38
+
+    /// What shows between and around the panels, and up through the toolbar,
+    /// which has no colour of its own.
+    ///
+    /// Translucent, and that is the whole trick: glass is only glass when
+    /// something varied shows through it, and inside a window the only thing
+    /// behind is the desktop. A flat colour here made the panels read as white
+    /// cards — the material lets the wallpaper up through the window, through
+    /// the ground, and through the panels on top of it.
+    ///
+    /// The white over it is there because a dark wallpaper otherwise drags the
+    /// whole window down with it, and this is an app for reading in.
+    @ViewBuilder
+    static var ground: some View {
+        Rectangle()
+            .fill(.ultraThinMaterial)
+            .overlay(Color.white.opacity(0.28))
+            .ignoresSafeArea()
+    }
+
+    static var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: Corner.panel, style: .continuous)
+    }
+}
+
+extension View {
+    /// Draws the view as one of the window's floating panels.
+    func columnPanel() -> some View {
+        clipShape(Column.shape)
+            .liquidGlass(.pane, in: Column.shape)
+    }
+}
+
+/// The gap between two columns, which can be dragged to resize the one to its
 /// left. The split view used to provide this; owning it is the price of columns
 /// that can actually be hidden and brought back.
 private struct ColumnDivider: View {
@@ -722,13 +886,14 @@ private struct ColumnDivider: View {
     @State private var startWidth: Double?
 
     var body: some View {
-        // A hairline to look at, inside a strip wide enough to catch. A bare
-        // `Divider` is one point across, which is not something a pointer can
-        // reasonably be asked to hit.
-        Rectangle()
-            .fill(Color(nsColor: .separatorColor))
-            .frame(width: 1)
-            .frame(width: 9)
+        // No line. The panels either side of it have rounded edges and the
+        // ground shows through between them, which separates them better than
+        // a hairline ruled across a window with rounded corners ever did. What
+        // is left is the strip a pointer can actually hit — a bare `Divider`
+        // is one point across, which is not something anyone can be asked to
+        // grab.
+        Color.clear
+            .frame(width: Column.gap)
             .contentShape(.rect)
             .onHover { hovering in
                 if hovering { NSCursor.resizeLeftRight.set() } else { NSCursor.arrow.set() }

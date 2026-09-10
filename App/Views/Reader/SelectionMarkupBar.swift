@@ -69,7 +69,7 @@ struct SelectionMarkupBar: View {
         .font(.body)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(.regularMaterial, in: .capsule)
+        .liquidGlass(.floating)
         .overlay(Capsule().strokeBorder(.primary.opacity(0.08), lineWidth: 0.5))
         .shadow(radius: 10, y: 3)
         .fixedSize()
@@ -133,7 +133,7 @@ struct NoteComposer: View {
             .controlSize(.small)
         }
         .padding(12)
-        .background(.regularMaterial, in: Capsule())
+        .liquidGlass(.floating)
         .overlay(Capsule().strokeBorder(.primary.opacity(0.08), lineWidth: 0.5))
         .shadow(radius: 12, y: 4)
         .onAppear { isFocused = true }

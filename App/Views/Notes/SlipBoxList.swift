@@ -72,7 +72,7 @@ struct SlipBoxList: View {
                     }
                 }
                 .listStyle(.inset)
-                .thinScrollers()
+                .hiddenScrollers()
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

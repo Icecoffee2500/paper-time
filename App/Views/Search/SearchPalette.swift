@@ -92,7 +92,7 @@ struct SearchPalette: View {
                 resultsList
             }
         }
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Corner.panel, style: .continuous))
+        .liquidGlass(.floating, in: RoundedRectangle(cornerRadius: Corner.panel, style: .continuous))
         .clipShape(RoundedRectangle(cornerRadius: Corner.panel, style: .continuous))
         .shadow(color: .black.opacity(0.25), radius: 24, y: 12)
         .onKeyPress(.upArrow) {

@@ -419,15 +419,42 @@ final class ReaderCoordinator: NSObject {
         case .dim:
             view.backgroundColor = UIColor(white: 0.12, alpha: 1)
             view.pageShadowsEnabled = false
+        case .glass:
+            // Nothing of its own behind the pages, and no shadow around them:
+            // both are opaque, and the point is to see the panel through the
+            // paper. The white of the page itself goes in `ReaderScreen`,
+            // which is where the compositing can be done.
+            view.backgroundColor = .clear
+            view.pageShadowsEnabled = false
         }
         #else
         switch configuration.tint {
         case .none: view.backgroundColor = .windowBackgroundColor
         case .sepia: view.backgroundColor = NSColor(red: 0.96, green: 0.93, blue: 0.86, alpha: 1)
         case .dim: view.backgroundColor = NSColor(white: 0.12, alpha: 1)
+        case .glass:
+            view.backgroundColor = .clear
+            view.pageShadowsEnabled = false
         }
+        setGlassCompositing(on: view, configuration.tint.isGlass)
         #endif
     }
+
+    #if os(macOS)
+    /// Multiplies the whole PDF view against whatever is drawn behind it, so
+    /// the white of the paper falls away to the panel's glass and only the ink
+    /// is left.
+    ///
+    /// Done on the layer rather than with SwiftUI's `.blendMode`, which never
+    /// reached the panel: the panel clips its content to a rounded rectangle,
+    /// and a clip is a compositing boundary — the blend was sealed inside it
+    /// with nothing behind to multiply with. A compositing filter on the
+    /// layer is the same operation stated where Core Animation will honour it.
+    private func setGlassCompositing(on view: PDFView, _ on: Bool) {
+        view.wantsLayer = true
+        view.layer?.compositingFilter = on ? "multiplyBlendMode" : nil
+    }
+    #endif
 
     private func restoreReadingPosition(in view: PDFView) {
         let index = session.paper.state.lastPageIndex

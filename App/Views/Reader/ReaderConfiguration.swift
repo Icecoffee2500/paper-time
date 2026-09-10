@@ -49,7 +49,7 @@ public final class ReaderConfiguration {
     /// A gentle tint for long reading sessions. Never inverts the page, because
     /// inverting a paper turns its figures into negatives.
     public enum PageTint: String, CaseIterable, Identifiable, Sendable {
-        case none, sepia, dim
+        case none, sepia, dim, glass
         public var id: String { rawValue }
 
         public var label: String {
@@ -57,8 +57,17 @@ public final class ReaderConfiguration {
             case .none: "Paper White"
             case .sepia: "Sepia"
             case .dim: "Dimmed"
+            case .glass: "Glass"
             }
         }
+
+        /// Whether the paper itself is glass — the page's white multiplied
+        /// away so the panel behind it shows through, leaving the ink.
+        ///
+        /// Its own tint rather than a setting of its own, because it is a way
+        /// of tinting the page and because the other three are what it has to
+        /// be chosen instead of: a page cannot be both dimmed and see-through.
+        public var isGlass: Bool { self == .glass }
     }
 
     public var mode: Mode = .read

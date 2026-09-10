@@ -73,6 +73,14 @@ private struct PaperInspectorForm: View {
             }
         }
         .formStyle(.grouped)
+        // A grouped form brings its own opaque background, which filled the
+        // whole inspector panel white and left no glass to see.
+        .scrollContentBackground(.hidden)
+        // And its own scroller. The sweep is window-wide, but it runs off the
+        // probes, and until this one there was none in the inspector: the
+        // form's bar was only ever taken away when some other panel happened
+        // to update after it appeared.
+        .hiddenScrollers()
         .onDisappear { saveNoteIfNeeded() }
     }
 
