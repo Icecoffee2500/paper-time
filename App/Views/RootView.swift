@@ -74,6 +74,9 @@ struct LibraryWindow: View {
     /// column, because on a Mac the picker for it lives in the toolbar and the
     /// toolbar is declared here.
     @State private var inspectorTab = InspectorTab.details
+    /// How wide the paper was while it was open, so it can be held at that
+    /// width on the way out rather than squeezed to nothing.
+    @State private var readerWidth: CGFloat = 600
     @State private var isImportingPDFs = false
     @State private var showsExport = false
     @State private var showsMigration = false
@@ -205,10 +208,21 @@ struct LibraryWindow: View {
                     )
                 }
             }
+            // Held at the width it had, and revealed, for the same reason
+            // the lists are. Collapsing the column to nothing handed the page
+            // a width of zero, and a `PDFView` with no width draws nothing —
+            // so for a frame the panel was there with nothing in it, which is
+            // a pane of glass the colour of paper. That was the white flash.
+            .frame(width: app.showsReader ? nil : readerWidth, alignment: .leading)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+                // Only while it is open: reading it back while it is being
+                // held would be reading our own answer.
+                if app.showsReader, width > 0 { readerWidth = width }
+            }
             // Closed by width rather than by taking it out of the tree: the
             // reader is expensive to build, and tearing the PDF view down and
             // back up is what made the other column toggles crawl.
-            .frame(maxWidth: app.showsReader ? .infinity : 0)
+            .frame(maxWidth: app.showsReader ? .infinity : 0, alignment: .leading)
             .opacity(app.showsReader ? 1 : 0)
             .clipped()
         }
@@ -689,9 +703,17 @@ struct PaperDetailColumn: View {
             }
 
             // Closed by width, the same as the other columns, so it slides
-            // rather than blinking in and out.
+            // rather than blinking in and out — and revealed rather than
+            // squeezed, for the same reason the lists are. Narrowing the
+            // column narrowed the form inside it, which re-wrapped every
+            // label on every frame: the paper's title went from two lines to
+            // three and back on the way past.
             inspector
-                .frame(width: app.showsInspector ? app.inspectorWidth : 0)
+                .frame(width: app.inspectorWidth)
+                .frame(
+                    width: app.showsInspector ? app.inspectorWidth : 0,
+                    alignment: .trailing
+                )
                 .columnPanel()
                 .opacity(app.showsInspector ? 1 : 0)
                 .clipped()
