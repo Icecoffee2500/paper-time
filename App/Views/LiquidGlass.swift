@@ -28,12 +28,17 @@ enum Glass {
 
     /// How much of its own body the glass has. Lower is more transparent.
     ///
-    /// Low enough that what is behind still reads through it. A pane keeps
-    /// more than the rest because it is what long passages of text are read
-    /// on, and glass you cannot read through is a window in the wrong place.
+    /// The panes are nearly solid, and that is the point rather than a
+    /// retreat from it. Glass belongs on the parts of a window you look
+    /// *past* — the ground, the toolbar, a bar floating over the page — and
+    /// not on the part you read. A pane at half opacity took its colour from
+    /// whatever wallpaper happened to be behind the window, so a paper and a
+    /// note were being read off a blue-purple gradient that changed with the
+    /// desktop. Chrome carries the glass here; content sits on something
+    /// calm, which is the arrangement the system's own apps use.
     var body: Double {
         switch self {
-        case .pane: 0.5
+        case .pane: 0.82
         case .control: 0.14
         case .floating: 0.3
         }

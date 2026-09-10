@@ -93,6 +93,10 @@ struct SlipBoxList: View {
                     }
                 }
                 .listStyle(.inset)
+                // An inset list paints its own opaque white, which is why the
+                // lists were the one white rectangle in a window of glass. The
+                // panel behind them is the background now.
+                .scrollContentBackground(.hidden)
                 .hiddenScrollers()
             }
         }
@@ -150,6 +154,9 @@ struct SlipBoxDetail: View {
             } description: {
                 Text("Choose a note, or write a new one.")
             }
+            // An empty panel is still a panel. Without this it shrank to the
+            // size of the words in it and sat on the ground as a card.
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 }

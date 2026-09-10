@@ -749,6 +749,7 @@ struct PaperDetailColumn: View {
                     systemImage: "doc.text",
                     description: Text("Choose a paper to start reading.")
                 )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
     }

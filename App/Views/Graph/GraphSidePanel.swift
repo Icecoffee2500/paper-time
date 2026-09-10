@@ -92,6 +92,10 @@ struct GraphSidePanel: View {
                 }
             }
             .listStyle(.inset)
+                // An inset list paints its own opaque white, which is why the
+                // lists were the one white rectangle in a window of glass. The
+                // panel behind them is the background now.
+                .scrollContentBackground(.hidden)
             .hiddenScrollers()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
