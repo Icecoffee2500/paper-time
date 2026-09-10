@@ -312,7 +312,12 @@ struct PaperGraphView: View {
         for node in graph.nodes {
             rect = rect.union(CGRect(origin: node.position, size: .zero))
         }
-        return rect.insetBy(dx: -60, dy: -60)
+        // A margin in proportion to the drawing, not 60 units of graph space:
+        // that was a fixed number in a coordinate system whose scale depends
+        // on how many papers there are, so on a large library it came to a few
+        // screen points and the outermost dots were clipped by the edge.
+        let margin = max(rect.width, rect.height) * 0.06
+        return rect.insetBy(dx: -margin, dy: -margin)
     }
 
     /// Graph space to screen space: fit the whole thing, then zoom and pan.

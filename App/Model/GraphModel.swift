@@ -156,7 +156,12 @@ public final class GraphModel {
 
             if !connected.isEmpty {
                 let count = connected.count
-                let ideal = sqrt(1_400 * 1_400 / Double(count))
+                // How far apart two papers want to be. Raised from 1,400:
+                // at the old spacing a library of this size settled into one
+                // dense ball where a dot was a smudge where several edges
+                // crossed, and the picture said nothing except "these are all
+                // related", which is not a finding.
+                let ideal = sqrt(2_100 * 2_100 / Double(count))
                 for (index, paper) in connected.enumerated() {
                     let angle = Double(index) / Double(count) * 2 * .pi
                     let radius = ideal * (1.2 + Double((index * 37) % 100) / 220)
@@ -218,18 +223,71 @@ public final class GraphModel {
                     }
                     temperature = max(temperature * 0.97, ideal * 0.01)
                 }
+
+                // Then simply push apart anything still touching. A force
+                // layout balances attraction against repulsion and is
+                // perfectly happy to leave two dots on top of each other; the
+                // eye is not. This settles quickly because by now almost
+                // nothing needs moving.
+                let minimum = ideal * 0.5
+                for _ in 0..<60 {
+                    var moved = false
+                    for (offset, first) in ids.enumerated() {
+                        for second in ids.dropFirst(offset + 1) {
+                            let a = positions[first]!, b = positions[second]!
+                            let dx = a.x - b.x, dy = a.y - b.y
+                            let distance = sqrt(dx * dx + dy * dy)
+                            guard distance < minimum else { continue }
+                            let safe = max(distance, 0.01)
+                            let shove = (minimum - safe) / 2
+                            let ux = dx / safe * shove, uy = dy / safe * shove
+                            positions[first] = CGPoint(x: a.x + ux, y: a.y + uy)
+                            positions[second] = CGPoint(x: b.x - ux, y: b.y - uy)
+                            moved = true
+                        }
+                    }
+                    if !moved { break }
+                }
             }
 
-            // The ring of papers nothing has been connected to yet.
-            let reach = positions.values.reduce(0.0) { furthest, point in
-                max(furthest, sqrt(point.x * point.x + point.y * point.y))
-            }
-            let ringRadius = max(reach * 1.35, 260)
-            for (index, paper) in lonely.enumerated() {
-                let angle = Double(index) / Double(max(lonely.count, 1)) * 2 * .pi
-                positions[paper.id] = CGPoint(
-                    x: cos(angle) * ringRadius, y: sin(angle) * ringRadius
-                )
+            // The papers nothing has been connected to yet, on a shelf under
+            // the rest.
+            //
+            // They used to sit in a ring around everything, and a ring was
+            // wrong twice over. It says these papers surround the shape and
+            // belong to it, when the point is that they do not; and a circle
+            // of radius R makes the drawing 2R square, so the part worth
+            // looking at was fitted into a quarter of the view while six
+            // unconnected dots held the corners. A row underneath says
+            // "also in the library, not yet part of this" — and it costs the
+            // picture almost nothing.
+            if !lonely.isEmpty {
+                let ideal = sqrt(2_100 * 2_100 / Double(max(connected.count, 1)))
+                let extent = positions.values.reduce(
+                    into: (minX: 0.0, maxX: 0.0, maxY: 0.0)
+                ) { box, point in
+                    box.minX = min(box.minX, point.x)
+                    box.maxX = max(box.maxX, point.x)
+                    box.maxY = max(box.maxY, point.y)
+                }
+                let width = max(extent.maxX - extent.minX, ideal * 4)
+                let gap = ideal * 0.5
+                let perRow = max(Int(width / gap), 1)
+                let top = extent.maxY + ideal * 1.1
+
+                for (index, paper) in lonely.enumerated() {
+                    let row = index / perRow
+                    let column = index % perRow
+                    // Each row is centred on the cluster rather than left
+                    // aligned to it, so a short last row does not hang off.
+                    let inRow = min(lonely.count - row * perRow, perRow)
+                    let rowWidth = Double(inRow - 1) * gap
+                    let centre = (extent.minX + extent.maxX) / 2
+                    positions[paper.id] = CGPoint(
+                        x: centre - rowWidth / 2 + Double(column) * gap,
+                        y: top + Double(row) * gap
+                    )
+                }
             }
 
             return papers.map { paper in
