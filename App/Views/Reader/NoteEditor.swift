@@ -43,17 +43,21 @@ struct NoteEditor: NSViewRepresentable {
         textView.isAutomaticTextReplacementEnabled = false
         textView.isAutomaticSpellingCorrectionEnabled = false
         textView.drawsBackground = false
-        textView.textContainerInset = NSSize(width: 14, height: 16)
+        // Room to breathe. A note is prose in a narrow column, and prose
+        // pressed against the edge of its column is the thing that made this
+        // read like a text field rather than a page.
+        textView.textContainerInset = NSSize(width: 22, height: 22)
+        // The chips are painted by the fragment this hands back.
+        textView.textLayoutManager?.delegate = context.coordinator
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
         textView.autoresizingMask = [.width]
         textView.textContainer?.widthTracksTextView = true
         textView.typingAttributes = NoteMarkdown.bodyAttributes
-        textView.linkTextAttributes = [
-            .foregroundColor: NSColor.controlAccentColor,
-            .cursor: NSCursor.pointingHand,
-            .underlineStyle: NSUnderlineStyle.single.rawValue,
-        ]
+        // Only the cursor. Colour and underline are decided per run, because a
+        // passage from the paper and a link to a note are not the same thing
+        // and should not look the same.
+        textView.linkTextAttributes = [.cursor: NSCursor.pointingHand]
         scrollView.documentView = textView
 
         context.coordinator.textView = textView
@@ -100,7 +104,17 @@ struct NoteEditor: NSViewRepresentable {
     // MARK: - Coordinator
 
     @MainActor
-    final class Coordinator: NSObject, NSTextViewDelegate {
+    final class Coordinator: NSObject, NSTextViewDelegate, @preconcurrency NSTextLayoutManagerDelegate {
+        /// Hands back the fragment that paints the passage chips. Everything
+        /// else about it is the stock one.
+        func textLayoutManager(
+            _ textLayoutManager: NSTextLayoutManager,
+            textLayoutFragmentFor location: any NSTextLocation,
+            in textElement: NSTextElement
+        ) -> NSTextLayoutFragment {
+            NoteLayoutFragment(textElement: textElement, range: textElement.elementRange)
+        }
+
         @Binding var markdown: String
         var onFollow: (NoteAnchor) -> Void
         var onOpenNote: (String) -> Void = { _ in }
@@ -415,7 +429,23 @@ final class NoteTextView: NSTextView {
 
     // MARK: Selecting
 
+    /// Follows the passage under the pointer, if there is one.
+    private func followChip(at event: NSEvent) -> Bool {
+        let point = convert(event.locationInWindow, from: nil)
+        let index = characterIndexForInsertion(at: point)
+        guard index >= 0, index < attributedString().length,
+              let url = attributedString().attribute(
+                  NoteChip.attribute, at: index, effectiveRange: nil
+              ) as? URL
+        else { return false }
+        _ = coordinator?.textView(self, clickedOnLink: url, at: index)
+        return true
+    }
+
     override func mouseDown(with event: NSEvent) {
+        // A chip is not a `.link`, so the click that follows it is ours to
+        // notice. Anything else falls through to the ordinary text handling.
+        if followChip(at: event) { return }
         isSelectingByHand = true
         // NSTextView tracks the drag itself and returns when the mouse is let
         // go, so this brackets the whole gesture.

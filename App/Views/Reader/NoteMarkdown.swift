@@ -124,6 +124,7 @@ enum NoteMarkdown {
         #endif
     }
 
+    /// A link out of the note — to another note, or to the web.
     static func linkAttributes(_ url: URL) -> [NSAttributedString.Key: Any] {
         [
             .font: bodyFont,
@@ -132,6 +133,28 @@ enum NoteMarkdown {
             .underlineStyle: NSUnderlineStyle.single.rawValue,
         ]
     }
+
+    /// A passage lifted out of the paper, which is a different thing: not a
+    /// pointer to somewhere else but a quotation with an address. No
+    /// underline, and `NoteChip` paints the rounded tint behind it.
+    #if os(macOS)
+    static func passageAttributes(_ url: URL) -> [NSAttributedString.Key: Any] {
+        // Deliberately not a `.link`. An `NSTextView` paints every link run in
+        // its own link colour whatever the run says, so a chip that was also a
+        // link came out blue no matter what colour it asked for. It carries
+        // its destination in its own attribute instead, and `NoteTextView`
+        // follows it on a click.
+        [
+            .font: bodyFont,
+            .foregroundColor: NoteChip.ink,
+            NoteChip.attribute: url,
+        ]
+    }
+    #else
+    static func passageAttributes(_ url: URL) -> [NSAttributedString.Key: Any] {
+        linkAttributes(url)
+    }
+    #endif
 
     private static var syntaxColor: NoteColor { .tertiaryLabelColor }
 
@@ -152,7 +175,7 @@ enum NoteMarkdown {
     static func link(for anchor: NoteAnchor) -> NSAttributedString {
         let source = "[\(escape(anchor.label))](\(anchor.url.absoluteString))"
         let piece = NSMutableAttributedString(
-            string: anchor.label, attributes: linkAttributes(anchor.url)
+            string: anchor.label, attributes: passageAttributes(anchor.url)
         )
         piece.addAttribute(.paperTimeSource, value: source,
                            range: NSRange(location: 0, length: piece.length))
@@ -405,8 +428,12 @@ enum NoteMarkdown {
         /// view does by itself.
         var paragraphStyle: NSParagraphStyle {
             let style = NSMutableParagraphStyle()
-            style.lineSpacing = 2
-            style.paragraphSpacing = 3
+            // Air. A note is read in a narrow column beside a paper, and the
+            // old setting — two points of leading, three between paragraphs —
+            // was a page of type with nowhere to rest. This is roughly the
+            // rhythm the system's own writing apps use.
+            style.lineSpacing = 4.5
+            style.paragraphSpacing = 11
             let step = NoteTypography.baseSize * 1.5
             switch kind {
             case .bullet, .ordered, .task:
@@ -418,8 +445,8 @@ enum NoteMarkdown {
                 style.firstLineHeadIndent = step * 0.8
                 style.headIndent = step * 0.8
             case .heading:
-                style.paragraphSpacing = 5
-                style.paragraphSpacingBefore = 9
+                style.paragraphSpacing = 6
+                style.paragraphSpacingBefore = 18
             case .plain:
                 break
             }
@@ -531,8 +558,15 @@ enum NoteMarkdown {
     ) -> NSAttributedString {
         switch token.kind {
         case .anchorLink(let label, let url):
+            // A passage from the paper is styled as a chip, anything else as a
+            // link. Reading the note back had been going through the generic
+            // path, so a passage was a chip when it was dropped in and a plain
+            // blue link the next time the note was opened.
+            let attributes = NoteAnchor(url: url) != nil
+                ? passageAttributes(url)
+                : linkAttributes(url)
             return atomic(label, source: "[\(escape(label))](\(url.absoluteString))",
-                          attributes: linkAttributes(url), style: style)
+                          attributes: attributes, style: style)
 
         case .noteLink(let id, let title):
             let shown = title.isEmpty ? id : title
@@ -598,7 +632,8 @@ enum NoteMarkdown {
         } else {
             guard let made = MathTypesetter.image(
                 latex: latex, display: display,
-                pointSize: size * (display ? 1.15 : 1), color: .labelColor,
+                pointSize: NoteTypography.mathSize(forBody: size) * (display ? 1.12 : 1),
+                color: .labelColor,
                 maxWidth: room
             ) else { return nil }
             if mathCache.count > 400 { mathCache.removeAll() }
