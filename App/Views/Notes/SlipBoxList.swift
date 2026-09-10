@@ -21,19 +21,41 @@ struct SlipBoxList: View {
                 Button {
                     notes.openNoteID = notes.create(paperID: nil).id
                 } label: {
-                    Label("New Note", systemImage: "square.and.pencil")
+                    Image(systemName: "square.and.pencil")
                 }
                 .buttonStyle(.borderless)
                 .help("Write a note of your own")
             }
             .padding(.horizontal, 16)
             .padding(.top, 10)
-            .padding(.bottom, 6)
+            .padding(.bottom, 8)
 
-            TextField("Search notes", text: $notes.query)
-                .textFieldStyle(.roundedBorder)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 8)
+            // A capsule with a glass in it, not a bordered box. The bevelled
+            // field is the one control on this surface that still looked like
+            // a dialog, and a search field is a search field everywhere else
+            // on the machine.
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .font(.callout)
+                    .foregroundStyle(.tertiary)
+                TextField("Search notes", text: $notes.query)
+                    .textFieldStyle(.plain)
+                if !notes.query.isEmpty {
+                    Button {
+                        model.notes.query = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Clear the search")
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(.quaternary.opacity(0.5)))
+            .padding(.horizontal, 16)
+            .padding(.bottom, 10)
 
             if !notes.tags.isEmpty {
                 ScrollView(.horizontal) {
@@ -47,7 +69,6 @@ struct SlipBoxList: View {
                 }
                 .scrollIndicators(.never)
             }
-            Divider()
 
             if notes.visible.isEmpty {
                 ContentUnavailableView {

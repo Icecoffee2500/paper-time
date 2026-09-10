@@ -26,7 +26,6 @@ struct ZettelEditorView: View {
 
         VStack(spacing: 0) {
             header(note)
-            Divider()
             editor(pending: pending)
             connections(note)
         }
@@ -50,15 +49,13 @@ struct ZettelEditorView: View {
                     .buttonStyle(.borderless)
                 }
                 Spacer(minLength: 0)
-                if let note {
-                    Text(note.id)
-                        .font(.caption.monospaced())
-                        .foregroundStyle(.tertiary)
-                        .help("The note's permanent identifier")
-                }
+
+                // Icon only. Spelling "Raw" out put a word in the quietest
+                // corner of a writing surface, next to a second word and a
+                // twelve-digit number — three things asking to be read before
+                // the note itself.
                 Toggle(isOn: $showsRaw) {
-                    Label("Raw", systemImage: "chevron.left.forwardslash.chevron.right")
-                        .labelStyle(.titleAndIcon)
+                    Image(systemName: "chevron.left.forwardslash.chevron.right")
                 }
                 .toggleStyle(.button)
                 .buttonStyle(.borderless)
@@ -66,6 +63,20 @@ struct ZettelEditorView: View {
                 .help("Show the note as Markdown, syntax and all")
 
                 Menu {
+                    if let note {
+                        // The identifier is worth keeping and not worth
+                        // staring at: it is what another note links to, so it
+                        // lives where you go when you want it.
+                        Button {
+                            #if os(macOS)
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(note.id, forType: .string)
+                            #endif
+                        } label: {
+                            Label("Copy Identifier — \(note.id)", systemImage: "number")
+                        }
+                        Divider()
+                    }
                     Button(role: .destructive) {
                         notes.delete(noteID)
                         onClose?()
@@ -79,9 +90,10 @@ struct ZettelEditorView: View {
                 .fixedSize()
             }
 
+            // The one thing on this surface that should be read first.
             TextField("Title", text: $title)
                 .textFieldStyle(.plain)
-                .font(.title3.weight(.semibold))
+                .font(.title2.weight(.semibold))
 
             if let note, !note.tags.isEmpty {
                 ScrollView(.horizontal) {
@@ -89,17 +101,19 @@ struct ZettelEditorView: View {
                         ForEach(note.tags, id: \.self) { tag in
                             Text("#\(tag)")
                                 .font(.caption)
-                                .padding(.horizontal, 7)
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 8)
                                 .padding(.vertical, 3)
-                                .background(Capsule().fill(.quaternary))
+                                .background(Capsule().fill(.quaternary.opacity(0.6)))
                         }
                     }
                 }
                 .scrollIndicators(.never)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 22)
+        .padding(.top, 14)
+        .padding(.bottom, 4)
     }
 
     @ViewBuilder
@@ -158,9 +172,12 @@ struct ZettelEditorView: View {
         let inbound = notes.linkedFrom(noteID)
         let outbound = notes.linksOut(of: noteID)
         if !inbound.isEmpty || !outbound.isEmpty {
-            Divider()
+            // No rule across the note. What separates the writing from what it
+            // is connected to is the change of scale and a little air, the
+            // same way the rest of the window separates one thing from
+            // another.
             ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 12) {
                     if !outbound.isEmpty {
                         connectionList("Links to", notes: outbound, symbol: "arrow.up.right")
                     }
@@ -168,32 +185,53 @@ struct ZettelEditorView: View {
                         connectionList("Linked from", notes: inbound, symbol: "arrow.down.left")
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
+                .padding(.horizontal, 22)
+                .padding(.vertical, 14)
             }
-            .frame(maxHeight: 160)
+            .frame(maxHeight: 150)
+            .hiddenScrollers()
         }
     }
 
+    /// One heading and the notes under it, each as a chip.
+    ///
+    /// Chips rather than links, and for the same reason a passage in the body
+    /// is one: a link says "there is more of this elsewhere", and these are
+    /// places in the same box. It also means that everywhere in this app, the
+    /// thing you can go to is a rounded tint — in the note, under it, and on
+    /// the page.
     private func connectionList(
         _ heading: String, notes list: [Zettel], symbol: String
     ) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(heading)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 6) {
+            Text(heading.uppercased())
+                .font(.caption2.weight(.semibold))
+                .tracking(0.6)
+                .foregroundStyle(.tertiary)
+
             ForEach(list) { other in
                 Button {
                     flush()
                     notes.requestedNoteID = other.id
                 } label: {
-                    Label(other.displayTitle, systemImage: symbol)
-                        .font(.callout)
-                        .lineLimit(1)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(.rect)
+                    HStack(spacing: 6) {
+                        Image(systemName: symbol)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text(other.displayTitle)
+                            .lineLimit(1)
+                    }
+                    .font(.callout)
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(
+                        RoundedRectangle(cornerRadius: Corner.row, style: .continuous)
+                            .fill(.quaternary.opacity(0.55))
+                    )
+                    .contentShape(RoundedRectangle(cornerRadius: Corner.row, style: .continuous))
                 }
-                .buttonStyle(.link)
+                .buttonStyle(.plain)
             }
         }
     }
