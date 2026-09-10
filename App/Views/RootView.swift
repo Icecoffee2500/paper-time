@@ -241,8 +241,35 @@ struct LibraryWindow: View {
             copySelectedCitationKey()
         }
         .onReceive(NotificationCenter.default.publisher(for: .paperTimeFindInDocument)) { _ in
-            link.isFinding = true
+            // The find bar lives over the page, so there has to be a page.
+            if !app.showsReader { app.toggleReader() }
+            if app.isFocusMode || model.selectedPaper != nil { link.isFinding = true }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .paperTimeNewNote)) { _ in
+            model.scope = .notes
+            model.notes.openNoteID = model.notes.create(paperID: model.selectedPaperID).id
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .paperTimeNextPaper)) { _ in
+            step(by: 1)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .paperTimePreviousPaper)) { _ in
+            step(by: -1)
+        }
+    }
+
+    /// Moves the selection along the list the reader is looking at.
+    private func step(by offset: Int) {
+        let papers = model.visiblePapers
+        guard !papers.isEmpty else { return }
+        guard let current = model.selectedPaperID,
+              let index = papers.firstIndex(where: { $0.id == current })
+        else {
+            model.selectedPaperID = papers.first?.id
+            return
+        }
+        let next = index + offset
+        guard papers.indices.contains(next) else { return }
+        model.selectedPaperID = papers[next].id
     }
 
     /// In focus mode the list is summoned over the page rather than pinned to

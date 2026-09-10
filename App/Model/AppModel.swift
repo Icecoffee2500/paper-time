@@ -70,28 +70,40 @@ public final class AppModel {
         didSet { UserDefaults.standard.set(paneShortcuts, forKey: "paneShortcuts") }
     }
 
-    public func shortcut(for pane: PaneShortcut) -> Shortcut {
-        paneShortcuts[pane.rawValue].flatMap(Shortcut.init(stored:)) ?? pane.fallback
+    public func shortcut(for action: ShortcutAction) -> Shortcut {
+        paneShortcuts[action.rawValue].flatMap(Shortcut.init(stored:)) ?? action.fallback
     }
 
-    public func setShortcut(_ shortcut: Shortcut, for pane: PaneShortcut) {
-        // One key, one pane: whoever else had it gives it up.
-        for other in PaneShortcut.allCases where other != pane {
-            if self.shortcut(for: other) == shortcut {
+    /// What the menu asks for: the shortcut, or nothing when another action
+    /// has taken the key this one had.
+    ///
+    /// Optional on purpose. Choosing between a button with a shortcut and one
+    /// without produced two different view types in the same place, and
+    /// SwiftUI handed the keys to the wrong menu items — ⌘[ opened the paper
+    /// list and ⌘P the sidebar. One view, one optional shortcut.
+    public func keyboardShortcut(for action: ShortcutAction) -> KeyboardShortcut? {
+        guard hasShortcut(action) else { return nil }
+        return shortcut(for: action).keyboardShortcut
+    }
+
+    public func setShortcut(_ shortcut: Shortcut, for action: ShortcutAction) {
+        // One key, one action: whoever else had it gives it up.
+        for other in ShortcutAction.allCases where other != action {
+            if hasShortcut(other), self.shortcut(for: other) == shortcut {
                 paneShortcuts[other.rawValue] = ""
             }
         }
-        paneShortcuts[pane.rawValue] = shortcut.stored
+        paneShortcuts[action.rawValue] = shortcut.stored
     }
 
     public func resetShortcuts() {
         paneShortcuts = [:]
     }
 
-    /// True when a pane has been left with no key at all, because another took
-    /// the one it had.
-    public func hasShortcut(_ pane: PaneShortcut) -> Bool {
-        guard let stored = paneShortcuts[pane.rawValue] else { return true }
+    /// True when an action has been left with no key at all, because another
+    /// took the one it had.
+    public func hasShortcut(_ action: ShortcutAction) -> Bool {
+        guard let stored = paneShortcuts[action.rawValue] else { return true }
         return Shortcut(stored: stored) != nil
     }
 

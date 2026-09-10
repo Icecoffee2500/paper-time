@@ -41,22 +41,20 @@ V-JEPA 2(식 2·3·4), `5308_The_Forgetting_Retention_`(2단, 단 사이 간격 
 
 ## 단축키
 
-창을 여닫는 단축키는 사용자가 바꿀 수 있다. 기본값은:
-
-| 창 | 기본 단축키 |
-| --- | --- |
-| 사이드바 | `⌘[` |
-| 논문 목록 | `⌘P` |
-| 논문(리더) | `⌘\` |
-| 인스펙터 | `⌘]` |
-| 논문에 집중 | `⌃⌘F` |
-
-정의는 `App/Model/PaneShortcuts.swift`(`PaneShortcut` 열거형과 기본값),
-저장은 `AppModel.paneShortcuts`(UserDefaults, 바뀔 때마다 스스로 기록),
-메뉴 적용은 `PaperTimeCommands.paneButton`, 설정 UI는
+앱의 **모든** 명령이 설정에서 바뀐다. 정의는 `App/Model/Shortcuts.swift`
+(`ShortcutAction` 열거형 하나에 기본값까지), 저장은 `AppModel.paneShortcuts`
+(UserDefaults, 바뀔 때마다 스스로 기록), 메뉴 적용은
+`PaperTimeCommands.command(_:_:run:)`, 설정 UI는
 `App/Views/ShortcutRecorder.swift`.
 
-한 키는 한 창에만 붙는다. 다른 창에 이미 있는 키를 주면 원래 주인은 단축키가
+새 명령을 만들면 `ShortcutAction`에 case 하나만 추가하면 메뉴와 설정에 동시에
+나온다. 하드코딩된 `keyboardShortcut`을 새로 쓰지 말 것.
+
+`⌘,`(설정)만 예외다. SwiftUI의 `Settings` 씬이 자기 항목을 따로 넣기 때문에
+우리 것을 더하면 메뉴에 Settings가 **두 개** 생긴다. 그래서 목록에는 보이되
+바꿀 수 없는 행으로 뒀다(`ShortcutAction.isFixed`).
+
+한 키는 한 명령에만 붙는다. 다른 창에 이미 있는 키를 주면 원래 주인은 단축키가
 없는 상태(`—`)가 되고, 메뉴 항목은 남되 키만 빠진다.
 
 단축키를 받는 필드(`ShortcutRecorder`)에는 두 개의 함정이 있었다. 둘 다
@@ -73,6 +71,11 @@ V-JEPA 2(식 2·3·4), `5308_The_Forgetting_Retention_`(2단, 단 사이 간격 
 
 `⌘P`는 원래 시스템 Print 항목이 가져가므로 `CommandGroup(replacing: .printItem) {}`
 로 비워뒀다. Print를 다시 넣을 일이 생기면 그 충돌부터 풀어야 한다.
+
+**메뉴 단축키가 이상해 보이면 `defaults read com.imtaeheon.PaperTime paneShortcuts`
+부터 확인할 것.** 저장된 값이 기본값을 덮는 것이지 코드가 틀린 게 아닐 때가 있다.
+그리고 Xcode에서 실행한 빌드가 백그라운드에 살아 있으면 그쪽 메뉴를 읽게 된다 —
+`pgrep -lf "Paper Time.app/Contents/MacOS"`로 몇 개가 떠 있는지 먼저 보라.
 
 ## 지금 상태
 

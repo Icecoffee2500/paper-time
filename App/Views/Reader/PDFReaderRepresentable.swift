@@ -103,6 +103,7 @@ final class ReaderCoordinator: NSObject {
     private var clickMonitor: Any?
     private var pinchMonitor: Any?
     private var scrolled: CGFloat = 0
+    private var markupObservers: [NSObjectProtocol] = []
     #endif
     #if canImport(UIKit)
     private var canvases: [Int: PKCanvasView] = [:]
@@ -265,6 +266,7 @@ final class ReaderCoordinator: NSObject {
         }
         installMarkClickMonitor(in: view)
         installPinchMonitor(in: view)
+        installMarkupShortcuts(for: view)
         #endif
         restoreReadingPosition(in: view)
         return view
@@ -359,6 +361,8 @@ final class ReaderCoordinator: NSObject {
         for monitor in [scrollMonitor, clickMonitor, pinchMonitor].compactMap({ $0 }) {
             NSEvent.removeMonitor(monitor)
         }
+        for observer in markupObservers { NotificationCenter.default.removeObserver(observer) }
+        markupObservers = []
         scrollMonitor = nil
         clickMonitor = nil
         pinchMonitor = nil
@@ -705,6 +709,32 @@ final class ReaderCoordinator: NSObject {
             showMarkEditor(for: hit, in: view)
             if let id = Self.markID(of: hit) { link.revealedMarkID = id }
             return nil
+        }
+    }
+
+    /// Marking the selection straight from the keyboard, without going to the
+    /// bar for it. The colour is whichever the bar would have offered first.
+    private func installMarkupShortcuts(for view: MarkupCapablePDFView) {
+        let centre = NotificationCenter.default
+        for (name, kind) in [
+            (Notification.Name.paperTimeHighlight, MarkupDescriptor.Kind.highlight),
+            (Notification.Name.paperTimeUnderline, MarkupDescriptor.Kind.underline),
+        ] {
+            markupObservers.append(centre.addObserver(
+                forName: name, object: nil, queue: .main
+            ) { [weak self, weak view] _ in
+                MainActor.assumeIsolated {
+                    guard let self, let view, let selection = view.currentSelection,
+                          !(selection.string ?? "").isEmpty
+                    else { return }
+                    let made = self.session.addMarkup(
+                        for: selection, kind: kind, color: .yellow
+                    )
+                    self.registerUndo(made, name: self.markupActionName(kind), in: view)
+                    view.clearSelection()
+                    self.hideMarkupPanel()
+                }
+            })
         }
     }
 

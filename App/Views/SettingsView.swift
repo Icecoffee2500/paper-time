@@ -159,29 +159,42 @@ struct SettingsView: View {
 
     // MARK: - Reading
 
-    /// Which key opens which pane.
+    /// Which key does what.
     ///
-    /// Habits come from whatever the reader used before this, so the defaults
-    /// are a starting point rather than a rule. A key can only belong to one
-    /// pane: giving it to a second takes it from the first, which is then left
-    /// with no shortcut until it is given one.
+    /// Every command the app has, not the handful somebody remembered to make
+    /// configurable. Habits come from whatever the reader used before this, so
+    /// the defaults are a starting point rather than a rule. A key belongs to
+    /// one command: giving it to a second takes it from the first, which is
+    /// then left with no shortcut until it is given one.
     @ViewBuilder
     private var shortcutsSection: some View {
         #if os(macOS)
         @Bindable var app = app
-        Section("Keyboard Shortcuts") {
-            ForEach(PaneShortcut.allCases) { pane in
-                LabeledContent(pane.title) {
-                    ShortcutRecorder(
-                        shortcut: app.shortcut(for: pane),
-                        isUnset: !app.hasShortcut(pane)
-                    ) { app.setShortcut($0, for: pane) }
+        ForEach(ShortcutAction.Group.allCases) { group in
+            Section(group == .library ? "Keyboard Shortcuts — \(group.rawValue)" : group.rawValue) {
+                ForEach(ShortcutAction.allCases.filter { $0.group == group }) { action in
+                    LabeledContent(action.title) {
+                        if action.isFixed {
+                            // The system's, and not ours to move.
+                            Text(action.fallback.display)
+                                .font(.body.monospaced())
+                                .foregroundStyle(.secondary)
+                                .help("Set by macOS")
+                        } else {
+                            ShortcutRecorder(
+                                shortcut: app.shortcut(for: action),
+                                isUnset: !app.hasShortcut(action)
+                            ) { app.setShortcut($0, for: action) }
+                        }
+                    }
                 }
-            }
-            HStack {
-                Spacer()
-                Button("Restore Defaults") { app.resetShortcuts() }
-                    .disabled(app.paneShortcuts.isEmpty)
+                if group == .app {
+                    HStack {
+                        Spacer()
+                        Button("Restore Defaults") { app.resetShortcuts() }
+                            .disabled(app.paneShortcuts.isEmpty)
+                    }
+                }
             }
         }
         #endif
