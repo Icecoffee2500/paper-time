@@ -99,10 +99,13 @@ struct NoteRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(note.displayTitle)
-                .font(.callout.weight(.medium))
+                .font(.callout.weight(.semibold))
                 .lineLimit(1)
-            if !note.preview.isEmpty {
-                Text(note.preview)
+            // What is left after the title, not the whole preview: a note with
+            // no title of its own takes its first words as one, and showing
+            // the preview under it printed the same sentence twice.
+            if !note.previewBody.isEmpty {
+                Text(note.previewBody)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)

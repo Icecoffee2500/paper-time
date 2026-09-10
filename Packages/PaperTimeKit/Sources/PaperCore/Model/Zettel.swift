@@ -79,31 +79,92 @@ public struct Zettel: Identifiable, Hashable, Sendable {
             .reduced()
     }
 
-    /// The first words of the body, for a row in a list.
+    /// The first words of the body, in prose, for a row in a list.
+    ///
+    /// Everything that is notation rather than words comes out. A formula is
+    /// the reason this exists: `$$\mathcal{L}_{\text{rollout}}$$` was being
+    /// shown as the note's own title, because a row shows the body when there
+    /// is no title and nothing here knew that a formula is not a sentence.
+    /// Mathematics is an object in a note, like a picture, so it is left out
+    /// of the summary of one rather than spelled.
     public var preview: String {
-        body
+        var text = body
+
+        for pattern in [
+            // Formulas, display first: `$$…$$` before `$…$`, or the opening
+            // pair of a display formula reads as one empty inline formula.
+            #"\$\$[\s\S]*?\$\$"#,
+            #"\$[^$\n]*?\$"#,
+            // Fenced and inline code.
+            #"```[\s\S]*?```"#,
+            // Images, before links: an image is a link with a bang on it.
+            #"!\[[^\]]*\]\([^)\s]*\)"#,
+        ] {
+            text = text.replacingOccurrences(of: pattern, with: " ",
+                                             options: .regularExpression)
+        }
+
+        text = text
             .replacingOccurrences(of: #"\[\[([^\]|]+)\|([^\]]*)\]\]"#, with: "$2",
+                                  options: .regularExpression)
+            .replacingOccurrences(of: #"\[\[([^\]|]+)\]\]"#, with: "$1",
                                   options: .regularExpression)
             .replacingOccurrences(of: #"\[([^\]\n]*)\]\([^)\s]*\)"#, with: "$1",
                                   options: .regularExpression)
+
+        return text
             .split(separator: "\n")
             .map { line in
                 var text = String(line)
                 while text.hasPrefix("#") { text.removeFirst() }
                 while text.hasPrefix(">") { text.removeFirst() }
+                // List markers, which are punctuation standing in for layout.
+                text = text.replacingOccurrences(
+                    of: #"^\s*([-*+]|\d+\.)\s+"#, with: "", options: .regularExpression
+                )
                 return text
                     .replacingOccurrences(of: "**", with: "")
+                    .replacingOccurrences(of: "`", with: "")
                     .trimmingCharacters(in: .whitespaces)
             }
             .filter { !$0.isEmpty }
             .joined(separator: " ")
+            // Taking things out leaves gaps, and punctuation that was holding
+            // hands with what was taken: "a formula, $x$, should" came out as
+            // "a formula, , should".
+            .replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
+            .replacingOccurrences(of: #"([,;:])(\s*[,;:])+"#, with: "$1",
+                                  options: .regularExpression)
+            .replacingOccurrences(of: #"\s+([,.;:!?])"#, with: "$1",
+                                  options: .regularExpression)
+            .trimmingCharacters(in: .whitespaces)
+    }
+
+    /// What a row shows under the title.
+    ///
+    /// Not the preview: for a note with no title of its own the title *is* the
+    /// first of the preview, and a row that repeats it says one thing twice.
+    /// This is what is left after it — the way Notes shows a first line and
+    /// then the rest.
+    public var previewBody: String {
+        let full = preview
+        let shown = displayTitle
+        guard title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              full.hasPrefix(shown)
+        else { return full }
+        return String(full.dropFirst(shown.count))
+            .trimmingCharacters(in: .whitespaces)
     }
 
     public var displayTitle: String {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty { return trimmed }
-        let firstLine = preview.prefix(60)
-        return firstLine.isEmpty ? "Untitled Note" : String(firstLine)
+        let firstLine = preview.prefix(60).trimmingCharacters(in: .whitespaces)
+        if !firstLine.isEmpty { return firstLine }
+        // A note can be a formula and nothing else, and now that formulas are
+        // left out of the preview there is nothing left to name it with. Say
+        // so rather than showing the notation.
+        return body.contains("$") ? "Formula" : "Untitled Note"
     }
 
     /// How this note is written into another one.

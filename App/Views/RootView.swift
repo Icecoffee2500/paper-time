@@ -699,7 +699,7 @@ struct PaperDetailColumn: View {
 
             // Nothing to drag against when the inspector is closed.
             if app.showsInspector {
-                ColumnDivider(width: $app.inspectorWidth, range: 280...520)
+                ColumnDivider(width: $app.inspectorWidth, range: 280...520, resizes: .trailing)
             }
 
             // Closed by width, the same as the other columns, so it slides
@@ -917,6 +917,14 @@ extension View {
 private struct ColumnDivider: View {
     @Binding var width: Double
     var range: ClosedRange<Double>
+    /// Which side of the gap the column being resized is on.
+    ///
+    /// The sidebar and the list are to the *left* of their divider, so
+    /// dragging right makes them wider. The inspector is to the right of its
+    /// own, so the same drag has to make it narrower — without this it grew
+    /// when the pointer went the other way, which is the one thing a divider
+    /// must never do.
+    var resizes: HorizontalEdge = .leading
     @State private var startWidth: Double?
 
     var body: some View {
@@ -937,8 +945,11 @@ private struct ColumnDivider: View {
                     .onChanged { value in
                         let start = startWidth ?? width
                         startWidth = start
+                        let travel = resizes == .leading
+                            ? value.translation.width
+                            : -value.translation.width
                         width = min(
-                            max(start + value.translation.width, range.lowerBound),
+                            max(start + travel, range.lowerBound),
                             range.upperBound
                         )
                     }
