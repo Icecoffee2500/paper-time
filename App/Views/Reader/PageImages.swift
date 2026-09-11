@@ -184,14 +184,18 @@ final class FigureOverlayView: NSView {
     }
 }
 
-/// One view over a page holding both overlays: the marks, multiplied onto
-/// the paper, and the figures for the dimmed tint, composited plainly.
+/// One view over a page holding its overlays: the mask over the margin's
+/// stamps, the figures for the dimmed tint, composited plainly, and the
+/// marks, multiplied onto the paper.
 final class PageOverlay: NSView {
+    private let mask: MarginMaskView
+
     init(page: PDFPage) {
+        mask = MarginMaskView(page: page)
         super.init(frame: .zero)
         let marks = MarkOverlayView(page: page)
         let figures = FigureOverlayView(page: page)
-        for child in [figures, marks] as [NSView] {
+        for child in [mask, figures, marks] as [NSView] {
             child.autoresizingMask = [.width, .height]
             addSubview(child)
         }
@@ -202,6 +206,9 @@ final class PageOverlay: NSView {
     override func layout() {
         super.layout()
         for child in subviews { child.frame = bounds }
+        // The book's crop comes and goes with the layout, and the page is
+        // laid out again each time it does.
+        mask.needsDisplay = true
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? { nil }

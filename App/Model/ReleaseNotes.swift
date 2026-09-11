@@ -225,15 +225,15 @@ enum ReleaseNotes {
                 ),
                 Entry(
                     Text2("책 모드", "Book mode"),
-                    Text2("⌘3이면 1·2쪽이 마주 보며 창을 채우고 ←→·스페이스·트랙패드로 넘긴다. 아래에 쪽 번호와 진행도. ⌘1 연속 스크롤, ⌘2 한 장씩. 배치를 바꿔도 보던 쪽은 그대로다.",
-                          "⌘3 fills the window with pages 1 and 2 facing; ← →, space and a swipe turn them. Page numbers and progress underneath. ⌘1 continuous, ⌘2 single page. Changing layout keeps the page you were on."),
+                    Text2("⌘3이면 1·2쪽이 마주 보며 창을 채우고 ←→·스페이스·트랙패드로 넘긴다. 어떤 논문이든 — 스캔한 교과서까지 — 쪽은 글에 맞춰 잘려 좌우 여백이 같고 가운데 여백은 늘 같은 폭이며, 여백에 세로로 찍힌 arXiv 도장은 지워진다. 아래에 쪽 번호와 진행도. ⌘1 연속 스크롤, ⌘2 한 장씩. 배치를 바꿔도 보던 쪽은 그대로다.",
+                          "⌘3 fills the window with pages 1 and 2 facing; ← →, space and a swipe turn them. Whatever the paper — a scanned textbook included — each page is cropped to its text, so the margins match on both sides and the gutter is always the same width, and the arXiv stamp running up the margin is painted out. Page numbers and progress underneath. ⌘1 continuous, ⌘2 single page. Changing layout keeps the page you were on."),
                     action: .layoutBook,
                     demo: .book
                 ),
                 Entry(
                     Text2("목차 팝업", "Table of contents"),
-                    Text2("⇧⌘L이면 PDF가 가진 목차가 페이지 위에 좁고 길게 뜬다 — 책 모드에서는 두 쪽 사이 여백에, 글자를 가리지 않게. 절을 누르면 그리로 가고, Esc나 다른 곳을 누르기 전까지 남는다. 단추는 없다. 키 하나다.",
-                          "⇧⌘L floats the PDF's own table of contents over the page, narrow and tall — in a book, in the gutter between the pages, covering no words. Click a section to go there; it stays until Escape or a click elsewhere. No button; one key."),
+                    Text2("⇧⌘L이면 목차가 페이지 위에 좁고 길게 뜬다 — 책 모드에서는 두 쪽 사이 여백에, 글자를 가리지 않게. PDF에 목차가 없거나 망가져 있으면 쪽에서 제목을 읽어낸다: 크기와 굵기, 번호, 문단 머리의 굵은 글까지. 제목 속 수식은 논문에 찍힌 그대로 그림으로 들어간다. 절을 누르면 그리로 가고, Esc나 다른 곳을 누르기 전까지 남는다. 단추는 없다. 키 하나다.",
+                          "⇧⌘L floats the table of contents over the page, narrow and tall — in a book, in the gutter between the pages, covering no words. When the PDF has no outline, or a broken one, the headings are read off the pages: by size and weight, by number, down to the bold words a paragraph opens with. Mathematics in a heading comes in as a picture of itself, as the paper set it. Click a section to go there; it stays until Escape or a click elsewhere. No button; one key."),
                     action: .floatingList
                 ),
                 Entry(

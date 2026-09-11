@@ -106,74 +106,87 @@ final class ReaderCoordinator: NSObject {
     /// Refits the spread to the view's width while a book is open.
     private var spreadObserver: (any NSObjectProtocol)?
 
-    /// The document the book trimmed, and the crop box each of its pages had
-    /// before, by page index — so the trim is undone on the pages it was
-    /// done to, and never applied to a paper that arrived later.
-    private var trimmed: (document: PDFDocument, boxes: [Int: CGRect])?
+    /// The crop that makes the document a book, while it is one.
+    private var bookTrim: BookTrim?
+    /// Keeps the spread centred: PDFKit lays a spread out with a full page
+    /// break at either end as well as between the pages, so the document is
+    /// wider than the view, and where the excess goes depends on how the view
+    /// was last scrolled — to the left edge for a page turn, wherever a jump
+    /// left it for a destination. This puts it back in the middle.
+    private var clipObserver: (any NSObjectProtocol)?
+    private var centering = false
 
-    /// How far the trim stays clear of the text, in page points.
-    private static let trimMargin: CGFloat = 18
-
-    /// Trims every page to the paper's text block.
-    ///
-    /// Papers set their margins differently — an ACM two-column page and an
-    /// arXiv preprint can differ by an inch a side — and in a spread those
-    /// margins met in the middle, so one paper opened with a canyon between
-    /// its pages and the next with a slit. The gutter should be the app's, not
-    /// the paper's. The text block is measured on the first pages and every
-    /// page is cropped to it, so the spread's width is spent on words: the
-    /// pages come up larger, and the gap between them is `pageBreakMargins`
-    /// plus a constant, the same for every paper. Only the crop box changes,
-    /// only in memory, and only while the book is open — page coordinates,
-    /// and so every mark and every anchor, are untouched.
-    ///
-    /// Measured line by line, from the lines wide enough to be body text: a
-    /// journal's "Downloaded from …" running up the margin is a line too,
-    /// and taken whole it put the text block's edge at the edge of the page.
+    /// Trims every page to the paper's content: see `BookTrim`.
     private func trimForBook(_ document: PDFDocument) {
-        if let trimmed, trimmed.document === document { return }
+        if let bookTrim, bookTrim.document === document, bookTrim.isApplied { return }
         untrim()
-        var minX = CGFloat.greatestFiniteMagnitude, maxX: CGFloat = -.greatestFiniteMagnitude
-        var sampled = 0
-        for index in 0..<min(document.pageCount, 8) {
-            guard let page = document.page(at: index) else { continue }
-            let media = page.bounds(for: .mediaBox)
-            guard let text = page.selection(for: media), (text.string?.count ?? 0) > 400 else { continue }
-            var pageMin = CGFloat.greatestFiniteMagnitude, pageMax: CGFloat = -.greatestFiniteMagnitude
-            for line in text.selectionsByLine() {
-                let bounds = line.bounds(for: page)
-                // A line of a column is wide and short; anything tall and
-                // narrow is running up the side and is not the text block.
-                guard bounds.width > media.width * 0.2, bounds.height < bounds.width else { continue }
-                pageMin = min(pageMin, bounds.minX)
-                pageMax = max(pageMax, bounds.maxX)
-            }
-            guard pageMax > pageMin, pageMax - pageMin > media.width * 0.45 else { continue }
-            minX = min(minX, pageMin)
-            maxX = max(maxX, pageMax)
-            sampled += 1
-        }
-        guard sampled > 0 else { return }
-        var boxes: [Int: CGRect] = [:]
-        for index in 0..<document.pageCount {
-            guard let page = document.page(at: index) else { continue }
-            let box = page.bounds(for: .cropBox)
-            let left = max(box.minX, minX - Self.trimMargin)
-            let right = min(box.maxX, maxX + Self.trimMargin)
-            guard right - left > box.width * 0.4 else { continue }
-            boxes[index] = box
-            page.setBounds(CGRect(x: left, y: box.minY, width: right - left, height: box.height), for: .cropBox)
-        }
-        trimmed = (document, boxes)
+        let trim = BookTrim(document: document)
+        trim.apply()
+        bookTrim = trim
     }
 
     private func untrim() {
-        guard let trimmed else { return }
-        for (index, box) in trimmed.boxes {
-            trimmed.document.page(at: index)?.setBounds(box, for: .cropBox)
-        }
-        self.trimmed = nil
+        bookTrim?.restore()
+        bookTrim = nil
         link.bookGutter = 0
+    }
+
+    /// Measures the pages about to be shown and re-crops them on their own
+    /// centre, laying the spread out again if any changed.
+    private func trimAround(_ page: PDFPage, in view: PDFView) {
+        guard let bookTrim, bookTrim.isApplied else { return }
+        let index = session.document.index(for: page)
+        guard index != NSNotFound else { return }
+        let spread = index - index % 2
+        if bookTrim.ensure([spread, spread + 1]) {
+            view.layoutDocumentView()
+            fitSpread(in: view)
+        }
+        // The spreads either side, after this one is on screen.
+        DispatchQueue.main.async { [weak bookTrim] in
+            _ = bookTrim?.ensure([spread + 2, spread + 3, spread - 2, spread - 1])
+        }
+    }
+
+    /// Scrolls the spread to the middle of the view when the document is
+    /// wider than the view; when it is narrower, PDFKit centres it itself.
+    /// Measured against the view, not the clip: a scroller can take a strip
+    /// off the clip's width, and a spread centred in the clip sat that much
+    /// to one side of the window.
+    private func centerSpread(in view: PDFView) {
+        guard appliedLayout == .book, !centering,
+              let scrollView = view.subviews.compactMap({ $0 as? NSScrollView }).first,
+              let documentView = scrollView.documentView, view.scaleFactor > 0
+        else { return }
+        let clip = scrollView.contentView
+        let excess = documentView.frame.width - clip.bounds.width
+        guard excess > 0.5 else { return }
+        let shown = view.visiblePages.map { view.convert($0.bounds(for: view.displayBox), from: $0) }
+        guard let minX = shown.map(\.minX).min(), let maxX = shown.map(\.maxX).max() else { return }
+        let offset = (minX + maxX) / 2 - view.bounds.midX
+        guard abs(offset) > 0.5 else { return }
+        let target = min(max(clip.bounds.origin.x + offset / view.scaleFactor, documentView.frame.minX), documentView.frame.minX + excess)
+        guard abs(clip.bounds.origin.x - target) > 0.25 else { return }
+        centering = true
+        clip.scroll(to: CGPoint(x: target, y: clip.bounds.origin.y))
+        scrollView.reflectScrolledClipView(clip)
+        centering = false
+    }
+
+    private func setCenterLock(_ isOn: Bool, in view: PDFView) {
+        if let clipObserver { NotificationCenter.default.removeObserver(clipObserver) }
+        clipObserver = nil
+        guard isOn, let scrollView = view.subviews.compactMap({ $0 as? NSScrollView }).first else { return }
+        let clip = scrollView.contentView
+        clip.postsBoundsChangedNotifications = true
+        clipObserver = NotificationCenter.default.addObserver(
+            forName: NSView.boundsDidChangeNotification, object: clip, queue: nil
+        ) { [weak self, weak view] _ in
+            MainActor.assumeIsolated {
+                guard let self, let view else { return }
+                self.centerSpread(in: view)
+            }
+        }
     }
 
     /// Scales a two-page spread to the width of the view.
@@ -197,6 +210,7 @@ final class ReaderCoordinator: NSObject {
         let gap = view.pageBreakMargins.left + view.pageBreakMargins.right
         view.scaleFactor = min(width / (bounds.width * 2 + gap), height / bounds.height)
         view.layoutDocumentView()
+        centerSpread(in: view)
         // How wide the gutter came out on screen, for the contents to fit in.
         let shown = view.visiblePages
             .map { view.convert($0.bounds(for: view.displayBox), from: $0) }
@@ -204,7 +218,7 @@ final class ReaderCoordinator: NSObject {
         if shown.count >= 2 {
             // Edge to edge, plus the trim each page keeps beside its text:
             // the whole stretch with no words in it.
-            link.bookGutter = max(0, shown[1].minX - shown[0].maxX) + 2 * Self.trimMargin * view.scaleFactor
+            link.bookGutter = max(0, shown[1].minX - shown[0].maxX) + 2 * BookTrim.margin * view.scaleFactor
         }
     }
     private var clickMonitor: Any?
@@ -436,6 +450,12 @@ final class ReaderCoordinator: NSObject {
         if let destination = link.destinationRequest {
             view.go(to: destination)
             link.destinationRequest = nil
+            #if os(macOS)
+            if appliedLayout == .book, let page = destination.page {
+                trimAround(page, in: view)
+                centerSpread(in: view)
+            }
+            #endif
             // Said outright: PDFKit posts its page-changed notification
             // before `currentPage` has moved for a destination jump, so the
             // status bar was left naming the spread you had just left.
@@ -492,6 +512,10 @@ final class ReaderCoordinator: NSObject {
         }
         for observer in markupObservers { NotificationCenter.default.removeObserver(observer) }
         markupObservers = []
+        for observer in [spreadObserver, clipObserver].compactMap({ $0 }) { NotificationCenter.default.removeObserver(observer) }
+        spreadObserver = nil
+        clipObserver = nil
+        untrim()
         scrollMonitor = nil
         arrowMonitor = nil
         clickMonitor = nil
@@ -552,6 +576,7 @@ final class ReaderCoordinator: NSObject {
 
         #if os(macOS)
         setBookScrolling(layout == .book, in: view)
+        setCenterLock(layout == .book, in: view)
         // A book fills the window: two pages across it, not two pages fitted
         // to its height and floating small in the middle. Fitted again
         // whenever the view's width changes, which in focus mode it does as
@@ -682,6 +707,9 @@ final class ReaderCoordinator: NSObject {
 
     @objc private func pageChanged(_ notification: Notification) {
         guard let view = pdfView, let page = view.currentPage else { return }
+        #if os(macOS)
+        if appliedLayout == .book { trimAround(page, in: view) }
+        #endif
         onPageChange(session.document.index(for: page))
     }
 
