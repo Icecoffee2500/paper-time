@@ -22,3 +22,4 @@ Config/Signing.local.xcconfig
 # Release staging for the disk image
 .dmg-build/
 *.dmg
+.build/
