@@ -115,13 +115,15 @@ final class ReaderCoordinator: NSObject {
         guard view.displayMode == .twoUp,
               let page = view.currentPage ?? view.document?.page(at: 0)
         else { return }
-        let pageWidth = page.bounds(for: view.displayBox).width
-        let available = view.bounds.width - 24
-        guard pageWidth > 0, available > 100 else { return }
+        let bounds = page.bounds(for: view.displayBox)
+        let width = view.bounds.width - 24, height = view.bounds.height - 16
+        guard bounds.width > 0, bounds.height > 0, width > 100, height > 100 else { return }
         view.autoScales = false
-        // A shade under the full width, so the last line of a page clears
-        // the status bar rather than sitting behind it.
-        view.scaleFactor = available / (pageWidth * 2 + 8) * 0.97
+        // As large as the spread can be with nothing cut off: the two pages
+        // across the width, unless the pages are then taller than the view,
+        // in which case the height decides. Filling the width alone put the
+        // top and bottom lines of every page out of sight.
+        view.scaleFactor = min(width / (bounds.width * 2 + 8), height / bounds.height)
     }
     private var clickMonitor: Any?
     private var pinchMonitor: Any?

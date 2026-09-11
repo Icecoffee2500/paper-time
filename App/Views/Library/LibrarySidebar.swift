@@ -3,10 +3,13 @@ import SwiftUI
 
 /// The source list: built-in scopes, collections, and tags.
 ///
-/// `LibraryModel.Scope` is not optional (there is always something selected),
-/// while `List(selection:)` wants `Binding<Scope?>`, so this view bridges the
-/// two with a small computed binding rather than adding an optional to the
-/// model just for this view.
+/// Not a `List(selection:)`. The system paints a selected sidebar row in the
+/// accent while the list has keyboard focus and in grey the moment focus
+/// moves to the papers — which, on a panel, read as "inactive" and, on the
+/// window's glass, read as a smudge. Which shelf you are on is not a fact
+/// about where the keyboard is pointing, so each row marks itself: the
+/// accent for its words on a pale tint of the accent behind them, the shape
+/// the folder's name takes in the header and a passage takes in a note.
 struct LibrarySidebar: View {
     @State private var showsAllAuthors = false
     @State private var authorsAreShown = true
@@ -15,17 +18,8 @@ struct LibrarySidebar: View {
     @State private var isPresentingNewCollection = false
     @State private var newCollectionName = ""
 
-    private var scopeSelection: Binding<LibraryModel.Scope?> {
-        Binding(
-            get: { model.scope },
-            set: { newValue in
-                if let newValue { model.scope = newValue }
-            }
-        )
-    }
-
     var body: some View {
-        List(selection: scopeSelection) {
+        List {
             if !model.searchQuery.isEmpty {
                 // A search is somewhere you can be, not a filter left switched
                 // on somewhere off-screen — so it gets a row of its own, at the
@@ -43,7 +37,7 @@ struct LibrarySidebar: View {
                         Image(systemName: "magnifyingglass")
                     }
                     .count(model.searchResultCount)
-                    .tag(LibraryModel.Scope.searchResults)
+                    .scopeRow(.searchResults, in: model)
                     .contextMenu {
                         Button("Clear Search") { model.clearSearchResults() }
                     }
@@ -53,26 +47,26 @@ struct LibrarySidebar: View {
             Section {
                 Label("All Papers", systemImage: "tray.full")
                     .count(model.counts.all)
-                    .tag(LibraryModel.Scope.all)
+                    .scopeRow(.all, in: model)
                 Label("Unread", systemImage: "circle")
                     .count(model.counts.unread)
-                    .tag(LibraryModel.Scope.unread)
+                    .scopeRow(.unread, in: model)
                     .dropTarget(in: model) { await model.setReadingStatus(.unread, for: $0) }
                 Label("Reading", systemImage: "circle.lefthalf.filled")
                     .count(model.counts.reading)
-                    .tag(LibraryModel.Scope.reading)
+                    .scopeRow(.reading, in: model)
                     .dropTarget(in: model) { await model.setReadingStatus(.reading, for: $0) }
                 Label("Read", systemImage: "checkmark.circle")
                     .count(model.counts.read)
-                    .tag(LibraryModel.Scope.read)
+                    .scopeRow(.read, in: model)
                     .dropTarget(in: model) { await model.setReadingStatus(.read, for: $0) }
                 Label("Favorites", systemImage: "star")
                     .count(model.counts.favorites)
-                    .tag(LibraryModel.Scope.favorites)
+                    .scopeRow(.favorites, in: model)
                     .dropTarget(in: model) { await model.setFavorite(true, for: $0) }
                 Label("Needs Review", systemImage: "exclamationmark.triangle")
                     .count(model.counts.needsReview)
-                    .tag(LibraryModel.Scope.needsReview)
+                    .scopeRow(.needsReview, in: model)
             } header: {
                 // The folder's name, small, where a headline used to sit
                 // over the whole list saying the same thing louder.
@@ -103,14 +97,14 @@ struct LibrarySidebar: View {
             Section("Slip-Box") {
                 Label("Notes", systemImage: "tray.full")
                     .count(model.notes.notes.count)
-                    .tag(LibraryModel.Scope.notes)
+                    .scopeRow(.notes, in: model)
             }
 
             Section("Collections") {
                 ForEach(model.collections.collections) { collection in
                     Label(collection.name, systemImage: symbolName(for: collection))
                         .count(model.counts.collections[collection.id] ?? 0)
-                        .tag(LibraryModel.Scope.collection(collection.id))
+                        .scopeRow(.collection(collection.id), in: model)
                         .dropTarget(in: model, isEnabled: !collection.isSmart) { paperID in
                             await model.addToCollection(collection.id, paperID: paperID)
                         }
@@ -139,7 +133,7 @@ struct LibrarySidebar: View {
                             .accessibilityHidden(true)
                     }
                     .count(model.counts.tags[tag.id] ?? 0)
-                    .tag(LibraryModel.Scope.tag(tag.id))
+                    .scopeRow(.tag(tag.id), in: model)
                     .dropTarget(in: model) { await model.addTag(tag.id, to: $0) }
                 }
             }
@@ -148,7 +142,7 @@ struct LibrarySidebar: View {
 
             Section {
                 Label("Graph", systemImage: "point.3.connected.trianglepath.dotted")
-                    .tag(LibraryModel.Scope.graph)
+                    .scopeRow(.graph, in: model)
             }
         }
         .hiddenScrollers()
@@ -183,7 +177,7 @@ struct LibrarySidebar: View {
                 ForEach(showsAllAuthors ? ranking : Array(ranking.prefix(10))) { author in
                     Label(author.name, systemImage: "person")
                         .count(author.count)
-                        .tag(LibraryModel.Scope.author(author.key))
+                        .scopeRow(.author(author.key), in: model)
                 }
                 if ranking.count > 10 {
                     Button(showsAllAuthors ? "Show Fewer" : "Show All \(ranking.count)") {
@@ -274,11 +268,13 @@ private struct PaperDropTarget: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .listRowBackground(
-                isTargeted
-                    ? RoundedRectangle(cornerRadius: Corner.row, style: .continuous)
-                        .fill(Color.accentColor.opacity(0.2))
-                    : nil
+            // A ring, not the row's background — the background belongs to
+            // whichever row is chosen, and a drop can land on any of them.
+            .overlay(
+                RoundedRectangle(cornerRadius: Corner.row, style: .continuous)
+                    .strokeBorder(Color.accentColor.opacity(isTargeted ? 0.6 : 0), lineWidth: 1.5)
+                    .padding(.horizontal, -8)
+                    .padding(.vertical, -3)
             )
             .dropDestination(for: PaperTransfer.self) { items, _ in
                 guard isEnabled, !items.isEmpty else { return false }
@@ -311,7 +307,34 @@ extension View {
 }
 
 
+/// A row of the source list that stands for a scope: pressed, it becomes the
+/// scope; when it is the scope, it says so in the accent.
+private struct ScopeRow: ViewModifier {
+    let scope: LibraryModel.Scope
+    let model: LibraryModel
+
+    private var isCurrent: Bool { model.scope == scope }
+
+    func body(content: Content) -> some View {
+        content
+            .foregroundStyle(isCurrent ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
+            .fontWeight(isCurrent ? .medium : .regular)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(.rect)
+            .onTapGesture { model.scope = scope }
+            .listRowBackground(
+                RoundedRectangle(cornerRadius: Corner.row, style: .continuous)
+                    .fill(Color.accentColor.opacity(isCurrent ? 0.12 : 0))
+                    .padding(.horizontal, 6)
+            )
+    }
+}
+
 private extension View {
+    func scopeRow(_ scope: LibraryModel.Scope, in model: LibraryModel) -> some View {
+        modifier(ScopeRow(scope: scope, model: model))
+    }
+
     /// A count beside a source-list row, shown even when it is zero.
     ///
     /// `.badge(0)` draws nothing at all, so a row would lose its number exactly

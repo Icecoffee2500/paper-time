@@ -42,6 +42,7 @@ struct FeatureDemoView: View {
             case .graph: GraphDemo(scale: scale)
             case .search: SearchDemo(scale: scale)
             case .book: BookDemo(scale: scale)
+            case .bookReading: BookReadingDemo(scale: scale)
             case .focus: FocusDemo(scale: scale)
             }
         }
@@ -1270,5 +1271,156 @@ private struct FocusDemo: View {
         .padding(scale.isFull ? 8 : 5)
         .frame(width: scale.isFull ? 80 : 40, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(.quaternary.opacity(0.7)))
+    }
+}
+
+// MARK: - Reading a book
+
+/// The spread with what a book gives you: which pages, how far in, and the
+/// contents floating in the gutter to jump by section.
+private struct BookReadingDemo: View {
+    let scale: DemoScale
+    @Environment(AppModel.self) private var app
+    @State private var leftPage = 3
+    @State private var showsContents = false
+
+    private let total = 48
+    private var sections: [(String, Int)] {
+        [
+            (ReleaseNotes.string("서론", "Introduction"), 1),
+            (ReleaseNotes.string("방법", "Method"), 5),
+            (ReleaseNotes.string("실험", "Experiments"), 11),
+            (ReleaseNotes.string("결과", "Results"), 19),
+            (ReleaseNotes.string("결론", "Conclusion"), 27),
+        ]
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: scale.gap) {
+            VStack(spacing: 0) {
+                ZStack {
+                    HStack(spacing: scale.isFull ? 14 : 6) {
+                        page(leftPage)
+                        page(leftPage + 1)
+                    }
+                    .padding(scale.isFull ? 10 : 6)
+
+                    if showsContents { contents.transition(.scale(scale: 0.96).combined(with: .opacity)) }
+                }
+                .frame(height: scale.isFull ? 176 : 80)
+
+                // The status bar: both pages of the spread, and how far in.
+                HStack(spacing: 8) {
+                    Text(ReleaseNotes.string("\(leftPage)–\(leftPage + 1) / \(total)쪽", "Pages \(leftPage)–\(leftPage + 1) of \(total)"))
+                        .font(.caption2)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                    ProgressView(value: Double(leftPage + 1), total: Double(total))
+                        .progressViewStyle(.linear)
+                        .tint(.secondary.opacity(0.6))
+                        .frame(width: scale.isFull ? 90 : 50)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, scale.isFull ? 10 : 6)
+                .padding(.vertical, 5)
+                .background(.background.opacity(0.6))
+            }
+            .background(
+                RoundedRectangle(cornerRadius: scale.corner, style: .continuous)
+                    .fill(.quaternary.opacity(0.35))
+            )
+            .clipShape(RoundedRectangle(cornerRadius: scale.corner, style: .continuous))
+
+            HStack(spacing: 6) {
+                turn("arrow.left", by: -2, enabled: leftPage > 1)
+                turn("arrow.right", by: 2, enabled: leftPage + 2 < total)
+                Text("space")
+                    .font(scale.small).monospaced()
+                    .foregroundStyle(.tertiary)
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(.quaternary.opacity(0.6)))
+                Spacer(minLength: 0)
+                Button {
+                    withAnimation(.snappy(duration: 0.25)) { showsContents.toggle() }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(app.shortcut(for: .floatingList).display).monospaced()
+                        Text(ReleaseNotes.string("목차", "Contents"))
+                    }
+                    .font(scale.small.weight(showsContents ? .semibold : .regular))
+                    .foregroundStyle(showsContents ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                    .padding(.horizontal, 7).padding(.vertical, 3)
+                    .background(Capsule().fill(showsContents ? AnyShapeStyle(.tint.opacity(0.14)) : AnyShapeStyle(.quaternary)))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    /// The contents, narrow and tall in the gutter. A section is one press;
+    /// the list stays until it is put away, because reading by sections
+    /// means going to several.
+    private var contents: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(ReleaseNotes.string("목차", "Contents"))
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.bottom, 2)
+            ForEach(sections, id: \.1) { name, first in
+                let isHere = leftPage == first - (first - 1) % 2
+                Button {
+                    withAnimation(.snappy(duration: 0.25)) { leftPage = first - (first - 1) % 2 }
+                } label: {
+                    HStack {
+                        Text(name).font(scale.small).lineLimit(1)
+                        Spacer(minLength: 4)
+                        Text("\(first)").font(.caption2).monospacedDigit().foregroundStyle(.tertiary)
+                    }
+                    .foregroundStyle(isHere ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
+                    .padding(.horizontal, 6).padding(.vertical, 3)
+                    .background(
+                        RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .fill(Color.accentColor.opacity(isHere ? 0.12 : 0))
+                    )
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(8)
+        .frame(width: scale.isFull ? 118 : 74)
+        .background(
+            RoundedRectangle(cornerRadius: scale.corner, style: .continuous)
+                .fill(.background)
+                .shadow(color: .black.opacity(0.14), radius: 8, y: 3)
+        )
+    }
+
+    private func page(_ number: Int) -> some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 6 : 3) {
+            ForEach(0..<(scale.isFull ? 11 : 5), id: \.self) { line in
+                Rule(width: ((number * 7 + line * 13) % 5 == 0) ? 60 : nil)
+            }
+            Spacer(minLength: 0)
+            Text("\(number)").font(.caption2).foregroundStyle(.tertiary).frame(maxWidth: .infinity)
+        }
+        .padding(scale.isFull ? 12 : 7)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(RoundedRectangle(cornerRadius: 3, style: .continuous).fill(.background))
+        .id(number)
+    }
+
+    private func turn(_ symbol: String, by delta: Int, enabled: Bool) -> some View {
+        Button {
+            withAnimation(.snappy(duration: 0.25)) { leftPage += delta }
+        } label: {
+            Image(systemName: symbol)
+                .font(scale.small.weight(.medium))
+                .frame(width: 26, height: 20)
+                .background(Capsule().fill(.quaternary))
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.4)
     }
 }

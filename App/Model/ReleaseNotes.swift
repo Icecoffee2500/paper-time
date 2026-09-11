@@ -60,6 +60,17 @@ enum ReleaseNotes {
             featured: true
         ),
         Highlight(
+            symbol: "book.pages",
+            title: Text2("책에서 절 사이를 오간다", "A book you move through by section"),
+            detail: Text2(
+                "두 쪽이 마주 보고, ←→와 스페이스와 트랙패드로 장을 넘긴다. 아래에는 지금 몇 쪽인지와 얼마나 읽었는지. ⇧⌘L이면 이 논문의 목차가 두 쪽 사이 여백에 떠서 — 글자는 가리지 않고 — 절을 누르는 대로 그리로 간다. 목차는 Esc나 다른 곳을 누르기 전까지 남는다. 논문 앱에서는 이렇게 읽을 수 있는 곳이 없었다.",
+                "Two pages face each other; ← →, the space bar and a swipe turn them. Underneath, which pages these are and how far in you are. ⇧⌘L floats this paper's table of contents into the gutter between the pages, covering no words, and each section is one click; it stays until Escape or a click elsewhere. No paper reader has read like this."
+            ),
+            action: .floatingList,
+            demo: .bookReading,
+            featured: true
+        ),
+        Highlight(
             symbol: "magnifyingglass",
             title: Text2("한 칸에서 전부 찾는다", "One field finds all of it"),
             detail: Text2(
@@ -83,8 +94,8 @@ enum ReleaseNotes {
             symbol: "book",
             title: Text2("책처럼 펼쳐서 읽는다", "Read it like a book"),
             detail: Text2(
-                "⌘3이면 1·2쪽이 마주 보며 창을 가득 채운다. ←→나 스페이스로 장을 넘기고, 트랙패드로 넘겨도 된다. 아래에는 지금 몇 쪽인지와 얼마나 읽었는지가 있고, ⌥⌘L이면 두 쪽 사이 여백에 이 논문의 목차가 떠서 절로 바로 간다. ⌘1은 연속 스크롤, ⌘2는 한 장씩 — 배치를 바꿔도 보던 쪽은 그대로다.",
-                "⌘3 and pages 1 and 2 face each other across the window. ← → or the space bar turn the page, and so does a swipe. Underneath, which pages these are and how far in you are; ⌥⌘L drops the paper's own table of contents into the gutter between the pages, and a section is one click away. ⌘1 scrolls, ⌘2 shows one page — and changing layout keeps the page you were on."
+                "⌘3이면 1·2쪽이 마주 보며 창을 가득 채운다. ←→나 스페이스로 장을 넘기고, 트랙패드로 넘겨도 된다. 아래에는 지금 몇 쪽인지와 얼마나 읽었는지가 있고, ⇧⌘L이면 두 쪽 사이 여백에 이 논문의 목차가 떠서 절로 바로 간다. ⌘1은 연속 스크롤, ⌘2는 한 장씩 — 배치를 바꿔도 보던 쪽은 그대로다.",
+                "⌘3 and pages 1 and 2 face each other across the window. ← → or the space bar turn the page, and so does a swipe. Underneath, which pages these are and how far in you are; ⇧⌘L drops the paper's own table of contents into the gutter between the pages, and a section is one click away. ⌘1 scrolls, ⌘2 shows one page — and changing layout keeps the page you were on."
             ),
             action: .layoutBook,
             demo: .book
@@ -93,8 +104,8 @@ enum ReleaseNotes {
             symbol: "rectangle.center.inset.filled",
             title: Text2("논문만 남긴다", "Only the paper"),
             detail: Text2(
-                "⇧⌘F 한 번에 사이드바·목록·인스펙터가 비켜서고 논문만 남는다. 열려 있던 것은 기억해 두고, 나올 때 그대로 돌려준다. 그 안에서도 ⌥⌘L로 목차를 불러 절을 옮겨 다닐 수 있다.",
-                "One ⇧⌘F and the sidebar, the list and the inspector step aside, leaving the paper. What was open is remembered and given back on the way out. ⌥⌘L still brings the table of contents, so you can move between sections without leaving."
+                "⇧⌘F 한 번에 사이드바·목록·인스펙터가 비켜서고 논문만 남는다. 열려 있던 것은 기억해 두고, 나올 때 그대로 돌려준다. 그 안에서도 ⇧⌘L로 목차를 불러 절을 옮겨 다닐 수 있다.",
+                "One ⇧⌘F and the sidebar, the list and the inspector step aside, leaving the paper. What was open is remembered and given back on the way out. ⇧⌘L still brings the table of contents, so you can move between sections without leaving."
             ),
             action: .focus,
             demo: .focus
@@ -178,6 +189,14 @@ enum ReleaseNotes {
                     featured: true
                 ),
                 Entry(
+                    Text2("책 읽기", "Reading as a book"),
+                    Text2("마주 보는 두 쪽, ←→·스페이스·트랙패드로 넘기기, 아래에 쪽 번호와 진행도, 그리고 ⇧⌘L로 두 쪽 사이 여백에 뜨는 목차 — 절을 누르면 그리로 가고 목차는 남는다.",
+                          "Two facing pages, turned by ← →, space or a swipe; page numbers and progress underneath; and ⇧⌘L floating the table of contents into the gutter — a section is one click, and the list stays."),
+                    action: .floatingList,
+                    demo: .bookReading,
+                    featured: true
+                ),
+                Entry(
                     Text2("검색", "Search"),
                     Text2("⌘K는 논문·노트·저자를 한 칸에서 찾고, ⌘F는 열린 논문 안을 찾는다.",
                           "⌘K finds papers, notes and authors from one field; ⌘F searches inside the open paper."),
@@ -213,8 +232,8 @@ enum ReleaseNotes {
                 ),
                 Entry(
                     Text2("목차 팝업", "Table of contents"),
-                    Text2("⌥⌘L이면 PDF가 가진 목차가 페이지 위에 좁고 길게 뜬다 — 책 모드에서는 두 쪽 사이 여백에, 글자를 가리지 않게. 절을 누르면 그리로 간다. 단추는 없다. 키 하나다.",
-                          "⌥⌘L floats the PDF's own table of contents over the page, narrow and tall — in a book, in the gutter between the pages, covering no words. Click a section to go there. No button; one key."),
+                    Text2("⇧⌘L이면 PDF가 가진 목차가 페이지 위에 좁고 길게 뜬다 — 책 모드에서는 두 쪽 사이 여백에, 글자를 가리지 않게. 절을 누르면 그리로 가고, Esc나 다른 곳을 누르기 전까지 남는다. 단추는 없다. 키 하나다.",
+                          "⇧⌘L floats the PDF's own table of contents over the page, narrow and tall — in a book, in the gutter between the pages, covering no words. Click a section to go there; it stays until Escape or a click elsewhere. No button; one key."),
                     action: .floatingList
                 ),
                 Entry(
@@ -288,7 +307,7 @@ enum ReleaseNotes {
             Feature(Text2("페이지 색", "Page tint"),
                     Text2("흰 종이, 세피아, 어둡게 — 그리고 Glass는 종이의 흰색을 걷어내 글자가 창 위에 앉게 한다. AA 메뉴에 있다.", "Paper white, sepia, dimmed — or Glass, which drops the page's white so it sits on the window. In the AA menu.")),
             Feature(Text2("논문에 집중", "Focus on the paper"),
-                    Text2("나머지가 비켜선다. 절을 옮길 때는 ⌥⌘L로 목차를 불러낸다.", "Everything else steps aside; ⌥⌘L brings the table of contents when you want another section."), action: .focus),
+                    Text2("나머지가 비켜선다. 절을 옮길 때는 ⇧⌘L로 목차를 불러낸다.", "Everything else steps aside; ⇧⌘L brings the table of contents when you want another section."), action: .focus),
             Feature(Text2("목차", "Table of contents"),
                     Text2("PDF가 가진 목차를 페이지 위에 띄운다. 절을 누르면 그리로.", "The PDF's own outline, floated over the page. Click a section to go there."), action: .floatingList),
             Feature(Text2("이동", "Move about"),
@@ -424,6 +443,9 @@ enum ReleaseNotes {
         case search
         /// Two pages across, turned with the arrows.
         case book
+        /// The spread with its page numbers, its progress, and the contents
+        /// floating in the gutter.
+        case bookReading
         /// The window with everything but the paper gone.
         case focus
 
@@ -438,8 +460,8 @@ enum ReleaseNotes {
         /// Shown full size in About, where the point is to let somebody try
         /// the thing rather than read about it.
         var demo: Demo?
-        /// The one to see first. Set on a single thing per version: two
-        /// headlines is a list, and a list is what this is trying not to be.
+        /// The ones to see first. One or two a version — more than that is
+        /// a list, and a list is what this is trying not to be.
         var featured = false
         var id: String { title.en }
     }

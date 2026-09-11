@@ -231,7 +231,7 @@ public enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
         // in this app it went to the window and never reached the command,
         // which is what made Focus look broken.
         case .focus: Shortcut("f", [.command, .shift])
-        case .floatingList: Shortcut("l", [.command, .option])
+        case .floatingList: Shortcut("l", [.command, .shift])
         case .zoomIn: Shortcut("+")
         case .zoomOut: Shortcut("-")
         case .actualSize: Shortcut("0")

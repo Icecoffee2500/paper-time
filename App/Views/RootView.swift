@@ -457,6 +457,7 @@ struct LibraryWindow: View {
                     Label("Add PDFs", systemImage: "plus").toolbarIcon()
                 }
                 .help("Add PDFs to the library (Command-O)")
+                .toolbarHover()
 
                 Button {
                     app.showsSearchPalette = true
@@ -464,6 +465,7 @@ struct LibraryWindow: View {
                     Label("Search", systemImage: "magnifyingglass").toolbarIcon()
                 }
                 .help("Search everything (Command-K)")
+                .toolbarHover()
 
                 sortMenu
                 viewMenu
@@ -502,6 +504,7 @@ struct LibraryWindow: View {
             Label("Panes", systemImage: "rectangle.split.3x1").toolbarIcon()
         }
         .help("Which panes are showing")
+        .toolbarHover()
     }
 
     @ViewBuilder
@@ -518,6 +521,7 @@ struct LibraryWindow: View {
             Label("Sort", systemImage: "arrow.up.arrow.down").toolbarIcon()
         }
         .help("Sort the list")
+        .toolbarHover()
     }
 
     @ViewBuilder
@@ -554,6 +558,7 @@ struct LibraryWindow: View {
         }
         .help("Page layout and tint")
         .disabled(model.selectedPaper == nil)
+        .toolbarHover()
     }
 
     @ViewBuilder
@@ -583,6 +588,7 @@ struct LibraryWindow: View {
             Label("Share", systemImage: "square.and.arrow.up").toolbarIcon()
         }
         .help("Export and import")
+        .toolbarHover()
     }
 
     @ToolbarContentBuilder
@@ -900,7 +906,13 @@ extension View {
         font(.system(size: 14, weight: .medium))
             .frame(width: 22, height: 22)
             .contentShape(.rect)
-            .modifier(ToolbarHover())
+    }
+
+    /// The hover square, on the control itself. On a `Menu` the label never
+    /// hears the pointer — the menu button takes it — so the modifier goes
+    /// on the menu, and on a `Button` for the same reason.
+    func toolbarHover() -> some View {
+        modifier(ToolbarHover())
     }
 }
 

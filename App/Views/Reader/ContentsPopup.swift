@@ -63,10 +63,13 @@ struct ContentsPopup: View {
                     VStack(alignment: .leading, spacing: 1) {
                         ForEach(items) { item in
                             Button {
+                                // Goes there and stays open: reading by
+                                // sections means going to several in a row,
+                                // and Escape or a click on the page is what
+                                // puts the list away.
                                 if let destination = item.destination {
                                     link.destinationRequest = destination
                                 }
-                                dismiss()
                             } label: {
                                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                                     Text(item.title)
@@ -98,17 +101,69 @@ struct ContentsPopup: View {
                 .scrollIndicators(.never)
             }
         }
-        .frame(width: 230)
+        .frame(width: 200)
         .frame(maxHeight: 520)
         .fixedSize(horizontal: false, vertical: true)
         .liquidGlass(.floating, in: RoundedRectangle(cornerRadius: Corner.panel, style: .continuous))
         .clipShape(RoundedRectangle(cornerRadius: Corner.panel, style: .continuous))
         .shadow(color: .black.opacity(0.18), radius: 18, y: 6)
         .background {
-            // Escape puts it away, from anywhere in the window.
+            // Escape puts it away, from anywhere in the window — and so
+            // does a click on anything that is not the list.
             Button("", action: dismiss)
                 .keyboardShortcut(.cancelAction)
                 .opacity(0)
+            ClickOutside(onClick: dismiss)
         }
     }
 }
+
+#if os(macOS)
+/// Notices a click that lands outside the view this sits in.
+///
+/// The click itself goes on to whatever it landed on: the list is put away,
+/// and the page still gets the click that put it away — the way a popover
+/// behaves, rather than the way a modal does.
+private struct ClickOutside: NSViewRepresentable {
+    let onClick: () -> Void
+
+    func makeNSView(context: Context) -> Watcher {
+        let watcher = Watcher()
+        watcher.onClick = onClick
+        return watcher
+    }
+
+    func updateNSView(_ view: Watcher, context: Context) { view.onClick = onClick }
+
+    final class Watcher: NSView {
+        var onClick: (() -> Void)?
+        // Removed in deinit, which is nonisolated; the monitor token is an
+        // opaque object AppKit hands back and nothing else touches it.
+        nonisolated(unsafe) private var monitor: Any?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if let monitor { NSEvent.removeMonitor(monitor); self.monitor = nil }
+            guard window != nil else { return }
+            monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) {
+                [weak self] event in
+                guard let self, let window = self.window, event.window === window else { return event }
+                // This view fills the popup's frame (it is its background),
+                // so "outside the popup" is "outside this view".
+                let inView = self.convert(event.locationInWindow, from: nil)
+                if !self.bounds.contains(inView) { self.onClick?() }
+                return event
+            }
+        }
+
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+        deinit { if let monitor { NSEvent.removeMonitor(monitor) } }
+    }
+}
+#else
+private struct ClickOutside: View {
+    let onClick: () -> Void
+    var body: some View { EmptyView() }
+}
+#endif
