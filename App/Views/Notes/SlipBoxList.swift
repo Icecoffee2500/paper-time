@@ -14,10 +14,38 @@ struct SlipBoxList: View {
         @Bindable var notes = model.notes
 
         VStack(spacing: 0) {
-            HStack(spacing: 8) {
+            // One row: the name, the search, the pen. Two rows put the field
+            // under the title and pushed the first note down a line for no
+            // reason a reader could see.
+            HStack(spacing: 10) {
                 Text("Notes")
                     .font(.headline)
-                Spacer()
+
+                // A capsule with a glass in it, not a bordered box. The
+                // bevelled field is the one control on this surface that
+                // still looked like a dialog, and a search field is a search
+                // field everywhere else on the machine.
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.callout)
+                        .foregroundStyle(.tertiary)
+                    TextField("Search notes", text: $notes.query)
+                        .textFieldStyle(.plain)
+                    if !notes.query.isEmpty {
+                        Button {
+                            model.notes.query = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.tertiary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Clear the search")
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Capsule().fill(.quaternary.opacity(0.5)))
+
                 Button {
                     notes.openNoteID = notes.create(paperID: nil).id
                 } label: {
@@ -29,33 +57,6 @@ struct SlipBoxList: View {
             .padding(.horizontal, 16)
             .padding(.top, 10)
             .padding(.bottom, 8)
-
-            // A capsule with a glass in it, not a bordered box. The bevelled
-            // field is the one control on this surface that still looked like
-            // a dialog, and a search field is a search field everywhere else
-            // on the machine.
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass")
-                    .font(.callout)
-                    .foregroundStyle(.tertiary)
-                TextField("Search notes", text: $notes.query)
-                    .textFieldStyle(.plain)
-                if !notes.query.isEmpty {
-                    Button {
-                        model.notes.query = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.tertiary)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Clear the search")
-                }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(Capsule().fill(.quaternary.opacity(0.5)))
-            .padding(.horizontal, 16)
-            .padding(.bottom, 10)
 
             if !notes.tags.isEmpty {
                 ScrollView(.horizontal) {

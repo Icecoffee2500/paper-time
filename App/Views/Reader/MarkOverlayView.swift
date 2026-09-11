@@ -61,8 +61,8 @@ final class MarkOverlayView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         guard let page, let context = NSGraphicsContext.current?.cgContext else { return }
-        let highlights = RoundedMarks.takeOver(page)
-        guard !highlights.isEmpty else { return }
+        let marks = RoundedMarks.takeOver(page)
+        guard !marks.isEmpty else { return }
 
         // The overlay covers the page's display box; page space maps onto it
         // by one scale factor and an offset. Neither is flipped: PDF and an
@@ -73,8 +73,8 @@ final class MarkOverlayView: NSView {
         context.translateBy(x: 0, y: 0)
         context.scaleBy(x: bounds.width / box.width, y: bounds.height / box.height)
         context.translateBy(x: -box.minX, y: -box.minY)
-        for highlight in highlights {
-            RoundedMarks.draw(highlight, in: context)
+        for mark in marks {
+            RoundedMarks.draw(mark, in: context)
         }
         context.restoreGState()
     }

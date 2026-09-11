@@ -100,6 +100,8 @@ final class ReaderCoordinator: NSObject {
     private let markupPanel = MarkupPanelController()
     private var markupTask: Task<Void, Never>?
     private var scrollMonitor: Any?
+    /// ← and → in a book, which PDFKit leaves unanswered.
+    private var arrowMonitor: Any?
     private var clickMonitor: Any?
     private var pinchMonitor: Any?
     private var scrolled: CGFloat = 0
@@ -361,12 +363,13 @@ final class ReaderCoordinator: NSObject {
         NotificationCenter.default.removeObserver(self)
         #if os(macOS)
         hideMarkupPanel()
-        for monitor in [scrollMonitor, clickMonitor, pinchMonitor].compactMap({ $0 }) {
+        for monitor in [scrollMonitor, arrowMonitor, clickMonitor, pinchMonitor].compactMap({ $0 }) {
             NSEvent.removeMonitor(monitor)
         }
         for observer in markupObservers { NotificationCenter.default.removeObserver(observer) }
         markupObservers = []
         scrollMonitor = nil
+        arrowMonitor = nil
         clickMonitor = nil
         pinchMonitor = nil
         #endif
@@ -795,7 +798,29 @@ final class ReaderCoordinator: NSObject {
             NSEvent.removeMonitor(monitor)
             scrollMonitor = nil
         }
+        if let monitor = arrowMonitor {
+            NSEvent.removeMonitor(monitor)
+            arrowMonitor = nil
+        }
         guard isOn else { return }
+        // A book is turned sideways. PDFKit answers ← and → with nothing in a
+        // spread — its arrows scroll, and a spread does not scroll — so the
+        // two keys that read as "turn the page" did nothing while ↑ and ↓,
+        // which read as "scroll", turned it. The event is taken at the window
+        // rather than in a `keyDown` override because the key lands in
+        // PDFKit's inner document view and never reaches the outer one.
+        arrowMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak view] event in
+            guard let view, let window = view.window, event.window === window,
+                  event.modifierFlags.intersection([.command, .option, .control]).isEmpty,
+                  window.firstResponder is NSView,
+                  !(window.firstResponder is NSTextView)
+            else { return event }
+            switch event.keyCode {
+            case 123: if view.canGoToPreviousPage { view.goToPreviousPage(nil) }; return nil
+            case 124: if view.canGoToNextPage { view.goToNextPage(nil) }; return nil
+            default: return event
+            }
+        }
         scrollMonitor = NSEvent.addLocalMonitorForEvents(
             matching: [.scrollWheel]
         ) { [weak self, weak view] event in

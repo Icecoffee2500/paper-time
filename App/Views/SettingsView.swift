@@ -87,35 +87,38 @@ struct SettingsView: View {
             // keyboard is pointing.
             VStack(alignment: .leading, spacing: 2) {
                 ForEach(Pane.allCases) { page in
+                    let isCurrent = pane == page
                     Button {
                         pane = page
                     } label: {
-                        Label(page.rawValue, systemImage: page.symbol)
-                            .foregroundStyle(pane == page ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(
-                                RoundedRectangle(cornerRadius: Corner.row, style: .continuous)
-                                    .fill(pane == page ? AnyShapeStyle(.tint) : AnyShapeStyle(.clear))
-                            )
-                            .contentShape(.rect)
+                        Label {
+                            Text(page.rawValue)
+                        } icon: {
+                            Image(systemName: page.symbol)
+                                .foregroundStyle(isCurrent ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                        }
+                        .foregroundStyle(.primary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        // The chosen page is the one lifted off the ground —
+                        // a white card with a soft edge — rather than the one
+                        // painted blue. The blue said "selected in a list";
+                        // this says "the page you are on".
+                        .background(
+                            RoundedRectangle(cornerRadius: Corner.row + 2, style: .continuous)
+                                .fill(isCurrent ? AnyShapeStyle(.background) : AnyShapeStyle(.clear))
+                                .shadow(color: .black.opacity(isCurrent ? 0.08 : 0), radius: 3, y: 1)
+                        )
+                        .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
                 }
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 10)
-            .frame(width: 172)
-            .padding(.top, 14)
-
-            // One hairline, and only here. Two columns of the same shade need
-            // something to say where one stops; the rule that had to go was
-            // the one across the top, which divided nothing. Fainter than a
-            // `Divider`, which at this length reads as a drawn border.
-            Rectangle()
-                .fill(Color.primary.opacity(0.07))
-                .frame(width: 1)
+            .frame(width: 176)
+            .padding(.top, 10)
 
             VStack(spacing: 0) {
                 // Above the page rather than in it, so it stays put while the
@@ -129,16 +132,13 @@ struct SettingsView: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            // Stops the page drawing up behind the traffic lights. A scroll
-            // view near the top of a full-height window extends itself into
-            // the titlebar and insets its content instead, which is right
-            // until something is scrolled: then the paragraph that has gone
-            // past the top is still drawn, over the title. Covering it is not
-            // on — a material laid over the ground blurs the same desktop
-            // twice and comes out milky white — so the column keeps its
-            // drawing inside itself.
-            .clipped()
-            .background(Color(nsColor: .textBackgroundColor).opacity(0.3))
+            // The page as a panel: rounded, lifted, and clear of the edges
+            // on three sides, with the sidebar sitting on the ground beside
+            // it. The same arrangement as the library window — and the one
+            // Aside uses, which is where the idea came from. The clip is also
+            // what keeps a scrolled page from drawing up behind the title.
+            .columnPanel()
+            .padding([.top, .trailing, .bottom], Column.margin)
         }
         .frame(width: 760, height: 540)
         .background { Column.ground }

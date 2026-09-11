@@ -115,6 +115,15 @@ struct PaperTimeCommands: Commands {
 
             Divider()
 
+            command("Continuous", .layoutContinuous, post: .paperTimeLayoutContinuous)
+                .disabled(model.library?.selectedPaperID == nil)
+            command("Single Page", .layoutSinglePage, post: .paperTimeLayoutSinglePage)
+                .disabled(model.library?.selectedPaperID == nil)
+            command("Book", .layoutBook, post: .paperTimeLayoutBook)
+                .disabled(model.library?.selectedPaperID == nil)
+
+            Divider()
+
             command("Zoom In", .zoomIn, post: .paperTimeZoomIn)
             command("Zoom Out", .zoomOut, post: .paperTimeZoomOut)
             command("Actual Size", .actualSize, post: .paperTimeActualSize)
@@ -147,6 +156,9 @@ extension Notification.Name {
     static let paperTimeLinkToNote = Notification.Name("PaperTime.linkToNote")
     static let paperTimeUltraCopy = Notification.Name("PaperTime.ultraCopy")
     static let paperTimeToggleFocus = Notification.Name("PaperTime.toggleFocus")
+    static let paperTimeLayoutContinuous = Notification.Name("PaperTime.layoutContinuous")
+    static let paperTimeLayoutSinglePage = Notification.Name("PaperTime.layoutSinglePage")
+    static let paperTimeLayoutBook = Notification.Name("PaperTime.layoutBook")
     static let paperTimeZoomIn = Notification.Name("PaperTime.zoomIn")
     static let paperTimeZoomOut = Notification.Name("PaperTime.zoomOut")
     static let paperTimeActualSize = Notification.Name("PaperTime.actualSize")

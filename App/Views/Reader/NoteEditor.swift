@@ -60,6 +60,20 @@ struct NoteEditor: NSViewRepresentable {
         textView.linkTextAttributes = [.cursor: NSCursor.pointingHand]
         scrollView.documentView = textView
 
+        // Over the whole scroll view, above the text, so the glow it draws
+        // for a hovered chip is not something the text has to redraw.
+        let hover = ChipHoverView(frame: scrollView.bounds)
+        hover.autoresizingMask = [.width, .height]
+        scrollView.addSubview(hover, positioned: .above, relativeTo: nil)
+        textView.chipHoverView = hover
+        // Scrolling moves the chip out from under its glow; the glow goes
+        // until the pointer finds the chip again.
+        scrollView.contentView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            textView, selector: #selector(NoteTextView.scrolled),
+            name: NSView.boundsDidChangeNotification, object: scrollView.contentView
+        )
+
         context.coordinator.textView = textView
         context.coordinator.showsRawText = showsRawText
         textView.postsFrameChangedNotifications = true
@@ -425,6 +439,84 @@ final class NoteTextView: NSTextView {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(markdown, forType: .string)
         return true
+    }
+
+    // MARK: Hovering
+
+    /// Draws the glow over the chip under the pointer. Owned by the scroll
+    /// view; this only tells it where.
+    weak var chipHoverView: ChipHoverView?
+    private var hoveredChip: NSRange?
+    private var tracking: NSTrackingArea?
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let tracking { removeTrackingArea(tracking) }
+        let area = NSTrackingArea(
+            rect: .zero,
+            options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+            owner: self, userInfo: nil
+        )
+        addTrackingArea(area)
+        tracking = area
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        super.mouseMoved(with: event)
+        setHoveredChip(chipRange(at: event))
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        setHoveredChip(nil)
+    }
+
+    @objc func scrolled() { setHoveredChip(nil) }
+
+    /// The whole chip under the pointer, in document offsets — and only when
+    /// the pointer is on its letters. `characterIndexForInsertion` snaps to
+    /// the nearest gap, so a pointer in the margin beside a chip would
+    /// otherwise count as on it.
+    private func chipRange(at event: NSEvent) -> NSRange? {
+        let point = convert(event.locationInWindow, from: nil)
+        let index = characterIndexForInsertion(at: point)
+        let text = attributedString()
+        guard index >= 0, index < text.length else { return nil }
+        var range = NSRange()
+        guard text.attribute(NoteChip.attribute, at: index, longestEffectiveRange: &range,
+                             in: NSRange(location: 0, length: text.length)) != nil
+        else { return nil }
+        return chipRects(range).contains { $0.contains(point) } ? range : nil
+    }
+
+    /// The boxes a chip occupies, one per line, in this view's coordinates.
+    private func chipRects(_ range: NSRange) -> [CGRect] {
+        guard let layout = textLayoutManager,
+              let content = layout.textContentManager,
+              let start = content.location(content.documentRange.location, offsetBy: range.location),
+              let end = content.location(start, offsetBy: range.length),
+              let span = NSTextRange(location: start, end: end)
+        else { return [] }
+        var rects: [CGRect] = []
+        layout.enumerateTextSegments(in: span, type: .standard, options: []) { _, frame, _, _ in
+            rects.append(
+                frame.offsetBy(dx: textContainerOrigin.x, dy: textContainerOrigin.y)
+                    .insetBy(dx: -NoteChip.padding.width, dy: -NoteChip.padding.height)
+            )
+            return true
+        }
+        return rects
+    }
+
+    private func setHoveredChip(_ range: NSRange?) {
+        guard hoveredChip != range else { return }
+        hoveredChip = range
+        guard let chipHoverView else { return }
+        guard let range else {
+            chipHoverView.rects = []
+            return
+        }
+        chipHoverView.rects = chipRects(range).map { convert($0, to: chipHoverView) }
     }
 
     // MARK: Selecting

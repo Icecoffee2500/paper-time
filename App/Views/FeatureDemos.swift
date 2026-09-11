@@ -177,11 +177,12 @@ private struct AnnotationDemo: View {
                 .padding(.vertical, 1)
                 .background(
                     RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .fill(mark.underlined ? .clear : mark.tint.opacity(0.4))
+                        // As pale as the marks on the real page now are.
+                        .fill(mark.underlined ? .clear : mark.tint.opacity(0.28))
                 )
                 .overlay(alignment: .bottom) {
                     if mark.underlined {
-                        Rectangle().fill(mark.tint).frame(height: 1.5)
+                        Rectangle().fill(mark.tint).frame(height: 2)
                     }
                 }
                 .overlay(
@@ -722,6 +723,11 @@ private struct GraphDemo: View {
         CGPoint(x: 0.58, y: 0.86),
     ]
 
+    /// Who the seven are. Invented, but recognisable — the point is that a
+    /// dot with a name under it reads as a paper and a bare dot reads as a
+    /// diagram.
+    private let names = ["Attention", "ViT", "V-JEPA 2", "DINOv2", "OpenVLA", "π0", "Octo"]
+
     private let edges: [(Int, Int, Kind)] = [
         (0, 1, .citation), (1, 2, .citation), (2, 4, .citation),
         (0, 2, .note), (2, 6, .note),
@@ -763,6 +769,14 @@ private struct GraphDemo: View {
                                         focus = focus == index ? nil : index
                                     }
                                 }
+                            if scale.isFull {
+                                Text(names[index])
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .opacity(focus == nil || related(index) ? 1 : 0.2)
+                                    .position(CGPoint(x: point.x, y: point.y + dot + 6))
+                                    .allowsHitTesting(false)
+                            }
                         }
                     }
                 }

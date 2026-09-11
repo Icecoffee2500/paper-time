@@ -119,6 +119,7 @@ public enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
     case addPapers, exportBibTeX, copyCitationKey, resolveMetadata, refreshFolder
     // Reading
     case searchEverything, findInDocument, ultracopy, linkToNote
+    case layoutContinuous, layoutSinglePage, layoutBook
     // Marking
     case highlight, underline, newNote
     // Panes
@@ -146,7 +147,8 @@ public enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .addPapers, .exportBibTeX, .copyCitationKey, .resolveMetadata, .refreshFolder:
             .library
-        case .searchEverything, .findInDocument, .ultracopy, .linkToNote:
+        case .searchEverything, .findInDocument, .ultracopy, .linkToNote,
+             .layoutContinuous, .layoutSinglePage, .layoutBook:
             .reading
         case .highlight, .underline, .newNote:
             .marking
@@ -171,6 +173,9 @@ public enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
         case .findInDocument: "Find in Document"
         case .ultracopy: "Ultracopy"
         case .linkToNote: "Link Selection to Note"
+        case .layoutContinuous: "Continuous Layout"
+        case .layoutSinglePage: "Single Page Layout"
+        case .layoutBook: "Book Layout"
         case .highlight: "Highlight Selection"
         case .underline: "Underline Selection"
         case .newNote: "New Note"
@@ -212,6 +217,9 @@ public enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
         case .findInDocument: Shortcut("f")
         case .ultracopy: Shortcut("c", [.command, .shift])
         case .linkToNote: Shortcut("l")
+        case .layoutContinuous: Shortcut("1")
+        case .layoutSinglePage: Shortcut("2")
+        case .layoutBook: Shortcut("3")
         case .highlight: Shortcut("h", [.command, .shift])
         case .underline: Shortcut("u", [.command, .shift])
         case .newNote: Shortcut("n")
@@ -219,7 +227,10 @@ public enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
         case .paperList: Shortcut("p")
         case .reader: Shortcut("\\")
         case .inspector: Shortcut("]")
-        case .focus: Shortcut("f", [.command, .control])
+        // Not ⌃⌘F, which is the system's own key for full screen: pressed
+        // in this app it went to the window and never reached the command,
+        // which is what made Focus look broken.
+        case .focus: Shortcut("f", [.command, .shift])
         case .floatingList: Shortcut("l", [.command, .option])
         case .zoomIn: Shortcut("+")
         case .zoomOut: Shortcut("-")

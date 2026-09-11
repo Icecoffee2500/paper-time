@@ -81,10 +81,10 @@ enum ReleaseNotes {
         ),
         Highlight(
             symbol: "highlighter",
-            title: Text2("표시는 PDF 안에 남는다", "Your marks go into the PDF"),
+            title: Text2("표시는 PDF 안에 남고, 여기서는 더 예쁘다", "Your marks go into the PDF — and look better here"),
             detail: Text2(
-                "형광펜과 밑줄이 옆에 붙은 데이터베이스가 아니라 파일 자체에 기록된다. 같은 논문을 미리보기로 열든, 아이패드에서 열든, 십 년 뒤에 열든 표시는 그대로 있다.",
-                "Highlights and underlines are written into the file itself, not into a database beside it. Open the same paper in Preview, on an iPad, or in ten years — the marks are still there."
+                "형광펜과 밑줄이 옆에 붙은 데이터베이스가 아니라 파일 자체에 기록된다. 미리보기든 아이패드든 십 년 뒤든 표시는 그대로다. 그리고 이 앱 안에서는 형광펜의 끝이 둥글고 글자가 살 만큼 연하며, 밑줄은 눈에 띄게 짙고, 마우스를 올리면 밝아진다 — 파일은 그대로 두고 그리는 법만 바꾼 것이라 다른 앱에서는 볼 수 없는 생김새다. 노트의 인용구도 같은 모양이다.",
+                "Highlights and underlines are written into the file itself, not into a database beside it — Preview, an iPad, ten years from now, the marks are there. And in here a highlight has rounded ends and stays pale enough to read through, an underline is dark enough to see, and either brightens under the pointer. The file is untouched; only the drawing is ours, which is why no other PDF app looks like this. A quotation in a note wears the same shape."
             ),
             demo: .annotations
         ),
@@ -179,6 +179,18 @@ enum ReleaseNotes {
                     demo: .annotations
                 ),
                 Entry(
+                    Text2("둥근 표시", "Rounded marks"),
+                    Text2("형광펜은 끝이 둥글고 글자가 살 만큼 연하다. 밑줄·취소선은 짙다. 마우스를 올리면 밝아지고 얇은 테두리가 생긴다. 노트의 인용구 칩도 같은 모양 — 파일은 그대로 두고 이 앱이 그리는 법만 바꾼 것이라 다른 PDF 앱에는 없는 생김새다.",
+                          "Highlights have rounded ends and stay pale enough to read through; underlines and strikes are dark. Under the pointer a mark brightens and gains a thin edge. Quotation chips in notes wear the same shape. The file is untouched — only the drawing is ours, which is why no other PDF app looks like this."),
+                    demo: .annotations
+                ),
+                Entry(
+                    Text2("배치 단축키", "Layout keys"),
+                    Text2("⌘1 연속 스크롤, ⌘2 한 장씩, ⌘3 책. 책에서는 ←→로 장을 넘긴다.",
+                          "⌘1 continuous, ⌘2 single page, ⌘3 book. In a book, ← and → turn the page."),
+                    action: .layoutBook
+                ),
+                Entry(
                     Text2("인용구 링크", "Passage links"),
                     Text2("선택한 글을 노트로 보내면 둥근 인용구로 앉고, 누르면 그 글이 있던 페이지의 정확한 자리로 돌아간다.",
                           "Send a selection to a note and it lands as a rounded quotation. Click it to jump back to the exact spot on the page."),
@@ -238,7 +250,7 @@ enum ReleaseNotes {
             Feature(Text2("전체 검색", "Search everything"),
                     Text2("논문·노트·저자를 한 칸에서 찾는다.", "Papers, notes and authors, from one field."), action: .searchEverything),
             Feature(Text2("페이지 배치", "Page layout"),
-                    Text2("연속 스크롤, 한 장씩, 또는 두 장 펼침. AA 메뉴에 있다.", "Continuous scrolling, single page, or a two-page spread. In the AA menu.")),
+                    Text2("연속 스크롤, 한 장씩, 또는 두 장 펼침. AA 메뉴에 있고, ⌘1·⌘2·⌘3으로도 바꾼다. 책에서는 ←→로 장을 넘긴다.", "Continuous scrolling, single page, or a two-page spread. In the AA menu, and on ⌘1, ⌘2 and ⌘3. In a book, ← and → turn the page."), action: .layoutBook),
             Feature(Text2("페이지 색", "Page tint"),
                     Text2("흰 종이, 세피아, 어둡게 — 그리고 Glass는 종이의 흰색을 걷어내 글자가 창 위에 앉게 한다. AA 메뉴에 있다.", "Paper white, sepia, dimmed — or Glass, which drops the page's white so it sits on the window. In the AA menu.")),
             Feature(Text2("논문에 집중", "Focus on the paper"),

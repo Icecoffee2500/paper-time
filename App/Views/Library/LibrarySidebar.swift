@@ -50,7 +50,7 @@ struct LibrarySidebar: View {
                 }
             }
 
-            Section("Library") {
+            Section {
                 Label("All Papers", systemImage: "tray.full")
                     .count(model.counts.all)
                     .tag(LibraryModel.Scope.all)
@@ -73,6 +73,18 @@ struct LibrarySidebar: View {
                 Label("Needs Review", systemImage: "exclamationmark.triangle")
                     .count(model.counts.needsReview)
                     .tag(LibraryModel.Scope.needsReview)
+            } header: {
+                // The folder's name, small, where a headline used to sit
+                // over the whole list saying the same thing louder.
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Library")
+                    Spacer()
+                    Text(model.displayName)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
             }
 
             Section("Slip-Box") {

@@ -290,14 +290,9 @@ struct LibraryWindow: View {
 
     private var sidebarColumn: some View {
         VStack(alignment: .leading, spacing: 0) {
-            #if os(macOS)
-            Text(model.displayName)
-                .font(.headline)
-                .lineLimit(1)
-                .padding(.horizontal, 16)
-                .padding(.top, 10)
-                .padding(.bottom, 6)
-            #endif
+            // No title. The folder's name was a headline over a list whose
+            // first section header already says "Library"; it is beside that
+            // header now, small, and the list starts where the title was.
             LibrarySidebar(model: model)
         }
     }
@@ -320,6 +315,15 @@ struct LibraryWindow: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .paperTimeToggleFocus)) { _ in
             app.toggleFocusMode()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .paperTimeLayoutContinuous)) { _ in
+            configuration.layout = .continuous
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .paperTimeLayoutSinglePage)) { _ in
+            configuration.layout = .singlePage
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .paperTimeLayoutBook)) { _ in
+            configuration.layout = .book
         }
         .fileImporter(
             isPresented: $isImportingPDFs,
@@ -520,9 +524,37 @@ struct LibraryWindow: View {
                 sortMenu
                 viewMenu
                 shareMenu
+                paneToggles
             }
             .toolbarButtons()
         }
+    }
+
+    /// The four panes, as four buttons.
+    ///
+    /// There used to be one, for the inspector, at the far end of the toolbar
+    /// — from when only the two sidebars could be hidden. Now every pane can,
+    /// so the one button became the odd one out. Four together, lit when their
+    /// pane is showing, next to the rest of the controls.
+    private var paneToggles: some View {
+        HStack(spacing: 2) {
+            paneToggle("sidebar.left", "Sidebar", on: app.isSidebarVisible) { app.toggleSidebar() }
+            paneToggle("list.bullet.rectangle", "Paper List", on: app.showsPaperList) { app.togglePaperList() }
+            paneToggle("doc.text", "Paper", on: app.showsReader && !app.isFocusMode) { app.toggleReader() }
+            paneToggle("sidebar.right", "Inspector", on: app.showsInspector) { app.toggleInspector() }
+        }
+        .padding(.leading, 6)
+    }
+
+    private func paneToggle(
+        _ symbol: String, _ name: String, on: Bool, action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Label(name, systemImage: symbol)
+                .toolbarIcon()
+                .foregroundStyle(on ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
+        }
+        .help(on ? "Hide the \(name.lowercased())" : "Show the \(name.lowercased())")
     }
 
     @ViewBuilder
@@ -571,11 +603,13 @@ struct LibraryWindow: View {
             )
             #endif
             Divider()
+            // No `.keyboardShortcut` here: the menu bar's Focus command
+            // already carries ⌃⌘F, and a second declaration of the same key
+            // on this toggle meant the two fought and neither fired.
             Toggle(
                 "Focus on the Paper",
                 isOn: Binding(get: { app.isFocusMode }, set: { app.setFocusMode($0) })
             )
-            .keyboardShortcut("f", modifiers: [.command, .control])
         } label: {
             Label("View Options", systemImage: "textformat.size").toolbarIcon()
         }
@@ -632,15 +666,6 @@ struct LibraryWindow: View {
             }
         }
 
-        ToolbarItem(id: "inspector", placement: .primaryAction) {
-            Button {
-                app.toggleInspector()
-            } label: {
-                Label("Inspector", systemImage: "sidebar.trailing")
-            }
-            .toolbarButtons()
-            .help("Show or hide the inspector (Command-])")
-        }
     }
 
     // MARK: - Actions
@@ -792,12 +817,28 @@ struct PaperDetailColumn: View {
                 // every selection, and creating a `PDFView` is most of what
                 // opening a paper used to cost. The reader reloads itself when
                 // the paper changes instead.
-                ReaderScreen(
-                    library: model,
-                    paper: paper,
-                    configuration: configuration,
-                    link: link
-                )
+                VStack(spacing: 0) {
+                    // The paper's name, where the list has "All Papers" and
+                    // the slip-box has "Notes". The page keeps its place; the
+                    // strip is what the panel gained by reaching higher.
+                    HStack {
+                        Text(paper.meta.displayTitle)
+                            .font(.headline)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 10)
+                    .padding(.bottom, 6)
+
+                    ReaderScreen(
+                        library: model,
+                        paper: paper,
+                        configuration: configuration,
+                        link: link
+                    )
+                }
             } else {
                 ContentUnavailableView(
                     "No Paper Selected",
@@ -933,7 +974,7 @@ enum Column {
     /// it, the panels sat a good inch below the buttons. This is empirical —
     /// there is no API for where the controls stop, only for where the band
     /// does.
-    static let underToolbar: CGFloat = 38
+    static let underToolbar: CGFloat = 46
 
     /// What shows between and around the panels, and up through the toolbar,
     /// which has no colour of its own.

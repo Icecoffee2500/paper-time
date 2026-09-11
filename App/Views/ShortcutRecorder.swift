@@ -17,9 +17,24 @@ struct ShortcutRecorder: View {
 
     @State private var isRecording = false
 
+    /// True while any recorder on screen is waiting for a key.
+    ///
+    /// The shortcut search catches combinations too, whenever its field has
+    /// focus — and clicking a recorder does not take that focus away, so the
+    /// key meant to become a shortcut was being typed into the search
+    /// instead. While a recorder is open the search stands aside.
+    @MainActor static var isRecordingAny = false
+
+    private var recording: Binding<Bool> {
+        Binding(
+            get: { isRecording },
+            set: { isRecording = $0; ShortcutRecorder.isRecordingAny = $0 }
+        )
+    }
+
     var body: some View {
         Button {
-            isRecording.toggle()
+            recording.wrappedValue.toggle()
         } label: {
             Text(isRecording ? "Press a key…" : (isUnset ? "—" : shortcut.display))
                 .font(.body.monospaced())
@@ -42,9 +57,9 @@ struct ShortcutRecorder: View {
         }
         .buttonStyle(.plain)
         .background(
-            KeyCatcher(isRecording: $isRecording) { key, modifiers in
+            KeyCatcher(isRecording: recording) { key, modifiers in
                 onRecord(Shortcut(key, modifiers))
-                isRecording = false
+                recording.wrappedValue = false
             }
             .allowsHitTesting(false)
         )
@@ -138,6 +153,8 @@ struct KeyCatcher: NSViewRepresentable {
 
         override func performKeyEquivalent(with event: NSEvent) -> Bool {
             guard let recorder, recorder.isRecording else { return false }
+            // A recorder that is open has first claim on the next key.
+            if recorder.capturesAnything, ShortcutRecorder.isRecordingAny { return false }
 
             // Escape gives up without changing anything, unless the caller
             // has said what it means here.
