@@ -106,8 +106,10 @@ final class ReaderCoordinator: NSObject {
     /// Refits the spread to the view's width while a book is open.
     private var spreadObserver: (any NSObjectProtocol)?
 
-    /// The crop box each page had before the book trimmed it, by page index.
-    private var uncroppedBoxes: [Int: CGRect] = [:]
+    /// The document the book trimmed, and the crop box each of its pages had
+    /// before, by page index — so the trim is undone on the pages it was
+    /// done to, and never applied to a paper that arrived later.
+    private var trimmed: (document: PDFDocument, boxes: [Int: CGRect])?
 
     /// How far the trim stays clear of the text, in page points.
     private static let trimMargin: CGFloat = 18
@@ -124,40 +126,53 @@ final class ReaderCoordinator: NSObject {
     /// plus a constant, the same for every paper. Only the crop box changes,
     /// only in memory, and only while the book is open — page coordinates,
     /// and so every mark and every anchor, are untouched.
+    ///
+    /// Measured line by line, from the lines wide enough to be body text: a
+    /// journal's "Downloaded from …" running up the margin is a line too,
+    /// and taken whole it put the text block's edge at the edge of the page.
     private func trimForBook(_ document: PDFDocument) {
-        guard uncroppedBoxes.isEmpty else { return }
+        if let trimmed, trimmed.document === document { return }
+        untrim()
         var minX = CGFloat.greatestFiniteMagnitude, maxX: CGFloat = -.greatestFiniteMagnitude
         var sampled = 0
         for index in 0..<min(document.pageCount, 8) {
             guard let page = document.page(at: index) else { continue }
             let media = page.bounds(for: .mediaBox)
-            // A page with a real body of text on it; a title page with a
-            // figure or a page of tables can lie about where the margins are.
             guard let text = page.selection(for: media), (text.string?.count ?? 0) > 400 else { continue }
-            let block = text.bounds(for: page)
-            guard block.width > media.width * 0.45 else { continue }
-            minX = min(minX, block.minX)
-            maxX = max(maxX, block.maxX)
+            var pageMin = CGFloat.greatestFiniteMagnitude, pageMax: CGFloat = -.greatestFiniteMagnitude
+            for line in text.selectionsByLine() {
+                let bounds = line.bounds(for: page)
+                // A line of a column is wide and short; anything tall and
+                // narrow is running up the side and is not the text block.
+                guard bounds.width > media.width * 0.2, bounds.height < bounds.width else { continue }
+                pageMin = min(pageMin, bounds.minX)
+                pageMax = max(pageMax, bounds.maxX)
+            }
+            guard pageMax > pageMin, pageMax - pageMin > media.width * 0.45 else { continue }
+            minX = min(minX, pageMin)
+            maxX = max(maxX, pageMax)
             sampled += 1
         }
         guard sampled > 0 else { return }
+        var boxes: [Int: CGRect] = [:]
         for index in 0..<document.pageCount {
             guard let page = document.page(at: index) else { continue }
             let box = page.bounds(for: .cropBox)
-            uncroppedBoxes[index] = box
             let left = max(box.minX, minX - Self.trimMargin)
             let right = min(box.maxX, maxX + Self.trimMargin)
             guard right - left > box.width * 0.4 else { continue }
+            boxes[index] = box
             page.setBounds(CGRect(x: left, y: box.minY, width: right - left, height: box.height), for: .cropBox)
         }
+        trimmed = (document, boxes)
     }
 
-    private func untrim(_ document: PDFDocument) {
-        guard !uncroppedBoxes.isEmpty else { return }
-        for (index, box) in uncroppedBoxes {
-            document.page(at: index)?.setBounds(box, for: .cropBox)
+    private func untrim() {
+        guard let trimmed else { return }
+        for (index, box) in trimmed.boxes {
+            trimmed.document.page(at: index)?.setBounds(box, for: .cropBox)
         }
-        uncroppedBoxes = [:]
+        self.trimmed = nil
         link.bookGutter = 0
     }
 
@@ -370,6 +385,13 @@ final class ReaderCoordinator: NSObject {
     func update(_ view: PDFView, revision: Int) {
         if view.document !== session.document {
             view.document = session.document
+            if appliedLayout == .book {
+                trimForBook(session.document)
+                DispatchQueue.main.async { [weak self, weak view] in
+                    guard let self, let view else { return }
+                    self.fitSpread(in: view)
+                }
+            }
             shownRevision = revision
             #if os(macOS)
             hideMarkupPanel()
@@ -499,7 +521,8 @@ final class ReaderCoordinator: NSObject {
             }
         }
 
-        if layout != .book { untrim(session.document) }
+        untrim()
+        applyTint(to: view)
         // The space between two pages of a spread. Wide, and the same for
         // every paper, because the pages have been trimmed to their text:
         // this gap plus the trim is the whole gutter.
@@ -595,8 +618,13 @@ final class ReaderCoordinator: NSObject {
         // becomes dark, black ink becomes light, and a colour keeps its hue.
         switch configuration.tint {
         case .none:
-            view.backgroundColor = .windowBackgroundColor
-            view.pageShadowsEnabled = true
+            // In a spread the ground is the paper's own white and there is
+            // no shadow under the pages: two white cards on a grey ground
+            // read as two cards, and one white field with two pages in it
+            // reads as a book. Scrolling layouts keep the window's ground.
+            let book = configuration.layout == .book
+            view.backgroundColor = book ? .textBackgroundColor : .windowBackgroundColor
+            view.pageShadowsEnabled = !book
         case .sepia, .glass:
             view.backgroundColor = .clear
             view.pageShadowsEnabled = false
@@ -606,6 +634,11 @@ final class ReaderCoordinator: NSObject {
         }
         setGlassCompositing(on: view, configuration.tint == .glass || configuration.tint == .sepia)
         setNightFilter(on: view, configuration.tint == .dim)
+        NightMode.isOn = configuration.tint == .dim
+        // The figures overlay draws only under the dimmed tint; ask every
+        // page to draw again so they appear or go.
+        for page in view.visiblePages { MarkOverlayView.refresh(page) }
+        view.needsDisplay = true
         #endif
     }
 
@@ -1122,7 +1155,7 @@ extension ReaderCoordinator: @preconcurrency PDFPageOverlayViewProvider {
         // No ink canvas on the Mac — PencilKit has none here, and ink written
         // on iPad is in the PDF as ordinary annotations PDFKit draws itself.
         // The overlay is where the highlights are drawn with rounded ends.
-        MarkOverlayView(page: page)
+        PageOverlay(page: page)
     }
     #endif
 }
