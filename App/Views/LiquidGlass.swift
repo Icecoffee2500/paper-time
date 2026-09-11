@@ -192,6 +192,12 @@ private struct PlainTitlebar: NSViewRepresentable {
         @objc private func flatten() {
             guard let window else { return }
             window.titlebarSeparatorStyle = .none
+            // Transparent, and covered by the window's own ground instead.
+            // AppKit's titlebar material is flat white over a translucent
+            // window, which put a hard step across the top — the same
+            // boundary as the rule, drawn in tone rather than in ink. The
+            // cover is the ground itself, so the strip the page scrolls under
+            // is the same glass as everything around it.
             window.titlebarAppearsTransparent = true
             window.styleMask.insert(.fullSizeContentView)
         }

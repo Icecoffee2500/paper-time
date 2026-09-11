@@ -84,6 +84,13 @@ struct KeyCatcher: NSViewRepresentable {
     /// would leave no way to quit.
     static let reserved: Set<String> = ["q", "w", "h", "m", ",", "`"]
 
+    /// Let through even by a search that is catching everything else.
+    ///
+    /// A field that swallowed ⌘Q and ⌘W would be a field you could not leave,
+    /// which is a worse bargain than not being able to ask what those two
+    /// keys do.
+    static let escapeHatches: Set<String> = ["q", "w"]
+
     final class CatchingView: NSView {
         var recorder: KeyCatcher?
 
@@ -144,8 +151,18 @@ struct KeyCatcher: NSViewRepresentable {
                   let character = CatchingView.key(for: event),
                   !character.isWhitespace
             else {
-                if !recorder.capturesAnything { NSSound.beep() }
+                // Ordinary typing comes through here too — AppKit offers
+                // every key down as a key equivalent first — so a search that
+                // catches combinations must hand the plain keys back, or the
+                // field it is attached to can never be typed in.
+                if recorder.capturesAnything { return false }
+                NSSound.beep()
                 return true
+            }
+            if recorder.capturesAnything,
+               modifiers == .command,
+               KeyCatcher.escapeHatches.contains(String(character)) {
+                return false
             }
             if !recorder.capturesAnything,
                modifiers == .command,

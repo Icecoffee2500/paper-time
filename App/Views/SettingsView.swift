@@ -28,8 +28,9 @@ struct SettingsView: View {
     @FocusState private var searchIsFocused: Bool
     /// Which log lines are showing what they mean.
     @State private var openEntries: Set<String> = []
-    /// True while the next key combination is being caught rather than run.
-    @State private var isCatchingKey = false
+    /// Which versions are unfolded. The newest one is, to begin with; the
+    /// rest fold away as they accumulate.
+    @State private var openReleases: Set<String> = Set(ReleaseNotes.releases.prefix(1).map(\.version))
 
     /// The pages of Settings.
     ///
@@ -90,11 +91,43 @@ struct SettingsView: View {
                 .fill(Color.primary.opacity(0.07))
                 .frame(width: 1)
 
-            settingsForm
-                .frame(maxWidth: .infinity)
-                .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
+            VStack(spacing: 0) {
+                // Above the page rather than in it, so it stays put while the
+                // keys scroll — and so the Form stops right-aligning it.
+                if pane == .shortcuts { shortcutSearchBar }
+
+                if pane == .about {
+                    AboutView()
+                } else {
+                    settingsForm
+                }
+            }
+            .frame(maxWidth: .infinity)
+            // Stops the page drawing up behind the traffic lights. A scroll
+            // view near the top of a full-height window extends itself into
+            // the titlebar and insets its content instead, which is right
+            // until something is scrolled: then the paragraph that has gone
+            // past the top is still drawn, over the title. Covering it is not
+            // on — a material laid over the ground blurs the same desktop
+            // twice and comes out milky white — so the column keeps its
+            // drawing inside itself.
+            .clipped()
+            .background(Color(nsColor: .textBackgroundColor).opacity(0.3))
         }
         .frame(width: 760, height: 540)
+        .background { Column.ground }
+        .sheet(isPresented: $showsReleaseNotes) {
+            WhatsNewView(marksAsSeen: false)
+        }
+        .sheet(isPresented: $showsFeatureLog) {
+            VStack(spacing: 0) {
+                FeatureLogView()
+                Button(ReleaseNotes.string("완료", "Done")) { showsFeatureLog = false }
+                    .keyboardShortcut(.defaultAction)
+                    .padding(.bottom, 16)
+            }
+        }
+        .translucentWindow()
         .plainTitlebar()
         .thinScrollers()
         #endif
@@ -113,7 +146,7 @@ struct SettingsView: View {
                 readingSection(settings: settings)
             case .shortcuts: shortcutsSection
             case .log: logSection
-            case .about: aboutSection
+            case .about: EmptyView()
             }
             #else
             librarySection
@@ -127,17 +160,6 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
-        .sheet(isPresented: $showsReleaseNotes) {
-            WhatsNewView(marksAsSeen: false)
-        }
-        .sheet(isPresented: $showsFeatureLog) {
-            VStack(spacing: 0) {
-                FeatureLogView()
-                Button(ReleaseNotes.string("완료", "Done")) { showsFeatureLog = false }
-                    .keyboardShortcut(.defaultAction)
-                    .padding(.bottom, 16)
-            }
-        }
         .confirmationDialog(
             "Change Library Folder?",
             isPresented: $showsChangeFolderConfirmation,
@@ -273,81 +295,11 @@ struct SettingsView: View {
         #if os(macOS)
         @Bindable var app = app
 
-        Section {
-            // The whole capsule takes the click, not just the letters. A
-            // plain text field is exactly as big as its text, so an empty one
-            // had almost nothing to hit — the field worked and could not be
-            // reached, which is the same as not working.
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.tertiary)
-
-                if isCatchingKey {
-                    Text("Press the keys…")
-                        .foregroundStyle(.tertiary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    TextField("", text: $shortcutQuery)
-                        .textFieldStyle(.plain)
-                        .multilineTextAlignment(.leading)
-                        .focused($searchIsFocused)
-                        .overlay(alignment: .leading) {
-                            if shortcutQuery.isEmpty {
-                                Text("Search by name or key")
-                                    .font(.body.weight(.light))
-                                    .foregroundStyle(.tertiary)
-                                    .allowsHitTesting(false)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-
-                if !shortcutQuery.isEmpty, !isCatchingKey {
-                    Button {
-                        shortcutQuery = ""
-                        capturedKey = nil
-                    } label: {
-                        Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                // Pressing a combination into an ordinary field does not type
-                // it, it runs it — ⌘K in this window was opening the search
-                // palette behind it. Armed, the next combination is caught
-                // before the menu bar sees it and written into the field.
-                Button {
-                    isCatchingKey.toggle()
-                    if isCatchingKey { searchIsFocused = false }
-                } label: {
-                    Image(systemName: "keyboard")
-                        .foregroundStyle(isCatchingKey ? AnyShapeStyle(.tint) : AnyShapeStyle(.tertiary))
-                }
-                .buttonStyle(.plain)
-                .help("Find what a key does — click, then press the keys")
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .background(Capsule().fill(.quaternary.opacity(0.5)))
-            .contentShape(Capsule())
-            .onTapGesture { if !isCatchingKey { searchIsFocused = true } }
-            .background(
-                KeyCatcher(isRecording: $isCatchingKey, capturesAnything: true) { key, modifiers in
-                    let pressed = Shortcut(key, modifiers)
-                    shortcutQuery = pressed.display
-                    capturedKey = pressed
-                    isCatchingKey = false
-                }
-                .allowsHitTesting(false)
-            )
-            // Editing the text by hand puts it back to an ordinary search.
-            .onChange(of: shortcutQuery) { _, now in
-                if now != capturedKey?.display { capturedKey = nil }
-            }
-            if matchingActions.isEmpty {
+        if matchingActions.isEmpty {
+            Section {
                 Text(capturedKey == nil
-                     ? "Nothing is on that key, and nothing is called that."
-                     : "Nothing is on \(shortcutQuery).")
+                     ? ReleaseNotes.string("그런 키도, 그런 이름도 없다.", "Nothing is on that key, and nothing is called that.")
+                     : ReleaseNotes.string("\(shortcutQuery)에는 아무것도 없다.", "Nothing is on \(shortcutQuery)."))
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -451,39 +403,181 @@ struct SettingsView: View {
         }
     }
 
+    /// The shortcut search, sitting above the page.
+    ///
+    /// It used to be a row of the Form, and a macOS Form right-aligns the
+    /// value side of a row: what you typed appeared hard against the clear
+    /// button while the placeholder still sat at the left, because they were
+    /// two different views being aligned two different ways. Out here it is
+    /// just a field.
+    ///
+    /// While the field has focus it also *catches* key combinations instead of
+    /// letting them run, which is the only way to ask "what is on ⌘K?" from
+    /// inside a window where ⌘K does something. ⌘Q and ⌘W are let through on
+    /// purpose — a field you cannot leave would be a worse bargain than an
+    /// unanswerable question.
+    @ViewBuilder
+    private var shortcutSearchBar: some View {
+        #if os(macOS)
+        HStack(spacing: 7) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.tertiary)
+
+            ZStack(alignment: .leading) {
+                if shortcutQuery.isEmpty {
+                    Text(ReleaseNotes.string("이름으로, 또는 키를 눌러서", "Search by name, or press the keys"))
+                        .font(.body.weight(.light))
+                        .foregroundStyle(.tertiary)
+                        .allowsHitTesting(false)
+                }
+                TextField("", text: $shortcutQuery)
+                    .textFieldStyle(.plain)
+                    .focused($searchIsFocused)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if !shortcutQuery.isEmpty {
+                Button {
+                    shortcutQuery = ""
+                    capturedKey = nil
+                } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
+                }
+                .buttonStyle(.plain)
+            }
+
+            Image(systemName: "keyboard")
+                .foregroundStyle(searchIsFocused ? AnyShapeStyle(.tint) : AnyShapeStyle(.tertiary))
+                .help(ReleaseNotes.string(
+                    "칸을 누른 다음 키 조합을 누르면, 그 키를 가진 기능이 나온다.",
+                    "Click the field, then press a combination to find what owns it."
+                ))
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Capsule().fill(.quaternary.opacity(0.5)))
+        .contentShape(Capsule())
+        // Simultaneous, not `onTapGesture`: a plain tap gesture over the
+        // capsule consumes the click before the field under it sees it, so
+        // the one place you would click to type was the one place that did
+        // not focus. This adds the padding around the field to its target
+        // without taking the field's own click away.
+        .simultaneousGesture(TapGesture().onEnded { searchIsFocused = true })
+        .background(
+            KeyCatcher(
+                isRecording: Binding(get: { searchIsFocused }, set: { searchIsFocused = $0 }),
+                capturesAnything: true
+            ) { key, modifiers in
+                let pressed = Shortcut(key, modifiers)
+                shortcutQuery = pressed.display
+                capturedKey = pressed
+            }
+            .allowsHitTesting(false)
+        )
+        // Editing the text by hand puts it back to an ordinary search.
+        .onChange(of: shortcutQuery) { _, now in
+            if now != capturedKey?.display { capturedKey = nil }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 14)
+        // Focused on arrival, because focus is what arms the key-catching.
+        // Somebody who opens this page to find out what ⌘K does should be
+        // able to press ⌘K, not click first and then press.
+        .onAppear { searchIsFocused = true }
+        #endif
+    }
+
     // MARK: - Log
 
     /// What each version brought, newest first.
     private var logSection: some View {
-        ForEach(ReleaseNotes.releases) { release in
+        Group {
             Section {
-                VStack(alignment: .leading, spacing: 2) {
-                    ForEach(release.added) { item in
-                        entry(item, symbol: "plus", tint: .green)
-                    }
-                    ForEach(release.fixed) { item in
-                        entry(item, symbol: "wrench.adjustable", tint: .orange)
-                    }
-                }
-            } header: {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(release.version).font(.headline)
-                    Text(release.date.value)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    Spacer(minLength: 12)
-                    // Said once, quietly, instead of a chevron on every line —
-                    // twelve arrows in a column is a texture, not a hint.
-                    Text(ReleaseNotes.string("항목을 누르면 설명", "Click an entry for what it means"))
+                HStack(spacing: 16) {
+                    legend("plus", .green, ReleaseNotes.string("더한 것", "Added"))
+                    legend("minus", .secondary, ReleaseNotes.string("뺀 것", "Removed"))
+                    legend("wrench.adjustable", .orange, ReleaseNotes.string("고친 것", "Fixed"))
+                    Spacer(minLength: 8)
+                    Text(ReleaseNotes.string("버전과 항목은 눌러서 펼친다", "Versions and entries open when clicked"))
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
-            } footer: {
-                Text(release.note.value)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+            }
+
+            ForEach(ReleaseNotes.releases) { release in
+                let isOpen = openReleases.contains(release.version)
+                Section {
+                    if isOpen {
+                        VStack(alignment: .leading, spacing: 2) {
+                            ForEach(release.added) { item in
+                                entry(item, symbol: "plus", tint: .green)
+                            }
+                            ForEach(release.removed) { item in
+                                entry(item, symbol: "minus", tint: .secondary)
+                            }
+                            ForEach(release.fixed) { item in
+                                entry(item, symbol: "wrench.adjustable", tint: .orange)
+                            }
+                        }
+                    }
+                } header: {
+                    // The version number is the handle. With one release that
+                    // is a formality; with ten it is the only way the page
+                    // stays a page.
+                    Button {
+                        withAnimation(.snappy(duration: 0.22)) {
+                            if isOpen { openReleases.remove(release.version) }
+                            else { openReleases.insert(release.version) }
+                        }
+                    } label: {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(release.version).font(.headline)
+                            Text(release.date.value)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            Text("·")
+                                .font(.subheadline)
+                                .foregroundStyle(.quaternary)
+                            Text(countLine(release))
+                                .font(.subheadline)
+                                .foregroundStyle(.tertiary)
+                            Spacer(minLength: 8)
+                        }
+                        .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                } footer: {
+                    if isOpen {
+                        Text(release.note.value)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
         }
+    }
+
+    /// One symbol and what it means, said once at the top instead of
+    /// twelve times down the side.
+    private func legend(_ symbol: String, _ tint: Color, _ label: String) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: symbol)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(tint)
+                .frame(width: 12)
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// What a folded version is hiding, so it can be skipped without opening.
+    private func countLine(_ release: ReleaseNotes.Release) -> String {
+        var parts: [String] = []
+        if !release.added.isEmpty { parts.append("+\(release.added.count)") }
+        if !release.removed.isEmpty { parts.append("−\(release.removed.count)") }
+        if !release.fixed.isEmpty { parts.append("~\(release.fixed.count)") }
+        return parts.joined(separator: " ")
     }
 
     /// A line of the log: the keyword, and the sentence it is hiding.

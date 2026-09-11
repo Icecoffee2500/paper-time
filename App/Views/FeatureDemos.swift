@@ -1,0 +1,716 @@
+import SwiftUI
+
+/// How much room a demonstration has.
+///
+/// The same six demos appear twice: folded under a line of the log, where
+/// they have to fit in a paragraph's worth of height, and in About, where the
+/// point is to let somebody actually try the thing. Rather than two sets of
+/// views drifting apart, each demo reads this and grows.
+enum DemoScale {
+    case compact
+    case full
+
+    var isFull: Bool { self == .full }
+    var body: Font { isFull ? .callout : .caption }
+    var small: Font { isFull ? .caption : .caption2 }
+    var pad: CGFloat { isFull ? 14 : 8 }
+    var gap: CGFloat { isFull ? 14 : 8 }
+    var corner: CGFloat { isFull ? 10 : 6 }
+    var stage: CGFloat { isFull ? 250 : 120 }
+}
+
+/// A small working model of a feature.
+///
+/// Not a video. A recording would be a file in the bundle that goes stale the
+/// first time the thing it shows is redrawn, and it cannot be poked. These are
+/// the real controls, built the same way the app is: press the key in the demo
+/// and the panes actually close, click a mark and the inspector actually goes
+/// to it. What is missing is the paper — no document is open in here — but the
+/// gesture is the true one, which is all a feature list owes anyone.
+struct FeatureDemoView: View {
+    let demo: ReleaseNotes.Demo
+    var scale: DemoScale = .compact
+
+    var body: some View {
+        Group {
+            switch demo {
+            case .annotations: AnnotationDemo(scale: scale)
+            case .panes: PaneDemo(scale: scale)
+            case .passageLink: PassageDemo(scale: scale)
+            case .ultracopy: UltracopyDemo(scale: scale)
+            case .slipBox: SlipBoxDemo(scale: scale)
+            case .graph: GraphDemo(scale: scale)
+            }
+        }
+        .padding(scale.pad)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: scale.isFull ? Corner.panel : Corner.popover, style: .continuous)
+                .fill(.quaternary.opacity(scale.isFull ? 0.2 : 0.25))
+        )
+    }
+}
+
+/// The wrapper the log uses: the same demo, indented under its line.
+struct LogDemoView: View {
+    let demo: ReleaseNotes.Demo
+
+    var body: some View {
+        FeatureDemoView(demo: demo, scale: .compact)
+            .padding(.leading, 21)
+            .padding(.top, 2)
+            .padding(.bottom, 6)
+    }
+}
+
+/// A sheet of paper, in the demos that need one.
+private struct Paper<Content: View>: View {
+    let scale: DemoScale
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        content
+            .padding(scale.isFull ? 10 : 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: scale.corner, style: .continuous).fill(.background)
+            )
+    }
+}
+
+/// A line of body text that is not the point of the demo.
+private struct Rule: View {
+    var width: CGFloat?
+
+    var body: some View {
+        Capsule()
+            .fill(.quaternary)
+            .frame(width: width, height: 3)
+    }
+}
+
+// MARK: - Marks, both ways
+
+/// A mark on the page and its row in the inspector, each reaching the other.
+///
+/// This is the one that is genuinely hard to say in a sentence. The marks list
+/// is not a report of what you highlighted, it is a way back into the paper —
+/// and the paper is a way into the list. Clicking either end here moves the
+/// other, scrolling if it has to, which is exactly what the app does.
+private struct AnnotationDemo: View {
+    let scale: DemoScale
+    @State private var selection: Int?
+
+    private struct Mark: Identifiable {
+        let id: Int
+        /// Which line of the page it sits on.
+        let line: Int
+        let text: String
+        let tint: Color
+        let underlined: Bool
+    }
+
+    private var marks: [Mark] {
+        [
+            Mark(id: 0, line: 1,
+                 text: ReleaseNotes.string("경계층에서 초과 감쇠가 생긴다", "excess damping arises in the boundary layer"),
+                 tint: .yellow, underlined: false),
+            Mark(id: 1, line: 6,
+                 text: ReleaseNotes.string("레이놀즈 수에 무관하다", "independent of the Reynolds number"),
+                 tint: .blue, underlined: true),
+            Mark(id: 2, line: 11,
+                 text: ReleaseNotes.string("측정값은 모형보다 40% 크다", "measurements exceed the model by 40%"),
+                 tint: .pink, underlined: false),
+        ]
+    }
+
+    private var lineCount: Int { 14 }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: scale.gap) {
+            page
+            list
+                .frame(width: scale.isFull ? 200 : 132)
+        }
+        .frame(height: scale.isFull ? 230 : 116)
+    }
+
+    /// The paper. Marks are the only thing set in type; everything else is
+    /// greeked, because the words are not what is being shown.
+    private var page: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.vertical) {
+                VStack(alignment: .leading, spacing: scale.isFull ? 7 : 5) {
+                    ForEach(0..<lineCount, id: \.self) { line in
+                        if let mark = marks.first(where: { $0.line == line }) {
+                            markOnPage(mark).id("page-\(mark.id)")
+                        } else {
+                            Rule(width: greekedWidth(line))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, scale.isFull ? 4 : 2)
+                        }
+                    }
+                }
+                .padding(scale.isFull ? 10 : 8)
+            }
+            .scrollIndicators(.never)
+            .background(
+                RoundedRectangle(cornerRadius: scale.corner, style: .continuous).fill(.background)
+            )
+            .onChange(of: selection) { _, now in
+                guard let now else { return }
+                withAnimation(.snappy(duration: 0.35)) { proxy.scrollTo("page-\(now)", anchor: .center) }
+            }
+        }
+    }
+
+    private func markOnPage(_ mark: Mark) -> some View {
+        Button {
+            withAnimation(.snappy(duration: 0.3)) { selection = mark.id }
+        } label: {
+            Text(mark.text)
+                .font(scale.body)
+                .lineLimit(scale.isFull ? 2 : 1)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 3)
+                .padding(.vertical, 1)
+                .background(
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .fill(mark.underlined ? .clear : mark.tint.opacity(0.4))
+                )
+                .overlay(alignment: .bottom) {
+                    if mark.underlined {
+                        Rectangle().fill(mark.tint).frame(height: 1.5)
+                    }
+                }
+                .overlay(
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .stroke(Color.accentColor, lineWidth: selection == mark.id ? 1.5 : 0)
+                        .padding(-1.5)
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// The inspector's Marks tab.
+    private var list: some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 6 : 4) {
+            Text(ReleaseNotes.string("표시", "Marks"))
+                .font(scale.small.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            ScrollViewReader { proxy in
+                ScrollView(.vertical) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(marks) { mark in
+                            row(mark).id("row-\(mark.id)")
+                        }
+                    }
+                }
+                .scrollIndicators(.never)
+                .onChange(of: selection) { _, now in
+                    guard let now else { return }
+                    withAnimation(.snappy(duration: 0.35)) { proxy.scrollTo("row-\(now)", anchor: .center) }
+                }
+            }
+        }
+    }
+
+    private func row(_ mark: Mark) -> some View {
+        Button {
+            withAnimation(.snappy(duration: 0.3)) { selection = mark.id }
+        } label: {
+            HStack(alignment: .top, spacing: 6) {
+                Image(systemName: mark.underlined ? "underline" : "highlighter")
+                    .font(scale.small)
+                    .foregroundStyle(mark.tint)
+                Text(mark.text)
+                    .font(scale.small)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: Corner.row, style: .continuous)
+                    .fill(selection == mark.id ? AnyShapeStyle(.tint.opacity(0.16)) : AnyShapeStyle(.clear))
+            )
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Varied line lengths, so the greeked text reads as prose rather than a
+    /// bar chart. Fixed, not random: a demo that reshuffles on every redraw
+    /// is a demo that flickers.
+    private func greekedWidth(_ line: Int) -> CGFloat? {
+        let pattern: [CGFloat?] = [nil, nil, nil, 120, nil, nil, nil, 90, nil, nil, nil, nil, 140, nil]
+        return pattern[line % pattern.count]
+    }
+}
+
+// MARK: - Four panes
+
+/// The window, small, with its four keys under it.
+private struct PaneDemo: View {
+    let scale: DemoScale
+    @Environment(AppModel.self) private var app
+    @State private var shown: Set<ShortcutAction> = [.sidebar, .paperList, .reader, .inspector]
+
+    private let panes: [(ShortcutAction, Double)] = [
+        (.sidebar, 0.16), (.paperList, 0.24), (.reader, 0.38), (.inspector, 0.22),
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: scale.gap) {
+            GeometryReader { geometry in
+                HStack(spacing: scale.isFull ? 6 : 4) {
+                    ForEach(panes, id: \.0) { pane, share in
+                        if shown.contains(pane) {
+                            RoundedRectangle(cornerRadius: scale.corner - 2, style: .continuous)
+                                .fill(pane == .reader ? AnyShapeStyle(.background) : AnyShapeStyle(.quaternary))
+                                .frame(width: max(10, geometry.size.width * share))
+                                .overlay { if pane == .reader { paperLines } }
+                                .transition(.scale(scale: 0.9, anchor: .center).combined(with: .opacity))
+                        }
+                    }
+                    // The rest stay their own width as one closes, rather
+                    // than stretching over the gap: the window reveals what
+                    // was behind, it does not rebalance.
+                    Spacer(minLength: 0)
+                }
+            }
+            .frame(height: scale.isFull ? 150 : 66)
+
+            HStack(spacing: 6) {
+                ForEach(panes, id: \.0) { pane, _ in
+                    let isShown = shown.contains(pane)
+                    Button {
+                        withAnimation(.snappy(duration: 0.28)) {
+                            if isShown { shown.remove(pane) } else { shown.insert(pane) }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(app.shortcut(for: pane).display).monospaced()
+                            Text(pane.title)
+                        }
+                        .font(scale.small)
+                        .foregroundStyle(isShown ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(isShown ? AnyShapeStyle(.quaternary) : AnyShapeStyle(.clear)))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private var paperLines: some View {
+        VStack(spacing: scale.isFull ? 6 : 3) {
+            ForEach(0..<(scale.isFull ? 8 : 4), id: \.self) { _ in
+                Capsule().fill(.quaternary).frame(height: 2)
+            }
+        }
+        .padding(scale.isFull ? 12 : 6)
+    }
+}
+
+// MARK: - Passage links
+
+/// A sentence on a page, and what ⌘L does with it.
+private struct PassageDemo: View {
+    let scale: DemoScale
+    @Environment(AppModel.self) private var app
+    @State private var sent = false
+
+    private var sentence: String {
+        ReleaseNotes.string(
+            "관측된 초과 감쇠는 경계층에서 비롯된다.",
+            "The observed excess damping originates in the boundary layer."
+        )
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: scale.gap) {
+            Paper(scale: scale) {
+                VStack(alignment: .leading, spacing: scale.isFull ? 7 : 4) {
+                    Rule(width: 90)
+                    Text(sentence)
+                        .font(scale.body)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 3)
+                        .padding(.vertical, 1)
+                        .background(
+                            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                .fill(Color.accentColor.opacity(sent ? 0 : 0.22))
+                        )
+                    Rule()
+                    Rule(width: 120)
+                }
+            }
+
+            Button {
+                withAnimation(.snappy(duration: 0.35)) { sent.toggle() }
+            } label: {
+                VStack(spacing: 3) {
+                    Image(systemName: sent ? "arrow.uturn.backward" : "arrow.right")
+                    Text(sent ? ReleaseNotes.string("되돌리기", "Undo")
+                              : app.shortcut(for: .linkToNote).display)
+                        .monospaced()
+                }
+                .font(scale.small)
+                .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .padding(.top, scale.isFull ? 26 : 18)
+
+            Paper(scale: scale) {
+                VStack(alignment: .leading, spacing: scale.isFull ? 7 : 5) {
+                    Text(ReleaseNotes.string("감쇠 메모", "Damping"))
+                        .font(scale.body.weight(.semibold))
+                    if sent {
+                        Text(sentence)
+                            .font(scale.body)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 3)
+                            .background(
+                                RoundedRectangle(cornerRadius: 5.5, style: .continuous)
+                                    .fill(Color.accentColor.opacity(0.14))
+                            )
+                            .overlay(alignment: .bottomTrailing) {
+                                // Inside the chip, not hanging off it: at this
+                                // size an overhang reads as the chip being cut
+                                // by the edge of the note.
+                                Image(systemName: "arrow.up.left.circle.fill")
+                                    .font(.system(size: scale.isFull ? 11 : 9))
+                                    .foregroundStyle(.tint)
+                                    .padding(1)
+                            }
+                            .transition(.scale(scale: 0.85).combined(with: .opacity))
+                        if scale.isFull {
+                            Text(ReleaseNotes.string("↖︎ 를 누르면 그 자리로 돌아간다.", "The ↖︎ goes back to the page it came from."))
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                    } else {
+                        Rule(width: 70)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Ultracopy
+
+/// The same paragraph as it is read and as it is pasted.
+private struct UltracopyDemo: View {
+    let scale: DemoScale
+    @Environment(AppModel.self) private var app
+    @State private var copied = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: scale.gap) {
+            Paper(scale: scale) {
+                Group {
+                    if copied {
+                        Text(ReleaseNotes.string(
+                            "감쇠율은 벽 근처에서 $\\gamma \\sim \\nu k^{2}$에\n비례한다.",
+                            "The damping rate scales as $\\gamma \\sim \\nu k^{2}$\nnear the wall."
+                        ))
+                        .monospaced()
+                        .transition(.opacity)
+                    } else {
+                        (Text(ReleaseNotes.string("감쇠율은 벽 근처에서 ", "The damping rate scales as "))
+                         + Text("γ ~ νk²").italic()
+                         + Text(ReleaseNotes.string("에 비례한다.", " near the wall.")))
+                            .transition(.opacity)
+                    }
+                }
+                .font(scale.body)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack(spacing: 8) {
+                Text(copied ? ReleaseNotes.string("클립보드", "On the clipboard")
+                            : ReleaseNotes.string("논문 위", "On the page"))
+                    .font(scale.small)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button {
+                    withAnimation(.snappy(duration: 0.25)) { copied.toggle() }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(app.shortcut(for: .ultracopy).display).monospaced()
+                        Text(copied ? ReleaseNotes.string("되돌리기", "Back")
+                                    : ReleaseNotes.string("복사", "Copy"))
+                    }
+                    .font(scale.small)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(.quaternary))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+// MARK: - Slip-box
+
+/// Two notes, a link between them, and the way back.
+private struct SlipBoxDemo: View {
+    let scale: DemoScale
+    @State private var open = 0
+
+    private var titles: [String] {
+        [ReleaseNotes.string("감쇠 메모", "Damping"), ReleaseNotes.string("경계층", "Boundary layer")]
+    }
+
+    var body: some View {
+        Paper(scale: scale) {
+            VStack(alignment: .leading, spacing: scale.isFull ? 10 : 6) {
+                HStack(spacing: 6) {
+                    if open != 0 {
+                        Button {
+                            withAnimation(.snappy(duration: 0.25)) { open = 0 }
+                        } label: {
+                            Image(systemName: "chevron.left").font(scale.small)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                    }
+                    Text(titles[open])
+                        .font(scale.body.weight(.semibold))
+                    Spacer()
+                    Text("\(titles[open]).md")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+
+                if open == 0 { first } else { second }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: scale.isFull ? 140 : 96, alignment: .top)
+        }
+    }
+
+    private var first: some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 8 : 5) {
+            HStack(spacing: 0) {
+                Text(ReleaseNotes.string("초과 감쇠는 ", "The excess damping comes from the "))
+                Button {
+                    withAnimation(.snappy(duration: 0.25)) { open = 1 }
+                } label: {
+                    Text(titles[1])
+                        .foregroundStyle(.tint)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(
+                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                .fill(Color.accentColor.opacity(0.12))
+                        )
+                }
+                .buttonStyle(.plain)
+                Text(ReleaseNotes.string("에서 온다.", "."))
+            }
+            .font(scale.body)
+
+            Rule()
+            Rule(width: 110)
+
+            Text(ReleaseNotes.string("링크를 눌러 보라.", "Click the link."))
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+    }
+
+    private var second: some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 8 : 5) {
+            Text(ReleaseNotes.string("벽 근처에서 속도 기울기가 커진다.", "The velocity gradient steepens near the wall."))
+                .font(scale.body)
+                .fixedSize(horizontal: false, vertical: true)
+            Rule(width: 140)
+
+            Divider().opacity(0.4)
+
+            Text(ReleaseNotes.string("나를 가리키는 노트", "Linked mentions"))
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Button {
+                withAnimation(.snappy(duration: 0.25)) { open = 0 }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.turn.up.left").font(.caption2)
+                    Text(titles[0]).font(scale.small)
+                    Spacer(minLength: 0)
+                }
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: Corner.row, style: .continuous).fill(.quaternary.opacity(0.5))
+                )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+}
+
+// MARK: - The graph
+
+/// The library drawn four ways at once, and the legend that takes one away.
+private struct GraphDemo: View {
+    let scale: DemoScale
+    @State private var hidden: Set<Kind> = []
+    @State private var focus: Int?
+
+    enum Kind: String, CaseIterable, Identifiable {
+        case citation, note, author, collection
+        var id: String { rawValue }
+
+        var tint: Color {
+            switch self {
+            case .citation: .blue
+            case .note: .purple
+            case .author: .teal
+            case .collection: .orange
+            }
+        }
+
+        var label: String {
+            switch self {
+            case .citation: ReleaseNotes.string("인용", "Citation")
+            case .note: ReleaseNotes.string("내 노트", "My notes")
+            case .author: ReleaseNotes.string("공저자", "Author")
+            case .collection: ReleaseNotes.string("컬렉션", "Collection")
+            }
+        }
+    }
+
+    /// Seven papers, placed by hand in unit space. The app's own graph finds
+    /// these positions by simulation; a demo that had to settle first would
+    /// spend its first second looking broken.
+    private let nodes: [CGPoint] = [
+        CGPoint(x: 0.18, y: 0.30), CGPoint(x: 0.42, y: 0.14), CGPoint(x: 0.50, y: 0.52),
+        CGPoint(x: 0.26, y: 0.76), CGPoint(x: 0.72, y: 0.30), CGPoint(x: 0.84, y: 0.66),
+        CGPoint(x: 0.58, y: 0.86),
+    ]
+
+    private let edges: [(Int, Int, Kind)] = [
+        (0, 1, .citation), (1, 2, .citation), (2, 4, .citation),
+        (0, 2, .note), (2, 6, .note),
+        (1, 4, .author), (4, 5, .author),
+        (2, 3, .collection), (3, 6, .collection), (5, 6, .collection),
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: scale.gap) {
+            TimelineView(.animation) { timeline in
+                let time = timeline.date.timeIntervalSinceReferenceDate
+                GeometryReader { geometry in
+                    let size = geometry.size
+                    ZStack {
+                        ForEach(Array(edges.enumerated()), id: \.offset) { index, edge in
+                            let (a, b, kind) = edge
+                            if !hidden.contains(kind) {
+                                Path { path in
+                                    path.move(to: place(a, in: size, at: time))
+                                    path.addLine(to: place(b, in: size, at: time))
+                                }
+                                .stroke(kind.tint.opacity(dim(a, b) ? 0.06 : 0.5), lineWidth: 1.2)
+                                .id(index)
+                            }
+                        }
+                        ForEach(nodes.indices, id: \.self) { index in
+                            let point = place(index, in: size, at: time)
+                            Circle()
+                                .fill(.tint)
+                                .opacity(focus == nil || related(index) ? 1 : 0.15)
+                                .frame(width: dot, height: dot)
+                                .overlay(
+                                    Circle().stroke(Color.accentColor, lineWidth: focus == index ? 2 : 0)
+                                        .padding(-3)
+                                )
+                                .position(point)
+                                .onTapGesture {
+                                    withAnimation(.snappy(duration: 0.25)) {
+                                        focus = focus == index ? nil : index
+                                    }
+                                }
+                        }
+                    }
+                }
+            }
+            .frame(height: scale.isFull ? 200 : 92)
+            .background(
+                RoundedRectangle(cornerRadius: scale.corner, style: .continuous).fill(.background)
+            )
+
+            HStack(spacing: 6) {
+                ForEach(Kind.allCases) { kind in
+                    let on = !hidden.contains(kind)
+                    Button {
+                        withAnimation(.snappy(duration: 0.2)) {
+                            if on { hidden.insert(kind) } else { hidden.remove(kind) }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Circle().fill(kind.tint).frame(width: 6, height: 6).opacity(on ? 1 : 0.3)
+                            Text(kind.label)
+                        }
+                        .font(scale.small)
+                        .foregroundStyle(on ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(on ? AnyShapeStyle(.quaternary) : AnyShapeStyle(.clear)))
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer(minLength: 0)
+                if scale.isFull {
+                    Text(focus == nil
+                         ? ReleaseNotes.string("논문을 눌러 집중", "Click a paper to focus")
+                         : ReleaseNotes.string("다시 눌러 해제", "Click it again to release"))
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+    }
+
+    private var dot: CGFloat { scale.isFull ? 13 : 8 }
+
+    /// Where a paper is right now. The drift is small and slow and never
+    /// stops, which is the difference between a diagram of a graph and a
+    /// graph — the app's own keeps moving for the same reason.
+    private func place(_ index: Int, in size: CGSize, at time: TimeInterval) -> CGPoint {
+        let node = nodes[index]
+        let phase = Double(index) * 1.7
+        let amplitude = scale.isFull ? 5.0 : 2.5
+        return CGPoint(
+            x: node.x * size.width + sin(time * 0.5 + phase) * amplitude,
+            y: node.y * size.height + cos(time * 0.4 + phase * 1.3) * amplitude
+        )
+    }
+
+    /// Whether a paper survives the focus.
+    private func related(_ index: Int) -> Bool {
+        guard let focus else { return true }
+        if index == focus { return true }
+        return edges.contains { a, b, kind in
+            !hidden.contains(kind) && ((a == focus && b == index) || (b == focus && a == index))
+        }
+    }
+
+    private func dim(_ a: Int, _ b: Int) -> Bool {
+        guard let focus else { return false }
+        return a != focus && b != focus
+    }
+}

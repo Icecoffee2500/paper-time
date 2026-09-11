@@ -54,7 +54,8 @@ enum ReleaseNotes {
             detail: Text2(
                 "형광펜과 밑줄이 옆에 붙은 데이터베이스가 아니라 파일 자체에 기록된다. 같은 논문을 미리보기로 열든, 아이패드에서 열든, 십 년 뒤에 열든 표시는 그대로 있다.",
                 "Highlights and underlines are written into the file itself, not into a database beside it. Open the same paper in Preview, on an iPad, or in ten years — the marks are still there."
-            )
+            ),
+            demo: .annotations
         ),
         Highlight(
             symbol: "function",
@@ -63,7 +64,8 @@ enum ReleaseNotes {
                 "수식이 섞인 문단을 선택하면 Ultracopy가 글은 글대로, 수식은 LaTeX으로 넘겨준다. 쓰던 논문에 그대로 붙이면 된다.",
                 "Select a passage with an equation in it and Ultracopy gives you the words with the formula as LaTeX, ready to paste into a paper of your own."
             ),
-            action: .ultracopy
+            action: .ultracopy,
+            demo: .ultracopy
         ),
         Highlight(
             symbol: "quote.opening",
@@ -72,7 +74,8 @@ enum ReleaseNotes {
                 "선택한 글을 노트로 보내면 인용구로 앉는다. 누르면 그 글이 있던 페이지의 정확한 자리로 돌아간다.",
                 "Send the selected text to a note and it arrives as a quotation you can click to go back to the exact place on the page it came from."
             ),
-            action: .linkToNote
+            action: .linkToNote,
+            demo: .passageLink
         ),
         Highlight(
             symbol: "tray.full",
@@ -81,7 +84,8 @@ enum ReleaseNotes {
                 "노트는 그것을 쓰게 만든 논문 아래가 아니라 한곳에 모여 산다. [[…]]로 서로 잇고, 이 앱 없이도 읽히는 평범한 Markdown 파일이다.",
                 "Notes live together rather than under the paper that caused them, link to each other with [[…]], and are plain Markdown files you can read without this app."
             ),
-            action: .newNote
+            action: .newNote,
+            demo: .slipBox
         ),
         Highlight(
             symbol: "point.3.filled.connected.trianglepath.dotted",
@@ -89,7 +93,18 @@ enum ReleaseNotes {
             detail: Text2(
                 "그래프는 인용·공저자·컬렉션으로, 그리고 내 노트가 이은 것으로 라이브러리를 그린다. 나머지 선을 끄면 남는 것이 문헌의 관계가 아니라 내 읽기다.",
                 "The graph draws your library by citation, shared author, collection — and by what your own notes link. Switch the other lines off and what is left is your reading rather than the literature's."
-            )
+            ),
+            demo: .graph
+        ),
+        Highlight(
+            symbol: "sidebar.left",
+            title: Text2("창은 내가 접는 대로 있는다", "The window folds to what you are doing"),
+            detail: Text2(
+                "사이드바·목록·논문·인스펙터가 각자 자기 키로 숨는다. 남은 것이 빈자리를 나눠 갖는 대신, 숨은 것 뒤에 있던 것이 드러난다. 패널 사이의 틈을 끌면 크기가 바뀐다.",
+                "The sidebar, the list, the paper and the inspector each hide on their own key — revealing what was behind rather than stretching to fill the gap. Drag the space between two of them to resize."
+            ),
+            action: .sidebar,
+            demo: .panes
         ),
         Highlight(
             symbol: "keyboard",
@@ -127,7 +142,8 @@ enum ReleaseNotes {
                     Text2("PDF 주석", "PDF annotations"),
                     Text2("형광펜과 밑줄이 파일 자체에 기록된다. 미리보기·아이패드·다른 어떤 PDF 앱에서 열어도 그대로 보인다.",
                           "Highlights and underlines are written into the file. They show up in Preview, on an iPad, in any PDF reader."),
-                    action: .highlight
+                    action: .highlight,
+                    demo: .annotations
                 ),
                 Entry(
                     Text2("Ultracopy", "Ultracopy"),
@@ -147,7 +163,8 @@ enum ReleaseNotes {
                     Text2("슬립박스", "Slip-box"),
                     Text2("노트는 한 폴더에 모여 살고 [[링크]]로 서로 잇는다. 나를 가리키는 노트는 아래에 모인다. 전부 평범한 Markdown 파일이다.",
                           "Notes live in one folder, joined by [[links]], with backlinks collected underneath. Plain Markdown files throughout."),
-                    action: .newNote
+                    action: .newNote,
+                    demo: .slipBox
                 ),
                 Entry(
                     Text2("인라인 LaTeX", "Inline LaTeX"),
@@ -157,7 +174,8 @@ enum ReleaseNotes {
                 Entry(
                     Text2("연결 그래프", "Connection graph"),
                     Text2("인용·공저자·컬렉션, 그리고 내 노트가 이은 것으로 라이브러리를 그린다. 범례에서 선을 끄면 그게 곧 질문이 된다.",
-                          "Draws the library by citation, author, collection and your own notes. Switching a line off in the legend is how you ask a question.")
+                          "Draws the library by citation, author, collection and your own notes. Switching a line off in the legend is how you ask a question."),
+                    demo: .graph
                 ),
                 Entry(
                     Text2("서지 자동 인식", "Metadata extraction"),
@@ -285,6 +303,8 @@ enum ReleaseNotes {
         let date: Text2
         let note: Text2
         let added: [Entry]
+        /// Taken out. Empty in the first release, which took nothing out.
+        var removed: [Entry] = []
         let fixed: [Entry]
         var id: String { version }
     }
@@ -315,14 +335,26 @@ enum ReleaseNotes {
         }
     }
 
-    /// The demonstrations the log knows how to draw.
+    /// The demonstrations the app knows how to draw.
+    ///
+    /// The same six are used in two sizes: small, under a line of the log,
+    /// and full size in About, where there is room to make them the real
+    /// thing rather than a diagram of it.
     enum Demo: String, Identifiable {
+        /// A mark on the page and its row in the inspector, either one
+        /// reaching the other.
+        case annotations
         /// Four panes, each hiding on its own key.
         case panes
         /// A selection leaving the page and landing in a note as a quotation.
         case passageLink
         /// What a copied passage looks like on the clipboard.
         case ultracopy
+        /// Notes linking to each other, and what links back.
+        case slipBox
+        /// The library drawn by four kinds of connection, with the legend
+        /// switching them off.
+        case graph
 
         var id: String { rawValue }
     }
@@ -332,6 +364,9 @@ enum ReleaseNotes {
         let title: Text2
         let detail: Text2
         var action: ShortcutAction?
+        /// Shown full size in About, where the point is to let somebody try
+        /// the thing rather than read about it.
+        var demo: Demo?
         var id: String { title.en }
     }
 
