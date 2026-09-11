@@ -1,5 +1,6 @@
 import Foundation
 import InkEngine
+import CoreImage
 import PDFKit
 import PDFReader
 import PencilKit
@@ -105,6 +106,61 @@ final class ReaderCoordinator: NSObject {
     /// Refits the spread to the view's width while a book is open.
     private var spreadObserver: (any NSObjectProtocol)?
 
+    /// The crop box each page had before the book trimmed it, by page index.
+    private var uncroppedBoxes: [Int: CGRect] = [:]
+
+    /// How far the trim stays clear of the text, in page points.
+    private static let trimMargin: CGFloat = 18
+
+    /// Trims every page to the paper's text block.
+    ///
+    /// Papers set their margins differently — an ACM two-column page and an
+    /// arXiv preprint can differ by an inch a side — and in a spread those
+    /// margins met in the middle, so one paper opened with a canyon between
+    /// its pages and the next with a slit. The gutter should be the app's, not
+    /// the paper's. The text block is measured on the first pages and every
+    /// page is cropped to it, so the spread's width is spent on words: the
+    /// pages come up larger, and the gap between them is `pageBreakMargins`
+    /// plus a constant, the same for every paper. Only the crop box changes,
+    /// only in memory, and only while the book is open — page coordinates,
+    /// and so every mark and every anchor, are untouched.
+    private func trimForBook(_ document: PDFDocument) {
+        guard uncroppedBoxes.isEmpty else { return }
+        var minX = CGFloat.greatestFiniteMagnitude, maxX: CGFloat = -.greatestFiniteMagnitude
+        var sampled = 0
+        for index in 0..<min(document.pageCount, 8) {
+            guard let page = document.page(at: index) else { continue }
+            let media = page.bounds(for: .mediaBox)
+            // A page with a real body of text on it; a title page with a
+            // figure or a page of tables can lie about where the margins are.
+            guard let text = page.selection(for: media), (text.string?.count ?? 0) > 400 else { continue }
+            let block = text.bounds(for: page)
+            guard block.width > media.width * 0.45 else { continue }
+            minX = min(minX, block.minX)
+            maxX = max(maxX, block.maxX)
+            sampled += 1
+        }
+        guard sampled > 0 else { return }
+        for index in 0..<document.pageCount {
+            guard let page = document.page(at: index) else { continue }
+            let box = page.bounds(for: .cropBox)
+            uncroppedBoxes[index] = box
+            let left = max(box.minX, minX - Self.trimMargin)
+            let right = min(box.maxX, maxX + Self.trimMargin)
+            guard right - left > box.width * 0.4 else { continue }
+            page.setBounds(CGRect(x: left, y: box.minY, width: right - left, height: box.height), for: .cropBox)
+        }
+    }
+
+    private func untrim(_ document: PDFDocument) {
+        guard !uncroppedBoxes.isEmpty else { return }
+        for (index, box) in uncroppedBoxes {
+            document.page(at: index)?.setBounds(box, for: .cropBox)
+        }
+        uncroppedBoxes = [:]
+        link.bookGutter = 0
+    }
+
     /// Scales a two-page spread to the width of the view.
     ///
     /// `autoScales` fits a spread to the view's *height*, so both pages are
@@ -123,7 +179,18 @@ final class ReaderCoordinator: NSObject {
         // across the width, unless the pages are then taller than the view,
         // in which case the height decides. Filling the width alone put the
         // top and bottom lines of every page out of sight.
-        view.scaleFactor = min(width / (bounds.width * 2 + 8), height / bounds.height)
+        let gap = view.pageBreakMargins.left + view.pageBreakMargins.right
+        view.scaleFactor = min(width / (bounds.width * 2 + gap), height / bounds.height)
+        view.layoutDocumentView()
+        // How wide the gutter came out on screen, for the contents to fit in.
+        let shown = view.visiblePages
+            .map { view.convert($0.bounds(for: view.displayBox), from: $0) }
+            .sorted { $0.minX < $1.minX }
+        if shown.count >= 2 {
+            // Edge to edge, plus the trim each page keeps beside its text:
+            // the whole stretch with no words in it.
+            link.bookGutter = max(0, shown[1].minX - shown[0].maxX) + 2 * Self.trimMargin * view.scaleFactor
+        }
     }
     private var clickMonitor: Any?
     private var pinchMonitor: Any?
@@ -432,6 +499,14 @@ final class ReaderCoordinator: NSObject {
             }
         }
 
+        if layout != .book { untrim(session.document) }
+        // The space between two pages of a spread. Wide, and the same for
+        // every paper, because the pages have been trimmed to their text:
+        // this gap plus the trim is the whole gutter.
+        view.pageBreakMargins = layout == .book
+            ? NSEdgeInsets(top: 4.75, left: 52, bottom: 4.75, right: 52)
+            : NSEdgeInsets(top: 4.75, left: 4.75, bottom: 4.75, right: 4.75)
+
         switch layout {
         case .continuous:
             view.displayMode = .singlePageContinuous
@@ -442,6 +517,7 @@ final class ReaderCoordinator: NSObject {
             view.displayDirection = .horizontal
             view.displaysAsBook = false
         case .book:
+            trimForBook(session.document)
             view.displayMode = .twoUp
             view.displayDirection = .horizontal
             // Pages 1 and 2 face each other. `displaysAsBook` puts the first
@@ -509,17 +585,41 @@ final class ReaderCoordinator: NSObject {
             view.pageShadowsEnabled = false
         }
         #else
+        // Sepia and Dimmed used to colour the space around the page and leave
+        // the page white, so the tint showed as a border. The paper is what
+        // has to change. Sepia is the glass trick with a sepia ground behind
+        // it: the page's white multiplies away to the ground and the ink
+        // stays ink. Dimmed cannot be a multiply — black ink over a dark
+        // ground is nothing — so it is an inversion with the hue turned
+        // back round, the way every reader's night mode is made: white paper
+        // becomes dark, black ink becomes light, and a colour keeps its hue.
         switch configuration.tint {
-        case .none: view.backgroundColor = .windowBackgroundColor
-        case .sepia: view.backgroundColor = NSColor(red: 0.96, green: 0.93, blue: 0.86, alpha: 1)
-        case .dim: view.backgroundColor = NSColor(white: 0.12, alpha: 1)
-        case .glass:
+        case .none:
+            view.backgroundColor = .windowBackgroundColor
+            view.pageShadowsEnabled = true
+        case .sepia, .glass:
+            view.backgroundColor = .clear
+            view.pageShadowsEnabled = false
+        case .dim:
             view.backgroundColor = .clear
             view.pageShadowsEnabled = false
         }
-        setGlassCompositing(on: view, configuration.tint.isGlass)
+        setGlassCompositing(on: view, configuration.tint == .glass || configuration.tint == .sepia)
+        setNightFilter(on: view, configuration.tint == .dim)
         #endif
     }
+
+    #if os(macOS)
+    /// Inverts the page's luminance and puts its colours back.
+    private func setNightFilter(on view: PDFView, _ on: Bool) {
+        view.wantsLayer = true
+        guard on else { view.layer?.filters = nil; return }
+        guard let invert = CIFilter(name: "CIColorInvert"),
+              let hue = CIFilter(name: "CIHueAdjust", parameters: [kCIInputAngleKey: Double.pi])
+        else { return }
+        view.layer?.filters = [invert, hue]
+    }
+    #endif
 
     #if os(macOS)
     /// Multiplies the whole PDF view against whatever is drawn behind it, so

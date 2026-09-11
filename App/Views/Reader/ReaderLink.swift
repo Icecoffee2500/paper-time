@@ -51,6 +51,9 @@ final class ReaderLink {
     /// A place in the document chosen from its table of contents. Cleared
     /// once the reader has gone there.
     var destinationRequest: PDFDestination?
+    /// How wide the space between the two pages of a spread is on screen,
+    /// while a book is open. Nought otherwise.
+    var bookGutter: CGFloat = 0
     /// A mark just clicked on the page, so the marks list can show which one.
     var revealedMarkID: UUID?
     /// A passage waiting to be dropped into the note at the cursor.

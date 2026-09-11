@@ -97,6 +97,16 @@ struct ReaderScreen: View {
         // Only under the glass tint. Multiplied over a dark ground the text
         // would go with the paper, which is why the other tints keep their
         // own opaque background instead.
+        // What the tinted page is multiplied against, or sits on: sepia
+        // paper under Sepia, a dark ground under Dimmed. Glass and Paper
+        // White have the panel.
+        .background {
+            switch configuration.tint {
+            case .sepia: Color(red: 0.96, green: 0.93, blue: 0.86)
+            case .dim: Color(white: 0.13)
+            default: Color.clear
+            }
+        }
         // Under the status bar in the scrolling layouts, where the page
         // flowing on beneath the glass is the point; not in a book, where
         // the bar was sitting on the last lines of both pages.

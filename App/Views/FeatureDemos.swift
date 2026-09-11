@@ -1307,7 +1307,7 @@ private struct BookReadingDemo: View {
 
                     if showsContents { contents.transition(.scale(scale: 0.96).combined(with: .opacity)) }
                 }
-                .frame(height: scale.isFull ? 176 : 80)
+                .frame(height: scale.isFull ? 190 : 88)
 
                 // The status bar: both pages of the spread, and how far in.
                 HStack(spacing: 8) {
@@ -1329,7 +1329,8 @@ private struct BookReadingDemo: View {
                 RoundedRectangle(cornerRadius: scale.corner, style: .continuous)
                     .fill(.quaternary.opacity(0.35))
             )
-            .clipShape(RoundedRectangle(cornerRadius: scale.corner, style: .continuous))
+            // No clip on the stage: the contents float over the pages, and a
+            // clip was cutting the top and bottom off the floating list.
 
             HStack(spacing: 6) {
                 turn("arrow.left", by: -2, enabled: leftPage > 1)
@@ -1377,7 +1378,7 @@ private struct BookReadingDemo: View {
                         Text("\(first)").font(.caption2).monospacedDigit().foregroundStyle(.tertiary)
                     }
                     .foregroundStyle(isHere ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
-                    .padding(.horizontal, 6).padding(.vertical, 3)
+                    .padding(.horizontal, 6).padding(.vertical, scale.isFull ? 3 : 1)
                     .background(
                         RoundedRectangle(cornerRadius: 5, style: .continuous)
                             .fill(Color.accentColor.opacity(isHere ? 0.12 : 0))
@@ -1387,13 +1388,14 @@ private struct BookReadingDemo: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(8)
+        .padding(scale.isFull ? 8 : 5)
         .frame(width: scale.isFull ? 118 : 74)
         .background(
             RoundedRectangle(cornerRadius: scale.corner, style: .continuous)
                 .fill(.background)
                 .shadow(color: .black.opacity(0.14), radius: 8, y: 3)
         )
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private func page(_ number: Int) -> some View {

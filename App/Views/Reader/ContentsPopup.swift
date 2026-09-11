@@ -27,7 +27,10 @@ struct ContentsPopup: View {
         func walk(_ node: PDFOutline, level: Int) {
             for index in 0..<node.numberOfChildren {
                 guard let child = node.child(at: index) else { continue }
-                let title = child.label?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                var title = child.label?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                if let destination = child.destination {
+                    title = Self.heading(matching: title, at: destination) ?? title
+                }
                 if !title.isEmpty {
                     let page = child.destination?.page.map { document.index(for: $0) + 1 }
                     found.append(Item(id: found.count, title: title, level: level,
@@ -40,6 +43,68 @@ struct ContentsPopup: View {
         }
         walk(root, level: 0)
         return found
+    }
+
+    /// The heading as it is printed, for an outline label that lost something
+    /// on the way into the file.
+    ///
+    /// LaTeX writes bookmarks from the heading with the mathematics taken out
+    /// — "The π₀ Model" becomes "The 0 Model" — because a PDF outline is plain
+    /// text and hyperref would rather drop a symbol than guess at it. The
+    /// heading is still on the page, in its real glyphs, at the place the
+    /// bookmark points to; this reads the lines around that point and takes
+    /// the one whose letters and digits match the label's. All-capitals
+    /// headings are given back their case, word by word, leaving alone any
+    /// word with something in it that is not a plain letter.
+    private static func heading(matching label: String, at destination: PDFDestination) -> String? {
+        guard let page = destination.page else { return nil }
+        let key = compact(label)
+        guard key.count >= 3 else { return nil }
+        let box = page.bounds(for: .cropBox)
+        // A band below the destination point, which hyperref places just
+        // above the heading; a little above too, for outlines set by hand.
+        let band = CGRect(x: box.minX, y: destination.point.y - 48, width: box.width, height: 64)
+        guard let lines = page.selection(for: band)?.selectionsByLine() else { return nil }
+        var best: (score: Int, text: String)?
+        for line in lines {
+            guard let text = line.string?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { continue }
+            let candidate = compact(text)
+            // The label's letters have to be in the line, in order; the line
+            // may have more (the symbol, a section number).
+            guard contains(candidate, inOrder: key) else { continue }
+            let extra = candidate.count - key.count
+            if best == nil || extra < best!.score { best = (extra, text) }
+        }
+        guard let best, best.score > 0 else { return nil }
+        return recase(best.text, like: label)
+    }
+
+    private static func compact(_ text: String) -> [Character] {
+        text.lowercased().filter { $0.isLetter || $0.isNumber }
+    }
+
+    private static func contains(_ haystack: [Character], inOrder needle: [Character]) -> Bool {
+        var index = 0
+        for character in haystack where index < needle.count && character == needle[index] { index += 1 }
+        return index == needle.count
+    }
+
+    /// The label's own words in the label's own case, with the line's extra
+    /// glyphs spliced in where they fall; a heading set in capitals stays
+    /// readable rather than shouting.
+    private static func recase(_ line: String, like label: String) -> String {
+        var text = line
+        // A leading section number or roman numeral the label did without.
+        if let range = text.range(of: #"^\s*(\d+(\.\d+)*\.?|[IVXLC]+\.)\s+"#, options: .regularExpression) {
+            text.removeSubrange(range)
+        }
+        let letters = text.filter(\.isLetter)
+        let isShouting = !letters.isEmpty && letters.allSatisfy { $0.isUppercase }
+        guard isShouting else { return text }
+        return text.split(separator: " ").map { word -> String in
+            let plain = word.allSatisfy { $0.isLetter && $0.isASCII }
+            return plain ? word.prefix(1).uppercased() + word.dropFirst().lowercased() : String(word)
+        }.joined(separator: " ")
     }
 
     var body: some View {
@@ -101,7 +166,9 @@ struct ContentsPopup: View {
                 .scrollIndicators(.never)
             }
         }
-        .frame(width: 200)
+        // As wide as the gutter allows and no wider: in a book the list sits
+        // between the pages, and it should sit there with room to spare.
+        .frame(width: link.bookGutter > 0 ? max(180, min(300, link.bookGutter - 40)) : 220)
         .frame(maxHeight: 520)
         .fixedSize(horizontal: false, vertical: true)
         .liquidGlass(.floating, in: RoundedRectangle(cornerRadius: Corner.panel, style: .continuous))

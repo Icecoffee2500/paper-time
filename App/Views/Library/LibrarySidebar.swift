@@ -36,7 +36,7 @@ struct LibrarySidebar: View {
                     } icon: {
                         Image(systemName: "magnifyingglass")
                     }
-                    .count(model.searchResultCount)
+                    .count(model.searchResultCount, current: model.scope == .searchResults)
                     .scopeRow(.searchResults, in: model)
                     .contextMenu {
                         Button("Clear Search") { model.clearSearchResults() }
@@ -46,26 +46,26 @@ struct LibrarySidebar: View {
 
             Section {
                 Label("All Papers", systemImage: "tray.full")
-                    .count(model.counts.all)
+                    .count(model.counts.all, current: model.scope == .all)
                     .scopeRow(.all, in: model)
                 Label("Unread", systemImage: "circle")
-                    .count(model.counts.unread)
+                    .count(model.counts.unread, current: model.scope == .unread)
                     .scopeRow(.unread, in: model)
                     .dropTarget(in: model) { await model.setReadingStatus(.unread, for: $0) }
                 Label("Reading", systemImage: "circle.lefthalf.filled")
-                    .count(model.counts.reading)
+                    .count(model.counts.reading, current: model.scope == .reading)
                     .scopeRow(.reading, in: model)
                     .dropTarget(in: model) { await model.setReadingStatus(.reading, for: $0) }
                 Label("Read", systemImage: "checkmark.circle")
-                    .count(model.counts.read)
+                    .count(model.counts.read, current: model.scope == .read)
                     .scopeRow(.read, in: model)
                     .dropTarget(in: model) { await model.setReadingStatus(.read, for: $0) }
                 Label("Favorites", systemImage: "star")
-                    .count(model.counts.favorites)
+                    .count(model.counts.favorites, current: model.scope == .favorites)
                     .scopeRow(.favorites, in: model)
                     .dropTarget(in: model) { await model.setFavorite(true, for: $0) }
                 Label("Needs Review", systemImage: "exclamationmark.triangle")
-                    .count(model.counts.needsReview)
+                    .count(model.counts.needsReview, current: model.scope == .needsReview)
                     .scopeRow(.needsReview, in: model)
             } header: {
                 // The folder's name, small, where a headline used to sit
@@ -96,14 +96,14 @@ struct LibrarySidebar: View {
 
             Section("Slip-Box") {
                 Label("Notes", systemImage: "tray.full")
-                    .count(model.notes.notes.count)
+                    .count(model.notes.notes.count, current: model.scope == .notes)
                     .scopeRow(.notes, in: model)
             }
 
             Section("Collections") {
                 ForEach(model.collections.collections) { collection in
                     Label(collection.name, systemImage: symbolName(for: collection))
-                        .count(model.counts.collections[collection.id] ?? 0)
+                        .count(model.counts.collections[collection.id] ?? 0, current: model.scope == .collection(collection.id))
                         .scopeRow(.collection(collection.id), in: model)
                         .dropTarget(in: model, isEnabled: !collection.isSmart) { paperID in
                             await model.addToCollection(collection.id, paperID: paperID)
@@ -132,7 +132,7 @@ struct LibrarySidebar: View {
                             .frame(width: 10, height: 10)
                             .accessibilityHidden(true)
                     }
-                    .count(model.counts.tags[tag.id] ?? 0)
+                    .count(model.counts.tags[tag.id] ?? 0, current: model.scope == .tag(tag.id))
                     .scopeRow(.tag(tag.id), in: model)
                     .dropTarget(in: model) { await model.addTag(tag.id, to: $0) }
                 }
@@ -176,7 +176,7 @@ struct LibrarySidebar: View {
             Section("Authors", isExpanded: $authorsAreShown) {
                 ForEach(showsAllAuthors ? ranking : Array(ranking.prefix(10))) { author in
                     Label(author.name, systemImage: "person")
-                        .count(author.count)
+                        .count(author.count, current: model.scope == .author(author.key))
                         .scopeRow(.author(author.key), in: model)
                 }
                 if ranking.count > 10 {
@@ -340,11 +340,13 @@ private extension View {
     /// `.badge(0)` draws nothing at all, so a row would lose its number exactly
     /// when the number is worth knowing — an empty collection reads as broken
     /// rather than empty.
-    func count(_ value: Int) -> some View {
+    func count(_ value: Int, current: Bool = false) -> some View {
+        // On the row you are on, the same accent as the words: a pale number
+        // beside a blue name looked like it belonged to a different row.
         badge(
             Text(value, format: .number)
                 .monospacedDigit()
-                .foregroundStyle(.secondary)
+                .foregroundStyle(current ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
         )
     }
 }
