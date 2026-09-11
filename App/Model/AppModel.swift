@@ -121,6 +121,31 @@ public final class AppModel {
     /// The Spotlight-style search overlay.
     public var showsSearchPalette = false
 
+    // MARK: - What's new
+
+    /// Whether the introduction is on screen.
+    public var showsReleaseNotes = false
+
+    /// The version whose notes have been read.
+    ///
+    /// Stored rather than a plain "has launched before" flag, so the same
+    /// sheet can introduce the next version too without anyone having to
+    /// remember to reset anything.
+    @ObservationIgnored
+    @AppStorage("seenReleaseNotesVersion") private var seenVersion = ""
+
+    /// True on the first run of a version the reader has not been shown.
+    public var hasUnseenReleaseNotes: Bool { seenVersion != ReleaseNotes.version }
+
+    public func showReleaseNotesIfNew() {
+        guard hasUnseenReleaseNotes else { return }
+        showsReleaseNotes = true
+    }
+
+    public func markReleaseNotesSeen() {
+        seenVersion = ReleaseNotes.version
+    }
+
     /// Hides everything except the paper.
     public private(set) var isFocusMode = false
     /// In focus mode the paper list is summoned as a floating panel instead of

@@ -11,6 +11,8 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(AppModel.self) private var app
     @State private var showsChangeFolderConfirmation = false
+    @State private var showsReleaseNotes = false
+    @State private var showsFeatureLog = false
 
     var body: some View {
         #if os(iOS)
@@ -36,6 +38,17 @@ struct SettingsView: View {
             aboutSection
         }
         .formStyle(.grouped)
+        .sheet(isPresented: $showsReleaseNotes) {
+            WhatsNewView(marksAsSeen: false)
+        }
+        .sheet(isPresented: $showsFeatureLog) {
+            VStack(spacing: 0) {
+                FeatureLogView()
+                Button(ReleaseNotes.string("완료", "Done")) { showsFeatureLog = false }
+                    .keyboardShortcut(.defaultAction)
+                    .padding(.bottom, 16)
+            }
+        }
         .confirmationDialog(
             "Change Library Folder?",
             isPresented: $showsChangeFolderConfirmation,
@@ -220,12 +233,17 @@ struct SettingsView: View {
     private var aboutSection: some View {
         Section("About") {
             LabeledContent("Paper Time", value: appVersion)
+            Button(ReleaseNotes.string("Paper Time 소개 다시 보기…", "What's New in Paper Time…")) { showsReleaseNotes = true }
+            Button(ReleaseNotes.string("모든 기능과 단축키…", "All Features and Keys…")) { showsFeatureLog = true }
             Text("Papers are stored as ordinary files in the folder you chose — nothing lives only inside this app.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
     }
 
+    /// The two pages, as sheets on Settings rather than windows of their own:
+    /// this is where someone goes when they are looking for how something
+    /// works, so it is where the answer should be.
     private var appVersion: String {
         guard let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String else {
             return "—"
