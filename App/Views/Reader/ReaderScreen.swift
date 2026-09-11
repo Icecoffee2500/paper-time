@@ -97,7 +97,10 @@ struct ReaderScreen: View {
         // Only under the glass tint. Multiplied over a dark ground the text
         // would go with the paper, which is why the other tints keep their
         // own opaque background instead.
-        .ignoresSafeArea(edges: .bottom)
+        // Under the status bar in the scrolling layouts, where the page
+        // flowing on beneath the glass is the point; not in a book, where
+        // the bar was sitting on the last lines of both pages.
+        .ignoresSafeArea(edges: configuration.layout == .book ? [] : .bottom)
         .navigationTitle(paper.meta.displayTitle)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -148,10 +151,26 @@ struct ReaderScreen: View {
     @ViewBuilder
     private func statusBar(_ session: DocumentSession) -> some View {
         HStack(spacing: 12) {
-            Text("Page \(currentPageIndex + 1) of \(max(session.document.pageCount, 1))")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
+            let count = max(session.document.pageCount, 1)
+            if configuration.layout == .book {
+                // Both pages of the spread, and how far through the paper
+                // they are — the two things a bookmark tells you.
+                let left = currentPageIndex - currentPageIndex % 2 + 1
+                let right = min(left + 1, count)
+                Text(left == right ? "Page \(left) of \(count)" : "Pages \(left)–\(right) of \(count)")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                ProgressView(value: Double(right), total: Double(count))
+                    .progressViewStyle(.linear)
+                    .tint(.secondary.opacity(0.6))
+                    .frame(width: 140)
+            } else {
+                Text("Page \(currentPageIndex + 1) of \(count)")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
 
             Spacer()
 

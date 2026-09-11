@@ -1010,21 +1010,30 @@ private struct SearchDemo: View {
     }
 }
 
-// MARK: - A book
+// MARK: - Layouts
 
-/// Two pages across, turned with the arrows.
+/// The three ways to lay the paper out, switched with their keys.
+///
+/// Shown as the switch itself: ⌘1, ⌘2, ⌘3 as buttons, and the little window
+/// rearranging as each is pressed — a column of pages scrolling, one page on
+/// its own, two facing pages you turn with the arrows. What each layout *is*
+/// is obvious the moment it is seen next to the other two, and not before.
 private struct BookDemo: View {
     let scale: DemoScale
     @Environment(AppModel.self) private var app
-    @State private var leftPage = 4
 
-    private var total: Int { 48 }
+    private enum Layout: CaseIterable { case continuous, single, book }
+    @State private var layout: Layout = .book
+    @State private var leftPage = 4
 
     var body: some View {
         VStack(alignment: .leading, spacing: scale.gap) {
-            HStack(alignment: .top, spacing: scale.isFull ? 6 : 3) {
-                page(leftPage)
-                page(leftPage + 1)
+            ZStack {
+                switch layout {
+                case .continuous: continuous.transition(.opacity)
+                case .single: single.transition(.opacity)
+                case .book: book.transition(.opacity)
+                }
             }
             .frame(height: scale.isFull ? 190 : 84)
             .frame(maxWidth: .infinity)
@@ -1033,26 +1042,66 @@ private struct BookDemo: View {
                 RoundedRectangle(cornerRadius: scale.corner, style: .continuous)
                     .fill(.quaternary.opacity(0.35))
             )
+            .clipShape(RoundedRectangle(cornerRadius: scale.corner, style: .continuous))
 
-            HStack(spacing: 8) {
-                turn("arrow.left", by: -2, enabled: leftPage > 2)
-                turn("arrow.right", by: 2, enabled: leftPage + 2 < total)
-                Text(ReleaseNotes.string("\(leftPage)–\(leftPage + 1) / \(total)쪽", "Pages \(leftPage)–\(leftPage + 1) of \(total)"))
-                    .font(scale.small)
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
+            HStack(spacing: 6) {
+                key(.layoutContinuous, ReleaseNotes.string("연속", "Continuous"), .continuous)
+                key(.layoutSinglePage, ReleaseNotes.string("한 장", "Single"), .single)
+                key(.layoutBook, ReleaseNotes.string("책", "Book"), .book)
                 Spacer(minLength: 0)
-                HStack(spacing: 4) {
-                    Text(app.shortcut(for: .layoutBook).display).monospaced()
-                    Text(ReleaseNotes.string("책으로", "Book"))
+                if layout == .book {
+                    turn("arrow.left", by: -2, enabled: leftPage > 1)
+                    turn("arrow.right", by: 2, enabled: leftPage + 2 < 48)
+                    Text(ReleaseNotes.string("\(leftPage)–\(leftPage + 1) / 48", "\(leftPage)–\(leftPage + 1) / 48"))
+                        .font(scale.small)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
                 }
-                .font(scale.small)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 3)
-                .background(Capsule().fill(.quaternary))
             }
         }
+    }
+
+    /// A key and its name, lit when it is the layout showing.
+    private func key(_ action: ShortcutAction, _ name: String, _ target: Layout) -> some View {
+        let isOn = layout == target
+        return Button {
+            withAnimation(.snappy(duration: 0.3)) { layout = target }
+        } label: {
+            HStack(spacing: 4) {
+                Text(app.shortcut(for: action).display).monospaced()
+                Text(name)
+            }
+            .font(scale.small.weight(isOn ? .semibold : .regular))
+            .foregroundStyle(isOn ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(isOn ? AnyShapeStyle(.tint.opacity(0.14)) : AnyShapeStyle(.quaternary)))
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// A column of pages, the middle one whole, the ones above and below cut
+    /// by the edge — which is what scrolling looks like standing still.
+    private var continuous: some View {
+        VStack(spacing: scale.isFull ? 8 : 4) {
+            page(3).frame(height: scale.isFull ? 60 : 26).clipped()
+            page(4)
+            page(5).frame(height: scale.isFull ? 60 : 26).clipped()
+        }
+        .frame(width: scale.isFull ? 150 : 66)
+        .offset(y: scale.isFull ? -10 : -5)
+    }
+
+    private var single: some View {
+        page(4).frame(width: scale.isFull ? 150 : 66)
+    }
+
+    private var book: some View {
+        HStack(spacing: scale.isFull ? 6 : 3) {
+            page(leftPage)
+            page(leftPage + 1)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     /// A page of greeked text, its number at the foot, the lines seeded by
@@ -1073,7 +1122,6 @@ private struct BookDemo: View {
         .background(
             RoundedRectangle(cornerRadius: 3, style: .continuous).fill(.background)
         )
-        .transition(.opacity)
         .id(number)
     }
 
@@ -1094,7 +1142,13 @@ private struct BookDemo: View {
 
 // MARK: - Focus
 
-/// The window with everything but the paper gone.
+/// The window, and the window with everything but the paper gone.
+///
+/// Drawn as the window rather than as four grey blocks: a sidebar with its
+/// rows, a list with its titles, a paper with a heading, an inspector with its
+/// fields. Then ⇧⌘F, and the three of them slide away and the paper takes the
+/// width — which is the whole of what Focus does, and it only reads as that
+/// when what leaves looked like something.
 private struct FocusDemo: View {
     let scale: DemoScale
     @Environment(AppModel.self) private var app
@@ -1102,37 +1156,40 @@ private struct FocusDemo: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: scale.gap) {
-            ZStack(alignment: .topLeading) {
-                HStack(spacing: scale.isFull ? 6 : 4) {
+            VStack(spacing: 0) {
+                // A titlebar, so it is a window.
+                HStack(spacing: 4) {
+                    ForEach(0..<3, id: \.self) { _ in
+                        Circle().fill(.quaternary).frame(width: 6, height: 6)
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+
+                HStack(spacing: scale.isFull ? 6 : 3) {
                     if !isFocused {
-                        pane(0.16).transition(.move(edge: .leading).combined(with: .opacity))
-                        pane(0.24).transition(.move(edge: .leading).combined(with: .opacity))
+                        sidebar.transition(.move(edge: .leading).combined(with: .opacity))
+                        list.transition(.move(edge: .leading).combined(with: .opacity))
                     }
                     paper
                     if !isFocused {
-                        pane(0.22).transition(.move(edge: .trailing).combined(with: .opacity))
+                        inspector.transition(.move(edge: .trailing).combined(with: .opacity))
                     }
                 }
-                if isFocused {
-                    // The list, summoned rather than kept: a pill in the
-                    // corner that brings the papers back over the page.
-                    HStack(spacing: 4) {
-                        Image(systemName: "sidebar.leading")
-                        Text(ReleaseNotes.string("논문", "Papers"))
-                    }
-                    .font(scale.small)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Capsule().fill(.background).shadow(color: .black.opacity(0.1), radius: 3, y: 1))
-                    .padding(8)
-                    .transition(.scale(scale: 0.8, anchor: .topLeading).combined(with: .opacity))
-                }
+                .padding(.horizontal, 6)
+                .padding(.bottom, 6)
             }
-            .frame(height: scale.isFull ? 150 : 66)
+            .frame(height: scale.isFull ? 170 : 74)
+            .background(
+                RoundedRectangle(cornerRadius: scale.corner, style: .continuous)
+                    .fill(.quaternary.opacity(0.35))
+            )
+            .clipShape(RoundedRectangle(cornerRadius: scale.corner, style: .continuous))
 
             HStack(spacing: 8) {
                 Button {
-                    withAnimation(.snappy(duration: 0.3)) { isFocused.toggle() }
+                    withAnimation(.snappy(duration: 0.32)) { isFocused.toggle() }
                 } label: {
                     HStack(spacing: 4) {
                         Text(app.shortcut(for: .focus).display).monospaced()
@@ -1140,43 +1197,78 @@ private struct FocusDemo: View {
                              ? ReleaseNotes.string("돌아오기", "Leave Focus")
                              : ReleaseNotes.string("논문에 집중", "Focus on the Paper"))
                     }
-                    .font(scale.small)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(isFocused ? AnyShapeStyle(.tint.opacity(0.15)) : AnyShapeStyle(.quaternary)))
+                    .font(scale.small.weight(.medium))
+                    .foregroundStyle(isFocused ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Capsule().fill(isFocused ? AnyShapeStyle(.tint.opacity(0.14)) : AnyShapeStyle(.quaternary)))
                 }
                 .buttonStyle(.plain)
                 Spacer(minLength: 0)
                 if scale.isFull {
                     Text(isFocused
-                         ? ReleaseNotes.string("나머지는 비켜섰다. 책 배치(⌘3)도 여기로 온다.", "Everything else stepped aside. Book layout (⌘3) comes here too.")
-                         : ReleaseNotes.string("눌러 보라.", "Press it."))
+                         ? ReleaseNotes.string("사이드바·목록·인스펙터가 비켜섰다. 다시 누르면 그대로 돌아온다.", "Sidebar, list and inspector stepped aside. Press again and they come back as they were.")
+                         : ReleaseNotes.string("네 패널이 다 보인다. 눌러 보라.", "All four panes. Press it."))
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
+                        .lineLimit(2)
                 }
             }
         }
     }
 
-    private func pane(_ share: Double) -> some View {
-        RoundedRectangle(cornerRadius: scale.corner - 2, style: .continuous)
-            .fill(.quaternary)
-            .frame(maxWidth: .infinity)
-            .layoutPriority(share)
+    private var sidebar: some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 6 : 3) {
+            ForEach(0..<(scale.isFull ? 6 : 3), id: \.self) { row in
+                HStack(spacing: 4) {
+                    Circle().fill(.quaternary).frame(width: 5, height: 5)
+                    Rule(width: row == 0 ? 34 : 26)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(scale.isFull ? 8 : 5)
+        .frame(width: scale.isFull ? 62 : 30, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(.quaternary.opacity(0.7)))
+    }
+
+    private var list: some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 7 : 4) {
+            ForEach(0..<(scale.isFull ? 4 : 2), id: \.self) { row in
+                VStack(alignment: .leading, spacing: 2) {
+                    Rule(width: row == 1 ? 50 : 66)
+                    Rule(width: 30).opacity(0.6)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(scale.isFull ? 8 : 5)
+        .frame(width: scale.isFull ? 92 : 44, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(.quaternary.opacity(0.7)))
     }
 
     private var paper: some View {
-        RoundedRectangle(cornerRadius: scale.corner - 2, style: .continuous)
-            .fill(.background)
-            .overlay {
-                VStack(spacing: scale.isFull ? 6 : 3) {
-                    ForEach(0..<(scale.isFull ? 8 : 4), id: \.self) { _ in
-                        Capsule().fill(.quaternary).frame(height: 2)
-                    }
-                }
-                .padding(scale.isFull ? 14 : 6)
+        VStack(alignment: .leading, spacing: scale.isFull ? 6 : 3) {
+            Capsule().fill(.secondary.opacity(0.5)).frame(width: scale.isFull ? 90 : 40, height: 3)
+            ForEach(0..<(scale.isFull ? 9 : 4), id: \.self) { line in
+                Rule(width: line == 4 ? 70 : nil)
             }
-            .frame(maxWidth: .infinity)
-            .layoutPriority(isFocused ? 1 : 0.38)
+            Spacer(minLength: 0)
+        }
+        .padding(scale.isFull ? 12 : 6)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(.background))
+    }
+
+    private var inspector: some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 7 : 4) {
+            ForEach(0..<(scale.isFull ? 5 : 2), id: \.self) { _ in
+                HStack { Rule(width: 22); Spacer(minLength: 0); Rule(width: 18).opacity(0.6) }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(scale.isFull ? 8 : 5)
+        .frame(width: scale.isFull ? 80 : 40, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(.quaternary.opacity(0.7)))
     }
 }

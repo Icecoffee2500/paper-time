@@ -48,6 +48,9 @@ final class ReaderLink {
     /// notes list, or a link followed out of a note. Cleared once the reader
     /// has scrolled there.
     var anchorRequest: Anchor?
+    /// A place in the document chosen from its table of contents. Cleared
+    /// once the reader has gone there.
+    var destinationRequest: PDFDestination?
     /// A mark just clicked on the page, so the marks list can show which one.
     var revealedMarkID: UUID?
     /// A passage waiting to be dropped into the note at the cursor.

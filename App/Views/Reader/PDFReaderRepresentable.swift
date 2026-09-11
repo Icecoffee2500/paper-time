@@ -119,7 +119,9 @@ final class ReaderCoordinator: NSObject {
         let available = view.bounds.width - 24
         guard pageWidth > 0, available > 100 else { return }
         view.autoScales = false
-        view.scaleFactor = available / (pageWidth * 2 + 8)
+        // A shade under the full width, so the last line of a page clears
+        // the status bar rather than sitting behind it.
+        view.scaleFactor = available / (pageWidth * 2 + 8) * 0.97
     }
     private var clickMonitor: Any?
     private var pinchMonitor: Any?
@@ -340,6 +342,10 @@ final class ReaderCoordinator: NSObject {
             reveal(anchor, in: view)
             link.anchorRequest = nil
         }
+        if let destination = link.destinationRequest {
+            view.go(to: destination)
+            link.destinationRequest = nil
+        }
     }
 
     /// Forces PDFKit to re-render the pages it has cached.
@@ -428,7 +434,11 @@ final class ReaderCoordinator: NSObject {
         case .book:
             view.displayMode = .twoUp
             view.displayDirection = .horizontal
-            view.displaysAsBook = true
+            // Pages 1 and 2 face each other. `displaysAsBook` puts the first
+            // page alone on the right as a cover, which a novel has and a
+            // paper does not — a paper's first spread is its title and its
+            // introduction, side by side.
+            view.displaysAsBook = false
         }
 
         #if os(macOS)
@@ -870,9 +880,16 @@ final class ReaderCoordinator: NSObject {
                   window.firstResponder is NSView,
                   !(window.firstResponder is NSTextView)
             else { return event }
+            // ← and →, and the space bar the way every reader has it: space
+            // forward, shift-space back.
+            let back = event.modifierFlags.contains(.shift)
             switch event.keyCode {
             case 123: if view.canGoToPreviousPage { view.goToPreviousPage(nil) }; return nil
             case 124: if view.canGoToNextPage { view.goToNextPage(nil) }; return nil
+            case 49:
+                if back { if view.canGoToPreviousPage { view.goToPreviousPage(nil) } }
+                else if view.canGoToNextPage { view.goToNextPage(nil) }
+                return nil
             default: return event
             }
         }
@@ -881,10 +898,12 @@ final class ReaderCoordinator: NSObject {
         ) { [weak self, weak view] event in
             guard let self, let view, let window = view.window,
                   event.window === window,
-                  view.hitTest(view.superview?.convert(event.locationInWindow, from: nil)
-                      ?? event.locationInWindow) != nil || view.bounds.contains(
-                          view.convert(event.locationInWindow, from: nil)
-                      )
+                  // What is actually under the pointer, from the top of the
+                  // window down — not whether the page is somewhere beneath
+                  // it. A list floating over the page is over the page, and
+                  // a scroll meant for the list was turning pages under it.
+                  let hit = window.contentView?.hitTest(event.locationInWindow),
+                  hit.isDescendant(of: view)
             else { return event }
             return turnPage(with: event, in: view) ? nil : event
         }

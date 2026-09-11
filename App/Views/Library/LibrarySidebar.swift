@@ -76,16 +76,28 @@ struct LibrarySidebar: View {
             } header: {
                 // The folder's name, small, where a headline used to sit
                 // over the whole list saying the same thing louder.
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Text("Library")
-                    // Beside the word, not at the far edge where it ran out
-                    // of room — and in the accent, so which library this is
-                    // can be read at a glance.
+                    // The folder as a chip — the same shape a passage from a
+                    // paper takes in a note, and for the same reason: it
+                    // names where something came from. Plain accent type
+                    // beside a grey header shouted; on its own pale tint it
+                    // is a label.
                     Text(model.displayName)
                         .foregroundStyle(.tint)
                         .lineLimit(1)
                         .truncationMode(.middle)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1.5)
+                        .background(
+                            RoundedRectangle(cornerRadius: 5.5, style: .continuous)
+                                .fill(Color.accentColor.opacity(0.12))
+                        )
                 }
+                // Lines the first row up with the first paper across the way:
+                // the list column's header is taller than this one, and the
+                // two rows underneath should sit level.
+                .padding(.bottom, 13)
             }
 
             Section("Slip-Box") {

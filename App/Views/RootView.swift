@@ -303,8 +303,6 @@ struct LibraryWindow: View {
         @Bindable var app = app
 
         return splitView
-
-        .overlay(alignment: .topLeading) { floatingList }
         .onChange(of: configuration.layout) { _, layout in
             app.settings.readerPageMode = layout.rawValue
             // A spread wants the whole window. Choosing Book is the clearest
@@ -388,67 +386,6 @@ struct LibraryWindow: View {
         let next = index + offset
         guard papers.indices.contains(next) else { return }
         model.selectedPaperID = papers[next].id
-    }
-
-    /// In focus mode the list is summoned over the page rather than pinned to
-    /// a column, so a glance at the library costs nothing and leaves nothing
-    /// behind.
-    @ViewBuilder
-    private var floatingList: some View {
-        if app.isFocusMode {
-            HStack(alignment: .top, spacing: 0) {
-                if app.showsFloatingList {
-                    VStack(alignment: .leading, spacing: 0) {
-                        HStack {
-                            Text(scopeTitle)
-                                .font(.headline)
-                            Spacer()
-                            Button {
-                                app.toggleFloatingList()
-                            } label: {
-                                Image(systemName: "chevron.left")
-                            }
-                            .buttonStyle(.plain)
-                            .help("Hide papers (Command-L)")
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.top, 12)
-                        .padding(.bottom, 8)
-                        Divider()
-                        PaperListView(model: model)
-                    }
-                        .frame(width: 320)
-                        .frame(maxHeight: 620)
-                        .liquidGlass(.floating, in: RoundedRectangle(cornerRadius: Corner.panel, style: .continuous))
-                        .shadow(radius: 18, y: 6)
-                        .padding(.leading, 16)
-                        .padding(.top, 16)
-                        .transition(.move(edge: .leading).combined(with: .opacity))
-                        .onChange(of: model.selectedPaperID) { _, _ in
-                            app.toggleFloatingList()
-                        }
-                } else {
-                    Button {
-                        app.toggleFloatingList()
-                    } label: {
-                        Label("Papers", systemImage: "sidebar.leading")
-                            .font(.callout.weight(.medium))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .liquidGlass(.floating)
-                            .overlay(
-                                Capsule().strokeBorder(.primary.opacity(0.08), lineWidth: 0.5)
-                            )
-                            .shadow(radius: 6, y: 2)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Show papers (Command-L)")
-                    .padding(.leading, 12)
-                    .padding(.top, 12)
-                    .transition(.opacity.combined(with: .move(edge: .leading)))
-                }
-            }
-        }
     }
 
     @ViewBuilder
@@ -746,6 +683,16 @@ struct PaperDetailColumn: View {
 
     var body: some View {
         columns
+        // The paper's contents, floating over the page. Centred on the
+        // column, which in a book spread puts it in the gutter between the
+        // two pages where there are no words to cover.
+        .overlay {
+            if app.showsFloatingList, model.selectedPaper != nil {
+                ContentsPopup(link: link) { app.toggleFloatingList() }
+                    .transition(.scale(scale: 0.96).combined(with: .opacity))
+            }
+        }
+        .animation(.snappy(duration: 0.22), value: app.showsFloatingList)
         // Clicking a mark on the page opens the list it lives in.
         .onChange(of: link.revealedMarkID) { _, id in
             guard id != nil else { return }
@@ -939,11 +886,31 @@ extension View {
         #endif
     }
 
-    /// One size for every icon in the toolbar, so the row is a row.
+    /// One size for every icon in the toolbar, so the row is a row — and a
+    /// faint square under the pointer, the way the segmented picker at the
+    /// other end of the toolbar already answers a hover. Borderless buttons
+    /// answered with nothing, and a row of icons that does not react does
+    /// not look like a row of buttons.
     func toolbarIcon() -> some View {
         font(.system(size: 14, weight: .medium))
             .frame(width: 22, height: 22)
             .contentShape(.rect)
+            .modifier(ToolbarHover())
+    }
+}
+
+private struct ToolbarHover: ViewModifier {
+    @State private var isHovering = false
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Color.primary.opacity(isHovering ? 0.09 : 0))
+                    .padding(-3)
+            )
+            .animation(.easeOut(duration: 0.12), value: isHovering)
+            .onHover { isHovering = $0 }
     }
 }
 

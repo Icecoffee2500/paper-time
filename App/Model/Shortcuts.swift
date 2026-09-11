@@ -184,7 +184,7 @@ public enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
         case .reader: "Paper"
         case .inspector: "Inspector"
         case .focus: "Focus on the Paper"
-        case .floatingList: "Show Papers in Focus"
+        case .floatingList: "Table of Contents"
         case .zoomIn: "Zoom In"
         case .zoomOut: "Zoom Out"
         case .actualSize: "Actual Size"

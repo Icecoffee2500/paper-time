@@ -110,8 +110,8 @@ struct PaperTimeCommands: Commands {
             ) { model.toggleFocusMode() }
                 .disabled(model.library == nil)
 
-            command("Show Papers", .floatingList) { model.toggleFloatingList() }
-                .disabled(!model.isFocusMode)
+            command("Table of Contents", .floatingList) { model.toggleFloatingList() }
+                .disabled(model.library?.selectedPaperID == nil)
 
             Divider()
 
