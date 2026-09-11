@@ -4,6 +4,16 @@ import SwiftUI
 struct PaperTimeApp: App {
     @State private var model = AppModel()
 
+    init() {
+        #if os(macOS)
+        // Draws every feature demo to a file and quits, for checking them
+        // without a window: `PAPERTIME_RENDER_DEMOS=/some/dir`.
+        if let directory = ProcessInfo.processInfo.environment["PAPERTIME_RENDER_DEMOS"] {
+            DemoRenderer.render(into: directory)
+        }
+        #endif
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()

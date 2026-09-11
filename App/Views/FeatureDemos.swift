@@ -131,12 +131,100 @@ private struct AnnotationDemo: View {
     private var lineCount: Int { 14 }
 
     var body: some View {
-        HStack(alignment: .top, spacing: scale.gap) {
-            page
-            list
-                .frame(width: scale.isFull ? 200 : 132)
+        VStack(alignment: .leading, spacing: scale.gap) {
+            comparison
+            HStack(alignment: .top, spacing: scale.gap) {
+                page
+                list
+                    .frame(width: scale.isFull ? 200 : 132)
+            }
+            .frame(height: scale.isFull ? 230 : 116)
         }
-        .frame(height: scale.isFull ? 230 : 116)
+    }
+
+    // MARK: The same line, marked twice
+
+    /// One highlighted line with a formula in it, drawn as every other PDF
+    /// app draws it and as this one does.
+    ///
+    /// The other apps paint the rectangle PDFKit reports, square-cornered and
+    /// as tall as the line — and a line carrying a sum with its limits is two
+    /// or three times the height of its words, so the box swallows the lines
+    /// above and below. Here the ink of the letters is measured and the band
+    /// covers just that, rounded at the ends, with the tall glyphs poking
+    /// out of it the way they poke out of a stroke drawn by hand.
+    private var comparison: some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 6 : 4) {
+            HStack(alignment: .top, spacing: scale.gap) {
+                sample(ours: false)
+                sample(ours: true)
+            }
+            Text(ReleaseNotes.string(
+                "수식이 든 줄: 저쪽은 상자가 줄 높이만큼 자라고 모서리가 각지다. 이쪽은 글자에 딱 맞고 끝이 둥글다 — 사람이 그은 것처럼.",
+                "A line with a formula: there, the box grows to the line's height and its corners are square. Here it fits the letters and its ends are round — the way a hand draws it."
+            ))
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func sample(ours: Bool) -> some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 6 : 4) {
+            Text(ours ? "Paper Time" : ReleaseNotes.string("다른 PDF 앱", "Other PDF apps"))
+                .font(scale.small.weight(ours ? .semibold : .regular))
+                .foregroundStyle(ours ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                .padding(.horizontal, 7)
+                .padding(.vertical, 2)
+                .background(Capsule().fill(ours ? AnyShapeStyle(.tint.opacity(0.14)) : AnyShapeStyle(.quaternary)))
+            Paper(scale: scale) {
+                VStack(alignment: .leading, spacing: scale.isFull ? 7 : 5) {
+                    Rule()
+                    markedFormula(ours: ours)
+                    Rule(width: scale.isFull ? 120 : 70)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// The line, set the way a page sets it: words, then a sum with its
+    /// limits above and below, then words. Marked square and tall on the
+    /// left, round and fitted on the right.
+    private func markedFormula(ours: Bool) -> some View {
+        let size: CGFloat = scale.isFull ? 13 : 10
+        return formula(size: size)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 3)
+            .background {
+                if ours {
+                    // The words' ink and a hair of margin, as `LineMetrics` measures it.
+                    RoundedRectangle(cornerRadius: 3.5, style: .continuous)
+                        .fill(Color.yellow.opacity(0.32))
+                        .frame(height: size * 1.2)
+                        .offset(y: size * 0.02)
+                } else {
+                    Rectangle().fill(Color.yellow.opacity(0.55))
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func formula(size: CGFloat) -> Text {
+        let body = Font.system(size: size, design: .serif)
+        let math = Font.system(size: size, design: .serif).italic()
+        let sum = Font.system(size: size * 1.6, design: .serif)
+        let limit = Font.system(size: size * 0.6, design: .serif)
+        let runs: [Text] = [
+            Text(ReleaseNotes.string("총 손실 ", "the total loss ")).font(body),
+            Text("∑").font(sum).baselineOffset(-size * 0.2),
+            Text("n").font(limit).baselineOffset(size * 0.9),
+            Text("i=1").font(limit).baselineOffset(-size * 0.55),
+            Text(" ℓ").font(math),
+            Text("i").font(limit).baselineOffset(-size * 0.25),
+            Text(ReleaseNotes.string("을 최소화한다", " over all tasks")).font(body),
+        ]
+        return runs.dropFirst().reduce(runs[0]) { $0 + $1 }
     }
 
     /// The paper. Marks are the only thing set in type; everything else is
@@ -1040,8 +1128,10 @@ private struct BookDemo: View {
             .frame(maxWidth: .infinity)
             .padding(scale.isFull ? 10 : 6)
             .background(
+                // A book is one white field; the scrolling layouts show their
+                // pages on the window's ground.
                 RoundedRectangle(cornerRadius: scale.corner, style: .continuous)
-                    .fill(.quaternary.opacity(0.35))
+                    .fill(layout == .book ? AnyShapeStyle(.background) : AnyShapeStyle(.quaternary.opacity(0.35)))
             )
             .clipShape(RoundedRectangle(cornerRadius: scale.corner, style: .continuous))
 
@@ -1097,12 +1187,10 @@ private struct BookDemo: View {
         page(4).frame(width: scale.isFull ? 150 : 66)
     }
 
+    /// The spread as the app draws it: cropped to the text, one white field.
     private var book: some View {
-        HStack(spacing: scale.isFull ? 6 : 3) {
-            page(leftPage)
-            page(leftPage + 1)
-        }
-        .frame(maxWidth: .infinity)
+        Spread(scale: scale, leftPage: leftPage, trimmed: true, lines: 12)
+            .frame(maxWidth: .infinity)
     }
 
     /// A page of greeked text, its number at the foot, the lines seeded by
@@ -1278,11 +1366,84 @@ private struct FocusDemo: View {
 
 /// The spread with what a book gives you: which pages, how far in, and the
 /// contents floating in the gutter to jump by section.
+/// Two facing pages, drawn the way this app shows them — or the way every
+/// other PDF app does.
+///
+/// Other apps put the PDF's two pages side by side as they come: each paper
+/// brings its own margins, a two-sided journal shifts its text toward the
+/// spine, the stamp arXiv runs up the margin stays, and PDFKit's spread is
+/// wider than the window so it sits wherever the last scroll left it. Here
+/// each page is cropped to its text, so the words stand the same distance
+/// from the middle on both sides and the gutter is the same width for every
+/// paper; there are no page edges to see, just one white field, and the
+/// stamp is painted out.
+private struct Spread: View {
+    let scale: DemoScale
+    let leftPage: Int
+    /// Cropped to the text, as this app does it; otherwise as the pages come.
+    let trimmed: Bool
+    var lines: Int = 11
+
+    var body: some View {
+        HStack(spacing: trimmed ? (scale.isFull ? 44 : 22) : (scale.isFull ? 4 : 2)) {
+            sheet(leftPage, leading: trimmed ? margin : outer, trailing: trimmed ? margin : inner)
+                .overlay(alignment: .leading) { if !trimmed { stamp } }
+            sheet(leftPage + 1, leading: trimmed ? margin : inner, trailing: trimmed ? margin : outer)
+        }
+        .offset(x: trimmed ? 0 : -(scale.isFull ? 18 : 8))
+        .animation(.snappy(duration: 0.35), value: trimmed)
+    }
+
+    private var margin: CGFloat { scale.isFull ? 10 : 5 }
+    private var outer: CGFloat { scale.isFull ? 34 : 15 }
+    private var inner: CGFloat { scale.isFull ? 8 : 4 }
+
+    private func sheet(_ number: Int, leading: CGFloat, trailing: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 6 : 3) {
+            ForEach(0..<(scale.isFull ? lines : 5), id: \.self) { line in
+                Rule(width: ((number * 7 + line * 13) % 5 == 0) ? 60 : nil)
+            }
+            Spacer(minLength: 0)
+            Text("\(number)").font(.caption2).foregroundStyle(.tertiary).frame(maxWidth: .infinity)
+        }
+        .padding(.vertical, scale.isFull ? 12 : 7)
+        .padding(.leading, leading)
+        .padding(.trailing, trailing)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .fill(.background)
+                .shadow(color: .black.opacity(trimmed ? 0 : 0.14), radius: 3, y: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+        .id(number)
+    }
+
+    /// The stamp up the margin, as the PDF prints it.
+    private var stamp: some View {
+        Text("arXiv:2410.24164v1  [cs.RO]  31 Oct 2024")
+            .font(.system(size: scale.isFull ? 7 : 4.5, design: .monospaced))
+            .foregroundStyle(.secondary.opacity(0.7))
+            .fixedSize()
+            .rotationEffect(.degrees(-90))
+            .frame(width: scale.isFull ? 10 : 6)
+            .offset(x: scale.isFull ? 12 : 5)
+            .transition(.opacity)
+    }
+}
+
 private struct BookReadingDemo: View {
     let scale: DemoScale
     @Environment(AppModel.self) private var app
     @State private var leftPage = 3
     @State private var showsContents = false
+    /// Cropped to the text, as here; or as every other app shows it.
+    @State private var trimmed: Bool
+
+    init(scale: DemoScale, trimmed: Bool = true) {
+        self.scale = scale
+        _trimmed = State(initialValue: trimmed)
+    }
 
     private let total = 48
     private var sections: [(String, Int)] {
@@ -1299,11 +1460,8 @@ private struct BookReadingDemo: View {
         VStack(alignment: .leading, spacing: scale.gap) {
             VStack(spacing: 0) {
                 ZStack {
-                    HStack(spacing: scale.isFull ? 14 : 6) {
-                        page(leftPage)
-                        page(leftPage + 1)
-                    }
-                    .padding(scale.isFull ? 10 : 6)
+                    Spread(scale: scale, leftPage: leftPage, trimmed: trimmed)
+                        .padding(scale.isFull ? 10 : 6)
 
                     if showsContents { contents.transition(.scale(scale: 0.96).combined(with: .opacity)) }
                 }
@@ -1326,8 +1484,11 @@ private struct BookReadingDemo: View {
                 .background(.background.opacity(0.6))
             }
             .background(
+                // One white field when the pages are cropped — the book is
+                // the field, not two cards on a ground. A grey ground when
+                // they are not, which is what shows their edges.
                 RoundedRectangle(cornerRadius: scale.corner, style: .continuous)
-                    .fill(.quaternary.opacity(0.35))
+                    .fill(trimmed ? AnyShapeStyle(.background) : AnyShapeStyle(.quaternary.opacity(0.35)))
             )
             // No clip on the stage: the contents float over the pages, and a
             // clip was cutting the top and bottom off the floating list.
@@ -1355,7 +1516,35 @@ private struct BookReadingDemo: View {
                 }
                 .buttonStyle(.plain)
             }
+
+            // The same spread as other apps show it, and as this one does.
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                mode(ReleaseNotes.string("다른 PDF 앱", "Other PDF apps"), trimmed: false)
+                mode("Paper Time", trimmed: true)
+                Text(trimmed
+                    ? ReleaseNotes.string("글에 맞춰 잘라 좌우 여백이 같고, 두 쪽 사이는 어떤 논문이든 같은 폭. 도장은 지우고, 목차는 그 사이에 뜬다.",
+                                          "Cropped to the text: equal margins both sides, a gutter the same width for every paper. The stamp is painted out; the contents float in between.")
+                    : ReleaseNotes.string("쪽을 그대로 나란히: 논문마다 여백이 다르고, 두 쪽은 붙거나 벌어지고, 펼침면은 한쪽으로 몰리고, 여백의 도장이 보인다.",
+                                          "The pages as they come: margins differ by paper, the two pages meet or gape, the spread sits to one side, and the stamp shows."))
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
+    }
+
+    private func mode(_ name: String, trimmed target: Bool) -> some View {
+        let isOn = trimmed == target
+        return Button {
+            withAnimation(.snappy(duration: 0.35)) { trimmed = target }
+        } label: {
+            Text(name)
+                .font(scale.small.weight(isOn ? .semibold : .regular))
+                .foregroundStyle(isOn ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                .padding(.horizontal, 7).padding(.vertical, 3)
+                .background(Capsule().fill(isOn ? AnyShapeStyle(.tint.opacity(0.14)) : AnyShapeStyle(.quaternary)))
+        }
+        .buttonStyle(.plain)
     }
 
     /// The contents, narrow and tall in the gutter. A section is one press;
@@ -1398,20 +1587,6 @@ private struct BookReadingDemo: View {
         .fixedSize(horizontal: false, vertical: true)
     }
 
-    private func page(_ number: Int) -> some View {
-        VStack(alignment: .leading, spacing: scale.isFull ? 6 : 3) {
-            ForEach(0..<(scale.isFull ? 11 : 5), id: \.self) { line in
-                Rule(width: ((number * 7 + line * 13) % 5 == 0) ? 60 : nil)
-            }
-            Spacer(minLength: 0)
-            Text("\(number)").font(.caption2).foregroundStyle(.tertiary).frame(maxWidth: .infinity)
-        }
-        .padding(scale.isFull ? 12 : 7)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(RoundedRectangle(cornerRadius: 3, style: .continuous).fill(.background))
-        .id(number)
-    }
-
     private func turn(_ symbol: String, by delta: Int, enabled: Bool) -> some View {
         Button {
             withAnimation(.snappy(duration: 0.25)) { leftPage += delta }
@@ -1426,3 +1601,41 @@ private struct BookReadingDemo: View {
         .opacity(enabled ? 1 : 0.4)
     }
 }
+
+#if os(macOS)
+/// Draws every demo, at both sizes, into PNG files — so they can be looked
+/// at without opening a window over whatever the user is doing.
+@MainActor
+enum DemoRenderer {
+    static func render(into directory: String) {
+        let model = AppModel()
+        let folder = URL(fileURLWithPath: directory)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        for demo in ReleaseNotes.Demo.allCases {
+            for scale in [DemoScale.compact, .full] {
+                let view = FeatureDemoView(demo: demo, scale: scale)
+                    .environment(model)
+                    .frame(width: scale.isFull ? 560 : 440)
+                    .padding(16)
+                    .background(Color(nsColor: .windowBackgroundColor))
+                let renderer = ImageRenderer(content: view)
+                renderer.scale = 2
+                guard let image = renderer.nsImage, let tiff = image.tiffRepresentation,
+                      let bitmap = NSBitmapImageRep(data: tiff),
+                      let png = bitmap.representation(using: .png, properties: [:])
+                else { continue }
+                try? png.write(to: folder.appendingPathComponent("\(demo.rawValue)-\(scale.isFull ? "full" : "compact").png"))
+            }
+        }
+        // The book as other apps show it, which the demo reaches by a press.
+        let other = ImageRenderer(content: BookReadingDemo(scale: .full, trimmed: false)
+            .environment(model).frame(width: 560).padding(16).background(Color(nsColor: .windowBackgroundColor)))
+        other.scale = 2
+        if let image = other.nsImage, let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff),
+           let png = bitmap.representation(using: .png, properties: [:]) {
+            try? png.write(to: folder.appendingPathComponent("bookReading-other.png"))
+        }
+        exit(0)
+    }
+}
+#endif
