@@ -75,13 +75,36 @@ struct SettingsView: View {
         // it — and this sidebar is the only way to reach five of the six
         // pages, so collapsing it is not something anyone should be offered.
         HStack(spacing: 0) {
-            List(Pane.allCases, selection: $pane) { page in
-                Label(page.rawValue, systemImage: page.symbol).tag(page)
+            // Rows of our own rather than a `List`. A sidebar list paints
+            // its selection with the accent colour only while the list itself
+            // has keyboard focus, and on the Shortcuts page focus belongs to
+            // the search field the moment you arrive — so the one page that
+            // needed the field also lost its blue, and the selection went
+            // grey. Which page you are on is not a fact about where the
+            // keyboard is pointing.
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(Pane.allCases) { page in
+                    Button {
+                        pane = page
+                    } label: {
+                        Label(page.rawValue, systemImage: page.symbol)
+                            .foregroundStyle(pane == page ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(
+                                RoundedRectangle(cornerRadius: Corner.row, style: .continuous)
+                                    .fill(pane == page ? AnyShapeStyle(.tint) : AnyShapeStyle(.clear))
+                            )
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer(minLength: 0)
             }
-            .listStyle(.sidebar)
-            .scrollContentBackground(.hidden)
+            .padding(.horizontal, 10)
             .frame(width: 172)
-            .padding(.top, 8)
+            .padding(.top, 14)
 
             // One hairline, and only here. Two columns of the same shade need
             // something to say where one stops; the rule that had to go was
@@ -572,12 +595,28 @@ struct SettingsView: View {
     }
 
     /// What a folded version is hiding, so it can be skipped without opening.
+    ///
+    /// Said in words. "+12" is a number whose unit you have to go and find
+    /// out, and the legend at the top of the page is exactly the thing
+    /// somebody reading a folded line cannot see.
     private func countLine(_ release: ReleaseNotes.Release) -> String {
         var parts: [String] = []
-        if !release.added.isEmpty { parts.append("+\(release.added.count)") }
-        if !release.removed.isEmpty { parts.append("−\(release.removed.count)") }
-        if !release.fixed.isEmpty { parts.append("~\(release.fixed.count)") }
-        return parts.joined(separator: " ")
+        if !release.added.isEmpty {
+            parts.append(ReleaseNotes.string(
+                "더한 것 \(release.added.count)개", "\(release.added.count) added"
+            ))
+        }
+        if !release.removed.isEmpty {
+            parts.append(ReleaseNotes.string(
+                "뺀 것 \(release.removed.count)개", "\(release.removed.count) removed"
+            ))
+        }
+        if !release.fixed.isEmpty {
+            parts.append(ReleaseNotes.string(
+                "고친 것 \(release.fixed.count)개", "\(release.fixed.count) fixed"
+            ))
+        }
+        return parts.joined(separator: " · ")
     }
 
     /// A line of the log: the keyword, and the sentence it is hiding.

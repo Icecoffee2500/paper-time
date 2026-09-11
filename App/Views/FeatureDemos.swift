@@ -40,6 +40,7 @@ struct FeatureDemoView: View {
             case .ultracopy: UltracopyDemo(scale: scale)
             case .slipBox: SlipBoxDemo(scale: scale)
             case .graph: GraphDemo(scale: scale)
+            case .search: SearchDemo(scale: scale)
             }
         }
         .padding(scale.pad)
@@ -712,5 +713,165 @@ private struct GraphDemo: View {
     private func dim(_ a: Int, _ b: Int) -> Bool {
         guard let focus else { return false }
         return a != focus && b != focus
+    }
+}
+
+// MARK: - Search everything
+
+/// ⌘K, at its own size.
+///
+/// Built to look like the palette itself rather than like a picture of it —
+/// the same card, the same capitalised group captions, the same 44-point rows
+/// with a symbol, a title and a line under it — because the thing worth
+/// showing is that papers, notes, authors, collections, tags and commands all
+/// come back from the same field. The corpus is invented; the filtering is
+/// real, so typing in here behaves the way typing in there does.
+private struct SearchDemo: View {
+    let scale: DemoScale
+    @Environment(AppModel.self) private var app
+    @State private var query = "vision"
+    @State private var highlighted = 0
+
+    private struct Row: Identifiable {
+        let id = UUID()
+        let group: String
+        let symbol: String
+        let title: String
+        let subtitle: String
+    }
+
+    private var corpus: [Row] {
+        [
+            Row(group: ReleaseNotes.string("논문", "Papers"), symbol: "doc.text",
+                title: "OpenVLA: An Open-Source Vision-Language-Action Model",
+                subtitle: "Kim, Pertsch, Karamcheti · 2024"),
+            Row(group: ReleaseNotes.string("논문", "Papers"), symbol: "doc.text",
+                title: "V-JEPA 2: Self-Supervised Video Models",
+                subtitle: "Assran, Bardes, LeCun · 2025"),
+            Row(group: ReleaseNotes.string("논문", "Papers"), symbol: "doc.text",
+                title: "Attention Is All You Need",
+                subtitle: "Vaswani, Shazeer, Parmar · 2017"),
+            Row(group: ReleaseNotes.string("노트", "Notes"), symbol: "note.text",
+                title: ReleaseNotes.string("행동 표현은 어디서 오는가", "Where action representations come from"),
+                subtitle: ReleaseNotes.string("OpenVLA를 읽다가", "while reading OpenVLA")),
+            Row(group: ReleaseNotes.string("저자", "Authors"), symbol: "person",
+                title: "Sergey Levine",
+                subtitle: ReleaseNotes.string("논문 3편", "3 papers")),
+            Row(group: ReleaseNotes.string("컬렉션", "Collections"), symbol: "folder",
+                title: "Vision Language Action",
+                subtitle: ReleaseNotes.string("논문 4편", "4 papers")),
+            Row(group: ReleaseNotes.string("태그", "Tags"), symbol: "number",
+                title: "#robotics",
+                subtitle: ReleaseNotes.string("논문 6편 · 노트 2개", "6 papers · 2 notes")),
+            Row(group: ReleaseNotes.string("명령", "Actions"), symbol: "square.and.arrow.down",
+                title: ReleaseNotes.string("논문 추가…", "Add Papers…"),
+                subtitle: app.shortcut(for: .addPapers).display),
+        ]
+    }
+
+    private var matches: [Row] {
+        let needle = query.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !needle.isEmpty else { return corpus }
+        return corpus.filter {
+            $0.title.lowercased().contains(needle) || $0.subtitle.lowercased().contains(needle)
+        }
+    }
+
+    /// The matches in their groups, in the palette's own order, each row
+    /// carrying its place in the flat list so one highlight runs through all
+    /// of them.
+    private var grouped: [(name: String, rows: [(offset: Int, row: Row)])] {
+        var order: [String] = []
+        var byGroup: [String: [(Int, Row)]] = [:]
+        for (offset, row) in matches.enumerated() {
+            if byGroup[row.group] == nil { order.append(row.group) }
+            byGroup[row.group, default: []].append((offset, row))
+        }
+        return order.map { (name: $0, rows: byGroup[$0]!.map { (offset: $0.0, row: $0.1) }) }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            field
+            if !matches.isEmpty {
+                Divider()
+                results
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: scale.isFull ? Corner.panel : Corner.popover, style: .continuous)
+                .fill(.background)
+        )
+        .clipShape(
+            RoundedRectangle(cornerRadius: scale.isFull ? Corner.panel : Corner.popover, style: .continuous)
+        )
+        .shadow(color: .black.opacity(0.12), radius: scale.isFull ? 14 : 6, y: scale.isFull ? 5 : 2)
+        .onChange(of: query) { _, _ in highlighted = 0 }
+    }
+
+    private var field: some View {
+        HStack(spacing: scale.isFull ? 12 : 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: scale.isFull ? 20 : 13))
+                .foregroundStyle(.secondary)
+            TextField(ReleaseNotes.string("Paper Time 검색", "Paper Time Search"), text: $query)
+                .textFieldStyle(.plain)
+                .font(.system(size: scale.isFull ? 20 : 13))
+            Text(app.shortcut(for: .searchEverything).display)
+                .font(scale.small)
+                .monospaced()
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, scale.isFull ? 16 : 10)
+        .padding(.vertical, scale.isFull ? 12 : 7)
+    }
+
+    private var results: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(grouped, id: \.name) { group in
+                Text(group.name.uppercased())
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, scale.isFull ? 16 : 10)
+                    .padding(.top, scale.isFull ? 10 : 7)
+                    .padding(.bottom, 3)
+
+                ForEach(group.rows, id: \.offset) { entry in
+                    row(entry.row, isHighlighted: entry.offset == highlighted)
+                        .onHover { if $0 { highlighted = entry.offset } }
+                        .onTapGesture { highlighted = entry.offset }
+                }
+            }
+        }
+        .padding(.bottom, 7)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func row(_ row: Row, isHighlighted: Bool) -> some View {
+        HStack(spacing: scale.isFull ? 11 : 8) {
+            Image(systemName: row.symbol)
+                .font(.system(size: scale.isFull ? 14 : 11))
+                .frame(width: scale.isFull ? 20 : 15)
+                .foregroundStyle(isHighlighted ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+            VStack(alignment: .leading, spacing: 0) {
+                Text(row.title)
+                    .font(scale.body)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Text(row.subtitle)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, scale.isFull ? 10 : 7)
+        .frame(height: scale.isFull ? 38 : 28)
+        .background(
+            RoundedRectangle(cornerRadius: Corner.row, style: .continuous)
+                .fill(isHighlighted ? AnyShapeStyle(.tint.opacity(0.15)) : AnyShapeStyle(.clear))
+        )
+        .padding(.horizontal, scale.isFull ? 6 : 4)
+        .contentShape(.rect)
     }
 }

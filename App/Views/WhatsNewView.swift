@@ -17,15 +17,12 @@ struct WhatsNewView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    ForEach(ReleaseNotes.highlights) { highlight in
-                        row(highlight)
-                    }
-                }
-                .padding(.horizontal, 34)
-                .padding(.vertical, 26)
+                FeatureShowcase { header }
+                    .padding(.horizontal, 30)
+                    .padding(.top, 30)
+                    .padding(.bottom, 26)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             // Takes the room left over, explicitly. Without this the stack
             // sized itself to the content, overran the sheet, and the footer
@@ -34,65 +31,54 @@ struct WhatsNewView: View {
             .scrollIndicators(.never)
             footer
         }
-        .frame(width: 540, height: 680)
+        .frame(width: 660, height: 760)
         .onAppear { if marksAsSeen { app.markReleaseNotesSeen() } }
     }
 
     private var header: some View {
-        VStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             Image(systemName: "books.vertical.fill")
-                .font(.system(size: 40))
+                .font(.system(size: 38))
                 .foregroundStyle(.tint)
-                .padding(.bottom, 2)
             Text(ReleaseNotes.string("Paper Time에 오신 것을 환영합니다", "Welcome to Paper Time"))
                 .font(.system(size: 26, weight: .bold))
             Text(ReleaseNotes.string("버전 \(ReleaseNotes.version) · 알파", "Version \(ReleaseNotes.version) · Alpha"))
                 .font(.callout)
                 .foregroundStyle(.secondary)
-        }
-        .padding(.top, 34)
-        .padding(.horizontal, 34)
-    }
-
-    private func row(_ highlight: ReleaseNotes.Highlight) -> some View {
-        HStack(alignment: .top, spacing: 15) {
-            Image(systemName: highlight.symbol)
-                .font(.system(size: 21))
-                .foregroundStyle(.tint)
-                .frame(width: 30, alignment: .center)
-                .padding(.top, 1)
-
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 7) {
-                    Text(highlight.title.value)
-                        .font(.headline)
-                    if let action = highlight.action {
-                        KeyCap(action: action)
-                    }
-                }
-                Text(highlight.detail.value)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            Text(ReleaseNotes.string(
+                "아래의 것들은 설명이 아니라 실제로 눌러볼 수 있는 것들이다 — 논문만 없을 뿐, 동작은 앱의 것 그대로다. 나중에 설정 → About에서 다시 볼 수 있다.",
+                "What follows is not a description: each one works. Only the paper is missing. It is all here again later, in Settings → About."
+            ))
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.top, 6)
         }
     }
 
     private var footer: some View {
         VStack(spacing: 12) {
-            Text(ReleaseNotes.string("알파 버전이다 — 매일 쓰면서 자주 바꾸고 있다. 논문과 노트는 내가 고른 폴더 안의 평범한 파일로 남는다.", "An alpha — used daily, changed often. Your papers and notes stay ordinary files in the folder you chose."))
+            Divider().opacity(0.5)
+            HStack(spacing: 14) {
+                Text(ReleaseNotes.string(
+                    "알파 버전이다 — 매일 쓰면서 자주 바꾸고 있다. 논문과 노트는 내가 고른 폴더 안의 평범한 파일로 남는다.",
+                    "An alpha — used daily, changed often. Your papers and notes stay ordinary files in the folder you chose."
+                ))
                 .font(.caption)
                 .foregroundStyle(.tertiary)
-                .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Button(ReleaseNotes.string("읽기 시작", "Start Reading")) { dismiss() }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .keyboardShortcut(.defaultAction)
+                Spacer(minLength: 8)
+
+                Button(ReleaseNotes.string("읽기 시작", "Start Reading")) { dismiss() }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .keyboardShortcut(.defaultAction)
+            }
+            .padding(.horizontal, 30)
+            .padding(.bottom, 20)
+            .padding(.top, 4)
         }
-        .padding(.horizontal, 34)
-        .padding(.bottom, 26)
     }
 }
 

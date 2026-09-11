@@ -137,12 +137,31 @@ struct SlipBoxList: View {
 /// The slip-box's detail pane: the note that is open, or an invitation.
 struct SlipBoxDetail: View {
     let model: LibraryModel
+    /// The handle the note's passage links speak through.
+    ///
+    /// This was nil, and a nil link is a link that goes nowhere: `⌘L` had
+    /// written the passage into the note, the chip was drawn, and clicking it
+    /// set an anchor on nothing. The slip-box had no paper open beside it, so
+    /// there seemed to be nothing to ask — but the note remembers which paper
+    /// it was written against, which is enough to open it.
+    let link: ReaderLink
+    /// Called when a passage in the open note is clicked, with the paper it
+    /// came from.
+    var onFollowPassage: (UUID) -> Void = { _ in }
 
     var body: some View {
         if let id = model.notes.openNoteID, model.notes.note(id) != nil {
-            ZettelEditorView(notes: model.notes, noteID: id, link: nil)
+            ZettelEditorView(notes: model.notes, noteID: id, link: link)
                 .frame(maxWidth: 760)
                 .frame(maxWidth: .infinity)
+                .onChange(of: link.anchorRequest) { _, request in
+                    // The reader consumes the request; this only has to
+                    // notice one was made, and say which paper it is for.
+                    guard request != nil,
+                          let paperID = model.notes.note(id)?.paperID
+                    else { return }
+                    onFollowPassage(paperID)
+                }
                 .onChange(of: model.notes.requestedNoteID) { _, requested in
                     guard let requested else { return }
                     model.notes.openNoteID = requested

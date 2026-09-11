@@ -78,6 +78,16 @@ enum ReleaseNotes {
             demo: .passageLink
         ),
         Highlight(
+            symbol: "magnifyingglass",
+            title: Text2("한 칸에서 전부 찾는다", "One field finds all of it"),
+            detail: Text2(
+                "⌘K는 논문·노트·저자·컬렉션·태그, 그리고 앱의 명령까지 같은 칸에서 찾는다. 어디에 뒀는지 기억하지 않아도 되고, 화살표와 Return만으로 끝난다. 논문 안의 글자를 찾는 것은 ⌘F 쪽이다.",
+                "⌘K searches papers, notes, authors, collections, tags and the app's own commands from the same field — arrows and Return, without remembering where you filed anything. ⌘F is the other one: the words inside the open paper."
+            ),
+            action: .searchEverything,
+            demo: .search
+        ),
+        Highlight(
             symbol: "tray.full",
             title: Text2("PDF 더미가 아니라 슬립박스", "A slip-box, not a pile of PDFs"),
             detail: Text2(
@@ -193,7 +203,8 @@ enum ReleaseNotes {
                     Text2("검색", "Search"),
                     Text2("⌘K는 논문·노트·저자를 한 칸에서 찾고, ⌘F는 열린 논문 안을 찾는다.",
                           "⌘K finds papers, notes and authors from one field; ⌘F searches inside the open paper."),
-                    action: .searchEverything
+                    action: .searchEverything,
+                    demo: .search
                 ),
                 Entry(
                     Text2("4-패널 창", "Four-pane window"),
@@ -355,6 +366,9 @@ enum ReleaseNotes {
         /// The library drawn by four kinds of connection, with the legend
         /// switching them off.
         case graph
+        /// One field over the window that finds papers, notes, authors,
+        /// collections, tags and commands.
+        case search
 
         var id: String { rawValue }
     }

@@ -83,6 +83,8 @@ struct LibraryWindow: View {
     /// How wide the paper was while it was open, so it can be held at that
     /// width on the way out rather than squeezed to nothing.
     @State private var readerWidth: CGFloat = 600
+    /// The paper a passage link opened, shown where the notes list was.
+    @State private var slipBoxPaperID: UUID?
     @State private var isImportingPDFs = false
     @State private var showsExport = false
     @State private var showsMigration = false
@@ -202,7 +204,10 @@ struct LibraryWindow: View {
             Group {
                 switch model.scope {
                 case .notes:
-                    SlipBoxDetail(model: model).columnPanel()
+                    SlipBoxDetail(model: model, link: link) { paperID in
+                        withAnimation(.snappy(duration: 0.25)) { slipBoxPaperID = paperID }
+                    }
+                    .columnPanel()
                 case .graph:
                     PaperGraphView(model: model, graph: model.graph).columnPanel()
                 default:
@@ -247,6 +252,41 @@ struct LibraryWindow: View {
         // was. The transaction the model opens is the one animation now.
     }
     #endif
+
+    /// A paper opened from a note, with the way back to the notes above it.
+    private func slipBoxPaper(_ paper: LoadedPaper) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Button {
+                    withAnimation(.snappy(duration: 0.25)) { slipBoxPaperID = nil }
+                } label: {
+                    Label("Notes", systemImage: "chevron.left")
+                        .font(.subheadline)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.escape, modifiers: [])
+
+                Spacer(minLength: 8)
+
+                Text(paper.meta.csl.fullTitle ?? paper.meta.displayTitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            .padding(.horizontal, 10)
+            .padding(.top, 8)
+            .padding(.bottom, 6)
+
+            ReaderScreen(
+                library: model, paper: paper,
+                configuration: configuration, link: link
+            )
+        }
+    }
 
     private var sidebarColumn: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -408,7 +448,16 @@ struct LibraryWindow: View {
     @ViewBuilder
     private var listColumn: some View {
         switch model.scope {
-        case .notes: SlipBoxList(model: model)
+        case .notes:
+            // Following a passage out of a note puts the paper where the list
+            // of notes was. The note stays open beside it — which is the
+            // whole point of following the link — so the paper takes the only
+            // other column there is, and a way back sits on top of it.
+            if let id = slipBoxPaperID, let paper = model.paper(id) {
+                slipBoxPaper(paper)
+            } else {
+                SlipBoxList(model: model)
+            }
         case .graph: GraphSidePanel(model: model, graph: model.graph)
         default: paperListColumn
         }
