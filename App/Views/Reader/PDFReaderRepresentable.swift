@@ -345,6 +345,13 @@ final class ReaderCoordinator: NSObject {
         if let destination = link.destinationRequest {
             view.go(to: destination)
             link.destinationRequest = nil
+            // Said outright: PDFKit posts its page-changed notification
+            // before `currentPage` has moved for a destination jump, so the
+            // status bar was left naming the spread you had just left.
+            if let page = destination.page {
+                let index = session.document.index(for: page)
+                if index != NSNotFound { onPageChange(index) }
+            }
         }
     }
 
@@ -379,6 +386,7 @@ final class ReaderCoordinator: NSObject {
         // than jammed against the top edge.
         let padded = anchor.rect.insetBy(dx: -24, dy: -80)
         view.go(to: padded, on: page)
+        onPageChange(anchor.pageIndex)
         if let selection = page.selection(for: anchor.rect) {
             view.setCurrentSelection(selection, animate: true)
         }
