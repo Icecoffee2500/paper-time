@@ -18,9 +18,18 @@ struct SettingsView: View {
     #endif
     /// What the shortcuts page is being searched for.
     @State private var shortcutQuery = ""
+    /// Set when the query was pressed rather than typed.
+    ///
+    /// A typed "⌘k" should still find ⇧⌘K — you are casting about. A pressed
+    /// ⌘K should not: you pressed exactly those keys and want to know what
+    /// they do, and offering the neighbouring combination answers a question
+    /// nobody asked.
+    @State private var capturedKey: Shortcut?
     @FocusState private var searchIsFocused: Bool
     /// Which log lines are showing what they mean.
     @State private var openEntries: Set<String> = []
+    /// True while the next key combination is being caught rather than run.
+    @State private var isCatchingKey = false
 
     /// The pages of Settings.
     ///
@@ -73,14 +82,21 @@ struct SettingsView: View {
             .frame(width: 172)
             .padding(.top, 8)
 
-            // No rule between them. The sidebar's own faint ground is what
-            // separates the two columns — the same way nothing else in this
-            // app is divided by a drawn line.
+            // One hairline, and only here. Two columns of the same shade need
+            // something to say where one stops; the rule that had to go was
+            // the one across the top, which divided nothing. Fainter than a
+            // `Divider`, which at this length reads as a drawn border.
+            Rectangle()
+                .fill(Color.primary.opacity(0.07))
+                .frame(width: 1)
+
             settingsForm
                 .frame(maxWidth: .infinity)
                 .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
         }
         .frame(width: 760, height: 540)
+        .plainTitlebar()
+        .thinScrollers()
         #endif
     }
 
@@ -265,31 +281,73 @@ struct SettingsView: View {
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.tertiary)
-                TextField(
-                    "",
-                    text: $shortcutQuery,
-                    prompt: Text("Search by name or key").foregroundStyle(.tertiary)
-                )
-                .textFieldStyle(.plain)
-                .multilineTextAlignment(.leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .focused($searchIsFocused)
-                if !shortcutQuery.isEmpty {
+
+                if isCatchingKey {
+                    Text("Press the keys…")
+                        .foregroundStyle(.tertiary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    TextField("", text: $shortcutQuery)
+                        .textFieldStyle(.plain)
+                        .multilineTextAlignment(.leading)
+                        .focused($searchIsFocused)
+                        .overlay(alignment: .leading) {
+                            if shortcutQuery.isEmpty {
+                                Text("Search by name or key")
+                                    .font(.body.weight(.light))
+                                    .foregroundStyle(.tertiary)
+                                    .allowsHitTesting(false)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                if !shortcutQuery.isEmpty, !isCatchingKey {
                     Button {
                         shortcutQuery = ""
+                        capturedKey = nil
                     } label: {
                         Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
                     }
                     .buttonStyle(.plain)
                 }
+
+                // Pressing a combination into an ordinary field does not type
+                // it, it runs it — ⌘K in this window was opening the search
+                // palette behind it. Armed, the next combination is caught
+                // before the menu bar sees it and written into the field.
+                Button {
+                    isCatchingKey.toggle()
+                    if isCatchingKey { searchIsFocused = false }
+                } label: {
+                    Image(systemName: "keyboard")
+                        .foregroundStyle(isCatchingKey ? AnyShapeStyle(.tint) : AnyShapeStyle(.tertiary))
+                }
+                .buttonStyle(.plain)
+                .help("Find what a key does — click, then press the keys")
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
             .background(Capsule().fill(.quaternary.opacity(0.5)))
             .contentShape(Capsule())
-            .onTapGesture { searchIsFocused = true }
+            .onTapGesture { if !isCatchingKey { searchIsFocused = true } }
+            .background(
+                KeyCatcher(isRecording: $isCatchingKey, capturesAnything: true) { key, modifiers in
+                    let pressed = Shortcut(key, modifiers)
+                    shortcutQuery = pressed.display
+                    capturedKey = pressed
+                    isCatchingKey = false
+                }
+                .allowsHitTesting(false)
+            )
+            // Editing the text by hand puts it back to an ordinary search.
+            .onChange(of: shortcutQuery) { _, now in
+                if now != capturedKey?.display { capturedKey = nil }
+            }
             if matchingActions.isEmpty {
-                Text("Nothing is on that key, and nothing is called that.")
+                Text(capturedKey == nil
+                     ? "Nothing is on that key, and nothing is called that."
+                     : "Nothing is on \(shortcutQuery).")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -354,6 +412,11 @@ struct SettingsView: View {
     /// The key is matched as it is drawn (⌘F) and as it is spoken (cmd, shift,
     /// option, control) — nobody types ⌘ into a search field.
     private var matchingActions: [ShortcutAction] {
+        if let capturedKey {
+            return ShortcutAction.allCases.filter {
+                app.shortcut(for: $0).display == capturedKey.display
+            }
+        }
         let query = shortcutQuery
             .trimmingCharacters(in: .whitespaces)
             .lowercased()
@@ -408,6 +471,12 @@ struct SettingsView: View {
                     Text(release.date.value)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                    Spacer(minLength: 12)
+                    // Said once, quietly, instead of a chevron on every line —
+                    // twelve arrows in a column is a texture, not a hint.
+                    Text(ReleaseNotes.string("항목을 누르면 설명", "Click an entry for what it means"))
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
                 }
             } footer: {
                 Text(release.note.value)
@@ -442,10 +511,6 @@ struct SettingsView: View {
                         KeyCap(action: action)
                     }
                     Spacer(minLength: 8)
-                    Image(systemName: "chevron.right")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                        .rotationEffect(.degrees(isOpen ? 90 : 0))
                 }
                 .contentShape(.rect)
             }
@@ -457,8 +522,13 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.leading, 21)
-                    .padding(.bottom, 4)
+                    .padding(.bottom, item.demo == nil ? 4 : 0)
                     .transition(.opacity.combined(with: .move(edge: .top)))
+
+                if let demo = item.demo {
+                    LogDemoView(demo: demo)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
             }
         }
         .padding(.vertical, 3)

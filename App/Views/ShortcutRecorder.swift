@@ -59,8 +59,15 @@ struct ShortcutRecorder: View {
 /// views as a key equivalent first, and whatever does not claim it there goes
 /// to the menu bar — which is exactly where ⌘P and ⌘\\ already live. Listening
 /// for `keyDown` meant listening for something that had already been taken.
-private struct KeyCatcher: NSViewRepresentable {
+struct KeyCatcher: NSViewRepresentable {
     @Binding var isRecording: Bool
+    /// Takes whatever is pressed, without judging it.
+    ///
+    /// Recording a shortcut refuses a combination it must not assign — ⌘Q and
+    /// the rest — and beeps. Searching for one has to accept them: asking
+    /// "what is on ⌘Q?" is a fair question, and the answer is "nothing of
+    /// ours", which is only sayable if the key gets through.
+    var capturesAnything = false
     let onKey: (Character, SwiftUI.EventModifiers) -> Void
 
     func makeNSView(context: Context) -> CatchingView {
@@ -137,10 +144,12 @@ private struct KeyCatcher: NSViewRepresentable {
                   let character = CatchingView.key(for: event),
                   !character.isWhitespace
             else {
-                NSSound.beep()
+                if !recorder.capturesAnything { NSSound.beep() }
                 return true
             }
-            if modifiers == .command, KeyCatcher.reserved.contains(String(character)) {
+            if !recorder.capturesAnything,
+               modifiers == .command,
+               KeyCatcher.reserved.contains(String(character)) {
                 NSSound.beep()
                 return true
             }

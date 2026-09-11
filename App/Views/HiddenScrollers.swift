@@ -16,9 +16,18 @@ import SwiftUI
 /// once at the root of the window: turning `hasVerticalScroller` off from out
 /// here worked for a moment and then SwiftUI put it back on its next layout,
 /// which is a fight not worth having with a framework over its own views.
-private struct HiddenScrollers: NSViewRepresentable {
+private struct ScrollerSweep: NSViewRepresentable {
+    /// Whether the scrollers should be slim rather than gone.
+    ///
+    /// Gone is right for the reader, where the page itself says where you are.
+    /// A settings page has no such landmark, so it keeps a scroller — just not
+    /// the wide grey lane the system draws when "Show scroll bars: Always" is
+    /// on.
+    let thin: Bool
+
     func makeNSView(context: Context) -> NSView {
         let probe = ProbeView()
+        probe.thin = thin
         probe.translatesAutoresizingMaskIntoConstraints = false
         return probe
     }
@@ -26,11 +35,15 @@ private struct HiddenScrollers: NSViewRepresentable {
     func updateNSView(_ view: NSView, context: Context) {
         // Rows come and go as the library changes, and a scroll view made
         // after the last sweep would come with its scroller still on.
-        DispatchQueue.main.async { (view as? ProbeView)?.applyToEnclosingScrollView() }
+        guard let probe = view as? ProbeView else { return }
+        probe.thin = thin
+        DispatchQueue.main.async { probe.applyToEnclosingScrollView() }
     }
 
     /// A zero-sized view that reaches for the scroll view it was put inside.
     final class ProbeView: NSView {
+        var thin = false
+
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             applyToEnclosingScrollView()
@@ -42,26 +55,27 @@ private struct HiddenScrollers: NSViewRepresentable {
             // there are a handful of scroll views in it and every one of them
             // wants the same treatment.
             guard let root = window?.contentView else { return }
-            Self.apply(under: root)
+            Self.apply(under: root, thin: thin)
         }
 
-        static func apply(under view: NSView) {
+        static func apply(under view: NSView, thin: Bool) {
             if let scrollView = view as? NSScrollView {
                 scrollView.scrollerStyle = .overlay
                 scrollView.verticalScrollElasticity = .allowed
                 scrollView.autohidesScrollers = true
-                // A scroller that draws nothing and measures nothing, rather
-                // than `hasVerticalScroller = false`: SwiftUI sets that flag
-                // itself on every layout and put the bar straight back. It
-                // does not replace the scroller object, so this stays put.
-                if !(scrollView.verticalScroller is InvisibleScroller) {
-                    scrollView.verticalScroller = InvisibleScroller()
+                // A scroller of our own, rather than `hasVerticalScroller =
+                // false`: SwiftUI sets that flag itself on every layout and
+                // put the bar straight back. It does not replace the scroller
+                // object, so this stays put.
+                let wanted: NSScroller.Type = thin ? ThinScroller.self : InvisibleScroller.self
+                if !(type(of: scrollView.verticalScroller ?? NSScroller()) == wanted) {
+                    scrollView.verticalScroller = wanted.init()
                 }
-                if !(scrollView.horizontalScroller is InvisibleScroller) {
-                    scrollView.horizontalScroller = InvisibleScroller()
+                if !(type(of: scrollView.horizontalScroller ?? NSScroller()) == wanted) {
+                    scrollView.horizontalScroller = wanted.init()
                 }
             }
-            for subview in view.subviews { apply(under: subview) }
+            for subview in view.subviews { apply(under: subview, thin: thin) }
         }
     }
 }
@@ -82,10 +96,40 @@ private final class InvisibleScroller: NSScroller {
     override func drawKnobSlot(in slotRect: NSRect, highlight: Bool) {}
 }
 
+/// A scroller drawn as a thin capsule, with no slot behind it.
+///
+/// The system's own is 15pt wide with a grey trough; this is a knob and
+/// nothing else, closer to the overlay scroller that appears when the setting
+/// is left on "Automatically".
+private final class ThinScroller: NSScroller {
+    override class var isCompatibleWithOverlayScrollers: Bool { true }
+
+    override class func scrollerWidth(
+        for controlSize: NSControl.ControlSize, scrollerStyle: NSScroller.Style
+    ) -> CGFloat { 9 }
+
+    override func draw(_ dirtyRect: NSRect) { drawKnob() }
+    override func drawKnobSlot(in slotRect: NSRect, highlight: Bool) {}
+
+    override func drawKnob() {
+        let rect = rect(for: .knob).insetBy(dx: 2.5, dy: 2)
+        guard rect.width > 0, rect.height > 0 else { return }
+        NSColor.secondaryLabelColor.withAlphaComponent(0.45).setFill()
+        NSBezierPath(
+            roundedRect: rect, xRadius: rect.width / 2, yRadius: rect.width / 2
+        ).fill()
+    }
+}
+
 extension View {
     /// No scrollers in the scroll views this sits among.
     func hiddenScrollers() -> some View {
-        background(HiddenScrollers().frame(width: 0, height: 0).allowsHitTesting(false))
+        background(ScrollerSweep(thin: false).frame(width: 0, height: 0).allowsHitTesting(false))
+    }
+
+    /// Slim ones instead, for a window that still needs to say where you are.
+    func thinScrollers() -> some View {
+        background(ScrollerSweep(thin: true).frame(width: 0, height: 0).allowsHitTesting(false))
     }
 }
 #else
@@ -93,5 +137,6 @@ import SwiftUI
 
 extension View {
     func hiddenScrollers() -> some View { self }
+    func thinScrollers() -> some View { self }
 }
 #endif

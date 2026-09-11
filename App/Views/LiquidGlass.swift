@@ -156,6 +156,50 @@ extension View {
     }
 }
 
+extension View {
+    /// Takes the hairline out from under a window's titlebar.
+    ///
+    /// `titlebarSeparatorStyle = .none` alone does not do it: the theme frame
+    /// still draws the step where the titlebar stops and the content starts,
+    /// and in a settings window that is a rule straight across the top of a
+    /// design which has no other rules in it. Letting the content run the full
+    /// height of the window removes the boundary rather than the line drawn on
+    /// it — the same arrangement the main window uses.
+    func plainTitlebar() -> some View {
+        background(PlainTitlebar().frame(width: 0, height: 0).allowsHitTesting(false))
+    }
+}
+
+private struct PlainTitlebar: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { Setter() }
+    func updateNSView(_ view: NSView, context: Context) {}
+
+    final class Setter: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard let window else { return }
+            // SwiftUI sets this itself while it is putting the window
+            // together, and whatever we ask for during `viewDidMoveToWindow`
+            // is simply overwritten a moment later. Setting it again on every
+            // update is what makes it stick.
+            NotificationCenter.default.addObserver(
+                self, selector: #selector(flatten),
+                name: NSWindow.didUpdateNotification, object: window
+            )
+            flatten()
+        }
+
+        @objc private func flatten() {
+            guard let window else { return }
+            window.titlebarSeparatorStyle = .none
+            window.titlebarAppearsTransparent = true
+            window.styleMask.insert(.fullSizeContentView)
+        }
+
+        deinit { NotificationCenter.default.removeObserver(self) }
+    }
+}
+
 private struct TranslucentWindow: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView { Opener() }
     func updateNSView(_ view: NSView, context: Context) {}

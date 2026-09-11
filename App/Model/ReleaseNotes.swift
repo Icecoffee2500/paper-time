@@ -133,13 +133,15 @@ enum ReleaseNotes {
                     Text2("Ultracopy", "Ultracopy"),
                     Text2("수식이 섞인 문단을 복사하면 글은 글대로, 수식은 LaTeX으로 나온다. 쓰던 원고에 그대로 붙는다.",
                           "Copy a passage and its equations come out as LaTeX, ready to paste into a manuscript."),
-                    action: .ultracopy
+                    action: .ultracopy,
+                    demo: .ultracopy
                 ),
                 Entry(
                     Text2("인용구 링크", "Passage links"),
                     Text2("선택한 글을 노트로 보내면 둥근 인용구로 앉고, 누르면 그 글이 있던 페이지의 정확한 자리로 돌아간다.",
                           "Send a selection to a note and it lands as a rounded quotation. Click it to jump back to the exact spot on the page."),
-                    action: .linkToNote
+                    action: .linkToNote,
+                    demo: .passageLink
                 ),
                 Entry(
                     Text2("슬립박스", "Slip-box"),
@@ -179,7 +181,8 @@ enum ReleaseNotes {
                     Text2("4-패널 창", "Four-pane window"),
                     Text2("사이드바·목록·논문·인스펙터가 각자 자기 키로 숨는다. 패널 사이의 틈을 끌면 크기가 바뀐다.",
                           "Sidebar, list, paper and inspector, each hiding on its own key. The gap between two of them resizes them."),
-                    action: .sidebar
+                    action: .sidebar,
+                    demo: .panes
                 ),
                 Entry(
                     Text2("단축키 편집·검색", "Editable, searchable shortcuts"),
@@ -292,13 +295,36 @@ enum ReleaseNotes {
         let title: Text2
         let detail: Text2
         var action: ShortcutAction?
+        /// A small working model of the feature, shown under the sentence.
+        ///
+        /// Only on the entries where a sentence genuinely does not land —
+        /// what "the passage comes back as a chip" means is one drag and one
+        /// keystroke, and a paragraph about it is worse than three seconds of
+        /// it happening.
+        var demo: Demo?
         var id: String { title.en }
 
-        init(_ title: Text2, _ detail: Text2, action: ShortcutAction? = nil) {
+        init(
+            _ title: Text2, _ detail: Text2,
+            action: ShortcutAction? = nil, demo: Demo? = nil
+        ) {
             self.title = title
             self.detail = detail
             self.action = action
+            self.demo = demo
         }
+    }
+
+    /// The demonstrations the log knows how to draw.
+    enum Demo: String, Identifiable {
+        /// Four panes, each hiding on its own key.
+        case panes
+        /// A selection leaving the page and landing in a note as a quotation.
+        case passageLink
+        /// What a copied passage looks like on the clipboard.
+        case ultracopy
+
+        var id: String { rawValue }
     }
 
     struct Highlight: Identifiable {
