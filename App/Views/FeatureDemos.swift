@@ -41,6 +41,8 @@ struct FeatureDemoView: View {
             case .slipBox: SlipBoxDemo(scale: scale)
             case .graph: GraphDemo(scale: scale)
             case .search: SearchDemo(scale: scale)
+            case .book: BookDemo(scale: scale)
+            case .focus: FocusDemo(scale: scale)
             }
         }
         .padding(scale.pad)
@@ -1005,5 +1007,176 @@ private struct SearchDemo: View {
         )
         .padding(.horizontal, scale.isFull ? 6 : 4)
         .contentShape(.rect)
+    }
+}
+
+// MARK: - A book
+
+/// Two pages across, turned with the arrows.
+private struct BookDemo: View {
+    let scale: DemoScale
+    @Environment(AppModel.self) private var app
+    @State private var leftPage = 4
+
+    private var total: Int { 48 }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: scale.gap) {
+            HStack(alignment: .top, spacing: scale.isFull ? 6 : 3) {
+                page(leftPage)
+                page(leftPage + 1)
+            }
+            .frame(height: scale.isFull ? 190 : 84)
+            .frame(maxWidth: .infinity)
+            .padding(scale.isFull ? 10 : 6)
+            .background(
+                RoundedRectangle(cornerRadius: scale.corner, style: .continuous)
+                    .fill(.quaternary.opacity(0.35))
+            )
+
+            HStack(spacing: 8) {
+                turn("arrow.left", by: -2, enabled: leftPage > 2)
+                turn("arrow.right", by: 2, enabled: leftPage + 2 < total)
+                Text(ReleaseNotes.string("\(leftPage)–\(leftPage + 1) / \(total)쪽", "Pages \(leftPage)–\(leftPage + 1) of \(total)"))
+                    .font(scale.small)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+                HStack(spacing: 4) {
+                    Text(app.shortcut(for: .layoutBook).display).monospaced()
+                    Text(ReleaseNotes.string("책으로", "Book"))
+                }
+                .font(scale.small)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(.quaternary))
+            }
+        }
+    }
+
+    /// A page of greeked text, its number at the foot, the lines seeded by
+    /// the number so turning the page changes what is on it.
+    private func page(_ number: Int) -> some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 6 : 3) {
+            ForEach(0..<(scale.isFull ? 12 : 6), id: \.self) { line in
+                Rule(width: ((number * 7 + line * 13) % 5 == 0) ? 60 : nil)
+            }
+            Spacer(minLength: 0)
+            Text("\(number)")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .frame(maxWidth: .infinity)
+        }
+        .padding(scale.isFull ? 12 : 7)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 3, style: .continuous).fill(.background)
+        )
+        .transition(.opacity)
+        .id(number)
+    }
+
+    private func turn(_ symbol: String, by delta: Int, enabled: Bool) -> some View {
+        Button {
+            withAnimation(.snappy(duration: 0.25)) { leftPage += delta }
+        } label: {
+            Image(systemName: symbol)
+                .font(scale.small.weight(.medium))
+                .frame(width: 26, height: 20)
+                .background(Capsule().fill(.quaternary))
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.4)
+    }
+}
+
+// MARK: - Focus
+
+/// The window with everything but the paper gone.
+private struct FocusDemo: View {
+    let scale: DemoScale
+    @Environment(AppModel.self) private var app
+    @State private var isFocused = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: scale.gap) {
+            ZStack(alignment: .topLeading) {
+                HStack(spacing: scale.isFull ? 6 : 4) {
+                    if !isFocused {
+                        pane(0.16).transition(.move(edge: .leading).combined(with: .opacity))
+                        pane(0.24).transition(.move(edge: .leading).combined(with: .opacity))
+                    }
+                    paper
+                    if !isFocused {
+                        pane(0.22).transition(.move(edge: .trailing).combined(with: .opacity))
+                    }
+                }
+                if isFocused {
+                    // The list, summoned rather than kept: a pill in the
+                    // corner that brings the papers back over the page.
+                    HStack(spacing: 4) {
+                        Image(systemName: "sidebar.leading")
+                        Text(ReleaseNotes.string("논문", "Papers"))
+                    }
+                    .font(scale.small)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Capsule().fill(.background).shadow(color: .black.opacity(0.1), radius: 3, y: 1))
+                    .padding(8)
+                    .transition(.scale(scale: 0.8, anchor: .topLeading).combined(with: .opacity))
+                }
+            }
+            .frame(height: scale.isFull ? 150 : 66)
+
+            HStack(spacing: 8) {
+                Button {
+                    withAnimation(.snappy(duration: 0.3)) { isFocused.toggle() }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(app.shortcut(for: .focus).display).monospaced()
+                        Text(isFocused
+                             ? ReleaseNotes.string("돌아오기", "Leave Focus")
+                             : ReleaseNotes.string("논문에 집중", "Focus on the Paper"))
+                    }
+                    .font(scale.small)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(isFocused ? AnyShapeStyle(.tint.opacity(0.15)) : AnyShapeStyle(.quaternary)))
+                }
+                .buttonStyle(.plain)
+                Spacer(minLength: 0)
+                if scale.isFull {
+                    Text(isFocused
+                         ? ReleaseNotes.string("나머지는 비켜섰다. 책 배치(⌘3)도 여기로 온다.", "Everything else stepped aside. Book layout (⌘3) comes here too.")
+                         : ReleaseNotes.string("눌러 보라.", "Press it."))
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+    }
+
+    private func pane(_ share: Double) -> some View {
+        RoundedRectangle(cornerRadius: scale.corner - 2, style: .continuous)
+            .fill(.quaternary)
+            .frame(maxWidth: .infinity)
+            .layoutPriority(share)
+    }
+
+    private var paper: some View {
+        RoundedRectangle(cornerRadius: scale.corner - 2, style: .continuous)
+            .fill(.background)
+            .overlay {
+                VStack(spacing: scale.isFull ? 6 : 3) {
+                    ForEach(0..<(scale.isFull ? 8 : 4), id: \.self) { _ in
+                        Capsule().fill(.quaternary).frame(height: 2)
+                    }
+                }
+                .padding(scale.isFull ? 14 : 6)
+            }
+            .frame(maxWidth: .infinity)
+            .layoutPriority(isFocused ? 1 : 0.38)
     }
 }

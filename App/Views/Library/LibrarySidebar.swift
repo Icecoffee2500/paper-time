@@ -76,12 +76,13 @@ struct LibrarySidebar: View {
             } header: {
                 // The folder's name, small, where a headline used to sit
                 // over the whole list saying the same thing louder.
-                HStack(alignment: .firstTextBaseline) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text("Library")
-                    Spacer()
+                    // Beside the word, not at the far edge where it ran out
+                    // of room — and in the accent, so which library this is
+                    // can be read at a glance.
                     Text(model.displayName)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(.tint)
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }

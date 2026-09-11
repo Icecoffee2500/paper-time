@@ -243,7 +243,9 @@ struct LibraryWindow: View {
         // gap between two of them is the drag strip that resizes them.
         .padding(.horizontal, Column.margin)
         .padding(.bottom, Column.margin)
-        .padding(.top, max(toolbarBand - Column.underToolbar, Column.margin))
+        // Nothing between the controls and the panels but the gap they
+        // already keep from each other; the band's own slack is the margin.
+        .padding(.top, max(toolbarBand - Column.underToolbar, 0))
         .background { Column.ground }
         // No `.animation(value:)` here. The toggles already declare the motion
         // with `withAnimation`, and declaring it a second time with a
@@ -524,37 +526,40 @@ struct LibraryWindow: View {
                 sortMenu
                 viewMenu
                 shareMenu
-                paneToggles
+                paneMenu
             }
             .toolbarButtons()
         }
     }
 
-    /// The four panes, as four buttons.
+    /// The four panes, behind one button.
     ///
-    /// There used to be one, for the inspector, at the far end of the toolbar
-    /// — from when only the two sidebars could be hidden. Now every pane can,
-    /// so the one button became the odd one out. Four together, lit when their
-    /// pane is showing, next to the rest of the controls.
-    private var paneToggles: some View {
-        HStack(spacing: 2) {
-            paneToggle("sidebar.left", "Sidebar", on: app.isSidebarVisible) { app.toggleSidebar() }
-            paneToggle("list.bullet.rectangle", "Paper List", on: app.showsPaperList) { app.togglePaperList() }
-            paneToggle("doc.text", "Paper", on: app.showsReader && !app.isFocusMode) { app.toggleReader() }
-            paneToggle("sidebar.right", "Inspector", on: app.showsInspector) { app.toggleInspector() }
+    /// There used to be one button, for the inspector, at the far end of the
+    /// toolbar — from when only the two sidebars could be hidden. Four in a
+    /// row said the same thing four times and took the room of six controls.
+    /// One menu, with a tick beside each pane that is showing, says it once.
+    private var paneMenu: some View {
+        Menu {
+            Toggle("Sidebar", isOn: Binding(
+                get: { app.isSidebarVisible }, set: { _ in app.toggleSidebar() }
+            ))
+            Toggle("Paper List", isOn: Binding(
+                get: { app.showsPaperList }, set: { _ in app.togglePaperList() }
+            ))
+            Toggle("Paper", isOn: Binding(
+                get: { app.showsReader && !app.isFocusMode }, set: { _ in app.toggleReader() }
+            ))
+            Toggle("Inspector", isOn: Binding(
+                get: { app.showsInspector }, set: { _ in app.toggleInspector() }
+            ))
+            Divider()
+            Toggle("Focus on the Paper", isOn: Binding(
+                get: { app.isFocusMode }, set: { app.setFocusMode($0) }
+            ))
+        } label: {
+            Label("Panes", systemImage: "rectangle.split.3x1").toolbarIcon()
         }
-        .padding(.leading, 6)
-    }
-
-    private func paneToggle(
-        _ symbol: String, _ name: String, on: Bool, action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Label(name, systemImage: symbol)
-                .toolbarIcon()
-                .foregroundStyle(on ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
-        }
-        .help(on ? "Hide the \(name.lowercased())" : "Show the \(name.lowercased())")
+        .help("Which panes are showing")
     }
 
     @ViewBuilder
@@ -602,14 +607,6 @@ struct LibraryWindow: View {
                 )
             )
             #endif
-            Divider()
-            // No `.keyboardShortcut` here: the menu bar's Focus command
-            // already carries ⌃⌘F, and a second declaration of the same key
-            // on this toggle meant the two fought and neither fired.
-            Toggle(
-                "Focus on the Paper",
-                isOn: Binding(get: { app.isFocusMode }, set: { app.setFocusMode($0) })
-            )
         } label: {
             Label("View Options", systemImage: "textformat.size").toolbarIcon()
         }
@@ -974,7 +971,7 @@ enum Column {
     /// it, the panels sat a good inch below the buttons. This is empirical —
     /// there is no API for where the controls stop, only for where the band
     /// does.
-    static let underToolbar: CGFloat = 46
+    static let underToolbar: CGFloat = 52
 
     /// What shows between and around the panels, and up through the toolbar,
     /// which has no colour of its own.

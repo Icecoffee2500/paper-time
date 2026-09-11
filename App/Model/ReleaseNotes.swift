@@ -80,6 +80,26 @@ enum ReleaseNotes {
             demo: .panes
         ),
         Highlight(
+            symbol: "book",
+            title: Text2("책처럼 펼쳐서 읽는다", "Read it like a book"),
+            detail: Text2(
+                "⌘3이면 두 쪽이 창을 가득 채우고, ←→로 장을 넘긴다. 나머지 패널은 비켜서고, 목록은 필요할 때 구석의 단추로 불러낸다. 트랙패드로 넘겨도 된다.",
+                "⌘3 and two pages fill the window, turned with ← and →. The other panes step aside; the list waits behind a button in the corner. A swipe turns the page too."
+            ),
+            action: .layoutBook,
+            demo: .book
+        ),
+        Highlight(
+            symbol: "rectangle.center.inset.filled",
+            title: Text2("논문만 남긴다", "Only the paper"),
+            detail: Text2(
+                "⇧⌘F 한 번에 사이드바·목록·인스펙터가 비켜서고 논문만 남는다. 열려 있던 것은 기억해 두고, 나올 때 그대로 돌려준다.",
+                "One ⇧⌘F and the sidebar, the list and the inspector step aside, leaving the paper. What was open is remembered and given back on the way out."
+            ),
+            action: .focus,
+            demo: .focus
+        ),
+        Highlight(
             symbol: "highlighter",
             title: Text2("표시는 PDF 안에 남고, 여기서는 더 예쁘다", "Your marks go into the PDF — and look better here"),
             detail: Text2(
@@ -185,10 +205,18 @@ enum ReleaseNotes {
                     demo: .annotations
                 ),
                 Entry(
-                    Text2("배치 단축키", "Layout keys"),
-                    Text2("⌘1 연속 스크롤, ⌘2 한 장씩, ⌘3 책. 책에서는 ←→로 장을 넘긴다.",
-                          "⌘1 continuous, ⌘2 single page, ⌘3 book. In a book, ← and → turn the page."),
-                    action: .layoutBook
+                    Text2("책 모드", "Book mode"),
+                    Text2("⌘3이면 두 쪽이 창을 가득 채우고 ←→로 장을 넘긴다. ⌘1 연속 스크롤, ⌘2 한 장씩. 배치를 바꿔도 보던 쪽은 그대로다.",
+                          "⌘3 fills the window with two pages, turned with ← and →. ⌘1 continuous, ⌘2 single page. Changing layout keeps the page you were on."),
+                    action: .layoutBook,
+                    demo: .book
+                ),
+                Entry(
+                    Text2("논문에 집중", "Focus on the paper"),
+                    Text2("⇧⌘F 한 번에 나머지 패널이 비켜서고 논문만 남는다. 목록은 구석의 단추로 불러내고, 나올 때 열려 있던 것을 그대로 돌려준다.",
+                          "One ⇧⌘F and the other panes step aside, leaving the paper. The list waits behind a button in the corner; what was open comes back on the way out."),
+                    action: .focus,
+                    demo: .focus
                 ),
                 Entry(
                     Text2("인용구 링크", "Passage links"),
@@ -386,6 +414,10 @@ enum ReleaseNotes {
         /// One field over the window that finds papers, notes, authors,
         /// collections, tags and commands.
         case search
+        /// Two pages across, turned with the arrows.
+        case book
+        /// The window with everything but the paper gone.
+        case focus
 
         var id: String { rawValue }
     }

@@ -38,8 +38,10 @@ final class ChipHoverView: NSView {
             path.fill()
             NSGraphicsContext.restoreGraphicsState()
 
-            NSColor.controlAccentColor.withAlphaComponent(0.55).setStroke()
-            path.lineWidth = 1
+            // As heavy as the edge a highlight gets on the page, so the two
+            // read as the same gesture.
+            NSColor.controlAccentColor.withAlphaComponent(0.6).setStroke()
+            path.lineWidth = 1.5
             path.stroke()
         }
     }

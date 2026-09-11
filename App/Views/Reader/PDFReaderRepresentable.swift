@@ -102,6 +102,25 @@ final class ReaderCoordinator: NSObject {
     private var scrollMonitor: Any?
     /// ← and → in a book, which PDFKit leaves unanswered.
     private var arrowMonitor: Any?
+    /// Refits the spread to the view's width while a book is open.
+    private var spreadObserver: (any NSObjectProtocol)?
+
+    /// Scales a two-page spread to the width of the view.
+    ///
+    /// `autoScales` fits a spread to the view's *height*, so both pages are
+    /// wholly visible and, on a wide window, small. A book is read across, so
+    /// the width is what should be filled: two pages, the gutter, and a hair
+    /// of margin on each side.
+    private func fitSpread(in view: PDFView) {
+        guard view.displayMode == .twoUp,
+              let page = view.currentPage ?? view.document?.page(at: 0)
+        else { return }
+        let pageWidth = page.bounds(for: view.displayBox).width
+        let available = view.bounds.width - 24
+        guard pageWidth > 0, available > 100 else { return }
+        view.autoScales = false
+        view.scaleFactor = available / (pageWidth * 2 + 8)
+    }
     private var clickMonitor: Any?
     private var pinchMonitor: Any?
     private var scrolled: CGFloat = 0
@@ -386,6 +405,17 @@ final class ReaderCoordinator: NSObject {
     /// turn, not scroll: `twoUp` horizontally, with `displaysAsBook` so the
     /// first page sits alone on the right the way a cover does.
     private func apply(layout: ReaderConfiguration.PageLayout, to view: PDFView) {
+        // The page you were on survives the change. Switching the display
+        // mode makes PDFKit lay the document out again, and it came back at
+        // the last page — so ⌘1 read as "go to the end" rather than "one
+        // page at a time, here".
+        let staying = view.currentPage
+        defer {
+            if let staying {
+                DispatchQueue.main.async { [weak view] in view?.go(to: staying) }
+            }
+        }
+
         switch layout {
         case .continuous:
             view.displayMode = .singlePageContinuous
@@ -403,6 +433,31 @@ final class ReaderCoordinator: NSObject {
 
         #if os(macOS)
         setBookScrolling(layout == .book, in: view)
+        // A book fills the window: two pages across it, not two pages fitted
+        // to its height and floating small in the middle. Fitted again
+        // whenever the view's width changes, which in focus mode it does as
+        // the columns leave.
+        if layout == .book {
+            view.postsFrameChangedNotifications = true
+            if spreadObserver == nil {
+                spreadObserver = NotificationCenter.default.addObserver(
+                    forName: NSView.frameDidChangeNotification, object: view, queue: .main
+                ) { [weak self, weak view] _ in
+                    MainActor.assumeIsolated {
+                        guard let self, let view, self.appliedLayout == .book else { return }
+                        self.fitSpread(in: view)
+                    }
+                }
+            }
+            DispatchQueue.main.async { [weak self, weak view] in
+                guard let self, let view else { return }
+                self.fitSpread(in: view)
+            }
+        } else {
+            if let spreadObserver { NotificationCenter.default.removeObserver(spreadObserver) }
+            spreadObserver = nil
+            view.autoScales = true
+        }
         #endif
 
         #if canImport(UIKit)

@@ -86,6 +86,14 @@ struct SettingsView: View {
             // grey. Which page you are on is not a fact about where the
             // keyboard is pointing.
             VStack(alignment: .leading, spacing: 2) {
+                // The window's title, here rather than centred over the page:
+                // the panel reaches the top of the window now, and a title
+                // drawn across it would have sat on the page.
+                Text("Settings")
+                    .font(.headline)
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 8)
+
                 ForEach(Pane.allCases) { page in
                     let isCurrent = pane == page
                     Button {
@@ -139,6 +147,9 @@ struct SettingsView: View {
             // what keeps a scrolled page from drawing up behind the title.
             .columnPanel()
             .padding([.top, .trailing, .bottom], Column.margin)
+            // Up to the top edge, past where the title was — the whole height
+            // of the window, the way Aside's page sits.
+            .ignoresSafeArea(edges: .top)
         }
         .frame(width: 760, height: 540)
         .background { Column.ground }
