@@ -200,7 +200,12 @@ struct MarkupListView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
                 .contentShape(.rect)
+                .pressable()
+                .padding(.horizontal, -6)
+                .padding(.vertical, -4)
             }
             .buttonStyle(.plain)
 

@@ -75,6 +75,7 @@ struct PaperNotesView: View {
                     ForEach(mine) { note in
                         NoteRow(note: note)
                             .contentShape(.rect)
+                            .pressable(inset: 6)
                             .onTapGesture { openID = note.id }
                             .contextMenu {
                                 Button(role: .destructive) { notes.delete(note.id) } label: {

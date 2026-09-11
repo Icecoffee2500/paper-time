@@ -409,57 +409,175 @@ private struct PassageDemo: View {
 
 // MARK: - Ultracopy
 
-/// The same paragraph as it is read and as it is pasted.
+/// The same passage copied twice: once the ordinary way, once with Ultracopy.
+///
+/// Said as a comparison, because on its own the good result looks merely
+/// normal. Nobody knows what "the mathematics comes out as LaTeX" is worth
+/// until they have seen what ⌘C does to the same line — a formula spilled
+/// into a row of loose letters and digits that has to be retyped from the
+/// page. Both keys are here to press, and the two results sit next to each
+/// other until one of them is obviously the one you wanted.
 private struct UltracopyDemo: View {
     let scale: DemoScale
     @Environment(AppModel.self) private var app
-    @State private var copied = false
+    @State private var plainCopied = false
+    @State private var ultraCopied = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: scale.gap) {
-            Paper(scale: scale) {
-                Group {
-                    if copied {
-                        Text(ReleaseNotes.string(
-                            "감쇠율은 벽 근처에서 $\\gamma \\sim \\nu k^{2}$에\n비례한다.",
-                            "The damping rate scales as $\\gamma \\sim \\nu k^{2}$\nnear the wall."
-                        ))
-                        .monospaced()
-                        .transition(.opacity)
-                    } else {
-                        (Text(ReleaseNotes.string("감쇠율은 벽 근처에서 ", "The damping rate scales as "))
-                         + Text("γ ~ νk²").italic()
-                         + Text(ReleaseNotes.string("에 비례한다.", " near the wall.")))
-                            .transition(.opacity)
-                    }
+            passage
+
+            if scale.isFull {
+                HStack(alignment: .top, spacing: scale.gap) {
+                    plain
+                    ultra
                 }
-                .font(scale.body)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .fixedSize(horizontal: false, vertical: true)
+            } else {
+                plain
+                ultra
             }
 
-            HStack(spacing: 8) {
-                Text(copied ? ReleaseNotes.string("클립보드", "On the clipboard")
-                            : ReleaseNotes.string("논문 위", "On the page"))
-                    .font(scale.small)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button {
-                    withAnimation(.snappy(duration: 0.25)) { copied.toggle() }
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(app.shortcut(for: .ultracopy).display).monospaced()
-                        Text(copied ? ReleaseNotes.string("되돌리기", "Back")
-                                    : ReleaseNotes.string("복사", "Copy"))
-                    }
-                    .font(scale.small)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(.quaternary))
-                }
-                .buttonStyle(.plain)
+            if plainCopied && ultraCopied {
+                Text(ReleaseNotes.string(
+                    "왼쪽은 손으로 다시 쳐야 하고, 오른쪽은 원고에 그대로 붙는다.",
+                    "The left has to be retyped; the right pastes into a manuscript as it is."
+                ))
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .transition(.opacity)
             }
         }
+    }
+
+    /// The line on the page, set the way the page sets it.
+    private var passage: some View {
+        Paper(scale: scale) {
+            VStack(alignment: .leading, spacing: scale.isFull ? 6 : 4) {
+                Rule(width: 110)
+                formula
+                    .font(scale.body)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 3)
+                    .padding(.vertical, 1)
+                    .background(
+                        RoundedRectangle(cornerRadius: 3, style: .continuous)
+                            .fill(Color.accentColor.opacity(0.18))
+                    )
+                Rule(width: 150)
+            }
+        }
+    }
+
+    /// The formula as type, one run at a time. Built as a list and folded,
+    /// because a dozen `Text`s joined with `+` in one expression is more than
+    /// the type-checker will sit through.
+    private var formula: Text {
+        let body = Font.system(scale.isFull ? .body : .caption, design: .serif)
+        let sub = Font.system(size: scale.isFull ? 9 : 7, design: .serif)
+        func main(_ string: String) -> Text { Text(string).font(body).italic() }
+        func low(_ string: String) -> Text { Text(string).font(sub).baselineOffset(-3) }
+        let runs: [Text] = [
+            Text(ReleaseNotes.string("각 단계에서 롤아웃 손실 ", "At each step we minimise the rollout loss ")),
+            main("ℒ"), low("rollout"), main("(ϕ) := ‖P"), low("ϕ"), main("(a"), low("1:T"),
+            main(", s"), low("1"), main(", z"), low("1"), main(") − z"), low("T+1"), main("‖"), low("1"),
+            Text(ReleaseNotes.string("을 최소화한다.", " over the horizon.")),
+        ]
+        return runs.dropFirst().reduce(runs[0]) { $0 + $1 }
+    }
+
+    private var plain: some View {
+        result(
+            key: "⌘C",
+            name: ReleaseNotes.string("그냥 복사", "Plain copy"),
+            tint: .secondary,
+            shown: plainCopied,
+            reveal: { plainCopied = true }
+        ) {
+            // What PDFKit hands back: every glyph, in reading order, with the
+            // structure that made it a formula gone.
+            Text(ReleaseNotes.string(
+                "각 단계에서 롤아웃 손실 Lrollout(ϕ) := ∥Pϕ(a1:T , s1, z1) − zT +1∥1을 최소화한다.",
+                "At each step we minimise the rollout loss Lrollout(ϕ) := ∥Pϕ(a1:T , s1, z1) − zT +1∥1 over the horizon."
+            ))
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private var ultra: some View {
+        result(
+            key: app.shortcut(for: .ultracopy).display,
+            name: "Ultracopy",
+            tint: .accentColor,
+            shown: ultraCopied,
+            reveal: { ultraCopied = true }
+        ) {
+            (Text(ReleaseNotes.string("각 단계에서 롤아웃 손실 ", "At each step we minimise the rollout loss "))
+             + Text(verbatim: "$\\mathcal{L}_{\\mathrm{rollout}}(\\phi) := \\|P_\\phi(a_{1:T}, s_1, z_1) - z_{T+1}\\|_1$")
+                .foregroundStyle(.tint)
+             + Text(ReleaseNotes.string("을 최소화한다.", " over the horizon.")))
+        }
+    }
+
+    /// One of the two results: a key to press, and what comes out.
+    private func result(
+        key: String, name: String, tint: Color, shown: Bool,
+        reveal: @escaping () -> Void, @ViewBuilder content: () -> some View
+    ) -> some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 8 : 5) {
+            HStack(spacing: 6) {
+                Text(key)
+                    .font(scale.small.weight(.medium))
+                    .monospaced()
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(
+                        RoundedRectangle(cornerRadius: Corner.row - 2, style: .continuous)
+                            .fill(tint.opacity(tint == .accentColor ? 0.14 : 0.1))
+                    )
+                    .foregroundStyle(tint)
+                Text(name)
+                    .font(scale.small.weight(tint == .accentColor ? .semibold : .regular))
+                    .foregroundStyle(tint == .accentColor ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                Spacer(minLength: 0)
+            }
+
+            ZStack(alignment: .topLeading) {
+                if shown {
+                    content()
+                        .font(scale.small.monospaced())
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                } else {
+                    Button {
+                        withAnimation(.snappy(duration: 0.3)) { reveal() }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "doc.on.clipboard")
+                            Text(ReleaseNotes.string("\(key) 눌러 보기", "Press \(key)"))
+                        }
+                        .font(scale.small)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(.quaternary))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(minHeight: scale.isFull ? 84 : 44, alignment: .topLeading)
+            .padding(scale.isFull ? 10 : 8)
+            .background(
+                RoundedRectangle(cornerRadius: scale.corner, style: .continuous)
+                    .fill(.background)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: scale.corner, style: .continuous)
+                    .stroke(tint == .accentColor && shown ? Color.accentColor.opacity(0.35) : .clear, lineWidth: 1)
+            )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

@@ -680,9 +680,16 @@ struct SettingsView: View {
                         .foregroundStyle(tint)
                         .frame(width: 12)
                     Text(item.title.value)
-                        .fontWeight(.medium)
+                        .fontWeight(item.featured ? .bold : .medium)
+                        .foregroundStyle(item.featured ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
                     if let action = item.action {
                         KeyCap(action: action)
+                    }
+                    if item.featured {
+                        Image(systemName: "star.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.tint)
+                            .help(ReleaseNotes.string("이 버전의 핵심 기능", "This version's headline"))
                     }
                     Spacer(minLength: 8)
                 }

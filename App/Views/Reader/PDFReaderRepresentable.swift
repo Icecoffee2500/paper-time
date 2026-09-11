@@ -173,11 +173,14 @@ final class ReaderCoordinator: NSObject {
         }
 
         #endif
+        // Before the document: PDFKit asks the provider as it lays pages
+        // out, and a provider that arrives after the pages does not get asked
+        // for them.
+        view.pageOverlayViewProvider = self
         view.document = session.document
         view.autoScales = true
         view.displaysPageBreaks = true
         view.pageShadowsEnabled = true
-        view.pageOverlayViewProvider = self
         #if canImport(UIKit)
         view.usePageViewController(false)
         #endif
@@ -907,9 +910,10 @@ extension ReaderCoordinator: @preconcurrency PDFPageOverlayViewProvider {
     }
     #else
     func pdfView(_ view: PDFView, overlayViewFor page: PDFPage) -> NSView? {
-        // PencilKit has no canvas on macOS. Ink written on iPad is stored in
-        // the PDF as standard annotations, which PDFKit already renders here.
-        nil
+        // No ink canvas on the Mac — PencilKit has none here, and ink written
+        // on iPad is in the PDF as ordinary annotations PDFKit draws itself.
+        // The overlay is where the highlights are drawn with rounded ends.
+        MarkOverlayView(page: page)
     }
     #endif
 }

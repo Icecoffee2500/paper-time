@@ -49,33 +49,15 @@ enum ReleaseNotes {
     /// twenty is a list nobody reads.
     static let highlights: [Highlight] = [
         Highlight(
-            symbol: "highlighter",
-            title: Text2("표시는 PDF 안에 남는다", "Your marks go into the PDF"),
-            detail: Text2(
-                "형광펜과 밑줄이 옆에 붙은 데이터베이스가 아니라 파일 자체에 기록된다. 같은 논문을 미리보기로 열든, 아이패드에서 열든, 십 년 뒤에 열든 표시는 그대로 있다.",
-                "Highlights and underlines are written into the file itself, not into a database beside it. Open the same paper in Preview, on an iPad, or in ten years — the marks are still there."
-            ),
-            demo: .annotations
-        ),
-        Highlight(
             symbol: "function",
-            title: Text2("수식을 LaTeX으로 복사", "Copy mathematics as LaTeX"),
+            title: Text2("Ultracopy — 수식은 LaTeX으로, 글은 글로", "Ultracopy — the words as words, the mathematics as LaTeX"),
             detail: Text2(
-                "수식이 섞인 문단을 선택하면 Ultracopy가 글은 글대로, 수식은 LaTeX으로 넘겨준다. 쓰던 논문에 그대로 붙이면 된다.",
-                "Select a passage with an equation in it and Ultracopy gives you the words with the formula as LaTeX, ready to paste into a paper of your own."
+                "PDF에서 수식이 든 문단을 ⌘C로 복사하면 수식이 글자 부스러기로 깨져 나온다. Ultracopy(⇧⌘C)는 같은 선택에서 글은 그대로, 수식은 그대로 쓸 수 있는 LaTeX으로 돌려준다. 아래에서 둘을 직접 눌러 비교해 보라.",
+                "⌘C on a passage with an equation in it gives you the formula as a spill of characters. Ultracopy (⇧⌘C) gives the same selection back with the words as words and the mathematics as LaTeX you can paste as it is. Press both below and compare."
             ),
             action: .ultracopy,
-            demo: .ultracopy
-        ),
-        Highlight(
-            symbol: "quote.opening",
-            title: Text2("인용한 구절은 주소를 갖는다", "A passage keeps its address"),
-            detail: Text2(
-                "선택한 글을 노트로 보내면 인용구로 앉는다. 누르면 그 글이 있던 페이지의 정확한 자리로 돌아간다.",
-                "Send the selected text to a note and it arrives as a quotation you can click to go back to the exact place on the page it came from."
-            ),
-            action: .linkToNote,
-            demo: .passageLink
+            demo: .ultracopy,
+            featured: true
         ),
         Highlight(
             symbol: "magnifyingglass",
@@ -86,6 +68,35 @@ enum ReleaseNotes {
             ),
             action: .searchEverything,
             demo: .search
+        ),
+        Highlight(
+            symbol: "sidebar.left",
+            title: Text2("창은 내가 접는 대로 있는다", "The window folds to what you are doing"),
+            detail: Text2(
+                "사이드바·목록·논문·인스펙터가 각자 자기 키로 숨는다. 남은 것이 빈자리를 나눠 갖는 대신, 숨은 것 뒤에 있던 것이 드러난다. 패널 사이의 틈을 끌면 크기가 바뀐다.",
+                "The sidebar, the list, the paper and the inspector each hide on their own key — revealing what was behind rather than stretching to fill the gap. Drag the space between two of them to resize."
+            ),
+            action: .sidebar,
+            demo: .panes
+        ),
+        Highlight(
+            symbol: "highlighter",
+            title: Text2("표시는 PDF 안에 남는다", "Your marks go into the PDF"),
+            detail: Text2(
+                "형광펜과 밑줄이 옆에 붙은 데이터베이스가 아니라 파일 자체에 기록된다. 같은 논문을 미리보기로 열든, 아이패드에서 열든, 십 년 뒤에 열든 표시는 그대로 있다.",
+                "Highlights and underlines are written into the file itself, not into a database beside it. Open the same paper in Preview, on an iPad, or in ten years — the marks are still there."
+            ),
+            demo: .annotations
+        ),
+        Highlight(
+            symbol: "quote.opening",
+            title: Text2("인용한 구절은 주소를 갖는다", "A passage keeps its address"),
+            detail: Text2(
+                "선택한 글을 노트로 보내면 인용구로 앉는다. 누르면 그 글이 있던 페이지의 정확한 자리로 돌아간다.",
+                "Send the selected text to a note and it arrives as a quotation you can click to go back to the exact place on the page it came from."
+            ),
+            action: .linkToNote,
+            demo: .passageLink
         ),
         Highlight(
             symbol: "tray.full",
@@ -105,16 +116,6 @@ enum ReleaseNotes {
                 "The graph draws your library by citation, shared author, collection — and by what your own notes link. Switch the other lines off and what is left is your reading rather than the literature's."
             ),
             demo: .graph
-        ),
-        Highlight(
-            symbol: "sidebar.left",
-            title: Text2("창은 내가 접는 대로 있는다", "The window folds to what you are doing"),
-            detail: Text2(
-                "사이드바·목록·논문·인스펙터가 각자 자기 키로 숨는다. 남은 것이 빈자리를 나눠 갖는 대신, 숨은 것 뒤에 있던 것이 드러난다. 패널 사이의 틈을 끌면 크기가 바뀐다.",
-                "The sidebar, the list, the paper and the inspector each hide on their own key — revealing what was behind rather than stretching to fill the gap. Drag the space between two of them to resize."
-            ),
-            action: .sidebar,
-            demo: .panes
         ),
         Highlight(
             symbol: "keyboard",
@@ -149,18 +150,33 @@ enum ReleaseNotes {
             note: Text2("첫 알파.", "The first alpha."),
             added: [
                 Entry(
+                    Text2("Ultracopy", "Ultracopy"),
+                    Text2("⌘C는 수식을 글자 부스러기로 깨뜨린다. ⇧⌘C는 같은 문단에서 글은 그대로, 수식은 바로 쓸 수 있는 LaTeX으로 돌려준다.",
+                          "⌘C spills an equation into loose characters. ⇧⌘C gives the same passage back with the words as words and the mathematics as LaTeX."),
+                    action: .ultracopy,
+                    demo: .ultracopy,
+                    featured: true
+                ),
+                Entry(
+                    Text2("검색", "Search"),
+                    Text2("⌘K는 논문·노트·저자를 한 칸에서 찾고, ⌘F는 열린 논문 안을 찾는다.",
+                          "⌘K finds papers, notes and authors from one field; ⌘F searches inside the open paper."),
+                    action: .searchEverything,
+                    demo: .search
+                ),
+                Entry(
+                    Text2("4-패널 창", "Four-pane window"),
+                    Text2("사이드바·목록·논문·인스펙터가 각자 자기 키로 숨는다. 패널 사이의 틈을 끌면 크기가 바뀐다.",
+                          "Sidebar, list, paper and inspector, each hiding on its own key. The gap between two of them resizes them."),
+                    action: .sidebar,
+                    demo: .panes
+                ),
+                Entry(
                     Text2("PDF 주석", "PDF annotations"),
                     Text2("형광펜과 밑줄이 파일 자체에 기록된다. 미리보기·아이패드·다른 어떤 PDF 앱에서 열어도 그대로 보인다.",
                           "Highlights and underlines are written into the file. They show up in Preview, on an iPad, in any PDF reader."),
                     action: .highlight,
                     demo: .annotations
-                ),
-                Entry(
-                    Text2("Ultracopy", "Ultracopy"),
-                    Text2("수식이 섞인 문단을 복사하면 글은 글대로, 수식은 LaTeX으로 나온다. 쓰던 원고에 그대로 붙는다.",
-                          "Copy a passage and its equations come out as LaTeX, ready to paste into a manuscript."),
-                    action: .ultracopy,
-                    demo: .ultracopy
                 ),
                 Entry(
                     Text2("인용구 링크", "Passage links"),
@@ -198,20 +214,6 @@ enum ReleaseNotes {
                     Text2("선택한 논문만, 또는 라이브러리 전체를 .bib로. 인용 키는 따로 복사할 수 있다.",
                           "The selection or the whole library as .bib. Citation keys can be copied on their own."),
                     action: .exportBibTeX
-                ),
-                Entry(
-                    Text2("검색", "Search"),
-                    Text2("⌘K는 논문·노트·저자를 한 칸에서 찾고, ⌘F는 열린 논문 안을 찾는다.",
-                          "⌘K finds papers, notes and authors from one field; ⌘F searches inside the open paper."),
-                    action: .searchEverything,
-                    demo: .search
-                ),
-                Entry(
-                    Text2("4-패널 창", "Four-pane window"),
-                    Text2("사이드바·목록·논문·인스펙터가 각자 자기 키로 숨는다. 패널 사이의 틈을 끌면 크기가 바뀐다.",
-                          "Sidebar, list, paper and inspector, each hiding on its own key. The gap between two of them resizes them."),
-                    action: .sidebar,
-                    demo: .panes
                 ),
                 Entry(
                     Text2("단축키 편집·검색", "Editable, searchable shortcuts"),
@@ -333,16 +335,19 @@ enum ReleaseNotes {
         /// keystroke, and a paragraph about it is worse than three seconds of
         /// it happening.
         var demo: Demo?
+        /// Marked out in the log the way it is in the introduction.
+        var featured = false
         var id: String { title.en }
 
         init(
             _ title: Text2, _ detail: Text2,
-            action: ShortcutAction? = nil, demo: Demo? = nil
+            action: ShortcutAction? = nil, demo: Demo? = nil, featured: Bool = false
         ) {
             self.title = title
             self.detail = detail
             self.action = action
             self.demo = demo
+            self.featured = featured
         }
     }
 
@@ -381,6 +386,9 @@ enum ReleaseNotes {
         /// Shown full size in About, where the point is to let somebody try
         /// the thing rather than read about it.
         var demo: Demo?
+        /// The one to see first. Set on a single thing per version: two
+        /// headlines is a list, and a list is what this is trying not to be.
+        var featured = false
         var id: String { title.en }
     }
 

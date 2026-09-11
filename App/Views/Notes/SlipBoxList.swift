@@ -84,6 +84,7 @@ struct SlipBoxList: View {
                 List(selection: $notes.openNoteID) {
                     ForEach(notes.visible) { note in
                         NoteRow(note: note, showsSource: source(of: note))
+                            .pressable(inset: 6)
                             .tag(note.id)
                             .contextMenu {
                                 Button(role: .destructive) { model.notes.delete(note.id) } label: {

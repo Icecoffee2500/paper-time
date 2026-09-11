@@ -90,20 +90,36 @@ struct FeatureShowcase<Header: View>: View {
                     .foregroundStyle(.tint)
                     .frame(width: 20)
                 Text(highlight.title.value)
-                    .font(.title3.weight(.semibold))
+                    .font(.title3.weight(highlight.featured ? .bold : .semibold))
+                    .foregroundStyle(highlight.featured ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
                 if let action = highlight.action {
                     KeyCap(action: action)
+                }
+                if highlight.featured {
+                    // Said once, in a word, rather than by shouting: the tint
+                    // on the title and the ring round the demonstration are
+                    // already saying it.
+                    Text(ReleaseNotes.string("핵심", "Headline"))
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(.tint))
                 }
             }
 
             Text(highlight.detail.value)
                 .font(.callout)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(highlight.featured ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.leading, 29)
 
             if let demo = highlight.demo {
                 FeatureDemoView(demo: demo, scale: .full)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Corner.panel, style: .continuous)
+                            .stroke(Color.accentColor.opacity(highlight.featured ? 0.4 : 0), lineWidth: 1.5)
+                    )
                     .padding(.leading, 29)
                     .padding(.top, 3)
             }
