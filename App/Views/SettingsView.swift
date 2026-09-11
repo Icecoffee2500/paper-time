@@ -18,6 +18,7 @@ struct SettingsView: View {
     #endif
     /// What the shortcuts page is being searched for.
     @State private var shortcutQuery = ""
+    @FocusState private var searchIsFocused: Bool
 
     /// The pages of Settings.
     ///
@@ -31,6 +32,7 @@ struct SettingsView: View {
         case bibtex = "BibTeX"
         case reading = "Reading"
         case shortcuts = "Shortcuts"
+        case log = "Log"
         case about = "About"
 
         var id: String { rawValue }
@@ -42,6 +44,7 @@ struct SettingsView: View {
             case .bibtex: "text.quote"
             case .reading: "doc.text"
             case .shortcuts: "keyboard"
+            case .log: "list.bullet.rectangle"
             case .about: "info.circle"
             }
         }
@@ -55,16 +58,25 @@ struct SettingsView: View {
                 .navigationBarTitleDisplayMode(.inline)
         }
         #else
-        NavigationSplitView {
+        // Two columns and a line, rather than a split view. A split view
+        // gives the sidebar its own floating surface and a button to collapse
+        // it — and this sidebar is the only way to reach five of the six
+        // pages, so collapsing it is not something anyone should be offered.
+        HStack(spacing: 0) {
             List(Pane.allCases, selection: $pane) { page in
                 Label(page.rawValue, systemImage: page.symbol).tag(page)
             }
-            .navigationSplitViewColumnWidth(min: 160, ideal: 178, max: 210)
-        } detail: {
+            .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
+            .frame(width: 164)
+            .padding(.top, 8)
+
+            Divider()
+
             settingsForm
-                .navigationTitle(pane.rawValue)
+                .frame(maxWidth: .infinity)
         }
-        .frame(width: 800, height: 540)
+        .frame(width: 760, height: 540)
         #endif
     }
 
@@ -80,6 +92,7 @@ struct SettingsView: View {
                 listSection(settings: settings)
                 readingSection(settings: settings)
             case .shortcuts: shortcutsSection
+            case .log: logSection
             case .about: aboutSection
             }
             #else
@@ -240,12 +253,20 @@ struct SettingsView: View {
         @Bindable var app = app
 
         Section {
+            // The whole capsule takes the click, not just the letters. A
+            // plain text field is exactly as big as its text, so an empty one
+            // had almost nothing to hit — the field worked and could not be
+            // reached, which is the same as not working.
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.tertiary)
-                TextField("Search by name or by key — try ⌘F, or \"cmd\", or \"find\"",
-                          text: $shortcutQuery)
-                    .textFieldStyle(.plain)
+                TextField(
+                    "",
+                    text: $shortcutQuery,
+                    prompt: Text("Search by name or key").foregroundStyle(.tertiary)
+                )
+                .textFieldStyle(.plain)
+                .focused($searchIsFocused)
                 if !shortcutQuery.isEmpty {
                     Button {
                         shortcutQuery = ""
@@ -255,6 +276,11 @@ struct SettingsView: View {
                     .buttonStyle(.plain)
                 }
             }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(Capsule().fill(.quaternary.opacity(0.5)))
+            .contentShape(Capsule())
+            .onTapGesture { searchIsFocused = true }
             if matchingActions.isEmpty {
                 Text("Nothing is on that key, and nothing is called that.")
                     .font(.callout)
@@ -335,6 +361,47 @@ struct SettingsView: View {
                 Text("None").tag("none")
                 Text("Sepia").tag("sepia")
                 Text("Dim").tag("dim")
+            }
+        }
+    }
+
+    // MARK: - Log
+
+    /// What each version brought, newest first.
+    private var logSection: some View {
+        ForEach(ReleaseNotes.releases) { release in
+            Section {
+                ForEach(Array(release.added.enumerated()), id: \.offset) { _, line in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text("+")
+                            .font(.body.monospaced())
+                            .foregroundStyle(.green)
+                        Text(line.value)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                    }
+                }
+                ForEach(Array(release.fixed.enumerated()), id: \.offset) { _, line in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text("×")
+                            .font(.body.monospaced())
+                            .foregroundStyle(.orange)
+                        Text(line.value)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                    }
+                }
+            } header: {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(release.version).font(.headline)
+                    Text(release.date.value)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            } footer: {
+                Text(release.note.value)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
         }
     }

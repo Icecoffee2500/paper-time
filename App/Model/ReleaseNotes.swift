@@ -110,6 +110,34 @@ enum ReleaseNotes {
         ),
     ]
 
+    /// What changed, version by version.
+    ///
+    /// Written the way a commit subject is: one line, what it does, no
+    /// adjectives. Somebody reading a changelog is scanning for whether the
+    /// thing they care about moved, and prose gets in the way of that.
+    static let releases: [Release] = [
+        Release(
+            version: "0.1.0",
+            date: Text2("2026년 9월", "September 2026"),
+            note: Text2("첫 알파.", "The first alpha."),
+            added: [
+                Text2("PDF 파일 자체에 기록되는 형광펜과 밑줄", "Highlights and underlines written into the PDF itself"),
+                Text2("수식을 LaTeX으로 옮기는 Ultracopy", "Ultracopy — copy a passage with its formulas as LaTeX"),
+                Text2("페이지 위치를 기억하는 인용구 링크 (⌘L)", "Passage links that remember the place on the page (⌘L)"),
+                Text2("Markdown 파일로 저장되는 슬립박스, [[링크]]와 역링크", "A slip-box of Markdown files, with [[links]] and backlinks"),
+                Text2("노트 안에서 조판되는 LaTeX", "LaTeX set inline as you write it in a note"),
+                Text2("인용·공저자·컬렉션·내 노트로 잇는 그래프", "A graph joining papers by citation, author, collection and your notes"),
+                Text2("논문에서 읽어내는 서지 정보, 확신 없으면 Needs Review", "Metadata read from the paper, left as Needs Review when unsure"),
+                Text2("BibTeX 내보내기와 인용 키 복사", "BibTeX export and citation-key copying"),
+                Text2("전체 검색 (⌘K)과 논문 내 검색 (⌘F)", "Search everything (⌘K) and find in the paper (⌘F)"),
+                Text2("숨기고 크기를 바꿀 수 있는 네 개의 패널", "Four panes that hide and resize"),
+                Text2("바꿀 수 있는 모든 단축키, 이름과 키로 검색", "Every shortcut editable, searchable by name or by key"),
+                Text2("사용자가 고른 폴더에 파일로 저장되는 라이브러리", "A library kept as files in a folder you choose"),
+            ],
+            fixed: []
+        ),
+    ]
+
     /// Everything, by where you are when you want it.
     static let groups: [Group] = [
         Group(Text2("읽기", "Reading"), symbol: "doc.text", features: [
@@ -190,6 +218,15 @@ enum ReleaseNotes {
                     Text2("라이브러리·서지·BibTeX·읽기·단축키·정보. 한 화면을 끝없이 내리는 대신 찾는 곳으로 바로 간다.", "Library, Metadata, BibTeX, Reading, Shortcuts and About — rather than one scroll with all of it in.")),
         ]),
     ]
+
+    struct Release: Identifiable {
+        let version: String
+        let date: Text2
+        let note: Text2
+        let added: [Text2]
+        let fixed: [Text2]
+        var id: String { version }
+    }
 
     struct Highlight: Identifiable {
         let symbol: String
