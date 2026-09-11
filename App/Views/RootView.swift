@@ -164,10 +164,15 @@ struct LibraryWindow: View {
             // frame of the animation. Held at its own width inside a frame
             // that animates, the list is revealed rather than resized, and
             // lays out once.
+            // On the ground, not on a panel — the way the Settings window's
+            // sidebar sits beside its page. The list of places is chrome;
+            // the panels are for the things you read. Kept rounded so the
+            // reveal still comes in as a shape, and clipped for the same
+            // reason as before.
             sidebarColumn
                 .frame(width: app.sidebarWidth)
                 .frame(width: app.isSidebarVisible ? app.sidebarWidth : 0, alignment: .leading)
-                .columnPanel()
+                .clipShape(Column.shape)
                 .opacity(app.isSidebarVisible ? 1 : 0)
                 .clipped()
 
