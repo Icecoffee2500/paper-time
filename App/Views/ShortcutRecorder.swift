@@ -68,6 +68,13 @@ struct KeyCatcher: NSViewRepresentable {
     /// "what is on ⌘Q?" is a fair question, and the answer is "nothing of
     /// ours", which is only sayable if the key gets through.
     var capturesAnything = false
+    /// What Escape should do instead of cancelling a recording.
+    ///
+    /// It has to be handled here rather than left to the window. A focused
+    /// text field swallows Escape — AppKit sends it to the field editor as
+    /// `cancelOperation:`, which consumes it and does nothing — so a window
+    /// that closes on Escape does not close while you are typing in one.
+    var onEscape: (() -> Void)?
     let onKey: (Character, SwiftUI.EventModifiers) -> Void
 
     func makeNSView(context: Context) -> CatchingView {
@@ -132,9 +139,14 @@ struct KeyCatcher: NSViewRepresentable {
         override func performKeyEquivalent(with event: NSEvent) -> Bool {
             guard let recorder, recorder.isRecording else { return false }
 
-            // Escape gives up without changing anything.
+            // Escape gives up without changing anything, unless the caller
+            // has said what it means here.
             if event.keyCode == 53 {
-                recorder.isRecording = false
+                if let onEscape = recorder.onEscape {
+                    onEscape()
+                } else {
+                    recorder.isRecording = false
+                }
                 return true
             }
 

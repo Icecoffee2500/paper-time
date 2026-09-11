@@ -1,6 +1,9 @@
 import Bibliography
 import LibraryStore
 import SwiftUI
+#if os(macOS)
+import AppKit
+#endif
 
 /// Per-device preferences plus the one library-lifecycle action (changing the
 /// folder) that has no other home.
@@ -152,7 +155,18 @@ struct SettingsView: View {
         }
         .translucentWindow()
         .plainTitlebar()
+        .centeredOnOpen()
         .thinScrollers()
+        // Escape closes it. Settings is a place you step into and back out
+        // of, and reaching for ⌘W or the mouse to leave a window you opened
+        // with a key is a change of hands for no reason. With something typed
+        // in the shortcut search the first Escape empties that instead, the
+        // way a search field behaves everywhere else.
+        .background {
+            Button("", action: escape)
+                .keyboardShortcut(.cancelAction)
+                .opacity(0)
+        }
         #endif
     }
 
@@ -377,6 +391,24 @@ struct SettingsView: View {
         #endif
     }
 
+    /// What Escape does: empty the search if there is anything in it, and
+    /// otherwise leave.
+    ///
+    /// Reached two ways, because Escape arrives two ways. With the search
+    /// field focused the key never gets past the field editor, so the
+    /// catcher in the field calls this; everywhere else on the page the
+    /// hidden cancel button does.
+    private func escape() {
+        #if os(macOS)
+        if !shortcutQuery.isEmpty {
+            shortcutQuery = ""
+            capturedKey = nil
+        } else {
+            NSApp.keyWindow?.performClose(nil)
+        }
+        #endif
+    }
+
     /// The commands a search matches, by name or by key.
     ///
     /// Both, because you arrive at this page from one of two directions: you
@@ -489,7 +521,8 @@ struct SettingsView: View {
         .background(
             KeyCatcher(
                 isRecording: Binding(get: { searchIsFocused }, set: { searchIsFocused = $0 }),
-                capturesAnything: true
+                capturesAnything: true,
+                onEscape: escape
             ) { key, modifiers in
                 let pressed = Shortcut(key, modifiers)
                 shortcutQuery = pressed.display
@@ -506,7 +539,15 @@ struct SettingsView: View {
         // Focused on arrival, because focus is what arms the key-catching.
         // Somebody who opens this page to find out what ⌘K does should be
         // able to press ⌘K, not click first and then press.
-        .onAppear { searchIsFocused = true }
+        //
+        // A tick late, deliberately: asked for during `onAppear` the field is
+        // not yet in the window's responder chain, and the request went
+        // nowhere — which is most of why pressing keys at this page appeared
+        // to do nothing.
+        .task {
+            try? await Task.sleep(for: .milliseconds(50))
+            searchIsFocused = true
+        }
         #endif
     }
 
