@@ -43,6 +43,9 @@ public final class GraphModel {
     /// The graph is rebuilt the next time it is looked at, and straight away
     /// if it is already on screen.
     public private(set) var isStale = true
+    /// Papers by how connected they are, newest build first. See
+    /// `mostConnected(limit:)`.
+    public private(set) var ranking: [Node] = []
     public private(set) var progress: (done: Int, total: Int)?
 
     /// Which kinds of line are drawn. Turning one off is how you ask a
@@ -55,6 +58,129 @@ public final class GraphModel {
     @ObservationIgnored private var citations: [UUID: Set<UUID>] = [:]
     @ObservationIgnored private var index: CitationIndex?
     @ObservationIgnored private var neighbourCache: [UUID: Set<UUID>] = [:]
+
+    // MARK: - The simulation
+
+    /// How much the graph is still moving. It falls away on its own, and
+    /// anything the reader does puts some back.
+    ///
+    /// The shape used to be worked out once, off the main actor, and then
+    /// frozen — which is why it read as a diagram of a graph rather than a
+    /// graph. This keeps the forces running under it, so a library settles
+    /// while you watch, drifts when you pull a paper out of it, and comes back
+    /// to rest somewhere slightly different. That is the difference between a
+    /// picture of connections and a thing made of them.
+    @ObservationIgnored public private(set) var alpha: Double = 0
+    @ObservationIgnored private var velocities: [UUID: CGVector] = [:]
+    @ObservationIgnored private var held: UUID?
+    @ObservationIgnored private var heldAt: CGPoint?
+    /// How far apart two papers want to be, worked out once per build.
+    @ObservationIgnored private var ideal: Double = 200
+
+    /// Whether it is worth asking for another frame.
+    public var isSettling: Bool { alpha > 0.002 || held != nil }
+
+    /// Puts motion back into it. Selecting, filtering and dragging all do.
+    public func reheat(_ amount: Double = 0.55) {
+        alpha = Swift.max(alpha, amount)
+    }
+
+    public func beginHolding(_ id: UUID, at point: CGPoint) {
+        held = id
+        heldAt = point
+        reheat(0.4)
+    }
+
+    public func hold(at point: CGPoint) {
+        guard held != nil else { return }
+        heldAt = point
+        reheat(0.4)
+    }
+
+    public func endHolding() {
+        held = nil
+        heldAt = nil
+        reheat(0.25)
+    }
+
+    /// One tick. Repulsion pushes everything apart, links pull what is joined
+    /// together, and a weak pull to the middle keeps a paper on one thread
+    /// from drifting off the sheet.
+    ///
+    /// Repulsion is deliberately the stronger of the two. Balanced evenly, a
+    /// group of papers that all cite each other collapses into a knot — which
+    /// is the one arrangement that tells you nothing, because you cannot see
+    /// which paper is which. Letting the push win opens the knots out and
+    /// leaves the long connections between clusters as the shape of the thing.
+    public func step() {
+        guard isSettling, nodes.count > 1 else { return }
+
+        let strength = ideal * ideal * 2.6
+        var forces = [CGVector](repeating: .zero, count: nodes.count)
+        var indexOf: [UUID: Int] = [:]
+        indexOf.reserveCapacity(nodes.count)
+        for (offset, node) in nodes.enumerated() { indexOf[node.id] = offset }
+
+        for i in 0..<nodes.count {
+            for j in (i + 1)..<nodes.count {
+                var dx = nodes[i].position.x - nodes[j].position.x
+                var dy = nodes[i].position.y - nodes[j].position.y
+                var distance = (dx * dx + dy * dy).squareRoot()
+                if distance < 0.5 {
+                    dx = Double((i % 7) + 1) * 0.3
+                    dy = Double((j % 5) + 1) * 0.3
+                    distance = (dx * dx + dy * dy).squareRoot()
+                }
+                let push = strength / (distance * distance)
+                let fx = dx / distance * push, fy = dy / distance * push
+                forces[i].dx += fx; forces[i].dy += fy
+                forces[j].dx -= fx; forces[j].dy -= fy
+            }
+        }
+
+        for edge in edges where shownKinds.contains(where: edge.kinds.contains) {
+            guard let a = indexOf[edge.a], let b = indexOf[edge.b] else { continue }
+            let dx = nodes[a].position.x - nodes[b].position.x
+            let dy = nodes[a].position.y - nodes[b].position.y
+            let distance = Swift.max((dx * dx + dy * dy).squareRoot(), 0.5)
+            let pull = (distance - ideal) * 0.55 * Swift.min(edge.weight, 1.5)
+            let fx = dx / distance * pull, fy = dy / distance * pull
+            forces[a].dx -= fx; forces[a].dy -= fy
+            forces[b].dx += fx; forces[b].dy += fy
+        }
+
+        for i in 0..<nodes.count {
+            forces[i].dx -= nodes[i].position.x * 0.012
+            forces[i].dy -= nodes[i].position.y * 0.012
+        }
+
+        // A held paper goes exactly where the pointer is, and drags its
+        // neighbours along by the links rather than by being special.
+        if let held, let heldAt, let index = indexOf[held] {
+            nodes[index].position = heldAt
+            velocities[held] = .zero
+            forces[index] = .zero
+        }
+
+        for i in 0..<nodes.count {
+            let id = nodes[i].id
+            guard id != held else { continue }
+            var velocity = velocities[id] ?? .zero
+            velocity.dx = (velocity.dx + forces[i].dx * alpha) * 0.84
+            velocity.dy = (velocity.dy + forces[i].dy * alpha) * 0.84
+            // A speed limit, so one bad frame cannot fling a paper off.
+            let speed = (velocity.dx * velocity.dx + velocity.dy * velocity.dy).squareRoot()
+            if speed > ideal * 0.45 {
+                velocity.dx *= ideal * 0.45 / speed
+                velocity.dy *= ideal * 0.45 / speed
+            }
+            velocities[id] = velocity
+            nodes[i].position.x += velocity.dx
+            nodes[i].position.y += velocity.dy
+        }
+
+        if held == nil { alpha *= 0.985 }
+    }
 
     public init() {}
 
@@ -99,6 +225,12 @@ public final class GraphModel {
         )
         self.edges = edges
         self.nodes = placed
+        self.ranking = placed.filter { $0.degree > 0 }.sorted { $0.degree > $1.degree }
+        self.ideal = (2_100 / Swift.max(Double(placed.count), 1).squareRoot())
+        self.velocities = [:]
+        // Warm, so the reader sees it arrange itself rather than arriving at
+        // an answer it had no part in.
+        self.alpha = 0.9
         var neighbours: [UUID: Set<UUID>] = [:]
         for edge in edges {
             neighbours[edge.a, default: []].insert(edge.b)
@@ -125,8 +257,16 @@ public final class GraphModel {
     }
 
     /// The best-connected papers, which is where a graph is worth entering.
+    /// The papers the rest of the library hangs off.
+    ///
+    /// Taken once, when the graph is built, and not read back out of `nodes`.
+    /// Degrees do not change while the simulation runs but positions do, and
+    /// sorting the live array would have made the side panel a dependency of
+    /// every frame of the motion — twelve rows re-sorted and re-laid-out sixty
+    /// times a second for an answer that never changes. The positions in these
+    /// are from build time and nothing reads them.
     public func mostConnected(limit: Int = 12) -> [Node] {
-        nodes.filter { $0.degree > 0 }.sorted { $0.degree > $1.degree }.prefix(limit).map(\.self)
+        Array(ranking.prefix(limit))
     }
 
     public func isVisible(_ id: UUID) -> Bool {

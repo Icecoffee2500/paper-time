@@ -13,6 +13,8 @@ struct PaperGraphView: View {
 
     @State private var zoom: CGFloat = 1
     @State private var pan: CGSize = .zero
+    /// What the current drag took hold of, decided when it started.
+    @State private var dragging: Dragging?
     @State private var gestureZoom: CGFloat = 1
     @State private var gesturePan: CGSize = .zero
     @State private var hovered: UUID?
@@ -37,7 +39,7 @@ struct PaperGraphView: View {
             // were. `contentShape` is what makes it catch the gestures, so
             // nothing is lost by taking the fill away.
             .contentShape(.rect)
-            .gesture(panGesture)
+            .gesture(dragGesture(transform: transform))
             .simultaneousGesture(magnifyGesture)
             .onTapGesture(count: 2) { point in
                 if let id = paper(at: point, transform: transform) { open(id) }
@@ -46,6 +48,7 @@ struct PaperGraphView: View {
                 let id = paper(at: point, transform: transform)
                 graph.selection = id
                 if id == nil { graph.focusesOnSelection = false }
+                graph.reheat(0.3)
             }
             .onContinuousHover { phase in
                 switch phase {
@@ -58,6 +61,15 @@ struct PaperGraphView: View {
             .overlay { emptyState }
         }
         .task { await graph.buildIfNeeded(from: model) }
+        // The forces keep running under it. Sleeping longer once it has come
+        // to rest means an idle graph costs nothing, and anything the reader
+        // does puts motion back in and wakes this up again.
+        .task {
+            while !Task.isCancelled {
+                graph.step()
+                try? await Task.sleep(for: .milliseconds(graph.isSettling ? 16 : 120))
+            }
+        }
         // Papers arriving, or notes linking to each other, change the shape of
         // the thing being looked at.
         .onChange(of: model.papers.count) { _, _ in
@@ -147,7 +159,7 @@ struct PaperGraphView: View {
     }
 
     private func radius(for node: GraphModel.Node) -> CGFloat {
-        4 + min(CGFloat(node.degree), 24).squareRoot() * 2.4
+        3 + min(CGFloat(node.degree), 24).squareRoot() * 1.7
     }
 
     private func color(for kind: GraphModel.EdgeKind) -> Color {
@@ -270,6 +282,47 @@ struct PaperGraphView: View {
 
     // MARK: - Gestures
 
+    /// One gesture for both: take hold of a paper, or take hold of the sheet.
+    ///
+    /// Which one it is depends on where it started, decided once at the
+    /// beginning and kept for the rest of the drag — a graph where the thing
+    /// you are pulling changes halfway through is unusable.
+    private func dragGesture(transform: Transform) -> some Gesture {
+        DragGesture(minimumDistance: 2)
+            .onChanged { value in
+                if dragging == nil {
+                    dragging = paper(at: value.startLocation, transform: transform)
+                        .map { Dragging.paper($0) } ?? .sheet
+                    if case let .paper(id) = dragging {
+                        graph.beginHolding(id, at: transform.position(value.startLocation))
+                    }
+                }
+                switch dragging {
+                case let .paper(id):
+                    _ = id
+                    graph.hold(at: transform.position(value.location))
+                case .sheet, .none:
+                    gesturePan = value.translation
+                }
+            }
+            .onEnded { value in
+                switch dragging {
+                case .paper:
+                    graph.endHolding()
+                case .sheet, .none:
+                    pan.width += value.translation.width
+                    pan.height += value.translation.height
+                    gesturePan = .zero
+                }
+                dragging = nil
+            }
+    }
+
+    private enum Dragging {
+        case paper(UUID)
+        case sheet
+    }
+
     private var panGesture: some Gesture {
         DragGesture()
             .onChanged { gesturePan = $0.translation }
@@ -307,9 +360,14 @@ struct PaperGraphView: View {
     }
 
     private var bounds: CGRect {
-        guard let first = graph.nodes.first?.position else { return CGRect(x: -1, y: -1, width: 2, height: 2) }
+        // Only what is being shown. With focus on, the view was still being
+        // fitted to every paper in the library, so the dozen left after the
+        // filter sat in a corner at the scale of the whole thing — the filter
+        // worked and looked as though it had not.
+        let shown = graph.nodes.filter { graph.isVisible($0.id) }
+        guard let first = shown.first?.position else { return CGRect(x: -1, y: -1, width: 2, height: 2) }
         var rect = CGRect(origin: first, size: .zero)
-        for node in graph.nodes {
+        for node in shown {
             rect = rect.union(CGRect(origin: node.position, size: .zero))
         }
         // A margin in proportion to the drawing, not 60 units of graph space:
@@ -338,6 +396,15 @@ struct PaperGraphView: View {
             self.offset = pan
             self.centre = CGPoint(x: bounds.midX, y: bounds.midY)
             self.origin = CGPoint(x: size.width / 2, y: size.height / 2)
+        }
+
+        /// Screen back to graph, for putting a dragged paper where the
+        /// pointer is.
+        func position(_ point: CGPoint) -> CGPoint {
+            CGPoint(
+                x: centre.x + (point.x - origin.x - offset.width) / scale,
+                y: centre.y + (point.y - origin.y - offset.height) / scale
+            )
         }
 
         func point(_ position: CGPoint) -> CGPoint {

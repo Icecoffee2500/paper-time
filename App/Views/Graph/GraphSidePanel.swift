@@ -32,12 +32,23 @@ struct GraphSidePanel: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 10)
 
-            Toggle("Focus on selection", isOn: Bindable(graph).focusesOnSelection)
-                .toggleStyle(.switch)
-                .controlSize(.small)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 10)
-                .disabled(graph.selection == nil)
+            // Disabled until there is something to focus *on*, and saying so.
+            // It was greyed out with no reason given, which reads as broken
+            // rather than as not-yet — and the panel below it was meanwhile
+            // telling the reader to turn it on.
+            VStack(alignment: .leading, spacing: 2) {
+                Toggle("Focus on selection", isOn: Bindable(graph).focusesOnSelection)
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .disabled(graph.selection == nil)
+                if graph.selection == nil {
+                    Text("Click a paper in the graph first.")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 10)
 
             // Shown only until something is picked. What the graph is made of
             // was already written down; what it is *for* was not, and a
@@ -50,6 +61,7 @@ struct GraphSidePanel: View {
                     ForEach(graph.mostConnected()) { node in
                         Button {
                             graph.selection = node.id
+                            graph.reheat(0.3)
                         } label: {
                             HStack(alignment: .firstTextBaseline, spacing: 8) {
                                 Text(node.title)
