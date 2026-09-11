@@ -112,27 +112,85 @@ enum ReleaseNotes {
 
     /// What changed, version by version.
     ///
-    /// Written the way a commit subject is: one line, what it does, no
-    /// adjectives. Somebody reading a changelog is scanning for whether the
-    /// thing they care about moved, and prose gets in the way of that.
+    /// The title is the keyword — what the thing is called, so the line can be
+    /// scanned — and the sentence under it is what it does, kept folded away
+    /// until asked for. A changelog is read by someone looking for whether the
+    /// thing they care about moved; making them read a paragraph to find out
+    /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
             version: "0.1.0",
             date: Text2("2026년 9월", "September 2026"),
             note: Text2("첫 알파.", "The first alpha."),
             added: [
-                Text2("PDF 파일 자체에 기록되는 형광펜과 밑줄", "Highlights and underlines written into the PDF itself"),
-                Text2("수식을 LaTeX으로 옮기는 Ultracopy", "Ultracopy — copy a passage with its formulas as LaTeX"),
-                Text2("페이지 위치를 기억하는 인용구 링크 (⌘L)", "Passage links that remember the place on the page (⌘L)"),
-                Text2("Markdown 파일로 저장되는 슬립박스, [[링크]]와 역링크", "A slip-box of Markdown files, with [[links]] and backlinks"),
-                Text2("노트 안에서 조판되는 LaTeX", "LaTeX set inline as you write it in a note"),
-                Text2("인용·공저자·컬렉션·내 노트로 잇는 그래프", "A graph joining papers by citation, author, collection and your notes"),
-                Text2("논문에서 읽어내는 서지 정보, 확신 없으면 Needs Review", "Metadata read from the paper, left as Needs Review when unsure"),
-                Text2("BibTeX 내보내기와 인용 키 복사", "BibTeX export and citation-key copying"),
-                Text2("전체 검색 (⌘K)과 논문 내 검색 (⌘F)", "Search everything (⌘K) and find in the paper (⌘F)"),
-                Text2("숨기고 크기를 바꿀 수 있는 네 개의 패널", "Four panes that hide and resize"),
-                Text2("바꿀 수 있는 모든 단축키, 이름과 키로 검색", "Every shortcut editable, searchable by name or by key"),
-                Text2("사용자가 고른 폴더에 파일로 저장되는 라이브러리", "A library kept as files in a folder you choose"),
+                Entry(
+                    Text2("PDF 주석", "PDF annotations"),
+                    Text2("형광펜과 밑줄이 파일 자체에 기록된다. 미리보기·아이패드·다른 어떤 PDF 앱에서 열어도 그대로 보인다.",
+                          "Highlights and underlines are written into the file. They show up in Preview, on an iPad, in any PDF reader."),
+                    action: .highlight
+                ),
+                Entry(
+                    Text2("Ultracopy", "Ultracopy"),
+                    Text2("수식이 섞인 문단을 복사하면 글은 글대로, 수식은 LaTeX으로 나온다. 쓰던 원고에 그대로 붙는다.",
+                          "Copy a passage and its equations come out as LaTeX, ready to paste into a manuscript."),
+                    action: .ultracopy
+                ),
+                Entry(
+                    Text2("인용구 링크", "Passage links"),
+                    Text2("선택한 글을 노트로 보내면 둥근 인용구로 앉고, 누르면 그 글이 있던 페이지의 정확한 자리로 돌아간다.",
+                          "Send a selection to a note and it lands as a rounded quotation. Click it to jump back to the exact spot on the page."),
+                    action: .linkToNote
+                ),
+                Entry(
+                    Text2("슬립박스", "Slip-box"),
+                    Text2("노트는 한 폴더에 모여 살고 [[링크]]로 서로 잇는다. 나를 가리키는 노트는 아래에 모인다. 전부 평범한 Markdown 파일이다.",
+                          "Notes live in one folder, joined by [[links]], with backlinks collected underneath. Plain Markdown files throughout."),
+                    action: .newNote
+                ),
+                Entry(
+                    Text2("인라인 LaTeX", "Inline LaTeX"),
+                    Text2("노트에 $x^2$처럼 쓰면 쓰는 대로 조판된다. 저장되는 것은 여전히 원문이라 다른 편집기에서도 열린다.",
+                          "Write $x^2$ in a note and it is set as you type. What is saved is still the source.")
+                ),
+                Entry(
+                    Text2("연결 그래프", "Connection graph"),
+                    Text2("인용·공저자·컬렉션, 그리고 내 노트가 이은 것으로 라이브러리를 그린다. 범례에서 선을 끄면 그게 곧 질문이 된다.",
+                          "Draws the library by citation, author, collection and your own notes. Switching a line off in the legend is how you ask a question.")
+                ),
+                Entry(
+                    Text2("서지 자동 인식", "Metadata extraction"),
+                    Text2("제목·저자·연도를 논문에서 읽어낸다. 확신이 없으면 조용히 저장하지 않고 Needs Review로 남긴다.",
+                          "Title, authors and year are read from the paper. What it is unsure of is left as Needs Review rather than saved quietly."),
+                    action: .resolveMetadata
+                ),
+                Entry(
+                    Text2("BibTeX 내보내기", "BibTeX export"),
+                    Text2("선택한 논문만, 또는 라이브러리 전체를 .bib로. 인용 키는 따로 복사할 수 있다.",
+                          "The selection or the whole library as .bib. Citation keys can be copied on their own."),
+                    action: .exportBibTeX
+                ),
+                Entry(
+                    Text2("검색", "Search"),
+                    Text2("⌘K는 논문·노트·저자를 한 칸에서 찾고, ⌘F는 열린 논문 안을 찾는다.",
+                          "⌘K finds papers, notes and authors from one field; ⌘F searches inside the open paper."),
+                    action: .searchEverything
+                ),
+                Entry(
+                    Text2("4-패널 창", "Four-pane window"),
+                    Text2("사이드바·목록·논문·인스펙터가 각자 자기 키로 숨는다. 패널 사이의 틈을 끌면 크기가 바뀐다.",
+                          "Sidebar, list, paper and inspector, each hiding on its own key. The gap between two of them resizes them."),
+                    action: .sidebar
+                ),
+                Entry(
+                    Text2("단축키 편집·검색", "Editable, searchable shortcuts"),
+                    Text2("모든 키를 바꿀 수 있고, 기능 이름으로도 키로도 찾을 수 있다. 뭘 눌렀는지 모를 때 \"cmd\"를 쳐보면 된다.",
+                          "Every key can be changed, and found by name or by key — type \"cmd\" when you do not know what you pressed.")
+                ),
+                Entry(
+                    Text2("폴더가 곧 라이브러리", "The folder is the library"),
+                    Text2("논문은 내가 고른 폴더에 평범한 파일로 있다. iCloud Drive나 구글 드라이브 안에 두면 동기화는 이미 해결돼 있다.",
+                          "Papers stay as ordinary files in a folder you chose. Put it in iCloud Drive or Google Drive and syncing is already solved.")
+                ),
             ],
             fixed: []
         ),
@@ -223,9 +281,24 @@ enum ReleaseNotes {
         let version: String
         let date: Text2
         let note: Text2
-        let added: [Text2]
-        let fixed: [Text2]
+        let added: [Entry]
+        let fixed: [Entry]
         var id: String { version }
+    }
+
+    /// One line of a changelog: a keyword to scan, and what it means when you
+    /// stop to look.
+    struct Entry: Identifiable {
+        let title: Text2
+        let detail: Text2
+        var action: ShortcutAction?
+        var id: String { title.en }
+
+        init(_ title: Text2, _ detail: Text2, action: ShortcutAction? = nil) {
+            self.title = title
+            self.detail = detail
+            self.action = action
+        }
     }
 
     struct Highlight: Identifiable {

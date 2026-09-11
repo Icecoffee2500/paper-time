@@ -19,6 +19,8 @@ struct SettingsView: View {
     /// What the shortcuts page is being searched for.
     @State private var shortcutQuery = ""
     @FocusState private var searchIsFocused: Bool
+    /// Which log lines are showing what they mean.
+    @State private var openEntries: Set<String> = []
 
     /// The pages of Settings.
     ///
@@ -68,13 +70,15 @@ struct SettingsView: View {
             }
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
-            .frame(width: 164)
+            .frame(width: 172)
             .padding(.top, 8)
 
-            Divider()
-
+            // No rule between them. The sidebar's own faint ground is what
+            // separates the two columns — the same way nothing else in this
+            // app is divided by a drawn line.
             settingsForm
                 .frame(maxWidth: .infinity)
+                .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
         }
         .frame(width: 760, height: 540)
         #endif
@@ -106,6 +110,7 @@ struct SettingsView: View {
             #endif
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
         .sheet(isPresented: $showsReleaseNotes) {
             WhatsNewView(marksAsSeen: false)
         }
@@ -266,6 +271,8 @@ struct SettingsView: View {
                     prompt: Text("Search by name or key").foregroundStyle(.tertiary)
                 )
                 .textFieldStyle(.plain)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .focused($searchIsFocused)
                 if !shortcutQuery.isEmpty {
                     Button {
@@ -291,30 +298,46 @@ struct SettingsView: View {
         ForEach(ShortcutAction.Group.allCases) { group in
             let actions = matchingActions.filter { $0.group == group }
             if !actions.isEmpty {
-                Section(group.rawValue) {
-                ForEach(actions) { action in
-                    LabeledContent(action.title) {
-                        if action.isFixed {
-                            // The system's, and not ours to move.
-                            Text(action.fallback.display)
-                                .font(.body.monospaced())
-                                .foregroundStyle(.secondary)
-                                .help("Set by macOS")
-                        } else {
-                            ShortcutRecorder(
-                                shortcut: app.shortcut(for: action),
-                                isUnset: !app.hasShortcut(action)
-                            ) { app.setShortcut($0, for: action) }
+                Section {
+                    // One card, rows separated by air. A line under every row
+                    // is a list of twenty-five hairlines, which is what made
+                    // this page look like a form to be filled in rather than
+                    // a set of keys to be read.
+                    VStack(spacing: 2) {
+                        ForEach(actions) { action in
+                            HStack {
+                                Text(action.title)
+                                Spacer(minLength: 12)
+                                if action.isFixed {
+                                    // The system's, and not ours to move.
+                                    Text(action.fallback.display)
+                                        .font(.body.monospaced())
+                                        .foregroundStyle(.secondary)
+                                        .help("Set by macOS")
+                                } else {
+                                    ShortcutRecorder(
+                                        shortcut: app.shortcut(for: action),
+                                        isUnset: !app.hasShortcut(action)
+                                    ) { app.setShortcut($0, for: action) }
+                                }
+                            }
+                            .padding(.vertical, 3)
                         }
                     }
+                } header: {
+                    Text(group.rawValue)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
                 }
-                if group == .app, shortcutQuery.isEmpty {
-                    HStack {
-                        Spacer()
-                        Button("Restore Defaults") { app.resetShortcuts() }
-                            .disabled(app.paneShortcuts.isEmpty)
-                    }
-                }
+            }
+        }
+
+        if shortcutQuery.isEmpty {
+            Section {
+                HStack {
+                    Spacer()
+                    Button("Restore Defaults") { app.resetShortcuts() }
+                        .disabled(app.paneShortcuts.isEmpty)
                 }
             }
         }
@@ -371,24 +394,12 @@ struct SettingsView: View {
     private var logSection: some View {
         ForEach(ReleaseNotes.releases) { release in
             Section {
-                ForEach(Array(release.added.enumerated()), id: \.offset) { _, line in
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text("+")
-                            .font(.body.monospaced())
-                            .foregroundStyle(.green)
-                        Text(line.value)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Spacer(minLength: 0)
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(release.added) { item in
+                        entry(item, symbol: "plus", tint: .green)
                     }
-                }
-                ForEach(Array(release.fixed.enumerated()), id: \.offset) { _, line in
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text("×")
-                            .font(.body.monospaced())
-                            .foregroundStyle(.orange)
-                        Text(line.value)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Spacer(minLength: 0)
+                    ForEach(release.fixed) { item in
+                        entry(item, symbol: "wrench.adjustable", tint: .orange)
                     }
                 }
             } header: {
@@ -404,6 +415,53 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    /// A line of the log: the keyword, and the sentence it is hiding.
+    ///
+    /// Folded by default. Twelve open paragraphs is a page nobody scans, and
+    /// scanning is the whole reason someone opens a changelog.
+    private func entry(
+        _ item: ReleaseNotes.Entry, symbol: String, tint: Color
+    ) -> some View {
+        let isOpen = openEntries.contains(item.id)
+        return VStack(alignment: .leading, spacing: 5) {
+            Button {
+                withAnimation(.snappy(duration: 0.2)) {
+                    if isOpen { openEntries.remove(item.id) } else { openEntries.insert(item.id) }
+                }
+            } label: {
+                HStack(spacing: 9) {
+                    Image(systemName: symbol)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(tint)
+                        .frame(width: 12)
+                    Text(item.title.value)
+                        .fontWeight(.medium)
+                    if let action = item.action {
+                        KeyCap(action: action)
+                    }
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(isOpen ? 90 : 0))
+                }
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+
+            if isOpen {
+                Text(item.detail.value)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, 21)
+                    .padding(.bottom, 4)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .padding(.vertical, 3)
     }
 
     // MARK: - About
