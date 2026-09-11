@@ -13,6 +13,39 @@ struct SettingsView: View {
     @State private var showsChangeFolderConfirmation = false
     @State private var showsReleaseNotes = false
     @State private var showsFeatureLog = false
+    #if os(macOS)
+    @State private var pane: Pane = .library
+    #endif
+    /// What the shortcuts page is being searched for.
+    @State private var shortcutQuery = ""
+
+    /// The pages of Settings.
+    ///
+    /// One scroll of everything had grown long enough that reaching the
+    /// shortcuts meant remembering they were at the bottom of it. People
+    /// arrive at Settings already knowing roughly what they came for, and a
+    /// list of names is what that knowledge is for.
+    enum Pane: String, CaseIterable, Identifiable {
+        case library = "Library"
+        case metadata = "Metadata"
+        case bibtex = "BibTeX"
+        case reading = "Reading"
+        case shortcuts = "Shortcuts"
+        case about = "About"
+
+        var id: String { rawValue }
+
+        var symbol: String {
+            switch self {
+            case .library: "folder"
+            case .metadata: "text.book.closed"
+            case .bibtex: "text.quote"
+            case .reading: "doc.text"
+            case .shortcuts: "keyboard"
+            case .about: "info.circle"
+            }
+        }
+    }
 
     var body: some View {
         #if os(iOS)
@@ -22,13 +55,34 @@ struct SettingsView: View {
                 .navigationBarTitleDisplayMode(.inline)
         }
         #else
-        settingsForm
+        NavigationSplitView {
+            List(Pane.allCases, selection: $pane) { page in
+                Label(page.rawValue, systemImage: page.symbol).tag(page)
+            }
+            .navigationSplitViewColumnWidth(min: 160, ideal: 178, max: 210)
+        } detail: {
+            settingsForm
+                .navigationTitle(pane.rawValue)
+        }
+        .frame(width: 800, height: 540)
         #endif
     }
 
     private var settingsForm: some View {
         let settings = app.settings
         return Form {
+            #if os(macOS)
+            switch pane {
+            case .library: librarySection
+            case .metadata: metadataSection(settings: settings)
+            case .bibtex: bibTeXSection(settings: settings)
+            case .reading:
+                listSection(settings: settings)
+                readingSection(settings: settings)
+            case .shortcuts: shortcutsSection
+            case .about: aboutSection
+            }
+            #else
             librarySection
             metadataSection(settings: settings)
             bibTeXSection(settings: settings)
@@ -36,6 +90,7 @@ struct SettingsView: View {
             readingSection(settings: settings)
             shortcutsSection
             aboutSection
+            #endif
         }
         .formStyle(.grouped)
         .sheet(isPresented: $showsReleaseNotes) {
@@ -183,9 +238,35 @@ struct SettingsView: View {
     private var shortcutsSection: some View {
         #if os(macOS)
         @Bindable var app = app
+
+        Section {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.tertiary)
+                TextField("Search by name or by key — try ⌘F, or \"cmd\", or \"find\"",
+                          text: $shortcutQuery)
+                    .textFieldStyle(.plain)
+                if !shortcutQuery.isEmpty {
+                    Button {
+                        shortcutQuery = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            if matchingActions.isEmpty {
+                Text("Nothing is on that key, and nothing is called that.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        }
+
         ForEach(ShortcutAction.Group.allCases) { group in
-            Section(group == .library ? "Keyboard Shortcuts — \(group.rawValue)" : group.rawValue) {
-                ForEach(ShortcutAction.allCases.filter { $0.group == group }) { action in
+            let actions = matchingActions.filter { $0.group == group }
+            if !actions.isEmpty {
+                Section(group.rawValue) {
+                ForEach(actions) { action in
                     LabeledContent(action.title) {
                         if action.isFixed {
                             // The system's, and not ours to move.
@@ -201,16 +282,46 @@ struct SettingsView: View {
                         }
                     }
                 }
-                if group == .app {
+                if group == .app, shortcutQuery.isEmpty {
                     HStack {
                         Spacer()
                         Button("Restore Defaults") { app.resetShortcuts() }
                             .disabled(app.paneShortcuts.isEmpty)
                     }
                 }
+                }
             }
         }
         #endif
+    }
+
+    /// The commands a search matches, by name or by key.
+    ///
+    /// Both, because you arrive at this page from one of two directions: you
+    /// know what the thing is called and want to know its key, or a key did
+    /// something you did not expect and you want to know what owns it. The
+    /// second is the one that is usually impossible.
+    ///
+    /// The key is matched as it is drawn (⌘F) and as it is spoken (cmd, shift,
+    /// option, control) — nobody types ⌘ into a search field.
+    private var matchingActions: [ShortcutAction] {
+        let query = shortcutQuery
+            .trimmingCharacters(in: .whitespaces)
+            .lowercased()
+        guard !query.isEmpty else { return ShortcutAction.allCases }
+        return ShortcutAction.allCases.filter { action in
+            haystack(for: action).contains(query)
+        }
+    }
+
+    private func haystack(for action: ShortcutAction) -> String {
+        let shortcut = app.shortcut(for: action)
+        var words = [action.title, action.group.rawValue, shortcut.display]
+        if shortcut.modifiers.contains(.command) { words += ["cmd", "command", "⌘"] }
+        if shortcut.modifiers.contains(.shift) { words += ["shift", "⇧"] }
+        if shortcut.modifiers.contains(.option) { words += ["opt", "option", "alt", "⌥"] }
+        if shortcut.modifiers.contains(.control) { words += ["ctrl", "control", "⌃"] }
+        return words.joined(separator: " ").lowercased()
     }
 
     private func readingSection(settings: AppSettings) -> some View {
