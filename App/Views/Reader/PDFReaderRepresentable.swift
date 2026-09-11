@@ -504,7 +504,7 @@ final class ReaderCoordinator: NSObject {
         // every paper, because the pages have been trimmed to their text:
         // this gap plus the trim is the whole gutter.
         view.pageBreakMargins = layout == .book
-            ? NSEdgeInsets(top: 4.75, left: 52, bottom: 4.75, right: 52)
+            ? NSEdgeInsets(top: 4.75, left: 84, bottom: 4.75, right: 84)
             : NSEdgeInsets(top: 4.75, left: 4.75, bottom: 4.75, right: 4.75)
 
         switch layout {
