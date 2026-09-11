@@ -602,9 +602,7 @@ struct SettingsView: View {
                             Text("·")
                                 .font(.subheadline)
                                 .foregroundStyle(.quaternary)
-                            Text(countLine(release))
-                                .font(.subheadline)
-                                .foregroundStyle(.tertiary)
+                            counts(release)
                             Spacer(minLength: 8)
                         }
                         .contentShape(.rect)
@@ -637,27 +635,29 @@ struct SettingsView: View {
 
     /// What a folded version is hiding, so it can be skipped without opening.
     ///
-    /// Said in words. "+12" is a number whose unit you have to go and find
-    /// out, and the legend at the top of the page is exactly the thing
-    /// somebody reading a folded line cannot see.
-    private func countLine(_ release: ReleaseNotes.Release) -> String {
-        var parts: [String] = []
-        if !release.added.isEmpty {
-            parts.append(ReleaseNotes.string(
-                "더한 것 \(release.added.count)개", "\(release.added.count) added"
-            ))
+    /// The same three symbols as the legend, rather than the words: a symbol
+    /// read once at the top of the page is read for the rest of it, and three
+    /// short pairs scan where three phrases have to be parsed. Nought is shown
+    /// too — that a version fixed nothing is worth knowing, and a missing
+    /// column would only be counted for.
+    private func counts(_ release: ReleaseNotes.Release) -> some View {
+        HStack(spacing: 11) {
+            count("plus", .green, release.added.count)
+            count("minus", .secondary, release.removed.count)
+            count("wrench.adjustable", .orange, release.fixed.count)
         }
-        if !release.removed.isEmpty {
-            parts.append(ReleaseNotes.string(
-                "뺀 것 \(release.removed.count)개", "\(release.removed.count) removed"
-            ))
+    }
+
+    private func count(_ symbol: String, _ tint: Color, _ number: Int) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: symbol)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(number == 0 ? AnyShapeStyle(.quaternary) : AnyShapeStyle(tint))
+                .frame(width: 12)
+            Text(ReleaseNotes.string("\(number)개", "\(number)"))
+                .font(.subheadline)
+                .foregroundStyle(number == 0 ? AnyShapeStyle(.quaternary) : AnyShapeStyle(.tertiary))
         }
-        if !release.fixed.isEmpty {
-            parts.append(ReleaseNotes.string(
-                "고친 것 \(release.fixed.count)개", "\(release.fixed.count) fixed"
-            ))
-        }
-        return parts.joined(separator: " · ")
     }
 
     /// A line of the log: the keyword, and the sentence it is hiding.
