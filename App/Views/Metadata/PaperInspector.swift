@@ -73,6 +73,14 @@ private struct PaperInspectorForm: View {
             }
         }
         .formStyle(.grouped)
+        // A grouped form brings its own opaque background, which filled the
+        // whole inspector panel white and left no glass to see.
+        .scrollContentBackground(.hidden)
+        // And its own scroller. The sweep is window-wide, but it runs off the
+        // probes, and until this one there was none in the inspector: the
+        // form's bar was only ever taken away when some other panel happened
+        // to update after it appeared.
+        .hiddenScrollers()
         .onDisappear { saveNoteIfNeeded() }
     }
 
@@ -209,6 +217,7 @@ private struct PaperInspectorForm: View {
                             Task { await model.attach(paperID, to: suggested.id) }
                         }
                         .buttonStyle(.borderedProminent)
+                        .buttonBorderShape(.capsule)
                     }
                     .padding(.vertical, 2)
                 }
@@ -257,6 +266,7 @@ private struct PaperInspectorForm: View {
                     Task { await model.update(meta: meta, for: paperID) }
                 }
                 .buttonStyle(.borderedProminent)
+                .buttonBorderShape(.capsule)
                 .disabled(!isDirty)
             }
         }

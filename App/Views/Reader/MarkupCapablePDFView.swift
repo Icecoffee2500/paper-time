@@ -1,5 +1,6 @@
 import InkEngine
 import PDFKit
+import PDFReader
 import SwiftUI
 
 #if canImport(UIKit)
@@ -88,6 +89,48 @@ final class MarkupCapablePDFView: PDFView {
     var onRemoveMark: ((PDFAnnotation) -> Void)?
     var onRecolorMark: ((PDFAnnotation, MarkupColor) -> Void)?
     private var hitMark: PDFAnnotation?
+
+    // MARK: Hovering
+
+    private var tracking: NSTrackingArea?
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let tracking { removeTrackingArea(tracking) }
+        let area = NSTrackingArea(
+            rect: .zero,
+            options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+            owner: self, userInfo: nil
+        )
+        addTrackingArea(area)
+        tracking = area
+    }
+
+    /// The hand over a mark, and the mark a shade deeper under it.
+    ///
+    /// A highlight on the page is something you can click — it opens the
+    /// mark in the inspector — and nothing about it said so. PDFKit sets its
+    /// own cursor on every move, so this only speaks up while the pointer is
+    /// actually on a mark and lets PDFKit have it back the moment it is not.
+    override func mouseMoved(with event: NSEvent) {
+        super.mouseMoved(with: event)
+        setHoveredMark(mark(at: event.locationInWindow))
+        if MarkHover.hovered != nil { NSCursor.pointingHand.set() }
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        setHoveredMark(nil)
+    }
+
+    private func setHoveredMark(_ mark: PDFAnnotation?) {
+        let previous = MarkHover.hovered
+        guard previous !== mark else { return }
+        MarkHover.hovered = mark
+        for changed in [previous, mark].compactMap({ $0?.page }) {
+            MarkOverlayView.refresh(changed)
+        }
+    }
 
     /// The mark under a click, if there is one.
     func mark(at locationInWindow: NSPoint) -> PDFAnnotation? {

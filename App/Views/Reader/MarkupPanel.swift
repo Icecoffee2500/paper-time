@@ -34,6 +34,7 @@ final class MarkupPanelController {
     private var onDelete: (() -> Void)?
     private var onNote: ((String) -> Void)?
     private var onCopy: (() -> Void)?
+    private var onUltraCopy: (() -> Void)?
     private var onDismiss: (() -> Void)?
     private var quotedText = ""
     private var anchor = NSRect.zero
@@ -45,12 +46,14 @@ final class MarkupPanelController {
         onMark: @escaping (MarkupDescriptor.Kind, MarkupColor) -> Void,
         onNote: @escaping (String) -> Void,
         onCopy: @escaping () -> Void,
+        onUltraCopy: @escaping () -> Void,
         onDismiss: @escaping () -> Void,
         composing: Bool = false
     ) {
         self.onMark = onMark
         self.onNote = onNote
         self.onCopy = onCopy
+        self.onUltraCopy = onUltraCopy
         self.onDismiss = onDismiss
         self.quotedText = quotedText
         self.anchor = anchor
@@ -120,7 +123,8 @@ final class MarkupPanelController {
         let bar = MarkupBarView(
             onMark: { [weak self] kind, color in self?.onMark?(kind, color) },
             onNote: { [weak self] in self?.presentComposer() },
-            onCopy: { [weak self] in self?.onCopy?() }
+            onCopy: { [weak self] in self?.onCopy?() },
+            onUltraCopy: { [weak self] in self?.onUltraCopy?() }
         )
         self.bar = bar
         composer = nil
@@ -175,9 +179,17 @@ private final class MarkupPanel: NSPanel {
 
 /// The row of markup actions.
 final class MarkupBarView: NSVisualEffectView {
+    /// One row of controls reads as a single pill, so the corner is half the
+    /// height rather than a number that has to be kept in step with it.
+    override func layout() {
+        super.layout()
+        layer?.cornerRadius = Corner.capsule(height: bounds.height)
+    }
+
     private let onMark: (MarkupDescriptor.Kind, MarkupColor) -> Void
     private let onNote: () -> Void
     private let onCopy: () -> Void
+    private let onUltraCopy: () -> Void
     private var armed = MarkupDescriptor.Kind.highlight
     private var colorButtons: [NSButton] = []
     private var underlineButton: NSButton?
@@ -186,18 +198,19 @@ final class MarkupBarView: NSVisualEffectView {
     init(
         onMark: @escaping (MarkupDescriptor.Kind, MarkupColor) -> Void,
         onNote: @escaping () -> Void,
-        onCopy: @escaping () -> Void
+        onCopy: @escaping () -> Void,
+        onUltraCopy: @escaping () -> Void
     ) {
         self.onMark = onMark
         self.onNote = onNote
         self.onCopy = onCopy
+        self.onUltraCopy = onUltraCopy
         super.init(frame: .zero)
 
         material = .popover
         blendingMode = .behindWindow
         state = .active
         wantsLayer = true
-        layer?.cornerRadius = 20
         layer?.cornerCurve = .continuous
         layer?.masksToBounds = true
 
@@ -224,6 +237,10 @@ final class MarkupBarView: NSVisualEffectView {
         views.append(Self.divider())
         views.append(symbolButton("note.text.badge.plus", "Add Note", #selector(note)))
         views.append(symbolButton("doc.on.doc", "Copy", #selector(copyText)))
+        views.append(symbolButton(
+            "function", "Ultracopy — copy with formulas as LaTeX (⌘⇧C)",
+            #selector(ultraCopyText)
+        ))
 
         let stack = NSStackView(views: views)
         stack.orientation = .horizontal
@@ -324,10 +341,18 @@ final class MarkupBarView: NSVisualEffectView {
     }
     @objc private func note() { onNote() }
     @objc private func copyText() { onCopy() }
+    @objc private func ultraCopyText() { onUltraCopy() }
 }
 
 /// The controls for a mark already on the page.
 private final class MarkEditorView: NSVisualEffectView {
+    /// One row of controls reads as a single pill, so the corner is half the
+    /// height rather than a number that has to be kept in step with it.
+    override func layout() {
+        super.layout()
+        layer?.cornerRadius = Corner.capsule(height: bounds.height)
+    }
+
     private let onRecolor: (MarkupColor) -> Void
     private let onDelete: () -> Void
 
@@ -340,7 +365,6 @@ private final class MarkEditorView: NSVisualEffectView {
         blendingMode = .behindWindow
         state = .active
         wantsLayer = true
-        layer?.cornerRadius = 20
         layer?.cornerCurve = .continuous
         layer?.masksToBounds = true
 
@@ -416,7 +440,7 @@ private final class NoteComposerView: NSVisualEffectView, NSTextFieldDelegate {
         blendingMode = .behindWindow
         state = .active
         wantsLayer = true
-        layer?.cornerRadius = 14
+        layer?.cornerRadius = Corner.popover
         layer?.cornerCurve = .continuous
         layer?.masksToBounds = true
 

@@ -90,7 +90,27 @@ struct ReaderScreen: View {
             },
             onToast: { show(toast: $0) }
         )
-        .ignoresSafeArea(edges: .bottom)
+        // Glass paper: multiplied against what is behind it, so the page's
+        // white falls away to whatever the panel is showing and the ink stays
+        // ink. Highlights multiply too, which is what a highlighter does.
+        //
+        // Only under the glass tint. Multiplied over a dark ground the text
+        // would go with the paper, which is why the other tints keep their
+        // own opaque background instead.
+        // What the tinted page is multiplied against, or sits on: sepia
+        // paper under Sepia, a dark ground under Dimmed. Glass and Paper
+        // White have the panel.
+        .background {
+            switch configuration.tint {
+            case .sepia: Color(red: 0.96, green: 0.93, blue: 0.86)
+            case .dim: Color(white: 0.13)
+            default: Color.clear
+            }
+        }
+        // Under the status bar in the scrolling layouts, where the page
+        // flowing on beneath the glass is the point; not in a book, where
+        // the bar was sitting on the last lines of both pages.
+        .ignoresSafeArea(edges: configuration.layout == .book ? [] : .bottom)
         .navigationTitle(paper.meta.displayTitle)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -103,7 +123,7 @@ struct ReaderScreen: View {
                     .font(.callout.weight(.medium))
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
-                    .background(.regularMaterial, in: .capsule)
+                    .liquidGlass(.floating)
                     .overlay(Capsule().strokeBorder(.primary.opacity(0.08), lineWidth: 0.5))
                     .shadow(radius: 8, y: 2)
                     .padding(.bottom, 56)
@@ -133,18 +153,35 @@ struct ReaderScreen: View {
         }
         .animation(.snappy(duration: 0.2), value: link.isFinding)
         .safeAreaInset(edge: .bottom) { statusBar(session) }
-        .onChange(of: currentPageIndex) { _, index in
+        .onChange(of: currentPageIndex, initial: true) { _, index in
             library.recordReadingPosition(index, for: paper.id)
+            link.currentPageIndex = index
         }
     }
 
     @ViewBuilder
     private func statusBar(_ session: DocumentSession) -> some View {
         HStack(spacing: 12) {
-            Text("Page \(currentPageIndex + 1) of \(max(session.document.pageCount, 1))")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
+            let count = max(session.document.pageCount, 1)
+            if configuration.layout == .book {
+                // Both pages of the spread, and how far through the paper
+                // they are — the two things a bookmark tells you.
+                let left = currentPageIndex - currentPageIndex % 2 + 1
+                let right = min(left + 1, count)
+                Text(left == right ? "Page \(left) of \(count)" : "Pages \(left)–\(right) of \(count)")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                ProgressView(value: Double(right), total: Double(count))
+                    .progressViewStyle(.linear)
+                    .tint(.secondary.opacity(0.6))
+                    .frame(width: 140)
+            } else {
+                Text("Page \(currentPageIndex + 1) of \(count)")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
 
             Spacer()
 
@@ -182,7 +219,10 @@ struct ReaderScreen: View {
         }
         .padding(.horizontal)
         .padding(.vertical, 6)
-        .background(.bar)
+        // A rectangle, not a capsule: the bar spans the panel and the panel's
+        // own clip is what rounds the two corners it shares with it. `.bar`
+        // was opaque, which left a white strip across the foot of the page.
+        .liquidGlass(.floating, in: Rectangle())
     }
 
     /// The note editor on iPhone and iPad, where the markup actions themselves

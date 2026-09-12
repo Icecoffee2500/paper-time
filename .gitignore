@@ -18,3 +18,8 @@ Tools/CorpusDump/corpusdump
 
 # Your own signing identity, not the project's
 Config/Signing.local.xcconfig
+
+# Release staging for the disk image
+.dmg-build/
+*.dmg
+.build/

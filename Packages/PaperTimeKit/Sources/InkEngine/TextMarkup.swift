@@ -298,9 +298,81 @@ public enum TextMarkupWriter {
         return created
     }
 
+    /// The identifier of a markup, whoever made it.
+    ///
+    /// A markup this app wrote carries its own. One made in Preview, Zotero or
+    /// on an iPad carries nothing, so it is given an identifier derived from
+    /// where it sits on the page — the same annotation answers to the same
+    /// identifier every time the file is opened, which is what lets it be
+    /// listed, selected, recoloured and deleted like any other.
+    public static func identifier(of annotation: PDFAnnotation) -> UUID? {
+        if let own = annotation.value(forAnnotationKey: idKey) as? String,
+           let id = UUID(uuidString: own) {
+            return id
+        }
+        guard kind(for: annotation) != nil else { return nil }
+        let page = annotation.page
+        let index = page.flatMap { $0.document?.index(for: $0) } ?? -1
+        return derivedIdentifier(of: annotation, pageIndex: index)
+    }
+
+    /// An identifier made from what the file already says: the subtype, the
+    /// page, and the rectangle rounded to the point. Nothing about it changes
+    /// unless the annotation itself moves.
+    static func derivedIdentifier(of annotation: PDFAnnotation, pageIndex index: Int) -> UUID {
+        let box = annotation.bounds
+        let seed = "\(annotation.type ?? "?")|\(index)|"
+            + "\(Int(box.minX.rounded()))|\(Int(box.minY.rounded()))|"
+            + "\(Int(box.width.rounded()))|\(Int(box.height.rounded()))"
+        return uuid(from: seed)
+    }
+
+    /// A UUID that depends only on the text given, so it is the same on every
+    /// device and every launch.
+    static func uuid(from seed: String) -> UUID {
+        // FNV-1a, twice over, with different offsets: enough to keep the
+        // markups of one page apart, which is all this has to do.
+        var low: UInt64 = 0xcbf2_9ce4_8422_2325
+        var high: UInt64 = 0x9e37_79b9_7f4a_7c15
+        for byte in Array(seed.utf8) {
+            low = (low ^ UInt64(byte)) &* 0x100_0000_01b3
+            high = (high &+ UInt64(byte)) &* 0x9e37_79b9_7f4a_7c15
+            high ^= high >> 29
+        }
+        var bytes = [UInt8]()
+        for shift in stride(from: 56, through: 0, by: -8) {
+            bytes.append(UInt8(truncatingIfNeeded: low >> UInt64(shift)))
+        }
+        for shift in stride(from: 56, through: 0, by: -8) {
+            bytes.append(UInt8(truncatingIfNeeded: high >> UInt64(shift)))
+        }
+        // Stamped as a version-4 UUID so nothing downstream is surprised.
+        bytes[6] = (bytes[6] & 0x0F) | 0x40
+        bytes[8] = (bytes[8] & 0x3F) | 0x80
+        return UUID(uuid: (bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5],
+                           bytes[6], bytes[7], bytes[8], bytes[9], bytes[10], bytes[11],
+                           bytes[12], bytes[13], bytes[14], bytes[15]))
+    }
+
+    /// Takes a markup made elsewhere into the app's care: from here on it
+    /// carries an identifier of its own, so moving or recolouring it does not
+    /// lose track of it. Called the first time the reader acts on one.
+    @discardableResult
+    public static func adopt(_ annotation: PDFAnnotation) -> UUID? {
+        guard kind(for: annotation) != nil else { return nil }
+        if let own = annotation.value(forAnnotationKey: idKey) as? String,
+           let id = UUID(uuidString: own) {
+            return id
+        }
+        guard let id = identifier(of: annotation) else { return nil }
+        annotation.setValue(id.uuidString, forAnnotationKey: idKey)
+        return id
+    }
+
     public static func remove(id: UUID, from page: PDFPage) {
-        for annotation in page.annotations
-        where annotation.value(forAnnotationKey: idKey) as? String == id.uuidString {
+        // Both kinds of markup answer here: the ones this app wrote, and the
+        // ones it only recognised.
+        for annotation in page.annotations where identifier(of: annotation) == id {
             page.removeAnnotation(annotation)
         }
     }
@@ -318,18 +390,20 @@ public enum TextMarkupWriter {
 
             for annotation in page.annotations {
                 guard let kind = kind(for: annotation) else { continue }
-                let identifier = annotation.value(forAnnotationKey: idKey) as? String
-                let key = identifier ?? "\(annotation.type ?? "?")-\(annotation.bounds.integral)"
+                let stored = (annotation.value(forAnnotationKey: idKey) as? String)
+                    .flatMap(UUID.init(uuidString:))
+                let id = stored ?? derivedIdentifier(of: annotation, pageIndex: index)
+                let key = id.uuidString
 
                 if var existing = grouped[key] {
-                    existing.rects.append(annotation.bounds)
+                    existing.rects += lineRects(of: annotation)
                     grouped[key] = existing
                 } else {
                     grouped[key] = MarkupDescriptor(
-                        id: identifier.flatMap(UUID.init(uuidString:)) ?? UUID(),
+                        id: id,
                         kind: kind,
                         pageIndex: index,
-                        rects: [annotation.bounds],
+                        rects: lineRects(of: annotation),
                         color: nearestColor(annotation.color),
                         quotedText: quotedText(for: annotation, on: page),
                         comment: comment(for: annotation, on: page)
@@ -349,6 +423,30 @@ public enum TextMarkupWriter {
     /// elsewhere only have `contents`, which readers fill with the quoted text
     /// by default — so that counts as a comment only when it differs from what
     /// is actually under the mark.
+    /// The lines a markup actually covers.
+    ///
+    /// A markup that runs over three lines is one annotation with three
+    /// quadrilaterals in it, and the box around them takes in the ends of
+    /// lines that were never marked. Reading the quadrilaterals back is what
+    /// keeps a recoloured markup the shape it was. PDFKit gives their corners
+    /// relative to the annotation's own box, so they are put back on the page.
+    static func lineRects(of annotation: PDFAnnotation) -> [CGRect] {
+        guard let quads = annotation.quadrilateralPoints, quads.count >= 4 else {
+            return [annotation.bounds]
+        }
+        let origin = annotation.bounds.origin
+        var rects: [CGRect] = []
+        for start in stride(from: 0, to: quads.count - 3, by: 4) {
+            let corners = (0..<4).map { quads[start + $0].pointValue }
+            let minX = corners.map(\.x).min() ?? 0, maxX = corners.map(\.x).max() ?? 0
+            let minY = corners.map(\.y).min() ?? 0, maxY = corners.map(\.y).max() ?? 0
+            let rect = CGRect(x: origin.x + minX, y: origin.y + minY,
+                              width: maxX - minX, height: maxY - minY)
+            if rect.width > 0.5, rect.height > 0.5 { rects.append(rect) }
+        }
+        return rects.isEmpty ? [annotation.bounds] : rects
+    }
+
     static func comment(for annotation: PDFAnnotation, on page: PDFPage) -> String {
         if let own = annotation.value(forAnnotationKey: commentKey) as? String, !own.isEmpty {
             return own

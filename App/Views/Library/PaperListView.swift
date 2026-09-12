@@ -45,6 +45,7 @@ struct PaperListView: View {
                         Task { await model.adoptLooseDocuments() }
                     }
                     .buttonStyle(.borderedProminent)
+                    .buttonBorderShape(.capsule)
                 }
             }
         } else if model.visiblePapers.isEmpty {
@@ -75,7 +76,13 @@ struct PaperListView: View {
                     .tag(paper.id)
                 }
             }
-            .thinScrollers()
+            // The same list style as the source list, so a selected paper and
+            // a selected scope are drawn with one shape rather than two.
+            #if os(macOS)
+            .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
+            #endif
+            .hiddenScrollers()
         }
     }
 
@@ -201,6 +208,7 @@ struct PaperRow: View, Equatable {
                 .font(.caption)
             }
             .buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
             .buttonBorderShape(.capsule)
             .controlSize(.small)
             .help("Supplementary material")

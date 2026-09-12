@@ -322,3 +322,134 @@ struct TextMarkupTests {
         #expect(!page.annotations.contains { $0.type == "Highlight" })
     }
 }
+
+/// Markups the file already carried when it arrived.
+///
+/// A paper that has been read in Preview, Zotero or on an iPad comes with
+/// highlights and underlines of its own. They are ordinary PDF annotations and
+/// nothing in the file forbids changing them — but they carry no identifier of
+/// this app's, and for a while that meant the reader could find them and then
+/// do nothing at all with them.
+@Suite("Markups made elsewhere")
+struct ForeignMarkupTests {
+    /// A page with a highlight put there by something other than this app: no
+    /// `/PTMarkupID`, and its lines given as quadrilaterals.
+    static func makeDocument(quads: [CGPoint]? = nil) throws -> PDFDocument {
+        let document = try TextMarkupTests.makeDocument(text: "the quick brown fox")
+        let page = try #require(document.page(at: 0))
+        let annotation = PDFAnnotation(
+            bounds: CGRect(x: 40, y: 690, width: 200, height: 40),
+            forType: .highlight,
+            withProperties: nil
+        )
+        annotation.color = .yellow
+        if let quads {
+            annotation.quadrilateralPoints = quads.map { NSValue(point: $0) }
+        }
+        page.addAnnotation(annotation)
+        return document
+    }
+
+    @Test("A markup made elsewhere is listed with an identifier of its own")
+    func foreignMarkupIsIdentified() throws {
+        let document = try Self.makeDocument()
+        let found = TextMarkupWriter.descriptors(in: document)
+        #expect(found.count == 1)
+        #expect(found.first?.kind == .highlight)
+    }
+
+    @Test("Its identifier is the same every time the file is read")
+    func identifierIsStable() throws {
+        let document = try Self.makeDocument()
+        let first = TextMarkupWriter.descriptors(in: document).first?.id
+        let second = TextMarkupWriter.descriptors(in: document).first?.id
+        #expect(first != nil)
+        #expect(first == second)
+    }
+
+    @Test("It can be removed, which is what it could not be before")
+    func foreignMarkupCanBeRemoved() throws {
+        let document = try Self.makeDocument()
+        let page = try #require(document.page(at: 0))
+        let id = try #require(TextMarkupWriter.descriptors(in: document).first?.id)
+
+        TextMarkupWriter.remove(id: id, from: page)
+
+        #expect(page.annotations.filter { $0.type == "Highlight" }.isEmpty)
+        #expect(TextMarkupWriter.descriptors(in: document).isEmpty)
+    }
+
+    @Test("Removing one and putting it back is what undo has to do")
+    func removalCanBeUndone() throws {
+        let document = try Self.makeDocument(quads: [
+            CGPoint(x: 0, y: 40), CGPoint(x: 200, y: 40),
+            CGPoint(x: 0, y: 20), CGPoint(x: 200, y: 20),
+            CGPoint(x: 0, y: 18), CGPoint(x: 90, y: 18),
+            CGPoint(x: 0, y: 0), CGPoint(x: 90, y: 0),
+        ])
+        let page = try #require(document.page(at: 0))
+        let before = try #require(TextMarkupWriter.descriptors(in: document).first)
+
+        TextMarkupWriter.remove(id: before.id, from: page)
+        #expect(TextMarkupWriter.descriptors(in: document).isEmpty)
+
+        // What undoing a removal does: put the descriptor back on the page.
+        _ = TextMarkupWriter.apply(before, to: page)
+        let after = try #require(TextMarkupWriter.descriptors(in: document).first)
+
+        #expect(after.id == before.id)
+        #expect(after.kind == before.kind)
+        #expect(after.rects.count == before.rects.count)
+        // And it can be taken off again, which is what redo does.
+        TextMarkupWriter.remove(id: after.id, from: page)
+        #expect(TextMarkupWriter.descriptors(in: document).isEmpty)
+    }
+
+    @Test("Taking one into the app's care leaves the identifier unchanged")
+    func adoptionKeepsTheIdentifier() throws {
+        let document = try Self.makeDocument()
+        let page = try #require(document.page(at: 0))
+        let annotation = try #require(page.annotations.first)
+        let before = try #require(TextMarkupWriter.identifier(of: annotation))
+
+        let adopted = TextMarkupWriter.adopt(annotation)
+
+        #expect(adopted == before)
+        #expect(annotation.value(forAnnotationKey: TextMarkupWriter.idKey) as? String
+            == before.uuidString)
+        #expect(TextMarkupWriter.identifier(of: annotation) == before)
+    }
+
+    @Test("Its lines are read back from the quadrilaterals, not the box round them")
+    func linesComeFromTheQuadrilaterals() throws {
+        // Two lines, with the second one shorter — the box around them takes
+        // in a corner that was never marked.
+        let document = try Self.makeDocument(quads: [
+            CGPoint(x: 0, y: 40), CGPoint(x: 200, y: 40),
+            CGPoint(x: 0, y: 20), CGPoint(x: 200, y: 20),
+            CGPoint(x: 0, y: 18), CGPoint(x: 90, y: 18),
+            CGPoint(x: 0, y: 0), CGPoint(x: 90, y: 0),
+        ])
+        let descriptor = try #require(TextMarkupWriter.descriptors(in: document).first)
+
+        #expect(descriptor.rects.count == 2)
+        #expect(descriptor.rects.first?.width == 200)
+        #expect(descriptor.rects.last?.width == 90)
+        // On the page, not in the annotation's own corner.
+        #expect(descriptor.rects.first?.minX == 40)
+    }
+
+    @Test("A markup this app wrote keeps the identifier it was given")
+    func ownMarkupKeepsItsIdentifier() throws {
+        let document = try TextMarkupTests.makeDocument(text: "the quick brown fox")
+        let page = try #require(document.page(at: 0))
+        let selection = try #require(document.findString("quick", withOptions: []).first)
+        let descriptor = try #require(TextMarkupWriter.descriptor(
+            for: selection, kind: .highlight, color: .yellow, in: document
+        ).first)
+        _ = TextMarkupWriter.apply(descriptor, to: page)
+
+        let found = try #require(TextMarkupWriter.descriptors(in: document).first)
+        #expect(found.id == descriptor.id)
+    }
+}

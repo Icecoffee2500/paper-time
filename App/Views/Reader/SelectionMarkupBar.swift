@@ -69,7 +69,7 @@ struct SelectionMarkupBar: View {
         .font(.body)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(.regularMaterial, in: .capsule)
+        .liquidGlass(.floating)
         .overlay(Capsule().strokeBorder(.primary.opacity(0.08), lineWidth: 0.5))
         .shadow(radius: 10, y: 3)
         .fixedSize()
@@ -127,16 +127,14 @@ struct NoteComposer: View {
                 Button("Save", action: onSave)
                     .keyboardShortcut(.defaultAction)
                     .buttonStyle(.borderedProminent)
+                    .buttonBorderShape(.capsule)
                     .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
             .controlSize(.small)
         }
         .padding(12)
-        .background(.regularMaterial, in: .rect(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(.primary.opacity(0.08), lineWidth: 0.5)
-        )
+        .liquidGlass(.floating)
+        .overlay(Capsule().strokeBorder(.primary.opacity(0.08), lineWidth: 0.5))
         .shadow(radius: 12, y: 4)
         .onAppear { isFocused = true }
     }
