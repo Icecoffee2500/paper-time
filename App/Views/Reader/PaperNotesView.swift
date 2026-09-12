@@ -70,6 +70,10 @@ struct PaperNotesView: View {
                 resonance
                 Divider()
             }
+            if link.hasSelection, !notes.drafts.isEmpty {
+                draftsStrip
+                Divider()
+            }
             HStack(spacing: 8) {
                 Text(mine.count == 1 ? "1 note" : "\(mine.count) notes")
                     .font(.subheadline)
@@ -196,6 +200,37 @@ extension PaperNotesView {
         }
         .buttonStyle(.plain)
         .pressable()
+    }
+
+    /// With a passage selected, the drafts it can go into — with its paper's
+    /// citation attached, which is what makes it a citation later.
+    private var draftsStrip: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label("Into a draft", systemImage: "doc.text")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.tint)
+                .padding(.horizontal, 16)
+                .padding(.top, 10)
+            ForEach(notes.drafts) { draft in
+                Button {
+                    link.pendingNoteAnchor = link.selectionAnchor()
+                    openID = draft.id
+                } label: {
+                    HStack {
+                        Text(draft.displayTitle).font(.callout).lineLimit(1)
+                        Spacer(minLength: 4)
+                        Image(systemName: "quote.opening").font(.caption)
+                    }
+                    .padding(.horizontal, 8).padding(.vertical, 5)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .pressable()
+                .padding(.horizontal, 10)
+            }
+        }
+        .padding(.bottom, 8)
     }
 
     /// The paper a note was written against, named.

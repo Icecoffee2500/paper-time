@@ -743,6 +743,13 @@ struct PaperDetailColumn: View {
             }
         }
         .animation(.snappy(duration: 0.22), value: app.showsFloatingList)
+        // A passage of another paper, followed from a note here: that paper
+        // opens, and its reader takes the request from there.
+        .onChange(of: link.anchorRequest) { _, request in
+            guard let request, let paperID = request.paperID, model.selectedPaperID != paperID,
+                  model.paper(paperID) != nil else { return }
+            model.selection = [paperID]
+        }
         // Clicking a mark on the page opens the list it lives in.
         .onChange(of: link.revealedMarkID) { _, id in
             guard id != nil else { return }

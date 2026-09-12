@@ -61,10 +61,12 @@ final class ReaderLink {
     /// A passage waiting to be dropped into the note at the cursor.
     var pendingNoteAnchor: NoteAnchor?
 
-    /// Somewhere on a page, in page coordinates.
+    /// Somewhere on a page, in page coordinates — of this paper, or of the
+    /// one named.
     struct Anchor: Equatable {
         var pageIndex: Int
         var rect: CGRect
+        var paperID: UUID? = nil
     }
 
     var hasSelection: Bool { selection?.string?.isEmpty == false }
@@ -81,7 +83,8 @@ final class ReaderLink {
         return NoteAnchor(
             pageIndex: index,
             rect: selection.bounds(for: page),
-            quotedText: selection.string ?? ""
+            quotedText: selection.string ?? "",
+            paperID: sessionPaperID
         )
     }
 

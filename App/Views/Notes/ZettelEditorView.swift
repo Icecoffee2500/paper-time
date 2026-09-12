@@ -129,7 +129,7 @@ struct ZettelEditorView: View {
                 showsRawText: showsRaw,
                 onFollow: { anchor in
                     link?.anchorRequest = ReaderLink.Anchor(
-                        pageIndex: anchor.pageIndex, rect: anchor.rect
+                        pageIndex: anchor.pageIndex, rect: anchor.rect, paperID: anchor.paperID
                     )
                 },
                 onOpenNote: { id in

@@ -335,6 +335,15 @@ public final class LibraryModel {
     }
 
     /// One paper by identifier, without scanning the library.
+    /// Every paper's citation key, as the BibTeX export would write it —
+    /// the paper's own where it has one, made up where it has not, and
+    /// unique across the library.
+    public func citationKeys() -> [UUID: String] {
+        CitationKey.assignKeys(to: papers.map {
+            (id: $0.id, item: $0.meta.csl, preferred: $0.meta.bibKey.isEmpty ? nil : $0.meta.bibKey)
+        })
+    }
+
     public func paper(_ id: UUID) -> LoadedPaper? {
         guard let position = indexByID[id], position < papers.count else { return nil }
         return papers[position]

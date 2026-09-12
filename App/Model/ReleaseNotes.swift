@@ -91,6 +91,16 @@ enum ReleaseNotes {
             featured: true
         ),
         Highlight(
+            symbol: "doc.text",
+            title: Text2("노트는 글이 되어야 한다 — 초안", "Notes are meant to become writing: the draft"),
+            detail: Text2(
+                "노트는 모으는 게 목적이 아니다. 연구자의 산출물은 원고이고, 슬립박스는 글쓰기로 끝나야 한다 — 그리고 그 길에서 인용이 끊어지지 않아야 한다. 초안은 노트 하나(kind: draft)다: 소제목 아래 글머리표를 쓰고, 논문을 읽다 구절을 선택하면 Notes 탭에 '초안에 넣기'가 떠서 ❝ 한 번으로 그 구절이 논문 주소를 달고 들어오고, 슬립박스의 노트는 우클릭 '초안에 넣기'로 [[링크]]가 된다. ⇧⌘E를 누르면 초안이 원고로 렌더된다: 구절 칩은 그 논문의 \\cite{키}가 되고(기본 LaTeX, pandoc [@키]도), 링크한 노트는 제 문장으로 풀리고, 인용한 논문만 담은 .bib이 함께 나온다. Overleaf에 붙이면 컴파일된다. 첫 목표는 관련연구 절 하나를 끝까지 — 아래에서 해 보라.",
+                "Collecting is not the point. A researcher's output is a manuscript, and the slip-box has to end in writing — with the citations intact along the way. A draft is a note (kind: draft): bullets under headings. Reading a paper, select a passage and the Notes tab offers \"Into a draft\": one ❝ and the passage arrives carrying the paper's address; a note in the slip-box goes in as a [[link]] from its context menu. ⇧⌘E renders the draft for the manuscript: each passage chip becomes that paper's \\cite{key} (LaTeX by default, pandoc [@key] too), each linked note unfolds into its own sentences, and a .bib of exactly the papers cited comes with it. Paste into Overleaf and it compiles. The first goal is one related-work section, end to end — try it below."
+            ),
+            demo: .express,
+            featured: true
+        ),
+        Highlight(
             symbol: "magnifyingglass",
             title: Text2("한 칸에서 전부 찾는다", "One field finds all of it"),
             detail: Text2(
@@ -228,6 +238,13 @@ enum ReleaseNotes {
                     Text2("한 주제의 노트가 다섯 개 넘게 쌓이면 슬립박스가 지도를 제안한다. 지도는 링크가 소제목 아래 놓인 노트(kind: map)이고, 열면 카드 보드가 된다. 울리는데 안 올린 노트는 ＋ 한 번.",
                           "When more than five notes pile up on one subject, the slip-box suggests a map. A map is a note (kind: map) with links under headings; opened, it is a board of cards. Notes that resonate but are not on it are one ＋ away."),
                     demo: .atlas,
+                    featured: true
+                ),
+                Entry(
+                    Text2("초안(Express)", "Drafts (Express)"),
+                    Text2("초안은 노트(kind: draft)다. 논문의 구절은 ❝로, 노트는 [[링크]]로 넣고, ⇧⌘E면 구절이 \\cite{키}로, 노트가 제 문장으로, 인용한 논문만의 .bib과 함께 나온다. 기본 LaTeX, pandoc도.",
+                          "A draft is a note (kind: draft). Passages go in with ❝, notes as [[links]]; ⇧⌘E renders passages as \\cite{key}, notes as their sentences, with a .bib of just the papers cited. LaTeX by default, pandoc too."),
+                    demo: .express,
                     featured: true
                 ),
                 Entry(
@@ -370,6 +387,8 @@ enum ReleaseNotes {
                     Text2("#이렇게 쓴다. 슬립박스가 모아준다.", "Write #like-this. The slip-box collects them.")),
             Feature(Text2("지도", "Maps"),
                     Text2("노트 다섯 개가 한 주제로 쌓이면 지도를 제안한다. 지도는 링크와 소제목으로 된 노트이고, 열면 보드다.", "Five notes on one subject and a map is suggested. A map is a note of links under headings; opened, it is a board.")),
+            Feature(Text2("초안과 내보내기", "Drafts and export"),
+                    Text2("구절과 노트로 초안을 채우고 ⇧⌘E로 \\cite와 .bib이 붙은 LaTeX을 받는다.", "Fill a draft from passages and notes; ⇧⌘E gives LaTeX with \\cite and a .bib.")),
             Feature(Text2("공명", "Resonance"),
                     Text2("읽는 쪽과 낱말을 나누는 다른 논문의 노트가 Notes 탭 맨 위에 올라온다. 노트 아래에는 아직 잇지 않은 울림이 모인다.", "Notes from other papers that share the page's words rise to the top of the Notes tab; under a note, the echoes not yet linked are gathered.")),
             Feature(Text2("Markdown과 LaTeX", "Markdown and LaTeX"),
@@ -492,6 +511,9 @@ enum ReleaseNotes {
         /// Notes piling up on one subject, the squeeze noticed, and the map
         /// they become — a board of cards, with the door open.
         case atlas
+        /// A draft filled from passages and notes, and what comes out: LaTeX
+        /// with its citations, and the .bib to go with it.
+        case express
 
         var id: String { rawValue }
     }

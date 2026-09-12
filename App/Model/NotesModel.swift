@@ -127,6 +127,8 @@ public final class NotesModel {
 
     /// The maps: notes that arrange other notes.
     public var maps: [Zettel] { notes.filter { $0.kind == .map } }
+    /// The drafts: writing on its way out of the box.
+    public var drafts: [Zettel] { notes.filter { $0.kind == .draft } }
 
     /// Whether a note has a map to live on.
     public func maps(holding id: String) -> [Zettel] {
@@ -153,9 +155,9 @@ public final class NotesModel {
         return map
     }
 
-    /// Puts a note on a map, under its last heading.
+    /// Puts a note on a map — or into a draft — under its last heading.
     public func add(_ id: String, toMap mapID: String) {
-        guard var map = byID[mapID], let note = byID[id], map.kind == .map,
+        guard var map = byID[mapID], let note = byID[id], map.kind != .note,
               !map.outline.contains(where: { $0.entries.contains { $0.id == id } })
         else { return }
         let separator = map.body.isEmpty || map.body.hasSuffix("\n") ? "" : "\n"

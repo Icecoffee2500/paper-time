@@ -46,6 +46,7 @@ struct FeatureDemoView: View {
             case .focus: FocusDemo(scale: scale)
             case .resonance: ResonanceDemo(scale: scale)
             case .atlas: AtlasDemo(scale: scale)
+            case .express: ExpressDemo(scale: scale)
             }
         }
         .padding(scale.pad)
@@ -2332,6 +2333,195 @@ private struct AtlasDemo: View {
     }
 }
 
+// MARK: - Express
+
+/// From a passage on a page to a line of LaTeX with its citation, done once.
+private struct ExpressDemo: View {
+    let scale: DemoScale
+    /// 0: the draft, with one bullet. 1: a passage is selected on the page.
+    /// 2: it is in the draft as a chip. 3: rendered — \cite and the .bib.
+    @State private var step: Int
+
+    init(scale: DemoScale, step: Int = 0) {
+        self.scale = scale
+        _step = State(initialValue: step)
+    }
+
+    private var sentence: String {
+        ReleaseNotes.string("EWC는 옛 과제에 중요한 가중치의 변화에 이차 벌점을 준다.", "EWC puts a quadratic penalty on changing the weights important for old tasks.")
+    }
+    private var instructions: [String] {
+        [
+            ReleaseNotes.string("관련연구 절의 초안이에요 — 소제목과 글머리표 하나. 읽던 논문에서 근거가 될 문장을 눌러 선택해 보세요.",
+                                "A draft of a related-work section — a heading and one bullet. Click the sentence on the page that would be its evidence."),
+            ReleaseNotes.string("Notes 탭에 '초안에 넣기'가 떴어요. ❝를 눌러요.", "The Notes tab offers \"Into a draft\". Press ❝."),
+            ReleaseNotes.string("구절이 칩으로 들어왔어요 — 논문 주소를 달고. ⇧⌘E(내보내기)를 눌러요.", "The passage is in, as a chip carrying its paper's address. Press ⇧⌘E (Export)."),
+            ReleaseNotes.string("칩은 \\cite{kirkpatrick2017}가 되고, 인용한 논문만의 .bib이 함께 나왔어요. Overleaf에 붙이면 컴파일돼요. 기본은 LaTeX, pandoc도.",
+                                "The chip became \\cite{kirkpatrick2017}, with a .bib of just that paper. Paste into Overleaf and it compiles. LaTeX by default; pandoc too."),
+        ]
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: scale.gap) {
+            HStack(alignment: .top, spacing: scale.gap) {
+                if step < 3 {
+                    paper
+                    draft.frame(width: scale.isFull ? 250 : 168)
+                } else {
+                    rendered
+                }
+            }
+            .frame(height: scale.isFull ? 210 : 160)
+            .animation(.snappy(duration: 0.3), value: step)
+
+            HStack(spacing: 6) {
+                ForEach(0..<4, id: \.self) { index in
+                    Text("\(index + 1)")
+                        .font(.caption2.weight(.semibold)).monospacedDigit()
+                        .frame(width: 16, height: 16)
+                        .background(Circle().fill(index < step ? Color.accentColor : (index == step ? Color.accentColor.opacity(0.14) : Color.clear)))
+                        .overlay(Circle().stroke(index == step ? Color.accentColor : Color.secondary.opacity(0.3), lineWidth: 1))
+                        .foregroundStyle(index < step ? AnyShapeStyle(.white) : (index == step ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary)))
+                }
+                if step == 2 {
+                    Button {
+                        withAnimation(.snappy(duration: 0.3)) { step = 3 }
+                    } label: {
+                        Label("⇧⌘E " + ReleaseNotes.string("내보내기", "Export"), systemImage: "square.and.arrow.up")
+                            .font(.caption2).foregroundStyle(.tint)
+                            .padding(.horizontal, 7).padding(.vertical, 3)
+                            .background(Capsule().fill(Color.accentColor.opacity(0.14)))
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer(minLength: 0)
+                if step >= 1 {
+                    Button {
+                        withAnimation(.snappy(duration: 0.3)) { step = 0 }
+                    } label: {
+                        Label(ReleaseNotes.string("처음부터", "Start over"), systemImage: "arrow.counterclockwise")
+                            .font(.caption2).foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            Text(instructions[min(step, 3)])
+                .font(scale.small)
+                .foregroundStyle(step == 3 ? .secondary : .primary)
+                .fixedSize(horizontal: false, vertical: true)
+                .id(step)
+        }
+    }
+
+    private var paper: some View {
+        Paper(scale: scale) {
+            VStack(alignment: .leading, spacing: scale.isFull ? 7 : 5) {
+                Rule()
+                Rule(width: scale.isFull ? 140 : 80)
+                Button {
+                    guard step == 0 else { return }
+                    withAnimation(.snappy(duration: 0.25)) { step = 1 }
+                } label: {
+                    Text(sentence)
+                        .font(.system(scale.isFull ? .callout : .caption2, design: .serif))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 3).padding(.vertical, 1)
+                        .background(RoundedRectangle(cornerRadius: 3, style: .continuous).fill(Color.accentColor.opacity(step == 1 ? 0.18 : 0)))
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                Rule()
+                Rule(width: scale.isFull ? 110 : 60)
+                Spacer(minLength: 0)
+                Text("Kirkpatrick 2017 · 2").font(.caption2).foregroundStyle(.tertiary).frame(maxWidth: .infinity)
+            }
+        }
+        .frame(maxHeight: .infinity)
+    }
+
+    /// The Notes tab with the draft: "Into a draft" while a passage is
+    /// selected, and the draft's own lines under it.
+    private var draft: some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 6 : 4) {
+            if step == 1 {
+                VStack(alignment: .leading, spacing: 3) {
+                    Label(ReleaseNotes.string("초안에 넣기", "Into a draft"), systemImage: "doc.text")
+                        .font(scale.small.weight(.semibold)).foregroundStyle(.tint)
+                    Button {
+                        withAnimation(.snappy(duration: 0.3)) { step = 2 }
+                    } label: {
+                        HStack {
+                            Text(ReleaseNotes.string("관련연구 — 지속 학습", "Related work — continual learning")).font(scale.small).lineLimit(1)
+                            Spacer(minLength: 4)
+                            Image(systemName: "quote.opening").font(.caption).foregroundStyle(.tint)
+                        }
+                        .padding(6)
+                        .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.accentColor.opacity(0.08)))
+                        .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+            Label(ReleaseNotes.string("관련연구 — 지속 학습", "Related work — continual learning"), systemImage: "doc.text")
+                .font(scale.small.weight(.semibold)).lineLimit(1)
+            Text("## " + ReleaseNotes.string("정규화 기반 방법", "Regularisation methods")).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+            Text("- " + ReleaseNotes.string("EWC는 옛 과제의 가중치를 지킨다", "EWC protects the old task's weights"))
+                .font(.caption2).fixedSize(horizontal: false, vertical: true)
+            if step >= 2 {
+                HStack(spacing: 4) {
+                    Text("- ").font(.caption2)
+                    HStack(spacing: 3) {
+                        Image(systemName: "quote.opening")
+                        Text(sentence).lineLimit(1)
+                    }
+                    .font(.caption2).foregroundStyle(.tint)
+                    .padding(.horizontal, 5).padding(.vertical, 2)
+                    .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(Color.accentColor.opacity(0.12)))
+                }
+                .transition(.scale(scale: 0.9).combined(with: .opacity))
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(scale.isFull ? 10 : 7)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(RoundedRectangle(cornerRadius: scale.corner, style: .continuous).fill(.background))
+    }
+
+    /// What ⇧⌘E gives: the text, and the bibliography beside it.
+    private var rendered: some View {
+        HStack(alignment: .top, spacing: scale.gap) {
+            pane("LaTeX", """
+            \\subsection*{\(ReleaseNotes.string("정규화 기반 방법", "Regularisation methods"))}
+            \(ReleaseNotes.string("EWC는 옛 과제의 가중치를 지킨다", "EWC protects the old task's weights"))
+            \\cite{kirkpatrick2017}
+            """)
+            pane("references.bib", """
+            @article{kirkpatrick2017,
+              author  = {Kirkpatrick, James and …},
+              title   = {Overcoming catastrophic forgetting…},
+              journal = {PNAS},
+              year    = {2017}
+            }
+            """)
+        }
+    }
+
+    private func pane(_ title: String, _ text: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+            Text(text)
+                .font(.system(size: scale.isFull ? 10 : 8, design: .monospaced))
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+            Spacer(minLength: 0)
+        }
+        .padding(scale.isFull ? 10 : 7)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(RoundedRectangle(cornerRadius: scale.corner, style: .continuous).fill(.background))
+    }
+}
+
 #if os(macOS)
 /// Draws every demo, at both sizes, into PNG files — so they can be looked
 /// at without opening a window over whatever the user is doing.
@@ -2378,6 +2568,7 @@ enum DemoRenderer {
         write("resonance-step3-compact", ResonanceDemo(scale: .compact, step: 3), full: false)
         write("resonance-rule", ResonanceDemo(scale: .full, step: 4, showsRule: true), full: true)
         for step in 1...3 { write("atlas-step\(step)", AtlasDemo(scale: .full, step: step), full: true) }
+        for step in 1...3 { write("express-step\(step)", ExpressDemo(scale: .full, step: step), full: true) }
         exit(0)
     }
 }

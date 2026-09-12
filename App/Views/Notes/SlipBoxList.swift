@@ -46,13 +46,22 @@ struct SlipBoxList: View {
                 .padding(.vertical, 5)
                 .background(Capsule().fill(.quaternary.opacity(0.5)))
 
-                Button {
-                    notes.openNoteID = notes.create(paperID: nil).id
+                Menu {
+                    Button {
+                        notes.openNoteID = notes.create(paperID: nil).id
+                    } label: { Label("New Note", systemImage: "note.text") }
+                    Button {
+                        notes.openNoteID = notes.create(paperID: nil, kind: .map).id
+                    } label: { Label("New Map", systemImage: "map") }
+                    Button {
+                        notes.openNoteID = notes.create(paperID: nil, kind: .draft).id
+                    } label: { Label("New Draft", systemImage: "doc.text") }
                 } label: {
                     Image(systemName: "square.and.pencil")
                 }
-                .buttonStyle(.borderless)
-                .help("Write a note of your own")
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .help("Write a note, a map, or a draft")
             }
             .padding(.horizontal, 16)
             .padding(.top, 10)
@@ -99,6 +108,9 @@ struct SlipBoxList: View {
                                     .pressable(inset: 6)
                                     .tag(note.id)
                                     .contextMenu {
+                                        if note.kind == .note {
+                                            filingMenu(note)
+                                        }
                                         Button(role: .destructive) { model.notes.delete(note.id) } label: {
                                             Label("Delete", systemImage: "trash")
                                         }
@@ -168,6 +180,27 @@ struct SlipBoxList: View {
         var notes: [Zettel]
     }
 
+    /// Where a note can go: onto a map, or into a draft.
+    @ViewBuilder
+    private func filingMenu(_ note: Zettel) -> some View {
+        let maps = notes.maps
+        let drafts = notes.drafts
+        if !maps.isEmpty {
+            Menu("Put on Map") {
+                ForEach(maps) { map in
+                    Button(map.displayTitle) { model.notes.add(note.id, toMap: map.id) }
+                }
+            }
+        }
+        if !drafts.isEmpty {
+            Menu("Add to Draft") {
+                ForEach(drafts) { draft in
+                    Button(draft.displayTitle) { model.notes.add(note.id, toMap: draft.id) }
+                }
+            }
+        }
+    }
+
     /// "These notes hang together; make them a map?"
     private func squeezeBanner(_ squeeze: Atlas.Suggestion) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -205,8 +238,10 @@ struct SlipBoxList: View {
         var found: [NoteGroup] = []
         var index: [String: Int] = [:]
         let maps = notes.visible.filter { $0.kind == .map }
-        if !maps.isEmpty { found.append(NoteGroup(id: "maps", title: "Maps", notes: maps)); index["maps"] = 0 }
-        for note in notes.visible where note.kind != .map {
+        if !maps.isEmpty { found.append(NoteGroup(id: "maps", title: "Maps", notes: maps)); index["maps"] = found.count - 1 }
+        let drafts = notes.visible.filter { $0.kind == .draft }
+        if !drafts.isEmpty { found.append(NoteGroup(id: "drafts", title: "Drafts", notes: drafts)); index["drafts"] = found.count - 1 }
+        for note in notes.visible where note.kind == .note {
             // A paper this library no longer has is no group of its own:
             // three chips all saying "Notes of my own" said nothing.
             let paper = note.paperID.flatMap { model.paper($0) }
@@ -219,7 +254,8 @@ struct SlipBoxList: View {
                 found.append(NoteGroup(id: key, title: title, notes: [note]))
             }
         }
-        return found.filter { $0.id == "maps" } + found.filter { $0.id != "-" && $0.id != "maps" } + found.filter { $0.id == "-" }
+        let special = ["maps", "drafts"]
+        return found.filter { special.contains($0.id) } + found.filter { $0.id != "-" && !special.contains($0.id) } + found.filter { $0.id == "-" }
     }
 }
 
@@ -243,6 +279,9 @@ struct SlipBoxDetail: View {
             Group {
                 if note.kind == .map {
                     MapView(model: model, mapID: id, link: link)
+                } else if note.kind == .draft {
+                    DraftView(model: model, draftID: id, link: link)
+                        .frame(maxWidth: 760)
                 } else {
                     ZettelEditorView(notes: model.notes, noteID: id, link: link)
                         .frame(maxWidth: 760)
@@ -251,9 +290,10 @@ struct SlipBoxDetail: View {
                 .frame(maxWidth: .infinity)
                 .onChange(of: link.anchorRequest) { _, request in
                     // The reader consumes the request; this only has to
-                    // notice one was made, and say which paper it is for.
-                    guard request != nil,
-                          let paperID = model.notes.note(id)?.paperID
+                    // notice one was made, and say which paper it is for —
+                    // the passage's own, or failing that the note's.
+                    guard let request,
+                          let paperID = request.paperID ?? model.notes.note(id)?.paperID
                     else { return }
                     onFollowPassage(paperID)
                 }
