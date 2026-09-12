@@ -44,6 +44,7 @@ struct FeatureDemoView: View {
             case .book: BookDemo(scale: scale)
             case .bookReading: BookReadingDemo(scale: scale)
             case .focus: FocusDemo(scale: scale)
+            case .resonance: ResonanceDemo(scale: scale)
             }
         }
         .padding(scale.pad)
@@ -1613,6 +1614,230 @@ private struct BookReadingDemo: View {
         .buttonStyle(.plain)
         .disabled(!enabled)
         .opacity(enabled ? 1 : 0.4)
+    }
+}
+
+// MARK: - Resonance
+
+/// A page being read and, beside it, the notes that echo it — written
+/// against other papers — with the words they share; or, across the switch,
+/// what every other app shows beside a page: the notes in their folder,
+/// waiting to be searched for.
+private struct ResonanceDemo: View {
+    let scale: DemoScale
+    @State private var page = 0
+    @State private var ours = true
+
+    private struct Echo {
+        let title: String
+        let source: String
+        let shared: [String]
+    }
+
+    private struct Page {
+        let sentence: String
+        let echoes: [Echo]
+    }
+
+    private var pages: [Page] {
+        [
+            Page(
+                sentence: ReleaseNotes.string(
+                    "EWC는 옛 과제에 중요한 가중치의 학습을 늦춰 — 시냅스 강화가 기억을 지키듯 — 파국적 망각을 막는다.",
+                    "EWC slows learning on the weights important for old tasks — the way synaptic consolidation protects a memory — and so avoids catastrophic forgetting."
+                ),
+                echoes: [
+                    Echo(title: ReleaseNotes.string("시냅스 강화는 기억을 굳힌다", "Synaptic consolidation hardens a memory"),
+                         source: ReleaseNotes.string("Yang 외 2009 · 3쪽", "Yang et al. 2009 · p. 3"),
+                         shared: [ReleaseNotes.string("시냅스 강화", "synaptic consolidation"), ReleaseNotes.string("기억", "memory")]),
+                    Echo(title: ReleaseNotes.string("망각은 겹쳐 쓰기다", "Forgetting is overwriting"),
+                         source: ReleaseNotes.string("McCloskey 1989 · 12쪽", "McCloskey 1989 · p. 12"),
+                         shared: [ReleaseNotes.string("파국적 망각", "catastrophic forgetting"), ReleaseNotes.string("가중치", "weights")]),
+                ]
+            ),
+            Page(
+                sentence: ReleaseNotes.string(
+                    "행동 머리는 텍스트를 디토크나이즈해 이산 행동으로 바꾼다: 로봇 정책은 곧 언어 모델이다.",
+                    "The action head detokenises text into discrete actions: the robot policy is a language model."
+                ),
+                echoes: [
+                    Echo(title: ReleaseNotes.string("연속 행동을 이산화하기", "Discretising continuous actions"),
+                         source: ReleaseNotes.string("RT-2 · 5쪽", "RT-2 · p. 5"),
+                         shared: [ReleaseNotes.string("이산 행동", "discrete actions"), ReleaseNotes.string("정책", "policy")]),
+                    Echo(title: ReleaseNotes.string("토큰이 곧 명령", "A token is a command"),
+                         source: ReleaseNotes.string("직접 쓴 노트", "A note of your own"),
+                         shared: [ReleaseNotes.string("디토크나이즈", "detokenises"), ReleaseNotes.string("언어 모델", "language model")]),
+                ]
+            ),
+        ]
+    }
+
+    /// The folder as other apps show it: the same notes, in the order they
+    /// were written, with nothing to say about the page.
+    private var folder: [String] {
+        [
+            ReleaseNotes.string("토큰이 곧 명령", "A token is a command"),
+            ReleaseNotes.string("망각은 겹쳐 쓰기다", "Forgetting is overwriting"),
+            ReleaseNotes.string("연속 행동을 이산화하기", "Discretising continuous actions"),
+            ReleaseNotes.string("시냅스 강화는 기억을 굳힌다", "Synaptic consolidation hardens a memory"),
+        ]
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: scale.gap) {
+            HStack(alignment: .top, spacing: scale.gap) {
+                paper
+                panel
+                    .frame(width: scale.isFull ? 230 : 150)
+            }
+            .frame(height: scale.isFull ? 200 : 118)
+
+            HStack(spacing: 6) {
+                turn("arrow.left", to: 0, enabled: page > 0)
+                turn("arrow.right", to: 1, enabled: page < pages.count - 1)
+                Text(ReleaseNotes.string("장을 넘기면 울림이 바뀐다", "Turn the page and the echoes change"))
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                Spacer(minLength: 0)
+            }
+
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                mode(ReleaseNotes.string("다른 PDF 앱", "Other PDF apps"), ours: false)
+                mode("Paper Time", ours: true)
+                Text(ours
+                    ? ReleaseNotes.string("읽는 쪽과 드문 낱말을 나누는 노트가 — 다른 논문에서 쓴 것이라도 — 스스로 올라온다. 어떤 낱말인지도 함께.",
+                                          "Notes that share the page's rarer words — written against other papers — come up by themselves, and say which words.")
+                    : ReleaseNotes.string("노트는 폴더에 쓴 순서로 누워 있다. 이 쪽과 닿는 노트가 있는지는 기억해서 검색해야 안다.",
+                                          "The notes lie in their folder in the order they were written. Whether one touches this page, you would have to remember, then search."))
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// The page: greeked lines, and the sentence being read set in type.
+    private var paper: some View {
+        Paper(scale: scale) {
+            VStack(alignment: .leading, spacing: scale.isFull ? 7 : 5) {
+                Rule()
+                Rule(width: scale.isFull ? 160 : 90)
+                Text(pages[page].sentence)
+                    .font(.system(scale.isFull ? .callout : .caption2, design: .serif))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .id(page)
+                    .transition(.opacity)
+                Rule()
+                Rule()
+                Rule(width: scale.isFull ? 120 : 70)
+                Spacer(minLength: 0)
+                Text("\(page + 3)")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .frame(maxHeight: .infinity)
+    }
+
+    /// The inspector's Notes tab: ours, reading along; or the folder.
+    private var panel: some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 6 : 4) {
+            if ours {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Label("Resonance", systemImage: "waveform")
+                        .font(scale.small.weight(.semibold))
+                        .foregroundStyle(.tint)
+                    if scale.isFull {
+                        Text(ReleaseNotes.string("다른 논문에서", "from other papers"))
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                ForEach(Array(pages[page].echoes.enumerated()), id: \.offset) { _, echo in
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(echo.title)
+                            .font(scale.small.weight(.medium))
+                            .lineLimit(1)
+                        Text(echo.source)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        Text(echo.shared.joined(separator: " · "))
+                            .font(.caption2)
+                            .foregroundStyle(.tint)
+                            .lineLimit(1)
+                    }
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 4)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(Color.accentColor.opacity(0.07))
+                    )
+                }
+                .id(page)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            } else {
+                Text("Notes")
+                    .font(scale.small.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 4) {
+                    Image(systemName: "magnifyingglass")
+                    Text(ReleaseNotes.string("노트 검색", "Search notes"))
+                }
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Capsule().fill(.quaternary.opacity(0.5)))
+                ForEach(folder, id: \.self) { title in
+                    Text(title)
+                        .font(scale.small)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, scale.isFull ? 3 : 1)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(scale.isFull ? 10 : 7)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(
+            RoundedRectangle(cornerRadius: scale.corner, style: .continuous).fill(.background)
+        )
+        .animation(.snappy(duration: 0.3), value: page)
+        .animation(.snappy(duration: 0.3), value: ours)
+    }
+
+    private func turn(_ symbol: String, to target: Int, enabled: Bool) -> some View {
+        Button {
+            withAnimation(.snappy(duration: 0.3)) { page = target }
+        } label: {
+            Image(systemName: symbol)
+                .font(scale.small.weight(.medium))
+                .frame(width: 26, height: 20)
+                .background(Capsule().fill(.quaternary))
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.4)
+    }
+
+    private func mode(_ name: String, ours target: Bool) -> some View {
+        let isOn = ours == target
+        return Button {
+            withAnimation(.snappy(duration: 0.3)) { ours = target }
+        } label: {
+            Text(name)
+                .font(scale.small.weight(isOn ? .semibold : .regular))
+                .foregroundStyle(isOn ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                .padding(.horizontal, 7).padding(.vertical, 3)
+                .background(Capsule().fill(isOn ? AnyShapeStyle(.tint.opacity(0.14)) : AnyShapeStyle(.quaternary)))
+        }
+        .buttonStyle(.plain)
     }
 }
 

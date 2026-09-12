@@ -13,8 +13,21 @@ struct PaperNotesView: View {
     let link: ReaderLink
 
     @State private var openID: String?
+    /// Notes from elsewhere that echo the pages being read, and the words
+    /// they share with them.
+    @State private var echoes: [(note: Zettel, shared: [String])] = []
+    /// The paper's pages, sampled, for judging how rare a word is; read once
+    /// per paper, a few pages per turn of the run loop.
+    @State private var background: [String] = []
+    @State private var backgroundOf: URL?
 
     private var notes: NotesModel { model.notes }
+
+    /// Everything the echoes depend on, so they are asked for again when any
+    /// of it changes — and not before the page has stopped turning.
+    private var echoKey: String {
+        "\(link.currentPageIndex)|\(notes.revision)|\(background.count)|\(link.bookGutter > 0)|\(paperID)"
+    }
 
     var body: some View {
         Group {
@@ -30,6 +43,12 @@ struct PaperNotesView: View {
             }
         }
         .onChange(of: paperID) { _, _ in openID = nil }
+        .task(id: link.session?.document.documentURL) { await readBackground() }
+        .task(id: echoKey) {
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled else { return }
+            refreshEchoes()
+        }
         // Command-L with no note open carries on with the last one written
         // about this paper, or starts one.
         .onChange(of: link.pendingNoteAnchor) { _, anchor in
@@ -47,6 +66,10 @@ struct PaperNotesView: View {
     private var list: some View {
         let mine = notes.notes(forPaper: paperID)
         return VStack(spacing: 0) {
+            if !echoes.isEmpty {
+                resonance
+                Divider()
+            }
             HStack(spacing: 8) {
                 Text(mine.count == 1 ? "1 note" : "\(mine.count) notes")
                     .font(.subheadline)
@@ -93,6 +116,125 @@ struct PaperNotesView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+}
+
+// MARK: - Resonance
+
+extension PaperNotesView {
+    /// The slip-box reading along: notes written against other papers that
+    /// share their rarer words with the pages on screen, named with the
+    /// words they share. Luhmann's box was a conversation partner; this is
+    /// the box speaking first, since nobody searches for a note they have
+    /// forgotten they wrote.
+    private var resonance: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Label("Resonance", systemImage: "waveform")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.tint)
+                Text("from other papers")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 10)
+            .padding(.bottom, 2)
+
+            ForEach(echoes, id: \.note.id) { echo in
+                echoRow(echo)
+            }
+            .padding(.horizontal, 10)
+        }
+        .padding(.bottom, 8)
+        .animation(.snappy(duration: 0.25), value: echoes.map(\.note.id))
+    }
+
+    private func echoRow(_ echo: (note: Zettel, shared: [String])) -> some View {
+        Button {
+            openID = echo.note.id
+        } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(echo.note.displayTitle)
+                        .font(.callout.weight(.medium))
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    if link.hasSelection {
+                        // The selection, dropped into that note: the echo
+                        // made into a link, which is what a slip-box is for.
+                        Button {
+                            link.pendingNoteAnchor = link.selectionAnchor()
+                            openID = echo.note.id
+                        } label: {
+                            Image(systemName: "quote.opening")
+                                .font(.caption)
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Drop the selected passage into this note")
+                    }
+                }
+                if let source = source(of: echo.note) {
+                    Text(source)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                // Why: the words the note and the page share, so the echo
+                // can be judged at a glance rather than taken on trust.
+                Text(echo.shared.joined(separator: " · "))
+                    .font(.caption)
+                    .foregroundStyle(.tint)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .pressable()
+    }
+
+    /// The paper a note was written against, named.
+    private func source(of note: Zettel) -> String? {
+        guard let paperID = note.paperID else { return "A note of your own" }
+        return model.paper(paperID)?.meta.csl.fullTitle
+    }
+
+    private func refreshEchoes() {
+        guard let document = link.session?.document else { echoes = []; return }
+        let index = link.currentPageIndex
+        // In a book both pages of the spread are under the eyes.
+        var pages = [index]
+        if link.bookGutter > 0 {
+            let left = index - index % 2
+            pages = [left, left + 1]
+        }
+        let text = pages.compactMap { document.page(at: $0)?.string }.joined(separator: "\n")
+        guard !text.isEmpty else { echoes = []; return }
+        let mine = Set(notes.notes(forPaper: paperID).map(\.id))
+        echoes = notes.resonance(with: text, background: background, excluding: mine, limit: 4)
+    }
+
+    /// Reads a sample of the paper's pages, a few per turn of the run loop,
+    /// so the words' rarity can be judged against the paper itself.
+    private func readBackground() async {
+        guard let document = link.session?.document else { return }
+        let url = document.documentURL
+        if let url, backgroundOf == url, !background.isEmpty { return }
+        let count = document.pageCount
+        let sample = min(count, 40)
+        var texts: [String] = []
+        for step in 0..<sample {
+            let index = sample <= 1 ? 0 : step * (count - 1) / (sample - 1)
+            if let text = document.page(at: index)?.string, !text.isEmpty { texts.append(text) }
+            if step % 4 == 3 { await Task.yield() }
+            if Task.isCancelled { return }
+        }
+        background = texts
+        backgroundOf = url
     }
 }
 

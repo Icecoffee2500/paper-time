@@ -30,6 +30,15 @@ public final class NotesModel {
     public var requestedNoteID: String?
 
     @ObservationIgnored private var saveTasks: [String: Task<Void, Never>] = [:]
+    /// The notes weighed for resonance, built when first asked. Weighed
+    /// against these pages, if any.
+    @ObservationIgnored private var resonanceIndex: (index: Resonance.Index, background: [String])?
+    /// Notes changed since the index was built. The index is rebuilt only
+    /// when one of them is asked about: the note being typed into is always
+    /// left out of its own echoes, so typing does not rebuild anything.
+    @ObservationIgnored private var changedSinceIndex = Set<String>()
+    /// Bumped whenever the notes change, so a view reading along can ask again.
+    public private(set) var revision = 0
 
     public init(store: LibraryStore) {
         self.store = store
@@ -92,6 +101,28 @@ public final class NotesModel {
             .map(\.self)
     }
 
+    // MARK: - Resonance
+
+    /// The notes that echo a text — a page being read, or another note —
+    /// with the words they share. `background` is what the words' rarity is
+    /// judged against: the pages of the paper being read.
+    public func resonance(
+        with text: String, background: [String] = [], excluding: Set<String> = [], limit: Int = 5
+    ) -> [(note: Zettel, shared: [String])] {
+        if resonanceIndex == nil || resonanceIndex?.background != background
+            || !changedSinceIndex.isSubset(of: excluding) {
+            let index = Resonance.Index(
+                notes: notes.filter { !$0.isEmpty }.map { (id: $0.id, text: $0.title + "\n" + $0.body) },
+                background: background
+            )
+            resonanceIndex = (index, background)
+            changedSinceIndex = []
+        }
+        guard let index = resonanceIndex?.index, !index.isEmpty else { return [] }
+        return index.matches(for: text, limit: limit, excluding: excluding)
+            .compactMap { match in byID[match.id].map { (note: $0, shared: match.shared) } }
+    }
+
     // MARK: - Writing
 
     public func create(paperID: UUID?) -> Zettel {
@@ -140,6 +171,15 @@ public final class NotesModel {
     // MARK: - Indexes
 
     private func apply(_ loaded: [Zettel]) {
+        // Which notes the index no longer describes.
+        var seen = Set<String>()
+        for note in loaded {
+            seen.insert(note.id)
+            if let known = byID[note.id], known.title == note.title, known.body == note.body { continue }
+            changedSinceIndex.insert(note.id)
+        }
+        for gone in byID.keys where !seen.contains(gone) { changedSinceIndex.insert(gone) }
+        revision += 1
         // In the order they were written, and staying there: a list that
         // re-sorted itself by the last edit moved the note you had just
         // touched to the top and everything else down a row, so nothing was

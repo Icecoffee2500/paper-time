@@ -153,8 +153,9 @@ struct ReaderScreen: View {
         }
         .animation(.snappy(duration: 0.2), value: link.isFinding)
         .safeAreaInset(edge: .bottom) { statusBar(session) }
-        .onChange(of: currentPageIndex) { _, index in
+        .onChange(of: currentPageIndex, initial: true) { _, index in
             library.recordReadingPosition(index, for: paper.id)
+            link.currentPageIndex = index
         }
     }
 

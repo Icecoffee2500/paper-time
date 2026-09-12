@@ -71,6 +71,16 @@ enum ReleaseNotes {
             featured: true
         ),
         Highlight(
+            symbol: "waveform",
+            title: Text2("읽는 동안 슬립박스가 말을 건다", "While you read, the slip-box speaks first"),
+            detail: Text2(
+                "다른 앱에서 노트는 폴더에 누워 있다가 검색해야 나온다 — 그런데 잊어버린 노트는 검색하지 않는다. 여기서는 읽고 있는 쪽과 드문 낱말을 나누는 노트가, 다른 논문을 읽으며 쓴 것이라도, 인스펙터의 Notes 탭 맨 위에 스스로 올라온다. 어떤 낱말을 나누는지도 함께 보여서 우연인지 울림인지 한눈에 판단할 수 있고, 선택한 구절을 그 노트에 바로 떨어뜨리거나 노트 편집기 아래에서 한 번 눌러 링크로 만든다. 루만은 자기 상자를 대화 상대라고 불렀다 — 상자가 먼저 말을 걸 때만 대화다.",
+                "In other apps a note lies in a folder until you search for it — and nobody searches for a note they have forgotten. Here, the notes that share their rarer words with the pages on screen — written against another paper, months ago — come up by themselves at the top of the inspector's Notes tab, named with the words they share, so a coincidence and an echo can be told apart at a glance. Drop the selected passage into one, or, under the note you are writing, press once to make the echo a link. Luhmann called his box a conversation partner; it is one only when the box speaks first."
+            ),
+            demo: .resonance,
+            featured: true
+        ),
+        Highlight(
             symbol: "magnifyingglass",
             title: Text2("한 칸에서 전부 찾는다", "One field finds all of it"),
             detail: Text2(
@@ -194,6 +204,13 @@ enum ReleaseNotes {
                           "Two facing pages, turned by ← →, space or a swipe; page numbers and progress underneath; and ⇧⌘L floating the table of contents into the gutter — a section is one click, and the list stays."),
                     action: .floatingList,
                     demo: .bookReading,
+                    featured: true
+                ),
+                Entry(
+                    Text2("공명", "Resonance"),
+                    Text2("읽고 있는 쪽과 드문 낱말을 나누는 노트가 — 다른 논문에서 쓴 것이라도 — Notes 탭 맨 위에 스스로 올라온다. 나누는 낱말도 함께. 노트 아래에서는 한 번 눌러 링크로 만든다.",
+                          "Notes that share their rarer words with the pages on screen — from other papers — come up by themselves at the top of the Notes tab, with the words they share. Under a note, one press makes the echo a link."),
+                    demo: .resonance,
                     featured: true
                 ),
                 Entry(
@@ -334,6 +351,8 @@ enum ReleaseNotes {
                     Text2("[[ 를 치면 다른 노트를 부른다. 나를 가리키는 노트는 읽고 있는 노트 아래에 모인다.", "Type [[ to reach for another note. What links back is listed under the one you are reading.")),
             Feature(Text2("태그", "Tags"),
                     Text2("#이렇게 쓴다. 슬립박스가 모아준다.", "Write #like-this. The slip-box collects them.")),
+            Feature(Text2("공명", "Resonance"),
+                    Text2("읽는 쪽과 낱말을 나누는 다른 논문의 노트가 Notes 탭 맨 위에 올라온다. 노트 아래에는 아직 잇지 않은 울림이 모인다.", "Notes from other papers that share the page's words rise to the top of the Notes tab; under a note, the echoes not yet linked are gathered.")),
             Feature(Text2("Markdown과 LaTeX", "Markdown and LaTeX"),
                     Text2("쓰는 대로 조판된다. $x^2$는 수식이 되고, 저장되는 것은 여전히 원문이다.", "Both are set as you write them. $x^2$ becomes mathematics; the source is still what is saved.")),
             Feature(Text2("원문 보기", "Raw"),
@@ -448,6 +467,9 @@ enum ReleaseNotes {
         case bookReading
         /// The window with everything but the paper gone.
         case focus
+        /// A page being read, and beside it the notes from other papers that
+        /// echo it, named with the words they share.
+        case resonance
 
         var id: String { rawValue }
     }

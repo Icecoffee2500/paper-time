@@ -54,6 +54,8 @@ final class ReaderLink {
     /// How wide the space between the two pages of a spread is on screen,
     /// while a book is open. Nought otherwise.
     var bookGutter: CGFloat = 0
+    /// The page under the reader's eyes, so the slip-box can read along.
+    var currentPageIndex = 0
     /// A mark just clicked on the page, so the marks list can show which one.
     var revealedMarkID: UUID?
     /// A passage waiting to be dropped into the note at the cursor.
