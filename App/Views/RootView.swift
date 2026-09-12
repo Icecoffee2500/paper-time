@@ -802,7 +802,9 @@ struct PaperDetailColumn: View {
                 VStack(spacing: 0) {
                     // The paper's name, where the list has "All Papers" and
                     // the slip-box has "Notes". The page keeps its place; the
-                    // strip is what the panel gained by reaching higher.
+                    // strip is what the panel gained by reaching higher. On
+                    // iOS the navigation bar already says it.
+                    #if os(macOS)
                     HStack {
                         Text(paper.meta.displayTitle)
                             .font(.headline)
@@ -813,6 +815,7 @@ struct PaperDetailColumn: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 10)
                     .padding(.bottom, 6)
+                    #endif
 
                     ReaderScreen(
                         library: model,

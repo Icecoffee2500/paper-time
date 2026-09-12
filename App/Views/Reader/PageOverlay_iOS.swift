@@ -19,8 +19,9 @@ final class MarkOverlayView: UIView {
         isOpaque = false
         backgroundColor = .clear
         isUserInteractionEnabled = false
-        // Multiplied onto the page, so the pale band lets the ink through.
-        layer.compositingFilter = "multiplyBlendMode"
+        // UIKit does not honour a multiply filter on the layer; the band
+        // is translucent instead, and the ink shows through it.
+        RoundedMarks.blendsByAlpha = true
         contentMode = .redraw
         Self.byPage[ObjectIdentifier(page)] = Weak(view: self)
         NotificationCenter.default.addObserver(

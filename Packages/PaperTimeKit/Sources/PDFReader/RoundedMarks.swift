@@ -21,6 +21,11 @@ public enum RoundedMarks {
     /// The kinds this takes over from PDFKit.
     public static let kinds: Set<String> = ["Highlight", "Underline", "StrikeOut"]
 
+    /// Whether a band is laid over the page translucently rather than
+    /// multiplied onto it. The Mac multiplies the overlay's layer; UIKit
+    /// ignores that filter, and an opaque pale band hid the words under it.
+    public nonisolated(unsafe) static var blendsByAlpha = false
+
     /// How round a highlight's ends are, as a share of its height, and the
     /// most they get. A short line of small type is nearly a capsule; a tall
     /// line carrying an equation stays a rounded box rather than a pill.
@@ -65,7 +70,11 @@ public enum RoundedMarks {
     private static func drawHighlight(
         _ annotation: PDFAnnotation, color: Tone, hovered: Bool, in context: CGContext
     ) {
-        let fill = color.blended(toward: 1, by: hovered ? 0.55 : 0.35)
+        var fill = color.blended(toward: 1, by: hovered ? 0.55 : 0.35)
+        if Self.blendsByAlpha {
+            fill = color
+            fill.alpha = hovered ? 0.3 : 0.42
+        }
         let path = CGMutablePath()
         for rect in lineRects(of: annotation) {
             let radius = min(rect.height * rounding, maximumRadius)
