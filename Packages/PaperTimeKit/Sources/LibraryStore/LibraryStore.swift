@@ -49,11 +49,21 @@ public actor LibraryStore {
     @discardableResult
     public func bootstrap(displayName: String = "Paper Time") throws -> LibraryManifest {
         try FileOperations.ensureDirectory(at: root)
+        // A library that another device wrote into iCloud is here only as
+        // stubs until asked for. Ask, and wait for the manifest, before
+        // deciding there is none — a fresh manifest written over a stub is
+        // the other device's library lost.
+        let support = LibraryLayout.supportDirectoryURL(inLibrary: root)
+        let manifestURL = LibraryLayout.manifestURL(inLibrary: root)
+        FileOperations.ensureDownloaded(directory: support, waitingFor: manifestURL)
+        FileOperations.ensureDownloaded(directory: root, waitingFor: manifestURL, timeout: 2)
+        if FileOperations.hasPlaceholders(in: support), !FileManager.default.fileExists(atPath: manifestURL.path(percentEncoded: false)) {
+            throw FileOperations.Failure.stillDownloading(manifestURL)
+        }
         try migrateFromFoldersPerPaperIfNeeded()
-        try FileOperations.ensureDirectory(at: LibraryLayout.supportDirectoryURL(inLibrary: root))
+        try FileOperations.ensureDirectory(at: support)
         try FileOperations.ensureDirectory(at: LibraryLayout.recordsDirectoryURL(inLibrary: root))
 
-        let manifestURL = LibraryLayout.manifestURL(inLibrary: root)
         if FileManager.default.fileExists(atPath: manifestURL.path(percentEncoded: false)) {
             return try loadManifest()
         }

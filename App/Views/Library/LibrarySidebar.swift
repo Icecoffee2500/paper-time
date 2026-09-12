@@ -11,6 +11,7 @@ import SwiftUI
 /// accent for its words on a pale tint of the accent behind them, the shape
 /// the folder's name takes in the header and a passage takes in a note.
 struct LibrarySidebar: View {
+    @Environment(AppModel.self) private var app
     @State private var showsAllAuthors = false
     @State private var authorsAreShown = true
     @Bindable var model: LibraryModel
@@ -77,16 +78,24 @@ struct LibrarySidebar: View {
                     // names where something came from. Plain accent type
                     // beside a grey header shouted; on its own pale tint it
                     // is a label.
-                    Text(model.displayName)
-                        .foregroundStyle(.tint)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1.5)
-                        .background(
-                            RoundedRectangle(cornerRadius: 5.5, style: .continuous)
-                                .fill(Color.accentColor.opacity(0.12))
-                        )
+                    // Pressed, the chip is the way to another folder.
+                    Button {
+                        app.isChoosingLibraryFolder = true
+                    } label: {
+                        Text(model.displayName)
+                            .foregroundStyle(.tint)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1.5)
+                            .background(
+                                RoundedRectangle(cornerRadius: 5.5, style: .continuous)
+                                    .fill(Color.accentColor.opacity(0.12))
+                            )
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Change the library folder")
                 }
                 // Lines the first row up with the first paper across the way:
                 // the list column's header is taller than this one, and the

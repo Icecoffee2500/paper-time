@@ -241,7 +241,7 @@ struct SettingsView: View {
                 }
             }
             Button("Change Library Folder…") {
-                showsChangeFolderConfirmation = true
+                app.isChoosingLibraryFolder = true
             }
         }
     }

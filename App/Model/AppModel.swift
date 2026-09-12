@@ -304,6 +304,9 @@ public final class AppModel {
         await open(location)
     }
 
+    /// Shows the folder picker; the library stays until a folder is chosen.
+    public var isChoosingLibraryFolder = false
+
     public func forgetLibrary() {
         preference.clear()
         library = nil

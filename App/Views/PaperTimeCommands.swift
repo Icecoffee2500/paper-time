@@ -53,7 +53,7 @@ struct PaperTimeCommands: Commands {
             Divider()
 
             Button("Change Library Folder…") {
-                model.forgetLibrary()
+                model.isChoosingLibraryFolder = true
             }
         }
 

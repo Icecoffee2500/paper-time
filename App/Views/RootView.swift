@@ -51,6 +51,12 @@ struct RootView: View {
         .sheet(isPresented: Bindable(app).showsReleaseNotes) {
             WhatsNewView()
         }
+        // Changing the folder is choosing a folder — the picker, not the
+        // first-run screen. Nothing is forgotten until something is chosen.
+        .fileImporter(isPresented: Bindable(app).isChoosingLibraryFolder, allowedContentTypes: [.folder]) { result in
+            guard case let .success(url) = result else { return }
+            Task { await app.adopt(folderAt: url) }
+        }
         .onChange(of: scenePhase) { _, phase in
             // The folder is watched while the app runs, but a Mac that was
             // asleep or an iPhone that suspended the app will have missed
@@ -980,7 +986,7 @@ struct LibraryUnavailableView: View {
             .buttonBorderShape(.capsule)
 
             Button("Choose a Different Folder…") {
-                app.forgetLibrary()
+                app.isChoosingLibraryFolder = true
             }
         }
     }
