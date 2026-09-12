@@ -14,12 +14,13 @@ struct WhatsNewView: View {
     /// Shown at launch, or asked for from Settings. Only the first kind marks
     /// the version as seen.
     var marksAsSeen = true
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
                 FeatureShowcase { header }
-                    .padding(.horizontal, 30)
+                    .padding(.horizontal, horizontalSizeClass == .compact ? 18 : 30)
                     .padding(.top, 30)
                     .padding(.bottom, 26)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -31,7 +32,11 @@ struct WhatsNewView: View {
             .scrollIndicators(.never)
             footer
         }
+        // A window's worth on the Mac; on iOS the sheet is the screen, and
+        // the showcase takes the width it is given.
+        #if os(macOS)
         .frame(width: 660, height: 760)
+        #endif
         .onAppear { if marksAsSeen { app.markReleaseNotesSeen() } }
     }
 
@@ -140,6 +145,8 @@ struct FeatureLogView: View {
             .frame(maxWidth: .infinity)
         }
         .scrollIndicators(.never)
+        #if os(macOS)
         .frame(width: 620, height: 640)
+        #endif
     }
 }

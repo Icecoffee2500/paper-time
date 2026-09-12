@@ -702,6 +702,17 @@ struct SettingsView: View {
                             .foregroundStyle(.tint)
                             .help(ReleaseNotes.string("이 버전의 핵심 기능", "This version's headline"))
                     }
+                    // Where it landed: one chip a device, when it is not just the Mac.
+                    if item.devices != [.mac] {
+                        ForEach(item.devices) { device in
+                            Label(device.label, systemImage: device.symbol)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(.quaternary.opacity(0.6)))
+                        }
+                    }
                     Spacer(minLength: 8)
                 }
                 .contentShape(.rect)

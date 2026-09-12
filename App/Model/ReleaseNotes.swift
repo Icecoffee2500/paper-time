@@ -216,6 +216,8 @@ enum ReleaseNotes {
                           "When more than five notes pile up on one subject, the slip-box suggests a map. A map is a note (kind: map) with links under headings; opened, it is a board of cards. Notes that resonate but are not on it are one ＋ away."),
                     demo: .atlas,
                     featured: true
+,
+                    devices: [.mac, .ipad, .iphone]
                 ),
                 Entry(
                     Text2("초안(Express)", "Drafts (Express)"),
@@ -223,27 +225,47 @@ enum ReleaseNotes {
                           "A draft is a note (kind: draft). Passages go in with ❝, notes as [[links]]; ⇧⌘E renders passages as \\cite{key}, notes as their sentences, with a .bib of just the papers cited. LaTeX by default, pandoc too."),
                     demo: .express,
                     featured: true
+,
+                    devices: [.mac, .ipad, .iphone]
                 ),
                 Entry(
                     Text2("검색은 묻기 전에 내놓는다", "Search that offers before it is asked"),
                     Text2("⌘K 또는 목록을 끝까지 당기면. 노트·지도·초안도 찾고 최근 연 것이 먼저. 빈칸이면 이어 읽기·읽었으니·다시 보기·이번 주 새로 — 각각 이유와 함께.",
                           "⌘K, or pull the list down past its top. Finds notes, maps and drafts too, the recently opened first. Empty, it offers Continue, Because you read, Revisit and New this week — each with its reason."),
                     action: .searchEverything
+,
+                    devices: [.mac, .ipad, .iphone]
                 ),
                 Entry(
                     Text2("아이패드 · 아이폰", "iPad and iPhone"),
                     Text2("아이패드는 맥과 같은 리더에 연필 — 필기는 PDF에 잉크 주석으로 남아 맥에서도 보인다. 아이폰은 읽고 찾는 데 맞춰 리더 바에 배치·검색·표시가 있다.",
                           "The iPad has the Mac's reader with a pencil — ink lands in the PDF as annotations and shows on the Mac. The phone is for reading and finding, with layout, search and marks on the reader's bar.")
+,
+                    devices: [.ipad, .iphone]
                 ),
             ],
             fixed: [
                 Entry(
                     Text2("책 모드 여백", "Book-mode margins"),
                     Text2("펼침면이 가운데에 서고, 논문마다 여백이 같으며, 여백의 도장은 지워진다.", "The spread stands centred, margins match across papers, and the stamps in the margin are painted out.")
+,
+                    devices: [.mac]
+                ),
+                Entry(
+                    Text2("환영 화면 크기", "Welcome sheet size"),
+                    Text2("아이폰에서 맥 창 크기로 뜨던 환영 화면이 화면에 맞는다.", "The welcome sheet, which opened at the Mac window's size on the phone, fits the screen."),
+                    devices: [.iphone]
+                ),
+                Entry(
+                    Text2("Google Drive 폴더 선택", "Choosing a Google Drive folder"),
+                    Text2("iOS의 Google Drive 파일 제공자는 폴더 선택을 지원하지 않아 '로드 중'에서 멈춘다. 첫 화면이 이를 말해 주고 iCloud Drive를 권한다.", "Google Drive's Files provider on iOS does not allow a folder to be chosen and loads without end; the first screen now says so and points to iCloud Drive."),
+                    devices: [.ipad, .iphone]
                 ),
                 Entry(
                     Text2("슬립박스 순서", "Slip-box order"),
                     Text2("노트는 쓴 순서로 고정되고 논문별로 묶인다.", "Notes stay in the order written, grouped by paper.")
+,
+                    devices: [.mac, .ipad, .iphone]
                 ),
             ]
         ),
@@ -489,17 +511,41 @@ enum ReleaseNotes {
         var demo: Demo?
         /// Marked out in the log the way it is in the introduction.
         var featured = false
+        /// Where the change landed. Everything is the Mac's unless it says
+        /// otherwise; a change made on several at once carries several.
+        var devices: [Device] = [.mac]
         var id: String { title.en }
 
         init(
             _ title: Text2, _ detail: Text2,
-            action: ShortcutAction? = nil, demo: Demo? = nil, featured: Bool = false
+            action: ShortcutAction? = nil, demo: Demo? = nil, featured: Bool = false,
+            devices: [Device] = [.mac]
         ) {
             self.title = title
             self.detail = detail
             self.action = action
             self.demo = demo
             self.featured = featured
+            self.devices = devices
+        }
+    }
+
+    enum Device: String, CaseIterable, Identifiable {
+        case mac, ipad, iphone
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .mac: "Mac"
+            case .ipad: "iPad"
+            case .iphone: "iPhone"
+            }
+        }
+        var symbol: String {
+            switch self {
+            case .mac: "macbook"
+            case .ipad: "ipad"
+            case .iphone: "iphone"
+            }
         }
     }
 
