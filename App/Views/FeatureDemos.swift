@@ -1385,7 +1385,9 @@ private struct Spread: View {
     var lines: Int = 11
 
     var body: some View {
-        HStack(spacing: trimmed ? (scale.isFull ? 44 : 22) : (scale.isFull ? 4 : 2)) {
+        // The gutter as the app makes it: wide enough for the contents to
+        // sit in with room to spare, and the same for every paper.
+        HStack(spacing: trimmed ? Self.gutter(scale) : (scale.isFull ? 4 : 2)) {
             sheet(leftPage, leading: trimmed ? margin : outer, trailing: trimmed ? margin : inner)
                 .overlay(alignment: .leading) { if !trimmed { stamp } }
             sheet(leftPage + 1, leading: trimmed ? margin : inner, trailing: trimmed ? margin : outer)
@@ -1393,6 +1395,8 @@ private struct Spread: View {
         .offset(x: trimmed ? 0 : -(scale.isFull ? 18 : 8))
         .animation(.snappy(duration: 0.35), value: trimmed)
     }
+
+    static func gutter(_ scale: DemoScale) -> CGFloat { scale.isFull ? 124 : 66 }
 
     private var margin: CGFloat { scale.isFull ? 10 : 5 }
     private var outer: CGFloat { scale.isFull ? 34 : 15 }
@@ -1436,13 +1440,14 @@ private struct BookReadingDemo: View {
     let scale: DemoScale
     @Environment(AppModel.self) private var app
     @State private var leftPage = 3
-    @State private var showsContents = false
+    @State private var showsContents: Bool
     /// Cropped to the text, as here; or as every other app shows it.
     @State private var trimmed: Bool
 
-    init(scale: DemoScale, trimmed: Bool = true) {
+    init(scale: DemoScale, trimmed: Bool = true, showsContents: Bool = false) {
         self.scale = scale
         _trimmed = State(initialValue: trimmed)
+        _showsContents = State(initialValue: showsContents)
     }
 
     private let total = 48
@@ -1465,7 +1470,9 @@ private struct BookReadingDemo: View {
 
                     if showsContents { contents.transition(.scale(scale: 0.96).combined(with: .opacity)) }
                 }
-                .frame(height: scale.isFull ? 190 : 88)
+                // Tall enough for the contents to sit inside the spread at
+                // the small size too, rather than over the status bar.
+                .frame(height: scale.isFull ? 190 : 118)
 
                 // The status bar: both pages of the spread, and how far in.
                 HStack(spacing: 8) {
@@ -1578,7 +1585,8 @@ private struct BookReadingDemo: View {
             }
         }
         .padding(scale.isFull ? 8 : 5)
-        .frame(width: scale.isFull ? 118 : 74)
+        // Narrower than the gutter by a margin either side, as in the app.
+        .frame(width: Spread.gutter(scale) - (scale.isFull ? 16 : 8))
         .background(
             RoundedRectangle(cornerRadius: scale.corner, style: .continuous)
                 .fill(.background)
@@ -1627,13 +1635,21 @@ enum DemoRenderer {
                 try? png.write(to: folder.appendingPathComponent("\(demo.rawValue)-\(scale.isFull ? "full" : "compact").png"))
             }
         }
-        // The book as other apps show it, which the demo reaches by a press.
-        let other = ImageRenderer(content: BookReadingDemo(scale: .full, trimmed: false)
-            .environment(model).frame(width: 560).padding(16).background(Color(nsColor: .windowBackgroundColor)))
-        other.scale = 2
-        if let image = other.nsImage, let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff),
-           let png = bitmap.representation(using: .png, properties: [:]) {
-            try? png.write(to: folder.appendingPathComponent("bookReading-other.png"))
+        // The states the book demo reaches by a press: as other apps show
+        // it, and with the contents floating in the gutter.
+        let states: [(String, DemoScale, Bool, Bool)] = [
+            ("bookReading-other", .full, false, false),
+            ("bookReading-contents", .full, true, true),
+            ("bookReading-contents-compact", .compact, true, true),
+        ]
+        for (name, scale, trimmed, contents) in states {
+            let renderer = ImageRenderer(content: BookReadingDemo(scale: scale, trimmed: trimmed, showsContents: contents)
+                .environment(model).frame(width: scale.isFull ? 560 : 440).padding(16).background(Color(nsColor: .windowBackgroundColor)))
+            renderer.scale = 2
+            if let image = renderer.nsImage, let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff),
+               let png = bitmap.representation(using: .png, properties: [:]) {
+                try? png.write(to: folder.appendingPathComponent("\(name).png"))
+            }
         }
         exit(0)
     }
