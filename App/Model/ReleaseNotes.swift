@@ -71,6 +71,16 @@ enum ReleaseNotes {
             featured: true
         ),
         Highlight(
+            symbol: "arrow.triangle.2.circlepath.icloud",
+            title: Text2("맥에서 긋고, 아이패드에서 본다 — 몇 초 뒤", "Mark it on the Mac, see it on the iPad — seconds later"),
+            detail: Text2(
+                "라이브러리는 iCloud Drive 폴더 하나다. 맥에서 하이라이트를 그으면 1.5초 뒤 PDF에 쓰이고, 폴더가 그것을 아이패드로 옮기며, 아이패드의 열린 쪽이 파일이 바뀐 것을 듣고 그 표시만 들여온다. 펜 잉크는 반대로 온다. 이쪽에서 아직 저장하지 않은 표시는 건드리지 않는다. 아래에서 맥 쪽에 하이라이트를 긋고 아이패드를 보라.",
+                "The library is one iCloud Drive folder. A highlight made on the Mac is written to the PDF 1.5 s later, the folder carries it to the iPad, and the iPad's open page hears the file change and takes in just that mark. Ink comes the other way. Marks not yet saved on this side are left alone. Make a highlight on the Mac below and watch the iPad."
+            ),
+            demo: .sync,
+            featured: true
+        ),
+        Highlight(
             symbol: "waveform",
             title: Text2("읽는 동안 슬립박스가 말을 건다", "While you read, the slip-box speaks first"),
             detail: Text2(
@@ -220,6 +230,14 @@ enum ReleaseNotes {
                     devices: [.mac, .ipad, .iphone]
                 ),
                 Entry(
+                    Text2("기기 사이 실시간 동기화", "Live sync between devices"),
+                    Text2("맥에서 그은 하이라이트가 아이패드의 열린 쪽에 몇 초 안에 나타난다 — 앱을 다시 열지 않아도. 펜으로 쓴 잉크도 반대 방향으로 온다. 열린 논문의 파일과 기록 폴더를 지켜보다가 바뀌면 그 차이만 읽어 들이고, 아직 저장하지 않은 이쪽의 표시는 그대로 둔다. 서버는 없다: iCloud Drive 폴더가 전부다.",
+                          "A highlight made on the Mac appears on the iPad's open page within seconds — no reopening. Ink drawn with the pencil comes the other way. The open paper's file and record folder are watched; when they change, only the difference is read in, and marks not yet written from this side stay. There is no server: the iCloud Drive folder is all of it."),
+                    demo: .sync,
+                    featured: true,
+                    devices: [.mac, .ipad, .iphone]
+                ),
+                Entry(
                     Text2("초안(Express)", "Drafts (Express)"),
                     Text2("초안은 노트(kind: draft)다. 논문의 구절은 ❝로, 노트는 [[링크]]로 넣고, ⇧⌘E면 구절이 \\cite{키}로, 노트가 제 문장으로, 인용한 논문만의 .bib과 함께 나온다. 기본 LaTeX, pandoc도.",
                           "A draft is a note (kind: draft). Passages go in with ❝, notes as [[links]]; ⇧⌘E renders passages as \\cite{key}, notes as their sentences, with a .bib of just the papers cited. LaTeX by default, pandoc too."),
@@ -260,6 +278,18 @@ enum ReleaseNotes {
                     Text2("Google Drive 폴더 선택", "Choosing a Google Drive folder"),
                     Text2("iOS의 Google Drive 파일 제공자는 폴더 선택을 지원하지 않아 '로드 중'에서 멈춘다. 첫 화면이 이를 말해 주고 iCloud Drive를 권한다.", "Google Drive's Files provider on iOS does not allow a folder to be chosen and loads without end; the first screen now says so and points to iCloud Drive."),
                     devices: [.ipad, .iphone]
+                ),
+                Entry(
+                    Text2("아이패드 펜 필기", "Writing with the pencil on the iPad"),
+                    Text2("PDFKit의 쪽 뷰가 터치를 받지 않아 그 위의 캔버스에 펜이 닿지 못했고, 스크롤 뷰가 펜 선을 스크롤로 가져갔다. 이제 쓰는 동안 펜은 캔버스로, 손가락은 스크롤로 간다(손가락 쓰기를 켜면 두 손가락이 스크롤).",
+                          "PDFKit's page view took no touches, so the pencil never reached the canvas above it, and the scroll view took a pencil stroke as a scroll. While drawing, the pencil now goes to the canvas and a finger scrolls (two fingers, with finger drawing on)."),
+                    devices: [.ipad]
+                ),
+                Entry(
+                    Text2("아이패드 하이라이트 모서리", "Highlight corners on the iPad"),
+                    Text2("PDFView가 쪽을 한 번 그려 둔 뒤라 파일의 네모난 표시가 둥근 것 밑에 남았다. 이제 쪽을 그리기 전에 표시를 넘겨받고, 바뀔 때마다 다시 그리게 한다.",
+                          "The PDF view had painted the page before the flat marks were hidden, so a square stayed under each rounded one. Marks are taken over before the page is painted, and the page repainted when they change."),
+                    devices: [.ipad]
                 ),
                 Entry(
                     Text2("iCloud 라이브러리가 비어 보임", "An iCloud library that looked empty"),
@@ -593,6 +623,9 @@ enum ReleaseNotes {
         /// A draft filled from passages and notes, and what comes out: LaTeX
         /// with its citations, and the .bib to go with it.
         case express
+        /// A Mac and an iPad side by side; a mark made on one lands on the
+        /// other a moment later, by way of the folder.
+        case sync
 
         var id: String { rawValue }
     }

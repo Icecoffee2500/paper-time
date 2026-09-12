@@ -233,6 +233,22 @@ final class ReaderCoordinator: NSObject {
     private var canvases: [Int: PKCanvasView] = [:]
     private var overlays: [Int: PageOverlay] = [:]
     private let toolPicker = PKToolPicker()
+    private var originalTouchTypes: [NSNumber]?
+
+    static func scrollView(in view: UIView) -> UIScrollView? {
+        for child in view.subviews {
+            if let scroll = child as? UIScrollView { return scroll }
+            if let found = scrollView(in: child) { return found }
+        }
+        return nil
+    }
+
+    /// Another device's ink for these pages arrived; the canvases show it.
+    @objc private func inkChanged(_ notification: Notification) {
+        guard notification.object as? DocumentSession === session,
+              let pages = notification.userInfo?["pages"] as? [Int] else { return }
+        for index in pages { canvases[index]?.drawing = session.drawing(forPage: index) }
+    }
     #endif
 
     init(
@@ -313,6 +329,11 @@ final class ReaderCoordinator: NSObject {
         appliedLayout = configuration.layout
         shownRevision = session.revision
 
+        #if canImport(UIKit)
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(inkChanged), name: .paperTimeInkChanged, object: nil
+        )
+        #endif
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(pageChanged),
@@ -481,7 +502,11 @@ final class ReaderCoordinator: NSObject {
         #if canImport(UIKit)
         view.clearSelection()
         for page in visiblePages(of: view) {
-            view.setNeedsDisplay(view.convert(page.bounds(for: view.displayBox), from: page))
+            // A mark just added is a flat annotation until the overlay has
+            // taken it over; do that now and have the cached page repainted.
+            _ = RoundedMarks.takeOver(page)
+            view.annotationsChanged(on: page)
+            MarkOverlayView.refresh(page)
         }
         view.layoutDocumentView()
         #else
@@ -1146,6 +1171,22 @@ final class ReaderCoordinator: NSObject {
             canvas.isUserInteractionEnabled = drawing
             canvas.drawingPolicy = configuration.fingerDrawing ? .anyInput : .pencilOnly
         }
+        // The page scrolls inside a scroll view whose pan recogniser sees
+        // every touch first and, given a pencil stroke, took it as a scroll:
+        // the canvas got nothing and the pencil "did not work". While
+        // drawing, the pencil belongs to the canvas and a finger scrolls;
+        // with finger drawing on, one finger draws and two scroll.
+        if let scrollView = pdfView.flatMap(Self.scrollView(in:)) {
+            let pan = scrollView.panGestureRecognizer
+            if originalTouchTypes == nil { originalTouchTypes = pan.allowedTouchTypes }
+            if drawing {
+                pan.allowedTouchTypes = [UITouch.TouchType.direct.rawValue as NSNumber, UITouch.TouchType.indirectPointer.rawValue as NSNumber]
+                pan.minimumNumberOfTouches = configuration.fingerDrawing ? 2 : 1
+            } else {
+                pan.allowedTouchTypes = originalTouchTypes ?? pan.allowedTouchTypes
+                pan.minimumNumberOfTouches = 1
+            }
+        }
         if drawing, configuration.showsToolPicker, let first = canvases.values.first {
             toolPicker.setVisible(true, forFirstResponder: first)
             first.becomeFirstResponder()
@@ -1163,6 +1204,11 @@ extension ReaderCoordinator: @preconcurrency PDFPageOverlayViewProvider {
     func pdfView(_ view: PDFView, overlayViewFor page: PDFPage) -> UIView? {
         let index = session.document.index(for: page)
         if let existing = overlays[index] { return existing }
+        // Hide the file's flat marks before PDFKit paints the page: UIKit's
+        // PDFView caches the drawn page, so a mark hidden after the first
+        // paint kept showing as a square under the rounded one.
+        _ = RoundedMarks.takeOver(page)
+        view.annotationsChanged(on: page)
 
         let canvas = PKCanvasView()
         canvas.backgroundColor = .clear

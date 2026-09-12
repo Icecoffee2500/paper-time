@@ -63,6 +63,7 @@ git switch debug/v0.1.0   # 오류 수정
 git switch v0.1.0
 git merge --no-ff dev/v0.1.0 debug/v0.1.0
 git switch main && git merge --no-ff v0.1.0 && git tag 0.1.0   # 태그는 v 없이 — 브랜치 v0.1.0과 이름이 겹친다
+Scripts/make-dmg.sh 0.1.0        # 닫은 버전마다 dist/에 DMG를 남긴다(dist/는 git 밖)
 # 리모트가 생기면: git push origin main --tags
 ```
 

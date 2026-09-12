@@ -83,6 +83,18 @@ final class PageOverlay: UIView {
         marginMask.setNeedsDisplay()
     }
 
+    /// PDFKit's page views do not take touches, so nothing under them —
+    /// this overlay, the canvas — was ever asked. Opened on the way up to
+    /// the scroll view, so a pencil stroke reaches the canvas.
+    override func didMoveToSuperview() {
+        super.didMoveToSuperview()
+        var view = superview
+        while let current = view, !(current is UIScrollView) {
+            current.isUserInteractionEnabled = true
+            view = current.superview
+        }
+    }
+
     /// Touches go to the canvas when it is drawing, and otherwise through
     /// to the page — the overlays themselves never take one.
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {

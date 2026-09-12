@@ -47,6 +47,7 @@ struct FeatureDemoView: View {
             case .resonance: ResonanceDemo(scale: scale)
             case .atlas: AtlasDemo(scale: scale)
             case .express: ExpressDemo(scale: scale)
+            case .sync: SyncDemo(scale: scale)
             }
         }
         .padding(scale.pad)
@@ -2573,3 +2574,105 @@ enum DemoRenderer {
     }
 }
 #endif
+
+
+// MARK: - Sync
+
+/// Two devices over one folder. Press the highlight on the Mac; the iPad's
+/// copy of the page gets it a moment later, the way the real one does.
+private struct SyncDemo: View {
+    let scale: DemoScale
+    /// 0: nothing marked. 1: marked on the Mac, on its way. 2: on the iPad too.
+    @State private var step: Int
+
+    init(scale: DemoScale, step: Int = 0) {
+        self.scale = scale
+        _step = State(initialValue: step)
+    }
+
+    private var lines: [String] {
+        [
+            ReleaseNotes.string("시냅스 강화는 학습한 과제의 가중치를", "Synaptic consolidation protects the weights"),
+            ReleaseNotes.string("보호한다 — 새 과제를 배우는 동안", "of a learned task while a new one is learned"),
+            ReleaseNotes.string("중요한 가중치의 변화를 늦춘다.", "by slowing change on the important ones."),
+        ]
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: scale.gap) {
+            HStack(alignment: .top, spacing: scale.gap) {
+                device(ReleaseNotes.string("맥", "Mac"), symbol: "macbook", marked: step >= 1)
+                VStack(spacing: 4) {
+                    Image(systemName: step == 1 ? "icloud.and.arrow.up" : "icloud")
+                        .symbolEffect(.pulse, isActive: step == 1)
+                        .font(scale.isFull ? .title2 : .body)
+                        .foregroundStyle(step == 1 ? Color.accentColor : .secondary)
+                    Text(step == 1
+                         ? ReleaseNotes.string("iCloud Drive로…", "via iCloud Drive…")
+                         : ReleaseNotes.string("같은 폴더", "one folder"))
+                        .font(scale.small)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxHeight: .infinity)
+                .padding(.top, scale.stage / 3)
+                device(ReleaseNotes.string("아이패드", "iPad"), symbol: "ipad", marked: step >= 2)
+            }
+            HStack {
+                Button {
+                    withAnimation(.snappy(duration: 0.3)) { step = 1 }
+                    Task {
+                        try? await Task.sleep(for: .seconds(1.6))
+                        withAnimation(.snappy(duration: 0.35)) { step = 2 }
+                    }
+                } label: {
+                    Label(ReleaseNotes.string("맥에서 하이라이트", "Highlight on the Mac"), systemImage: "highlighter")
+                }
+                .disabled(step != 0)
+                if step == 2 {
+                    Button(ReleaseNotes.string("다시", "Again")) { withAnimation { step = 0 } }
+                }
+                Spacer()
+                Text(caption)
+                    .font(scale.small)
+                    .foregroundStyle(.secondary)
+            }
+            .font(scale.body)
+            .buttonStyle(.bordered)
+            .controlSize(scale.isFull ? .regular : .small)
+        }
+    }
+
+    private var caption: String {
+        switch step {
+        case 1: ReleaseNotes.string("1.5초 뒤 PDF에 쓰이고, 폴더가 옮긴다", "Written to the PDF in 1.5 s; the folder carries it")
+        case 2: ReleaseNotes.string("아이패드의 열린 쪽이 그 표시만 들여왔다", "The iPad's open page took in just that mark")
+        default: ReleaseNotes.string("앱을 다시 열지 않는다", "No reopening")
+        }
+    }
+
+    private func device(_ name: String, symbol: String, marked: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label(name, systemImage: symbol)
+                .font(scale.small)
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: scale.isFull ? 5 : 3) {
+                ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
+                    Text(line)
+                        .font(scale.small)
+                        .padding(.horizontal, 3)
+                        .background(
+                            Capsule().fill(Color.yellow.opacity(marked && index == 1 ? 0.55 : 0))
+                        )
+                }
+            }
+            .padding(scale.pad)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: scale.stage * 0.6, alignment: .top)
+            .background(
+                RoundedRectangle(cornerRadius: scale.corner, style: .continuous)
+                    .fill(.background)
+                    .shadow(color: .black.opacity(0.08), radius: 2, y: 1)
+            )
+        }
+    }
+}

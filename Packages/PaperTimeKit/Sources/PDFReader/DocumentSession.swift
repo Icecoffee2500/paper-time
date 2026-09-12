@@ -55,9 +55,15 @@ public final class DocumentSession {
     private var removalsSinceLastFlush: [UUID] = []
     private var flushTask: Task<Void, Never>?
     private var fileFingerprint: FileFingerprint?
+    private var inkFingerprints: [Int: FileFingerprint] = [:]
+    private var watcher: DocumentWatcher?
+    private var reloadTask: Task<Void, Never>?
+    private var changedWhileSaving = false
 
     /// How long the app waits after the last change before rewriting the PDF.
-    private let flushDelay: Duration = .seconds(4)
+    /// Short, because another device is waiting to see it: iCloud adds its
+    /// own seconds on top.
+    private let flushDelay: Duration = .milliseconds(1500)
 
     struct FileFingerprint: Equatable {
         var size: Int64
@@ -153,6 +159,7 @@ public final class DocumentSession {
         )
         await session.loadDrawings()
         session.readBackExistingMarks()
+        session.startWatching()
         return session
     }
 
@@ -180,12 +187,13 @@ public final class DocumentSession {
         let folder = paper.folder
         let data = drawing.dataRepresentation()
         let isEmpty = drawing.strokes.isEmpty
-        Task { [store] in
+        Task { [store, weak self] in
             if isEmpty {
                 try? await store.removeInk(pageIndex: index, in: folder)
             } else {
                 try? await store.saveInk(data, pageIndex: index, in: folder)
             }
+            self?.inkFingerprints[index] = FileFingerprint(url: folder.inkURL(pageIndex: index))
         }
         scheduleFlush()
     }
@@ -197,7 +205,113 @@ public final class DocumentSession {
                   let drawing = try? PKDrawing(data: data)
             else { continue }
             drawings[index] = drawing
+            inkFingerprints[index] = FileFingerprint(url: paper.folder.inkURL(pageIndex: index))
         }
+    }
+
+    // MARK: - Following the file
+
+    /// Starts listening for the file changing under the reader.
+    func startWatching() {
+        guard watcher == nil else { return }
+        watcher = DocumentWatcher(document: paper.documentURL, record: paper.folder.url) { [weak self] in
+            Task { @MainActor [weak self] in await self?.fileMayHaveChanged() }
+        }
+    }
+
+    private func fileMayHaveChanged() async {
+        if saveState == .saving {
+            // Our own write; or theirs, landing during ours. Look again after.
+            changedWhileSaving = true
+            return
+        }
+        reloadTask?.cancel()
+        reloadTask = Task { [weak self] in await self?.reloadFromDisk() }
+    }
+
+    /// Takes in what another device wrote, without disturbing what this one
+    /// is doing: marks and ink from the file are merged into the open
+    /// document, and anything not yet written from here is kept.
+    public func reloadFromDisk() async {
+        await mergeInkFromDisk()
+        let url = paper.documentURL
+        guard let now = FileFingerprint(url: url), now != fileFingerprint else { return }
+        FileOperations.requestDownload(of: url)
+        guard let found = await Task.detached(priority: .utility) { () -> ReadBack? in
+            guard let data = try? FileOperations.read(contentsOf: url),
+                  let document = PDFDocument(data: data) else { return nil }
+            return ReadBack(
+                markups: TextMarkupWriter.descriptors(in: document),
+                hasForeignInk: Self.scanForForeignInk(in: document)
+            )
+        }.value, !Task.isCancelled else { return }
+        fileFingerprint = now
+        merge(found.markups)
+        hasForeignInk = found.hasForeignInk
+    }
+
+    /// The file's marks laid over ours. Ours that are not yet saved stay;
+    /// theirs that we did not just delete come in; what they deleted goes.
+    private func merge(_ theirs: [MarkupDescriptor]) {
+        let pendingAdds = Set(markupsSinceLastFlush.map(\.id))
+        let pendingRemovals = Set(removalsSinceLastFlush)
+        let theirIDs = Set(theirs.map(\.id))
+        var changed = false
+
+        for descriptor in theirs where !pendingRemovals.contains(descriptor.id) {
+            if let index = markups.firstIndex(where: { $0.id == descriptor.id }) {
+                let ours = markups[index]
+                guard !pendingAdds.contains(descriptor.id),
+                      ours.color != descriptor.color || ours.comment != descriptor.comment
+                else { continue }
+                markups[index] = descriptor
+            } else {
+                markups.append(descriptor)
+            }
+            if let page = document.page(at: descriptor.pageIndex) {
+                TextMarkupWriter.remove(id: descriptor.id, from: page)
+                TextMarkupWriter.apply(descriptor, to: page)
+            }
+            changed = true
+        }
+        for descriptor in markups where !theirIDs.contains(descriptor.id) && !pendingAdds.contains(descriptor.id) {
+            if let page = document.page(at: descriptor.pageIndex) {
+                TextMarkupWriter.remove(id: descriptor.id, from: page)
+            }
+            markups.removeAll { $0.id == descriptor.id }
+            changed = true
+        }
+        guard changed else { return }
+        sortMarkups()
+        revision += 1
+    }
+
+    /// Ink sidecars that changed on disk replace the pages' drawings — except
+    /// pages drawn on here and not yet written, which are this device's to keep.
+    private func mergeInkFromDisk() async {
+        let folder = paper.folder
+        let onDisk = Set(await store.inkPageIndices(in: folder))
+        var changedPages: [Int] = []
+        for index in onDisk.union(inkFingerprints.keys) where !pagesNeedingInkRewrite.contains(index) {
+            let url = folder.inkURL(pageIndex: index)
+            let now = onDisk.contains(index) ? FileFingerprint(url: url) : nil
+            guard now != inkFingerprints[index] else { continue }
+            inkFingerprints[index] = now
+            var drawing = PKDrawing()
+            if now != nil, let data = try? await store.loadInk(pageIndex: index, in: folder),
+               let loaded = try? PKDrawing(data: data) {
+                drawing = loaded
+            }
+            guard drawing != drawings[index] ?? PKDrawing() else { continue }
+            drawings[index] = drawing
+            if let page = document.page(at: index) { InkConverter.apply(drawing, to: page) }
+            changedPages.append(index)
+        }
+        guard !changedPages.isEmpty else { return }
+        NotificationCenter.default.post(
+            name: .paperTimeInkChanged, object: self, userInfo: ["pages": changedPages]
+        )
+        revision += 1
     }
 
     // MARK: - Text markup
@@ -227,7 +341,7 @@ public final class DocumentSession {
         sortMarkups()
         revision += 1
         saveState = .pending
-        scheduleFlush(delay: .seconds(2))
+        scheduleFlush(delay: .seconds(1))
         return descriptors
     }
 
@@ -265,7 +379,7 @@ public final class DocumentSession {
         sortMarkups()
         revision += 1
         saveState = .pending
-        scheduleFlush(delay: .seconds(2))
+        scheduleFlush(delay: .seconds(1))
     }
 
     /// Takes several marks off the page at once.
@@ -289,7 +403,7 @@ public final class DocumentSession {
         markupsSinceLastFlush.append(markups[index])
         revision += 1
         saveState = .pending
-        scheduleFlush(delay: .seconds(2))
+        scheduleFlush(delay: .seconds(1))
     }
 
     public func removeMarkup(id: UUID) {
@@ -302,7 +416,7 @@ public final class DocumentSession {
         removalsSinceLastFlush.append(id)
         revision += 1
         saveState = .pending
-        scheduleFlush(delay: .seconds(2))
+        scheduleFlush(delay: .seconds(1))
     }
 
     public func updateComment(_ comment: String, forMarkup id: UUID) {
@@ -315,7 +429,7 @@ public final class DocumentSession {
         markupsSinceLastFlush.append(markups[index])
         revision += 1
         saveState = .pending
-        scheduleFlush(delay: .seconds(2))
+        scheduleFlush(delay: .seconds(1))
     }
 
     // MARK: - Saving
@@ -377,6 +491,10 @@ public final class DocumentSession {
             saveState = .idle
         case let .failure(error):
             saveState = .failed(error.localizedDescription)
+        }
+        if changedWhileSaving {
+            changedWhileSaving = false
+            await fileMayHaveChanged()
         }
     }
 
@@ -458,4 +576,7 @@ public extension Notification.Name {
     /// Posted by a `DocumentSession` whenever a mark is added, removed or
     /// recoloured on its pages.
     static let paperTimeMarksChanged = Notification.Name("PaperTimeMarksChanged")
+    /// Posted when another device's ink arrived for pages of the open paper;
+    /// `userInfo["pages"]` lists them. The canvases showing them redraw.
+    public static let paperTimeInkChanged = Notification.Name("PaperTimeInkChanged")
 }
