@@ -158,6 +158,28 @@ public enum FileOperations {
         }
     }
 
+    /// Asks iCloud for whatever under a folder is not on this device yet, and
+    /// returns at once. Cheap on a small folder; what an open paper's record
+    /// needs every few seconds.
+    public static func requestPendingDownloads(in directory: URL) {
+        let manager = FileManager.default
+        guard let items = manager.enumerator(
+            at: directory,
+            includingPropertiesForKeys: [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey],
+            options: []
+        ) else { return }
+        for case let url as URL in items {
+            if url.lastPathComponent.hasSuffix(".icloud") {
+                let real = url.deletingLastPathComponent()
+                    .appending(path: String(url.lastPathComponent.dropFirst().dropLast(".icloud".count)))
+                try? manager.startDownloadingUbiquitousItem(at: real)
+            } else if let values = try? url.resourceValues(forKeys: [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey]),
+                      values.isUbiquitousItem == true, values.ubiquitousItemDownloadingStatus == .notDownloaded {
+                try? manager.startDownloadingUbiquitousItem(at: url)
+            }
+        }
+    }
+
     /// Whether a directory holds iCloud stubs for files not yet on this device.
     public static func hasPlaceholders(in directory: URL) -> Bool {
         let items = (try? FileManager.default.contentsOfDirectory(atPath: directory.path(percentEncoded: false))) ?? []

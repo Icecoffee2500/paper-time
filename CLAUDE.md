@@ -20,8 +20,9 @@ Apple 네이티브(macOS/iPadOS/iOS 26) 논문 리더 + 필기 + 서지관리 �
 ## 빌드/실행
 - Xcode 26.6. 앱 타겟 실행은 Xcode 또는 `xcodebuild`. 시뮬레이터 확인은 iOS Simulator 도구 사용.
 - iOS 빌드: `xcodebuild -scheme PaperTime -destination 'platform=iOS Simulator,id=<UDID>' -derivedDataPath build/ios CODE_SIGNING_ALLOWED=NO build`, 설치·실행은 `xcrun simctl install/launch`. 시뮬레이터를 손대지 않고 몰고 가려면 환경변수: `SIMCTL_CHILD_PAPERTIME_LIBRARY=PaperTimePapers`(앱 Documents 안 상대경로), `…_SKIP_WELCOME=1`, `…_ADOPT_LOOSE=1`(폴더의 PDF를 들여옴), `…_OPEN_FIRST=1`(첫 논문을 연다). 시뮬레이터에서 필기·지우개를 시험하려면 AA 메뉴의 Draw with Finger를 켠다; 탭을 여러 개 이어 보내면 메뉴 애니메이션에 먹히니 한 탭마다 스크린샷으로 확인한다. 캡처는 `xcrun simctl io <UDID> screenshot`.
-- iOS 필기 층: 하이라이트·밑줄은 PDF 주석이지만 그리는 것은 `MarkOverlayView`(둥근 끝), 잉크는 `PKCanvasView`(사이드카가 진실)다. 캔버스가 있는 쪽에서는 PDF에 든 우리 잉크 주석을 숨긴다(`hideOwnedInk`) — 둘 다 그리면 선이 겹치고 지운 자리에 유령이 남는다. 지우개는 `PageOverlay`가 직접 받는다: PencilKit 캔버스 위에 얹은 팬 제스처는 캔버스의 스트로크가 시작되는 순간 취소된다.
-- 동기화: 표시는 기기별 저널 `.papertime/papers/<id>/marks/<device>.json`에 즉시, PDF에는 1.5초 뒤 저널대로 다시 쓴다(`DocumentSession.reconcile`). 같은 Wi-Fi의 기기는 `NearbySync`(Multipeer, 서비스 `papertime-sync`, 라이브러리 ID가 같을 때만)로 즉시 받고, 받은 것은 메모리에만 적용한다 — 디스크는 iCloud가 가져온다. 잉크 주석의 경로는 주석 bounds 기준 좌표다(PDFKit이 `/InkList`에 원점을 더한다).
+- 필기 층(세 기기 공통): 하이라이트·밑줄은 PDF 주석이고 `MarkOverlayView`가 둥근 끝으로 그린다. 잉크는 쪽마다 사이드카 `.papertime/papers/<id>/ink/pNNNN.drawing`이 **진실**이고, PDF 속 잉크 주석은 저장 때 써 내는 사본이다(경로는 주석 bounds 기준 좌표 — PDFKit이 `/InkList`에 원점을 더한다). 파일에만 있는 잉크는 열 때 `InkConverter.drawing(fromOwnedInkOn:)`으로 사이드카를 만든다. 오버레이 아래에서는 PDF의 잉크 사본을 항상 숨긴다(`hideOwnedInk`). 아이패드·아이폰은 `PKCanvasView`가, 맥은 `InkOverlayView`(PKDrawing 렌더)가 사이드카를 그린다. 지우개는 `PageOverlay`가 직접 받는다(캔버스 위의 팬 제스처는 스트로크가 시작되면 취소된다).
+- 펜 도구: `ReaderConfiguration.tool/presets`(`InkTool`, `PenColor`, `InkPresets`)가 상태, `MarkingToolbar`(iOS)가 제목 아래 도구 줄. PKToolPicker는 쓰지 않는다 — 캔버스 tool은 `configuration.currentTool`로 코디네이터가 맞춘다. 형광펜만 글자에 맞춘다(위=하이라이트, 아래=밑줄); 펜은 절대 스냅하지 않는다.
+- 동기화(iCloud Drive만; 근거리 전송은 뺐다): 표시는 기기별 저널 `.papertime/papers/<id>/marks/<device>.json`에 즉시, PDF에는 1.5초 뒤 저널대로 다시 쓴다(`DocumentSession.reconcile`). `DocumentWatcher`(파일 프리젠터+kqueue)와 3초 폴링(`requestPendingDownloads`)이 도착을 알린다. CloudKit(푸시)은 무료 계정으로 쓸 수 없다.
 - 플랫폼 분기: AppKit 전용 파일은 `#if os(macOS)`로 통째로 감싸고 UIKit 쌍을 옆에 둔다(`MarkOverlayView`, `MarginMaskView`, `PageOverlay`). 색은 `PlatformColorShims.swift`가 AppKit 이름을 UIKit에 준다.
 
 ## 기능 소개(스니펫) 규칙

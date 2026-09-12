@@ -155,4 +155,38 @@ struct InkRoundTripTests {
         #expect(CGRect(origin: .zero, size: annotation.bounds.size).insetBy(dx: -1, dy: -1).contains(path.bounds))
         #expect(annotation.bounds.minX > 290 && annotation.bounds.minX < 300)
     }
+
+    @Test("Ink in the file comes back as strokes where the pen put them")
+    func inkBecomesStrokesAgain() throws {
+        var drawing = PKDrawing()
+        let points = [CGPoint(x: 100, y: 200), CGPoint(x: 160, y: 210), CGPoint(x: 220, y: 200)].map {
+            PKStrokePoint(location: $0, timeOffset: 0, size: CGSize(width: 4, height: 4), opacity: 1, force: 1, azimuth: 0, altitude: .pi / 2)
+        }
+        drawing.strokes.append(PKStroke(ink: PKInk(.marker, color: .blue), path: PKStrokePath(controlPoints: points, creationDate: .now)))
+        let geometry = PageGeometry(cropBox: CGRect(x: 0, y: 0, width: 612, height: 792), rotation: 0)
+        let data = try SavingHelpers.blankPage()
+        let document = try #require(PDFDocument(data: data))
+        let page = try #require(document.page(at: 0))
+        InkConverter.apply(drawing, to: page, geometry: geometry)
+
+        let back = InkConverter.drawing(fromOwnedInkOn: page, geometry: geometry)
+        let stroke = try #require(back.strokes.first)
+        #expect(stroke.ink.inkType == .marker)
+        let bounds = stroke.renderBounds
+        #expect(abs(bounds.minX - 100) < 6 && abs(bounds.maxX - 220) < 6)
+        #expect(abs(bounds.midY - 205) < 8)
+    }
+}
+
+enum SavingHelpers {
+    static func blankPage() throws -> Data {
+        let data = NSMutableData()
+        let consumer = try #require(CGDataConsumer(data: data))
+        var mediaBox = CGRect(x: 0, y: 0, width: 612, height: 792)
+        let context = try #require(CGContext(consumer: consumer, mediaBox: &mediaBox, nil))
+        context.beginPDFPage(nil)
+        context.endPDFPage()
+        context.closePDF()
+        return data as Data
+    }
 }

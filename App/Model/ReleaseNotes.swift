@@ -72,10 +72,10 @@ enum ReleaseNotes {
         ),
         Highlight(
             symbol: "arrow.triangle.2.circlepath.icloud",
-            title: Text2("맥에서 긋고, 아이패드에서 본다 — 바로", "Mark it on the Mac, see it on the iPad — now"),
+            title: Text2("맥에서 긋고, 아이패드에서 본다 — 몇 초 뒤", "Mark it on the Mac, see it on the iPad — seconds later"),
             detail: Text2(
-                "서버는 없다. 라이브러리는 iCloud Drive 폴더 하나인데, 20 MB PDF가 오가기를 기다리면 열 초다. 그래서 표시는 두 길로 간다. 같은 Wi-Fi에 있는 기기끼리는 몇백 바이트를 직접 건네 1초 안에 나타나고, 떨어져 있으면 기기마다 자기 이름으로 쓰는 작은 저널 파일이 폴더를 타고 온다 — 두 기기가 같은 파일을 쓰는 일이 없으니 충돌도 없다. PDF는 그 뒤 1.5초에 저널대로 다시 쓰여 어느 앱에서 열어도 같다. 표시마다 가장 최근 말이 이긴다: 여기서 지우고 저기서 색을 바꾸면, 나중 것이 남는다. 아래에서 맥 쪽에 하이라이트를 긋고 아이패드를 보라.",
-                "There is no server. The library is one iCloud Drive folder, and waiting for a 20 MB PDF to travel is ten seconds. So a mark takes two roads. Devices on the same Wi-Fi hand a few hundred bytes to each other directly and it shows within a second; apart, a small journal file each device writes under its own name rides the folder — no two devices ever write one file, so nothing conflicts. The PDF is rewritten to the journals 1.5 s later, so any app opening it sees the same. On each mark the newest word wins: remove it here, recolour it there, and the later one stands. Make a highlight on the Mac below and watch the iPad."
+                "서버는 없다. 라이브러리는 iCloud Drive 폴더 하나인데, 20 MB PDF가 오가기를 기다리면 열 초다. 그래서 무거운 것은 기다리지 않는다. 표시는 기기마다 자기 이름으로 쓰는 몇 KB짜리 저널 파일에, 잉크는 쪽마다 사이드카에 즉시 쓰고, iCloud Drive가 그것을 옮긴다 — 두 기기가 같은 저널을 쓰는 일이 없으니 충돌도 없다. 받는 쪽은 열린 논문의 기록 폴더를 지켜보고 3초마다 한 번 더 살핀다. PDF는 그 뒤 1.5초에 저널대로 다시 쓰여 어느 앱에서 열어도 같다. 표시마다 가장 최근 말이 이긴다: 여기서 지우고 저기서 색을 바꾸면 나중 것이 남는다. 아래에서 맥 쪽에 하이라이트를 긋고 아이패드를 보라.",
+                "There is no server. The library is one iCloud Drive folder, and waiting for a 20 MB PDF to travel is ten seconds. So nothing waits for the heavy thing. Marks go at once into a journal of a few KB each device writes under its own name, ink into a sidecar per page, and iCloud Drive carries those — no two devices ever write one journal, so nothing conflicts. The receiving side watches the open paper's record and looks again every three seconds. The PDF is rewritten to the journals 1.5 s later, so any app opening it sees the same. On each mark the newest word wins: remove it here, recolour it there, and the later one stands. Make a highlight on the Mac below and watch the iPad."
             ),
             demo: .sync,
             featured: true
@@ -230,9 +230,9 @@ enum ReleaseNotes {
                     devices: [.mac, .ipad, .iphone]
                 ),
                 Entry(
-                    Text2("기기 사이 실시간 동기화", "Live sync between devices"),
-                    Text2("맥에서 그은 하이라이트가 아이패드의 열린 쪽에 바로 나타난다. 두 길로 간다: 같은 Wi-Fi의 기기끼리는 직접(Multipeer) 보내 1초 안에, 떨어져 있으면 iCloud Drive 폴더로. 표시는 기기마다 자기 이름의 작은 저널 파일에 즉시 쓰고, PDF는 1.5초 뒤 그에 맞춰 다시 쓴다 — 20 MB PDF 한 장이 오가기를 기다리지 않는다. 표시마다 가장 최근 말이 이긴다. 잉크도 같은 길로 온다.",
-                          "A highlight made on the Mac appears on the iPad's open page at once. Two roads: devices on the same Wi-Fi hand it over directly (Multipeer) within a second; apart, the iCloud Drive folder carries it. Marks go straight into a small journal file named for the device, and the PDF is rewritten to match 1.5 s later — nobody waits for a 20 MB PDF to travel. On each mark the newest word wins. Ink takes the same roads."),
+                    Text2("기기 사이 동기화", "Sync between devices"),
+                    Text2("맥에서 그은 하이라이트가 몇 초 뒤 아이패드의 열린 쪽에 나타난다 — 앱을 다시 열지 않아도. 표시는 기기마다 자기 이름의 작은 저널 파일에 즉시 쓰고, 잉크는 쪽마다 사이드카에 쓴다; 둘 다 몇 KB라 iCloud Drive가 곧 옮긴다. 20 MB PDF는 그 뒤 1.5초에 저널대로 다시 쓰여 어느 앱에서 열어도 같다 — 아무도 PDF가 오가기를 기다리지 않는다. 표시마다 가장 최근 말이 이긴다. 열린 논문의 기록 폴더는 3초마다 한 번 더 살피고 아직 안 온 것은 iCloud에 청한다.",
+                          "A highlight made on the Mac appears on the iPad's open page a few seconds later — no reopening. Marks go straight into a small journal file named for the device, ink into a sidecar per page; both a few KB, which iCloud Drive carries promptly. The 20 MB PDF is rewritten to the journals 1.5 s later so any app opening it sees the same — nobody waits for the PDF to travel. On each mark the newest word wins. The open paper's record is looked at every three seconds, and what has not come yet is asked of iCloud."),
                     demo: .sync,
                     featured: true,
                     devices: [.mac, .ipad, .iphone]
@@ -280,17 +280,29 @@ enum ReleaseNotes {
                     devices: [.ipad, .iphone]
                 ),
                 Entry(
-                    Text2("아이패드 펜 도구", "Pen tools on the iPad"),
-                    Text2("마커로 글자 위를 긋면 글자에 맞춘 하이라이트가, 펜으로 글자 밑에 얇은 선을 그으면 밑줄이 된다 — AA 메뉴 'Fit Marks to Text'를 끄면 그은 선 그대로 남는다(GoodNotes의 직선 하이라이터처럼 고른다). 손글씨는 언제나 잉크다. 지우개는 선과 함께 하이라이트도 지우고, 읽기 모드에서 표시를 탭하면 색·지우기 메뉴가 뜬다. 맥에서 한 표시와 아이패드에서 한 표시는 이제 한 층이다.",
-                          "A marker stroke over words becomes a highlight fitted to them; a thin pen line under words becomes an underline — turn 'Fit Marks to Text' off in the AA menu and the line stays as drawn (the choice GoodNotes gives for its straight highlighter). Handwriting is always ink. The eraser takes highlights off along with strokes, and in reading mode a tap on a mark opens its colours and Remove. Marks made on the Mac and on the iPad are one layer now."),
+                    Text2("펜 도구 바", "The pen tool strip"),
+                    Text2("펜을 들면 제목 아래에 도구 줄이 나온다 — 노트 앱이 두는 자리에, 애플의 떠다니는 팔레트 대신. 되돌리기·다시하기, 펜·형광펜·지우개, 그리고 고른 도구의 빠른 색 셋과 굵기 셋. 도구를 한 번 더 누르면 그 도구의 설정(형광펜: 글자에 맞추기, 지우개: 하이라이트도 지우기, 손가락 그리기), 쓰고 있는 색·굵기를 한 번 더 누르면 그 자리에 다른 색·굵기를 넣는다. 형광펜은 글자 위에서는 맞춘 하이라이트, 글자 밑에서는 밑줄이 되고 — 끄면 그은 그대로. 펜은 언제나 손글씨. 지우개는 선을 통째로, 하이라이트도 함께. 읽기 모드에서 표시를 탭하면 색·지우기. 아이폰도 같은 줄, 손가락이 펜이다.",
+                          "Take the pencil out and a strip of tools appears under the title — where a notebook keeps them, instead of Apple's floating palette. Undo and redo; pen, highlighter, eraser; then the chosen tool's three quick colours and three widths. Tap a tool again for its options (highlighter: fit to text; eraser: erase highlights too; draw with finger); tap the colour or width in use to put another in its place. The highlighter over words becomes a fitted highlight, under them an underline — off, it stays as drawn. The pen is always handwriting. The eraser takes strokes whole, highlights along with them. In reading mode a tap on a mark offers its colours and Remove. The phone has the same strip, with a finger for a pen."),
                     demo: .penTools,
-                    devices: [.ipad]
+                    devices: [.ipad, .iphone]
+                ),
+                Entry(
+                    Text2("잉크는 사이드카가 진실", "The sidecar is where ink lives"),
+                    Text2("잉크는 쪽마다 사이드카 하나에 살고, PDF 속 잉크 주석은 거기서 써 낸 사본이다. 파일에는 있는데 사이드카가 없는 잉크는 열 때 사이드카로 만든다. 그래서 어느 기기에서 그렸든 세 기기 모두 같은 선을 그리고, 지우고, 다시 그린다 — 맥은 캔버스가 없어도 같은 PencilKit으로 사이드카를 그려, 아이패드의 선이 몇 KB와 함께 온다.",
+                          "Ink lives in one sidecar per page; the ink annotations in the PDF are a copy written from it. Ink in the file with no sidecar gets one on opening. So whichever device drew it, all three draw, erase and redraw the same strokes — the Mac, canvas or not, renders the sidecar with the same PencilKit, and an iPad stroke arrives with its few kilobytes."),
+                    devices: [.mac, .ipad, .iphone]
                 ),
                 Entry(
                     Text2("아이패드 펜 필기", "Writing with the pencil on the iPad"),
                     Text2("PDFKit의 쪽 뷰가 터치를 받지 않아 그 위의 캔버스에 펜이 닿지 못했고, 스크롤 뷰가 펜 선을 스크롤로 가져갔다. 이제 쓰는 동안 펜은 캔버스로, 손가락은 스크롤로 간다(손가락 쓰기를 켜면 두 손가락이 스크롤).",
                           "PDFKit's page view took no touches, so the pencil never reached the canvas above it, and the scroll view took a pencil stroke as a scroll. While drawing, the pencil now goes to the canvas and a finger scrolls (two fingers, with finger drawing on)."),
                     devices: [.ipad]
+                ),
+                Entry(
+                    Text2("아이폰에 지운 잉크가 남음", "Erased ink lingering on the phone"),
+                    Text2("아이패드에서 한 쪽의 선을 모두 지우면 사이드카가 사라지고, 아이폰은 그 순간 PDF에 남은 옛 사본을 다시 그렸다 — 20 MB PDF가 다시 올 때까지 일부가 남아 보였다. 이제 오버레이 아래에서는 PDF의 잉크 사본을 언제나 숨긴다.",
+                          "Erase every stroke on a page on the iPad and its sidecar goes; the phone then drew the old copy left in the PDF, so some strokes lingered until the 20 MB PDF came again. The PDF's copy of the ink is now always hidden under an overlay."),
+                    devices: [.iphone, .mac]
                 ),
                 Entry(
                     Text2("아이패드 잉크가 맥에서 안 보임", "iPad ink invisible on the Mac"),

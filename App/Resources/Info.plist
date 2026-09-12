@@ -37,13 +37,6 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>Paper Time finds your other devices on this network so a highlight or a pen stroke made on one appears on the others at once.</string>
-	<key>NSBonjourServices</key>
-	<array>
-		<string>_papertime-sync._tcp</string>
-		<string>_papertime-sync._udp</string>
-	</array>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 	<key>UIFileSharingEnabled</key>

@@ -62,6 +62,7 @@ public final class DocumentSession {
     private var fileFingerprint: FileFingerprint?
     private var inkFingerprints: [Int: FileFingerprint] = [:]
     private var watcher: DocumentWatcher?
+    private var pollTask: Task<Void, Never>?
     private var reloadTask: Task<Void, Never>?
     private var changedWhileSaving = false
 
@@ -100,10 +101,6 @@ public final class DocumentSession {
         self.markups = fileMarks
         self.hasForeignInk = hasForeignInk ?? Self.scanForForeignInk(in: document)
         sortMarkups()
-        NotificationCenter.default.addObserver(
-            self, selector: #selector(nearbyMessage(_:)),
-            name: NearbySync.messageNotification, object: nil
-        )
     }
 
     /// Fills in the marks already in the file, just after opening.
@@ -172,27 +169,42 @@ public final class DocumentSession {
             hasForeignInk: prepared.hasForeignInk
         )
         await session.loadDrawings()
-        session.repairMisplacedInk()
+        await session.adoptInkFromFile()
         session.readBackExistingMarks()
         session.startWatching()
         return session
     }
 
-    /// Pages whose ink an earlier version wrote outside its box (see
-    /// `InkConverter.isMisplaced`) are rewritten from their sidecars on the
-    /// next save, so the Mac sees what the iPad drew.
-    private func repairMisplacedInk() {
-        for (index, drawing) in drawings where !drawing.strokes.isEmpty {
-            guard let page = document.page(at: index),
-                  page.annotations.contains(where: InkConverter.isMisplaced) else { continue }
-            InkConverter.apply(drawing, to: page)
-            pagesNeedingInkRewrite.insert(index)
+    /// The sidecar is where a page's ink lives; the PDF's copy is written
+    /// from it. A page with ink in the file and no sidecar — from before
+    /// there were sidecars, or written wrong by an earlier version — gets
+    /// one made from the file, so every device draws, erases and syncs the
+    /// same strokes. Pages written wrong are rewritten on the next save.
+    private func adoptInkFromFile() async {
+        var rewrite: Set<Int> = []
+        for index in 0..<document.pageCount {
+            guard let page = document.page(at: index) else { continue }
+            let owned = page.annotations.filter { $0.type == "Ink" && InkConverter.isOwned($0) }
+            guard !owned.isEmpty else { continue }
+            if drawings[index] == nil {
+                let drawing = InkConverter.drawing(fromOwnedInkOn: page)
+                guard !drawing.strokes.isEmpty else { continue }
+                drawings[index] = drawing
+                let data = drawing.dataRepresentation()
+                let folder = paper.folder
+                try? await store.saveInk(data, pageIndex: index, in: folder)
+                inkFingerprints[index] = FileFingerprint(url: folder.inkURL(pageIndex: index))
+            }
+            if owned.contains(where: InkConverter.isMisplaced), let drawing = drawings[index] {
+                InkConverter.apply(drawing, to: page)
+                rewrite.insert(index)
+            }
         }
-        if !pagesNeedingInkRewrite.isEmpty {
-            saveState = .pending
-            revision += 1
-            scheduleFlush()
-        }
+        guard !rewrite.isEmpty else { return }
+        pagesNeedingInkRewrite.formUnion(rewrite)
+        saveState = .pending
+        revision += 1
+        scheduleFlush()
     }
 
     /// A parsed document on its way from a background task to the main actor.
@@ -227,7 +239,6 @@ public final class DocumentSession {
             }
             self?.inkFingerprints[index] = FileFingerprint(url: folder.inkURL(pageIndex: index))
         }
-        NearbySync.shared.send(NearbySync.Envelope(kind: "ink", paperID: paper.id, page: index, device: deviceID, data: data))
         scheduleFlush()
     }
 
@@ -249,6 +260,19 @@ public final class DocumentSession {
         guard watcher == nil else { return }
         watcher = DocumentWatcher(document: paper.documentURL, record: paper.folder.url) { [weak self] in
             Task { @MainActor [weak self] in await self?.fileMayHaveChanged() }
+        }
+        // iCloud does not always announce what it brought, and does not
+        // bring what nobody asked for. Every few seconds: ask for whatever
+        // in the record is still in the cloud, and look at what is here.
+        // A look costs a handful of stats when nothing changed.
+        pollTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(3))
+                guard let self else { return }
+                let record = paper.folder.url
+                await Task.detached(priority: .utility) { FileOperations.requestPendingDownloads(in: record) }.value
+                await fileMayHaveChanged()
+            }
         }
     }
 
@@ -289,37 +313,12 @@ public final class DocumentSession {
             fileFingerprint = now
             hasForeignInk = found.hasForeignInk
         }
-        // Other devices' journals from disk, unless what reached us directly
-        // is newer. Our own is ours; the disk copy is only ever behind it.
+        // Other devices' journals from disk. Our own is ours; the disk copy
+        // is only ever behind it.
         for (device, journal) in found.journals where device != deviceID {
             if (journals[device]?.updated ?? .distantPast) <= journal.updated { journals[device] = journal }
         }
         reconcile()
-    }
-
-    /// What arrived from a device in the room, applied to the open page and
-    /// nowhere else; the folder brings the same thing to disk in its own time.
-    @objc private func nearbyMessage(_ notification: Notification) {
-        guard let envelope = notification.userInfo?["envelope"] as? NearbySync.Envelope,
-              envelope.paperID == paper.id, envelope.device != deviceID else { return }
-        switch envelope.kind {
-        case "marks":
-            guard let journal = try? MarkJournal(data: envelope.data) else { return }
-            if (journals[journal.device]?.updated ?? .distantPast) <= journal.updated {
-                journals[journal.device] = journal
-                reconcile()
-            }
-        case "ink":
-            guard let index = envelope.page, !pagesNeedingInkRewrite.contains(index),
-                  let drawing = try? PKDrawing(data: envelope.data),
-                  drawing != drawings[index] ?? PKDrawing() else { return }
-            drawings[index] = drawing
-            if let page = document.page(at: index) { InkConverter.apply(drawing, to: page) }
-            NotificationCenter.default.post(name: .paperTimeInkChanged, object: self, userInfo: ["pages": [index]])
-            revision += 1
-        default:
-            break
-        }
     }
 
     /// The marks the page should show: what the file holds, overruled mark
@@ -353,8 +352,8 @@ public final class DocumentSession {
 
     // MARK: - The journal
 
-    /// Writes a mark into this device's journal, saves the journal, and tells
-    /// the devices in the room. Every change to a mark goes through here.
+    /// Writes a mark into this device's journal and saves it. Every change
+    /// to a mark goes through here; the folder carries it to the others.
     private func record(_ descriptor: MarkupDescriptor) {
         var own = journals[deviceID] ?? MarkJournal()
         own.record(descriptor)
@@ -370,9 +369,6 @@ public final class DocumentSession {
     }
 
     private func publishJournal(_ journal: MarkJournal) {
-        if let data = try? journal.encoded() {
-            NearbySync.shared.send(NearbySync.Envelope(kind: "marks", paperID: paper.id, device: deviceID, data: data))
-        }
         let folder = paper.folder
         journalSaveTask?.cancel()
         journalSaveTask = Task.detached(priority: .utility) {

@@ -111,6 +111,55 @@ public enum InkConverter {
         return moved
     }
 
+    /// The strokes a page's own ink annotations describe.
+    ///
+    /// For a page that has ink in the file but no sidecar — written by a
+    /// version before sidecars, or whose sidecar has not come across yet.
+    /// The pressure is gone; the shape, width and colour are not, and once
+    /// it is a drawing it can be erased and redrawn like the rest.
+    public static func drawing(fromOwnedInkOn page: PDFPage, geometry: PageGeometry? = nil) -> PKDrawing {
+        let resolved = geometry ?? PageGeometry(page: page)
+        var strokes: [PKStroke] = []
+        for annotation in page.annotations where annotation.type == "Ink" && isOwned(annotation) {
+            // Paths come back relative to the box — except from the files
+            // that were written wrong, whose paths read back in page space.
+            let offset = isMisplaced(annotation) ? .zero : annotation.bounds.origin
+            let width = max(annotation.border?.lineWidth ?? 2, 0.5)
+            let colour = annotation.color
+            let translucent = colour.cgColor.alpha < 0.95
+            let ink = PKInk(translucent ? .marker : .pen, color: colour.withAlphaComponent(1))
+            for path in annotation.paths ?? [] {
+                let points = polylinePoints(of: path).map {
+                    resolved.canvasPoint(fromPDF: CGPoint(x: $0.x + offset.x, y: $0.y + offset.y))
+                }
+                guard let first = points.first else { continue }
+                let controls = (points.count > 1 ? points : [first, CGPoint(x: first.x + 0.01, y: first.y)])
+                    .enumerated().map { index, point in
+                        PKStrokePoint(
+                            location: point, timeOffset: TimeInterval(index) * 0.005,
+                            size: CGSize(width: width, height: width), opacity: 1, force: 1, azimuth: 0, altitude: .pi / 2
+                        )
+                    }
+                strokes.append(PKStroke(ink: ink, path: PKStrokePath(controlPoints: controls, creationDate: .now)))
+            }
+        }
+        return PKDrawing(strokes: strokes)
+    }
+
+    static func polylinePoints(of path: PlatformBezierPath) -> [CGPoint] {
+        var points: [CGPoint] = []
+        path.cgPath.applyWithBlock { element in
+            let e = element.pointee
+            switch e.type {
+            case .moveToPoint, .addLineToPoint: points.append(e.points[0])
+            case .addQuadCurveToPoint: points.append(e.points[1])
+            case .addCurveToPoint: points.append(e.points[2])
+            default: break
+            }
+        }
+        return points
+    }
+
     /// True for an ink annotation written with page coordinates in its path,
     /// by the versions before the fix above: the path lies outside the box
     /// the annotation is drawn in. Such pages are rewritten on the next save.

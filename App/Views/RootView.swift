@@ -586,17 +586,6 @@ struct LibraryWindow: View {
                 }
             #if os(iOS)
             Toggle("Draw with Finger", isOn: $configuration.fingerDrawing)
-            Toggle("Fit Marks to Text", isOn: $configuration.snapsMarksToText)
-            Toggle(
-                "Draw",
-                isOn: Binding(
-                    get: { configuration.mode == .draw },
-                    set: { on in
-                        configuration.mode = on ? .draw : .read
-                        configuration.showsToolPicker = on
-                    }
-                )
-            )
             #endif
         } label: {
             Label("View Options", systemImage: "textformat.size").toolbarIcon()
@@ -851,23 +840,28 @@ struct PaperDetailColumn: View {
                     )
                 }
                 #if os(iOS)
+                // The tools, in a strip under the title while the pencil is
+                // out — where a notebook keeps them. The same strip on the
+                // iPad and the phone; only its width differs.
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    if configuration.mode == .draw {
+                        MarkingToolbar(configuration: configuration)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+                }
+                .animation(.snappy(duration: 0.22), value: configuration.mode)
                 .toolbar {
-                    // The pencil, first in the reader's own bar: on the iPad
-                    // the paper is written on, and the tool that does it
-                    // should not be two menus deep. The phone is for reading
-                    // and finding, and has no pencil.
-                    if UIDevice.current.userInterfaceIdiom == .pad {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button {
-                                let drawing = configuration.mode != .draw
-                                configuration.mode = drawing ? .draw : .read
-                                configuration.showsToolPicker = drawing
-                            } label: {
-                                Label("Draw", systemImage: configuration.mode == .draw ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
-                            }
-                            .keyboardShortcut("d", modifiers: [.command, .shift])
-                            .help("Write on the page with the pencil")
+                    // The pencil, first in the reader's own bar: the paper is
+                    // written on, and the tool that does it should not be two
+                    // menus deep. On the phone a finger holds it.
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            configuration.mode = configuration.mode == .draw ? .read : .draw
+                        } label: {
+                            Label("Draw", systemImage: configuration.mode == .draw ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
                         }
+                        .keyboardShortcut("d", modifiers: [.command, .shift])
+                        .help("Write on the page with the pencil")
                     }
                     // On a phone the reader is a screen of its own, so the
                     // page's options and the search come along with it.
