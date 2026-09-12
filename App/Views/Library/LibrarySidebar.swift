@@ -360,7 +360,9 @@ private struct ScopeRow: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .labelStyle(SidebarLabelStyle(symbolColor: isCurrent ? symbolColor : nil))
+            // Yellow is the one colour that cannot carry a line drawing on a
+            // pale ground; the star takes the deepened gold the words use.
+            .labelStyle(SidebarLabelStyle(symbolColor: isCurrent ? (scope == .favorites ? textColor : symbolColor) : nil))
             // The row's colour is the symbol's: name, count and ground
             // agree, rather than an orange symbol on a blue wash.
             .tint(textColor)
@@ -385,31 +387,36 @@ private struct GraphSymbol: View {
 
     var body: some View {
         Canvas { context, size in
+            let radius: CGFloat = 3
             let points = [
-                CGPoint(x: size.width * 0.5, y: size.height * 0.16),
-                CGPoint(x: size.width * 0.14, y: size.height * 0.84),
-                CGPoint(x: size.width * 0.86, y: size.height * 0.84),
+                CGPoint(x: size.width * 0.5, y: radius + 0.5),
+                CGPoint(x: radius + 0.5, y: size.height - radius - 0.5),
+                CGPoint(x: size.width - radius - 0.5, y: size.height - radius - 0.5),
             ]
+            // Edges run from rim to rim, not through the nodes, so the three
+            // circles stay circles.
             var edges = Path()
             for index in 0..<3 {
-                edges.move(to: points[index])
-                edges.addLine(to: points[(index + 1) % 3])
+                let from = points[index], to = points[(index + 1) % 3]
+                let length = hypot(to.x - from.x, to.y - from.y)
+                let unit = CGPoint(x: (to.x - from.x) / length, y: (to.y - from.y) / length)
+                edges.move(to: CGPoint(x: from.x + unit.x * (radius + 1), y: from.y + unit.y * (radius + 1)))
+                edges.addLine(to: CGPoint(x: to.x - unit.x * (radius + 1), y: to.y - unit.y * (radius + 1)))
             }
-            context.stroke(edges, with: .color(.secondary.opacity(0.7)),
-                           style: StrokeStyle(lineWidth: 1, dash: [1.5, 2]))
+            context.stroke(edges, with: .color(colored ? .secondary : .primary.opacity(0.55)),
+                           style: StrokeStyle(lineWidth: 1.1, lineCap: .round))
             // Filled in colour when chosen; outlined, like the other rows'
             // symbols, when not.
             for (index, point) in points.enumerated() {
-                let dot = CGRect(x: point.x - 3, y: point.y - 3, width: 6, height: 6)
+                let dot = CGRect(x: point.x - radius, y: point.y - radius, width: radius * 2, height: radius * 2)
                 if colored {
                     context.fill(Path(ellipseIn: dot), with: .color(ScopeRow.graphColors[index]))
                 } else {
-                    context.fill(Path(ellipseIn: dot), with: .color(.clear))
-                    context.stroke(Path(ellipseIn: dot.insetBy(dx: 0.5, dy: 0.5)), with: .color(.primary), lineWidth: 1)
+                    context.stroke(Path(ellipseIn: dot), with: .color(.primary), lineWidth: 1.2)
                 }
             }
         }
-        .frame(width: 15, height: 15)
+        .frame(width: 17, height: 16)
         .accessibilityHidden(true)
     }
 }
