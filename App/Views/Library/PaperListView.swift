@@ -83,6 +83,16 @@ struct PaperListView: View {
             .scrollContentBackground(.hidden)
             #endif
             .hiddenScrollers()
+            // Pulled down past its top, the list opens the search — the
+            // way a Home Screen does, and with a trackpad the way an
+            // overscroll does. The gesture that says "give me something"
+            // gets the field that gives everything.
+            .onScrollGeometryChange(for: Bool.self) { geometry in
+                geometry.contentOffset.y + geometry.contentInsets.top < -72
+            } action: { _, pulled in
+                guard pulled, !app.showsSearchPalette else { return }
+                app.showsSearchPalette = true
+            }
         }
     }
 

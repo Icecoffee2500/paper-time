@@ -330,6 +330,10 @@ public final class AppModel {
             }
             if environment["PAPERTIME_SCOPE"] == "notes" { model.scope = .notes }
             if let noteID = environment["PAPERTIME_OPEN_NOTE"] { model.notes.openNoteID = noteID }
+            if environment["PAPERTIME_SHOW_SEARCH"] != nil {
+                try? await Task.sleep(for: .seconds(2))
+                showsSearchPalette = true
+            }
         } catch {
             phase = .failed(error.localizedDescription)
         }

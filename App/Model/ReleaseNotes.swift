@@ -104,8 +104,8 @@ enum ReleaseNotes {
             symbol: "magnifyingglass",
             title: Text2("한 칸에서 전부 찾는다", "One field finds all of it"),
             detail: Text2(
-                "⌘K는 논문·노트·저자·컬렉션·태그, 그리고 앱의 명령까지 같은 칸에서 찾는다. 어디에 뒀는지 기억하지 않아도 되고, 화살표와 Return만으로 끝난다. 논문 안의 글자를 찾는 것은 ⌘F 쪽이다.",
-                "⌘K searches papers, notes, authors, collections, tags and the app's own commands from the same field — arrows and Return, without remembering where you filed anything. ⌘F is the other one: the words inside the open paper."
+                "⌘K — 또는 논문 목록을 위로 끝까지 당기면 — 한 칸이 뜬다. 치면 논문·노트·지도·초안·저자·컬렉션·태그·명령을 찾고, 같은 제목이면 최근에 연 것이 먼저다. 치지 않으면 빈칸이 아니라 제안이다: '이어 읽기'(어디까지 읽었고 몇 쪽 남았는지 — 끝이 가까울수록 끌리는 법), '읽었으니'(방금 읽은 논문과 드문 낱말을 나누는 아직 안 읽은 논문, 나누는 낱말과 함께 — 아는 것을 새 쪽에서 보게 하는 호기심의 틈), '다시 보기'(몇 주 전 읽고 노트를 남긴 논문 — 잊히기 직전이 다시 볼 때다), '이번 주 새로'. 논문 안의 글자를 찾는 것은 ⌘F 쪽이다.",
+                "⌘K — or pull the paper list down past its top — and one field appears. Type, and it finds papers, notes, maps, drafts, authors, collections, tags and commands, the recently opened first among equals. Type nothing, and it offers rather than waits: Continue (how far you got and how few pages are left — the last stretch pulls hardest), Because you read (unread papers that share their rarer words with the one you just read, the words named — a known thing seen from a new side), Revisit (read weeks ago, with your notes — just before it fades is the time), New this week. ⌘F is the other one: the words inside the open paper."
             ),
             action: .searchEverything,
             demo: .search
@@ -352,7 +352,7 @@ enum ReleaseNotes {
             Feature(Text2("논문 안에서 찾기", "Find in the paper"),
                     Text2("열려 있는 PDF를 검색하고 결과를 하나씩 넘긴다.", "Search the open PDF and step through the matches."), action: .findInDocument),
             Feature(Text2("전체 검색", "Search everything"),
-                    Text2("논문·노트·저자를 한 칸에서 찾는다.", "Papers, notes and authors, from one field."), action: .searchEverything),
+                    Text2("논문·노트·지도·초안·저자·컬렉션·명령을 한 칸에서. 목록을 끝까지 당겨도 열린다. 빈칸이면 이어 읽기·읽었으니·다시 보기·새로 온 것을 제안한다.", "Papers, notes, maps, drafts, authors, collections, commands, from one field; pull the list down to open it. Empty, it offers: continue, because you read, revisit, new."), action: .searchEverything),
             Feature(Text2("페이지 배치", "Page layout"),
                     Text2("연속 스크롤, 한 장씩, 또는 두 장 펼침. AA 메뉴에 있고, ⌘1·⌘2·⌘3으로도 바꾼다. 책에서는 ←→로 장을 넘긴다.", "Continuous scrolling, single page, or a two-page spread. In the AA menu, and on ⌘1, ⌘2 and ⌘3. In a book, ← and → turn the page."), action: .layoutBook),
             Feature(Text2("페이지 색", "Page tint"),

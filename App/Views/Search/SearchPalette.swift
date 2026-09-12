@@ -20,6 +20,7 @@ struct SearchPalette: View {
     private enum ResultGroup: String, CaseIterable {
         case library = "Library"
         case papers = "Papers"
+        case notes = "Notes"
         case collections = "Collections"
         case tags = "Tags"
         case actions = "Actions"
@@ -36,14 +37,30 @@ struct SearchPalette: View {
         #endif
     }
 
+    /// Typed: what matches. Empty: what is offered, in its groups.
     private var results: [SearchResult] {
-        Array(SearchIndex.results(for: query, in: model).prefix(maxDisplayedResults))
+        if query.trimmingCharacters(in: .whitespaces).isEmpty {
+            return offered.flatMap(\.results)
+        }
+        return Array(SearchIndex.results(for: query, in: model).prefix(maxDisplayedResults))
     }
+
+    private var offered: [SearchSuggestions.Group] { SearchSuggestions.groups(in: model) }
 
     /// Results split into their display groups, each row carrying the index it
     /// has in the flat list so keyboard highlighting stays in one coordinate
     /// space.
     private var groups: [SearchResultGroup] {
+        if query.trimmingCharacters(in: .whitespaces).isEmpty {
+            var offset = 0
+            return offered.map { group in
+                let rows = group.results.map { result in
+                    defer { offset += 1 }
+                    return SearchResultRow(offset: offset, result: result)
+                }
+                return SearchResultGroup(group: nil, title: group.title, rows: rows)
+            }
+        }
         var byGroup: [ResultGroup: [SearchResultRow]] = [:]
         for (offset, result) in results.enumerated() {
             let group = sectionForKind(result.kind)
@@ -52,7 +69,7 @@ struct SearchPalette: View {
         var ordered: [SearchResultGroup] = []
         for group in ResultGroup.allCases {
             guard let rows = byGroup[group], !rows.isEmpty else { continue }
-            ordered.append(SearchResultGroup(group: group, rows: rows))
+            ordered.append(SearchResultGroup(group: group, title: group.rawValue, rows: rows))
         }
         return ordered
     }
@@ -64,9 +81,10 @@ struct SearchPalette: View {
     }
 
     private struct SearchResultGroup: Identifiable {
-        var group: ResultGroup
+        var group: ResultGroup?
+        var title: String
         var rows: [SearchResultRow]
-        var id: String { group.rawValue }
+        var id: String { title }
     }
 
     var body: some View {
@@ -117,7 +135,7 @@ struct SearchPalette: View {
                 .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
 
-            TextField("Paper Time Search", text: $query)
+            TextField(offered.isEmpty ? "Paper Time Search" : "Search — or pick up where you were", text: $query)
                 .textFieldStyle(.plain)
                 .font(.system(size: 26, weight: .regular))
                 .focused($isFieldFocused)
@@ -133,7 +151,7 @@ struct SearchPalette: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(groups) { group in
-                        Text(group.group.rawValue.uppercased())
+                        Text(group.title.uppercased())
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 20)
@@ -152,7 +170,10 @@ struct SearchPalette: View {
                 }
                 .padding(.bottom, 8)
             }
-            .frame(maxHeight: CGFloat(maxDisplayedResults) * rowHeight + 40)
+            // As tall as its rows and no taller: two offers under an empty
+            // field are two rows, not a panel with two rows at the top.
+            .frame(height: min(CGFloat(results.count) * rowHeight + CGFloat(groups.count) * 30 + 8,
+                               CGFloat(maxDisplayedResults) * rowHeight + 40))
             .onChange(of: highlightedIndex) { _, newValue in
                 withAnimation(.easeOut(duration: 0.12)) {
                     scrollProxy.scrollTo(newValue, anchor: .center)
@@ -172,7 +193,13 @@ struct SearchPalette: View {
                 Text(result.title)
                     .font(.body)
                     .lineLimit(1)
-                if !result.subtitle.isEmpty {
+                if let reason = result.reason {
+                    // Why it is offered — the reason is the invitation.
+                    Text(reason.text)
+                        .font(.caption)
+                        .foregroundStyle(.tint)
+                        .lineLimit(1)
+                } else if !result.subtitle.isEmpty {
                     Text(result.subtitle)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -181,6 +208,13 @@ struct SearchPalette: View {
             }
 
             Spacer(minLength: 0)
+
+            if let progress = result.reason?.progress {
+                ProgressView(value: progress)
+                    .progressViewStyle(.linear)
+                    .tint(.secondary.opacity(0.6))
+                    .frame(width: 64)
+            }
         }
         .padding(.horizontal, 12)
         .frame(height: rowHeight)
@@ -201,6 +235,7 @@ struct SearchPalette: View {
         switch kind {
         case .showAll: .library
         case .paper: .papers
+        case .note: .notes
         case .collection: .collections
         case .tag: .tags
         case .action: .actions
@@ -224,6 +259,9 @@ struct SearchPalette: View {
             model.showSearchResults(for: query)
         case let .paper(id):
             model.selectedPaperID = id
+        case let .note(id):
+            model.scope = .notes
+            model.notes.openNoteID = id
         case let .collection(id):
             model.scope = .collection(id)
         case let .tag(id):
