@@ -141,8 +141,12 @@ struct LibrarySidebar: View {
             authorsSection
 
             Section {
-                Label("Graph", systemImage: "point.3.connected.trianglepath.dotted")
-                    .scopeRow(.graph, in: model)
+                Label {
+                    Text("Graph")
+                } icon: {
+                    GraphSymbol(colored: model.scope == .graph)
+                }
+                .scopeRow(.graph, in: model)
             }
         }
         .hiddenScrollers()
@@ -330,9 +334,28 @@ private struct ScopeRow: ViewModifier {
         }
     }
 
+    /// The three colours the graph draws its connections in, for its row.
+    static let graphColors: [Color] = [.blue, .purple, .teal]
+
+    /// A pale wash of the row's colour; for the graph, the three colours of
+    /// its connections running into one another.
+    private var ground: AnyShapeStyle {
+        guard isCurrent else { return AnyShapeStyle(Color.clear) }
+        if scope == .graph {
+            return AnyShapeStyle(LinearGradient(
+                colors: Self.graphColors.map { $0.opacity(0.16) },
+                startPoint: .leading, endPoint: .trailing
+            ))
+        }
+        return AnyShapeStyle(symbolColor.opacity(0.13))
+    }
+
     func body(content: Content) -> some View {
         content
             .labelStyle(SidebarLabelStyle(symbolColor: isCurrent ? symbolColor : nil))
+            // The row's colour is the symbol's: name, count and ground
+            // agree, rather than an orange symbol on a blue wash.
+            .tint(symbolColor)
             .foregroundStyle(isCurrent ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
             .fontWeight(isCurrent ? .medium : .regular)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -340,9 +363,40 @@ private struct ScopeRow: ViewModifier {
             .onTapGesture { model.scope = scope }
             .listRowBackground(
                 RoundedRectangle(cornerRadius: Corner.row, style: .continuous)
-                    .fill(Color.accentColor.opacity(isCurrent ? 0.12 : 0))
+                    .fill(ground)
                     .padding(.horizontal, 6)
             )
+    }
+}
+
+/// The graph's symbol: three nodes joined by dotted edges, each node in one
+/// of the colours the graph draws its connections in when the row is the
+/// one chosen, and plain otherwise.
+private struct GraphSymbol: View {
+    let colored: Bool
+
+    var body: some View {
+        Canvas { context, size in
+            let points = [
+                CGPoint(x: size.width * 0.5, y: size.height * 0.16),
+                CGPoint(x: size.width * 0.14, y: size.height * 0.84),
+                CGPoint(x: size.width * 0.86, y: size.height * 0.84),
+            ]
+            var edges = Path()
+            for index in 0..<3 {
+                edges.move(to: points[index])
+                edges.addLine(to: points[(index + 1) % 3])
+            }
+            context.stroke(edges, with: .color(.secondary.opacity(0.7)),
+                           style: StrokeStyle(lineWidth: 1, dash: [1.5, 2]))
+            for (index, point) in points.enumerated() {
+                let dot = CGRect(x: point.x - 3, y: point.y - 3, width: 6, height: 6)
+                let color: Color = colored ? ScopeRow.graphColors[index] : .primary
+                context.fill(Path(ellipseIn: dot), with: .color(color))
+            }
+        }
+        .frame(width: 15, height: 15)
+        .accessibilityHidden(true)
     }
 }
 
