@@ -397,10 +397,16 @@ private struct GraphSymbol: View {
             }
             context.stroke(edges, with: .color(.secondary.opacity(0.7)),
                            style: StrokeStyle(lineWidth: 1, dash: [1.5, 2]))
+            // Filled in colour when chosen; outlined, like the other rows'
+            // symbols, when not.
             for (index, point) in points.enumerated() {
                 let dot = CGRect(x: point.x - 3, y: point.y - 3, width: 6, height: 6)
-                let color: Color = colored ? ScopeRow.graphColors[index] : .primary
-                context.fill(Path(ellipseIn: dot), with: .color(color))
+                if colored {
+                    context.fill(Path(ellipseIn: dot), with: .color(ScopeRow.graphColors[index]))
+                } else {
+                    context.fill(Path(ellipseIn: dot), with: .color(.clear))
+                    context.stroke(Path(ellipseIn: dot.insetBy(dx: 0.5, dy: 0.5)), with: .color(.primary), lineWidth: 1)
+                }
             }
         }
         .frame(width: 15, height: 15)
