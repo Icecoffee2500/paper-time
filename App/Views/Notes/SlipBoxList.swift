@@ -82,16 +82,28 @@ struct SlipBoxList: View {
                 }
                 .frame(maxHeight: .infinity)
             } else {
+                // Grouped by the paper they were written against, each group
+                // in the order its notes were written, and the groups in the
+                // order their first note was — so a note stays where it is.
                 List(selection: $notes.openNoteID) {
-                    ForEach(notes.visible) { note in
-                        NoteRow(note: note, showsSource: source(of: note))
-                            .pressable(inset: 6)
-                            .tag(note.id)
-                            .contextMenu {
-                                Button(role: .destructive) { model.notes.delete(note.id) } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }
+                    ForEach(groups, id: \.id) { group in
+                        Section {
+                            ForEach(group.notes) { note in
+                                NoteRow(note: note)
+                                    .pressable(inset: 6)
+                                    .tag(note.id)
+                                    .contextMenu {
+                                        Button(role: .destructive) { model.notes.delete(note.id) } label: {
+                                            Label("Delete", systemImage: "trash")
+                                        }
+                                    }
                             }
+                        } header: {
+                            Text(group.title)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
                     }
                 }
                 .listStyle(.inset)
@@ -129,10 +141,27 @@ struct SlipBoxList: View {
         .buttonStyle(.plain)
     }
 
-    /// The paper a note was written against, named rather than numbered.
-    private func source(of note: Zettel) -> String? {
-        guard let paperID = note.paperID, let paper = model.paper(paperID) else { return nil }
-        return paper.meta.csl.fullTitle
+    private struct NoteGroup {
+        let id: String
+        let title: String
+        var notes: [Zettel]
+    }
+
+    /// The visible notes by paper, notes of no paper last.
+    private var groups: [NoteGroup] {
+        var found: [NoteGroup] = []
+        var index: [String: Int] = [:]
+        for note in notes.visible {
+            let key = note.paperID?.uuidString ?? "-"
+            if let at = index[key] {
+                found[at].notes.append(note)
+            } else {
+                let title = note.paperID.flatMap { model.paper($0)?.meta.csl.fullTitle } ?? "Notes of my own"
+                index[key] = found.count
+                found.append(NoteGroup(id: key, title: title, notes: [note]))
+            }
+        }
+        return found.filter { $0.id != "-" } + found.filter { $0.id == "-" }
     }
 }
 

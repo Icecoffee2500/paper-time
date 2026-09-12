@@ -140,7 +140,11 @@ public final class NotesModel {
     // MARK: - Indexes
 
     private func apply(_ loaded: [Zettel]) {
-        notes = loaded.sorted { $0.modified > $1.modified }
+        // In the order they were written, and staying there: a list that
+        // re-sorted itself by the last edit moved the note you had just
+        // touched to the top and everything else down a row, so nothing was
+        // ever where it had been.
+        notes = loaded.sorted { $0.created == $1.created ? $0.id < $1.id : $0.created < $1.created }
         byID = Dictionary(notes.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
 
         var links: [String: [String]] = [:]

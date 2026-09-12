@@ -1444,7 +1444,7 @@ private struct BookReadingDemo: View {
     /// Cropped to the text, as here; or as every other app shows it.
     @State private var trimmed: Bool
 
-    init(scale: DemoScale, trimmed: Bool = true, showsContents: Bool = false) {
+    init(scale: DemoScale, trimmed: Bool = true, showsContents: Bool = true) {
         self.scale = scale
         _trimmed = State(initialValue: trimmed)
         _showsContents = State(initialValue: showsContents)

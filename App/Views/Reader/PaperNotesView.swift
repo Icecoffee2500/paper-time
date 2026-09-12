@@ -103,9 +103,17 @@ struct NoteRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(note.displayTitle)
-                .font(.callout.weight(.semibold))
-                .lineLimit(1)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(note.displayTitle)
+                    .font(.callout.weight(.semibold))
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                // When it was written, at the right edge where a date goes.
+                Text(note.created.formatted(date: .abbreviated, time: .omitted))
+                    .font(.caption)
+                    .monospacedDigit()
+                    .foregroundStyle(.tertiary)
+            }
             // What is left after the title, not the whole preview: a note with
             // no title of its own takes its first words as one, and showing
             // the preview under it printed the same sentence twice.
@@ -116,19 +124,19 @@ struct NoteRow: View {
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
             }
-            HStack(spacing: 6) {
-                Text(note.modified.formatted(date: .abbreviated, time: .shortened))
-                if let showsSource {
-                    Text("·")
-                    Text(showsSource).lineLimit(1)
+            if showsSource != nil || !note.tags.isEmpty {
+                HStack(spacing: 6) {
+                    if let showsSource {
+                        Text(showsSource).lineLimit(1)
+                    }
+                    ForEach(note.tags.prefix(3), id: \.self) { tag in
+                        Text("#\(tag)")
+                            .foregroundStyle(.tint)
+                    }
                 }
-                ForEach(note.tags.prefix(3), id: \.self) { tag in
-                    Text("#\(tag)")
-                        .foregroundStyle(.tint)
-                }
+                .font(.caption)
+                .foregroundStyle(.tertiary)
             }
-            .font(.caption)
-            .foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 3)
