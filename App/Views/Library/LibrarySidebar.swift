@@ -315,15 +315,25 @@ private struct ScopeRow: ViewModifier {
 
     private var isCurrent: Bool { model.scope == scope }
 
+    /// The colour the chosen row's symbol takes. The source list's own icon
+    /// colouring ignores the row's foreground style, so the label is drawn
+    /// here, symbol first. States get the system's colours for states —
+    /// reading is under way, read is done, review is wanted — and places
+    /// take the accent, so the strip reads as one thing with a few meanings.
+    private var symbolColor: Color {
+        switch scope {
+        case .reading: .orange
+        case .read: .green
+        case .favorites: .yellow
+        case .needsReview: .red
+        default: .accentColor
+        }
+    }
+
     func body(content: Content) -> some View {
         content
-            // Both levels: a `Label` draws its icon in the secondary style,
-            // so colouring the row alone left a grey symbol beside a blue
-            // name — the one part of the chosen row that did not know.
-            .foregroundStyle(
-                isCurrent ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary),
-                isCurrent ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary)
-            )
+            .labelStyle(SidebarLabelStyle(symbolColor: isCurrent ? symbolColor : nil))
+            .foregroundStyle(isCurrent ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
             .fontWeight(isCurrent ? .medium : .regular)
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(.rect)
@@ -333,6 +343,20 @@ private struct ScopeRow: ViewModifier {
                     .fill(Color.accentColor.opacity(isCurrent ? 0.12 : 0))
                     .padding(.horizontal, 6)
             )
+    }
+}
+
+/// A source-list label whose symbol can be given a colour of its own.
+private struct SidebarLabelStyle: LabelStyle {
+    let symbolColor: Color?
+
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 7) {
+            configuration.icon
+                .foregroundStyle(symbolColor.map(AnyShapeStyle.init) ?? AnyShapeStyle(.primary))
+                .frame(width: 20, alignment: .center)
+            configuration.title
+        }
     }
 }
 
