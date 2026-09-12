@@ -108,8 +108,8 @@ public enum Resonance {
                 found.append((Match(id: entry.id, score: score, shared: shared), contributions.count))
             }
             let matches: [Match] = found.map { $0.0 }
-            guard let strongest = matches.map(\.score).max(), strongest >= 0.9 else { return [] }
-            let floor: Double = max(0.9, strongest * 0.35)
+            guard let strongest = matches.map(\.score).max(), strongest >= 1.0 else { return [] }
+            let floor: Double = max(1.0, strongest * 0.35)
             let kept: [Match] = matches.filter { $0.score >= floor }
             let ordered: [Match] = kept.sorted { lhs, rhs in
                 lhs.score == rhs.score ? lhs.id < rhs.id : lhs.score > rhs.score
