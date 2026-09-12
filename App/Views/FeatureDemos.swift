@@ -1639,8 +1639,11 @@ private struct ResonanceDemo: View {
     @State private var selected = false
     @State private var dropped = false
     @State private var linked = false
+    /// The rule that picks the notes, with its numbers, shown on request.
+    @State private var showsRule = false
 
-    init(scale: DemoScale, step: Int = 0) {
+    init(scale: DemoScale, step: Int = 0, showsRule: Bool = false) {
+        _showsRule = State(initialValue: showsRule)
         self.scale = scale
         _step = State(initialValue: step)
         _page = State(initialValue: step >= 1 ? 1 : 0)
@@ -1703,7 +1706,52 @@ private struct ResonanceDemo: View {
             .frame(height: scale.isFull ? 224 : 168)
 
             guidance
+            if showsRule { rule.transition(.opacity.combined(with: .move(edge: .top))) }
         }
+        .animation(.snappy(duration: 0.3), value: showsRule)
+    }
+
+    /// How the notes are chosen, in numbers — a reading friend who has your
+    /// notes by heart, and the arithmetic the friend does.
+    private var rule: some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 6 : 4) {
+            Text(ReleaseNotes.string("어떻게 고르나", "How the notes are chosen"))
+                .font(scale.small.weight(.semibold))
+            Text(ReleaseNotes.string(
+                "네 노트를 전부 외운 읽기 친구가 있다고 생각하면 된다. 장을 넘기면 친구가 새 쪽의 낱말과 노트 하나하나의 낱말을 나란히 놓고 같은 것을 센다 — 다만 이렇게 센다:",
+                "Think of a reading friend who knows your notes by heart. When you turn the page, the friend lays the page's words beside each note's and counts what they share — counting like this:"
+            ))
+            ForEach(rules, id: \.self) { line in
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("·").foregroundStyle(.tertiary)
+                    Text(line).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Text(ReleaseNotes.string(
+                "점수 = Σ 무게 × 짝 보너스 × √min(횟수) ÷ (1 + ln 노트 길이).  겹친 낱말이 둘 이상(짝이면 하나)이고, 점수가 1.0 이상이며 1등의 35% 이상인 노트만, 많아도 넷.",
+                "score = Σ weight × pair bonus × √min(count) ÷ (1 + ln note length).  Only notes sharing two words (or one pair), scoring 1.0 or more and at least 35% of the strongest — four at most."
+            ))
+            .font(scale.small.monospaced())
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .font(scale.small)
+        .padding(scale.isFull ? 10 : 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: scale.corner, style: .continuous).fill(.background))
+    }
+
+    private var rules: [String] {
+        [
+            ReleaseNotes.string("흔한 말은 세지 않는다: 기능어와 논문마다 쓰는 말(model, method, results, training, data…) 300개쯤은 겹쳐도 0.",
+                                "Common words are not counted: function words and the words every paper uses (model, method, results, training, data…), some 300, count for nothing."),
+            ReleaseNotes.string("낱말 하나의 무게 = ln((N+1) ÷ (그 낱말이 나오는 글 수 + 0.5)) + 0.3. N은 노트 수 + 이 논문에서 뽑은 40쪽. 45개 글 중 42개에 나오는 'network'는 0.38, 3개에만 나오는 'consolidation'은 2.88 — 드문 말이 일곱 배.",
+                                "A word's weight = ln((N+1) ÷ (texts it appears in + 0.5)) + 0.3, with N = notes + 40 sampled pages of this paper. 'network', in 42 of 45 texts: 0.38. 'consolidation', in 3: 2.88 — seven times as much."),
+            ReleaseNotes.string("두 낱말이 붙어서 겹치면('catastrophic forgetting') ×1.3. weights와 weight, pretrained와 pretraining은 같은 말로 본다.",
+                                "Two words together ('catastrophic forgetting') count ×1.3. weights and weight, pretrained and pretraining are one word."),
+            ReleaseNotes.string("긴 노트는 우연히 더 겹치니 (1 + ln 길이)로 나눈다. 다섯 줄이든 다섯 낱말이든 짧은 노트는 같은 길이로 친다.",
+                                "A long note shares more by chance, so its sum is divided by (1 + ln length); anything short is treated as the same short length."),
+        ]
     }
 
     // MARK: The page
@@ -1957,6 +2005,14 @@ private struct ResonanceDemo: View {
                     .buttonStyle(.plain)
                 }
                 Spacer(minLength: 0)
+                Button {
+                    withAnimation(.snappy(duration: 0.3)) { showsRule.toggle() }
+                } label: {
+                    Label(ReleaseNotes.string("어떻게 고르나?", "How are they chosen?"), systemImage: "function")
+                        .font(.caption2.weight(showsRule ? .semibold : .regular))
+                        .foregroundStyle(showsRule ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                }
+                .buttonStyle(.plain)
                 if step >= 1 {
                     Button {
                         withAnimation(.snappy(duration: 0.3)) {
@@ -2025,6 +2081,7 @@ enum DemoRenderer {
             write("resonance-step\(step)", ResonanceDemo(scale: .full, step: step), full: true)
         }
         write("resonance-step3-compact", ResonanceDemo(scale: .compact, step: 3), full: false)
+        write("resonance-rule", ResonanceDemo(scale: .full, step: 4, showsRule: true), full: true)
         exit(0)
     }
 }
