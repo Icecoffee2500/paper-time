@@ -1468,7 +1468,9 @@ private struct BookReadingDemo: View {
                     Spread(scale: scale, leftPage: leftPage, trimmed: trimmed)
                         .padding(scale.isFull ? 10 : 6)
 
-                    if showsContents { contents.transition(.scale(scale: 0.96).combined(with: .opacity)) }
+                    // Only on this side: no other reader floats a contents
+                    // list in the gutter, which is the point of the switch.
+                    if showsContents && trimmed { contents.transition(.scale(scale: 0.96).combined(with: .opacity)) }
                 }
                 // Tall enough for the contents to sit inside the spread at
                 // the small size too, rather than over the status bar.
@@ -1509,6 +1511,7 @@ private struct BookReadingDemo: View {
                     .padding(.horizontal, 6).padding(.vertical, 2)
                     .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(.quaternary.opacity(0.6)))
                 Spacer(minLength: 0)
+                let contentsShowing = showsContents && trimmed
                 Button {
                     withAnimation(.snappy(duration: 0.25)) { showsContents.toggle() }
                 } label: {
@@ -1516,12 +1519,15 @@ private struct BookReadingDemo: View {
                         Text(app.shortcut(for: .floatingList).display).monospaced()
                         Text(ReleaseNotes.string("목차", "Contents"))
                     }
-                    .font(scale.small.weight(showsContents ? .semibold : .regular))
-                    .foregroundStyle(showsContents ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                    .font(scale.small.weight(contentsShowing ? .semibold : .regular))
+                    .foregroundStyle(contentsShowing ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
                     .padding(.horizontal, 7).padding(.vertical, 3)
-                    .background(Capsule().fill(showsContents ? AnyShapeStyle(.tint.opacity(0.14)) : AnyShapeStyle(.quaternary)))
+                    .background(Capsule().fill(contentsShowing ? AnyShapeStyle(.tint.opacity(0.14)) : AnyShapeStyle(.quaternary)))
                 }
                 .buttonStyle(.plain)
+                // There is no such key in the other readers.
+                .disabled(!trimmed)
+                .opacity(trimmed ? 1 : 0.4)
             }
 
             // The same spread as other apps show it, and as this one does.
@@ -1531,8 +1537,8 @@ private struct BookReadingDemo: View {
                 Text(trimmed
                     ? ReleaseNotes.string("글에 맞춰 잘라 좌우 여백이 같고, 두 쪽 사이는 어떤 논문이든 같은 폭. 도장은 지우고, 목차는 그 사이에 뜬다.",
                                           "Cropped to the text: equal margins both sides, a gutter the same width for every paper. The stamp is painted out; the contents float in between.")
-                    : ReleaseNotes.string("쪽을 그대로 나란히: 논문마다 여백이 다르고, 두 쪽은 붙거나 벌어지고, 펼침면은 한쪽으로 몰리고, 여백의 도장이 보인다.",
-                                          "The pages as they come: margins differ by paper, the two pages meet or gape, the spread sits to one side, and the stamp shows."))
+                    : ReleaseNotes.string("쪽을 그대로 나란히: 논문마다 여백이 다르고, 두 쪽은 붙거나 벌어지고, 펼침면은 한쪽으로 몰리고, 여백의 도장이 보인다. 사이에 목차를 띄울 자리도 없다.",
+                                          "The pages as they come: margins differ by paper, the two pages meet or gape, the spread sits to one side, and the stamp shows. There is no room between them for a contents list, either."))
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)

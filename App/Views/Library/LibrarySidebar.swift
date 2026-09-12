@@ -317,7 +317,13 @@ private struct ScopeRow: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .foregroundStyle(isCurrent ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
+            // Both levels: a `Label` draws its icon in the secondary style,
+            // so colouring the row alone left a grey symbol beside a blue
+            // name — the one part of the chosen row that did not know.
+            .foregroundStyle(
+                isCurrent ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary),
+                isCurrent ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary)
+            )
             .fontWeight(isCurrent ? .medium : .regular)
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(.rect)

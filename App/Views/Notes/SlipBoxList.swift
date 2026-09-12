@@ -99,14 +99,29 @@ struct SlipBoxList: View {
                                     }
                             }
                         } header: {
+                            // The paper as a chip, the same shape the library
+                            // folder wears in the source list: a group of
+                            // notes is named, not ruled off. A line over
+                            // every group and under every note made the box
+                            // read as a table.
                             Text(group.title)
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(group.id == "-" ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint))
                                 .lineLimit(1)
+                                .truncationMode(.middle)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                        .fill(Color.accentColor.opacity(group.id == "-" ? 0 : 0.12))
+                                )
+                                .padding(.bottom, 2)
                         }
                     }
                 }
-                .listStyle(.inset)
+                // The source list's style: rounded selection, and no rule
+                // between one note and the next.
+                .listStyle(.sidebar)
                 // An inset list paints its own opaque white, which is why the
                 // lists were the one white rectangle in a window of glass. The
                 // panel behind them is the background now.
