@@ -1619,67 +1619,77 @@ private struct BookReadingDemo: View {
 
 // MARK: - Resonance
 
-/// A page being read and, beside it, the notes that echo it — written
-/// against other papers — with the words they share; or, across the switch,
-/// what every other app shows beside a page: the notes in their folder,
-/// waiting to be searched for.
+/// Resonance, learned by doing it: four steps, each a real press.
+///
+/// A feature nobody has seen before cannot be shown all at once — it has
+/// to be done once. So this is the reading surface and the inspector's
+/// Notes tab side by side, and a line underneath saying what to do next:
+/// turn the page, and the notes that echo it come up; select a sentence, and
+/// the ❝ button appears on each; press it, and the passage lands in that
+/// note with its address; and under the note, press the link, and two notes
+/// that never mentioned each other now do. Every step is the gesture the
+/// app itself uses.
 private struct ResonanceDemo: View {
     let scale: DemoScale
+    /// 0: reading. 1: the echoes are up. 2: a sentence is selected. 3: the
+    /// passage is in the note. 4: the link is written.
+    @State private var step: Int
     @State private var page = 0
-    @State private var ours = true
+    @State private var openNote: Int?
+    @State private var selected = false
+    @State private var dropped = false
+    @State private var linked = false
+
+    init(scale: DemoScale, step: Int = 0) {
+        self.scale = scale
+        _step = State(initialValue: step)
+        _page = State(initialValue: step >= 1 ? 1 : 0)
+        _selected = State(initialValue: step == 2)
+        _openNote = State(initialValue: step >= 3 ? 0 : nil)
+        _dropped = State(initialValue: step >= 3)
+        _linked = State(initialValue: step >= 4)
+    }
 
     private struct Echo {
         let title: String
         let source: String
         let shared: [String]
+        let body: [String]
     }
 
-    private struct Page {
-        let sentence: String
-        let echoes: [Echo]
-    }
-
-    private var pages: [Page] {
+    private var sentences: [String] {
         [
-            Page(
-                sentence: ReleaseNotes.string(
-                    "EWC는 옛 과제에 중요한 가중치의 학습을 늦춰 — 시냅스 강화가 기억을 지키듯 — 파국적 망각을 막는다.",
-                    "EWC slows learning on the weights important for old tasks — the way synaptic consolidation protects a memory — and so avoids catastrophic forgetting."
-                ),
-                echoes: [
-                    Echo(title: ReleaseNotes.string("시냅스 강화는 기억을 굳힌다", "Synaptic consolidation hardens a memory"),
-                         source: ReleaseNotes.string("Yang 외 2009 · 3쪽", "Yang et al. 2009 · p. 3"),
-                         shared: [ReleaseNotes.string("시냅스 강화", "synaptic consolidation"), ReleaseNotes.string("기억", "memory")]),
-                    Echo(title: ReleaseNotes.string("망각은 겹쳐 쓰기다", "Forgetting is overwriting"),
-                         source: ReleaseNotes.string("McCloskey 1989 · 12쪽", "McCloskey 1989 · p. 12"),
-                         shared: [ReleaseNotes.string("파국적 망각", "catastrophic forgetting"), ReleaseNotes.string("가중치", "weights")]),
-                ]
-            ),
-            Page(
-                sentence: ReleaseNotes.string(
-                    "행동 머리는 텍스트를 디토크나이즈해 이산 행동으로 바꾼다: 로봇 정책은 곧 언어 모델이다.",
-                    "The action head detokenises text into discrete actions: the robot policy is a language model."
-                ),
-                echoes: [
-                    Echo(title: ReleaseNotes.string("연속 행동을 이산화하기", "Discretising continuous actions"),
-                         source: ReleaseNotes.string("RT-2 · 5쪽", "RT-2 · p. 5"),
-                         shared: [ReleaseNotes.string("이산 행동", "discrete actions"), ReleaseNotes.string("정책", "policy")]),
-                    Echo(title: ReleaseNotes.string("토큰이 곧 명령", "A token is a command"),
-                         source: ReleaseNotes.string("직접 쓴 노트", "A note of your own"),
-                         shared: [ReleaseNotes.string("디토크나이즈", "detokenises"), ReleaseNotes.string("언어 모델", "language model")]),
-                ]
-            ),
+            ReleaseNotes.string("우리는 로봇 정책을 위한 사전 학습 데이터셋을 소개한다.", "We introduce a pretraining dataset for robot policies."),
+            ReleaseNotes.string("EWC는 옛 과제에 중요한 가중치의 학습을 늦춰 — 시냅스 강화가 기억을 지키듯 — 파국적 망각을 막는다.",
+                                "EWC slows learning on the weights important for old tasks — the way synaptic consolidation protects a memory — and so avoids catastrophic forgetting."),
         ]
     }
 
-    /// The folder as other apps show it: the same notes, in the order they
-    /// were written, with nothing to say about the page.
-    private var folder: [String] {
+    private var echoes: [Echo] {
         [
-            ReleaseNotes.string("토큰이 곧 명령", "A token is a command"),
-            ReleaseNotes.string("망각은 겹쳐 쓰기다", "Forgetting is overwriting"),
-            ReleaseNotes.string("연속 행동을 이산화하기", "Discretising continuous actions"),
-            ReleaseNotes.string("시냅스 강화는 기억을 굳힌다", "Synaptic consolidation hardens a memory"),
+            Echo(title: ReleaseNotes.string("시냅스 강화는 기억을 굳힌다", "Synaptic consolidation hardens a memory"),
+                 source: ReleaseNotes.string("Yang 외 2009에서 씀", "Written against Yang et al. 2009"),
+                 shared: [ReleaseNotes.string("시냅스 강화", "synaptic consolidation"), ReleaseNotes.string("기억", "memory")],
+                 body: [ReleaseNotes.string("새 가시는 며칠 지나면 굳고, 굳은 가시는 지워지지 않는다.", "New spines harden within days; a hardened spine is not erased."),
+                        ReleaseNotes.string("기억이 지켜지는 방식은 '쓰지 않기'다.", "A memory is kept by not being written over.")]),
+            Echo(title: ReleaseNotes.string("망각은 겹쳐 쓰기다", "Forgetting is overwriting"),
+                 source: ReleaseNotes.string("McCloskey 1989에서 씀", "Written against McCloskey 1989"),
+                 shared: [ReleaseNotes.string("파국적 망각", "catastrophic forgetting"), ReleaseNotes.string("가중치", "weights")],
+                 body: [ReleaseNotes.string("새 과제가 옛 과제의 가중치를 덮어쓴다.", "The new task writes over the old task's weights.")]),
+        ]
+    }
+
+    private var instructions: [String] {
+        [
+            ReleaseNotes.string("논문을 읽는 중이에요. →로 장을 넘겨 보세요.", "You are reading. Turn the page with →."),
+            ReleaseNotes.string("다른 논문을 읽다 쓴 노트 둘이 올라왔어요 — 이 쪽과 파란 낱말을 나누는 노트예요. 이번엔 쪽의 문장을 눌러 선택해 보세요.",
+                                "Two notes came up, written against other papers — they share the blue words with this page. Now click the sentence on the page to select it."),
+            ReleaseNotes.string("노트마다 ❝ 단추가 생겼어요. 눌러서 선택한 구절을 그 노트에 떨어뜨리세요.",
+                                "Each note grew a ❝ button. Press one to drop the selected passage into that note."),
+            ReleaseNotes.string("구절이 주소를 갖고 들어갔어요 — 누르면 이 쪽으로 돌아와요. 아래 'RESONATES WITH'에서 🔗를 눌러 다른 울림을 링크로 만드세요.",
+                                "The passage is in, with its address — click it and you are back on this page. Under RESONATES WITH, press the link to make the other echo a link."),
+            ReleaseNotes.string("두 논문의 구절이 노트 하나에서 만나고, 두 노트가 서로를 가리켜요. 다른 앱이었다면 그 노트가 있다는 걸 기억해 검색하고, 열어 복사해 붙여야 했을 일이에요.",
+                                "Passages from two papers meet in one note, and two notes now point at each other. In another app you would have had to remember the note existed, search for it, open it, and paste."),
         ]
     }
 
@@ -1687,49 +1697,26 @@ private struct ResonanceDemo: View {
         VStack(alignment: .leading, spacing: scale.gap) {
             HStack(alignment: .top, spacing: scale.gap) {
                 paper
-                panel
-                    .frame(width: scale.isFull ? 230 : 150)
+                inspector
+                    .frame(width: scale.isFull ? 250 : 168)
             }
-            .frame(height: scale.isFull ? 200 : 118)
+            .frame(height: scale.isFull ? 224 : 168)
 
-            HStack(spacing: 6) {
-                turn("arrow.left", to: 0, enabled: page > 0)
-                turn("arrow.right", to: 1, enabled: page < pages.count - 1)
-                Text(ReleaseNotes.string("장을 넘기면 울림이 바뀐다", "Turn the page and the echoes change"))
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                Spacer(minLength: 0)
-            }
-
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                mode(ReleaseNotes.string("다른 PDF 앱", "Other PDF apps"), ours: false)
-                mode("Paper Time", ours: true)
-                Text(ours
-                    ? ReleaseNotes.string("읽는 쪽과 드문 낱말을 나누는 노트가 — 다른 논문에서 쓴 것이라도 — 스스로 올라온다. 어떤 낱말인지도 함께.",
-                                          "Notes that share the page's rarer words — written against other papers — come up by themselves, and say which words.")
-                    : ReleaseNotes.string("노트는 폴더에 쓴 순서로 누워 있다. 이 쪽과 닿는 노트가 있는지는 기억해서 검색해야 안다.",
-                                          "The notes lie in their folder in the order they were written. Whether one touches this page, you would have to remember, then search."))
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            guidance
         }
     }
 
-    /// The page: greeked lines, and the sentence being read set in type.
+    // MARK: The page
+
     private var paper: some View {
         Paper(scale: scale) {
             VStack(alignment: .leading, spacing: scale.isFull ? 7 : 5) {
                 Rule()
-                Rule(width: scale.isFull ? 160 : 90)
-                Text(pages[page].sentence)
-                    .font(.system(scale.isFull ? .callout : .caption2, design: .serif))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .id(page)
-                    .transition(.opacity)
+                Rule(width: scale.isFull ? 160 : 80)
+                sentence
                 Rule()
                 Rule()
-                Rule(width: scale.isFull ? 120 : 70)
+                Rule(width: scale.isFull ? 120 : 60)
                 Spacer(minLength: 0)
                 Text("\(page + 3)")
                     .font(.caption2)
@@ -1740,104 +1727,257 @@ private struct ResonanceDemo: View {
         .frame(maxHeight: .infinity)
     }
 
-    /// The inspector's Notes tab: ours, reading along; or the folder.
-    private var panel: some View {
-        VStack(alignment: .leading, spacing: scale.isFull ? 6 : 4) {
-            if ours {
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Label("Resonance", systemImage: "waveform")
-                        .font(scale.small.weight(.semibold))
-                        .foregroundStyle(.tint)
-                    if scale.isFull {
-                        Text(ReleaseNotes.string("다른 논문에서", "from other papers"))
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                    }
-                }
-                ForEach(Array(pages[page].echoes.enumerated()), id: \.offset) { _, echo in
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(echo.title)
-                            .font(scale.small.weight(.medium))
-                            .lineLimit(1)
-                        Text(echo.source)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                        Text(echo.shared.joined(separator: " · "))
-                            .font(.caption2)
-                            .foregroundStyle(.tint)
-                            .lineLimit(1)
-                    }
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 4)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(Color.accentColor.opacity(0.07))
-                    )
-                }
-                .id(page)
-                .transition(.opacity.combined(with: .move(edge: .top)))
-            } else {
-                Text("Notes")
-                    .font(scale.small.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                HStack(spacing: 4) {
-                    Image(systemName: "magnifyingglass")
-                    Text(ReleaseNotes.string("노트 검색", "Search notes"))
-                }
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 3)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Capsule().fill(.quaternary.opacity(0.5)))
-                ForEach(folder, id: \.self) { title in
-                    Text(title)
-                        .font(scale.small)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, scale.isFull ? 3 : 1)
-                }
+    /// The sentence being read. From the second step on it can be selected
+    /// with a press, the way a drag selects it on the real page.
+    private var sentence: some View {
+        Button {
+            guard step >= 1 else { return }
+            withAnimation(.snappy(duration: 0.25)) {
+                selected = true
+                if step == 1 { step = 2 }
             }
-            Spacer(minLength: 0)
+        } label: {
+            Text(sentences[page])
+                .font(.system(scale.isFull ? .callout : .caption2, design: .serif))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 3)
+                .padding(.vertical, 1)
+                .background(
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .fill(Color.accentColor.opacity(selected ? 0.18 : 0))
+                )
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .id(page)
+        .transition(.opacity)
+    }
+
+    // MARK: The inspector
+
+    private var inspector: some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 6 : 4) {
+            if let openNote {
+                editor(echoes[openNote])
+            } else {
+                notesTab
+            }
         }
         .padding(scale.isFull ? 10 : 7)
         .frame(maxHeight: .infinity, alignment: .top)
+        .background(RoundedRectangle(cornerRadius: scale.corner, style: .continuous).fill(.background))
+        .animation(.snappy(duration: 0.3), value: step)
+        .animation(.snappy(duration: 0.3), value: openNote)
+    }
+
+    /// The Notes tab: the echoes when there are any, then this paper's own.
+    @ViewBuilder
+    private var notesTab: some View {
+        if step >= 1 {
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Label("Resonance", systemImage: "waveform")
+                    .font(scale.small.weight(.semibold))
+                    .foregroundStyle(.tint)
+                if scale.isFull {
+                    Text(ReleaseNotes.string("다른 논문에서", "from other papers"))
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            ForEach(Array(echoes.enumerated()), id: \.offset) { index, echo in
+                echoRow(index, echo)
+            }
+            .transition(.opacity.combined(with: .move(edge: .top)))
+        }
+        Text(ReleaseNotes.string("이 논문의 노트 0개", "0 notes on this paper"))
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+            .padding(.top, step >= 1 ? 4 : 0)
+        Spacer(minLength: 0)
+    }
+
+    private func echoRow(_ index: Int, _ echo: Echo) -> some View {
+        HStack(alignment: .top, spacing: 4) {
+            Button {
+                withAnimation(.snappy(duration: 0.3)) { openNote = index }
+            } label: {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(echo.title)
+                        .font(scale.small.weight(.medium))
+                        .lineLimit(1)
+                    Text(echo.source)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    Text(echo.shared.joined(separator: " · "))
+                        .font(.caption2)
+                        .foregroundStyle(.tint)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+
+            // The ❝: only once there is a selection to drop, as in the app.
+            if selected, !dropped {
+                Button {
+                    withAnimation(.snappy(duration: 0.3)) {
+                        openNote = index
+                        dropped = true
+                        selected = false
+                        if step < 3 { step = 3 }
+                    }
+                } label: {
+                    Image(systemName: "quote.opening")
+                        .font(scale.small)
+                        .foregroundStyle(.tint)
+                        .padding(4)
+                        .background(Circle().fill(Color.accentColor.opacity(0.14)))
+                }
+                .buttonStyle(.plain)
+                .transition(.scale.combined(with: .opacity))
+            }
+        }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 4)
         .background(
-            RoundedRectangle(cornerRadius: scale.corner, style: .continuous).fill(.background)
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Color.accentColor.opacity(0.07))
         )
-        .animation(.snappy(duration: 0.3), value: page)
-        .animation(.snappy(duration: 0.3), value: ours)
     }
 
-    private func turn(_ symbol: String, to target: Int, enabled: Bool) -> some View {
-        Button {
-            withAnimation(.snappy(duration: 0.3)) { page = target }
-        } label: {
-            Image(systemName: symbol)
-                .font(scale.small.weight(.medium))
-                .frame(width: 26, height: 20)
-                .background(Capsule().fill(.quaternary))
+    /// The note, open: its title, its lines, the passage once it has landed,
+    /// and underneath what it resonates with — with the link to press.
+    private func editor(_ echo: Echo) -> some View {
+        let other = echoes[openNote == 0 ? 1 : 0]
+        return VStack(alignment: .leading, spacing: scale.isFull ? 6 : 4) {
+            Button {
+                withAnimation(.snappy(duration: 0.3)) { openNote = nil }
+            } label: {
+                Label("Notes", systemImage: "chevron.left")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+
+            Text(echo.title)
+                .font(scale.small.weight(.semibold))
+                .lineLimit(1)
+            ForEach(echo.body, id: \.self) { line in
+                Text(line)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if dropped {
+                // The passage as a chip: the shape everything you can go
+                // to takes in this app.
+                HStack(spacing: 4) {
+                    Image(systemName: "quote.opening")
+                        .font(.caption2)
+                    Text(sentences[page])
+                        .lineLimit(1)
+                }
+                .font(.caption2)
+                .foregroundStyle(.tint)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(Color.accentColor.opacity(0.12)))
+                .transition(.scale(scale: 0.9).combined(with: .opacity))
+            }
+            if linked {
+                Text("[[\(other.title)]]")
+                    .font(.caption2)
+                    .foregroundStyle(.tint)
+                    .transition(.opacity)
+            }
+            Spacer(minLength: 0)
+            if !linked {
+                Text("RESONATES WITH")
+                    .font(.system(size: 8, weight: .semibold))
+                    .tracking(0.6)
+                    .foregroundStyle(.tertiary)
+                HStack(spacing: 4) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "waveform")
+                            .foregroundStyle(.tint)
+                        Text(other.title).lineLimit(1)
+                    }
+                    .font(.caption2)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(.quaternary.opacity(0.55)))
+                    Button {
+                        withAnimation(.snappy(duration: 0.3)) {
+                            linked = true
+                            if step < 4 { step = 4 }
+                        }
+                    } label: {
+                        Image(systemName: "link.badge.plus")
+                            .font(.caption2)
+                            .foregroundStyle(.tint)
+                            .padding(4)
+                            .background(Circle().fill(Color.accentColor.opacity(0.14)))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
         }
-        .buttonStyle(.plain)
-        .disabled(!enabled)
-        .opacity(enabled ? 1 : 0.4)
     }
 
-    private func mode(_ name: String, ours target: Bool) -> some View {
-        let isOn = ours == target
-        return Button {
-            withAnimation(.snappy(duration: 0.3)) { ours = target }
-        } label: {
-            Text(name)
-                .font(scale.small.weight(isOn ? .semibold : .regular))
-                .foregroundStyle(isOn ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
-                .padding(.horizontal, 7).padding(.vertical, 3)
-                .background(Capsule().fill(isOn ? AnyShapeStyle(.tint.opacity(0.14)) : AnyShapeStyle(.quaternary)))
+    // MARK: What to do next
+
+    private var guidance: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                // Where you are in the four steps.
+                ForEach(0..<4, id: \.self) { index in
+                    Text("\(index + 1)")
+                        .font(.caption2.weight(.semibold))
+                        .monospacedDigit()
+                        .frame(width: 16, height: 16)
+                        .background(Circle().fill(index < step ? Color.accentColor : (index == step ? Color.accentColor.opacity(0.14) : Color.clear)))
+                        .overlay(Circle().stroke(index == step ? Color.accentColor : Color.secondary.opacity(0.3), lineWidth: 1))
+                        .foregroundStyle(index < step ? AnyShapeStyle(.white) : (index == step ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary)))
+                }
+                if step == 0 {
+                    Button {
+                        withAnimation(.snappy(duration: 0.3)) {
+                            page = 1
+                            step = 1
+                        }
+                    } label: {
+                        Image(systemName: "arrow.right")
+                            .font(scale.small.weight(.medium))
+                            .frame(width: 26, height: 20)
+                            .background(Capsule().fill(Color.accentColor.opacity(0.14)))
+                            .foregroundStyle(.tint)
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer(minLength: 0)
+                if step >= 1 {
+                    Button {
+                        withAnimation(.snappy(duration: 0.3)) {
+                            step = 0; page = 0; openNote = nil; selected = false; dropped = false; linked = false
+                        }
+                    } label: {
+                        Label(ReleaseNotes.string("처음부터", "Start over"), systemImage: "arrow.counterclockwise")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            Text(instructions[min(step, instructions.count - 1)])
+                .font(scale.small)
+                .foregroundStyle(step == 4 ? .secondary : .primary)
+                .fixedSize(horizontal: false, vertical: true)
+                .id(step)
+                .transition(.opacity)
         }
-        .buttonStyle(.plain)
+        .animation(.snappy(duration: 0.3), value: step)
     }
 }
 
@@ -1868,20 +2008,23 @@ enum DemoRenderer {
         }
         // The states the book demo reaches by a press: as other apps show
         // it, and with the contents floating in the gutter.
-        let states: [(String, DemoScale, Bool, Bool)] = [
-            ("bookReading-other", .full, false, false),
-            ("bookReading-contents", .full, true, true),
-            ("bookReading-contents-compact", .compact, true, true),
-        ]
-        for (name, scale, trimmed, contents) in states {
-            let renderer = ImageRenderer(content: BookReadingDemo(scale: scale, trimmed: trimmed, showsContents: contents)
-                .environment(model).frame(width: scale.isFull ? 560 : 440).padding(16).background(Color(nsColor: .windowBackgroundColor)))
+        func write(_ name: String, _ view: some View, full: Bool) {
+            let renderer = ImageRenderer(content: view
+                .environment(model).frame(width: full ? 560 : 440).padding(16).background(Color(nsColor: .windowBackgroundColor)))
             renderer.scale = 2
             if let image = renderer.nsImage, let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff),
                let png = bitmap.representation(using: .png, properties: [:]) {
                 try? png.write(to: folder.appendingPathComponent("\(name).png"))
             }
         }
+        write("bookReading-other", BookReadingDemo(scale: .full, trimmed: false, showsContents: false), full: true)
+        write("bookReading-contents", BookReadingDemo(scale: .full, trimmed: true, showsContents: true), full: true)
+        write("bookReading-contents-compact", BookReadingDemo(scale: .compact, trimmed: true, showsContents: true), full: false)
+        // Resonance is learned in steps; each step is a picture.
+        for step in 1...4 {
+            write("resonance-step\(step)", ResonanceDemo(scale: .full, step: step), full: true)
+        }
+        write("resonance-step3-compact", ResonanceDemo(scale: .compact, step: 3), full: false)
         exit(0)
     }
 }

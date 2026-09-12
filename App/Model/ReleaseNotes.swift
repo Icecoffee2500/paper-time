@@ -74,8 +74,8 @@ enum ReleaseNotes {
             symbol: "waveform",
             title: Text2("읽는 동안 슬립박스가 말을 건다", "While you read, the slip-box speaks first"),
             detail: Text2(
-                "다른 앱에서 노트는 폴더에 누워 있다가 검색해야 나온다 — 그런데 잊어버린 노트는 검색하지 않는다. 여기서는 읽고 있는 쪽과 드문 낱말을 나누는 노트가, 다른 논문을 읽으며 쓴 것이라도, 인스펙터의 Notes 탭 맨 위에 스스로 올라온다. 어떤 낱말을 나누는지도 함께 보여서 우연인지 울림인지 한눈에 판단할 수 있고, 선택한 구절을 그 노트에 바로 떨어뜨리거나 노트 편집기 아래에서 한 번 눌러 링크로 만든다. 루만은 자기 상자를 대화 상대라고 불렀다 — 상자가 먼저 말을 걸 때만 대화다.",
-                "In other apps a note lies in a folder until you search for it — and nobody searches for a note they have forgotten. Here, the notes that share their rarer words with the pages on screen — written against another paper, months ago — come up by themselves at the top of the inspector's Notes tab, named with the words they share, so a coincidence and an echo can be told apart at a glance. Drop the selected passage into one, or, under the note you are writing, press once to make the echo a link. Luhmann called his box a conversation partner; it is one only when the box speaks first."
+                "할 일은 없다. 논문을 읽으면 된다. 인스펙터의 Notes 탭을 열어 두면, 지금 보이는 쪽과 드문 낱말을 나누는 노트가 — 몇 달 전 다른 논문을 읽다 쓴 것이라도 — 맨 위에 스스로 올라온다. 노트 아래 파란 낱말이 둘이 나누는 말이다: 우연이면 지나치고, 울림이면 노트를 눌러 열어 본다. 쪽에서 문장을 선택하면 노트마다 ❝ 단추가 생기고, 누르면 그 구절이 주소를 갖고 그 노트에 들어간다 — 두 논문이 노트 하나에서 만난다. 노트를 쓰는 동안에는 편집기 아래 'Resonates with'에 아직 잇지 않은 울림이 모이고, 🔗 한 번이면 [[링크]]가 써진다. 다른 앱에서 노트는 폴더에 누워 있다가 검색해야 나온다 — 그런데 잊어버린 노트는 검색하지 않는다. 루만은 자기 상자를 대화 상대라고 불렀다; 상자가 먼저 말을 걸 때만 대화다. 아래에서 네 단계를 직접 해 보라.",
+                "There is nothing to do but read. Keep the inspector's Notes tab open and the notes that share their rarer words with the pages on screen — written months ago, against another paper — come up by themselves at the top. The blue words under each are what the two share: a coincidence, and you read on; an echo, and you click the note to open it. Select a sentence on the page and every note grows a ❝ button; press it and the passage lands in that note with its address — two papers meet in one note. While you write, 'Resonates with' under the editor gathers the echoes not yet linked, and one 🔗 writes the [[link]]. In other apps a note lies in a folder until you search for it — and nobody searches for a note they have forgotten. Luhmann called his box a conversation partner; it is one only when the box speaks first. Do the four steps below."
             ),
             demo: .resonance,
             featured: true
@@ -208,8 +208,8 @@ enum ReleaseNotes {
                 ),
                 Entry(
                     Text2("공명", "Resonance"),
-                    Text2("읽고 있는 쪽과 드문 낱말을 나누는 노트가 — 다른 논문에서 쓴 것이라도 — Notes 탭 맨 위에 스스로 올라온다. 나누는 낱말도 함께. 노트 아래에서는 한 번 눌러 링크로 만든다.",
-                          "Notes that share their rarer words with the pages on screen — from other papers — come up by themselves at the top of the Notes tab, with the words they share. Under a note, one press makes the echo a link."),
+                    Text2("읽기만 하면 된다: 보이는 쪽과 드문 낱말을 나누는 노트가 — 다른 논문에서 쓴 것이라도 — Notes 탭 맨 위에 올라온다. 파란 낱말이 나누는 말. 문장을 선택하면 ❝로 그 노트에 떨어뜨리고, 노트 아래 'Resonates with'에서 🔗 한 번이면 링크가 써진다. 아래 네 단계를 직접 해 보라.",
+                          "Just read: notes that share the page's rarer words — from other papers — come up at the top of the Notes tab, the shared words in blue. Select a sentence and ❝ drops it into a note; under a note, 'Resonates with' and one 🔗 writes the link. Do the four steps below."),
                     demo: .resonance,
                     featured: true
                 ),

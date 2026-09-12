@@ -138,6 +138,7 @@ extension PaperNotesView {
                     .foregroundStyle(.tertiary)
                 Spacer(minLength: 0)
             }
+            .help("Notes written against other papers that share this page's rarer words — the shared words are shown in blue. Click one to open it; select a passage on the page and ❝ drops it into that note.")
             .padding(.horizontal, 16)
             .padding(.top, 10)
             .padding(.bottom, 2)
