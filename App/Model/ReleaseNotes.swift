@@ -262,6 +262,11 @@ enum ReleaseNotes {
                     devices: [.ipad, .iphone]
                 ),
                 Entry(
+                    Text2("iCloud 라이브러리가 비어 보임", "An iCloud library that looked empty"),
+                    Text2("맥에서 만든 라이브러리를 아이패드·아이폰이 논문 0편으로 열었다. iOS의 iCloud는 숨김 폴더 .papertime 아래를 통째로 숨김으로 표시해 기록 폴더가 하나도 잡히지 않았다. 이제 이름으로 가려 62편이 그대로 온다.", "A library made on the Mac opened on the iPad and iPhone with no papers. iCloud on iOS flags everything under the hidden .papertime folder as hidden, so no record folder was listed. Records are now filtered by name, and the papers come across."),
+                    devices: [.ipad, .iphone]
+                ),
+                Entry(
                     Text2("슬립박스 순서", "Slip-box order"),
                     Text2("노트는 쓴 순서로 고정되고 논문별로 묶인다.", "Notes stay in the order written, grouped by paper.")
 ,

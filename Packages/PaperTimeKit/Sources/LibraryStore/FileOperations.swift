@@ -204,13 +204,22 @@ public enum FileOperations {
     }
 
     public static func subdirectories(of url: URL) throws -> [URL] {
-        let contents = try FileManager.default.contentsOfDirectory(
-            at: url,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles, .skipsPackageDescendants]
-        )
-        return contents
+        try visibleContents(of: url, keys: [.isDirectoryKey])
             .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
+    }
+
+    /// The entries of a directory whose names do not start with a dot.
+    ///
+    /// Deliberately not `.skipsHiddenFiles`: iCloud Drive on iOS marks
+    /// everything under a dot-folder as hidden, so listing `.papertime/papers`
+    /// with that option returned nothing — sixty-two records on the Mac, an
+    /// empty library on the iPad, with every file present and readable.
+    public static func visibleContents(of url: URL, keys: [URLResourceKey]? = nil) throws -> [URL] {
+        try FileManager.default.contentsOfDirectory(
+            at: url,
+            includingPropertiesForKeys: keys,
+            options: [.skipsPackageDescendants]
+        ).filter { !$0.lastPathComponent.hasPrefix(".") }
     }
 }
