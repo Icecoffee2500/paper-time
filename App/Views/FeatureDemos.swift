@@ -1712,46 +1712,156 @@ private struct ResonanceDemo: View {
     }
 
     /// How the notes are chosen, in numbers — a reading friend who has your
-    /// notes by heart, and the arithmetic the friend does.
+    /// notes by heart, and the arithmetic the friend does. Cards and chips
+    /// rather than a paragraph: a rule is read one at a time, and a number
+    /// is read as a number.
     private var rule: some View {
-        VStack(alignment: .leading, spacing: scale.isFull ? 6 : 4) {
-            Text(ReleaseNotes.string("어떻게 고르나", "How the notes are chosen"))
-                .font(scale.small.weight(.semibold))
-            Text(ReleaseNotes.string(
-                "네 노트를 전부 외운 읽기 친구가 있다고 생각하면 된다. 장을 넘기면 친구가 새 쪽의 낱말과 노트 하나하나의 낱말을 나란히 놓고 같은 것을 센다 — 다만 이렇게 센다:",
-                "Think of a reading friend who knows your notes by heart. When you turn the page, the friend lays the page's words beside each note's and counts what they share — counting like this:"
-            ))
-            ForEach(rules, id: \.self) { line in
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text("·").foregroundStyle(.tertiary)
-                    Text(line).fixedSize(horizontal: false, vertical: true)
-                }
+        VStack(alignment: .leading, spacing: scale.isFull ? 10 : 7) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(ReleaseNotes.string("어떻게 고르나", "How the notes are chosen"))
+                    .font(scale.small.weight(.semibold))
+                Text(ReleaseNotes.string(
+                    "네 노트를 전부 외운 읽기 친구가, 새 쪽의 낱말과 노트의 낱말을 나란히 놓고 같은 것을 센다. 다만 이렇게.",
+                    "A reading friend who knows your notes by heart lays the page's words beside each note's and counts what they share. Like this."
+                ))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             }
-            Text(ReleaseNotes.string(
-                "점수 = Σ 무게 × 짝 보너스 × √min(횟수) ÷ (1 + ln 노트 길이).  겹친 낱말이 둘 이상(짝이면 하나)이고, 점수가 1.0 이상이며 1등의 35% 이상인 노트만, 많아도 넷.",
-                "score = Σ weight × pair bonus × √min(count) ÷ (1 + ln note length).  Only notes sharing two words (or one pair), scoring 1.0 or more and at least 35% of the strongest — four at most."
-            ))
-            .font(scale.small.monospaced())
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+
+            let cards: [AnyView] = [AnyView(notCounted), AnyView(weight), AnyView(pairs), AnyView(length)]
+            if scale.isFull {
+                HStack(alignment: .top, spacing: 8) { cards[0]; cards[1] }
+                HStack(alignment: .top, spacing: 8) { cards[2]; cards[3] }
+            } else {
+                ForEach(0..<4, id: \.self) { cards[$0] }
+            }
+
+            score
         }
-        .font(scale.small)
-        .padding(scale.isFull ? 10 : 8)
+        .padding(scale.isFull ? 12 : 8)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: scale.corner, style: .continuous).fill(.quaternary.opacity(0.25)))
+    }
+
+    /// One rule: a symbol, a name, one line, and its numbers.
+    private func card(_ symbol: String, _ title: String, _ line: String, @ViewBuilder figures: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 6 : 4) {
+            Label(title, systemImage: symbol)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tint)
+            Text(line)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            figures()
+        }
+        .padding(scale.isFull ? 10 : 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(RoundedRectangle(cornerRadius: scale.corner, style: .continuous).fill(.background))
     }
 
-    private var rules: [String] {
-        [
-            ReleaseNotes.string("흔한 말은 세지 않는다: 기능어와 논문마다 쓰는 말(model, method, results, training, data…) 300개쯤은 겹쳐도 0.",
-                                "Common words are not counted: function words and the words every paper uses (model, method, results, training, data…), some 300, count for nothing."),
-            ReleaseNotes.string("낱말 하나의 무게 = ln((N+1) ÷ (그 낱말이 나오는 글 수 + 0.5)) + 0.3. N은 노트 수 + 이 논문에서 뽑은 40쪽. 45개 글 중 42개에 나오는 'network'는 0.38, 3개에만 나오는 'consolidation'은 2.88 — 드문 말이 일곱 배.",
-                                "A word's weight = ln((N+1) ÷ (texts it appears in + 0.5)) + 0.3, with N = notes + 40 sampled pages of this paper. 'network', in 42 of 45 texts: 0.38. 'consolidation', in 3: 2.88 — seven times as much."),
-            ReleaseNotes.string("두 낱말이 붙어서 겹치면('catastrophic forgetting') ×1.3. weights와 weight, pretrained와 pretraining은 같은 말로 본다.",
-                                "Two words together ('catastrophic forgetting') count ×1.3. weights and weight, pretrained and pretraining are one word."),
-            ReleaseNotes.string("긴 노트는 우연히 더 겹치니 (1 + ln 길이)로 나눈다. 다섯 줄이든 다섯 낱말이든 짧은 노트는 같은 길이로 친다.",
-                                "A long note shares more by chance, so its sum is divided by (1 + ln length); anything short is treated as the same short length."),
-        ]
+    /// A number or a word in a rounded tint — the shape a figure takes here.
+    private func chip(_ text: String, tinted: Bool = false, mono: Bool = true) -> some View {
+        Text(text)
+            .font(mono ? .caption2.monospaced() : .caption2)
+            .foregroundStyle(tinted ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(tinted ? Color.accentColor.opacity(0.12) : Color.secondary.opacity(0.1))
+            )
+    }
+
+    private var notCounted: some View {
+        card("xmark.circle", ReleaseNotes.string("세지 않는 말", "Not counted"),
+             ReleaseNotes.string("기능어와 논문마다 쓰는 말은 겹쳐도 0.", "Function words, and the words every paper uses, count for nothing.")) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 4) {
+                    ForEach(["model", "method", "results", "training", "data"], id: \.self) { chip($0, mono: false) }
+                }
+                chip(ReleaseNotes.string("317개", "317 words"), tinted: true)
+            }
+        }
+    }
+
+    private var weight: some View {
+        card("scalemass", ReleaseNotes.string("낱말의 무게", "A word's weight"),
+             ReleaseNotes.string("드물수록 무겁다. N = 노트 수 + 이 논문에서 뽑은 40쪽.", "The rarer, the heavier. N = the notes + 40 sampled pages of this paper.")) {
+            VStack(alignment: .leading, spacing: 5) {
+                chip("ln((N+1) ÷ (df+0.5)) + 0.3", tinted: true)
+                example("network", "42 / 45", 0.38, of: 2.88)
+                example("consolidation", "3 / 45", 2.88, of: 2.88)
+            }
+        }
+    }
+
+    /// One worked word: where it appears, and the weight that gives it,
+    /// drawn as a bar so the two can be compared without reading.
+    private func example(_ word: String, _ seen: String, _ value: Double, of most: Double) -> some View {
+        HStack(spacing: 6) {
+            Text(word).font(.caption2).frame(width: scale.isFull ? 78 : 66, alignment: .leading).lineLimit(1)
+            Text(seen).font(.caption2.monospaced()).foregroundStyle(.tertiary).lineLimit(1).fixedSize().frame(width: 48, alignment: .trailing)
+            GeometryReader { geo in
+                Capsule().fill(Color.accentColor.opacity(value == most ? 0.8 : 0.3))
+                    .frame(width: max(4, geo.size.width * value / most))
+            }
+            .frame(height: 6)
+            Text(String(format: "%.2f", value))
+                .font(.caption2.monospaced().weight(value == most ? .semibold : .regular))
+                .foregroundStyle(value == most ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                .frame(width: 30, alignment: .trailing)
+        }
+    }
+
+    private var pairs: some View {
+        card("link", ReleaseNotes.string("짝과 어간", "Pairs and stems"),
+             ReleaseNotes.string("붙어서 겹치는 두 낱말은 더 무겁고, 꼴이 다른 같은 말은 하나로 본다.", "Two words together weigh more; a word in another form is the same word.")) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 4) { chip("catastrophic forgetting", mono: false); chip("×1.3", tinted: true) }
+                HStack(spacing: 4) { chip("weights", mono: false); Text("=").font(.caption2).foregroundStyle(.tertiary); chip("weight", mono: false) }
+                HStack(spacing: 4) { chip("pretrained", mono: false); Text("=").font(.caption2).foregroundStyle(.tertiary); chip("pretraining", mono: false) }
+            }
+        }
+    }
+
+    private var length: some View {
+        card("text.alignleft", ReleaseNotes.string("긴 노트", "A long note"),
+             ReleaseNotes.string("길면 우연히 더 겹치니 나눈다. 짧은 노트는 다 같은 길이로 친다.", "It shares more by chance, so its sum is divided. Anything short counts as the same short length.")) {
+            chip("÷ (1 + ln 길이)".replacingOccurrences(of: "길이", with: ReleaseNotes.string("길이", "length")), tinted: true)
+        }
+    }
+
+    /// The score, as a formula read left to right, and the gates a note
+    /// has to pass.
+    private var score: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 4) {
+                Text(ReleaseNotes.string("점수", "score")).font(.caption.weight(.semibold))
+                Text("=").font(.caption2).foregroundStyle(.tertiary)
+                chip(ReleaseNotes.string("Σ 무게 × 짝 × √min(횟수)", "Σ weight × pair × √min(count)"), tinted: true)
+                Text("÷").font(.caption2).foregroundStyle(.tertiary)
+                chip(ReleaseNotes.string("1 + ln 길이", "1 + ln length"), tinted: true)
+            }
+            HStack(spacing: 6) {
+                gate(ReleaseNotes.string("겹친 말", "shared"), "≥ 2")
+                gate(ReleaseNotes.string("점수", "score"), "≥ 1.0")
+                gate(ReleaseNotes.string("1등의", "of the best"), "≥ 35%")
+                gate(ReleaseNotes.string("많아도", "at most"), "4")
+            }
+        }
+    }
+
+    private func gate(_ name: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(value).font(.caption.monospaced().weight(.semibold)).foregroundStyle(.tint)
+            Text(name).font(.system(size: 9)).foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: scale.corner - 2, style: .continuous).fill(.background))
     }
 
     // MARK: The page
