@@ -206,6 +206,48 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.2.0",
+            date: Text2("2026년 9월", "September 2026"),
+            note: Text2("두 번째 알파: 상자가 글이 되는 길, 그리고 아이패드와 아이폰.", "The second alpha: the way from the box to the manuscript, and the iPad and iPhone."),
+            added: [
+                Entry(
+                    Text2("지도(Atlas)", "Maps (Atlas)"),
+                    Text2("한 주제의 노트가 다섯 개 넘게 쌓이면 슬립박스가 지도를 제안한다. 지도는 링크가 소제목 아래 놓인 노트(kind: map)이고, 열면 카드 보드가 된다. 울리는데 안 올린 노트는 ＋ 한 번.",
+                          "When more than five notes pile up on one subject, the slip-box suggests a map. A map is a note (kind: map) with links under headings; opened, it is a board of cards. Notes that resonate but are not on it are one ＋ away."),
+                    demo: .atlas,
+                    featured: true
+                ),
+                Entry(
+                    Text2("초안(Express)", "Drafts (Express)"),
+                    Text2("초안은 노트(kind: draft)다. 논문의 구절은 ❝로, 노트는 [[링크]]로 넣고, ⇧⌘E면 구절이 \\cite{키}로, 노트가 제 문장으로, 인용한 논문만의 .bib과 함께 나온다. 기본 LaTeX, pandoc도.",
+                          "A draft is a note (kind: draft). Passages go in with ❝, notes as [[links]]; ⇧⌘E renders passages as \\cite{key}, notes as their sentences, with a .bib of just the papers cited. LaTeX by default, pandoc too."),
+                    demo: .express,
+                    featured: true
+                ),
+                Entry(
+                    Text2("검색은 묻기 전에 내놓는다", "Search that offers before it is asked"),
+                    Text2("⌘K 또는 목록을 끝까지 당기면. 노트·지도·초안도 찾고 최근 연 것이 먼저. 빈칸이면 이어 읽기·읽었으니·다시 보기·이번 주 새로 — 각각 이유와 함께.",
+                          "⌘K, or pull the list down past its top. Finds notes, maps and drafts too, the recently opened first. Empty, it offers Continue, Because you read, Revisit and New this week — each with its reason."),
+                    action: .searchEverything
+                ),
+                Entry(
+                    Text2("아이패드 · 아이폰", "iPad and iPhone"),
+                    Text2("아이패드는 맥과 같은 리더에 연필 — 필기는 PDF에 잉크 주석으로 남아 맥에서도 보인다. 아이폰은 읽고 찾는 데 맞춰 리더 바에 배치·검색·표시가 있다.",
+                          "The iPad has the Mac's reader with a pencil — ink lands in the PDF as annotations and shows on the Mac. The phone is for reading and finding, with layout, search and marks on the reader's bar.")
+                ),
+            ],
+            fixed: [
+                Entry(
+                    Text2("책 모드 여백", "Book-mode margins"),
+                    Text2("펼침면이 가운데에 서고, 논문마다 여백이 같으며, 여백의 도장은 지워진다.", "The spread stands centred, margins match across papers, and the stamps in the margin are painted out.")
+                ),
+                Entry(
+                    Text2("슬립박스 순서", "Slip-box order"),
+                    Text2("노트는 쓴 순서로 고정되고 논문별로 묶인다.", "Notes stay in the order written, grouped by paper.")
+                ),
+            ]
+        ),
+        Release(
             version: "0.1.0",
             date: Text2("2026년 9월", "September 2026"),
             note: Text2("첫 알파.", "The first alpha."),
@@ -231,20 +273,6 @@ enum ReleaseNotes {
                     Text2("읽기만 하면 된다: 보이는 쪽과 드문 낱말을 나누는 노트가 — 다른 논문에서 쓴 것이라도 — Notes 탭 맨 위에 올라온다. 파란 낱말이 나누는 말. 문장을 선택하면 ❝로 그 노트에 떨어뜨리고, 노트 아래 'Resonates with'에서 🔗 한 번이면 링크가 써진다. 아래 네 단계를 직접 해 보라.",
                           "Just read: notes that share the page's rarer words — from other papers — come up at the top of the Notes tab, the shared words in blue. Select a sentence and ❝ drops it into a note; under a note, 'Resonates with' and one 🔗 writes the link. Do the four steps below."),
                     demo: .resonance,
-                    featured: true
-                ),
-                Entry(
-                    Text2("지도(Atlas)", "Maps (Atlas)"),
-                    Text2("한 주제의 노트가 다섯 개 넘게 쌓이면 슬립박스가 지도를 제안한다. 지도는 링크가 소제목 아래 놓인 노트(kind: map)이고, 열면 카드 보드가 된다. 울리는데 안 올린 노트는 ＋ 한 번.",
-                          "When more than five notes pile up on one subject, the slip-box suggests a map. A map is a note (kind: map) with links under headings; opened, it is a board of cards. Notes that resonate but are not on it are one ＋ away."),
-                    demo: .atlas,
-                    featured: true
-                ),
-                Entry(
-                    Text2("초안(Express)", "Drafts (Express)"),
-                    Text2("초안은 노트(kind: draft)다. 논문의 구절은 ❝로, 노트는 [[링크]]로 넣고, ⇧⌘E면 구절이 \\cite{키}로, 노트가 제 문장으로, 인용한 논문만의 .bib과 함께 나온다. 기본 LaTeX, pandoc도.",
-                          "A draft is a note (kind: draft). Passages go in with ❝, notes as [[links]]; ⇧⌘E renders passages as \\cite{key}, notes as their sentences, with a .bib of just the papers cited. LaTeX by default, pandoc too."),
-                    demo: .express,
                     featured: true
                 ),
                 Entry(
