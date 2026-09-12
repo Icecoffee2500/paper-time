@@ -335,7 +335,15 @@ private struct ScopeRow: ViewModifier {
     }
 
     /// The three colours the graph draws its connections in, for its row.
-    static let graphColors: [Color] = [.blue, .purple, .teal]
+    static let graphColors: [Color] = [.blue, .purple, .pink]
+    @Environment(\.colorScheme) private var colorScheme
+
+    /// The row's colour made fit for words: a yellow star reads, yellow
+    /// type on a pale wash over a blue desktop does not. Deepened toward
+    /// black in the light, lifted toward white in the dark.
+    private var textColor: Color {
+        symbolColor.mix(with: colorScheme == .dark ? .white : .black, by: colorScheme == .dark ? 0.25 : 0.4)
+    }
 
     /// A pale wash of the row's colour; for the graph, the three colours of
     /// its connections running into one another.
@@ -343,11 +351,11 @@ private struct ScopeRow: ViewModifier {
         guard isCurrent else { return AnyShapeStyle(Color.clear) }
         if scope == .graph {
             return AnyShapeStyle(LinearGradient(
-                colors: Self.graphColors.map { $0.opacity(0.16) },
+                colors: Self.graphColors.map { $0.opacity(0.24) },
                 startPoint: .leading, endPoint: .trailing
             ))
         }
-        return AnyShapeStyle(symbolColor.opacity(0.13))
+        return AnyShapeStyle(symbolColor.opacity(0.2))
     }
 
     func body(content: Content) -> some View {
@@ -355,8 +363,8 @@ private struct ScopeRow: ViewModifier {
             .labelStyle(SidebarLabelStyle(symbolColor: isCurrent ? symbolColor : nil))
             // The row's colour is the symbol's: name, count and ground
             // agree, rather than an orange symbol on a blue wash.
-            .tint(symbolColor)
-            .foregroundStyle(isCurrent ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
+            .tint(textColor)
+            .foregroundStyle(isCurrent ? AnyShapeStyle(textColor) : AnyShapeStyle(.primary))
             .fontWeight(isCurrent ? .medium : .regular)
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(.rect)
