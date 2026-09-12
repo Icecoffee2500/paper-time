@@ -89,6 +89,10 @@ struct LibraryWindow: View {
     @State private var showsExport = false
     @State private var showsMigration = false
     @State private var showsCitationStyles = false
+    #if os(iOS)
+    /// Settings on iOS: there is no Settings window, so a sheet from a gear.
+    @State private var showsSettings = false
+    #endif
 
     var body: some View {
         decorated
@@ -302,6 +306,29 @@ struct LibraryWindow: View {
             // header now, small, and the list starts where the title was.
             LibrarySidebar(model: model)
         }
+        #if os(iOS)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showsSettings = true
+                } label: {
+                    Label("Settings", systemImage: "gearshape")
+                }
+                .keyboardShortcut(",", modifiers: .command)
+            }
+        }
+        .sheet(isPresented: $showsSettings) {
+            NavigationStack {
+                SettingsView()
+                    .environment(app)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { showsSettings = false }
+                        }
+                    }
+            }
+        }
+        #endif
     }
 
     private var windowBody: some View {
@@ -689,6 +716,7 @@ struct PaperDetailColumn: View {
     let configuration: ReaderConfiguration
     let link: ReaderLink
     @Environment(AppModel.self) private var app
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     @Binding var inspectorTab: InspectorTab
 
@@ -775,7 +803,9 @@ struct PaperDetailColumn: View {
                 VStack(spacing: 0) {
                     // The paper's name, where the list has "All Papers" and
                     // the slip-box has "Notes". The page keeps its place; the
-                    // strip is what the panel gained by reaching higher.
+                    // strip is what the panel gained by reaching higher. On
+                    // iOS the navigation bar already says it.
+                    #if os(macOS)
                     HStack {
                         Text(paper.meta.displayTitle)
                             .font(.headline)
@@ -786,6 +816,7 @@ struct PaperDetailColumn: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 10)
                     .padding(.bottom, 6)
+                    #endif
 
                     ReaderScreen(
                         library: model,
@@ -794,6 +825,67 @@ struct PaperDetailColumn: View {
                         link: link
                     )
                 }
+                #if os(iOS)
+                .toolbar {
+                    // The pencil, first in the reader's own bar: on the iPad
+                    // the paper is written on, and the tool that does it
+                    // should not be two menus deep. The phone is for reading
+                    // and finding, and has no pencil.
+                    if UIDevice.current.userInterfaceIdiom == .pad {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button {
+                                let drawing = configuration.mode != .draw
+                                configuration.mode = drawing ? .draw : .read
+                                configuration.showsToolPicker = drawing
+                            } label: {
+                                Label("Draw", systemImage: configuration.mode == .draw ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
+                            }
+                            .keyboardShortcut("d", modifiers: [.command, .shift])
+                            .help("Write on the page with the pencil")
+                        }
+                    }
+                    // On a phone the reader is a screen of its own, so the
+                    // page's options and the search come along with it.
+                    if horizontalSizeClass == .compact {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Menu {
+                                Picker("Page Layout", selection: Bindable(configuration).layout) {
+                                    ForEach(ReaderConfiguration.PageLayout.allCases) { layout in
+                                        Label(layout.label, systemImage: layout.symbolName).tag(layout)
+                                    }
+                                }
+                                Picker("Page Tint", selection: Bindable(configuration).tint) {
+                                    ForEach(ReaderConfiguration.PageTint.allCases) { tint in
+                                        Text(tint.label).tag(tint)
+                                    }
+                                }
+                                Button {
+                                    app.toggleFloatingList()
+                                } label: {
+                                    Label("Table of Contents", systemImage: "list.bullet.indent")
+                                }
+                            } label: {
+                                Label("View Options", systemImage: "textformat.size")
+                            }
+                        }
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button {
+                                app.showsSearchPalette = true
+                            } label: {
+                                Label("Search", systemImage: "magnifyingglass")
+                            }
+                        }
+                        // The marks and the notes, as a sheet.
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button {
+                                app.toggleInspector()
+                            } label: {
+                                Label("Marks and Notes", systemImage: "sidebar.trailing")
+                            }
+                        }
+                    }
+                }
+                #endif
             } else {
                 ContentUnavailableView(
                     "No Paper Selected",

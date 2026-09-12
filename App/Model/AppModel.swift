@@ -259,6 +259,19 @@ public final class AppModel {
 
     /// Reopens the folder chosen on this device, if there is one.
     public func restore() async {
+        // For driving a simulator: `PAPERTIME_LIBRARY=<folder>` opens that
+        // folder as the library, and `PAPERTIME_SKIP_WELCOME=1` keeps the
+        // introduction down.
+        let environment = ProcessInfo.processInfo.environment
+        if environment["PAPERTIME_SKIP_WELCOME"] != nil { markReleaseNotesSeen() }
+        if let path = environment["PAPERTIME_LIBRARY"] {
+            // A relative path is inside the app's own Documents, which on a
+            // simulator moves with every install.
+            let base = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: "/")
+            let url = path.hasPrefix("/") ? URL(fileURLWithPath: path, isDirectory: true) : base.appendingPathComponent(path, isDirectory: true)
+            await adopt(folderAt: url)
+            return
+        }
         guard let result = preference.load() else {
             phase = .needsLibraryFolder
             return
@@ -305,6 +318,16 @@ public final class AppModel {
             library = model
             phase = .ready
             await model.refresh()
+            // Driving a simulator: take in the folder's loose PDFs and open
+            // the first paper, since nothing there can be tapped from here.
+            let environment = ProcessInfo.processInfo.environment
+            if environment["PAPERTIME_ADOPT_LOOSE"] != nil {
+                _ = await model.adoptLooseDocuments()
+                await model.refresh()
+            }
+            if environment["PAPERTIME_OPEN_FIRST"] != nil, let first = model.visiblePapers.first {
+                model.selection = [first.id]
+            }
         } catch {
             phase = .failed(error.localizedDescription)
         }

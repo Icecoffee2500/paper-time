@@ -34,3 +34,15 @@ extension PlatformBezierPath {
         return path
     }
 }
+
+
+extension NSValue {
+    /// The point in an `NSValue`, which AppKit and UIKit name differently.
+    public var platformPoint: CGPoint {
+        #if canImport(UIKit)
+        cgPointValue
+        #else
+        pointValue
+        #endif
+    }
+}

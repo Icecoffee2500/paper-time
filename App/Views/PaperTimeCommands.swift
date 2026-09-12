@@ -1,4 +1,6 @@
+#if canImport(AppKit)
 import AppKit
+#endif
 import SwiftUI
 
 /// Menu bar commands. On the Mac these are the primary way to reach most

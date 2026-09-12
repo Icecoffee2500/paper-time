@@ -19,7 +19,7 @@ struct ContentsPopup: View {
 
     /// The size the list sets its words in; the pictures of formulas are
     /// scaled to match it.
-    private static var listSize: CGFloat { NSFont.preferredFont(forTextStyle: .callout).pointSize }
+    private static var listSize: CGFloat { PlatformFont.preferredFont(forTextStyle: .callout).pointSize }
 
     /// Contents already read, by the document they were read from — a paper
     /// asked for its contents twice is not read twice.
@@ -73,8 +73,8 @@ struct ContentsPopup: View {
             switch piece {
             case .words(let words):
                 return text + Text(words)
-            case .picture(let image):
-                return text + Text(" ") + Text(Image(nsImage: image)) + Text(" ")
+            case .picture(let image, let scale):
+                return text + Text(" ") + Text(Image(decorative: image, scale: scale)) + Text(" ")
             }
         }
     }

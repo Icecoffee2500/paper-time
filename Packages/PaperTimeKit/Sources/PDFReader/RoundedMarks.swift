@@ -1,3 +1,4 @@
+import InkEngine
 import PDFKit
 
 /// The app's own drawing of the marks on a page.
@@ -19,6 +20,11 @@ import PDFKit
 public enum RoundedMarks {
     /// The kinds this takes over from PDFKit.
     public static let kinds: Set<String> = ["Highlight", "Underline", "StrikeOut"]
+
+    /// Whether a band is laid over the page translucently rather than
+    /// multiplied onto it. The Mac multiplies the overlay's layer; UIKit
+    /// ignores that filter, and an opaque pale band hid the words under it.
+    public nonisolated(unsafe) static var blendsByAlpha = false
 
     /// How round a highlight's ends are, as a share of its height, and the
     /// most they get. A short line of small type is nearly a capsule; a tall
@@ -42,7 +48,7 @@ public enum RoundedMarks {
     /// result onto the page, so a pale band still lets the ink through and a
     /// dark line only gets darker.
     public static func draw(_ annotation: PDFAnnotation, in context: CGContext) {
-        guard let color = annotation.color.usingColorSpace(.sRGB) else { return }
+        guard let color = Tone(annotation.color) else { return }
         let isHovered = MarkHover.hovered === annotation
         context.saveGState()
         switch annotation.type {
@@ -62,9 +68,13 @@ public enum RoundedMarks {
     /// lighter still and a thin edge in the true colour, so what is about to
     /// be pressed is the most legible line on the page rather than the least.
     private static func drawHighlight(
-        _ annotation: PDFAnnotation, color: NSColor, hovered: Bool, in context: CGContext
+        _ annotation: PDFAnnotation, color: Tone, hovered: Bool, in context: CGContext
     ) {
-        let fill = color.blended(withFraction: hovered ? 0.55 : 0.35, of: .white) ?? color
+        var fill = color.blended(toward: 1, by: hovered ? 0.55 : 0.35)
+        if Self.blendsByAlpha {
+            fill = color
+            fill.alpha = hovered ? 0.3 : 0.42
+        }
         let path = CGMutablePath()
         for rect in lineRects(of: annotation) {
             let radius = min(rect.height * rounding, maximumRadius)
@@ -75,7 +85,7 @@ public enum RoundedMarks {
         context.fillPath()
         if hovered {
             context.addPath(path)
-            context.setStrokeColor((color.blended(withFraction: 0.15, of: .black) ?? color).cgColor)
+            context.setStrokeColor(color.blended(toward: 0, by: 0.15).cgColor)
             context.setLineWidth(0.9)
             context.strokePath()
         }
@@ -89,10 +99,10 @@ public enum RoundedMarks {
     /// suits a band leaves it barely there. Deepened, and thicker under the
     /// pointer, in the colour itself.
     private static func drawLine(
-        _ annotation: PDFAnnotation, color: NSColor, hovered: Bool,
+        _ annotation: PDFAnnotation, color: Tone, hovered: Bool,
         along position: LinePosition, in context: CGContext
     ) {
-        let ink = hovered ? color : (color.blended(withFraction: 0.3, of: .black) ?? color)
+        let ink = hovered ? color : color.blended(toward: 0, by: 0.3)
         context.setStrokeColor(ink.cgColor)
         context.setLineCap(.round)
         for rect in lineRects(of: annotation) {
@@ -108,6 +118,31 @@ public enum RoundedMarks {
         }
     }
 
+    /// A colour as four numbers, the same on every platform, that can be
+    /// blended toward white or black.
+    struct Tone {
+        var red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat
+
+        init?(_ color: PlatformColor) {
+            guard let converted = color.cgColor.converted(to: CGColorSpace(name: CGColorSpace.sRGB)!, intent: .defaultIntent, options: nil),
+                  let parts = converted.components, parts.count >= 3
+            else { return nil }
+            red = parts[0]; green = parts[1]; blue = parts[2]; alpha = parts.count > 3 ? parts[3] : 1
+        }
+
+        func blended(toward grey: CGFloat, by fraction: CGFloat) -> Tone {
+            var tone = self
+            tone.red += (grey - red) * fraction
+            tone.green += (grey - green) * fraction
+            tone.blue += (grey - blue) * fraction
+            return tone
+        }
+
+        var cgColor: CGColor {
+            CGColor(colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!, components: [red, green, blue, alpha])!
+        }
+    }
+
     /// The lines a markup covers, put back onto the page from the corners
     /// PDFKit stores relative to the annotation's own box.
     static func lineRects(of annotation: PDFAnnotation) -> [CGRect] {
@@ -117,7 +152,7 @@ public enum RoundedMarks {
         let origin = annotation.bounds.origin
         var rects: [CGRect] = []
         for start in stride(from: 0, to: quads.count - 3, by: 4) {
-            let corners = (0..<4).map { quads[start + $0].pointValue }
+            let corners: [CGPoint] = (0..<4).map { quads[start + $0].platformPoint }
             guard let minX = corners.map(\.x).min(), let maxX = corners.map(\.x).max(),
                   let minY = corners.map(\.y).min(), let maxY = corners.map(\.y).max()
             else { continue }
