@@ -8,9 +8,11 @@ import SwiftUI
 
 #if canImport(UIKit)
 import UIKit
+typealias PlatformEdgeInsets = UIEdgeInsets
 typealias PlatformViewRepresentable = UIViewRepresentable
 #else
 import AppKit
+typealias PlatformEdgeInsets = NSEdgeInsets
 typealias PlatformViewRepresentable = NSViewRepresentable
 #endif
 
@@ -97,25 +99,8 @@ final class ReaderCoordinator: NSObject {
     private var appliedTint: ReaderConfiguration.PageTint?
     private var appliedMode: ReaderConfiguration.Mode?
     private var appliedFingerDrawing: Bool?
-    #if os(macOS)
-    private let markupPanel = MarkupPanelController()
-    private var markupTask: Task<Void, Never>?
-    private var scrollMonitor: Any?
-    /// ← and → in a book, which PDFKit leaves unanswered.
-    private var arrowMonitor: Any?
-    /// Refits the spread to the view's width while a book is open.
-    private var spreadObserver: (any NSObjectProtocol)?
-
     /// The crop that makes the document a book, while it is one.
     private var bookTrim: BookTrim?
-    /// Keeps the spread centred: PDFKit lays a spread out with a full page
-    /// break at either end as well as between the pages, so the document is
-    /// wider than the view, and where the excess goes depends on how the view
-    /// was last scrolled — to the left edge for a page turn, wherever a jump
-    /// left it for a destination. This puts it back in the middle.
-    private var clipObserver: (any NSObjectProtocol)?
-    private var centering = false
-
     /// Trims every page to the paper's content: see `BookTrim`.
     private func trimForBook(_ document: PDFDocument) {
         if let bookTrim, bookTrim.document === document, bookTrim.isApplied { return }
@@ -140,13 +125,31 @@ final class ReaderCoordinator: NSObject {
         let spread = index - index % 2
         if bookTrim.ensure([spread, spread + 1]) {
             view.layoutDocumentView()
+            #if os(macOS)
             fitSpread(in: view)
+            #endif
         }
         // The spreads either side, after this one is on screen.
         DispatchQueue.main.async { [weak bookTrim] in
             _ = bookTrim?.ensure([spread + 2, spread + 3, spread - 2, spread - 1])
         }
     }
+
+    #if os(macOS)
+    /// Keeps the spread centred: PDFKit lays a spread out with a full page
+    /// break at either end as well as between the pages, so the document is
+    /// wider than the view, and where the excess goes depends on how the view
+    /// was last scrolled — to the left edge for a page turn, wherever a jump
+    /// left it for a destination. This puts it back in the middle.
+    private var clipObserver: (any NSObjectProtocol)?
+    private var centering = false
+    private let markupPanel = MarkupPanelController()
+    private var markupTask: Task<Void, Never>?
+    private var scrollMonitor: Any?
+    /// ← and → in a book, which PDFKit leaves unanswered.
+    private var arrowMonitor: Any?
+    /// Refits the spread to the view's width while a book is open.
+    private var spreadObserver: (any NSObjectProtocol)?
 
     /// Scrolls the spread to the middle of the view when the document is
     /// wider than the view; when it is narrower, PDFKit centres it itself.
@@ -228,6 +231,7 @@ final class ReaderCoordinator: NSObject {
     #endif
     #if canImport(UIKit)
     private var canvases: [Int: PKCanvasView] = [:]
+    private var overlays: [Int: PageOverlay] = [:]
     private let toolPicker = PKToolPicker()
     #endif
 
@@ -401,10 +405,12 @@ final class ReaderCoordinator: NSObject {
             view.document = session.document
             if appliedLayout == .book {
                 trimForBook(session.document)
+                #if os(macOS)
                 DispatchQueue.main.async { [weak self, weak view] in
                     guard let self, let view else { return }
                     self.fitSpread(in: view)
                 }
+                #endif
             }
             shownRevision = revision
             #if os(macOS)
@@ -524,6 +530,7 @@ final class ReaderCoordinator: NSObject {
         #if canImport(UIKit)
         toolPicker.setVisible(false, forFirstResponder: PKCanvasView())
         canvases.removeAll()
+        overlays.removeAll()
         #endif
     }
 
@@ -551,8 +558,8 @@ final class ReaderCoordinator: NSObject {
         // every paper, because the pages have been trimmed to their text:
         // this gap plus the trim is the whole gutter.
         view.pageBreakMargins = layout == .book
-            ? NSEdgeInsets(top: 4.75, left: 84, bottom: 4.75, right: 84)
-            : NSEdgeInsets(top: 4.75, left: 4.75, bottom: 4.75, right: 4.75)
+            ? PlatformEdgeInsets(top: 4.75, left: 84, bottom: 4.75, right: 84)
+            : PlatformEdgeInsets(top: 4.75, left: 4.75, bottom: 4.75, right: 4.75)
 
         switch layout {
         case .continuous:
@@ -1155,7 +1162,7 @@ extension ReaderCoordinator: @preconcurrency PDFPageOverlayViewProvider {
     #if canImport(UIKit)
     func pdfView(_ view: PDFView, overlayViewFor page: PDFPage) -> UIView? {
         let index = session.document.index(for: page)
-        if let existing = canvases[index] { return existing }
+        if let existing = overlays[index] { return existing }
 
         let canvas = PKCanvasView()
         canvas.backgroundColor = .clear
@@ -1171,7 +1178,11 @@ extension ReaderCoordinator: @preconcurrency PDFPageOverlayViewProvider {
         toolPicker.addObserver(canvas)
         canvas.tool = toolPicker.selectedTool
         canvases[index] = canvas
-        return canvas
+        // The canvas rides on the same overlay as the rounded marks and the
+        // margin mask, so the iPad page looks like the Mac's, plus ink.
+        let overlay = PageOverlay(page: page, canvas: canvas)
+        overlays[index] = overlay
+        return overlay
     }
 
     func pdfView(_ pdfView: PDFView, willEndDisplayingOverlayView overlayView: UIView, for page: PDFPage) {

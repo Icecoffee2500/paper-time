@@ -1,6 +1,9 @@
-#if os(macOS)
-import AppKit
 import PDFKit
+#if canImport(UIKit)
+import UIKit
+#else
+import AppKit
+#endif
 
 /// Crops a document's pages to their content while it is read as a book, so
 /// that every paper's spread has the same gutter and the same margins.
@@ -279,6 +282,7 @@ final class BookTrim {
     }
 }
 
+#if os(macOS)
 /// Paints out the text that runs up a page's margin while the book's crop
 /// would otherwise cut through it — the arXiv stamp, a journal's download
 /// notice — in the paper's own white, so that under the dimmed tint it is
@@ -310,6 +314,39 @@ final class MarginMaskView: NSView {
             context.fill(CGRect(
                 x: (rect.minX - box.minX) * scale, y: (rect.minY - box.minY) * scale,
                 width: rect.width * scale, height: rect.height * scale
+            ))
+        }
+    }
+}
+#else
+/// The same mask, for UIKit: the stamps in the margin painted out in white.
+final class MarginMaskView: UIView {
+    private weak var page: PDFPage?
+
+    init(page: PDFPage) {
+        self.page = page
+        super.init(frame: .zero)
+        isOpaque = false
+        backgroundColor = .clear
+        isUserInteractionEnabled = false
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    override func draw(_ rect: CGRect) {
+        guard let page, let trim = BookTrim.active, trim.document === page.document,
+              let context = UIGraphicsGetCurrentContext()
+        else { return }
+        let box = page.bounds(for: .cropBox)
+        guard box.width > 0 else { return }
+        let scale = bounds.width / box.width
+        context.setFillColor(CGColor(gray: 1, alpha: 1))
+        // UIKit's y runs down; the page's runs up.
+        for stamp in trim.stamps(on: page) {
+            let stamp = stamp.insetBy(dx: -3, dy: -3)
+            context.fill(CGRect(
+                x: (stamp.minX - box.minX) * scale, y: bounds.height - (stamp.maxY - box.minY) * scale,
+                width: stamp.width * scale, height: stamp.height * scale
             ))
         }
     }

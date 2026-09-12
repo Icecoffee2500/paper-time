@@ -1,6 +1,12 @@
-#if os(macOS)
-import AppKit
 import PDFKit
+import SwiftUI
+#if canImport(UIKit)
+import UIKit
+typealias PlatformFont = UIFont
+#else
+import AppKit
+typealias PlatformFont = NSFont
+#endif
 
 /// A paper's table of contents, from the outline it carries or, failing
 /// that, from the headings on its pages.
@@ -26,7 +32,8 @@ enum PaperContents {
 
     enum Piece {
         case words(String)
-        case picture(NSImage)
+        /// A picture cut from the page, and the pixels per point it is shown at.
+        case picture(CGImage, scale: CGFloat)
     }
 
     /// The contents, by preference: the outline the PDF carries, when it is
@@ -141,7 +148,7 @@ enum PaperContents {
                 guard bounds.width > 0, bounds.height > 0, bounds.height < bounds.width * 2 else { continue }
                 var sizes: [CGFloat: Int] = [:]
                 attributed.enumerateAttribute(.font, in: NSRange(location: 0, length: attributed.length)) { value, range, _ in
-                    let size = ((value as? NSFont)?.pointSize ?? 0).rounded()
+                    let size = ((value as? PlatformFont)?.pointSize ?? 0).rounded()
                     sizes[size, default: 0] += range.length
                 }
                 let size = sizes.max { $0.value < $1.value }?.key ?? 0
@@ -417,7 +424,7 @@ enum PaperContents {
         var sizes = [CGFloat](repeating: 0, count: characters.count)
         var weight: [CGFloat: Int] = [:]
         attributed.enumerateAttribute(.font, in: NSRange(location: 0, length: attributed.length)) { value, range, _ in
-            let size = ((value as? NSFont)?.pointSize ?? 0).rounded()
+            let size = ((value as? PlatformFont)?.pointSize ?? 0).rounded()
             for index in range.location..<(range.location + range.length) where index < sizes.count { sizes[index] = size }
             weight[size, default: 0] += range.length
         }
@@ -494,7 +501,7 @@ enum PaperContents {
         }
         var result: [Piece] = []
         if !head.isEmpty { result.append(.words(head)) }
-        result.append(.picture(picture))
+        result.append(.picture(picture.0, scale: picture.1))
         if !tail.isEmpty { result.append(.words(tail)) }
         return result
     }
@@ -541,7 +548,7 @@ enum PaperContents {
     /// the size of the list's — a formula set at 10 points in a 12-point
     /// list is shown at six-fifths of its size, and sits level with the
     /// words either side of it.
-    private static func snippet(of rect: CGRect, on page: PDFPage, scale: CGFloat) -> NSImage? {
+    private static func snippet(of rect: CGRect, on page: PDFPage, scale: CGFloat) -> (CGImage, CGFloat)? {
         guard rect.width > 2, rect.height > 3, rect.width < 400 else { return nil }
         let pixels: CGFloat = 4
         let width = Int(rect.width * pixels), height = Int(rect.height * pixels)
@@ -557,7 +564,7 @@ enum PaperContents {
         context.translateBy(x: -(rect.minX - box.minX), y: -(rect.minY - box.minY))
         page.draw(with: .mediaBox, to: context)
         guard let image = context.makeImage() else { return nil }
-        return NSImage(cgImage: image, size: NSSize(width: rect.width * scale, height: rect.height * scale))
+        // Drawn at four pixels a point and shown at `scale` points a point.
+        return (image, pixels / scale)
     }
 }
-#endif
