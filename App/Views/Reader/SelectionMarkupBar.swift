@@ -176,21 +176,25 @@ extension View {
     ///
     /// Above the text when there is room, below it when the selection starts at
     /// the top of the view — the control must never cover what it is about.
-    func offset(anchoredTo frame: CGRect, width: CGFloat) -> some View {
-        modifier(AnchoredToSelection(frame: frame, width: width))
+    func offset(anchoredTo frame: CGRect, width: CGFloat, below: Bool = false) -> some View {
+        modifier(AnchoredToSelection(frame: frame, width: width, below: below))
     }
 }
 
 private struct AnchoredToSelection: ViewModifier {
     let frame: CGRect
     let width: CGFloat
+    var below = false
 
     func body(content: Content) -> some View {
         GeometryReader { proxy in
             let maxX = max(8, proxy.size.width - width - 8)
             let x = min(max(8, frame.midX - width / 2), maxX)
             let above = frame.minY - 56
-            let y = above > 8 ? above : min(frame.maxY + 14, max(8, proxy.size.height - 180))
+            let under = frame.maxY + 14
+            let y = below
+                ? (under < proxy.size.height - 60 ? under : max(8, above))
+                : (above > 8 ? above : min(under, max(8, proxy.size.height - 180)))
             content.offset(x: x, y: y)
         }
     }

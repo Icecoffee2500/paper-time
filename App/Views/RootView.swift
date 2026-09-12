@@ -333,6 +333,7 @@ struct LibraryWindow: View {
                 }
                 .keyboardShortcut(",", modifiers: .command)
             }
+            .sharedBackgroundVisibility(.hidden)
         }
         .sheet(isPresented: $showsSettings) {
             NavigationStack {
@@ -352,7 +353,11 @@ struct LibraryWindow: View {
         @Bindable var app = app
 
         return splitView
-        .onChange(of: configuration.layout) { _, layout in
+        .task {
+            try? await Task.sleep(for: .milliseconds(600))
+            app.reassertFocusMode()
+        }
+        .onChange(of: configuration.layout, initial: true) { _, layout in
             app.settings.readerPageMode = layout.rawValue
             // A spread wants the whole window. Choosing Book is the clearest
             // statement a reader can make that they are here to read, so the
@@ -374,6 +379,7 @@ struct LibraryWindow: View {
         .onReceive(NotificationCenter.default.publisher(for: .paperTimeLayoutBook)) { _ in
             configuration.layout = .book
         }
+        #if os(macOS)
         .fileImporter(
             isPresented: $isImportingPDFs,
             allowedContentTypes: [.pdf],
@@ -382,6 +388,7 @@ struct LibraryWindow: View {
             guard case let .success(urls) = result else { return }
             Task { await model.importDocuments(at: urls) }
         }
+        #endif
         .sheet(isPresented: $showsExport) { BibTeXExportView() }
         .sheet(isPresented: $showsMigration) { MigrationView(model: model) }
         .sheet(isPresented: $showsCitationStyles) {
@@ -472,6 +479,16 @@ struct LibraryWindow: View {
         PaperListView(model: model)
             .navigationTitle(scopeTitle)
             .toolbar(id: "library") { toolbarContent }
+            // The importer sits on the column whose button asks for it: hung
+            // on the split view's root it never came up on the iPad.
+            .fileImporter(
+                isPresented: $isImportingPDFs,
+                allowedContentTypes: [.pdf],
+                allowsMultipleSelection: true
+            ) { result in
+                guard case let .success(urls) = result else { return }
+                Task { await model.importDocuments(at: urls) }
+            }
         #endif
     }
 
@@ -495,6 +512,16 @@ struct LibraryWindow: View {
         // drew the little vertical rules between the buttons.
         ToolbarItem(id: "actions", placement: barPlacement) {
             HStack(spacing: 4) {
+                #if os(iOS)
+                // The list can step aside here too, as it does on the Mac.
+                Button {
+                    app.togglePaperList()
+                } label: {
+                    Label("Hide Paper List", systemImage: "sidebar.leading").toolbarIcon()
+                }
+                .help("Hide or show the paper list")
+                .toolbarHover()
+                #endif
                 Button {
                     isImportingPDFs = true
                 } label: {
@@ -518,6 +545,7 @@ struct LibraryWindow: View {
             }
             .toolbarButtons()
         }
+        .sharedBackgroundVisibility(.hidden)
     }
 
     /// The four panes, behind one button.
@@ -854,7 +882,18 @@ struct PaperDetailColumn: View {
                     // The pencil, first in the reader's own bar: the paper is
                     // written on, and the tool that does it should not be two
                     // menus deep. On the phone a finger holds it.
-                    ToolbarItem(placement: .topBarTrailing) {
+                    // Flat, like the Mac's: the glass pills the system draws
+                    // behind toolbar groups made the two bars read as two apps.
+                    ToolbarItemGroup(placement: .topBarTrailing) {
+                        // The table of contents, one button, wherever the
+                        // reader is — not a line inside the AA menu.
+                        Button {
+                            app.toggleFloatingList()
+                        } label: {
+                            Label("Table of Contents", systemImage: "list.bullet.indent")
+                        }
+                        .keyboardShortcut("l", modifiers: [.command, .shift])
+                        .help("Table of contents")
                         Button {
                             configuration.mode = configuration.mode == .draw ? .read : .draw
                         } label: {
@@ -863,9 +902,25 @@ struct PaperDetailColumn: View {
                         .keyboardShortcut("d", modifiers: [.command, .shift])
                         .help("Write on the page with the pencil")
                     }
+                    .sharedBackgroundVisibility(.hidden)
                     // On a phone the reader is a screen of its own, so the
                     // page's options and the search come along with it.
-                    if horizontalSizeClass == .compact {
+                    // On a phone the reader is a screen of its own; on the iPad
+                    // with the list stepped aside (a book, or focus) it is the
+                    // only bar there is. Either way the page's options, the
+                    // search and the way back come along with it.
+                    if horizontalSizeClass == .compact || app.columnVisibility == .detailOnly {
+                        if horizontalSizeClass != .compact {
+                            ToolbarItem(placement: .topBarLeading) {
+                                Button {
+                                    app.togglePaperList()
+                                } label: {
+                                    Label("Show Paper List", systemImage: "sidebar.leading")
+                                }
+                                .help("Show the paper list")
+                            }
+                            .sharedBackgroundVisibility(.hidden)
+                        }
                         ToolbarItem(placement: .topBarTrailing) {
                             Menu {
                                 Picker("Page Layout", selection: Bindable(configuration).layout) {
@@ -887,6 +942,7 @@ struct PaperDetailColumn: View {
                                 Label("View Options", systemImage: "textformat.size")
                             }
                         }
+                        .sharedBackgroundVisibility(.hidden)
                         ToolbarItem(placement: .topBarTrailing) {
                             Button {
                                 app.showsSearchPalette = true
@@ -894,6 +950,7 @@ struct PaperDetailColumn: View {
                                 Label("Search", systemImage: "magnifyingglass")
                             }
                         }
+                        .sharedBackgroundVisibility(.hidden)
                         // The marks and the notes, as a sheet.
                         ToolbarItem(placement: .topBarTrailing) {
                             Button {
@@ -902,6 +959,7 @@ struct PaperDetailColumn: View {
                                 Label("Marks and Notes", systemImage: "sidebar.trailing")
                             }
                         }
+                        .sharedBackgroundVisibility(.hidden)
                     }
                 }
                 #endif

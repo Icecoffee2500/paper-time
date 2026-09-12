@@ -299,6 +299,18 @@ enum ReleaseNotes {
                     devices: [.ipad]
                 ),
                 Entry(
+                    Text2("형광펜이 아랫줄까지 칠함", "The highlighter spilling onto the next line"),
+                    Text2("형광펜은 굵어서 한 줄을 따라 그은 선의 상자가 줄보다 크고, 이웃 줄에 걸쳤다. 이제 선의 가운데 띠로 어느 줄인지 정한다 — 한 줄을 그으면 한 줄이다.",
+                          "A highlighter is wide: one stroke along one line made a box taller than the line, touching its neighbours. The line is now judged by the band at the stroke's centre — one line drawn, one line marked."),
+                    devices: [.ipad, .iphone]
+                ),
+                Entry(
+                    Text2("아이패드의 창이 맥처럼", "The iPad's window, like the Mac's"),
+                    Text2("도구 단추 뒤의 유리 알약을 없애 맥처럼 평평하게. 쪽 표시줄은 열 너비에 맞춘 평면. 책 모드가 목록을 물리고 두 쪽을 너비에 꽉 채운다(단일 쪽에만 쪽 넘김 컨트롤러를 쓴다). 목록 열의 단추로 목록을 숨기고, 목록이 없을 때는 리더 바에 목록·AA·검색·인스펙터가 온다. 목차는 리더 바의 단추. PDF 추가가 아이패드에서 열린다. 글자를 선택하면 맥과 같은 색 막대가 뜬다 — 이름 대신 색으로.",
+                          "The glass pills behind toolbar buttons are gone, flat as the Mac. The page bar is a flat strip the width of the column. Book mode steps the list aside and fills the width with two pages (the page-turn controller is kept for the single page only). A button on the list column hides the list; with the list away, the reader's bar carries list, AA, search and inspector. The table of contents is a button on the reader's bar. Adding PDFs opens on the iPad. Selecting text brings the Mac's colour bar — colours, not their names."),
+                    devices: [.ipad, .iphone]
+                ),
+                Entry(
                     Text2("아이폰에 지운 잉크가 남음", "Erased ink lingering on the phone"),
                     Text2("아이패드에서 한 쪽의 선을 모두 지우면 사이드카가 사라지고, 아이폰은 그 순간 PDF에 남은 옛 사본을 다시 그렸다 — 20 MB PDF가 다시 올 때까지 일부가 남아 보였다. 이제 오버레이 아래에서는 PDF의 잉크 사본을 언제나 숨긴다.",
                           "Erase every stroke on a page on the iPad and its sidecar goes; the phone then drew the old copy left in the PDF, so some strokes lingered until the 20 MB PDF came again. The PDF's copy of the ink is now always hidden under an overlay."),

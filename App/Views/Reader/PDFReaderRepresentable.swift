@@ -322,6 +322,10 @@ final class ReaderCoordinator: NSObject {
             self.session.addMarkup(for: selection, kind: kind, color: color)
         }
         view.onNote = { [weak self] in self?.onNoteRequested() }
+        view.onLayout = { [weak self, weak view] width in
+            guard let self, let view, appliedLayout == .book, fittedSpreadWidth != width else { return }
+            fitSpread(in: view)
+        }
         #else
         let view = MarkupCapablePDFView()
         view.onMarkup = { [weak self] kind, color in
@@ -693,9 +697,44 @@ final class ReaderCoordinator: NSObject {
         // The page view controller gives the paged modes a real swipe-to-turn
         // gesture with the curl-free horizontal transition Books uses. It has
         // to be off for continuous scrolling or the scroll is taken over.
-        view.usePageViewController(layout != .continuous, withViewOptions: nil)
+        // Only the single page turns with the page view controller: it shows
+        // one page at a time, which made a book of two pages show one.
+        view.usePageViewController(layout == .singlePage, withViewOptions: nil)
+        // A book fills the width, as on the Mac; anything else fits itself.
+        if layout == .book {
+            DispatchQueue.main.async { [weak self, weak view] in
+                guard let self, let view else { return }
+                fitSpread(in: view)
+            }
+        } else {
+            view.autoScales = true
+            fittedSpreadWidth = 0
+        }
         #endif
     }
+
+    #if canImport(UIKit)
+    private var fittedSpreadWidth: CGFloat = 0
+
+    /// Two pages across the view, as large as they can be with nothing cut
+    /// off — the same rule the Mac applies. Done again when the width changes.
+    func fitSpread(in view: PDFView) {
+        guard view.displayMode == .twoUp,
+              let page = view.currentPage ?? view.document?.page(at: 0) else { return }
+        let bounds = page.bounds(for: view.displayBox)
+        let width = view.bounds.width - 24, height = view.bounds.height - 16
+        guard bounds.width > 0, bounds.height > 0, width > 100, height > 100 else { return }
+        view.autoScales = false
+        // Autoscaling leaves its own fit behind as the floor and the
+        // ceiling; a scale set with those still in place is clamped to it.
+        view.minScaleFactor = 0.1
+        view.maxScaleFactor = 8
+        let gap = view.pageBreakMargins.left + view.pageBreakMargins.right
+        view.scaleFactor = min(width / (bounds.width * 2 + gap), height / bounds.height)
+        fittedSpreadWidth = view.bounds.width
+        view.layoutDocumentView()
+    }
+    #endif
 
     private func applyTint(to view: PDFView) {
         #if canImport(UIKit)
@@ -1393,7 +1432,14 @@ extension ReaderCoordinator: @preconcurrency PKCanvasViewDelegate {
         // across a column gap, floods half the page.
         let kind: MarkupDescriptor.Kind
         var pieces: [CGRect] = []
-        let crossed = lines.filter { $0.maxY > rect.minY - 2 && $0.minY < rect.maxY + 2 }
+        // A highlighter is wide: one stroke along one line is a box taller
+        // than the line, spilling onto the neighbours. Judge by the stroke's
+        // core — the band around its centre when it is a line's worth tall,
+        // the box less half a nib when it is deliberately taller.
+        let core: CGRect = rect.height < line.height * 1.8
+            ? CGRect(x: rect.minX, y: rect.midY - line.height * 0.25, width: rect.width, height: line.height * 0.5)
+            : rect.insetBy(dx: 0, dy: min(rect.height * 0.3, line.height * 0.6))
+        let crossed = lines.filter { $0.maxY > core.minY && $0.minY < core.maxY }
         let isFlat = rect.height < line.height * 0.6
         let sitsLow = rect.midY < line.minY + line.height * 0.28 && rect.midY > line.minY - line.height * 0.7
         if isFlat, sitsLow {

@@ -219,17 +219,47 @@ struct ReaderScreen: View {
         }
         .padding(.horizontal)
         .padding(.vertical, 6)
+        #if os(macOS)
         // A rectangle, not a capsule: the bar spans the panel and the panel's
         // own clip is what rounds the two corners it shares with it. `.bar`
         // was opaque, which left a white strip across the foot of the page.
         .liquidGlass(.floating, in: Rectangle())
+        #else
+        // The floating glass overran the column's edges on the iPad; a flat
+        // material the width of the column is what the Mac's bar looks like.
+        .frame(maxWidth: .infinity)
+        .background(.regularMaterial)
+        #endif
     }
 
     /// The note editor on iPhone and iPad, where the markup actions themselves
     /// live in the system edit menu and only the editor needs a place to sit.
     @ViewBuilder
     private func touchSelectionControls(_ session: DocumentSession) -> some View {
-        if !Self.usesFloatingMarkupBar, let noteSelection {
+        #if os(iOS)
+        // The Mac's bar, on the iPad and the phone: the colours as colours,
+        // beside the selection, rather than their names in the edit menu.
+        // Below the words, where the system's own menu is not.
+        if noteSelection == nil, let selection, selection.string?.isEmpty == false {
+            SelectionMarkupBar(
+                onMark: { kind, color in
+                    session.addMarkup(for: selection, kind: kind, color: color)
+                    dismissSelectionControls()
+                },
+                onNote: {
+                    noteDraft = ""
+                    noteSelection = selection
+                },
+                onCopy: {
+                    UIPasteboard.general.string = selection.string
+                    dismissSelectionControls()
+                    show(toast: "Copied")
+                }
+            )
+            .offset(anchoredTo: selectionFrame, width: 260, below: true)
+            .transition(.scale(scale: 0.94, anchor: .top).combined(with: .opacity))
+        }
+        if let noteSelection {
             NoteComposer(
                 quotedText: noteSelection.string ?? "",
                 text: $noteDraft,
@@ -246,6 +276,7 @@ struct ReaderScreen: View {
             .offset(anchoredTo: selectionFrame, width: 300)
             .transition(.scale(scale: 0.94, anchor: .bottom).combined(with: .opacity))
         }
+        #endif
     }
 
     /// Whether markup controls float next to the selection.
@@ -258,7 +289,7 @@ struct ReaderScreen: View {
         #if os(macOS)
         true
         #else
-        false
+        true
         #endif
     }
 

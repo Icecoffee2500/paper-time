@@ -170,6 +170,23 @@ public final class AppModel {
     public func setFocusMode(_ isOn: Bool) {
         guard isOn != isFocusMode else { return }
         withAnimation(AppModel.paneMotion) {
+            #if os(iOS)
+            // The split view owns the columns here; focus is its detail-only
+            // state, and leaving focus gives back the columns it had.
+            if isOn {
+                restoredColumnVisibility = columnVisibility
+                restoredInspector = showsInspector
+                columnVisibility = .detailOnly
+                showsInspector = false
+                isFocusMode = true
+            } else {
+                columnVisibility = restoredColumnVisibility == .detailOnly ? .doubleColumn : restoredColumnVisibility
+                showsInspector = restoredInspector
+                showsFloatingList = false
+                isFocusMode = false
+            }
+            return
+            #endif
             if isOn {
                 restoredColumnVisibility = columnVisibility
                 restoredInspector = showsInspector
@@ -191,6 +208,16 @@ public final class AppModel {
         }
     }
 
+    /// Says again what focus mode already said. The split view on the iPad
+    /// settles its columns a moment after it appears, over whatever was set
+    /// before it did; a book opened at launch was left with its list showing.
+    public func reassertFocusMode() {
+        #if os(iOS)
+        guard isFocusMode else { return }
+        withAnimation(AppModel.paneMotion) { columnVisibility = .detailOnly }
+        #endif
+    }
+
     /// Summons the paper's table of contents over the page, or puts it away.
     public func toggleFloatingList() {
         withAnimation(AppModel.paneMotion) {
@@ -209,12 +236,23 @@ public final class AppModel {
     /// Hides the scope sidebar only. The paper list stays put: collapsing both
     /// columns at once is a different, rarer intent than "give me more room".
     public func toggleSidebar() {
-        withAnimation(AppModel.paneMotion) { sidebarHidden.toggle() }
+        withAnimation(AppModel.paneMotion) {
+            #if os(iOS)
+            columnVisibility = columnVisibility == .all ? .doubleColumn : .all
+            #else
+            sidebarHidden.toggle()
+            #endif
+        }
     }
 
     /// Hides the paper list, leaving the source list and the reader.
     public func togglePaperList() {
         withAnimation(AppModel.paneMotion) {
+            #if os(iOS)
+            columnVisibility = columnVisibility == .detailOnly ? .doubleColumn : .detailOnly
+            if columnVisibility != .detailOnly { isFocusMode = false }
+            return
+            #endif
             showsPaperList.toggle()
             // Something has to be left to look at.
             if !showsPaperList, !showsReader, !isSidebarVisible { showsReader = true }
@@ -252,7 +290,7 @@ public final class AppModel {
         #if os(macOS)
         !sidebarHidden
         #else
-        columnVisibility != .detailOnly
+        columnVisibility == .all
         #endif
     }
 
