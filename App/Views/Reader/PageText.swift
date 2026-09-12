@@ -1,4 +1,3 @@
-#if os(macOS)
 import CoreGraphics
 import PDFKit
 
@@ -380,4 +379,3 @@ enum PageText {
         CGPDFOperatorTableRelease(table)
     }
 }
-#endif

@@ -437,7 +437,7 @@ public enum TextMarkupWriter {
         let origin = annotation.bounds.origin
         var rects: [CGRect] = []
         for start in stride(from: 0, to: quads.count - 3, by: 4) {
-            let corners = (0..<4).map { quads[start + $0].pointValue }
+            let corners: [CGPoint] = (0..<4).map { quads[start + $0].platformPoint }
             let minX = corners.map(\.x).min() ?? 0, maxX = corners.map(\.x).max() ?? 0
             let minY = corners.map(\.y).min() ?? 0, maxY = corners.map(\.y).max() ?? 0
             let rect = CGRect(x: origin.x + minX, y: origin.y + minY,

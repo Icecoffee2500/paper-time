@@ -89,6 +89,10 @@ struct LibraryWindow: View {
     @State private var showsExport = false
     @State private var showsMigration = false
     @State private var showsCitationStyles = false
+    #if os(iOS)
+    /// Settings on iOS: there is no Settings window, so a sheet from a gear.
+    @State private var showsSettings = false
+    #endif
 
     var body: some View {
         decorated
@@ -302,6 +306,29 @@ struct LibraryWindow: View {
             // header now, small, and the list starts where the title was.
             LibrarySidebar(model: model)
         }
+        #if os(iOS)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showsSettings = true
+                } label: {
+                    Label("Settings", systemImage: "gearshape")
+                }
+                .keyboardShortcut(",", modifiers: .command)
+            }
+        }
+        .sheet(isPresented: $showsSettings) {
+            NavigationStack {
+                SettingsView()
+                    .environment(app)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { showsSettings = false }
+                        }
+                    }
+            }
+        }
+        #endif
     }
 
     private var windowBody: some View {
@@ -794,6 +821,24 @@ struct PaperDetailColumn: View {
                         link: link
                     )
                 }
+                #if os(iOS)
+                // The pencil, first in the reader's own bar: on the iPad the
+                // paper is written on, and the tool that does it should not
+                // be two menus deep.
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            let drawing = configuration.mode != .draw
+                            configuration.mode = drawing ? .draw : .read
+                            configuration.showsToolPicker = drawing
+                        } label: {
+                            Label("Draw", systemImage: configuration.mode == .draw ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
+                        }
+                        .keyboardShortcut("d", modifiers: [.command, .shift])
+                        .help("Write on the page with the pencil")
+                    }
+                }
+                #endif
             } else {
                 ContentUnavailableView(
                     "No Paper Selected",
