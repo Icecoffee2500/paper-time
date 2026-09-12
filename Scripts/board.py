@@ -245,7 +245,9 @@ def main() -> int:
     lane_count = assign_lanes(commits)
     graph, graph_width = draw(commits, lane_count)
 
-    closed = version in known and counts("main", version)[1] == 0
+    # Closed means tagged: a version branch just opened is equal to main
+    # too, and is the opposite of closed.
+    closed = version in known and bool(git("tag", "-l", version.lstrip("v")).strip())
     ready = (
         version in known
         and counts(version, dev)[1] == 0
