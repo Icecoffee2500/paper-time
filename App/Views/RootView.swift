@@ -716,6 +716,7 @@ struct PaperDetailColumn: View {
     let configuration: ReaderConfiguration
     let link: ReaderLink
     @Environment(AppModel.self) private var app
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     @Binding var inspectorTab: InspectorTab
 
@@ -825,20 +826,63 @@ struct PaperDetailColumn: View {
                     )
                 }
                 #if os(iOS)
-                // The pencil, first in the reader's own bar: on the iPad the
-                // paper is written on, and the tool that does it should not
-                // be two menus deep.
                 .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button {
-                            let drawing = configuration.mode != .draw
-                            configuration.mode = drawing ? .draw : .read
-                            configuration.showsToolPicker = drawing
-                        } label: {
-                            Label("Draw", systemImage: configuration.mode == .draw ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
+                    // The pencil, first in the reader's own bar: on the iPad
+                    // the paper is written on, and the tool that does it
+                    // should not be two menus deep. The phone is for reading
+                    // and finding, and has no pencil.
+                    if UIDevice.current.userInterfaceIdiom == .pad {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button {
+                                let drawing = configuration.mode != .draw
+                                configuration.mode = drawing ? .draw : .read
+                                configuration.showsToolPicker = drawing
+                            } label: {
+                                Label("Draw", systemImage: configuration.mode == .draw ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
+                            }
+                            .keyboardShortcut("d", modifiers: [.command, .shift])
+                            .help("Write on the page with the pencil")
                         }
-                        .keyboardShortcut("d", modifiers: [.command, .shift])
-                        .help("Write on the page with the pencil")
+                    }
+                    // On a phone the reader is a screen of its own, so the
+                    // page's options and the search come along with it.
+                    if horizontalSizeClass == .compact {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Menu {
+                                Picker("Page Layout", selection: Bindable(configuration).layout) {
+                                    ForEach(ReaderConfiguration.PageLayout.allCases) { layout in
+                                        Label(layout.label, systemImage: layout.symbolName).tag(layout)
+                                    }
+                                }
+                                Picker("Page Tint", selection: Bindable(configuration).tint) {
+                                    ForEach(ReaderConfiguration.PageTint.allCases) { tint in
+                                        Text(tint.label).tag(tint)
+                                    }
+                                }
+                                Button {
+                                    app.toggleFloatingList()
+                                } label: {
+                                    Label("Table of Contents", systemImage: "list.bullet.indent")
+                                }
+                            } label: {
+                                Label("View Options", systemImage: "textformat.size")
+                            }
+                        }
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button {
+                                app.showsSearchPalette = true
+                            } label: {
+                                Label("Search", systemImage: "magnifyingglass")
+                            }
+                        }
+                        // The marks and the notes, as a sheet.
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button {
+                                app.toggleInspector()
+                            } label: {
+                                Label("Marks and Notes", systemImage: "sidebar.trailing")
+                            }
+                        }
                     }
                 }
                 #endif
