@@ -240,16 +240,23 @@ struct ZettelEditorView: View {
 
                     // One press and the echo is written into the note as a
                     // link — the act a slip-box lives on, without the trip
-                    // to the other note to find out what it was called.
+                    // to the other note to find out what it was called. When
+                    // the echo is a map, the press goes the other way: this
+                    // note is filed on the map.
                     Button {
-                        let separator = body_.isEmpty || body_.hasSuffix("\n") ? "" : "\n\n"
-                        body_ += separator + echo.note.linkMarkdown
+                        if echo.note.kind == .map {
+                            flush()
+                            notes.add(noteID, toMap: echo.note.id)
+                        } else {
+                            let separator = body_.isEmpty || body_.hasSuffix("\n") ? "" : "\n\n"
+                            body_ += separator + echo.note.linkMarkdown
+                        }
                     } label: {
-                        Image(systemName: "link.badge.plus")
+                        Image(systemName: echo.note.kind == .map ? "map" : "link.badge.plus")
                             .font(.caption)
                     }
                     .buttonStyle(.borderless)
-                    .help("Link this note to it")
+                    .help(echo.note.kind == .map ? "Put this note on the map" : "Link this note to it")
                 }
             }
         }

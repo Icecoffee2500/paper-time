@@ -328,6 +328,8 @@ public final class AppModel {
             if environment["PAPERTIME_OPEN_FIRST"] != nil, let first = model.visiblePapers.first {
                 model.selection = [first.id]
             }
+            if environment["PAPERTIME_SCOPE"] == "notes" { model.scope = .notes }
+            if let noteID = environment["PAPERTIME_OPEN_NOTE"] { model.notes.openNoteID = noteID }
         } catch {
             phase = .failed(error.localizedDescription)
         }

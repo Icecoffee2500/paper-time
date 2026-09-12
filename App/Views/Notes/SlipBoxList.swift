@@ -71,6 +71,12 @@ struct SlipBoxList: View {
                 .scrollIndicators(.never)
             }
 
+            // The squeeze: notes with no home that hang together. One line,
+            // and a map is one press — Milo's moment, noticed for you.
+            if notes.query.isEmpty, notes.selectedTag == nil, let squeeze = notes.suggestions.first {
+                squeezeBanner(squeeze)
+            }
+
             if notes.visible.isEmpty {
                 ContentUnavailableView {
                     Label(notes.notes.isEmpty ? "The Box Is Empty" : "Nothing Matches",
@@ -162,21 +168,58 @@ struct SlipBoxList: View {
         var notes: [Zettel]
     }
 
-    /// The visible notes by paper, notes of no paper last.
+    /// "These notes hang together; make them a map?"
+    private func squeezeBanner(_ squeeze: Atlas.Suggestion) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Image(systemName: "map")
+                .foregroundStyle(.tint)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(squeeze.noteIDs.count) notes are one subject")
+                    .font(.callout.weight(.medium))
+                Text(squeeze.words.joined(separator: " · "))
+                    .font(.caption)
+                    .foregroundStyle(.tint)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 4)
+            Button("Make a Map") {
+                let map = model.notes.createMap(from: squeeze) { model.paper($0)?.meta.csl.fullTitle }
+                model.notes.openNoteID = map.id
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: Corner.row, style: .continuous)
+                .fill(Color.accentColor.opacity(0.08))
+        )
+        .padding(.horizontal, 12)
+        .padding(.bottom, 8)
+    }
+
+    /// The visible notes by paper, notes of no paper last — and the maps
+    /// first of all, since a map is where the others live.
     private var groups: [NoteGroup] {
         var found: [NoteGroup] = []
         var index: [String: Int] = [:]
-        for note in notes.visible {
-            let key = note.paperID?.uuidString ?? "-"
+        let maps = notes.visible.filter { $0.kind == .map }
+        if !maps.isEmpty { found.append(NoteGroup(id: "maps", title: "Maps", notes: maps)); index["maps"] = 0 }
+        for note in notes.visible where note.kind != .map {
+            // A paper this library no longer has is no group of its own:
+            // three chips all saying "Notes of my own" said nothing.
+            let paper = note.paperID.flatMap { model.paper($0) }
+            let key = paper.map { $0.id.uuidString } ?? "-"
             if let at = index[key] {
                 found[at].notes.append(note)
             } else {
-                let title = note.paperID.flatMap { model.paper($0)?.meta.csl.fullTitle } ?? "Notes of my own"
+                let title = paper?.meta.csl.fullTitle ?? paper?.meta.displayTitle ?? "Notes of my own"
                 index[key] = found.count
                 found.append(NoteGroup(id: key, title: title, notes: [note]))
             }
         }
-        return found.filter { $0.id != "-" } + found.filter { $0.id == "-" }
+        return found.filter { $0.id == "maps" } + found.filter { $0.id != "-" && $0.id != "maps" } + found.filter { $0.id == "-" }
     }
 }
 
@@ -196,9 +239,15 @@ struct SlipBoxDetail: View {
     var onFollowPassage: (UUID) -> Void = { _ in }
 
     var body: some View {
-        if let id = model.notes.openNoteID, model.notes.note(id) != nil {
-            ZettelEditorView(notes: model.notes, noteID: id, link: link)
-                .frame(maxWidth: 760)
+        if let id = model.notes.openNoteID, let note = model.notes.note(id) {
+            Group {
+                if note.kind == .map {
+                    MapView(model: model, mapID: id, link: link)
+                } else {
+                    ZettelEditorView(notes: model.notes, noteID: id, link: link)
+                        .frame(maxWidth: 760)
+                }
+            }
                 .frame(maxWidth: .infinity)
                 .onChange(of: link.anchorRequest) { _, request in
                     // The reader consumes the request; this only has to

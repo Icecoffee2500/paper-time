@@ -45,6 +45,7 @@ struct FeatureDemoView: View {
             case .bookReading: BookReadingDemo(scale: scale)
             case .focus: FocusDemo(scale: scale)
             case .resonance: ResonanceDemo(scale: scale)
+            case .atlas: AtlasDemo(scale: scale)
             }
         }
         .padding(scale.pad)
@@ -2147,6 +2148,190 @@ private struct ResonanceDemo: View {
     }
 }
 
+// MARK: - Atlas
+
+/// The squeeze, done once: notes piling up, the one line that notices, the
+/// map that one press makes, and a stray note filed onto it.
+private struct AtlasDemo: View {
+    let scale: DemoScale
+    /// 0: the notes, piling. 1: the line has appeared. 2: the map is made.
+    /// 3: the stray note is filed.
+    @State private var step: Int
+
+    init(scale: DemoScale, step: Int = 0) {
+        self.scale = scale
+        _step = State(initialValue: step)
+    }
+
+    private var titles: [String] {
+        [
+            ReleaseNotes.string("시냅스 강화는 기억을 굳힌다", "Synaptic consolidation hardens a memory"),
+            ReleaseNotes.string("망각은 겹쳐 쓰기다", "Forgetting is overwriting"),
+            ReleaseNotes.string("Fisher 정보가 중요도다", "Fisher information as importance"),
+            ReleaseNotes.string("EWC의 이차 벌점", "EWC's quadratic penalty"),
+            ReleaseNotes.string("가시는 며칠 안에 굳는다", "Spines harden within days"),
+        ]
+    }
+    private var stray: String { ReleaseNotes.string("리허설 없이 기억 지키기", "Keeping a memory without rehearsal") }
+    private var words: [String] {
+        [ReleaseNotes.string("파국적 망각", "catastrophic forgetting"), ReleaseNotes.string("강화", "consolidation")]
+    }
+    private var instructions: [String] {
+        [
+            ReleaseNotes.string("슬립박스에 노트가 쌓이고 있어요 — 여러 논문에서, 한 주제로. 아직 지도는 없어요. 노트를 하나 더 써 보세요.",
+                                "Notes are piling up in the slip-box — from several papers, on one subject. No map yet. Write one more note."),
+            ReleaseNotes.string("다섯 개가 서로 낱말을 나누자 맨 위에 한 줄이 떴어요: 압박(squeeze)의 순간이에요. '지도 만들기'를 눌러요.",
+                                "Five now share their words, and a line has appeared at the top: the squeeze. Press \"Make a Map\"."),
+            ReleaseNotes.string("초안이 써졌어요 — 제목은 나누는 낱말, 노트는 논문별 열 아래 카드. 옆에 '울리지만 안 올린' 노트가 있죠? ＋를 눌러요.",
+                                "A draft is written — the title from the shared words, the notes as cards under a column per paper. Beside it, a note that resonates but is not filed: press ＋."),
+            ReleaseNotes.string("올라갔어요. 지도는 그냥 Markdown 노트라 다른 앱에서도 읽히고, 다음 노트를 쓸 때 편집기 아래에 이 지도가 떠서 🗺 한 번으로 올려요.",
+                                "Filed. The map is plain Markdown, readable anywhere; when you write the next note, the map comes up under the editor and one 🗺 files it."),
+        ]
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: scale.gap) {
+            Paper(scale: scale) {
+                if step >= 2 { board } else { box }
+            }
+            .frame(height: scale.isFull ? 220 : 160)
+            .animation(.snappy(duration: 0.3), value: step)
+
+            HStack(spacing: 6) {
+                ForEach(0..<3, id: \.self) { index in
+                    Text("\(index + 1)")
+                        .font(.caption2.weight(.semibold)).monospacedDigit()
+                        .frame(width: 16, height: 16)
+                        .background(Circle().fill(index < step ? Color.accentColor : (index == step ? Color.accentColor.opacity(0.14) : Color.clear)))
+                        .overlay(Circle().stroke(index == step ? Color.accentColor : Color.secondary.opacity(0.3), lineWidth: 1))
+                        .foregroundStyle(index < step ? AnyShapeStyle(.white) : (index == step ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary)))
+                }
+                if step == 0 {
+                    Button {
+                        withAnimation(.snappy(duration: 0.3)) { step = 1 }
+                    } label: {
+                        Label(ReleaseNotes.string("노트 쓰기", "Write a note"), systemImage: "square.and.pencil")
+                            .font(.caption2).foregroundStyle(.tint)
+                            .padding(.horizontal, 7).padding(.vertical, 3)
+                            .background(Capsule().fill(Color.accentColor.opacity(0.14)))
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer(minLength: 0)
+                if step >= 1 {
+                    Button {
+                        withAnimation(.snappy(duration: 0.3)) { step = 0 }
+                    } label: {
+                        Label(ReleaseNotes.string("처음부터", "Start over"), systemImage: "arrow.counterclockwise")
+                            .font(.caption2).foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            Text(instructions[min(step, instructions.count - 1)])
+                .font(scale.small)
+                .foregroundStyle(step == 3 ? .secondary : .primary)
+                .fixedSize(horizontal: false, vertical: true)
+                .id(step)
+        }
+    }
+
+    /// The slip-box: the notes as rows, and at the top — once there are
+    /// five — the line.
+    private var box: some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 6 : 4) {
+            Text("Notes").font(scale.small.weight(.semibold))
+            if step >= 1 {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Image(systemName: "map").foregroundStyle(.tint)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(ReleaseNotes.string("노트 5개가 한 주제예요", "5 notes are one subject")).font(scale.small.weight(.medium))
+                        Text(words.joined(separator: " · ")).font(.caption2).foregroundStyle(.tint)
+                    }
+                    Spacer(minLength: 0)
+                    Button {
+                        withAnimation(.snappy(duration: 0.3)) { step = 2 }
+                    } label: {
+                        Text(ReleaseNotes.string("지도 만들기", "Make a Map"))
+                            .font(.caption2.weight(.semibold)).foregroundStyle(.white)
+                            .padding(.horizontal, 8).padding(.vertical, 4)
+                            .background(Capsule().fill(Color.accentColor))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(8)
+                .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.accentColor.opacity(0.08)))
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+            ForEach(Array(titles.prefix(step >= 1 ? 5 : 4).enumerated()), id: \.offset) { index, title in
+                HStack {
+                    Text(title).font(scale.small).lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text("Sep \(3 + index)").font(.caption2).foregroundStyle(.tertiary)
+                }
+                .padding(.horizontal, 6).padding(.vertical, 2)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// The map as a board: columns of cards, and the open door beside them.
+    private var board: some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 8 : 5) {
+            HStack(spacing: 6) {
+                Label(words.map { $0.capitalized }.joined(separator: " · "), systemImage: "map")
+                    .font(scale.small.weight(.semibold)).lineLimit(1)
+                Text(step >= 3 ? "6" : "5").font(.caption2).foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.left.forwardslash.chevron.right").font(.caption2).foregroundStyle(.secondary)
+            }
+            HStack(alignment: .top, spacing: 8) {
+                boardColumn(ReleaseNotes.string("Kirkpatrick 2017", "Kirkpatrick 2017"), [titles[1], titles[2], titles[3]] + (step >= 3 ? [stray] : []))
+                boardColumn(ReleaseNotes.string("Yang 2009", "Yang 2009"), [titles[0], titles[4]])
+                if step < 3 {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label(ReleaseNotes.string("울리는데 안 올림", "Resonates, not filed"), systemImage: "waveform")
+                            .font(.caption2.weight(.semibold)).foregroundStyle(.tint).lineLimit(1)
+                        HStack(alignment: .top, spacing: 4) {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(stray).font(.caption2).lineLimit(2)
+                                Text(words[0]).font(.system(size: 9)).foregroundStyle(.tint)
+                            }
+                            Spacer(minLength: 0)
+                            Button {
+                                withAnimation(.snappy(duration: 0.3)) { step = 3 }
+                            } label: {
+                                Image(systemName: "plus.circle.fill").foregroundStyle(.tint)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(6)
+                        .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.accentColor.opacity(0.07)))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .transition(.opacity)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func boardColumn(_ title: String, _ cards: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.caption2.weight(.semibold)).foregroundStyle(.secondary).lineLimit(1)
+            ForEach(cards, id: \.self) { card in
+                Text(card)
+                    .font(.caption2)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(6)
+                    .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(.quaternary.opacity(0.5)))
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
 #if os(macOS)
 /// Draws every demo, at both sizes, into PNG files — so they can be looked
 /// at without opening a window over whatever the user is doing.
@@ -2192,6 +2377,7 @@ enum DemoRenderer {
         }
         write("resonance-step3-compact", ResonanceDemo(scale: .compact, step: 3), full: false)
         write("resonance-rule", ResonanceDemo(scale: .full, step: 4, showsRule: true), full: true)
+        for step in 1...3 { write("atlas-step\(step)", AtlasDemo(scale: .full, step: step), full: true) }
         exit(0)
     }
 }

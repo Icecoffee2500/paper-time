@@ -148,10 +148,21 @@ struct LibraryWindow: View {
             } content: {
                 listColumn
             } detail: {
-                PaperDetailColumn(
-                    model: model, configuration: configuration,
-                    link: link, inspectorTab: $inspectorTab
-                )
+                // The same three details the Mac has: the note, the graph,
+                // the paper.
+                switch model.scope {
+                case .notes:
+                    SlipBoxDetail(model: model, link: link) { paperID in
+                        withAnimation(.snappy(duration: 0.25)) { slipBoxPaperID = paperID }
+                    }
+                case .graph:
+                    PaperGraphView(model: model, graph: model.graph)
+                default:
+                    PaperDetailColumn(
+                        model: model, configuration: configuration,
+                        link: link, inspectorTab: $inspectorTab
+                    )
+                }
             }
         )
         #endif

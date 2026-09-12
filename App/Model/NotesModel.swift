@@ -123,10 +123,50 @@ public final class NotesModel {
             .compactMap { match in byID[match.id].map { (note: $0, shared: match.shared) } }
     }
 
+    // MARK: - Atlas
+
+    /// The maps: notes that arrange other notes.
+    public var maps: [Zettel] { notes.filter { $0.kind == .map } }
+
+    /// Whether a note has a map to live on.
+    public func maps(holding id: String) -> [Zettel] {
+        maps.filter { $0.outline.contains { $0.entries.contains { $0.id == id } } }
+    }
+
+    /// Where the squeeze is: notes with no map that hang together, five or
+    /// more. Found once per change to the notes.
+    public var suggestions: [Atlas.Suggestion] {
+        if let cached = suggestionCache, cached.revision == revision { return cached.found }
+        let found = Atlas.squeeze(notes: notes, maps: maps)
+        suggestionCache = (revision, found)
+        return found
+    }
+    @ObservationIgnored private var suggestionCache: (revision: Int, found: [Atlas.Suggestion])?
+
+    /// Makes the map a suggestion asked for, as a first draft to be taken
+    /// over: a title from the shared words, the notes under their papers.
+    public func createMap(from suggestion: Atlas.Suggestion, paperTitle: (UUID) -> String?) -> Zettel {
+        let made = Atlas.draft(for: suggestion, notes: notes, paperTitle: paperTitle)
+        var map = Zettel(id: Zettel.makeID(avoiding: Set(byID.keys)), kind: .map, title: made.title, body: made.body)
+        map.modified = .now
+        update(map)
+        return map
+    }
+
+    /// Puts a note on a map, under its last heading.
+    public func add(_ id: String, toMap mapID: String) {
+        guard var map = byID[mapID], let note = byID[id], map.kind == .map,
+              !map.outline.contains(where: { $0.entries.contains { $0.id == id } })
+        else { return }
+        let separator = map.body.isEmpty || map.body.hasSuffix("\n") ? "" : "\n"
+        map.body += separator + "- " + note.linkMarkdown + "\n"
+        update(map)
+    }
+
     // MARK: - Writing
 
-    public func create(paperID: UUID?) -> Zettel {
-        let note = Zettel(id: Zettel.makeID(avoiding: Set(byID.keys)), paperID: paperID)
+    public func create(paperID: UUID?, kind: Zettel.Kind = .note) -> Zettel {
+        let note = Zettel(id: Zettel.makeID(avoiding: Set(byID.keys)), kind: kind, paperID: paperID)
         var updated = notes
         updated.insert(note, at: 0)
         apply(updated)
