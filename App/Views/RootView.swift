@@ -149,7 +149,7 @@ struct LibraryWindow: View {
         // iPhone and iPad keep the system split view: it is what gives them
         // the sliding sidebar, the back button and the compact layout.
         return AnyView(
-            NavigationSplitView(columnVisibility: $app.columnVisibility) {
+            NavigationSplitView(columnVisibility: $app.columnVisibility, preferredCompactColumn: $app.compactColumn) {
                 sidebarColumn
             } content: {
                 listColumn

@@ -31,6 +31,9 @@ public final class AppModel {
     /// `.all` is not one of the states it understands — starting there left
     /// every later change to the binding being ignored.
     public var columnVisibility = NavigationSplitViewVisibility.doubleColumn
+    /// Which column an iPhone shows. Tapping a shelf pushes the list; tapping
+    /// a paper pushes the page. The system moves it back on its own.
+    public var compactColumn = NavigationSplitViewColumn.sidebar
     #if os(macOS)
     public var showsInspector = true
     #else

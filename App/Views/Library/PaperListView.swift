@@ -74,6 +74,15 @@ struct PaperListView: View {
                         model: model
                     )
                     .tag(paper.id)
+                    #if os(iOS)
+                    // A `Set` selection only takes taps in edit mode on
+                    // iOS, so the row opens the paper itself.
+                    .contentShape(.rect)
+                    .onTapGesture {
+                        model.selection = [paper.id]
+                        app.compactColumn = .detail
+                    }
+                    #endif
                 }
             }
             // The same list style as the source list, so a selected paper and

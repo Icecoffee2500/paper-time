@@ -227,7 +227,7 @@ struct SettingsView: View {
     // MARK: - Library
 
     private var librarySection: some View {
-        Section("Library") {
+        Section {
             LabeledContent("Folder") {
                 Text(app.library?.location.url.path(percentEncoded: false) ?? "Not Connected")
                     .foregroundStyle(.secondary)
@@ -243,6 +243,12 @@ struct SettingsView: View {
             Button("Change Library Folder…") {
                 app.isChoosingLibraryFolder = true
             }
+        } header: {
+            Text("Library")
+        } footer: {
+            Text(
+                "To move the library, move the whole folder — including the hidden .papertime folder inside it, which holds the records, notes, ink and reading progress. Copying only the PDFs starts a fresh library and leaves the notes behind."
+            )
         }
     }
 

@@ -323,6 +323,7 @@ extension View {
 /// A row of the source list that stands for a scope: pressed, it becomes the
 /// scope; when it is the scope, it says so in the accent.
 private struct ScopeRow: ViewModifier {
+    @Environment(AppModel.self) private var app
     let scope: LibraryModel.Scope
     let model: LibraryModel
 
@@ -379,7 +380,10 @@ private struct ScopeRow: ViewModifier {
             .fontWeight(isCurrent ? .medium : .regular)
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(.rect)
-            .onTapGesture { model.scope = scope }
+            .onTapGesture {
+                model.scope = scope
+                app.compactColumn = .content
+            }
             .listRowBackground(
                 RoundedRectangle(cornerRadius: Corner.row, style: .continuous)
                     .fill(ground)
