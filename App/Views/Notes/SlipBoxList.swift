@@ -14,10 +14,38 @@ struct SlipBoxList: View {
         @Bindable var notes = model.notes
 
         VStack(spacing: 0) {
-            HStack(spacing: 8) {
+            // One row: the name, the search, the pen. Two rows put the field
+            // under the title and pushed the first note down a line for no
+            // reason a reader could see.
+            HStack(spacing: 10) {
                 Text("Notes")
                     .font(.headline)
-                Spacer()
+
+                // A capsule with a glass in it, not a bordered box. The
+                // bevelled field is the one control on this surface that
+                // still looked like a dialog, and a search field is a search
+                // field everywhere else on the machine.
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.callout)
+                        .foregroundStyle(.tertiary)
+                    TextField("Search notes", text: $notes.query)
+                        .textFieldStyle(.plain)
+                    if !notes.query.isEmpty {
+                        Button {
+                            model.notes.query = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.tertiary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Clear the search")
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Capsule().fill(.quaternary.opacity(0.5)))
+
                 Button {
                     notes.openNoteID = notes.create(paperID: nil).id
                 } label: {
@@ -29,33 +57,6 @@ struct SlipBoxList: View {
             .padding(.horizontal, 16)
             .padding(.top, 10)
             .padding(.bottom, 8)
-
-            // A capsule with a glass in it, not a bordered box. The bevelled
-            // field is the one control on this surface that still looked like
-            // a dialog, and a search field is a search field everywhere else
-            // on the machine.
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass")
-                    .font(.callout)
-                    .foregroundStyle(.tertiary)
-                TextField("Search notes", text: $notes.query)
-                    .textFieldStyle(.plain)
-                if !notes.query.isEmpty {
-                    Button {
-                        model.notes.query = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.tertiary)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Clear the search")
-                }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(Capsule().fill(.quaternary.opacity(0.5)))
-            .padding(.horizontal, 16)
-            .padding(.bottom, 10)
 
             if !notes.tags.isEmpty {
                 ScrollView(.horizontal) {
@@ -81,18 +82,46 @@ struct SlipBoxList: View {
                 }
                 .frame(maxHeight: .infinity)
             } else {
+                // Grouped by the paper they were written against, each group
+                // in the order its notes were written, and the groups in the
+                // order their first note was — so a note stays where it is.
                 List(selection: $notes.openNoteID) {
-                    ForEach(notes.visible) { note in
-                        NoteRow(note: note, showsSource: source(of: note))
-                            .tag(note.id)
-                            .contextMenu {
-                                Button(role: .destructive) { model.notes.delete(note.id) } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }
+                    ForEach(groups, id: \.id) { group in
+                        Section {
+                            ForEach(group.notes) { note in
+                                NoteRow(note: note)
+                                    .pressable(inset: 6)
+                                    .tag(note.id)
+                                    .contextMenu {
+                                        Button(role: .destructive) { model.notes.delete(note.id) } label: {
+                                            Label("Delete", systemImage: "trash")
+                                        }
+                                    }
                             }
+                        } header: {
+                            // The paper as a chip, the same shape the library
+                            // folder wears in the source list: a group of
+                            // notes is named, not ruled off. A line over
+                            // every group and under every note made the box
+                            // read as a table.
+                            Text(group.title)
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(group.id == "-" ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint))
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                        .fill(Color.accentColor.opacity(group.id == "-" ? 0 : 0.12))
+                                )
+                                .padding(.bottom, 2)
+                        }
                     }
                 }
-                .listStyle(.inset)
+                // The source list's style: rounded selection, and no rule
+                // between one note and the next.
+                .listStyle(.sidebar)
                 // An inset list paints its own opaque white, which is why the
                 // lists were the one white rectangle in a window of glass. The
                 // panel behind them is the background now.
@@ -127,10 +156,27 @@ struct SlipBoxList: View {
         .buttonStyle(.plain)
     }
 
-    /// The paper a note was written against, named rather than numbered.
-    private func source(of note: Zettel) -> String? {
-        guard let paperID = note.paperID, let paper = model.paper(paperID) else { return nil }
-        return paper.meta.csl.fullTitle
+    private struct NoteGroup {
+        let id: String
+        let title: String
+        var notes: [Zettel]
+    }
+
+    /// The visible notes by paper, notes of no paper last.
+    private var groups: [NoteGroup] {
+        var found: [NoteGroup] = []
+        var index: [String: Int] = [:]
+        for note in notes.visible {
+            let key = note.paperID?.uuidString ?? "-"
+            if let at = index[key] {
+                found[at].notes.append(note)
+            } else {
+                let title = note.paperID.flatMap { model.paper($0)?.meta.csl.fullTitle } ?? "Notes of my own"
+                index[key] = found.count
+                found.append(NoteGroup(id: key, title: title, notes: [note]))
+            }
+        }
+        return found.filter { $0.id != "-" } + found.filter { $0.id == "-" }
     }
 }
 

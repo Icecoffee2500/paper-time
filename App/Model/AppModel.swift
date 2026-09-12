@@ -188,8 +188,8 @@ public final class AppModel {
         }
     }
 
+    /// Summons the paper's table of contents over the page, or puts it away.
     public func toggleFloatingList() {
-        guard isFocusMode else { return }
         withAnimation(AppModel.paneMotion) {
             showsFloatingList.toggle()
         }

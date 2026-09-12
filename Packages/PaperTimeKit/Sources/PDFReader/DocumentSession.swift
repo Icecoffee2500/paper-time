@@ -41,7 +41,12 @@ public final class DocumentSession {
     /// does not by itself repaint the view showing it. The view watches this
     /// and redraws — which is the difference between a highlight that appears
     /// and one that only exists in the file.
-    public private(set) var revision = 0
+    public private(set) var revision = 0 {
+        // Anyone drawing the marks — the overlay that gives highlights their
+        // rounded ends — hears about every change through this, rather than
+        // through each of the five methods that make one.
+        didSet { NotificationCenter.default.post(name: .paperTimeMarksChanged, object: self) }
+    }
 
     private let store: LibraryStore
     private var drawings: [Int: PKDrawing] = [:]
@@ -447,4 +452,10 @@ public final class DocumentSession {
         }
         context.closePDF()
     }
+}
+
+public extension Notification.Name {
+    /// Posted by a `DocumentSession` whenever a mark is added, removed or
+    /// recoloured on its pages.
+    static let paperTimeMarksChanged = Notification.Name("PaperTimeMarksChanged")
 }

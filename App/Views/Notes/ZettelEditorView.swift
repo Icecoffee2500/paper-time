@@ -171,7 +171,11 @@ struct ZettelEditorView: View {
     private func connections(_ note: Zettel?) -> some View {
         let inbound = notes.linkedFrom(noteID)
         let outbound = notes.linksOut(of: noteID)
-        if !inbound.isEmpty || !outbound.isEmpty {
+        // Notes this one shares its rarer words with and is not yet linked
+        // to either way: the links the box would make if it could.
+        let linked = Set(inbound.map(\.id) + outbound.map(\.id) + [noteID])
+        let echoes = notes.resonance(with: title + "\n" + body_, excluding: linked, limit: 4)
+        if !inbound.isEmpty || !outbound.isEmpty || !echoes.isEmpty {
             // No rule across the note. What separates the writing from what it
             // is connected to is the change of scale and a little air, the
             // same way the rest of the window separates one thing from
@@ -184,12 +188,70 @@ struct ZettelEditorView: View {
                     if !inbound.isEmpty {
                         connectionList("Linked from", notes: inbound, symbol: "arrow.down.left")
                     }
+                    if !echoes.isEmpty {
+                        echoList(echoes)
+                    }
                 }
                 .padding(.horizontal, 22)
                 .padding(.vertical, 14)
             }
-            .frame(maxHeight: 150)
+            .frame(maxHeight: 190)
             .hiddenScrollers()
+        }
+    }
+
+    /// The notes that resonate with this one, each with the words shared and
+    /// a way to make the echo a link with one press.
+    private func echoList(_ echoes: [(note: Zettel, shared: [String])]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Resonates with".uppercased())
+                .font(.caption2.weight(.semibold))
+                .tracking(0.6)
+                .foregroundStyle(.tertiary)
+
+            ForEach(echoes, id: \.note.id) { echo in
+                HStack(spacing: 6) {
+                    Button {
+                        flush()
+                        notes.requestedNoteID = echo.note.id
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "waveform")
+                                .font(.caption2)
+                                .foregroundStyle(.tint)
+                            Text(echo.note.displayTitle)
+                                .lineLimit(1)
+                            Text(echo.shared.joined(separator: " · "))
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(1)
+                        }
+                        .font(.callout)
+                        .foregroundStyle(.primary)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(
+                            RoundedRectangle(cornerRadius: Corner.row, style: .continuous)
+                                .fill(.quaternary.opacity(0.55))
+                        )
+                        .contentShape(RoundedRectangle(cornerRadius: Corner.row, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+
+                    // One press and the echo is written into the note as a
+                    // link — the act a slip-box lives on, without the trip
+                    // to the other note to find out what it was called.
+                    Button {
+                        let separator = body_.isEmpty || body_.hasSuffix("\n") ? "" : "\n\n"
+                        body_ += separator + echo.note.linkMarkdown
+                    } label: {
+                        Image(systemName: "link.badge.plus")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Link this note to it")
+                }
+            }
         }
     }
 

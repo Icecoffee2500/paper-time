@@ -17,9 +17,24 @@ struct ShortcutRecorder: View {
 
     @State private var isRecording = false
 
+    /// True while any recorder on screen is waiting for a key.
+    ///
+    /// The shortcut search catches combinations too, whenever its field has
+    /// focus — and clicking a recorder does not take that focus away, so the
+    /// key meant to become a shortcut was being typed into the search
+    /// instead. While a recorder is open the search stands aside.
+    @MainActor static var isRecordingAny = false
+
+    private var recording: Binding<Bool> {
+        Binding(
+            get: { isRecording },
+            set: { isRecording = $0; ShortcutRecorder.isRecordingAny = $0 }
+        )
+    }
+
     var body: some View {
         Button {
-            isRecording.toggle()
+            recording.wrappedValue.toggle()
         } label: {
             Text(isRecording ? "Press a key…" : (isUnset ? "—" : shortcut.display))
                 .font(.body.monospaced())
@@ -42,9 +57,9 @@ struct ShortcutRecorder: View {
         }
         .buttonStyle(.plain)
         .background(
-            KeyCatcher(isRecording: $isRecording) { key, modifiers in
+            KeyCatcher(isRecording: recording) { key, modifiers in
                 onRecord(Shortcut(key, modifiers))
-                isRecording = false
+                recording.wrappedValue = false
             }
             .allowsHitTesting(false)
         )
@@ -68,6 +83,13 @@ struct KeyCatcher: NSViewRepresentable {
     /// "what is on ⌘Q?" is a fair question, and the answer is "nothing of
     /// ours", which is only sayable if the key gets through.
     var capturesAnything = false
+    /// What Escape should do instead of cancelling a recording.
+    ///
+    /// It has to be handled here rather than left to the window. A focused
+    /// text field swallows Escape — AppKit sends it to the field editor as
+    /// `cancelOperation:`, which consumes it and does nothing — so a window
+    /// that closes on Escape does not close while you are typing in one.
+    var onEscape: (() -> Void)?
     let onKey: (Character, SwiftUI.EventModifiers) -> Void
 
     func makeNSView(context: Context) -> CatchingView {
@@ -131,10 +153,17 @@ struct KeyCatcher: NSViewRepresentable {
 
         override func performKeyEquivalent(with event: NSEvent) -> Bool {
             guard let recorder, recorder.isRecording else { return false }
+            // A recorder that is open has first claim on the next key.
+            if recorder.capturesAnything, ShortcutRecorder.isRecordingAny { return false }
 
-            // Escape gives up without changing anything.
+            // Escape gives up without changing anything, unless the caller
+            // has said what it means here.
             if event.keyCode == 53 {
-                recorder.isRecording = false
+                if let onEscape = recorder.onEscape {
+                    onEscape()
+                } else {
+                    recorder.isRecording = false
+                }
                 return true
             }
 

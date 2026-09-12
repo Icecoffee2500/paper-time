@@ -144,11 +144,25 @@ enum NoteMarkdown {
         // link came out blue no matter what colour it asked for. It carries
         // its destination in its own attribute instead, and `NoteTextView`
         // follows it on a click.
-        [
+        var attributes: [NSAttributedString.Key: Any] = [
             .font: bodyFont,
             .foregroundColor: NoteChip.ink,
             NoteChip.attribute: url,
+            // The hand, over the words. `NSTextView` honours this itself,
+            // which is the one thing a `.link` would have given us for free.
+            .cursor: NSCursor.pointingHand,
         ]
+        // And a word about where it goes. A tint the pointer deepened would
+        // have said "pressable" too, but TextKit 2 keeps a fragment's
+        // rendering and would not draw the chip again on a hover — and a
+        // tooltip says more: not just that it goes somewhere, but where.
+        if let anchor = NoteAnchor(url: url) {
+            attributes[.toolTip] = ReleaseNotes.string(
+                "논문 \(anchor.pageIndex + 1)쪽의 이 구절로 간다",
+                "Goes to this passage on page \(anchor.pageIndex + 1) of the paper"
+            )
+        }
+        return attributes
     }
     #else
     static func passageAttributes(_ url: URL) -> [NSAttributedString.Key: Any] {

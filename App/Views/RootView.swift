@@ -164,10 +164,15 @@ struct LibraryWindow: View {
             // frame of the animation. Held at its own width inside a frame
             // that animates, the list is revealed rather than resized, and
             // lays out once.
+            // On the ground, not on a panel — the way the Settings window's
+            // sidebar sits beside its page. The list of places is chrome;
+            // the panels are for the things you read. Kept rounded so the
+            // reveal still comes in as a shape, and clipped for the same
+            // reason as before.
             sidebarColumn
                 .frame(width: app.sidebarWidth)
                 .frame(width: app.isSidebarVisible ? app.sidebarWidth : 0, alignment: .leading)
-                .columnPanel()
+                .clipShape(Column.shape)
                 .opacity(app.isSidebarVisible ? 1 : 0)
                 .clipped()
 
@@ -243,7 +248,9 @@ struct LibraryWindow: View {
         // gap between two of them is the drag strip that resizes them.
         .padding(.horizontal, Column.margin)
         .padding(.bottom, Column.margin)
-        .padding(.top, max(toolbarBand - Column.underToolbar, Column.margin))
+        // Nothing between the controls and the panels but the gap they
+        // already keep from each other; the band's own slack is the margin.
+        .padding(.top, max(toolbarBand - Column.underToolbar, 0))
         .background { Column.ground }
         // No `.animation(value:)` here. The toggles already declare the motion
         // with `withAnimation`, and declaring it a second time with a
@@ -290,14 +297,9 @@ struct LibraryWindow: View {
 
     private var sidebarColumn: some View {
         VStack(alignment: .leading, spacing: 0) {
-            #if os(macOS)
-            Text(model.displayName)
-                .font(.headline)
-                .lineLimit(1)
-                .padding(.horizontal, 16)
-                .padding(.top, 10)
-                .padding(.bottom, 6)
-            #endif
+            // No title. The folder's name was a headline over a list whose
+            // first section header already says "Library"; it is beside that
+            // header now, small, and the list starts where the title was.
             LibrarySidebar(model: model)
         }
     }
@@ -306,8 +308,6 @@ struct LibraryWindow: View {
         @Bindable var app = app
 
         return splitView
-
-        .overlay(alignment: .topLeading) { floatingList }
         .onChange(of: configuration.layout) { _, layout in
             app.settings.readerPageMode = layout.rawValue
             // A spread wants the whole window. Choosing Book is the clearest
@@ -320,6 +320,15 @@ struct LibraryWindow: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .paperTimeToggleFocus)) { _ in
             app.toggleFocusMode()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .paperTimeLayoutContinuous)) { _ in
+            configuration.layout = .continuous
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .paperTimeLayoutSinglePage)) { _ in
+            configuration.layout = .singlePage
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .paperTimeLayoutBook)) { _ in
+            configuration.layout = .book
         }
         .fileImporter(
             isPresented: $isImportingPDFs,
@@ -382,67 +391,6 @@ struct LibraryWindow: View {
         let next = index + offset
         guard papers.indices.contains(next) else { return }
         model.selectedPaperID = papers[next].id
-    }
-
-    /// In focus mode the list is summoned over the page rather than pinned to
-    /// a column, so a glance at the library costs nothing and leaves nothing
-    /// behind.
-    @ViewBuilder
-    private var floatingList: some View {
-        if app.isFocusMode {
-            HStack(alignment: .top, spacing: 0) {
-                if app.showsFloatingList {
-                    VStack(alignment: .leading, spacing: 0) {
-                        HStack {
-                            Text(scopeTitle)
-                                .font(.headline)
-                            Spacer()
-                            Button {
-                                app.toggleFloatingList()
-                            } label: {
-                                Image(systemName: "chevron.left")
-                            }
-                            .buttonStyle(.plain)
-                            .help("Hide papers (Command-L)")
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.top, 12)
-                        .padding(.bottom, 8)
-                        Divider()
-                        PaperListView(model: model)
-                    }
-                        .frame(width: 320)
-                        .frame(maxHeight: 620)
-                        .liquidGlass(.floating, in: RoundedRectangle(cornerRadius: Corner.panel, style: .continuous))
-                        .shadow(radius: 18, y: 6)
-                        .padding(.leading, 16)
-                        .padding(.top, 16)
-                        .transition(.move(edge: .leading).combined(with: .opacity))
-                        .onChange(of: model.selectedPaperID) { _, _ in
-                            app.toggleFloatingList()
-                        }
-                } else {
-                    Button {
-                        app.toggleFloatingList()
-                    } label: {
-                        Label("Papers", systemImage: "sidebar.leading")
-                            .font(.callout.weight(.medium))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .liquidGlass(.floating)
-                            .overlay(
-                                Capsule().strokeBorder(.primary.opacity(0.08), lineWidth: 0.5)
-                            )
-                            .shadow(radius: 6, y: 2)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Show papers (Command-L)")
-                    .padding(.leading, 12)
-                    .padding(.top, 12)
-                    .transition(.opacity.combined(with: .move(edge: .leading)))
-                }
-            }
-        }
     }
 
     @ViewBuilder
@@ -509,6 +457,7 @@ struct LibraryWindow: View {
                     Label("Add PDFs", systemImage: "plus").toolbarIcon()
                 }
                 .help("Add PDFs to the library (Command-O)")
+                .toolbarHover()
 
                 Button {
                     app.showsSearchPalette = true
@@ -516,13 +465,46 @@ struct LibraryWindow: View {
                     Label("Search", systemImage: "magnifyingglass").toolbarIcon()
                 }
                 .help("Search everything (Command-K)")
+                .toolbarHover()
 
                 sortMenu
                 viewMenu
                 shareMenu
+                paneMenu
             }
             .toolbarButtons()
         }
+    }
+
+    /// The four panes, behind one button.
+    ///
+    /// There used to be one button, for the inspector, at the far end of the
+    /// toolbar — from when only the two sidebars could be hidden. Four in a
+    /// row said the same thing four times and took the room of six controls.
+    /// One menu, with a tick beside each pane that is showing, says it once.
+    private var paneMenu: some View {
+        Menu {
+            Toggle("Sidebar", isOn: Binding(
+                get: { app.isSidebarVisible }, set: { _ in app.toggleSidebar() }
+            ))
+            Toggle("Paper List", isOn: Binding(
+                get: { app.showsPaperList }, set: { _ in app.togglePaperList() }
+            ))
+            Toggle("Paper", isOn: Binding(
+                get: { app.showsReader && !app.isFocusMode }, set: { _ in app.toggleReader() }
+            ))
+            Toggle("Inspector", isOn: Binding(
+                get: { app.showsInspector }, set: { _ in app.toggleInspector() }
+            ))
+            Divider()
+            Toggle("Focus on the Paper", isOn: Binding(
+                get: { app.isFocusMode }, set: { app.setFocusMode($0) }
+            ))
+        } label: {
+            Label("Panes", systemImage: "rectangle.split.3x1").toolbarIcon()
+        }
+        .help("Which panes are showing")
+        .toolbarHover()
     }
 
     @ViewBuilder
@@ -539,6 +521,7 @@ struct LibraryWindow: View {
             Label("Sort", systemImage: "arrow.up.arrow.down").toolbarIcon()
         }
         .help("Sort the list")
+        .toolbarHover()
     }
 
     @ViewBuilder
@@ -570,17 +553,12 @@ struct LibraryWindow: View {
                 )
             )
             #endif
-            Divider()
-            Toggle(
-                "Focus on the Paper",
-                isOn: Binding(get: { app.isFocusMode }, set: { app.setFocusMode($0) })
-            )
-            .keyboardShortcut("f", modifiers: [.command, .control])
         } label: {
             Label("View Options", systemImage: "textformat.size").toolbarIcon()
         }
         .help("Page layout and tint")
         .disabled(model.selectedPaper == nil)
+        .toolbarHover()
     }
 
     @ViewBuilder
@@ -610,6 +588,7 @@ struct LibraryWindow: View {
             Label("Share", systemImage: "square.and.arrow.up").toolbarIcon()
         }
         .help("Export and import")
+        .toolbarHover()
     }
 
     @ToolbarContentBuilder
@@ -632,15 +611,6 @@ struct LibraryWindow: View {
             }
         }
 
-        ToolbarItem(id: "inspector", placement: .primaryAction) {
-            Button {
-                app.toggleInspector()
-            } label: {
-                Label("Inspector", systemImage: "sidebar.trailing")
-            }
-            .toolbarButtons()
-            .help("Show or hide the inspector (Command-])")
-        }
     }
 
     // MARK: - Actions
@@ -724,6 +694,16 @@ struct PaperDetailColumn: View {
 
     var body: some View {
         columns
+        // The paper's contents, floating over the page. Centred on the
+        // column, which in a book spread puts it in the gutter between the
+        // two pages where there are no words to cover.
+        .overlay {
+            if app.showsFloatingList, model.selectedPaper != nil {
+                ContentsPopup(link: link) { app.toggleFloatingList() }
+                    .transition(.scale(scale: 0.96).combined(with: .opacity))
+            }
+        }
+        .animation(.snappy(duration: 0.22), value: app.showsFloatingList)
         // Clicking a mark on the page opens the list it lives in.
         .onChange(of: link.revealedMarkID) { _, id in
             guard id != nil else { return }
@@ -792,12 +772,28 @@ struct PaperDetailColumn: View {
                 // every selection, and creating a `PDFView` is most of what
                 // opening a paper used to cost. The reader reloads itself when
                 // the paper changes instead.
-                ReaderScreen(
-                    library: model,
-                    paper: paper,
-                    configuration: configuration,
-                    link: link
-                )
+                VStack(spacing: 0) {
+                    // The paper's name, where the list has "All Papers" and
+                    // the slip-box has "Notes". The page keeps its place; the
+                    // strip is what the panel gained by reaching higher.
+                    HStack {
+                        Text(paper.meta.displayTitle)
+                            .font(.headline)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 10)
+                    .padding(.bottom, 6)
+
+                    ReaderScreen(
+                        library: model,
+                        paper: paper,
+                        configuration: configuration,
+                        link: link
+                    )
+                }
             } else {
                 ContentUnavailableView(
                     "No Paper Selected",
@@ -901,11 +897,37 @@ extension View {
         #endif
     }
 
-    /// One size for every icon in the toolbar, so the row is a row.
+    /// One size for every icon in the toolbar, so the row is a row — and a
+    /// faint square under the pointer, the way the segmented picker at the
+    /// other end of the toolbar already answers a hover. Borderless buttons
+    /// answered with nothing, and a row of icons that does not react does
+    /// not look like a row of buttons.
     func toolbarIcon() -> some View {
         font(.system(size: 14, weight: .medium))
             .frame(width: 22, height: 22)
             .contentShape(.rect)
+    }
+
+    /// The hover square, on the control itself. On a `Menu` the label never
+    /// hears the pointer — the menu button takes it — so the modifier goes
+    /// on the menu, and on a `Button` for the same reason.
+    func toolbarHover() -> some View {
+        modifier(ToolbarHover())
+    }
+}
+
+private struct ToolbarHover: ViewModifier {
+    @State private var isHovering = false
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Color.primary.opacity(isHovering ? 0.09 : 0))
+                    .padding(-3)
+            )
+            .animation(.easeOut(duration: 0.12), value: isHovering)
+            .onHover { isHovering = $0 }
     }
 }
 
@@ -933,7 +955,7 @@ enum Column {
     /// it, the panels sat a good inch below the buttons. This is empirical —
     /// there is no API for where the controls stop, only for where the band
     /// does.
-    static let underToolbar: CGFloat = 38
+    static let underToolbar: CGFloat = 52
 
     /// What shows between and around the panels, and up through the toolbar,
     /// which has no colour of its own.

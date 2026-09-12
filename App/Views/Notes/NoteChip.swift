@@ -19,19 +19,18 @@ enum NoteChip {
     /// Marks a run as a passage from the paper. The value is the corner style.
     static let attribute = NSAttributedString.Key("PaperTimeChip")
 
-    static var fill: NSColor { .controlAccentColor.withAlphaComponent(0.13) }
-    static var stroke: NSColor { .controlAccentColor.withAlphaComponent(0.2) }
+    static var fill: NSColor { .controlAccentColor.withAlphaComponent(0.12) }
 
-    /// Ink, not accent.
+    /// The accent, as the words themselves.
     ///
-    /// A chip can hold a whole sentence, and a sentence set in link blue
-    /// shouts across the note. The words are a quotation and should read as
-    /// words; the tint behind them is what says where they came from. Only a
-    /// touch of the accent is left in, so the chip still belongs to the same
-    /// family as everything else that is clickable.
-    static var ink: NSColor {
-        .textColor.blended(withFraction: 0.18, of: .controlAccentColor) ?? .textColor
-    }
+    /// These read as ink for a while — a whole quoted sentence in link blue
+    /// seemed too loud — but ink on a pale tint is what a highlight looks
+    /// like, and a highlight is something you made, not something you can
+    /// press. The demonstrations in About set the words in the accent over a
+    /// fainter tint, and side by side that version said "this goes somewhere"
+    /// and this one did not. So it is the accent now, and the tint is lighter
+    /// to keep the pair readable.
+    static var ink: NSColor { .controlAccentColor }
 
     /// How far the tint reaches past the letters, and how round it is.
     static let padding = NSSize(width: 4.5, height: 1.5)
@@ -61,9 +60,6 @@ final class NoteLayoutFragment: NSTextLayoutFragment {
                                         xRadius: NoteChip.radius, yRadius: NoteChip.radius)
                 NoteChip.fill.setFill()
                 path.fill()
-                NoteChip.stroke.setStroke()
-                path.lineWidth = 0.5
-                path.stroke()
             }
         }
         context.restoreGState()

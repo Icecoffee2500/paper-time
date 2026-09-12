@@ -41,6 +41,10 @@ struct FeatureDemoView: View {
             case .slipBox: SlipBoxDemo(scale: scale)
             case .graph: GraphDemo(scale: scale)
             case .search: SearchDemo(scale: scale)
+            case .book: BookDemo(scale: scale)
+            case .bookReading: BookReadingDemo(scale: scale)
+            case .focus: FocusDemo(scale: scale)
+            case .resonance: ResonanceDemo(scale: scale)
             }
         }
         .padding(scale.pad)
@@ -128,12 +132,100 @@ private struct AnnotationDemo: View {
     private var lineCount: Int { 14 }
 
     var body: some View {
-        HStack(alignment: .top, spacing: scale.gap) {
-            page
-            list
-                .frame(width: scale.isFull ? 200 : 132)
+        VStack(alignment: .leading, spacing: scale.gap) {
+            comparison
+            HStack(alignment: .top, spacing: scale.gap) {
+                page
+                list
+                    .frame(width: scale.isFull ? 200 : 132)
+            }
+            .frame(height: scale.isFull ? 230 : 116)
         }
-        .frame(height: scale.isFull ? 230 : 116)
+    }
+
+    // MARK: The same line, marked twice
+
+    /// One highlighted line with a formula in it, drawn as every other PDF
+    /// app draws it and as this one does.
+    ///
+    /// The other apps paint the rectangle PDFKit reports, square-cornered and
+    /// as tall as the line — and a line carrying a sum with its limits is two
+    /// or three times the height of its words, so the box swallows the lines
+    /// above and below. Here the ink of the letters is measured and the band
+    /// covers just that, rounded at the ends, with the tall glyphs poking
+    /// out of it the way they poke out of a stroke drawn by hand.
+    private var comparison: some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 6 : 4) {
+            HStack(alignment: .top, spacing: scale.gap) {
+                sample(ours: false)
+                sample(ours: true)
+            }
+            Text(ReleaseNotes.string(
+                "수식이 든 줄: 저쪽은 상자가 줄 높이만큼 자라고 모서리가 각지다. 이쪽은 글자에 딱 맞고 끝이 둥글다 — 사람이 그은 것처럼.",
+                "A line with a formula: there, the box grows to the line's height and its corners are square. Here it fits the letters and its ends are round — the way a hand draws it."
+            ))
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func sample(ours: Bool) -> some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 6 : 4) {
+            Text(ours ? "Paper Time" : ReleaseNotes.string("다른 PDF 앱", "Other PDF apps"))
+                .font(scale.small.weight(ours ? .semibold : .regular))
+                .foregroundStyle(ours ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                .padding(.horizontal, 7)
+                .padding(.vertical, 2)
+                .background(Capsule().fill(ours ? AnyShapeStyle(.tint.opacity(0.14)) : AnyShapeStyle(.quaternary)))
+            Paper(scale: scale) {
+                VStack(alignment: .leading, spacing: scale.isFull ? 7 : 5) {
+                    Rule()
+                    markedFormula(ours: ours)
+                    Rule(width: scale.isFull ? 120 : 70)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// The line, set the way a page sets it: words, then a sum with its
+    /// limits above and below, then words. Marked square and tall on the
+    /// left, round and fitted on the right.
+    private func markedFormula(ours: Bool) -> some View {
+        let size: CGFloat = scale.isFull ? 13 : 10
+        return formula(size: size)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 3)
+            .background {
+                if ours {
+                    // The words' ink and a hair of margin, as `LineMetrics` measures it.
+                    RoundedRectangle(cornerRadius: 3.5, style: .continuous)
+                        .fill(Color.yellow.opacity(0.32))
+                        .frame(height: size * 1.2)
+                        .offset(y: size * 0.02)
+                } else {
+                    Rectangle().fill(Color.yellow.opacity(0.55))
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func formula(size: CGFloat) -> Text {
+        let body = Font.system(size: size, design: .serif)
+        let math = Font.system(size: size, design: .serif).italic()
+        let sum = Font.system(size: size * 1.6, design: .serif)
+        let limit = Font.system(size: size * 0.6, design: .serif)
+        let runs: [Text] = [
+            Text(ReleaseNotes.string("총 손실 ", "the total loss ")).font(body),
+            Text("∑").font(sum).baselineOffset(-size * 0.2),
+            Text("n").font(limit).baselineOffset(size * 0.9),
+            Text("i=1").font(limit).baselineOffset(-size * 0.55),
+            Text(" ℓ").font(math),
+            Text("i").font(limit).baselineOffset(-size * 0.25),
+            Text(ReleaseNotes.string("을 최소화한다", " over all tasks")).font(body),
+        ]
+        return runs.dropFirst().reduce(runs[0]) { $0 + $1 }
     }
 
     /// The paper. Marks are the only thing set in type; everything else is
@@ -177,11 +269,12 @@ private struct AnnotationDemo: View {
                 .padding(.vertical, 1)
                 .background(
                     RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .fill(mark.underlined ? .clear : mark.tint.opacity(0.4))
+                        // As pale as the marks on the real page now are.
+                        .fill(mark.underlined ? .clear : mark.tint.opacity(0.28))
                 )
                 .overlay(alignment: .bottom) {
                     if mark.underlined {
-                        Rectangle().fill(mark.tint).frame(height: 1.5)
+                        Rectangle().fill(mark.tint).frame(height: 2)
                     }
                 }
                 .overlay(
@@ -409,57 +502,175 @@ private struct PassageDemo: View {
 
 // MARK: - Ultracopy
 
-/// The same paragraph as it is read and as it is pasted.
+/// The same passage copied twice: once the ordinary way, once with Ultracopy.
+///
+/// Said as a comparison, because on its own the good result looks merely
+/// normal. Nobody knows what "the mathematics comes out as LaTeX" is worth
+/// until they have seen what ⌘C does to the same line — a formula spilled
+/// into a row of loose letters and digits that has to be retyped from the
+/// page. Both keys are here to press, and the two results sit next to each
+/// other until one of them is obviously the one you wanted.
 private struct UltracopyDemo: View {
     let scale: DemoScale
     @Environment(AppModel.self) private var app
-    @State private var copied = false
+    @State private var plainCopied = false
+    @State private var ultraCopied = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: scale.gap) {
-            Paper(scale: scale) {
-                Group {
-                    if copied {
-                        Text(ReleaseNotes.string(
-                            "감쇠율은 벽 근처에서 $\\gamma \\sim \\nu k^{2}$에\n비례한다.",
-                            "The damping rate scales as $\\gamma \\sim \\nu k^{2}$\nnear the wall."
-                        ))
-                        .monospaced()
-                        .transition(.opacity)
-                    } else {
-                        (Text(ReleaseNotes.string("감쇠율은 벽 근처에서 ", "The damping rate scales as "))
-                         + Text("γ ~ νk²").italic()
-                         + Text(ReleaseNotes.string("에 비례한다.", " near the wall.")))
-                            .transition(.opacity)
-                    }
+            passage
+
+            if scale.isFull {
+                HStack(alignment: .top, spacing: scale.gap) {
+                    plain
+                    ultra
                 }
-                .font(scale.body)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .fixedSize(horizontal: false, vertical: true)
+            } else {
+                plain
+                ultra
             }
 
-            HStack(spacing: 8) {
-                Text(copied ? ReleaseNotes.string("클립보드", "On the clipboard")
-                            : ReleaseNotes.string("논문 위", "On the page"))
-                    .font(scale.small)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button {
-                    withAnimation(.snappy(duration: 0.25)) { copied.toggle() }
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(app.shortcut(for: .ultracopy).display).monospaced()
-                        Text(copied ? ReleaseNotes.string("되돌리기", "Back")
-                                    : ReleaseNotes.string("복사", "Copy"))
-                    }
-                    .font(scale.small)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(.quaternary))
-                }
-                .buttonStyle(.plain)
+            if plainCopied && ultraCopied {
+                Text(ReleaseNotes.string(
+                    "왼쪽은 손으로 다시 쳐야 하고, 오른쪽은 원고에 그대로 붙는다.",
+                    "The left has to be retyped; the right pastes into a manuscript as it is."
+                ))
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .transition(.opacity)
             }
         }
+    }
+
+    /// The line on the page, set the way the page sets it.
+    private var passage: some View {
+        Paper(scale: scale) {
+            VStack(alignment: .leading, spacing: scale.isFull ? 6 : 4) {
+                Rule(width: 110)
+                formula
+                    .font(scale.body)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 3)
+                    .padding(.vertical, 1)
+                    .background(
+                        RoundedRectangle(cornerRadius: 3, style: .continuous)
+                            .fill(Color.accentColor.opacity(0.18))
+                    )
+                Rule(width: 150)
+            }
+        }
+    }
+
+    /// The formula as type, one run at a time. Built as a list and folded,
+    /// because a dozen `Text`s joined with `+` in one expression is more than
+    /// the type-checker will sit through.
+    private var formula: Text {
+        let body = Font.system(scale.isFull ? .body : .caption, design: .serif)
+        let sub = Font.system(size: scale.isFull ? 9 : 7, design: .serif)
+        func main(_ string: String) -> Text { Text(string).font(body).italic() }
+        func low(_ string: String) -> Text { Text(string).font(sub).baselineOffset(-3) }
+        let runs: [Text] = [
+            Text(ReleaseNotes.string("각 단계에서 롤아웃 손실 ", "At each step we minimise the rollout loss ")),
+            main("ℒ"), low("rollout"), main("(ϕ) := ‖P"), low("ϕ"), main("(a"), low("1:T"),
+            main(", s"), low("1"), main(", z"), low("1"), main(") − z"), low("T+1"), main("‖"), low("1"),
+            Text(ReleaseNotes.string("을 최소화한다.", " over the horizon.")),
+        ]
+        return runs.dropFirst().reduce(runs[0]) { $0 + $1 }
+    }
+
+    private var plain: some View {
+        result(
+            key: "⌘C",
+            name: ReleaseNotes.string("그냥 복사", "Plain copy"),
+            tint: .secondary,
+            shown: plainCopied,
+            reveal: { plainCopied = true }
+        ) {
+            // What PDFKit hands back: every glyph, in reading order, with the
+            // structure that made it a formula gone.
+            Text(ReleaseNotes.string(
+                "각 단계에서 롤아웃 손실 Lrollout(ϕ) := ∥Pϕ(a1:T , s1, z1) − zT +1∥1을 최소화한다.",
+                "At each step we minimise the rollout loss Lrollout(ϕ) := ∥Pϕ(a1:T , s1, z1) − zT +1∥1 over the horizon."
+            ))
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private var ultra: some View {
+        result(
+            key: app.shortcut(for: .ultracopy).display,
+            name: "Ultracopy",
+            tint: .accentColor,
+            shown: ultraCopied,
+            reveal: { ultraCopied = true }
+        ) {
+            (Text(ReleaseNotes.string("각 단계에서 롤아웃 손실 ", "At each step we minimise the rollout loss "))
+             + Text(verbatim: "$\\mathcal{L}_{\\mathrm{rollout}}(\\phi) := \\|P_\\phi(a_{1:T}, s_1, z_1) - z_{T+1}\\|_1$")
+                .foregroundStyle(.tint)
+             + Text(ReleaseNotes.string("을 최소화한다.", " over the horizon.")))
+        }
+    }
+
+    /// One of the two results: a key to press, and what comes out.
+    private func result(
+        key: String, name: String, tint: Color, shown: Bool,
+        reveal: @escaping () -> Void, @ViewBuilder content: () -> some View
+    ) -> some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 8 : 5) {
+            HStack(spacing: 6) {
+                Text(key)
+                    .font(scale.small.weight(.medium))
+                    .monospaced()
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(
+                        RoundedRectangle(cornerRadius: Corner.row - 2, style: .continuous)
+                            .fill(tint.opacity(tint == .accentColor ? 0.14 : 0.1))
+                    )
+                    .foregroundStyle(tint)
+                Text(name)
+                    .font(scale.small.weight(tint == .accentColor ? .semibold : .regular))
+                    .foregroundStyle(tint == .accentColor ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                Spacer(minLength: 0)
+            }
+
+            ZStack(alignment: .topLeading) {
+                if shown {
+                    content()
+                        .font(scale.small.monospaced())
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                } else {
+                    Button {
+                        withAnimation(.snappy(duration: 0.3)) { reveal() }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "doc.on.clipboard")
+                            Text(ReleaseNotes.string("\(key) 눌러 보기", "Press \(key)"))
+                        }
+                        .font(scale.small)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(.quaternary))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(minHeight: scale.isFull ? 84 : 44, alignment: .topLeading)
+            .padding(scale.isFull ? 10 : 8)
+            .background(
+                RoundedRectangle(cornerRadius: scale.corner, style: .continuous)
+                    .fill(.background)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: scale.corner, style: .continuous)
+                    .stroke(tint == .accentColor && shown ? Color.accentColor.opacity(0.35) : .clear, lineWidth: 1)
+            )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -604,6 +815,11 @@ private struct GraphDemo: View {
         CGPoint(x: 0.58, y: 0.86),
     ]
 
+    /// Who the seven are. Invented, but recognisable — the point is that a
+    /// dot with a name under it reads as a paper and a bare dot reads as a
+    /// diagram.
+    private let names = ["Attention", "ViT", "V-JEPA 2", "DINOv2", "OpenVLA", "π0", "Octo"]
+
     private let edges: [(Int, Int, Kind)] = [
         (0, 1, .citation), (1, 2, .citation), (2, 4, .citation),
         (0, 2, .note), (2, 6, .note),
@@ -645,6 +861,14 @@ private struct GraphDemo: View {
                                         focus = focus == index ? nil : index
                                     }
                                 }
+                            if scale.isFull {
+                                Text(names[index])
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .opacity(focus == nil || related(index) ? 1 : 0.2)
+                                    .position(CGPoint(x: point.x, y: point.y + dot + 6))
+                                    .allowsHitTesting(false)
+                            }
                         }
                     }
                 }
@@ -875,3 +1099,1100 @@ private struct SearchDemo: View {
         .contentShape(.rect)
     }
 }
+
+// MARK: - Layouts
+
+/// The three ways to lay the paper out, switched with their keys.
+///
+/// Shown as the switch itself: ⌘1, ⌘2, ⌘3 as buttons, and the little window
+/// rearranging as each is pressed — a column of pages scrolling, one page on
+/// its own, two facing pages you turn with the arrows. What each layout *is*
+/// is obvious the moment it is seen next to the other two, and not before.
+private struct BookDemo: View {
+    let scale: DemoScale
+    @Environment(AppModel.self) private var app
+
+    private enum Layout: CaseIterable { case continuous, single, book }
+    @State private var layout: Layout = .book
+    @State private var leftPage = 4
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: scale.gap) {
+            ZStack {
+                switch layout {
+                case .continuous: continuous.transition(.opacity)
+                case .single: single.transition(.opacity)
+                case .book: book.transition(.opacity)
+                }
+            }
+            .frame(height: scale.isFull ? 190 : 84)
+            .frame(maxWidth: .infinity)
+            .padding(scale.isFull ? 10 : 6)
+            .background(
+                // A book is one white field; the scrolling layouts show their
+                // pages on the window's ground.
+                RoundedRectangle(cornerRadius: scale.corner, style: .continuous)
+                    .fill(layout == .book ? AnyShapeStyle(.background) : AnyShapeStyle(.quaternary.opacity(0.35)))
+            )
+            .clipShape(RoundedRectangle(cornerRadius: scale.corner, style: .continuous))
+
+            HStack(spacing: 6) {
+                key(.layoutContinuous, ReleaseNotes.string("연속", "Continuous"), .continuous)
+                key(.layoutSinglePage, ReleaseNotes.string("한 장", "Single"), .single)
+                key(.layoutBook, ReleaseNotes.string("책", "Book"), .book)
+                Spacer(minLength: 0)
+                if layout == .book {
+                    turn("arrow.left", by: -2, enabled: leftPage > 1)
+                    turn("arrow.right", by: 2, enabled: leftPage + 2 < 48)
+                    Text(ReleaseNotes.string("\(leftPage)–\(leftPage + 1) / 48", "\(leftPage)–\(leftPage + 1) / 48"))
+                        .font(scale.small)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    /// A key and its name, lit when it is the layout showing.
+    private func key(_ action: ShortcutAction, _ name: String, _ target: Layout) -> some View {
+        let isOn = layout == target
+        return Button {
+            withAnimation(.snappy(duration: 0.3)) { layout = target }
+        } label: {
+            HStack(spacing: 4) {
+                Text(app.shortcut(for: action).display).monospaced()
+                Text(name)
+            }
+            .font(scale.small.weight(isOn ? .semibold : .regular))
+            .foregroundStyle(isOn ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(isOn ? AnyShapeStyle(.tint.opacity(0.14)) : AnyShapeStyle(.quaternary)))
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// A column of pages, the middle one whole, the ones above and below cut
+    /// by the edge — which is what scrolling looks like standing still.
+    private var continuous: some View {
+        VStack(spacing: scale.isFull ? 8 : 4) {
+            page(3).frame(height: scale.isFull ? 60 : 26).clipped()
+            page(4)
+            page(5).frame(height: scale.isFull ? 60 : 26).clipped()
+        }
+        .frame(width: scale.isFull ? 150 : 66)
+        .offset(y: scale.isFull ? -10 : -5)
+    }
+
+    private var single: some View {
+        page(4).frame(width: scale.isFull ? 150 : 66)
+    }
+
+    /// The spread as the app draws it: cropped to the text, one white field.
+    private var book: some View {
+        Spread(scale: scale, leftPage: leftPage, trimmed: true, lines: 12)
+            .frame(maxWidth: .infinity)
+    }
+
+    /// A page of greeked text, its number at the foot, the lines seeded by
+    /// the number so turning the page changes what is on it.
+    private func page(_ number: Int) -> some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 6 : 3) {
+            ForEach(0..<(scale.isFull ? 12 : 6), id: \.self) { line in
+                Rule(width: ((number * 7 + line * 13) % 5 == 0) ? 60 : nil)
+            }
+            Spacer(minLength: 0)
+            Text("\(number)")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .frame(maxWidth: .infinity)
+        }
+        .padding(scale.isFull ? 12 : 7)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 3, style: .continuous).fill(.background)
+        )
+        .id(number)
+    }
+
+    private func turn(_ symbol: String, by delta: Int, enabled: Bool) -> some View {
+        Button {
+            withAnimation(.snappy(duration: 0.25)) { leftPage += delta }
+        } label: {
+            Image(systemName: symbol)
+                .font(scale.small.weight(.medium))
+                .frame(width: 26, height: 20)
+                .background(Capsule().fill(.quaternary))
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.4)
+    }
+}
+
+// MARK: - Focus
+
+/// The window, and the window with everything but the paper gone.
+///
+/// Drawn as the window rather than as four grey blocks: a sidebar with its
+/// rows, a list with its titles, a paper with a heading, an inspector with its
+/// fields. Then ⇧⌘F, and the three of them slide away and the paper takes the
+/// width — which is the whole of what Focus does, and it only reads as that
+/// when what leaves looked like something.
+private struct FocusDemo: View {
+    let scale: DemoScale
+    @Environment(AppModel.self) private var app
+    @State private var isFocused = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: scale.gap) {
+            VStack(spacing: 0) {
+                // A titlebar, so it is a window.
+                HStack(spacing: 4) {
+                    ForEach(0..<3, id: \.self) { _ in
+                        Circle().fill(.quaternary).frame(width: 6, height: 6)
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+
+                HStack(spacing: scale.isFull ? 6 : 3) {
+                    if !isFocused {
+                        sidebar.transition(.move(edge: .leading).combined(with: .opacity))
+                        list.transition(.move(edge: .leading).combined(with: .opacity))
+                    }
+                    paper
+                    if !isFocused {
+                        inspector.transition(.move(edge: .trailing).combined(with: .opacity))
+                    }
+                }
+                .padding(.horizontal, 6)
+                .padding(.bottom, 6)
+            }
+            .frame(height: scale.isFull ? 170 : 74)
+            .background(
+                RoundedRectangle(cornerRadius: scale.corner, style: .continuous)
+                    .fill(.quaternary.opacity(0.35))
+            )
+            .clipShape(RoundedRectangle(cornerRadius: scale.corner, style: .continuous))
+
+            HStack(spacing: 8) {
+                Button {
+                    withAnimation(.snappy(duration: 0.32)) { isFocused.toggle() }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(app.shortcut(for: .focus).display).monospaced()
+                        Text(isFocused
+                             ? ReleaseNotes.string("돌아오기", "Leave Focus")
+                             : ReleaseNotes.string("논문에 집중", "Focus on the Paper"))
+                    }
+                    .font(scale.small.weight(.medium))
+                    .foregroundStyle(isFocused ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Capsule().fill(isFocused ? AnyShapeStyle(.tint.opacity(0.14)) : AnyShapeStyle(.quaternary)))
+                }
+                .buttonStyle(.plain)
+                Spacer(minLength: 0)
+                if scale.isFull {
+                    Text(isFocused
+                         ? ReleaseNotes.string("사이드바·목록·인스펙터가 비켜섰다. 다시 누르면 그대로 돌아온다.", "Sidebar, list and inspector stepped aside. Press again and they come back as they were.")
+                         : ReleaseNotes.string("네 패널이 다 보인다. 눌러 보라.", "All four panes. Press it."))
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(2)
+                }
+            }
+        }
+    }
+
+    private var sidebar: some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 6 : 3) {
+            ForEach(0..<(scale.isFull ? 6 : 3), id: \.self) { row in
+                HStack(spacing: 4) {
+                    Circle().fill(.quaternary).frame(width: 5, height: 5)
+                    Rule(width: row == 0 ? 34 : 26)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(scale.isFull ? 8 : 5)
+        .frame(width: scale.isFull ? 62 : 30, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(.quaternary.opacity(0.7)))
+    }
+
+    private var list: some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 7 : 4) {
+            ForEach(0..<(scale.isFull ? 4 : 2), id: \.self) { row in
+                VStack(alignment: .leading, spacing: 2) {
+                    Rule(width: row == 1 ? 50 : 66)
+                    Rule(width: 30).opacity(0.6)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(scale.isFull ? 8 : 5)
+        .frame(width: scale.isFull ? 92 : 44, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(.quaternary.opacity(0.7)))
+    }
+
+    private var paper: some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 6 : 3) {
+            Capsule().fill(.secondary.opacity(0.5)).frame(width: scale.isFull ? 90 : 40, height: 3)
+            ForEach(0..<(scale.isFull ? 9 : 4), id: \.self) { line in
+                Rule(width: line == 4 ? 70 : nil)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(scale.isFull ? 12 : 6)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(.background))
+    }
+
+    private var inspector: some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 7 : 4) {
+            ForEach(0..<(scale.isFull ? 5 : 2), id: \.self) { _ in
+                HStack { Rule(width: 22); Spacer(minLength: 0); Rule(width: 18).opacity(0.6) }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(scale.isFull ? 8 : 5)
+        .frame(width: scale.isFull ? 80 : 40, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(.quaternary.opacity(0.7)))
+    }
+}
+
+// MARK: - Reading a book
+
+/// The spread with what a book gives you: which pages, how far in, and the
+/// contents floating in the gutter to jump by section.
+/// Two facing pages, drawn the way this app shows them — or the way every
+/// other PDF app does.
+///
+/// Other apps put the PDF's two pages side by side as they come: each paper
+/// brings its own margins, a two-sided journal shifts its text toward the
+/// spine, the stamp arXiv runs up the margin stays, and PDFKit's spread is
+/// wider than the window so it sits wherever the last scroll left it. Here
+/// each page is cropped to its text, so the words stand the same distance
+/// from the middle on both sides and the gutter is the same width for every
+/// paper; there are no page edges to see, just one white field, and the
+/// stamp is painted out.
+private struct Spread: View {
+    let scale: DemoScale
+    let leftPage: Int
+    /// Cropped to the text, as this app does it; otherwise as the pages come.
+    let trimmed: Bool
+    var lines: Int = 11
+
+    var body: some View {
+        // The gutter as the app makes it: wide enough for the contents to
+        // sit in with room to spare, and the same for every paper.
+        HStack(spacing: trimmed ? Self.gutter(scale) : (scale.isFull ? 4 : 2)) {
+            sheet(leftPage, leading: trimmed ? margin : outer, trailing: trimmed ? margin : inner)
+                .overlay(alignment: .leading) { if !trimmed { stamp } }
+            sheet(leftPage + 1, leading: trimmed ? margin : inner, trailing: trimmed ? margin : outer)
+        }
+        .offset(x: trimmed ? 0 : -(scale.isFull ? 18 : 8))
+        .animation(.snappy(duration: 0.35), value: trimmed)
+    }
+
+    static func gutter(_ scale: DemoScale) -> CGFloat { scale.isFull ? 124 : 66 }
+
+    private var margin: CGFloat { scale.isFull ? 10 : 5 }
+    private var outer: CGFloat { scale.isFull ? 34 : 15 }
+    private var inner: CGFloat { scale.isFull ? 8 : 4 }
+
+    private func sheet(_ number: Int, leading: CGFloat, trailing: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 6 : 3) {
+            ForEach(0..<(scale.isFull ? lines : 5), id: \.self) { line in
+                Rule(width: ((number * 7 + line * 13) % 5 == 0) ? 60 : nil)
+            }
+            Spacer(minLength: 0)
+            Text("\(number)").font(.caption2).foregroundStyle(.tertiary).frame(maxWidth: .infinity)
+        }
+        .padding(.vertical, scale.isFull ? 12 : 7)
+        .padding(.leading, leading)
+        .padding(.trailing, trailing)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .fill(.background)
+                .shadow(color: .black.opacity(trimmed ? 0 : 0.14), radius: 3, y: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+        .id(number)
+    }
+
+    /// The stamp up the margin, as the PDF prints it.
+    private var stamp: some View {
+        Text("arXiv:2410.24164v1  [cs.RO]  31 Oct 2024")
+            .font(.system(size: scale.isFull ? 7 : 4.5, design: .monospaced))
+            .foregroundStyle(.secondary.opacity(0.7))
+            .fixedSize()
+            .rotationEffect(.degrees(-90))
+            .frame(width: scale.isFull ? 10 : 6)
+            .offset(x: scale.isFull ? 12 : 5)
+            .transition(.opacity)
+    }
+}
+
+private struct BookReadingDemo: View {
+    let scale: DemoScale
+    @Environment(AppModel.self) private var app
+    @State private var leftPage = 3
+    @State private var showsContents: Bool
+    /// Cropped to the text, as here; or as every other app shows it.
+    @State private var trimmed: Bool
+
+    init(scale: DemoScale, trimmed: Bool = true, showsContents: Bool = true) {
+        self.scale = scale
+        _trimmed = State(initialValue: trimmed)
+        _showsContents = State(initialValue: showsContents)
+    }
+
+    private let total = 48
+    private var sections: [(String, Int)] {
+        [
+            (ReleaseNotes.string("서론", "Introduction"), 1),
+            (ReleaseNotes.string("방법", "Method"), 5),
+            (ReleaseNotes.string("실험", "Experiments"), 11),
+            (ReleaseNotes.string("결과", "Results"), 19),
+            (ReleaseNotes.string("결론", "Conclusion"), 27),
+        ]
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: scale.gap) {
+            VStack(spacing: 0) {
+                ZStack {
+                    Spread(scale: scale, leftPage: leftPage, trimmed: trimmed)
+                        .padding(scale.isFull ? 10 : 6)
+
+                    // Only on this side: no other reader floats a contents
+                    // list in the gutter, which is the point of the switch.
+                    if showsContents && trimmed { contents.transition(.scale(scale: 0.96).combined(with: .opacity)) }
+                }
+                // Tall enough for the contents to sit inside the spread at
+                // the small size too, rather than over the status bar.
+                .frame(height: scale.isFull ? 190 : 118)
+
+                // The status bar: both pages of the spread, and how far in.
+                HStack(spacing: 8) {
+                    Text(ReleaseNotes.string("\(leftPage)–\(leftPage + 1) / \(total)쪽", "Pages \(leftPage)–\(leftPage + 1) of \(total)"))
+                        .font(.caption2)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                    ProgressView(value: Double(leftPage + 1), total: Double(total))
+                        .progressViewStyle(.linear)
+                        .tint(.secondary.opacity(0.6))
+                        .frame(width: scale.isFull ? 90 : 50)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, scale.isFull ? 10 : 6)
+                .padding(.vertical, 5)
+                .background(.background.opacity(0.6))
+            }
+            .background(
+                // One white field when the pages are cropped — the book is
+                // the field, not two cards on a ground. A grey ground when
+                // they are not, which is what shows their edges.
+                RoundedRectangle(cornerRadius: scale.corner, style: .continuous)
+                    .fill(trimmed ? AnyShapeStyle(.background) : AnyShapeStyle(.quaternary.opacity(0.35)))
+            )
+            // No clip on the stage: the contents float over the pages, and a
+            // clip was cutting the top and bottom off the floating list.
+
+            HStack(spacing: 6) {
+                turn("arrow.left", by: -2, enabled: leftPage > 1)
+                turn("arrow.right", by: 2, enabled: leftPage + 2 < total)
+                Text("space")
+                    .font(scale.small).monospaced()
+                    .foregroundStyle(.tertiary)
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(.quaternary.opacity(0.6)))
+                Spacer(minLength: 0)
+                let contentsShowing = showsContents && trimmed
+                Button {
+                    withAnimation(.snappy(duration: 0.25)) { showsContents.toggle() }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(app.shortcut(for: .floatingList).display).monospaced()
+                        Text(ReleaseNotes.string("목차", "Contents"))
+                    }
+                    .font(scale.small.weight(contentsShowing ? .semibold : .regular))
+                    .foregroundStyle(contentsShowing ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                    .padding(.horizontal, 7).padding(.vertical, 3)
+                    .background(Capsule().fill(contentsShowing ? AnyShapeStyle(.tint.opacity(0.14)) : AnyShapeStyle(.quaternary)))
+                }
+                .buttonStyle(.plain)
+                // There is no such key in the other readers.
+                .disabled(!trimmed)
+                .opacity(trimmed ? 1 : 0.4)
+            }
+
+            // The same spread as other apps show it, and as this one does.
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                mode(ReleaseNotes.string("다른 PDF 앱", "Other PDF apps"), trimmed: false)
+                mode("Paper Time", trimmed: true)
+                Text(trimmed
+                    ? ReleaseNotes.string("글에 맞춰 잘라 좌우 여백이 같고, 두 쪽 사이는 어떤 논문이든 같은 폭. 도장은 지우고, 목차는 그 사이에 뜬다.",
+                                          "Cropped to the text: equal margins both sides, a gutter the same width for every paper. The stamp is painted out; the contents float in between.")
+                    : ReleaseNotes.string("쪽을 그대로 나란히: 논문마다 여백이 다르고, 두 쪽은 붙거나 벌어지고, 펼침면은 한쪽으로 몰리고, 여백의 도장이 보인다. 사이에 목차를 띄울 자리도 없다.",
+                                          "The pages as they come: margins differ by paper, the two pages meet or gape, the spread sits to one side, and the stamp shows. There is no room between them for a contents list, either."))
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func mode(_ name: String, trimmed target: Bool) -> some View {
+        let isOn = trimmed == target
+        return Button {
+            withAnimation(.snappy(duration: 0.35)) { trimmed = target }
+        } label: {
+            Text(name)
+                .font(scale.small.weight(isOn ? .semibold : .regular))
+                .foregroundStyle(isOn ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                .padding(.horizontal, 7).padding(.vertical, 3)
+                .background(Capsule().fill(isOn ? AnyShapeStyle(.tint.opacity(0.14)) : AnyShapeStyle(.quaternary)))
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// The contents, narrow and tall in the gutter. A section is one press;
+    /// the list stays until it is put away, because reading by sections
+    /// means going to several.
+    private var contents: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(ReleaseNotes.string("목차", "Contents"))
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.bottom, 2)
+            ForEach(sections, id: \.1) { name, first in
+                let isHere = leftPage == first - (first - 1) % 2
+                Button {
+                    withAnimation(.snappy(duration: 0.25)) { leftPage = first - (first - 1) % 2 }
+                } label: {
+                    HStack {
+                        Text(name).font(scale.small).lineLimit(1)
+                        Spacer(minLength: 4)
+                        Text("\(first)").font(.caption2).monospacedDigit().foregroundStyle(.tertiary)
+                    }
+                    .foregroundStyle(isHere ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
+                    .padding(.horizontal, 6).padding(.vertical, scale.isFull ? 3 : 1)
+                    .background(
+                        RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .fill(Color.accentColor.opacity(isHere ? 0.12 : 0))
+                    )
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(scale.isFull ? 8 : 5)
+        // Narrower than the gutter by a margin either side, as in the app.
+        .frame(width: Spread.gutter(scale) - (scale.isFull ? 16 : 8))
+        .background(
+            RoundedRectangle(cornerRadius: scale.corner, style: .continuous)
+                .fill(.background)
+                .shadow(color: .black.opacity(0.14), radius: 8, y: 3)
+        )
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func turn(_ symbol: String, by delta: Int, enabled: Bool) -> some View {
+        Button {
+            withAnimation(.snappy(duration: 0.25)) { leftPage += delta }
+        } label: {
+            Image(systemName: symbol)
+                .font(scale.small.weight(.medium))
+                .frame(width: 26, height: 20)
+                .background(Capsule().fill(.quaternary))
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.4)
+    }
+}
+
+// MARK: - Resonance
+
+/// Resonance, learned by doing it: four steps, each a real press.
+///
+/// A feature nobody has seen before cannot be shown all at once — it has
+/// to be done once. So this is the reading surface and the inspector's
+/// Notes tab side by side, and a line underneath saying what to do next:
+/// turn the page, and the notes that echo it come up; select a sentence, and
+/// the ❝ button appears on each; press it, and the passage lands in that
+/// note with its address; and under the note, press the link, and two notes
+/// that never mentioned each other now do. Every step is the gesture the
+/// app itself uses.
+private struct ResonanceDemo: View {
+    let scale: DemoScale
+    /// 0: reading. 1: the echoes are up. 2: a sentence is selected. 3: the
+    /// passage is in the note. 4: the link is written.
+    @State private var step: Int
+    @State private var page = 0
+    @State private var openNote: Int?
+    @State private var selected = false
+    @State private var dropped = false
+    @State private var linked = false
+    /// The rule that picks the notes, with its numbers, shown on request.
+    @State private var showsRule = false
+
+    init(scale: DemoScale, step: Int = 0, showsRule: Bool = false) {
+        _showsRule = State(initialValue: showsRule)
+        self.scale = scale
+        _step = State(initialValue: step)
+        _page = State(initialValue: step >= 1 ? 1 : 0)
+        _selected = State(initialValue: step == 2)
+        _openNote = State(initialValue: step >= 3 ? 0 : nil)
+        _dropped = State(initialValue: step >= 3)
+        _linked = State(initialValue: step >= 4)
+    }
+
+    private struct Echo {
+        let title: String
+        let source: String
+        let shared: [String]
+        let body: [String]
+    }
+
+    private var sentences: [String] {
+        [
+            ReleaseNotes.string("우리는 로봇 정책을 위한 사전 학습 데이터셋을 소개한다.", "We introduce a pretraining dataset for robot policies."),
+            ReleaseNotes.string("EWC는 옛 과제에 중요한 가중치의 학습을 늦춰 — 시냅스 강화가 기억을 지키듯 — 파국적 망각을 막는다.",
+                                "EWC slows learning on the weights important for old tasks — the way synaptic consolidation protects a memory — and so avoids catastrophic forgetting."),
+        ]
+    }
+
+    private var echoes: [Echo] {
+        [
+            Echo(title: ReleaseNotes.string("시냅스 강화는 기억을 굳힌다", "Synaptic consolidation hardens a memory"),
+                 source: ReleaseNotes.string("Yang 외 2009에서 씀", "Written against Yang et al. 2009"),
+                 shared: [ReleaseNotes.string("시냅스 강화", "synaptic consolidation"), ReleaseNotes.string("기억", "memory")],
+                 body: [ReleaseNotes.string("새 가시는 며칠 지나면 굳고, 굳은 가시는 지워지지 않는다.", "New spines harden within days; a hardened spine is not erased."),
+                        ReleaseNotes.string("기억이 지켜지는 방식은 '쓰지 않기'다.", "A memory is kept by not being written over.")]),
+            Echo(title: ReleaseNotes.string("망각은 겹쳐 쓰기다", "Forgetting is overwriting"),
+                 source: ReleaseNotes.string("McCloskey 1989에서 씀", "Written against McCloskey 1989"),
+                 shared: [ReleaseNotes.string("파국적 망각", "catastrophic forgetting"), ReleaseNotes.string("가중치", "weights")],
+                 body: [ReleaseNotes.string("새 과제가 옛 과제의 가중치를 덮어쓴다.", "The new task writes over the old task's weights.")]),
+        ]
+    }
+
+    private var instructions: [String] {
+        [
+            ReleaseNotes.string("논문을 읽는 중이에요. →로 장을 넘겨 보세요.", "You are reading. Turn the page with →."),
+            ReleaseNotes.string("다른 논문을 읽다 쓴 노트 둘이 올라왔어요 — 이 쪽과 파란 낱말을 나누는 노트예요. 이번엔 쪽의 문장을 눌러 선택해 보세요.",
+                                "Two notes came up, written against other papers — they share the blue words with this page. Now click the sentence on the page to select it."),
+            ReleaseNotes.string("노트마다 ❝ 단추가 생겼어요. 눌러서 선택한 구절을 그 노트에 떨어뜨리세요.",
+                                "Each note grew a ❝ button. Press one to drop the selected passage into that note."),
+            ReleaseNotes.string("구절이 주소를 갖고 들어갔어요 — 누르면 이 쪽으로 돌아와요. 아래 'RESONATES WITH'에서 🔗를 눌러 다른 울림을 링크로 만드세요.",
+                                "The passage is in, with its address — click it and you are back on this page. Under RESONATES WITH, press the link to make the other echo a link."),
+            ReleaseNotes.string("두 논문의 구절이 노트 하나에서 만나고, 두 노트가 서로를 가리켜요. 다른 앱이었다면 그 노트가 있다는 걸 기억해 검색하고, 열어 복사해 붙여야 했을 일이에요.",
+                                "Passages from two papers meet in one note, and two notes now point at each other. In another app you would have had to remember the note existed, search for it, open it, and paste."),
+        ]
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: scale.gap) {
+            HStack(alignment: .top, spacing: scale.gap) {
+                paper
+                inspector
+                    .frame(width: scale.isFull ? 250 : 168)
+            }
+            .frame(height: scale.isFull ? 224 : 168)
+
+            guidance
+            if showsRule { rule.transition(.opacity.combined(with: .move(edge: .top))) }
+        }
+        .animation(.snappy(duration: 0.3), value: showsRule)
+    }
+
+    /// How the notes are chosen, in numbers — a reading friend who has your
+    /// notes by heart, and the arithmetic the friend does. Cards and chips
+    /// rather than a paragraph: a rule is read one at a time, and a number
+    /// is read as a number.
+    private var rule: some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 10 : 7) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(ReleaseNotes.string("어떻게 고르나", "How the notes are chosen"))
+                    .font(scale.small.weight(.semibold))
+                Text(ReleaseNotes.string(
+                    "네 노트를 전부 외운 읽기 친구가, 새 쪽의 낱말과 노트의 낱말을 나란히 놓고 같은 것을 센다. 다만 이렇게.",
+                    "A reading friend who knows your notes by heart lays the page's words beside each note's and counts what they share. Like this."
+                ))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
+            let cards: [AnyView] = [AnyView(notCounted), AnyView(weight), AnyView(pairs), AnyView(length)]
+            if scale.isFull {
+                HStack(alignment: .top, spacing: 8) { cards[0]; cards[1] }
+                HStack(alignment: .top, spacing: 8) { cards[2]; cards[3] }
+            } else {
+                ForEach(0..<4, id: \.self) { cards[$0] }
+            }
+
+            score
+        }
+        .padding(scale.isFull ? 12 : 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: scale.corner, style: .continuous).fill(.quaternary.opacity(0.25)))
+    }
+
+    /// One rule: a symbol, a name, one line, and its numbers.
+    private func card(_ symbol: String, _ title: String, _ line: String, @ViewBuilder figures: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 6 : 4) {
+            Label(title, systemImage: symbol)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tint)
+            Text(line)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            figures()
+        }
+        .padding(scale.isFull ? 10 : 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(RoundedRectangle(cornerRadius: scale.corner, style: .continuous).fill(.background))
+    }
+
+    /// A number or a word in a rounded tint — the shape a figure takes here.
+    private func chip(_ text: String, tinted: Bool = false, mono: Bool = true) -> some View {
+        Text(text)
+            .font(mono ? .caption2.monospaced() : .caption2)
+            .foregroundStyle(tinted ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(tinted ? Color.accentColor.opacity(0.12) : Color.secondary.opacity(0.1))
+            )
+    }
+
+    private var notCounted: some View {
+        card("xmark.circle", ReleaseNotes.string("세지 않는 말", "Not counted"),
+             ReleaseNotes.string("기능어와 논문마다 쓰는 말은 겹쳐도 0.", "Function words, and the words every paper uses, count for nothing.")) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 4) {
+                    ForEach(["model", "method", "results", "training", "data"], id: \.self) { chip($0, mono: false) }
+                }
+                chip(ReleaseNotes.string("317개", "317 words"), tinted: true)
+            }
+        }
+    }
+
+    private var weight: some View {
+        card("scalemass", ReleaseNotes.string("낱말의 무게", "A word's weight"),
+             ReleaseNotes.string("드물수록 무겁다. N = 노트 수 + 이 논문에서 뽑은 40쪽.", "The rarer, the heavier. N = the notes + 40 sampled pages of this paper.")) {
+            VStack(alignment: .leading, spacing: 5) {
+                chip("ln((N+1) ÷ (df+0.5)) + 0.3", tinted: true)
+                example("network", "42 / 45", 0.38, of: 2.88)
+                example("consolidation", "3 / 45", 2.88, of: 2.88)
+            }
+        }
+    }
+
+    /// One worked word: where it appears, and the weight that gives it,
+    /// drawn as a bar so the two can be compared without reading.
+    private func example(_ word: String, _ seen: String, _ value: Double, of most: Double) -> some View {
+        HStack(spacing: 6) {
+            Text(word).font(.caption2).frame(width: scale.isFull ? 78 : 66, alignment: .leading).lineLimit(1)
+            Text(seen).font(.caption2.monospaced()).foregroundStyle(.tertiary).lineLimit(1).fixedSize().frame(width: 48, alignment: .trailing)
+            GeometryReader { geo in
+                Capsule().fill(Color.accentColor.opacity(value == most ? 0.8 : 0.3))
+                    .frame(width: max(4, geo.size.width * value / most))
+            }
+            .frame(height: 6)
+            Text(String(format: "%.2f", value))
+                .font(.caption2.monospaced().weight(value == most ? .semibold : .regular))
+                .foregroundStyle(value == most ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                .frame(width: 30, alignment: .trailing)
+        }
+    }
+
+    private var pairs: some View {
+        card("link", ReleaseNotes.string("짝과 어간", "Pairs and stems"),
+             ReleaseNotes.string("붙어서 겹치는 두 낱말은 더 무겁고, 꼴이 다른 같은 말은 하나로 본다.", "Two words together weigh more; a word in another form is the same word.")) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 4) { chip("catastrophic forgetting", mono: false); chip("×1.3", tinted: true) }
+                HStack(spacing: 4) { chip("weights", mono: false); Text("=").font(.caption2).foregroundStyle(.tertiary); chip("weight", mono: false) }
+                HStack(spacing: 4) { chip("pretrained", mono: false); Text("=").font(.caption2).foregroundStyle(.tertiary); chip("pretraining", mono: false) }
+            }
+        }
+    }
+
+    private var length: some View {
+        card("text.alignleft", ReleaseNotes.string("긴 노트", "A long note"),
+             ReleaseNotes.string("길면 우연히 더 겹치니 나눈다. 짧은 노트는 다 같은 길이로 친다.", "It shares more by chance, so its sum is divided. Anything short counts as the same short length.")) {
+            chip("÷ (1 + ln 길이)".replacingOccurrences(of: "길이", with: ReleaseNotes.string("길이", "length")), tinted: true)
+        }
+    }
+
+    /// The score, as a formula read left to right, and the gates a note
+    /// has to pass.
+    private var score: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 4) {
+                Text(ReleaseNotes.string("점수", "score")).font(.caption.weight(.semibold))
+                Text("=").font(.caption2).foregroundStyle(.tertiary)
+                chip(ReleaseNotes.string("Σ 무게 × 짝 × √min(횟수)", "Σ weight × pair × √min(count)"), tinted: true)
+                Text("÷").font(.caption2).foregroundStyle(.tertiary)
+                chip(ReleaseNotes.string("1 + ln 길이", "1 + ln length"), tinted: true)
+            }
+            HStack(spacing: 6) {
+                gate(ReleaseNotes.string("겹친 말", "shared"), "≥ 2")
+                gate(ReleaseNotes.string("점수", "score"), "≥ 1.0")
+                gate(ReleaseNotes.string("1등의", "of the best"), "≥ 35%")
+                gate(ReleaseNotes.string("많아도", "at most"), "4")
+            }
+        }
+    }
+
+    private func gate(_ name: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(value).font(.caption.monospaced().weight(.semibold)).foregroundStyle(.tint)
+            Text(name).font(.system(size: 9)).foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: scale.corner - 2, style: .continuous).fill(.background))
+    }
+
+    // MARK: The page
+
+    private var paper: some View {
+        Paper(scale: scale) {
+            VStack(alignment: .leading, spacing: scale.isFull ? 7 : 5) {
+                Rule()
+                Rule(width: scale.isFull ? 160 : 80)
+                sentence
+                Rule()
+                Rule()
+                Rule(width: scale.isFull ? 120 : 60)
+                Spacer(minLength: 0)
+                Text("\(page + 3)")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .frame(maxHeight: .infinity)
+    }
+
+    /// The sentence being read. From the second step on it can be selected
+    /// with a press, the way a drag selects it on the real page.
+    private var sentence: some View {
+        Button {
+            guard step >= 1 else { return }
+            withAnimation(.snappy(duration: 0.25)) {
+                selected = true
+                if step == 1 { step = 2 }
+            }
+        } label: {
+            Text(sentences[page])
+                .font(.system(scale.isFull ? .callout : .caption2, design: .serif))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 3)
+                .padding(.vertical, 1)
+                .background(
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .fill(Color.accentColor.opacity(selected ? 0.18 : 0))
+                )
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .id(page)
+        .transition(.opacity)
+    }
+
+    // MARK: The inspector
+
+    private var inspector: some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 6 : 4) {
+            if let openNote {
+                editor(echoes[openNote])
+            } else {
+                notesTab
+            }
+        }
+        .padding(scale.isFull ? 10 : 7)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(RoundedRectangle(cornerRadius: scale.corner, style: .continuous).fill(.background))
+        .animation(.snappy(duration: 0.3), value: step)
+        .animation(.snappy(duration: 0.3), value: openNote)
+    }
+
+    /// The Notes tab: the echoes when there are any, then this paper's own.
+    @ViewBuilder
+    private var notesTab: some View {
+        if step >= 1 {
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Label("Resonance", systemImage: "waveform")
+                    .font(scale.small.weight(.semibold))
+                    .foregroundStyle(.tint)
+                if scale.isFull {
+                    Text(ReleaseNotes.string("다른 논문에서", "from other papers"))
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            ForEach(Array(echoes.enumerated()), id: \.offset) { index, echo in
+                echoRow(index, echo)
+            }
+            .transition(.opacity.combined(with: .move(edge: .top)))
+        }
+        Text(ReleaseNotes.string("이 논문의 노트 0개", "0 notes on this paper"))
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+            .padding(.top, step >= 1 ? 4 : 0)
+        Spacer(minLength: 0)
+    }
+
+    private func echoRow(_ index: Int, _ echo: Echo) -> some View {
+        HStack(alignment: .top, spacing: 4) {
+            Button {
+                withAnimation(.snappy(duration: 0.3)) { openNote = index }
+            } label: {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(echo.title)
+                        .font(scale.small.weight(.medium))
+                        .lineLimit(1)
+                    Text(echo.source)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    Text(echo.shared.joined(separator: " · "))
+                        .font(.caption2)
+                        .foregroundStyle(.tint)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+
+            // The ❝: only once there is a selection to drop, as in the app.
+            if selected, !dropped {
+                Button {
+                    withAnimation(.snappy(duration: 0.3)) {
+                        openNote = index
+                        dropped = true
+                        selected = false
+                        if step < 3 { step = 3 }
+                    }
+                } label: {
+                    Image(systemName: "quote.opening")
+                        .font(scale.small)
+                        .foregroundStyle(.tint)
+                        .padding(4)
+                        .background(Circle().fill(Color.accentColor.opacity(0.14)))
+                }
+                .buttonStyle(.plain)
+                .transition(.scale.combined(with: .opacity))
+            }
+        }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Color.accentColor.opacity(0.07))
+        )
+    }
+
+    /// The note, open: its title, its lines, the passage once it has landed,
+    /// and underneath what it resonates with — with the link to press.
+    private func editor(_ echo: Echo) -> some View {
+        let other = echoes[openNote == 0 ? 1 : 0]
+        return VStack(alignment: .leading, spacing: scale.isFull ? 6 : 4) {
+            Button {
+                withAnimation(.snappy(duration: 0.3)) { openNote = nil }
+            } label: {
+                Label("Notes", systemImage: "chevron.left")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+
+            Text(echo.title)
+                .font(scale.small.weight(.semibold))
+                .lineLimit(1)
+            ForEach(echo.body, id: \.self) { line in
+                Text(line)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if dropped {
+                // The passage as a chip: the shape everything you can go
+                // to takes in this app.
+                HStack(spacing: 4) {
+                    Image(systemName: "quote.opening")
+                        .font(.caption2)
+                    Text(sentences[page])
+                        .lineLimit(1)
+                }
+                .font(.caption2)
+                .foregroundStyle(.tint)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(Color.accentColor.opacity(0.12)))
+                .transition(.scale(scale: 0.9).combined(with: .opacity))
+            }
+            if linked {
+                Text("[[\(other.title)]]")
+                    .font(.caption2)
+                    .foregroundStyle(.tint)
+                    .transition(.opacity)
+            }
+            Spacer(minLength: 0)
+            if !linked {
+                Text("RESONATES WITH")
+                    .font(.system(size: 8, weight: .semibold))
+                    .tracking(0.6)
+                    .foregroundStyle(.tertiary)
+                HStack(spacing: 4) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "waveform")
+                            .foregroundStyle(.tint)
+                        Text(other.title).lineLimit(1)
+                    }
+                    .font(.caption2)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(.quaternary.opacity(0.55)))
+                    Button {
+                        withAnimation(.snappy(duration: 0.3)) {
+                            linked = true
+                            if step < 4 { step = 4 }
+                        }
+                    } label: {
+                        Image(systemName: "link.badge.plus")
+                            .font(.caption2)
+                            .foregroundStyle(.tint)
+                            .padding(4)
+                            .background(Circle().fill(Color.accentColor.opacity(0.14)))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    // MARK: What to do next
+
+    private var guidance: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                // Where you are in the four steps.
+                ForEach(0..<4, id: \.self) { index in
+                    Text("\(index + 1)")
+                        .font(.caption2.weight(.semibold))
+                        .monospacedDigit()
+                        .frame(width: 16, height: 16)
+                        .background(Circle().fill(index < step ? Color.accentColor : (index == step ? Color.accentColor.opacity(0.14) : Color.clear)))
+                        .overlay(Circle().stroke(index == step ? Color.accentColor : Color.secondary.opacity(0.3), lineWidth: 1))
+                        .foregroundStyle(index < step ? AnyShapeStyle(.white) : (index == step ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary)))
+                }
+                if step == 0 {
+                    Button {
+                        withAnimation(.snappy(duration: 0.3)) {
+                            page = 1
+                            step = 1
+                        }
+                    } label: {
+                        Image(systemName: "arrow.right")
+                            .font(scale.small.weight(.medium))
+                            .frame(width: 26, height: 20)
+                            .background(Capsule().fill(Color.accentColor.opacity(0.14)))
+                            .foregroundStyle(.tint)
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer(minLength: 0)
+                Button {
+                    withAnimation(.snappy(duration: 0.3)) { showsRule.toggle() }
+                } label: {
+                    Label(ReleaseNotes.string("어떻게 고르나?", "How are they chosen?"), systemImage: "function")
+                        .font(.caption2.weight(showsRule ? .semibold : .regular))
+                        .foregroundStyle(showsRule ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                }
+                .buttonStyle(.plain)
+                if step >= 1 {
+                    Button {
+                        withAnimation(.snappy(duration: 0.3)) {
+                            step = 0; page = 0; openNote = nil; selected = false; dropped = false; linked = false
+                        }
+                    } label: {
+                        Label(ReleaseNotes.string("처음부터", "Start over"), systemImage: "arrow.counterclockwise")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            Text(instructions[min(step, instructions.count - 1)])
+                .font(scale.small)
+                .foregroundStyle(step == 4 ? .secondary : .primary)
+                .fixedSize(horizontal: false, vertical: true)
+                .id(step)
+                .transition(.opacity)
+        }
+        .animation(.snappy(duration: 0.3), value: step)
+    }
+}
+
+#if os(macOS)
+/// Draws every demo, at both sizes, into PNG files — so they can be looked
+/// at without opening a window over whatever the user is doing.
+@MainActor
+enum DemoRenderer {
+    static func render(into directory: String) {
+        let model = AppModel()
+        let folder = URL(fileURLWithPath: directory)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        for demo in ReleaseNotes.Demo.allCases {
+            for scale in [DemoScale.compact, .full] {
+                let view = FeatureDemoView(demo: demo, scale: scale)
+                    .environment(model)
+                    .frame(width: scale.isFull ? 560 : 440)
+                    .padding(16)
+                    .background(Color(nsColor: .windowBackgroundColor))
+                let renderer = ImageRenderer(content: view)
+                renderer.scale = 2
+                guard let image = renderer.nsImage, let tiff = image.tiffRepresentation,
+                      let bitmap = NSBitmapImageRep(data: tiff),
+                      let png = bitmap.representation(using: .png, properties: [:])
+                else { continue }
+                try? png.write(to: folder.appendingPathComponent("\(demo.rawValue)-\(scale.isFull ? "full" : "compact").png"))
+            }
+        }
+        // The states the book demo reaches by a press: as other apps show
+        // it, and with the contents floating in the gutter.
+        func write(_ name: String, _ view: some View, full: Bool) {
+            let renderer = ImageRenderer(content: view
+                .environment(model).frame(width: full ? 560 : 440).padding(16).background(Color(nsColor: .windowBackgroundColor)))
+            renderer.scale = 2
+            if let image = renderer.nsImage, let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff),
+               let png = bitmap.representation(using: .png, properties: [:]) {
+                try? png.write(to: folder.appendingPathComponent("\(name).png"))
+            }
+        }
+        write("bookReading-other", BookReadingDemo(scale: .full, trimmed: false, showsContents: false), full: true)
+        write("bookReading-contents", BookReadingDemo(scale: .full, trimmed: true, showsContents: true), full: true)
+        write("bookReading-contents-compact", BookReadingDemo(scale: .compact, trimmed: true, showsContents: true), full: false)
+        // Resonance is learned in steps; each step is a picture.
+        for step in 1...4 {
+            write("resonance-step\(step)", ResonanceDemo(scale: .full, step: step), full: true)
+        }
+        write("resonance-step3-compact", ResonanceDemo(scale: .compact, step: 3), full: false)
+        write("resonance-rule", ResonanceDemo(scale: .full, step: 4, showsRule: true), full: true)
+        exit(0)
+    }
+}
+#endif

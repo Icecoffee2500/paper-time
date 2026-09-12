@@ -1,5 +1,6 @@
 import Foundation
 import InkEngine
+import CoreImage
 import PDFKit
 import PDFReader
 import PencilKit
@@ -100,6 +101,126 @@ final class ReaderCoordinator: NSObject {
     private let markupPanel = MarkupPanelController()
     private var markupTask: Task<Void, Never>?
     private var scrollMonitor: Any?
+    /// ← and → in a book, which PDFKit leaves unanswered.
+    private var arrowMonitor: Any?
+    /// Refits the spread to the view's width while a book is open.
+    private var spreadObserver: (any NSObjectProtocol)?
+
+    /// The crop that makes the document a book, while it is one.
+    private var bookTrim: BookTrim?
+    /// Keeps the spread centred: PDFKit lays a spread out with a full page
+    /// break at either end as well as between the pages, so the document is
+    /// wider than the view, and where the excess goes depends on how the view
+    /// was last scrolled — to the left edge for a page turn, wherever a jump
+    /// left it for a destination. This puts it back in the middle.
+    private var clipObserver: (any NSObjectProtocol)?
+    private var centering = false
+
+    /// Trims every page to the paper's content: see `BookTrim`.
+    private func trimForBook(_ document: PDFDocument) {
+        if let bookTrim, bookTrim.document === document, bookTrim.isApplied { return }
+        untrim()
+        let trim = BookTrim(document: document)
+        trim.apply()
+        bookTrim = trim
+    }
+
+    private func untrim() {
+        bookTrim?.restore()
+        bookTrim = nil
+        link.bookGutter = 0
+    }
+
+    /// Measures the pages about to be shown and re-crops them on their own
+    /// centre, laying the spread out again if any changed.
+    private func trimAround(_ page: PDFPage, in view: PDFView) {
+        guard let bookTrim, bookTrim.isApplied else { return }
+        let index = session.document.index(for: page)
+        guard index != NSNotFound else { return }
+        let spread = index - index % 2
+        if bookTrim.ensure([spread, spread + 1]) {
+            view.layoutDocumentView()
+            fitSpread(in: view)
+        }
+        // The spreads either side, after this one is on screen.
+        DispatchQueue.main.async { [weak bookTrim] in
+            _ = bookTrim?.ensure([spread + 2, spread + 3, spread - 2, spread - 1])
+        }
+    }
+
+    /// Scrolls the spread to the middle of the view when the document is
+    /// wider than the view; when it is narrower, PDFKit centres it itself.
+    /// Measured against the view, not the clip: a scroller can take a strip
+    /// off the clip's width, and a spread centred in the clip sat that much
+    /// to one side of the window.
+    private func centerSpread(in view: PDFView) {
+        guard appliedLayout == .book, !centering,
+              let scrollView = view.subviews.compactMap({ $0 as? NSScrollView }).first,
+              let documentView = scrollView.documentView, view.scaleFactor > 0
+        else { return }
+        let clip = scrollView.contentView
+        let excess = documentView.frame.width - clip.bounds.width
+        guard excess > 0.5 else { return }
+        let shown = view.visiblePages.map { view.convert($0.bounds(for: view.displayBox), from: $0) }
+        guard let minX = shown.map(\.minX).min(), let maxX = shown.map(\.maxX).max() else { return }
+        let offset = (minX + maxX) / 2 - view.bounds.midX
+        guard abs(offset) > 0.5 else { return }
+        let target = min(max(clip.bounds.origin.x + offset / view.scaleFactor, documentView.frame.minX), documentView.frame.minX + excess)
+        guard abs(clip.bounds.origin.x - target) > 0.25 else { return }
+        centering = true
+        clip.scroll(to: CGPoint(x: target, y: clip.bounds.origin.y))
+        scrollView.reflectScrolledClipView(clip)
+        centering = false
+    }
+
+    private func setCenterLock(_ isOn: Bool, in view: PDFView) {
+        if let clipObserver { NotificationCenter.default.removeObserver(clipObserver) }
+        clipObserver = nil
+        guard isOn, let scrollView = view.subviews.compactMap({ $0 as? NSScrollView }).first else { return }
+        let clip = scrollView.contentView
+        clip.postsBoundsChangedNotifications = true
+        clipObserver = NotificationCenter.default.addObserver(
+            forName: NSView.boundsDidChangeNotification, object: clip, queue: nil
+        ) { [weak self, weak view] _ in
+            MainActor.assumeIsolated {
+                guard let self, let view else { return }
+                self.centerSpread(in: view)
+            }
+        }
+    }
+
+    /// Scales a two-page spread to the width of the view.
+    ///
+    /// `autoScales` fits a spread to the view's *height*, so both pages are
+    /// wholly visible and, on a wide window, small. A book is read across, so
+    /// the width is what should be filled: two pages, the gutter, and a hair
+    /// of margin on each side.
+    private func fitSpread(in view: PDFView) {
+        guard view.displayMode == .twoUp,
+              let page = view.currentPage ?? view.document?.page(at: 0)
+        else { return }
+        let bounds = page.bounds(for: view.displayBox)
+        let width = view.bounds.width - 24, height = view.bounds.height - 16
+        guard bounds.width > 0, bounds.height > 0, width > 100, height > 100 else { return }
+        view.autoScales = false
+        // As large as the spread can be with nothing cut off: the two pages
+        // across the width, unless the pages are then taller than the view,
+        // in which case the height decides. Filling the width alone put the
+        // top and bottom lines of every page out of sight.
+        let gap = view.pageBreakMargins.left + view.pageBreakMargins.right
+        view.scaleFactor = min(width / (bounds.width * 2 + gap), height / bounds.height)
+        view.layoutDocumentView()
+        centerSpread(in: view)
+        // How wide the gutter came out on screen, for the contents to fit in.
+        let shown = view.visiblePages
+            .map { view.convert($0.bounds(for: view.displayBox), from: $0) }
+            .sorted { $0.minX < $1.minX }
+        if shown.count >= 2 {
+            // Edge to edge, plus the trim each page keeps beside its text:
+            // the whole stretch with no words in it.
+            link.bookGutter = max(0, shown[1].minX - shown[0].maxX) + 2 * BookTrim.margin * view.scaleFactor
+        }
+    }
     private var clickMonitor: Any?
     private var pinchMonitor: Any?
     private var scrolled: CGFloat = 0
@@ -173,11 +294,14 @@ final class ReaderCoordinator: NSObject {
         }
 
         #endif
+        // Before the document: PDFKit asks the provider as it lays pages
+        // out, and a provider that arrives after the pages does not get asked
+        // for them.
+        view.pageOverlayViewProvider = self
         view.document = session.document
         view.autoScales = true
         view.displaysPageBreaks = true
         view.pageShadowsEnabled = true
-        view.pageOverlayViewProvider = self
         #if canImport(UIKit)
         view.usePageViewController(false)
         #endif
@@ -275,6 +399,13 @@ final class ReaderCoordinator: NSObject {
     func update(_ view: PDFView, revision: Int) {
         if view.document !== session.document {
             view.document = session.document
+            if appliedLayout == .book {
+                trimForBook(session.document)
+                DispatchQueue.main.async { [weak self, weak view] in
+                    guard let self, let view else { return }
+                    self.fitSpread(in: view)
+                }
+            }
             shownRevision = revision
             #if os(macOS)
             hideMarkupPanel()
@@ -316,6 +447,23 @@ final class ReaderCoordinator: NSObject {
             reveal(anchor, in: view)
             link.anchorRequest = nil
         }
+        if let destination = link.destinationRequest {
+            view.go(to: destination)
+            link.destinationRequest = nil
+            #if os(macOS)
+            if appliedLayout == .book, let page = destination.page {
+                trimAround(page, in: view)
+                centerSpread(in: view)
+            }
+            #endif
+            // Said outright: PDFKit posts its page-changed notification
+            // before `currentPage` has moved for a destination jump, so the
+            // status bar was left naming the spread you had just left.
+            if let page = destination.page {
+                let index = session.document.index(for: page)
+                if index != NSNotFound { onPageChange(index) }
+            }
+        }
     }
 
     /// Forces PDFKit to re-render the pages it has cached.
@@ -349,6 +497,7 @@ final class ReaderCoordinator: NSObject {
         // than jammed against the top edge.
         let padded = anchor.rect.insetBy(dx: -24, dy: -80)
         view.go(to: padded, on: page)
+        onPageChange(anchor.pageIndex)
         if let selection = page.selection(for: anchor.rect) {
             view.setCurrentSelection(selection, animate: true)
         }
@@ -358,12 +507,17 @@ final class ReaderCoordinator: NSObject {
         NotificationCenter.default.removeObserver(self)
         #if os(macOS)
         hideMarkupPanel()
-        for monitor in [scrollMonitor, clickMonitor, pinchMonitor].compactMap({ $0 }) {
+        for monitor in [scrollMonitor, arrowMonitor, clickMonitor, pinchMonitor].compactMap({ $0 }) {
             NSEvent.removeMonitor(monitor)
         }
         for observer in markupObservers { NotificationCenter.default.removeObserver(observer) }
         markupObservers = []
+        for observer in [spreadObserver, clipObserver].compactMap({ $0 }) { NotificationCenter.default.removeObserver(observer) }
+        spreadObserver = nil
+        clipObserver = nil
+        untrim()
         scrollMonitor = nil
+        arrowMonitor = nil
         clickMonitor = nil
         pinchMonitor = nil
         #endif
@@ -380,6 +534,26 @@ final class ReaderCoordinator: NSObject {
     /// turn, not scroll: `twoUp` horizontally, with `displaysAsBook` so the
     /// first page sits alone on the right the way a cover does.
     private func apply(layout: ReaderConfiguration.PageLayout, to view: PDFView) {
+        // The page you were on survives the change. Switching the display
+        // mode makes PDFKit lay the document out again, and it came back at
+        // the last page — so ⌘1 read as "go to the end" rather than "one
+        // page at a time, here".
+        let staying = view.currentPage
+        defer {
+            if let staying {
+                DispatchQueue.main.async { [weak view] in view?.go(to: staying) }
+            }
+        }
+
+        untrim()
+        applyTint(to: view)
+        // The space between two pages of a spread. Wide, and the same for
+        // every paper, because the pages have been trimmed to their text:
+        // this gap plus the trim is the whole gutter.
+        view.pageBreakMargins = layout == .book
+            ? NSEdgeInsets(top: 4.75, left: 84, bottom: 4.75, right: 84)
+            : NSEdgeInsets(top: 4.75, left: 4.75, bottom: 4.75, right: 4.75)
+
         switch layout {
         case .continuous:
             view.displayMode = .singlePageContinuous
@@ -390,13 +564,44 @@ final class ReaderCoordinator: NSObject {
             view.displayDirection = .horizontal
             view.displaysAsBook = false
         case .book:
+            trimForBook(session.document)
             view.displayMode = .twoUp
             view.displayDirection = .horizontal
-            view.displaysAsBook = true
+            // Pages 1 and 2 face each other. `displaysAsBook` puts the first
+            // page alone on the right as a cover, which a novel has and a
+            // paper does not — a paper's first spread is its title and its
+            // introduction, side by side.
+            view.displaysAsBook = false
         }
 
         #if os(macOS)
         setBookScrolling(layout == .book, in: view)
+        setCenterLock(layout == .book, in: view)
+        // A book fills the window: two pages across it, not two pages fitted
+        // to its height and floating small in the middle. Fitted again
+        // whenever the view's width changes, which in focus mode it does as
+        // the columns leave.
+        if layout == .book {
+            view.postsFrameChangedNotifications = true
+            if spreadObserver == nil {
+                spreadObserver = NotificationCenter.default.addObserver(
+                    forName: NSView.frameDidChangeNotification, object: view, queue: .main
+                ) { [weak self, weak view] _ in
+                    MainActor.assumeIsolated {
+                        guard let self, let view, self.appliedLayout == .book else { return }
+                        self.fitSpread(in: view)
+                    }
+                }
+            }
+            DispatchQueue.main.async { [weak self, weak view] in
+                guard let self, let view else { return }
+                self.fitSpread(in: view)
+            }
+        } else {
+            if let spreadObserver { NotificationCenter.default.removeObserver(spreadObserver) }
+            spreadObserver = nil
+            view.autoScales = true
+        }
         #endif
 
         #if canImport(UIKit)
@@ -428,17 +633,51 @@ final class ReaderCoordinator: NSObject {
             view.pageShadowsEnabled = false
         }
         #else
+        // Sepia and Dimmed used to colour the space around the page and leave
+        // the page white, so the tint showed as a border. The paper is what
+        // has to change. Sepia is the glass trick with a sepia ground behind
+        // it: the page's white multiplies away to the ground and the ink
+        // stays ink. Dimmed cannot be a multiply — black ink over a dark
+        // ground is nothing — so it is an inversion with the hue turned
+        // back round, the way every reader's night mode is made: white paper
+        // becomes dark, black ink becomes light, and a colour keeps its hue.
         switch configuration.tint {
-        case .none: view.backgroundColor = .windowBackgroundColor
-        case .sepia: view.backgroundColor = NSColor(red: 0.96, green: 0.93, blue: 0.86, alpha: 1)
-        case .dim: view.backgroundColor = NSColor(white: 0.12, alpha: 1)
-        case .glass:
+        case .none:
+            // In a spread the ground is the paper's own white and there is
+            // no shadow under the pages: two white cards on a grey ground
+            // read as two cards, and one white field with two pages in it
+            // reads as a book. Scrolling layouts keep the window's ground.
+            let book = configuration.layout == .book
+            view.backgroundColor = book ? .textBackgroundColor : .windowBackgroundColor
+            view.pageShadowsEnabled = !book
+        case .sepia, .glass:
+            view.backgroundColor = .clear
+            view.pageShadowsEnabled = false
+        case .dim:
             view.backgroundColor = .clear
             view.pageShadowsEnabled = false
         }
-        setGlassCompositing(on: view, configuration.tint.isGlass)
+        setGlassCompositing(on: view, configuration.tint == .glass || configuration.tint == .sepia)
+        setNightFilter(on: view, configuration.tint == .dim)
+        NightMode.isOn = configuration.tint == .dim
+        // The figures overlay draws only under the dimmed tint; ask every
+        // page to draw again so they appear or go.
+        for page in view.visiblePages { MarkOverlayView.refresh(page) }
+        view.needsDisplay = true
         #endif
     }
+
+    #if os(macOS)
+    /// Inverts the page's luminance and puts its colours back.
+    private func setNightFilter(on view: PDFView, _ on: Bool) {
+        view.wantsLayer = true
+        guard on else { view.layer?.filters = nil; return }
+        guard let invert = CIFilter(name: "CIColorInvert"),
+              let hue = CIFilter(name: "CIHueAdjust", parameters: [kCIInputAngleKey: Double.pi])
+        else { return }
+        view.layer?.filters = [invert, hue]
+    }
+    #endif
 
     #if os(macOS)
     /// Multiplies the whole PDF view against whatever is drawn behind it, so
@@ -468,6 +707,9 @@ final class ReaderCoordinator: NSObject {
 
     @objc private func pageChanged(_ notification: Notification) {
         guard let view = pdfView, let page = view.currentPage else { return }
+        #if os(macOS)
+        if appliedLayout == .book { trimAround(page, in: view) }
+        #endif
         onPageChange(session.document.index(for: page))
     }
 
@@ -792,16 +1034,47 @@ final class ReaderCoordinator: NSObject {
             NSEvent.removeMonitor(monitor)
             scrollMonitor = nil
         }
+        if let monitor = arrowMonitor {
+            NSEvent.removeMonitor(monitor)
+            arrowMonitor = nil
+        }
         guard isOn else { return }
+        // A book is turned sideways. PDFKit answers ← and → with nothing in a
+        // spread — its arrows scroll, and a spread does not scroll — so the
+        // two keys that read as "turn the page" did nothing while ↑ and ↓,
+        // which read as "scroll", turned it. The event is taken at the window
+        // rather than in a `keyDown` override because the key lands in
+        // PDFKit's inner document view and never reaches the outer one.
+        arrowMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak view] event in
+            guard let view, let window = view.window, event.window === window,
+                  event.modifierFlags.intersection([.command, .option, .control]).isEmpty,
+                  window.firstResponder is NSView,
+                  !(window.firstResponder is NSTextView)
+            else { return event }
+            // ← and →, and the space bar the way every reader has it: space
+            // forward, shift-space back.
+            let back = event.modifierFlags.contains(.shift)
+            switch event.keyCode {
+            case 123: if view.canGoToPreviousPage { view.goToPreviousPage(nil) }; return nil
+            case 124: if view.canGoToNextPage { view.goToNextPage(nil) }; return nil
+            case 49:
+                if back { if view.canGoToPreviousPage { view.goToPreviousPage(nil) } }
+                else if view.canGoToNextPage { view.goToNextPage(nil) }
+                return nil
+            default: return event
+            }
+        }
         scrollMonitor = NSEvent.addLocalMonitorForEvents(
             matching: [.scrollWheel]
         ) { [weak self, weak view] event in
             guard let self, let view, let window = view.window,
                   event.window === window,
-                  view.hitTest(view.superview?.convert(event.locationInWindow, from: nil)
-                      ?? event.locationInWindow) != nil || view.bounds.contains(
-                          view.convert(event.locationInWindow, from: nil)
-                      )
+                  // What is actually under the pointer, from the top of the
+                  // window down — not whether the page is somewhere beneath
+                  // it. A list floating over the page is over the page, and
+                  // a scroll meant for the list was turning pages under it.
+                  let hit = window.contentView?.hitTest(event.locationInWindow),
+                  hit.isDescendant(of: view)
             else { return event }
             return turnPage(with: event, in: view) ? nil : event
         }
@@ -907,9 +1180,10 @@ extension ReaderCoordinator: @preconcurrency PDFPageOverlayViewProvider {
     }
     #else
     func pdfView(_ view: PDFView, overlayViewFor page: PDFPage) -> NSView? {
-        // PencilKit has no canvas on macOS. Ink written on iPad is stored in
-        // the PDF as standard annotations, which PDFKit already renders here.
-        nil
+        // No ink canvas on the Mac — PencilKit has none here, and ink written
+        // on iPad is in the PDF as ordinary annotations PDFKit draws itself.
+        // The overlay is where the highlights are drawn with rounded ends.
+        PageOverlay(page: page)
     }
     #endif
 }

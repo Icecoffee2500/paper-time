@@ -49,33 +49,36 @@ enum ReleaseNotes {
     /// twenty is a list nobody reads.
     static let highlights: [Highlight] = [
         Highlight(
-            symbol: "highlighter",
-            title: Text2("표시는 PDF 안에 남는다", "Your marks go into the PDF"),
-            detail: Text2(
-                "형광펜과 밑줄이 옆에 붙은 데이터베이스가 아니라 파일 자체에 기록된다. 같은 논문을 미리보기로 열든, 아이패드에서 열든, 십 년 뒤에 열든 표시는 그대로 있다.",
-                "Highlights and underlines are written into the file itself, not into a database beside it. Open the same paper in Preview, on an iPad, or in ten years — the marks are still there."
-            ),
-            demo: .annotations
-        ),
-        Highlight(
             symbol: "function",
-            title: Text2("수식을 LaTeX으로 복사", "Copy mathematics as LaTeX"),
+            title: Text2("Ultracopy — 수식은 LaTeX으로, 글은 글로", "Ultracopy — the words as words, the mathematics as LaTeX"),
             detail: Text2(
-                "수식이 섞인 문단을 선택하면 Ultracopy가 글은 글대로, 수식은 LaTeX으로 넘겨준다. 쓰던 논문에 그대로 붙이면 된다.",
-                "Select a passage with an equation in it and Ultracopy gives you the words with the formula as LaTeX, ready to paste into a paper of your own."
+                "PDF에서 수식이 든 문단을 ⌘C로 복사하면 수식이 글자 부스러기로 깨져 나온다. Ultracopy(⇧⌘C)는 같은 선택에서 글은 그대로, 수식은 그대로 쓸 수 있는 LaTeX으로 돌려준다. 아래에서 둘을 직접 눌러 비교해 보라.",
+                "⌘C on a passage with an equation in it gives you the formula as a spill of characters. Ultracopy (⇧⌘C) gives the same selection back with the words as words and the mathematics as LaTeX you can paste as it is. Press both below and compare."
             ),
             action: .ultracopy,
-            demo: .ultracopy
+            demo: .ultracopy,
+            featured: true
         ),
         Highlight(
-            symbol: "quote.opening",
-            title: Text2("인용한 구절은 주소를 갖는다", "A passage keeps its address"),
+            symbol: "book.pages",
+            title: Text2("책에서 절 사이를 오간다", "A book you move through by section"),
             detail: Text2(
-                "선택한 글을 노트로 보내면 인용구로 앉는다. 누르면 그 글이 있던 페이지의 정확한 자리로 돌아간다.",
-                "Send the selected text to a note and it arrives as a quotation you can click to go back to the exact place on the page it came from."
+                "두 쪽이 마주 보고, ←→와 스페이스와 트랙패드로 장을 넘긴다. 다른 앱은 PDF의 쪽을 그대로 나란히 놓아서 논문마다 여백이 달라지고 펼침면이 한쪽으로 몰리지만, 여기서는 쪽을 글에 맞춰 잘라 — 스캔한 교과서까지 — 좌우 여백이 같고 두 쪽 사이는 늘 같은 폭이며, 여백에 세로로 찍힌 arXiv 도장은 지워진다. 아래에는 지금 몇 쪽인지와 얼마나 읽었는지. ⇧⌘L이면 이 논문의 목차가 두 쪽 사이 여백에 떠서 — 글자는 가리지 않고 — 절을 누르는 대로 그리로 간다. 목차는 Esc나 다른 곳을 누르기 전까지 남는다. 아래에서 '다른 PDF 앱'을 눌러 비교해 보라.",
+                "Two pages face each other; ← →, the space bar and a swipe turn them. Other apps set the PDF's pages side by side as they are, so the margins change from paper to paper and the spread sits off to one side; here each page is cropped to its text — a scanned textbook included — so the margins match on both sides, the gutter is always the same width, and the arXiv stamp running up the margin is painted out. Underneath, which pages these are and how far in you are. ⇧⌘L floats this paper's table of contents into the gutter between the pages, covering no words, and each section is one click; it stays until Escape or a click elsewhere. Press \"Other PDF apps\" below and compare."
             ),
-            action: .linkToNote,
-            demo: .passageLink
+            action: .floatingList,
+            demo: .bookReading,
+            featured: true
+        ),
+        Highlight(
+            symbol: "waveform",
+            title: Text2("읽는 동안 슬립박스가 말을 건다", "While you read, the slip-box speaks first"),
+            detail: Text2(
+                "할 일은 없다. 논문을 읽으면 된다. 인스펙터의 Notes 탭을 열어 두면, 지금 보이는 쪽과 드문 낱말을 나누는 노트가 — 몇 달 전 다른 논문을 읽다 쓴 것이라도 — 맨 위에 스스로 올라온다. 노트 아래 파란 낱말이 둘이 나누는 말이다: 우연이면 지나치고, 울림이면 노트를 눌러 열어 본다. 쪽에서 문장을 선택하면 노트마다 ❝ 단추가 생기고, 누르면 그 구절이 주소를 갖고 그 노트에 들어간다 — 두 논문이 노트 하나에서 만난다. 노트를 쓰는 동안에는 편집기 아래 'Resonates with'에 아직 잇지 않은 울림이 모이고, 🔗 한 번이면 [[링크]]가 써진다. 다른 앱에서 노트는 폴더에 누워 있다가 검색해야 나온다 — 그런데 잊어버린 노트는 검색하지 않는다. 루만은 자기 상자를 대화 상대라고 불렀다; 상자가 먼저 말을 걸 때만 대화다.\n\n고르는 법은 숨기지 않는다. 네 노트를 전부 외운 읽기 친구가 새 쪽의 낱말과 노트의 낱말을 나란히 놓고 같은 것을 센다고 생각하면 된다 — 다만 기능어와 논문마다 쓰는 말(model, method, results…) 300개쯤은 세지 않고, 낱말 하나의 무게는 ln((N+1)÷(그 말이 나오는 글 수+0.5))+0.3으로 매긴다(N = 노트 수 + 이 논문에서 뽑은 40쪽; 45개 글 중 42개에 나오는 'network'는 0.38, 3개에만 나오는 'consolidation'은 2.88). 두 낱말이 붙어 겹치면 ×1.3, 긴 노트는 (1+ln 길이)로 나눈다. 겹친 말이 둘 이상이고 점수 1.0 이상, 1등의 35% 이상인 노트만 넷까지 올라온다. 아래에서 네 단계를 직접 해 보고, '어떻게 고르나?'를 눌러 보라.",
+                "There is nothing to do but read. Keep the inspector's Notes tab open and the notes that share their rarer words with the pages on screen — written months ago, against another paper — come up by themselves at the top. The blue words under each are what the two share: a coincidence, and you read on; an echo, and you click the note to open it. Select a sentence on the page and every note grows a ❝ button; press it and the passage lands in that note with its address — two papers meet in one note. While you write, 'Resonates with' under the editor gathers the echoes not yet linked, and one 🔗 writes the [[link]]. In other apps a note lies in a folder until you search for it — and nobody searches for a note they have forgotten. Luhmann called his box a conversation partner; it is one only when the box speaks first.\n\nThe rule is not hidden. Think of a reading friend who knows your notes by heart, laying the page's words beside each note's and counting what they share — except that function words and the words every paper uses (model, method, results…), some 300, are not counted, and a word's weight is ln((N+1)÷(texts it appears in+0.5))+0.3, with N the notes plus 40 sampled pages of this paper ('network', in 42 of 45 texts: 0.38; 'consolidation', in 3: 2.88). Two words together count ×1.3; a long note's sum is divided by (1+ln length). Only notes sharing two words, scoring 1.0 or more and at least 35% of the strongest come up, four at most. Do the four steps below, and press 'How are they chosen?'."
+            ),
+            demo: .resonance,
+            featured: true
         ),
         Highlight(
             symbol: "magnifyingglass",
@@ -86,6 +89,55 @@ enum ReleaseNotes {
             ),
             action: .searchEverything,
             demo: .search
+        ),
+        Highlight(
+            symbol: "sidebar.left",
+            title: Text2("창은 내가 접는 대로 있는다", "The window folds to what you are doing"),
+            detail: Text2(
+                "사이드바·목록·논문·인스펙터가 각자 자기 키로 숨는다. 남은 것이 빈자리를 나눠 갖는 대신, 숨은 것 뒤에 있던 것이 드러난다. 패널 사이의 틈을 끌면 크기가 바뀐다.",
+                "The sidebar, the list, the paper and the inspector each hide on their own key — revealing what was behind rather than stretching to fill the gap. Drag the space between two of them to resize."
+            ),
+            action: .sidebar,
+            demo: .panes
+        ),
+        Highlight(
+            symbol: "book",
+            title: Text2("책처럼 펼쳐서 읽는다", "Read it like a book"),
+            detail: Text2(
+                "⌘3이면 1·2쪽이 마주 보며 창을 가득 채운다. ←→나 스페이스로 장을 넘기고, 트랙패드로 넘겨도 된다. 아래에는 지금 몇 쪽인지와 얼마나 읽었는지가 있고, ⇧⌘L이면 두 쪽 사이 여백에 이 논문의 목차가 떠서 절로 바로 간다. ⌘1은 연속 스크롤, ⌘2는 한 장씩 — 배치를 바꿔도 보던 쪽은 그대로다.",
+                "⌘3 and pages 1 and 2 face each other across the window. ← → or the space bar turn the page, and so does a swipe. Underneath, which pages these are and how far in you are; ⇧⌘L drops the paper's own table of contents into the gutter between the pages, and a section is one click away. ⌘1 scrolls, ⌘2 shows one page — and changing layout keeps the page you were on."
+            ),
+            action: .layoutBook,
+            demo: .book
+        ),
+        Highlight(
+            symbol: "rectangle.center.inset.filled",
+            title: Text2("논문만 남긴다", "Only the paper"),
+            detail: Text2(
+                "⇧⌘F 한 번에 사이드바·목록·인스펙터가 비켜서고 논문만 남는다. 열려 있던 것은 기억해 두고, 나올 때 그대로 돌려준다. 그 안에서도 ⇧⌘L로 목차를 불러 절을 옮겨 다닐 수 있다.",
+                "One ⇧⌘F and the sidebar, the list and the inspector step aside, leaving the paper. What was open is remembered and given back on the way out. ⇧⌘L still brings the table of contents, so you can move between sections without leaving."
+            ),
+            action: .focus,
+            demo: .focus
+        ),
+        Highlight(
+            symbol: "highlighter",
+            title: Text2("표시는 PDF 안에 남고, 여기서는 더 예쁘다", "Your marks go into the PDF — and look better here"),
+            detail: Text2(
+                "형광펜과 밑줄이 옆에 붙은 데이터베이스가 아니라 파일 자체에 기록된다. 미리보기든 아이패드든 십 년 뒤든 표시는 그대로다. 그리고 이 앱 안에서는 형광펜의 끝이 둥글고 글자가 살 만큼 연하며, 밑줄은 눈에 띄게 짙고, 마우스를 올리면 밝아진다. 수식이 든 줄에서 다른 앱은 상자가 줄 높이만큼 자라지만, 여기서는 글자의 잉크를 재서 사람이 그은 것처럼 딱 맞게 덮는다 — 파일은 그대로 두고 그리는 법만 바꾼 것이라 다른 앱에서는 볼 수 없는 생김새다. 노트의 인용구도 같은 모양이다. 아래에서 둘을 나란히 보라.",
+                "Highlights and underlines are written into the file itself, not into a database beside it — Preview, an iPad, ten years from now, the marks are there. And in here a highlight has rounded ends and stays pale enough to read through, an underline is dark enough to see, and either brightens under the pointer. On a line carrying a formula, other apps grow the box to the height of the line; here the ink of the letters is measured and the band fits them the way a hand-drawn stroke does. The file is untouched; only the drawing is ours, which is why no other PDF app looks like this. A quotation in a note wears the same shape. Compare the two side by side below."
+            ),
+            demo: .annotations
+        ),
+        Highlight(
+            symbol: "quote.opening",
+            title: Text2("인용한 구절은 주소를 갖는다", "A passage keeps its address"),
+            detail: Text2(
+                "선택한 글을 노트로 보내면 인용구로 앉는다. 누르면 그 글이 있던 페이지의 정확한 자리로 돌아간다.",
+                "Send the selected text to a note and it arrives as a quotation you can click to go back to the exact place on the page it came from."
+            ),
+            action: .linkToNote,
+            demo: .passageLink
         ),
         Highlight(
             symbol: "tray.full",
@@ -105,16 +157,6 @@ enum ReleaseNotes {
                 "The graph draws your library by citation, shared author, collection — and by what your own notes link. Switch the other lines off and what is left is your reading rather than the literature's."
             ),
             demo: .graph
-        ),
-        Highlight(
-            symbol: "sidebar.left",
-            title: Text2("창은 내가 접는 대로 있는다", "The window folds to what you are doing"),
-            detail: Text2(
-                "사이드바·목록·논문·인스펙터가 각자 자기 키로 숨는다. 남은 것이 빈자리를 나눠 갖는 대신, 숨은 것 뒤에 있던 것이 드러난다. 패널 사이의 틈을 끌면 크기가 바뀐다.",
-                "The sidebar, the list, the paper and the inspector each hide on their own key — revealing what was behind rather than stretching to fill the gap. Drag the space between two of them to resize."
-            ),
-            action: .sidebar,
-            demo: .panes
         ),
         Highlight(
             symbol: "keyboard",
@@ -149,6 +191,43 @@ enum ReleaseNotes {
             note: Text2("첫 알파.", "The first alpha."),
             added: [
                 Entry(
+                    Text2("Ultracopy", "Ultracopy"),
+                    Text2("⌘C는 수식을 글자 부스러기로 깨뜨린다. ⇧⌘C는 같은 문단에서 글은 그대로, 수식은 바로 쓸 수 있는 LaTeX으로 돌려준다.",
+                          "⌘C spills an equation into loose characters. ⇧⌘C gives the same passage back with the words as words and the mathematics as LaTeX."),
+                    action: .ultracopy,
+                    demo: .ultracopy,
+                    featured: true
+                ),
+                Entry(
+                    Text2("책 읽기", "Reading as a book"),
+                    Text2("마주 보는 두 쪽, ←→·스페이스·트랙패드로 넘기기, 아래에 쪽 번호와 진행도, 그리고 ⇧⌘L로 두 쪽 사이 여백에 뜨는 목차 — 절을 누르면 그리로 가고 목차는 남는다.",
+                          "Two facing pages, turned by ← →, space or a swipe; page numbers and progress underneath; and ⇧⌘L floating the table of contents into the gutter — a section is one click, and the list stays."),
+                    action: .floatingList,
+                    demo: .bookReading,
+                    featured: true
+                ),
+                Entry(
+                    Text2("공명", "Resonance"),
+                    Text2("읽기만 하면 된다: 보이는 쪽과 드문 낱말을 나누는 노트가 — 다른 논문에서 쓴 것이라도 — Notes 탭 맨 위에 올라온다. 파란 낱말이 나누는 말. 문장을 선택하면 ❝로 그 노트에 떨어뜨리고, 노트 아래 'Resonates with'에서 🔗 한 번이면 링크가 써진다. 아래 네 단계를 직접 해 보라.",
+                          "Just read: notes that share the page's rarer words — from other papers — come up at the top of the Notes tab, the shared words in blue. Select a sentence and ❝ drops it into a note; under a note, 'Resonates with' and one 🔗 writes the link. Do the four steps below."),
+                    demo: .resonance,
+                    featured: true
+                ),
+                Entry(
+                    Text2("검색", "Search"),
+                    Text2("⌘K는 논문·노트·저자를 한 칸에서 찾고, ⌘F는 열린 논문 안을 찾는다.",
+                          "⌘K finds papers, notes and authors from one field; ⌘F searches inside the open paper."),
+                    action: .searchEverything,
+                    demo: .search
+                ),
+                Entry(
+                    Text2("4-패널 창", "Four-pane window"),
+                    Text2("사이드바·목록·논문·인스펙터가 각자 자기 키로 숨는다. 패널 사이의 틈을 끌면 크기가 바뀐다.",
+                          "Sidebar, list, paper and inspector, each hiding on its own key. The gap between two of them resizes them."),
+                    action: .sidebar,
+                    demo: .panes
+                ),
+                Entry(
                     Text2("PDF 주석", "PDF annotations"),
                     Text2("형광펜과 밑줄이 파일 자체에 기록된다. 미리보기·아이패드·다른 어떤 PDF 앱에서 열어도 그대로 보인다.",
                           "Highlights and underlines are written into the file. They show up in Preview, on an iPad, in any PDF reader."),
@@ -156,11 +235,30 @@ enum ReleaseNotes {
                     demo: .annotations
                 ),
                 Entry(
-                    Text2("Ultracopy", "Ultracopy"),
-                    Text2("수식이 섞인 문단을 복사하면 글은 글대로, 수식은 LaTeX으로 나온다. 쓰던 원고에 그대로 붙는다.",
-                          "Copy a passage and its equations come out as LaTeX, ready to paste into a manuscript."),
-                    action: .ultracopy,
-                    demo: .ultracopy
+                    Text2("둥근 표시", "Rounded marks"),
+                    Text2("형광펜은 끝이 둥글고 글자가 살 만큼 연하다. 수식이 든 줄에서도 상자가 줄 높이만큼 자라지 않고 글자에 딱 맞는다 — 사람이 그은 것처럼. 밑줄·취소선은 짙다. 마우스를 올리면 밝아지고 얇은 테두리가 생긴다. 노트의 인용구 칩도 같은 모양 — 파일은 그대로 두고 이 앱이 그리는 법만 바꾼 것이라 다른 PDF 앱에는 없는 생김새다.",
+                          "Highlights have rounded ends and stay pale enough to read through, and on a line with a formula the band fits the letters rather than growing to the line's height — like a stroke drawn by hand. Underlines and strikes are dark. Under the pointer a mark brightens and gains a thin edge. Quotation chips in notes wear the same shape. The file is untouched — only the drawing is ours, which is why no other PDF app looks like this."),
+                    demo: .annotations
+                ),
+                Entry(
+                    Text2("책 모드", "Book mode"),
+                    Text2("⌘3이면 1·2쪽이 마주 보며 창을 채우고 ←→·스페이스·트랙패드로 넘긴다. 어떤 논문이든 — 스캔한 교과서까지 — 쪽은 글에 맞춰 잘려 좌우 여백이 같고 가운데 여백은 늘 같은 폭이며, 여백에 세로로 찍힌 arXiv 도장은 지워진다. 아래에 쪽 번호와 진행도. ⌘1 연속 스크롤, ⌘2 한 장씩. 배치를 바꿔도 보던 쪽은 그대로다.",
+                          "⌘3 fills the window with pages 1 and 2 facing; ← →, space and a swipe turn them. Whatever the paper — a scanned textbook included — each page is cropped to its text, so the margins match on both sides and the gutter is always the same width, and the arXiv stamp running up the margin is painted out. Page numbers and progress underneath. ⌘1 continuous, ⌘2 single page. Changing layout keeps the page you were on."),
+                    action: .layoutBook,
+                    demo: .book
+                ),
+                Entry(
+                    Text2("목차 팝업", "Table of contents"),
+                    Text2("⇧⌘L이면 목차가 페이지 위에 좁고 길게 뜬다 — 책 모드에서는 두 쪽 사이 여백에, 글자를 가리지 않게. PDF에 목차가 없거나 망가져 있으면 쪽에서 제목을 읽어낸다: 크기와 굵기, 번호, 문단 머리의 굵은 글까지. 제목 속 수식은 논문에 찍힌 그대로 그림으로 들어간다. 절을 누르면 그리로 가고, Esc나 다른 곳을 누르기 전까지 남는다. 단추는 없다. 키 하나다.",
+                          "⇧⌘L floats the table of contents over the page, narrow and tall — in a book, in the gutter between the pages, covering no words. When the PDF has no outline, or a broken one, the headings are read off the pages: by size and weight, by number, down to the bold words a paragraph opens with. Mathematics in a heading comes in as a picture of itself, as the paper set it. Click a section to go there; it stays until Escape or a click elsewhere. No button; one key."),
+                    action: .floatingList
+                ),
+                Entry(
+                    Text2("논문에 집중", "Focus on the paper"),
+                    Text2("⇧⌘F 한 번에 나머지 패널이 비켜서고 논문만 남는다. 목록은 구석의 단추로 불러내고, 나올 때 열려 있던 것을 그대로 돌려준다.",
+                          "One ⇧⌘F and the other panes step aside, leaving the paper. The list waits behind a button in the corner; what was open comes back on the way out."),
+                    action: .focus,
+                    demo: .focus
                 ),
                 Entry(
                     Text2("인용구 링크", "Passage links"),
@@ -200,20 +298,6 @@ enum ReleaseNotes {
                     action: .exportBibTeX
                 ),
                 Entry(
-                    Text2("검색", "Search"),
-                    Text2("⌘K는 논문·노트·저자를 한 칸에서 찾고, ⌘F는 열린 논문 안을 찾는다.",
-                          "⌘K finds papers, notes and authors from one field; ⌘F searches inside the open paper."),
-                    action: .searchEverything,
-                    demo: .search
-                ),
-                Entry(
-                    Text2("4-패널 창", "Four-pane window"),
-                    Text2("사이드바·목록·논문·인스펙터가 각자 자기 키로 숨는다. 패널 사이의 틈을 끌면 크기가 바뀐다.",
-                          "Sidebar, list, paper and inspector, each hiding on its own key. The gap between two of them resizes them."),
-                    action: .sidebar,
-                    demo: .panes
-                ),
-                Entry(
                     Text2("단축키 편집·검색", "Editable, searchable shortcuts"),
                     Text2("모든 키를 바꿀 수 있고, 기능 이름으로도 키로도 찾을 수 있다. 뭘 눌렀는지 모를 때 \"cmd\"를 쳐보면 된다.",
                           "Every key can be changed, and found by name or by key — type \"cmd\" when you do not know what you pressed.")
@@ -236,11 +320,13 @@ enum ReleaseNotes {
             Feature(Text2("전체 검색", "Search everything"),
                     Text2("논문·노트·저자를 한 칸에서 찾는다.", "Papers, notes and authors, from one field."), action: .searchEverything),
             Feature(Text2("페이지 배치", "Page layout"),
-                    Text2("연속 스크롤, 한 장씩, 또는 두 장 펼침. AA 메뉴에 있다.", "Continuous scrolling, single page, or a two-page spread. In the AA menu.")),
+                    Text2("연속 스크롤, 한 장씩, 또는 두 장 펼침. AA 메뉴에 있고, ⌘1·⌘2·⌘3으로도 바꾼다. 책에서는 ←→로 장을 넘긴다.", "Continuous scrolling, single page, or a two-page spread. In the AA menu, and on ⌘1, ⌘2 and ⌘3. In a book, ← and → turn the page."), action: .layoutBook),
             Feature(Text2("페이지 색", "Page tint"),
                     Text2("흰 종이, 세피아, 어둡게 — 그리고 Glass는 종이의 흰색을 걷어내 글자가 창 위에 앉게 한다. AA 메뉴에 있다.", "Paper white, sepia, dimmed — or Glass, which drops the page's white so it sits on the window. In the AA menu.")),
             Feature(Text2("논문에 집중", "Focus on the paper"),
-                    Text2("나머지가 비켜선다. 목록은 필요할 때 페이지 위로 불러낸다.", "Everything else steps aside; the library is summoned over the page when you want it."), action: .focus),
+                    Text2("나머지가 비켜선다. 절을 옮길 때는 ⇧⌘L로 목차를 불러낸다.", "Everything else steps aside; ⇧⌘L brings the table of contents when you want another section."), action: .focus),
+            Feature(Text2("목차", "Table of contents"),
+                    Text2("PDF가 가진 목차를 페이지 위에 띄운다. 절을 누르면 그리로.", "The PDF's own outline, floated over the page. Click a section to go there."), action: .floatingList),
             Feature(Text2("이동", "Move about"),
                     Text2("다음·이전 페이지, 다음·이전 논문, 그리고 지나온 자리로 뒤로·앞으로.", "Next and previous page, next and previous paper, and back and forward through where you have been."), action: .nextPage),
         ]),
@@ -265,6 +351,8 @@ enum ReleaseNotes {
                     Text2("[[ 를 치면 다른 노트를 부른다. 나를 가리키는 노트는 읽고 있는 노트 아래에 모인다.", "Type [[ to reach for another note. What links back is listed under the one you are reading.")),
             Feature(Text2("태그", "Tags"),
                     Text2("#이렇게 쓴다. 슬립박스가 모아준다.", "Write #like-this. The slip-box collects them.")),
+            Feature(Text2("공명", "Resonance"),
+                    Text2("읽는 쪽과 낱말을 나누는 다른 논문의 노트가 Notes 탭 맨 위에 올라온다. 노트 아래에는 아직 잇지 않은 울림이 모인다.", "Notes from other papers that share the page's words rise to the top of the Notes tab; under a note, the echoes not yet linked are gathered.")),
             Feature(Text2("Markdown과 LaTeX", "Markdown and LaTeX"),
                     Text2("쓰는 대로 조판된다. $x^2$는 수식이 되고, 저장되는 것은 여전히 원문이다.", "Both are set as you write them. $x^2$ becomes mathematics; the source is still what is saved.")),
             Feature(Text2("원문 보기", "Raw"),
@@ -333,16 +421,19 @@ enum ReleaseNotes {
         /// keystroke, and a paragraph about it is worse than three seconds of
         /// it happening.
         var demo: Demo?
+        /// Marked out in the log the way it is in the introduction.
+        var featured = false
         var id: String { title.en }
 
         init(
             _ title: Text2, _ detail: Text2,
-            action: ShortcutAction? = nil, demo: Demo? = nil
+            action: ShortcutAction? = nil, demo: Demo? = nil, featured: Bool = false
         ) {
             self.title = title
             self.detail = detail
             self.action = action
             self.demo = demo
+            self.featured = featured
         }
     }
 
@@ -351,7 +442,7 @@ enum ReleaseNotes {
     /// The same six are used in two sizes: small, under a line of the log,
     /// and full size in About, where there is room to make them the real
     /// thing rather than a diagram of it.
-    enum Demo: String, Identifiable {
+    enum Demo: String, Identifiable, CaseIterable {
         /// A mark on the page and its row in the inspector, either one
         /// reaching the other.
         case annotations
@@ -369,6 +460,16 @@ enum ReleaseNotes {
         /// One field over the window that finds papers, notes, authors,
         /// collections, tags and commands.
         case search
+        /// Two pages across, turned with the arrows.
+        case book
+        /// The spread with its page numbers, its progress, and the contents
+        /// floating in the gutter.
+        case bookReading
+        /// The window with everything but the paper gone.
+        case focus
+        /// A page being read, and beside it the notes from other papers that
+        /// echo it, named with the words they share.
+        case resonance
 
         var id: String { rawValue }
     }
@@ -381,6 +482,9 @@ enum ReleaseNotes {
         /// Shown full size in About, where the point is to let somebody try
         /// the thing rather than read about it.
         var demo: Demo?
+        /// The ones to see first. One or two a version — more than that is
+        /// a list, and a list is what this is trying not to be.
+        var featured = false
         var id: String { title.en }
     }
 

@@ -1,6 +1,9 @@
 import Bibliography
 import LibraryStore
 import SwiftUI
+#if os(macOS)
+import AppKit
+#endif
 
 /// Per-device preferences plus the one library-lifecycle action (changing the
 /// folder) that has no other home.
@@ -83,36 +86,47 @@ struct SettingsView: View {
             // grey. Which page you are on is not a fact about where the
             // keyboard is pointing.
             VStack(alignment: .leading, spacing: 2) {
+                // The window's title, here rather than centred over the page:
+                // the panel reaches the top of the window now, and a title
+                // drawn across it would have sat on the page.
+                Text("Settings")
+                    .font(.headline)
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 8)
+
                 ForEach(Pane.allCases) { page in
+                    let isCurrent = pane == page
                     Button {
                         pane = page
                     } label: {
-                        Label(page.rawValue, systemImage: page.symbol)
-                            .foregroundStyle(pane == page ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(
-                                RoundedRectangle(cornerRadius: Corner.row, style: .continuous)
-                                    .fill(pane == page ? AnyShapeStyle(.tint) : AnyShapeStyle(.clear))
-                            )
-                            .contentShape(.rect)
+                        Label {
+                            Text(page.rawValue)
+                        } icon: {
+                            Image(systemName: page.symbol)
+                                .foregroundStyle(isCurrent ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                        }
+                        .foregroundStyle(.primary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        // The chosen page is the one lifted off the ground —
+                        // a white card with a soft edge — rather than the one
+                        // painted blue. The blue said "selected in a list";
+                        // this says "the page you are on".
+                        .background(
+                            RoundedRectangle(cornerRadius: Corner.row + 2, style: .continuous)
+                                .fill(isCurrent ? AnyShapeStyle(.background) : AnyShapeStyle(.clear))
+                                .shadow(color: .black.opacity(isCurrent ? 0.08 : 0), radius: 3, y: 1)
+                        )
+                        .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
                 }
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 10)
-            .frame(width: 172)
-            .padding(.top, 14)
-
-            // One hairline, and only here. Two columns of the same shade need
-            // something to say where one stops; the rule that had to go was
-            // the one across the top, which divided nothing. Fainter than a
-            // `Divider`, which at this length reads as a drawn border.
-            Rectangle()
-                .fill(Color.primary.opacity(0.07))
-                .frame(width: 1)
+            .frame(width: 176)
+            .padding(.top, 10)
 
             VStack(spacing: 0) {
                 // Above the page rather than in it, so it stays put while the
@@ -126,16 +140,16 @@ struct SettingsView: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            // Stops the page drawing up behind the traffic lights. A scroll
-            // view near the top of a full-height window extends itself into
-            // the titlebar and insets its content instead, which is right
-            // until something is scrolled: then the paragraph that has gone
-            // past the top is still drawn, over the title. Covering it is not
-            // on — a material laid over the ground blurs the same desktop
-            // twice and comes out milky white — so the column keeps its
-            // drawing inside itself.
-            .clipped()
-            .background(Color(nsColor: .textBackgroundColor).opacity(0.3))
+            // The page as a panel: rounded, lifted, and clear of the edges
+            // on three sides, with the sidebar sitting on the ground beside
+            // it. The same arrangement as the library window — and the one
+            // Aside uses, which is where the idea came from. The clip is also
+            // what keeps a scrolled page from drawing up behind the title.
+            .columnPanel()
+            .padding([.top, .trailing, .bottom], Column.margin)
+            // Up to the top edge, past where the title was — the whole height
+            // of the window, the way Aside's page sits.
+            .ignoresSafeArea(edges: .top)
         }
         .frame(width: 760, height: 540)
         .background { Column.ground }
@@ -152,7 +166,18 @@ struct SettingsView: View {
         }
         .translucentWindow()
         .plainTitlebar()
+        .centeredOnOpen()
         .thinScrollers()
+        // Escape closes it. Settings is a place you step into and back out
+        // of, and reaching for ⌘W or the mouse to leave a window you opened
+        // with a key is a change of hands for no reason. With something typed
+        // in the shortcut search the first Escape empties that instead, the
+        // way a search field behaves everywhere else.
+        .background {
+            Button("", action: escape)
+                .keyboardShortcut(.cancelAction)
+                .opacity(0)
+        }
         #endif
     }
 
@@ -377,6 +402,24 @@ struct SettingsView: View {
         #endif
     }
 
+    /// What Escape does: empty the search if there is anything in it, and
+    /// otherwise leave.
+    ///
+    /// Reached two ways, because Escape arrives two ways. With the search
+    /// field focused the key never gets past the field editor, so the
+    /// catcher in the field calls this; everywhere else on the page the
+    /// hidden cancel button does.
+    private func escape() {
+        #if os(macOS)
+        if !shortcutQuery.isEmpty {
+            shortcutQuery = ""
+            capturedKey = nil
+        } else {
+            NSApp.keyWindow?.performClose(nil)
+        }
+        #endif
+    }
+
     /// The commands a search matches, by name or by key.
     ///
     /// Both, because you arrive at this page from one of two directions: you
@@ -489,7 +532,8 @@ struct SettingsView: View {
         .background(
             KeyCatcher(
                 isRecording: Binding(get: { searchIsFocused }, set: { searchIsFocused = $0 }),
-                capturesAnything: true
+                capturesAnything: true,
+                onEscape: escape
             ) { key, modifiers in
                 let pressed = Shortcut(key, modifiers)
                 shortcutQuery = pressed.display
@@ -506,7 +550,15 @@ struct SettingsView: View {
         // Focused on arrival, because focus is what arms the key-catching.
         // Somebody who opens this page to find out what ⌘K does should be
         // able to press ⌘K, not click first and then press.
-        .onAppear { searchIsFocused = true }
+        //
+        // A tick late, deliberately: asked for during `onAppear` the field is
+        // not yet in the window's responder chain, and the request went
+        // nowhere — which is most of why pressing keys at this page appeared
+        // to do nothing.
+        .task {
+            try? await Task.sleep(for: .milliseconds(50))
+            searchIsFocused = true
+        }
         #endif
     }
 
@@ -561,9 +613,7 @@ struct SettingsView: View {
                             Text("·")
                                 .font(.subheadline)
                                 .foregroundStyle(.quaternary)
-                            Text(countLine(release))
-                                .font(.subheadline)
-                                .foregroundStyle(.tertiary)
+                            counts(release)
                             Spacer(minLength: 8)
                         }
                         .contentShape(.rect)
@@ -596,27 +646,29 @@ struct SettingsView: View {
 
     /// What a folded version is hiding, so it can be skipped without opening.
     ///
-    /// Said in words. "+12" is a number whose unit you have to go and find
-    /// out, and the legend at the top of the page is exactly the thing
-    /// somebody reading a folded line cannot see.
-    private func countLine(_ release: ReleaseNotes.Release) -> String {
-        var parts: [String] = []
-        if !release.added.isEmpty {
-            parts.append(ReleaseNotes.string(
-                "더한 것 \(release.added.count)개", "\(release.added.count) added"
-            ))
+    /// The same three symbols as the legend, rather than the words: a symbol
+    /// read once at the top of the page is read for the rest of it, and three
+    /// short pairs scan where three phrases have to be parsed. Nought is shown
+    /// too — that a version fixed nothing is worth knowing, and a missing
+    /// column would only be counted for.
+    private func counts(_ release: ReleaseNotes.Release) -> some View {
+        HStack(spacing: 11) {
+            count("plus", .green, release.added.count)
+            count("minus", .secondary, release.removed.count)
+            count("wrench.adjustable", .orange, release.fixed.count)
         }
-        if !release.removed.isEmpty {
-            parts.append(ReleaseNotes.string(
-                "뺀 것 \(release.removed.count)개", "\(release.removed.count) removed"
-            ))
+    }
+
+    private func count(_ symbol: String, _ tint: Color, _ number: Int) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: symbol)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(number == 0 ? AnyShapeStyle(.quaternary) : AnyShapeStyle(tint))
+                .frame(width: 12)
+            Text(ReleaseNotes.string("\(number)개", "\(number)"))
+                .font(.subheadline)
+                .foregroundStyle(number == 0 ? AnyShapeStyle(.quaternary) : AnyShapeStyle(.tertiary))
         }
-        if !release.fixed.isEmpty {
-            parts.append(ReleaseNotes.string(
-                "고친 것 \(release.fixed.count)개", "\(release.fixed.count) fixed"
-            ))
-        }
-        return parts.joined(separator: " · ")
     }
 
     /// A line of the log: the keyword, and the sentence it is hiding.
@@ -639,9 +691,16 @@ struct SettingsView: View {
                         .foregroundStyle(tint)
                         .frame(width: 12)
                     Text(item.title.value)
-                        .fontWeight(.medium)
+                        .fontWeight(item.featured ? .bold : .medium)
+                        .foregroundStyle(item.featured ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
                     if let action = item.action {
                         KeyCap(action: action)
+                    }
+                    if item.featured {
+                        Image(systemName: "star.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.tint)
+                            .help(ReleaseNotes.string("이 버전의 핵심 기능", "This version's headline"))
                     }
                     Spacer(minLength: 8)
                 }

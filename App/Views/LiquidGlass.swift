@@ -200,6 +200,10 @@ private struct PlainTitlebar: NSViewRepresentable {
             // is the same glass as everything around it.
             window.titlebarAppearsTransparent = true
             window.styleMask.insert(.fullSizeContentView)
+            // The page's panel now reaches the top of the window, where the
+            // title was drawn; the word moves into the sidebar instead.
+            window.title = "Settings"
+            window.titleVisibility = .hidden
         }
 
         deinit { NotificationCenter.default.removeObserver(self) }
