@@ -50,7 +50,13 @@ public enum InkConverter {
         let padding = max(width, 2)
         let bounds = path.bounds.insetBy(dx: -padding, dy: -padding)
         let annotation = PDFAnnotation(bounds: bounds, forType: .ink, withProperties: nil)
-        annotation.add(path)
+        // PDFKit takes the path relative to the annotation's own origin and
+        // adds the origin back when it writes /InkList. Handed page
+        // coordinates, it wrote every stroke at twice its position — outside
+        // its /Rect, where every reader but the canvas clipped it away. The
+        // iPad showed its ink from the sidecar and never noticed; the Mac saw
+        // nothing.
+        annotation.add(Self.translated(path, by: CGPoint(x: -bounds.minX, y: -bounds.minY)))
         annotation.color = colour(for: stroke)
         let border = PDFBorder()
         border.lineWidth = width
@@ -93,6 +99,26 @@ public enum InkConverter {
         let created = annotations(from: drawing, geometry: resolved)
         for annotation in created { page.addAnnotation(annotation) }
         return created.count
+    }
+
+    static func translated(_ path: PlatformBezierPath, by offset: CGPoint) -> PlatformBezierPath {
+        let moved = path.copy() as! PlatformBezierPath
+        #if canImport(UIKit)
+        moved.apply(CGAffineTransform(translationX: offset.x, y: offset.y))
+        #else
+        moved.transform(using: AffineTransform(translationByX: offset.x, byY: offset.y))
+        #endif
+        return moved
+    }
+
+    /// True for an ink annotation written with page coordinates in its path,
+    /// by the versions before the fix above: the path lies outside the box
+    /// the annotation is drawn in. Such pages are rewritten on the next save.
+    public static func isMisplaced(_ annotation: PDFAnnotation) -> Bool {
+        guard annotation.type == "Ink", isOwned(annotation),
+              let path = annotation.paths?.first else { return false }
+        let local = CGRect(origin: .zero, size: annotation.bounds.size).insetBy(dx: -2, dy: -2)
+        return !local.contains(path.bounds)
     }
 
     public static func removeOwnedAnnotations(from page: PDFPage) {

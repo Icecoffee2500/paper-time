@@ -72,10 +72,10 @@ enum ReleaseNotes {
         ),
         Highlight(
             symbol: "arrow.triangle.2.circlepath.icloud",
-            title: Text2("맥에서 긋고, 아이패드에서 본다 — 몇 초 뒤", "Mark it on the Mac, see it on the iPad — seconds later"),
+            title: Text2("맥에서 긋고, 아이패드에서 본다 — 바로", "Mark it on the Mac, see it on the iPad — now"),
             detail: Text2(
-                "라이브러리는 iCloud Drive 폴더 하나다. 맥에서 하이라이트를 그으면 1.5초 뒤 PDF에 쓰이고, 폴더가 그것을 아이패드로 옮기며, 아이패드의 열린 쪽이 파일이 바뀐 것을 듣고 그 표시만 들여온다. 펜 잉크는 반대로 온다. 이쪽에서 아직 저장하지 않은 표시는 건드리지 않는다. 아래에서 맥 쪽에 하이라이트를 긋고 아이패드를 보라.",
-                "The library is one iCloud Drive folder. A highlight made on the Mac is written to the PDF 1.5 s later, the folder carries it to the iPad, and the iPad's open page hears the file change and takes in just that mark. Ink comes the other way. Marks not yet saved on this side are left alone. Make a highlight on the Mac below and watch the iPad."
+                "서버는 없다. 라이브러리는 iCloud Drive 폴더 하나인데, 20 MB PDF가 오가기를 기다리면 열 초다. 그래서 표시는 두 길로 간다. 같은 Wi-Fi에 있는 기기끼리는 몇백 바이트를 직접 건네 1초 안에 나타나고, 떨어져 있으면 기기마다 자기 이름으로 쓰는 작은 저널 파일이 폴더를 타고 온다 — 두 기기가 같은 파일을 쓰는 일이 없으니 충돌도 없다. PDF는 그 뒤 1.5초에 저널대로 다시 쓰여 어느 앱에서 열어도 같다. 표시마다 가장 최근 말이 이긴다: 여기서 지우고 저기서 색을 바꾸면, 나중 것이 남는다. 아래에서 맥 쪽에 하이라이트를 긋고 아이패드를 보라.",
+                "There is no server. The library is one iCloud Drive folder, and waiting for a 20 MB PDF to travel is ten seconds. So a mark takes two roads. Devices on the same Wi-Fi hand a few hundred bytes to each other directly and it shows within a second; apart, a small journal file each device writes under its own name rides the folder — no two devices ever write one file, so nothing conflicts. The PDF is rewritten to the journals 1.5 s later, so any app opening it sees the same. On each mark the newest word wins: remove it here, recolour it there, and the later one stands. Make a highlight on the Mac below and watch the iPad."
             ),
             demo: .sync,
             featured: true
@@ -231,8 +231,8 @@ enum ReleaseNotes {
                 ),
                 Entry(
                     Text2("기기 사이 실시간 동기화", "Live sync between devices"),
-                    Text2("맥에서 그은 하이라이트가 아이패드의 열린 쪽에 몇 초 안에 나타난다 — 앱을 다시 열지 않아도. 펜으로 쓴 잉크도 반대 방향으로 온다. 열린 논문의 파일과 기록 폴더를 지켜보다가 바뀌면 그 차이만 읽어 들이고, 아직 저장하지 않은 이쪽의 표시는 그대로 둔다. 서버는 없다: iCloud Drive 폴더가 전부다.",
-                          "A highlight made on the Mac appears on the iPad's open page within seconds — no reopening. Ink drawn with the pencil comes the other way. The open paper's file and record folder are watched; when they change, only the difference is read in, and marks not yet written from this side stay. There is no server: the iCloud Drive folder is all of it."),
+                    Text2("맥에서 그은 하이라이트가 아이패드의 열린 쪽에 바로 나타난다. 두 길로 간다: 같은 Wi-Fi의 기기끼리는 직접(Multipeer) 보내 1초 안에, 떨어져 있으면 iCloud Drive 폴더로. 표시는 기기마다 자기 이름의 작은 저널 파일에 즉시 쓰고, PDF는 1.5초 뒤 그에 맞춰 다시 쓴다 — 20 MB PDF 한 장이 오가기를 기다리지 않는다. 표시마다 가장 최근 말이 이긴다. 잉크도 같은 길로 온다.",
+                          "A highlight made on the Mac appears on the iPad's open page at once. Two roads: devices on the same Wi-Fi hand it over directly (Multipeer) within a second; apart, the iCloud Drive folder carries it. Marks go straight into a small journal file named for the device, and the PDF is rewritten to match 1.5 s later — nobody waits for a 20 MB PDF to travel. On each mark the newest word wins. Ink takes the same roads."),
                     demo: .sync,
                     featured: true,
                     devices: [.mac, .ipad, .iphone]
@@ -280,10 +280,23 @@ enum ReleaseNotes {
                     devices: [.ipad, .iphone]
                 ),
                 Entry(
+                    Text2("아이패드 펜 도구", "Pen tools on the iPad"),
+                    Text2("마커로 글자 위를 긋면 글자에 맞춘 하이라이트가, 펜으로 글자 밑에 얇은 선을 그으면 밑줄이 된다 — AA 메뉴 'Fit Marks to Text'를 끄면 그은 선 그대로 남는다(GoodNotes의 직선 하이라이터처럼 고른다). 손글씨는 언제나 잉크다. 지우개는 선과 함께 하이라이트도 지우고, 읽기 모드에서 표시를 탭하면 색·지우기 메뉴가 뜬다. 맥에서 한 표시와 아이패드에서 한 표시는 이제 한 층이다.",
+                          "A marker stroke over words becomes a highlight fitted to them; a thin pen line under words becomes an underline — turn 'Fit Marks to Text' off in the AA menu and the line stays as drawn (the choice GoodNotes gives for its straight highlighter). Handwriting is always ink. The eraser takes highlights off along with strokes, and in reading mode a tap on a mark opens its colours and Remove. Marks made on the Mac and on the iPad are one layer now."),
+                    demo: .penTools,
+                    devices: [.ipad]
+                ),
+                Entry(
                     Text2("아이패드 펜 필기", "Writing with the pencil on the iPad"),
                     Text2("PDFKit의 쪽 뷰가 터치를 받지 않아 그 위의 캔버스에 펜이 닿지 못했고, 스크롤 뷰가 펜 선을 스크롤로 가져갔다. 이제 쓰는 동안 펜은 캔버스로, 손가락은 스크롤로 간다(손가락 쓰기를 켜면 두 손가락이 스크롤).",
                           "PDFKit's page view took no touches, so the pencil never reached the canvas above it, and the scroll view took a pencil stroke as a scroll. While drawing, the pencil now goes to the canvas and a finger scrolls (two fingers, with finger drawing on)."),
                     devices: [.ipad]
+                ),
+                Entry(
+                    Text2("아이패드 잉크가 맥에서 안 보임", "iPad ink invisible on the Mac"),
+                    Text2("PDFKit은 잉크 경로를 주석 상자 기준으로 받는데 쪽 좌표를 넘겨, 파일의 선이 상자 밖 두 배 자리에 쓰였다. 아이폰은 사이드카를 캔버스로 그려 눈치채지 못했고 맥은 아무것도 보지 못했다. 좌표를 고쳤고, 예전 파일은 다음 저장 때 다시 쓴다.",
+                          "PDFKit takes an ink path relative to the annotation's box; handed page coordinates, it wrote each stroke at twice its position, outside the box. The iPhone drew its ink from the sidecar and never noticed; the Mac saw nothing. The coordinates are fixed, and older files are rewritten on their next save."),
+                    devices: [.mac, .ipad]
                 ),
                 Entry(
                     Text2("아이패드 하이라이트 모서리", "Highlight corners on the iPad"),
@@ -626,6 +639,8 @@ enum ReleaseNotes {
         /// A Mac and an iPad side by side; a mark made on one lands on the
         /// other a moment later, by way of the folder.
         case sync
+        /// A marker stroke over words, kept as drawn or fitted to the words.
+        case penTools
 
         var id: String { rawValue }
     }

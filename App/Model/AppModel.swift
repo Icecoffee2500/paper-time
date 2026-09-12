@@ -311,6 +311,7 @@ public final class AppModel {
     public var isChoosingLibraryFolder = false
 
     public func forgetLibrary() {
+        NearbySync.shared.stop()
         preference.clear()
         library = nil
         phase = .needsLibraryFolder
@@ -320,6 +321,9 @@ public final class AppModel {
         let store = LibraryStore(location: location)
         do {
             let manifest = try await store.bootstrap()
+            // The other devices on this library, reached directly when they
+            // are on the same network; the folder carries the rest.
+            NearbySync.shared.start(libraryID: manifest.libraryID.uuidString)
             let model = LibraryModel(store: store, location: location, manifest: manifest)
             library = model
             phase = .ready

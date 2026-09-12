@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import InkEngine
 import PDFKit
 import PDFReader
 import PencilKit
@@ -66,6 +67,7 @@ final class PageOverlay: UIView {
         marginMask = MarginMaskView(page: page)
         self.canvas = canvas
         super.init(frame: .zero)
+        self.page = page
         backgroundColor = .clear
         isOpaque = false
         let marks = MarkOverlayView(page: page)
@@ -83,23 +85,117 @@ final class PageOverlay: UIView {
         marginMask.setNeedsDisplay()
     }
 
-    /// PDFKit's page views do not take touches, so nothing under them —
-    /// this overlay, the canvas — was ever asked. Opened on the way up to
-    /// the scroll view, so a pencil stroke reaches the canvas.
-    override func didMoveToSuperview() {
-        super.didMoveToSuperview()
+    private var wantsInteraction = false
+
+    /// Whether the page under this overlay takes touches at all.
+    ///
+    /// PDFKit's page views do not, and while reading that is right — text
+    /// selection lives on the document view above them. While drawing, the
+    /// pencil has to get down to the canvas, so the way is opened; closed
+    /// again when drawing ends, so selecting a sentence works as before.
+    func setInteractive(_ on: Bool) {
+        wantsInteraction = on
+        applyInteraction()
+    }
+
+    private func applyInteraction() {
         var view = superview
         while let current = view, !(current is UIScrollView) {
-            current.isUserInteractionEnabled = true
+            if NSStringFromClass(type(of: current)).contains("PageView") {
+                current.isUserInteractionEnabled = wantsInteraction
+            }
             view = current.superview
         }
     }
 
+    override func didMoveToSuperview() {
+        super.didMoveToSuperview()
+        applyInteraction()
+    }
+
+    /// The page this overlay lies on, for whoever handles a touch on it.
+    private(set) weak var page: PDFPage?
+
+    /// A point on the overlay, on the page — the inverse of the mapping the
+    /// marks are drawn with.
+    func pagePoint(_ point: CGPoint) -> CGPoint? {
+        guard let page, bounds.width > 0, bounds.height > 0 else { return nil }
+        let box = page.bounds(for: .cropBox)
+        return CGPoint(
+            x: box.minX + point.x * box.width / bounds.width,
+            y: box.minY + (bounds.height - point.y) * box.height / bounds.height
+        )
+    }
+
+    /// A point on the page under the eraser: the coordinator takes the marks
+    /// there off.
+    var onErase: ((CGPoint) -> Void)?
+    /// Where a touch is on the page, by the PDF view's own reckoning — the
+    /// one mapping that is right at every zoom.
+    var pagePointOfTouch: ((UITouch) -> CGPoint?)?
+    /// The same for where the touch was a moment ago, so a fast rub still
+    /// covers the ground between two samples.
+    var previousPagePointOfTouch: ((UITouch) -> CGPoint?)?
+    /// Strokes were rubbed out here; the session should hear about the canvas.
+    var onStrokesErased: ((PKCanvasView) -> Void)?
+
     /// Touches go to the canvas when it is drawing, and otherwise through
     /// to the page — the overlays themselves never take one.
+    ///
+    /// With the eraser chosen the overlay takes the touch itself: PencilKit's
+    /// own erasing would not reach the highlights, and a pan recogniser laid
+    /// over its canvas was cancelled the moment its stroke began. So one
+    /// eraser rubs out both — strokes as objects, marks by their box.
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         guard canvas.isUserInteractionEnabled else { return nil }
+        if canvas.tool is PKEraserTool {
+            if canvas.drawingPolicy == .pencilOnly,
+               let touch = event?.allTouches?.first, touch.type != .pencil {
+                return nil
+            }
+            return self
+        }
         return canvas.hitTest(convert(point, to: canvas), with: event)
+    }
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) { erase(touches) }
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) { erase(touches) }
+
+    private func erase(_ touches: Set<UITouch>) {
+        guard let page else { return }
+        let geometry = PageGeometry(page: page)
+        for touch in touches {
+            guard let point = pagePointOfTouch?(touch) ?? pagePoint(touch.location(in: self)) else { continue }
+            let previous = previousPagePointOfTouch?(touch) ?? point
+            // Touch samples arrive a finger's width apart on a quick rub;
+            // walk the gap so nothing between them is skipped.
+            let distance = hypot(point.x - previous.x, point.y - previous.y)
+            let steps = max(1, Int(distance / 3))
+            for step in 0...steps {
+                let t = CGFloat(step) / CGFloat(steps)
+                let sample = CGPoint(x: previous.x + (point.x - previous.x) * t, y: previous.y + (point.y - previous.y) * t)
+                onErase?(sample)
+                // The strokes live in the canvas's own space; go there from
+                // the page rather than through the touch's view coordinates.
+                eraseStrokes(at: geometry.canvasPoint(fromPDF: sample))
+            }
+        }
+    }
+
+    private func eraseStrokes(at point: CGPoint) {
+        let radius: CGFloat = 14
+        var drawing = canvas.drawing
+        let before = drawing.strokes.count
+        drawing.strokes.removeAll { stroke in
+            guard stroke.renderBounds.insetBy(dx: -radius, dy: -radius).contains(point) else { return false }
+            return stroke.path.interpolatedPoints(by: .distance(3)).contains { sample in
+                let location = sample.location.applying(stroke.transform)
+                return hypot(location.x - point.x, location.y - point.y) <= radius
+            }
+        }
+        guard drawing.strokes.count != before else { return }
+        canvas.drawing = drawing
+        onStrokesErased?(canvas)
     }
 }
 #endif

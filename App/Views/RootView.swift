@@ -586,6 +586,7 @@ struct LibraryWindow: View {
                 }
             #if os(iOS)
             Toggle("Draw with Finger", isOn: $configuration.fingerDrawing)
+            Toggle("Fit Marks to Text", isOn: $configuration.snapsMarksToText)
             Toggle(
                 "Draw",
                 isOn: Binding(

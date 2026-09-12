@@ -48,6 +48,7 @@ struct FeatureDemoView: View {
             case .atlas: AtlasDemo(scale: scale)
             case .express: ExpressDemo(scale: scale)
             case .sync: SyncDemo(scale: scale)
+            case .penTools: PenToolsDemo(scale: scale)
             }
         }
         .padding(scale.pad)
@@ -2674,5 +2675,98 @@ private struct SyncDemo: View {
                     .shadow(color: .black.opacity(0.08), radius: 2, y: 1)
             )
         }
+    }
+}
+
+
+// MARK: - Pen tools
+
+/// One marker stroke over a line of text, shown both ways: kept as the hand
+/// drew it, or fitted to the words. The switch is the one in the AA menu.
+private struct PenToolsDemo: View {
+    let scale: DemoScale
+    @State private var fits = true
+
+    private var line: String {
+        ReleaseNotes.string("시냅스 강화는 학습한 과제의 가중치를 보호한다", "Synaptic consolidation protects a learned task's weights")
+    }
+    private var next: String {
+        ReleaseNotes.string("새 과제를 배우는 동안 중요한 가중치의 변화를 늦춘다.", "by slowing change on the weights that matter while a new one is learned.")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: scale.gap) {
+            HStack(alignment: .top, spacing: scale.gap) {
+                sample(fitted: false, title: ReleaseNotes.string("그은 대로", "As drawn"))
+                sample(fitted: true, title: ReleaseNotes.string("글자에 맞춰", "Fitted to the text"))
+            }
+            HStack {
+                // Two buttons rather than a switch: the switch is the setting's
+                // control, but the headless renderer cannot draw one.
+                Button(ReleaseNotes.string("그은 대로", "As drawn")) { withAnimation(.snappy(duration: 0.2)) { fits = false } }
+                    .buttonStyle(.bordered)
+                    .tint(fits ? nil : .accentColor)
+                Button(ReleaseNotes.string("글자에 맞춰", "Fit to the text")) { withAnimation(.snappy(duration: 0.2)) { fits = true } }
+                    .buttonStyle(.bordered)
+                    .tint(fits ? .accentColor : nil)
+                Spacer()
+                Text(fits
+                     ? ReleaseNotes.string("마커는 하이라이트로, 밑선은 밑줄로 — 손글씨는 잉크로 남는다", "Marker → highlight, a line beneath → underline; handwriting stays ink")
+                     : ReleaseNotes.string("선이 손 그대로 남는다", "The line stays as the hand made it"))
+                    .font(scale.small)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func sample(fitted: Bool, title: String) -> some View {
+        let chosen = fitted == fits
+        return VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(scale.small)
+                .foregroundStyle(chosen ? Color.accentColor : .secondary)
+            VStack(alignment: .leading, spacing: scale.isFull ? 6 : 3) {
+                Text(line)
+                    .font(scale.small)
+                    .padding(.horizontal, 3)
+                    .background(alignment: .leading) {
+                        if fitted {
+                            Capsule().fill(Color.yellow.opacity(0.5))
+                        } else {
+                            WobblyStroke().stroke(Color.yellow.opacity(0.55), style: StrokeStyle(lineWidth: scale.isFull ? 12 : 8, lineCap: .round))
+                                .padding(.horizontal, -4)
+                        }
+                    }
+                Text(next)
+                    .font(scale.small)
+                    .padding(.horizontal, 3)
+            }
+            .padding(scale.pad)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: scale.corner, style: .continuous)
+                    .fill(.background)
+                    .shadow(color: .black.opacity(0.08), radius: 2, y: 1)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: scale.corner, style: .continuous)
+                    .strokeBorder(chosen ? Color.accentColor.opacity(0.6) : .clear, lineWidth: 1.5)
+            )
+        }
+    }
+}
+
+/// A marker stroke as a hand makes it: a little wave, a little slope.
+private struct WobblyStroke: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let y = rect.midY
+        path.move(to: CGPoint(x: rect.minX, y: y + 2))
+        path.addCurve(
+            to: CGPoint(x: rect.maxX, y: y - 3),
+            control1: CGPoint(x: rect.minX + rect.width * 0.35, y: y - 5),
+            control2: CGPoint(x: rect.minX + rect.width * 0.7, y: y + 5)
+        )
+        return path
     }
 }

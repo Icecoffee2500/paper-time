@@ -234,6 +234,12 @@ final class ReaderCoordinator: NSObject {
     private var overlays: [Int: PageOverlay] = [:]
     private let toolPicker = PKToolPicker()
     private var originalTouchTypes: [NSNumber]?
+    /// Strokes each canvas had when last seen, so a new one can be told apart
+    /// from an erasure.
+    private var strokeCounts: [Int: Int] = [:]
+    private var isRewritingCanvas = false
+    private var editMenu: UIEditMenuInteraction?
+    private var tappedMarkID: UUID?
 
     static func scrollView(in view: UIView) -> UIScrollView? {
         for child in view.subviews {
@@ -247,7 +253,26 @@ final class ReaderCoordinator: NSObject {
     @objc private func inkChanged(_ notification: Notification) {
         guard notification.object as? DocumentSession === session,
               let pages = notification.userInfo?["pages"] as? [Int] else { return }
-        for index in pages { canvases[index]?.drawing = session.drawing(forPage: index) }
+        for index in pages {
+            canvases[index]?.drawing = session.drawing(forPage: index)
+            strokeCounts[index] = session.drawing(forPage: index).strokes.count
+            if let page = session.document.page(at: index) {
+                hideOwnedInk(on: page, index: index)
+                pdfView?.annotationsChanged(on: page)
+            }
+        }
+    }
+
+    /// Under a canvas, the file's copy of our ink is not drawn: the canvas
+    /// shows the sidecar's strokes, live and erasable, and drawing the PDF's
+    /// annotations too doubled every line and left a ghost behind an erased
+    /// one. Ink with no sidecar — from a device whose sidecar has not come —
+    /// is left to PDFKit, since hiding it would be losing it.
+    private func hideOwnedInk(on page: PDFPage, index: Int) {
+        guard !session.drawing(forPage: index).strokes.isEmpty else { return }
+        for annotation in page.annotations where InkConverter.isOwned(annotation) && annotation.shouldDisplay {
+            annotation.shouldDisplay = false
+        }
     }
     #endif
 
@@ -403,6 +428,16 @@ final class ReaderCoordinator: NSObject {
         focusGesture.numberOfTouchesRequired = 2
         focusGesture.numberOfTapsRequired = 2
         view.addGestureRecognizer(focusGesture)
+        // A tap on a mark opens its menu — colours and Remove — as a click
+        // does on the Mac. Taps elsewhere are left to PDFKit.
+        let markTap = UITapGestureRecognizer(target: self, action: #selector(markTapped(_:)))
+        markTap.cancelsTouchesInView = false
+        markTap.delaysTouchesEnded = false
+        markTap.delegate = self
+        view.addGestureRecognizer(markTap)
+        let interaction = UIEditMenuInteraction(delegate: self)
+        view.addInteraction(interaction)
+        editMenu = interaction
         #endif
 
         pdfView = view
@@ -511,6 +546,9 @@ final class ReaderCoordinator: NSObject {
         view.layoutDocumentView()
         #else
         view.clearSelection()
+        // Ink that arrived from another device is a new annotation on a page
+        // PDFKit has already drawn; tell it so, or the cached page stays.
+        for page in visiblePages(of: view) { view.annotationsChanged(on: page) }
         view.layoutDocumentView()
         view.needsDisplay = true
         #endif
@@ -1171,6 +1209,7 @@ final class ReaderCoordinator: NSObject {
             canvas.isUserInteractionEnabled = drawing
             canvas.drawingPolicy = configuration.fingerDrawing ? .anyInput : .pencilOnly
         }
+        for overlay in overlays.values { overlay.setInteractive(drawing) }
         // The page scrolls inside a scroll view whose pan recogniser sees
         // every touch first and, given a pencil stroke, took it as a scroll:
         // the canvas got nothing and the pencil "did not work". While
@@ -1208,6 +1247,7 @@ extension ReaderCoordinator: @preconcurrency PDFPageOverlayViewProvider {
         // PDFView caches the drawn page, so a mark hidden after the first
         // paint kept showing as a square under the rounded one.
         _ = RoundedMarks.takeOver(page)
+        hideOwnedInk(on: page, index: index)
         view.annotationsChanged(on: page)
 
         let canvas = PKCanvasView()
@@ -1222,11 +1262,38 @@ extension ReaderCoordinator: @preconcurrency PDFPageOverlayViewProvider {
         // not add its own scrolling on top of the PDF view's.
         canvas.isScrollEnabled = false
         toolPicker.addObserver(canvas)
+        toolPicker.addObserver(self)
         canvas.tool = toolPicker.selectedTool
         canvases[index] = canvas
         // The canvas rides on the same overlay as the rounded marks and the
         // margin mask, so the iPad page looks like the Mac's, plus ink.
         let overlay = PageOverlay(page: page, canvas: canvas)
+        overlay.setInteractive(configuration.mode == .draw)
+        // The eraser takes marks off along with strokes: the pencil, run over
+        // a highlight, removes it.
+        overlay.onErase = { [weak self, weak page] point in
+            guard let self, let page else { return }
+            let hits = page.annotations.filter {
+                RoundedMarks.kinds.contains($0.type ?? "") && $0.bounds.insetBy(dx: -3, dy: -3).contains(point)
+            }
+            for annotation in hits {
+                guard let id = TextMarkupWriter.identifier(of: annotation) else { continue }
+                session.removeMarkup(id: id)
+            }
+        }
+        overlay.pagePointOfTouch = { [weak self, weak page] touch in
+            guard let view = self?.pdfView, let page else { return nil }
+            return view.convert(touch.location(in: view), to: page)
+        }
+        overlay.previousPagePointOfTouch = { [weak self, weak page] touch in
+            guard let view = self?.pdfView, let page else { return nil }
+            return view.convert(touch.previousLocation(in: view), to: page)
+        }
+        overlay.onStrokesErased = { [weak self] canvas in
+            guard let self else { return }
+            strokeCounts[canvas.tag] = canvas.drawing.strokes.count
+            session.setDrawing(canvas.drawing, forPage: canvas.tag)
+        }
         overlays[index] = overlay
         return overlay
     }
@@ -1248,7 +1315,135 @@ extension ReaderCoordinator: @preconcurrency PDFPageOverlayViewProvider {
 #if canImport(UIKit)
 extension ReaderCoordinator: @preconcurrency PKCanvasViewDelegate {
     func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
-        session.setDrawing(canvasView.drawing, forPage: canvasView.tag)
+        guard !isRewritingCanvas else { return }
+        let index = canvasView.tag
+        let known = strokeCounts[index] ?? 0
+        var strokes = canvasView.drawing.strokes
+        if configuration.snapsMarksToText, strokes.count > known,
+           let page = session.document.page(at: index) {
+            // The strokes just finished, newest last. Those that read as a
+            // mark on the text become one and leave the canvas.
+            var kept: [PKStroke] = Array(strokes[..<known])
+            for stroke in strokes[known...] where !snap(stroke, on: page) {
+                kept.append(stroke)
+            }
+            if kept.count != strokes.count {
+                strokes = kept
+                isRewritingCanvas = true
+                canvasView.drawing = PKDrawing(strokes: kept)
+                isRewritingCanvas = false
+            }
+        }
+        strokeCounts[index] = strokes.count
+        session.setDrawing(canvasView.drawing, forPage: index)
+        if let page = session.document.page(at: index), page.annotations.contains(where: { InkConverter.isOwned($0) && $0.shouldDisplay }) {
+            hideOwnedInk(on: page, index: index)
+            pdfView?.annotationsChanged(on: page)
+        }
+    }
+
+    /// Reads one stroke as a highlight or an underline on the page's text,
+    /// makes the mark, and says so; or says it is writing and leaves it be.
+    ///
+    /// A marker over words is a highlight fitted to them. A pen line is an
+    /// underline only when it is thin, flat, and lies under the letters —
+    /// anything taller is handwriting and stays ink. A marker in the margin,
+    /// where there are no words, stays ink too.
+    private func snap(_ stroke: PKStroke, on page: PDFPage) -> Bool {
+        let geometry = PageGeometry(page: page)
+        let box = stroke.renderBounds
+        let corners = [
+            CGPoint(x: box.minX, y: box.minY), CGPoint(x: box.maxX, y: box.minY),
+            CGPoint(x: box.minX, y: box.maxY), CGPoint(x: box.maxX, y: box.maxY),
+        ].map(geometry.pdfPoint(fromCanvas:))
+        let xs = corners.map(\.x), ys = corners.map(\.y)
+        let rect = CGRect(x: xs.min()!, y: ys.min()!, width: xs.max()! - xs.min()!, height: ys.max()! - ys.min()!)
+        let isMarker = stroke.ink.inkType == .marker
+
+        // The lines of text the stroke touches — for a pen line, the one just above it.
+        let probe = isMarker ? rect : rect.insetBy(dx: 0, dy: -8)
+        guard let around = page.selection(for: probe),
+              around.string?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        else { return false }
+        let lines = around.selectionsByLine().map { $0.bounds(for: page) }.filter { $0.height > 0 }
+        guard let line = lines.min(by: { abs($0.midY - rect.midY) < abs($1.midY - rect.midY) }) else { return false }
+
+        // Only the words under the stroke, line by line: a selection run from
+        // one end of the stroke to the other follows the text instead and,
+        // across a column gap, floods half the page.
+        let kind: MarkupDescriptor.Kind
+        var pieces: [CGRect] = []
+        if isMarker {
+            let crossed = lines.filter { $0.maxY > rect.minY - 2 && $0.minY < rect.maxY + 2 }
+            guard !crossed.isEmpty, rect.height <= line.height * 2.4 * CGFloat(crossed.count) else { return false }
+            kind = .highlight
+            pieces = crossed.map { CGRect(x: rect.minX, y: $0.minY, width: rect.width, height: $0.height) }
+        } else {
+            let thin = rect.height < line.height * 0.45
+            let long = rect.width > line.height * 1.5
+            let underLetters = rect.midY < line.minY + line.height * 0.4 && rect.midY > line.minY - line.height * 0.6
+            guard thin, long, underLetters else { return false }
+            kind = .underline
+            pieces = [CGRect(x: rect.minX, y: line.minY, width: rect.width, height: line.height)]
+        }
+        let span = PDFSelection(document: session.document)
+        for piece in pieces {
+            if let part = page.selection(for: piece) { span.add(part) }
+        }
+        guard span.string?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else { return false }
+
+        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+        stroke.ink.color.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+        let color = MarkupColor.nearest(red: red, green: green, blue: blue)
+        return !session.addMarkup(for: span, kind: kind, color: color).isEmpty
+    }
+
+    @objc private func markTapped(_ gesture: UITapGestureRecognizer) {
+        guard configuration.mode != .draw, let view = pdfView else { return }
+        let location = gesture.location(in: view)
+        guard let page = view.page(for: location, nearest: false) else { return }
+        let pagePoint = view.convert(location, to: page)
+        guard let annotation = page.annotations.first(where: {
+            RoundedMarks.kinds.contains($0.type ?? "") && $0.bounds.insetBy(dx: -2, dy: -2).contains(pagePoint)
+        }), let id = TextMarkupWriter.identifier(of: annotation) else { return }
+        tappedMarkID = id
+        editMenu?.presentEditMenu(with: UIEditMenuConfiguration(identifier: nil, sourcePoint: location))
+    }
+}
+
+extension ReaderCoordinator: PKToolPickerObserver {
+    /// The picker changes the tool of the canvas that is first responder;
+    /// the other pages' canvases have to be told, or the eraser chosen on
+    /// page one is still a pen on page two.
+    func toolPickerSelectedToolDidChange(_ toolPicker: PKToolPicker) {
+        for canvas in canvases.values { canvas.tool = toolPicker.selectedTool }
+    }
+}
+
+extension ReaderCoordinator: UIGestureRecognizerDelegate {
+    func gestureRecognizer(
+        _ gestureRecognizer: UIGestureRecognizer,
+        shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+    ) -> Bool {
+        true
+    }
+}
+
+extension ReaderCoordinator: @preconcurrency UIEditMenuInteractionDelegate {
+    func editMenuInteraction(
+        _ interaction: UIEditMenuInteraction, menuFor configuration: UIEditMenuConfiguration,
+        suggestedActions: [UIMenuElement]
+    ) -> UIMenu? {
+        guard let id = tappedMarkID, let mark = session.markup(withID: id) else { return nil }
+        let colors = MarkupColor.allCases.map { color in
+            UIAction(title: color.displayName, state: color == mark.color ? .on : .off) { [weak self] _ in
+                self?.session.recolor(id: id, to: color)
+            }
+        }
+        let remove = UIAction(title: String(localized: "Remove"), image: UIImage(systemName: "trash"), attributes: .destructive) { [weak self] _ in
+            self?.session.removeMarkup(id: id)
+        }
+        return UIMenu(children: [UIMenu(options: .displayInline, children: colors), remove])
     }
 }
 #endif

@@ -84,6 +84,12 @@ public final class ReaderConfiguration {
     /// still scrolls under a resting hand.
     public var fingerDrawing = false
     public var showsToolPicker = false
+    /// A marker stroke over words becomes a highlight fitted to them, a thin
+    /// pen line under words an underline — the way GoodNotes straightens a
+    /// highlighter. Off, the line stays exactly as it was drawn.
+    public var snapsMarksToText: Bool = UserDefaults.standard.object(forKey: "snapMarksToText") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(snapsMarksToText, forKey: "snapMarksToText") }
+    }
 
     public init() {}
 }

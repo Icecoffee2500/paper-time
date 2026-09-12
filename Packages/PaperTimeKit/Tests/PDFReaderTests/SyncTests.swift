@@ -78,4 +78,39 @@ struct SyncTests {
         await session.reloadFromDisk()
         #expect(session.markups.isEmpty)
     }
+
+    @Test("Another device's journal brings its mark without the PDF changing")
+    func journalArrives() async throws {
+        let (store, paper) = try Self.makeLibrary()
+        let session = try await DocumentSession.open(paper: paper, store: store)
+        try await Task.sleep(for: .milliseconds(300))
+
+        var theirs = MarkJournal(device: "iPad-TEST", name: "iPad")
+        let mark = Self.mark(40, color: .blue)
+        theirs.record(mark)
+        try theirs.save(to: paper.folder)
+
+        await session.reloadFromDisk()
+        #expect(session.markups.map(\.id) == [mark.id])
+        #expect(session.markups.first?.color == .blue)
+
+        // Later they remove it; the newer word wins.
+        theirs.recordRemoval(of: mark.id, at: .now.addingTimeInterval(1))
+        try theirs.save(to: paper.folder)
+        await session.reloadFromDisk()
+        #expect(session.markups.isEmpty)
+    }
+
+    @Test("Our removal outlives their addition when it is the newer word")
+    func newestWordWins() {
+        var a = MarkJournal(device: "A", name: "A")
+        var b = MarkJournal(device: "B", name: "B")
+        let mark = Self.mark(40)
+        a.record(mark, at: Date(timeIntervalSince1970: 100))
+        b.recordRemoval(of: mark.id, at: Date(timeIntervalSince1970: 200))
+        let merged = MarkJournal.merged(["A": a, "B": b])
+        #expect(merged[mark.id]?.descriptor == nil)
+        b.record(mark, at: Date(timeIntervalSince1970: 300))
+        #expect(MarkJournal.merged(["A": a, "B": b])[mark.id]?.descriptor?.id == mark.id)
+    }
 }

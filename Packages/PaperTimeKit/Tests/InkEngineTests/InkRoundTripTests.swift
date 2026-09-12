@@ -138,4 +138,21 @@ struct InkRoundTripTests {
         // A horizontal stroke on the rotated canvas is vertical on the page.
         #expect(annotation.bounds.height > annotation.bounds.width)
     }
+
+    @Test("An ink annotation's path sits inside its own box")
+    func pathIsRelativeToBounds() throws {
+        var drawing = PKDrawing()
+        let ink = PKInk(.pen, color: .black)
+        let points = [CGPoint(x: 300, y: 500), CGPoint(x: 340, y: 520), CGPoint(x: 380, y: 500)].map {
+            PKStrokePoint(location: $0, timeOffset: 0, size: CGSize(width: 3, height: 3), opacity: 1, force: 1, azimuth: 0, altitude: .pi / 2)
+        }
+        drawing.strokes.append(PKStroke(ink: ink, path: PKStrokePath(controlPoints: points, creationDate: .now)))
+        let geometry = PageGeometry(cropBox: CGRect(x: 0, y: 0, width: 612, height: 792), rotation: 0)
+        let annotation = try #require(InkConverter.annotations(from: drawing, geometry: geometry).first)
+        let path = try #require(annotation.paths?.first)
+        // PDFKit adds the annotation's origin back when it writes /InkList, so
+        // a path handed in page coordinates would land at twice its position.
+        #expect(CGRect(origin: .zero, size: annotation.bounds.size).insetBy(dx: -1, dy: -1).contains(path.bounds))
+        #expect(annotation.bounds.minX > 290 && annotation.bounds.minX < 300)
+    }
 }
