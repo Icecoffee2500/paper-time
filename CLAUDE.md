@@ -19,6 +19,8 @@ Apple 네이티브(macOS/iPadOS/iOS 26) 논문 리더 + 필기 + 서지관리 �
 
 ## 빌드/실행
 - Xcode 26.6. 앱 타겟 실행은 Xcode 또는 `xcodebuild`. 시뮬레이터 확인은 iOS Simulator 도구 사용.
+- iOS 빌드: `xcodebuild -scheme PaperTime -destination 'platform=iOS Simulator,id=<UDID>' -derivedDataPath build/ios CODE_SIGNING_ALLOWED=NO build`, 설치·실행은 `xcrun simctl install/launch`. 시뮬레이터를 손대지 않고 몰고 가려면 환경변수: `SIMCTL_CHILD_PAPERTIME_LIBRARY=PaperTimePapers`(앱 Documents 안 상대경로), `…_SKIP_WELCOME=1`, `…_ADOPT_LOOSE=1`(폴더의 PDF를 들여옴), `…_OPEN_FIRST=1`(첫 논문을 연다). 캡처는 `xcrun simctl io <UDID> screenshot`.
+- 플랫폼 분기: AppKit 전용 파일은 `#if os(macOS)`로 통째로 감싸고 UIKit 쌍을 옆에 둔다(`MarkOverlayView`, `MarginMaskView`, `PageOverlay`). 색은 `PlatformColorShims.swift`가 AppKit 이름을 UIKit에 준다.
 
 ## 기능 소개(스니펫) 규칙
 새 기능이 **중요한 기능**이면 — 즉 한 문장으로는 무엇인지 와닿지 않거나, 사용자가 모르면 영영 안 쓰게 될 기능이면 — 코드만 쓰고 끝내지 않는다. 다음을 **같은 커밋에서** 함께 한다.
@@ -44,6 +46,7 @@ Apple 네이티브(macOS/iPadOS/iOS 26) 논문 리더 + 필기 + 서지관리 �
 | `v0.1.0` | 이번 버전. `main`에서 갈라져 나온다. |
 | `dev/v0.1.0` | **새 기능**은 여기서. |
 | `debug/v0.1.0` | **오류 수정**은 여기서. |
+| `ipad/v0.1.0`, `iphone/v0.1.0` | 기기별 이식은 버전 밑에 기기 가지로. |
 
 흐름:
 
@@ -59,7 +62,7 @@ git switch debug/v0.1.0   # 오류 수정
 # 안정화되면 둘 다 버전 가지로 합치고, 버전을 닫는다
 git switch v0.1.0
 git merge --no-ff dev/v0.1.0 debug/v0.1.0
-git switch main && git merge --no-ff v0.1.0 && git tag v0.1.0
+git switch main && git merge --no-ff v0.1.0 && git tag 0.1.0   # 태그는 v 없이 — 브랜치 v0.1.0과 이름이 겹친다
 # 리모트가 생기면: git push origin main --tags
 ```
 
