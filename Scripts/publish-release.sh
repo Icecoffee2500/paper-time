@@ -93,7 +93,11 @@ git worktree add -q "$WORK" gh-pages 2>/dev/null || {
   rm -f "$WORK"/* 2>/dev/null || true
 }
 trap 'git -C "$ROOT" worktree remove --force "$WORK" 2>/dev/null || true' EXIT
-cp Website/index.html Website/releases.json "$WORK/"
+# The whole site, not two files of it: the page has stylesheet, script and
+# screenshots now. Cleared first, so a file dropped from Website/ leaves the
+# branch too.
+git -C "$WORK" rm -rq --ignore-unmatch . >/dev/null 2>&1 || true
+cp -R Website/. "$WORK/"
 git -C "$WORK" add -A
 git -C "$WORK" commit -qm "Paper Time $TAG on the page" || echo "the page was already up to date"
 git -C "$WORK" push -q origin gh-pages
