@@ -321,26 +321,36 @@ struct NoteEditor: NSViewRepresentable {
 
         /// Drops a link where the cursor is, the way an editor inserts a
         /// citation: the writing carries on from there.
+        /// Drops the passage in as a quotation of its own.
+        ///
+        /// Written into the Markdown rather than typed into the display: a
+        /// quotation is two lines and a blank one, and insertions into the
+        /// rendered text have to be mapped back through markers that are not
+        /// there — a mapping that is exactly right for a word and exactly
+        /// wrong for a block. Editing the source and re-rendering it is one
+        /// step, and what lands is what the file will hold.
         func insert(_ anchor: NoteAnchor, into textView: NoteTextView) {
-            let piece = NoteMarkdown.link(for: anchor)
-            var range = textView.selectedRange()
-            if range.location > textView.string.utf16.count {
-                range = NSRange(location: textView.string.utf16.count, length: 0)
-            }
-            textView.insertText(showsRawText ? NoteMarkdown.markdown(from: piece) : piece,
-                                replacementRange: range)
-            textView.typingAttributes = showsRawText
-                ? NoteMarkdown.rawAttributes : NoteMarkdown.bodyAttributes
-
-            if let storage = textView.textStorage {
-                let source = NoteMarkdown.markdown(from: storage)
-                let caret = NoteMarkdown.sourceIndex(
+            guard let storage = textView.textStorage else { return }
+            let source = NoteMarkdown.markdown(from: storage) as NSString
+            let caret = min(
+                NoteMarkdown.sourceIndex(
                     in: storage, displayIndex: textView.selectedRange().location
-                )
-                lastKnownMarkdown = source
-                markdown = source
-                restyle(textView, source: source, caretSource: caret)
-            }
+                ),
+                source.length
+            )
+            var head = source.substring(to: caret)
+            let tail = source.substring(from: caret)
+            // A quotation starts its own line, and leaves one behind it to go
+            // on writing in.
+            if !head.isEmpty, !head.hasSuffix("\n") { head += "\n" }
+            let block = NoteMarkdown.quotationSource(for: anchor)
+            let after = tail.hasPrefix("\n") ? "" : "\n"
+            let updated = head + block + after + tail
+
+            lastKnownMarkdown = updated
+            markdown = updated
+            restyle(textView, source: updated,
+                    caretSource: (head + block + after).utf16.count)
             textView.window?.makeFirstResponder(textView)
         }
 

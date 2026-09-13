@@ -161,9 +161,20 @@ struct ZettelEditorView: View {
             }
         }
         #else
+        // The phone and the iPad write in the Markdown itself — the rendered
+        // editor is the Mac's for now — so a passage arrives as the block
+        // quote it will always be. It was arriving nowhere at all before:
+        // ⌘L and the "노트로" button set the anchor and nothing on these
+        // devices was listening for it.
         TextEditor(text: $body_)
             .font(.body)
             .padding(.horizontal, 8)
+            .onChange(of: pending) { _, anchor in
+                guard let anchor, loadedID == noteID else { return }
+                if !body_.isEmpty, !body_.hasSuffix("\n") { body_ += "\n" }
+                body_ += NoteMarkdown.quotationSource(for: anchor) + "\n"
+                link?.pendingNoteAnchor = nil
+            }
         #endif
     }
 

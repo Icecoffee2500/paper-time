@@ -37,11 +37,63 @@ enum NoteChip {
     static let radius: CGFloat = 5.5
 }
 
-/// Paints the chips, then lets the text draw on top of them.
+/// The bar down the left of a quotation, and the faint ground behind it.
+///
+/// A quotation in a note is a passage from the paper — words that are not the
+/// writer's. The chip said that inline, which was right while a passage was a
+/// token dropped mid-sentence; a whole sentence lifted out of a paper is a
+/// quotation, and a quotation has looked the same in print for centuries: set
+/// in, a rule down its side. So that is what it is now, and the chip is left
+/// to the passages that are still dropped inline.
+enum NoteQuoteBar {
+    /// Marks a run as part of a quoted paragraph.
+    static let attribute = NSAttributedString.Key("PaperTimeQuote")
+
+    static var bar: NSColor { .controlAccentColor.withAlphaComponent(0.55) }
+    static var ground: NSColor { .controlAccentColor.withAlphaComponent(0.05) }
+    static let width: CGFloat = 2.5
+    /// How far left of the words the bar stands.
+    static let gap: CGFloat = 13
+}
+
+/// Paints the quotations and the chips, then lets the text draw on top.
 final class NoteLayoutFragment: NSTextLayoutFragment {
     override func draw(at point: CGPoint, in context: CGContext) {
+        drawQuotes(in: context)
         drawChips(in: context)
         super.draw(at: point, in: context)
+    }
+
+    /// One bar per quoted paragraph, the height of the lines it covers.
+    ///
+    /// Drawn from the fragment's own bounds rather than per line, so a
+    /// quotation that wraps gets one continuous rule rather than a dotted
+    /// column of them.
+    private func drawQuotes(in context: CGContext) {
+        guard let paragraph = textElement as? NSTextParagraph else { return }
+        let text = paragraph.attributedString
+        guard text.length > 0,
+              text.attribute(NoteQuoteBar.attribute, at: 0, effectiveRange: nil) != nil
+        else { return }
+
+        let box = layoutFragmentFrame
+        let indent = (text.attribute(.paragraphStyle, at: 0, effectiveRange: nil)
+                      as? NSParagraphStyle)?.headIndent ?? 0
+        let top = box.minY - layoutFragmentFrame.minY
+        let ground = CGRect(x: indent - NoteQuoteBar.gap, y: top,
+                            width: max(box.width - indent + NoteQuoteBar.gap, 0),
+                            height: box.height)
+
+        context.saveGState()
+        NoteQuoteBar.ground.setFill()
+        NSBezierPath(roundedRect: ground, xRadius: 4, yRadius: 4).fill()
+        NoteQuoteBar.bar.setFill()
+        NSBezierPath(
+            roundedRect: CGRect(x: ground.minX, y: top,
+                                width: NoteQuoteBar.width, height: box.height),
+            xRadius: NoteQuoteBar.width / 2, yRadius: NoteQuoteBar.width / 2
+        ).fill()
+        context.restoreGState()
     }
 
     private func drawChips(in context: CGContext) {
@@ -54,6 +106,11 @@ final class NoteLayoutFragment: NSTextLayoutFragment {
             NoteChip.attribute, in: NSRange(location: 0, length: text.length)
         ) { value, range, _ in
             guard value != nil else { return }
+            // Not inside a quotation: the block is already tinted, and a chip
+            // on top of it is the same thing said twice.
+            if text.attribute(NoteQuoteBar.attribute, at: range.location, effectiveRange: nil) != nil {
+                return
+            }
             for rect in rects(for: range, in: paragraph) {
                 let box = rect.insetBy(dx: -NoteChip.padding.width, dy: -NoteChip.padding.height)
                 let path = NSBezierPath(roundedRect: box,

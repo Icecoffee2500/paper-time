@@ -299,6 +299,18 @@ enum ReleaseNotes {
                     devices: [.ipad]
                 ),
                 Entry(
+                    Text2("구절은 인용으로, 노트는 링크로", "A passage is a quotation; a note is a link"),
+                    Text2("읽다가 고른 구절과 다른 노트로 가는 링크가 같은 몸짓으로 보였다 — 둘 다 문장 속의 물든 토막이었다. 다른 것이다. 링크는 \"이것의 더 많은 것이 저기 있다\"고 말하고, 인용은 \"이 말은 내 것이 아니다, 7쪽에서 왔다\"고 말한다. 그래서 구절은 이제 제 문단을 갖는 인용으로 들어온다: 왼쪽에 줄, 옅은 바탕, 기울인 글씨, 그리고 밑에 쪽수. 눌러서 그 줄로 돌아가는 것은 그대로다. 파일에는 평범한 마크다운 인용(>)으로 남아 다른 편집기에서도 인용으로 보인다. 문장 가운데 떨어뜨린 구절은 여전히 칩이다 — 그건 원래 토막이 맞다. 아이폰과 아이패드에서는 ⌘L이 아무 데로도 가지 않고 있었는데(노트가 그 신호를 듣는 쪽이 맥밖에 없었다) 이제 거기서도 인용이 들어온다.",
+                          "A passage chosen while reading and a link to another note were the same gesture to look at — both a tinted morsel inside a sentence. They are not the same thing. A link says \"there is more of this over there\"; a quotation says \"these words are not mine, they came from page seven\". So a passage now arrives as a quotation with a paragraph of its own: a rule down its left, a pale ground, the words set in italic, the page underneath. Pressing it still goes back to that line. In the file it is an ordinary Markdown block quote, so it reads as a quotation in any other editor too. A passage dropped mid-sentence is still a chip — that one really is a morsel. On the phone and the iPad ⌘L had been going nowhere at all (only the Mac was listening for it); the quotation lands there now as well."),
+                    devices: [.mac, .ipad, .iphone]
+                ),
+                Entry(
+                    Text2("노트 링크가 줄의 나머지를 삼킴", "A note link swallowing the rest of its line"),
+                    Text2("[[노트]] 뒤에 같은 줄에서 구절을 인용하면, 링크의 이름표가 [[까지 열고 들어가 노트 이름도 그 뒤의 글도 구절도 통째로 하나의 링크가 됐다. 같은 자리에서 시작하는 둘 중에는 먼저 끝나는 쪽이 뜻한 것이다.",
+                          "Cite a passage on the same line as a [[note]] and the link's label opened at the note's own bracket and ran to the passage at the end — note name, words between, and passage, all one link. Where two matches begin at the same character, the one that ends sooner is the one that was meant."),
+                    devices: [.mac]
+                ),
+                Entry(
                     Text2("설정이 아이폰·아이패드의 설정답게", "Settings that look like settings on the phone and the iPad"),
                     Text2("맥이 옆에 세워 둔 일곱 쪽을, 손으로 쓰는 화면에서는 한 두루마리에 다 이어 붙여 놓았었다. 이제 같은 일곱 쪽이 일곱 줄이 되어 하나씩 열린다 — 이름도 기호도 맥과 같고, 줄 끝에는 지금 값이 적힌다(라이브러리·폴더 이름, 읽기·현재 배치). 없던 것도 생겼다: 기록(Log)은 아이폰·아이패드에 아예 없었고, 소개(About)는 판 번호 한 줄이었는데 이제 맥과 같은 실물 크기 소개다. 단축키는 키보드를 붙일 수 있는 아이패드에만, 읽기 전용으로. 폴더 칸에 통째로 들어가 카드 높이만큼 구멍을 내던 긴 경로는 이름만 남기고 밑으로 내렸고, 이름이 안 보이던 연락처 칸에 이름을 붙였으며, 쪽 배치·색조는 이제 리더의 것을 그대로 읽어 온다 — 목록에 없던 Glass가 여기에도 생겼고 'None'이 'Paper White'가 되었다.",
                           "The Mac stands its seven pages beside the page it is showing; on a touch screen they had all been sewn into one scroll. The same seven are now seven rows opened one at a time — the same names and symbols as the Mac, each with its value at the end (Library · the folder's name, Reading · the layout in use). Two were missing outright: the Log was not on the phone or the iPad at all, and About was a version number, where now it is the Mac's full-size introduction. The keys are on the iPad, which may have a keyboard, to read rather than to change. The long path that went into the Folder row and left a hole the height of the card now sits under the section with the folder's name in the row; the contact field, which showed only its placeholder, has its name back; and the layout and tint pickers read the reader's own cases — so Glass is offered here too, and \"None\" is called Paper White, as the page calls it."),

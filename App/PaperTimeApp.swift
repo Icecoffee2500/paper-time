@@ -11,6 +11,13 @@ struct PaperTimeApp: App {
         if let directory = ProcessInfo.processInfo.environment["PAPERTIME_RENDER_DEMOS"] {
             DemoRenderer.render(into: directory)
         }
+        // Prints how a note's Markdown is set, run by run, and quits:
+        // `PAPERTIME_DUMP_NOTE="$(cat note.md)"`. A note is rendered in a text
+        // view inside three panes, which is a slow place to find out that a
+        // quotation came out looking like a link.
+        if let markdown = ProcessInfo.processInfo.environment["PAPERTIME_DUMP_NOTE"] {
+            NoteMarkdown.dump(markdown)
+        }
         #endif
     }
 
