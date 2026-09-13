@@ -12,6 +12,11 @@ import UIKit
 struct PaperListView: View {
     @Bindable var model: LibraryModel
     @Environment(AppModel.self) private var app
+    /// How far past its top the list has been pulled.
+    ///
+    /// How far, not merely whether: the words have to come in with the pull,
+    /// or they are one more thing that appears without being asked for.
+    @State private var pull: CGFloat = 0
 
     var body: some View {
         content
@@ -133,13 +138,47 @@ struct PaperListView: View {
             // way a Home Screen does, and with a trackpad the way an
             // overscroll does. The gesture that says "give me something"
             // gets the field that gives everything.
-            .onScrollGeometryChange(for: Bool.self) { geometry in
-                geometry.contentOffset.y + geometry.contentInsets.top < -72
-            } action: { _, pulled in
-                guard pulled, !app.showsSearchPalette else { return }
+            //
+            // It used to happen without warning: the list sprang back and a
+            // palette was suddenly there, and nothing had said it would be.
+            // Now the pull uncovers the words for it, and going past them is
+            // what opens it — so the gesture is something you can stop doing.
+            .overlay(alignment: .top) { pullHint }
+            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                -(geometry.contentOffset.y + geometry.contentInsets.top)
+            } action: { _, distance in
+                pull = distance
+                guard distance > Self.pullThreshold, !app.showsSearchPalette else { return }
                 app.showsSearchPalette = true
             }
         }
+    }
+
+    /// How far the list must be pulled before the search opens.
+    private static let pullThreshold: CGFloat = 72
+
+    /// What the pull uncovers, and what crossing it will do.
+    ///
+    /// It fades in over the first two thirds of the pull and firms up at the
+    /// end, so the last stretch of the gesture is the part that says "now".
+    /// It never takes a touch: the pull belongs to the list.
+    private var pullHint: some View {
+        let progress = min(max(pull / (Self.pullThreshold * 0.66), 0), 1)
+        let armed = pull > Self.pullThreshold * 0.9
+        return HStack(spacing: 6) {
+            Image(systemName: "rectangle.and.text.magnifyingglass")
+            Text("Search Everything")
+        }
+        .font(.footnote.weight(.medium))
+        .foregroundStyle(armed ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+        .opacity(progress)
+        .scaleEffect(0.92 + progress * 0.08)
+        // Carried down by the pull rather than pinned to the edge, so it
+        // reads as something the gesture is uncovering.
+        .offset(y: max(0, pull * 0.34) + 4)
+        .animation(.snappy(duration: 0.14), value: armed)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
     private var looseDescription: String {

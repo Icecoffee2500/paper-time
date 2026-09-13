@@ -311,6 +311,18 @@ enum ReleaseNotes {
                     devices: [.mac, .ipad, .iphone]
                 ),
                 Entry(
+                    Text2("당겨 내리면 무엇이 나오는지 먼저 말한다", "The pull says what it will open"),
+                    Text2("논문 목록을 끝까지 당기면 서재 전체 검색이 뜬다 — 뜨기 전까지는 아무 말이 없어서, 목록이 튕겨 돌아오고 갑자기 창이 있었다. 이제 당기는 만큼 'Search Everything'이 따라 올라오고, 그 문구를 지나야 열린다. 멈출 수 있는 몸짓이 되었다. 세 기기 모두.",
+                          "Pulling the paper list past its top opens the library-wide search — and nothing had said it would, so the list sprang back and a palette was suddenly there. The words \"Search Everything\" now come in with the pull, and going past them is what opens it, so the gesture is something you can stop doing. On all three."),
+                    devices: [.mac, .ipad, .iphone]
+                ),
+                Entry(
+                    Text2("검색을 열면 키보드가 먼저 올라옴", "The keyboard arriving before the search did"),
+                    Text2("아이폰과 아이패드에서 검색을 열면 키보드가 곧장 올라와, 무엇을 이어 읽을지 내놓는 절반을 덮었다. 맥은 ⌘K를 누른 순간부터 타자를 칠 준비가 되어 있는 게 맞지만, 손으로 쓰는 화면에서는 먼저 보고 필요하면 칸을 누른다.",
+                          "Opening the search on the phone or the iPad raised the keyboard at once, covering the half of the palette that offers what to read next. On the Mac the caret belongs in the field — ⌘K is a key you press in order to type — but on a touch screen you look first and tap the field if you want to type."),
+                    devices: [.ipad, .iphone]
+                ),
+                Entry(
                     Text2("빈 선반이 검색 실패라고 말함", "An empty shelf saying the search had failed"),
                     Text2("아직 아무것도 별을 안 단 즐겨찾기 앞에서 '맞춤법을 확인하거나 다시 검색하세요'가 떴다. 선반마다 제 이유를 말한다 — 읽는 중으로 표시한 논문이 여기 모인다, 별을 달면 여기 있다.",
                           "\"Check the spelling or try a new search\" stood in front of Favorites, which nothing had been starred into yet. Each shelf now says why it is empty — papers you set to Reading wait here; star one and it will be here."),
@@ -324,14 +336,14 @@ enum ReleaseNotes {
                 ),
                 Entry(
                     Text2("책장이 소리 없이 바뀜", "A spread that changed without turning"),
-                    Text2("아이패드의 책 모드는 쓸면 넘어가되 한 칸이 그냥 다른 칸으로 바뀌었다 — 넘어간 것이 아니라 잘못된 것처럼 보인다. 한 쪽 모드가 쪽 넘김 컨트롤러에서 받는 그 움직임을, 책은 두 장의 그림으로 만든다: 있던 펼침면이 나가고 올 펼침면이 들어온다.",
-                          "The iPad's book turned on a swipe but cut from one spread to the next with no motion, which reads as a glitch rather than a page turning. The movement the single page gets from the page-turn controller is made for the book out of two still pictures: the spread that was, carried out; the spread that will be, carried in."),
+                    Text2("아이패드의 책 모드는 쓸면 넘어가되 한 칸이 그냥 다른 칸으로 바뀌었다 — 넘어간 것이 아니라 잘못된 것처럼 보인다. 한 쪽 모드가 쪽 넘김 컨트롤러에서 받는 그 움직임을, 책은 층(layer)의 밀어내기로 받는다. 처음에는 그림 두 장을 찍어 옮겼는데, 올 펼침면의 그림을 찍으려면 그걸 통째로 그려 놓고 시작해야 해서 움직임이 있어야 할 자리에 멈칫이 들어갔다 — 지금은 렌더 서버가 이미 그려 둔 것을 그대로 민다.",
+                          "The iPad's book turned on a swipe but cut from one spread to the next with no motion, which reads as a glitch rather than a page turning. The movement the single page gets from the page-turn controller comes to the book as a push on its own layer. Two snapshots were the first attempt: taking the picture of the spread about to arrive means drawing the whole of it before the animation can begin, and the pause landed exactly where the movement should have been. The render server already has it drawn, and now it does the pushing."),
                     devices: [.ipad, .iphone]
                 ),
                 Entry(
                     Text2("맥의 목차도 쪽 아래로", "The Mac's contents along the foot as well"),
-                    Text2("목차가 기둥으로 서는 곳은 펼침면의 가운데 홈뿐이다. 이어 읽기와 한 쪽 모드에서는 쪽이 열을 가득 채우니, 그 한가운데 선 기둥은 찾아 주려던 글을 가린다. 이제 거기서는 아이패드처럼 쪽 아래를 가로지른다.",
-                          "The only place a column of headings can stand is the gutter of a spread. In continuous and single-page the page fills the column, and a column down the middle of it covers the words it is meant to help you find — so there it lies along the foot, as it does on the iPad."),
+                    Text2("목차가 기둥으로 서는 곳은 펼침면의 가운데 홈뿐이다. 이어 읽기와 한 쪽 모드에서는 쪽이 열을 가득 채우니, 그 한가운데 선 기둥은 찾아 주려던 글을 가린다. 이제 거기서는 아이패드처럼 쪽 아래를 가로지른다. (처음 고쳤을 때 맥에서만 여전히 한가운데 떴다 — 아래로 붙이라는 말은 붙일 벽이 있어야 듣는데, 손가락을 받는 투명한 층이 없는 맥에서는 겹이 판 크기로 오그라들어 붙을 데가 없었다.)",
+                          "The only place a column of headings can stand is the gutter of a spread. In continuous and single-page the page fills the column, and a column down the middle of it covers the words it is meant to help you find — so there it lies along the foot, as it does on the iPad. (It kept appearing in the middle on the Mac after the first attempt: an instruction to sit at the bottom needs a bottom to sit at, and without the invisible layer that catches a dismissing touch the stack shrank to the panel and had none.)"),
                     devices: [.mac]
                 ),
                 Entry(

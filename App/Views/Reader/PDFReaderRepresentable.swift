@@ -916,40 +916,38 @@ final class ReaderCoordinator: NSObject {
     }
 
     #if canImport(UIKit)
-    /// Slides the old spread out and the new one in, the way the single page
+    /// Pushes the old spread off and the new one on, the way the single page
     /// turns.
     ///
-    /// A single page gets this from the page view controller, which cannot
-    /// show two pages at once and so is off in a book — and a book without it
-    /// cut from one spread to the next with no motion at all, which reads as
-    /// a glitch rather than a page turning. Two still pictures do it instead:
-    /// the spread as it was and the spread as it will be, carried across the
-    /// view while the real one waits underneath.
+    /// A single page gets its movement from the page view controller, which
+    /// cannot show two pages at once and so is off in a book — and a book
+    /// without it cut from one spread to the next with no motion at all,
+    /// which reads as a glitch rather than a page turning.
+    ///
+    /// Core Animation does it, not a pair of snapshot views. The snapshots
+    /// were the first attempt and they stuttered: taking the picture of the
+    /// spread about to arrive means rendering the whole of it on the main
+    /// thread before the animation can start, and the pause landed exactly
+    /// where the movement should have been. A push transition on the view's
+    /// own layer is handed to the render server, which already has the old
+    /// spread drawn and needs no picture taken of either.
     private func turningPages(in view: PDFView, forward: Bool, _ turn: () -> Void) {
-        guard appliedLayout == .book, !isTurningPages,
-              let before = view.snapshotView(afterScreenUpdates: false)
-        else { turn(); return }
+        guard appliedLayout == .book, !isTurningPages else { turn(); return }
         isTurningPages = true
-        let width = view.bounds.width
-        before.frame = view.bounds
-        view.addSubview(before)
-
+        let push = CATransition()
+        push.type = .push
+        push.subtype = forward ? .fromRight : .fromLeft
+        push.duration = 0.32
+        // The curve the page view controller uses: quick to leave, gentle to
+        // arrive. Linear reads as a slide rather than a turn.
+        push.timingFunction = CAMediaTimingFunction(controlPoints: 0.25, 0.1, 0.25, 1)
+        view.layer.add(push, forKey: "paperTime.turn")
         turn()
-
-        guard let after = view.snapshotView(afterScreenUpdates: true) else {
-            before.removeFromSuperview()
-            isTurningPages = false
-            return
-        }
-        after.frame = view.bounds.offsetBy(dx: forward ? width : -width, dy: 0)
-        view.addSubview(after)
-
-        UIView.animate(withDuration: 0.28, delay: 0, options: [.curveEaseInOut]) {
-            before.frame = view.bounds.offsetBy(dx: forward ? -width : width, dy: 0)
-            after.frame = view.bounds
-        } completion: { [weak self] _ in
-            before.removeFromSuperview()
-            after.removeFromSuperview()
+        // Lay the new spread out before the transition is committed, so what
+        // is pushed on is the spread and not the blank it would otherwise be
+        // for the first frame or two.
+        view.layoutIfNeeded()
+        DispatchQueue.main.asyncAfter(deadline: .now() + push.duration) { [weak self] in
             self?.isTurningPages = false
         }
     }

@@ -919,6 +919,13 @@ struct PaperDetailColumn: View {
                         .padding(.bottom, ReaderScreen.statusBarClearance + 12)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
+                // Told to fill the reader and sit at the bottom of it. On iOS
+                // the layer that catches the dismissing touch fills the stack
+                // and the alignment has something to work against; the Mac has
+                // no such layer, so the stack shrank to the panel and the
+                // overlay put that in the middle of the page — which is how a
+                // footer ended up floating over the words it was avoiding.
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             }
         }
     }

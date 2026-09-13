@@ -99,7 +99,15 @@ struct SearchPalette: View {
                     .padding(.top, proxy.size.height * 0.28)
             }
         }
+        // The Mac opens with the caret in the field: the keyboard is already
+        // there, and ⌘K is a key you press in order to type. A touch screen
+        // has no keyboard until one is asked for, and raising it covers the
+        // half of the palette that offers what to read next — which is the
+        // part worth seeing before typing anything. Tap the field and it
+        // comes, as it does everywhere else.
+        #if os(macOS)
         .onAppear { isFieldFocused = true }
+        #endif
     }
 
     private var paletteCard: some View {
