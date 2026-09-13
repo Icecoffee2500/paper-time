@@ -2,216 +2,149 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Paper Time</title>
-<meta name="description" content="논문을 읽고, 표시하고, 그 표시를 생각으로 바꾸기 위한 맥·아이패드·아이폰 앱.">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📚</text></svg>">
-<style>
-  :root {
-    --ink: #1c1b19;
-    --ink-soft: #6b6863;
-    --ink-faint: #9a968f;
-    --paper: #faf9f7;
-    --card: #ffffff;
-    --rule: #e6e3dd;
-    --tint: #3b6ea5;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --ink: #eceae6;
-      --ink-soft: #a9a49c;
-      --ink-faint: #7b7770;
-      --paper: #171614;
-      --card: #201f1c;
-      --rule: #302e2a;
-      --tint: #7ba8d8;
-    }
-  }
-  * { box-sizing: border-box; }
-  html { -webkit-text-size-adjust: 100%; }
-  body {
-    margin: 0;
-    background: var(--paper);
-    color: var(--ink);
-    font: 16px/1.62 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue",
-          "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-    padding: 0 20px 96px;
-  }
-  .wrap { max-width: 660px; margin: 0 auto; }
-
-  header { padding: 96px 0 8px; }
-  .mark { font-size: 40px; line-height: 1; }
-  h1 {
-    font-size: 34px; letter-spacing: -0.02em; margin: 18px 0 6px; font-weight: 600;
-  }
-  .tagline { font-size: 19px; color: var(--ink-soft); margin: 0 0 6px; }
-  .tagline-en { font-size: 15px; color: var(--ink-faint); margin: 0; }
-
-  .download { margin: 40px 0 10px; }
-  .button {
-    display: inline-flex; align-items: baseline; gap: 10px;
-    background: var(--tint); color: #fff; text-decoration: none;
-    padding: 13px 22px; border-radius: 12px; font-size: 17px; font-weight: 500;
-  }
-  .button:hover { filter: brightness(1.08); }
-  .button .meta { font-size: 13px; font-weight: 400; opacity: 0.82; }
-  .under { font-size: 13.5px; color: var(--ink-faint); margin: 12px 0 0; }
-
-  h2 {
-    font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
-    color: var(--ink-faint); margin: 56px 0 14px;
-  }
-  p { margin: 0 0 14px; }
-  .lede { color: var(--ink-soft); }
-
-  ul.plain { list-style: none; padding: 0; margin: 0; }
-  ul.plain li { padding: 3px 0; color: var(--ink-soft); }
-  ul.plain li b { color: var(--ink); font-weight: 600; }
-
-  .release {
-    border-top: 1px solid var(--rule); padding: 16px 0;
-    display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
-  }
-  .release .v { font-weight: 600; font-variant-numeric: tabular-nums; min-width: 58px; }
-  .release .d { color: var(--ink-faint); font-size: 14px; flex: 1 1 140px; }
-  .release a { color: var(--tint); text-decoration: none; font-size: 15px; }
-  .release a:hover { text-decoration: underline; }
-  .release .size { color: var(--ink-faint); font-size: 13px; }
-
-  .note {
-    background: var(--card); border: 1px solid var(--rule); border-radius: 12px;
-    padding: 16px 18px; font-size: 14.5px; color: var(--ink-soft);
-  }
-  .note b { color: var(--ink); }
-  .note code {
-    font: 13px ui-monospace, SFMono-Regular, Menlo, monospace;
-    background: var(--paper); padding: 1px 5px; border-radius: 5px;
-  }
-
-  footer {
-    margin-top: 64px; padding-top: 20px; border-top: 1px solid var(--rule);
-    font-size: 13.5px; color: var(--ink-faint);
-  }
-  footer a { color: var(--ink-soft); }
-</style>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Paper Time — 논문에만 집중하기 위한 앱</title>
+<meta name="description" content="논문을 읽고, 표시하고, 그 표시를 생각으로 바꾸기 위한 맥·아이패드·아이폰 앱. 수식은 LaTeX으로 복사되고, 구절은 주소째로 노트가 된다.">
+<meta property="og:title" content="Paper Time">
+<meta property="og:description" content="논문을 읽고, 표시하고, 그 표시를 생각으로 바꾸기 위한 앱.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📖</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;1,9..144,600&family=Gowun+Batang:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="wrap">
 
-  <header>
-    <div class="mark">📚</div>
-    <h1>Paper Time</h1>
-    <p class="tagline">논문을 읽고, 표시하고, 그 표시를 생각으로 바꾸기 위한 앱.</p>
-    <p class="tagline-en">A reader for papers, for the marks you make on them, and for what those marks become.</p>
+<!-- ─────────────────────────── the first screen ─────────────────────────── -->
+<div class="screen">
+
+  <header class="hero">
+    <div>
+      <h1 class="wordmark">Paper <span class="t">Time</span></h1>
+      <p class="lede">논문에만 집중할 수 있게.<br>
+        나머지는 <b class="mark">앱이 알아서</b> 한다.</p>
+    </div>
+
+    <div class="actions">
+      <a class="btn btn-primary" id="get" href="https://github.com/Icecoffee2500/paper-time/releases">
+        <span>
+          <span class="label">받기</span><br>
+          <span class="sub">macOS</span>
+        </span>
+      </a>
+      <button class="btn btn-ghost" id="how">설치하는 법</button>
+      <button class="btn btn-ghost" id="older">이전 버전</button>
+    </div>
   </header>
 
-  <div class="download">
-    <a class="button" id="primary" href="#versions">
-      <span id="primary-label">최신 버전 받기</span>
-      <span class="meta" id="primary-meta"></span>
-    </a>
-    <p class="under">macOS 26 이상 · Apple Silicon · 무료</p>
-  </div>
-
-  <h2>무엇인가</h2>
-  <p class="lede">
-    PDF를 읽고, 밑줄과 하이라이트를 긋고, 연필로 쓰고, 그 표시들이 노트가 되고
-    노트가 초고가 되기까지를 한 앱에서 한다. 서지는 정확하게 뽑고 BibTeX으로 내보낸다.
-  </p>
-  <ul class="plain">
-    <li><b>파일은 내 것</b> — 논문은 내가 고른 폴더에 평범한 PDF로, 노트는 Markdown으로 있다. 앱을 지워도 읽던 것은 남는다.</li>
-    <li><b>표시는 PDF 안에</b> — 하이라이트·밑줄·잉크가 PDF 주석으로 남아 Preview에서도, Zotero에서도 보인다.</li>
-    <li><b>세 기기</b> — 맥·아이패드·아이폰이 같은 폴더를 보고, 표시는 몇 초 안에 건너간다. iCloud Drive면 충분하다.</li>
-    <li><b>클라우드 LLM 없음</b> — 온디바이스 모델만 쓴다. 논문이 어디로도 올라가지 않는다.</li>
-  </ul>
-
-  <h2 id="versions">버전</h2>
-  <div id="releases">
-    <p class="lede">불러오는 중…</p>
-  </div>
-  <noscript>
-    <p class="lede">받을 곳: <a id="ns-link" href="#">GitHub Releases</a></p>
-  </noscript>
-
-  <h2>처음 열 때</h2>
-  <div class="note">
-    <p style="margin:0 0 10px">
-      무료 개발자 계정으로 만든 앱이라 <b>Apple의 공증(notarization)을 받지 않았다.</b>
-      그냥 두 번 누르면 macOS가 "확인되지 않은 개발자"라며 막는다.
-    </p>
-    <p style="margin:0">
-      한 번만: <b>Applications 폴더의 Paper Time을 <code>Control</code>-누른 채 클릭 → 열기 → 열기</b>.
-      그 다음부터는 평범하게 열린다.
-    </p>
-  </div>
-
-  <h2>아이패드 · 아이폰</h2>
-  <p class="lede">
-    아이폰과 아이패드 앱은 아직 App Store에 없다. 소스를 받아 Xcode에서 자기 기기에
-    직접 빌드하면 쓸 수 있다 — 무료 계정으로도 된다.
-  </p>
-
-  <footer>
-    <span id="repo-line"></span>
-  </footer>
+  <main class="stage">
+    <div class="viewport">
+      <button class="arrow prev" id="prev" aria-label="이전 기능">‹</button>
+      <div class="track" id="track"></div>
+      <button class="arrow next" id="next" aria-label="다음 기능">›</button>
+    </div>
+    <nav class="rail" id="rail" aria-label="기능 목록"></nav>
+  </main>
 
 </div>
 
-<script>
-(function () {
-  const fmt = (n) => (n / 1048576).toFixed(1) + " MB";
-  const day = (iso) => {
-    if (!iso) return "";
-    const d = new Date(iso);
-    return d.getFullYear() + "년 " + (d.getMonth() + 1) + "월 " + d.getDate() + "일";
-  };
+<!-- ───────────────────────────── why it exists ──────────────────────────── -->
+<section class="why">
+  <p class="big">논문을 읽는 시간의 절반은<br>논문을 읽는 데 쓰이지 않는다.</p>
 
-  fetch("releases.json", { cache: "no-cache" })
-    .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-    .then((data) => {
-      const repo = data.repo || "";
-      const list = document.getElementById("releases");
-      const releases = (data.releases || []).filter((r) => r.asset);
+  <p>파일 이름을 고치고, 어느 폴더에 넣었는지 기억해 내고, 표시해 둔 문장을 다시 찾고,
+    인용 키를 손으로 옮기고, 수식을 복사했다가 깨진 것을 다시 타이핑한다.
+    <b>그 모든 일이 이해와는 아무 상관이 없다.</b></p>
 
-      if (repo) {
-        const url = "https://github.com/" + repo;
-        document.getElementById("repo-line").innerHTML =
-          '소스와 모든 버전: <a href="' + url + '">' + repo + "</a>";
-        const ns = document.getElementById("ns-link");
-        if (ns) ns.href = url + "/releases";
-      }
+  <p>Paper Time은 그 일들을 대신 하기 위해 만들었다. 남은 시간에 하라는 것은 하나뿐이다 —
+    <b class="mark">읽고, 이해하고, 그 이해를 남기는 것.</b> 표시는 문장 위에 남고,
+    문장은 주소를 가진 채 노트로 가고, 노트는 서로를 부르다가 어느 날 초고가 된다.</p>
 
-      if (!releases.length) {
-        list.innerHTML =
-          '<p class="lede">아직 올라온 버전이 없다.</p>';
-        return;
-      }
+  <div class="facts">
+    <div class="fact">
+      <h3>파일이 진실</h3>
+      <p>라이브러리는 폴더 하나다. 논문은 평범한 PDF, 노트는 Markdown.
+        앱을 지워도 읽던 것은 그대로 남는다.</p>
+    </div>
+    <div class="fact">
+      <h3>표시는 PDF 안에</h3>
+      <p>하이라이트·밑줄·연필 자국이 PDF 주석으로 들어간다.
+        Preview에서도, Zotero에서도, 지도교수의 아이패드에서도 보인다.</p>
+    </div>
+    <div class="fact">
+      <h3>기기 셋, 폴더 하나</h3>
+      <p>맥·아이패드·아이폰이 같은 폴더를 본다.
+        iCloud Drive면 충분하고, 계정도 서버도 없다.</p>
+    </div>
+    <div class="fact">
+      <h3>클라우드 LLM 없음</h3>
+      <p>온디바이스 모델만 쓴다. 읽고 있는 논문이 어디로도 올라가지 않는다.</p>
+    </div>
+  </div>
+</section>
 
-      const latest = releases[0];
-      const primary = document.getElementById("primary");
-      primary.href = latest.asset;
-      document.getElementById("primary-label").textContent =
-        "Paper Time " + latest.version + " 받기";
-      document.getElementById("primary-meta").textContent =
-        latest.size ? fmt(latest.size) + " · DMG" : "DMG";
+<footer>
+  <span>Paper Time · 알파. 아직 만드는 중이고, 고장 나면 고친다.</span>
+  <span>소스: <a id="repo-link" href="https://github.com/Icecoffee2500/paper-time">Icecoffee2500/paper-time</a></span>
+</footer>
 
-      list.innerHTML = releases
-        .map(
-          (r) =>
-            '<div class="release">' +
-            '<span class="v">' + r.version + "</span>" +
-            '<span class="d">' + (r.note || day(r.date)) + "</span>" +
-            '<a href="' + r.asset + '">DMG 받기</a>' +
-            (r.size ? '<span class="size">' + fmt(r.size) + "</span>" : "") +
-            "</div>"
-        )
-        .join("");
-    })
-    .catch(() => {
-      document.getElementById("releases").innerHTML =
-        '<p class="lede">버전 목록을 불러오지 못했다.</p>';
-    });
-})();
-</script>
+<!-- ────────────────────────────── how to install ────────────────────────── -->
+<dialog id="how-dialog">
+  <div class="sheet">
+    <button class="sheet-close" aria-label="닫기">✕</button>
+    <h2>설치하는 법</h2>
+    <p class="sub">세 걸음이고, 두 번째와 세 번째는 <b>처음 한 번만</b> 하면 된다.<br>
+      무료 개발자 계정으로 만든 앱이라 Apple의 공증(notarization)을 받지 않았다.</p>
+
+    <div class="step">
+      <div class="no">1</div>
+      <div class="body">
+        <h3>DMG를 열고 Applications로 끌어 놓는다</h3>
+        <p>받은 파일을 두 번 누르면 이 창이 열린다. Paper Time을 Applications 위로 끌면 설치가 끝난다.</p>
+        <img src="img/install-1-dmg.jpg" alt="Paper Time 디스크 이미지 창 — 앱 아이콘과 Applications 폴더" loading="lazy">
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="no">2</div>
+      <div class="body">
+        <h3>처음 열면 macOS가 막는다 — 정상이다</h3>
+        <p>“Apple은 악성 코드가 없음을 확인할 수 없습니다”라고 나온다.
+          Apple에 돈을 내지 않은 앱은 전부 이렇게 나온다. <b>완료</b>를 누르고 3번으로 간다.</p>
+        <img class="shot-sm" src="img/install-2-blocked.jpg" alt="‘Paper Time’을 열지 않음 — macOS의 차단 알림" loading="lazy">
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="no">3</div>
+      <div class="body">
+        <h3>시스템 설정 → 개인정보 보호 및 보안 → <b>그래도 열기</b></h3>
+        <p>맨 아래 <b>보안</b> 항목에 방금 막힌 앱이 적혀 있다. 오른쪽 <b>그래도 열기</b>를 누르고,
+          이어서 나오는 창에서 한 번 더 <b>그래도 열기</b>를 누르면 끝이다.
+          다음부터는 평범하게 두 번 눌러 열린다.</p>
+        <img src="img/install-3-allow.jpg" alt="시스템 설정의 보안 항목 — Mac을 보호하기 위해 Paper Time을 차단했습니다, 그래도 열기 단추" loading="lazy">
+        <img class="shot-sm" style="margin-top:10px" src="img/install-4-confirm.jpg" alt="‘Paper Time’을 열겠습니까? — 그래도 열기" loading="lazy">
+      </div>
+    </div>
+
+    <p class="hint" style="margin-top:16px">
+      macOS 26 이상 · Apple Silicon. 아이패드·아이폰 앱은 아직 App Store에 없다 —
+      소스를 받아 Xcode에서 자기 기기로 직접 빌드하면 무료 계정으로도 쓸 수 있다.
+    </p>
+  </div>
+</dialog>
+
+<!-- ─────────────────────────────── versions ─────────────────────────────── -->
+<dialog id="versions-dialog">
+  <div class="sheet">
+    <button class="sheet-close" aria-label="닫기">✕</button>
+    <h2>버전</h2>
+    <p class="sub">닫힌 버전마다 디스크 이미지 하나. 옛 버전도 계속 받을 수 있다.</p>
+    <div id="versions-list"><p class="hint">불러오는 중…</p></div>
+  </div>
+</dialog>
+
+<script src="demos.js"></script>
 </body>
 </html>
