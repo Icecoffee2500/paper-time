@@ -1,4 +1,12 @@
 {
-  "repo": "",
-  "releases": []
+  "repo": "Icecoffee2500/paper-time",
+  "releases": [
+    {
+      "version": "0.1.0",
+      "date": "2026-09-13T08:05:21Z",
+      "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.1.0/Paper.Time.0.1.0.dmg",
+      "size": 4044607,
+      "note": "첫 알파. 읽기·표시·노트·BibTeX."
+    }
+  ]
 }
