@@ -419,3 +419,30 @@ dialog::backdrop { background: rgba(20, 16, 10, .45); backdrop-filter: blur(3px)
   * { transition-duration: .01ms !important; animation-duration: .01ms !important; }
   html { scroll-behavior: auto; }
 }
+
+/* ─────────────────────────── the real thing ───────────────────────────── */
+
+.shots {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: clamp(48px, 9vh, 96px) 0 0;
+  display: grid;
+  gap: clamp(24px, 4vh, 44px);
+}
+.shots figure { margin: 0; }
+.shots img {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 14px;
+  border: 1px solid var(--rule);
+  box-shadow: var(--shadow-2);
+  background: var(--card);
+}
+.shots figcaption {
+  font-family: var(--korean);
+  font-size: clamp(13.5px, 1.5vw, 15.5px);
+  color: var(--ink-3);
+  margin-top: 12px;
+  text-align: center;
+}
