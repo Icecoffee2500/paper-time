@@ -737,6 +737,9 @@ final class ReaderCoordinator: NSObject {
 
     #if canImport(UIKit)
     private var fittedSpreadWidth: CGFloat = 0
+    /// Whether a spread is in the middle of being carried across the view, so
+    /// a second flick does not stack another pair of pictures on the first.
+    private var isTurningPages = false
     /// The swipes that turn a spread, while the reader is a book.
     private var bookSwipes: [UISwipeGestureRecognizer] = []
 
@@ -896,13 +899,61 @@ final class ReaderCoordinator: NSObject {
 
     @objc private func goToNextPage() {
         guard let view = pdfView, view.canGoToNextPage else { return }
+        #if canImport(UIKit)
+        turningPages(in: view, forward: true) { view.goToNextPage(nil) }
+        #else
         view.goToNextPage(nil)
+        #endif
     }
 
     @objc private func goToPreviousPage() {
         guard let view = pdfView, view.canGoToPreviousPage else { return }
+        #if canImport(UIKit)
+        turningPages(in: view, forward: false) { view.goToPreviousPage(nil) }
+        #else
         view.goToPreviousPage(nil)
+        #endif
     }
+
+    #if canImport(UIKit)
+    /// Slides the old spread out and the new one in, the way the single page
+    /// turns.
+    ///
+    /// A single page gets this from the page view controller, which cannot
+    /// show two pages at once and so is off in a book — and a book without it
+    /// cut from one spread to the next with no motion at all, which reads as
+    /// a glitch rather than a page turning. Two still pictures do it instead:
+    /// the spread as it was and the spread as it will be, carried across the
+    /// view while the real one waits underneath.
+    private func turningPages(in view: PDFView, forward: Bool, _ turn: () -> Void) {
+        guard appliedLayout == .book, !isTurningPages,
+              let before = view.snapshotView(afterScreenUpdates: false)
+        else { turn(); return }
+        isTurningPages = true
+        let width = view.bounds.width
+        before.frame = view.bounds
+        view.addSubview(before)
+
+        turn()
+
+        guard let after = view.snapshotView(afterScreenUpdates: true) else {
+            before.removeFromSuperview()
+            isTurningPages = false
+            return
+        }
+        after.frame = view.bounds.offsetBy(dx: forward ? width : -width, dy: 0)
+        view.addSubview(after)
+
+        UIView.animate(withDuration: 0.28, delay: 0, options: [.curveEaseInOut]) {
+            before.frame = view.bounds.offsetBy(dx: forward ? -width : width, dy: 0)
+            after.frame = view.bounds
+        } completion: { [weak self] _ in
+            before.removeFromSuperview()
+            after.removeFromSuperview()
+            self?.isTurningPages = false
+        }
+    }
+    #endif
 
     @objc private func goBackInHistory() {
         guard let view = pdfView, view.canGoBack else { return }

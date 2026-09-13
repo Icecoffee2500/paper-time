@@ -67,11 +67,36 @@ struct SettingsView: View {
 
     var body: some View {
         #if os(iOS)
-        NavigationStack {
-            settingsForm
-                .navigationTitle("Settings")
-                .navigationBarTitleDisplayMode(.inline)
+        // The pages as rows to step into, not one scroll of everything.
+        //
+        // The Mac keeps the same seven pages in a sidebar beside the page it
+        // is showing. A phone has no room for a sidebar and an iPad in a
+        // sheet has little more, so the seven become seven rows opened one at
+        // a time — the same pages, the same names, the same symbols, in the
+        // shape these devices use for settings everywhere else. The stack is
+        // the presenter's: this used to make one of its own inside the
+        // sheet's, and two stacks cannot agree on whose bar is whose.
+        List {
+            Section {
+                ForEach(Self.pages) { page in
+                    NavigationLink(value: page) {
+                        LabeledContent {
+                            Text(summary(for: page))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        } label: {
+                            Label(page.rawValue, systemImage: page.symbol)
+                        }
+                    }
+                }
+            } footer: {
+                Text("Papers are ordinary files in the folder you chose — nothing lives only inside this app.")
+            }
         }
+        .navigationTitle("Settings")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(for: Pane.self) { settingsPage($0) }
         #else
         // Two columns and a line, rather than a split view. A split view
         // gives the sidebar its own floating surface and a button to collapse
@@ -181,10 +206,107 @@ struct SettingsView: View {
         #endif
     }
 
+#if os(iOS)
+    /// The pages this device has.
+    ///
+    /// A phone has no keys to remap and no keyboard to read them off, so the
+    /// shortcuts page is not offered there. The iPad, which may well have a
+    /// keyboard attached, gets them to read.
+    static var pages: [Pane] {
+        Pane.allCases.filter { page in
+            page != .shortcuts || UIDevice.current.userInterfaceIdiom != .phone
+        }
+    }
+
+    /// What a row says about its page without being opened — the folder's
+    /// name, the layout in use — the way Settings says "Wi-Fi · name".
+    private func summary(for page: Pane) -> String {
+        switch page {
+        case .library:
+            app.library?.location.url.lastPathComponent ?? "Not Connected"
+        case .metadata:
+            app.settings.resolvesMetadataOnImport ? "On Import" : "Off"
+        case .bibtex:
+            BibTeXExportOptions.PreprintStyle(rawValue: app.settings.preferredPreprintStyle)?.displayName ?? ""
+        case .reading:
+            ReaderConfiguration.PageLayout(rawValue: app.settings.readerPageMode)?.label ?? ""
+        case .log:
+            ReleaseNotes.releases.first?.version ?? ""
+        case .about:
+            appVersion
+        case .shortcuts:
+            ""
+        }
+    }
+
+    /// One page of settings, pushed from the list.
+    @ViewBuilder
+    private func settingsPage(_ page: Pane) -> some View {
+        let settings = app.settings
+        Group {
+            switch page {
+            case .library:
+                Form { librarySection }
+                    .confirmationDialog(
+                        "Change Library Folder?",
+                        isPresented: $showsChangeFolderConfirmation,
+                        titleVisibility: .visible
+                    ) {
+                        Button("Change Folder", role: .destructive) { app.forgetLibrary() }
+                        Button("Cancel", role: .cancel) {}
+                    } message: {
+                        Text("This doesn't delete anything. Your papers stay exactly where they are — you'll just choose a folder again, on this device.")
+                    }
+            case .metadata:
+                Form { metadataSection(settings: settings) }
+            case .bibtex:
+                Form { bibTeXSection(settings: settings) }
+            case .reading:
+                Form {
+                    readingSection(settings: settings)
+                    listSection(settings: settings)
+                }
+            case .shortcuts:
+                Form { keysSection }
+            case .log:
+                Form { logSection }
+            case .about:
+                AboutView()
+            }
+        }
+        .navigationTitle(page.rawValue)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// The keys, to read rather than to change.
+    ///
+    /// Remapping belongs where the keyboard is the main instrument; on an
+    /// iPad the keyboard is a guest, and what a guest needs is the list of
+    /// what the keys already do. Changing them is on the Mac, and what is
+    /// changed there travels in the same settings.
+    @ViewBuilder
+    private var keysSection: some View {
+        ForEach(ShortcutAction.Group.allCases) { group in
+            let actions = ShortcutAction.allCases.filter { $0.group == group }
+            if !actions.isEmpty {
+                Section(group.rawValue) {
+                    ForEach(actions) { action in
+                        LabeledContent(action.title) {
+                            Text(app.shortcut(for: action).display)
+                                .font(.body.monospaced())
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+        }
+    }
+#endif
+
+#if os(macOS)
     private var settingsForm: some View {
         let settings = app.settings
         return Form {
-            #if os(macOS)
             switch pane {
             case .library: librarySection
             case .metadata: metadataSection(settings: settings)
@@ -196,15 +318,6 @@ struct SettingsView: View {
             case .log: logSection
             case .about: EmptyView()
             }
-            #else
-            librarySection
-            metadataSection(settings: settings)
-            bibTeXSection(settings: settings)
-            listSection(settings: settings)
-            readingSection(settings: settings)
-            shortcutsSection
-            aboutSection
-            #endif
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
@@ -223,32 +336,66 @@ struct SettingsView: View {
             )
         }
     }
+#endif
 
     // MARK: - Library
+    /// A section's name, where it is not already the name of the page.
+    ///
+    /// The Mac shows these pages side by side with a list and no title over
+    /// them, so each section says what it is. On iOS the navigation bar has
+    /// just said it, and saying it twice, one line apart, is the kind of
+    /// thing that makes a settings screen look unfinished.
+    @ViewBuilder
+    private func pageHeader(_ title: String) -> some View {
+        #if os(macOS)
+        Text(title)
+        #endif
+    }
+
 
     private var librarySection: some View {
         Section {
+            // The folder's name in the row and its path underneath the
+            // section, not the other way round. A row is one line long, and
+            // the path is four: wrapped into a row it left a hole the height
+            // of the card on the phone and the iPad, and it was unreadable
+            // in either place. Down here it can take the width it needs.
             LabeledContent("Folder") {
-                Text(app.library?.location.url.path(percentEncoded: false) ?? "Not Connected")
+                Text(app.library?.location.url.lastPathComponent ?? "Not Connected")
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .truncationMode(.middle)
             }
             if let provider = app.library?.location.provider {
+                // The icon and the name side by side rather than a `Label`:
+                // a Label handed to a form row's value side was given the
+                // whole column and grew a card's worth of empty space under
+                // itself on the phone and the iPad.
                 LabeledContent("Synced Via") {
-                    Label(provider.displayName, systemImage: provider.symbolName)
-                        .accessibilityLabel("Synced via \(provider.displayName)")
+                    HStack(spacing: 6) {
+                        Image(systemName: provider.symbolName)
+                        Text(provider.displayName)
+                    }
+                    .foregroundStyle(.secondary)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Synced via \(provider.displayName)")
                 }
             }
             Button("Change Library Folder…") {
                 app.isChoosingLibraryFolder = true
             }
         } header: {
-            Text("Library")
+            pageHeader("Library")
         } footer: {
-            Text(
-                "To move the library, move the whole folder — including the hidden .papertime folder inside it, which holds the records, notes, ink and reading progress. Copying only the PDFs starts a fresh library and leaves the notes behind."
-            )
+            VStack(alignment: .leading, spacing: 10) {
+                if let path = app.library?.location.url.path(percentEncoded: false) {
+                    Text(path)
+                        .font(.footnote.monospaced())
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Text(
+                    "To move the library, move the whole folder — including the hidden .papertime folder inside it, which holds the records, notes, ink and reading progress. Copying only the PDFs starts a fresh library and leaves the notes behind."
+                )
+            }
         }
     }
 
@@ -257,27 +404,41 @@ struct SettingsView: View {
     private func metadataSection(settings: AppSettings) -> some View {
         Section {
             Toggle("Resolve Metadata on Import", isOn: Bindable(settings).resolvesMetadataOnImport)
-            LabeledContent("On-Device Extraction") {
-                Label {
-                    Text(app.library?.onDeviceModelMessage ?? "Open a library to check availability.")
-                } icon: {
-                    Image(systemName: "info.circle")
-                        .accessibilityLabel("Information")
-                }
+            // Its own row rather than a value beside a label: the message is
+            // a sentence, and a sentence in the value column of a form row is
+            // either squeezed into a corner or given the whole card to fall
+            // down — the same trap the library's provider fell into.
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: "info.circle")
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("Information")
+                Text(app.library?.onDeviceModelMessage ?? "Open a library to check availability.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .font(.footnote)
 
+            // On iOS a field given a prompt loses its title, so the row
+            // read "optional" and nothing else. The name goes beside it, the
+            // way every other row on the page is named.
+            #if os(iOS)
+            LabeledContent("Contact Email") {
+                TextField("optional", text: Bindable(settings).metadataContactEmail)
+                    .multilineTextAlignment(.trailing)
+                    .textInputAutocapitalization(.never)
+                    .keyboardType(.emailAddress)
+                    .autocorrectionDisabled()
+            }
+            #else
             TextField(
                 "Contact Email",
                 text: Bindable(settings).metadataContactEmail,
                 prompt: Text("optional")
             )
-            #if os(iOS)
-            .textInputAutocapitalization(.never)
-            .keyboardType(.emailAddress)
-            #endif
             .autocorrectionDisabled()
+            #endif
         } header: {
-            Text("Metadata")
+            pageHeader("Metadata")
         } footer: {
             Text(
                 """
@@ -293,7 +454,7 @@ struct SettingsView: View {
     // MARK: - BibTeX
 
     private func bibTeXSection(settings: AppSettings) -> some View {
-        Section("BibTeX") {
+        Section {
             Picker("Preprint Style", selection: Bindable(settings).preferredPreprintStyle) {
                 ForEach(BibTeXExportOptions.PreprintStyle.allCases, id: \.rawValue) { style in
                     Text(style.displayName).tag(style.rawValue)
@@ -301,6 +462,8 @@ struct SettingsView: View {
             }
             Toggle("Protect Case in Titles", isOn: Bindable(settings).protectsCase)
             Toggle("Include Unverified Records in Export", isOn: Bindable(settings).includesUnverifiedInExport)
+        } header: {
+            pageHeader("BibTeX")
         }
     }
 
@@ -461,17 +624,26 @@ struct SettingsView: View {
     }
 
     private func readingSection(settings: AppSettings) -> some View {
-        Section("Reading") {
+        // Driven by the reader's own cases rather than a hand-written copy of
+        // them. The copy had drifted: it offered "None" and "Dim" where the
+        // page's own menu says "Paper White" and "Dimmed", and it had never
+        // heard of Glass — so a tint chosen on the page had no name here and
+        // one chosen here was called something else there.
+        Section {
             Picker("Page Layout", selection: Bindable(settings).readerPageMode) {
-                Text("Continuous").tag("continuous")
-                Text("Single Page").tag("singlePage")
-                Text("Book").tag("book")
+                ForEach(ReaderConfiguration.PageLayout.allCases) { layout in
+                    Label(layout.label, systemImage: layout.symbolName).tag(layout.rawValue)
+                }
             }
             Picker("Page Tint", selection: Bindable(settings).readerTint) {
-                Text("None").tag("none")
-                Text("Sepia").tag("sepia")
-                Text("Dim").tag("dim")
+                ForEach(ReaderConfiguration.PageTint.allCases) { tint in
+                    Text(tint.label).tag(tint.rawValue)
+                }
             }
+        } header: {
+            pageHeader("Reading")
+        } footer: {
+            Text("What a paper opens as. The page's own AA menu changes the one you are reading without changing this.")
         }
     }
 
@@ -744,17 +916,6 @@ struct SettingsView: View {
     }
 
     // MARK: - About
-
-    private var aboutSection: some View {
-        Section("About") {
-            LabeledContent("Paper Time", value: appVersion)
-            Button(ReleaseNotes.string("Paper Time 소개 다시 보기…", "What's New in Paper Time…")) { showsReleaseNotes = true }
-            Button(ReleaseNotes.string("모든 기능과 단축키…", "All Features and Keys…")) { showsFeatureLog = true }
-            Text("Papers are stored as ordinary files in the folder you chose — nothing lives only inside this app.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-    }
 
     /// The two pages, as sheets on Settings rather than windows of their own:
     /// this is where someone goes when they are looking for how something

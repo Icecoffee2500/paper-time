@@ -191,6 +191,22 @@ public final class LibraryModel {
         startWatchingFolder()
     }
 
+    /// Asks the cloud for whatever it has not brought yet, then reads the
+    /// folder again.
+    ///
+    /// The folder is watched and polled already, but iCloud does not announce
+    /// what it is carrying and will not carry what nobody asked for: a mark
+    /// made on another device can take several seconds to arrive. Several
+    /// seconds with nothing to press is a wait that reads as a fault, so
+    /// there is something to press.
+    public func pullFromCloud() async {
+        let url = location.url
+        await Task.detached(priority: .userInitiated) {
+            FileOperations.requestPendingDownloads(in: url)
+        }.value
+        await refresh()
+    }
+
     // MARK: - Watching the folder
 
     /// Starts reacting to changes made to the library folder from outside.

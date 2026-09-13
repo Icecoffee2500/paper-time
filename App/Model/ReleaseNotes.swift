@@ -299,6 +299,48 @@ enum ReleaseNotes {
                     devices: [.ipad]
                 ),
                 Entry(
+                    Text2("설정이 아이폰·아이패드의 설정답게", "Settings that look like settings on the phone and the iPad"),
+                    Text2("맥이 옆에 세워 둔 일곱 쪽을, 손으로 쓰는 화면에서는 한 두루마리에 다 이어 붙여 놓았었다. 이제 같은 일곱 쪽이 일곱 줄이 되어 하나씩 열린다 — 이름도 기호도 맥과 같고, 줄 끝에는 지금 값이 적힌다(라이브러리·폴더 이름, 읽기·현재 배치). 없던 것도 생겼다: 기록(Log)은 아이폰·아이패드에 아예 없었고, 소개(About)는 판 번호 한 줄이었는데 이제 맥과 같은 실물 크기 소개다. 단축키는 키보드를 붙일 수 있는 아이패드에만, 읽기 전용으로. 폴더 칸에 통째로 들어가 카드 높이만큼 구멍을 내던 긴 경로는 이름만 남기고 밑으로 내렸고, 이름이 안 보이던 연락처 칸에 이름을 붙였으며, 쪽 배치·색조는 이제 리더의 것을 그대로 읽어 온다 — 목록에 없던 Glass가 여기에도 생겼고 'None'이 'Paper White'가 되었다.",
+                          "The Mac stands its seven pages beside the page it is showing; on a touch screen they had all been sewn into one scroll. The same seven are now seven rows opened one at a time — the same names and symbols as the Mac, each with its value at the end (Library · the folder's name, Reading · the layout in use). Two were missing outright: the Log was not on the phone or the iPad at all, and About was a version number, where now it is the Mac's full-size introduction. The keys are on the iPad, which may have a keyboard, to read rather than to change. The long path that went into the Folder row and left a hole the height of the card now sits under the section with the folder's name in the row; the contact field, which showed only its placeholder, has its name back; and the layout and tint pickers read the reader's own cases — so Glass is offered here too, and \"None\" is called Paper White, as the page calls it."),
+                    devices: [.ipad, .iphone]
+                ),
+                Entry(
+                    Text2("어디서나 동기화 단추", "A sync button, on every device"),
+                    Text2("표시와 잉크는 작은 파일로 오가고 iCloud가 가져올 때 온다 — 대개 몇 초, 가끔 여덟 초. 기다리는 동안 누를 것이 없었다. 이제 목록 바에 새로고침이 있고(⌘R), 책을 펴 목록이 물러난 아이패드에서는 AA 메뉴에도 있다. 누르면 iCloud에 아직 안 가져온 것을 청하고, 폴더를 다시 읽고, 열어 둔 논문에게 제 파일을 다시 보라고 이른다. 맥 메뉴의 '폴더에서 새로고침'도 같은 일을 하게 되어 ⌘R은 이제 하나다.",
+                          "Marks and ink travel as small files and arrive when iCloud brings them — usually seconds, sometimes eight. There was nothing to press while waiting. There is now: a refresh on the list's bar (⌘R), and in the AA menu on the iPad when a book has sent the list away. It asks iCloud for what it has not brought, reads the folder again, and tells the open paper to look at its own files. The Mac's \"Refresh from Folder\" does the same errand now, so ⌘R means one thing."),
+                    devices: [.mac, .ipad, .iphone]
+                ),
+                Entry(
+                    Text2("빈 선반이 검색 실패라고 말함", "An empty shelf saying the search had failed"),
+                    Text2("아직 아무것도 별을 안 단 즐겨찾기 앞에서 '맞춤법을 확인하거나 다시 검색하세요'가 떴다. 선반마다 제 이유를 말한다 — 읽는 중으로 표시한 논문이 여기 모인다, 별을 달면 여기 있다.",
+                          "\"Check the spelling or try a new search\" stood in front of Favorites, which nothing had been starred into yet. Each shelf now says why it is empty — papers you set to Reading wait here; star one and it will be here."),
+                    devices: [.mac, .ipad, .iphone]
+                ),
+                Entry(
+                    Text2("돋보기가 둘, 생김새는 하나", "Two magnifiers, one shape"),
+                    Text2("리더 바의 돋보기는 이 논문을 찾고, 목록 바의 돋보기는 서재 전체를 뒤지는데 둘이 똑같이 생겨서 어느 쪽을 누르는지 알 수 없었다. 서재 쪽은 이제 목록과 돋보기가 함께 있는 기호다.",
+                          "The magnifier on the reader's bar finds a word in this paper; the one on the list's bar looks through the whole library. They were the same shape, so pressing one was a coin toss. The library's is now a list with a magnifier over it."),
+                    devices: [.mac, .ipad, .iphone]
+                ),
+                Entry(
+                    Text2("책장이 소리 없이 바뀜", "A spread that changed without turning"),
+                    Text2("아이패드의 책 모드는 쓸면 넘어가되 한 칸이 그냥 다른 칸으로 바뀌었다 — 넘어간 것이 아니라 잘못된 것처럼 보인다. 한 쪽 모드가 쪽 넘김 컨트롤러에서 받는 그 움직임을, 책은 두 장의 그림으로 만든다: 있던 펼침면이 나가고 올 펼침면이 들어온다.",
+                          "The iPad's book turned on a swipe but cut from one spread to the next with no motion, which reads as a glitch rather than a page turning. The movement the single page gets from the page-turn controller is made for the book out of two still pictures: the spread that was, carried out; the spread that will be, carried in."),
+                    devices: [.ipad, .iphone]
+                ),
+                Entry(
+                    Text2("맥의 목차도 쪽 아래로", "The Mac's contents along the foot as well"),
+                    Text2("목차가 기둥으로 서는 곳은 펼침면의 가운데 홈뿐이다. 이어 읽기와 한 쪽 모드에서는 쪽이 열을 가득 채우니, 그 한가운데 선 기둥은 찾아 주려던 글을 가린다. 이제 거기서는 아이패드처럼 쪽 아래를 가로지른다.",
+                          "The only place a column of headings can stand is the gutter of a spread. In continuous and single-page the page fills the column, and a column down the middle of it covers the words it is meant to help you find — so there it lies along the foot, as it does on the iPad."),
+                    devices: [.mac]
+                ),
+                Entry(
+                    Text2("슬립박스에서 나올 수 없음", "No way out of the slip-box"),
+                    Text2("아이패드에서 노트로 들어가면 서가를 여는 단추가 논문 목록과 함께 사라져, 다른 선반으로 갈 길이 없었다. 그 바는 목록의 것이 아니라 열의 것이다.",
+                          "Walking into the notes on the iPad took the button that opens the shelves with it, and there was no way back to another shelf. That bar belongs to the column, not to the papers."),
+                    devices: [.ipad, .iphone]
+                ),
+                Entry(
                     Text2("다른 논문을 열면 표시가 안 보임", "Marks invisible after opening a second paper"),
                     Text2("쪽 위의 겹(잉크 캔버스와 둥근 표시를 그리는 층)을 쪽 번호로만 기억해, 다음 논문의 1쪽이 앞 논문 1쪽의 겹을 물려받았다. 그래서 앞 논문의 잉크가 다음 논문 위에 그려지고, 하이라이트는 PDFKit에게 숨긴 뒤 아무도 그리지 않아 사라졌다 — 표시 목록에는 남은 채로. 이제 논문 하나에 겹 한 벌이고, 그릴 것이 없는 쪽에서는 숨기지 않는다.",
                           "The layer over a page — the ink canvas and the one that draws the rounded marks — was remembered by page number alone, so page 1 of the next paper inherited page 1 of the last. The previous paper's ink was drawn over the new one, and a highlight was hidden from PDFKit with nothing left to draw it: gone from the page, still in the list of marks. One paper now has one set of layers, and a page with nothing to draw its marks keeps PDFKit's."),

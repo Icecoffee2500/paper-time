@@ -155,7 +155,9 @@ struct LibraryWindow: View {
         return AnyView(
             NavigationSplitView(columnVisibility: $app.columnVisibility, preferredCompactColumn: $app.compactColumn) {
                 listColumn
-                    .navigationSplitViewColumnWidth(min: 300, ideal: 340, max: 420)
+                    // Wide enough for the row of buttons above it: at 340 the sixth
+                    // pushed the shelves button off the leading edge.
+                    .navigationSplitViewColumnWidth(min: 340, ideal: 380, max: 460)
             } detail: {
                 // The same three details the Mac has: the note, the graph,
                 // the paper.
@@ -458,6 +460,9 @@ struct LibraryWindow: View {
         .onReceive(NotificationCenter.default.publisher(for: .paperTimeExportBibTeX)) { _ in
             showsExport = true
         }
+        .onReceive(NotificationCenter.default.publisher(for: .paperTimeSyncNow)) { _ in
+            syncNow()
+        }
         .onReceive(NotificationCenter.default.publisher(for: .paperTimeCopyCitationKey)) { _ in
             copySelectedCitationKey()
         }
@@ -493,8 +498,31 @@ struct LibraryWindow: View {
         model.selectedPaperID = papers[next].id
     }
 
-    @ViewBuilder
+    /// The list column, whatever the shelf is showing.
+    ///
+    /// The bar belongs to the column, not to the papers: hung on the paper
+    /// list alone, walking into the slip-box took the button that opens the
+    /// shelves with it, and there was no way back out of the notes.
     private var listColumn: some View {
+        shelfColumn
+        #if !os(macOS)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(id: "library") { toolbarContent }
+            // The importer sits on the column whose button asks for it: hung
+            // on the split view's root it never came up on the iPad.
+            .fileImporter(
+                isPresented: $isImportingPDFs,
+                allowedContentTypes: [.pdf],
+                allowsMultipleSelection: true
+            ) { result in
+                guard case let .success(urls) = result else { return }
+                Task { await model.importDocuments(at: urls) }
+            }
+        #endif
+    }
+
+    @ViewBuilder
+    private var shelfColumn: some View {
         switch model.scope {
         case .notes:
             // Following a passage out of a note puts the paper where the list
@@ -527,20 +555,6 @@ struct LibraryWindow: View {
             .padding(.bottom, 6)
             PaperListView(model: model)
         }
-        #if !os(macOS)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar(id: "library") { toolbarContent }
-            // The importer sits on the column whose button asks for it: hung
-            // on the split view's root it never came up on the iPad.
-            .fileImporter(
-                isPresented: $isImportingPDFs,
-                allowedContentTypes: [.pdf],
-                allowsMultipleSelection: true
-            ) { result in
-                guard case let .success(urls) = result else { return }
-                Task { await model.importDocuments(at: urls) }
-            }
-        #endif
     }
 
     // MARK: - Toolbar
@@ -583,12 +597,31 @@ struct LibraryWindow: View {
                 .help("Add PDFs to the library (Command-O)")
                 .toolbarHover()
 
+                // Not a plain magnifier: the reader's bar has one of those
+                // for finding a word in the paper, and two magnifiers in one
+                // window are a coin toss. This one looks through everything
+                // and offers before it is asked, which is what the sparkle
+                // is for.
                 Button {
                     app.showsSearchPalette = true
                 } label: {
-                    Label("Search", systemImage: "magnifyingglass").toolbarIcon()
+                    Label("Search Everything", systemImage: "rectangle.and.text.magnifyingglass").toolbarIcon()
                 }
-                .help("Search everything (Command-K)")
+                .help("Search papers, notes, maps and drafts (Command-K)")
+                .toolbarHover()
+
+                // Marks and ink travel in small files that iCloud brings when
+                // it is ready — usually seconds. This asks for them now.
+                Button(action: syncNow) {
+                    Label("Sync Now", systemImage: "arrow.clockwise").toolbarIcon()
+                }
+                .help("Fetch what the other devices have written (Command-R)")
+                // On the Mac the same key is on the Library menu, and two
+                // owners of one key is one too many.
+                #if os(iOS)
+                .keyboardShortcut("r", modifiers: .command)
+                #endif
+                .disabled(model.isScanning)
                 .toolbarHover()
 
                 sortMenu
@@ -750,12 +783,21 @@ struct LibraryWindow: View {
         case .addPDFs: isImportingPDFs = true
         case .exportBibTeX: showsExport = true
         case .resolveMetadata: Task { await model.resolveAllPending() }
-        case .refresh: Task { await model.refresh() }
+        case .refresh: syncNow()
         case .importLibrary: showsMigration = true
         case .settings:
             #if os(macOS)
             NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
             #endif
+        }
+    }
+
+    /// Asks iCloud for what it has not brought and re-reads the folder, and
+    /// tells the open paper to look at its own files again.
+    private func syncNow() {
+        Task {
+            await model.pullFromCloud()
+            await link.session?.reloadFromDisk()
         }
     }
 
@@ -854,26 +896,57 @@ struct PaperDetailColumn: View {
     @ViewBuilder
     private var contents: some View {
         if app.showsFloatingList, model.selectedPaper != nil {
-            #if os(macOS)
-            ContentsPopup(link: link) { app.toggleFloatingList() }
-                .transition(.scale(scale: 0.96).combined(with: .opacity))
-            #else
-            ZStack(alignment: .bottom) {
-                // Not a dimming: the paper stays readable while the list is
-                // up, because the point of the list is to find your way about
-                // the paper. It is here to catch the touch that dismisses.
-                Color.clear
-                    .contentShape(.rect)
-                    .onTapGesture { app.toggleFloatingList() }
-                ContentsPopup(link: link, placement: .footer) { app.toggleFloatingList() }
-                    .padding(.horizontal, 12)
-                    // Clear of the bar that counts the pages: the list floats
-                    // over the paper, not over the reader's own furniture.
-                    .padding(.bottom, ReaderScreen.statusBarClearance + 12)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            if contentsPlacement == .gutter {
+                ContentsPopup(link: link) { app.toggleFloatingList() }
+                    .transition(.scale(scale: 0.96).combined(with: .opacity))
+            } else {
+                ZStack(alignment: .bottom) {
+                    #if !os(macOS)
+                    // Not a dimming: the paper stays readable while the list
+                    // is up, because the point of the list is to find your
+                    // way about the paper. It is here to catch the touch that
+                    // dismisses. The Mac has no such layer — a click there
+                    // goes to the page and puts the list away on its way.
+                    Color.clear
+                        .contentShape(.rect)
+                        .onTapGesture { app.toggleFloatingList() }
+                    #endif
+                    ContentsPopup(link: link, placement: .footer) { app.toggleFloatingList() }
+                        .padding(.horizontal, 12)
+                        // Clear of the bar that counts the pages: the list
+                        // floats over the paper, not over the reader's own
+                        // furniture.
+                        .padding(.bottom, ReaderScreen.statusBarClearance + 12)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
-            #endif
         }
+    }
+
+    /// Asks iCloud for what it has not brought yet, and tells the open paper
+    /// to look at its own files again.
+    private func syncNow() {
+        Task {
+            await model.pullFromCloud()
+            await link.session?.reloadFromDisk()
+        }
+    }
+
+    /// Where the contents goes.
+    ///
+    /// Only a spread has a gutter to stand in. A scrolling page and a single
+    /// page fill the column, so a column of headings down the middle of them
+    /// covers the words it is meant to help you find — there it lies along the
+    /// foot instead, where it covers the least and the headings get the width.
+    private var contentsPlacement: ContentsPopup.Placement {
+        #if os(macOS)
+        configuration.layout == .book ? .gutter : .footer
+        #else
+        // A touch screen keeps it along the foot even in a book: the spread
+        // fills the screen edge to edge there, and the gutter it leaves is a
+        // seam rather than a margin.
+        .footer
+        #endif
     }
 
     /// The page and the inspector, side by side.
@@ -1031,8 +1104,14 @@ struct PaperDetailColumn: View {
                                 Button {
                                     app.showsSearchPalette = true
                                 } label: {
-                                    Label("Search the Library", systemImage: "magnifyingglass.circle")
+                                    Label("Search Everything", systemImage: "rectangle.and.text.magnifyingglass")
                                 }
+                                // Also here: with the list stepped aside for
+                                // a book, the bar it lives on is gone.
+                                Button(action: syncNow) {
+                                    Label("Sync Now", systemImage: "arrow.clockwise")
+                                }
+                                .disabled(model.isScanning)
                             } label: {
                                 Label("View Options", systemImage: "textformat.size")
                             }

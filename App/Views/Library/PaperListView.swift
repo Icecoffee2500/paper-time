@@ -23,6 +23,32 @@ struct PaperListView: View {
             }
     }
 
+    /// What an empty shelf says. Each one is empty for its own reason, and
+    /// the reason is what tells you whether anything is wrong — nothing is,
+    /// in every case here.
+    private var emptyShelf: (title: String, symbol: String, note: String) {
+        switch model.scope {
+        case .unread:
+            ("Nothing Unread", "circle", "Every paper in the library has been opened.")
+        case .reading:
+            ("Nothing Being Read", "circle.lefthalf.filled", "Set a paper's status to Reading and it will wait for you here.")
+        case .read:
+            ("Nothing Read Yet", "checkmark.circle", "Papers you mark as Read gather here.")
+        case .favorites:
+            ("No Favorites", "star", "Star a paper and it will be here whenever you want it.")
+        case .needsReview:
+            ("Nothing to Review", "exclamationmark.triangle", "No paper's details are in doubt.")
+        case .collection:
+            ("This Collection Is Empty", "folder", "Drag papers onto it in the sidebar to put them in.")
+        case .tag:
+            ("Nothing With This Tag", "tag", "Tag a paper and it will appear here.")
+        case .author:
+            ("Nothing by This Author", "person", "No paper in the library carries this name.")
+        default:
+            ("Nothing Here", "tray", "This shelf is empty.")
+        }
+    }
+
     @ViewBuilder
     private var content: some View {
         if model.papers.isEmpty {
@@ -49,7 +75,18 @@ struct PaperListView: View {
                 }
             }
         } else if model.visiblePapers.isEmpty {
-            ContentUnavailableView.search(text: model.searchText)
+            // An empty shelf is not a failed search. "Check the spelling"
+            // in front of Favorites, which nothing has been starred into
+            // yet, reads as though the app has lost something.
+            if !model.searchText.isEmpty || model.scope == .searchResults {
+                ContentUnavailableView.search(text: model.searchText)
+            } else {
+                ContentUnavailableView {
+                    Label(emptyShelf.title, systemImage: emptyShelf.symbol)
+                } description: {
+                    Text(emptyShelf.note)
+                }
+            }
         } else {
             List(selection: $model.selection) {
                 if !model.looseDocuments.isEmpty {
