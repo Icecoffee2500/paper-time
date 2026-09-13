@@ -173,7 +173,7 @@ struct LibraryWindow: View {
                     )
                 }
             }
-            .overlay { scopePanel }
+            .background { scopePanel }
             .sheet(isPresented: $showsSettings) {
                 NavigationStack {
                     SettingsView()
@@ -191,52 +191,35 @@ struct LibraryWindow: View {
 
     #if os(iOS)
     /// The library's shelves — scopes, collections, tags, authors — as a
-    /// panel in the middle of the window, over a dimmed ground, the way
-    /// Spotlight comes: pick a shelf and it goes.
-    @ViewBuilder
+    /// panel in the middle of the window, the way Spotlight comes: a form
+    /// sheet, which the system centres, dims the ground behind and lets a
+    /// tap outside dismiss. Pick a shelf and it goes.
     private var scopePanel: some View {
         @Bindable var app = app
-        if app.showsScopePanel {
-            ZStack {
-                Color.black.opacity(0.18)
-                    .ignoresSafeArea()
-                    .onTapGesture { withAnimation(AppModel.paneMotion) { app.showsScopePanel = false } }
-                VStack(spacing: 0) {
-                    HStack {
-                        Text("Library")
-                            .font(.headline)
-                        Spacer()
-                        Button {
-                            app.showsScopePanel = false
-                            showsSettings = true
-                        } label: {
-                            Image(systemName: "gearshape")
-                        }
-                        .help("Settings")
-                        Button {
-                            withAnimation(AppModel.paneMotion) { app.showsScopePanel = false }
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
-                        }
-                        .help("Close")
-                    }
-                    .buttonStyle(.borderless)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 12)
-                    Divider()
+        return Color.clear
+            .frame(width: 0, height: 0)
+            .sheet(isPresented: $app.showsScopePanel) {
+                NavigationStack {
                     LibrarySidebar(model: model)
-                        .scrollContentBackground(.hidden)
-                        .frame(maxHeight: .infinity)
+                        .navigationTitle("Library")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .topBarLeading) {
+                                Button {
+                                    app.showsScopePanel = false
+                                    showsSettings = true
+                                } label: {
+                                    Label("Settings", systemImage: "gearshape")
+                                }
+                            }
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("Done") { app.showsScopePanel = false }
+                            }
+                        }
                 }
-                .frame(width: 440, height: 640)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(.primary.opacity(0.08), lineWidth: 0.5))
-                .shadow(color: .black.opacity(0.22), radius: 30, y: 12)
-                .padding(24)
+                .presentationSizing(.form)
+                .presentationBackground(.regularMaterial)
             }
-            .transition(.opacity.combined(with: .scale(scale: 0.96)))
-        }
     }
     #endif
 
@@ -576,20 +559,20 @@ struct LibraryWindow: View {
     private var toolbarContent: some CustomizableToolbarContent {
         // One group rather than one item each: separate toolbar items are what
         // drew the little vertical rules between the buttons.
-        #if os(iOS)
-        ToolbarItem(id: "shelves", placement: .topBarLeading) {
-            Button {
-                withAnimation(AppModel.paneMotion) { app.showsScopePanel.toggle() }
-            } label: {
-                Label("Library", systemImage: "square.grid.2x2").toolbarIcon()
-            }
-            .help("The library's shelves: scopes, collections, tags")
-            .keyboardShortcut("1", modifiers: [.command, .control])
-        }
-        .sharedBackgroundVisibility(.hidden)
-        #endif
         ToolbarItem(id: "actions", placement: barPlacement) {
             HStack(spacing: 4) {
+                #if os(iOS)
+                // The shelves, first: the leading edge belongs to the split
+                // view's own toggle, which sat over anything put beside it.
+                Button {
+                    withAnimation(AppModel.paneMotion) { app.showsScopePanel.toggle() }
+                } label: {
+                    Label("Library", systemImage: "square.grid.2x2").toolbarIcon()
+                }
+                .help("The library's shelves: scopes, collections, tags")
+                .keyboardShortcut("1", modifiers: [.command, .control])
+                .toolbarHover()
+                #endif
                 Button {
                     isImportingPDFs = true
                 } label: {
