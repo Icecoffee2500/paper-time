@@ -230,7 +230,11 @@ private struct ToolOptions: View {
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
-        .frame(minWidth: 300, minHeight: tool == .highlighter ? 190 : 140)
+        // Tall enough for the last row of the form: at 190 the "Draw with
+        // Finger" switch under the highlighter's explanation was cut in half
+        // by the popover's edge, and a switch you cannot reach is a setting
+        // that does not exist.
+        .frame(minWidth: 320, minHeight: tool == .pen ? 150 : 300)
     }
 }
 

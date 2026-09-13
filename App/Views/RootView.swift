@@ -512,7 +512,10 @@ struct LibraryWindow: View {
     }
 
     private var paperListColumn: some View {
-        #if os(macOS)
+        // The shelf's name stands at the top of the column on every device.
+        // In the iPad's navigation bar it was squeezed between our own
+        // buttons and the system's toggle until one clipped letter of it was
+        // left standing in the corner.
         VStack(spacing: 0) {
             HStack {
                 Text(scopeTitle)
@@ -524,9 +527,8 @@ struct LibraryWindow: View {
             .padding(.bottom, 6)
             PaperListView(model: model)
         }
-        #else
-        PaperListView(model: model)
-            .navigationTitle(scopeTitle)
+        #if !os(macOS)
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar(id: "library") { toolbarContent }
             // The importer sits on the column whose button asks for it: hung
             // on the split view's root it never came up on the iPad.
@@ -817,12 +819,7 @@ struct PaperDetailColumn: View {
         // The paper's contents, floating over the page. Centred on the
         // column, which in a book spread puts it in the gutter between the
         // two pages where there are no words to cover.
-        .overlay {
-            if app.showsFloatingList, model.selectedPaper != nil {
-                ContentsPopup(link: link) { app.toggleFloatingList() }
-                    .transition(.scale(scale: 0.96).combined(with: .opacity))
-            }
-        }
+        .overlay { contents }
         .animation(.snappy(duration: 0.22), value: app.showsFloatingList)
         // A passage of another paper, followed from a note here: that paper
         // opens, and its reader takes the request from there.
@@ -843,6 +840,39 @@ struct PaperDetailColumn: View {
             app.showsInspector = true
             inspectorTab = .note
             link.pendingNoteAnchor = anchor
+        }
+    }
+
+    /// The paper's table of contents, over the page.
+    ///
+    /// On the Mac it floats in the middle of the column, which in a spread is
+    /// the gutter between the two pages, and a click anywhere else puts it
+    /// away. A touch screen gets the same list along the foot of the paper,
+    /// where a thumb is, and the whole page above it is the way out — there
+    /// is no Escape key to fall back on, so the way out has to be the obvious
+    /// one: touch the paper.
+    @ViewBuilder
+    private var contents: some View {
+        if app.showsFloatingList, model.selectedPaper != nil {
+            #if os(macOS)
+            ContentsPopup(link: link) { app.toggleFloatingList() }
+                .transition(.scale(scale: 0.96).combined(with: .opacity))
+            #else
+            ZStack(alignment: .bottom) {
+                // Not a dimming: the paper stays readable while the list is
+                // up, because the point of the list is to find your way about
+                // the paper. It is here to catch the touch that dismisses.
+                Color.clear
+                    .contentShape(.rect)
+                    .onTapGesture { app.toggleFloatingList() }
+                ContentsPopup(link: link, placement: .footer) { app.toggleFloatingList() }
+                    .padding(.horizontal, 12)
+                    // Clear of the bar that counts the pages: the list floats
+                    // over the paper, not over the reader's own furniture.
+                    .padding(.bottom, ReaderScreen.statusBarClearance + 12)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+            #endif
         }
     }
 
@@ -993,21 +1023,34 @@ struct PaperDetailColumn: View {
                                 } label: {
                                     Label("Table of Contents", systemImage: "list.bullet.indent")
                                 }
+                                Divider()
+                                // The whole library, from inside a paper —
+                                // the other kind of looking, and the rarer
+                                // one, so it is a line in the menu and the
+                                // bar keeps the one about this paper.
+                                Button {
+                                    app.showsSearchPalette = true
+                                } label: {
+                                    Label("Search the Library", systemImage: "magnifyingglass.circle")
+                                }
                             } label: {
                                 Label("View Options", systemImage: "textformat.size")
                             }
                         }
                         .sharedBackgroundVisibility(.hidden)
-                    if horizontalSizeClass == .compact || app.columnVisibility == .detailOnly {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button {
-                                app.showsSearchPalette = true
-                            } label: {
-                                Label("Search", systemImage: "magnifyingglass")
-                            }
+                    // Finding a word in the paper being read. The magnifier
+                    // in the reader's own bar means this paper; the one in
+                    // the list's bar means the library. Both were the
+                    // library, and there was no way to search a paper at all.
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            link.isFinding = true
+                        } label: {
+                            Label("Find in Paper", systemImage: "magnifyingglass")
                         }
-                        .sharedBackgroundVisibility(.hidden)
+                        .keyboardShortcut("f", modifiers: .command)
                     }
+                    .sharedBackgroundVisibility(.hidden)
                     // The marks and the notes, floating in from the right.
                     ToolbarItem(placement: .topBarTrailing) {
                         Button {

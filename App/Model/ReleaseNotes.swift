@@ -299,6 +299,42 @@ enum ReleaseNotes {
                     devices: [.ipad]
                 ),
                 Entry(
+                    Text2("다른 논문을 열면 표시가 안 보임", "Marks invisible after opening a second paper"),
+                    Text2("쪽 위의 겹(잉크 캔버스와 둥근 표시를 그리는 층)을 쪽 번호로만 기억해, 다음 논문의 1쪽이 앞 논문 1쪽의 겹을 물려받았다. 그래서 앞 논문의 잉크가 다음 논문 위에 그려지고, 하이라이트는 PDFKit에게 숨긴 뒤 아무도 그리지 않아 사라졌다 — 표시 목록에는 남은 채로. 이제 논문 하나에 겹 한 벌이고, 그릴 것이 없는 쪽에서는 숨기지 않는다.",
+                          "The layer over a page — the ink canvas and the one that draws the rounded marks — was remembered by page number alone, so page 1 of the next paper inherited page 1 of the last. The previous paper's ink was drawn over the new one, and a highlight was hidden from PDFKit with nothing left to draw it: gone from the page, still in the list of marks. One paper now has one set of layers, and a page with nothing to draw its marks keeps PDFKit's."),
+                    devices: [.ipad, .iphone]
+                ),
+                Entry(
+                    Text2("책이 넘어가지 않음", "A book that would not turn"),
+                    Text2("아이패드의 책 모드에는 쪽을 넘길 것이 없었다. 쪽 넘김 컨트롤러는 한 쪽씩만 보여 쓸 수 없고, 펼침면은 화면에 꽉 맞춰 스크롤할 여지도 없어 — 쓸어도 두 쪽이 몇 점 밀렸다 말았다. 이제 책에서는 쓸면 넘어간다. 확대한 펼침면은 천천히 끌면 그대로 움직인다.",
+                          "Book mode on the iPad had nothing that turned a page: the page-turn controller shows one page and a spread is two, and the spread is fitted to the screen, leaving no room to scroll — a swipe moved the pages a few points and let go. A swipe now turns the book, while a deliberate drag still moves a spread that has been zoomed into."),
+                    devices: [.ipad, .iphone]
+                ),
+                Entry(
+                    Text2("목차는 쪽 아래에 길게", "The contents along the foot of the page"),
+                    Text2("맥에서 목차는 펼침면의 가운데 홈에 서는 좁은 기둥이다. 손으로 읽는 화면에는 내줄 홈이 없어, 쪽 아래를 가로지르는 낮고 넓은 판으로 뜬다 — 제목이 접히지 않고 한 줄에 들어간다. 목록이 담긴 만큼만 높고, 쪽 세는 줄을 덮지 않는다. 쪽 아무 데나 누르면 닫힌다.",
+                          "On the Mac the contents stands in the gutter of a spread, a narrow column. A touch screen has no gutter to give, so it comes as a low, wide panel across the foot of the page — a heading fits on one line. It is as tall as its headings need and no taller, and it keeps clear of the bar that counts the pages. A touch anywhere on the paper puts it away."),
+                    devices: [.ipad, .iphone]
+                ),
+                Entry(
+                    Text2("논문 안에서 찾기", "Finding a word in the paper"),
+                    Text2("아이패드의 리더 바에는 서재 전체를 뒤지는 돋보기만 있고, 읽고 있는 논문에서 한 낱말을 찾을 방법이 없었다. 이제 리더 바의 돋보기는 이 논문이고(⌘F), 서재 전체는 목록 쪽의 돋보기와 AA 메뉴의 한 줄이다.",
+                          "The iPad's reader bar carried a magnifier that searched the whole library and no way to find a word in the paper being read. The magnifier on the reader's bar now means this paper (⌘F); the library is the magnifier on the list and a line in the AA menu."),
+                    devices: [.ipad, .iphone]
+                ),
+                Entry(
+                    Text2("서가의 불이 옮겨 앉는다", "The lit shelf moves"),
+                    Text2("어느 서가에 있는지를 칠하는 바탕이 한 줄에서 꺼지고 다른 줄에서 켜졌다. 이제 그 유리 한 장이 고른 줄로 미끄러져 간다 — 음악의 아래 단추들처럼. 어디에서 왔는지가 보인다.",
+                          "The wash that says which shelf you are on went out on one row and came on in another. That one piece of glass now slides to the row you chose, the way the buttons along the foot of Music do — so you can see where you came from."),
+                    devices: [.mac, .ipad, .iphone]
+                ),
+                Entry(
+                    Text2("도구 설정이 잘림", "Tool options cut off"),
+                    Text2("형광펜과 지우개의 설정 팝오버가 짧아 마지막 줄(손가락 그리기)이 모서리에 잘렸다 — 닿을 수 없는 설정은 없는 설정이다.",
+                          "The highlighter's and eraser's options popover was too short and its last row — draw with finger — was cut in half by the edge. A switch you cannot reach is a setting that does not exist."),
+                    devices: [.ipad, .iphone]
+                ),
+                Entry(
                     Text2("아이패드의 서가는 패널로, 인스펙터는 떠서", "The iPad's shelves as a panel, its inspector afloat"),
                     Text2("아이패드 화면은 열 셋을 둘 만큼 넓지 않다. 서가(범위·컬렉션·태그·저자)는 목록 열의 격자 단추로 Spotlight처럼 창 가운데에 떠서 나오고, 고르면 사라진다. 인스펙터는 오른쪽에서 쪽 위로 떠 들어온다 — 시트가 읽던 쪽을 가리던 대신. 목록은 시스템 토글로 숨기고 보인다. 툴바가 겹치던 것도 이렇게 풀렸다.",
                           "The iPad's screen has no room for three columns. The shelves — scopes, collections, tags, authors — come as a panel in the middle of the window, Spotlight-fashion, from the grid button on the list; pick one and it goes. The inspector floats in over the page from the right instead of a sheet that hid what you were reading. The list hides and shows with the system's own toggle. The overlapping toolbar came apart the same way."),

@@ -16,10 +16,49 @@ struct LibrarySidebar: View {
     @State private var authorsAreShown = true
     @Bindable var model: LibraryModel
 
+    /// Where the shelf you are on sits, in the list's own space — one shape
+    /// for the whole list, so it can travel between rows.
+    @State private var litShelf: CGRect?
+
     @State private var isPresentingNewCollection = false
     @State private var newCollectionName = ""
 
     var body: some View {
+        list
+            // The rows clip their own backgrounds, so a shape that travels
+            // between them cannot live in one. It is drawn once, behind the
+            // whole list, at whichever row is lit.
+            .scrollContentBackground(.hidden)
+            .background(alignment: .topLeading) { litGlass }
+            .onPreferenceChange(LitShelf.self) { litShelf = $0 }
+    }
+
+    /// The shelf you are on, lit: one piece of glass carrying the row's own
+    /// colour. It slides from row to row rather than being repainted in each,
+    /// which is the move the buttons along the foot of Music make — and it
+    /// says the thing a wash cannot: you came from there, you are here now.
+    private var litGlass: some View {
+        // Rows and list both measured against the window, so the difference
+        // is where the glass goes; a named space put it half a panel away.
+        GeometryReader { proxy in
+            if let litShelf {
+                let origin = proxy.frame(in: .global).origin
+                let shape = RoundedRectangle(cornerRadius: Corner.row, style: .continuous)
+                shape
+                    .fill(ScopeRow.ground(for: model.scope))
+                    .liquidGlass(.control, in: shape)
+                    // The list's width, not the row's: every row is the same
+                    // width, and a width taken from whichever row answered
+                    // first was animated as it travelled, so the glass swelled
+                    // out over the page on its way down.
+                    .frame(width: max(proxy.size.width - 12, 0), height: litShelf.height)
+                    .offset(x: 6, y: litShelf.minY - origin.y)
+            }
+        }
+        .clipped()
+    }
+
+    private var list: some View {
         List {
             if !model.searchQuery.isEmpty {
                 // A search is somewhere you can be, not a filter left switched
@@ -334,7 +373,9 @@ private struct ScopeRow: ViewModifier {
     /// here, symbol first. States get the system's colours for states —
     /// reading is under way, read is done, review is wanted — and places
     /// take the accent, so the strip reads as one thing with a few meanings.
-    private var symbolColor: Color {
+    private var symbolColor: Color { Self.symbolColor(for: scope) }
+
+    static func symbolColor(for scope: LibraryModel.Scope) -> Color {
         switch scope {
         case .reading: .orange
         case .read: .green
@@ -355,17 +396,17 @@ private struct ScopeRow: ViewModifier {
         symbolColor.mix(with: colorScheme == .dark ? .white : .black, by: colorScheme == .dark ? 0.25 : 0.4)
     }
 
-    /// A pale wash of the row's colour; for the graph, the three colours of
-    /// its connections running into one another.
-    private var ground: AnyShapeStyle {
-        guard isCurrent else { return AnyShapeStyle(Color.clear) }
+    /// A pale wash of a shelf's colour; for the graph, the three colours of
+    /// its connections running into one another. Asked for by the one lit
+    /// shape the list draws, which is not inside any row.
+    static func ground(for scope: LibraryModel.Scope) -> AnyShapeStyle {
         if scope == .graph {
             return AnyShapeStyle(LinearGradient(
-                colors: Self.graphColors.map { $0.opacity(0.24) },
+                colors: graphColors.map { $0.opacity(0.24) },
                 startPoint: .leading, endPoint: .trailing
             ))
         }
-        return AnyShapeStyle(symbolColor.opacity(0.2))
+        return AnyShapeStyle(symbolColor(for: scope).opacity(0.2))
     }
 
     func body(content: Content) -> some View {
@@ -381,17 +422,50 @@ private struct ScopeRow: ViewModifier {
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(.rect)
             .onTapGesture {
-                model.scope = scope
+                // Animated, so the lit shape travels from the row you were on
+                // to this one rather than blinking out and in somewhere else.
+                withAnimation(.smooth(duration: 0.32)) { model.scope = scope }
                 // On the iPad the list is the split view's first column and
-                // the shelves came from a panel, which has done its job.
+                // the shelves came from a panel, which has done its job —
+                // but not before the glass has been seen arriving. A panel
+                // that vanishes on the touch takes the answer with it.
                 app.compactColumn = .sidebar
-                withAnimation(AppModel.paneMotion) { app.showsScopePanel = false }
+                dismissPanel()
             }
-            .listRowBackground(
-                RoundedRectangle(cornerRadius: Corner.row, style: .continuous)
-                    .fill(ground)
-                    .padding(.horizontal, 6)
-            )
+            // The row says where it is when it is the one lit; the list
+            // draws the glass there. Nothing of its own: a row's background
+            // is clipped to the row, and a shape clipped to where it starts
+            // cannot be seen going anywhere.
+            .listRowBackground(place)
+    }
+
+    /// Puts the shelves panel away once the glass has arrived.
+    private func dismissPanel() {
+        guard app.showsScopePanel else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(280))
+            withAnimation(AppModel.paneMotion) { app.showsScopePanel = false }
+        }
+    }
+
+    @ViewBuilder
+    private var place: some View {
+        if isCurrent {
+            GeometryReader { proxy in
+                Color.clear.preference(key: LitShelf.self, value: proxy.frame(in: .global))
+            }
+        } else {
+            Color.clear
+        }
+    }
+}
+
+/// Where the lit shelf is. Only the row that is lit answers; the first
+/// answer wins, and none at all means it has been scrolled out of sight.
+struct LitShelf: PreferenceKey {
+    static let defaultValue: CGRect? = nil
+    static func reduce(value: inout CGRect?, nextValue: () -> CGRect?) {
+        value = value ?? nextValue()
     }
 }
 
