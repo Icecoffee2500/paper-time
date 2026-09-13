@@ -34,6 +34,9 @@ public final class AppModel {
     /// Which column an iPhone shows. Tapping a shelf pushes the list; tapping
     /// a paper pushes the page. The system moves it back on its own.
     public var compactColumn = NavigationSplitViewColumn.sidebar
+    /// The iPad's source list: not a column, which the screen has no room
+    /// for, but a panel summoned over the window, the way Spotlight comes.
+    public var showsScopePanel = false
     #if os(macOS)
     public var showsInspector = true
     #else
@@ -238,7 +241,7 @@ public final class AppModel {
     public func toggleSidebar() {
         withAnimation(AppModel.paneMotion) {
             #if os(iOS)
-            columnVisibility = columnVisibility == .all ? .doubleColumn : .all
+            showsScopePanel.toggle()
             #else
             sidebarHidden.toggle()
             #endif
@@ -290,7 +293,7 @@ public final class AppModel {
         #if os(macOS)
         !sidebarHidden
         #else
-        columnVisibility == .all
+        showsScopePanel
         #endif
     }
 

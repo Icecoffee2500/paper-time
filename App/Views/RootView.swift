@@ -148,11 +148,14 @@ struct LibraryWindow: View {
         #else
         // iPhone and iPad keep the system split view: it is what gives them
         // the sliding sidebar, the back button and the compact layout.
+        // Two columns, not three: the screen has no room for a shelf of
+        // scopes beside the list and the page. The scopes come as a panel
+        // over the window (`scopePanel`), the inspector floats in from the
+        // right, and the system's own toggle hides and shows the list.
         return AnyView(
             NavigationSplitView(columnVisibility: $app.columnVisibility, preferredCompactColumn: $app.compactColumn) {
-                sidebarColumn
-            } content: {
                 listColumn
+                    .navigationSplitViewColumnWidth(min: 300, ideal: 340, max: 420)
             } detail: {
                 // The same three details the Mac has: the note, the graph,
                 // the paper.
@@ -170,9 +173,72 @@ struct LibraryWindow: View {
                     )
                 }
             }
+            .overlay { scopePanel }
+            .sheet(isPresented: $showsSettings) {
+                NavigationStack {
+                    SettingsView()
+                        .environment(app)
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("Done") { showsSettings = false }
+                            }
+                        }
+                }
+            }
         )
         #endif
     }
+
+    #if os(iOS)
+    /// The library's shelves — scopes, collections, tags, authors — as a
+    /// panel in the middle of the window, over a dimmed ground, the way
+    /// Spotlight comes: pick a shelf and it goes.
+    @ViewBuilder
+    private var scopePanel: some View {
+        @Bindable var app = app
+        if app.showsScopePanel {
+            ZStack {
+                Color.black.opacity(0.18)
+                    .ignoresSafeArea()
+                    .onTapGesture { withAnimation(AppModel.paneMotion) { app.showsScopePanel = false } }
+                VStack(spacing: 0) {
+                    HStack {
+                        Text("Library")
+                            .font(.headline)
+                        Spacer()
+                        Button {
+                            app.showsScopePanel = false
+                            showsSettings = true
+                        } label: {
+                            Image(systemName: "gearshape")
+                        }
+                        .help("Settings")
+                        Button {
+                            withAnimation(AppModel.paneMotion) { app.showsScopePanel = false }
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .help("Close")
+                    }
+                    .buttonStyle(.borderless)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 12)
+                    Divider()
+                    LibrarySidebar(model: model)
+                        .scrollContentBackground(.hidden)
+                        .frame(maxHeight: .infinity)
+                }
+                .frame(width: 440, height: 640)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(.primary.opacity(0.08), lineWidth: 0.5))
+                .shadow(color: .black.opacity(0.22), radius: 30, y: 12)
+                .padding(24)
+            }
+            .transition(.opacity.combined(with: .scale(scale: 0.96)))
+        }
+    }
+    #endif
 
     #if os(macOS)
     private var macColumns: some View {
@@ -510,18 +576,20 @@ struct LibraryWindow: View {
     private var toolbarContent: some CustomizableToolbarContent {
         // One group rather than one item each: separate toolbar items are what
         // drew the little vertical rules between the buttons.
+        #if os(iOS)
+        ToolbarItem(id: "shelves", placement: .topBarLeading) {
+            Button {
+                withAnimation(AppModel.paneMotion) { app.showsScopePanel.toggle() }
+            } label: {
+                Label("Library", systemImage: "square.grid.2x2").toolbarIcon()
+            }
+            .help("The library's shelves: scopes, collections, tags")
+            .keyboardShortcut("1", modifiers: [.command, .control])
+        }
+        .sharedBackgroundVisibility(.hidden)
+        #endif
         ToolbarItem(id: "actions", placement: barPlacement) {
             HStack(spacing: 4) {
-                #if os(iOS)
-                // The list can step aside here too, as it does on the Mac.
-                Button {
-                    app.togglePaperList()
-                } label: {
-                    Label("Hide Paper List", systemImage: "sidebar.leading").toolbarIcon()
-                }
-                .help("Hide or show the paper list")
-                .toolbarHover()
-                #endif
                 Button {
                     isImportingPDFs = true
                 } label: {
@@ -539,9 +607,15 @@ struct LibraryWindow: View {
                 .toolbarHover()
 
                 sortMenu
+                // On the iPad the page's options sit on the page's own bar;
+                // here they only crowded the column into an overflow menu.
+                #if os(macOS)
                 viewMenu
+                #endif
                 shareMenu
+                #if os(macOS)
                 paneMenu
+                #endif
             }
             .toolbarButtons()
         }
@@ -825,12 +899,22 @@ struct PaperDetailColumn: View {
         }
         // Likewise: `toggleInspector` opens the transaction.
         #else
-        // iPhone and iPad keep the system inspector: there it is a sheet, and
-        // there is no window toolbar for it to collide with.
-        return page.inspector(isPresented: $app.showsInspector) {
-            inspector
-                .inspectorColumnWidth(min: 280, ideal: 360, max: 520)
+        // The inspector floats in from the right, over the page, and goes
+        // the same way: the screen is too narrow to give it a column, and a
+        // sheet took the page away while the notes were being read.
+        return page.overlay(alignment: .trailing) {
+            if app.showsInspector {
+                inspector
+                    .frame(width: 360)
+                    .frame(maxHeight: .infinity)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.primary.opacity(0.08), lineWidth: 0.5))
+                    .shadow(color: .black.opacity(0.18), radius: 24, y: 8)
+                    .padding(10)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
         }
+        .animation(AppModel.paneMotion, value: app.showsInspector)
         #endif
     }
 
@@ -909,19 +993,7 @@ struct PaperDetailColumn: View {
                     // with the list stepped aside (a book, or focus) it is the
                     // only bar there is. Either way the page's options, the
                     // search and the way back come along with it.
-                    if horizontalSizeClass == .compact || app.columnVisibility == .detailOnly {
-                        if horizontalSizeClass != .compact {
-                            ToolbarItem(placement: .topBarLeading) {
-                                Button {
-                                    app.togglePaperList()
-                                } label: {
-                                    Label("Show Paper List", systemImage: "sidebar.leading")
-                                }
-                                .help("Show the paper list")
-                            }
-                            .sharedBackgroundVisibility(.hidden)
-                        }
-                        ToolbarItem(placement: .topBarTrailing) {
+                    ToolbarItem(placement: .topBarTrailing) {
                             Menu {
                                 Picker("Page Layout", selection: Bindable(configuration).layout) {
                                     ForEach(ReaderConfiguration.PageLayout.allCases) { layout in
@@ -943,6 +1015,7 @@ struct PaperDetailColumn: View {
                             }
                         }
                         .sharedBackgroundVisibility(.hidden)
+                    if horizontalSizeClass == .compact || app.columnVisibility == .detailOnly {
                         ToolbarItem(placement: .topBarTrailing) {
                             Button {
                                 app.showsSearchPalette = true
@@ -951,16 +1024,17 @@ struct PaperDetailColumn: View {
                             }
                         }
                         .sharedBackgroundVisibility(.hidden)
-                        // The marks and the notes, as a sheet.
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button {
-                                app.toggleInspector()
-                            } label: {
-                                Label("Marks and Notes", systemImage: "sidebar.trailing")
-                            }
-                        }
-                        .sharedBackgroundVisibility(.hidden)
                     }
+                    // The marks and the notes, floating in from the right.
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            app.toggleInspector()
+                        } label: {
+                            Label("Marks and Notes", systemImage: app.showsInspector ? "sidebar.trailing" : "sidebar.trailing")
+                                .symbolVariant(app.showsInspector ? .fill : .none)
+                        }
+                    }
+                    .sharedBackgroundVisibility(.hidden)
                 }
                 #endif
             } else {

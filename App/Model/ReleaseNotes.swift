@@ -299,6 +299,12 @@ enum ReleaseNotes {
                     devices: [.ipad]
                 ),
                 Entry(
+                    Text2("아이패드의 서가는 패널로, 인스펙터는 떠서", "The iPad's shelves as a panel, its inspector afloat"),
+                    Text2("아이패드 화면은 열 셋을 둘 만큼 넓지 않다. 서가(범위·컬렉션·태그·저자)는 목록 열의 격자 단추로 Spotlight처럼 창 가운데에 떠서 나오고, 고르면 사라진다. 인스펙터는 오른쪽에서 쪽 위로 떠 들어온다 — 시트가 읽던 쪽을 가리던 대신. 목록은 시스템 토글로 숨기고 보인다. 툴바가 겹치던 것도 이렇게 풀렸다.",
+                          "The iPad's screen has no room for three columns. The shelves — scopes, collections, tags, authors — come as a panel in the middle of the window, Spotlight-fashion, from the grid button on the list; pick one and it goes. The inspector floats in over the page from the right instead of a sheet that hid what you were reading. The list hides and shows with the system's own toggle. The overlapping toolbar came apart the same way."),
+                    devices: [.ipad, .iphone]
+                ),
+                Entry(
                     Text2("형광펜이 아랫줄까지 칠함", "The highlighter spilling onto the next line"),
                     Text2("형광펜은 굵어서 한 줄을 따라 그은 선의 상자가 줄보다 크고, 이웃 줄에 걸쳤다. 이제 선의 가운데 띠로 어느 줄인지 정한다 — 한 줄을 그으면 한 줄이다.",
                           "A highlighter is wide: one stroke along one line made a box taller than the line, touching its neighbours. The line is now judged by the band at the stroke's centre — one line drawn, one line marked."),

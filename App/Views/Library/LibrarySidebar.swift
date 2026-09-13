@@ -382,7 +382,10 @@ private struct ScopeRow: ViewModifier {
             .contentShape(.rect)
             .onTapGesture {
                 model.scope = scope
-                app.compactColumn = .content
+                // On the iPad the list is the split view's first column and
+                // the shelves came from a panel, which has done its job.
+                app.compactColumn = .sidebar
+                withAnimation(AppModel.paneMotion) { app.showsScopePanel = false }
             }
             .listRowBackground(
                 RoundedRectangle(cornerRadius: Corner.row, style: .continuous)
