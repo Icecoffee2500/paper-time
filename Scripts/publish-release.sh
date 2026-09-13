@@ -39,27 +39,27 @@ python3 - "$REPO" "$TAG" "$NOTE" <<'PY'
 import json, subprocess, sys, pathlib
 
 repo, tag, note = sys.argv[1], sys.argv[2], sys.argv[3]
+
+# Asked of the API rather than of `gh release list --json`, which older
+# builds of gh do not have.
 raw = subprocess.run(
-    ["gh", "release", "list", "--limit", "100",
-     "--json", "tagName,publishedAt,isDraft,isPrerelease"],
+    ["gh", "api", "repos/" + repo + "/releases", "--paginate"],
     capture_output=True, text=True, check=True).stdout
+
 releases = []
 for item in json.loads(raw):
-    if item.get("isDraft"):
+    if item.get("draft"):
         continue
-    name = item["tagName"]
-    assets = json.loads(subprocess.run(
-        ["gh", "release", "view", name, "--json", "assets"],
-        capture_output=True, text=True, check=True).stdout)["assets"]
-    dmg = next((a for a in assets if a["name"].lower().endswith(".dmg")), None)
+    dmg = next((a for a in item.get("assets", [])
+                if a["name"].lower().endswith(".dmg")), None)
     if not dmg:
         continue
     releases.append({
-        "version": name,
-        "date": item.get("publishedAt"),
-        "asset": dmg["url"],
+        "version": item["tag_name"],
+        "date": item.get("published_at"),
+        "asset": dmg["browser_download_url"],
         "size": dmg.get("size"),
-        "note": note if name == tag and note else None,
+        "note": note if item["tag_name"] == tag and note else None,
     })
 
 # Newest first, by version number rather than by the day it was pushed.
@@ -71,13 +71,15 @@ releases.sort(key=key, reverse=True)
 # A note written for one version stays with it across later runs.
 page = pathlib.Path("Website/releases.json")
 if page.exists():
-    old = {r["version"]: r.get("note") for r in json.loads(page.read_text()).get("releases", [])}
+    old = {r["version"]: r.get("note")
+           for r in json.loads(page.read_text()).get("releases", [])}
     for entry in releases:
         if not entry["note"]:
             entry["note"] = old.get(entry["version"])
 
-page.write_text(json.dumps({"repo": repo, "releases": releases}, indent=2, ensure_ascii=False) + "\n")
-print(f"Website/releases.json — {len(releases)} version(s)")
+page.write_text(json.dumps({"repo": repo, "releases": releases},
+                           indent=2, ensure_ascii=False) + "\n")
+print("Website/releases.json - " + str(len(releases)) + " version(s)")
 PY
 
 # The page lives on its own branch, holding nothing but itself: the site is
