@@ -72,13 +72,18 @@ struct LibrarySidebar: View {
     /// guess is pressable; this is the thing a token or a tab is closed with
     /// everywhere else — a filled disc that darkens under the pointer, with a
     /// target bigger than the mark inside it.
+    /// Whether the cross is on the row at all: under the pointer on the Mac,
+    /// always on a touch screen.
+    private var dismissShown: Bool {
+        #if os(macOS)
+        hoveringSearch
+        #else
+        true
+        #endif
+    }
+
     @ViewBuilder
     private var dismissSearch: some View {
-        #if os(macOS)
-        let shown = hoveringSearch
-        #else
-        let shown = true
-        #endif
         Button {
             model.clearSearchResults()
         } label: {
@@ -93,13 +98,15 @@ struct LibrarySidebar: View {
         }
         .buttonStyle(.plain)
         .onHover { hoveringDismiss = $0 }
-        // Into the corner itself: the row's own padding would otherwise hold
-        // it a few points inside, which reads as floating rather than as the
-        // corner's own control.
-        .padding(.top, -7)
-        .padding(.trailing, -7)
-        .opacity(shown ? 1 : 0)
-        .animation(.easeOut(duration: 0.12), value: shown)
+        // In the corner, not over it. Hanging the button outside the row put
+        // half of it past the edge a list row clips at, so the disc came out
+        // with its top and its right side sliced off. Flush with the row's
+        // own bounds is as far into the corner as it can go and still be
+        // drawn whole.
+        .padding(.top, 1)
+        .padding(.trailing, 1)
+        .opacity(dismissShown ? 1 : 0)
+        .animation(.easeOut(duration: 0.12), value: dismissShown)
         .animation(.easeOut(duration: 0.1), value: hoveringDismiss)
         .accessibilityLabel("Clear Search")
         .help("Clear Search")
@@ -123,7 +130,12 @@ struct LibrarySidebar: View {
                     } icon: {
                         Image(systemName: "magnifyingglass")
                     }
-                    .count(model.searchResultCount, current: model.scope == .searchResults)
+                    // The count steps aside for the button rather than
+                    // sharing the corner with it: a number with a cross on
+                    // top of it is two things in one place, and the one you
+                    // can press has to win.
+                    .count(dismissShown ? nil : model.searchResultCount,
+                           current: model.scope == .searchResults)
                     .scopeRow(.searchResults, in: model)
                     // A search you have finished with should be as easy to
                     // put away as it was to open. It stayed until it was
@@ -588,13 +600,17 @@ private extension View {
     /// `.badge(0)` draws nothing at all, so a row would lose its number exactly
     /// when the number is worth knowing — an empty collection reads as broken
     /// rather than empty.
-    func count(_ value: Int, current: Bool = false) -> some View {
+    /// Nil takes the badge off the row, for a row that has something else to
+    /// show in that corner.
+    func count(_ value: Int?, current: Bool = false) -> some View {
         // On the row you are on, the same accent as the words: a pale number
         // beside a blue name looked like it belonged to a different row.
         badge(
-            Text(value, format: .number)
-                .monospacedDigit()
-                .foregroundStyle(current ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+            value.map {
+                Text($0, format: .number)
+                    .monospacedDigit()
+                    .foregroundStyle(current ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+            }
         )
     }
 }
