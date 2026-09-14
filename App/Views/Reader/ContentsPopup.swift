@@ -62,7 +62,9 @@ struct ContentsPopup: View {
         let identity = ObjectIdentifier(document)
         Self.reader.async {
             let copy = url.flatMap { PDFDocument(url: $0) } ?? data.flatMap { PDFDocument(data: $0) }
-            let found = copy.map { PaperContents.items(in: $0, listSize: size) } ?? []
+            let found = Trace.time("contents: read the headings") {
+                copy.map { PaperContents.items(in: $0, listSize: size) } ?? []
+            }
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     if let url { Self.known[url] = found }

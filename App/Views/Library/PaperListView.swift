@@ -385,7 +385,14 @@ struct PaperRow: View, Equatable {
         }
         .padding(.vertical, 2)
         .contentShape(.rect)
-        .contextMenu { contextMenuContent(paper) }
+        // A view rather than the items themselves. A `@ViewBuilder` closure
+        // here is run when the row is built, so every row in the library was
+        // making its whole menu — a reading-status picker, a submenu holding
+        // thirty other papers, and two passes over the library to work out
+        // what could go in it — before anybody had right-clicked anything.
+        // A `View` is a struct until it is shown, and its body runs when the
+        // menu opens: once, for one row.
+        .contextMenu { PaperMenu(paper: paper, model: model) }
         // Dragging a paper onto a sidebar row files it there; dropping one
         // paper onto another attaches it as supplementary material.
         .draggable(PaperTransfer(id: paper.id, title: paper.meta.displayTitle))
@@ -497,8 +504,25 @@ struct PaperRow: View, Equatable {
         }
     }
 
-    @ViewBuilder
-    private func contextMenuContent(_ paper: LoadedPaper) -> some View {
+    private func copyToPasteboard(_ string: String) {
+        #if os(macOS)
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(string, forType: .string)
+        #else
+        UIPasteboard.general.string = string
+        #endif
+    }
+}
+
+/// What a right-click on a paper offers.
+///
+/// Its own view, and that is the point: see `PaperRow`.
+private struct PaperMenu: View {
+    let paper: LoadedPaper
+    let model: LibraryModel
+
+    var body: some View {
         Button {
             model.selectedPaperID = paper.id
         } label: {
@@ -520,8 +544,9 @@ struct PaperRow: View, Equatable {
             )
         }
 
+        let candidates = self.candidates
         Menu("Attach To") {
-            ForEach(model.attachmentCandidates(for: paper.id).prefix(30)) { candidate in
+            ForEach(candidates.prefix(30)) { candidate in
                 Button(candidate.meta.displayTitle) {
                     Task { await model.attach(paper.id, to: candidate.id) }
                 }
@@ -530,7 +555,7 @@ struct PaperRow: View, Equatable {
         .disabled(
             paper.meta.parentID != nil
                 || !model.attachments(of: paper.id).isEmpty
-                || model.attachmentCandidates(for: paper.id).isEmpty
+                || candidates.isEmpty
         )
 
         if paper.meta.parentID != nil {
@@ -569,6 +594,30 @@ struct PaperRow: View, Equatable {
             Task { await model.moveToTrash(paper.id) }
         } label: {
             Label("Move to Trash", systemImage: "trash")
+        }
+    }
+
+    /// The papers this one could be attached to, asked for once rather than
+    /// twice: the submenu wants them and so did the test for whether there
+    /// are any, and each ask was a pass over the library and a sort.
+    private var candidates: [LoadedPaper] {
+        model.attachmentCandidates(for: paper.id)
+    }
+
+    private func statusBinding(_ paper: LoadedPaper) -> Binding<PaperState.ReadingStatus> {
+        Binding(
+            get: { paper.state.readingStatus },
+            set: { newValue in
+                Task { await model.setReadingStatus(newValue, for: paper.id) }
+            }
+        )
+    }
+
+    private func label(for status: PaperState.ReadingStatus) -> String {
+        switch status {
+        case .unread: "Unread"
+        case .reading: "Reading"
+        case .read: "Read"
         }
     }
 

@@ -19,7 +19,7 @@ struct SearchPalette: View {
     // frontmost, which is how a ⌘K once ended up in somebody's browser. The
     // same variable that opens the palette for a check can carry what to look
     // for, and then the check needs no keyboard at all.
-    @State private var query = ProcessInfo.processInfo.environment["PAPERTIME_SHOW_SEARCH"] ?? ""
+    @State private var query = Boot.setting("PAPERTIME_SHOW_SEARCH") ?? ""
     @State private var highlightedIndex = 0
     /// What the words themselves turned up, as the papers are read.
     @State private var passages: [SearchResult] = []
@@ -428,7 +428,7 @@ struct SearchPalette: View {
             // Pressing the first row from a script, so that "does it land on
             // the word?" can be seen in a screenshot without a click being
             // posted to whatever happens to be frontmost.
-            if ProcessInfo.processInfo.environment["PAPERTIME_SEARCH_JUMP"] != nil,
+            if Boot.isSet("PAPERTIME_SEARCH_JUMP"),
                passages.count == 1 {
                 activate(passages[0])
                 return

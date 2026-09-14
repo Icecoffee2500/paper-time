@@ -107,14 +107,12 @@ struct SlipBoxList: View {
                                 NoteRow(note: note)
                                     .pressable(inset: 6)
                                     .tag(note.id)
-                                    .contextMenu {
-                                        if note.kind == .note {
-                                            filingMenu(note)
-                                        }
-                                        Button(role: .destructive) { model.notes.delete(note.id) } label: {
-                                            Label("Delete", systemImage: "trash")
-                                        }
-                                    }
+                                    // A view, so its body is built when the
+                                    // menu opens rather than when the row is:
+                                    // the filing menu asks the box for every
+                                    // map and every draft it holds, and it
+                                    // was asking once per note in the list.
+                                    .contextMenu { NoteMenu(note: note, model: model) }
                             }
                         } header: {
                             // The paper as a chip, the same shape the library
@@ -182,24 +180,7 @@ struct SlipBoxList: View {
 
     /// Where a note can go: onto a map, or into a draft.
     @ViewBuilder
-    private func filingMenu(_ note: Zettel) -> some View {
-        let maps = notes.maps
-        let drafts = notes.drafts
-        if !maps.isEmpty {
-            Menu("Put on Map") {
-                ForEach(maps) { map in
-                    Button(map.displayTitle) { model.notes.add(note.id, toMap: map.id) }
-                }
-            }
-        }
-        if !drafts.isEmpty {
-            Menu("Add to Draft") {
-                ForEach(drafts) { draft in
-                    Button(draft.displayTitle) { model.notes.add(note.id, toMap: draft.id) }
-                }
-            }
-        }
-    }
+
 
     /// "These notes hang together; make them a map?"
     private func squeezeBanner(_ squeeze: Atlas.Suggestion) -> some View {
@@ -311,6 +292,39 @@ struct SlipBoxDetail: View {
             // An empty panel is still a panel. Without this it shrank to the
             // size of the words in it and sat on the ground as a card.
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+}
+
+/// What a right-click on a note offers: where to file it, and the way out.
+///
+/// Its own view for the reason `PaperMenu` is one — the body of a view is
+/// built when it is shown, and a `@ViewBuilder` closure is built with the row.
+private struct NoteMenu: View {
+    let note: Zettel
+    let model: LibraryModel
+
+    var body: some View {
+        if note.kind == .note {
+            let maps = model.notes.maps
+            let drafts = model.notes.drafts
+            if !maps.isEmpty {
+                Menu("Put on Map") {
+                    ForEach(maps) { map in
+                        Button(map.displayTitle) { model.notes.add(note.id, toMap: map.id) }
+                    }
+                }
+            }
+            if !drafts.isEmpty {
+                Menu("Add to Draft") {
+                    ForEach(drafts) { draft in
+                        Button(draft.displayTitle) { model.notes.add(note.id, toMap: draft.id) }
+                    }
+                }
+            }
+        }
+        Button(role: .destructive) { model.notes.delete(note.id) } label: {
+            Label("Delete", systemImage: "trash")
         }
     }
 }

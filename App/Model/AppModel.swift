@@ -306,9 +306,8 @@ public final class AppModel {
         // For driving a simulator: `PAPERTIME_LIBRARY=<folder>` opens that
         // folder as the library, and `PAPERTIME_SKIP_WELCOME=1` keeps the
         // introduction down.
-        let environment = ProcessInfo.processInfo.environment
-        if environment["PAPERTIME_SKIP_WELCOME"] != nil { markReleaseNotesSeen() }
-        if let path = environment["PAPERTIME_LIBRARY"] {
+        if Boot.isSet("PAPERTIME_SKIP_WELCOME") { markReleaseNotesSeen() }
+        if let path = Boot.setting("PAPERTIME_LIBRARY") {
             // A relative path is inside the app's own Documents, which on a
             // simulator moves with every install.
             let base = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: "/")
@@ -367,29 +366,28 @@ public final class AppModel {
             await model.refresh()
             // Driving a simulator: take in the folder's loose PDFs and open
             // the first paper, since nothing there can be tapped from here.
-            let environment = ProcessInfo.processInfo.environment
-            if environment["PAPERTIME_ADOPT_LOOSE"] != nil {
+            if Boot.isSet("PAPERTIME_ADOPT_LOOSE") {
                 _ = await model.adoptLooseDocuments()
                 await model.refresh()
             }
-            if environment["PAPERTIME_OPEN_FIRST"] != nil, let first = model.visiblePapers.first {
+            if Boot.isSet("PAPERTIME_OPEN_FIRST"), let first = model.visiblePapers.first {
                 model.selection = [first.id]
             }
             // A particular paper rather than whichever is first: the pictures
             // on the landing page want the one with marks on it.
-            if let wanted = environment["PAPERTIME_OPEN_TITLE"],
+            if let wanted = Boot.setting("PAPERTIME_OPEN_TITLE"),
                let paper = model.visiblePapers.first(where: {
                    $0.meta.displayTitle.localizedCaseInsensitiveContains(wanted)
                }) {
                 model.selection = [paper.id]
             }
-            if environment["PAPERTIME_SCOPE"] == "notes" { model.scope = .notes }
+            if Boot.setting("PAPERTIME_SCOPE") == "notes" { model.scope = .notes }
             // The results of a search, without anybody having to type one.
-            if let query = environment["PAPERTIME_SEARCH_RESULTS"] {
+            if let query = Boot.setting("PAPERTIME_SEARCH_RESULTS") {
                 model.showSearchResults(for: query)
             }
-            if let noteID = environment["PAPERTIME_OPEN_NOTE"] { model.notes.openNoteID = noteID }
-            if environment["PAPERTIME_SHOW_SEARCH"] != nil {
+            if let noteID = Boot.setting("PAPERTIME_OPEN_NOTE") { model.notes.openNoteID = noteID }
+            if Boot.isSet("PAPERTIME_SHOW_SEARCH") {
                 try? await Task.sleep(for: .seconds(2))
                 showsSearchPalette = true
             }

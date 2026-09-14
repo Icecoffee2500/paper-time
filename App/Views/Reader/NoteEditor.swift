@@ -203,18 +203,47 @@ struct NoteEditor: NSViewRepresentable {
                 let caret = NoteMarkdown.sourceIndex(
                     in: storage, displayIndex: textView.selectedRange().location
                 )
+                // The line under the caret is shown exactly as it is written —
+                // that is what makes a rendered note editable — so while the
+                // typing stays on one line there is nothing to set again. It
+                // used to set the whole note on every keystroke: a note of
+                // thirty thousand characters was sixty milliseconds a letter,
+                // and the words arrived behind the fingers. Anything that
+                // changes the shape of the note — a line more, a line fewer,
+                // the caret moving to another line — still sets it.
+                let lines = source.reduce(into: 1) { count, character in
+                    if character == "\n" { count += 1 }
+                }
+                let line = source.prefix(caret).reduce(into: 0) { count, character in
+                    if character == "\n" { count += 1 }
+                }
+                if lines == self.setLineCount, line == self.setCaretLine {
+                    return
+                }
+                self.setLineCount = lines
+                self.setCaretLine = line
                 self.restyle(textView, source: source, caretSource: caret)
             }
         }
 
+        /// Which line the caret was on, and how many lines there were, when
+        /// the note was last set — see `scheduleRestyle`. (`lastCaretLine`
+        /// above is a different thing: the *range* of the line, kept so a
+        /// click that stays on one line does not set the note again.)
+        private var setCaretLine = -1
+        private var setLineCount = -1
+
         func restyle(_ textView: NoteTextView, source: String, caretSource: Int?) {
             guard !isRestyling else { return }
+            if caretSource == nil { setCaretLine = -1; setLineCount = -1 }
             isRestyling = true
             defer { isRestyling = false }
 
-            let rendered = NoteMarkdown.render(
-                source, caret: caretSource, raw: showsRawText, width: room(in: textView)
-            )
+            let rendered = Trace.time("note: set the whole note again") {
+                NoteMarkdown.render(
+                    source, caret: caretSource, raw: showsRawText, width: room(in: textView)
+                )
+            }
             lastKnownWidth = room(in: textView)
             let caret = caretSource.map { rendered.displayIndex(forSource: $0) }
             setContents(rendered.text, in: textView)

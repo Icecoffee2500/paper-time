@@ -111,16 +111,20 @@ public final class NotesModel {
     ) -> [(note: Zettel, shared: [String])] {
         if resonanceIndex == nil || resonanceIndex?.background != background
             || !changedSinceIndex.isSubset(of: excluding) {
-            let index = Resonance.Index(
-                notes: notes.filter { !$0.isEmpty }.map { (id: $0.id, text: $0.title + "\n" + $0.body) },
-                background: background
-            )
+            let index = Trace.time("resonance: build the index") {
+                Resonance.Index(
+                    notes: notes.filter { !$0.isEmpty }.map { (id: $0.id, text: $0.title + "\n" + $0.body) },
+                    background: background
+                )
+            }
             resonanceIndex = (index, background)
             changedSinceIndex = []
         }
         guard let index = resonanceIndex?.index, !index.isEmpty else { return [] }
-        return index.matches(for: text, limit: limit, excluding: excluding)
-            .compactMap { match in byID[match.id].map { (note: $0, shared: match.shared) } }
+        return Trace.time("resonance: match a page") {
+            index.matches(for: text, limit: limit, excluding: excluding)
+                .compactMap { match in byID[match.id].map { (note: $0, shared: match.shared) } }
+        }
     }
 
     // MARK: - Atlas
@@ -176,16 +180,33 @@ public final class NotesModel {
     }
 
     /// Keeps a note, a moment after the typing stops.
+    /// One note, changed.
+    ///
+    /// Typing a letter into a note calls this, so it is on the path of every
+    /// keystroke. It used to hand the whole box back to `apply`, which sorted
+    /// every note, rebuilt the identifier map, and walked every note's links
+    /// and tags — all of it to say that one note's body now has one more
+    /// character in it. The list's order is by when a note was *written*,
+    /// which an edit does not change, so the note can be put back where it
+    /// was; and the links and the tags are only walked again when the links
+    /// or the tags are what changed.
     public func update(_ note: Zettel) {
         var edited = note
         edited.modified = .now
-        var updated = notes
-        if let index = updated.firstIndex(where: { $0.id == note.id }) {
-            updated[index] = edited
+        if let index = notes.firstIndex(where: { $0.id == note.id }) {
+            let before = notes[index]
+            notes[index] = edited
+            byID[edited.id] = edited
+            if before.title != edited.title || before.body != edited.body {
+                changedSinceIndex.insert(edited.id)
+            }
+            if before.links != edited.links || before.tags != edited.tags {
+                rebuildConnections()
+            }
+            revision += 1
         } else {
-            updated.insert(edited, at: 0)
+            apply(notes + [edited])
         }
-        apply(updated)
 
         saveTasks[note.id]?.cancel()
         saveTasks[note.id] = Task { [store] in
@@ -229,6 +250,11 @@ public final class NotesModel {
         notes = loaded.sorted { $0.created == $1.created ? $0.id < $1.id : $0.created < $1.created }
         byID = Dictionary(notes.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
 
+        rebuildConnections()
+    }
+
+    /// Who links to whom, and how many notes wear each tag.
+    private func rebuildConnections() {
         var links: [String: [String]] = [:]
         var counts: [String: Int] = [:]
         for note in notes {

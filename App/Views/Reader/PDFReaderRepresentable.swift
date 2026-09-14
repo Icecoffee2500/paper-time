@@ -471,6 +471,10 @@ final class ReaderCoordinator: NSObject {
     }
 
     func update(_ view: PDFView, revision: Int) {
+        Trace.time("reader: update") { updateNow(view, revision: revision) }
+    }
+
+    private func updateNow(_ view: PDFView, revision: Int) {
         if view.document !== session.document {
             // The overlays belong to the pages of the paper being left, and
             // they are kept by page *number*. Handed on to the next paper,
@@ -570,6 +574,10 @@ final class ReaderCoordinator: NSObject {
     /// drew from it, so without this a new highlight only shows up after the
     /// page is scrolled away and back.
     private func redraw(_ view: PDFView) {
+        Trace.time("reader: redraw") { redrawNow(view) }
+    }
+
+    private func redrawNow(_ view: PDFView) {
         #if canImport(UIKit)
         view.clearSelection()
         for page in visiblePages(of: view) {

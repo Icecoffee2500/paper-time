@@ -69,6 +69,17 @@ public final class LibraryModel {
     private var indexByID: [UUID: Int] = [:]
     private var attachmentIDsByParent: [UUID: [UUID]] = [:]
     public private(set) var counts = ScopeCounts()
+    /// Every paper that stands on its own, in title order — see
+    /// `attachmentCandidates(for:)`.
+    @ObservationIgnored private var attachableCache: [LoadedPaper]?
+    private var attachable: [LoadedPaper] {
+        if let attachableCache { return attachableCache }
+        let made = papers
+            .filter { $0.meta.parentID == nil }
+            .sorted { $0.meta.displayTitle < $1.meta.displayTitle }
+        attachableCache = made
+        return made
+    }
 
     /// How many papers each source-list row stands for.
     ///
@@ -369,7 +380,10 @@ public final class LibraryModel {
 
     /// Supplements travel with their parent, so the library lists only the
     /// papers that stand on their own.
-    private func invalidateVisibleCache() { visibleCache = nil }
+    private func invalidateVisibleCache() {
+        visibleCache = nil
+        attachableCache = nil
+    }
 
     public var visiblePapers: [LoadedPaper] {
         if let visibleCache { return visibleCache }
@@ -475,11 +489,15 @@ public final class LibraryModel {
     ///
     /// Only top-level papers, and never itself: a supplement of a supplement
     /// would be unreachable in a list that shows neither.
+    /// The papers something could be attached to: everything that stands on
+    /// its own, in title order, less the one being attached.
+    ///
+    /// The order is worked out once per change to the library rather than per
+    /// ask. It used to sort the whole library on every call, and the call was
+    /// made twice by every row in the list — sixty-two rows, a hundred and
+    /// twenty-four sorts, before anybody had opened a menu.
     public func attachmentCandidates(for paperID: UUID) -> [LoadedPaper] {
-        papers
-            .filter { $0.id != paperID && $0.meta.parentID == nil }
-            .filter { attachments(of: $0.id).isEmpty || true }
-            .sorted { $0.meta.displayTitle < $1.meta.displayTitle }
+        attachable.filter { $0.id != paperID }
     }
 
     public func attach(_ childID: UUID, to parentID: UUID) async {

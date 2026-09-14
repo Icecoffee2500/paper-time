@@ -50,6 +50,9 @@ enum NoteMarkdown {
         }
     }
 
+    /// The paragraph styles, one per kind of line — see `paragraphStyle`.
+    fileprivate nonisolated(unsafe) static var styles: [String: NSParagraphStyle] = [:]
+
     /// Stands in for syntax that is not shown, so the run has something to hang
     /// its source on and the caret has somewhere to be.
     static let hiddenMarker = "\u{200B}"
@@ -249,7 +252,7 @@ enum NoteMarkdown {
         // and the formula set as mathematics are drawn, not spelled, and
         // neither shows up in a list of attributes. With a path to write to,
         // the same note is laid out and saved as a picture.
-        if let path = ProcessInfo.processInfo.environment["PAPERTIME_DUMP_NOTE_IMAGE"] {
+        if let path = Boot.setting("PAPERTIME_DUMP_NOTE_IMAGE") {
             draw(markdown, to: path)
         }
         exit(0)
@@ -420,6 +423,14 @@ enum NoteMarkdown {
     static func render(
         _ source: String, caret: Int? = nil, raw: Bool = false, width: CGFloat? = nil
     ) -> Rendered {
+        Trace.time("note: render \(source.count) characters") {
+            renderNow(source, caret: caret, raw: raw, width: width)
+        }
+    }
+
+    private static func renderNow(
+        _ source: String, caret: Int? = nil, raw: Bool = false, width: CGFloat? = nil
+    ) -> Rendered {
         available = width
         let text = source as NSString
         if raw {
@@ -503,9 +514,15 @@ enum NoteMarkdown {
             let contentStart = lineRange.location + markerLength
             let content = block.content as NSString
             var index = 0
+            // Four regular expressions used to be run over every line of
+            // every note on every keystroke, looking for links, wiki links,
+            // formulas and emphasis. Most lines of most notes are prose and
+            // hold none of the four characters those begin with, and asking
+            // that question costs one pass over the line instead of four.
+            let mayHold = !revealed && Self.holdsMarkup(block.content)
             while index < content.length {
                 let rest = NSRange(location: index, length: content.length - index)
-                guard !revealed, let token = nextToken(in: content, from: index) else {
+                guard mayHold, let token = nextToken(in: content, from: index) else {
                     append(
                         NSAttributedString(string: content.substring(with: rest),
                                            attributes: block.attributes(style: style)),
@@ -592,6 +609,20 @@ enum NoteMarkdown {
 
             func take(_ pattern: NSRegularExpression) -> NSTextCheckingResult? {
                 pattern.firstMatch(in: body as String, range: whole)
+            }
+
+            // Every one of these patterns is anchored to the first character,
+            // so a line that does not begin with one of their characters
+            // cannot match any of them — and asking four regular expressions
+            // about it, per line, per keystroke, was most of what it cost to
+            // set a note.
+            let head = (body as String).utf8.first ?? 0
+            let couldBeMarked = head == 0x23 || head == 0x2D || head == 0x2A  // # - *
+                || head == 0x2B || head == 0x3E || (head >= 0x30 && head <= 0x39)  // + > 0-9
+            guard couldBeMarked else {
+                marker = ""
+                content = line
+                return
             }
 
             if let match = take(Self.taskPattern) {
@@ -687,6 +718,10 @@ enum NoteMarkdown {
         /// than under the bullet — what every outliner does and no plain text
         /// view does by itself.
         var paragraphStyle: NSParagraphStyle {
+            // One style per kind of line, not one per line: they are read
+            // from here and never changed.
+            let key = "\(kind)|\(indent)"
+            if let known = NoteMarkdown.styles[key] { return known }
             let style = NSMutableParagraphStyle()
             // Air. A note is read in a narrow column beside a paper, and the
             // old setting — two points of leading, three between paragraphs —
@@ -715,6 +750,7 @@ enum NoteMarkdown {
             case .plain:
                 break
             }
+            NoteMarkdown.styles[key] = style
             return style
         }
 
@@ -772,6 +808,16 @@ enum NoteMarkdown {
     private static let emphasisPattern = try! NSRegularExpression(
         pattern: #"(\*\*)([^*\n]+)(\*\*)|(\*)([^*\n]+)(\*)|(`)([^`\n]+)(`)"#
     )
+
+    /// Whether a line could hold any of the four things that are set
+    /// differently — a link, a note link, a formula, or emphasis. All four
+    /// begin with one of these characters.
+    private static func holdsMarkup(_ line: String) -> Bool {
+        // Over the bytes, not through `NSString.character(at:)` — that is a
+        // message send per character, and there are thirty thousand of them
+        // in a note worth worrying about.
+        line.utf8.contains { $0 == 0x5B || $0 == 0x24 || $0 == 0x2A || $0 == 0x60 }
+    }
 
     private static func nextToken(in line: NSString, from index: Int) -> Token? {
         let range = NSRange(location: index, length: line.length - index)

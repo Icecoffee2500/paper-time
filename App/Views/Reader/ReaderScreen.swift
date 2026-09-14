@@ -378,7 +378,11 @@ struct ReaderScreen: View {
         link.loadingPaperID = paper.id
         defer { if link.loadingPaperID == paper.id { link.loadingPaperID = nil } }
         do {
-            let opened = try await DocumentSession.open(paper: paper, store: library.store)
+            Trace.mark("opening \(paper.meta.displayTitle.prefix(30))")
+            let opened = try await Trace.time("open the paper") {
+                try await DocumentSession.open(paper: paper, store: library.store)
+            }
+            Trace.mark("opened \(paper.meta.displayTitle.prefix(30))")
             session = opened
             link.adopt(opened, for: paper.id)
             currentPageIndex = paper.state.lastPageIndex

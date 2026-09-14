@@ -240,6 +240,10 @@ extension PaperNotesView {
     }
 
     private func refreshEchoes() {
+        Trace.time("echoes: find") { refreshEchoesNow() }
+    }
+
+    private func refreshEchoesNow() {
         guard let document = link.session?.document else { echoes = []; return }
         let index = link.currentPageIndex
         // In a book both pages of the spread are under the eyes.
@@ -265,7 +269,8 @@ extension PaperNotesView {
         var texts: [String] = []
         for step in 0..<sample {
             let index = sample <= 1 ? 0 : step * (count - 1) / (sample - 1)
-            if let text = document.page(at: index)?.string, !text.isEmpty { texts.append(text) }
+            let text = Trace.time("echoes: read one page") { document.page(at: index)?.string }
+            if let text, !text.isEmpty { texts.append(text) }
             if step % 4 == 3 { await Task.yield() }
             if Task.isCancelled { return }
         }

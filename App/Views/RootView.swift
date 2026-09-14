@@ -86,7 +86,7 @@ struct LibraryWindow: View {
     /// column, because on a Mac the picker for it lives in the toolbar and the
     /// toolbar is declared here.
     @State private var inspectorTab = InspectorTab(
-        rawValue: ProcessInfo.processInfo.environment["PAPERTIME_INSPECTOR_TAB"] ?? ""
+        rawValue: Boot.setting("PAPERTIME_INSPECTOR_TAB") ?? ""
     ) ?? .details
     /// How wide the paper was while it was open, so it can be held at that
     /// width on the way out rather than squeezed to nothing.
@@ -347,7 +347,14 @@ struct LibraryWindow: View {
             .opacity(app.showsReader ? 1 : 0)
             .clipped()
         }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { windowWidth = $0 }
+        // Rounded, and that is the point: a drag on the window's edge reports
+        // a new width sixty times a second, and every one of them was a
+        // change of state that rebuilt the whole column stack. The only thing
+        // this number decides is how far a divider may be dragged, which does
+        // not need to know about single points.
+        .onGeometryChange(for: CGFloat.self) { ($0.size.width / 24).rounded() * 24 } action: {
+            windowWidth = $0
+        }
         // The panels float clear of the window's edges and of the toolbar, so
         // every boundary in the window is a curve and a gap rather than a
         // straight line drawn where two flat backgrounds happen to meet. The
@@ -1033,8 +1040,11 @@ struct PaperDetailColumn: View {
                 .clipped()
         }
         // How much there is to share between the page and the inspector,
-        // which is what says how far the inspector may be dragged.
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { columnWidth = $0 }
+        // which is what says how far the inspector may be dragged. Rounded,
+        // for the reason the window's own width is.
+        .onGeometryChange(for: CGFloat.self) { ($0.size.width / 24).rounded() * 24 } action: {
+            columnWidth = $0
+        }
         // Likewise: `toggleInspector` opens the transaction.
         #else
         // The inspector floats in from the right, over the page, and goes
@@ -1060,7 +1070,9 @@ struct PaperDetailColumn: View {
             }
         }
         .animation(AppModel.paneMotion, value: app.showsInspector)
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { columnWidth = $0 }
+        .onGeometryChange(for: CGFloat.self) { ($0.size.width / 24).rounded() * 24 } action: {
+            columnWidth = $0
+        }
         #endif
     }
 
