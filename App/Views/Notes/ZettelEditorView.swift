@@ -39,7 +39,10 @@ struct ZettelEditorView: View {
 
     @ViewBuilder
     private func header(_ note: Zettel?) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        // Air between the way back and the title. At six points the two sat
+        // on top of each other, and the title — the one thing here meant to
+        // be read first — read as a caption under a button.
+        VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 8) {
                 if let onClose {
                     Button(action: onClose) {
@@ -112,8 +115,8 @@ struct ZettelEditorView: View {
             }
         }
         .padding(.horizontal, 22)
-        .padding(.top, 14)
-        .padding(.bottom, 4)
+        .padding(.top, 12)
+        .padding(.bottom, 10)
     }
 
     @ViewBuilder
