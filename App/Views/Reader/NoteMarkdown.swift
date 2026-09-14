@@ -316,24 +316,30 @@ enum NoteMarkdown {
     /// The address rides inside the quoted line, so pressing the words still
     /// goes back to them on the page.
     static func quotationSource(for anchor: NoteAnchor) -> String {
-        let text = anchor.quotedText
-            .replacingOccurrences(of: "\n", with: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = anchor.quotedText.trimmingCharacters(in: .whitespacesAndNewlines)
         let quoted = text.isEmpty ? anchor.label : text
         let page = ReleaseNotes.string("\(anchor.pageIndex + 1)쪽", "p. \(anchor.pageIndex + 1)")
-        var lines = quotationLines(of: quoted)
+        // The passage arrives with the page's own shape in it — headings,
+        // paragraphs, a displayed formula on its own line — and each of those
+        // lines is a line of the quotation.
+        var lines = quoted.components(separatedBy: "\n").flatMap { line -> [String] in
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            return trimmed.isEmpty ? [""] : quotationLines(of: trimmed)
+        }
         let citation = "[\(escape(page))](\(anchor.url.absoluteString))"
         // At the end of the last line rather than on a line of its own. A
         // line that says "— 2쪽" is a line of prose that has to be read; the
         // page set close after the last word is a mark, and a mark is looked
         // at rather than read. A displayed formula keeps its own line, so
         // there the page goes under it.
-        if let last = lines.last, !last.hasPrefix("$$") {
+        if let last = lines.last, !last.hasPrefix("$$"), !last.hasPrefix("#") {
             lines[lines.count - 1] = last + " " + citation
         } else {
             lines.append(citation)
         }
-        return lines.map { "> \($0)\n" }.joined()
+        // An empty line inside a quotation is written "> ", not left blank:
+        // a blank line would end the quotation and start another.
+        return lines.map { $0.isEmpty ? ">\n" : "> \($0)\n" }.joined()
     }
 
     /// The quoted words, broken where a displayed formula wants a line.
@@ -367,18 +373,6 @@ enum NoteMarkdown {
     private static let displayMathPattern = try! NSRegularExpression(
         pattern: #"\$\$[^$]+\$\$"#
     )
-
-    /// A link to a place in the paper, ready to drop at the cursor.
-    static func link(for anchor: NoteAnchor) -> NSAttributedString {
-        let source = "[\(escape(anchor.label))](\(anchor.url.absoluteString))"
-        let piece = NSMutableAttributedString(
-            string: anchor.label, attributes: passageAttributes(anchor.url)
-        )
-        piece.addAttribute(.paperTimeSource, value: source,
-                           range: NSRange(location: 0, length: piece.length))
-        piece.append(NSAttributedString(string: " ", attributes: bodyAttributes))
-        return piece
-    }
 
     /// Brackets and backslashes in a label would end the link early, so they
     /// travel escaped — which is what any Markdown reader expects of them.
@@ -594,6 +588,10 @@ enum NoteMarkdown {
         var indent = 0
         /// Set by the renderer once it can see the lines on either side.
         var quoteEdge: QuoteEdge = []
+        /// The heading level of a quoted line that was a section title on the
+        /// page. Nil for everything else, including an ordinary heading —
+        /// that is `kind`.
+        var heading: Int?
 
         init(line: String) {
             let text = line as NSString
@@ -646,6 +644,17 @@ enum NoteMarkdown {
                 marker = lead + body.substring(to: after)
                 content = body.substring(from: after)
                 kind = .quote
+                // A quotation can hold the section it was taken from. The
+                // "###" belongs to the marker, so it is hidden with the ">"
+                // and the words are set as the heading they were on the page.
+                let inner = content as NSString
+                if let match = Self.headingPattern.firstMatch(
+                    in: content, range: NSRange(location: 0, length: inner.length)
+                ) {
+                    marker += inner.substring(with: match.range)
+                    heading = inner.substring(with: match.range(at: 1)).count
+                    content = inner.substring(from: match.range.length)
+                }
             } else {
                 marker = ""
                 content = line
@@ -664,10 +673,11 @@ enum NoteMarkdown {
         }
 
         var font: NoteFont {
+            if let heading { return NoteTypography.heading(level: heading) }
             switch kind {
-            case .heading(let level): NoteTypography.heading(level: level)
-            case .quote: NoteTypography.body(italic: true)
-            default: NoteTypography.body()
+            case .heading(let level): return NoteTypography.heading(level: level)
+            case .quote: return NoteTypography.body(italic: true)
+            default: return NoteTypography.body()
             }
         }
 
@@ -690,7 +700,9 @@ enum NoteMarkdown {
             // A quotation lifted off a page is somebody's actual words and
             // is set as darkly as the note around it. One typed by hand is
             // an aside — the writer's own voice, quoted — and steps back.
-            case .quote: quoteEdge.contains(.anchored) ? .labelColor : .secondaryLabelColor
+            case .quote:
+                heading != nil || quoteEdge.contains(.anchored)
+                    ? .labelColor : .secondaryLabelColor
             case .task(let done): done ? .secondaryLabelColor : .labelColor
             default: .labelColor
             }
@@ -927,9 +939,12 @@ enum NoteMarkdown {
             ])
 
         case .emphasis(let text, let bold, let italic, let mono, let source):
+            // Inside a quotation the words are set in italics, so bold there
+            // is bold italic: it is the paper's own emphasis, still quoted.
+            let quoted = block.kind == .quote && block.heading == nil
             var attributes: [NSAttributedString.Key: Any] = [
                 .font: mono ? NoteTypography.mono()
-                            : NoteTypography.body(bold: bold, italic: italic),
+                            : NoteTypography.body(bold: bold, italic: italic || quoted),
                 .foregroundColor: NoteColor.labelColor,
             ]
             if mono { attributes[.backgroundColor] = NoteColor.quaternaryLabelColor }

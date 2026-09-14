@@ -273,9 +273,9 @@ enum ReleaseNotes {
                     devices: [.mac, .ipad, .iphone]
                 ),
                 Entry(
-                    Text2("구절은 인용으로, 수식은 수식으로", "A passage arrives as a quotation"),
-                    Text2("⌘L로 노트에 넣은 구절은 세로줄이 선 인용이 된다 — 옅은 바탕, 기울인 글씨, 밑에 쪽수. 쪽수를 누르면 그 줄로 돌아가고, 인용문은 이제 그냥 글이라 마우스로 골라 복사할 수 있다. 수식은 UltraCopy와 같은 눈으로 읽어 $…$로 들어오므로, 인용 안에서도 수식으로 조판된다 — 예전처럼 기호가 흩어진 산문이 아니라. 파일에는 평범한 마크다운 인용(>)으로 남는다.",
-                          "A passage put into a note with ⌘L is now a quotation with a rule down its side: a faint ground, italics, and the page under it. The page reference goes back to the line; the quoted words are ordinary text again, so they can be selected and copied. The mathematics is read the way UltraCopy reads it and arrives as $…$, so a formula inside a quotation is set as a formula rather than as the scattered symbols a PDF makes of it. In the file it is a plain Markdown block quote."),
+                    Text2("인용은 논문의 구조를 데리고 온다", "A quotation brings the page's shape with it"),
+                    Text2("⌘L로 노트에 넣은 구절은 세로줄이 선 인용이 되고, 논문에서의 생김새를 그대로 가지고 온다: 절 제목은 제목으로, 문단은 문단으로, 굵은 머리말은 굵게, 그리고 따로 선 수식은 제 줄에 번호(\\tag)까지 달고. 쪽수를 누르면 그 줄로 돌아가고, 인용문은 그냥 글이라 골라서 복사할 수 있다. 수식은 UltraCopy와 같은 눈으로 읽어 $…$로 들어온다 — 기호가 흩어진 산문이 아니라. 파일에는 평범한 마크다운 인용(>)으로 남는다.",
+                          "A passage put into a note with ⌘L is a quotation with a rule down its side, and it brings the page's own shape: the section title is a title, paragraphs are paragraphs, a bold lead-in stays bold, and a displayed equation keeps its own line and its number (as \\tag). The page reference goes back to the line; the quoted words are ordinary text, so they can be selected and copied. The mathematics is read the way UltraCopy reads it and arrives as $…$ — not as the scattered symbols a PDF makes of it. In the file it is a plain Markdown block quote."),
                     demo: .passageLink,
                     devices: [.mac, .ipad, .iphone]
                 ),

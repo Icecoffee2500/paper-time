@@ -466,16 +466,31 @@ private struct PassageDemo: View {
 
     /// What lands in the note: a rule, a faint ground, the words in italics,
     /// and the page under them — a quotation, which is what it is.
+    private var heading: String {
+        ReleaseNotes.string("2.1 경계층 감쇠", "2.1 Boundary-layer damping")
+    }
+
     private var quotation: some View {
         HStack(alignment: .top, spacing: scale.isFull ? 9 : 6) {
             Capsule()
                 .fill(Color.accentColor.opacity(0.55))
                 .frame(width: scale.isFull ? 2.5 : 2)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
+                // The title came across as a title.
+                Text(heading)
+                    .font(scale.body.weight(.semibold))
                 quoted.italic()
-                Text(ReleaseNotes.string("— 2쪽", "— p. 2"))
+                // The page, as the small tinted mark the app sets at the end
+                // of the last line.
+                Text(ReleaseNotes.string("2쪽", "p. 2"))
                     .font(scale.small)
                     .foregroundStyle(.tint)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .fill(Color.accentColor.opacity(0.12))
+                    )
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -492,13 +507,20 @@ private struct PassageDemo: View {
             Paper(scale: scale) {
                 VStack(alignment: .leading, spacing: scale.isFull ? 7 : 4) {
                     Rule(width: 90)
-                    quoted
-                        .padding(.horizontal, 3)
-                        .padding(.vertical, 1)
-                        .background(
-                            RoundedRectangle(cornerRadius: 3, style: .continuous)
-                                .fill(Color.accentColor.opacity(sent ? 0 : 0.22))
-                        )
+                    // A section title over the sentence, because what the
+                    // quotation brings back is the shape of the page and not
+                    // only its words.
+                    VStack(alignment: .leading, spacing: scale.isFull ? 5 : 3) {
+                        Text(heading)
+                            .font(scale.body.weight(.semibold))
+                        quoted
+                    }
+                    .padding(.horizontal, 3)
+                    .padding(.vertical, 1)
+                    .background(
+                        RoundedRectangle(cornerRadius: 3, style: .continuous)
+                            .fill(Color.accentColor.opacity(sent ? 0 : 0.22))
+                    )
                     Rule()
                     Rule(width: 120)
                 }

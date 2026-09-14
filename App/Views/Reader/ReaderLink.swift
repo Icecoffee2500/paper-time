@@ -80,6 +80,10 @@ final class ReaderLink {
     /// i − θ ∗ A,i ) 2" — which is not what was on the page and cannot be set
     /// as what was on the page. Now it arrives as `$…$`, and the note draws
     /// the formula.
+    ///
+    /// And with the shape of the page: the section it came under is a
+    /// heading, the equation keeps its own line and its number, the bold
+    /// lead-in of a paragraph is still bold, and paragraphs are paragraphs.
     func selectionAnchor() -> NoteAnchor? {
         guard let selection, let session,
               let page = selection.pages.first,
@@ -90,7 +94,7 @@ final class ReaderLink {
         return NoteAnchor(
             pageIndex: index,
             rect: selection.bounds(for: page),
-            quotedText: MathReader.latex(from: selection),
+            quotedText: MathReader.structured(from: selection).joined(separator: "\n"),
             paperID: sessionPaperID
         )
     }
