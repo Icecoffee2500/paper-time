@@ -375,6 +375,14 @@ public final class AppModel {
             if environment["PAPERTIME_OPEN_FIRST"] != nil, let first = model.visiblePapers.first {
                 model.selection = [first.id]
             }
+            // A particular paper rather than whichever is first: the pictures
+            // on the landing page want the one with marks on it.
+            if let wanted = environment["PAPERTIME_OPEN_TITLE"],
+               let paper = model.visiblePapers.first(where: {
+                   $0.meta.displayTitle.localizedCaseInsensitiveContains(wanted)
+               }) {
+                model.selection = [paper.id]
+            }
             if environment["PAPERTIME_SCOPE"] == "notes" { model.scope = .notes }
             if let noteID = environment["PAPERTIME_OPEN_NOTE"] { model.notes.openNoteID = noteID }
             if environment["PAPERTIME_SHOW_SEARCH"] != nil {

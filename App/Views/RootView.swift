@@ -85,7 +85,9 @@ struct LibraryWindow: View {
     /// Which of the inspector's tabs is showing. Owned here rather than by the
     /// column, because on a Mac the picker for it lives in the toolbar and the
     /// toolbar is declared here.
-    @State private var inspectorTab = InspectorTab.details
+    @State private var inspectorTab = InspectorTab(
+        rawValue: ProcessInfo.processInfo.environment["PAPERTIME_INSPECTOR_TAB"] ?? ""
+    ) ?? .details
     /// How wide the paper was while it was open, so it can be held at that
     /// width on the way out rather than squeezed to nothing.
     @State private var readerWidth: CGFloat = 600

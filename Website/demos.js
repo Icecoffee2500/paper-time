@@ -391,18 +391,28 @@ function passageToNote() {
       el("button", {
         style:
           "display:block;width:100%;text-align:left;border:none;border-left:3px solid var(--accent);" +
-          "background:var(--accent-soft);border-radius:0 8px 8px 0;padding:9px 12px;cursor:pointer;" +
+          "background:var(--accent-soft);border-radius:0 8px 0 0;padding:9px 12px 6px;cursor:pointer;" +
           "font:italic 13px/1.55 'Times New Roman',serif;color:var(--ink)",
         onclick: backToPage,
-      }, "❝ " + SENTENCE + " "),
+      }, SENTENCE + " "),
       el("div", {
         style:
-          "border-left:3px solid var(--accent);background:var(--accent-soft);" +
+          "border-left:3px solid var(--accent-line);background:var(--accent-soft);" +
           "border-radius:0 8px 8px 0;padding:6px 12px 9px;margin-top:-1px;" +
-          "font:italic 14px/1.5 'Times New Roman',serif;color:var(--ink);text-align:center",
+          "font:italic 14px/1.5 var(--serif);color:var(--ink);text-align:center",
       }, "ℒ(θ) = ℒ\u2099(θ) + Σᵢ (λ⁄2) Fᵢ (θᵢ − θ*ᴀ,ᵢ)²"),
-      el("div", { style: "font-size:10.5px;color:var(--ink-3);padding-left:3px" },
-        "Kirkpatrick 2017 · 3쪽 — 누르면 그 줄로 돌아간다"),
+      // The page rides at the end of the quotation as a small tinted mark,
+      // the way the app sets it — not as a line of prose under it.
+      el("div", {
+        style:
+          "border-left:3px solid var(--accent-line);background:var(--accent-soft);" +
+          "border-radius:0 0 8px 0;padding:0 12px 8px;margin-top:-1px",
+      }, el("button", {
+        style:
+          "border:none;background:var(--accent-soft);color:var(--accent);border-radius:5px;" +
+          "padding:2px 7px;font:600 11px/1 var(--sans);cursor:pointer",
+        onclick: backToPage,
+      }, "3쪽")),
       el("div", {
         contenteditable: "true",
         style: "border:1px solid var(--rule);border-radius:10px;padding:10px 12px;font-size:14px;" +
@@ -585,36 +595,116 @@ function threeDevices() {
     caption);
 }
 
+/* ═════════════════════ the draft that becomes a manuscript ══════════════ */
+
+/// A draft note, and what ⇧⌘E makes of it.
+///
+/// The end of the whole thing, and the hardest to believe without seeing:
+/// the passages you pressed ⌘L on come out as \cite{키}, the notes you linked
+/// come out as their own sentences, and the .bib holds exactly the papers you
+/// actually cited — nothing else in the library.
+function draftToManuscript() {
+  let rendered = false;
+
+  const draft = el("div", { class: "pane", style: "flex:1;min-height:0" },
+    el("div", { style: "font-weight:600;margin-bottom:8px" }, "초안 · 관련연구"),
+    el("div", { style: "font-size:13.5px;line-height:1.7" },
+      el("div", { style: "color:var(--ink-3);font-size:11px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px" },
+        "연속 학습"),
+      el("div", { style: "display:flex;gap:8px;margin-bottom:8px" },
+        el("span", { style: "color:var(--ink-3)" }, "•"),
+        el("span", {},
+          "EWC는 파라미터마다 다른 뻣뻣함의 스프링이다 ",
+          el("span", {
+            style: "background:var(--accent-soft);color:var(--accent);border-radius:5px;" +
+                   "padding:1px 6px;font-size:12px;white-space:nowrap",
+          }, "❝ Kirkpatrick 2017 · 3쪽"))),
+      el("div", { style: "display:flex;gap:8px" },
+        el("span", { style: "color:var(--ink-3)" }, "•"),
+        el("span", {},
+          "이 관점은 ",
+          el("span", { style: "color:var(--accent)" }, "[[시냅스 강화가 기억을 지킨다]]"),
+          " 에서 이어진다."))));
+
+  const out = el("div", { class: "pane", style: "flex:1;min-height:0;font:12.5px/1.65 var(--mono);white-space:pre-wrap" });
+  const hint = el("p", { class: "hint" });
+
+  const render = () => {
+    if (!rendered) {
+      out.textContent = "⇧⌘E를 누르면 여기에 원고가 나온다.";
+      out.style.color = "var(--ink-3)";
+      hint.innerHTML = "초안은 노트 하나다 — 구절과 링크로 짓는다.";
+      return;
+    }
+    out.style.color = "var(--ink)";
+    out.textContent =
+      "EWC는 파라미터마다 다른 뻣뻣함의 스프링이다~\\cite{kirkpatrick2017overcoming}.\n" +
+      "이 관점은 시냅스 강화가 기억을 지킨다는 관찰에서 이어진다.\n\n" +
+      "% draft.bib — 인용한 논문만\n" +
+      "@article{kirkpatrick2017overcoming,\n" +
+      "  title  = {Overcoming catastrophic forgetting in neural networks},\n" +
+      "  author = {Kirkpatrick, James and Pascanu, Razvan and others},\n" +
+      "  year   = {2017}, journal = {PNAS}\n}";
+    hint.innerHTML = "<b style='color:var(--green)'>Overleaf에 붙이면 컴파일된다.</b> 인용 키도, .bib도 손으로 옮기지 않았다.";
+  };
+
+  const go = el("button", {
+    class: "btn btn-primary",
+    onclick: () => { rendered = !rendered; render(); },
+  }, el("span", { class: "key", style: "background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.3);color:#fff" }, "⇧⌘E"),
+     "원고로 렌더");
+
+  render();
+  return el("div", { class: "demo-shell", style: "flex-direction:column;gap:12px" },
+    el("div", { class: "demo-shell", style: "flex:1;min-height:0" }, draft, out),
+    el("div", { style: "display:flex;gap:10px;align-items:center;flex-wrap:wrap" }, go, hint));
+}
+
 /* ═══════════════════════════ the carousel ═══════════════════════════ */
 
+/// Three goes at it, the same three the app's own About window uses: what no
+/// other reader does at all, what makes the window a place to read in, and
+/// what becomes of the reading afterwards. Nine things in a row is a list;
+/// four, then four, then two is an argument.
+const TIERS = [
+  { n: 1, name: "다른 데 없는 것" },
+  { n: 2, name: "읽는 자리" },
+  { n: 3, name: "읽고 난 뒤" },
+];
+
 const SLIDES = [
-  { n: "Ultracopy", h: "수식은 LaTeX으로, 글은 글로",
+  { t: 1, n: "Ultracopy", h: "수식은 LaTeX으로, 글은 글로",
     p: "PDF에서 수식이 든 문단을 그냥 복사하면 글자 부스러기가 나온다. Ultracopy는 같은 선택에서 글은 그대로, 수식은 바로 컴파일되는 LaTeX으로 돌려준다.",
     make: ultracopy },
-  { n: "Search Everything", h: "논문 안의 한 줄까지 찾는다",
-    p: "논문·노트·지도·초안·태그·동작이 한 칸에 있고, 제목에 없는 낱말은 본문에서 찾는다 — 고르면 그 논문의 그 줄로 간다. 빈칸일 때는 이어 읽을 것과 다시 볼 것을 이유와 함께 먼저 내놓는다.",
-    make: searchEverything },
-  { n: "Book mode", h: "책처럼 펴고, 목차로 건너뛴다",
-    p: "두 쪽이 마주 보고, 여백은 잘려 본문만 남는다. 목차는 단축키 하나 — 절 이름을 누르면 그 절로 바로 간다.",
-    make: bookMode },
-  { n: "하이라이트", h: "수식이 있어도 줄은 한 줄이다",
+  { t: 1, n: "하이라이트", h: "수식이 있어도 줄은 한 줄이다",
     p: "수식이 든 줄은 상자가 높아서, 여느 앱의 하이라이트는 위아래 줄까지 삼킨다. 여기서는 글자가 앉은 자리만 덮는다.",
     make: fittedHighlight },
-  { n: "Marks", h: "표시 목록은 문이다",
+  { t: 1, n: "구절 → 노트", h: "구절이 주소를 가지고 간다",
+    p: "읽다가 고른 문장을 노트로 보내면 세로줄이 선 인용이 되고, 끝에 쪽수가 붙는다. 쪽수를 누르면 논문의 그 줄로 돌아간다. 수식이 든 문장은 수식째로 — Ultracopy와 같은 눈으로 읽는다.",
+    make: passageToNote },
+  { t: 1, n: "Search Everything", h: "논문 안의 한 줄까지 찾는다",
+    p: "논문·노트·지도·초안·태그·동작이 한 칸에 있고, 제목에 없는 낱말은 본문에서 찾는다 — 고르면 그 논문의 그 줄로 간다. 빈칸일 때는 이어 읽을 것과 다시 볼 것을 이유와 함께 먼저 내놓는다.",
+    make: searchEverything },
+
+  { t: 2, n: "Book mode", h: "책처럼 펴고, 목차로 건너뛴다",
+    p: "두 쪽이 마주 보고, 여백은 잘려 본문만 남는다. 목차는 단축키 하나 — 절 이름을 누르면 그 절로 바로 간다.",
+    make: bookMode },
+  { t: 2, n: "Marks", h: "표시 목록은 문이다",
     p: "인스펙터의 하이라이트·밑줄·메모를 누르면 논문이 그 자리로 간다. 무엇을 표시했는지가 아니라 어디에 표시했는지가 남는다.",
     make: marksJump },
-  { n: "구절 → 노트", h: "구절이 주소를 가지고 간다",
-    p: "읽다가 고른 문장을 노트로 보내면 세로줄이 선 인용이 되고, 밑에 쪽수가 붙는다. 쪽수를 누르면 논문의 그 줄로 돌아간다. 수식이 든 문장은 수식째로 — Ultracopy와 같은 눈으로 읽는다.",
-    make: passageToNote },
-  { n: "노트 ↔ 노트", h: "노트가 서로를 안다",
-    p: "노트 안에서 다른 노트를 이름으로 부른다. 읽은 것이 쌓이는 대신 엮인다 — 그게 나중에 초고가 된다.",
-    make: noteLinks },
-  { n: "창", h: "필요한 창만 켠다",
-    p: "서가·목록·논문·인스펙터를 하나씩 껐다 켠다. 읽을 때는 논문만, 정리할 때는 넷 다.",
+  { t: 2, n: "창", h: "필요한 창만 켠다",
+    p: "서가·목록·논문·인스펙터를 하나씩 껐다 켠다. 읽을 때는 논문만, 정리할 때는 넷 다. 열의 너비는 창이 허락하는 데까지 늘어난다.",
     make: panes },
-  { n: "세 기기", h: "폴더 하나, 기기 셋",
+  { t: 2, n: "세 기기", h: "폴더 하나, 기기 셋",
     p: "맥·아이패드·아이폰이 같은 폴더를 본다. 표시는 작은 저널로 먼저 건너가고 PDF는 뒤따라온다.",
     make: threeDevices },
+
+  { t: 3, n: "노트 ↔ 노트", h: "노트가 서로를 안다",
+    p: "노트 안에서 다른 노트를 이름으로 부른다. 읽은 것이 쌓이는 대신 엮인다 — 그게 나중에 초고가 된다.",
+    make: noteLinks },
+  { t: 3, n: "초안 → 원고", h: "노트는 글이 되어야 한다",
+    p: "초안도 노트 하나다. 구절은 ❝로, 노트는 [[링크]]로 넣고 ⇧⌘E를 누르면 구절이 \\cite{키}가 되고, 인용한 논문만 담은 .bib이 함께 나온다.",
+    make: draftToManuscript },
 ];
 
 function mountCarousel() {
@@ -623,20 +713,37 @@ function mountCarousel() {
   let index = 0;
   const nodes = [];
 
+  const chips = [];
+
   SLIDES.forEach((s, i) => {
     const demo = s.make();
+    const tier = TIERS.find((t) => t.n === s.t);
     const slide = el("section", { class: "slide", "aria-hidden": "true" },
-      el("h2", {}, s.h),
-      el("p", { class: "pitch" }, s.p),
+      el("div", { class: "said" },
+        el("span", { class: "tag" }, tier.name),
+        el("h2", {}, s.h),
+        el("p", { class: "pitch" }, s.p)),
       el("div", { class: "demo" }, demo));
     slide.demo = demo;
     track.append(slide);
     nodes.push(slide);
-
-    rail.append(el("button", {
-      class: "chip", onclick: () => go(i),
-    }, el("span", { class: "n" }, String(i + 1).padStart(2, "0")), s.n));
   });
+
+  // The rail is grouped the way the app's source list is: a small caption
+  // over the rows that belong under it.
+  for (const tier of TIERS) {
+    const row = el("div", { class: "tier-row" });
+    SLIDES.forEach((s, i) => {
+      if (s.t !== tier.n) return;
+      const chip = el("button", { class: "chip", onclick: () => go(i) },
+        el("span", { class: "n" }, String(i + 1).padStart(2, "0")), s.n);
+      chips[i] = chip;
+      row.append(chip);
+    });
+    if (!row.children.length) continue;
+    rail.append(el("div", { class: "tier" },
+      el("div", { class: "tier-name" }, tier.name), row));
+  }
 
   const go = (next, dir) => {
     const count = SLIDES.length;
@@ -647,8 +754,8 @@ function mountCarousel() {
       node.classList.toggle("is-current", i === target);
       node.setAttribute("aria-hidden", i === target ? "false" : "true");
     });
-    [...rail.children].forEach((c, i) => c.classList.toggle("is-current", i === target));
-    rail.children[target]?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+    chips.forEach((c, i) => c.classList.toggle("is-current", i === target));
+    chips[target]?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
     index = target;
     nodes[target].demo.activate?.();
   };

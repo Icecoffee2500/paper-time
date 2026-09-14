@@ -117,6 +117,9 @@ struct FeatureShowcase<Header: View>: View {
 
     private func section(_ highlight: ReleaseNotes.Highlight) -> some View {
         VStack(alignment: .leading, spacing: 9) {
+            // No badge on the first tier's rows any more: the heading over
+            // them has just said what they are, and saying it again on every
+            // one of five turns an argument into a row of stickers.
             HStack(spacing: 9) {
                 Image(systemName: highlight.symbol)
                     .font(.system(size: 15))
@@ -127,17 +130,6 @@ struct FeatureShowcase<Header: View>: View {
                     .foregroundStyle(highlight.featured ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
                 if let action = highlight.action {
                     KeyCap(action: action)
-                }
-                if highlight.featured {
-                    // Said once, in a word, rather than by shouting: the tint
-                    // on the title and the ring round the demonstration are
-                    // already saying it.
-                    Text(ReleaseNotes.string("핵심", "Headline"))
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(.tint))
                 }
             }
 
