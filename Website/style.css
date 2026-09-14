@@ -1,45 +1,58 @@
-/* Paper Time — the page you land on knowing nothing.
-   Paper for a ground, ink for the words, and a highlighter for the one
-   phrase in each sentence that has to land. */
+/* Paper Time — the landing page, set in the app's own grammar.
+   Everything here is borrowed from the window it is selling: the cool ground
+   with rounded white panels floating clear of it, the system face, the accent
+   used for the one thing in a view that goes somewhere, the three corner radii
+   (row 8, popover 14, panel 22), and the highlighter — which is the app's own
+   gesture and so the one flourish this page allows itself. */
 
 :root {
-  --paper: #f6f3ec;
-  --paper-2: #fffdf8;
-  --card: #ffffff;
-  --ink: #16130f;
-  --ink-2: #575049;
-  --ink-3: #8c837a;
-  --rule: #e2dbcd;
-  --accent: #1f5f8b;
-  --accent-soft: #e7f0f7;
-  --mark: #ffd84d;
-  --mark-soft: #fff0b0;
-  --green: #2f7d54;
-  --shadow-1: 0 1px 2px rgba(28, 22, 14, .07), 0 8px 28px rgba(28, 22, 14, .07);
-  --shadow-2: 0 2px 6px rgba(28, 22, 14, .10), 0 26px 60px rgba(28, 22, 14, .13);
-  --display: "Fraunces", "Gowun Batang", Georgia, serif;
-  --korean: "Gowun Batang", "Apple SD Gothic Neo", serif;
-  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue",
-          "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", sans-serif;
+  color-scheme: light;
+  /* The window's ground: what the panels float on. */
+  --ground: #e7ecf5;
+  --ground-2: #dde5f1;
+  /* A column panel, and a pane inside one. */
+  --panel: #ffffff;
+  --panel-2: #f6f7f9;
+  --ink: #16161a;
+  --ink-2: #55555e;
+  --ink-3: #8b8b94;
+  --rule: rgba(0, 0, 0, .09);
+  --accent: #0a6cff;
+  --accent-soft: rgba(10, 108, 255, .10);
+  --accent-line: rgba(10, 108, 255, .55);
+  --mark: #ffe14d;
+  --mark-soft: rgba(255, 225, 77, .55);
+  --green: #1f9254;
+  --row: 8px;
+  --popover: 14px;
+  --panel-r: 22px;
+  --shadow-1: 0 1px 2px rgba(16, 24, 40, .06), 0 6px 18px rgba(16, 24, 40, .07);
+  --shadow-2: 0 1px 3px rgba(16, 24, 40, .08), 0 22px 60px rgba(16, 24, 40, .16);
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Pretendard",
+          "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
+  --serif: "Times New Roman", "Nanum Myeongjo", serif;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --paper: #14120f;
-    --paper-2: #1b1815;
-    --card: #201d19;
-    --ink: #f0ece4;
-    --ink-2: #b4aca1;
-    --ink-3: #837b71;
-    --rule: #322d27;
-    --accent: #7fb6df;
-    --accent-soft: #1b2a35;
-    --mark: #f0c637;
-    --mark-soft: #4a3c12;
-    --green: #6cc194;
-    --shadow-1: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 28px rgba(0, 0, 0, .34);
-    --shadow-2: 0 2px 6px rgba(0, 0, 0, .5), 0 26px 60px rgba(0, 0, 0, .45);
+    color-scheme: dark;
+    --ground: #16181d;
+    --ground-2: #101216;
+    --panel: #1f2127;
+    --panel-2: #272a31;
+    --ink: #f2f2f5;
+    --ink-2: #b3b4bd;
+    --ink-3: #82838d;
+    --rule: rgba(255, 255, 255, .11);
+    --accent: #55a0ff;
+    --accent-soft: rgba(85, 160, 255, .16);
+    --accent-line: rgba(85, 160, 255, .6);
+    --mark: #e3c02e;
+    --mark-soft: rgba(227, 192, 46, .32);
+    --green: #56c98a;
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, .5), 0 6px 18px rgba(0, 0, 0, .35);
+    --shadow-2: 0 1px 3px rgba(0, 0, 0, .55), 0 22px 60px rgba(0, 0, 0, .5);
   }
 }
 
@@ -48,21 +61,29 @@ html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
 
 body {
   margin: 0;
-  background: var(--paper);
   color: var(--ink);
-  font: 16px/1.6 var(--sans);
+  font: 15px/1.6 var(--sans);
   overflow-x: hidden;
+  /* The ground is a wash rather than a flat fill, the way the window's is
+     a material with the desktop coming up through it. */
+  background:
+    radial-gradient(120% 80% at 12% -10%, rgba(255, 255, 255, .9), transparent 60%),
+    linear-gradient(160deg, var(--ground), var(--ground-2));
+  background-attachment: fixed;
+  min-height: 100svh;
 }
 
-a { color: var(--accent); }
+a { color: var(--accent); text-underline-offset: 2px; }
 button { font: inherit; color: inherit; }
 
-/* The highlighter, as a thing the page does to its own words. */
+/* The highlighter, fitted to the words — which is what the app does. */
 .mark {
-  background: linear-gradient(transparent 58%, var(--mark-soft) 58%, var(--mark-soft) 94%, transparent 94%);
-  padding: 0 .12em;
+  background: linear-gradient(transparent 56%, var(--mark-soft) 56%, var(--mark-soft) 94%, transparent 94%);
+  padding: 0 .1em;
   border-radius: 2px;
 }
+
+.wrap { max-width: 1240px; margin: 0 auto; width: 100%; padding: 0 22px; }
 
 /* ─────────────────────────── the first screen ─────────────────────────── */
 
@@ -70,62 +91,65 @@ button { font: inherit; color: inherit; }
   min-height: 100svh;
   display: flex;
   flex-direction: column;
-  padding: 0 20px;
+  padding: 0 22px;
 }
 
 .hero {
-  max-width: 1080px;
+  max-width: 1240px;
   margin: 0 auto;
   width: 100%;
-  padding: clamp(28px, 5vh, 60px) 0 clamp(14px, 2.4vh, 26px);
+  padding: clamp(26px, 4.6vh, 54px) 0 clamp(12px, 2vh, 22px);
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 28px;
+  gap: 26px;
   flex-wrap: wrap;
 }
 
 .wordmark {
-  font-family: var(--display);
+  font-size: clamp(34px, 5vw, 54px);
   font-weight: 700;
-  font-size: clamp(38px, 6.4vw, 68px);
-  line-height: .98;
-  letter-spacing: -.025em;
-  margin: 0 0 10px;
+  letter-spacing: -.028em;
+  line-height: 1.02;
+  margin: 0 0 8px;
 }
-.wordmark .t { font-style: italic; }
+.wordmark .t { color: var(--accent); }
 
 .lede {
-  font-family: var(--korean);
-  font-size: clamp(17px, 2.1vw, 22px);
+  font-size: clamp(16px, 1.9vw, 20px);
   line-height: 1.5;
   color: var(--ink-2);
   margin: 0;
-  max-width: 30ch;
+  max-width: 34ch;
 }
-.lede b { color: var(--ink); font-weight: 700; }
+.lede b { color: var(--ink); font-weight: 600; }
 
-.actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.actions { display: flex; gap: 9px; align-items: stretch; flex-wrap: wrap; }
 
+/* The app's own buttons: a filled one for the thing you came for, glassy
+   panels for the rest. */
 .btn {
   display: inline-flex; align-items: center; gap: 9px;
-  border: 1px solid transparent; border-radius: 12px;
-  padding: 12px 18px; font-size: 15px; font-weight: 600;
+  border: 1px solid transparent; border-radius: 11px;
+  padding: 10px 16px; font-size: 14.5px; font-weight: 600;
   text-decoration: none; cursor: pointer; background: none;
-  transition: transform .12s ease, background .15s ease, border-color .15s ease;
+  transition: transform .12s ease, filter .15s ease, background .15s ease;
 }
 .btn:active { transform: translateY(1px); }
 .btn-primary { background: var(--accent); color: #fff; box-shadow: var(--shadow-1); }
-.btn-primary:hover { filter: brightness(1.08); }
-.btn-primary .sub { font-weight: 400; font-size: 12.5px; opacity: .85; }
-.btn-ghost { border-color: var(--rule); background: var(--paper-2); color: var(--ink); }
-.btn-ghost:hover { border-color: var(--ink-3); }
+.btn-primary:hover { filter: brightness(1.07); }
+.btn-primary .sub { font-weight: 400; font-size: 12px; opacity: .82; }
+.btn-ghost {
+  background: var(--panel); color: var(--ink);
+  border-color: var(--rule); box-shadow: var(--shadow-1);
+}
+.btn-ghost:hover { background: var(--panel-2); }
 
 /* ───────────────────────────── the carousel ───────────────────────────── */
 
 .stage {
   flex: 1;
-  max-width: 1080px;
+  max-width: 1240px;
   width: 100%;
   margin: 0 auto;
   display: flex;
@@ -133,213 +157,211 @@ button { font: inherit; color: inherit; }
   min-height: 0;
 }
 
-.viewport {
-  position: relative;
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  align-items: stretch;
-}
+.viewport { position: relative; flex: 1; min-height: 0; display: flex; align-items: stretch; }
 
-.track {
-  flex: 1;
-  position: relative;
-  overflow: hidden;
-  border-radius: 20px;
-}
+.track { flex: 1; position: relative; overflow: hidden; border-radius: var(--panel-r); }
 
+/* One slide is a column panel: white, rounded to the panel radius, floating
+   clear of the ground. */
 .slide {
   position: absolute;
   inset: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--card);
+  display: grid;
+  grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: clamp(18px, 2.4vw, 34px);
+  align-items: stretch;
+  background: var(--panel);
   border: 1px solid var(--rule);
-  border-radius: 20px;
+  border-radius: var(--panel-r);
   box-shadow: var(--shadow-2);
-  padding: clamp(16px, 2.4vh, 26px) clamp(16px, 3vw, 34px) clamp(14px, 2vh, 22px);
+  padding: clamp(18px, 2.6vh, 30px) clamp(18px, 2.6vw, 32px);
   opacity: 0;
   visibility: hidden;
-  transform: translateX(var(--from, 40px)) scale(.985);
-  transition: opacity .34s ease, transform .34s cubic-bezier(.22, .61, .36, 1), visibility .34s;
+  transform: translateX(var(--from, 36px)) scale(.99);
+  transition: opacity .32s ease, transform .32s cubic-bezier(.22, .61, .36, 1), visibility .32s;
 }
 .slide.is-current { opacity: 1; visibility: visible; transform: none; }
 
+/* The words sit against the middle of the demonstration beside them,
+   which is where the eye goes first on a wide screen. */
+.slide .said { align-self: center; }
+
+.slide .tag {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 600; letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: 4px 10px;
+  margin-bottom: 12px;
+}
+
 .slide h2 {
-  font-family: var(--display);
-  font-weight: 600;
-  font-size: clamp(21px, 2.7vw, 30px);
-  letter-spacing: -.015em;
-  margin: 0 0 4px;
+  font-size: clamp(20px, 2.1vw, 27px);
+  font-weight: 650;
+  letter-spacing: -.016em;
+  line-height: 1.28;
+  margin: 0 0 8px;
 }
 .slide .pitch {
-  font-family: var(--korean);
   color: var(--ink-2);
-  margin: 0 0 clamp(10px, 1.8vh, 18px);
-  font-size: clamp(14px, 1.5vw, 16.5px);
-  line-height: 1.5;
-  max-width: 62ch;
+  margin: 0;
+  font-size: clamp(13.5px, 1.1vw, 15px);
+  line-height: 1.62;
 }
-.slide .demo { flex: 1; min-height: 0; display: flex; }
+.slide .demo { display: flex; min-width: 0; min-height: 0; }
 
 .arrow {
   flex: 0 0 auto;
-  width: 44px;
+  width: 40px;
   border: none;
   background: none;
   cursor: pointer;
   color: var(--ink-3);
   display: grid;
   place-items: center;
-  font-size: 26px;
+  font-size: 24px;
   border-radius: 12px;
   transition: color .15s, background .15s;
 }
-.arrow:hover { color: var(--ink); background: rgba(128, 120, 108, .1); }
+.arrow:hover { color: var(--ink); background: rgba(120, 120, 130, .12); }
 
+/* The rail reads like the app's source list: small captions, and a row that
+   is tinted when it is the one you are in. */
 .rail {
   display: flex;
-  gap: 6px;
+  align-items: flex-end;
+  gap: 18px;
   overflow-x: auto;
   scrollbar-width: none;
-  padding: clamp(10px, 1.6vh, 16px) 44px clamp(12px, 2.2vh, 22px);
+  padding: clamp(10px, 1.4vh, 15px) 40px clamp(12px, 2vh, 20px);
   scroll-snap-type: x proximity;
 }
 .rail::-webkit-scrollbar { display: none; }
+
+.tier { display: flex; flex-direction: column; gap: 4px; flex: 0 0 auto; }
+.tier-name {
+  font-size: 10.5px; font-weight: 600; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--ink-3);
+  padding-left: 10px;
+}
+.tier-row { display: flex; gap: 4px; }
 
 .chip {
   flex: 0 0 auto;
   scroll-snap-align: center;
   border: 1px solid transparent;
   background: none;
-  border-radius: 999px;
-  padding: 6px 13px;
+  border-radius: var(--row);
+  padding: 6px 11px;
   font-size: 13px;
-  color: var(--ink-3);
+  color: var(--ink-2);
   cursor: pointer;
   white-space: nowrap;
-  transition: color .15s, background .15s, border-color .15s;
+  transition: color .15s, background .15s;
 }
-.chip:hover { color: var(--ink); }
-.chip .n { font-variant-numeric: tabular-nums; opacity: .55; margin-right: 6px; }
+.chip:hover { background: rgba(120, 120, 130, .1); color: var(--ink); }
+.chip .n { font-variant-numeric: tabular-nums; opacity: .5; margin-right: 6px; }
 .chip.is-current {
-  color: var(--ink);
-  background: var(--paper-2);
-  border-color: var(--rule);
+  color: var(--accent);
+  background: var(--accent-soft);
   font-weight: 600;
 }
-.chip.is-current .n { color: var(--accent); opacity: 1; }
+.chip.is-current .n { color: var(--accent); opacity: .8; }
 
 /* ───────────────────────────── demo furniture ─────────────────────────── */
 
-.demo-shell {
-  flex: 1;
-  display: flex;
-  min-height: 0;
-  gap: 14px;
-  width: 100%;
-}
+.demo-shell { flex: 1; display: flex; min-height: 0; min-width: 0; gap: 14px; width: 100%; }
 .pane {
-  background: var(--paper-2);
+  background: var(--panel);
   border: 1px solid var(--rule);
-  border-radius: 14px;
-  padding: 14px 16px;
+  border-radius: var(--popover);
+  box-shadow: var(--shadow-1);
+  padding: 13px 15px;
   overflow: auto;
   min-height: 0;
 }
 .paper-face {
-  font-family: "Times New Roman", "Nanum Myeongjo", serif;
-  font-size: clamp(10.5px, 1.15vw, 13px);
+  font-family: var(--serif);
+  font-size: clamp(10.5px, .95vw, 13px);
   line-height: 1.62;
   color: var(--ink);
   text-align: justify;
   hyphens: auto;
 }
-.paper-face h4 {
-  font-size: 1.12em;
-  margin: 0 0 .5em;
-  font-weight: 700;
-}
+.paper-face h4 { font-size: 1.12em; margin: 0 0 .5em; font-weight: 700; }
 .paper-face p { margin: 0 0 .75em; }
 
+/* A key, the way the app draws one in a menu. */
 .key {
   font: 600 11.5px/1 var(--mono);
   border: 1px solid var(--rule);
-  border-bottom-width: 2px;
   border-radius: 6px;
   padding: 4px 7px;
-  background: var(--paper-2);
+  background: var(--panel-2);
   color: var(--ink-2);
   white-space: nowrap;
 }
 
 .seg {
   display: inline-flex;
-  background: var(--paper);
-  border: 1px solid var(--rule);
-  border-radius: 10px;
-  padding: 3px;
-  gap: 3px;
+  background: rgba(120, 120, 130, .12);
+  border-radius: 9px;
+  padding: 2px;
+  gap: 2px;
 }
 .seg button {
   border: none; background: none; cursor: pointer;
-  padding: 6px 13px; border-radius: 7px; font-size: 13px; font-weight: 500;
+  padding: 5px 12px; border-radius: 7px; font-size: 13px; font-weight: 500;
   color: var(--ink-2); transition: background .15s, color .15s;
 }
-.seg button.on { background: var(--card); color: var(--ink); box-shadow: var(--shadow-1); }
+.seg button.on { background: var(--panel); color: var(--ink); box-shadow: var(--shadow-1); }
 
 .hint { font-size: 12.5px; color: var(--ink-3); margin: 8px 0 0; }
-.hint b { color: var(--ink-2); }
+.hint b { color: var(--ink-2); font-weight: 600; }
 
 /* ───────────────────────────── below the fold ─────────────────────────── */
 
-.why {
-  max-width: 780px;
-  margin: 0 auto;
-  padding: clamp(60px, 12vh, 130px) 0 clamp(40px, 8vh, 90px);
-}
+.why { max-width: 760px; margin: 0 auto; padding: clamp(56px, 11vh, 120px) 22px clamp(36px, 7vh, 80px); }
 .why .big {
-  font-family: var(--korean);
-  font-weight: 700;
-  font-size: clamp(24px, 4.2vw, 40px);
-  line-height: 1.42;
-  letter-spacing: -.01em;
-  margin: 0 0 26px;
+  font-weight: 650;
+  font-size: clamp(23px, 3.6vw, 36px);
+  line-height: 1.4;
+  letter-spacing: -.02em;
+  margin: 0 0 24px;
 }
 .why p {
-  font-size: clamp(15.5px, 1.7vw, 18px);
-  line-height: 1.78;
+  font-size: clamp(15px, 1.6vw, 17px);
+  line-height: 1.75;
   color: var(--ink-2);
-  margin: 0 0 18px;
+  margin: 0 0 17px;
 }
 .why p b { color: var(--ink); font-weight: 600; }
 
 .facts {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 14px;
-  margin-top: 40px;
+  gap: 12px;
+  margin-top: 38px;
 }
 .fact {
-  background: var(--card);
+  background: var(--panel);
   border: 1px solid var(--rule);
-  border-radius: 14px;
-  padding: 16px 18px;
+  border-radius: var(--popover);
+  box-shadow: var(--shadow-1);
+  padding: 15px 17px;
 }
-.fact h3 {
-  font-family: var(--display);
-  font-size: 16.5px;
-  margin: 0 0 6px;
-  font-weight: 600;
-}
-.fact p { font-size: 14px; line-height: 1.62; color: var(--ink-2); margin: 0; }
+.fact h3 { font-size: 15.5px; margin: 0 0 5px; font-weight: 650; }
+.fact p { font-size: 13.5px; line-height: 1.6; color: var(--ink-2); margin: 0; }
 
 footer {
-  max-width: 780px;
+  max-width: 760px;
   margin: 0 auto;
-  padding: 26px 0 70px;
+  padding: 24px 22px 70px;
   border-top: 1px solid var(--rule);
-  font-size: 13.5px;
+  font-size: 13px;
   color: var(--ink-3);
   display: flex;
   justify-content: space-between;
@@ -351,98 +373,72 @@ footer {
 
 dialog {
   border: none;
-  border-radius: 20px;
+  border-radius: var(--panel-r);
   padding: 0;
-  background: var(--card);
+  background: var(--panel);
   color: var(--ink);
   max-width: min(720px, calc(100vw - 32px));
   width: 100%;
   box-shadow: var(--shadow-2);
 }
-dialog::backdrop { background: rgba(20, 16, 10, .45); backdrop-filter: blur(3px); }
-.sheet { padding: 26px clamp(20px, 4vw, 34px) 30px; }
-.sheet h2 {
-  font-family: var(--display); font-weight: 600;
-  font-size: 24px; margin: 0 0 4px;
-}
-.sheet .sub { color: var(--ink-2); margin: 0 0 22px; font-size: 14.5px; }
+dialog::backdrop { background: rgba(12, 16, 24, .4); backdrop-filter: blur(4px); }
+.sheet { padding: 24px clamp(20px, 4vw, 32px) 28px; }
+.sheet h2 { font-weight: 650; font-size: 22px; margin: 0 0 4px; letter-spacing: -.015em; }
+.sheet .sub { color: var(--ink-2); margin: 0 0 20px; font-size: 14px; }
 .sheet-close {
   position: sticky; top: 0; float: right;
   border: none; background: none; cursor: pointer;
-  font-size: 22px; color: var(--ink-3); line-height: 1; padding: 4px 6px;
+  font-size: 20px; color: var(--ink-3); line-height: 1; padding: 4px 6px;
 }
 
-.step { display: flex; gap: 16px; padding: 16px 0; border-top: 1px solid var(--rule); }
+.step { display: flex; gap: 15px; padding: 16px 0; border-top: 1px solid var(--rule); }
 .step:first-of-type { border-top: none; }
 .step .no {
-  flex: 0 0 26px; height: 26px; border-radius: 50%;
+  flex: 0 0 24px; height: 24px; border-radius: 50%;
   background: var(--accent); color: #fff;
   display: grid; place-items: center;
-  font-size: 13px; font-weight: 700;
+  font-size: 12.5px; font-weight: 700;
 }
 .step .body { flex: 1; min-width: 0; }
-.step h3 { margin: 2px 0 6px; font-size: 16px; }
+.step h3 { margin: 1px 0 6px; font-size: 15.5px; font-weight: 650; }
 .step p { margin: 0 0 10px; font-size: 14px; color: var(--ink-2); line-height: 1.6; }
 .step img {
   max-width: 100%; border-radius: 10px; border: 1px solid var(--rule);
-  display: block; background: var(--paper);
+  display: block; background: var(--panel-2);
 }
 .step .shot-sm { max-width: 300px; }
 
 .vrow {
   display: flex; align-items: baseline; gap: 14px;
-  padding: 14px 0; border-top: 1px solid var(--rule); flex-wrap: wrap;
+  padding: 13px 0; border-top: 1px solid var(--rule); flex-wrap: wrap;
 }
 .vrow:first-of-type { border-top: none; }
 .vrow .v { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 54px; }
-.vrow .n { color: var(--ink-3); font-size: 14px; flex: 1 1 120px; }
+.vrow .n { color: var(--ink-3); font-size: 13.5px; flex: 1 1 120px; }
 .vrow .s { color: var(--ink-3); font-size: 13px; }
 
 /* ─────────────────────────────── narrow ───────────────────────────────── */
 
+@media (max-width: 1000px) {
+  .slide { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 14px; }
+  .slide .said { align-self: start; }
+}
+
 @media (max-width: 860px) {
-  .hero { align-items: flex-start; padding-bottom: 14px; }
+  .hero { align-items: flex-start; padding-bottom: 12px; }
   .arrow { position: absolute; top: 50%; transform: translateY(-50%); z-index: 3;
-           background: var(--card); border: 1px solid var(--rule);
-           width: 36px; height: 36px; border-radius: 50%; font-size: 19px;
+           background: var(--panel); border: 1px solid var(--rule);
+           width: 34px; height: 34px; border-radius: 50%; font-size: 18px;
            box-shadow: var(--shadow-1); }
   .arrow.prev { left: 4px; }
   .arrow.next { right: 4px; }
-  .viewport { position: relative; }
-  .rail { padding-left: 8px; padding-right: 8px; }
+  .rail { padding-left: 8px; padding-right: 8px; gap: 12px; }
   .demo-shell { flex-direction: column; }
   .screen { min-height: auto; padding-bottom: 8px; }
-  .stage { min-height: 74svh; }
+  .stage { min-height: 78svh; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   * { transition-duration: .01ms !important; animation-duration: .01ms !important; }
   html { scroll-behavior: auto; }
-}
-
-/* ─────────────────────────── the real thing ───────────────────────────── */
-
-.shots {
-  max-width: 1080px;
-  margin: 0 auto;
-  padding: clamp(48px, 9vh, 96px) 0 0;
-  display: grid;
-  gap: clamp(24px, 4vh, 44px);
-}
-.shots figure { margin: 0; }
-.shots img {
-  width: 100%;
-  height: auto;
-  display: block;
-  border-radius: 14px;
-  border: 1px solid var(--rule);
-  box-shadow: var(--shadow-2);
-  background: var(--card);
-}
-.shots figcaption {
-  font-family: var(--korean);
-  font-size: clamp(13.5px, 1.5vw, 15.5px);
-  color: var(--ink-3);
-  margin-top: 12px;
-  text-align: center;
 }

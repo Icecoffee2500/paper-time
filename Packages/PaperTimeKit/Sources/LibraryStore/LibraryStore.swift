@@ -49,11 +49,21 @@ public actor LibraryStore {
     @discardableResult
     public func bootstrap(displayName: String = "Paper Time") throws -> LibraryManifest {
         try FileOperations.ensureDirectory(at: root)
+        // A library that another device wrote into iCloud is here only as
+        // stubs until asked for. Ask, and wait for the manifest, before
+        // deciding there is none — a fresh manifest written over a stub is
+        // the other device's library lost.
+        let support = LibraryLayout.supportDirectoryURL(inLibrary: root)
+        let manifestURL = LibraryLayout.manifestURL(inLibrary: root)
+        FileOperations.ensureDownloaded(directory: support, waitingFor: manifestURL)
+        FileOperations.ensureDownloaded(directory: root, waitingFor: manifestURL, timeout: 2)
+        if FileOperations.hasPlaceholders(in: support), !FileManager.default.fileExists(atPath: manifestURL.path(percentEncoded: false)) {
+            throw FileOperations.Failure.stillDownloading(manifestURL)
+        }
         try migrateFromFoldersPerPaperIfNeeded()
-        try FileOperations.ensureDirectory(at: LibraryLayout.supportDirectoryURL(inLibrary: root))
+        try FileOperations.ensureDirectory(at: support)
         try FileOperations.ensureDirectory(at: LibraryLayout.recordsDirectoryURL(inLibrary: root))
 
-        let manifestURL = LibraryLayout.manifestURL(inLibrary: root)
         if FileManager.default.fileExists(atPath: manifestURL.path(percentEncoded: false)) {
             return try loadManifest()
         }
@@ -135,11 +145,7 @@ public actor LibraryStore {
         try FileOperations.ensureDirectory(at: LibraryLayout.recordsDirectoryURL(inLibrary: root))
 
         for oldFolder in (try? FileOperations.subdirectories(of: oldPapers)) ?? [] {
-            let contents = (try? manager.contentsOfDirectory(
-                at: oldFolder,
-                includingPropertiesForKeys: nil,
-                options: [.skipsHiddenFiles]
-            )) ?? []
+            let contents = (try? FileOperations.visibleContents(of: oldFolder)) ?? []
 
             guard let metaURL = contents.first(where: { $0.lastPathComponent == "meta.json" }),
                   var meta = try? FileOperations.decode(PaperMeta.self, at: metaURL)
@@ -217,9 +223,11 @@ public actor LibraryStore {
             do {
                 papers.append(try load(folder))
             } catch {
+                LibraryDiagnostics.log("load failed \(folder.url.lastPathComponent): \(error)")
                 failures.append((folder.url, error))
             }
         }
+        LibraryDiagnostics.log("loadAll: \(papers.count) papers, \(failures.count) failures")
         return (papers, failures)
     }
 
@@ -274,11 +282,7 @@ public actor LibraryStore {
     public func loadNotes() -> [Zettel] {
         migrateNotesIntoSlipBox()
         let directory = LibraryLayout.slipBoxURL(inLibrary: root)
-        let urls = (try? FileManager.default.contentsOfDirectory(
-            at: directory,
-            includingPropertiesForKeys: [.contentModificationDateKey],
-            options: [.skipsHiddenFiles]
-        )) ?? []
+        let urls = (try? FileOperations.visibleContents(of: directory, keys: [.contentModificationDateKey])) ?? []
 
         return urls
             .filter { $0.pathExtension == "md" }
@@ -318,15 +322,11 @@ public actor LibraryStore {
     private func migrateNotesIntoSlipBox() {
         let manager = FileManager.default
         let recordsDirectory = LibraryLayout.recordsDirectoryURL(inLibrary: root)
-        guard let records = try? manager.contentsOfDirectory(
-            at: recordsDirectory, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]
-        ) else { return }
+        guard let records = try? FileOperations.visibleContents(of: recordsDirectory) else { return }
 
         var taken = Set(
-            ((try? manager.contentsOfDirectory(
-                at: LibraryLayout.slipBoxURL(inLibrary: root),
-                includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]
-            )) ?? []).map { $0.deletingPathExtension().lastPathComponent }
+            ((try? FileOperations.visibleContents(of: LibraryLayout.slipBoxURL(inLibrary: root))) ?? [])
+                .map { $0.deletingPathExtension().lastPathComponent }
         )
 
         for record in records {
@@ -336,10 +336,8 @@ public actor LibraryStore {
             if manager.fileExists(atPath: folder.legacyNoteURL.path) {
                 sources.append(folder.legacyNoteURL)
             }
-            sources += ((try? manager.contentsOfDirectory(
-                at: folder.notesDirectoryURL, includingPropertiesForKeys: nil,
-                options: [.skipsHiddenFiles]
-            )) ?? []).filter { $0.pathExtension == "md" }
+            sources += ((try? FileOperations.visibleContents(of: folder.notesDirectoryURL)) ?? [])
+                .filter { $0.pathExtension == "md" }
 
             for source in sources {
                 guard let text = try? String(contentsOf: source, encoding: .utf8) else { continue }
@@ -385,13 +383,14 @@ public actor LibraryStore {
         guard let enumerator = FileManager.default.enumerator(
             at: root,
             includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+            options: [.skipsPackageDescendants]
         ) else { return [] }
 
         var found: [URL] = []
         while let item = enumerator.nextObject() as? URL {
             let path = Self.normalizedPath(item)
-            if path == support || path.hasPrefix(support + "/")
+            if item.lastPathComponent.hasPrefix(".")
+                || path == support || path.hasPrefix(support + "/")
                 || path == trash || path.hasPrefix(trash + "/") {
                 enumerator.skipDescendants()
                 continue
@@ -409,7 +408,9 @@ public actor LibraryStore {
                 .compactMap { try? loadMeta($0) }
                 .map(\.file.relativePath)
         )
-        return documentURLs().filter { !claimed.contains(relativePath(of: $0)) }
+        let loose = documentURLs().filter { !claimed.contains(relativePath(of: $0)) }
+        LibraryDiagnostics.log("loose documents: \(loose.count) of \(claimed.count) claimed")
+        return loose
     }
 
     /// PDFs in the library that the given records do not account for.
@@ -623,11 +624,7 @@ public actor LibraryStore {
 
     /// Page indices that have a stored drawing.
     public func inkPageIndices(in folder: PaperFolder) -> [Int] {
-        let contents = try? FileManager.default.contentsOfDirectory(
-            at: folder.inkDirectoryURL,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
-        )
+        let contents = try? FileOperations.visibleContents(of: folder.inkDirectoryURL)
         return (contents ?? [])
             .compactMap { LibraryLayout.pageIndex(fromInkFileName: $0.lastPathComponent) }
             .sorted()

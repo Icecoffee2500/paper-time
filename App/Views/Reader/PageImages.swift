@@ -1,7 +1,9 @@
 #if os(macOS)
 import AppKit
 import CoreImage
+import InkEngine
 import PDFKit
+import PencilKit
 
 /// Where the pictures are on a page.
 ///
@@ -190,12 +192,13 @@ final class FigureOverlayView: NSView {
 final class PageOverlay: NSView {
     private let mask: MarginMaskView
 
-    init(page: PDFPage) {
+    init(page: PDFPage, drawing: @escaping () -> PKDrawing = { PKDrawing() }) {
         mask = MarginMaskView(page: page)
         super.init(frame: .zero)
         let marks = MarkOverlayView(page: page)
         let figures = FigureOverlayView(page: page)
-        for child in [mask, figures, marks] as [NSView] {
+        let ink = InkOverlayView(page: page, drawing: drawing)
+        for child in [mask, figures, marks, ink] as [NSView] {
             child.autoresizingMask = [.width, .height]
             addSubview(child)
         }
@@ -212,5 +215,48 @@ final class PageOverlay: NSView {
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
+}
+
+/// The page's ink, drawn from its sidecar the way the iPad draws it —
+/// PencilKit renders the strokes — so the two look the same and a stroke
+/// made on the iPad is on the Mac as soon as its few kilobytes arrive.
+final class InkOverlayView: NSView {
+    private weak var page: PDFPage?
+    private let drawing: () -> PKDrawing
+    private var cached: (drawing: PKDrawing, image: NSImage)?
+
+    nonisolated(unsafe) private static var byPage: [ObjectIdentifier: Weak] = [:]
+    private struct Weak { weak var view: InkOverlayView? }
+
+    init(page: PDFPage, drawing: @escaping () -> PKDrawing) {
+        self.page = page
+        self.drawing = drawing
+        super.init(frame: .zero)
+        Self.byPage[ObjectIdentifier(page)] = Weak(view: self)
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    static func refresh(_ page: PDFPage) {
+        byPage[ObjectIdentifier(page)]?.view?.needsDisplay = true
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    override var isOpaque: Bool { false }
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard let page else { return }
+        let strokes = drawing()
+        guard !strokes.strokes.isEmpty, bounds.width > 0 else { return }
+        let size = PageGeometry(page: page).displaySize
+        let image: NSImage
+        if let cached, cached.drawing == strokes {
+            image = cached.image
+        } else {
+            image = strokes.image(from: CGRect(origin: .zero, size: size), scale: 2)
+            cached = (strokes, image)
+        }
+        image.draw(in: bounds, from: .zero, operation: .sourceOver, fraction: 1)
+    }
 }
 #endif

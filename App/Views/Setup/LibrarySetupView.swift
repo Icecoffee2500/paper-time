@@ -82,6 +82,16 @@ struct LibrarySetupView: View {
                     Text("Your papers stay in that folder. Deleting the app never deletes them.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                    #if os(iOS)
+                    // Said before the picker spins forever: Google's Files
+                    // provider on iOS lets a file be picked but not a folder,
+                    // and the picker shows "Loading" for as long as you wait.
+                    Text("On iPhone and iPad, choose a folder in iCloud Drive or on this device. Google Drive's Files provider does not allow a folder to be chosen here — its picker loads without end — so a Google Drive library can be used from the Mac, and the same papers kept in iCloud Drive for these devices.")
+                        .font(.footnote)
+                        .foregroundStyle(.tertiary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 460)
+                    #endif
                 }
                 .padding(40)
                 .frame(maxWidth: .infinity, minHeight: proxy.size.height)

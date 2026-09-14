@@ -203,18 +203,47 @@ struct NoteEditor: NSViewRepresentable {
                 let caret = NoteMarkdown.sourceIndex(
                     in: storage, displayIndex: textView.selectedRange().location
                 )
+                // The line under the caret is shown exactly as it is written —
+                // that is what makes a rendered note editable — so while the
+                // typing stays on one line there is nothing to set again. It
+                // used to set the whole note on every keystroke: a note of
+                // thirty thousand characters was sixty milliseconds a letter,
+                // and the words arrived behind the fingers. Anything that
+                // changes the shape of the note — a line more, a line fewer,
+                // the caret moving to another line — still sets it.
+                let lines = source.reduce(into: 1) { count, character in
+                    if character == "\n" { count += 1 }
+                }
+                let line = source.prefix(caret).reduce(into: 0) { count, character in
+                    if character == "\n" { count += 1 }
+                }
+                if lines == self.setLineCount, line == self.setCaretLine {
+                    return
+                }
+                self.setLineCount = lines
+                self.setCaretLine = line
                 self.restyle(textView, source: source, caretSource: caret)
             }
         }
 
+        /// Which line the caret was on, and how many lines there were, when
+        /// the note was last set — see `scheduleRestyle`. (`lastCaretLine`
+        /// above is a different thing: the *range* of the line, kept so a
+        /// click that stays on one line does not set the note again.)
+        private var setCaretLine = -1
+        private var setLineCount = -1
+
         func restyle(_ textView: NoteTextView, source: String, caretSource: Int?) {
             guard !isRestyling else { return }
+            if caretSource == nil { setCaretLine = -1; setLineCount = -1 }
             isRestyling = true
             defer { isRestyling = false }
 
-            let rendered = NoteMarkdown.render(
-                source, caret: caretSource, raw: showsRawText, width: room(in: textView)
-            )
+            let rendered = Trace.time("note: set the whole note again") {
+                NoteMarkdown.render(
+                    source, caret: caretSource, raw: showsRawText, width: room(in: textView)
+                )
+            }
             lastKnownWidth = room(in: textView)
             let caret = caretSource.map { rendered.displayIndex(forSource: $0) }
             setContents(rendered.text, in: textView)
@@ -321,26 +350,36 @@ struct NoteEditor: NSViewRepresentable {
 
         /// Drops a link where the cursor is, the way an editor inserts a
         /// citation: the writing carries on from there.
+        /// Drops the passage in as a quotation of its own.
+        ///
+        /// Written into the Markdown rather than typed into the display: a
+        /// quotation is two lines and a blank one, and insertions into the
+        /// rendered text have to be mapped back through markers that are not
+        /// there — a mapping that is exactly right for a word and exactly
+        /// wrong for a block. Editing the source and re-rendering it is one
+        /// step, and what lands is what the file will hold.
         func insert(_ anchor: NoteAnchor, into textView: NoteTextView) {
-            let piece = NoteMarkdown.link(for: anchor)
-            var range = textView.selectedRange()
-            if range.location > textView.string.utf16.count {
-                range = NSRange(location: textView.string.utf16.count, length: 0)
-            }
-            textView.insertText(showsRawText ? NoteMarkdown.markdown(from: piece) : piece,
-                                replacementRange: range)
-            textView.typingAttributes = showsRawText
-                ? NoteMarkdown.rawAttributes : NoteMarkdown.bodyAttributes
-
-            if let storage = textView.textStorage {
-                let source = NoteMarkdown.markdown(from: storage)
-                let caret = NoteMarkdown.sourceIndex(
+            guard let storage = textView.textStorage else { return }
+            let source = NoteMarkdown.markdown(from: storage) as NSString
+            let caret = min(
+                NoteMarkdown.sourceIndex(
                     in: storage, displayIndex: textView.selectedRange().location
-                )
-                lastKnownMarkdown = source
-                markdown = source
-                restyle(textView, source: source, caretSource: caret)
-            }
+                ),
+                source.length
+            )
+            var head = source.substring(to: caret)
+            let tail = source.substring(from: caret)
+            // A quotation starts its own line, and leaves one behind it to go
+            // on writing in.
+            if !head.isEmpty, !head.hasSuffix("\n") { head += "\n" }
+            let block = NoteMarkdown.quotationSource(for: anchor)
+            let after = tail.hasPrefix("\n") ? "" : "\n"
+            let updated = head + block + after + tail
+
+            lastKnownMarkdown = updated
+            markdown = updated
+            restyle(textView, source: updated,
+                    caretSource: (head + block + after).utf16.count)
             textView.window?.makeFirstResponder(textView)
         }
 

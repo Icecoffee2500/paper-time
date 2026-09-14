@@ -34,10 +34,14 @@ private struct ScrollerSweep: NSViewRepresentable {
 
     func updateNSView(_ view: NSView, context: Context) {
         // Rows come and go as the library changes, and a scroll view made
-        // after the last sweep would come with its scroller still on.
+        // after the last sweep would come with its scroller still on. Once a
+        // turn of the run loop, though, however many probes ask: the sweep
+        // walks every view in the window, and there is a probe in every list
+        // — so a resize, which updates all of them on every frame, was
+        // walking the whole window a dozen times a frame.
         guard let probe = view as? ProbeView else { return }
         probe.thin = thin
-        DispatchQueue.main.async { probe.applyToEnclosingScrollView() }
+        probe.scheduleSweep()
     }
 
     /// A zero-sized view that reaches for the scroll view it was put inside.
@@ -48,6 +52,19 @@ private struct ScrollerSweep: NSViewRepresentable {
             super.viewDidMoveToWindow()
             applyToEnclosingScrollView()
         }
+
+        /// Asks for a sweep, and gets one — with everybody else who asked
+        /// before the run loop came round again.
+        func scheduleSweep() {
+            guard !Self.sweepPending else { return }
+            Self.sweepPending = true
+            DispatchQueue.main.async { [weak self] in
+                Self.sweepPending = false
+                self?.applyToEnclosingScrollView()
+            }
+        }
+
+        @MainActor private static var sweepPending = false
 
         func applyToEnclosingScrollView() {
             // Walking up finds nothing: the background of a List sits outside

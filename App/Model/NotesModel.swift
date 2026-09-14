@@ -111,22 +111,68 @@ public final class NotesModel {
     ) -> [(note: Zettel, shared: [String])] {
         if resonanceIndex == nil || resonanceIndex?.background != background
             || !changedSinceIndex.isSubset(of: excluding) {
-            let index = Resonance.Index(
-                notes: notes.filter { !$0.isEmpty }.map { (id: $0.id, text: $0.title + "\n" + $0.body) },
-                background: background
-            )
+            let index = Trace.time("resonance: build the index") {
+                Resonance.Index(
+                    notes: notes.filter { !$0.isEmpty }.map { (id: $0.id, text: $0.title + "\n" + $0.body) },
+                    background: background
+                )
+            }
             resonanceIndex = (index, background)
             changedSinceIndex = []
         }
         guard let index = resonanceIndex?.index, !index.isEmpty else { return [] }
-        return index.matches(for: text, limit: limit, excluding: excluding)
-            .compactMap { match in byID[match.id].map { (note: $0, shared: match.shared) } }
+        return Trace.time("resonance: match a page") {
+            index.matches(for: text, limit: limit, excluding: excluding)
+                .compactMap { match in byID[match.id].map { (note: $0, shared: match.shared) } }
+        }
+    }
+
+    // MARK: - Atlas
+
+    /// The maps: notes that arrange other notes.
+    public var maps: [Zettel] { notes.filter { $0.kind == .map } }
+    /// The drafts: writing on its way out of the box.
+    public var drafts: [Zettel] { notes.filter { $0.kind == .draft } }
+
+    /// Whether a note has a map to live on.
+    public func maps(holding id: String) -> [Zettel] {
+        maps.filter { $0.outline.contains { $0.entries.contains { $0.id == id } } }
+    }
+
+    /// Where the squeeze is: notes with no map that hang together, five or
+    /// more. Found once per change to the notes.
+    public var suggestions: [Atlas.Suggestion] {
+        if let cached = suggestionCache, cached.revision == revision { return cached.found }
+        let found = Atlas.squeeze(notes: notes, maps: maps)
+        suggestionCache = (revision, found)
+        return found
+    }
+    @ObservationIgnored private var suggestionCache: (revision: Int, found: [Atlas.Suggestion])?
+
+    /// Makes the map a suggestion asked for, as a first draft to be taken
+    /// over: a title from the shared words, the notes under their papers.
+    public func createMap(from suggestion: Atlas.Suggestion, paperTitle: (UUID) -> String?) -> Zettel {
+        let made = Atlas.draft(for: suggestion, notes: notes, paperTitle: paperTitle)
+        var map = Zettel(id: Zettel.makeID(avoiding: Set(byID.keys)), kind: .map, title: made.title, body: made.body)
+        map.modified = .now
+        update(map)
+        return map
+    }
+
+    /// Puts a note on a map — or into a draft — under its last heading.
+    public func add(_ id: String, toMap mapID: String) {
+        guard var map = byID[mapID], let note = byID[id], map.kind != .note,
+              !map.outline.contains(where: { $0.entries.contains { $0.id == id } })
+        else { return }
+        let separator = map.body.isEmpty || map.body.hasSuffix("\n") ? "" : "\n"
+        map.body += separator + "- " + note.linkMarkdown + "\n"
+        update(map)
     }
 
     // MARK: - Writing
 
-    public func create(paperID: UUID?) -> Zettel {
-        let note = Zettel(id: Zettel.makeID(avoiding: Set(byID.keys)), paperID: paperID)
+    public func create(paperID: UUID?, kind: Zettel.Kind = .note) -> Zettel {
+        let note = Zettel(id: Zettel.makeID(avoiding: Set(byID.keys)), kind: kind, paperID: paperID)
         var updated = notes
         updated.insert(note, at: 0)
         apply(updated)
@@ -134,16 +180,33 @@ public final class NotesModel {
     }
 
     /// Keeps a note, a moment after the typing stops.
+    /// One note, changed.
+    ///
+    /// Typing a letter into a note calls this, so it is on the path of every
+    /// keystroke. It used to hand the whole box back to `apply`, which sorted
+    /// every note, rebuilt the identifier map, and walked every note's links
+    /// and tags — all of it to say that one note's body now has one more
+    /// character in it. The list's order is by when a note was *written*,
+    /// which an edit does not change, so the note can be put back where it
+    /// was; and the links and the tags are only walked again when the links
+    /// or the tags are what changed.
     public func update(_ note: Zettel) {
         var edited = note
         edited.modified = .now
-        var updated = notes
-        if let index = updated.firstIndex(where: { $0.id == note.id }) {
-            updated[index] = edited
+        if let index = notes.firstIndex(where: { $0.id == note.id }) {
+            let before = notes[index]
+            notes[index] = edited
+            byID[edited.id] = edited
+            if before.title != edited.title || before.body != edited.body {
+                changedSinceIndex.insert(edited.id)
+            }
+            if before.links != edited.links || before.tags != edited.tags {
+                rebuildConnections()
+            }
+            revision += 1
         } else {
-            updated.insert(edited, at: 0)
+            apply(notes + [edited])
         }
-        apply(updated)
 
         saveTasks[note.id]?.cancel()
         saveTasks[note.id] = Task { [store] in
@@ -187,6 +250,11 @@ public final class NotesModel {
         notes = loaded.sorted { $0.created == $1.created ? $0.id < $1.id : $0.created < $1.created }
         byID = Dictionary(notes.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
 
+        rebuildConnections()
+    }
+
+    /// Who links to whom, and how many notes wear each tag.
+    private func rebuildConnections() {
         var links: [String: [String]] = [:]
         var counts: [String: Int] = [:]
         for note in notes {

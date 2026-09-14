@@ -232,8 +232,57 @@ final class ReaderCoordinator: NSObject {
     #if canImport(UIKit)
     private var canvases: [Int: PKCanvasView] = [:]
     private var overlays: [Int: PageOverlay] = [:]
-    private let toolPicker = PKToolPicker()
+    private var originalTouchTypes: [NSNumber]?
+    private var appliedToolKey: String?
+    /// The canvas last drawn on, whose undo stack the strip's arrows work.
+    private weak var lastCanvas: PKCanvasView?
+    /// Strokes each canvas had when last seen, so a new one can be told apart
+    /// from an erasure.
+    private var strokeCounts: [Int: Int] = [:]
+    private var isRewritingCanvas = false
+    private var editMenu: UIEditMenuInteraction?
+    private var tappedMarkID: UUID?
+
+    static func scrollView(in view: UIView) -> UIScrollView? {
+        for child in view.subviews {
+            if let scroll = child as? UIScrollView { return scroll }
+            if let found = scrollView(in: child) { return found }
+        }
+        return nil
+    }
+
     #endif
+
+    /// Another device's ink for these pages arrived; the overlays show it.
+    @objc private func inkChanged(_ notification: Notification) {
+        guard notification.object as? DocumentSession === session,
+              let pages = notification.userInfo?["pages"] as? [Int] else { return }
+        for index in pages {
+            #if canImport(UIKit)
+            canvases[index]?.drawing = session.drawing(forPage: index)
+            strokeCounts[index] = session.drawing(forPage: index).strokes.count
+            #endif
+            if let page = session.document.page(at: index) {
+                #if os(macOS)
+                InkOverlayView.refresh(page)
+                #endif
+                hideOwnedInk(on: page, index: index)
+                pdfView?.annotationsChanged(on: page)
+            }
+        }
+    }
+
+    /// Under an overlay the file's copy of our ink is not drawn. The sidecar
+    /// is where the ink lives — the canvas draws it on the iPad, the ink
+    /// overlay on the Mac — and a page with ink in the file always has one,
+    /// made from the file if need be. Drawing the PDF's annotations too
+    /// doubled every line and left a ghost behind an erased one, until the
+    /// twenty-megabyte PDF caught up.
+    private func hideOwnedInk(on page: PDFPage, index: Int) {
+        for annotation in page.annotations where InkConverter.isOwned(annotation) && annotation.shouldDisplay {
+            annotation.shouldDisplay = false
+        }
+    }
 
     init(
         session: DocumentSession,
@@ -273,6 +322,10 @@ final class ReaderCoordinator: NSObject {
             self.session.addMarkup(for: selection, kind: kind, color: color)
         }
         view.onNote = { [weak self] in self?.onNoteRequested() }
+        view.onLayout = { [weak self, weak view] width in
+            guard let self, let view, appliedLayout == .book, fittedSpreadWidth != width else { return }
+            fitSpread(in: view)
+        }
         #else
         let view = MarkupCapablePDFView()
         view.onMarkup = { [weak self] kind, color in
@@ -313,6 +366,13 @@ final class ReaderCoordinator: NSObject {
         appliedLayout = configuration.layout
         shownRevision = session.revision
 
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(inkChanged), name: .paperTimeInkChanged, object: nil
+        )
+        #if canImport(UIKit)
+        NotificationCenter.default.addObserver(self, selector: #selector(undoInk), name: .paperTimeInkUndo, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(redoInk), name: .paperTimeInkRedo, object: nil)
+        #endif
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(pageChanged),
@@ -382,6 +442,16 @@ final class ReaderCoordinator: NSObject {
         focusGesture.numberOfTouchesRequired = 2
         focusGesture.numberOfTapsRequired = 2
         view.addGestureRecognizer(focusGesture)
+        // A tap on a mark opens its menu — colours and Remove — as a click
+        // does on the Mac. Taps elsewhere are left to PDFKit.
+        let markTap = UITapGestureRecognizer(target: self, action: #selector(markTapped(_:)))
+        markTap.cancelsTouchesInView = false
+        markTap.delaysTouchesEnded = false
+        markTap.delegate = self
+        view.addGestureRecognizer(markTap)
+        let interaction = UIEditMenuInteraction(delegate: self)
+        view.addInteraction(interaction)
+        editMenu = interaction
         #endif
 
         pdfView = view
@@ -401,7 +471,22 @@ final class ReaderCoordinator: NSObject {
     }
 
     func update(_ view: PDFView, revision: Int) {
+        Trace.time("reader: update") { updateNow(view, revision: revision) }
+    }
+
+    private func updateNow(_ view: PDFView, revision: Int) {
         if view.document !== session.document {
+            // The overlays belong to the pages of the paper being left, and
+            // they are kept by page *number*. Handed on to the next paper,
+            // page 1's canvas brought the last paper's ink with it, and page
+            // 1's marks had no overlay of their own: `redraw` hides a mark
+            // from PDFKit so the overlay can draw it rounded, and with the
+            // overlay pointing at another document's page nothing drew it at
+            // all. A highlight went on being made — the list showed it — and
+            // the page stayed blank. One paper, one set of overlays.
+            #if canImport(UIKit)
+            discardPageViews()
+            #endif
             view.document = session.document
             if appliedLayout == .book {
                 trimForBook(session.document)
@@ -440,6 +525,12 @@ final class ReaderCoordinator: NSObject {
             appliedFingerDrawing = configuration.fingerDrawing
             updateCanvasInteraction()
         }
+        #if canImport(UIKit)
+        if appliedToolKey != configuration.toolKey {
+            appliedToolKey = configuration.toolKey
+            for canvas in canvases.values { canvas.tool = configuration.currentTool }
+        }
+        #endif
 
         // A find result asks the reader to bring it into view; acting on it
         // here keeps the PDF view the only thing that knows how to scroll.
@@ -449,7 +540,12 @@ final class ReaderCoordinator: NSObject {
             link.scrollRequest = nil
         }
 
-        if let anchor = link.anchorRequest {
+        // Only if it is this paper's. An anchor naming another paper is a
+        // request to open that one, and the reader still showing the old one
+        // was answering it — scrolling to page nine of the wrong document and
+        // leaving nothing for the right one to act on.
+        if let anchor = link.anchorRequest,
+           anchor.paperID == nil || anchor.paperID == session.paper.id {
             reveal(anchor, in: view)
             link.anchorRequest = nil
         }
@@ -478,27 +574,56 @@ final class ReaderCoordinator: NSObject {
     /// drew from it, so without this a new highlight only shows up after the
     /// page is scrolled away and back.
     private func redraw(_ view: PDFView) {
+        Trace.time("reader: redraw") { redrawNow(view) }
+    }
+
+    private func redrawNow(_ view: PDFView) {
         #if canImport(UIKit)
         view.clearSelection()
         for page in visiblePages(of: view) {
-            view.setNeedsDisplay(view.convert(page.bounds(for: view.displayBox), from: page))
+            // Hiding a mark from PDFKit is only safe where something else
+            // will draw it. A page whose overlay has not been asked for yet
+            // keeps PDFKit's own square mark until it has one — visibly
+            // square beats invisible.
+            let index = session.document.index(for: page)
+            guard overlays[index]?.page === page else { continue }
+            // A mark just added is a flat annotation until the overlay has
+            // taken it over; do that now and have the cached page repainted.
+            _ = RoundedMarks.takeOver(page)
+            view.annotationsChanged(on: page)
+            MarkOverlayView.refresh(page)
         }
         view.layoutDocumentView()
         #else
         view.clearSelection()
+        // Ink that arrived from another device is a new annotation on a page
+        // PDFKit has already drawn; tell it so, or the cached page stays.
+        for page in visiblePages(of: view) { view.annotationsChanged(on: page) }
         view.layoutDocumentView()
         view.needsDisplay = true
         #endif
     }
 
+    /// The pages on screen — both of them in a spread, where a mark made on
+    /// the facing page was left to PDFKit's own square drawing because only
+    /// the current page was ever repainted.
     private func visiblePages(of view: PDFView) -> [PDFPage] {
-        guard let current = view.currentPage else { return [] }
-        return [current]
+        let shown = view.visiblePages
+        if !shown.isEmpty { return shown }
+        return view.currentPage.map { [$0] } ?? []
     }
 
     /// Scrolls a mark into view and flashes the text under it.
     private func reveal(_ anchor: ReaderLink.Anchor, in view: PDFView) {
         guard let page = session.document.page(at: anchor.pageIndex) else { return }
+        // A place on the page was not worked out — go to the page itself
+        // rather than to its bottom-left corner, which is where an empty
+        // rectangle would send it.
+        guard !anchor.rect.isEmpty else {
+            view.go(to: page)
+            onPageChange(anchor.pageIndex)
+            return
+        }
         // A little room around the mark, so it lands inside the page rather
         // than jammed against the top edge.
         let padded = anchor.rect.insetBy(dx: -24, dy: -80)
@@ -528,7 +653,6 @@ final class ReaderCoordinator: NSObject {
         pinchMonitor = nil
         #endif
         #if canImport(UIKit)
-        toolPicker.setVisible(false, forFirstResponder: PKCanvasView())
         canvases.removeAll()
         overlays.removeAll()
         #endif
@@ -615,9 +739,77 @@ final class ReaderCoordinator: NSObject {
         // The page view controller gives the paged modes a real swipe-to-turn
         // gesture with the curl-free horizontal transition Books uses. It has
         // to be off for continuous scrolling or the scroll is taken over.
-        view.usePageViewController(layout != .continuous, withViewOptions: nil)
+        // Only the single page turns with the page view controller: it shows
+        // one page at a time, which made a book of two pages show one.
+        view.usePageViewController(layout == .singlePage, withViewOptions: nil)
+        setBookSwipes(layout == .book, in: view)
+        // A book fills the width, as on the Mac; anything else fits itself.
+        if layout == .book {
+            DispatchQueue.main.async { [weak self, weak view] in
+                guard let self, let view else { return }
+                fitSpread(in: view)
+            }
+        } else {
+            view.autoScales = true
+            fittedSpreadWidth = 0
+        }
         #endif
     }
+
+    #if canImport(UIKit)
+    private var fittedSpreadWidth: CGFloat = 0
+    /// Whether a spread is in the middle of being carried across the view, so
+    /// a second flick does not stack another pair of pictures on the first.
+    private var isTurningPages = false
+    /// The swipes that turn a spread, while the reader is a book.
+    private var bookSwipes: [UISwipeGestureRecognizer] = []
+
+    /// A book turns by a swipe across it, as it does in Books.
+    ///
+    /// Nothing else here can turn it. The page view controller shows one page
+    /// at a time and a spread is two, so it is off; and the spread is fitted
+    /// to the view, which leaves the scroll view a few points of slack and no
+    /// more — a swipe dragged the two pages sideways and let go, and the book
+    /// stayed on the same spread. The scroll view's own pan is made to wait
+    /// on these, so a deliberate drag still moves a spread that has been
+    /// zoomed into while a flick turns the page.
+    private func setBookSwipes(_ on: Bool, in view: PDFView) {
+        for swipe in bookSwipes { view.removeGestureRecognizer(swipe) }
+        bookSwipes = []
+        guard on else { return }
+        let turns: [(UISwipeGestureRecognizer.Direction, Selector)] = [
+            (.left, #selector(goToNextPage)),
+            (.right, #selector(goToPreviousPage)),
+        ]
+        for (direction, action) in turns {
+            let swipe = UISwipeGestureRecognizer(target: self, action: action)
+            swipe.direction = direction
+            view.addGestureRecognizer(swipe)
+            bookSwipes.append(swipe)
+        }
+        guard let scrollView = Self.scrollView(in: view) else { return }
+        for swipe in bookSwipes { scrollView.panGestureRecognizer.require(toFail: swipe) }
+    }
+
+    /// Two pages across the view, as large as they can be with nothing cut
+    /// off — the same rule the Mac applies. Done again when the width changes.
+    func fitSpread(in view: PDFView) {
+        guard view.displayMode == .twoUp,
+              let page = view.currentPage ?? view.document?.page(at: 0) else { return }
+        let bounds = page.bounds(for: view.displayBox)
+        let width = view.bounds.width - 24, height = view.bounds.height - 16
+        guard bounds.width > 0, bounds.height > 0, width > 100, height > 100 else { return }
+        view.autoScales = false
+        // Autoscaling leaves its own fit behind as the floor and the
+        // ceiling; a scale set with those still in place is clamped to it.
+        view.minScaleFactor = 0.1
+        view.maxScaleFactor = 8
+        let gap = view.pageBreakMargins.left + view.pageBreakMargins.right
+        view.scaleFactor = min(width / (bounds.width * 2 + gap), height / bounds.height)
+        fittedSpreadWidth = view.bounds.width
+        view.layoutDocumentView()
+    }
+    #endif
 
     private func applyTint(to view: PDFView) {
         #if canImport(UIKit)
@@ -728,13 +920,59 @@ final class ReaderCoordinator: NSObject {
 
     @objc private func goToNextPage() {
         guard let view = pdfView, view.canGoToNextPage else { return }
+        #if canImport(UIKit)
+        turningPages(in: view, forward: true) { view.goToNextPage(nil) }
+        #else
         view.goToNextPage(nil)
+        #endif
     }
 
     @objc private func goToPreviousPage() {
         guard let view = pdfView, view.canGoToPreviousPage else { return }
+        #if canImport(UIKit)
+        turningPages(in: view, forward: false) { view.goToPreviousPage(nil) }
+        #else
         view.goToPreviousPage(nil)
+        #endif
     }
+
+    #if canImport(UIKit)
+    /// Pushes the old spread off and the new one on, the way the single page
+    /// turns.
+    ///
+    /// A single page gets its movement from the page view controller, which
+    /// cannot show two pages at once and so is off in a book — and a book
+    /// without it cut from one spread to the next with no motion at all,
+    /// which reads as a glitch rather than a page turning.
+    ///
+    /// Core Animation does it, not a pair of snapshot views. The snapshots
+    /// were the first attempt and they stuttered: taking the picture of the
+    /// spread about to arrive means rendering the whole of it on the main
+    /// thread before the animation can start, and the pause landed exactly
+    /// where the movement should have been. A push transition on the view's
+    /// own layer is handed to the render server, which already has the old
+    /// spread drawn and needs no picture taken of either.
+    private func turningPages(in view: PDFView, forward: Bool, _ turn: () -> Void) {
+        guard appliedLayout == .book, !isTurningPages else { turn(); return }
+        isTurningPages = true
+        let push = CATransition()
+        push.type = .push
+        push.subtype = forward ? .fromRight : .fromLeft
+        push.duration = 0.32
+        // The curve the page view controller uses: quick to leave, gentle to
+        // arrive. Linear reads as a slide rather than a turn.
+        push.timingFunction = CAMediaTimingFunction(controlPoints: 0.25, 0.1, 0.25, 1)
+        view.layer.add(push, forKey: "paperTime.turn")
+        turn()
+        // Lay the new spread out before the transition is committed, so what
+        // is pushed on is the spread and not the blank it would otherwise be
+        // for the first frame or two.
+        view.layoutIfNeeded()
+        DispatchQueue.main.asyncAfter(deadline: .now() + push.duration) { [weak self] in
+            self?.isTurningPages = false
+        }
+    }
+    #endif
 
     @objc private func goBackInHistory() {
         guard let view = pdfView, view.canGoBack else { return }
@@ -1139,6 +1377,19 @@ final class ReaderCoordinator: NSObject {
 
     // MARK: - Canvases
 
+    #if canImport(UIKit)
+    /// Lets go of every page's canvas and overlay, so the next document is
+    /// given fresh ones. PDFKit asks for an overlay again as each page of the
+    /// new document is laid out.
+    private func discardPageViews() {
+        for overlay in overlays.values { overlay.removeFromSuperview() }
+        overlays.removeAll()
+        canvases.removeAll()
+        strokeCounts.removeAll()
+        lastCanvas = nil
+    }
+    #endif
+
     private func updateCanvasInteraction() {
         #if canImport(UIKit)
         let drawing = configuration.mode == .draw
@@ -1146,11 +1397,26 @@ final class ReaderCoordinator: NSObject {
             canvas.isUserInteractionEnabled = drawing
             canvas.drawingPolicy = configuration.fingerDrawing ? .anyInput : .pencilOnly
         }
-        if drawing, configuration.showsToolPicker, let first = canvases.values.first {
-            toolPicker.setVisible(true, forFirstResponder: first)
-            first.becomeFirstResponder()
-        } else if let first = canvases.values.first {
-            toolPicker.setVisible(false, forFirstResponder: first)
+        for overlay in overlays.values { overlay.setInteractive(drawing) }
+        // The page view, once it takes touches, can end up first responder
+        // with a text-input keyboard behind it; a menu opening then brings
+        // the keyboard up. Nothing is being typed while drawing.
+        if drawing { pdfView?.window?.endEditing(true) }
+        // The page scrolls inside a scroll view whose pan recogniser sees
+        // every touch first and, given a pencil stroke, took it as a scroll:
+        // the canvas got nothing and the pencil "did not work". While
+        // drawing, the pencil belongs to the canvas and a finger scrolls;
+        // with finger drawing on, one finger draws and two scroll.
+        if let scrollView = pdfView.flatMap(Self.scrollView(in:)) {
+            let pan = scrollView.panGestureRecognizer
+            if originalTouchTypes == nil { originalTouchTypes = pan.allowedTouchTypes }
+            if drawing {
+                pan.allowedTouchTypes = [UITouch.TouchType.direct.rawValue as NSNumber, UITouch.TouchType.indirectPointer.rawValue as NSNumber]
+                pan.minimumNumberOfTouches = configuration.fingerDrawing ? 2 : 1
+            } else {
+                pan.allowedTouchTypes = originalTouchTypes ?? pan.allowedTouchTypes
+                pan.minimumNumberOfTouches = 1
+            }
         }
         #endif
     }
@@ -1162,7 +1428,15 @@ extension ReaderCoordinator: @preconcurrency PDFPageOverlayViewProvider {
     #if canImport(UIKit)
     func pdfView(_ view: PDFView, overlayViewFor page: PDFPage) -> UIView? {
         let index = session.document.index(for: page)
-        if let existing = overlays[index] { return existing }
+        // The same page, not merely the same page number: an overlay left
+        // over from another document would draw that document's ink here.
+        if let existing = overlays[index], existing.page === page { return existing }
+        // Hide the file's flat marks before PDFKit paints the page: UIKit's
+        // PDFView caches the drawn page, so a mark hidden after the first
+        // paint kept showing as a square under the rounded one.
+        _ = RoundedMarks.takeOver(page)
+        hideOwnedInk(on: page, index: index)
+        view.annotationsChanged(on: page)
 
         let canvas = PKCanvasView()
         canvas.backgroundColor = .clear
@@ -1175,12 +1449,37 @@ extension ReaderCoordinator: @preconcurrency PDFPageOverlayViewProvider {
         // The overlay is handed to PDFKit in page coordinates; PencilKit must
         // not add its own scrolling on top of the PDF view's.
         canvas.isScrollEnabled = false
-        toolPicker.addObserver(canvas)
-        canvas.tool = toolPicker.selectedTool
+        canvas.tool = configuration.currentTool
         canvases[index] = canvas
         // The canvas rides on the same overlay as the rounded marks and the
         // margin mask, so the iPad page looks like the Mac's, plus ink.
         let overlay = PageOverlay(page: page, canvas: canvas)
+        overlay.setInteractive(configuration.mode == .draw)
+        // The eraser takes marks off along with strokes: the pencil, run over
+        // a highlight, removes it.
+        overlay.onErase = { [weak self, weak page] point in
+            guard let self, let page, configuration.presets.eraserErasesMarks else { return }
+            let hits = page.annotations.filter {
+                RoundedMarks.kinds.contains($0.type ?? "") && $0.bounds.insetBy(dx: -3, dy: -3).contains(point)
+            }
+            for annotation in hits {
+                guard let id = TextMarkupWriter.identifier(of: annotation) else { continue }
+                session.removeMarkup(id: id)
+            }
+        }
+        overlay.pagePointOfTouch = { [weak self, weak page] touch in
+            guard let view = self?.pdfView, let page else { return nil }
+            return view.convert(touch.location(in: view), to: page)
+        }
+        overlay.previousPagePointOfTouch = { [weak self, weak page] touch in
+            guard let view = self?.pdfView, let page else { return nil }
+            return view.convert(touch.previousLocation(in: view), to: page)
+        }
+        overlay.onStrokesErased = { [weak self] canvas in
+            guard let self else { return }
+            strokeCounts[canvas.tag] = canvas.drawing.strokes.count
+            session.setDrawing(canvas.drawing, forPage: canvas.tag)
+        }
         overlays[index] = overlay
         return overlay
     }
@@ -1191,18 +1490,154 @@ extension ReaderCoordinator: @preconcurrency PDFPageOverlayViewProvider {
     }
     #else
     func pdfView(_ view: PDFView, overlayViewFor page: PDFPage) -> NSView? {
-        // No ink canvas on the Mac — PencilKit has none here, and ink written
-        // on iPad is in the PDF as ordinary annotations PDFKit draws itself.
-        // The overlay is where the highlights are drawn with rounded ends.
-        PageOverlay(page: page)
+        // No canvas on the Mac — PencilKit has none here — but the ink is
+        // drawn from the same sidecar the iPad draws, so a stroke arrives
+        // with the sidecar's few kilobytes and not with the whole PDF. The
+        // overlay is also where the highlights get their rounded ends.
+        let index = session.document.index(for: page)
+        hideOwnedInk(on: page, index: index)
+        return PageOverlay(page: page) { [weak self] in
+            self?.session.drawing(forPage: index) ?? PKDrawing()
+        }
     }
     #endif
 }
 
 #if canImport(UIKit)
 extension ReaderCoordinator: @preconcurrency PKCanvasViewDelegate {
+    func canvasViewDidBeginUsingTool(_ canvasView: PKCanvasView) {
+        lastCanvas = canvasView
+    }
+
     func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
-        session.setDrawing(canvasView.drawing, forPage: canvasView.tag)
+        lastCanvas = canvasView
+        guard !isRewritingCanvas else { return }
+        let index = canvasView.tag
+        let known = strokeCounts[index] ?? 0
+        var strokes = canvasView.drawing.strokes
+        if configuration.presets.fitsToText, strokes.count > known,
+           let page = session.document.page(at: index) {
+            // The strokes just finished, newest last. Those that read as a
+            // mark on the text become one and leave the canvas.
+            var kept: [PKStroke] = Array(strokes[..<known])
+            for stroke in strokes[known...] where !snap(stroke, on: page) {
+                kept.append(stroke)
+            }
+            if kept.count != strokes.count {
+                strokes = kept
+                isRewritingCanvas = true
+                canvasView.drawing = PKDrawing(strokes: kept)
+                isRewritingCanvas = false
+            }
+        }
+        strokeCounts[index] = strokes.count
+        session.setDrawing(canvasView.drawing, forPage: index)
+        if let page = session.document.page(at: index), page.annotations.contains(where: { InkConverter.isOwned($0) && $0.shouldDisplay }) {
+            hideOwnedInk(on: page, index: index)
+            pdfView?.annotationsChanged(on: page)
+        }
+    }
+
+    /// Reads one highlighter stroke as a mark on the page's text, makes the
+    /// mark, and says so; or says it is not one and leaves the stroke be.
+    ///
+    /// Over words it is a highlight fitted to them; run along under the
+    /// words, it is an underline. The pen never snaps — handwriting is
+    /// handwriting — and a highlighter in the margin, where there are no
+    /// words, stays ink too.
+    private func snap(_ stroke: PKStroke, on page: PDFPage) -> Bool {
+        guard stroke.ink.inkType == .marker else { return false }
+        let geometry = PageGeometry(page: page)
+        let box = stroke.renderBounds
+        let corners = [
+            CGPoint(x: box.minX, y: box.minY), CGPoint(x: box.maxX, y: box.minY),
+            CGPoint(x: box.minX, y: box.maxY), CGPoint(x: box.maxX, y: box.maxY),
+        ].map(geometry.pdfPoint(fromCanvas:))
+        let xs = corners.map(\.x), ys = corners.map(\.y)
+        let rect = CGRect(x: xs.min()!, y: ys.min()!, width: xs.max()! - xs.min()!, height: ys.max()! - ys.min()!)
+
+        // The lines of text the stroke touches, or lies just under.
+        guard let around = page.selection(for: rect.insetBy(dx: 0, dy: -6)),
+              around.string?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        else { return false }
+        let lines = around.selectionsByLine().map { $0.bounds(for: page) }.filter { $0.height > 0 }
+        guard let line = lines.min(by: { abs($0.midY - rect.midY) < abs($1.midY - rect.midY) }) else { return false }
+
+        // Only the words under the stroke, line by line: a selection run from
+        // one end of the stroke to the other follows the text instead and,
+        // across a column gap, floods half the page.
+        let kind: MarkupDescriptor.Kind
+        var pieces: [CGRect] = []
+        // A highlighter is wide: one stroke along one line is a box taller
+        // than the line, spilling onto the neighbours. Judge by the stroke's
+        // core — the band around its centre when it is a line's worth tall,
+        // the box less half a nib when it is deliberately taller.
+        let core: CGRect = rect.height < line.height * 1.8
+            ? CGRect(x: rect.minX, y: rect.midY - line.height * 0.25, width: rect.width, height: line.height * 0.5)
+            : rect.insetBy(dx: 0, dy: min(rect.height * 0.3, line.height * 0.6))
+        let crossed = lines.filter { $0.maxY > core.minY && $0.minY < core.maxY }
+        let isFlat = rect.height < line.height * 0.6
+        let sitsLow = rect.midY < line.minY + line.height * 0.28 && rect.midY > line.minY - line.height * 0.7
+        if isFlat, sitsLow {
+            kind = .underline
+            pieces = [CGRect(x: rect.minX, y: line.minY, width: rect.width, height: line.height)]
+        } else {
+            guard !crossed.isEmpty, rect.height <= line.height * 2.4 * CGFloat(crossed.count) else { return false }
+            kind = .highlight
+            pieces = crossed.map { CGRect(x: rect.minX, y: $0.minY, width: rect.width, height: $0.height) }
+        }
+        let span = PDFSelection(document: session.document)
+        for piece in pieces {
+            if let part = page.selection(for: piece) { span.add(part) }
+        }
+        guard span.string?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else { return false }
+
+        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+        stroke.ink.color.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+        let color = MarkupColor.nearest(red: red, green: green, blue: blue)
+        return !session.addMarkup(for: span, kind: kind, color: color).isEmpty
+    }
+
+    @objc private func undoInk() { (lastCanvas ?? canvases.values.first)?.undoManager?.undo() }
+    @objc private func redoInk() { (lastCanvas ?? canvases.values.first)?.undoManager?.redo() }
+
+    @objc private func markTapped(_ gesture: UITapGestureRecognizer) {
+        guard configuration.mode != .draw, let view = pdfView else { return }
+        let location = gesture.location(in: view)
+        guard let page = view.page(for: location, nearest: false) else { return }
+        let pagePoint = view.convert(location, to: page)
+        guard let annotation = page.annotations.first(where: {
+            RoundedMarks.kinds.contains($0.type ?? "") && $0.bounds.insetBy(dx: -2, dy: -2).contains(pagePoint)
+        }), let id = TextMarkupWriter.identifier(of: annotation) else { return }
+        tappedMarkID = id
+        editMenu?.presentEditMenu(with: UIEditMenuConfiguration(identifier: nil, sourcePoint: location))
+    }
+}
+
+extension ReaderCoordinator: UIGestureRecognizerDelegate {
+    func gestureRecognizer(
+        _ gestureRecognizer: UIGestureRecognizer,
+        shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+    ) -> Bool {
+        true
+    }
+}
+
+extension ReaderCoordinator: @preconcurrency UIEditMenuInteractionDelegate {
+    func editMenuInteraction(
+        _ interaction: UIEditMenuInteraction, menuFor configuration: UIEditMenuConfiguration,
+        suggestedActions: [UIMenuElement]
+    ) -> UIMenu? {
+        guard let id = tappedMarkID, let mark = session.markup(withID: id) else { return nil }
+        let colors = MarkupColor.allCases.map { color in
+            UIAction(title: color.displayName, state: color == mark.color ? .on : .off) { [weak self] _ in
+                self?.session.recolor(id: id, to: color)
+            }
+        }
+        let remove = UIAction(title: String(localized: "Remove"), image: UIImage(systemName: "trash"), attributes: .destructive) { [weak self] _ in
+            self?.session.removeMarkup(id: id)
+        }
+        return UIMenu(children: [UIMenu(options: .displayInline, children: colors), remove])
     }
 }
 #endif

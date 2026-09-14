@@ -11,16 +11,58 @@ import UIKit
 /// The middle column: every paper in the current scope, searchable and sortable.
 struct PaperListView: View {
     @Bindable var model: LibraryModel
+    /// The open paper, so a result found in the text of another one can send
+    /// the reader to the line it was found on.
+    let link: ReaderLink
     @Environment(AppModel.self) private var app
+    /// How far past its top the list has been pulled.
+    ///
+    /// How far, not merely whether: the words have to come in with the pull,
+    /// or they are one more thing that appears without being asked for.
+    @State private var pull: CGFloat = 0
+    /// What the same query turned up inside the papers, when the list is
+    /// showing the results of a search.
+    @State private var passages: [PaperTextIndex.Hit] = []
+    @State private var scanning = false
 
     var body: some View {
         content
+            // Here rather than on the list: with nothing matching by title
+            // the list is not on screen at all, and that is exactly the
+            // search whose answer is inside the papers.
+            .task(id: searchKey) { await scanText() }
             .dropDestination(for: URL.self) { urls, _ in
                 let pdfURLs = urls.filter { $0.pathExtension.lowercased() == "pdf" }
                 guard !pdfURLs.isEmpty else { return false }
                 Task { await model.importDocuments(at: pdfURLs) }
                 return true
             }
+    }
+
+    /// What an empty shelf says. Each one is empty for its own reason, and
+    /// the reason is what tells you whether anything is wrong — nothing is,
+    /// in every case here.
+    private var emptyShelf: (title: String, symbol: String, note: String) {
+        switch model.scope {
+        case .unread:
+            ("Nothing Unread", "circle", "Every paper in the library has been opened.")
+        case .reading:
+            ("Nothing Being Read", "circle.lefthalf.filled", "Set a paper's status to Reading and it will wait for you here.")
+        case .read:
+            ("Nothing Read Yet", "checkmark.circle", "Papers you mark as Read gather here.")
+        case .favorites:
+            ("No Favorites", "star", "Star a paper and it will be here whenever you want it.")
+        case .needsReview:
+            ("Nothing to Review", "exclamationmark.triangle", "No paper's details are in doubt.")
+        case .collection:
+            ("This Collection Is Empty", "folder", "Drag papers onto it in the sidebar to put them in.")
+        case .tag:
+            ("Nothing With This Tag", "tag", "Tag a paper and it will appear here.")
+        case .author:
+            ("Nothing by This Author", "person", "No paper in the library carries this name.")
+        default:
+            ("Nothing Here", "tray", "This shelf is empty.")
+        }
     }
 
     @ViewBuilder
@@ -48,8 +90,19 @@ struct PaperListView: View {
                     .buttonBorderShape(.capsule)
                 }
             }
-        } else if model.visiblePapers.isEmpty {
-            ContentUnavailableView.search(text: model.searchText)
+        } else if model.visiblePapers.isEmpty, !hasPassages {
+            // An empty shelf is not a failed search. "Check the spelling"
+            // in front of Favorites, which nothing has been starred into
+            // yet, reads as though the app has lost something.
+            if !model.searchText.isEmpty || model.scope == .searchResults {
+                ContentUnavailableView.search(text: model.searchText)
+            } else {
+                ContentUnavailableView {
+                    Label(emptyShelf.title, systemImage: emptyShelf.symbol)
+                } description: {
+                    Text(emptyShelf.note)
+                }
+            }
         } else {
             List(selection: $model.selection) {
                 if !model.looseDocuments.isEmpty {
@@ -64,6 +117,7 @@ struct PaperListView: View {
                         }
                     }
                 }
+                Section {
                 ForEach(model.visiblePapers) { paper in
                     PaperRow(
                         paper: paper,
@@ -74,6 +128,39 @@ struct PaperListView: View {
                         model: model
                     )
                     .tag(paper.id)
+                    #if os(iOS)
+                    // A `Set` selection only takes taps in edit mode on
+                    // iOS, so the row opens the paper itself.
+                    .contentShape(.rect)
+                    .onTapGesture {
+                        model.selection = [paper.id]
+                        app.compactColumn = .detail
+                    }
+                    #endif
+                }
+                } header: {
+                    // Only while a search is being shown. Everywhere else the
+                    // list is one list and a heading over it would be a label
+                    // on a thing that has no counterpart.
+                    if hasPassages, !model.visiblePapers.isEmpty {
+                        Text("In the Titles")
+                    }
+                }
+
+                if hasPassages {
+                    Section("In the Papers") {
+                        ForEach(passages, id: \.passage) { hit in
+                            passageRow(hit)
+                        }
+                        if scanning {
+                            HStack(spacing: 8) {
+                                ProgressView().controlSize(.small)
+                                Text("Reading the papers…")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
                 }
             }
             // The same list style as the source list, so a selected paper and
@@ -83,7 +170,128 @@ struct PaperListView: View {
             .scrollContentBackground(.hidden)
             #endif
             .hiddenScrollers()
+            // Pulled down past its top, the list opens the search — the
+            // way a Home Screen does, and with a trackpad the way an
+            // overscroll does. The gesture that says "give me something"
+            // gets the field that gives everything.
+            //
+            // It used to happen without warning: the list sprang back and a
+            // palette was suddenly there, and nothing had said it would be.
+            // Now the pull uncovers the words for it, and going past them is
+            // what opens it — so the gesture is something you can stop doing.
+            .overlay(alignment: .top) { pullHint }
+            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                -(geometry.contentOffset.y + geometry.contentInsets.top)
+            } action: { _, distance in
+                pull = distance
+                guard distance > Self.pullThreshold, !app.showsSearchPalette else { return }
+                app.showsSearchPalette = true
+            }
         }
+    }
+
+    /// What the text search answers to: the query, and only while the list is
+    /// showing a search at all.
+    private var searchKey: String { isSearch ? model.searchQuery : "" }
+
+    private var isSearch: Bool { model.scope == .searchResults }
+    /// Whether the text of the papers has something to say about this search.
+    private var hasPassages: Bool { isSearch && (scanning || !passages.isEmpty) }
+
+    /// One paper whose *text* holds the query: the sentence it is in, and
+    /// where. Pressing it opens the paper at that line rather than at the
+    /// page it was left on.
+    private func passageRow(_ hit: PaperTextIndex.Hit) -> some View {
+        Button {
+            openPassage(hit.passage, in: model, link: link)
+            #if os(iOS)
+            app.compactColumn = .detail
+            #endif
+        } label: {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "text.magnifyingglass")
+                    .font(.caption)
+                    .foregroundStyle(.tint)
+                    .padding(.top, 2)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(hit.snippet)
+                        .font(.callout)
+                        .lineLimit(2)
+                    Text(passageSubtitle(hit))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .padding(.vertical, 2)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func passageSubtitle(_ hit: PaperTextIndex.Hit) -> String {
+        let page = ReleaseNotes.string("\(hit.passage.pageIndex + 1)쪽",
+                                       "p. \(hit.passage.pageIndex + 1)")
+        let more = hit.count > 1
+            ? ReleaseNotes.string(" · \(hit.count)번", " · \(hit.count) matches") : ""
+        return "\(hit.title) · \(page)\(more)"
+    }
+
+    /// Reads the library for the words the search was made of.
+    ///
+    /// The same work the palette does, kept when the palette is dismissed:
+    /// pressing Return on a search should not throw away the half of the
+    /// answer that was not in any title.
+    private func scanText() async {
+        passages = []
+        guard isSearch else {
+            scanning = false
+            return
+        }
+        let query = model.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard query.count > 1 else { return }
+        let named = Set(model.visiblePapers.map(\.id))
+        let sources = model.papers
+            .filter { $0.meta.parentID == nil && !named.contains($0.id) }
+            .sorted {
+                ($0.state.lastOpenedAt ?? .distantPast) > ($1.state.lastOpenedAt ?? .distantPast)
+            }
+            .map {
+                PaperTextIndex.Source(id: $0.id, url: $0.documentURL,
+                                      title: $0.meta.displayTitle)
+            }
+        scanning = true
+        for await hit in PaperTextIndex.shared.hits(for: query, in: sources) {
+            passages.append(hit)
+        }
+        scanning = false
+    }
+
+    /// How far the list must be pulled before the search opens.
+    private static let pullThreshold: CGFloat = 72
+
+    /// What the pull uncovers, and what crossing it will do.
+    ///
+    /// It fades in over the first two thirds of the pull and firms up at the
+    /// end, so the last stretch of the gesture is the part that says "now".
+    /// It never takes a touch: the pull belongs to the list.
+    private var pullHint: some View {
+        let progress = min(max(pull / (Self.pullThreshold * 0.66), 0), 1)
+        let armed = pull > Self.pullThreshold * 0.9
+        return HStack(spacing: 6) {
+            Image(systemName: "rectangle.and.text.magnifyingglass")
+            Text("Search Everything")
+        }
+        .font(.footnote.weight(.medium))
+        .foregroundStyle(armed ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+        .opacity(progress)
+        .scaleEffect(0.92 + progress * 0.08)
+        // Carried down by the pull rather than pinned to the edge, so it
+        // reads as something the gesture is uncovering.
+        .offset(y: max(0, pull * 0.34) + 4)
+        .animation(.snappy(duration: 0.14), value: armed)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
     private var looseDescription: String {
@@ -177,7 +385,14 @@ struct PaperRow: View, Equatable {
         }
         .padding(.vertical, 2)
         .contentShape(.rect)
-        .contextMenu { contextMenuContent(paper) }
+        // A view rather than the items themselves. A `@ViewBuilder` closure
+        // here is run when the row is built, so every row in the library was
+        // making its whole menu — a reading-status picker, a submenu holding
+        // thirty other papers, and two passes over the library to work out
+        // what could go in it — before anybody had right-clicked anything.
+        // A `View` is a struct until it is shown, and its body runs when the
+        // menu opens: once, for one row.
+        .contextMenu { PaperMenu(paper: paper, model: model) }
         // Dragging a paper onto a sidebar row files it there; dropping one
         // paper onto another attaches it as supplementary material.
         .draggable(PaperTransfer(id: paper.id, title: paper.meta.displayTitle))
@@ -289,8 +504,25 @@ struct PaperRow: View, Equatable {
         }
     }
 
-    @ViewBuilder
-    private func contextMenuContent(_ paper: LoadedPaper) -> some View {
+    private func copyToPasteboard(_ string: String) {
+        #if os(macOS)
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(string, forType: .string)
+        #else
+        UIPasteboard.general.string = string
+        #endif
+    }
+}
+
+/// What a right-click on a paper offers.
+///
+/// Its own view, and that is the point: see `PaperRow`.
+private struct PaperMenu: View {
+    let paper: LoadedPaper
+    let model: LibraryModel
+
+    var body: some View {
         Button {
             model.selectedPaperID = paper.id
         } label: {
@@ -312,8 +544,9 @@ struct PaperRow: View, Equatable {
             )
         }
 
+        let candidates = self.candidates
         Menu("Attach To") {
-            ForEach(model.attachmentCandidates(for: paper.id).prefix(30)) { candidate in
+            ForEach(candidates.prefix(30)) { candidate in
                 Button(candidate.meta.displayTitle) {
                     Task { await model.attach(paper.id, to: candidate.id) }
                 }
@@ -322,7 +555,7 @@ struct PaperRow: View, Equatable {
         .disabled(
             paper.meta.parentID != nil
                 || !model.attachments(of: paper.id).isEmpty
-                || model.attachmentCandidates(for: paper.id).isEmpty
+                || candidates.isEmpty
         )
 
         if paper.meta.parentID != nil {
@@ -361,6 +594,30 @@ struct PaperRow: View, Equatable {
             Task { await model.moveToTrash(paper.id) }
         } label: {
             Label("Move to Trash", systemImage: "trash")
+        }
+    }
+
+    /// The papers this one could be attached to, asked for once rather than
+    /// twice: the submenu wants them and so did the test for whether there
+    /// are any, and each ask was a pass over the library and a sort.
+    private var candidates: [LoadedPaper] {
+        model.attachmentCandidates(for: paper.id)
+    }
+
+    private func statusBinding(_ paper: LoadedPaper) -> Binding<PaperState.ReadingStatus> {
+        Binding(
+            get: { paper.state.readingStatus },
+            set: { newValue in
+                Task { await model.setReadingStatus(newValue, for: paper.id) }
+            }
+        )
+    }
+
+    private func label(for status: PaperState.ReadingStatus) -> String {
+        switch status {
+        case .unread: "Unread"
+        case .reading: "Reading"
+        case .read: "Read"
         }
     }
 

@@ -18,6 +18,16 @@ struct NoteAnchorTests {
         #expect(restored.rect == anchor.rect)
     }
 
+    @Test("The paper travels with the passage when it is named")
+    func paper() throws {
+        let paper = UUID()
+        var far = anchor
+        far.paperID = paper
+        #expect(far.url.absoluteString.contains("paper=\(paper.uuidString)"))
+        #expect(try #require(NoteAnchor(url: far.url)).paperID == paper)
+        #expect(try #require(NoteAnchor(url: anchor.url)).paperID == nil)
+    }
+
     @Test("The label is the opening words, shortened")
     func label() {
         #expect(anchor.label == "We introduce the OpenVLA model, a 7B-parameter…")

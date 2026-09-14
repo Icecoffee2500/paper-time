@@ -26,14 +26,60 @@ enum MathReader {
     /// of one the range spilled into.
     @MainActor
     static func latex(from selection: PDFSelection) -> String {
-        var pieces: [String] = []
-        for page in selection.pages {
+        let read = pieces(from: selection)
+        guard !read.isEmpty else { return selection.string ?? "" }
+        return join(read.map(\.plain))
+    }
+
+    /// One thing the selection reached, in reading order, with what the page
+    /// made of it.
+    ///
+    /// The clipboard wants one line and takes `plain`; a note wants the page
+    /// back and takes the rest — whether this was a heading, whether it was a
+    /// formula set on its own, which words were in bold, and where the line
+    /// began and ended, which is how a new paragraph gives itself away.
+    struct Piece {
+        enum Kind: Equatable {
+            case prose
+            /// A section title, with how much larger than the body it was set.
+            case heading(level: Int)
+            /// A formula on its own line.
+            case display
+            /// A formula small enough to sit inside a sentence.
+            case inline
+        }
+
+        var kind: Kind
+        /// What `latex(from:)` has always answered with.
+        var plain: String
+        /// The same, with the page's bold kept as Markdown.
+        var marked: String
+        /// Where the row began and ended, in page points.
+        var left: CGFloat = 0
+        var right: CGFloat = 0
+        /// The row's baseline, and which page it was on: two lines of one
+        /// paragraph sit a line apart, and the gap before a new paragraph is
+        /// wider. That, and a line that stops short of the column, is how a
+        /// paragraph ends — an indent is not, because a bulleted list indents
+        /// every line it has.
+        var baseline: CGFloat = 0
+        var page = 0
+        /// The size the row was set at, against the page's body size.
+        var scale: CGFloat = 1
+    }
+
+    @MainActor
+    static func pieces(from selection: PDFSelection) -> [Piece] {
+        var pieces: [Piece] = []
+        for (number, page) in selection.pages.enumerated() {
             let pageCharacters = characters(of: page)
             let pageText = (page.string ?? "") as NSString
             MathTranscriber.fallback = characterLookup(for: page)
             defer { MathTranscriber.fallback = nil }
             guard let scanned = scan(page), !scanned.glyphs.isEmpty else {
-                if let plain = selection.string, !plain.isEmpty { pieces.append(plain) }
+                if let plain = selection.string, !plain.isEmpty {
+                    pieces.append(Piece(kind: .prose, plain: plain, marked: plain))
+                }
                 continue
             }
             // The page, laid out: every row it was set on, gathered into the
@@ -41,6 +87,15 @@ enum MathReader {
             let layout = layout(of: page, scanned: scanned)
             let boxes = lineBoxes(of: selection, on: page)
             let rules = scanned.rules
+            let pageBody = size(of: scanned.glyphs)
+            // How wide the page sets its text, so "this line stops short" has
+            // something to be short of.
+            let extents = layout.blocks.compactMap { block -> CGFloat? in
+                guard let row = block.rows.first, let first = row.first else { return nil }
+                let band = row.dropFirst().reduce(first.rect) { $0.union($1.rect) }
+                return band.width
+            }
+            let columnWidth = extents.max() ?? page.bounds(for: .cropBox).width
 
             func selected(_ glyph: PDFContentScanner.Glyph) -> Bool {
                 boxes.contains { belongs(glyph, to: $0) }
@@ -72,12 +127,22 @@ enum MathReader {
                     let whole = block.rows[0].count
                     if wantsFormula, glyphs.count * 10 < whole * 9 { continue }
                     let band = glyphs.dropFirst().reduce(glyphs[0].rect) { $0.union($1.rect) }
+                    let nearby = rules.filter { band.insetBy(dx: -2, dy: -2).intersects($0.rect) }
                     let text = read(
-                        glyphs,
-                        rules: rules.filter { band.insetBy(dx: -2, dy: -2).intersects($0.rect) },
-                        characters: pageCharacters, text: pageText
+                        glyphs, rules: nearby, characters: pageCharacters, text: pageText
                     )
-                    if !text.isEmpty { pieces.append(text) }
+                    guard !text.isEmpty else { continue }
+                    let marked = readMarkingBold(
+                        glyphs, rules: nearby, characters: pageCharacters, text: pageText
+                    )
+                    let scale = size(of: glyphs) / max(pageBody, 1)
+                    pieces.append(Piece(
+                        kind: heading(level: scale, glyphs: glyphs, text: text,
+                                      short: band.width < columnWidth * 0.55),
+                        plain: text, marked: marked,
+                        left: band.minX, right: band.maxX,
+                        baseline: glyphs[0].origin.y, page: number, scale: scale
+                    ))
                     continue
                 }
 
@@ -103,14 +168,274 @@ enum MathReader {
                     rules: rules.filter { bounds.insetBy(dx: -2, dy: -2).intersects($0.rect) }
                 )
                 if let tag { body += tag }
-                if !body.isEmpty {
-                    pieces.append(all.count > 3 ? "$$\(body)$$" : "$\(body)$")
-                }
+                guard !body.isEmpty else { continue }
+                let displayed = all.count > 3
+                let wrapped = displayed ? "$$\(body)$$" : "$\(body)$"
+                pieces.append(Piece(
+                    kind: displayed ? .display : .inline,
+                    plain: wrapped, marked: wrapped,
+                    left: bounds.minX, right: bounds.maxX,
+                    baseline: all[0].origin.y, page: number
+                ))
             }
         }
+        return pieces
+    }
 
-        guard !pieces.isEmpty else { return selection.string ?? "" }
-        return join(pieces)
+    /// A line that holds nothing but mathematics, as a displayed formula.
+    ///
+    /// Nil when the line is prose with a formula in it, which is the common
+    /// case and must stay where it is.
+    private static func displayedEquation(in line: String) -> String? {
+        let text = line.trimmingCharacters(in: .whitespaces)
+        guard text.contains("$") else { return nil }
+        var maths: [String] = []
+        var rest = ""
+        var index = text.startIndex
+        while let open = text[index...].firstIndex(of: "$") {
+            rest += text[index..<open]
+            guard let close = text[text.index(after: open)...].firstIndex(of: "$") else {
+                rest += text[open...]
+                index = text.endIndex
+                break
+            }
+            maths.append(String(text[text.index(after: open)..<close]))
+            index = text.index(after: close)
+        }
+        rest += text[index...]
+        guard !maths.isEmpty else { return nil }
+
+        // What is left over once the mathematics is taken out: an equation
+        // carries at most its number and the punctuation that ends the
+        // sentence it completes.
+        var tag: String?
+        var leftovers = rest.trimmingCharacters(in: .whitespaces)
+        if let match = leftovers.range(of: #"\(([0-9]+[a-z]?)\)"#, options: .regularExpression) {
+            tag = String(leftovers[match]).trimmingCharacters(in: CharacterSet(charactersIn: "()"))
+            leftovers.removeSubrange(match)
+        }
+        let remainder = leftovers.trimmingCharacters(in: CharacterSet(charactersIn: " ,.;:\t"))
+        guard remainder.isEmpty else { return nil }
+
+        var body = upright(maths.joined(separator: " "))
+        if let tag { body += "\\tag{\(tag)}" }
+        return "$$\(body)$$"
+    }
+
+    /// Sets the words inside a formula upright.
+    ///
+    /// A run of three letters or more in mathematics is a name, not three
+    /// variables multiplied — minimize, argmax, softmax, exp. TeX would have
+    /// written `\operatorname{minimize}`; the page draws it upright; and
+    /// without this it comes back as eight italic letters in a row, which is
+    /// the one thing a quoted formula must not look like.
+    private static func upright(_ latex: String) -> String {
+        var out = ""
+        var letters = ""
+        var index = latex.startIndex
+
+        func flush() {
+            guard !letters.isEmpty else { return }
+            out += letters.count >= 3 ? "\\text{\(letters)}" : letters
+            letters = ""
+        }
+
+        while index < latex.endIndex {
+            let character = latex[index]
+            if character == "\\" {
+                // A command's own name is not a word in the formula.
+                flush()
+                out.append(character)
+                index = latex.index(after: index)
+                while index < latex.endIndex, latex[index].isLetter {
+                    out.append(latex[index])
+                    index = latex.index(after: index)
+                }
+                continue
+            }
+            if character.isLetter, character.isASCII {
+                letters.append(character)
+            } else {
+                flush()
+                out.append(character)
+            }
+            index = latex.index(after: index)
+        }
+        flush()
+        return out
+    }
+
+    /// Whether a row is a section title, and how loud a one.
+    ///
+    /// Set larger than the body is what makes a heading a heading; bold alone
+    /// is a run-in heading — "Architecture." at the head of a paragraph — and
+    /// that stays a bold phrase inside its sentence, which is what it is.
+    private static func heading(
+        level scale: CGFloat, glyphs: [PDFContentScanner.Glyph], text: String,
+        short: Bool
+    ) -> Piece.Kind {
+        // A title is short and does not end in a full stop; the first line of
+        // a paragraph set in a larger face is neither.
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.hasSuffix("."), !trimmed.hasSuffix(","), trimmed.count < 90
+        else { return .prose }
+        // Either it is set larger than the body, or it is a line of its own,
+        // set entirely in bold, that stops well short of the column: that is
+        // a subsection heading in every paper's template, and it is often no
+        // more than half a point larger than the text under it.
+        let bold = !glyphs.isEmpty && glyphs.allSatisfy(isBold)
+        if scale >= 1.12 { return .heading(level: scale >= 1.45 ? 2 : scale >= 1.22 ? 3 : 4) }
+        if bold, short, scale >= 1.0 { return .heading(level: 4) }
+        return .prose
+    }
+
+    /// The row, read as `read` reads it, with its bold words wrapped.
+    private static func readMarkingBold(
+        _ row: [PDFContentScanner.Glyph],
+        rules: [PDFContentScanner.Rule],
+        characters: [PageCharacter],
+        text: NSString
+    ) -> String {
+        // Runs of one weight at a time: a bold lead-in and the sentence that
+        // follows it are one row on the page and two things to read.
+        var runs: [(bold: Bool, glyphs: [PDFContentScanner.Glyph])] = []
+        for glyph in row.sorted(by: { $0.origin.x < $1.origin.x }) {
+            let bold = isBold(glyph)
+            if var last = runs.last, last.bold == bold {
+                last.glyphs.append(glyph)
+                runs[runs.count - 1] = last
+            } else {
+                runs.append((bold, [glyph]))
+            }
+        }
+        guard runs.contains(where: \.bold), runs.count > 1 else {
+            return read(row, rules: rules, characters: characters, text: text)
+        }
+        var out = ""
+        for run in runs {
+            let piece = read(run.glyphs, rules: rules, characters: characters, text: text)
+                .trimmingCharacters(in: .whitespaces)
+            guard !piece.isEmpty else { continue }
+            if !out.isEmpty { out += " " }
+            out += run.bold ? "**\(piece)**" : piece
+        }
+        return out
+    }
+
+    /// Whether a glyph was drawn in a bold face.
+    ///
+    /// From the font's own name, which is all a PDF says about weight: TeX
+    /// writes bold as CMBX or NimbusRomNo9L-Medi, everybody else writes the
+    /// word out.
+    static func isBold(_ glyph: PDFContentScanner.Glyph) -> Bool {
+        let name = glyph.fontName.uppercased()
+        // "BX" catches the bold extended faces every TeX paper is set with —
+        // CMBX10, SFBX1000 — and "-BD" the OpenType ones the newer templates
+        // use, OptimisticDisp-Bd among them.
+        return name.contains("BOLD") || name.contains("BX") || name.contains("-BD")
+            || name.contains("MEDI") || name.contains("SEMIB") || name.contains("HEAVY")
+            || name.contains("BLACK") || name.hasSuffix("-B")
+    }
+
+    /// The passage as Markdown, with the shape of the page kept.
+    ///
+    /// `latex(from:)` answers with one line, which is what a clipboard wants.
+    /// A note wants what was on the page: a section title set as a title, a
+    /// displayed equation on its own line with its number, the bold lead-in
+    /// of a paragraph still bold, and a new paragraph starting a new
+    /// paragraph. Quoting three pages of a paper into a note used to give one
+    /// grey slab with the headings swallowed mid-sentence.
+    ///
+    /// An empty string in the result is a paragraph break.
+    @MainActor
+    static func structured(from selection: PDFSelection) -> [String] {
+        let read = pieces(from: selection)
+        guard !read.isEmpty else {
+            let plain = (selection.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            return plain.isEmpty ? [] : [plain]
+        }
+
+        // The column, as the selected rows drew it. A line that stops well
+        // short of the right edge ended a paragraph; a line that starts in
+        // from the left edge began one.
+        let rows = read.filter { $0.kind != .inline }
+        let left = rows.map(\.left).min() ?? 0
+        let right = rows.map(\.right).max() ?? 0
+        let column = max(right - left, 1)
+        // How far apart two lines of one paragraph sit, as this page set them.
+        let gaps = zip(rows, rows.dropFirst()).compactMap { above, below -> CGFloat? in
+            guard above.page == below.page else { return nil }
+            let gap = above.baseline - below.baseline
+            return gap > 1 && gap < 80 ? gap : nil
+        }.sorted()
+        let leading = gaps.isEmpty ? 0 : gaps[gaps.count / 2]
+
+        var lines: [String] = []
+        var paragraph = ""
+        var previous: Piece?
+
+        func close() {
+            let trimmed = paragraph.trimmingCharacters(in: .whitespaces)
+            if !trimmed.isEmpty { lines.append(trimmed) }
+            paragraph = ""
+        }
+        func breakHere() {
+            close()
+            if lines.last != "" && !lines.isEmpty { lines.append("") }
+        }
+
+        for piece in read {
+            switch piece.kind {
+            case .heading(let level):
+                breakHere()
+                lines.append(String(repeating: "#", count: level) + " " + piece.marked)
+                lines.append("")
+                previous = nil
+
+            case .display:
+                breakHere()
+                lines.append(piece.marked)
+                lines.append("")
+                previous = nil
+
+            case .inline:
+                paragraph += paragraph.isEmpty ? piece.marked : " " + piece.marked
+
+            case .prose:
+                // A line that is all mathematics and an equation number is a
+                // displayed equation, whatever the row was classified as —
+                // "minimize" is a word, and the line it stands on is still an
+                // equation. This is the line that used to arrive in the
+                // middle of a sentence with its number stuck to it.
+                if let equation = displayedEquation(in: piece.marked) {
+                    breakHere()
+                    lines.append(equation)
+                    lines.append("")
+                    previous = nil
+                    continue
+                }
+                // A paragraph ended if the line before it stopped short of the
+                // column, or this one is set in from its left edge.
+                if let previous, previous.kind == .prose {
+                    let endedShort = previous.right < right - column * 0.12
+                    let spaced = leading > 0 && previous.page == piece.page
+                        && previous.baseline - piece.baseline > leading * 1.5
+                    if endedShort || spaced { breakHere() }
+                }
+                if paragraph.isEmpty {
+                    paragraph = piece.marked
+                } else if paragraph.hasSuffix("-") {
+                    paragraph.removeLast()
+                    paragraph += piece.marked
+                } else {
+                    paragraph += " " + piece.marked
+                }
+                previous = piece
+            }
+        }
+        close()
+        while lines.last == "" { lines.removeLast() }
+        return lines
     }
 
     /// One character as PDFKit read it, with where it sits on the page.

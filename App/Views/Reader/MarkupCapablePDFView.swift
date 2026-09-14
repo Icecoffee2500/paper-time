@@ -18,10 +18,24 @@ final class MarkupCapablePDFView: PDFView {
     var onNote: (() -> Void)?
     /// Called when the user asks to look up a reference or a term.
     var onLookUp: ((String) -> Void)?
+    /// Called after every layout, with the view's width — the spread is
+    /// fitted again when the columns beside it come and go.
+    var onLayout: ((CGFloat) -> Void)?
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        onLayout?(bounds.width)
+    }
 
     override func buildMenu(with builder: any UIMenuBuilder) {
         super.buildMenu(with: builder)
-        guard currentSelection?.string?.isEmpty == false else { return }
+        // The marks live in the bar beside the selection, with their colours
+        // shown as colours, as on the Mac — and the bar has Copy. The system
+        // menu would sit right on top of it, so it is emptied and stays away.
+        for identifier in [UIMenu.Identifier.standardEdit, .lookup, .learn, .share, .replace, .format, .text, .find, .speech] {
+            builder.remove(menu: identifier)
+        }
+        guard false, currentSelection?.string?.isEmpty == false else { return }
 
         let highlights = MarkupColor.allCases.map { color in
             UIAction(

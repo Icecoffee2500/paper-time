@@ -9,6 +9,7 @@ public enum ZettelFile {
     public static func text(of note: Zettel) -> String {
         var header = "---\n"
         header += "id: \(note.id)\n"
+        if note.kind != .note { header += "kind: \(note.kind.rawValue)\n" }
         if !note.title.isEmpty { header += "title: \(note.title)\n" }
         if let paperID = note.paperID { header += "paper: \(paperID.uuidString)\n" }
         let tags = note.tags
@@ -37,6 +38,7 @@ public enum ZettelFile {
 
         return Zettel(
             id: fields["id"] ?? fallbackID,
+            kind: fields["kind"].flatMap(Zettel.Kind.init(rawValue:)) ?? .note,
             title: fields["title"] ?? "",
             body: body,
             paperID: fields["paper"].flatMap(UUID.init(uuidString:)),

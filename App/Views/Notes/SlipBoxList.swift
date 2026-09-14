@@ -46,13 +46,22 @@ struct SlipBoxList: View {
                 .padding(.vertical, 5)
                 .background(Capsule().fill(.quaternary.opacity(0.5)))
 
-                Button {
-                    notes.openNoteID = notes.create(paperID: nil).id
+                Menu {
+                    Button {
+                        notes.openNoteID = notes.create(paperID: nil).id
+                    } label: { Label("New Note", systemImage: "note.text") }
+                    Button {
+                        notes.openNoteID = notes.create(paperID: nil, kind: .map).id
+                    } label: { Label("New Map", systemImage: "map") }
+                    Button {
+                        notes.openNoteID = notes.create(paperID: nil, kind: .draft).id
+                    } label: { Label("New Draft", systemImage: "doc.text") }
                 } label: {
                     Image(systemName: "square.and.pencil")
                 }
-                .buttonStyle(.borderless)
-                .help("Write a note of your own")
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .help("Write a note, a map, or a draft")
             }
             .padding(.horizontal, 16)
             .padding(.top, 10)
@@ -69,6 +78,12 @@ struct SlipBoxList: View {
                     .padding(.bottom, 10)
                 }
                 .scrollIndicators(.never)
+            }
+
+            // The squeeze: notes with no home that hang together. One line,
+            // and a map is one press — Milo's moment, noticed for you.
+            if notes.query.isEmpty, notes.selectedTag == nil, let squeeze = notes.suggestions.first {
+                squeezeBanner(squeeze)
             }
 
             if notes.visible.isEmpty {
@@ -92,11 +107,12 @@ struct SlipBoxList: View {
                                 NoteRow(note: note)
                                     .pressable(inset: 6)
                                     .tag(note.id)
-                                    .contextMenu {
-                                        Button(role: .destructive) { model.notes.delete(note.id) } label: {
-                                            Label("Delete", systemImage: "trash")
-                                        }
-                                    }
+                                    // A view, so its body is built when the
+                                    // menu opens rather than when the row is:
+                                    // the filing menu asks the box for every
+                                    // map and every draft it holds, and it
+                                    // was asking once per note in the list.
+                                    .contextMenu { NoteMenu(note: note, model: model) }
                             }
                         } header: {
                             // The paper as a chip, the same shape the library
@@ -162,21 +178,65 @@ struct SlipBoxList: View {
         var notes: [Zettel]
     }
 
-    /// The visible notes by paper, notes of no paper last.
+    /// Where a note can go: onto a map, or into a draft.
+    @ViewBuilder
+
+
+    /// "These notes hang together; make them a map?"
+    private func squeezeBanner(_ squeeze: Atlas.Suggestion) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Image(systemName: "map")
+                .foregroundStyle(.tint)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(squeeze.noteIDs.count) notes are one subject")
+                    .font(.callout.weight(.medium))
+                Text(squeeze.words.joined(separator: " · "))
+                    .font(.caption)
+                    .foregroundStyle(.tint)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 4)
+            Button("Make a Map") {
+                let map = model.notes.createMap(from: squeeze) { model.paper($0)?.meta.csl.fullTitle }
+                model.notes.openNoteID = map.id
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: Corner.row, style: .continuous)
+                .fill(Color.accentColor.opacity(0.08))
+        )
+        .padding(.horizontal, 12)
+        .padding(.bottom, 8)
+    }
+
+    /// The visible notes by paper, notes of no paper last — and the maps
+    /// first of all, since a map is where the others live.
     private var groups: [NoteGroup] {
         var found: [NoteGroup] = []
         var index: [String: Int] = [:]
-        for note in notes.visible {
-            let key = note.paperID?.uuidString ?? "-"
+        let maps = notes.visible.filter { $0.kind == .map }
+        if !maps.isEmpty { found.append(NoteGroup(id: "maps", title: "Maps", notes: maps)); index["maps"] = found.count - 1 }
+        let drafts = notes.visible.filter { $0.kind == .draft }
+        if !drafts.isEmpty { found.append(NoteGroup(id: "drafts", title: "Drafts", notes: drafts)); index["drafts"] = found.count - 1 }
+        for note in notes.visible where note.kind == .note {
+            // A paper this library no longer has is no group of its own:
+            // three chips all saying "Notes of my own" said nothing.
+            let paper = note.paperID.flatMap { model.paper($0) }
+            let key = paper.map { $0.id.uuidString } ?? "-"
             if let at = index[key] {
                 found[at].notes.append(note)
             } else {
-                let title = note.paperID.flatMap { model.paper($0)?.meta.csl.fullTitle } ?? "Notes of my own"
+                let title = paper?.meta.csl.fullTitle ?? paper?.meta.displayTitle ?? "Notes of my own"
                 index[key] = found.count
                 found.append(NoteGroup(id: key, title: title, notes: [note]))
             }
         }
-        return found.filter { $0.id != "-" } + found.filter { $0.id == "-" }
+        let special = ["maps", "drafts"]
+        return found.filter { special.contains($0.id) } + found.filter { $0.id != "-" && !special.contains($0.id) } + found.filter { $0.id == "-" }
     }
 }
 
@@ -196,15 +256,25 @@ struct SlipBoxDetail: View {
     var onFollowPassage: (UUID) -> Void = { _ in }
 
     var body: some View {
-        if let id = model.notes.openNoteID, model.notes.note(id) != nil {
-            ZettelEditorView(notes: model.notes, noteID: id, link: link)
-                .frame(maxWidth: 760)
+        if let id = model.notes.openNoteID, let note = model.notes.note(id) {
+            Group {
+                if note.kind == .map {
+                    MapView(model: model, mapID: id, link: link)
+                } else if note.kind == .draft {
+                    DraftView(model: model, draftID: id, link: link)
+                        .frame(maxWidth: 760)
+                } else {
+                    ZettelEditorView(notes: model.notes, noteID: id, link: link)
+                        .frame(maxWidth: 760)
+                }
+            }
                 .frame(maxWidth: .infinity)
                 .onChange(of: link.anchorRequest) { _, request in
                     // The reader consumes the request; this only has to
-                    // notice one was made, and say which paper it is for.
-                    guard request != nil,
-                          let paperID = model.notes.note(id)?.paperID
+                    // notice one was made, and say which paper it is for —
+                    // the passage's own, or failing that the note's.
+                    guard let request,
+                          let paperID = request.paperID ?? model.notes.note(id)?.paperID
                     else { return }
                     onFollowPassage(paperID)
                 }
@@ -222,6 +292,39 @@ struct SlipBoxDetail: View {
             // An empty panel is still a panel. Without this it shrank to the
             // size of the words in it and sat on the ground as a card.
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+}
+
+/// What a right-click on a note offers: where to file it, and the way out.
+///
+/// Its own view for the reason `PaperMenu` is one — the body of a view is
+/// built when it is shown, and a `@ViewBuilder` closure is built with the row.
+private struct NoteMenu: View {
+    let note: Zettel
+    let model: LibraryModel
+
+    var body: some View {
+        if note.kind == .note {
+            let maps = model.notes.maps
+            let drafts = model.notes.drafts
+            if !maps.isEmpty {
+                Menu("Put on Map") {
+                    ForEach(maps) { map in
+                        Button(map.displayTitle) { model.notes.add(note.id, toMap: map.id) }
+                    }
+                }
+            }
+            if !drafts.isEmpty {
+                Menu("Add to Draft") {
+                    ForEach(drafts) { draft in
+                        Button(draft.displayTitle) { model.notes.add(note.id, toMap: draft.id) }
+                    }
+                }
+            }
+        }
+        Button(role: .destructive) { model.notes.delete(note.id) } label: {
+            Label("Delete", systemImage: "trash")
         }
     }
 }

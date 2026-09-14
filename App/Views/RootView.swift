@@ -51,6 +51,12 @@ struct RootView: View {
         .sheet(isPresented: Bindable(app).showsReleaseNotes) {
             WhatsNewView()
         }
+        // Changing the folder is choosing a folder — the picker, not the
+        // first-run screen. Nothing is forgotten until something is chosen.
+        .fileImporter(isPresented: Bindable(app).isChoosingLibraryFolder, allowedContentTypes: [.folder]) { result in
+            guard case let .success(url) = result else { return }
+            Task { await app.adopt(folderAt: url) }
+        }
         .onChange(of: scenePhase) { _, phase in
             // The folder is watched while the app runs, but a Mac that was
             // asleep or an iPhone that suspended the app will have missed
@@ -79,10 +85,15 @@ struct LibraryWindow: View {
     /// Which of the inspector's tabs is showing. Owned here rather than by the
     /// column, because on a Mac the picker for it lives in the toolbar and the
     /// toolbar is declared here.
-    @State private var inspectorTab = InspectorTab.details
+    @State private var inspectorTab = InspectorTab(
+        rawValue: Boot.setting("PAPERTIME_INSPECTOR_TAB") ?? ""
+    ) ?? .details
     /// How wide the paper was while it was open, so it can be held at that
     /// width on the way out rather than squeezed to nothing.
     @State private var readerWidth: CGFloat = 600
+    /// How much room the window has, so a column can be dragged as wide as
+    /// there is room for rather than as wide as a number written here.
+    @State private var windowWidth: CGFloat = 1200
     /// The paper a passage link opened, shown where the notes list was.
     @State private var slipBoxPaperID: UUID?
     @State private var isImportingPDFs = false
@@ -142,22 +153,112 @@ struct LibraryWindow: View {
         #else
         // iPhone and iPad keep the system split view: it is what gives them
         // the sliding sidebar, the back button and the compact layout.
+        // Two columns, not three: the screen has no room for a shelf of
+        // scopes beside the list and the page. The scopes come as a panel
+        // over the window (`scopePanel`), the inspector floats in from the
+        // right, and the system's own toggle hides and shows the list.
         return AnyView(
-            NavigationSplitView(columnVisibility: $app.columnVisibility) {
-                sidebarColumn
-            } content: {
+            NavigationSplitView(columnVisibility: $app.columnVisibility, preferredCompactColumn: $app.compactColumn) {
                 listColumn
+                    // Wide enough for the row of buttons above it: at 340 the sixth
+                    // pushed the shelves button off the leading edge.
+                    .navigationSplitViewColumnWidth(min: 340, ideal: 380, max: 640)
             } detail: {
-                PaperDetailColumn(
-                    model: model, configuration: configuration,
-                    link: link, inspectorTab: $inspectorTab
-                )
+                // The same three details the Mac has: the note, the graph,
+                // the paper.
+                switch model.scope {
+                case .notes:
+                    SlipBoxDetail(model: model, link: link) { paperID in
+                        withAnimation(.snappy(duration: 0.25)) { slipBoxPaperID = paperID }
+                    }
+                case .graph:
+                    PaperGraphView(model: model, graph: model.graph)
+                default:
+                    PaperDetailColumn(
+                        model: model, configuration: configuration,
+                        link: link, inspectorTab: $inspectorTab
+                    )
+                }
+            }
+            .background { scopePanel }
+            .sheet(isPresented: $showsSettings) {
+                NavigationStack {
+                    SettingsView()
+                        .environment(app)
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("Done") { showsSettings = false }
+                            }
+                        }
+                }
             }
         )
         #endif
     }
 
+    #if os(iOS)
+    /// The library's shelves — scopes, collections, tags, authors — as a
+    /// panel in the middle of the window, the way Spotlight comes: a form
+    /// sheet, which the system centres, dims the ground behind and lets a
+    /// tap outside dismiss. Pick a shelf and it goes.
+    private var scopePanel: some View {
+        @Bindable var app = app
+        return Color.clear
+            .frame(width: 0, height: 0)
+            .sheet(isPresented: $app.showsScopePanel) {
+                NavigationStack {
+                    LibrarySidebar(model: model)
+                        .navigationTitle("Library")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .topBarLeading) {
+                                Button {
+                                    app.showsScopePanel = false
+                                    showsSettings = true
+                                } label: {
+                                    Label("Settings", systemImage: "gearshape")
+                                }
+                            }
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("Done") { app.showsScopePanel = false }
+                            }
+                        }
+                }
+                .presentationSizing(.form)
+                .presentationBackground(.regularMaterial)
+            }
+    }
+    #endif
+
     #if os(macOS)
+    /// How wide a column may be dragged.
+    ///
+    /// It used to be a number — 360 for the shelves, 560 for the list, 520
+    /// for the inspector — and a number is a guess about somebody else's
+    /// window. Reading beside a note means giving the note half the screen,
+    /// and half of a 32-inch screen is not 520 points. So the limit is the
+    /// room there actually is: everything the window has, less what the
+    /// other open columns are holding and a page's worth for the paper.
+    /// `mine` is what this column itself already takes, which would
+    /// otherwise be counted against it.
+    private func widest(_ floor: CGFloat) -> CGFloat {
+        var taken: CGFloat = Pane.pageFloor
+        if app.isSidebarVisible { taken += app.sidebarWidth }
+        if app.showsPaperList { taken += app.paperListWidth }
+        if app.showsInspector { taken += app.inspectorWidth }
+        return max(floor, windowWidth - taken + currentWidth(floor))
+    }
+
+    /// The width the column being asked about is holding right now, told
+    /// apart by its own minimum — the one number each column has of its own.
+    private func currentWidth(_ floor: CGFloat) -> CGFloat {
+        switch floor {
+        case 200: app.isSidebarVisible ? app.sidebarWidth : 0
+        case 240: app.showsPaperList ? app.paperListWidth : 0
+        default: app.showsInspector ? app.inspectorWidth : 0
+        }
+    }
+
     private var macColumns: some View {
         @Bindable var app = app
 
@@ -181,7 +282,7 @@ struct LibraryWindow: View {
                 .clipped()
 
             if app.isSidebarVisible {
-                ColumnDivider(width: $app.sidebarWidth, range: 200...360)
+                ColumnDivider(width: $app.sidebarWidth, range: 200...widest(200))
             }
 
             // With the paper closed the list is the only thing left to look
@@ -207,7 +308,7 @@ struct LibraryWindow: View {
 
             // Nothing to drag against when there is no paper beside it.
             if app.showsPaperList, app.showsReader {
-                ColumnDivider(width: $app.paperListWidth, range: 240...560)
+                ColumnDivider(width: $app.paperListWidth, range: 240...widest(240))
             }
 
             Group {
@@ -245,6 +346,14 @@ struct LibraryWindow: View {
             .frame(maxWidth: app.showsReader ? .infinity : 0, alignment: .leading)
             .opacity(app.showsReader ? 1 : 0)
             .clipped()
+        }
+        // Rounded, and that is the point: a drag on the window's edge reports
+        // a new width sixty times a second, and every one of them was a
+        // change of state that rebuilt the whole column stack. The only thing
+        // this number decides is how far a divider may be dragged, which does
+        // not need to know about single points.
+        .onGeometryChange(for: CGFloat.self) { ($0.size.width / 24).rounded() * 24 } action: {
+            windowWidth = $0
         }
         // The panels float clear of the window's edges and of the toolbar, so
         // every boundary in the window is a curve and a gap rather than a
@@ -316,6 +425,7 @@ struct LibraryWindow: View {
                 }
                 .keyboardShortcut(",", modifiers: .command)
             }
+            .sharedBackgroundVisibility(.hidden)
         }
         .sheet(isPresented: $showsSettings) {
             NavigationStack {
@@ -335,14 +445,18 @@ struct LibraryWindow: View {
         @Bindable var app = app
 
         return splitView
-        .onChange(of: configuration.layout) { _, layout in
+        .task {
+            try? await Task.sleep(for: .milliseconds(600))
+            app.reassertFocusMode()
+        }
+        .onChange(of: configuration.layout, initial: true) { _, layout in
             app.settings.readerPageMode = layout.rawValue
             // A spread wants the whole window. Choosing Book is the clearest
             // statement a reader can make that they are here to read, so the
             // columns step aside and the list becomes something summoned.
             app.setFocusMode(layout == .book)
         }
-        .searchPalette(model: model, isPresented: $app.showsSearchPalette) { action in
+        .searchPalette(model: model, link: link, isPresented: $app.showsSearchPalette) { action in
             perform(action)
         }
         .onReceive(NotificationCenter.default.publisher(for: .paperTimeToggleFocus)) { _ in
@@ -357,6 +471,7 @@ struct LibraryWindow: View {
         .onReceive(NotificationCenter.default.publisher(for: .paperTimeLayoutBook)) { _ in
             configuration.layout = .book
         }
+        #if os(macOS)
         .fileImporter(
             isPresented: $isImportingPDFs,
             allowedContentTypes: [.pdf],
@@ -365,6 +480,7 @@ struct LibraryWindow: View {
             guard case let .success(urls) = result else { return }
             Task { await model.importDocuments(at: urls) }
         }
+        #endif
         .sheet(isPresented: $showsExport) { BibTeXExportView() }
         .sheet(isPresented: $showsMigration) { MigrationView(model: model) }
         .sheet(isPresented: $showsCitationStyles) {
@@ -384,6 +500,9 @@ struct LibraryWindow: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .paperTimeExportBibTeX)) { _ in
             showsExport = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .paperTimeSyncNow)) { _ in
+            syncNow()
         }
         .onReceive(NotificationCenter.default.publisher(for: .paperTimeCopyCitationKey)) { _ in
             copySelectedCitationKey()
@@ -420,8 +539,31 @@ struct LibraryWindow: View {
         model.selectedPaperID = papers[next].id
     }
 
-    @ViewBuilder
+    /// The list column, whatever the shelf is showing.
+    ///
+    /// The bar belongs to the column, not to the papers: hung on the paper
+    /// list alone, walking into the slip-box took the button that opens the
+    /// shelves with it, and there was no way back out of the notes.
     private var listColumn: some View {
+        shelfColumn
+        #if !os(macOS)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(id: "library") { toolbarContent }
+            // The importer sits on the column whose button asks for it: hung
+            // on the split view's root it never came up on the iPad.
+            .fileImporter(
+                isPresented: $isImportingPDFs,
+                allowedContentTypes: [.pdf],
+                allowsMultipleSelection: true
+            ) { result in
+                guard case let .success(urls) = result else { return }
+                Task { await model.importDocuments(at: urls) }
+            }
+        #endif
+    }
+
+    @ViewBuilder
+    private var shelfColumn: some View {
         switch model.scope {
         case .notes:
             // Following a passage out of a note puts the paper where the list
@@ -439,7 +581,10 @@ struct LibraryWindow: View {
     }
 
     private var paperListColumn: some View {
-        #if os(macOS)
+        // The shelf's name stands at the top of the column on every device.
+        // In the iPad's navigation bar it was squeezed between our own
+        // buttons and the system's toggle until one clipped letter of it was
+        // left standing in the corner.
         VStack(spacing: 0) {
             HStack {
                 Text(scopeTitle)
@@ -449,13 +594,8 @@ struct LibraryWindow: View {
             .padding(.horizontal, 16)
             .padding(.top, 10)
             .padding(.bottom, 6)
-            PaperListView(model: model)
+            PaperListView(model: model, link: link)
         }
-        #else
-        PaperListView(model: model)
-            .navigationTitle(scopeTitle)
-            .toolbar(id: "library") { toolbarContent }
-        #endif
     }
 
     // MARK: - Toolbar
@@ -478,6 +618,18 @@ struct LibraryWindow: View {
         // drew the little vertical rules between the buttons.
         ToolbarItem(id: "actions", placement: barPlacement) {
             HStack(spacing: 4) {
+                #if os(iOS)
+                // The shelves, first: the leading edge belongs to the split
+                // view's own toggle, which sat over anything put beside it.
+                Button {
+                    withAnimation(AppModel.paneMotion) { app.showsScopePanel.toggle() }
+                } label: {
+                    Label("Library", systemImage: "square.grid.2x2").toolbarIcon()
+                }
+                .help("The library's shelves: scopes, collections, tags")
+                .keyboardShortcut("1", modifiers: [.command, .control])
+                .toolbarHover()
+                #endif
                 Button {
                     isImportingPDFs = true
                 } label: {
@@ -486,21 +638,47 @@ struct LibraryWindow: View {
                 .help("Add PDFs to the library (Command-O)")
                 .toolbarHover()
 
+                // Not a plain magnifier: the reader's bar has one of those
+                // for finding a word in the paper, and two magnifiers in one
+                // window are a coin toss. This one looks through everything
+                // and offers before it is asked, which is what the sparkle
+                // is for.
                 Button {
                     app.showsSearchPalette = true
                 } label: {
-                    Label("Search", systemImage: "magnifyingglass").toolbarIcon()
+                    Label("Search Everything", systemImage: "rectangle.and.text.magnifyingglass").toolbarIcon()
                 }
-                .help("Search everything (Command-K)")
+                .help("Search papers, notes, maps and drafts (Command-K)")
+                .toolbarHover()
+
+                // Marks and ink travel in small files that iCloud brings when
+                // it is ready — usually seconds. This asks for them now.
+                Button(action: syncNow) {
+                    Label("Sync Now", systemImage: "arrow.clockwise").toolbarIcon()
+                }
+                .help("Fetch what the other devices have written (Command-R)")
+                // On the Mac the same key is on the Library menu, and two
+                // owners of one key is one too many.
+                #if os(iOS)
+                .keyboardShortcut("r", modifiers: .command)
+                #endif
+                .disabled(model.isScanning)
                 .toolbarHover()
 
                 sortMenu
+                // On the iPad the page's options sit on the page's own bar;
+                // here they only crowded the column into an overflow menu.
+                #if os(macOS)
                 viewMenu
+                #endif
                 shareMenu
+                #if os(macOS)
                 paneMenu
+                #endif
             }
             .toolbarButtons()
         }
+        .sharedBackgroundVisibility(.hidden)
     }
 
     /// The four panes, behind one button.
@@ -569,16 +747,6 @@ struct LibraryWindow: View {
                 }
             #if os(iOS)
             Toggle("Draw with Finger", isOn: $configuration.fingerDrawing)
-            Toggle(
-                "Draw",
-                isOn: Binding(
-                    get: { configuration.mode == .draw },
-                    set: { on in
-                        configuration.mode = on ? .draw : .read
-                        configuration.showsToolPicker = on
-                    }
-                )
-            )
             #endif
         } label: {
             Label("View Options", systemImage: "textformat.size").toolbarIcon()
@@ -656,12 +824,21 @@ struct LibraryWindow: View {
         case .addPDFs: isImportingPDFs = true
         case .exportBibTeX: showsExport = true
         case .resolveMetadata: Task { await model.resolveAllPending() }
-        case .refresh: Task { await model.refresh() }
+        case .refresh: syncNow()
         case .importLibrary: showsMigration = true
         case .settings:
             #if os(macOS)
             NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
             #endif
+        }
+    }
+
+    /// Asks iCloud for what it has not brought and re-reads the folder, and
+    /// tells the open paper to look at its own files again.
+    private func syncNow() {
+        Task {
+            await model.pullFromCloud()
+            await link.session?.reloadFromDisk()
         }
     }
 
@@ -719,19 +896,25 @@ struct PaperDetailColumn: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     @Binding var inspectorTab: InspectorTab
+    /// The room the page and the inspector share.
+    @State private var columnWidth: CGFloat = 800
+    /// How wide the inspector was when a drag on its grip began.
+    @State private var gripStart: CGFloat?
 
     var body: some View {
         columns
         // The paper's contents, floating over the page. Centred on the
         // column, which in a book spread puts it in the gutter between the
         // two pages where there are no words to cover.
-        .overlay {
-            if app.showsFloatingList, model.selectedPaper != nil {
-                ContentsPopup(link: link) { app.toggleFloatingList() }
-                    .transition(.scale(scale: 0.96).combined(with: .opacity))
-            }
-        }
+        .overlay { contents }
         .animation(.snappy(duration: 0.22), value: app.showsFloatingList)
+        // A passage of another paper, followed from a note here: that paper
+        // opens, and its reader takes the request from there.
+        .onChange(of: link.anchorRequest) { _, request in
+            guard let request, let paperID = request.paperID, model.selectedPaperID != paperID,
+                  model.paper(paperID) != nil else { return }
+            model.selection = [paperID]
+        }
         // Clicking a mark on the page opens the list it lives in.
         .onChange(of: link.revealedMarkID) { _, id in
             guard id != nil else { return }
@@ -745,6 +928,77 @@ struct PaperDetailColumn: View {
             inspectorTab = .note
             link.pendingNoteAnchor = anchor
         }
+    }
+
+    /// The paper's table of contents, over the page.
+    ///
+    /// On the Mac it floats in the middle of the column, which in a spread is
+    /// the gutter between the two pages, and a click anywhere else puts it
+    /// away. A touch screen gets the same list along the foot of the paper,
+    /// where a thumb is, and the whole page above it is the way out — there
+    /// is no Escape key to fall back on, so the way out has to be the obvious
+    /// one: touch the paper.
+    @ViewBuilder
+    private var contents: some View {
+        if app.showsFloatingList, model.selectedPaper != nil {
+            if contentsPlacement == .gutter {
+                ContentsPopup(link: link) { app.toggleFloatingList() }
+                    .transition(.scale(scale: 0.96).combined(with: .opacity))
+            } else {
+                ZStack(alignment: .bottom) {
+                    #if !os(macOS)
+                    // Not a dimming: the paper stays readable while the list
+                    // is up, because the point of the list is to find your
+                    // way about the paper. It is here to catch the touch that
+                    // dismisses. The Mac has no such layer — a click there
+                    // goes to the page and puts the list away on its way.
+                    Color.clear
+                        .contentShape(.rect)
+                        .onTapGesture { app.toggleFloatingList() }
+                    #endif
+                    ContentsPopup(link: link, placement: .footer) { app.toggleFloatingList() }
+                        .padding(.horizontal, 12)
+                        // Clear of the bar that counts the pages: the list
+                        // floats over the paper, not over the reader's own
+                        // furniture.
+                        .padding(.bottom, ReaderScreen.statusBarClearance + 12)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+                // Told to fill the reader and sit at the bottom of it. On iOS
+                // the layer that catches the dismissing touch fills the stack
+                // and the alignment has something to work against; the Mac has
+                // no such layer, so the stack shrank to the panel and the
+                // overlay put that in the middle of the page — which is how a
+                // footer ended up floating over the words it was avoiding.
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            }
+        }
+    }
+
+    /// Asks iCloud for what it has not brought yet, and tells the open paper
+    /// to look at its own files again.
+    private func syncNow() {
+        Task {
+            await model.pullFromCloud()
+            await link.session?.reloadFromDisk()
+        }
+    }
+
+    /// Where the contents goes.
+    ///
+    /// Only a spread has a gutter to stand in. A scrolling page and a single
+    /// page fill the column, so a column of headings down the middle of them
+    /// covers the words it is meant to help you find — there it lies along the
+    /// foot instead, where it covers the least and the headings get the width.
+    private var contentsPlacement: ContentsPopup.Placement {
+        #if os(macOS)
+        configuration.layout == .book ? .gutter : .footer
+        #else
+        // A touch screen keeps it along the foot even in a book: the spread
+        // fills the screen edge to edge there, and the gutter it leaves is a
+        // seam rather than a margin.
+        .footer
+        #endif
     }
 
     /// The page and the inspector, side by side.
@@ -762,7 +1016,11 @@ struct PaperDetailColumn: View {
 
             // Nothing to drag against when the inspector is closed.
             if app.showsInspector {
-                ColumnDivider(width: $app.inspectorWidth, range: 280...520, resizes: .trailing)
+                ColumnDivider(
+                    width: $app.inspectorWidth,
+                    range: 280...max(280, columnWidth - Pane.pageFloor),
+                    resizes: .trailing
+                )
             }
 
             // Closed by width, the same as the other columns, so it slides
@@ -781,16 +1039,70 @@ struct PaperDetailColumn: View {
                 .opacity(app.showsInspector ? 1 : 0)
                 .clipped()
         }
+        // How much there is to share between the page and the inspector,
+        // which is what says how far the inspector may be dragged. Rounded,
+        // for the reason the window's own width is.
+        .onGeometryChange(for: CGFloat.self) { ($0.size.width / 24).rounded() * 24 } action: {
+            columnWidth = $0
+        }
         // Likewise: `toggleInspector` opens the transaction.
         #else
-        // iPhone and iPad keep the system inspector: there it is a sheet, and
-        // there is no window toolbar for it to collide with.
-        return page.inspector(isPresented: $app.showsInspector) {
-            inspector
-                .inspectorColumnWidth(min: 280, ideal: 360, max: 520)
+        // The inspector floats in from the right, over the page, and goes
+        // the same way: the screen is too narrow to give it a column, and a
+        // sheet took the page away while the notes were being read.
+        return page.overlay(alignment: .trailing) {
+            if app.showsInspector {
+                HStack(spacing: 0) {
+                    // A grip, on an iPad. Writing a note beside a paper is
+                    // the reason the panel is there, and 360 points is a
+                    // column two words wide — which is fine for a list of
+                    // marks and no way to write in.
+                    if horizontalSizeClass == .regular { grip }
+                    inspector
+                }
+                    .frame(width: horizontalSizeClass == .regular ? app.inspectorWidth : 360)
+                    .frame(maxHeight: .infinity)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.primary.opacity(0.08), lineWidth: 0.5))
+                    .shadow(color: .black.opacity(0.18), radius: 24, y: 8)
+                    .padding(10)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+        }
+        .animation(AppModel.paneMotion, value: app.showsInspector)
+        .onGeometryChange(for: CGFloat.self) { ($0.size.width / 24).rounded() * 24 } action: {
+            columnWidth = $0
         }
         #endif
     }
+
+    #if !os(macOS)
+    /// The handle down the inspector's leading edge, and the drag that
+    /// widens it. Touch has no pointer to change shape over a gap, so the
+    /// thing to pull has to be something you can see.
+    private var grip: some View {
+        Capsule()
+            .fill(.secondary.opacity(0.5))
+            .frame(width: 4, height: 44)
+            .padding(.horizontal, 7)
+            .contentShape(.rect)
+            .gesture(
+                DragGesture(minimumDistance: 2)
+                    .onChanged { value in
+                        // From where the drag began, not from where the
+                        // panel is now: a translation applied to the width it
+                        // has already been given compounds, and the panel
+                        // runs away across the screen.
+                        let start = gripStart ?? app.inspectorWidth
+                        gripStart = start
+                        let widest = max(320, columnWidth - Pane.pageFloor)
+                        app.inspectorWidth =
+                            min(max(start - value.translation.width, 320), widest)
+                    }
+                    .onEnded { _ in gripStart = nil }
+            )
+    }
+    #endif
 
     private var page: some View {
         Group {
@@ -826,28 +1138,48 @@ struct PaperDetailColumn: View {
                     )
                 }
                 #if os(iOS)
-                .toolbar {
-                    // The pencil, first in the reader's own bar: on the iPad
-                    // the paper is written on, and the tool that does it
-                    // should not be two menus deep. The phone is for reading
-                    // and finding, and has no pencil.
-                    if UIDevice.current.userInterfaceIdiom == .pad {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button {
-                                let drawing = configuration.mode != .draw
-                                configuration.mode = drawing ? .draw : .read
-                                configuration.showsToolPicker = drawing
-                            } label: {
-                                Label("Draw", systemImage: configuration.mode == .draw ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
-                            }
-                            .keyboardShortcut("d", modifiers: [.command, .shift])
-                            .help("Write on the page with the pencil")
-                        }
+                // The tools, in a strip under the title while the pencil is
+                // out — where a notebook keeps them. The same strip on the
+                // iPad and the phone; only its width differs.
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    if configuration.mode == .draw {
+                        MarkingToolbar(configuration: configuration)
+                            .transition(.move(edge: .top).combined(with: .opacity))
                     }
+                }
+                .animation(.snappy(duration: 0.22), value: configuration.mode)
+                .toolbar {
+                    // The pencil, first in the reader's own bar: the paper is
+                    // written on, and the tool that does it should not be two
+                    // menus deep. On the phone a finger holds it.
+                    // Flat, like the Mac's: the glass pills the system draws
+                    // behind toolbar groups made the two bars read as two apps.
+                    ToolbarItemGroup(placement: .topBarTrailing) {
+                        // The table of contents, one button, wherever the
+                        // reader is — not a line inside the AA menu.
+                        Button {
+                            app.toggleFloatingList()
+                        } label: {
+                            Label("Table of Contents", systemImage: "list.bullet.indent")
+                        }
+                        .keyboardShortcut("l", modifiers: [.command, .shift])
+                        .help("Table of contents")
+                        Button {
+                            configuration.mode = configuration.mode == .draw ? .read : .draw
+                        } label: {
+                            Label("Draw", systemImage: configuration.mode == .draw ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
+                        }
+                        .keyboardShortcut("d", modifiers: [.command, .shift])
+                        .help("Write on the page with the pencil")
+                    }
+                    .sharedBackgroundVisibility(.hidden)
                     // On a phone the reader is a screen of its own, so the
                     // page's options and the search come along with it.
-                    if horizontalSizeClass == .compact {
-                        ToolbarItem(placement: .topBarTrailing) {
+                    // On a phone the reader is a screen of its own; on the iPad
+                    // with the list stepped aside (a book, or focus) it is the
+                    // only bar there is. Either way the page's options, the
+                    // search and the way back come along with it.
+                    ToolbarItem(placement: .topBarTrailing) {
                             Menu {
                                 Picker("Page Layout", selection: Bindable(configuration).layout) {
                                     ForEach(ReaderConfiguration.PageLayout.allCases) { layout in
@@ -864,26 +1196,50 @@ struct PaperDetailColumn: View {
                                 } label: {
                                     Label("Table of Contents", systemImage: "list.bullet.indent")
                                 }
+                                Divider()
+                                // The whole library, from inside a paper —
+                                // the other kind of looking, and the rarer
+                                // one, so it is a line in the menu and the
+                                // bar keeps the one about this paper.
+                                Button {
+                                    app.showsSearchPalette = true
+                                } label: {
+                                    Label("Search Everything", systemImage: "rectangle.and.text.magnifyingglass")
+                                }
+                                // Also here: with the list stepped aside for
+                                // a book, the bar it lives on is gone.
+                                Button(action: syncNow) {
+                                    Label("Sync Now", systemImage: "arrow.clockwise")
+                                }
+                                .disabled(model.isScanning)
                             } label: {
                                 Label("View Options", systemImage: "textformat.size")
                             }
                         }
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button {
-                                app.showsSearchPalette = true
-                            } label: {
-                                Label("Search", systemImage: "magnifyingglass")
-                            }
+                        .sharedBackgroundVisibility(.hidden)
+                    // Finding a word in the paper being read. The magnifier
+                    // in the reader's own bar means this paper; the one in
+                    // the list's bar means the library. Both were the
+                    // library, and there was no way to search a paper at all.
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            link.isFinding = true
+                        } label: {
+                            Label("Find in Paper", systemImage: "magnifyingglass")
                         }
-                        // The marks and the notes, as a sheet.
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button {
-                                app.toggleInspector()
-                            } label: {
-                                Label("Marks and Notes", systemImage: "sidebar.trailing")
-                            }
+                        .keyboardShortcut("f", modifiers: .command)
+                    }
+                    .sharedBackgroundVisibility(.hidden)
+                    // The marks and the notes, floating in from the right.
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            app.toggleInspector()
+                        } label: {
+                            Label("Marks and Notes", systemImage: app.showsInspector ? "sidebar.trailing" : "sidebar.trailing")
+                                .symbolVariant(app.showsInspector ? .fill : .none)
                         }
                     }
+                    .sharedBackgroundVisibility(.hidden)
                 }
                 #endif
             } else {
@@ -962,7 +1318,7 @@ struct LibraryUnavailableView: View {
             .buttonBorderShape(.capsule)
 
             Button("Choose a Different Folder…") {
-                app.forgetLibrary()
+                app.isChoosingLibraryFolder = true
             }
         }
     }
@@ -1023,6 +1379,19 @@ private struct ToolbarHover: ViewModifier {
     }
 }
 
+
+/// What the page keeps for itself, whatever else is open.
+///
+/// The one number left in the column widths. Everything else — how wide the
+/// shelves, the list, the inspector may be dragged — is worked out from the
+/// window, because a limit written down here is a guess about somebody
+/// else's screen: reading beside a note means giving the note half of it,
+/// and half of a large screen is not the 520 points this used to allow.
+/// Outside the Mac-only `Column` because the iPad's inspector is dragged
+/// against the same floor.
+enum Pane {
+    static let pageFloor: CGFloat = 300
+}
 
 #if os(macOS)
 /// How the window's columns sit in it.
