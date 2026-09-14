@@ -536,7 +536,12 @@ final class ReaderCoordinator: NSObject {
             link.scrollRequest = nil
         }
 
-        if let anchor = link.anchorRequest {
+        // Only if it is this paper's. An anchor naming another paper is a
+        // request to open that one, and the reader still showing the old one
+        // was answering it — scrolling to page nine of the wrong document and
+        // leaving nothing for the right one to act on.
+        if let anchor = link.anchorRequest,
+           anchor.paperID == nil || anchor.paperID == session.paper.id {
             reveal(anchor, in: view)
             link.anchorRequest = nil
         }
@@ -603,6 +608,14 @@ final class ReaderCoordinator: NSObject {
     /// Scrolls a mark into view and flashes the text under it.
     private func reveal(_ anchor: ReaderLink.Anchor, in view: PDFView) {
         guard let page = session.document.page(at: anchor.pageIndex) else { return }
+        // A place on the page was not worked out — go to the page itself
+        // rather than to its bottom-left corner, which is where an empty
+        // rectangle would send it.
+        guard !anchor.rect.isEmpty else {
+            view.go(to: page)
+            onPageChange(anchor.pageIndex)
+            return
+        }
         // A little room around the mark, so it lands inside the page rather
         // than jammed against the top edge.
         let padded = anchor.rect.insetBy(dx: -24, dy: -80)

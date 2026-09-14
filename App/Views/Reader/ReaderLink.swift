@@ -73,6 +73,13 @@ final class ReaderLink {
 
     /// The place the current selection points at, ready to be written into a
     /// note. Nil when nothing is selected.
+    ///
+    /// The words are read the way UltraCopy reads them, not the way PDFKit
+    /// hands them over: a line of mathematics quoted into a note used to
+    /// arrive as the prose a PDF makes of its symbols — "L(θ) = i λ 2 F i (θ
+    /// i − θ ∗ A,i ) 2" — which is not what was on the page and cannot be set
+    /// as what was on the page. Now it arrives as `$…$`, and the note draws
+    /// the formula.
     func selectionAnchor() -> NoteAnchor? {
         guard let selection, let session,
               let page = selection.pages.first,
@@ -83,7 +90,7 @@ final class ReaderLink {
         return NoteAnchor(
             pageIndex: index,
             rect: selection.bounds(for: page),
-            quotedText: selection.string ?? "",
+            quotedText: MathReader.latex(from: selection),
             paperID: sessionPaperID
         )
     }

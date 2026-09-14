@@ -10,6 +10,8 @@ struct SearchResult: Identifiable, Hashable {
         /// jumping to one of them.
         case showAll(String)
         case paper(UUID)
+        /// A place inside a paper: the word was in the text, not the title.
+        case passage(PaperTextIndex.Passage)
         case note(String)
         case collection(UUID)
         case tag(UUID)
@@ -58,6 +60,25 @@ struct SearchResult: Identifiable, Hashable {
     var symbolName: String
     var score: Double
     var reason: Reason? = nil
+}
+
+extension SearchResult {
+    /// A row for a word found inside a paper. The passage leads and the
+    /// paper follows it: the sentence is what was being looked for, and the
+    /// title is how you know which paper it is in.
+    init(hit: PaperTextIndex.Hit) {
+        let page = ReleaseNotes.string("\(hit.passage.pageIndex + 1)쪽",
+                                       "p. \(hit.passage.pageIndex + 1)")
+        let more = hit.count > 1
+            ? ReleaseNotes.string(" · \(hit.count)번", " · \(hit.count) matches") : ""
+        self.init(
+            kind: .passage(hit.passage),
+            title: hit.snippet,
+            subtitle: "\(hit.title) · \(page)\(more)",
+            symbolName: "text.magnifyingglass",
+            score: 0
+        )
+    }
 }
 
 /// What the palette offers when nothing has been typed: not a blank, but

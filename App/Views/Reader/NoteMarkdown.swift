@@ -173,12 +173,17 @@ enum NoteMarkdown {
     /// A passage standing inside a quotation: the block's own words, and
     /// pressable. On the Mac the pointer turns to a hand over it; everywhere
     /// the press goes back to the page.
+    /// `words` is true when the link *is* the quotation — a note written
+    /// before a passage became a block quote, where the whole line is one
+    /// long link. Then it is set as the quoted words are. Otherwise it is the
+    /// page under the quotation, which is a citation: the one thing in the
+    /// block that goes somewhere, so it carries the accent.
     static func quotedPassageAttributes(
-        _ url: URL, style: NSParagraphStyle
+        _ url: URL, style: NSParagraphStyle, words: Bool = true
     ) -> [NSAttributedString.Key: Any] {
         var attributes: [NSAttributedString.Key: Any] = [
-            .font: NoteTypography.body(italic: true),
-            .foregroundColor: NoteColor.labelColor,
+            .font: NoteTypography.body(italic: words),
+            .foregroundColor: words ? NoteColor.labelColor : accent,
             .paragraphStyle: style,
         ]
         #if os(macOS)
@@ -212,6 +217,7 @@ enum NoteMarkdown {
     /// terminal.
     /// The Markdown itself, not a path to it: the app is sandboxed, and a
     /// path handed to it on the command line is a path it may not read.
+    @MainActor
     static func dump(_ markdown: String) {
         let rendered = render(markdown, raw: false).text
         let whole = NSRange(location: 0, length: rendered.length)
@@ -233,7 +239,46 @@ enum NoteMarkdown {
                          marks.isEmpty ? "—" : marks.joined(separator: "+") as NSString,
                          String(text.prefix(60)) as NSString))
         }
+        // What the runs *say* is only half of it: the rule down a quotation
+        // and the formula set as mathematics are drawn, not spelled, and
+        // neither shows up in a list of attributes. With a path to write to,
+        // the same note is laid out and saved as a picture.
+        if let path = ProcessInfo.processInfo.environment["PAPERTIME_DUMP_NOTE_IMAGE"] {
+            draw(markdown, to: path)
+        }
         exit(0)
+    }
+
+    private final class Fragments: NSObject, NSTextLayoutManagerDelegate {
+        func textLayoutManager(
+            _ textLayoutManager: NSTextLayoutManager,
+            textLayoutFragmentFor location: any NSTextLocation,
+            in textElement: NSTextElement
+        ) -> NSTextLayoutFragment {
+            NoteLayoutFragment(textElement: textElement, range: textElement.elementRange)
+        }
+    }
+
+    @MainActor
+    private static func draw(_ markdown: String, to path: String, width: CGFloat = 620) {
+        let view = NSTextView(frame: CGRect(x: 0, y: 0, width: width, height: 900))
+        view.textContainerInset = CGSize(width: 20, height: 18)
+        view.backgroundColor = .textBackgroundColor
+        let fragments = Fragments()
+        view.textLayoutManager?.delegate = fragments
+        view.textStorage?.setAttributedString(render(markdown, width: width - 64).text)
+        if let layout = view.textLayoutManager {
+            layout.ensureLayout(for: layout.documentRange)
+        }
+        view.layoutSubtreeIfNeeded()
+        guard let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
+        view.cacheDisplay(in: view.bounds, to: bitmap)
+        try? bitmap.representation(using: .png, properties: [:])?
+            .write(to: URL(filePath: path))
+        print("— drawn to \(path)")
+        // Held to the end of the call: the layout manager does not keep its
+        // delegate, and a fragment asked for after it has gone is a crash.
+        withExtendedLifetime(fragments) {}
     }
     #endif
 
@@ -267,8 +312,41 @@ enum NoteMarkdown {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let quoted = text.isEmpty ? anchor.label : text
         let page = ReleaseNotes.string("\(anchor.pageIndex + 1)쪽", "p. \(anchor.pageIndex + 1)")
-        return "> [\(escape(quoted))](\(anchor.url.absoluteString))\n> — \(page)\n"
+        let body = quotationLines(of: quoted).map { "> \($0)\n" }.joined()
+        return body + "> — [\(escape(page))](\(anchor.url.absoluteString))\n"
     }
+
+    /// The quoted words, broken where a displayed formula wants a line.
+    ///
+    /// The passage arrives from `MathReader` as one line with its
+    /// mathematics in `$…$` — the same reading UltraCopy puts on the
+    /// clipboard, so a formula quoted into a note is a formula and not the
+    /// prose PDFKit would have made of it. A `$$…$$` was set on a line of its
+    /// own in the paper, and putting it back on one keeps the quotation
+    /// looking like what was quoted.
+    static func quotationLines(of text: String) -> [String] {
+        let whole = text as NSString
+        var lines: [String] = []
+        var index = 0
+        func add(_ piece: String) {
+            let trimmed = piece.trimmingCharacters(in: .whitespaces)
+            if !trimmed.isEmpty { lines.append(trimmed) }
+        }
+        for match in displayMathPattern.matches(
+            in: text, range: NSRange(location: 0, length: whole.length)
+        ) {
+            add(whole.substring(with: NSRange(location: index,
+                                              length: match.range.location - index)))
+            add(whole.substring(with: match.range))
+            index = match.range.location + match.range.length
+        }
+        add(whole.substring(from: index))
+        return lines.isEmpty ? [text] : lines
+    }
+
+    private static let displayMathPattern = try! NSRegularExpression(
+        pattern: #"\$\$[^$]+\$\$"#
+    )
 
     /// A link to a place in the paper, ready to drop at the cursor.
     static func link(for anchor: NoteAnchor) -> NSAttributedString {
@@ -346,12 +424,23 @@ enum NoteMarkdown {
             pieces.append((NSRange(location: start, length: piece.length), range))
         }
 
-        for lineRange in lines(of: text) {
-            let line = text.substring(with: lineRange)
+        // Every line is read before any is set, because a quoted line needs
+        // to know whether the line above and below it are quoted too.
+        let lineRanges = lines(of: text)
+        var blocks = lineRanges.map { Block(line: text.substring(with: $0)) }
+        for index in blocks.indices where blocks[index].kind == .quote {
+            var edge: QuoteEdge = []
+            if index == 0 || blocks[index - 1].kind != .quote { edge.insert(.opens) }
+            if index == blocks.count - 1 || blocks[index + 1].kind != .quote {
+                edge.insert(.closes)
+            }
+            blocks[index].quoteEdge = edge
+        }
+
+        for (lineRange, block) in zip(lineRanges, blocks) {
             let revealed = caret.map {
                 $0 >= lineRange.location && $0 <= lineRange.location + lineRange.length
             } ?? false
-            let block = Block(line: line)
             let style = block.paragraphStyle
             let markerLength = (block.marker as NSString).length
 
@@ -361,6 +450,16 @@ enum NoteMarkdown {
                     ? [.font: block.font, .foregroundColor: syntaxColor]
                     : [.font: block.markerFont, .foregroundColor: block.markerColor]
                 attributes[.paragraphStyle] = style
+                #if os(macOS)
+                // The stand-in for a quotation's "> " is the first thing in
+                // the paragraph, and the rule is drawn per paragraph — so
+                // leaving the marker out of the quotation was leaving the
+                // quotation out of the rule. That is why no bar ever
+                // appeared beside one.
+                if block.kind == .quote {
+                    attributes[NoteQuoteBar.attribute] = block.quoteEdge.rawValue
+                }
+                #endif
                 let piece = NSMutableAttributedString(string: shown, attributes: attributes)
                 if shown != block.marker {
                     piece.addAttribute(.paperTimeSource, value: block.marker,
@@ -417,6 +516,20 @@ enum NoteMarkdown {
 
     // MARK: - Blocks
 
+    /// Which ends of a quotation a line owns.
+    ///
+    /// A block quote is several lines and so several paragraphs, and a
+    /// paragraph is what the layout draws at a time. Without this each line
+    /// would get its own little rule with a gap above and below it, which is
+    /// a dotted column rather than a quotation. Knowing which line opens and
+    /// which closes lets the rule be rounded at the two ends and run
+    /// straight through everything between.
+    struct QuoteEdge: OptionSet {
+        let rawValue: Int
+        static let opens = QuoteEdge(rawValue: 1)
+        static let closes = QuoteEdge(rawValue: 2)
+    }
+
     /// What kind of line this is, and what the characters at its head mean.
     struct Block {
         enum Kind: Equatable { case plain, heading(Int), quote, bullet, ordered(Int), task(Bool) }
@@ -425,6 +538,8 @@ enum NoteMarkdown {
         var marker = ""
         var content = ""
         var indent = 0
+        /// Set by the renderer once it can see the lines on either side.
+        var quoteEdge: QuoteEdge = []
 
         init(line: String) {
             let text = line as NSString
@@ -504,7 +619,11 @@ enum NoteMarkdown {
 
         var colour: NoteColor {
             switch kind {
-            case .quote: .secondaryLabelColor
+            // Not grey. A quotation is already set apart by its rule, its
+            // ground and its italics; greying it as well says "skip this",
+            // and the reason it is in the note is that it must not be
+            // skipped.
+            case .quote: .labelColor
             case .task(let done): done ? .secondaryLabelColor : .labelColor
             default: .labelColor
             }
@@ -521,8 +640,9 @@ enum NoteMarkdown {
             }
             #if os(macOS)
             // The bar down the left of a quotation is drawn, not typed, so the
-            // layout needs to know which lines are quoted.
-            if kind == .quote { attributes[NoteQuoteBar.attribute] = true }
+            // layout needs to know which lines are quoted, and which of them
+            // are the first and the last.
+            if kind == .quote { attributes[NoteQuoteBar.attribute] = quoteEdge.rawValue }
             #endif
             return attributes
         }
@@ -686,10 +806,20 @@ enum NoteMarkdown {
             // "these words are quoted", and a tinted chip inside a tinted
             // quote says it twice. It keeps the words the quote's own, and
             // only the press survives.
-            let attributes = NoteAnchor(url: url) != nil
-                ? (block.kind == .quote ? quotedPassageAttributes(url, style: style)
-                                        : passageAttributes(url))
-                : linkAttributes(url)
+            let attributes: [NSAttributedString.Key: Any]
+            if NoteAnchor(url: url) == nil {
+                attributes = linkAttributes(url)
+            } else if block.kind == .quote {
+                // The whole line, or a part of it: a note written before a
+                // passage became a block quote holds the quotation itself
+                // inside the link, and a note written since holds the page
+                // reference under the quoted words.
+                let whole = token.range.location == 0
+                    && token.range.length == (block.content as NSString).length
+                attributes = quotedPassageAttributes(url, style: style, words: whole)
+            } else {
+                attributes = passageAttributes(url)
+            }
             return atomic(label, source: "[\(escape(label))](\(url.absoluteString))",
                           attributes: attributes, style: style)
 

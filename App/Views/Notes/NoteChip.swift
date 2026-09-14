@@ -64,36 +64,100 @@ final class NoteLayoutFragment: NSTextLayoutFragment {
         super.draw(at: point, in: context)
     }
 
-    /// One bar per quoted paragraph, the height of the lines it covers.
+    /// The quotation this fragment belongs to, if it belongs to one: which
+    /// ends of the rule it owns, and the box the ground fills.
     ///
-    /// Drawn from the fragment's own bounds rather than per line, so a
+    /// Drawn from the fragment's own frame rather than per line, so a
     /// quotation that wraps gets one continuous rule rather than a dotted
     /// column of them.
-    private func drawQuotes(in context: CGContext) {
-        guard let paragraph = textElement as? NSTextParagraph else { return }
+    private var quotation: (edge: NoteMarkdown.QuoteEdge, ground: CGRect)? {
+        guard let paragraph = textElement as? NSTextParagraph else { return nil }
         let text = paragraph.attributedString
-        guard text.length > 0,
-              text.attribute(NoteQuoteBar.attribute, at: 0, effectiveRange: nil) != nil
-        else { return }
+        guard text.length > 0 else { return nil }
+
+        // Looked for across the paragraph rather than at its first
+        // character. A quoted line begins with the stand-in for the "> " that
+        // is not shown, and that marker was not part of the quotation as far
+        // as this was concerned — so the guard failed on every quotation
+        // there was, and the rule was never drawn once.
+        var edge: NoteMarkdown.QuoteEdge?
+        text.enumerateAttribute(
+            NoteQuoteBar.attribute, in: NSRange(location: 0, length: text.length)
+        ) { value, _, stop in
+            guard let raw = value as? Int else { return }
+            edge = NoteMarkdown.QuoteEdge(rawValue: raw)
+            stop.pointee = true
+        }
+        guard let edge else { return nil }
 
         let box = layoutFragmentFrame
-        let indent = (text.attribute(.paragraphStyle, at: 0, effectiveRange: nil)
-                      as? NSParagraphStyle)?.headIndent ?? 0
-        let top = box.minY - layoutFragmentFrame.minY
-        let ground = CGRect(x: indent - NoteQuoteBar.gap, y: top,
-                            width: max(box.width - indent + NoteQuoteBar.gap, 0),
-                            height: box.height)
+        // Nothing is added below. A quotation of three lines is three
+        // paragraphs drawn one after another, and their boxes meet exactly —
+        // the space between the lines is inside them — so the three rules
+        // already read as one. Reaching past the foot of one into the next
+        // only painted the seam twice, and a translucent tint painted twice
+        // is a line across the quotation.
+        // As wide as the column, not as wide as the line. A ground that
+        // stopped at the last word would give the quotation a ragged right
+        // edge and make its two-word last line look like a different thing
+        // from the line above it.
+        let room = textLayoutManager?.textContainer?.size.width ?? 0
+        let reach = room > 0 && room < 10_000 ? room - box.minX : box.width
+        // The fragment already begins where its words do — a paragraph set
+        // in by twenty points has a box that starts twenty points in — so
+        // the rule is placed from the fragment's own left edge and not from
+        // the indent, which would put it under the first letter.
+        return (edge, CGRect(x: -NoteQuoteBar.gap, y: 0,
+                             width: max(reach, box.width) + NoteQuoteBar.gap,
+                             height: box.height))
+    }
+
+    /// What a fragment may paint on. The default is the box its words
+    /// occupy, and everything outside it is clipped — which is where the
+    /// rule stands and where the ground reaches, so without this a quotation
+    /// of two words got two words' worth of quotation.
+    override var renderingSurfaceBounds: CGRect {
+        guard let quotation else { return super.renderingSurfaceBounds }
+        return super.renderingSurfaceBounds.union(quotation.ground)
+    }
+
+    private func drawQuotes(in context: CGContext) {
+        guard let quotation else { return }
+        let (edge, ground) = quotation
 
         context.saveGState()
         NoteQuoteBar.ground.setFill()
-        NSBezierPath(roundedRect: ground, xRadius: 4, yRadius: 4).fill()
+        Self.path(ground, radius: 4, top: edge.contains(.opens),
+                  bottom: edge.contains(.closes)).fill()
         NoteQuoteBar.bar.setFill()
-        NSBezierPath(
-            roundedRect: CGRect(x: ground.minX, y: top,
-                                width: NoteQuoteBar.width, height: box.height),
-            xRadius: NoteQuoteBar.width / 2, yRadius: NoteQuoteBar.width / 2
-        ).fill()
+        Self.path(CGRect(x: ground.minX, y: 0,
+                         width: NoteQuoteBar.width, height: ground.height),
+                  radius: NoteQuoteBar.width / 2,
+                  top: edge.contains(.opens), bottom: edge.contains(.closes)).fill()
         context.restoreGState()
+    }
+
+    /// A rectangle rounded only at the ends that are ends.
+    ///
+    /// One path rather than two fills: the tint is translucent, and a corner
+    /// painted twice is a corner that is darker than the rest of the rule.
+    /// Overlapping rectangles in a single path are filled once.
+    private static func path(
+        _ rect: CGRect, radius: CGFloat, top: Bool, bottom: Bool
+    ) -> NSBezierPath {
+        let radius = min(radius, rect.width / 2, rect.height / 2)
+        let path = NSBezierPath()
+        path.windingRule = .nonZero
+        path.appendRoundedRect(rect, xRadius: radius, yRadius: radius)
+        if !top {
+            path.appendRect(CGRect(x: rect.minX, y: rect.minY,
+                                   width: rect.width, height: radius))
+        }
+        if !bottom {
+            path.appendRect(CGRect(x: rect.minX, y: rect.maxY - radius,
+                                   width: rect.width, height: radius))
+        }
+        return path
     }
 
     private func drawChips(in context: CGContext) {

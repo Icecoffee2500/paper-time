@@ -425,10 +425,65 @@ private struct PassageDemo: View {
     @Environment(AppModel.self) private var app
     @State private var sent = false
 
+    /// A sentence with mathematics in it, because that is the half of this
+    /// that is hard: any app can carry words across, and what arrives as
+    /// loose symbols when it is carried the ordinary way is the formula.
     private var sentence: String {
         ReleaseNotes.string(
-            "관측된 초과 감쇠는 경계층에서 비롯된다.",
-            "The observed excess damping originates in the boundary layer."
+            "감쇠는 경계층 두께에 따라 ",
+            "The damping grows with the boundary layer thickness as "
+        )
+    }
+
+    private var tail: String {
+        ReleaseNotes.string(" 처럼 커진다.", ".")
+    }
+
+    private let formula = "\\zeta \\propto \\delta^{1/2}"
+
+    /// The formula, set — on the Mac by the same typesetter the notes use,
+    /// so what is being shown is the thing itself rather than a picture of
+    /// it. Written out where there is no typesetter.
+    private var formulaText: Text {
+        #if os(macOS)
+        if let made = MathTypesetter.image(
+            latex: formula, display: false,
+            pointSize: scale.isFull ? 15 : 11, color: .labelColor
+        ) {
+            return Text(Image(nsImage: made.image))
+        }
+        #endif
+        return Text("ζ ∝ δ^(1/2)").italic()
+    }
+
+
+    /// The sentence as it is set on the page, and as it is set in the note.
+    private var quoted: some View {
+        (Text(sentence) + formulaText + Text(tail))
+            .font(scale.body)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// What lands in the note: a rule, a faint ground, the words in italics,
+    /// and the page under them — a quotation, which is what it is.
+    private var quotation: some View {
+        HStack(alignment: .top, spacing: scale.isFull ? 9 : 6) {
+            Capsule()
+                .fill(Color.accentColor.opacity(0.55))
+                .frame(width: scale.isFull ? 2.5 : 2)
+            VStack(alignment: .leading, spacing: 2) {
+                quoted.italic()
+                Text(ReleaseNotes.string("— 2쪽", "— p. 2"))
+                    .font(scale.small)
+                    .foregroundStyle(.tint)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, scale.isFull ? 7 : 5)
+        .padding(.vertical, scale.isFull ? 5 : 3)
+        .background(
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(Color.accentColor.opacity(0.05))
         )
     }
 
@@ -437,9 +492,7 @@ private struct PassageDemo: View {
             Paper(scale: scale) {
                 VStack(alignment: .leading, spacing: scale.isFull ? 7 : 4) {
                     Rule(width: 90)
-                    Text(sentence)
-                        .font(scale.body)
-                        .fixedSize(horizontal: false, vertical: true)
+                    quoted
                         .padding(.horizontal, 3)
                         .padding(.vertical, 1)
                         .background(
@@ -471,29 +524,16 @@ private struct PassageDemo: View {
                     Text(ReleaseNotes.string("감쇠 메모", "Damping"))
                         .font(scale.body.weight(.semibold))
                     if sent {
-                        Text(sentence)
-                            .font(scale.body)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 3)
-                            .background(
-                                RoundedRectangle(cornerRadius: 5.5, style: .continuous)
-                                    .fill(Color.accentColor.opacity(0.14))
-                            )
-                            .overlay(alignment: .bottomTrailing) {
-                                // Inside the chip, not hanging off it: at this
-                                // size an overhang reads as the chip being cut
-                                // by the edge of the note.
-                                Image(systemName: "arrow.up.left.circle.fill")
-                                    .font(.system(size: scale.isFull ? 11 : 9))
-                                    .foregroundStyle(.tint)
-                                    .padding(1)
-                            }
-                            .transition(.scale(scale: 0.85).combined(with: .opacity))
+                        quotation
+                            .transition(.scale(scale: 0.9, anchor: .topLeading)
+                                .combined(with: .opacity))
                         if scale.isFull {
-                            Text(ReleaseNotes.string("↖︎ 를 누르면 그 자리로 돌아간다.", "The ↖︎ goes back to the page it came from."))
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
+                            Text(ReleaseNotes.string(
+                                "쪽수를 누르면 그 줄로 돌아간다. 인용문은 그냥 글이라 골라서 복사할 수 있고, 수식은 수식으로 남는다.",
+                                "The page goes back to that line. The quoted words are ordinary text — selectable, copyable — and the formula stays a formula."
+                            ))
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
                         }
                     } else {
                         Rule(width: 70)
@@ -991,6 +1031,19 @@ private struct SearchDemo: View {
             Row(group: ReleaseNotes.string("태그", "Tags"), symbol: "number",
                 title: "#robotics",
                 subtitle: ReleaseNotes.string("논문 6편 · 노트 2개", "6 papers · 2 notes")),
+            // What the title search cannot do: the word is on page nine and
+            // nowhere in the title, so this row is the only way the paper
+            // comes up at all.
+            Row(group: ReleaseNotes.string("논문 안에서", "In the Papers"),
+                symbol: "text.magnifyingglass",
+                // The snippet is not translated: it is a sentence from a
+                // paper, and the papers are in English.
+                title: "…freezing the vision encoder collapses action prediction…",
+                subtitle: ReleaseNotes.string("V-JEPA 2 · 9쪽 · 3번", "V-JEPA 2 · p. 9 · 3 matches")),
+            Row(group: ReleaseNotes.string("논문 안에서", "In the Papers"),
+                symbol: "text.magnifyingglass",
+                title: "…the vision tokens are projected into the action space…",
+                subtitle: ReleaseNotes.string("OpenVLA · 4쪽", "OpenVLA · p. 4")),
             Row(group: ReleaseNotes.string("명령", "Actions"), symbol: "square.and.arrow.down",
                 title: ReleaseNotes.string("논문 추가…", "Add Papers…"),
                 subtitle: app.shortcut(for: .addPapers).display),

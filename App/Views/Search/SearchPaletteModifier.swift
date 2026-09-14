@@ -7,6 +7,7 @@ import SwiftUI
 /// where you were.
 private struct SearchPaletteModifier: ViewModifier {
     let model: LibraryModel
+    let link: ReaderLink
     @Binding var isPresented: Bool
     let perform: (SearchResult.Action) -> Void
 
@@ -14,7 +15,8 @@ private struct SearchPaletteModifier: ViewModifier {
         content
             .overlay {
                 if isPresented {
-                    SearchPalette(model: model, isPresented: $isPresented, perform: perform)
+                    SearchPalette(model: model, link: link, isPresented: $isPresented,
+                                  perform: perform)
                         .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
                         .zIndex(1)
                 }
@@ -26,11 +28,13 @@ private struct SearchPaletteModifier: ViewModifier {
 extension View {
     func searchPalette(
         model: LibraryModel,
+        link: ReaderLink,
         isPresented: Binding<Bool>,
         perform: @escaping (SearchResult.Action) -> Void
     ) -> some View {
         modifier(
-            SearchPaletteModifier(model: model, isPresented: isPresented, perform: perform)
+            SearchPaletteModifier(model: model, link: link,
+                                  isPresented: isPresented, perform: perform)
         )
     }
 }

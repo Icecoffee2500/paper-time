@@ -76,6 +76,9 @@ function searchEverything() {
     { g: "노트", t: "시냅스 강화가 기억을 지킨다", s: "Kirkpatrick 2017에서" },
     { g: "노트", t: "왜 EWC는 피셔 정보를 쓰는가", s: "지도 · 연속 학습" },
     { g: "태그", t: "continual-learning", s: "논문 7편" },
+    // 제목에는 없고 본문에만 있는 낱말: 이 줄이 없으면 그 논문은 떠오르지 않는다.
+    { g: "본문", t: "…synaptic consolidation enables continual learning…", s: "Kirkpatrick 2017 · 1쪽 · 9번" },
+    { g: "본문", t: "…unlearning specific layers may not help the model forget…", s: "Can Memorization Be Localized? · 9쪽" },
     { g: "동작", t: "PDF 추가…", s: "⌘O" },
     { g: "동작", t: "BibTeX 내보내기…", s: "⇧⌘E" },
   ];
@@ -116,7 +119,7 @@ function searchEverything() {
     }
     const hits = ITEMS.filter((i) => (i.t + i.s + i.g).toLowerCase().includes(query));
     caption.innerHTML = hits.length
-      ? `논문도 노트도 태그도 동작도, <b>한 칸에서</b>. ${hits.length}개.`
+      ? `제목도 노트도 태그도, <b>논문 본문 속 한 줄까지</b>. ${hits.length}개.`
       : "그런 것은 없다.";
     for (const h of hits) list.append(row(h.t, h.s, h.g));
   };
@@ -350,10 +353,19 @@ function passageToNote() {
     style: "background:rgba(31,95,139,.22);border-radius:3px;padding:0 2px;transition:background .25s",
   }, SENTENCE);
 
+  // 고른 자리에 수식이 걸쳐 있다 — 노트에 도착한 것이 수식인지 글자 부스러기인지가
+  // 갈리는 자리.
+  const formula = el("p", {
+    style:
+      "text-align:center;font:italic 15px/1.6 'Times New Roman',serif;margin:10px 0;" +
+      "background:rgba(31,95,139,.22);border-radius:3px;transition:background .25s",
+  }, "ℒ(θ) = ℒ\u2099(θ) + Σᵢ (λ⁄2) Fᵢ (θᵢ − θ*ᴀ,ᵢ)²");
+
   const page = el("div", { class: "pane paper-face", style: "flex:1.2;min-height:0" },
     el("h4", {}, "2. Elastic Weight Consolidation"),
     el("p", {}, "A deep neural network consists of multiple layers of linear projection followed by element-wise nonlinearities."),
     el("p", {}, sentence),
+    formula,
     el("p", {}, "Importantly, the stiffness of this spring should not be the same for all parameters; rather, it should be greater for parameters that most affect performance."));
 
   const noteBody = el("div", { style: "display:flex;flex-direction:column;gap:10px;min-height:0" });
@@ -382,7 +394,13 @@ function passageToNote() {
           "background:var(--accent-soft);border-radius:0 8px 8px 0;padding:9px 12px;cursor:pointer;" +
           "font:italic 13px/1.55 'Times New Roman',serif;color:var(--ink)",
         onclick: backToPage,
-      }, "❝ " + SENTENCE),
+      }, "❝ " + SENTENCE + " "),
+      el("div", {
+        style:
+          "border-left:3px solid var(--accent);background:var(--accent-soft);" +
+          "border-radius:0 8px 8px 0;padding:6px 12px 9px;margin-top:-1px;" +
+          "font:italic 14px/1.5 'Times New Roman',serif;color:var(--ink);text-align:center",
+      }, "ℒ(θ) = ℒ\u2099(θ) + Σᵢ (λ⁄2) Fᵢ (θᵢ − θ*ᴀ,ᵢ)²"),
       el("div", { style: "font-size:10.5px;color:var(--ink-3);padding-left:3px" },
         "Kirkpatrick 2017 · 3쪽 — 누르면 그 줄로 돌아간다"),
       el("div", {
@@ -390,7 +408,7 @@ function passageToNote() {
         style: "border:1px solid var(--rule);border-radius:10px;padding:10px 12px;font-size:14px;" +
                "min-height:64px;outline:none;background:var(--card)",
       }, "스프링의 뻣뻣함이 파라미터마다 다르다는 게 핵심이다."));
-    hint.innerHTML = "<b style='color:var(--green)'>구절이 주소를 가지고 왔다.</b> 인용을 누르면 그 줄로 돌아간다.";
+    hint.innerHTML = "<b style='color:var(--green)'>구절이 주소를 가지고 왔다.</b> 수식은 수식으로 남는다 — 인용을 누르면 그 줄로 돌아간다.";
   };
 
   const send = el("button", {
@@ -573,8 +591,8 @@ const SLIDES = [
   { n: "Ultracopy", h: "수식은 LaTeX으로, 글은 글로",
     p: "PDF에서 수식이 든 문단을 그냥 복사하면 글자 부스러기가 나온다. Ultracopy는 같은 선택에서 글은 그대로, 수식은 바로 컴파일되는 LaTeX으로 돌려준다.",
     make: ultracopy },
-  { n: "Search Everything", h: "묻기 전에 내놓는 검색",
-    p: "논문·노트·지도·초안·태그·동작이 한 칸에 있다. 빈칸일 때는 이어 읽을 것과 다시 볼 것을 이유와 함께 먼저 내놓는다.",
+  { n: "Search Everything", h: "논문 안의 한 줄까지 찾는다",
+    p: "논문·노트·지도·초안·태그·동작이 한 칸에 있고, 제목에 없는 낱말은 본문에서 찾는다 — 고르면 그 논문의 그 줄로 간다. 빈칸일 때는 이어 읽을 것과 다시 볼 것을 이유와 함께 먼저 내놓는다.",
     make: searchEverything },
   { n: "Book mode", h: "책처럼 펴고, 목차로 건너뛴다",
     p: "두 쪽이 마주 보고, 여백은 잘려 본문만 남는다. 목차는 단축키 하나 — 절 이름을 누르면 그 절로 바로 간다.",
@@ -586,7 +604,7 @@ const SLIDES = [
     p: "인스펙터의 하이라이트·밑줄·메모를 누르면 논문이 그 자리로 간다. 무엇을 표시했는지가 아니라 어디에 표시했는지가 남는다.",
     make: marksJump },
   { n: "구절 → 노트", h: "구절이 주소를 가지고 간다",
-    p: "읽다가 고른 문장을 노트로 보내면 인용이 아니라 링크가 된다. 노트에서 그 인용을 누르면 논문의 그 줄로 돌아간다.",
+    p: "읽다가 고른 문장을 노트로 보내면 세로줄이 선 인용이 되고, 밑에 쪽수가 붙는다. 쪽수를 누르면 논문의 그 줄로 돌아간다. 수식이 든 문장은 수식째로 — Ultracopy와 같은 눈으로 읽는다.",
     make: passageToNote },
   { n: "노트 ↔ 노트", h: "노트가 서로를 안다",
     p: "노트 안에서 다른 노트를 이름으로 부른다. 읽은 것이 쌓이는 대신 엮인다 — 그게 나중에 초고가 된다.",

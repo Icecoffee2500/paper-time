@@ -415,7 +415,7 @@ struct LibraryWindow: View {
             // columns step aside and the list becomes something summoned.
             app.setFocusMode(layout == .book)
         }
-        .searchPalette(model: model, isPresented: $app.showsSearchPalette) { action in
+        .searchPalette(model: model, link: link, isPresented: $app.showsSearchPalette) { action in
             perform(action)
         }
         .onReceive(NotificationCenter.default.publisher(for: .paperTimeToggleFocus)) { _ in

@@ -255,6 +255,21 @@ enum ReleaseNotes {
                     devices: [.mac, .ipad, .iphone]
                 ),
                 Entry(
+                    Text2("논문 안의 낱말까지 찾는다", "Search that reads the papers"),
+                    Text2("제목에 없고 9쪽 한 줄에만 있는 낱말도 찾는다. ⌘K에 'unlearning'을 치면 그 낱말이 적힌 논문들이 «논문 안에서»에 문장째로 뜨고, 고르면 그 논문의 그 줄로 간다. 본문은 한 번만 읽어 캐시에 두므로 처음만 몇 초, 다음부터는 즉시. 줄 끝에서 잘려 un- 과 learning으로 나뉜 낱말도 한 낱말로 본다.",
+                          "A word that is nowhere in a title and on one line of page nine is found too. Type \u{201C}unlearning\u{201D} into ⌘K and the papers that say it appear under In the Papers, each with the sentence it says it in; choose one and the reader goes to that line. The text of each paper is read once and kept, so only the first search waits; a word broken across a line end — un- then learning — still counts as one word."),
+                    demo: .search,
+                    featured: true,
+                    devices: [.mac, .ipad, .iphone]
+                ),
+                Entry(
+                    Text2("구절은 인용으로, 수식은 수식으로", "A passage arrives as a quotation"),
+                    Text2("⌘L로 노트에 넣은 구절은 세로줄이 선 인용이 된다 — 옅은 바탕, 기울인 글씨, 밑에 쪽수. 쪽수를 누르면 그 줄로 돌아가고, 인용문은 이제 그냥 글이라 마우스로 골라 복사할 수 있다. 수식은 UltraCopy와 같은 눈으로 읽어 $…$로 들어오므로, 인용 안에서도 수식으로 조판된다 — 예전처럼 기호가 흩어진 산문이 아니라. 파일에는 평범한 마크다운 인용(>)으로 남는다.",
+                          "A passage put into a note with ⌘L is now a quotation with a rule down its side: a faint ground, italics, and the page under it. The page reference goes back to the line; the quoted words are ordinary text again, so they can be selected and copied. The mathematics is read the way UltraCopy reads it and arrives as $…$, so a formula inside a quotation is set as a formula rather than as the scattered symbols a PDF makes of it. In the file it is a plain Markdown block quote."),
+                    demo: .passageLink,
+                    devices: [.mac, .ipad, .iphone]
+                ),
+                Entry(
                     Text2("아이패드 · 아이폰", "iPad and iPhone"),
                     Text2("아이패드는 맥과 같은 리더에 연필 — 필기는 PDF에 잉크 주석으로 남아 맥에서도 보인다. 아이폰은 읽고 찾는 데 맞춰 리더 바에 배치·검색·표시가 있다.",
                           "The iPad has the Mac's reader with a pencil — ink lands in the PDF as annotations and shows on the Mac. The phone is for reading and finding, with layout, search and marks on the reader's bar.")
@@ -582,7 +597,7 @@ enum ReleaseNotes {
             Feature(Text2("논문 안에서 찾기", "Find in the paper"),
                     Text2("열려 있는 PDF를 검색하고 결과를 하나씩 넘긴다.", "Search the open PDF and step through the matches."), action: .findInDocument),
             Feature(Text2("전체 검색", "Search everything"),
-                    Text2("논문·노트·지도·초안·저자·컬렉션·명령을 한 칸에서. 목록을 끝까지 당겨도 열린다. 빈칸이면 이어 읽기·읽었으니·다시 보기·새로 온 것을 제안한다.", "Papers, notes, maps, drafts, authors, collections, commands, from one field; pull the list down to open it. Empty, it offers: continue, because you read, revisit, new."), action: .searchEverything),
+                    Text2("논문·노트·지도·초안·저자·컬렉션·명령을 한 칸에서. 제목에 없는 낱말은 «논문 안에서»가 본문에서 찾아 문장째로 보여 주고, 고르면 그 줄로 간다. 목록을 끝까지 당겨도 열린다. 빈칸이면 이어 읽기·읽었으니·다시 보기·새로 온 것을 제안한다.", "Papers, notes, maps, drafts, authors, collections, commands, from one field. A word that is in none of the titles is looked for in the text — In the Papers shows the sentence it is in, and choosing it goes to that line. Pull the list down to open it. Empty, it offers: continue, because you read, revisit, new."), action: .searchEverything),
             Feature(Text2("페이지 배치", "Page layout"),
                     Text2("연속 스크롤, 한 장씩, 또는 두 장 펼침. AA 메뉴에 있고, ⌘1·⌘2·⌘3으로도 바꾼다. 책에서는 ←→로 장을 넘긴다.", "Continuous scrolling, single page, or a two-page spread. In the AA menu, and on ⌘1, ⌘2 and ⌘3. In a book, ← and → turn the page."), action: .layoutBook),
             Feature(Text2("페이지 색", "Page tint"),
