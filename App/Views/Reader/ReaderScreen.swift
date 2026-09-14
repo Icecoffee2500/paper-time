@@ -279,6 +279,10 @@ struct ReaderScreen: View {
         #endif
     }
 
+    /// How much room the bar that counts the pages takes at the foot of the
+    /// reader, for anything floating that has to stay clear of it.
+    static let statusBarClearance: CGFloat = 44
+
     /// Whether markup controls float next to the selection.
     ///
     /// The Mac has no selection menu of its own, so the bar is the only place

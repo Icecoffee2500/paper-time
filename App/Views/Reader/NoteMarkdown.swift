@@ -170,7 +170,72 @@ enum NoteMarkdown {
     }
     #endif
 
+    /// A passage standing inside a quotation: the block's own words, and
+    /// pressable. On the Mac the pointer turns to a hand over it; everywhere
+    /// the press goes back to the page.
+    static func quotedPassageAttributes(
+        _ url: URL, style: NSParagraphStyle
+    ) -> [NSAttributedString.Key: Any] {
+        var attributes: [NSAttributedString.Key: Any] = [
+            .font: NoteTypography.body(italic: true),
+            .foregroundColor: NoteColor.labelColor,
+            .paragraphStyle: style,
+        ]
+        #if os(macOS)
+        // Part of the quotation, so the bar reaches across it and the chip
+        // painter leaves it alone — without this the words of the quotation
+        // were the one run in it wearing a chip.
+        attributes[NoteQuoteBar.attribute] = true
+        attributes[NoteChip.attribute] = url
+        attributes[.cursor] = NSCursor.pointingHand
+        if let anchor = NoteAnchor(url: url) {
+            attributes[.toolTip] = ReleaseNotes.string(
+                "논문 \(anchor.pageIndex + 1)쪽의 이 구절로 간다",
+                "Goes to this passage on page \(anchor.pageIndex + 1) of the paper"
+            )
+        }
+        #else
+        attributes[.link] = url
+        attributes[.underlineStyle] = 0
+        #endif
+        return attributes
+    }
+
     private static var syntaxColor: NoteColor { .tertiaryLabelColor }
+
+    #if os(macOS)
+    /// Renders a note file and prints what each run of it became, then quits.
+    ///
+    /// The note editor is three panes deep and its rows do not answer a
+    /// synthetic click, so "is a quotation actually set as a quotation?" was a
+    /// question that could only be answered by looking. This answers it in a
+    /// terminal.
+    /// The Markdown itself, not a path to it: the app is sandboxed, and a
+    /// path handed to it on the command line is a path it may not read.
+    static func dump(_ markdown: String) {
+        let rendered = render(markdown, raw: false).text
+        let whole = NSRange(location: 0, length: rendered.length)
+        print("— \(rendered.length) characters from \(markdown.count) of Markdown")
+        rendered.enumerateAttributes(in: whole) { attributes, range, _ in
+            let text = rendered.attributedSubstring(from: range).string
+                .replacingOccurrences(of: "\n", with: "⏎")
+                .replacingOccurrences(of: "\u{200B}", with: "·")
+            var marks: [String] = []
+            if attributes[NoteQuoteBar.attribute] != nil { marks.append("QUOTE") }
+            if attributes[NoteChip.attribute] != nil { marks.append("PASSAGE") }
+            if attributes[.link] != nil { marks.append("LINK") }
+            if let font = attributes[.font] as? NSFont,
+               font.fontDescriptor.symbolicTraits.contains(.italic) { marks.append("italic") }
+            if let style = attributes[.paragraphStyle] as? NSParagraphStyle, style.headIndent > 0 {
+                marks.append("indent \(Int(style.headIndent))")
+            }
+            print(String(format: "%5d %-14@ %@", range.location,
+                         marks.isEmpty ? "—" : marks.joined(separator: "+") as NSString,
+                         String(text.prefix(60)) as NSString))
+        }
+        exit(0)
+    }
+    #endif
 
     // MARK: - Writing links
 
@@ -183,6 +248,26 @@ enum NoteMarkdown {
         guard url.scheme == "papertime", url.host == "note" else { return nil }
         return URLComponents(url: url, resolvingAgainstBaseURL: false)?
             .queryItems?.first { $0.name == "id" }?.value
+    }
+
+    /// A passage from the paper, as the Markdown that will hold it.
+    ///
+    /// A quotation, not a link. A link says "there is more of this somewhere
+    /// else" — which is what a `[[note]]` says, and the two had come to look
+    /// like the same gesture. This is the other thing: these words are not
+    /// mine, they are from page seven, and here they are. So it goes in as a
+    /// block quote with the page under it, which is what a quotation has
+    /// looked like since long before any of this.
+    ///
+    /// The address rides inside the quoted line, so pressing the words still
+    /// goes back to them on the page.
+    static func quotationSource(for anchor: NoteAnchor) -> String {
+        let text = anchor.quotedText
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let quoted = text.isEmpty ? anchor.label : text
+        let page = ReleaseNotes.string("\(anchor.pageIndex + 1)쪽", "p. \(anchor.pageIndex + 1)")
+        return "> [\(escape(quoted))](\(anchor.url.absoluteString))\n> — \(page)\n"
     }
 
     /// A link to a place in the paper, ready to drop at the cursor.
@@ -434,6 +519,11 @@ enum NoteMarkdown {
             if case .task(true) = kind {
                 attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
             }
+            #if os(macOS)
+            // The bar down the left of a quotation is drawn, not typed, so the
+            // layout needs to know which lines are quoted.
+            if kind == .quote { attributes[NoteQuoteBar.attribute] = true }
+            #endif
             return attributes
         }
 
@@ -456,8 +546,13 @@ enum NoteMarkdown {
                 style.headIndent = base
                 style.tabStops = [NSTextTab(textAlignment: .left, location: base)]
             case .quote:
-                style.firstLineHeadIndent = step * 0.8
-                style.headIndent = step * 0.8
+                // Room on the left for the bar, and above and below so the
+                // quotation reads as a thing set into the note rather than a
+                // paragraph that happens to be in italics.
+                style.firstLineHeadIndent = step * 0.85
+                style.headIndent = step * 0.85
+                style.paragraphSpacing = 3
+                style.paragraphSpacingBefore = 3
             case .heading:
                 style.paragraphSpacing = 6
                 style.paragraphSpacingBefore = 18
@@ -528,7 +623,17 @@ enum NoteMarkdown {
 
         func consider(_ token: Token?) {
             guard let token else { return }
-            if best == nil || token.range.location < best!.range.location { best = token }
+            guard let current = best else { best = token; return }
+            // The earliest match wins, and where two begin at the same
+            // character the shorter one does. A `[[note]]` and a link whose
+            // label was allowed to run past it both start at that bracket,
+            // and the greedy one had been swallowing the rest of the line —
+            // the note link, the words after it, and the passage at the end.
+            if token.range.location < current.range.location
+                || (token.range.location == current.range.location
+                    && token.range.length < current.range.length) {
+                best = token
+            }
         }
 
         if let match = linkPattern.firstMatch(in: line as String, range: range),
@@ -576,8 +681,14 @@ enum NoteMarkdown {
             // link. Reading the note back had been going through the generic
             // path, so a passage was a chip when it was dropped in and a plain
             // blue link the next time the note was opened.
+            //
+            // Inside a quotation it is neither: the block is already saying
+            // "these words are quoted", and a tinted chip inside a tinted
+            // quote says it twice. It keeps the words the quote's own, and
+            // only the press survives.
             let attributes = NoteAnchor(url: url) != nil
-                ? passageAttributes(url)
+                ? (block.kind == .quote ? quotedPassageAttributes(url, style: style)
+                                        : passageAttributes(url))
                 : linkAttributes(url)
             return atomic(label, source: "[\(escape(label))](\(url.absoluteString))",
                           attributes: attributes, style: style)

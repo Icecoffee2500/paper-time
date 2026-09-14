@@ -66,9 +66,16 @@ git switch debug/v0.1.0   # 오류 수정
 git switch v0.1.0
 git merge --no-ff dev/v0.1.0 debug/v0.1.0
 git switch main && git merge --no-ff v0.1.0 && git tag 0.1.0   # 태그는 v 없이 — 브랜치 v0.1.0과 이름이 겹친다
-Scripts/make-dmg.sh 0.1.0        # 닫은 버전마다 dist/에 DMG를 남긴다(dist/는 git 밖)
-# 리모트가 생기면: git push origin main --tags
+Scripts/publish-release.sh 0.1.0  # DMG를 만들어 릴리스에 올리고 배포 페이지를 다시 쓴다
+git push origin main --tags
 ```
+
+배포 페이지는 `Website/`에 있고 `gh-pages` 가지에서 서비스된다 —
+<https://icecoffee2500.github.io/paper-time/>. `Scripts/publish-release.sh <tag>`가
+`Scripts/make-dmg.sh`를 불러 DMG를 만들고, GitHub 릴리스에 올리고,
+`Website/releases.json`을 다시 써서 `gh-pages`로 옮긴다. 그 json은 소스 쪽에도
+같이 커밋한다. `Docs/`는 이 프로젝트가 스스로 두는 메모이지 배포 페이지가 아니다
+(대소문자를 가리지 않는 디스크에서 `docs/`로 보여도 git은 가린다).
 
 한쪽에서 고친 것이 다른 쪽에 당장 필요하면, 그 가지를 기다리지 말고 `git merge debug/v0.1.0`으로 끌어온다. 버전을 닫기 전까지 `main`은 건드리지 않는다.
 

@@ -45,10 +45,11 @@ struct PaperTimeCommands: Commands {
                 guard let library = model.library else { return }
                 Task { await library.resolveAllPending() }
             }
-            command("Refresh from Folder", .refreshFolder) {
-                guard let library = model.library else { return }
-                Task { await library.refresh() }
-            }
+            // The same errand as the toolbar's button: ask the cloud for what
+            // it has not brought, read the folder again, and tell the open
+            // paper to look at its own files. Posted rather than done here,
+            // because the reader's session is the window's, not the menu's.
+            command("Sync Now", .refreshFolder, post: .paperTimeSyncNow)
 
             Divider()
 
@@ -150,6 +151,7 @@ extension Notification.Name {
     static let paperTimeAddPapers = Notification.Name("PaperTime.addPapers")
     static let paperTimeExportBibTeX = Notification.Name("PaperTime.exportBibTeX")
     static let paperTimeCopyCitationKey = Notification.Name("PaperTime.copyCitationKey")
+    static let paperTimeSyncNow = Notification.Name("PaperTime.syncNow")
     static let paperTimeNextPage = Notification.Name("PaperTime.nextPage")
     static let paperTimePreviousPage = Notification.Name("PaperTime.previousPage")
     static let paperTimeGoBack = Notification.Name("PaperTime.goBack")

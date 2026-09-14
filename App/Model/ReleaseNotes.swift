@@ -299,6 +299,108 @@ enum ReleaseNotes {
                     devices: [.ipad]
                 ),
                 Entry(
+                    Text2("구절은 인용으로, 노트는 링크로", "A passage is a quotation; a note is a link"),
+                    Text2("읽다가 고른 구절과 다른 노트로 가는 링크가 같은 몸짓으로 보였다 — 둘 다 문장 속의 물든 토막이었다. 다른 것이다. 링크는 \"이것의 더 많은 것이 저기 있다\"고 말하고, 인용은 \"이 말은 내 것이 아니다, 7쪽에서 왔다\"고 말한다. 그래서 구절은 이제 제 문단을 갖는 인용으로 들어온다: 왼쪽에 줄, 옅은 바탕, 기울인 글씨, 그리고 밑에 쪽수. 눌러서 그 줄로 돌아가는 것은 그대로다. 파일에는 평범한 마크다운 인용(>)으로 남아 다른 편집기에서도 인용으로 보인다. 문장 가운데 떨어뜨린 구절은 여전히 칩이다 — 그건 원래 토막이 맞다. 아이폰과 아이패드에서는 ⌘L이 아무 데로도 가지 않고 있었는데(노트가 그 신호를 듣는 쪽이 맥밖에 없었다) 이제 거기서도 인용이 들어온다.",
+                          "A passage chosen while reading and a link to another note were the same gesture to look at — both a tinted morsel inside a sentence. They are not the same thing. A link says \"there is more of this over there\"; a quotation says \"these words are not mine, they came from page seven\". So a passage now arrives as a quotation with a paragraph of its own: a rule down its left, a pale ground, the words set in italic, the page underneath. Pressing it still goes back to that line. In the file it is an ordinary Markdown block quote, so it reads as a quotation in any other editor too. A passage dropped mid-sentence is still a chip — that one really is a morsel. On the phone and the iPad ⌘L had been going nowhere at all (only the Mac was listening for it); the quotation lands there now as well."),
+                    devices: [.mac, .ipad, .iphone]
+                ),
+                Entry(
+                    Text2("노트 링크가 줄의 나머지를 삼킴", "A note link swallowing the rest of its line"),
+                    Text2("[[노트]] 뒤에 같은 줄에서 구절을 인용하면, 링크의 이름표가 [[까지 열고 들어가 노트 이름도 그 뒤의 글도 구절도 통째로 하나의 링크가 됐다. 같은 자리에서 시작하는 둘 중에는 먼저 끝나는 쪽이 뜻한 것이다.",
+                          "Cite a passage on the same line as a [[note]] and the link's label opened at the note's own bracket and ran to the passage at the end — note name, words between, and passage, all one link. Where two matches begin at the same character, the one that ends sooner is the one that was meant."),
+                    devices: [.mac]
+                ),
+                Entry(
+                    Text2("설정이 아이폰·아이패드의 설정답게", "Settings that look like settings on the phone and the iPad"),
+                    Text2("맥이 옆에 세워 둔 일곱 쪽을, 손으로 쓰는 화면에서는 한 두루마리에 다 이어 붙여 놓았었다. 이제 같은 일곱 쪽이 일곱 줄이 되어 하나씩 열린다 — 이름도 기호도 맥과 같고, 줄 끝에는 지금 값이 적힌다(라이브러리·폴더 이름, 읽기·현재 배치). 없던 것도 생겼다: 기록(Log)은 아이폰·아이패드에 아예 없었고, 소개(About)는 판 번호 한 줄이었는데 이제 맥과 같은 실물 크기 소개다. 단축키는 키보드를 붙일 수 있는 아이패드에만, 읽기 전용으로. 폴더 칸에 통째로 들어가 카드 높이만큼 구멍을 내던 긴 경로는 이름만 남기고 밑으로 내렸고, 이름이 안 보이던 연락처 칸에 이름을 붙였으며, 쪽 배치·색조는 이제 리더의 것을 그대로 읽어 온다 — 목록에 없던 Glass가 여기에도 생겼고 'None'이 'Paper White'가 되었다.",
+                          "The Mac stands its seven pages beside the page it is showing; on a touch screen they had all been sewn into one scroll. The same seven are now seven rows opened one at a time — the same names and symbols as the Mac, each with its value at the end (Library · the folder's name, Reading · the layout in use). Two were missing outright: the Log was not on the phone or the iPad at all, and About was a version number, where now it is the Mac's full-size introduction. The keys are on the iPad, which may have a keyboard, to read rather than to change. The long path that went into the Folder row and left a hole the height of the card now sits under the section with the folder's name in the row; the contact field, which showed only its placeholder, has its name back; and the layout and tint pickers read the reader's own cases — so Glass is offered here too, and \"None\" is called Paper White, as the page calls it."),
+                    devices: [.ipad, .iphone]
+                ),
+                Entry(
+                    Text2("어디서나 동기화 단추", "A sync button, on every device"),
+                    Text2("표시와 잉크는 작은 파일로 오가고 iCloud가 가져올 때 온다 — 대개 몇 초, 가끔 여덟 초. 기다리는 동안 누를 것이 없었다. 이제 목록 바에 새로고침이 있고(⌘R), 책을 펴 목록이 물러난 아이패드에서는 AA 메뉴에도 있다. 누르면 iCloud에 아직 안 가져온 것을 청하고, 폴더를 다시 읽고, 열어 둔 논문에게 제 파일을 다시 보라고 이른다. 맥 메뉴의 '폴더에서 새로고침'도 같은 일을 하게 되어 ⌘R은 이제 하나다.",
+                          "Marks and ink travel as small files and arrive when iCloud brings them — usually seconds, sometimes eight. There was nothing to press while waiting. There is now: a refresh on the list's bar (⌘R), and in the AA menu on the iPad when a book has sent the list away. It asks iCloud for what it has not brought, reads the folder again, and tells the open paper to look at its own files. The Mac's \"Refresh from Folder\" does the same errand now, so ⌘R means one thing."),
+                    devices: [.mac, .ipad, .iphone]
+                ),
+                Entry(
+                    Text2("당겨 내리면 무엇이 나오는지 먼저 말한다", "The pull says what it will open"),
+                    Text2("논문 목록을 끝까지 당기면 서재 전체 검색이 뜬다 — 뜨기 전까지는 아무 말이 없어서, 목록이 튕겨 돌아오고 갑자기 창이 있었다. 이제 당기는 만큼 'Search Everything'이 따라 올라오고, 그 문구를 지나야 열린다. 멈출 수 있는 몸짓이 되었다. 세 기기 모두.",
+                          "Pulling the paper list past its top opens the library-wide search — and nothing had said it would, so the list sprang back and a palette was suddenly there. The words \"Search Everything\" now come in with the pull, and going past them is what opens it, so the gesture is something you can stop doing. On all three."),
+                    devices: [.mac, .ipad, .iphone]
+                ),
+                Entry(
+                    Text2("검색을 열면 키보드가 먼저 올라옴", "The keyboard arriving before the search did"),
+                    Text2("아이폰과 아이패드에서 검색을 열면 키보드가 곧장 올라와, 무엇을 이어 읽을지 내놓는 절반을 덮었다. 맥은 ⌘K를 누른 순간부터 타자를 칠 준비가 되어 있는 게 맞지만, 손으로 쓰는 화면에서는 먼저 보고 필요하면 칸을 누른다.",
+                          "Opening the search on the phone or the iPad raised the keyboard at once, covering the half of the palette that offers what to read next. On the Mac the caret belongs in the field — ⌘K is a key you press in order to type — but on a touch screen you look first and tap the field if you want to type."),
+                    devices: [.ipad, .iphone]
+                ),
+                Entry(
+                    Text2("빈 선반이 검색 실패라고 말함", "An empty shelf saying the search had failed"),
+                    Text2("아직 아무것도 별을 안 단 즐겨찾기 앞에서 '맞춤법을 확인하거나 다시 검색하세요'가 떴다. 선반마다 제 이유를 말한다 — 읽는 중으로 표시한 논문이 여기 모인다, 별을 달면 여기 있다.",
+                          "\"Check the spelling or try a new search\" stood in front of Favorites, which nothing had been starred into yet. Each shelf now says why it is empty — papers you set to Reading wait here; star one and it will be here."),
+                    devices: [.mac, .ipad, .iphone]
+                ),
+                Entry(
+                    Text2("돋보기가 둘, 생김새는 하나", "Two magnifiers, one shape"),
+                    Text2("리더 바의 돋보기는 이 논문을 찾고, 목록 바의 돋보기는 서재 전체를 뒤지는데 둘이 똑같이 생겨서 어느 쪽을 누르는지 알 수 없었다. 서재 쪽은 이제 목록과 돋보기가 함께 있는 기호다.",
+                          "The magnifier on the reader's bar finds a word in this paper; the one on the list's bar looks through the whole library. They were the same shape, so pressing one was a coin toss. The library's is now a list with a magnifier over it."),
+                    devices: [.mac, .ipad, .iphone]
+                ),
+                Entry(
+                    Text2("책장이 소리 없이 바뀜", "A spread that changed without turning"),
+                    Text2("아이패드의 책 모드는 쓸면 넘어가되 한 칸이 그냥 다른 칸으로 바뀌었다 — 넘어간 것이 아니라 잘못된 것처럼 보인다. 한 쪽 모드가 쪽 넘김 컨트롤러에서 받는 그 움직임을, 책은 층(layer)의 밀어내기로 받는다. 처음에는 그림 두 장을 찍어 옮겼는데, 올 펼침면의 그림을 찍으려면 그걸 통째로 그려 놓고 시작해야 해서 움직임이 있어야 할 자리에 멈칫이 들어갔다 — 지금은 렌더 서버가 이미 그려 둔 것을 그대로 민다.",
+                          "The iPad's book turned on a swipe but cut from one spread to the next with no motion, which reads as a glitch rather than a page turning. The movement the single page gets from the page-turn controller comes to the book as a push on its own layer. Two snapshots were the first attempt: taking the picture of the spread about to arrive means drawing the whole of it before the animation can begin, and the pause landed exactly where the movement should have been. The render server already has it drawn, and now it does the pushing."),
+                    devices: [.ipad, .iphone]
+                ),
+                Entry(
+                    Text2("맥의 목차도 쪽 아래로", "The Mac's contents along the foot as well"),
+                    Text2("목차가 기둥으로 서는 곳은 펼침면의 가운데 홈뿐이다. 이어 읽기와 한 쪽 모드에서는 쪽이 열을 가득 채우니, 그 한가운데 선 기둥은 찾아 주려던 글을 가린다. 이제 거기서는 아이패드처럼 쪽 아래를 가로지른다. (처음 고쳤을 때 맥에서만 여전히 한가운데 떴다 — 아래로 붙이라는 말은 붙일 벽이 있어야 듣는데, 손가락을 받는 투명한 층이 없는 맥에서는 겹이 판 크기로 오그라들어 붙을 데가 없었다.)",
+                          "The only place a column of headings can stand is the gutter of a spread. In continuous and single-page the page fills the column, and a column down the middle of it covers the words it is meant to help you find — so there it lies along the foot, as it does on the iPad. (It kept appearing in the middle on the Mac after the first attempt: an instruction to sit at the bottom needs a bottom to sit at, and without the invisible layer that catches a dismissing touch the stack shrank to the panel and had none.)"),
+                    devices: [.mac]
+                ),
+                Entry(
+                    Text2("슬립박스에서 나올 수 없음", "No way out of the slip-box"),
+                    Text2("아이패드에서 노트로 들어가면 서가를 여는 단추가 논문 목록과 함께 사라져, 다른 선반으로 갈 길이 없었다. 그 바는 목록의 것이 아니라 열의 것이다.",
+                          "Walking into the notes on the iPad took the button that opens the shelves with it, and there was no way back to another shelf. That bar belongs to the column, not to the papers."),
+                    devices: [.ipad, .iphone]
+                ),
+                Entry(
+                    Text2("다른 논문을 열면 표시가 안 보임", "Marks invisible after opening a second paper"),
+                    Text2("쪽 위의 겹(잉크 캔버스와 둥근 표시를 그리는 층)을 쪽 번호로만 기억해, 다음 논문의 1쪽이 앞 논문 1쪽의 겹을 물려받았다. 그래서 앞 논문의 잉크가 다음 논문 위에 그려지고, 하이라이트는 PDFKit에게 숨긴 뒤 아무도 그리지 않아 사라졌다 — 표시 목록에는 남은 채로. 이제 논문 하나에 겹 한 벌이고, 그릴 것이 없는 쪽에서는 숨기지 않는다.",
+                          "The layer over a page — the ink canvas and the one that draws the rounded marks — was remembered by page number alone, so page 1 of the next paper inherited page 1 of the last. The previous paper's ink was drawn over the new one, and a highlight was hidden from PDFKit with nothing left to draw it: gone from the page, still in the list of marks. One paper now has one set of layers, and a page with nothing to draw its marks keeps PDFKit's."),
+                    devices: [.ipad, .iphone]
+                ),
+                Entry(
+                    Text2("책이 넘어가지 않음", "A book that would not turn"),
+                    Text2("아이패드의 책 모드에는 쪽을 넘길 것이 없었다. 쪽 넘김 컨트롤러는 한 쪽씩만 보여 쓸 수 없고, 펼침면은 화면에 꽉 맞춰 스크롤할 여지도 없어 — 쓸어도 두 쪽이 몇 점 밀렸다 말았다. 이제 책에서는 쓸면 넘어간다. 확대한 펼침면은 천천히 끌면 그대로 움직인다.",
+                          "Book mode on the iPad had nothing that turned a page: the page-turn controller shows one page and a spread is two, and the spread is fitted to the screen, leaving no room to scroll — a swipe moved the pages a few points and let go. A swipe now turns the book, while a deliberate drag still moves a spread that has been zoomed into."),
+                    devices: [.ipad, .iphone]
+                ),
+                Entry(
+                    Text2("목차는 쪽 아래에 길게", "The contents along the foot of the page"),
+                    Text2("맥에서 목차는 펼침면의 가운데 홈에 서는 좁은 기둥이다. 손으로 읽는 화면에는 내줄 홈이 없어, 쪽 아래를 가로지르는 낮고 넓은 판으로 뜬다 — 제목이 접히지 않고 한 줄에 들어간다. 목록이 담긴 만큼만 높고, 쪽 세는 줄을 덮지 않는다. 쪽 아무 데나 누르면 닫힌다.",
+                          "On the Mac the contents stands in the gutter of a spread, a narrow column. A touch screen has no gutter to give, so it comes as a low, wide panel across the foot of the page — a heading fits on one line. It is as tall as its headings need and no taller, and it keeps clear of the bar that counts the pages. A touch anywhere on the paper puts it away."),
+                    devices: [.ipad, .iphone]
+                ),
+                Entry(
+                    Text2("논문 안에서 찾기", "Finding a word in the paper"),
+                    Text2("아이패드의 리더 바에는 서재 전체를 뒤지는 돋보기만 있고, 읽고 있는 논문에서 한 낱말을 찾을 방법이 없었다. 이제 리더 바의 돋보기는 이 논문이고(⌘F), 서재 전체는 목록 쪽의 돋보기와 AA 메뉴의 한 줄이다.",
+                          "The iPad's reader bar carried a magnifier that searched the whole library and no way to find a word in the paper being read. The magnifier on the reader's bar now means this paper (⌘F); the library is the magnifier on the list and a line in the AA menu."),
+                    devices: [.ipad, .iphone]
+                ),
+                Entry(
+                    Text2("서가의 불이 옮겨 앉는다", "The lit shelf moves"),
+                    Text2("어느 서가에 있는지를 칠하는 바탕이 한 줄에서 꺼지고 다른 줄에서 켜졌다. 이제 그 유리 한 장이 고른 줄로 미끄러져 간다 — 음악의 아래 단추들처럼. 어디에서 왔는지가 보인다.",
+                          "The wash that says which shelf you are on went out on one row and came on in another. That one piece of glass now slides to the row you chose, the way the buttons along the foot of Music do — so you can see where you came from."),
+                    devices: [.mac, .ipad, .iphone]
+                ),
+                Entry(
+                    Text2("도구 설정이 잘림", "Tool options cut off"),
+                    Text2("형광펜과 지우개의 설정 팝오버가 짧아 마지막 줄(손가락 그리기)이 모서리에 잘렸다 — 닿을 수 없는 설정은 없는 설정이다.",
+                          "The highlighter's and eraser's options popover was too short and its last row — draw with finger — was cut in half by the edge. A switch you cannot reach is a setting that does not exist."),
+                    devices: [.ipad, .iphone]
+                ),
+                Entry(
                     Text2("아이패드의 서가는 패널로, 인스펙터는 떠서", "The iPad's shelves as a panel, its inspector afloat"),
                     Text2("아이패드 화면은 열 셋을 둘 만큼 넓지 않다. 서가(범위·컬렉션·태그·저자)는 목록 열의 격자 단추로 Spotlight처럼 창 가운데에 떠서 나오고, 고르면 사라진다. 인스펙터는 오른쪽에서 쪽 위로 떠 들어온다 — 시트가 읽던 쪽을 가리던 대신. 목록은 시스템 토글로 숨기고 보인다. 툴바가 겹치던 것도 이렇게 풀렸다.",
                           "The iPad's screen has no room for three columns. The shelves — scopes, collections, tags, authors — come as a panel in the middle of the window, Spotlight-fashion, from the grid button on the list; pick one and it goes. The inspector floats in over the page from the right instead of a sheet that hid what you were reading. The list hides and shows with the system's own toggle. The overlapping toolbar came apart the same way."),

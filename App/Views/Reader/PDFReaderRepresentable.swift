@@ -472,6 +472,17 @@ final class ReaderCoordinator: NSObject {
 
     func update(_ view: PDFView, revision: Int) {
         if view.document !== session.document {
+            // The overlays belong to the pages of the paper being left, and
+            // they are kept by page *number*. Handed on to the next paper,
+            // page 1's canvas brought the last paper's ink with it, and page
+            // 1's marks had no overlay of their own: `redraw` hides a mark
+            // from PDFKit so the overlay can draw it rounded, and with the
+            // overlay pointing at another document's page nothing drew it at
+            // all. A highlight went on being made — the list showed it — and
+            // the page stayed blank. One paper, one set of overlays.
+            #if canImport(UIKit)
+            discardPageViews()
+            #endif
             view.document = session.document
             if appliedLayout == .book {
                 trimForBook(session.document)
@@ -557,6 +568,12 @@ final class ReaderCoordinator: NSObject {
         #if canImport(UIKit)
         view.clearSelection()
         for page in visiblePages(of: view) {
+            // Hiding a mark from PDFKit is only safe where something else
+            // will draw it. A page whose overlay has not been asked for yet
+            // keeps PDFKit's own square mark until it has one — visibly
+            // square beats invisible.
+            let index = session.document.index(for: page)
+            guard overlays[index]?.page === page else { continue }
             // A mark just added is a flat annotation until the overlay has
             // taken it over; do that now and have the cached page repainted.
             _ = RoundedMarks.takeOver(page)
@@ -574,9 +591,13 @@ final class ReaderCoordinator: NSObject {
         #endif
     }
 
+    /// The pages on screen — both of them in a spread, where a mark made on
+    /// the facing page was left to PDFKit's own square drawing because only
+    /// the current page was ever repainted.
     private func visiblePages(of view: PDFView) -> [PDFPage] {
-        guard let current = view.currentPage else { return [] }
-        return [current]
+        let shown = view.visiblePages
+        if !shown.isEmpty { return shown }
+        return view.currentPage.map { [$0] } ?? []
     }
 
     /// Scrolls a mark into view and flashes the text under it.
@@ -700,6 +721,7 @@ final class ReaderCoordinator: NSObject {
         // Only the single page turns with the page view controller: it shows
         // one page at a time, which made a book of two pages show one.
         view.usePageViewController(layout == .singlePage, withViewOptions: nil)
+        setBookSwipes(layout == .book, in: view)
         // A book fills the width, as on the Mac; anything else fits itself.
         if layout == .book {
             DispatchQueue.main.async { [weak self, weak view] in
@@ -715,6 +737,38 @@ final class ReaderCoordinator: NSObject {
 
     #if canImport(UIKit)
     private var fittedSpreadWidth: CGFloat = 0
+    /// Whether a spread is in the middle of being carried across the view, so
+    /// a second flick does not stack another pair of pictures on the first.
+    private var isTurningPages = false
+    /// The swipes that turn a spread, while the reader is a book.
+    private var bookSwipes: [UISwipeGestureRecognizer] = []
+
+    /// A book turns by a swipe across it, as it does in Books.
+    ///
+    /// Nothing else here can turn it. The page view controller shows one page
+    /// at a time and a spread is two, so it is off; and the spread is fitted
+    /// to the view, which leaves the scroll view a few points of slack and no
+    /// more — a swipe dragged the two pages sideways and let go, and the book
+    /// stayed on the same spread. The scroll view's own pan is made to wait
+    /// on these, so a deliberate drag still moves a spread that has been
+    /// zoomed into while a flick turns the page.
+    private func setBookSwipes(_ on: Bool, in view: PDFView) {
+        for swipe in bookSwipes { view.removeGestureRecognizer(swipe) }
+        bookSwipes = []
+        guard on else { return }
+        let turns: [(UISwipeGestureRecognizer.Direction, Selector)] = [
+            (.left, #selector(goToNextPage)),
+            (.right, #selector(goToPreviousPage)),
+        ]
+        for (direction, action) in turns {
+            let swipe = UISwipeGestureRecognizer(target: self, action: action)
+            swipe.direction = direction
+            view.addGestureRecognizer(swipe)
+            bookSwipes.append(swipe)
+        }
+        guard let scrollView = Self.scrollView(in: view) else { return }
+        for swipe in bookSwipes { scrollView.panGestureRecognizer.require(toFail: swipe) }
+    }
 
     /// Two pages across the view, as large as they can be with nothing cut
     /// off — the same rule the Mac applies. Done again when the width changes.
@@ -845,13 +899,59 @@ final class ReaderCoordinator: NSObject {
 
     @objc private func goToNextPage() {
         guard let view = pdfView, view.canGoToNextPage else { return }
+        #if canImport(UIKit)
+        turningPages(in: view, forward: true) { view.goToNextPage(nil) }
+        #else
         view.goToNextPage(nil)
+        #endif
     }
 
     @objc private func goToPreviousPage() {
         guard let view = pdfView, view.canGoToPreviousPage else { return }
+        #if canImport(UIKit)
+        turningPages(in: view, forward: false) { view.goToPreviousPage(nil) }
+        #else
         view.goToPreviousPage(nil)
+        #endif
     }
+
+    #if canImport(UIKit)
+    /// Pushes the old spread off and the new one on, the way the single page
+    /// turns.
+    ///
+    /// A single page gets its movement from the page view controller, which
+    /// cannot show two pages at once and so is off in a book — and a book
+    /// without it cut from one spread to the next with no motion at all,
+    /// which reads as a glitch rather than a page turning.
+    ///
+    /// Core Animation does it, not a pair of snapshot views. The snapshots
+    /// were the first attempt and they stuttered: taking the picture of the
+    /// spread about to arrive means rendering the whole of it on the main
+    /// thread before the animation can start, and the pause landed exactly
+    /// where the movement should have been. A push transition on the view's
+    /// own layer is handed to the render server, which already has the old
+    /// spread drawn and needs no picture taken of either.
+    private func turningPages(in view: PDFView, forward: Bool, _ turn: () -> Void) {
+        guard appliedLayout == .book, !isTurningPages else { turn(); return }
+        isTurningPages = true
+        let push = CATransition()
+        push.type = .push
+        push.subtype = forward ? .fromRight : .fromLeft
+        push.duration = 0.32
+        // The curve the page view controller uses: quick to leave, gentle to
+        // arrive. Linear reads as a slide rather than a turn.
+        push.timingFunction = CAMediaTimingFunction(controlPoints: 0.25, 0.1, 0.25, 1)
+        view.layer.add(push, forKey: "paperTime.turn")
+        turn()
+        // Lay the new spread out before the transition is committed, so what
+        // is pushed on is the spread and not the blank it would otherwise be
+        // for the first frame or two.
+        view.layoutIfNeeded()
+        DispatchQueue.main.asyncAfter(deadline: .now() + push.duration) { [weak self] in
+            self?.isTurningPages = false
+        }
+    }
+    #endif
 
     @objc private func goBackInHistory() {
         guard let view = pdfView, view.canGoBack else { return }
@@ -1256,6 +1356,19 @@ final class ReaderCoordinator: NSObject {
 
     // MARK: - Canvases
 
+    #if canImport(UIKit)
+    /// Lets go of every page's canvas and overlay, so the next document is
+    /// given fresh ones. PDFKit asks for an overlay again as each page of the
+    /// new document is laid out.
+    private func discardPageViews() {
+        for overlay in overlays.values { overlay.removeFromSuperview() }
+        overlays.removeAll()
+        canvases.removeAll()
+        strokeCounts.removeAll()
+        lastCanvas = nil
+    }
+    #endif
+
     private func updateCanvasInteraction() {
         #if canImport(UIKit)
         let drawing = configuration.mode == .draw
@@ -1294,7 +1407,9 @@ extension ReaderCoordinator: @preconcurrency PDFPageOverlayViewProvider {
     #if canImport(UIKit)
     func pdfView(_ view: PDFView, overlayViewFor page: PDFPage) -> UIView? {
         let index = session.document.index(for: page)
-        if let existing = overlays[index] { return existing }
+        // The same page, not merely the same page number: an overlay left
+        // over from another document would draw that document's ink here.
+        if let existing = overlays[index], existing.page === page { return existing }
         // Hide the file's flat marks before PDFKit paints the page: UIKit's
         // PDFView caches the drawn page, so a mark hidden after the first
         // paint kept showing as a square under the rounded one.

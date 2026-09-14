@@ -168,7 +168,7 @@ public enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
         case .exportBibTeX: "Export BibTeX"
         case .copyCitationKey: "Copy Citation Key"
         case .resolveMetadata: "Resolve Missing Metadata"
-        case .refreshFolder: "Refresh from Folder"
+        case .refreshFolder: "Sync Now"
         case .searchEverything: "Search Everything"
         case .findInDocument: "Find in Document"
         case .ultracopy: "Ultracopy"
