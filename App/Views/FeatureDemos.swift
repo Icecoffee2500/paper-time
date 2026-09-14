@@ -45,6 +45,10 @@ struct FeatureDemoView: View {
             case .bookReading: BookReadingDemo(scale: scale)
             case .focus: FocusDemo(scale: scale)
             case .resonance: ResonanceDemo(scale: scale)
+            case .atlas: AtlasDemo(scale: scale)
+            case .express: ExpressDemo(scale: scale)
+            case .sync: SyncDemo(scale: scale)
+            case .penTools: PenToolsDemo(scale: scale)
             }
         }
         .padding(scale.pad)
@@ -421,10 +425,80 @@ private struct PassageDemo: View {
     @Environment(AppModel.self) private var app
     @State private var sent = false
 
+    /// A sentence with mathematics in it, because that is the half of this
+    /// that is hard: any app can carry words across, and what arrives as
+    /// loose symbols when it is carried the ordinary way is the formula.
     private var sentence: String {
         ReleaseNotes.string(
-            "관측된 초과 감쇠는 경계층에서 비롯된다.",
-            "The observed excess damping originates in the boundary layer."
+            "감쇠는 경계층 두께에 따라 ",
+            "The damping grows with the boundary layer thickness as "
+        )
+    }
+
+    private var tail: String {
+        ReleaseNotes.string(" 처럼 커진다.", ".")
+    }
+
+    private let formula = "\\zeta \\propto \\delta^{1/2}"
+
+    /// The formula, set — on the Mac by the same typesetter the notes use,
+    /// so what is being shown is the thing itself rather than a picture of
+    /// it. Written out where there is no typesetter.
+    private var formulaText: Text {
+        #if os(macOS)
+        if let made = MathTypesetter.image(
+            latex: formula, display: false,
+            pointSize: scale.isFull ? 15 : 11, color: .labelColor
+        ) {
+            return Text(Image(nsImage: made.image))
+        }
+        #endif
+        return Text("ζ ∝ δ^(1/2)").italic()
+    }
+
+
+    /// The sentence as it is set on the page, and as it is set in the note.
+    private var quoted: some View {
+        (Text(sentence) + formulaText + Text(tail))
+            .font(scale.body)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// What lands in the note: a rule, a faint ground, the words in italics,
+    /// and the page under them — a quotation, which is what it is.
+    private var heading: String {
+        ReleaseNotes.string("2.1 경계층 감쇠", "2.1 Boundary-layer damping")
+    }
+
+    private var quotation: some View {
+        HStack(alignment: .top, spacing: scale.isFull ? 9 : 6) {
+            Capsule()
+                .fill(Color.accentColor.opacity(0.55))
+                .frame(width: scale.isFull ? 2.5 : 2)
+            VStack(alignment: .leading, spacing: 4) {
+                // The title came across as a title.
+                Text(heading)
+                    .font(scale.body.weight(.semibold))
+                quoted.italic()
+                // The page, as the small tinted mark the app sets at the end
+                // of the last line.
+                Text(ReleaseNotes.string("2쪽", "p. 2"))
+                    .font(scale.small)
+                    .foregroundStyle(.tint)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .fill(Color.accentColor.opacity(0.12))
+                    )
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, scale.isFull ? 7 : 5)
+        .padding(.vertical, scale.isFull ? 5 : 3)
+        .background(
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(Color.accentColor.opacity(0.05))
         )
     }
 
@@ -433,15 +507,20 @@ private struct PassageDemo: View {
             Paper(scale: scale) {
                 VStack(alignment: .leading, spacing: scale.isFull ? 7 : 4) {
                     Rule(width: 90)
-                    Text(sentence)
-                        .font(scale.body)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 3)
-                        .padding(.vertical, 1)
-                        .background(
-                            RoundedRectangle(cornerRadius: 3, style: .continuous)
-                                .fill(Color.accentColor.opacity(sent ? 0 : 0.22))
-                        )
+                    // A section title over the sentence, because what the
+                    // quotation brings back is the shape of the page and not
+                    // only its words.
+                    VStack(alignment: .leading, spacing: scale.isFull ? 5 : 3) {
+                        Text(heading)
+                            .font(scale.body.weight(.semibold))
+                        quoted
+                    }
+                    .padding(.horizontal, 3)
+                    .padding(.vertical, 1)
+                    .background(
+                        RoundedRectangle(cornerRadius: 3, style: .continuous)
+                            .fill(Color.accentColor.opacity(sent ? 0 : 0.22))
+                    )
                     Rule()
                     Rule(width: 120)
                 }
@@ -467,29 +546,16 @@ private struct PassageDemo: View {
                     Text(ReleaseNotes.string("감쇠 메모", "Damping"))
                         .font(scale.body.weight(.semibold))
                     if sent {
-                        Text(sentence)
-                            .font(scale.body)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 3)
-                            .background(
-                                RoundedRectangle(cornerRadius: 5.5, style: .continuous)
-                                    .fill(Color.accentColor.opacity(0.14))
-                            )
-                            .overlay(alignment: .bottomTrailing) {
-                                // Inside the chip, not hanging off it: at this
-                                // size an overhang reads as the chip being cut
-                                // by the edge of the note.
-                                Image(systemName: "arrow.up.left.circle.fill")
-                                    .font(.system(size: scale.isFull ? 11 : 9))
-                                    .foregroundStyle(.tint)
-                                    .padding(1)
-                            }
-                            .transition(.scale(scale: 0.85).combined(with: .opacity))
+                        quotation
+                            .transition(.scale(scale: 0.9, anchor: .topLeading)
+                                .combined(with: .opacity))
                         if scale.isFull {
-                            Text(ReleaseNotes.string("↖︎ 를 누르면 그 자리로 돌아간다.", "The ↖︎ goes back to the page it came from."))
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
+                            Text(ReleaseNotes.string(
+                                "쪽수를 누르면 그 줄로 돌아간다. 인용문은 그냥 글이라 골라서 복사할 수 있고, 수식은 수식으로 남는다.",
+                                "The page goes back to that line. The quoted words are ordinary text — selectable, copyable — and the formula stays a formula."
+                            ))
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
                         }
                     } else {
                         Rule(width: 70)
@@ -987,6 +1053,19 @@ private struct SearchDemo: View {
             Row(group: ReleaseNotes.string("태그", "Tags"), symbol: "number",
                 title: "#robotics",
                 subtitle: ReleaseNotes.string("논문 6편 · 노트 2개", "6 papers · 2 notes")),
+            // What the title search cannot do: the word is on page nine and
+            // nowhere in the title, so this row is the only way the paper
+            // comes up at all.
+            Row(group: ReleaseNotes.string("논문 안에서", "In the Papers"),
+                symbol: "text.magnifyingglass",
+                // The snippet is not translated: it is a sentence from a
+                // paper, and the papers are in English.
+                title: "…freezing the vision encoder collapses action prediction…",
+                subtitle: ReleaseNotes.string("V-JEPA 2 · 9쪽 · 3번", "V-JEPA 2 · p. 9 · 3 matches")),
+            Row(group: ReleaseNotes.string("논문 안에서", "In the Papers"),
+                symbol: "text.magnifyingglass",
+                title: "…the vision tokens are projected into the action space…",
+                subtitle: ReleaseNotes.string("OpenVLA · 4쪽", "OpenVLA · p. 4")),
             Row(group: ReleaseNotes.string("명령", "Actions"), symbol: "square.and.arrow.down",
                 title: ReleaseNotes.string("논문 추가…", "Add Papers…"),
                 subtitle: app.shortcut(for: .addPapers).display),
@@ -2147,6 +2226,379 @@ private struct ResonanceDemo: View {
     }
 }
 
+// MARK: - Atlas
+
+/// The squeeze, done once: notes piling up, the one line that notices, the
+/// map that one press makes, and a stray note filed onto it.
+private struct AtlasDemo: View {
+    let scale: DemoScale
+    /// 0: the notes, piling. 1: the line has appeared. 2: the map is made.
+    /// 3: the stray note is filed.
+    @State private var step: Int
+
+    init(scale: DemoScale, step: Int = 0) {
+        self.scale = scale
+        _step = State(initialValue: step)
+    }
+
+    private var titles: [String] {
+        [
+            ReleaseNotes.string("시냅스 강화는 기억을 굳힌다", "Synaptic consolidation hardens a memory"),
+            ReleaseNotes.string("망각은 겹쳐 쓰기다", "Forgetting is overwriting"),
+            ReleaseNotes.string("Fisher 정보가 중요도다", "Fisher information as importance"),
+            ReleaseNotes.string("EWC의 이차 벌점", "EWC's quadratic penalty"),
+            ReleaseNotes.string("가시는 며칠 안에 굳는다", "Spines harden within days"),
+        ]
+    }
+    private var stray: String { ReleaseNotes.string("리허설 없이 기억 지키기", "Keeping a memory without rehearsal") }
+    private var words: [String] {
+        [ReleaseNotes.string("파국적 망각", "catastrophic forgetting"), ReleaseNotes.string("강화", "consolidation")]
+    }
+    private var instructions: [String] {
+        [
+            ReleaseNotes.string("슬립박스에 노트가 쌓이고 있어요 — 여러 논문에서, 한 주제로. 아직 지도는 없어요. 노트를 하나 더 써 보세요.",
+                                "Notes are piling up in the slip-box — from several papers, on one subject. No map yet. Write one more note."),
+            ReleaseNotes.string("다섯 개가 서로 낱말을 나누자 맨 위에 한 줄이 떴어요: 압박(squeeze)의 순간이에요. '지도 만들기'를 눌러요.",
+                                "Five now share their words, and a line has appeared at the top: the squeeze. Press \"Make a Map\"."),
+            ReleaseNotes.string("초안이 써졌어요 — 제목은 나누는 낱말, 노트는 논문별 열 아래 카드. 옆에 '울리지만 안 올린' 노트가 있죠? ＋를 눌러요.",
+                                "A draft is written — the title from the shared words, the notes as cards under a column per paper. Beside it, a note that resonates but is not filed: press ＋."),
+            ReleaseNotes.string("올라갔어요. 지도는 그냥 Markdown 노트라 다른 앱에서도 읽히고, 다음 노트를 쓸 때 편집기 아래에 이 지도가 떠서 🗺 한 번으로 올려요.",
+                                "Filed. The map is plain Markdown, readable anywhere; when you write the next note, the map comes up under the editor and one 🗺 files it."),
+        ]
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: scale.gap) {
+            Paper(scale: scale) {
+                if step >= 2 { board } else { box }
+            }
+            .frame(height: scale.isFull ? 220 : 160)
+            .animation(.snappy(duration: 0.3), value: step)
+
+            HStack(spacing: 6) {
+                ForEach(0..<3, id: \.self) { index in
+                    Text("\(index + 1)")
+                        .font(.caption2.weight(.semibold)).monospacedDigit()
+                        .frame(width: 16, height: 16)
+                        .background(Circle().fill(index < step ? Color.accentColor : (index == step ? Color.accentColor.opacity(0.14) : Color.clear)))
+                        .overlay(Circle().stroke(index == step ? Color.accentColor : Color.secondary.opacity(0.3), lineWidth: 1))
+                        .foregroundStyle(index < step ? AnyShapeStyle(.white) : (index == step ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary)))
+                }
+                if step == 0 {
+                    Button {
+                        withAnimation(.snappy(duration: 0.3)) { step = 1 }
+                    } label: {
+                        Label(ReleaseNotes.string("노트 쓰기", "Write a note"), systemImage: "square.and.pencil")
+                            .font(.caption2).foregroundStyle(.tint)
+                            .padding(.horizontal, 7).padding(.vertical, 3)
+                            .background(Capsule().fill(Color.accentColor.opacity(0.14)))
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer(minLength: 0)
+                if step >= 1 {
+                    Button {
+                        withAnimation(.snappy(duration: 0.3)) { step = 0 }
+                    } label: {
+                        Label(ReleaseNotes.string("처음부터", "Start over"), systemImage: "arrow.counterclockwise")
+                            .font(.caption2).foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            Text(instructions[min(step, instructions.count - 1)])
+                .font(scale.small)
+                .foregroundStyle(step == 3 ? .secondary : .primary)
+                .fixedSize(horizontal: false, vertical: true)
+                .id(step)
+        }
+    }
+
+    /// The slip-box: the notes as rows, and at the top — once there are
+    /// five — the line.
+    private var box: some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 6 : 4) {
+            Text("Notes").font(scale.small.weight(.semibold))
+            if step >= 1 {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Image(systemName: "map").foregroundStyle(.tint)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(ReleaseNotes.string("노트 5개가 한 주제예요", "5 notes are one subject")).font(scale.small.weight(.medium))
+                        Text(words.joined(separator: " · ")).font(.caption2).foregroundStyle(.tint)
+                    }
+                    Spacer(minLength: 0)
+                    Button {
+                        withAnimation(.snappy(duration: 0.3)) { step = 2 }
+                    } label: {
+                        Text(ReleaseNotes.string("지도 만들기", "Make a Map"))
+                            .font(.caption2.weight(.semibold)).foregroundStyle(.white)
+                            .padding(.horizontal, 8).padding(.vertical, 4)
+                            .background(Capsule().fill(Color.accentColor))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(8)
+                .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.accentColor.opacity(0.08)))
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+            ForEach(Array(titles.prefix(step >= 1 ? 5 : 4).enumerated()), id: \.offset) { index, title in
+                HStack {
+                    Text(title).font(scale.small).lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text("Sep \(3 + index)").font(.caption2).foregroundStyle(.tertiary)
+                }
+                .padding(.horizontal, 6).padding(.vertical, 2)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// The map as a board: columns of cards, and the open door beside them.
+    private var board: some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 8 : 5) {
+            HStack(spacing: 6) {
+                Label(words.map { $0.capitalized }.joined(separator: " · "), systemImage: "map")
+                    .font(scale.small.weight(.semibold)).lineLimit(1)
+                Text(step >= 3 ? "6" : "5").font(.caption2).foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.left.forwardslash.chevron.right").font(.caption2).foregroundStyle(.secondary)
+            }
+            HStack(alignment: .top, spacing: 8) {
+                boardColumn(ReleaseNotes.string("Kirkpatrick 2017", "Kirkpatrick 2017"), [titles[1], titles[2], titles[3]] + (step >= 3 ? [stray] : []))
+                boardColumn(ReleaseNotes.string("Yang 2009", "Yang 2009"), [titles[0], titles[4]])
+                if step < 3 {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label(ReleaseNotes.string("울리는데 안 올림", "Resonates, not filed"), systemImage: "waveform")
+                            .font(.caption2.weight(.semibold)).foregroundStyle(.tint).lineLimit(1)
+                        HStack(alignment: .top, spacing: 4) {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(stray).font(.caption2).lineLimit(2)
+                                Text(words[0]).font(.system(size: 9)).foregroundStyle(.tint)
+                            }
+                            Spacer(minLength: 0)
+                            Button {
+                                withAnimation(.snappy(duration: 0.3)) { step = 3 }
+                            } label: {
+                                Image(systemName: "plus.circle.fill").foregroundStyle(.tint)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(6)
+                        .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.accentColor.opacity(0.07)))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .transition(.opacity)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func boardColumn(_ title: String, _ cards: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.caption2.weight(.semibold)).foregroundStyle(.secondary).lineLimit(1)
+            ForEach(cards, id: \.self) { card in
+                Text(card)
+                    .font(.caption2)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(6)
+                    .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(.quaternary.opacity(0.5)))
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+// MARK: - Express
+
+/// From a passage on a page to a line of LaTeX with its citation, done once.
+private struct ExpressDemo: View {
+    let scale: DemoScale
+    /// 0: the draft, with one bullet. 1: a passage is selected on the page.
+    /// 2: it is in the draft as a chip. 3: rendered — \cite and the .bib.
+    @State private var step: Int
+
+    init(scale: DemoScale, step: Int = 0) {
+        self.scale = scale
+        _step = State(initialValue: step)
+    }
+
+    private var sentence: String {
+        ReleaseNotes.string("EWC는 옛 과제에 중요한 가중치의 변화에 이차 벌점을 준다.", "EWC puts a quadratic penalty on changing the weights important for old tasks.")
+    }
+    private var instructions: [String] {
+        [
+            ReleaseNotes.string("관련연구 절의 초안이에요 — 소제목과 글머리표 하나. 읽던 논문에서 근거가 될 문장을 눌러 선택해 보세요.",
+                                "A draft of a related-work section — a heading and one bullet. Click the sentence on the page that would be its evidence."),
+            ReleaseNotes.string("Notes 탭에 '초안에 넣기'가 떴어요. ❝를 눌러요.", "The Notes tab offers \"Into a draft\". Press ❝."),
+            ReleaseNotes.string("구절이 칩으로 들어왔어요 — 논문 주소를 달고. ⇧⌘E(내보내기)를 눌러요.", "The passage is in, as a chip carrying its paper's address. Press ⇧⌘E (Export)."),
+            ReleaseNotes.string("칩은 \\cite{kirkpatrick2017}가 되고, 인용한 논문만의 .bib이 함께 나왔어요. Overleaf에 붙이면 컴파일돼요. 기본은 LaTeX, pandoc도.",
+                                "The chip became \\cite{kirkpatrick2017}, with a .bib of just that paper. Paste into Overleaf and it compiles. LaTeX by default; pandoc too."),
+        ]
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: scale.gap) {
+            HStack(alignment: .top, spacing: scale.gap) {
+                if step < 3 {
+                    paper
+                    draft.frame(width: scale.isFull ? 250 : 168)
+                } else {
+                    rendered
+                }
+            }
+            .frame(height: scale.isFull ? 210 : 160)
+            .animation(.snappy(duration: 0.3), value: step)
+
+            HStack(spacing: 6) {
+                ForEach(0..<4, id: \.self) { index in
+                    Text("\(index + 1)")
+                        .font(.caption2.weight(.semibold)).monospacedDigit()
+                        .frame(width: 16, height: 16)
+                        .background(Circle().fill(index < step ? Color.accentColor : (index == step ? Color.accentColor.opacity(0.14) : Color.clear)))
+                        .overlay(Circle().stroke(index == step ? Color.accentColor : Color.secondary.opacity(0.3), lineWidth: 1))
+                        .foregroundStyle(index < step ? AnyShapeStyle(.white) : (index == step ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary)))
+                }
+                if step == 2 {
+                    Button {
+                        withAnimation(.snappy(duration: 0.3)) { step = 3 }
+                    } label: {
+                        Label("⇧⌘E " + ReleaseNotes.string("내보내기", "Export"), systemImage: "square.and.arrow.up")
+                            .font(.caption2).foregroundStyle(.tint)
+                            .padding(.horizontal, 7).padding(.vertical, 3)
+                            .background(Capsule().fill(Color.accentColor.opacity(0.14)))
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer(minLength: 0)
+                if step >= 1 {
+                    Button {
+                        withAnimation(.snappy(duration: 0.3)) { step = 0 }
+                    } label: {
+                        Label(ReleaseNotes.string("처음부터", "Start over"), systemImage: "arrow.counterclockwise")
+                            .font(.caption2).foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            Text(instructions[min(step, 3)])
+                .font(scale.small)
+                .foregroundStyle(step == 3 ? .secondary : .primary)
+                .fixedSize(horizontal: false, vertical: true)
+                .id(step)
+        }
+    }
+
+    private var paper: some View {
+        Paper(scale: scale) {
+            VStack(alignment: .leading, spacing: scale.isFull ? 7 : 5) {
+                Rule()
+                Rule(width: scale.isFull ? 140 : 80)
+                Button {
+                    guard step == 0 else { return }
+                    withAnimation(.snappy(duration: 0.25)) { step = 1 }
+                } label: {
+                    Text(sentence)
+                        .font(.system(scale.isFull ? .callout : .caption2, design: .serif))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 3).padding(.vertical, 1)
+                        .background(RoundedRectangle(cornerRadius: 3, style: .continuous).fill(Color.accentColor.opacity(step == 1 ? 0.18 : 0)))
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                Rule()
+                Rule(width: scale.isFull ? 110 : 60)
+                Spacer(minLength: 0)
+                Text("Kirkpatrick 2017 · 2").font(.caption2).foregroundStyle(.tertiary).frame(maxWidth: .infinity)
+            }
+        }
+        .frame(maxHeight: .infinity)
+    }
+
+    /// The Notes tab with the draft: "Into a draft" while a passage is
+    /// selected, and the draft's own lines under it.
+    private var draft: some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 6 : 4) {
+            if step == 1 {
+                VStack(alignment: .leading, spacing: 3) {
+                    Label(ReleaseNotes.string("초안에 넣기", "Into a draft"), systemImage: "doc.text")
+                        .font(scale.small.weight(.semibold)).foregroundStyle(.tint)
+                    Button {
+                        withAnimation(.snappy(duration: 0.3)) { step = 2 }
+                    } label: {
+                        HStack {
+                            Text(ReleaseNotes.string("관련연구 — 지속 학습", "Related work — continual learning")).font(scale.small).lineLimit(1)
+                            Spacer(minLength: 4)
+                            Image(systemName: "quote.opening").font(.caption).foregroundStyle(.tint)
+                        }
+                        .padding(6)
+                        .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.accentColor.opacity(0.08)))
+                        .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+            Label(ReleaseNotes.string("관련연구 — 지속 학습", "Related work — continual learning"), systemImage: "doc.text")
+                .font(scale.small.weight(.semibold)).lineLimit(1)
+            Text("## " + ReleaseNotes.string("정규화 기반 방법", "Regularisation methods")).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+            Text("- " + ReleaseNotes.string("EWC는 옛 과제의 가중치를 지킨다", "EWC protects the old task's weights"))
+                .font(.caption2).fixedSize(horizontal: false, vertical: true)
+            if step >= 2 {
+                HStack(spacing: 4) {
+                    Text("- ").font(.caption2)
+                    HStack(spacing: 3) {
+                        Image(systemName: "quote.opening")
+                        Text(sentence).lineLimit(1)
+                    }
+                    .font(.caption2).foregroundStyle(.tint)
+                    .padding(.horizontal, 5).padding(.vertical, 2)
+                    .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(Color.accentColor.opacity(0.12)))
+                }
+                .transition(.scale(scale: 0.9).combined(with: .opacity))
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(scale.isFull ? 10 : 7)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(RoundedRectangle(cornerRadius: scale.corner, style: .continuous).fill(.background))
+    }
+
+    /// What ⇧⌘E gives: the text, and the bibliography beside it.
+    private var rendered: some View {
+        HStack(alignment: .top, spacing: scale.gap) {
+            pane("LaTeX", """
+            \\subsection*{\(ReleaseNotes.string("정규화 기반 방법", "Regularisation methods"))}
+            \(ReleaseNotes.string("EWC는 옛 과제의 가중치를 지킨다", "EWC protects the old task's weights"))
+            \\cite{kirkpatrick2017}
+            """)
+            pane("references.bib", """
+            @article{kirkpatrick2017,
+              author  = {Kirkpatrick, James and …},
+              title   = {Overcoming catastrophic forgetting…},
+              journal = {PNAS},
+              year    = {2017}
+            }
+            """)
+        }
+    }
+
+    private func pane(_ title: String, _ text: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+            Text(text)
+                .font(.system(size: scale.isFull ? 10 : 8, design: .monospaced))
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+            Spacer(minLength: 0)
+        }
+        .padding(scale.isFull ? 10 : 7)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(RoundedRectangle(cornerRadius: scale.corner, style: .continuous).fill(.background))
+    }
+}
+
 #if os(macOS)
 /// Draws every demo, at both sizes, into PNG files — so they can be looked
 /// at without opening a window over whatever the user is doing.
@@ -2192,7 +2644,204 @@ enum DemoRenderer {
         }
         write("resonance-step3-compact", ResonanceDemo(scale: .compact, step: 3), full: false)
         write("resonance-rule", ResonanceDemo(scale: .full, step: 4, showsRule: true), full: true)
+        for step in 1...3 { write("atlas-step\(step)", AtlasDemo(scale: .full, step: step), full: true) }
+        for step in 1...3 { write("express-step\(step)", ExpressDemo(scale: .full, step: step), full: true) }
         exit(0)
     }
 }
 #endif
+
+
+// MARK: - Sync
+
+/// Two devices over one folder. Press the highlight on the Mac; the iPad's
+/// copy of the page gets it a moment later, the way the real one does.
+private struct SyncDemo: View {
+    let scale: DemoScale
+    /// 0: nothing marked. 1: marked on the Mac, on its way. 2: on the iPad too.
+    @State private var step: Int
+
+    init(scale: DemoScale, step: Int = 0) {
+        self.scale = scale
+        _step = State(initialValue: step)
+    }
+
+    private var lines: [String] {
+        [
+            ReleaseNotes.string("시냅스 강화는 학습한 과제의 가중치를", "Synaptic consolidation protects the weights"),
+            ReleaseNotes.string("보호한다 — 새 과제를 배우는 동안", "of a learned task while a new one is learned"),
+            ReleaseNotes.string("중요한 가중치의 변화를 늦춘다.", "by slowing change on the important ones."),
+        ]
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: scale.gap) {
+            HStack(alignment: .top, spacing: scale.gap) {
+                device(ReleaseNotes.string("맥", "Mac"), symbol: "macbook", marked: step >= 1)
+                VStack(spacing: 4) {
+                    Image(systemName: step == 1 ? "icloud.and.arrow.up" : "icloud")
+                        .symbolEffect(.pulse, isActive: step == 1)
+                        .font(scale.isFull ? .title2 : .body)
+                        .foregroundStyle(step == 1 ? Color.accentColor : .secondary)
+                    Text(step == 1
+                         ? ReleaseNotes.string("iCloud Drive로…", "via iCloud Drive…")
+                         : ReleaseNotes.string("같은 폴더", "one folder"))
+                        .font(scale.small)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxHeight: .infinity)
+                .padding(.top, scale.stage / 3)
+                device(ReleaseNotes.string("아이패드", "iPad"), symbol: "ipad", marked: step >= 2)
+            }
+            HStack {
+                Button {
+                    withAnimation(.snappy(duration: 0.3)) { step = 1 }
+                    Task {
+                        try? await Task.sleep(for: .seconds(1.6))
+                        withAnimation(.snappy(duration: 0.35)) { step = 2 }
+                    }
+                } label: {
+                    Label(ReleaseNotes.string("맥에서 하이라이트", "Highlight on the Mac"), systemImage: "highlighter")
+                }
+                .disabled(step != 0)
+                if step == 2 {
+                    Button(ReleaseNotes.string("다시", "Again")) { withAnimation { step = 0 } }
+                }
+                Spacer()
+                Text(caption)
+                    .font(scale.small)
+                    .foregroundStyle(.secondary)
+            }
+            .font(scale.body)
+            .buttonStyle(.bordered)
+            .controlSize(scale.isFull ? .regular : .small)
+        }
+    }
+
+    private var caption: String {
+        switch step {
+        case 1: ReleaseNotes.string("1.5초 뒤 PDF에 쓰이고, 폴더가 옮긴다", "Written to the PDF in 1.5 s; the folder carries it")
+        case 2: ReleaseNotes.string("아이패드의 열린 쪽이 그 표시만 들여왔다", "The iPad's open page took in just that mark")
+        default: ReleaseNotes.string("앱을 다시 열지 않는다", "No reopening")
+        }
+    }
+
+    private func device(_ name: String, symbol: String, marked: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label(name, systemImage: symbol)
+                .font(scale.small)
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: scale.isFull ? 5 : 3) {
+                ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
+                    Text(line)
+                        .font(scale.small)
+                        .padding(.horizontal, 3)
+                        .background(
+                            Capsule().fill(Color.yellow.opacity(marked && index == 1 ? 0.55 : 0))
+                        )
+                }
+            }
+            .padding(scale.pad)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: scale.stage * 0.6, alignment: .top)
+            .background(
+                RoundedRectangle(cornerRadius: scale.corner, style: .continuous)
+                    .fill(.background)
+                    .shadow(color: .black.opacity(0.08), radius: 2, y: 1)
+            )
+        }
+    }
+}
+
+
+// MARK: - Pen tools
+
+/// One marker stroke over a line of text, shown both ways: kept as the hand
+/// drew it, or fitted to the words. The switch is the one in the AA menu.
+private struct PenToolsDemo: View {
+    let scale: DemoScale
+    @State private var fits = true
+
+    private var line: String {
+        ReleaseNotes.string("시냅스 강화는 학습한 과제의 가중치를 보호한다", "Synaptic consolidation protects a learned task's weights")
+    }
+    private var next: String {
+        ReleaseNotes.string("새 과제를 배우는 동안 중요한 가중치의 변화를 늦춘다.", "by slowing change on the weights that matter while a new one is learned.")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: scale.gap) {
+            HStack(alignment: .top, spacing: scale.gap) {
+                sample(fitted: false, title: ReleaseNotes.string("그은 대로", "As drawn"))
+                sample(fitted: true, title: ReleaseNotes.string("글자에 맞춰", "Fitted to the text"))
+            }
+            HStack {
+                // Two buttons rather than a switch: the switch is the setting's
+                // control, but the headless renderer cannot draw one.
+                Button(ReleaseNotes.string("그은 대로", "As drawn")) { withAnimation(.snappy(duration: 0.2)) { fits = false } }
+                    .buttonStyle(.bordered)
+                    .tint(fits ? nil : .accentColor)
+                Button(ReleaseNotes.string("글자에 맞춰", "Fit to the text")) { withAnimation(.snappy(duration: 0.2)) { fits = true } }
+                    .buttonStyle(.bordered)
+                    .tint(fits ? .accentColor : nil)
+                Spacer()
+                Text(fits
+                     ? ReleaseNotes.string("마커는 하이라이트로, 밑선은 밑줄로 — 손글씨는 잉크로 남는다", "Marker → highlight, a line beneath → underline; handwriting stays ink")
+                     : ReleaseNotes.string("선이 손 그대로 남는다", "The line stays as the hand made it"))
+                    .font(scale.small)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func sample(fitted: Bool, title: String) -> some View {
+        let chosen = fitted == fits
+        return VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(scale.small)
+                .foregroundStyle(chosen ? Color.accentColor : .secondary)
+            VStack(alignment: .leading, spacing: scale.isFull ? 6 : 3) {
+                Text(line)
+                    .font(scale.small)
+                    .padding(.horizontal, 3)
+                    .background(alignment: .leading) {
+                        if fitted {
+                            Capsule().fill(Color.yellow.opacity(0.5))
+                        } else {
+                            WobblyStroke().stroke(Color.yellow.opacity(0.55), style: StrokeStyle(lineWidth: scale.isFull ? 12 : 8, lineCap: .round))
+                                .padding(.horizontal, -4)
+                        }
+                    }
+                Text(next)
+                    .font(scale.small)
+                    .padding(.horizontal, 3)
+            }
+            .padding(scale.pad)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: scale.corner, style: .continuous)
+                    .fill(.background)
+                    .shadow(color: .black.opacity(0.08), radius: 2, y: 1)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: scale.corner, style: .continuous)
+                    .strokeBorder(chosen ? Color.accentColor.opacity(0.6) : .clear, lineWidth: 1.5)
+            )
+        }
+    }
+}
+
+/// A marker stroke as a hand makes it: a little wave, a little slope.
+private struct WobblyStroke: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let y = rect.midY
+        path.move(to: CGPoint(x: rect.minX, y: y + 2))
+        path.addCurve(
+            to: CGPoint(x: rect.maxX, y: y - 3),
+            control1: CGPoint(x: rect.minX + rect.width * 0.35, y: y - 5),
+            control2: CGPoint(x: rect.minX + rect.width * 0.7, y: y + 5)
+        )
+        return path
+    }
+}

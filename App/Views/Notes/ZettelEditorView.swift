@@ -39,7 +39,10 @@ struct ZettelEditorView: View {
 
     @ViewBuilder
     private func header(_ note: Zettel?) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        // Air between the way back and the title. At six points the two sat
+        // on top of each other, and the title — the one thing here meant to
+        // be read first — read as a caption under a button.
+        VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 8) {
                 if let onClose {
                     Button(action: onClose) {
@@ -112,8 +115,8 @@ struct ZettelEditorView: View {
             }
         }
         .padding(.horizontal, 22)
-        .padding(.top, 14)
-        .padding(.bottom, 4)
+        .padding(.top, 12)
+        .padding(.bottom, 10)
     }
 
     @ViewBuilder
@@ -129,7 +132,7 @@ struct ZettelEditorView: View {
                 showsRawText: showsRaw,
                 onFollow: { anchor in
                     link?.anchorRequest = ReaderLink.Anchor(
-                        pageIndex: anchor.pageIndex, rect: anchor.rect
+                        pageIndex: anchor.pageIndex, rect: anchor.rect, paperID: anchor.paperID
                     )
                 },
                 onOpenNote: { id in
@@ -161,9 +164,20 @@ struct ZettelEditorView: View {
             }
         }
         #else
+        // The phone and the iPad write in the Markdown itself — the rendered
+        // editor is the Mac's for now — so a passage arrives as the block
+        // quote it will always be. It was arriving nowhere at all before:
+        // ⌘L and the "노트로" button set the anchor and nothing on these
+        // devices was listening for it.
         TextEditor(text: $body_)
             .font(.body)
             .padding(.horizontal, 8)
+            .onChange(of: pending) { _, anchor in
+                guard let anchor, loadedID == noteID else { return }
+                if !body_.isEmpty, !body_.hasSuffix("\n") { body_ += "\n" }
+                body_ += NoteMarkdown.quotationSource(for: anchor) + "\n"
+                link?.pendingNoteAnchor = nil
+            }
         #endif
     }
 
@@ -240,16 +254,23 @@ struct ZettelEditorView: View {
 
                     // One press and the echo is written into the note as a
                     // link — the act a slip-box lives on, without the trip
-                    // to the other note to find out what it was called.
+                    // to the other note to find out what it was called. When
+                    // the echo is a map, the press goes the other way: this
+                    // note is filed on the map.
                     Button {
-                        let separator = body_.isEmpty || body_.hasSuffix("\n") ? "" : "\n\n"
-                        body_ += separator + echo.note.linkMarkdown
+                        if echo.note.kind == .map {
+                            flush()
+                            notes.add(noteID, toMap: echo.note.id)
+                        } else {
+                            let separator = body_.isEmpty || body_.hasSuffix("\n") ? "" : "\n\n"
+                            body_ += separator + echo.note.linkMarkdown
+                        }
                     } label: {
-                        Image(systemName: "link.badge.plus")
+                        Image(systemName: echo.note.kind == .map ? "map" : "link.badge.plus")
                             .font(.caption)
                     }
                     .buttonStyle(.borderless)
-                    .help("Link this note to it")
+                    .help(echo.note.kind == .map ? "Put this note on the map" : "Link this note to it")
                 }
             }
         }

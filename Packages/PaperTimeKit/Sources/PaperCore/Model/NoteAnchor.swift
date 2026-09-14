@@ -12,11 +12,16 @@ public struct NoteAnchor: Hashable, Sendable, Codable {
     public var pageIndex: Int
     public var rect: CGRect
     public var quotedText: String
+    /// The paper the passage is in, when it is not the note's own — a
+    /// passage dropped into a note about another paper, or into a draft,
+    /// which is about no paper and cites many.
+    public var paperID: UUID?
 
-    public init(pageIndex: Int, rect: CGRect, quotedText: String) {
+    public init(pageIndex: Int, rect: CGRect, quotedText: String, paperID: UUID? = nil) {
         self.pageIndex = pageIndex
         self.rect = rect
         self.quotedText = quotedText
+        self.paperID = paperID
     }
 
     public static let scheme = "papertime"
@@ -33,6 +38,7 @@ public struct NoteAnchor: Hashable, Sendable, Codable {
             URLQueryItem(name: "w", value: Self.format(rect.width)),
             URLQueryItem(name: "h", value: Self.format(rect.height)),
         ]
+        if let paperID { components.queryItems?.append(URLQueryItem(name: "paper", value: paperID.uuidString)) }
         return components.url ?? URL(string: "papertime://anchor")!
     }
 
@@ -49,6 +55,7 @@ public struct NoteAnchor: Hashable, Sendable, Codable {
         self.pageIndex = Int(page)
         self.rect = CGRect(x: x, y: y, width: width, height: height)
         self.quotedText = ""
+        self.paperID = items.first { $0.name == "paper" }?.value.flatMap(UUID.init(uuidString:))
     }
 
     /// What the link reads as in the note.

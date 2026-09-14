@@ -10,12 +10,28 @@ import SwiftUI
 /// the gutter between the two pages and covers no words. It has no button;
 /// it is a key, and Escape or a choice puts it away.
 struct ContentsPopup: View {
+    /// Where the list is put, which decides its shape.
+    ///
+    /// On the Mac it is a narrow column standing in the gutter of a spread.
+    /// A touch screen has no gutter to spare and the page is read at arm's
+    /// length, so there it is a wide, shallow panel along the foot of the
+    /// paper — the headings get the width, the paper keeps its top.
+    enum Placement { case gutter, footer }
+
     let link: ReaderLink
+    var placement: Placement = .gutter
     let dismiss: () -> Void
 
     @State private var items: [PaperContents.Item] = []
     /// Whether the pages are still being read for their headings.
     @State private var reading = true
+    /// How tall the headings are, so a panel along the foot of the page is as
+    /// short as its contents allow. A scroll view takes whatever height it is
+    /// offered, which in a footer is the rest of the screen.
+    @State private var listHeight: CGFloat = 0
+
+    /// The most of the page a footer list may cover.
+    private static let footerLimit: CGFloat = 300
 
     /// The size the list sets its words in; the pictures of formulas are
     /// scaled to match it.
@@ -46,7 +62,9 @@ struct ContentsPopup: View {
         let identity = ObjectIdentifier(document)
         Self.reader.async {
             let copy = url.flatMap { PDFDocument(url: $0) } ?? data.flatMap { PDFDocument(data: $0) }
-            let found = copy.map { PaperContents.items(in: $0, listSize: size) } ?? []
+            let found = Trace.time("contents: read the headings") {
+                copy.map { PaperContents.items(in: $0, listSize: size) } ?? []
+            }
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     if let url { Self.known[url] = found }
@@ -136,14 +154,23 @@ struct ContentsPopup: View {
                     }
                     .padding(.horizontal, 6)
                     .padding(.bottom, 8)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { listHeight = $0 }
                 }
                 .scrollIndicators(.never)
+                .frame(height: placement == .footer
+                    ? min(max(listHeight, 44), Self.footerLimit)
+                    : nil)
             }
         }
         // As wide as the gutter allows and no wider: in a book the list sits
         // between the pages, and it should sit there with room to spare.
-        .frame(width: link.bookGutter > 0 ? max(180, min(300, link.bookGutter - 40)) : 220)
-        .frame(maxHeight: 520)
+        // Along the foot of the page it takes the width instead, which is
+        // what lets a heading be read without wrapping.
+        .frame(width: placement == .gutter
+            ? (link.bookGutter > 0 ? max(180, min(300, link.bookGutter - 40)) : 220)
+            : nil)
+        .frame(maxWidth: placement == .gutter ? nil : .infinity)
+        .frame(maxHeight: placement == .gutter ? 520 : nil)
         .fixedSize(horizontal: false, vertical: true)
         .onAppear(perform: load)
         .liquidGlass(.floating, in: RoundedRectangle(cornerRadius: Corner.panel, style: .continuous))

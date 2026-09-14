@@ -10,9 +10,20 @@ struct SearchResult: Identifiable, Hashable {
         /// jumping to one of them.
         case showAll(String)
         case paper(UUID)
+        /// A place inside a paper: the word was in the text, not the title.
+        case passage(PaperTextIndex.Passage)
+        case note(String)
         case collection(UUID)
         case tag(UUID)
         case action(Action)
+    }
+
+    /// Why a paper is being suggested, when it is: the field is empty and
+    /// the palette is offering rather than finding.
+    struct Reason: Hashable {
+        var text: String
+        /// How far through the paper the reader is, for a bar; nil for none.
+        var progress: Double?
     }
 
     /// Commands the palette can surface without any query context.
@@ -48,6 +59,159 @@ struct SearchResult: Identifiable, Hashable {
     var subtitle: String
     var symbolName: String
     var score: Double
+    var reason: Reason? = nil
+}
+
+extension SearchResult {
+    /// A row for a word found inside a paper. The passage leads and the
+    /// paper follows it: the sentence is what was being looked for, and the
+    /// title is how you know which paper it is in.
+    init(hit: PaperTextIndex.Hit) {
+        let page = ReleaseNotes.string("\(hit.passage.pageIndex + 1)쪽",
+                                       "p. \(hit.passage.pageIndex + 1)")
+        let more = hit.count > 1
+            ? ReleaseNotes.string(" · \(hit.count)번", " · \(hit.count) matches") : ""
+        self.init(
+            kind: .passage(hit.passage),
+            title: hit.snippet,
+            subtitle: "\(hit.title) · \(page)\(more)",
+            symbolName: "text.magnifyingglass",
+            score: 0
+        )
+    }
+}
+
+/// Opens the paper a word was found in and sends the reader to the line.
+///
+/// The rectangle is worked out only now, by opening that one file: the index
+/// keeps the page and the range of characters, which is small, and turns them
+/// into a place on the page when somebody actually asks to go there.
+///
+/// Here rather than in the palette because two places ask for it now — the
+/// palette, and the list of search results, which groups the papers that say
+/// the word in their text under the ones that say it in their titles.
+@MainActor
+func openPassage(_ passage: PaperTextIndex.Passage, in model: LibraryModel, link: ReaderLink) {
+    guard let paper = model.paper(passage.paperID) else { return }
+    model.selectedPaperID = passage.paperID
+    Task {
+        let rect = await PaperTextIndex.shared.rect(for: passage, at: paper.documentURL)
+        link.anchorRequest = ReaderLink.Anchor(
+            pageIndex: passage.pageIndex, rect: rect ?? .zero, paperID: passage.paperID
+        )
+    }
+}
+
+/// What the palette offers when nothing has been typed: not a blank, but
+/// the papers the reader is most likely to want next, each with its reason.
+///
+/// The reasons are borrowed from how people actually come back to reading.
+/// An unfinished paper nags (Zeigarnik) and the last stretch pulls hardest
+/// (the goal gradient), so "Continue" leads, with how little is left. A
+/// paper read a few weeks ago is about to be forgotten (Ebbinghaus's curve)
+/// and a short revisit at that moment keeps it — so "Revisit" surfaces the
+/// ones with notes, once a week or so has passed. And an unread paper is
+/// more inviting when it is named as a neighbour of one just read
+/// (Loewenstein's information gap: the shared words show a known thing
+/// from a new side), so "Because you read …" says which words they share.
+/// New arrivals close the list. Three or four, never a wall.
+struct SearchSuggestions {
+    struct Group: Identifiable {
+        let title: String
+        let results: [SearchResult]
+        var id: String { title }
+    }
+
+    @MainActor
+    static func groups(in model: LibraryModel) -> [Group] {
+        let papers = model.papers.filter { $0.meta.parentID == nil }
+        let now = Date.now
+        var taken = Set<UUID>()
+        var groups: [Group] = []
+
+        func row(_ paper: LoadedPaper, _ reason: String, progress: Double? = nil, symbol: String = "doc.text") -> SearchResult {
+            taken.insert(paper.id)
+            return SearchResult(
+                kind: .paper(paper.id), title: paper.meta.displayTitle,
+                subtitle: paper.meta.displayAuthors, symbolName: symbol, score: 0,
+                reason: SearchResult.Reason(text: reason, progress: progress)
+            )
+        }
+        func ago(_ date: Date) -> String {
+            let days = Int(now.timeIntervalSince(date) / 86_400)
+            switch days {
+            case 0: return "today"
+            case 1: return "yesterday"
+            case 2..<14: return "\(days) days ago"
+            case 14..<60: return "\(days / 7) weeks ago"
+            default: return "\(days / 30) months ago"
+            }
+        }
+
+        // Continue: opened, not finished, most recent first.
+        let unfinished = papers.filter { paper in
+            let pages = paper.meta.file.pageCount
+            return paper.state.lastOpenedAt != nil && pages > 1
+                && paper.state.lastPageIndex > 0 && paper.state.lastPageIndex < pages - 1
+                && paper.state.readingStatus != .read
+        }
+        .sorted { ($0.state.lastOpenedAt ?? .distantPast) > ($1.state.lastOpenedAt ?? .distantPast) }
+        .prefix(3)
+        if !unfinished.isEmpty {
+            groups.append(Group(title: "Continue", results: unfinished.map { paper in
+                let pages = paper.meta.file.pageCount
+                let left = pages - 1 - paper.state.lastPageIndex
+                let progress = Double(paper.state.lastPageIndex + 1) / Double(pages)
+                let reason = "\(Int(progress * 100))% · \(left == 1 ? "1 page" : "\(left) pages") left · \(ago(paper.state.lastOpenedAt ?? now))"
+                return row(paper, reason, progress: progress, symbol: "book.pages")
+            }))
+        }
+
+        // Because you read …: the unread neighbours of the last paper read.
+        if let recent = papers.filter({ $0.state.lastOpenedAt != nil })
+            .max(by: { ($0.state.lastOpenedAt ?? .distantPast) < ($1.state.lastOpenedAt ?? .distantPast) }) {
+            let text: (LoadedPaper) -> String = { paper in
+                [paper.meta.displayTitle, paper.meta.csl.abstract ?? "", paper.meta.csl.containerTitle ?? ""]
+                    .joined(separator: "\n")
+                    + "\n" + model.notes.notes(forPaper: paper.id).map { $0.title + " " + $0.body }.joined(separator: "\n")
+            }
+            let unread = papers.filter { $0.state.lastOpenedAt == nil && !taken.contains($0.id) }
+            if !unread.isEmpty {
+                let index = Resonance.Index(notes: unread.map { (id: $0.id.uuidString, text: text($0)) })
+                let neighbours = index.matches(for: text(recent), limit: 3)
+                let rows = neighbours.compactMap { match -> SearchResult? in
+                    guard let id = UUID(uuidString: match.id), let paper = papers.first(where: { $0.id == id }) else { return nil }
+                    let short = recent.meta.displayTitle.split(separator: " ").prefix(4).joined(separator: " ")
+                    return row(paper, "shares \(match.shared.prefix(2).joined(separator: " · ")) with “\(short)…”", symbol: "waveform")
+                }
+                if !rows.isEmpty { groups.append(Group(title: "Because you read", results: rows)) }
+            }
+        }
+
+        // Revisit: read a week or more ago, with notes — before it fades.
+        let toRevisit = papers.filter { paper in
+            guard let opened = paper.state.lastOpenedAt, !taken.contains(paper.id) else { return false }
+            let days = now.timeIntervalSince(opened) / 86_400
+            return days >= 7 && days <= 90 && !model.notes.notes(forPaper: paper.id).isEmpty
+        }
+        .sorted { model.notes.notes(forPaper: $0.id).count > model.notes.notes(forPaper: $1.id).count }
+        .prefix(2)
+        if !toRevisit.isEmpty {
+            groups.append(Group(title: "Revisit", results: toRevisit.map { paper in
+                let count = model.notes.notes(forPaper: paper.id).count
+                return row(paper, "read \(ago(paper.state.lastOpenedAt ?? now)) · \(count == 1 ? "1 note" : "\(count) notes") — a look now keeps it", symbol: "arrow.counterclockwise")
+            }))
+        }
+
+        // New this week, unread.
+        let fresh = papers.filter { now.timeIntervalSince($0.meta.addedAt) < 7 * 86_400 && $0.state.lastOpenedAt == nil && !taken.contains($0.id) }
+            .sorted { $0.meta.addedAt > $1.meta.addedAt }
+            .prefix(2)
+        if !fresh.isEmpty {
+            groups.append(Group(title: "New this week", results: fresh.map { row($0, "added \(ago($0.meta.addedAt))", symbol: "sparkles") }))
+        }
+        return groups
+    }
 }
 
 /// Builds and ranks the palette's results for one query.
@@ -87,13 +251,30 @@ enum SearchIndex {
 
         for paper in model.papers {
             guard let score = paperScore(foldedQuery: foldedQuery, paper: paper) else { continue }
+            // The paper you had open this morning comes before the one you
+            // read in March: the same title match, and recency decides.
+            let recency = paper.state.lastOpenedAt.map { max(0, 0.15 - Date.now.timeIntervalSince($0) / (30 * 86_400) * 0.15) } ?? 0
             results.append(
                 SearchResult(
                     kind: .paper(paper.id),
                     title: paper.meta.displayTitle,
                     subtitle: paperSubtitle(paper),
                     symbolName: "doc.text",
-                    score: score
+                    score: score + recency
+                )
+            )
+        }
+
+        for note in model.notes.notes where !note.isEmpty {
+            let folded = TextNormalization.foldedTitle(note.displayTitle + " " + note.preview.prefix(200))
+            guard let score = matchScore(foldedQuery: foldedQuery, foldedText: folded) else { continue }
+            results.append(
+                SearchResult(
+                    kind: .note(note.id),
+                    title: note.displayTitle,
+                    subtitle: note.kind == .map ? "Map" : note.kind == .draft ? "Draft" : "Note",
+                    symbolName: note.kind == .map ? "map" : note.kind == .draft ? "doc.text" : "note.text",
+                    score: score - 0.05
                 )
             )
         }

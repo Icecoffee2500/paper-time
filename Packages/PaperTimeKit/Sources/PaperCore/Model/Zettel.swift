@@ -22,9 +22,18 @@ import Foundation
 /// See [[202609061204|Discretising continuous actions]].
 /// ```
 public struct Zettel: Identifiable, Hashable, Sendable {
+    /// What a note is for. Most are notes. A *map* is a note whose body
+    /// arranges other notes — links under headings — and is the home a
+    /// note has instead of a folder. A *draft* is a piece of writing being
+    /// assembled from notes and passages, on its way out of the box.
+    public enum Kind: String, Codable, Hashable, Sendable, CaseIterable {
+        case note, map, draft
+    }
+
     /// The identifier written on the note, and the name of its file: the
     /// minute it was made. It never changes, so links to it never break.
     public var id: String
+    public var kind: Kind
     public var title: String
     public var body: String
     /// The paper being read when it was written, if there was one. A note with
@@ -35,6 +44,7 @@ public struct Zettel: Identifiable, Hashable, Sendable {
 
     public init(
         id: String,
+        kind: Kind = .note,
         title: String = "",
         body: String = "",
         paperID: UUID? = nil,
@@ -42,6 +52,7 @@ public struct Zettel: Identifiable, Hashable, Sendable {
         modified: Date = .now
     ) {
         self.id = id
+        self.kind = kind
         self.title = title
         self.body = body
         self.paperID = paperID
@@ -56,6 +67,28 @@ public struct Zettel: Identifiable, Hashable, Sendable {
 
     /// A literature note is one written against a source.
     public var isLiterature: Bool { paperID != nil }
+
+    /// A map's body read as an outline: its headings, and under each the
+    /// notes it links to, in the order written. Links before the first
+    /// heading fall under an unnamed section.
+    public var outline: [MapSection] {
+        var sections: [MapSection] = [MapSection(title: "", entries: [])]
+        for line in body.split(separator: "\n", omittingEmptySubsequences: false) {
+            let text = String(line)
+            if text.hasPrefix("#") {
+                let title = text.drop { $0 == "#" }.trimmingCharacters(in: .whitespaces)
+                sections.append(MapSection(title: title, entries: []))
+                continue
+            }
+            let range = NSRange(text.startIndex..., in: text)
+            for match in Self.linkPattern.matches(in: text, range: range) {
+                guard let idRange = Range(match.range(at: 1), in: text) else { continue }
+                let label = Range(match.range(at: 2), in: text).map { String(text[$0]) } ?? ""
+                sections[sections.count - 1].entries.append(MapSection.Entry(id: String(text[idRange]), label: label))
+            }
+        }
+        return sections.filter { !$0.entries.isEmpty || !$0.title.isEmpty }
+    }
 
     // MARK: - What the text says
 
@@ -193,6 +226,22 @@ public struct Zettel: Identifiable, Hashable, Sendable {
     static let tagPattern = try! NSRegularExpression(
         pattern: #"(?:^|\s)#([\p{L}\p{N}][\p{L}\p{N}_/-]*)"#
     )
+}
+
+/// One heading of a map and the notes under it.
+public struct MapSection: Hashable, Sendable {
+    public struct Entry: Hashable, Sendable {
+        public let id: String
+        public let label: String
+    }
+
+    public var title: String
+    public var entries: [Entry]
+
+    public init(title: String, entries: [Entry]) {
+        self.title = title
+        self.entries = entries
+    }
 }
 
 private extension [String] {

@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Paper Time — 논문에만 집중하기 위한 앱</title>
+<meta name="description" content="논문을 읽고, 표시하고, 그 표시를 생각으로 바꾸기 위한 맥·아이패드·아이폰 앱. 수식은 LaTeX으로 복사되고, 구절은 주소째로 노트가 된다.">
+<meta property="og:title" content="Paper Time">
+<meta property="og:description" content="논문을 읽고, 표시하고, 그 표시를 생각으로 바꾸기 위한 앱.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📖</text></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ─────────────────────────── the first screen ─────────────────────────── -->
+<div class="screen">
+
+  <header class="hero">
+    <div>
+      <h1 class="wordmark">Paper <span class="t">Time</span></h1>
+      <p class="lede">논문에만 집중할 수 있게.<br>
+        나머지는 <b class="mark">앱이 알아서</b> 한다.</p>
+    </div>
+
+    <div class="actions">
+      <a class="btn btn-primary" id="get" href="https://github.com/Icecoffee2500/paper-time/releases">
+        <span>
+          <span class="label">받기</span><br>
+          <span class="sub">macOS</span>
+        </span>
+      </a>
+      <button class="btn btn-ghost" id="how">설치하는 법</button>
+      <button class="btn btn-ghost" id="older">이전 버전</button>
+    </div>
+  </header>
+
+  <main class="stage">
+    <div class="viewport">
+      <button class="arrow prev" id="prev" aria-label="이전 기능">‹</button>
+      <div class="track" id="track"></div>
+      <button class="arrow next" id="next" aria-label="다음 기능">›</button>
+    </div>
+    <nav class="rail" id="rail" aria-label="기능 목록"></nav>
+  </main>
+
+</div>
+
+<!-- ───────────────────────────── why it exists ──────────────────────────── -->
+<section class="why">
+  <p class="big">논문을 읽는 시간의 절반은<br>논문을 읽는 데 쓰이지 않는다.</p>
+
+  <p>파일 이름을 고치고, 어느 폴더에 넣었는지 기억해 내고, 표시해 둔 문장을 다시 찾고,
+    인용 키를 손으로 옮기고, 수식을 복사했다가 깨진 것을 다시 타이핑한다.
+    <b>그 모든 일이 이해와는 아무 상관이 없다.</b></p>
+
+  <p>Paper Time은 그 일들을 대신 하기 위해 만들었다. 남은 시간에 하라는 것은 하나뿐이다 —
+    <b class="mark">읽고, 이해하고, 그 이해를 남기는 것.</b> 표시는 문장 위에 남고,
+    문장은 주소를 가진 채 노트로 가고, 노트는 서로를 부르다가 어느 날 초고가 된다.</p>
+
+  <div class="facts">
+    <div class="fact">
+      <h3>파일이 진실</h3>
+      <p>라이브러리는 폴더 하나다. 논문은 평범한 PDF, 노트는 Markdown.
+        앱을 지워도 읽던 것은 그대로 남는다.</p>
+    </div>
+    <div class="fact">
+      <h3>표시는 PDF 안에</h3>
+      <p>하이라이트·밑줄·연필 자국이 PDF 주석으로 들어간다.
+        Preview에서도, Zotero에서도, 지도교수의 아이패드에서도 보인다.</p>
+    </div>
+    <div class="fact">
+      <h3>기기 셋, 폴더 하나</h3>
+      <p>맥·아이패드·아이폰이 같은 폴더를 본다.
+        iCloud Drive면 충분하고, 계정도 서버도 없다.</p>
+    </div>
+    <div class="fact">
+      <h3>클라우드 LLM 없음</h3>
+      <p>온디바이스 모델만 쓴다. 읽고 있는 논문이 어디로도 올라가지 않는다.</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <span>Paper Time · 알파. 아직 만드는 중이고, 고장 나면 고친다.</span>
+  <span>소스: <a id="repo-link" href="https://github.com/Icecoffee2500/paper-time">Icecoffee2500/paper-time</a></span>
+</footer>
+
+<!-- ────────────────────────────── how to install ────────────────────────── -->
+<dialog id="how-dialog">
+  <div class="sheet">
+    <button class="sheet-close" aria-label="닫기">✕</button>
+    <h2>설치하는 법</h2>
+    <p class="sub">세 걸음이고, 두 번째와 세 번째는 <b>처음 한 번만</b> 하면 된다.<br>
+      무료 개발자 계정으로 만든 앱이라 Apple의 공증(notarization)을 받지 않았다.</p>
+
+    <div class="step">
+      <div class="no">1</div>
+      <div class="body">
+        <h3>DMG를 열고 Applications로 끌어 놓는다</h3>
+        <p>받은 파일을 두 번 누르면 이 창이 열린다. Paper Time을 Applications 위로 끌면 설치가 끝난다.</p>
+        <img src="img/install-1-dmg.jpg" alt="Paper Time 디스크 이미지 창 — 앱 아이콘과 Applications 폴더" loading="lazy">
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="no">2</div>
+      <div class="body">
+        <h3>처음 열면 macOS가 막는다 — 정상이다</h3>
+        <p>“Apple은 악성 코드가 없음을 확인할 수 없습니다”라고 나온다.
+          Apple에 돈을 내지 않은 앱은 전부 이렇게 나온다. <b>완료</b>를 누르고 3번으로 간다.</p>
+        <img class="shot-sm" src="img/install-2-blocked.jpg" alt="‘Paper Time’을 열지 않음 — macOS의 차단 알림" loading="lazy">
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="no">3</div>
+      <div class="body">
+        <h3>시스템 설정 → 개인정보 보호 및 보안 → <b>그래도 열기</b></h3>
+        <p>맨 아래 <b>보안</b> 항목에 방금 막힌 앱이 적혀 있다. 오른쪽 <b>그래도 열기</b>를 누르고,
+          이어서 나오는 창에서 한 번 더 <b>그래도 열기</b>를 누르면 끝이다.
+          다음부터는 평범하게 두 번 눌러 열린다.</p>
+        <img src="img/install-3-allow.jpg" alt="시스템 설정의 보안 항목 — Mac을 보호하기 위해 Paper Time을 차단했습니다, 그래도 열기 단추" loading="lazy">
+        <img class="shot-sm" style="margin-top:10px" src="img/install-4-confirm.jpg" alt="‘Paper Time’을 열겠습니까? — 그래도 열기" loading="lazy">
+      </div>
+    </div>
+
+    <p class="hint" style="margin-top:16px">
+      macOS 26 이상 · Apple Silicon. 아이패드·아이폰 앱은 아직 App Store에 없다 —
+      소스를 받아 Xcode에서 자기 기기로 직접 빌드하면 무료 계정으로도 쓸 수 있다.
+    </p>
+  </div>
+</dialog>
+
+<!-- ─────────────────────────────── versions ─────────────────────────────── -->
+<dialog id="versions-dialog">
+  <div class="sheet">
+    <button class="sheet-close" aria-label="닫기">✕</button>
+    <h2>버전</h2>
+    <p class="sub">닫힌 버전마다 디스크 이미지 하나. 옛 버전도 계속 받을 수 있다.</p>
+    <div id="versions-list"><p class="hint">불러오는 중…</p></div>
+  </div>
+</dialog>
+
+<script src="demos.js"></script>
+</body>
+</html>

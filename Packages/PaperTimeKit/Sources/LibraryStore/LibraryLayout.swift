@@ -41,6 +41,9 @@ public enum LibraryLayout {
             .appending(path: notesDirectoryName, directoryHint: .isDirectory)
     }
     public static let inkDirectoryName = "ink"
+    /// One small file per device with the marks it made — the fast path
+    /// between devices, beside the PDF that is the slow, durable one.
+    public static let marksDirectoryName = "marks"
     public static let trashDirectoryName = "Trash"
 
     public static func supportDirectoryURL(inLibrary root: URL) -> URL {
@@ -133,6 +136,14 @@ public struct PaperFolder: Hashable, Sendable {
 
     public func inkURL(pageIndex: Int) -> URL {
         inkDirectoryURL.appending(path: LibraryLayout.inkFileName(pageIndex: pageIndex))
+    }
+
+    public var marksDirectoryURL: URL {
+        url.appending(path: LibraryLayout.marksDirectoryName, directoryHint: .isDirectory)
+    }
+
+    public func marksURL(device: String) -> URL {
+        marksDirectoryURL.appending(path: "\(device).json")
     }
 }
 

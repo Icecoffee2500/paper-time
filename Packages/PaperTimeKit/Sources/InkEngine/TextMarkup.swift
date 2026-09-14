@@ -19,6 +19,21 @@ public enum MarkupColor: String, Codable, Hashable, Sendable, CaseIterable {
         }
     }
 
+    /// The mark colour closest to an ink colour — so a green marker stroke
+    /// straightened into a highlight stays green. Grey and black ink, which
+    /// are near none of them, take the default.
+    public static func nearest(red: CGFloat, green: CGFloat, blue: CGFloat) -> MarkupColor {
+        let brightest = max(red, green, blue), darkest = min(red, green, blue)
+        guard brightest - darkest > 0.18 else { return .yellow }
+        return allCases.min { lhs, rhs in
+            func distance(_ c: MarkupColor) -> CGFloat {
+                let p = c.components
+                return (p.red - red) * (p.red - red) + (p.green - green) * (p.green - green) + (p.blue - blue) * (p.blue - blue)
+            }
+            return distance(lhs) < distance(rhs)
+        } ?? .yellow
+    }
+
     public var platformColor: PlatformColor {
         let parts = components
         return PlatformColor(red: parts.red, green: parts.green, blue: parts.blue, alpha: 1)

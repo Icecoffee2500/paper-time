@@ -51,13 +51,25 @@ public final class DocumentSession {
     private let store: LibraryStore
     private var drawings: [Int: PKDrawing] = [:]
     private var pagesNeedingInkRewrite: Set<Int> = []
-    private var markupsSinceLastFlush: [MarkupDescriptor] = []
-    private var removalsSinceLastFlush: [UUID] = []
+    /// The marks the PDF file itself holds — ours once written, and any
+    /// made in another app, which have no journal and live only there.
+    private var fileMarks: [MarkupDescriptor] = []
+    /// Every device's word on every mark, this device's included.
+    private var journals: [String: MarkJournal] = [:]
+    private let deviceID = DeviceIdentity.current
+    private var journalSaveTask: Task<Void, Never>?
     private var flushTask: Task<Void, Never>?
     private var fileFingerprint: FileFingerprint?
+    private var inkFingerprints: [Int: FileFingerprint] = [:]
+    private var watcher: DocumentWatcher?
+    private var pollTask: Task<Void, Never>?
+    private var reloadTask: Task<Void, Never>?
+    private var changedWhileSaving = false
 
     /// How long the app waits after the last change before rewriting the PDF.
-    private let flushDelay: Duration = .seconds(4)
+    /// Short, because another device is waiting to see it: iCloud adds its
+    /// own seconds on top.
+    private let flushDelay: Duration = .milliseconds(1500)
 
     struct FileFingerprint: Equatable {
         var size: Int64
@@ -85,7 +97,8 @@ public final class DocumentSession {
         self.document = document
         self.store = store
         self.fileFingerprint = FileFingerprint(url: paper.documentURL)
-        self.markups = markups ?? TextMarkupWriter.descriptors(in: document)
+        self.fileMarks = markups ?? TextMarkupWriter.descriptors(in: document)
+        self.markups = fileMarks
         self.hasForeignInk = hasForeignInk ?? Self.scanForForeignInk(in: document)
         sortMarkups()
     }
@@ -93,17 +106,20 @@ public final class DocumentSession {
     /// Fills in the marks already in the file, just after opening.
     private func readBackExistingMarks() {
         let box = DocumentBox(document: document)
+        let folder = paper.folder
         Task { [weak self] in
             let found = await Task.detached(priority: .utility) { () -> ReadBack in
                 ReadBack(
                     markups: TextMarkupWriter.descriptors(in: box.document),
-                    hasForeignInk: Self.scanForForeignInk(in: box.document)
+                    hasForeignInk: Self.scanForForeignInk(in: box.document),
+                    journals: MarkJournal.load(from: folder)
                 )
             }.value
-            guard let self, markups.isEmpty else { return }
-            markups = found.markups
+            guard let self else { return }
+            fileMarks = found.markups ?? []
             hasForeignInk = found.hasForeignInk
-            sortMarkups()
+            for (device, journal) in found.journals { journals[device] = journal }
+            reconcile()
         }
     }
 
@@ -114,8 +130,9 @@ public final class DocumentSession {
     }
 
     private struct ReadBack: @unchecked Sendable {
-        var markups: [MarkupDescriptor]
+        var markups: [MarkupDescriptor]?
         var hasForeignInk: Bool
+        var journals: [String: MarkJournal]
     }
 
     nonisolated static func scanForForeignInk(in document: PDFDocument) -> Bool {
@@ -152,8 +169,42 @@ public final class DocumentSession {
             hasForeignInk: prepared.hasForeignInk
         )
         await session.loadDrawings()
+        await session.adoptInkFromFile()
         session.readBackExistingMarks()
+        session.startWatching()
         return session
+    }
+
+    /// The sidecar is where a page's ink lives; the PDF's copy is written
+    /// from it. A page with ink in the file and no sidecar — from before
+    /// there were sidecars, or written wrong by an earlier version — gets
+    /// one made from the file, so every device draws, erases and syncs the
+    /// same strokes. Pages written wrong are rewritten on the next save.
+    private func adoptInkFromFile() async {
+        var rewrite: Set<Int> = []
+        for index in 0..<document.pageCount {
+            guard let page = document.page(at: index) else { continue }
+            let owned = page.annotations.filter { $0.type == "Ink" && InkConverter.isOwned($0) }
+            guard !owned.isEmpty else { continue }
+            if drawings[index] == nil {
+                let drawing = InkConverter.drawing(fromOwnedInkOn: page)
+                guard !drawing.strokes.isEmpty else { continue }
+                drawings[index] = drawing
+                let data = drawing.dataRepresentation()
+                let folder = paper.folder
+                try? await store.saveInk(data, pageIndex: index, in: folder)
+                inkFingerprints[index] = FileFingerprint(url: folder.inkURL(pageIndex: index))
+            }
+            if owned.contains(where: InkConverter.isMisplaced), let drawing = drawings[index] {
+                InkConverter.apply(drawing, to: page)
+                rewrite.insert(index)
+            }
+        }
+        guard !rewrite.isEmpty else { return }
+        pagesNeedingInkRewrite.formUnion(rewrite)
+        saveState = .pending
+        revision += 1
+        scheduleFlush()
     }
 
     /// A parsed document on its way from a background task to the main actor.
@@ -180,12 +231,13 @@ public final class DocumentSession {
         let folder = paper.folder
         let data = drawing.dataRepresentation()
         let isEmpty = drawing.strokes.isEmpty
-        Task { [store] in
+        Task { [store, weak self] in
             if isEmpty {
                 try? await store.removeInk(pageIndex: index, in: folder)
             } else {
                 try? await store.saveInk(data, pageIndex: index, in: folder)
             }
+            self?.inkFingerprints[index] = FileFingerprint(url: folder.inkURL(pageIndex: index))
         }
         scheduleFlush()
     }
@@ -197,7 +249,161 @@ public final class DocumentSession {
                   let drawing = try? PKDrawing(data: data)
             else { continue }
             drawings[index] = drawing
+            inkFingerprints[index] = FileFingerprint(url: paper.folder.inkURL(pageIndex: index))
         }
+    }
+
+    // MARK: - Following the file
+
+    /// Starts listening for the file changing under the reader.
+    func startWatching() {
+        guard watcher == nil else { return }
+        watcher = DocumentWatcher(document: paper.documentURL, record: paper.folder.url) { [weak self] in
+            Task { @MainActor [weak self] in await self?.fileMayHaveChanged() }
+        }
+        // iCloud does not always announce what it brought, and does not
+        // bring what nobody asked for. Every few seconds: ask for whatever
+        // in the record is still in the cloud, and look at what is here.
+        // A look costs a handful of stats when nothing changed.
+        pollTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(3))
+                guard let self else { return }
+                let record = paper.folder.url
+                await Task.detached(priority: .utility) { FileOperations.requestPendingDownloads(in: record) }.value
+                await fileMayHaveChanged()
+            }
+        }
+    }
+
+    private func fileMayHaveChanged() async {
+        if saveState == .saving {
+            // Our own write; or theirs, landing during ours. Look again after.
+            changedWhileSaving = true
+            return
+        }
+        reloadTask?.cancel()
+        reloadTask = Task { [weak self] in await self?.reloadFromDisk() }
+    }
+
+    /// Takes in what another device wrote, without disturbing what this one
+    /// is doing. The journals are re-read whole — they are small — and the
+    /// PDF only when its fingerprint moved; the page is then reconciled with
+    /// the lot.
+    public func reloadFromDisk() async {
+        await mergeInkFromDisk()
+        let url = paper.documentURL
+        let folder = paper.folder
+        let now = FileFingerprint(url: url)
+        let pdfChanged = now != nil && now != fileFingerprint
+        if pdfChanged { FileOperations.requestDownload(of: url) }
+        let found = await Task.detached(priority: .utility) { () -> ReadBack in
+            var marks: [MarkupDescriptor]?
+            var foreign = false
+            if pdfChanged, let data = try? FileOperations.read(contentsOf: url),
+               let document = PDFDocument(data: data) {
+                marks = TextMarkupWriter.descriptors(in: document)
+                foreign = Self.scanForForeignInk(in: document)
+            }
+            return ReadBack(markups: marks, hasForeignInk: foreign, journals: MarkJournal.load(from: folder))
+        }.value
+        guard !Task.isCancelled else { return }
+        if let marks = found.markups {
+            fileMarks = marks
+            fileFingerprint = now
+            hasForeignInk = found.hasForeignInk
+        }
+        // Other devices' journals from disk. Our own is ours; the disk copy
+        // is only ever behind it.
+        for (device, journal) in found.journals where device != deviceID {
+            if (journals[device]?.updated ?? .distantPast) <= journal.updated { journals[device] = journal }
+        }
+        reconcile()
+    }
+
+    /// The marks the page should show: what the file holds, overruled mark
+    /// by mark by the newest journal entry — a device's addition, change or
+    /// removal. The page is brought to that, and only the differences touch it.
+    private func reconcile() {
+        var desired: [UUID: MarkupDescriptor] = [:]
+        for mark in fileMarks { desired[mark.id] = mark }
+        for (id, entry) in MarkJournal.merged(journals) {
+            if let descriptor = entry.descriptor { desired[id] = descriptor } else { desired[id] = nil }
+        }
+        var current: [UUID: MarkupDescriptor] = [:]
+        for mark in markups { current[mark.id] = mark }
+        var changed = false
+        for (id, descriptor) in desired where current[id] != descriptor {
+            if let page = document.page(at: descriptor.pageIndex) {
+                TextMarkupWriter.remove(id: id, from: page)
+                TextMarkupWriter.apply(descriptor, to: page)
+            }
+            changed = true
+        }
+        for (id, mark) in current where desired[id] == nil {
+            if let page = document.page(at: mark.pageIndex) { TextMarkupWriter.remove(id: id, from: page) }
+            changed = true
+        }
+        guard changed else { return }
+        markups = Array(desired.values)
+        sortMarkups()
+        revision += 1
+    }
+
+    // MARK: - The journal
+
+    /// Writes a mark into this device's journal and saves it. Every change
+    /// to a mark goes through here; the folder carries it to the others.
+    private func record(_ descriptor: MarkupDescriptor) {
+        var own = journals[deviceID] ?? MarkJournal()
+        own.record(descriptor)
+        journals[deviceID] = own
+        publishJournal(own)
+    }
+
+    private func recordRemoval(of id: UUID) {
+        var own = journals[deviceID] ?? MarkJournal()
+        own.recordRemoval(of: id)
+        journals[deviceID] = own
+        publishJournal(own)
+    }
+
+    private func publishJournal(_ journal: MarkJournal) {
+        let folder = paper.folder
+        journalSaveTask?.cancel()
+        journalSaveTask = Task.detached(priority: .utility) {
+            try? await Task.sleep(for: .milliseconds(200))
+            guard !Task.isCancelled else { return }
+            try? journal.save(to: folder)
+        }
+    }
+
+    /// Ink sidecars that changed on disk replace the pages' drawings — except
+    /// pages drawn on here and not yet written, which are this device's to keep.
+    private func mergeInkFromDisk() async {
+        let folder = paper.folder
+        let onDisk = Set(await store.inkPageIndices(in: folder))
+        var changedPages: [Int] = []
+        for index in onDisk.union(inkFingerprints.keys) where !pagesNeedingInkRewrite.contains(index) {
+            let url = folder.inkURL(pageIndex: index)
+            let now = onDisk.contains(index) ? FileFingerprint(url: url) : nil
+            guard now != inkFingerprints[index] else { continue }
+            inkFingerprints[index] = now
+            var drawing = PKDrawing()
+            if now != nil, let data = try? await store.loadInk(pageIndex: index, in: folder),
+               let loaded = try? PKDrawing(data: data) {
+                drawing = loaded
+            }
+            guard drawing != drawings[index] ?? PKDrawing() else { continue }
+            drawings[index] = drawing
+            if let page = document.page(at: index) { InkConverter.apply(drawing, to: page) }
+            changedPages.append(index)
+        }
+        guard !changedPages.isEmpty else { return }
+        NotificationCenter.default.post(
+            name: .paperTimeInkChanged, object: self, userInfo: ["pages": changedPages]
+        )
+        revision += 1
     }
 
     // MARK: - Text markup
@@ -222,12 +428,12 @@ public final class DocumentSession {
             guard let page = document.page(at: descriptor.pageIndex) else { continue }
             TextMarkupWriter.apply(descriptor, to: page)
             markups.append(descriptor)
-            markupsSinceLastFlush.append(descriptor)
+            record(descriptor)
         }
         sortMarkups()
         revision += 1
         saveState = .pending
-        scheduleFlush(delay: .seconds(2))
+        scheduleFlush(delay: .seconds(1))
         return descriptors
     }
 
@@ -260,12 +466,12 @@ public final class DocumentSession {
             guard let page = document.page(at: descriptor.pageIndex) else { continue }
             TextMarkupWriter.apply(descriptor, to: page)
             markups.append(descriptor)
-            markupsSinceLastFlush.append(descriptor)
+            record(descriptor)
         }
         sortMarkups()
         revision += 1
         saveState = .pending
-        scheduleFlush(delay: .seconds(2))
+        scheduleFlush(delay: .seconds(1))
     }
 
     /// Takes several marks off the page at once.
@@ -286,10 +492,10 @@ public final class DocumentSession {
             TextMarkupWriter.remove(id: id, from: page)
             TextMarkupWriter.apply(markups[index], to: page)
         }
-        markupsSinceLastFlush.append(markups[index])
+        record(markups[index])
         revision += 1
         saveState = .pending
-        scheduleFlush(delay: .seconds(2))
+        scheduleFlush(delay: .seconds(1))
     }
 
     public func removeMarkup(id: UUID) {
@@ -298,11 +504,10 @@ public final class DocumentSession {
             TextMarkupWriter.remove(id: id, from: page)
         }
         markups.removeAll { $0.id == id }
-        markupsSinceLastFlush.removeAll { $0.id == id }
-        removalsSinceLastFlush.append(id)
+        recordRemoval(of: id)
         revision += 1
         saveState = .pending
-        scheduleFlush(delay: .seconds(2))
+        scheduleFlush(delay: .seconds(1))
     }
 
     public func updateComment(_ comment: String, forMarkup id: UUID) {
@@ -312,10 +517,10 @@ public final class DocumentSession {
             TextMarkupWriter.remove(id: id, from: page)
             TextMarkupWriter.apply(markups[index], to: page)
         }
-        markupsSinceLastFlush.append(markups[index])
+        record(markups[index])
         revision += 1
         saveState = .pending
-        scheduleFlush(delay: .seconds(2))
+        scheduleFlush(delay: .seconds(1))
     }
 
     // MARK: - Saving
@@ -347,20 +552,32 @@ public final class DocumentSession {
         saveState = .saving
 
         let url = paper.documentURL
-        let additions = markupsSinceLastFlush
-        let removals = removalsSinceLastFlush
+        // The file is written to agree with every journal, not just with
+        // what changed here: whichever device writes, the PDF ends up
+        // holding what all of them have said.
+        var additions: [MarkupDescriptor] = []
+        var removals: [UUID] = []
+        for (id, entry) in MarkJournal.merged(journals) {
+            if let descriptor = entry.descriptor { additions.append(descriptor) } else { removals.append(id) }
+        }
         var inks: [Int: Data] = [:]
+        for (index, drawing) in drawings where !drawing.strokes.isEmpty {
+            inks[index] = drawing.dataRepresentation()
+        }
         for index in pagesNeedingInkRewrite {
             inks[index] = (drawings[index] ?? PKDrawing()).dataRepresentation()
         }
         let baseline = fileFingerprint
+        let toApply = additions
+        let toRemove = removals
+        let inkToWrite = inks
 
         let outcome = await Task.detached(priority: .utility) {
             Self.write(
                 to: url,
-                additions: additions,
-                removals: removals,
-                ink: inks
+                additions: toApply,
+                removals: toRemove,
+                ink: inkToWrite
             )
         }.value
 
@@ -371,12 +588,15 @@ public final class DocumentSession {
             // their marks and ours both survive.
             _ = baseline
             fileFingerprint = FileFingerprint(url: url)
-            markupsSinceLastFlush.removeAll()
-            removalsSinceLastFlush.removeAll()
+            fileMarks = additions + fileMarks.filter { mark in !additions.contains { $0.id == mark.id } && !removals.contains(mark.id) }
             pagesNeedingInkRewrite.removeAll()
             saveState = .idle
         case let .failure(error):
             saveState = .failed(error.localizedDescription)
+        }
+        if changedWhileSaving {
+            changedWhileSaving = false
+            await fileMayHaveChanged()
         }
     }
 
@@ -458,4 +678,7 @@ public extension Notification.Name {
     /// Posted by a `DocumentSession` whenever a mark is added, removed or
     /// recoloured on its pages.
     static let paperTimeMarksChanged = Notification.Name("PaperTimeMarksChanged")
+    /// Posted when another device's ink arrived for pages of the open paper;
+    /// `userInfo["pages"]` lists them. The canvases showing them redraw.
+    public static let paperTimeInkChanged = Notification.Name("PaperTimeInkChanged")
 }

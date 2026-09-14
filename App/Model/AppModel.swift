@@ -31,6 +31,12 @@ public final class AppModel {
     /// `.all` is not one of the states it understands — starting there left
     /// every later change to the binding being ignored.
     public var columnVisibility = NavigationSplitViewVisibility.doubleColumn
+    /// Which column an iPhone shows. Tapping a shelf pushes the list; tapping
+    /// a paper pushes the page. The system moves it back on its own.
+    public var compactColumn = NavigationSplitViewColumn.sidebar
+    /// The iPad's source list: not a column, which the screen has no room
+    /// for, but a panel summoned over the window, the way Spotlight comes.
+    public var showsScopePanel = false
     #if os(macOS)
     public var showsInspector = true
     #else
@@ -167,6 +173,23 @@ public final class AppModel {
     public func setFocusMode(_ isOn: Bool) {
         guard isOn != isFocusMode else { return }
         withAnimation(AppModel.paneMotion) {
+            #if os(iOS)
+            // The split view owns the columns here; focus is its detail-only
+            // state, and leaving focus gives back the columns it had.
+            if isOn {
+                restoredColumnVisibility = columnVisibility
+                restoredInspector = showsInspector
+                columnVisibility = .detailOnly
+                showsInspector = false
+                isFocusMode = true
+            } else {
+                columnVisibility = restoredColumnVisibility == .detailOnly ? .doubleColumn : restoredColumnVisibility
+                showsInspector = restoredInspector
+                showsFloatingList = false
+                isFocusMode = false
+            }
+            return
+            #endif
             if isOn {
                 restoredColumnVisibility = columnVisibility
                 restoredInspector = showsInspector
@@ -188,6 +211,16 @@ public final class AppModel {
         }
     }
 
+    /// Says again what focus mode already said. The split view on the iPad
+    /// settles its columns a moment after it appears, over whatever was set
+    /// before it did; a book opened at launch was left with its list showing.
+    public func reassertFocusMode() {
+        #if os(iOS)
+        guard isFocusMode else { return }
+        withAnimation(AppModel.paneMotion) { columnVisibility = .detailOnly }
+        #endif
+    }
+
     /// Summons the paper's table of contents over the page, or puts it away.
     public func toggleFloatingList() {
         withAnimation(AppModel.paneMotion) {
@@ -206,12 +239,23 @@ public final class AppModel {
     /// Hides the scope sidebar only. The paper list stays put: collapsing both
     /// columns at once is a different, rarer intent than "give me more room".
     public func toggleSidebar() {
-        withAnimation(AppModel.paneMotion) { sidebarHidden.toggle() }
+        withAnimation(AppModel.paneMotion) {
+            #if os(iOS)
+            showsScopePanel.toggle()
+            #else
+            sidebarHidden.toggle()
+            #endif
+        }
     }
 
     /// Hides the paper list, leaving the source list and the reader.
     public func togglePaperList() {
         withAnimation(AppModel.paneMotion) {
+            #if os(iOS)
+            columnVisibility = columnVisibility == .detailOnly ? .doubleColumn : .detailOnly
+            if columnVisibility != .detailOnly { isFocusMode = false }
+            return
+            #endif
             showsPaperList.toggle()
             // Something has to be left to look at.
             if !showsPaperList, !showsReader, !isSidebarVisible { showsReader = true }
@@ -249,7 +293,7 @@ public final class AppModel {
         #if os(macOS)
         !sidebarHidden
         #else
-        columnVisibility != .detailOnly
+        showsScopePanel
         #endif
     }
 
@@ -262,9 +306,8 @@ public final class AppModel {
         // For driving a simulator: `PAPERTIME_LIBRARY=<folder>` opens that
         // folder as the library, and `PAPERTIME_SKIP_WELCOME=1` keeps the
         // introduction down.
-        let environment = ProcessInfo.processInfo.environment
-        if environment["PAPERTIME_SKIP_WELCOME"] != nil { markReleaseNotesSeen() }
-        if let path = environment["PAPERTIME_LIBRARY"] {
+        if Boot.isSet("PAPERTIME_SKIP_WELCOME") { markReleaseNotesSeen() }
+        if let path = Boot.setting("PAPERTIME_LIBRARY") {
             // A relative path is inside the app's own Documents, which on a
             // simulator moves with every install.
             let base = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: "/")
@@ -304,6 +347,9 @@ public final class AppModel {
         await open(location)
     }
 
+    /// Shows the folder picker; the library stays until a folder is chosen.
+    public var isChoosingLibraryFolder = false
+
     public func forgetLibrary() {
         preference.clear()
         library = nil
@@ -320,13 +366,30 @@ public final class AppModel {
             await model.refresh()
             // Driving a simulator: take in the folder's loose PDFs and open
             // the first paper, since nothing there can be tapped from here.
-            let environment = ProcessInfo.processInfo.environment
-            if environment["PAPERTIME_ADOPT_LOOSE"] != nil {
+            if Boot.isSet("PAPERTIME_ADOPT_LOOSE") {
                 _ = await model.adoptLooseDocuments()
                 await model.refresh()
             }
-            if environment["PAPERTIME_OPEN_FIRST"] != nil, let first = model.visiblePapers.first {
+            if Boot.isSet("PAPERTIME_OPEN_FIRST"), let first = model.visiblePapers.first {
                 model.selection = [first.id]
+            }
+            // A particular paper rather than whichever is first: the pictures
+            // on the landing page want the one with marks on it.
+            if let wanted = Boot.setting("PAPERTIME_OPEN_TITLE"),
+               let paper = model.visiblePapers.first(where: {
+                   $0.meta.displayTitle.localizedCaseInsensitiveContains(wanted)
+               }) {
+                model.selection = [paper.id]
+            }
+            if Boot.setting("PAPERTIME_SCOPE") == "notes" { model.scope = .notes }
+            // The results of a search, without anybody having to type one.
+            if let query = Boot.setting("PAPERTIME_SEARCH_RESULTS") {
+                model.showSearchResults(for: query)
+            }
+            if let noteID = Boot.setting("PAPERTIME_OPEN_NOTE") { model.notes.openNoteID = noteID }
+            if Boot.isSet("PAPERTIME_SHOW_SEARCH") {
+                try? await Task.sleep(for: .seconds(2))
+                showsSearchPalette = true
             }
         } catch {
             phase = .failed(error.localizedDescription)

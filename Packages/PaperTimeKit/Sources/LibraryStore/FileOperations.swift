@@ -15,9 +15,12 @@ public enum FileOperations {
         case notADirectory(URL)
         case documentMissing(URL)
         case writeVerificationFailed(URL)
+        case stillDownloading(URL)
 
         public var errorDescription: String? {
             switch self {
+            case .stillDownloading:
+                "This library is still arriving from iCloud. Give it a moment and try again."
             case let .coordinationFailed(url, error):
                 "Could not access \(url.lastPathComponent): \(error.localizedDescription)"
             case let .notADirectory(url):
@@ -118,6 +121,71 @@ public enum FileOperations {
         }
     }
 
+    /// Asks iCloud for everything under a directory that is still only a
+    /// placeholder, and waits — up to `timeout` — for the one file named.
+    ///
+    /// A library in iCloud Drive arrives on a new device as placeholders:
+    /// each file is a hidden `.name.icloud` stub until something asks for it,
+    /// and nothing asks for a hidden folder of records on its own. Without
+    /// this the app saw no manifest, made a fresh empty one, and the iPad
+    /// showed a library of nothing beside a Mac showing sixty papers.
+    public static func ensureDownloaded(directory: URL, waitingFor file: URL, timeout: TimeInterval = 20) {
+        let manager = FileManager.default
+        guard (try? directory.resourceValues(forKeys: [.isUbiquitousItemKey]).isUbiquitousItem) == true
+            || hasPlaceholders(in: directory)
+        else { return }
+        func request() {
+            guard let items = manager.enumerator(at: directory, includingPropertiesForKeys: [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey], options: []) else { return }
+            for case let url as URL in items {
+                if url.lastPathComponent.hasSuffix(".icloud") {
+                    // The stub names the file: `.name.icloud` → `name`.
+                    let real = url.deletingLastPathComponent()
+                        .appending(path: String(url.lastPathComponent.dropFirst().dropLast(".icloud".count)))
+                    try? manager.startDownloadingUbiquitousItem(at: real)
+                } else if let values = try? url.resourceValues(forKeys: [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey]),
+                          values.isUbiquitousItem == true, values.ubiquitousItemDownloadingStatus == .notDownloaded {
+                    try? manager.startDownloadingUbiquitousItem(at: url)
+                }
+            }
+            try? manager.startDownloadingUbiquitousItem(at: file)
+        }
+        request()
+        let deadline = Date.now.addingTimeInterval(timeout)
+        while Date.now < deadline {
+            if manager.fileExists(atPath: file.path(percentEncoded: false)), isMaterialised(file) { return }
+            Thread.sleep(forTimeInterval: 0.4)
+            request()
+        }
+    }
+
+    /// Asks iCloud for whatever under a folder is not on this device yet, and
+    /// returns at once. Cheap on a small folder; what an open paper's record
+    /// needs every few seconds.
+    public static func requestPendingDownloads(in directory: URL) {
+        let manager = FileManager.default
+        guard let items = manager.enumerator(
+            at: directory,
+            includingPropertiesForKeys: [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey],
+            options: []
+        ) else { return }
+        for case let url as URL in items {
+            if url.lastPathComponent.hasSuffix(".icloud") {
+                let real = url.deletingLastPathComponent()
+                    .appending(path: String(url.lastPathComponent.dropFirst().dropLast(".icloud".count)))
+                try? manager.startDownloadingUbiquitousItem(at: real)
+            } else if let values = try? url.resourceValues(forKeys: [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey]),
+                      values.isUbiquitousItem == true, values.ubiquitousItemDownloadingStatus == .notDownloaded {
+                try? manager.startDownloadingUbiquitousItem(at: url)
+            }
+        }
+    }
+
+    /// Whether a directory holds iCloud stubs for files not yet on this device.
+    public static func hasPlaceholders(in directory: URL) -> Bool {
+        let items = (try? FileManager.default.contentsOfDirectory(atPath: directory.path(percentEncoded: false))) ?? []
+        return items.contains { $0.hasSuffix(".icloud") }
+    }
+
     /// Whether the file's contents are on this device right now.
     public static func isMaterialised(_ url: URL) -> Bool {
         let keys: Set<URLResourceKey> = [
@@ -158,13 +226,22 @@ public enum FileOperations {
     }
 
     public static func subdirectories(of url: URL) throws -> [URL] {
-        let contents = try FileManager.default.contentsOfDirectory(
-            at: url,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles, .skipsPackageDescendants]
-        )
-        return contents
+        try visibleContents(of: url, keys: [.isDirectoryKey])
             .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
+    }
+
+    /// The entries of a directory whose names do not start with a dot.
+    ///
+    /// Deliberately not `.skipsHiddenFiles`: iCloud Drive on iOS marks
+    /// everything under a dot-folder as hidden, so listing `.papertime/papers`
+    /// with that option returned nothing — sixty-two records on the Mac, an
+    /// empty library on the iPad, with every file present and readable.
+    public static func visibleContents(of url: URL, keys: [URLResourceKey]? = nil) throws -> [URL] {
+        try FileManager.default.contentsOfDirectory(
+            at: url,
+            includingPropertiesForKeys: keys,
+            options: [.skipsPackageDescendants]
+        ).filter { !$0.lastPathComponent.hasPrefix(".") }
     }
 }
