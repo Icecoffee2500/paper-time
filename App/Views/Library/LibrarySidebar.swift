@@ -22,6 +22,8 @@ struct LibrarySidebar: View {
     /// Whether the pointer is over the search row, which is the only row
     /// that carries a control of its own.
     @State private var hoveringSearch = false
+    /// And whether it is over the button itself, which answers on its own.
+    @State private var hoveringDismiss = false
 
     @State private var isPresentingNewCollection = false
     @State private var newCollectionName = ""
@@ -61,10 +63,15 @@ struct LibrarySidebar: View {
         .clipped()
     }
 
-    /// The way out of a search: a cross at the row's corner, on the Mac
-    /// while the pointer is over it and on a touch screen always — there is
-    /// no hovering with a finger, and a control that only appears under a
-    /// pointer does not exist on an iPad.
+    /// The way out of a search: a small round button in the row's corner, on
+    /// the Mac while the pointer is over the row and on a touch screen
+    /// always — there is no hovering with a finger, and a control that only
+    /// appears under a pointer does not exist on an iPad.
+    ///
+    /// A button, not a character. An × drawn as text is something you have to
+    /// guess is pressable; this is the thing a token or a tab is closed with
+    /// everywhere else — a filled disc that darkens under the pointer, with a
+    /// target bigger than the mark inside it.
     @ViewBuilder
     private var dismissSearch: some View {
         #if os(macOS)
@@ -75,16 +82,27 @@ struct LibrarySidebar: View {
         Button {
             model.clearSearchResults()
         } label: {
-            Image(systemName: "xmark.circle.fill")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .symbolRenderingMode(.hierarchical)
+            Image(systemName: "xmark")
+                .font(.system(size: 8, weight: .bold))
+                .foregroundStyle(hoveringDismiss ? Color.primary : .secondary)
+                .frame(width: 17, height: 17)
+                .background {
+                    Circle().fill(hoveringDismiss ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.quaternary))
+                }
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .padding(.top, 1)
+        .onHover { hoveringDismiss = $0 }
+        // Into the corner itself: the row's own padding would otherwise hold
+        // it a few points inside, which reads as floating rather than as the
+        // corner's own control.
+        .padding(.top, -7)
+        .padding(.trailing, -7)
         .opacity(shown ? 1 : 0)
         .animation(.easeOut(duration: 0.12), value: shown)
+        .animation(.easeOut(duration: 0.1), value: hoveringDismiss)
         .accessibilityLabel("Clear Search")
+        .help("Clear Search")
     }
 
     private var list: some View {

@@ -384,6 +384,10 @@ public final class AppModel {
                 model.selection = [paper.id]
             }
             if environment["PAPERTIME_SCOPE"] == "notes" { model.scope = .notes }
+            // The results of a search, without anybody having to type one.
+            if let query = environment["PAPERTIME_SEARCH_RESULTS"] {
+                model.showSearchResults(for: query)
+            }
             if let noteID = environment["PAPERTIME_OPEN_NOTE"] { model.notes.openNoteID = noteID }
             if environment["PAPERTIME_SHOW_SEARCH"] != nil {
                 try? await Task.sleep(for: .seconds(2))
