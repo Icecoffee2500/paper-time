@@ -193,8 +193,19 @@ final class NoteLayoutFragment: NSTextLayoutFragment {
             if text.attribute(NoteQuoteBar.attribute, at: range.location, effectiveRange: nil) != nil {
                 return
             }
+            // The page at the end of a quotation is the one chip that
+            // follows a word instead of standing among them, and the tint
+            // reaching its usual four points to the left ate the space
+            // between them: "probe.3쪽". It keeps its room on the right and
+            // gives back the space on the left.
+            let isCitation = quotation != nil
             for rect in rects(for: range, in: paragraph) {
-                let box = rect.insetBy(dx: -NoteChip.padding.width, dy: -NoteChip.padding.height)
+                let box = CGRect(
+                    x: rect.minX - (isCitation ? 0 : NoteChip.padding.width),
+                    y: rect.minY - NoteChip.padding.height,
+                    width: rect.width + NoteChip.padding.width * (isCitation ? 1 : 2),
+                    height: rect.height + NoteChip.padding.height * 2
+                )
                 let path = NSBezierPath(roundedRect: box,
                                         xRadius: NoteChip.radius, yRadius: NoteChip.radius)
                 NoteChip.fill.setFill()
