@@ -19,6 +19,9 @@ struct LibrarySidebar: View {
     /// Where the shelf you are on sits, in the list's own space — one shape
     /// for the whole list, so it can travel between rows.
     @State private var litShelf: CGRect?
+    /// Whether the pointer is over the search row, which is the only row
+    /// that carries a control of its own.
+    @State private var hoveringSearch = false
 
     @State private var isPresentingNewCollection = false
     @State private var newCollectionName = ""
@@ -58,6 +61,32 @@ struct LibrarySidebar: View {
         .clipped()
     }
 
+    /// The way out of a search: a cross at the row's corner, on the Mac
+    /// while the pointer is over it and on a touch screen always — there is
+    /// no hovering with a finger, and a control that only appears under a
+    /// pointer does not exist on an iPad.
+    @ViewBuilder
+    private var dismissSearch: some View {
+        #if os(macOS)
+        let shown = hoveringSearch
+        #else
+        let shown = true
+        #endif
+        Button {
+            model.clearSearchResults()
+        } label: {
+            Image(systemName: "xmark.circle.fill")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .symbolRenderingMode(.hierarchical)
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 1)
+        .opacity(shown ? 1 : 0)
+        .animation(.easeOut(duration: 0.12), value: shown)
+        .accessibilityLabel("Clear Search")
+    }
+
     private var list: some View {
         List {
             if !model.searchQuery.isEmpty {
@@ -78,6 +107,12 @@ struct LibrarySidebar: View {
                     }
                     .count(model.searchResultCount, current: model.scope == .searchResults)
                     .scopeRow(.searchResults, in: model)
+                    // A search you have finished with should be as easy to
+                    // put away as it was to open. It stayed until it was
+                    // replaced, or until somebody thought to look in a
+                    // context menu for it.
+                    .overlay(alignment: .topTrailing) { dismissSearch }
+                    .onHover { hoveringSearch = $0 }
                     .contextMenu {
                         Button("Clear Search") { model.clearSearchResults() }
                     }

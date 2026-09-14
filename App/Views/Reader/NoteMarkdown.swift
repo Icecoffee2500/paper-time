@@ -182,15 +182,21 @@ enum NoteMarkdown {
         _ url: URL, style: NSParagraphStyle, words: Bool = true
     ) -> [NSAttributedString.Key: Any] {
         var attributes: [NSAttributedString.Key: Any] = [
-            .font: NoteTypography.body(italic: words),
+            .font: words
+                ? NoteTypography.body(italic: true)
+                : NoteTypography.body(size: NoteTypography.baseSize * 0.76),
             .foregroundColor: words ? NoteColor.labelColor : accent,
             .paragraphStyle: style,
         ]
         #if os(macOS)
-        // Part of the quotation, so the bar reaches across it and the chip
-        // painter leaves it alone — without this the words of the quotation
-        // were the one run in it wearing a chip.
-        attributes[NoteQuoteBar.attribute] = true
+        // The words of a quotation are part of it, so the bar reaches across
+        // them and the chip painter leaves them alone — without that they
+        // were the one run in the quotation wearing a chip. The page at the
+        // end is the exception: it is in the quotation without being of it,
+        // so it keeps the rounded tint that means "this goes somewhere",
+        // which is the whole of what tells a quoted passage from a quotation
+        // somebody typed.
+        if words { attributes[NoteQuoteBar.attribute] = QuoteEdge.anchored.rawValue }
         attributes[NoteChip.attribute] = url
         attributes[.cursor] = NSCursor.pointingHand
         if let anchor = NoteAnchor(url: url) {
@@ -312,8 +318,19 @@ enum NoteMarkdown {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let quoted = text.isEmpty ? anchor.label : text
         let page = ReleaseNotes.string("\(anchor.pageIndex + 1)쪽", "p. \(anchor.pageIndex + 1)")
-        let body = quotationLines(of: quoted).map { "> \($0)\n" }.joined()
-        return body + "> — [\(escape(page))](\(anchor.url.absoluteString))\n"
+        var lines = quotationLines(of: quoted)
+        let citation = "[\(escape(page))](\(anchor.url.absoluteString))"
+        // At the end of the last line rather than on a line of its own. A
+        // line that says "— 2쪽" is a line of prose that has to be read; the
+        // page set close after the last word is a mark, and a mark is looked
+        // at rather than read. A displayed formula keeps its own line, so
+        // there the page goes under it.
+        if let last = lines.last, !last.hasPrefix("$$") {
+            lines[lines.count - 1] = last + " " + citation
+        } else {
+            lines.append(citation)
+        }
+        return lines.map { "> \($0)\n" }.joined()
     }
 
     /// The quoted words, broken where a displayed formula wants a line.
@@ -436,6 +453,21 @@ enum NoteMarkdown {
             }
             blocks[index].quoteEdge = edge
         }
+        // An address anywhere in a quotation belongs to all of it: the page
+        // is written at the end, and the line above it is the same quotation.
+        var start = 0
+        while start < blocks.count {
+            guard blocks[start].kind == .quote else {
+                start += 1
+                continue
+            }
+            var end = start
+            while end + 1 < blocks.count, blocks[end + 1].kind == .quote { end += 1 }
+            if (start...end).contains(where: { blocks[$0].content.contains("](papertime://anchor") }) {
+                for index in start...end { blocks[index].quoteEdge.insert(.anchored) }
+            }
+            start = end + 1
+        }
 
         for (lineRange, block) in zip(lineRanges, blocks) {
             let revealed = caret.map {
@@ -528,6 +560,11 @@ enum NoteMarkdown {
         let rawValue: Int
         static let opens = QuoteEdge(rawValue: 1)
         static let closes = QuoteEdge(rawValue: 2)
+        /// The quotation carries a passage's address — it came off a page
+        /// with ⌘L rather than being typed. It is drawn differently: the
+        /// accent rather than a grey, a faint ground under it, and the page
+        /// itself at the end of the last line.
+        static let anchored = QuoteEdge(rawValue: 4)
     }
 
     /// What kind of line this is, and what the characters at its head mean.
@@ -619,11 +656,10 @@ enum NoteMarkdown {
 
         var colour: NoteColor {
             switch kind {
-            // Not grey. A quotation is already set apart by its rule, its
-            // ground and its italics; greying it as well says "skip this",
-            // and the reason it is in the note is that it must not be
-            // skipped.
-            case .quote: .labelColor
+            // A quotation lifted off a page is somebody's actual words and
+            // is set as darkly as the note around it. One typed by hand is
+            // an aside — the writer's own voice, quoted — and steps back.
+            case .quote: quoteEdge.contains(.anchored) ? .labelColor : .secondaryLabelColor
             case .task(let done): done ? .secondaryLabelColor : .labelColor
             default: .labelColor
             }

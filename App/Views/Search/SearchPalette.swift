@@ -163,6 +163,13 @@ struct SearchPalette: View {
             dismiss()
             return .handled
         }
+        // Escape, from inside the field. A text field takes the key as its
+        // own cancel and never passes it on, so `onKeyPress` — which only
+        // ever saw the keys the field let through — was deaf to the one key
+        // everybody presses to put a palette away. This is the cancel itself.
+        #if os(macOS)
+        .onExitCommand { dismiss() }
+        #endif
         .onChange(of: query) { _, _ in highlightedIndex = 0 }
     }
 
@@ -318,7 +325,7 @@ struct SearchPalette: View {
         case let .paper(id):
             model.selectedPaperID = id
         case let .passage(passage):
-            open(passage)
+            openPassage(passage, in: model, link: link)
         case let .note(id):
             model.scope = .notes
             model.notes.openNoteID = id
@@ -330,22 +337,6 @@ struct SearchPalette: View {
             perform(action)
         }
         dismiss()
-    }
-
-    /// Opens the paper a word was found in and sends the reader to the line.
-    ///
-    /// The rectangle is worked out only now, by opening that one file: the
-    /// index keeps the page and the characters, which is small, and turns
-    /// them into a place on the page when somebody actually asks to go there.
-    private func open(_ passage: PaperTextIndex.Passage) {
-        guard let paper = model.paper(passage.paperID) else { return }
-        model.selectedPaperID = passage.paperID
-        Task {
-            let rect = await PaperTextIndex.shared.rect(for: passage, at: paper.documentURL)
-            link.anchorRequest = ReaderLink.Anchor(
-                pageIndex: passage.pageIndex, rect: rect ?? .zero, paperID: passage.paperID
-            )
-        }
     }
 
     // MARK: - The words inside the papers

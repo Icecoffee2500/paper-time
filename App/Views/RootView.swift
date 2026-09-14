@@ -89,6 +89,9 @@ struct LibraryWindow: View {
     /// How wide the paper was while it was open, so it can be held at that
     /// width on the way out rather than squeezed to nothing.
     @State private var readerWidth: CGFloat = 600
+    /// How much room the window has, so a column can be dragged as wide as
+    /// there is room for rather than as wide as a number written here.
+    @State private var windowWidth: CGFloat = 1200
     /// The paper a passage link opened, shown where the notes list was.
     @State private var slipBoxPaperID: UUID?
     @State private var isImportingPDFs = false
@@ -157,7 +160,7 @@ struct LibraryWindow: View {
                 listColumn
                     // Wide enough for the row of buttons above it: at 340 the sixth
                     // pushed the shelves button off the leading edge.
-                    .navigationSplitViewColumnWidth(min: 340, ideal: 380, max: 460)
+                    .navigationSplitViewColumnWidth(min: 340, ideal: 380, max: 640)
             } detail: {
                 // The same three details the Mac has: the note, the graph,
                 // the paper.
@@ -226,6 +229,34 @@ struct LibraryWindow: View {
     #endif
 
     #if os(macOS)
+    /// How wide a column may be dragged.
+    ///
+    /// It used to be a number — 360 for the shelves, 560 for the list, 520
+    /// for the inspector — and a number is a guess about somebody else's
+    /// window. Reading beside a note means giving the note half the screen,
+    /// and half of a 32-inch screen is not 520 points. So the limit is the
+    /// room there actually is: everything the window has, less what the
+    /// other open columns are holding and a page's worth for the paper.
+    /// `mine` is what this column itself already takes, which would
+    /// otherwise be counted against it.
+    private func widest(_ floor: CGFloat) -> CGFloat {
+        var taken: CGFloat = Pane.pageFloor
+        if app.isSidebarVisible { taken += app.sidebarWidth }
+        if app.showsPaperList { taken += app.paperListWidth }
+        if app.showsInspector { taken += app.inspectorWidth }
+        return max(floor, windowWidth - taken + currentWidth(floor))
+    }
+
+    /// The width the column being asked about is holding right now, told
+    /// apart by its own minimum — the one number each column has of its own.
+    private func currentWidth(_ floor: CGFloat) -> CGFloat {
+        switch floor {
+        case 200: app.isSidebarVisible ? app.sidebarWidth : 0
+        case 240: app.showsPaperList ? app.paperListWidth : 0
+        default: app.showsInspector ? app.inspectorWidth : 0
+        }
+    }
+
     private var macColumns: some View {
         @Bindable var app = app
 
@@ -249,7 +280,7 @@ struct LibraryWindow: View {
                 .clipped()
 
             if app.isSidebarVisible {
-                ColumnDivider(width: $app.sidebarWidth, range: 200...360)
+                ColumnDivider(width: $app.sidebarWidth, range: 200...widest(200))
             }
 
             // With the paper closed the list is the only thing left to look
@@ -275,7 +306,7 @@ struct LibraryWindow: View {
 
             // Nothing to drag against when there is no paper beside it.
             if app.showsPaperList, app.showsReader {
-                ColumnDivider(width: $app.paperListWidth, range: 240...560)
+                ColumnDivider(width: $app.paperListWidth, range: 240...widest(240))
             }
 
             Group {
@@ -314,6 +345,7 @@ struct LibraryWindow: View {
             .opacity(app.showsReader ? 1 : 0)
             .clipped()
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { windowWidth = $0 }
         // The panels float clear of the window's edges and of the toolbar, so
         // every boundary in the window is a curve and a gap rather than a
         // straight line drawn where two flat backgrounds happen to meet. The
@@ -553,7 +585,7 @@ struct LibraryWindow: View {
             .padding(.horizontal, 16)
             .padding(.top, 10)
             .padding(.bottom, 6)
-            PaperListView(model: model)
+            PaperListView(model: model, link: link)
         }
     }
 
@@ -855,6 +887,10 @@ struct PaperDetailColumn: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     @Binding var inspectorTab: InspectorTab
+    /// The room the page and the inspector share.
+    @State private var columnWidth: CGFloat = 800
+    /// How wide the inspector was when a drag on its grip began.
+    @State private var gripStart: CGFloat?
 
     var body: some View {
         columns
@@ -971,7 +1007,11 @@ struct PaperDetailColumn: View {
 
             // Nothing to drag against when the inspector is closed.
             if app.showsInspector {
-                ColumnDivider(width: $app.inspectorWidth, range: 280...520, resizes: .trailing)
+                ColumnDivider(
+                    width: $app.inspectorWidth,
+                    range: 280...max(280, columnWidth - Pane.pageFloor),
+                    resizes: .trailing
+                )
             }
 
             // Closed by width, the same as the other columns, so it slides
@@ -990,6 +1030,9 @@ struct PaperDetailColumn: View {
                 .opacity(app.showsInspector ? 1 : 0)
                 .clipped()
         }
+        // How much there is to share between the page and the inspector,
+        // which is what says how far the inspector may be dragged.
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { columnWidth = $0 }
         // Likewise: `toggleInspector` opens the transaction.
         #else
         // The inspector floats in from the right, over the page, and goes
@@ -997,8 +1040,15 @@ struct PaperDetailColumn: View {
         // sheet took the page away while the notes were being read.
         return page.overlay(alignment: .trailing) {
             if app.showsInspector {
-                inspector
-                    .frame(width: 360)
+                HStack(spacing: 0) {
+                    // A grip, on an iPad. Writing a note beside a paper is
+                    // the reason the panel is there, and 360 points is a
+                    // column two words wide — which is fine for a list of
+                    // marks and no way to write in.
+                    if horizontalSizeClass == .regular { grip }
+                    inspector
+                }
+                    .frame(width: horizontalSizeClass == .regular ? app.inspectorWidth : 360)
                     .frame(maxHeight: .infinity)
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.primary.opacity(0.08), lineWidth: 0.5))
@@ -1008,8 +1058,37 @@ struct PaperDetailColumn: View {
             }
         }
         .animation(AppModel.paneMotion, value: app.showsInspector)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { columnWidth = $0 }
         #endif
     }
+
+    #if !os(macOS)
+    /// The handle down the inspector's leading edge, and the drag that
+    /// widens it. Touch has no pointer to change shape over a gap, so the
+    /// thing to pull has to be something you can see.
+    private var grip: some View {
+        Capsule()
+            .fill(.secondary.opacity(0.5))
+            .frame(width: 4, height: 44)
+            .padding(.horizontal, 7)
+            .contentShape(.rect)
+            .gesture(
+                DragGesture(minimumDistance: 2)
+                    .onChanged { value in
+                        // From where the drag began, not from where the
+                        // panel is now: a translation applied to the width it
+                        // has already been given compounds, and the panel
+                        // runs away across the screen.
+                        let start = gripStart ?? app.inspectorWidth
+                        gripStart = start
+                        let widest = max(320, columnWidth - Pane.pageFloor)
+                        app.inspectorWidth =
+                            min(max(start - value.translation.width, 320), widest)
+                    }
+                    .onEnded { _ in gripStart = nil }
+            )
+    }
+    #endif
 
     private var page: some View {
         Group {
@@ -1286,6 +1365,19 @@ private struct ToolbarHover: ViewModifier {
     }
 }
 
+
+/// What the page keeps for itself, whatever else is open.
+///
+/// The one number left in the column widths. Everything else — how wide the
+/// shelves, the list, the inspector may be dragged — is worked out from the
+/// window, because a limit written down here is a guess about somebody
+/// else's screen: reading beside a note means giving the note half of it,
+/// and half of a large screen is not the 520 points this used to allow.
+/// Outside the Mac-only `Column` because the iPad's inspector is dragged
+/// against the same floor.
+enum Pane {
+    static let pageFloor: CGFloat = 300
+}
 
 #if os(macOS)
 /// How the window's columns sit in it.

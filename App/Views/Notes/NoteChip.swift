@@ -46,11 +46,28 @@ enum NoteChip {
 /// in, a rule down its side. So that is what it is now, and the chip is left
 /// to the passages that are still dropped inline.
 enum NoteQuoteBar {
-    /// Marks a run as part of a quoted paragraph.
+    /// Marks a run as part of a quoted paragraph. The value is a
+    /// `NoteMarkdown.QuoteEdge`: which ends of the rule this line owns, and
+    /// whether the quotation came off a page.
     static let attribute = NSAttributedString.Key("PaperTimeQuote")
 
-    static var bar: NSColor { .controlAccentColor.withAlphaComponent(0.55) }
-    static var ground: NSColor { .controlAccentColor.withAlphaComponent(0.05) }
+    /// Two quotations, told apart by their rule.
+    ///
+    /// A quotation you typed is an aside in your own note — grey rule, no
+    /// ground, the words a shade back. A quotation you took off a page with
+    /// ⌘L is evidence: it is in the accent, on the faintest wash of it, with
+    /// the page at the end of the last line. Neither shouts, and nobody has
+    /// to be told which is which.
+    static func bar(anchored: Bool) -> NSColor {
+        anchored
+            ? .controlAccentColor.withAlphaComponent(0.55)
+            : .tertiaryLabelColor.withAlphaComponent(0.55)
+    }
+
+    static func ground(anchored: Bool) -> NSColor {
+        anchored ? .controlAccentColor.withAlphaComponent(0.05) : .clear
+    }
+
     static let width: CGFloat = 2.5
     /// How far left of the words the bar stands.
     static let gap: CGFloat = 13
@@ -125,11 +142,12 @@ final class NoteLayoutFragment: NSTextLayoutFragment {
         guard let quotation else { return }
         let (edge, ground) = quotation
 
+        let anchored = edge.contains(.anchored)
         context.saveGState()
-        NoteQuoteBar.ground.setFill()
+        NoteQuoteBar.ground(anchored: anchored).setFill()
         Self.path(ground, radius: 4, top: edge.contains(.opens),
                   bottom: edge.contains(.closes)).fill()
-        NoteQuoteBar.bar.setFill()
+        NoteQuoteBar.bar(anchored: anchored).setFill()
         Self.path(CGRect(x: ground.minX, y: 0,
                          width: NoteQuoteBar.width, height: ground.height),
                   radius: NoteQuoteBar.width / 2,

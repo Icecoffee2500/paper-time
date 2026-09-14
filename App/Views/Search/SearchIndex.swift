@@ -81,6 +81,27 @@ extension SearchResult {
     }
 }
 
+/// Opens the paper a word was found in and sends the reader to the line.
+///
+/// The rectangle is worked out only now, by opening that one file: the index
+/// keeps the page and the range of characters, which is small, and turns them
+/// into a place on the page when somebody actually asks to go there.
+///
+/// Here rather than in the palette because two places ask for it now — the
+/// palette, and the list of search results, which groups the papers that say
+/// the word in their text under the ones that say it in their titles.
+@MainActor
+func openPassage(_ passage: PaperTextIndex.Passage, in model: LibraryModel, link: ReaderLink) {
+    guard let paper = model.paper(passage.paperID) else { return }
+    model.selectedPaperID = passage.paperID
+    Task {
+        let rect = await PaperTextIndex.shared.rect(for: passage, at: paper.documentURL)
+        link.anchorRequest = ReaderLink.Anchor(
+            pageIndex: passage.pageIndex, rect: rect ?? .zero, paperID: passage.paperID
+        )
+    }
+}
+
 /// What the palette offers when nothing has been typed: not a blank, but
 /// the papers the reader is most likely to want next, each with its reason.
 ///

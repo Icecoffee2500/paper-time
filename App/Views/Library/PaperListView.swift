@@ -11,15 +11,26 @@ import UIKit
 /// The middle column: every paper in the current scope, searchable and sortable.
 struct PaperListView: View {
     @Bindable var model: LibraryModel
+    /// The open paper, so a result found in the text of another one can send
+    /// the reader to the line it was found on.
+    let link: ReaderLink
     @Environment(AppModel.self) private var app
     /// How far past its top the list has been pulled.
     ///
     /// How far, not merely whether: the words have to come in with the pull,
     /// or they are one more thing that appears without being asked for.
     @State private var pull: CGFloat = 0
+    /// What the same query turned up inside the papers, when the list is
+    /// showing the results of a search.
+    @State private var passages: [PaperTextIndex.Hit] = []
+    @State private var scanning = false
 
     var body: some View {
         content
+            // Here rather than on the list: with nothing matching by title
+            // the list is not on screen at all, and that is exactly the
+            // search whose answer is inside the papers.
+            .task(id: searchKey) { await scanText() }
             .dropDestination(for: URL.self) { urls, _ in
                 let pdfURLs = urls.filter { $0.pathExtension.lowercased() == "pdf" }
                 guard !pdfURLs.isEmpty else { return false }
@@ -79,7 +90,7 @@ struct PaperListView: View {
                     .buttonBorderShape(.capsule)
                 }
             }
-        } else if model.visiblePapers.isEmpty {
+        } else if model.visiblePapers.isEmpty, !hasPassages {
             // An empty shelf is not a failed search. "Check the spelling"
             // in front of Favorites, which nothing has been starred into
             // yet, reads as though the app has lost something.
@@ -106,6 +117,7 @@ struct PaperListView: View {
                         }
                     }
                 }
+                Section {
                 ForEach(model.visiblePapers) { paper in
                     PaperRow(
                         paper: paper,
@@ -125,6 +137,30 @@ struct PaperListView: View {
                         app.compactColumn = .detail
                     }
                     #endif
+                }
+                } header: {
+                    // Only while a search is being shown. Everywhere else the
+                    // list is one list and a heading over it would be a label
+                    // on a thing that has no counterpart.
+                    if hasPassages, !model.visiblePapers.isEmpty {
+                        Text("In the Titles")
+                    }
+                }
+
+                if hasPassages {
+                    Section("In the Papers") {
+                        ForEach(passages, id: \.passage) { hit in
+                            passageRow(hit)
+                        }
+                        if scanning {
+                            HStack(spacing: 8) {
+                                ProgressView().controlSize(.small)
+                                Text("Reading the papers…")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
                 }
             }
             // The same list style as the source list, so a selected paper and
@@ -152,6 +188,83 @@ struct PaperListView: View {
                 app.showsSearchPalette = true
             }
         }
+    }
+
+    /// What the text search answers to: the query, and only while the list is
+    /// showing a search at all.
+    private var searchKey: String { isSearch ? model.searchQuery : "" }
+
+    private var isSearch: Bool { model.scope == .searchResults }
+    /// Whether the text of the papers has something to say about this search.
+    private var hasPassages: Bool { isSearch && (scanning || !passages.isEmpty) }
+
+    /// One paper whose *text* holds the query: the sentence it is in, and
+    /// where. Pressing it opens the paper at that line rather than at the
+    /// page it was left on.
+    private func passageRow(_ hit: PaperTextIndex.Hit) -> some View {
+        Button {
+            openPassage(hit.passage, in: model, link: link)
+            #if os(iOS)
+            app.compactColumn = .detail
+            #endif
+        } label: {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "text.magnifyingglass")
+                    .font(.caption)
+                    .foregroundStyle(.tint)
+                    .padding(.top, 2)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(hit.snippet)
+                        .font(.callout)
+                        .lineLimit(2)
+                    Text(passageSubtitle(hit))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .padding(.vertical, 2)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func passageSubtitle(_ hit: PaperTextIndex.Hit) -> String {
+        let page = ReleaseNotes.string("\(hit.passage.pageIndex + 1)쪽",
+                                       "p. \(hit.passage.pageIndex + 1)")
+        let more = hit.count > 1
+            ? ReleaseNotes.string(" · \(hit.count)번", " · \(hit.count) matches") : ""
+        return "\(hit.title) · \(page)\(more)"
+    }
+
+    /// Reads the library for the words the search was made of.
+    ///
+    /// The same work the palette does, kept when the palette is dismissed:
+    /// pressing Return on a search should not throw away the half of the
+    /// answer that was not in any title.
+    private func scanText() async {
+        passages = []
+        guard isSearch else {
+            scanning = false
+            return
+        }
+        let query = model.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard query.count > 1 else { return }
+        let named = Set(model.visiblePapers.map(\.id))
+        let sources = model.papers
+            .filter { $0.meta.parentID == nil && !named.contains($0.id) }
+            .sorted {
+                ($0.state.lastOpenedAt ?? .distantPast) > ($1.state.lastOpenedAt ?? .distantPast)
+            }
+            .map {
+                PaperTextIndex.Source(id: $0.id, url: $0.documentURL,
+                                      title: $0.meta.displayTitle)
+            }
+        scanning = true
+        for await hit in PaperTextIndex.shared.hits(for: query, in: sources) {
+            passages.append(hit)
+        }
+        scanning = false
     }
 
     /// How far the list must be pulled before the search opens.

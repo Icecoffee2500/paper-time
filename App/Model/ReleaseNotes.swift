@@ -57,7 +57,7 @@ enum ReleaseNotes {
             ),
             action: .ultracopy,
             demo: .ultracopy,
-            featured: true
+            tier: .one
         ),
         Highlight(
             symbol: "book.pages",
@@ -68,7 +68,7 @@ enum ReleaseNotes {
             ),
             action: .floatingList,
             demo: .bookReading,
-            featured: true
+            tier: .two
         ),
         Highlight(
             symbol: "arrow.triangle.2.circlepath.icloud",
@@ -78,7 +78,7 @@ enum ReleaseNotes {
                 "There is no server. The library is one iCloud Drive folder, and waiting for a 20 MB PDF to travel is ten seconds. So nothing waits for the heavy thing. Marks go at once into a journal of a few KB each device writes under its own name, ink into a sidecar per page, and iCloud Drive carries those — no two devices ever write one journal, so nothing conflicts. The receiving side watches the open paper's record and looks again every three seconds. The PDF is rewritten to the journals 1.5 s later, so any app opening it sees the same. On each mark the newest word wins: remove it here, recolour it there, and the later one stands. Make a highlight on the Mac below and watch the iPad."
             ),
             demo: .sync,
-            featured: true
+            tier: .two
         ),
         Highlight(
             symbol: "waveform",
@@ -88,7 +88,7 @@ enum ReleaseNotes {
                 "There is nothing to do but read. Keep the inspector's Notes tab open and the notes that share their rarer words with the pages on screen — written months ago, against another paper — come up by themselves at the top. The blue words under each are what the two share: a coincidence, and you read on; an echo, and you click the note to open it. Select a sentence on the page and every note grows a ❝ button; press it and the passage lands in that note with its address — two papers meet in one note. While you write, 'Resonates with' under the editor gathers the echoes not yet linked, and one 🔗 writes the [[link]]. In other apps a note lies in a folder until you search for it — and nobody searches for a note they have forgotten. Luhmann called his box a conversation partner; it is one only when the box speaks first.\n\nThe rule is not hidden. Think of a reading friend who knows your notes by heart, laying the page's words beside each note's and counting what they share — except that function words and the words every paper uses (model, method, results…), some 300, are not counted, and a word's weight is ln((N+1)÷(texts it appears in+0.5))+0.3, with N the notes plus 40 sampled pages of this paper ('network', in 42 of 45 texts: 0.38; 'consolidation', in 3: 2.88). Two words together count ×1.3; a long note's sum is divided by (1+ln length). Only notes sharing two words, scoring 1.0 or more and at least 35% of the strongest come up, four at most. Do the four steps below, and press 'How are they chosen?'."
             ),
             demo: .resonance,
-            featured: true
+            tier: .one
         ),
         Highlight(
             symbol: "map",
@@ -98,7 +98,7 @@ enum ReleaseNotes {
                 "A note lives on a map, not in a folder. The map is itself a note — its body is [[links]] to other notes under headings, so in any other app it is plain Markdown. The rule is not to make one in advance: when five or more notes on one subject have piled up, linking to each other or sharing their rarer words, and no map holds them, one line appears at the top of the slip-box: \"6 notes are one subject — consolidation · forgetting.\" Press it and a draft is written: a title from the shared words, the notes as links under a heading per paper. Open the map and it is a board — a column per heading, a card per note — with, beside it, the notes that resonate with the map and are not yet on it, one ＋ away. Writing a note, a map that echoes it appears under the editor, and one 🗺 files the note on it. Do the four steps below."
             ),
             demo: .atlas,
-            featured: true
+            tier: .three
         ),
         Highlight(
             symbol: "doc.text",
@@ -108,7 +108,7 @@ enum ReleaseNotes {
                 "Collecting is not the point. A researcher's output is a manuscript, and the slip-box has to end in writing — with the citations intact along the way. A draft is a note (kind: draft): bullets under headings. Reading a paper, select a passage and the Notes tab offers \"Into a draft\": one ❝ and the passage arrives carrying the paper's address; a note in the slip-box goes in as a [[link]] from its context menu. ⇧⌘E renders the draft for the manuscript: each passage chip becomes that paper's \\cite{key} (LaTeX by default, pandoc [@key] too), each linked note unfolds into its own sentences, and a .bib of exactly the papers cited comes with it. Paste into Overleaf and it compiles. The first goal is one related-work section, end to end — try it below."
             ),
             demo: .express,
-            featured: true
+            tier: .three
         ),
         Highlight(
             symbol: "magnifyingglass",
@@ -118,7 +118,8 @@ enum ReleaseNotes {
                 "⌘K — or pull the paper list down past its top — and one field appears. Type, and it finds papers, notes, maps, drafts, authors, collections, tags and commands, the recently opened first among equals. Type nothing, and it offers rather than waits: Continue (how far you got and how few pages are left — the last stretch pulls hardest), Because you read (unread papers that share their rarer words with the one you just read, the words named — a known thing seen from a new side), Revisit (read weeks ago, with your notes — just before it fades is the time), New this week. ⌘F is the other one: the words inside the open paper."
             ),
             action: .searchEverything,
-            demo: .search
+            demo: .search,
+            tier: .one
         ),
         Highlight(
             symbol: "sidebar.left",
@@ -128,7 +129,8 @@ enum ReleaseNotes {
                 "The sidebar, the list, the paper and the inspector each hide on their own key — revealing what was behind rather than stretching to fill the gap. Drag the space between two of them to resize."
             ),
             action: .sidebar,
-            demo: .panes
+            demo: .panes,
+            tier: .two
         ),
         Highlight(
             symbol: "book",
@@ -138,7 +140,8 @@ enum ReleaseNotes {
                 "⌘3 and pages 1 and 2 face each other across the window. ← → or the space bar turn the page, and so does a swipe. Underneath, which pages these are and how far in you are; ⇧⌘L drops the paper's own table of contents into the gutter between the pages, and a section is one click away. ⌘1 scrolls, ⌘2 shows one page — and changing layout keeps the page you were on."
             ),
             action: .layoutBook,
-            demo: .book
+            demo: .book,
+            tier: .two
         ),
         Highlight(
             symbol: "rectangle.center.inset.filled",
@@ -148,7 +151,8 @@ enum ReleaseNotes {
                 "One ⇧⌘F and the sidebar, the list and the inspector step aside, leaving the paper. What was open is remembered and given back on the way out. ⇧⌘L still brings the table of contents, so you can move between sections without leaving."
             ),
             action: .focus,
-            demo: .focus
+            demo: .focus,
+            tier: .two
         ),
         Highlight(
             symbol: "highlighter",
@@ -157,7 +161,8 @@ enum ReleaseNotes {
                 "형광펜과 밑줄이 옆에 붙은 데이터베이스가 아니라 파일 자체에 기록된다. 미리보기든 아이패드든 십 년 뒤든 표시는 그대로다. 그리고 이 앱 안에서는 형광펜의 끝이 둥글고 글자가 살 만큼 연하며, 밑줄은 눈에 띄게 짙고, 마우스를 올리면 밝아진다. 수식이 든 줄에서 다른 앱은 상자가 줄 높이만큼 자라지만, 여기서는 글자의 잉크를 재서 사람이 그은 것처럼 딱 맞게 덮는다 — 파일은 그대로 두고 그리는 법만 바꾼 것이라 다른 앱에서는 볼 수 없는 생김새다. 노트의 인용구도 같은 모양이다. 아래에서 둘을 나란히 보라.",
                 "Highlights and underlines are written into the file itself, not into a database beside it — Preview, an iPad, ten years from now, the marks are there. And in here a highlight has rounded ends and stays pale enough to read through, an underline is dark enough to see, and either brightens under the pointer. On a line carrying a formula, other apps grow the box to the height of the line; here the ink of the letters is measured and the band fits them the way a hand-drawn stroke does. The file is untouched; only the drawing is ours, which is why no other PDF app looks like this. A quotation in a note wears the same shape. Compare the two side by side below."
             ),
-            demo: .annotations
+            demo: .annotations,
+            tier: .one
         ),
         Highlight(
             symbol: "quote.opening",
@@ -167,7 +172,8 @@ enum ReleaseNotes {
                 "Send the selected text to a note and it arrives as a quotation you can click to go back to the exact place on the page it came from."
             ),
             action: .linkToNote,
-            demo: .passageLink
+            demo: .passageLink,
+            tier: .one
         ),
         Highlight(
             symbol: "tray.full",
@@ -177,7 +183,8 @@ enum ReleaseNotes {
                 "Notes live together rather than under the paper that caused them, link to each other with [[…]], and are plain Markdown files you can read without this app."
             ),
             action: .newNote,
-            demo: .slipBox
+            demo: .slipBox,
+            tier: .three
         ),
         Highlight(
             symbol: "point.3.filled.connected.trianglepath.dotted",
@@ -186,7 +193,8 @@ enum ReleaseNotes {
                 "그래프는 인용·공저자·컬렉션으로, 그리고 내 노트가 이은 것으로 라이브러리를 그린다. 나머지 선을 끄면 남는 것이 문헌의 관계가 아니라 내 읽기다.",
                 "The graph draws your library by citation, shared author, collection — and by what your own notes link. Switch the other lines off and what is left is your reading rather than the literature's."
             ),
-            demo: .graph
+            demo: .graph,
+            tier: .three
         ),
         Highlight(
             symbol: "keyboard",
@@ -195,7 +203,8 @@ enum ReleaseNotes {
                 "설정 → Shortcuts에서 기능 이름으로도, 키로도 찾는다. 뭘 눌렀는지 모르겠으면 \"cmd\"나 ⌘F를 쳐보면 그 키를 가진 명령이 나온다. 그리고 이 앱의 모든 키는 바꿀 수 있다.",
                 "Settings → Shortcuts searches by name and by key. If something happened and you do not know what you pressed, type \"cmd\" or ⌘F and the command that owns it comes back. Every key in this app can be changed."
             ),
-            action: .settings
+            action: .settings,
+            tier: .three
         ),
         Highlight(
             symbol: "folder",
@@ -203,7 +212,8 @@ enum ReleaseNotes {
             detail: Text2(
                 "논문은 놓아둔 자리에 평범한 파일로 있다. iCloud Drive나 구글 드라이브 안의 폴더를 가리키면, 동기화는 이 앱이 새로 해야 할 일이 아니라 이미 갖고 있는 것이 된다.",
                 "Papers stay as ordinary files where you put them. Point it at a folder in iCloud Drive or Google Drive and syncing is something you already have rather than something this app has to do."
-            )
+            ),
+            tier: .two
         ),
     ]
 
@@ -792,6 +802,50 @@ enum ReleaseNotes {
         var id: String { rawValue }
     }
 
+    /// What order to meet the app in.
+    ///
+    /// Fifteen things that are each worth a paragraph is not a list anybody
+    /// reads; it is a wall, and a wall is read by nobody. So they are told in
+    /// three goes. The first answers "why not just use Preview" — the things
+    /// no other reader does at all. The second is what makes the window a
+    /// place to read in rather than a viewer. The third is what becomes of
+    /// the reading afterwards, which is the part that turns into writing.
+    /// Somebody who stops after the first tier has still seen the point.
+    enum Tier: Int, CaseIterable, Identifiable {
+        case one = 1, two, three
+        var id: Int { rawValue }
+
+        var name: Text2 {
+            switch self {
+            case .one: Text2("다른 데 없는 것", "Nowhere else")
+            case .two: Text2("읽는 자리", "The place you read in")
+            case .three: Text2("읽고 난 뒤", "After the reading")
+            }
+        }
+
+        var promise: Text2 {
+            switch self {
+            case .one:
+                Text2("이것들 때문에 만들었다. 다른 PDF 앱에서는 아예 되지 않는 일들.",
+                      "The reasons it was built: things no other PDF reader does at all.")
+            case .two:
+                Text2("논문 말고는 아무것도 신경 쓰지 않게 하는 것들.",
+                      "What makes the window a place to read in, and nothing else.")
+            case .three:
+                Text2("표시가 생각이 되고, 생각이 원고가 되는 길.",
+                      "How marks become thinking, and thinking becomes a manuscript.")
+            }
+        }
+
+        var symbol: String {
+            switch self {
+            case .one: "sparkles"
+            case .two: "book.pages"
+            case .three: "pencil.and.outline"
+            }
+        }
+    }
+
     struct Highlight: Identifiable {
         let symbol: String
         let title: Text2
@@ -800,9 +854,13 @@ enum ReleaseNotes {
         /// Shown full size in About, where the point is to let somebody try
         /// the thing rather than read about it.
         var demo: Demo?
-        /// The ones to see first. One or two a version — more than that is
-        /// a list, and a list is what this is trying not to be.
-        var featured = false
+        /// Which of the three goes this one belongs to.
+        var tier: Tier = .two
+        /// The first tier is what somebody came for, and it is set apart —
+        /// the tint on the title, the ring round the demonstration. This was
+        /// a flag of its own, which meant two ways of saying one thing and a
+        /// chance for them to disagree.
+        var featured: Bool { tier == .one }
         var id: String { title.en }
     }
 

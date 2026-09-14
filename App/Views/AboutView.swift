@@ -76,10 +76,43 @@ struct FeatureShowcase<Header: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 30) {
             header
-            ForEach(ReleaseNotes.highlights) { highlight in
-                section(highlight)
+            ForEach(ReleaseNotes.Tier.allCases) { tier in
+                let features = ReleaseNotes.highlights.filter { $0.tier == tier }
+                if !features.isEmpty {
+                    tierHeading(tier)
+                    ForEach(features) { highlight in
+                        section(highlight)
+                    }
+                }
             }
         }
+    }
+
+    /// The rule between one go and the next.
+    ///
+    /// Not a title bar: a thin line with a few words on it, the way a
+    /// well-set book divides a chapter. What it is really doing is telling
+    /// the reader they may stop here — the first three demonstrations are
+    /// the app, and everything after them is the app being thorough.
+    private func tierHeading(_ tier: ReleaseNotes.Tier) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Divider()
+                .padding(.bottom, 6)
+            HStack(spacing: 8) {
+                Image(systemName: tier.symbol)
+                    .font(.caption)
+                    .foregroundStyle(.tint)
+                Text(tier.name.value.uppercased())
+                    .font(.caption.weight(.semibold))
+                    .tracking(0.8)
+                    .foregroundStyle(.tint)
+            }
+            Text(tier.promise.value)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.top, 6)
     }
 
     private func section(_ highlight: ReleaseNotes.Highlight) -> some View {
