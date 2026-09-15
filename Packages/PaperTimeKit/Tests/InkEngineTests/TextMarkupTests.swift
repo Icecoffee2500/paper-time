@@ -210,6 +210,40 @@ struct TextMarkupTests {
         #expect(marked.maxY <= reported.maxY)
     }
 
+    @Test("A mark already in the file is not written into it again")
+    func writtenMarksAreLeftAlone() throws {
+        let document = try Self.makeDocument(text: "handwriting sample")
+        let page = try #require(document.page(at: 0))
+        let selection = try #require(document.findString("handwriting", withOptions: []).first)
+        let descriptor = try #require(
+            TextMarkupWriter.descriptor(
+                for: selection, kind: .highlight, color: .yellow, in: document
+            ).first
+        )
+
+        #expect(!TextMarkupWriter.isAlreadyWritten(descriptor, on: page))
+        TextMarkupWriter.apply(descriptor, to: page)
+        #expect(TextMarkupWriter.isAlreadyWritten(descriptor, on: page))
+
+        // What the reader can change about a mark it has already made.
+        var recoloured = descriptor
+        recoloured.color = .green
+        #expect(!TextMarkupWriter.isAlreadyWritten(recoloured, on: page))
+        var commented = descriptor
+        commented.comment = "worth coming back to"
+        #expect(!TextMarkupWriter.isAlreadyWritten(commented, on: page))
+        var moved = descriptor
+        moved.rects = descriptor.rects.map { $0.offsetBy(dx: 0, dy: 4) }
+        #expect(!TextMarkupWriter.isAlreadyWritten(moved, on: page))
+
+        // And it survives the trip through a file, where the numbers are kept
+        // to fewer decimals than Swift holds them in.
+        let written = try #require(document.dataRepresentation())
+        let reloaded = try #require(PDFDocument(data: written))
+        let reloadedPage = try #require(reloaded.page(at: 0))
+        #expect(TextMarkupWriter.isAlreadyWritten(descriptor, on: reloadedPage))
+    }
+
     @Test("The ink is found where the text was drawn")
     func inkExtentFromRendering() throws {
         // Drawn with its baseline at exactly y = 700, 18 point Helvetica, so
