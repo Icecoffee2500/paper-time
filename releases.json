@@ -2,6 +2,13 @@
   "repo": "Icecoffee2500/paper-time",
   "releases": [
     {
+      "version": "0.2.1",
+      "date": "2026-09-15T01:16:44Z",
+      "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.2.1/Paper.Time.0.2.1.dmg",
+      "size": 4725009,
+      "note": "표 안에서도 형광펜이 통한다."
+    },
+    {
       "version": "0.2.0",
       "date": "2026-09-14T07:18:52Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.2.0/Paper.Time.0.2.0.dmg",
