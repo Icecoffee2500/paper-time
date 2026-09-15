@@ -465,6 +465,8 @@ final class ReaderCoordinator: NSObject {
         installMarkClickMonitor(in: view)
         installPinchMonitor(in: view)
         installMarkupShortcuts(for: view)
+        if let plan = Boot.setting("PAPERTIME_MARK_TEST") { markWithoutAMouse(plan, in: view) }
+        if Boot.isSet("PAPERTIME_WATCH_THREADS") { watchNotificationThreads() }
         #endif
         restoreReadingPosition(in: view)
         return view
@@ -1049,6 +1051,58 @@ final class ReaderCoordinator: NSObject {
             try? await Task.sleep(for: .milliseconds(220))
             guard !Task.isCancelled, let self else { return }
             showMarkupPanel(for: selection, in: view)
+        }
+    }
+
+    /// Reports any notification that arrives on a thread other than the main
+    /// one. Every observer in this file is an `@objc` method of a main-actor
+    /// class, and a notification delivered on another thread calls it there.
+    private func watchNotificationThreads() {
+        NotificationCenter.default.addObserver(
+            forName: nil, object: nil, queue: nil
+        ) { note in
+            guard !Thread.isMainThread else { return }
+            FileHandle.standardError.write(Data(
+                "OFF-MAIN: \(note.name.rawValue) from \(type(of: note.object ?? "nil" as Any))\n".utf8
+            ))
+        }
+    }
+
+    /// Marks a rectangle of a page and takes the mark straight back off,
+    /// reporting how long the marking took.
+    ///
+    /// `--papertime-mark-test=5,70,600,490,140` marks that rectangle of page
+    /// six (pages counted from zero), which on this paper is a table. A
+    /// selection dragged across a table is a hundred lines in one gesture, and
+    /// that is the shape of mark that has to stay quick — there is no way to
+    /// drag a mouse from a script, and PDFKit's own drag runs an event loop of
+    /// its own that a synthesised event cannot get through.
+    private func markWithoutAMouse(_ plan: String, in view: PDFView) {
+        Task { @MainActor [weak self, weak view] in
+            func say(_ text: String) {
+                FileHandle.standardError.write(Data("mark test: \(text)\n".utf8))
+            }
+            try? await Task.sleep(for: .seconds(2))
+            guard let self, let view, let document = view.document else { return say("no view") }
+            let numbers = plan.split(separator: ",").compactMap { Double($0) }
+            guard let first = numbers.first, let page = document.page(at: Int(first))
+            else { return say("no page") }
+            let rect = numbers.count >= 5
+                ? CGRect(x: numbers[1], y: numbers[2], width: numbers[3], height: numbers[4])
+                : page.bounds(for: .cropBox)
+            view.go(to: rect, on: page)
+            try? await Task.sleep(for: .milliseconds(400))
+            guard let selection = page.selection(for: rect) else { return say("nothing there") }
+
+            let started = Date()
+            let made = session.addMarkup(for: selection, kind: .highlight, color: .yellow)
+            let took = Date().timeIntervalSince(started) * 1000
+            say(String(format: "%d lines, %d rects, %.1f ms",
+                       selection.selectionsByLine().count,
+                       made.first?.rects.count ?? 0, took))
+            // Put the paper back as it was: a probe must not leave marks in
+            // somebody's library.
+            for descriptor in made { session.removeMarkup(id: descriptor.id) }
         }
     }
 
