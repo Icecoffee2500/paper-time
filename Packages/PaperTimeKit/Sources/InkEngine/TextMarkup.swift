@@ -113,22 +113,28 @@ public enum TextMarkupWriter {
     ) -> [MarkupDescriptor] {
         var byPage: [Int: [CGRect]] = [:]
         var textByPage: [Int: String] = [:]
-        var metricsByPage: [Int: LineMetrics] = [:]
 
         // A selection spanning several lines has to become one rectangle per
         // line, or the highlight covers the whole block including its margins.
         for line in selection.selectionsByLine() {
             for page in line.pages {
                 let index = document.index(for: page)
-                let metrics = metricsByPage[index] ?? LineMetrics(page: page)
-                metricsByPage[index] = metrics
-                byPage[index, default: []].append(
-                    metrics.tightened(line.bounds(for: page), on: page)
-                )
+                byPage[index, default: []].append(line.bounds(for: page))
                 let existing = textByPage[index] ?? ""
                 let addition = line.string ?? ""
                 textByPage[index] = existing.isEmpty ? addition : "\(existing) \(addition)"
             }
+        }
+
+        // The lines are fitted to their letters a page at a time, off one
+        // rendering that covers the whole mark. Measuring them one at a time
+        // drew the page once per line — a hundred times over for a selection
+        // across a table, a second of the main thread spent inside PDFKit
+        // while PDFKit was busy with that same page on a thread of its own.
+        for (index, rects) in byPage {
+            guard let page = document.page(at: index) else { continue }
+            let metrics = LineMetrics(page: page, over: rects.reduce(CGRect.null) { $0.union($1) })
+            byPage[index] = rects.map { metrics.tightened($0) }
         }
 
         return byPage.keys.sorted().map { index in
@@ -160,18 +166,22 @@ public enum TextMarkupWriter {
     /// reported rectangle, so it cannot stray onto a neighbouring line.
     struct LineMetrics {
         private let typicalLine: CGFloat
+        /// One greyscale rendering covering every line of this mark. Made
+        /// once: see the note in `descriptor(for:)`.
+        private let strip: InkStrip?
 
-        init(page: PDFPage) {
+        init(page: PDFPage, over region: CGRect) {
             let heights = (page.selection(for: page.bounds(for: .cropBox))?
                 .selectionsByLine() ?? [])
                 .map { $0.bounds(for: page).height }
                 .filter { $0 > 0 }
                 .sorted()
             typicalLine = heights.count >= 4 ? heights[heights.count / 2] : 0
+            strip = region.isNull ? nil : InkStrip(page: page, over: region)
         }
 
-        func tightened(_ rect: CGRect, on page: PDFPage) -> CGRect {
-            guard let ink = Self.inkExtent(of: rect, on: page) else { return rect }
+        func tightened(_ rect: CGRect) -> CGRect {
+            guard let ink = strip?.extent(of: rect) else { return rect }
 
             // Something too thin to be a line of text — a rule, a fragment of a
             // figure — is left alone.
@@ -190,19 +200,58 @@ public enum TextMarkupWriter {
             return band
         }
 
-        /// The top and bottom of the ink belonging to this line.
+        /// The top and bottom of the ink belonging to one line.
         static func inkExtent(of rect: CGRect, on page: PDFPage) -> (minY: CGFloat, height: CGFloat)? {
-            let scale: CGFloat = 3
-            let width = Int((rect.width * scale).rounded(.up))
-            let height = Int((rect.height * scale).rounded(.up))
-            guard width > 0, height > 2, width * height <= 4_000_000 else { return nil }
+            InkStrip(page: page, over: rect)?.extent(of: rect)
+        }
+    }
+
+    /// A piece of the page, drawn once in grey, kept to be read line by line.
+    ///
+    /// The page is drawn a single time for the whole mark rather than once per
+    /// line. Two reasons, and the second is the one that matters: a mark
+    /// across a table covers a hundred lines, so a hundred renderings of a
+    /// full page were a second of work; and PDFKit hands a page that has just
+    /// come into view to Vision on a queue of its own — on macOS 26 it looks
+    /// for tables there — so every one of those renderings was the app reading
+    /// a page while the frameworks underneath were rewriting it.
+    struct InkStrip {
+        /// Kept rather than copied out: a page's worth of grey is four
+        /// megabytes, and it is read a few thousand times and then dropped.
+        private let context: CGContext
+        private let pixels: UnsafePointer<UInt8>
+        private let rowBytes: Int
+        private let width: Int
+        private let height: Int
+        private let scale: CGFloat
+        /// The page rectangle the bitmap covers, its top-left at pixel (0, 0).
+        private let region: CGRect
+
+        init?(page: PDFPage, over wanted: CGRect) {
+            // A hair of margin, so a line at the very edge of the mark is
+            // measured with the white space that tells where it ends.
+            let region = wanted.insetBy(dx: -2, dy: -2)
+            guard region.width > 0, region.height > 0 else { return nil }
+
+            // Three pixels to the point where that fits; coarser for a mark
+            // that covers a whole page, rather than giving up as the old
+            // per-line measurement did when a line was improbably large.
+            var scale: CGFloat = 3
+            var width = 0, height = 0
+            while scale >= 0.5 {
+                width = Int((region.width * scale).rounded(.up))
+                height = Int((region.height * scale).rounded(.up))
+                if width > 0, height > 2, width * height <= 16_000_000 { break }
+                scale /= 2
+            }
+            guard width > 0, height > 2, width * height <= 16_000_000 else { return nil }
 
             guard let context = CGContext(
                 data: nil,
                 width: width,
                 height: height,
                 bitsPerComponent: 8,
-                bytesPerRow: width,
+                bytesPerRow: 0,
                 space: CGColorSpaceCreateDeviceGray(),
                 bitmapInfo: CGImageAlphaInfo.none.rawValue
             ) else { return nil }
@@ -211,18 +260,44 @@ public enum TextMarkupWriter {
             context.fill(CGRect(x: 0, y: 0, width: width, height: height))
             context.scaleBy(x: scale, y: scale)
             let box = page.bounds(for: .cropBox)
-            context.translateBy(x: -(rect.minX - box.minX), y: -(rect.minY - box.minY))
+            context.translateBy(x: -(region.minX - box.minX), y: -(region.minY - box.minY))
             page.draw(with: .cropBox, to: context)
 
             guard let data = context.data else { return nil }
-            let pixels = data.assumingMemoryBound(to: UInt8.self)
-            var ink = [Int](repeating: 0, count: height)
-            for row in 0..<height {
-                let start = row * width
+            self.context = context
+            self.pixels = UnsafePointer(data.assumingMemoryBound(to: UInt8.self))
+            // The stride Core Graphics chose, which it rounds up for alignment
+            // and which is not the width in bytes.
+            self.rowBytes = context.bytesPerRow
+            self.width = width
+            self.height = height
+            self.scale = scale
+            self.region = region
+        }
+
+        /// Where the ink of one line sits inside this strip.
+        func extent(of rect: CGRect) -> (minY: CGFloat, height: CGFloat)? {
+            // The line's own window into the bitmap. Row 0 of that window is
+            // the top of the line's rectangle, which is what the measurements
+            // below are expressed in.
+            let top = Int(((region.maxY - rect.maxY) * scale).rounded(.down))
+            let rows = Int((rect.height * scale).rounded(.up))
+            let left = Int(((rect.minX - region.minX) * scale).rounded(.down))
+            let columns = Int((rect.width * scale).rounded(.up))
+            let firstRow = max(0, top), lastRow = min(height - 1, top + rows - 1)
+            let firstColumn = max(0, left), lastColumn = min(width - 1, left + columns - 1)
+            guard lastRow - firstRow > 2, lastColumn >= firstColumn else { return nil }
+
+            var ink = [Int](repeating: 0, count: lastRow - firstRow + 1)
+            for row in firstRow...lastRow {
+                let start = row * rowBytes
                 var count = 0
-                for column in 0..<width where pixels[start + column] < 160 { count += 1 }
-                ink[row] = count
+                for column in firstColumn...lastColumn where pixels[start + column] < 160 {
+                    count += 1
+                }
+                ink[row - firstRow] = count
             }
+            let height = ink.count
 
             guard let densest = ink.max(), densest > 0 else { return nil }
 
@@ -253,26 +328,27 @@ public enum TextMarkupWriter {
             // that separates this line from the next.
             let faint = max(1, densest / 40)
             let gap = 3
-            var top = core.first
+            var topRow = core.first
             var blank = 0
             var row = core.first - 1
             while row >= 0, blank < gap {
                 blank = ink[row] >= faint ? 0 : blank + 1
-                if ink[row] >= faint { top = row }
+                if ink[row] >= faint { topRow = row }
                 row -= 1
             }
-            var bottom = core.last
+            var bottomRow = core.last
             blank = 0
             row = core.last + 1
             while row < height, blank < gap {
                 blank = ink[row] >= faint ? 0 : blank + 1
-                if ink[row] >= faint { bottom = row }
+                if ink[row] >= faint { bottomRow = row }
                 row += 1
             }
 
-            // Row 0 of the bitmap is the top of the rectangle.
-            let maxY = rect.maxY - CGFloat(top) / scale
-            let minY = rect.maxY - CGFloat(bottom + 1) / scale
+            // Back to the page, off the strip's own grid: row r covers from
+            // `region.maxY - (r + 1) / scale` up to `region.maxY - r / scale`.
+            let maxY = region.maxY - CGFloat(firstRow + topRow) / scale
+            let minY = region.maxY - CGFloat(firstRow + bottomRow + 1) / scale
             return (minY, maxY - minY)
         }
     }
@@ -382,6 +458,41 @@ public enum TextMarkupWriter {
         guard let id = identifier(of: annotation) else { return nil }
         annotation.setValue(id.uuidString, forAnnotationKey: idKey)
         return id
+    }
+
+    /// Whether the page already carries exactly this markup.
+    ///
+    /// The writer puts every mark the journals know about back into the file
+    /// on every save, so that a file another device also wrote ends up
+    /// holding both. Writing back a mark that is already there changes
+    /// nothing in the file — but every annotation added tells PDFKit, which
+    /// tells the whole process, on whichever thread the writer happens to be.
+    /// Measured on a paper marked up across a table, one round of saving sent
+    /// twenty thousand of those notifications off the main thread, where the
+    /// view that receives them has no business being.
+    public static func isAlreadyWritten(_ descriptor: MarkupDescriptor, on page: PDFPage) -> Bool {
+        let mine = page.annotations.filter { identifier(of: $0) == descriptor.id }
+        guard !mine.isEmpty else { return false }
+        guard mine.allSatisfy({ kind(for: $0) == descriptor.kind }) else { return false }
+        guard mine.allSatisfy({ nearestColor($0.color) == descriptor.color }) else { return false }
+        let comments = Set(mine.map { $0.value(forAnnotationKey: commentKey) as? String ?? "" })
+        guard comments == [descriptor.comment] else { return false }
+
+        // A note is one annotation at the head of what it refers to; the rest
+        // are one annotation per line.
+        guard descriptor.kind != .note else { return mine.count == 1 }
+        let written = mine.map(\.bounds)
+        let wanted = descriptor.rects.filter { $0.width > 0.5 && $0.height > 0.5 }
+        guard written.count == wanted.count else { return false }
+        return wanted.allSatisfy { rect in
+            written.contains { near($0, rect) }
+        }
+    }
+
+    /// The same rectangle, to within what a PDF keeps of it.
+    private static func near(_ lhs: CGRect, _ rhs: CGRect) -> Bool {
+        abs(lhs.minX - rhs.minX) < 0.01 && abs(lhs.minY - rhs.minY) < 0.01
+            && abs(lhs.width - rhs.width) < 0.01 && abs(lhs.height - rhs.height) < 0.01
     }
 
     public static func remove(id: UUID, from page: PDFPage) {

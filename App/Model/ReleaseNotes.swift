@@ -226,6 +226,26 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.2.1",
+            date: Text2("2026년 9월", "September 2026"),
+            note: Text2("표 안에서도 형광펜이 통한다.", "The highlighter works inside a table too."),
+            added: [],
+            fixed: [
+                Entry(
+                    Text2("표 안의 표시", "Marking inside a table"),
+                    Text2("표를 가로질러 그은 선택은 줄이 백 개가 넘는다. 형광펜이 글자에 맞게 앉으려고 줄마다 쪽을 한 번씩 그렸으니 백 번이었고, 그동안 PDFKit은 같은 쪽을 제 스레드에서 훑고 있었다 — 맥OS 26은 새로 보이는 쪽을 Vision에 넘겨 표를 찾는다. 이제 한 번만 그린다. 표 한 덩어리를 칠하는 데 78밀리초가 4밀리초가 됐고, 앱이 그 쪽을 붙들고 있는 시간도 그만큼 짧아졌다.",
+                          "A selection drawn across a table is more than a hundred lines. To sit the highlight on the letters, the app drew the page once for every one of them — a hundred renderings, while PDFKit was reading the same page on a thread of its own, because macOS 26 hands a newly visible page to Vision to look for tables in it. It draws once now. Measuring a table's worth of lines went from 78 milliseconds to 4, and the app holds that page for as much less time."),
+                    devices: [.mac, .ipad, .iphone]
+                ),
+                Entry(
+                    Text2("저장할 때의 소란", "The noise of saving"),
+                    Text2("저장은 파일을 디스크에서 다시 짓는다 — 다른 기기가 쓴 표시까지 같이 남기려고 아는 표시를 모두 다시 넣었다. 이미 그대로 들어 있는 표시는 이제 건드리지 않는다. 표를 칠한 논문에서 저장 한 번이 던지던 알림 2만 3천 개가 0이 됐다.",
+                          "A save rebuilds the file from disk, putting back every mark the app knows about so that another device's marks survive too. Marks already in the file, exactly as they are, are now left alone: on a paper marked across a table, one round of saving went from twenty-three thousand notifications to none."),
+                    devices: [.mac, .ipad, .iphone]
+                ),
+            ]
+        ),
+        Release(
             version: "0.2.0",
             date: Text2("2026년 9월", "September 2026"),
             note: Text2("두 번째 알파: 상자가 글이 되는 길, 그리고 아이패드와 아이폰.", "The second alpha: the way from the box to the manuscript, and the iPad and iPhone."),

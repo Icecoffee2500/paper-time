@@ -618,6 +618,10 @@ public final class DocumentSession {
             }
             for descriptor in additions {
                 guard let page = document.page(at: descriptor.pageIndex) else { continue }
+                // Already in the file, exactly as the journals describe it:
+                // writing it again would produce the same bytes and a storm of
+                // notifications from this thread. See `isAlreadyWritten`.
+                guard !TextMarkupWriter.isAlreadyWritten(descriptor, on: page) else { continue }
                 TextMarkupWriter.remove(id: descriptor.id, from: page)
                 TextMarkupWriter.apply(descriptor, to: page)
             }
