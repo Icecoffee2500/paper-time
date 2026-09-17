@@ -226,6 +226,20 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.2.3",
+            date: Text2("2026년 9월", "September 2026"),
+            note: Text2("표의 셀이 노랗게 칠해진다.", "A table cell takes the highlighter."),
+            added: [],
+            fixed: [
+                Entry(
+                    Text2("표 셀 하이라이트", "Highlighting a table cell"),
+                    Text2("표에서 셀을 잡은 선택은 전체로는 제 자리를 아는데, 줄로 쪼개면 PDFKit이 위치를 잃는다(빈 사각형). 형광펜은 줄 단위로 사각형을 만들어서 사각형이 0개인 표시가 됐다 — 막대 뜨고 색 눌러도 아무것도 안 나타났다. 자리를 모르는 줄은 글자 범위로 다시 묻고, 그래도 모르면 선택 전체의 상자를 쓴다.",
+                          "A cell selected in a table knows where it is as a whole, but split into lines PDFKit loses the place (a null rectangle). Highlights are made a line at a time, so the mark had no rectangles: the bar came up, the colour was pressed, nothing appeared. A line without a place is asked again by its text range, and failing that the whole selection's box stands in."),
+                    devices: [.mac, .ipad, .iphone]
+                ),
+            ]
+        ),
+        Release(
             version: "0.2.2",
             date: Text2("2026년 9월", "September 2026"),
             note: Text2("표에서 죽던 진짜 이유를 찾았다.", "The real reason it died in tables, found."),

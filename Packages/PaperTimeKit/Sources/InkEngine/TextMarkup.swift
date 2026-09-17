@@ -119,10 +119,7 @@ public enum TextMarkupWriter {
         for line in selection.selectionsByLine() {
             for page in line.pages {
                 let index = document.index(for: page)
-                // A line PDFKit cannot place — `nan` all round, on some table
-                // cells — has nowhere to be marked, and `Int(nan)` is a trap.
-                let bounds = line.bounds(for: page)
-                guard bounds.isFinite else { continue }
+                guard let bounds = placement(of: line, on: page, within: selection) else { continue }
                 byPage[index, default: []].append(bounds)
                 let existing = textByPage[index] ?? ""
                 let addition = line.string ?? ""
@@ -151,6 +148,35 @@ public enum TextMarkupWriter {
                     .trimmingCharacters(in: .whitespacesAndNewlines)
             )
         }
+    }
+
+    /// Where a line of a selection is, asked three ways.
+    ///
+    /// For a selection made in a table — once PDFKit's own table analysis has
+    /// been over the page — `selectionsByLine()` hands back lines whose
+    /// `bounds(for:)` is the null rectangle, `(inf, inf, 0, 0)`, while the
+    /// selection as a whole still knows where it is. Marks are made a line at
+    /// a time, so a cell selected in a table produced a mark with no
+    /// rectangles in it: the bar came up, the colour was pressed, nothing
+    /// appeared. So a line that cannot say where it is is rebuilt from its
+    /// text ranges and asked again, and failing that the whole selection's
+    /// box stands in for it — exact for a single cell, and for several cells
+    /// still the block the reader drew.
+    static func placement(of line: PDFSelection, on page: PDFPage, within whole: PDFSelection) -> CGRect? {
+        func usable(_ rect: CGRect) -> Bool { rect.isFinite && rect.width > 0 && rect.height > 0 }
+        let own = line.bounds(for: page)
+        if usable(own) { return own }
+
+        var rebuilt = CGRect.null
+        for i in 0..<line.numberOfTextRanges(on: page) {
+            guard let again = page.selection(for: line.range(at: i, on: page)) else { continue }
+            let box = again.bounds(for: page)
+            if usable(box) { rebuilt = rebuilt.union(box) }
+        }
+        if usable(rebuilt) { return rebuilt }
+
+        let all = whole.bounds(for: page)
+        return usable(all) ? all : nil
     }
 
     /// Where a line's words actually are, found by looking at the ink.
