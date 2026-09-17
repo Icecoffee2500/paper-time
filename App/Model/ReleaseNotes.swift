@@ -228,12 +228,12 @@ enum ReleaseNotes {
         Release(
             version: "0.3.0",
             date: Text2("2026년 9월", "September 2026"),
-            note: Text2("Sonoma에서도 돈다.", "Runs on Sonoma."),
+            note: Text2("Sonoma를 위해 지었다 — 아직 Sonoma에서 켜 본 것은 아니다.", "Built for Sonoma — not yet run on one."),
             added: [
                 Entry(
                     Text2("macOS 14부터", "From macOS 14"),
-                    Text2("최소 macOS가 26에서 14(Sonoma)로 내려갔다. 26에만 있는 것은 셋이고 없어도 앱은 그대로다: 온디바이스 모델이 제목·저자를 읽는 것(그 아래에서는 조판 규칙으로 읽는다), 도구 막대의 유리(그 아래에서는 평범한 도구 막대), 목록을 끌어내려 검색을 여는 것(⌘K와 단추는 그대로).",
-                          "The minimum macOS goes from 26 to 14, Sonoma. Three things exist only on 26 and the app stands without them: the on-device model reading titles and authors (below it, layout heuristics do), the glass on the toolbar (below it, an ordinary toolbar), and pulling the list down to open the search (Command-K and the button remain)."),
+                    Text2("최소 macOS가 26에서 14(Sonoma)로 내려갔다. 26에만 있는 것은 셋이고 없어도 앱은 그대로다: 온디바이스 모델이 제목·저자를 읽는 것(그 아래에서는 조판 규칙으로 읽는다), 도구 막대의 유리(그 아래에서는 평범한 도구 막대), 목록을 끌어내려 검색을 여는 것(⌘K와 단추는 그대로). 26이 깔린 맥에서 14를 위해 짓고 확인했고, 실제 Sonoma 맥이 이 앱을 켜 본 것은 아직 없다 — 켜 봤다면 어땠는지 알려주면 고맙다.",
+                          "The minimum macOS goes from 26 to 14, Sonoma. Three things exist only on 26 and the app stands without them: the on-device model reading titles and authors (below it, layout heuristics do), the glass on the toolbar (below it, an ordinary toolbar), and pulling the list down to open the search (Command-K and the button remain). Built and checked for 14 on a Mac running 26; a Sonoma Mac has not yet opened it — if yours does, say how it went."),
                     devices: [.mac]
                 ),
             ],
