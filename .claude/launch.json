@@ -2,10 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "site",
+      "name": "website",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8791", "--directory", "Website"],
-      "port": 8791
+      "runtimeArgs": ["-m", "http.server", "8769", "--directory", "Website"],
+      "port": 8769
     }
   ]
 }

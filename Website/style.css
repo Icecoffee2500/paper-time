@@ -416,6 +416,9 @@ dialog::backdrop { background: rgba(12, 16, 24, .4); backdrop-filter: blur(4px);
 .vrow .v { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 54px; }
 .vrow .n { color: var(--ink-3); font-size: 13.5px; flex: 1 1 120px; }
 .vrow .s { color: var(--ink-3); font-size: 13px; }
+.vrow .d { color: var(--ink-2); font-size: 13px; font-variant-numeric: tabular-nums; margin-left: auto; }
+/* One line under the buttons, the width of them: how many have taken it. */
+.actions .tally { flex-basis: 100%; margin: 2px 0 0 2px; }
 
 /* ─────────────────────────────── narrow ───────────────────────────────── */
 

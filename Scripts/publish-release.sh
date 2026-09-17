@@ -59,6 +59,9 @@ for item in json.loads(raw):
         "date": item.get("published_at"),
         "asset": dmg["browser_download_url"],
         "size": dmg.get("size"),
+        # GitHub's own tally of the asset, as of this run: a snapshot for
+        # the page to show when the live API is out of reach.
+        "downloads": dmg.get("download_count", 0),
         "note": note if item["tag_name"] == tag and note else None,
     })
 
@@ -82,25 +85,8 @@ page.write_text(json.dumps({"repo": repo, "releases": releases},
 print("Website/releases.json - " + str(len(releases)) + " version(s)")
 PY
 
-# The page lives on its own branch, holding nothing but itself: the site is
-# what a visitor gets, and the source is what a reader of the source gets.
-WORK="/tmp/papertime-pages"
-rm -rf "$WORK"
-git worktree add -q "$WORK" gh-pages 2>/dev/null || {
-  git worktree add -q --detach "$WORK"
-  git -C "$WORK" checkout -q --orphan gh-pages
-  git -C "$WORK" rm -rq --cached . 2>/dev/null || true
-  rm -f "$WORK"/* 2>/dev/null || true
-}
-trap 'git -C "$ROOT" worktree remove --force "$WORK" 2>/dev/null || true' EXIT
-# The whole site, not two files of it: the page has stylesheet, script and
-# screenshots now. Cleared first, so a file dropped from Website/ leaves the
-# branch too.
-git -C "$WORK" rm -rq --ignore-unmatch . >/dev/null 2>&1 || true
-cp -R Website/. "$WORK/"
-git -C "$WORK" add -A
-git -C "$WORK" commit -qm "Paper Time $TAG on the page" || echo "the page was already up to date"
-git -C "$WORK" push -q origin gh-pages
+# Onto gh-pages, by the script that does only that.
+Scripts/publish-page.sh "Paper Time $TAG on the page" >/dev/null
 
 echo "published $TAG to $REPO"
 echo "the page: https://$(echo "$REPO" | cut -d/ -f1 | tr "A-Z" "a-z").github.io/$(echo "$REPO" | cut -d/ -f2)/"

@@ -89,6 +89,10 @@ git push origin main --tags
 같이 커밋한다. `Docs/`는 이 프로젝트가 스스로 두는 메모이지 배포 페이지가 아니다
 (대소문자를 가리지 않는 디스크에서 `docs/`로 보여도 git은 가린다).
 
+배포 페이지의 **다운로드 수**는 GitHub가 릴리스 자산(DMG)마다 세는 `download_count`다 — 첫 DMG를 올린 날부터 세고 있어서 페이지에 보이기 전의 것도 들어 있다. `publish-release.sh`가 그때의 값을 `releases.json`의 `downloads`에 박아 두고(API가 막혔을 때의 대비), 페이지(`demos.js`의 `fetchDownloadCounts`)는 열릴 때 `api.github.com/repos/…/releases`를 직접 불러 산 값으로 바꾼다(인증 없이 IP당 시간에 60번 — 랜딩 페이지에는 넉넉하다). **그 숫자에는 확인하느라 내려받은 것도 다 들어간다** — 배포 확인은 릴리스 자산을 `curl`로 받지 말고 `dist/`에 만들어진 같은 DMG로 하라(`gh release view <tag> --json assets`의 `digest`로 같은 파일인지 대조할 수 있다). 2026-09-17 기준 10회 중 7회가 그렇게 내가 받은 것이었다.
+
+페이지만 바꾼 것(문장, 카드, 스크립트)은 릴리스 없이 `Scripts/publish-page.sh "메시지"`로 gh-pages에 올린다 — `publish-release.sh`도 마지막에 이걸 부른다. 그런 커밋은 `releases.json`과 마찬가지로 `main`에 직접 둔다(앱 버전이 아니라 페이지의 일이다). 링크를 붙였을 때 메신저가 펼치는 카드(`og:image`)와 파비콘은 `Scripts/page-images.swift`가 앱 아이콘에서 그린다 — `swiftc -O Scripts/page-images.swift -o /tmp/page-images && /tmp/page-images`. 카드는 JPEG다(바탕이 그라디언트라 PNG는 1.5 MB, JPEG는 170 KB). `og:image`가 없으면 카카오톡 같은 곳은 페이지의 첫 `<img>`를 집어 간다 — 그게 설치 안내의 보안 대화상자 스크린샷이었다.
+
 한쪽에서 고친 것이 다른 쪽에 당장 필요하면, 그 가지를 기다리지 말고 `git merge debug/v0.1.0`으로 끌어온다. 버전을 닫기 전까지 `main`은 건드리지 않는다.
 
 개발 현황은 `python3 Scripts/board.py`로 본다 — 가지별 상태와 커밋 그래프를 HTML로 그려서 열어준다.
