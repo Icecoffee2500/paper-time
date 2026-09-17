@@ -226,6 +226,20 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.2.2",
+            date: Text2("2026년 9월", "September 2026"),
+            note: Text2("표에서 죽던 진짜 이유를 찾았다.", "The real reason it died in tables, found."),
+            added: [],
+            fixed: [
+                Entry(
+                    Text2("표에서 형광펜을 들면 꺼지던 것", "Quitting when the highlighter was raised over a table"),
+                    Text2("표를 가로지른 선택에 대해 PDFKit이 위치를 '숫자 아님(nan)'으로 돌려줄 때가 있다. 그 자리에 표시 막대를 세우려다 AppKit이 예외를 던졌고, 그 예외가 Swift 태스크를 뚫고 지나가면서 런타임을 망가뜨려 그 다음 아무 곳에서나 죽었다. 이제 위치를 모르는 줄은 세지 않고, 아는 줄이 하나도 없으면 막대는 손 아래에 선다. 막대 자체도 숫자 아닌 자리는 거절한다.",
+                          "For a selection across a table, PDFKit sometimes reports its position as not-a-number. Standing the markup bar there made AppKit throw, and that exception, unwinding through a Swift task, left the runtime broken — the app then died at the next thing it did, anywhere. Lines without a place are no longer counted; when none has one, the bar stands under the hand. The bar itself now refuses a position that is not a number."),
+                    devices: [.mac]
+                ),
+            ]
+        ),
+        Release(
             version: "0.2.1",
             date: Text2("2026년 9월", "September 2026"),
             note: Text2("표 안에서도 형광펜이 통한다.", "The highlighter works inside a table too."),
