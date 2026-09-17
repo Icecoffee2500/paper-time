@@ -4,7 +4,7 @@ import PackageDescription
 let package = Package(
     name: "PaperTimeKit",
     defaultLocalization: "en",
-    platforms: [.iOS("26.0"), .macOS("26.0")],
+    platforms: [.iOS("26.0"), .macOS("14.0")],
     products: [
         .library(name: "PaperCore", targets: ["PaperCore"]),
         .library(name: "LibraryStore", targets: ["LibraryStore"]),

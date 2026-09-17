@@ -458,7 +458,7 @@ private struct ScopeRow: ViewModifier {
     /// type on a pale wash over a blue desktop does not. Deepened toward
     /// black in the light, lifted toward white in the dark.
     private var textColor: Color {
-        symbolColor.mix(with: colorScheme == .dark ? .white : .black, by: colorScheme == .dark ? 0.25 : 0.4)
+        symbolColor.mixed(with: colorScheme == .dark ? .white : .black, by: colorScheme == .dark ? 0.25 : 0.4)
     }
 
     /// A pale wash of a shelf's colour; for the graph, the three colours of
@@ -612,5 +612,23 @@ private extension View {
                     .foregroundStyle(current ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
             }
         )
+    }
+}
+
+extension Color {
+    /// This colour moved part of the way toward another.
+    ///
+    /// `mix(with:by:)` arrived with macOS 15; before it, AppKit's blend does
+    /// the same sum in the same space, near enough for a wash behind words.
+    func mixed(with other: Color, by fraction: Double) -> Color {
+        if #available(macOS 15, iOS 18, *) {
+            return mix(with: other, by: fraction)
+        }
+        #if os(macOS)
+        let base = NSColor(self)
+        return Color(nsColor: base.blended(withFraction: fraction, of: NSColor(other)) ?? base)
+        #else
+        return self
+        #endif
     }
 }
