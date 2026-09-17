@@ -119,7 +119,11 @@ public enum TextMarkupWriter {
         for line in selection.selectionsByLine() {
             for page in line.pages {
                 let index = document.index(for: page)
-                byPage[index, default: []].append(line.bounds(for: page))
+                // A line PDFKit cannot place — `nan` all round, on some table
+                // cells — has nowhere to be marked, and `Int(nan)` is a trap.
+                let bounds = line.bounds(for: page)
+                guard bounds.isFinite else { continue }
+                byPage[index, default: []].append(bounds)
                 let existing = textByPage[index] ?? ""
                 let addition = line.string ?? ""
                 textByPage[index] = existing.isEmpty ? addition : "\(existing) \(addition)"
@@ -132,7 +136,7 @@ public enum TextMarkupWriter {
         // across a table, a second of the main thread spent inside PDFKit
         // while PDFKit was busy with that same page on a thread of its own.
         for (index, rects) in byPage {
-            guard let page = document.page(at: index) else { continue }
+            guard let page = document.page(at: index), !rects.isEmpty else { continue }
             let metrics = LineMetrics(page: page, over: rects.reduce(CGRect.null) { $0.union($1) })
             byPage[index] = rects.map { metrics.tightened($0) }
         }

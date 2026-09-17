@@ -46,3 +46,17 @@ extension NSValue {
         #endif
     }
 }
+
+extension CGRect {
+    /// Whether every number in the rectangle is one.
+    ///
+    /// PDFKit's selections can report a `bounds(for:)` of `nan` — seen on a
+    /// selection across a table, after the framework's own table analysis had
+    /// rewritten the page's lines. `isEmpty` and `isNull` both let such a
+    /// rectangle through, because every comparison with `nan` is false; and a
+    /// window asked to stand at `nan` throws an Objective-C exception, which
+    /// is not a thing a Swift task survives.
+    public var isFinite: Bool {
+        origin.x.isFinite && origin.y.isFinite && size.width.isFinite && size.height.isFinite
+    }
+}

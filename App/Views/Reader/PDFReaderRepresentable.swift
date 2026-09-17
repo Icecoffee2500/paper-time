@@ -1018,11 +1018,7 @@ final class ReaderCoordinator: NSObject {
 
         // Where the selection sits inside the reader, so the markup controls
         // can appear next to the text instead of at the top of the window.
-        var frame = CGRect.zero
-        for page in selection.pages {
-            let bounds = view.convert(selection.bounds(for: page), from: page)
-            frame = frame.isEmpty ? bounds : frame.union(bounds)
-        }
+        var frame = Self.extent(of: selection, in: view)
 
         #if os(macOS)
         // AppKit views are bottom-left origin unless flipped, while the SwiftUI
@@ -1037,6 +1033,27 @@ final class ReaderCoordinator: NSObject {
         #if os(macOS)
         scheduleMarkupPanel(for: selection, in: view)
         #endif
+    }
+
+    /// The box round a selection, in the view's coordinates, made only from
+    /// the pages that can say where it is.
+    ///
+    /// `bounds(for:)` comes back as `nan` for some lines of a selection that
+    /// crosses a table — once PDFKit's own table analysis has been over the
+    /// page — and `nan` passes `isEmpty`, `union`s into everything it touches,
+    /// and ends as a window frame AppKit refuses with an exception. Empty
+    /// here means "nowhere PDFKit could name", and the callers say what to
+    /// do with that.
+    private static func extent(of selection: PDFSelection, in view: PDFView) -> CGRect {
+        var frame = CGRect.zero
+        for page in selection.pages {
+            let onPage = selection.bounds(for: page)
+            guard onPage.isFinite else { continue }
+            let bounds = view.convert(onPage, from: page)
+            guard bounds.isFinite else { continue }
+            frame = frame.isEmpty ? bounds : frame.union(bounds)
+        }
+        return frame
     }
 
     // MARK: - Markup panel
@@ -1093,6 +1110,9 @@ final class ReaderCoordinator: NSObject {
             view.go(to: rect, on: page)
             try? await Task.sleep(for: .milliseconds(400))
             guard let selection = page.selection(for: rect) else { return say("nothing there") }
+            let lines = selection.selectionsByLine()
+            let placeless = lines.filter { !$0.bounds(for: page).isFinite }.count
+            say("selection bounds \(selection.bounds(for: page)), \(placeless) of \(lines.count) lines without a place")
 
             let started = Date()
             let made = session.addMarkup(for: selection, kind: .highlight, color: .yellow)
@@ -1103,6 +1123,19 @@ final class ReaderCoordinator: NSObject {
             // Put the paper back as it was: a probe must not leave marks in
             // somebody's library.
             for descriptor in made { session.removeMarkup(id: descriptor.id) }
+
+            // `--papertime-nan-bar=1`: the exact call that took the app down —
+            // the bar asked to stand at a place that is not a number. Before
+            // the guards this threw inside a task and the app died a moment
+            // later, somewhere else; now it should stand mid-window and say so.
+            if Boot.isSet("PAPERTIME_NAN_BAR"), let window = view.window {
+                let nowhere = CGRect(x: CGFloat.nan, y: CGFloat.nan, width: 10, height: 10)
+                markupPanel.show(anchor: nowhere, over: window, quotedText: "",
+                                 onMark: { _, _ in }, onNote: { _ in }, onCopy: {},
+                                 onUltraCopy: {}, onDismiss: {})
+                try? await Task.sleep(for: .milliseconds(300))
+                say("nan bar: showing \(markupPanel.isShowing), panel frame \(markupPanel.frameForTesting.map { "\($0)" } ?? "none")")
+            }
         }
     }
 
@@ -1112,14 +1145,19 @@ final class ReaderCoordinator: NSObject {
         composing: Bool = false
     ) {
         guard let window = view.window else { return }
-        var frame = CGRect.zero
-        for page in selection.pages {
-            let bounds = view.convert(selection.bounds(for: page), from: page)
-            frame = frame.isEmpty ? bounds : frame.union(bounds)
+        var onScreen: CGRect
+        let frame = Self.extent(of: selection, in: view)
+        if !frame.isEmpty {
+            onScreen = window.convertToScreen(view.convert(frame, to: nil))
+        } else {
+            // PDFKit could not say where the selection is — every line of it
+            // came back as `nan`, which a selection across a table can do.
+            // The words are still selected and can still be marked, so the
+            // bar stands where the hand is instead of not at all.
+            let pointer = NSEvent.mouseLocation
+            onScreen = CGRect(x: pointer.x, y: pointer.y, width: 0, height: 0)
         }
-        guard !frame.isEmpty else { return }
-        let inWindow = view.convert(frame, to: nil)
-        let onScreen = window.convertToScreen(inWindow)
+        guard onScreen.isFinite else { return }
 
         markupPanel.show(
             anchor: onScreen,
@@ -1205,9 +1243,10 @@ final class ReaderCoordinator: NSObject {
               let descriptor = session.markup(withID: id)
         else { return }
 
-        guard let page = annotation.page else { return }
+        guard let page = annotation.page, annotation.bounds.isFinite else { return }
         let inView = view.convert(annotation.bounds, from: page)
         let onScreen = window.convertToScreen(view.convert(inView, to: nil))
+        guard onScreen.isFinite else { return }
         markupPanel.showEditor(
             anchor: onScreen,
             over: window,

@@ -244,6 +244,17 @@ struct TextMarkupTests {
         #expect(TextMarkupWriter.isAlreadyWritten(descriptor, on: reloadedPage))
     }
 
+    @Test("A rectangle with nan in it is not finite, whatever isEmpty says")
+    func nanRectangleIsCaught() {
+        let bad = CGRect(x: CGFloat.nan, y: CGFloat.nan, width: 316, height: 34)
+        #expect(!bad.isEmpty)      // the trap: every comparison with nan is false
+        #expect(!bad.isNull)
+        #expect(!bad.isFinite)
+        #expect(!CGRect(x: 0, y: 0, width: CGFloat.infinity, height: 1).isFinite)
+        #expect(CGRect(x: 1, y: 2, width: 3, height: 4).isFinite)
+        #expect(CGRect.zero.isFinite)
+    }
+
     @Test("The ink is found where the text was drawn")
     func inkExtentFromRendering() throws {
         // Drawn with its baseline at exactly y = 700, 18 point Helvetica, so
