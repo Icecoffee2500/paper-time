@@ -116,20 +116,34 @@ struct LibraryWindow: View {
     @ViewBuilder
     private var decorated: some View {
         #if os(macOS)
-        windowBody
-            // One toolbar with a flexible spacer in it, rather than two.
-            // Without the title holding them apart the two groups packed
-            // against the leading edge together; the spacer is what macOS 26
-            // gives you to say "these belong at the other end".
-            .toolbar(id: "library") {
-                toolbarContent.sharedBackgroundVisibility(.hidden)
-                ToolbarSpacer(.flexible)
-                inspectorToolbarContent.sharedBackgroundVisibility(.hidden)
-            }
-            // Hidden, so the toolbar has no colour of its own: the window's
-            // ground runs straight up through it and there is no edge left
-            // where the two used to meet. The controls carry their own glass.
-            .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        if #available(macOS 26, *) {
+            windowBody
+                // One toolbar with a flexible spacer in it, rather than two.
+                // Without the title holding them apart the two groups packed
+                // against the leading edge together; the spacer is what macOS 26
+                // gives you to say "these belong at the other end".
+                .toolbar(id: "library") {
+                    toolbarContent.sharedBackgroundVisibility(.hidden)
+                    ToolbarSpacer(.flexible)
+                    inspectorToolbarContent.sharedBackgroundVisibility(.hidden)
+                }
+                // Hidden, so the toolbar has no colour of its own: the window's
+                // ground runs straight up through it and there is no edge left
+                // where the two used to meet. The controls carry their own glass.
+                .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        } else {
+            // Sonoma and Sequoia: no glass to hide and no ToolbarSpacer. A
+            // Spacer in an item of its own is what a flexible space was
+            // before there was a name for it, and the toolbar's ground is
+            // hidden the older way.
+            windowBody
+                .toolbar(id: "library") {
+                    toolbarContent
+                    ToolbarItem(id: "space", placement: .automatic) { Spacer() }
+                    inspectorToolbarContent
+                }
+                .toolbarBackground(.hidden, for: .windowToolbar)
+        }
         #else
         windowBody
         #endif
@@ -548,7 +562,7 @@ struct LibraryWindow: View {
         shelfColumn
         #if !os(macOS)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar(id: "library") { toolbarContent }
+            .toolbar(id: "library") { toolbarContent.sharedBackgroundVisibility(.hidden) }
             // The importer sits on the column whose button asks for it: hung
             // on the split view's root it never came up on the iPad.
             .fileImporter(
@@ -678,7 +692,6 @@ struct LibraryWindow: View {
             }
             .toolbarButtons()
         }
-        .sharedBackgroundVisibility(.hidden)
     }
 
     /// The four panes, behind one button.

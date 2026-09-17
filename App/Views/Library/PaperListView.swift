@@ -180,9 +180,7 @@ struct PaperListView: View {
             // Now the pull uncovers the words for it, and going past them is
             // what opens it — so the gesture is something you can stop doing.
             .overlay(alignment: .top) { pullHint }
-            .onScrollGeometryChange(for: CGFloat.self) { geometry in
-                -(geometry.contentOffset.y + geometry.contentInsets.top)
-            } action: { _, distance in
+            .onPull { distance in
                 pull = distance
                 guard distance > Self.pullThreshold, !app.showsSearchPalette else { return }
                 app.showsSearchPalette = true
@@ -705,5 +703,25 @@ private struct AttachmentPopover: View {
             .padding(.bottom, 6)
         }
         .frame(width: 300)
+    }
+}
+
+extension View {
+    /// How far a list has been pulled past its top, as it changes.
+    ///
+    /// Scroll geometry is a macOS 15 / iOS 18 thing. Before that the pull is
+    /// not observed and the list does not open the search this way — the
+    /// toolbar button and Command-K still do.
+    @ViewBuilder
+    func onPull(_ handle: @escaping (CGFloat) -> Void) -> some View {
+        if #available(macOS 15, iOS 18, *) {
+            onScrollGeometryChange(for: CGFloat.self) { geometry in
+                -(geometry.contentOffset.y + geometry.contentInsets.top)
+            } action: { _, distance in
+                handle(distance)
+            }
+        } else {
+            self
+        }
     }
 }

@@ -4,18 +4,22 @@ options:
   createIntermediateGroups: true
   deploymentTarget:
     iOS: "26.0"
-    macOS: "26.0"
+    macOS: "14.0"
   groupSortPosition: top
 
 settings:
   base:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
-    MARKETING_VERSION: "0.2.4"
+    MARKETING_VERSION: "0.3.0"
     CURRENT_PROJECT_VERSION: "1"
     CODE_SIGN_STYLE: Automatic
     SWIFT_EMIT_LOC_STRINGS: YES
     ENABLE_USER_SCRIPT_SANDBOXING: YES
+    # Weak, because the app runs back to macOS 14 and the framework does not
+    # exist there: a strong load command would have dyld refuse the whole app
+    # at launch. Every use is behind `#available(macOS 26, *)`.
+    OTHER_LDFLAGS: ["-weak_framework", "FoundationModels"]
 
 configFiles:
   Debug: Config/Signing.xcconfig

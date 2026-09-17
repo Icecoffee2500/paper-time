@@ -226,6 +226,20 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.3.0",
+            date: Text2("2026년 9월", "September 2026"),
+            note: Text2("Sonoma에서도 돈다.", "Runs on Sonoma."),
+            added: [
+                Entry(
+                    Text2("macOS 14부터", "From macOS 14"),
+                    Text2("최소 macOS가 26에서 14(Sonoma)로 내려갔다. 26에만 있는 것은 셋이고 없어도 앱은 그대로다: 온디바이스 모델이 제목·저자를 읽는 것(그 아래에서는 조판 규칙으로 읽는다), 도구 막대의 유리(그 아래에서는 평범한 도구 막대), 목록을 끌어내려 검색을 여는 것(⌘K와 단추는 그대로).",
+                          "The minimum macOS goes from 26 to 14, Sonoma. Three things exist only on 26 and the app stands without them: the on-device model reading titles and authors (below it, layout heuristics do), the glass on the toolbar (below it, an ordinary toolbar), and pulling the list down to open the search (Command-K and the button remain)."),
+                    devices: [.mac]
+                ),
+            ],
+            fixed: []
+        ),
+        Release(
             version: "0.2.4",
             date: Text2("2026년 9월", "September 2026"),
             note: Text2("표 위에서도 마음대로 드래그한다.", "Drag freely over a table."),
