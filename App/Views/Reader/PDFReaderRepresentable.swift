@@ -1003,6 +1003,9 @@ final class ReaderCoordinator: NSObject {
     }
 
     @objc private func selectionChanged(_ notification: Notification) {
+        if Boot.isSet("PAPERTIME_WATCH_SELECTION"), let selection = pdfView?.currentSelection {
+            Self.describe(selection)
+        }
         guard let view = pdfView,
               let selection = view.currentSelection,
               selection.string?.isEmpty == false
@@ -1033,6 +1036,25 @@ final class ReaderCoordinator: NSObject {
         #if os(macOS)
         scheduleMarkupPanel(for: selection, in: view)
         #endif
+    }
+
+    /// Prints what PDFKit says about a selection: `--papertime-watch-selection=1`.
+    /// For the selections a table produces, where `bounds(for:)` is `nan`.
+    private static func describe(_ selection: PDFSelection) {
+        let lines = selection.selectionsByLine()
+        var out = "selection: \"\((selection.string ?? "").prefix(50))\" string \(selection.string?.count ?? -1) chars, \(selection.pages.count) pages, \(lines.count) lines\n"
+        for page in selection.pages {
+            out += "  text ranges on page: \((0..<selection.numberOfTextRanges(on: page)).map { selection.range(at: $0, on: page) })\n"
+            out += "  page bounds \(selection.bounds(for: page))\n"
+            for (i, line) in lines.enumerated().prefix(12) {
+                let ranges = (0..<line.numberOfTextRanges(on: page)).map { line.range(at: $0, on: page) }
+                let chars = ranges.flatMap { r in
+                    [r.location, r.location + max(r.length - 1, 0)].map { page.characterBounds(at: $0) }
+                }
+                out += "  line \(i) \"\((line.string ?? "").prefix(24))\" bounds \(line.bounds(for: page)) ranges \(ranges) charBounds \(chars)\n"
+            }
+        }
+        FileHandle.standardError.write(Data(out.utf8))
     }
 
     /// The box round a selection, in the view's coordinates, made only from
@@ -1107,10 +1129,33 @@ final class ReaderCoordinator: NSObject {
             let rect = numbers.count >= 5
                 ? CGRect(x: numbers[1], y: numbers[2], width: numbers[3], height: numbers[4])
                 : page.bounds(for: .cropBox)
+            if let zoom = Boot.setting("PAPERTIME_MARK_TEST_ZOOM").flatMap(Double.init) {
+                view.autoScales = false
+                view.scaleFactor = zoom
+            }
             view.go(to: rect, on: page)
             try? await Task.sleep(for: .milliseconds(400))
-            guard let selection = page.selection(for: rect) else { return say("nothing there") }
+            if let window = view.window {
+                let onScreen = window.convertToScreen(view.convert(view.convert(rect, from: page), to: nil))
+                let top = NSScreen.screens.first?.frame.height ?? 0
+                say("rect on screen (top-left origin): \(Int(onScreen.minX)) \(Int(top - onScreen.maxY)) \(Int(onScreen.width)) \(Int(onScreen.height))")
+            }
+            // `--papertime-mark-test-dry=1`: only go there and say where it is.
+            // Marking writes the file, the watcher reloads it, and the view
+            // scrolls back to wherever it was — under a probe that has just
+            // been told where the table is.
+            if Boot.isSet("PAPERTIME_MARK_TEST_DRY") { return say("dry: went there, marked nothing") }
+            // `--papertime-mark-test-range=1644,11`: select by text range
+            // instead — the way a table cell comes in from the mouse.
+            let byRange: PDFSelection? = Boot.setting("PAPERTIME_MARK_TEST_RANGE").flatMap { spec in
+                let parts = spec.split(separator: ",").compactMap { Int($0) }
+                return parts.count == 2 ? page.selection(for: NSRange(location: parts[0], length: parts[1])) : nil
+            }
+            guard let selection = byRange ?? page.selection(for: rect) else { return say("nothing there") }
             let lines = selection.selectionsByLine()
+            for (i, line) in lines.enumerated() {
+                say("line \(i) \"\((line.string ?? "").prefix(20))\" bounds \(line.bounds(for: page))")
+            }
             let placeless = lines.filter { !$0.bounds(for: page).isFinite }.count
             say("selection bounds \(selection.bounds(for: page)), \(placeless) of \(lines.count) lines without a place")
 
