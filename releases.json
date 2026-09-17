@@ -2,6 +2,13 @@
   "repo": "Icecoffee2500/paper-time",
   "releases": [
     {
+      "version": "0.2.2",
+      "date": "2026-09-17T07:00:39Z",
+      "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.2.2/Paper.Time.0.2.2.dmg",
+      "size": 4731431,
+      "note": "표에서 죽던 진짜 이유를 찾았다."
+    },
+    {
       "version": "0.2.1",
       "date": "2026-09-15T01:16:44Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.2.1/Paper.Time.0.2.1.dmg",
