@@ -2,6 +2,13 @@
   "repo": "Icecoffee2500/paper-time",
   "releases": [
     {
+      "version": "0.3.0",
+      "date": "2026-09-17T11:55:04Z",
+      "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.3.0/Paper.Time.0.3.0.dmg",
+      "size": 4780258,
+      "note": "Sonoma를 위해 지었다 — macOS 14부터. 아직 Sonoma에서 켜 본 것은 아니다."
+    },
+    {
       "version": "0.2.4",
       "date": "2026-09-17T08:18:08Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.2.4/Paper.Time.0.2.4.dmg",
