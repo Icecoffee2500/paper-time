@@ -351,6 +351,21 @@ final class ReaderCoordinator: NSObject {
         }
 
         #endif
+        #if os(macOS)
+        // No table mode. On macOS 26 PDFKit hands every page that comes into
+        // view to Vision, and where it finds a table it draws a frame with
+        // handles and lets the mouse select cells and nothing else — a drag
+        // that starts inside the table cannot reach the sentence beside it.
+        // The switch is PDFKit's own, not in the headers, so it is asked for
+        // by name and left alone if a future PDFKit no longer has it. Turning
+        // it off also stops the background analysis that rewrote pages under
+        // the reader (see CLAUDE.md), and the selections it produced whose
+        // lines had no place.
+        let analysis = NSSelectorFromString("setDocumentAnalysisEnabled:")
+        if view.responds(to: analysis) {
+            view.setValue(false, forKey: "documentAnalysisEnabled")
+        }
+        #endif
         // Before the document: PDFKit asks the provider as it lays pages
         // out, and a provider that arrives after the pages does not get asked
         // for them.

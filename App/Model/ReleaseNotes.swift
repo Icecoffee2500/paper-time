@@ -226,6 +226,20 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.2.4",
+            date: Text2("2026년 9월", "September 2026"),
+            note: Text2("표 위에서도 마음대로 드래그한다.", "Drag freely over a table."),
+            added: [],
+            fixed: [
+                Entry(
+                    Text2("표 모드 끔", "Table mode, off"),
+                    Text2("macOS 26의 PDFKit은 화면에 든 쪽을 Vision에 넘겨 표를 찾고, 찾으면 손잡이 달린 테두리를 치고 그 안에서는 셀만 잡게 한다 — 표 안에서 시작한 드래그가 옆 문장까지 못 간다. 그 스위치를 내렸다. 이제 표 위에서도 글처럼 선택되고 형광펜이 든다. 덤으로 배경에서 쪽을 다시 쓰던 분석이 사라져 쪽 넘김이 가볍다.",
+                          "PDFKit on macOS 26 hands every visible page to Vision to look for tables, and where it finds one it draws a frame with handles and lets the mouse take cells and nothing else — a drag begun inside the table cannot reach the sentence beside it. That switch is now off. A table selects like text and takes the highlighter; and the background analysis that rewrote pages under the reader is gone with it."),
+                    devices: [.mac]
+                ),
+            ]
+        ),
+        Release(
             version: "0.2.3",
             date: Text2("2026년 9월", "September 2026"),
             note: Text2("표의 셀이 노랗게 칠해진다.", "A table cell takes the highlighter."),
