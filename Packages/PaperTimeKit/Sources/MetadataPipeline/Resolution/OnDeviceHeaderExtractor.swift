@@ -5,6 +5,11 @@ import PaperCore
 import FoundationModels
 
 /// The fields the on-device model is asked to fill in.
+///
+/// Gated to the systems that have the framework at run time as well as at
+/// build time: the app is built on macOS 26 and runs back to Sonoma, where
+/// FoundationModels does not exist and every symbol below would be unresolved.
+@available(macOS 26, iOS 26, *)
 @Generable
 struct GeneratedPaperHeader {
     @Guide(description: "The complete title of the paper, on one line, with no line breaks")
@@ -56,6 +61,7 @@ public struct OnDeviceHeaderExtractor: HeaderExtracting {
 
     public var availability: Availability {
         #if canImport(FoundationModels)
+        guard #available(macOS 26, iOS 26, *) else { return .frameworkMissing }
         switch SystemLanguageModel.default.availability {
         case .available:
             return .available
@@ -78,7 +84,7 @@ public struct OnDeviceHeaderExtractor: HeaderExtracting {
 
     public func extract(from signals: DocumentSignals) async -> [ExtractedHeader] {
         #if canImport(FoundationModels)
-        guard isAvailable else { return [] }
+        guard #available(macOS 26, iOS 26, *), isAvailable else { return [] }
         let excerpt = Self.excerpt(from: signals)
         guard excerpt.count > 40 else { return [] }
 
@@ -127,6 +133,7 @@ public struct OnDeviceHeaderExtractor: HeaderExtracting {
     }
 
     #if canImport(FoundationModels)
+    @available(macOS 26, iOS 26, *)
     static func header(from generated: GeneratedPaperHeader) -> ExtractedHeader? {
         let title = TextNormalization.collapsingWhitespace(generated.title)
         guard title.count >= 8 else { return nil }
