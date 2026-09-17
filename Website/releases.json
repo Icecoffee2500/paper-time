@@ -2,6 +2,13 @@
   "repo": "Icecoffee2500/paper-time",
   "releases": [
     {
+      "version": "0.2.3",
+      "date": "2026-09-17T07:51:00Z",
+      "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.2.3/Paper.Time.0.2.3.dmg",
+      "size": 4737627,
+      "note": "표의 셀이 노랗게 칠해진다."
+    },
+    {
       "version": "0.2.2",
       "date": "2026-09-17T07:00:39Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.2.2/Paper.Time.0.2.2.dmg",
