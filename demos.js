@@ -803,16 +803,51 @@ async function mountDownloads() {
     primary.querySelector(".label").textContent = `${latest.version} 받기`;
     primary.querySelector(".sub").textContent = `macOS · ${mb(latest.size)}`;
 
-    list.replaceChildren(...releases.map((r) =>
-      el("div", { class: "vrow" },
-        el("span", { class: "v" }, r.version),
-        el("span", { class: "n" }, r.note || ""),
-        el("a", { href: r.asset }, "DMG 받기"),
-        el("span", { class: "s" }, r.size ? mb(r.size) : ""))));
+    // How many times each disk image has been taken. GitHub counts every
+    // download of a release asset, and has since the first one was put
+    // up, so the tally reaches back before the page showed it. The number
+    // written at publish time is shown first; the live one replaces it
+    // when the API answers (sixty asks an hour per visitor, more than
+    // enough for a landing page).
+    const render = (counts) => {
+      list.replaceChildren(...releases.map((r) => {
+        const n = counts[r.version];
+        return el("div", { class: "vrow" },
+          el("span", { class: "v" }, r.version),
+          el("span", { class: "n" }, r.note || ""),
+          el("a", { href: r.asset }, "DMG 받기"),
+          el("span", { class: "s" }, r.size ? mb(r.size) : ""),
+          el("span", { class: "d" }, n == null ? "" : `${n.toLocaleString("ko-KR")}번 받음`));
+      }));
+      const total = Object.values(counts).reduce((a, b) => a + (b || 0), 0);
+      const tally = document.getElementById("tally");
+      if (tally) tally.replaceChildren(
+        "지금까지 ", el("b", {}, `${total.toLocaleString("ko-KR")}번`), " 받아갔다 · 버전별은 이전 버전에서");
+    };
+    render(Object.fromEntries(releases.map((r) => [r.version, r.downloads])));
+    if (data.repo) fetchDownloadCounts(data.repo).then((live) => { if (live) render(live); });
   } catch {
     primary.querySelector(".label").textContent = "GitHub에서 받기";
     primary.href = "https://github.com/Icecoffee2500/paper-time/releases";
     list.replaceChildren(el("p", { class: "hint" }, "버전 목록을 불러오지 못했다."));
+  }
+}
+
+/* The live tally, from GitHub's releases API — or nothing, quietly. */
+async function fetchDownloadCounts(repo) {
+  try {
+    const res = await fetch(`https://api.github.com/repos/${repo}/releases?per_page=100`, {
+      headers: { Accept: "application/vnd.github+json" },
+    });
+    if (!res.ok) return null;
+    const counts = {};
+    for (const release of await res.json()) {
+      const dmg = (release.assets || []).find((a) => /\.dmg$/i.test(a.name));
+      if (dmg) counts[release.tag_name] = dmg.download_count;
+    }
+    return Object.keys(counts).length ? counts : null;
+  } catch {
+    return null;
   }
 }
 

@@ -6,6 +6,7 @@
       "date": "2026-09-17T11:55:04Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.3.0/Paper.Time.0.3.0.dmg",
       "size": 4780258,
+      "downloads": 1,
       "note": "Sonoma를 위해 지었다 — macOS 14부터. 아직 Sonoma에서 켜 본 것은 아니다."
     },
     {
@@ -13,6 +14,7 @@
       "date": "2026-09-17T08:18:08Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.2.4/Paper.Time.0.2.4.dmg",
       "size": 4739376,
+      "downloads": 1,
       "note": "표 위에서도 마음대로 드래그한다."
     },
     {
@@ -20,6 +22,7 @@
       "date": "2026-09-17T07:51:00Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.2.3/Paper.Time.0.2.3.dmg",
       "size": 4737627,
+      "downloads": 1,
       "note": "표의 셀이 노랗게 칠해진다."
     },
     {
@@ -27,6 +30,7 @@
       "date": "2026-09-17T07:00:39Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.2.2/Paper.Time.0.2.2.dmg",
       "size": 4731431,
+      "downloads": 1,
       "note": "표에서 죽던 진짜 이유를 찾았다."
     },
     {
@@ -34,6 +38,7 @@
       "date": "2026-09-15T01:16:44Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.2.1/Paper.Time.0.2.1.dmg",
       "size": 4725009,
+      "downloads": 2,
       "note": "표 안에서도 형광펜이 통한다."
     },
     {
@@ -41,6 +46,7 @@
       "date": "2026-09-14T07:18:52Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.2.0/Paper.Time.0.2.0.dmg",
       "size": 4712382,
+      "downloads": 3,
       "note": "두 번째 알파: 논문 본문까지 찾는 검색, 구조를 지키는 인용, 그리고 아이패드·아이폰."
     },
     {
@@ -48,6 +54,7 @@
       "date": "2026-09-13T08:05:21Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.1.0/Paper.Time.0.1.0.dmg",
       "size": 4044607,
+      "downloads": 1,
       "note": "첫 알파. 읽기·표시·노트·BibTeX."
     }
   ]
