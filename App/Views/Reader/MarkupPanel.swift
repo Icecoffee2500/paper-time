@@ -95,6 +95,9 @@ final class MarkupPanelController {
         isShowing = true
     }
 
+    /// Where the panel stands, for the probe that shows it at `nan`.
+    var frameForTesting: NSRect? { panel?.frame }
+
     func hide() {
         isShowing = false
         guard let panel else { return }
@@ -162,6 +165,17 @@ final class MarkupPanelController {
     /// Keeps the panel over the text and inside the window.
     private func position(_ panel: NSPanel, size: NSSize, in host: NSWindow) {
         let frame = host.frame
+        // An anchor that is not a number would put the panel at `nan`, and
+        // AppKit answers that with an NSInternalInconsistencyException. Thrown
+        // from inside a Swift task — which is where the bar is shown from —
+        // that exception left the concurrency runtime pointing at a dead
+        // stack frame, and the app died on the next main-actor call, in
+        // whatever method happened to come next. The selection PDFKit hands
+        // back across a table is where the `nan` came from. Over the middle
+        // of the window is the least wrong place to stand instead.
+        if !anchor.isFinite {
+            anchor = CGRect(x: frame.midX, y: frame.midY, width: 0, height: 0)
+        }
         var x = anchor.midX - size.width / 2
         x = min(max(x, frame.minX + 12), max(frame.minX + 12, frame.maxX - size.width - 12))
         // Above the text where it fits, below it when the selection sits at the
@@ -175,6 +189,18 @@ final class MarkupPanelController {
 /// A panel that may take keyboard focus when the note editor needs it.
 private final class MarkupPanel: NSPanel {
     override var canBecomeKey: Bool { true }
+
+    /// The last line: a frame with `nan` in it is refused here rather than
+    /// thrown at by AppKit. See `MarkupPanelController.position`.
+    override func setFrame(_ frameRect: NSRect, display flag: Bool) {
+        guard frameRect.isFinite else { return }
+        super.setFrame(frameRect, display: flag)
+    }
+
+    override func setFrameOrigin(_ point: NSPoint) {
+        guard point.x.isFinite, point.y.isFinite else { return }
+        super.setFrameOrigin(point)
+    }
 }
 
 /// The row of markup actions.
