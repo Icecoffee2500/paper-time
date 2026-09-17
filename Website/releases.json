@@ -2,6 +2,13 @@
   "repo": "Icecoffee2500/paper-time",
   "releases": [
     {
+      "version": "0.2.4",
+      "date": "2026-09-17T08:18:08Z",
+      "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.2.4/Paper.Time.0.2.4.dmg",
+      "size": 4739376,
+      "note": "표 위에서도 마음대로 드래그한다."
+    },
+    {
       "version": "0.2.3",
       "date": "2026-09-17T07:51:00Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.2.3/Paper.Time.0.2.3.dmg",
