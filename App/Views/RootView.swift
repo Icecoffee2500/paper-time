@@ -605,7 +605,7 @@ struct LibraryWindow: View {
                     .font(.headline)
                 Spacer()
                 #if os(macOS)
-                InspectorToggle()
+                PaneToggle(pane: .paperList)
                 #endif
             }
             .padding(.horizontal, 16)
@@ -1154,7 +1154,7 @@ struct PaperDetailColumn: View {
                         .tint(configuration.mode == .draw ? Color.accentColor : .primary)
                         .toolbarHover()
                         .help("Draw on the page (\(app.shortcut(for: .draw).display))")
-                        InspectorToggle()
+                        PaneToggle(pane: .reader)
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 10)
@@ -1304,7 +1304,7 @@ struct PaperDetailColumn: View {
                     .font(.headline)
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 0)
-                InspectorToggle()
+                PaneToggle(pane: .inspector)
             }
             .padding(.horizontal, 16)
             .padding(.top, 10)
@@ -1549,23 +1549,36 @@ private struct ColumnDivider: View {
 }
 #endif
 
-/// One button, on every column's header row, that shows and hides the
-/// inspector — so each pane has a visible way to reach it, not only ⌘].
-struct InspectorToggle: View {
+/// The button on a column's header row that hides that column — the paper
+/// list its own, the paper its own, the inspector its own. Bringing one back
+/// is the panes menu's or its key's; the row it sat on is gone with it.
+struct PaneToggle: View {
+    let pane: ShortcutAction
     @Environment(AppModel.self) private var app
+
+    private var symbol: String {
+        switch pane {
+        case .paperList: "sidebar.left"
+        case .inspector: "sidebar.trailing"
+        default: "rectangle.center.inset.filled"
+        }
+    }
 
     var body: some View {
         Button {
-            app.toggleInspector()
+            switch pane {
+            case .paperList: app.togglePaperList()
+            case .inspector: app.toggleInspector()
+            default: app.toggleReader()
+            }
         } label: {
-            Label(app.showsInspector ? "Hide Inspector" : "Show Inspector", systemImage: "sidebar.trailing")
+            Label("Hide \(pane.title)", systemImage: symbol)
                 .labelStyle(.iconOnly)
-                .symbolVariant(app.showsInspector ? .fill : .none)
+                .symbolVariant(.fill)
                 .toolbarIcon()
         }
         .buttonStyle(.borderless)
-        .tint(app.showsInspector ? Color.accentColor : .primary)
         .toolbarHover()
-        .help("\(app.showsInspector ? "Hide" : "Show") the inspector (\(app.shortcut(for: .inspector).display))")
+        .help("Hide the \(pane.title.lowercased()) (\(app.shortcut(for: pane).display))")
     }
 }
