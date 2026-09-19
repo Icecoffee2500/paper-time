@@ -131,10 +131,19 @@ struct ReaderScreen: View {
         }
         .overlay(alignment: .topLeading) {
             if configuration.mode == .draw {
-                SketchStylePanel(configuration: configuration)
-                    .padding(.leading, 12)
-                    .padding(.top, 60)
-                    .transition(.move(edge: .leading).combined(with: .opacity))
+                // Scrolls when the window is shorter than the panel — the
+                // text tool's panel is a tall one — instead of running off
+                // the bottom with its last controls cut away.
+                ScrollView(.vertical, showsIndicators: false) {
+                    SketchStylePanel(configuration: configuration)
+                        .padding(.leading, 12)
+                        .padding(.top, 60)
+                        .padding(.bottom, Self.statusBarClearance + 12)
+                        .padding(.trailing, 12)
+                }
+                .scrollBounceBehavior(.basedOnSize)
+                .fixedSize(horizontal: true, vertical: false)
+                .transition(.move(edge: .leading).combined(with: .opacity))
             }
         }
         .animation(.snappy(duration: 0.22), value: configuration.mode)
