@@ -104,7 +104,9 @@ struct SketchStylePanel: View {
                 if state.hasSelection { actions }
             }
             .padding(12)
-            .frame(width: 188)
+            // As wide as its widest row and no wider: a fixed width cut the
+            // seventh fill swatch in half.
+            .fixedSize()
             .liquidGlass(.floating, in: RoundedRectangle(cornerRadius: Corner.popover, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: Corner.popover, style: .continuous).strokeBorder(.primary.opacity(0.08), lineWidth: 0.5))
         }

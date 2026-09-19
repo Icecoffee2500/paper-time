@@ -604,6 +604,9 @@ struct LibraryWindow: View {
                 Text(scopeTitle)
                     .font(.headline)
                 Spacer()
+                #if os(macOS)
+                InspectorToggle()
+                #endif
             }
             .padding(.horizontal, 16)
             .padding(.top, 10)
@@ -1151,6 +1154,7 @@ struct PaperDetailColumn: View {
                         .tint(configuration.mode == .draw ? Color.accentColor : .primary)
                         .toolbarHover()
                         .help("Draw on the page (\(app.shortcut(for: .draw).display))")
+                        InspectorToggle()
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 10)
@@ -1291,6 +1295,21 @@ struct PaperDetailColumn: View {
         // it SwiftUI centres the whole stack, which left the contents floating
         // halfway down an empty inspector.
         VStack(spacing: 0) {
+            #if os(macOS)
+            // The way to close the column, on the column: the keys and the
+            // panes menu were the only way, and a pane you cannot see how
+            // to close is a pane you leave open.
+            HStack {
+                Text("Inspector")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+                InspectorToggle()
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 10)
+            .padding(.bottom, 6)
+            #endif
             if model.selectedPaper != nil {
                 #if !os(macOS)
                 CapsulePicker(
@@ -1529,3 +1548,24 @@ private struct ColumnDivider: View {
     }
 }
 #endif
+
+/// One button, on every column's header row, that shows and hides the
+/// inspector — so each pane has a visible way to reach it, not only ⌘].
+struct InspectorToggle: View {
+    @Environment(AppModel.self) private var app
+
+    var body: some View {
+        Button {
+            app.toggleInspector()
+        } label: {
+            Label(app.showsInspector ? "Hide Inspector" : "Show Inspector", systemImage: "sidebar.trailing")
+                .labelStyle(.iconOnly)
+                .symbolVariant(app.showsInspector ? .fill : .none)
+                .toolbarIcon()
+        }
+        .buttonStyle(.borderless)
+        .tint(app.showsInspector ? Color.accentColor : .primary)
+        .toolbarHover()
+        .help("\(app.showsInspector ? "Hide" : "Show") the inspector (\(app.shortcut(for: .inspector).display))")
+    }
+}
