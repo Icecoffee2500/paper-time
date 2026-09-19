@@ -604,9 +604,6 @@ struct LibraryWindow: View {
                 Text(scopeTitle)
                     .font(.headline)
                 Spacer()
-                #if os(macOS)
-                PaneToggle(pane: .paperList)
-                #endif
             }
             .padding(.horizontal, 16)
             .padding(.top, 10)
@@ -703,28 +700,27 @@ struct LibraryWindow: View {
     /// toolbar — from when only the two sidebars could be hidden. Four in a
     /// row said the same thing four times and took the room of six controls.
     /// One menu, with a tick beside each pane that is showing, says it once.
+    /// The four panes, one button each, where the one menu used to be:
+    /// each shows and hides its own pane and stays put — a button that
+    /// closes a pane and goes with it cannot open it again.
     private var paneMenu: some View {
-        Menu {
-            Toggle("Sidebar", isOn: Binding(
-                get: { app.isSidebarVisible }, set: { _ in app.toggleSidebar() }
-            ))
-            Toggle("Paper List", isOn: Binding(
-                get: { app.showsPaperList }, set: { _ in app.togglePaperList() }
-            ))
-            Toggle("Paper", isOn: Binding(
-                get: { app.showsReader && !app.isFocusMode }, set: { _ in app.toggleReader() }
-            ))
-            Toggle("Inspector", isOn: Binding(
-                get: { app.showsInspector }, set: { _ in app.toggleInspector() }
-            ))
-            Divider()
-            Toggle("Focus on the Paper", isOn: Binding(
-                get: { app.isFocusMode }, set: { app.setFocusMode($0) }
-            ))
-        } label: {
-            Label("Panes", systemImage: "rectangle.split.3x1").toolbarIcon()
+        HStack(spacing: 2) {
+            paneButton(.sidebar, symbol: "sidebar.left", on: app.isSidebarVisible) { app.toggleSidebar() }
+            paneButton(.paperList, symbol: "list.bullet.rectangle", on: app.showsPaperList) { app.togglePaperList() }
+            paneButton(.reader, symbol: "doc.text", on: app.showsReader && !app.isFocusMode) { app.toggleReader() }
+            paneButton(.inspector, symbol: "sidebar.trailing", on: app.showsInspector) { app.toggleInspector() }
         }
-        .help("Which panes are showing")
+    }
+
+    private func paneButton(_ pane: ShortcutAction, symbol: String, on: Bool, toggle: @escaping () -> Void) -> some View {
+        Button(action: toggle) {
+            Label(pane.title, systemImage: symbol)
+                .labelStyle(.iconOnly)
+                .symbolVariant(on ? .fill : .none)
+                .toolbarIcon()
+        }
+        .tint(on ? Color.accentColor : .primary)
+        .help("\(on ? "Hide" : "Show") the \(pane.title.lowercased()) (\(app.shortcut(for: pane).display))")
         .toolbarHover()
     }
 
@@ -1154,7 +1150,6 @@ struct PaperDetailColumn: View {
                         .tint(configuration.mode == .draw ? Color.accentColor : .primary)
                         .toolbarHover()
                         .help("Draw on the page (\(app.shortcut(for: .draw).display))")
-                        PaneToggle(pane: .reader)
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 10)
@@ -1295,21 +1290,6 @@ struct PaperDetailColumn: View {
         // it SwiftUI centres the whole stack, which left the contents floating
         // halfway down an empty inspector.
         VStack(spacing: 0) {
-            #if os(macOS)
-            // The way to close the column, on the column: the keys and the
-            // panes menu were the only way, and a pane you cannot see how
-            // to close is a pane you leave open.
-            HStack {
-                Text("Inspector")
-                    .font(.headline)
-                    .foregroundStyle(.secondary)
-                Spacer(minLength: 0)
-                PaneToggle(pane: .inspector)
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 10)
-            .padding(.bottom, 6)
-            #endif
             if model.selectedPaper != nil {
                 #if !os(macOS)
                 CapsulePicker(
@@ -1548,37 +1528,3 @@ private struct ColumnDivider: View {
     }
 }
 #endif
-
-/// The button on a column's header row that hides that column — the paper
-/// list its own, the paper its own, the inspector its own. Bringing one back
-/// is the panes menu's or its key's; the row it sat on is gone with it.
-struct PaneToggle: View {
-    let pane: ShortcutAction
-    @Environment(AppModel.self) private var app
-
-    private var symbol: String {
-        switch pane {
-        case .paperList: "sidebar.left"
-        case .inspector: "sidebar.trailing"
-        default: "rectangle.center.inset.filled"
-        }
-    }
-
-    var body: some View {
-        Button {
-            switch pane {
-            case .paperList: app.togglePaperList()
-            case .inspector: app.toggleInspector()
-            default: app.toggleReader()
-            }
-        } label: {
-            Label("Hide \(pane.title)", systemImage: symbol)
-                .labelStyle(.iconOnly)
-                .symbolVariant(.fill)
-                .toolbarIcon()
-        }
-        .buttonStyle(.borderless)
-        .toolbarHover()
-        .help("Hide the \(pane.title.lowercased()) (\(app.shortcut(for: pane).display))")
-    }
-}
