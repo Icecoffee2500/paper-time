@@ -60,6 +60,17 @@ enum ReleaseNotes {
             tier: .one
         ),
         Highlight(
+            symbol: "pencil.and.outline",
+            title: Text2("맥에서도 자유롭게 그린다 — 도형·화살표·카드·손글씨", "Draw freely on the Mac: shapes, arrows, cards, handwriting"),
+            detail: Text2(
+                "PDF 앱의 필기는 딱딱하다 — 네모 하나, 메모 아이콘 하나. 여기서는 펜을 들면(⇧⌘D) 쪽 위에 Excalidraw의 도구 줄이 뜬다: 선택 V, 펜 P, 형광펜 H, 지우개 E, 네모 R, 동그라미 O, 화살표 A, 선 L, 글 T — 한 글자로 바꾼다. 화살표는 가운데 손잡이를 끌면 XMind처럼 구부러지고, 상자를 두 번 누르면 그 안에 글을 쓰고, 글 카드에는 배경색과 테두리를 준다. 손글씨든 도형이든 골라서 옮기고, B를 누르면 그 둘레에 테두리가 둘러진다(마인드맵의 토픽처럼). 왼쪽 패널에서 선 색·채움·굵기·점선·모서리·화살표 끝·글자 크기·투명도. 형광펜은 아이패드처럼 글자에 맞춰지고, 지우개는 선·도형·하이라이트를 함께 지운다. 모두 ⌘Z. 그리고 전부 PDF 안에 표준 주석으로도 기록되어 아이패드·아이폰·Preview에서 같은 자리에 보인다. 아래 카드를 끌어 보라 — 화살표가 따라온다.",
+                "Drawing in a PDF app is stiff: one box, one note icon. Here, take the pencil out (⇧⌘D) and Excalidraw's tool rack floats over the page: select V, pen P, highlighter H, eraser E, rectangle R, ellipse O, arrow A, line L, text T — one letter each. An arrow bends when its middle handle is pulled, the way XMind's do; double-click a box to write inside it; a text card takes a background and a border. Select handwriting or shapes and move them, and B draws a frame round the lot, like a mind map's topic. The panel on the left has stroke, fill, width, dash, corners, arrowheads, text size and opacity. The highlighter fits itself to the words as on the iPad; the eraser takes strokes, shapes and highlights together. All of it undoes with ⌘Z. And all of it is written into the PDF as standard annotations too, so the iPad, the iPhone and Preview show it in the same place. Drag the card below — the arrow follows."
+            ),
+            action: .draw,
+            demo: .sketch,
+            tier: .one
+        ),
+        Highlight(
             symbol: "book.pages",
             title: Text2("책에서 절 사이를 오간다", "A book you move through by section"),
             detail: Text2(
@@ -225,6 +236,35 @@ enum ReleaseNotes {
     /// thing they care about moved; making them read a paragraph to find out
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
+        Release(
+            version: "0.4.0",
+            date: Text2("2026년 9월", "September 2026"),
+            note: Text2("맥이 아이패드처럼 그린다 — 그리고 아이패드가 못 하던 것까지.", "The Mac draws like the iPad — and then some."),
+            added: [
+                Entry(
+                    Text2("맥에서 그리기", "Drawing on the Mac"),
+                    Text2("맥에는 그릴 길이 없었다 — 아이패드의 잉크를 보여 주기만 했다. 이제 ⇧⌘D(또는 제목 줄의 연필)로 펜을 들면 쪽 위에 도구 줄이 뜨고, 마우스·트랙패드·태블릿 펜으로 그린다(태블릿의 압력은 굵기에). 펜 선은 아이패드와 같은 잉크 사이드카로 들어가 세 기기가 같은 선을 본다. 형광펜은 글자에 맞춰 하이라이트·밑줄이 되고, 지우개는 선·도형·하이라이트를 함께 지운다. Esc는 선택을 놓고, 도구를 내리고, 펜을 내려놓는다 — 그 순서로.",
+                          "The Mac had no way to draw — it only showed the iPad's ink. Now ⇧⌘D (or the pencil on the title row) takes the pencil out, a tool rack floats over the page, and the mouse, the trackpad or a tablet pen draws (a tablet's pressure sets the width). Pen strokes go into the same ink sidecar as the iPad's, so all three devices see one line. The highlighter fits the words into a highlight or an underline; the eraser takes strokes, shapes and highlights together. Escape lets go of the selection, then the tool, then the pencil — in that order."),
+                    action: .draw,
+                    demo: .sketch,
+                    featured: true,
+                    devices: [.mac]
+                ),
+                Entry(
+                    Text2("도형·화살표·글 카드", "Shapes, arrows, text cards"),
+                    Text2("Excalidraw와 XMind에서 좋은 것만: 네모(R)·동그라미(O)·화살표(A)·선(L)·글(T), 한 글자 키. 그린 뒤에는 선택(V)으로 돌아와 옮기고, 손잡이로 크기를 바꾸고, 화살표는 가운데 손잡이로 구부린다. 상자를 두 번 누르면 안에 글을 쓰고, 빈 곳을 두 번 누르면 글 카드가 생긴다 — 배경색과 테두리를 줄 수 있어 마인드맵의 토픽 상자가 된다. 손글씨도 골라서 옮길 수 있고, 무엇이든 골라 B를 누르면 둘레에 테두리(둥근 네모)가 둘러진다. ⇧-클릭으로 여럿, 빈 곳을 끌어 사각 선택, ⌘D 복제, ⇧⌘] / ⇧⌘[ 앞뒤, 화살표 키로 한 점씩(⇧면 열 점). 왼콽 패널: 선 색 7, 채움 6+없음, 굵기 3, 점선, 모서리, 화살표 끝 5종(양 끝 따로), 글자 크기 3, 투명도. 고른 것이 있으면 그것을 바꾸고 다음 것의 기본도 된다.",
+                          "The good parts of Excalidraw and XMind: rectangle (R), ellipse (O), arrow (A), line (L), text (T), one letter each. Drawn, the pointer goes back to Select (V): move, resize by the handles, bend an arrow by its middle handle. Double-click a box to write in it; double-click empty paper for a text card — give it a background and a border and it is a mind map's topic box. Handwriting is selectable and movable too, and B frames whatever is selected in a rounded box. Shift-click for several, drag empty paper for a marquee, ⌘D duplicates, ⇧⌘] / ⇧⌘[ reorder, the arrow keys nudge a point (ten with Shift). The panel on the left: 7 stroke colours, 6 fills and none, 3 widths, dash, corners, 5 arrowheads set per end, 3 text sizes, opacity. With something selected a change applies to it and becomes the default for the next."),
+                    devices: [.mac]
+                ),
+                Entry(
+                    Text2("도형은 PDF에도, 사이드카에도", "Shapes in the PDF, and beside it"),
+                    Text2("도형은 쪽마다 사이드카(`sketch/pNNNN.json`)가 진실이고 iCloud Drive로 다른 기기에 간다; PDF에는 저장 때 표준 주석 사본을 쓴다 — 네모는 Square, 동그라미는 Circle, 곧은 화살표는 Line, 굽은 화살표는 Ink, 글은 FreeText — 그래서 Preview나 다른 앱에서도 같은 자리에 보인다. 사본마다 원소 자체를 실어 두어 사이드카 없는 기기가 파일에서 그대로 되살린다. 아이패드·아이폰은 같은 렌더러로 그려서 보여 준다(고치는 것은 맥에서).",
+                          "Shapes live in a sidecar per page (`sketch/pNNNN.json`) that iCloud Drive carries; the PDF gets a copy on save as standard annotations — Square, Circle, Line for a straight arrow, Ink for a bent one, FreeText for words — so Preview and any other app show them in the same place. Each copy carries the element itself, so a device without the sidecar rebuilds it from the file. The iPad and the iPhone draw them with the same renderer (editing is the Mac's)."),
+                    devices: [.mac, .ipad, .iphone]
+                ),
+            ],
+            fixed: []
+        ),
         Release(
             version: "0.3.0",
             date: Text2("2026년 9월", "September 2026"),
@@ -706,6 +746,10 @@ enum ReleaseNotes {
                     Text2("논문 안의 모든 표시를 종류별로. 인스펙터의 Marks 탭에 있고, 누르면 그 자리로 간다.", "Every mark in the paper, filtered by kind, in the inspector's Marks tab. Click one to go to it.")),
             Feature(Text2("다른 앱이 남긴 필기", "Ink from other apps"),
                     Text2("다른 앱이 PDF에 남긴 손글씨를 그대로 보여주고, 그 위에 그리기 전까지 건드리지 않는다.", "Freehand drawing another app left in the PDF is shown and left alone until you draw over it.")),
+            Feature(Text2("맥에서 그리기", "Drawing on the Mac"),
+                    Text2("펜을 들면 쪽 위에 도구 줄: 펜·형광펜·지우개와 네모·동그라미·화살표·선·글, 한 글자 키. 펜 선은 아이패드와 같은 잉크로.", "Take the pencil out and a tool rack floats over the page: pen, highlighter, eraser, and rectangle, ellipse, arrow, line, text, one letter each. Pen strokes are the iPad's ink."), action: .draw),
+            Feature(Text2("도형·화살표·글 카드", "Shapes, arrows, text cards"),
+                    Text2("구부러지는 화살표, 글이 든 상자, 배경과 테두리가 있는 카드, 손글씨 둘레의 테두리(B). 옮기고, 크기를 바꾸고, 스타일을 바꾸고, ⌘Z. PDF에는 표준 주석으로 기록된다.", "Arrows that bend, boxes with words in them, cards with a background and a border, a frame round handwriting (B). Move, resize, restyle, ⌘Z. Written into the PDF as standard annotations.")),
         ]),
         Group(Text2("노트", "Notes"), symbol: "note.text", features: [
             Feature(Text2("새 노트", "A new note"),
@@ -874,6 +918,10 @@ enum ReleaseNotes {
         case sync
         /// A marker stroke over words, kept as drawn or fitted to the words.
         case penTools
+        /// The Mac's drawing layer beside a plain reader's box and note
+        /// icon: a card with words, a bent arrow that follows it when it is
+        /// dragged, a frame round handwriting, and the row of one-key tools.
+        case sketch
 
         var id: String { rawValue }
     }

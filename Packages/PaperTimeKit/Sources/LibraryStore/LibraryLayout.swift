@@ -41,6 +41,9 @@ public enum LibraryLayout {
             .appending(path: notesDirectoryName, directoryHint: .isDirectory)
     }
     public static let inkDirectoryName = "ink"
+    /// The shapes, arrows and text cards drawn on the pages, one small JSON
+    /// file per page beside the ink.
+    public static let sketchDirectoryName = "sketch"
     /// One small file per device with the marks it made — the fast path
     /// between devices, beside the PDF that is the slow, durable one.
     public static let marksDirectoryName = "marks"
@@ -80,6 +83,15 @@ public enum LibraryLayout {
     public static func pageIndex(fromInkFileName name: String) -> Int? {
         guard name.hasPrefix("p"), name.hasSuffix(".drawing") else { return nil }
         return Int(name.dropFirst().dropLast(".drawing".count))
+    }
+
+    public static func sketchFileName(pageIndex: Int) -> String {
+        String(format: "p%04d.json", pageIndex)
+    }
+
+    public static func pageIndex(fromSketchFileName name: String) -> Int? {
+        guard name.hasPrefix("p"), name.hasSuffix(".json") else { return nil }
+        return Int(name.dropFirst().dropLast(".json".count))
     }
 
     /// The name a newly imported PDF takes inside the library.
@@ -136,6 +148,14 @@ public struct PaperFolder: Hashable, Sendable {
 
     public func inkURL(pageIndex: Int) -> URL {
         inkDirectoryURL.appending(path: LibraryLayout.inkFileName(pageIndex: pageIndex))
+    }
+
+    public var sketchDirectoryURL: URL {
+        url.appending(path: LibraryLayout.sketchDirectoryName, directoryHint: .isDirectory)
+    }
+
+    public func sketchURL(pageIndex: Int) -> URL {
+        sketchDirectoryURL.appending(path: LibraryLayout.sketchFileName(pageIndex: pageIndex))
     }
 
     public var marksDirectoryURL: URL {

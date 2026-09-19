@@ -192,13 +192,19 @@ final class FigureOverlayView: NSView {
 final class PageOverlay: NSView {
     private let mask: MarginMaskView
 
-    init(page: PDFPage, drawing: @escaping () -> PKDrawing = { PKDrawing() }) {
+    init(
+        page: PDFPage,
+        drawing: @escaping () -> PKDrawing = { PKDrawing() },
+        sketch: @escaping () -> [SketchElement] = { [] },
+        hiddenSketch: @escaping () -> Set<UUID> = { [] }
+    ) {
         mask = MarginMaskView(page: page)
         super.init(frame: .zero)
         let marks = MarkOverlayView(page: page)
         let figures = FigureOverlayView(page: page)
         let ink = InkOverlayView(page: page, drawing: drawing)
-        for child in [mask, figures, marks, ink] as [NSView] {
+        let shapes = SketchOverlayView(page: page, elements: sketch, hidden: hiddenSketch)
+        for child in [mask, figures, marks, ink, shapes] as [NSView] {
             child.autoresizingMask = [.width, .height]
             addSubview(child)
         }
@@ -257,6 +263,52 @@ final class InkOverlayView: NSView {
             cached = (strokes, image)
         }
         image.draw(in: bounds, from: .zero, operation: .sourceOver, fraction: 1)
+    }
+}
+
+/// The page's shapes, arrows and text cards, drawn from the sketch sidecar
+/// with the one renderer every device uses — so an arrow bent on the Mac
+/// is the same arrow on the iPad. Leaves out whatever the input view is
+/// drawing itself at the moment (the box being dragged, the card being
+/// typed into), so nothing is drawn twice.
+final class SketchOverlayView: NSView {
+    private weak var page: PDFPage?
+    private let elements: () -> [SketchElement]
+    private let hiddenIDs: () -> Set<UUID>
+
+    nonisolated(unsafe) private static var byPage: [ObjectIdentifier: Weak] = [:]
+    private struct Weak { weak var view: SketchOverlayView? }
+
+    init(page: PDFPage, elements: @escaping () -> [SketchElement], hidden: @escaping () -> Set<UUID>) {
+        self.page = page
+        self.elements = elements
+        self.hiddenIDs = hidden
+        super.init(frame: .zero)
+        wantsLayer = true
+        Self.byPage[ObjectIdentifier(page)] = Weak(view: self)
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    static func refresh(_ page: PDFPage) {
+        byPage[ObjectIdentifier(page)]?.view?.needsDisplay = true
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    override var isOpaque: Bool { false }
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard let page, let context = NSGraphicsContext.current?.cgContext else { return }
+        let left = hiddenIDs()
+        let shown = elements().filter { !left.contains($0.id) }
+        guard !shown.isEmpty else { return }
+        let box = page.bounds(for: .cropBox)
+        guard box.width > 0, box.height > 0 else { return }
+        context.saveGState()
+        context.scaleBy(x: bounds.width / box.width, y: bounds.height / box.height)
+        context.translateBy(x: -box.minX, y: -box.minY)
+        SketchRenderer.draw(shown, in: context)
+        context.restoreGState()
     }
 }
 #endif

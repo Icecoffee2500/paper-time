@@ -101,6 +101,11 @@ final class ReaderCoordinator: NSObject {
     private var appliedFingerDrawing: Bool?
     /// The crop that makes the document a book, while it is one.
     private var bookTrim: BookTrim?
+    #if os(macOS)
+    /// Over the PDF view while the pencil is out; kept between outings so
+    /// its selection state does not have to be rebuilt.
+    private var sketchInput: SketchInputView?
+    #endif
     /// Trims every page to the paper's content: see `BookTrim`.
     private func trimForBook(_ document: PDFDocument) {
         if let bookTrim, bookTrim.document === document, bookTrim.isApplied { return }
@@ -279,8 +284,20 @@ final class ReaderCoordinator: NSObject {
     /// doubled every line and left a ghost behind an erased one, until the
     /// twenty-megabyte PDF caught up.
     private func hideOwnedInk(on page: PDFPage, index: Int) {
-        for annotation in page.annotations where InkConverter.isOwned(annotation) && annotation.shouldDisplay {
+        for annotation in page.annotations
+        where (InkConverter.isOwned(annotation) || SketchWriter.isOwned(annotation)) && annotation.shouldDisplay {
             annotation.shouldDisplay = false
+        }
+    }
+
+    /// A page's sketch changed — drawn here, undone, or arrived from another
+    /// device: the overlay drawing it draws again.
+    @objc private func sketchChanged(_ notification: Notification) {
+        guard notification.object as? DocumentSession === session,
+              let pages = notification.userInfo?["pages"] as? [Int] else { return }
+        for index in pages {
+            guard let page = session.document.page(at: index) else { continue }
+            SketchOverlayView.refresh(page)
         }
     }
 
@@ -312,6 +329,9 @@ final class ReaderCoordinator: NSObject {
         self.session = session
         self.onSelectionChange = onSelectionChange
         self.onToast = onToast
+        #if os(macOS)
+        sketchInput?.session = session
+        #endif
     }
 
     func makePDFView() -> PDFView {
@@ -383,6 +403,9 @@ final class ReaderCoordinator: NSObject {
 
         NotificationCenter.default.addObserver(
             self, selector: #selector(inkChanged), name: .paperTimeInkChanged, object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(sketchChanged), name: .paperTimeSketchChanged, object: nil
         )
         #if canImport(UIKit)
         NotificationCenter.default.addObserver(self, selector: #selector(undoInk), name: .paperTimeInkUndo, object: nil)
@@ -481,6 +504,7 @@ final class ReaderCoordinator: NSObject {
         installPinchMonitor(in: view)
         installMarkupShortcuts(for: view)
         if let plan = Boot.setting("PAPERTIME_MARK_TEST") { markWithoutAMouse(plan, in: view) }
+        if Boot.isSet("PAPERTIME_DRAW") || Boot.isSet("PAPERTIME_SKETCH_SHOT") { sketchProbe(in: view) }
         if Boot.isSet("PAPERTIME_WATCH_THREADS") { watchNotificationThreads() }
         #endif
         restoreReadingPosition(in: view)
@@ -517,6 +541,10 @@ final class ReaderCoordinator: NSObject {
             shownRevision = revision
             #if os(macOS)
             hideMarkupPanel()
+            // The selection and the half-drawn shape belonged to the last
+            // paper; the pencil is put back on this one below.
+            sketchInput?.deactivate()
+            appliedMode = nil
             #endif
             restoreReadingPosition(in: view)
         } else if revision != shownRevision {
@@ -663,6 +691,9 @@ final class ReaderCoordinator: NSObject {
         for observer in [spreadObserver, clipObserver].compactMap({ $0 }) { NotificationCenter.default.removeObserver(observer) }
         spreadObserver = nil
         clipObserver = nil
+        sketchInput?.deactivate()
+        sketchInput?.removeFromSuperview()
+        sketchInput = nil
         untrim()
         scrollMonitor = nil
         arrowMonitor = nil
@@ -1199,6 +1230,85 @@ final class ReaderCoordinator: NSObject {
         }
     }
 
+    /// Drives the pencil without a hand on it, for checking the drawing
+    /// mode from a script: `--papertime-draw=1` takes the pencil out,
+    /// `--papertime-sketch-tool=rectangle` picks a tool,
+    /// `--papertime-sketch-sample=1` puts a few shapes on the page in view,
+    /// and `--papertime-sketch-shot=<path in the container>` writes the
+    /// window to a PNG after `--papertime-sketch-shot-after=<seconds>`
+    /// (two by default), saying on stderr where the page is on screen so a
+    /// real pointer can be sent there. Only with a library named on the
+    /// command line: it draws on whatever paper is open.
+    private func sketchProbe(in view: PDFView) {
+        guard Boot.isSet("PAPERTIME_LIBRARY") else {
+            FileHandle.standardError.write(Data("sketch probe: refused — not the test library\n".utf8))
+            return
+        }
+        Task { @MainActor [weak self, weak view] in
+            try? await Task.sleep(for: .seconds(1.5))
+            guard let self, let view, let window = view.window else { return }
+            func say(_ text: String) { FileHandle.standardError.write(Data((text + "\n").utf8)) }
+            if Boot.isSet("PAPERTIME_DRAW") { configuration.mode = .draw }
+            if let name = Boot.setting("PAPERTIME_SKETCH_TOOL"), let tool = SketchTool(rawValue: name) {
+                configuration.sketch.tool = tool
+            }
+            guard let page = view.currentPage else { return say("sketch probe: no page") }
+            let index = session.document.index(for: page)
+            let box = page.bounds(for: view.displayBox)
+            if Boot.isSet("PAPERTIME_SKETCH_SAMPLE") {
+                var arrow = SketchElement(kind: .arrow, points: [
+                    CGPoint(x: box.minX + 60, y: box.maxY - 200), CGPoint(x: box.minX + 250, y: box.maxY - 120),
+                ], style: SketchStyle(stroke: .red))
+                arrow.setMidpoint(CGPoint(x: box.minX + 130, y: box.maxY - 100))
+                let who = SketchElement(kind: .rectangle, points: [
+                    CGPoint(x: box.minX + 260, y: box.maxY - 160), CGPoint(x: box.minX + 400, y: box.maxY - 100),
+                ], style: SketchStyle(stroke: .blue, fill: .paleBlue), text: "Who is the intended market?")
+                let why = SketchElement(kind: .ellipse, points: [
+                    CGPoint(x: box.minX + 60, y: box.maxY - 320), CGPoint(x: box.minX + 200, y: box.maxY - 240),
+                ], style: SketchStyle(stroke: .purple, dash: .dashed))
+                var card = SketchElement(kind: .text, points: [
+                    CGPoint(x: box.minX + 240, y: box.maxY - 240), CGPoint(x: box.minX + 380, y: box.maxY - 270),
+                ], style: SketchStyle(stroke: .ink, fill: .paleYellow), text: "user personas\nuser flow path")
+                card.style.border = true
+                session.setSketch([arrow, who, why, card], forPage: index)
+                say("sketch probe: 4 sample elements on page \(index)")
+            }
+            // `--papertime-sketch-script="tool=rectangle;drag=100,600,300,500;report"`:
+            // gestures in page coordinates, run one after another.
+            if let script = Boot.setting("PAPERTIME_SKETCH_SCRIPT") {
+                try? await Task.sleep(for: .milliseconds(300))
+                for op in script.split(separator: ";").map({ $0.trimmingCharacters(in: .whitespaces) }) where !op.isEmpty {
+                    if op.hasPrefix("wait=") {
+                        try? await Task.sleep(for: .seconds(Double(op.dropFirst(5)) ?? 0.5))
+                        continue
+                    }
+                    if let input = sketchInput {
+                        say(input.performProbe(op))
+                    } else {
+                        say("sketch probe: no input view — is the pencil out?")
+                    }
+                    try? await Task.sleep(for: .milliseconds(120))
+                }
+            }
+            let after = Boot.setting("PAPERTIME_SKETCH_SHOT_AFTER").flatMap(Double.init) ?? 2
+            // Where the page is, for a pointer: Cocoa (y up from the bottom
+            // of the screen) and Quartz (y down from the top).
+            let onScreen = window.convertToScreen(view.convert(view.convert(box, from: page), to: nil))
+            let screenHeight = NSScreen.screens.first?.frame.height ?? 0
+            say("sketch probe: page \(index) cocoa \(Int(onScreen.minX)) \(Int(onScreen.minY)) \(Int(onScreen.width)) \(Int(onScreen.height))")
+            say("sketch probe: page \(index) quartz top-left \(Int(onScreen.minX)) \(Int(screenHeight - onScreen.maxY)) size \(Int(onScreen.width)) \(Int(onScreen.height))")
+            guard let path = Boot.setting("PAPERTIME_SKETCH_SHOT") else { return }
+            try? await Task.sleep(for: .seconds(after))
+            guard let content = window.contentView,
+                  let rep = content.bitmapImageRepForCachingDisplay(in: content.bounds) else { return say("sketch probe: no bitmap") }
+            content.cacheDisplay(in: content.bounds, to: rep)
+            if let png = rep.representation(using: .png, properties: [:]) {
+                try? png.write(to: URL(fileURLWithPath: path))
+                say("sketch probe: wrote \(path); page \(index) has \(session.sketch(forPage: index).count) elements, \(session.drawing(forPage: index).strokes.count) strokes, \(session.markups.count) marks")
+            }
+        }
+    }
+
     private func showMarkupPanel(
         for selection: PDFSelection,
         in view: PDFView,
@@ -1544,6 +1654,25 @@ final class ReaderCoordinator: NSObject {
     #endif
 
     private func updateCanvasInteraction() {
+        #if os(macOS)
+        guard let view = pdfView else { return }
+        if configuration.mode == .draw {
+            hideMarkupPanel()
+            view.clearSelection()
+            onSelectionChange(nil, .zero)
+            let input = sketchInput ?? makeSketchInput(for: view)
+            input.session = session
+            if input.superview !== view {
+                input.frame = view.bounds
+                view.addSubview(input)
+            }
+            input.activate()
+        } else if let input = sketchInput {
+            input.deactivate()
+            input.removeFromSuperview()
+            view.window?.makeFirstResponder(view)
+        }
+        #endif
         #if canImport(UIKit)
         let drawing = configuration.mode == .draw
         for canvas in canvases.values {
@@ -1606,7 +1735,9 @@ extension ReaderCoordinator: @preconcurrency PDFPageOverlayViewProvider {
         canvases[index] = canvas
         // The canvas rides on the same overlay as the rounded marks and the
         // margin mask, so the iPad page looks like the Mac's, plus ink.
-        let overlay = PageOverlay(page: page, canvas: canvas)
+        let overlay = PageOverlay(page: page, canvas: canvas) { [weak self] in
+            self?.session.sketch(forPage: index) ?? []
+        }
         overlay.setInteractive(configuration.mode == .draw)
         // The eraser takes marks off along with strokes: the pencil, run over
         // a highlight, removes it.
@@ -1649,9 +1780,46 @@ extension ReaderCoordinator: @preconcurrency PDFPageOverlayViewProvider {
         // overlay is also where the highlights get their rounded ends.
         let index = session.document.index(for: page)
         hideOwnedInk(on: page, index: index)
-        return PageOverlay(page: page) { [weak self] in
-            self?.session.drawing(forPage: index) ?? PKDrawing()
+        return PageOverlay(
+            page: page,
+            drawing: { [weak self] in
+                guard let self else { return PKDrawing() }
+                let drawing = session.drawing(forPage: index)
+                // Strokes being dragged are drawn by the input view meanwhile.
+                let hidden = sketchInput?.hiddenStrokeIndices(onPage: index) ?? []
+                guard !hidden.isEmpty else { return drawing }
+                return PKDrawing(strokes: drawing.strokes.enumerated().filter { !hidden.contains($0.offset) }.map(\.element))
+            },
+            sketch: { [weak self] in self?.session.sketch(forPage: index) ?? [] },
+            hiddenSketch: { [weak self] in self?.sketchInput?.hiddenElementIDs(onPage: index) ?? [] }
+        )
+    }
+
+    /// The view that takes the mouse while the pencil is out.
+    private func makeSketchInput(for view: PDFView) -> SketchInputView {
+        let input = SketchInputView(pdfView: view, configuration: configuration, session: session)
+        input.refreshPage = { [weak self] index in
+            guard let self, let page = session.document.page(at: index) else { return }
+            SketchOverlayView.refresh(page)
+            InkOverlayView.refresh(page)
         }
+        // The eraser over a highlight or an underline takes it off, with
+        // the marks' own undo.
+        input.eraseMark = { [weak self, weak view] page, point in
+            guard let self, let view else { return }
+            let hits = page.annotations.filter {
+                RoundedMarks.kinds.contains($0.type ?? "") && $0.bounds.insetBy(dx: -3, dy: -3).contains(point)
+            }
+            for annotation in hits {
+                guard let id = TextMarkupWriter.identifier(of: annotation),
+                      let descriptor = session.markup(withID: id) else { continue }
+                session.removeMarkup(id: id)
+                registerRemovalUndo([descriptor], name: "Erase Mark", in: view)
+            }
+        }
+        input.onToast = { [weak self] message in self?.onToast(message) }
+        sketchInput = input
+        return input
     }
     #endif
 }
@@ -1691,64 +1859,9 @@ extension ReaderCoordinator: @preconcurrency PKCanvasViewDelegate {
         }
     }
 
-    /// Reads one highlighter stroke as a mark on the page's text, makes the
-    /// mark, and says so; or says it is not one and leaves the stroke be.
-    ///
-    /// Over words it is a highlight fitted to them; run along under the
-    /// words, it is an underline. The pen never snaps — handwriting is
-    /// handwriting — and a highlighter in the margin, where there are no
-    /// words, stays ink too.
+    /// The same judgement as on the Mac: see `StrokeSnapper`.
     private func snap(_ stroke: PKStroke, on page: PDFPage) -> Bool {
-        guard stroke.ink.inkType == .marker else { return false }
-        let geometry = PageGeometry(page: page)
-        let box = stroke.renderBounds
-        let corners = [
-            CGPoint(x: box.minX, y: box.minY), CGPoint(x: box.maxX, y: box.minY),
-            CGPoint(x: box.minX, y: box.maxY), CGPoint(x: box.maxX, y: box.maxY),
-        ].map(geometry.pdfPoint(fromCanvas:))
-        let xs = corners.map(\.x), ys = corners.map(\.y)
-        let rect = CGRect(x: xs.min()!, y: ys.min()!, width: xs.max()! - xs.min()!, height: ys.max()! - ys.min()!)
-
-        // The lines of text the stroke touches, or lies just under.
-        guard let around = page.selection(for: rect.insetBy(dx: 0, dy: -6)),
-              around.string?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-        else { return false }
-        let lines = around.selectionsByLine().map { $0.bounds(for: page) }.filter { $0.height > 0 }
-        guard let line = lines.min(by: { abs($0.midY - rect.midY) < abs($1.midY - rect.midY) }) else { return false }
-
-        // Only the words under the stroke, line by line: a selection run from
-        // one end of the stroke to the other follows the text instead and,
-        // across a column gap, floods half the page.
-        let kind: MarkupDescriptor.Kind
-        var pieces: [CGRect] = []
-        // A highlighter is wide: one stroke along one line is a box taller
-        // than the line, spilling onto the neighbours. Judge by the stroke's
-        // core — the band around its centre when it is a line's worth tall,
-        // the box less half a nib when it is deliberately taller.
-        let core: CGRect = rect.height < line.height * 1.8
-            ? CGRect(x: rect.minX, y: rect.midY - line.height * 0.25, width: rect.width, height: line.height * 0.5)
-            : rect.insetBy(dx: 0, dy: min(rect.height * 0.3, line.height * 0.6))
-        let crossed = lines.filter { $0.maxY > core.minY && $0.minY < core.maxY }
-        let isFlat = rect.height < line.height * 0.6
-        let sitsLow = rect.midY < line.minY + line.height * 0.28 && rect.midY > line.minY - line.height * 0.7
-        if isFlat, sitsLow {
-            kind = .underline
-            pieces = [CGRect(x: rect.minX, y: line.minY, width: rect.width, height: line.height)]
-        } else {
-            guard !crossed.isEmpty, rect.height <= line.height * 2.4 * CGFloat(crossed.count) else { return false }
-            kind = .highlight
-            pieces = crossed.map { CGRect(x: rect.minX, y: $0.minY, width: rect.width, height: $0.height) }
-        }
-        let span = PDFSelection(document: session.document)
-        for piece in pieces {
-            if let part = page.selection(for: piece) { span.add(part) }
-        }
-        guard span.string?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else { return false }
-
-        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
-        stroke.ink.color.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
-        let color = MarkupColor.nearest(red: red, green: green, blue: blue)
-        return !session.addMarkup(for: span, kind: kind, color: color).isEmpty
+        StrokeSnapper.snap(stroke, on: page, session: session)
     }
 
     @objc private func undoInk() { (lastCanvas ?? canvases.values.first)?.undoManager?.undo() }

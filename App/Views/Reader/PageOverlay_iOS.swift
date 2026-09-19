@@ -57,13 +57,56 @@ final class MarkOverlayView: UIView {
     }
 }
 
+/// The shapes, arrows and text cards the Mac drew, from the same sidecar
+/// and with the same renderer, under the pencil canvas. The iPad shows them
+/// and does not edit them; the PDF's own copy is hidden so nothing is
+/// drawn twice.
+final class SketchOverlayView: UIView {
+    private weak var page: PDFPage?
+    private let elements: () -> [SketchElement]
+
+    nonisolated(unsafe) private static var byPage: [ObjectIdentifier: Weak] = [:]
+    private struct Weak { weak var view: SketchOverlayView? }
+
+    init(page: PDFPage, elements: @escaping () -> [SketchElement]) {
+        self.page = page
+        self.elements = elements
+        super.init(frame: .zero)
+        isOpaque = false
+        backgroundColor = .clear
+        isUserInteractionEnabled = false
+        contentMode = .redraw
+        Self.byPage[ObjectIdentifier(page)] = Weak(view: self)
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    static func refresh(_ page: PDFPage) {
+        byPage[ObjectIdentifier(page)]?.view?.setNeedsDisplay()
+    }
+
+    override func draw(_ rect: CGRect) {
+        guard let page, let context = UIGraphicsGetCurrentContext() else { return }
+        let shown = elements()
+        guard !shown.isEmpty else { return }
+        let box = page.bounds(for: .cropBox)
+        guard box.width > 0, box.height > 0 else { return }
+        context.saveGState()
+        context.translateBy(x: 0, y: bounds.height)
+        context.scaleBy(x: bounds.width / box.width, y: -bounds.height / box.height)
+        context.translateBy(x: -box.minX, y: -box.minY)
+        SketchRenderer.draw(shown, in: context, options: .init(flipsText: true))
+        context.restoreGState()
+    }
+}
+
 /// One view over a page holding its overlays: the mask over the margin's
 /// stamps, the marks with their rounded ends, and on top the pencil canvas.
 final class PageOverlay: UIView {
     private let marginMask: MarginMaskView
     let canvas: PKCanvasView
 
-    init(page: PDFPage, canvas: PKCanvasView) {
+    init(page: PDFPage, canvas: PKCanvasView, sketch: @escaping () -> [SketchElement] = { [] }) {
         marginMask = MarginMaskView(page: page)
         self.canvas = canvas
         super.init(frame: .zero)
@@ -71,7 +114,8 @@ final class PageOverlay: UIView {
         backgroundColor = .clear
         isOpaque = false
         let marks = MarkOverlayView(page: page)
-        for child in [marginMask, marks, canvas] as [UIView] {
+        let shapes = SketchOverlayView(page: page, elements: sketch)
+        for child in [marginMask, marks, shapes, canvas] as [UIView] {
             child.autoresizingMask = [.flexibleWidth, .flexibleHeight]
             addSubview(child)
         }

@@ -117,6 +117,32 @@ struct ReaderScreen: View {
         #endif
         .overlay(alignment: .topLeading) { touchSelectionControls(session) }
         .animation(.snappy(duration: 0.16), value: selectionFrame)
+        #if os(macOS)
+        // The pencil's tools, floating over the top of the page while it
+        // is out, and the style of what it draws down the left — where
+        // Excalidraw keeps them, and for the same reason: they are about
+        // the page, so they sit on it.
+        .overlay(alignment: .top) {
+            if configuration.mode == .draw {
+                SketchToolbar(configuration: configuration)
+                    .padding(.top, 10)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .overlay(alignment: .topLeading) {
+            if configuration.mode == .draw {
+                SketchStylePanel(configuration: configuration)
+                    .padding(.leading, 12)
+                    .padding(.top, 60)
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+            }
+        }
+        .animation(.snappy(duration: 0.22), value: configuration.mode)
+        .onChange(of: configuration.mode) { _, mode in
+            // Whatever was selected as text has no place while drawing.
+            if mode == .draw { dismissSelectionControls() }
+        }
+        #endif
         .overlay(alignment: .bottom) {
             if let toast {
                 Text(toast)

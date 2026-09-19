@@ -49,6 +49,7 @@ struct FeatureDemoView: View {
             case .express: ExpressDemo(scale: scale)
             case .sync: SyncDemo(scale: scale)
             case .penTools: PenToolsDemo(scale: scale)
+            case .sketch: SketchDemo(scale: scale)
             }
         }
         .padding(scale.pad)
@@ -2842,6 +2843,192 @@ private struct WobblyStroke: Shape {
             control1: CGPoint(x: rect.minX + rect.width * 0.35, y: y - 5),
             control2: CGPoint(x: rect.minX + rect.width * 0.7, y: y + 5)
         )
+        return path
+    }
+}
+
+// MARK: - Drawing on the page
+
+/// The Mac's drawing layer beside what a PDF reader usually offers: on the
+/// left the square box and the note icon every reader has, on the right a
+/// card with words on it, an arrow that bends, and a frame round a line of
+/// handwriting. The card can be dragged — the arrow follows — because the
+/// point is not that the shapes exist but that they move like Excalidraw's.
+private struct SketchDemo: View {
+    let scale: DemoScale
+    @State private var cardOffset = CGSize.zero
+    @State private var dragStart = CGSize.zero
+    @State private var tool: SketchTool = .select
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: scale.gap) {
+            HStack(alignment: .top, spacing: scale.gap) {
+                other
+                ours
+            }
+            HStack(spacing: 4) {
+                ForEach([SketchTool.select, .pen, .highlighter, .rectangle, .ellipse, .arrow, .text], id: \.self) { item in
+                    Button { withAnimation(.snappy(duration: 0.15)) { tool = item } } label: {
+                        VStack(spacing: 0) {
+                            Image(systemName: item.symbolName)
+                                .font(.system(size: scale.isFull ? 12 : 10, weight: .medium))
+                                .frame(height: scale.isFull ? 16 : 13)
+                            Text(String(item.key).uppercased())
+                                .font(.system(size: scale.isFull ? 7 : 6, weight: .semibold, design: .rounded))
+                                .foregroundStyle(tool == item ? Color.accentColor : .secondary)
+                        }
+                        .frame(width: scale.isFull ? 26 : 22, height: scale.isFull ? 26 : 22)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(Color.accentColor.opacity(tool == item ? 0.16 : 0))
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .tint(tool == item ? Color.accentColor : .primary)
+                }
+                Spacer()
+                Text(ReleaseNotes.string("한 글자 키로 도구를 바꾼다 · 카드를 끌어 보라", "One-letter keys change the tool · drag the card"))
+                    .font(scale.small)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var other: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(ReleaseNotes.string("다른 PDF 앱", "Other PDF apps"))
+                .font(scale.small)
+                .foregroundStyle(.secondary)
+            ZStack(alignment: .topLeading) {
+                Paper(scale: scale) {
+                    VStack(alignment: .leading, spacing: scale.isFull ? 7 : 4) {
+                        Rule(); Rule(width: 90); Rule(); Rule(width: 60); Rule(); Rule(width: 110)
+                    }
+                    .frame(height: scale.stage * 0.62)
+                }
+                Rectangle()
+                    .strokeBorder(Color.red, lineWidth: 1.2)
+                    .frame(width: scale.isFull ? 96 : 60, height: scale.isFull ? 44 : 28)
+                    .offset(x: scale.isFull ? 24 : 14, y: scale.isFull ? 30 : 18)
+                Image(systemName: "note.text")
+                    .font(.system(size: scale.isFull ? 16 : 11))
+                    .foregroundStyle(.yellow)
+                    .offset(x: scale.isFull ? 130 : 82, y: scale.isFull ? 24 : 16)
+            }
+            Text(ReleaseNotes.string("네모와 메모 아이콘. 그것으로 끝.", "A box and a note icon. That is all."))
+                .font(scale.small)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var ours: some View {
+        let full = scale.isFull
+        let cardSize = CGSize(width: full ? 104 : 66, height: full ? 40 : 26)
+        let cardOrigin = CGPoint(x: full ? 150 : 96, y: full ? 22 : 14)
+        let boxOrigin = CGPoint(x: full ? 20 : 12, y: full ? 70 : 44)
+        let boxSize = CGSize(width: full ? 74 : 48, height: full ? 34 : 22)
+        return VStack(alignment: .leading, spacing: 4) {
+            Text("Paper Time")
+                .font(scale.small)
+                .foregroundStyle(Color.accentColor)
+            ZStack(alignment: .topLeading) {
+                Paper(scale: scale) {
+                    VStack(alignment: .leading, spacing: full ? 7 : 4) {
+                        Rule(); Rule(width: 90); Rule(); Rule(width: 60); Rule(); Rule(width: 110)
+                    }
+                    .frame(height: scale.stage * 0.62)
+                }
+                // The box, with its label.
+                RoundedRectangle(cornerRadius: full ? 7 : 5, style: .continuous)
+                    .fill(Color.blue.opacity(0.14))
+                    .overlay(RoundedRectangle(cornerRadius: full ? 7 : 5, style: .continuous).strokeBorder(Color.blue, lineWidth: 1.4))
+                    .overlay(Text("Who?").font(.system(size: full ? 11 : 8, weight: .semibold)).foregroundStyle(Color.blue))
+                    .frame(width: boxSize.width, height: boxSize.height)
+                    .offset(x: boxOrigin.x, y: boxOrigin.y)
+                // The arrow, bent, from the box to the card, wherever the card is.
+                BentArrow(
+                    from: CGPoint(x: boxOrigin.x + boxSize.width, y: boxOrigin.y + boxSize.height / 2),
+                    to: CGPoint(x: cardOrigin.x + cardOffset.width, y: cardOrigin.y + cardOffset.height + cardSize.height / 2),
+                    lift: full ? 26 : 16
+                )
+                .stroke(Color.red, style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
+                // The card: a note with a background and a border, that moves.
+                RoundedRectangle(cornerRadius: full ? 6 : 4, style: .continuous)
+                    .fill(Color.yellow.opacity(0.35))
+                    .overlay(RoundedRectangle(cornerRadius: full ? 6 : 4, style: .continuous).strokeBorder(.primary.opacity(0.7), lineWidth: 1))
+                    .overlay(
+                        Text(ReleaseNotes.string("왜 지금인가?", "Why now?"))
+                            .font(.system(size: full ? 10 : 7))
+                            .padding(3)
+                    )
+                    .frame(width: cardSize.width, height: cardSize.height)
+                    .offset(x: cardOrigin.x + cardOffset.width, y: cardOrigin.y + cardOffset.height)
+                    .gesture(
+                        DragGesture(minimumDistance: 1)
+                            .onChanged { value in
+                                cardOffset = CGSize(width: dragStart.width + value.translation.width, height: dragStart.height + value.translation.height)
+                            }
+                            .onEnded { _ in dragStart = cardOffset }
+                    )
+                // Handwriting, framed.
+                Scribble()
+                    .stroke(Color.primary.opacity(0.8), style: StrokeStyle(lineWidth: 1.3, lineCap: .round))
+                    .frame(width: full ? 110 : 70, height: full ? 22 : 14)
+                    .padding(full ? 6 : 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: full ? 8 : 5, style: .continuous)
+                            .strokeBorder(Color.purple, style: StrokeStyle(lineWidth: 1.2, dash: [4, 3]))
+                    )
+                    .offset(x: full ? 120 : 76, y: full ? 100 : 62)
+            }
+            Text(ReleaseNotes.string("카드에 글, 구부러지는 화살표, 손글씨에 테두리.", "A card with words, an arrow that bends, a frame round handwriting."))
+                .font(scale.small)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+/// A curve from one point to another, lifted at its middle.
+private struct BentArrow: Shape {
+    var from: CGPoint
+    var to: CGPoint
+    var lift: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let control = CGPoint(x: (from.x + to.x) / 2, y: min(from.y, to.y) - lift)
+        path.move(to: from)
+        path.addQuadCurve(to: to, control: control)
+        // The head, along the curve's direction at its end.
+        let d = CGPoint(x: to.x - control.x, y: to.y - control.y)
+        let length = max(hypot(d.x, d.y), 0.001)
+        let u = CGPoint(x: d.x / length, y: d.y / length)
+        let n = CGPoint(x: -u.y, y: u.x)
+        let size: CGFloat = 7
+        path.move(to: CGPoint(x: to.x - u.x * size + n.x * size * 0.5, y: to.y - u.y * size + n.y * size * 0.5))
+        path.addLine(to: to)
+        path.addLine(to: CGPoint(x: to.x - u.x * size - n.x * size * 0.5, y: to.y - u.y * size - n.y * size * 0.5))
+        return path
+    }
+}
+
+/// A line of handwriting, as a shape: loops that read as letters.
+private struct Scribble: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let y = rect.midY
+        path.move(to: CGPoint(x: rect.minX, y: y + 3))
+        var x = rect.minX
+        var up = true
+        while x < rect.maxX {
+            let next = min(x + rect.width / 9, rect.maxX)
+            let control = CGPoint(x: (x + next) / 2, y: up ? rect.minY : rect.maxY)
+            path.addQuadCurve(to: CGPoint(x: next, y: y + (up ? 3 : -2)), control: control)
+            up.toggle()
+            x = next
+        }
         return path
     }
 }

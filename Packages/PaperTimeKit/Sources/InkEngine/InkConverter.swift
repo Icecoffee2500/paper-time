@@ -186,6 +186,7 @@ public enum InkConverter {
     /// True when a page carries ink drawn somewhere other than this app, which
     /// the user should be told about before it gets replaced.
     public static func hasForeignInk(on page: PDFPage) -> Bool {
-        page.annotations.contains { $0.type == "Ink" && !isOwned($0) }
+        // A bent arrow of the sketch layer is ink too, and it is ours.
+        page.annotations.contains { $0.type == "Ink" && !isOwned($0) && !SketchWriter.isOwned($0) }
     }
 }

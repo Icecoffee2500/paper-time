@@ -173,6 +173,9 @@ public final class ReaderConfiguration {
     public var presets = InkPresets.load() {
         didSet { presets.save() }
     }
+    /// The Mac's drawing mode: which of Excalidraw's tools the pointer is,
+    /// the style the next shape gets, and what is selected on the page.
+    let sketch = SketchState()
     /// Which tool the canvases should hold, as a string that changes when
     /// anything about it does — the cheap way for the reader to notice.
     public var toolKey: String {

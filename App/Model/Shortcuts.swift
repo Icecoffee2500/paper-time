@@ -121,7 +121,7 @@ public enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
     case searchEverything, findInDocument, ultracopy, linkToNote
     case layoutContinuous, layoutSinglePage, layoutBook
     // Marking
-    case highlight, underline, newNote
+    case highlight, underline, newNote, draw
     // Panes
     case sidebar, paperList, reader, inspector, focus, floatingList
     // Moving about
@@ -150,7 +150,7 @@ public enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
         case .searchEverything, .findInDocument, .ultracopy, .linkToNote,
              .layoutContinuous, .layoutSinglePage, .layoutBook:
             .reading
-        case .highlight, .underline, .newNote:
+        case .highlight, .underline, .newNote, .draw:
             .marking
         case .sidebar, .paperList, .reader, .inspector, .focus, .floatingList:
             .panes
@@ -179,6 +179,7 @@ public enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
         case .highlight: "Highlight Selection"
         case .underline: "Underline Selection"
         case .newNote: "New Note"
+        case .draw: "Draw on the Page"
         case .sidebar: "Sidebar"
         case .paperList: "Paper List"
         case .reader: "Paper"
@@ -223,6 +224,7 @@ public enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
         case .highlight: Shortcut("h", [.command, .shift])
         case .underline: Shortcut("u", [.command, .shift])
         case .newNote: Shortcut("n")
+        case .draw: Shortcut("d", [.command, .shift])
         case .sidebar: Shortcut("[")
         case .paperList: Shortcut("p")
         case .reader: Shortcut("\\")

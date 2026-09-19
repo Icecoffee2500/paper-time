@@ -82,6 +82,10 @@ struct PaperTimeCommands: Commands {
                 .disabled(model.library?.selectedPaperID == nil)
             command("New Note", .newNote, post: .paperTimeNewNote)
                 .disabled(model.library == nil)
+            // The pencil, the shapes and the arrows: the Mac's own drawing
+            // mode, which the iPad reaches with the pencil itself.
+            command("Draw on the Page", .draw, post: .paperTimeToggleDraw)
+                .disabled(model.library?.selectedPaperID == nil)
         }
 
         // The paper list answers to Command-P, so the system's own Print item
@@ -170,5 +174,6 @@ extension Notification.Name {
     static let paperTimeUnderline = Notification.Name("PaperTime.underline")
     static let paperTimeNewNote = Notification.Name("PaperTime.newNote")
     static let paperTimeNextPaper = Notification.Name("PaperTime.nextPaper")
+    static let paperTimeToggleDraw = Notification.Name("PaperTime.toggleDraw")
     static let paperTimePreviousPaper = Notification.Name("PaperTime.previousPaper")
 }
