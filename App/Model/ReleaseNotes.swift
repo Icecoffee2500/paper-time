@@ -237,6 +237,26 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.4.1",
+            date: Text2("2026년 9월", "September 2026"),
+            note: Text2("스타일 패널이 잘리지 않고, 인스펙터에 단추가 생겼다.", "The style panel is no longer cut off, and the inspector has buttons."),
+            added: [
+                Entry(
+                    Text2("인스펙터 단추", "Inspector buttons"),
+                    Text2("논문 목록·논문·인스펙터 세 칸의 머리줄마다 인스펙터를 열고 닫는 단추가 있다 — ⌘]와 창 메뉴만이 아니라.", "Each of the three columns — the list, the paper, the inspector — has a button on its header row to show or hide the inspector, not only ⌘] and the panes menu."),
+                    action: .inspector,
+                    devices: [.mac]
+                ),
+            ],
+            fixed: [
+                Entry(
+                    Text2("스타일 패널 잘림", "The style panel was cut off"),
+                    Text2("그리기의 스타일 패널이 폭이 고정되어 일곱째 채움 색이 반만 보였고, 글 도구의 긴 패널은 창 아래로 빠져나갔다. 이제 내용만큼 넓고, 창이 짧으면 안에서 스크롤된다.", "The drawing mode's style panel had a fixed width that cut the seventh fill colour in half, and the text tool's tall panel ran off the bottom of the window. It is now as wide as its rows and scrolls inside a short window."),
+                    devices: [.mac]
+                ),
+            ]
+        ),
+        Release(
             version: "0.4.0",
             date: Text2("2026년 9월", "September 2026"),
             note: Text2("맥이 아이패드처럼 그린다 — 그리고 아이패드가 못 하던 것까지.", "The Mac draws like the iPad — and then some."),
