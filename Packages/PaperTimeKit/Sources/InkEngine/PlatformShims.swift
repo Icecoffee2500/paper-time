@@ -5,10 +5,12 @@ import Foundation
 import UIKit
 public typealias PlatformColor = UIColor
 public typealias PlatformBezierPath = UIBezierPath
+public typealias PlatformFont = UIFont
 #else
 import AppKit
 public typealias PlatformColor = NSColor
 public typealias PlatformBezierPath = NSBezierPath
+public typealias PlatformFont = NSFont
 #endif
 
 extension PlatformBezierPath {
