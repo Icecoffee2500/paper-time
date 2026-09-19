@@ -2,6 +2,14 @@
   "repo": "Icecoffee2500/paper-time",
   "releases": [
     {
+      "version": "0.4.2",
+      "date": "2026-09-19T07:00:45Z",
+      "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.4.2/Paper.Time.0.4.2.dmg",
+      "size": 5217164,
+      "downloads": 0,
+      "note": "칸마다 닫는 단추 — 목록·논문·인스펙터 각각."
+    },
+    {
       "version": "0.4.1",
       "date": "2026-09-19T06:51:35Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.4.1/Paper.Time.0.4.1.dmg",
