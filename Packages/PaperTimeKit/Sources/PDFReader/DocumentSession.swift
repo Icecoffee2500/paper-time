@@ -51,6 +51,11 @@ public final class DocumentSession {
     private let store: LibraryStore
     private var drawings: [Int: PKDrawing] = [:]
     private var pagesNeedingInkRewrite: Set<Int> = []
+    /// The shapes, arrows and text cards on each page — the sketch layer.
+    /// Like the ink, a sidecar per page is the truth and the PDF gets a copy.
+    private var sketches: [Int: [SketchElement]] = [:]
+    private var pagesNeedingSketchRewrite: Set<Int> = []
+    private var sketchFingerprints: [Int: FileFingerprint] = [:]
     /// The marks the PDF file itself holds — ours once written, and any
     /// made in another app, which have no journal and live only there.
     private var fileMarks: [MarkupDescriptor] = []
@@ -170,6 +175,8 @@ public final class DocumentSession {
         )
         await session.loadDrawings()
         await session.adoptInkFromFile()
+        await session.loadSketches()
+        await session.adoptSketchFromFile()
         session.readBackExistingMarks()
         session.startWatching()
         return session
@@ -253,6 +260,98 @@ public final class DocumentSession {
         }
     }
 
+    // MARK: - The sketch layer
+
+    public func sketch(forPage index: Int) -> [SketchElement] {
+        sketches[index] ?? []
+    }
+
+    /// Records a page's sketch. The sidecar is written straight away; the
+    /// PDF's copy follows on the usual delay. Whoever draws the pages hears
+    /// about it through `paperTimeSketchChanged`.
+    public func setSketch(_ elements: [SketchElement], forPage index: Int) {
+        sketches[index] = elements
+        pagesNeedingSketchRewrite.insert(index)
+        saveState = .pending
+
+        let folder = paper.folder
+        let data = Self.encodeSketch(elements)
+        let isEmpty = elements.isEmpty
+        Task { [store, weak self] in
+            if isEmpty {
+                try? await store.removeSketch(pageIndex: index, in: folder)
+            } else if let data {
+                try? await store.saveSketch(data, pageIndex: index, in: folder)
+            }
+            self?.sketchFingerprints[index] = FileFingerprint(url: folder.sketchURL(pageIndex: index))
+        }
+        NotificationCenter.default.post(
+            name: .paperTimeSketchChanged, object: self, userInfo: ["pages": [index]]
+        )
+        scheduleFlush()
+    }
+
+    nonisolated static func encodeSketch(_ elements: [SketchElement]) -> Data? {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
+        return try? encoder.encode(elements)
+    }
+
+    nonisolated static func decodeSketch(_ data: Data) -> [SketchElement]? {
+        try? JSONDecoder().decode([SketchElement].self, from: data)
+    }
+
+    private func loadSketches() async {
+        for index in await store.sketchPageIndices(in: paper.folder) {
+            guard let data = try? await store.loadSketch(pageIndex: index, in: paper.folder),
+                  let elements = Self.decodeSketch(data)
+            else { continue }
+            sketches[index] = elements
+            sketchFingerprints[index] = FileFingerprint(url: paper.folder.sketchURL(pageIndex: index))
+        }
+    }
+
+    /// A page whose file carries our shapes and whose sidecar has not come
+    /// across gets its sidecar made from the file — every annotation of ours
+    /// carries the element it was written from.
+    private func adoptSketchFromFile() async {
+        for index in 0..<document.pageCount where sketches[index] == nil {
+            guard let page = document.page(at: index) else { continue }
+            let elements = SketchWriter.elements(fromOwnedOn: page)
+            guard !elements.isEmpty, let data = Self.encodeSketch(elements) else { continue }
+            sketches[index] = elements
+            let folder = paper.folder
+            try? await store.saveSketch(data, pageIndex: index, in: folder)
+            sketchFingerprints[index] = FileFingerprint(url: folder.sketchURL(pageIndex: index))
+        }
+    }
+
+    /// Sketch sidecars that changed on disk replace the pages' elements —
+    /// except pages changed here and not yet written, which are ours to keep.
+    private func mergeSketchFromDisk() async {
+        let folder = paper.folder
+        let onDisk = Set(await store.sketchPageIndices(in: folder))
+        var changedPages: [Int] = []
+        for index in onDisk.union(sketchFingerprints.keys) where !pagesNeedingSketchRewrite.contains(index) {
+            let url = folder.sketchURL(pageIndex: index)
+            let now = onDisk.contains(index) ? FileFingerprint(url: url) : nil
+            guard now != sketchFingerprints[index] else { continue }
+            sketchFingerprints[index] = now
+            var elements: [SketchElement] = []
+            if now != nil, let data = try? await store.loadSketch(pageIndex: index, in: folder),
+               let loaded = Self.decodeSketch(data) {
+                elements = loaded
+            }
+            guard elements != sketches[index] ?? [] else { continue }
+            sketches[index] = elements
+            changedPages.append(index)
+        }
+        guard !changedPages.isEmpty else { return }
+        NotificationCenter.default.post(
+            name: .paperTimeSketchChanged, object: self, userInfo: ["pages": changedPages]
+        )
+    }
+
     // MARK: - Following the file
 
     /// Starts listening for the file changing under the reader.
@@ -292,6 +391,7 @@ public final class DocumentSession {
     /// the lot.
     public func reloadFromDisk() async {
         await mergeInkFromDisk()
+        await mergeSketchFromDisk()
         let url = paper.documentURL
         let folder = paper.folder
         let now = FileFingerprint(url: url)
@@ -548,7 +648,7 @@ public final class DocumentSession {
     public func flush() async {
         flushTask?.cancel()
         flushTask = nil
-        guard saveState == .pending || !pagesNeedingInkRewrite.isEmpty else { return }
+        guard saveState == .pending || !pagesNeedingInkRewrite.isEmpty || !pagesNeedingSketchRewrite.isEmpty else { return }
         saveState = .saving
 
         let url = paper.documentURL
@@ -567,17 +667,26 @@ public final class DocumentSession {
         for index in pagesNeedingInkRewrite {
             inks[index] = (drawings[index] ?? PKDrawing()).dataRepresentation()
         }
+        var sketchData: [Int: Data] = [:]
+        for (index, elements) in sketches where !elements.isEmpty {
+            sketchData[index] = Self.encodeSketch(elements)
+        }
+        for index in pagesNeedingSketchRewrite {
+            sketchData[index] = Self.encodeSketch(sketches[index] ?? [])
+        }
         let baseline = fileFingerprint
         let toApply = additions
         let toRemove = removals
         let inkToWrite = inks
+        let sketchToWrite = sketchData
 
         let outcome = await Task.detached(priority: .utility) {
             Self.write(
                 to: url,
                 additions: toApply,
                 removals: toRemove,
-                ink: inkToWrite
+                ink: inkToWrite,
+                sketches: sketchToWrite
             )
         }.value
 
@@ -590,6 +699,7 @@ public final class DocumentSession {
             fileFingerprint = FileFingerprint(url: url)
             fileMarks = additions + fileMarks.filter { mark in !additions.contains { $0.id == mark.id } && !removals.contains(mark.id) }
             pagesNeedingInkRewrite.removeAll()
+            pagesNeedingSketchRewrite.removeAll()
             saveState = .idle
         case let .failure(error):
             saveState = .failed(error.localizedDescription)
@@ -605,7 +715,8 @@ public final class DocumentSession {
         to url: URL,
         additions: [MarkupDescriptor],
         removals: [UUID],
-        ink: [Int: Data]
+        ink: [Int: Data],
+        sketches: [Int: Data] = [:]
     ) -> Result<Void, any Error> {
         do {
             let data = try FileOperations.read(contentsOf: url)
@@ -631,6 +742,13 @@ public final class DocumentSession {
                 else { continue }
                 InkConverter.apply(drawing, to: page)
             }
+            for (index, sketchData) in sketches {
+                guard let page = document.page(at: index),
+                      let elements = decodeSketch(sketchData),
+                      !SketchWriter.isAlreadyWritten(elements, on: page)
+                else { continue }
+                SketchWriter.apply(elements, to: page)
+            }
             guard let out = document.dataRepresentation() else {
                 throw FileOperations.Failure.writeVerificationFailed(url)
             }
@@ -645,6 +763,12 @@ public final class DocumentSession {
         for index in pagesNeedingInkRewrite {
             guard let page = document.page(at: index) else { continue }
             InkConverter.apply(drawings[index] ?? PKDrawing(), to: page)
+        }
+        // The open document never carries the sketch — the overlays draw it
+        // from the sidecar — so the export puts it in, visibly, first.
+        for (index, elements) in sketches {
+            guard let page = document.page(at: index) else { continue }
+            SketchWriter.apply(elements, to: page)
         }
     }
 
@@ -684,5 +808,8 @@ public extension Notification.Name {
     static let paperTimeMarksChanged = Notification.Name("PaperTimeMarksChanged")
     /// Posted when another device's ink arrived for pages of the open paper;
     /// `userInfo["pages"]` lists them. The canvases showing them redraw.
-    public static let paperTimeInkChanged = Notification.Name("PaperTimeInkChanged")
+    static let paperTimeInkChanged = Notification.Name("PaperTimeInkChanged")
+    /// Posted when pages' sketches changed — drawn here, or arrived from
+    /// another device; `userInfo["pages"]` lists them.
+    static let paperTimeSketchChanged = Notification.Name("PaperTimeSketchChanged")
 }

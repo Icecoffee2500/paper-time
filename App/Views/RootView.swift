@@ -1137,6 +1137,20 @@ struct PaperDetailColumn: View {
                             .lineLimit(1)
                             .truncationMode(.tail)
                         Spacer(minLength: 0)
+                        // The pencil, at the end of the paper's own strip:
+                        // the paper is drawn on, and the tool that does it
+                        // should be on the paper's row, not two menus deep.
+                        Button {
+                            configuration.mode = configuration.mode == .draw ? .read : .draw
+                        } label: {
+                            Label("Draw", systemImage: configuration.mode == .draw ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
+                                .labelStyle(.iconOnly)
+                                .toolbarIcon()
+                        }
+                        .buttonStyle(.borderless)
+                        .tint(configuration.mode == .draw ? Color.accentColor : .primary)
+                        .toolbarHover()
+                        .help("Draw on the page (\(app.shortcut(for: .draw).display))")
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 10)
@@ -1149,6 +1163,10 @@ struct PaperDetailColumn: View {
                         configuration: configuration,
                         link: link
                     )
+                }
+                // The menu's "Draw on the Page", and its key.
+                .onReceive(NotificationCenter.default.publisher(for: .paperTimeToggleDraw)) { _ in
+                    configuration.mode = configuration.mode == .draw ? .read : .draw
                 }
                 #if os(iOS)
                 // The tools, in a strip under the title while the pencil is
@@ -1177,12 +1195,13 @@ struct PaperDetailColumn: View {
                         }
                         .keyboardShortcut("l", modifiers: [.command, .shift])
                         .help("Table of contents")
+                        // Its key is the menu command's, so it is not pressed
+                        // twice for one press.
                         Button {
                             configuration.mode = configuration.mode == .draw ? .read : .draw
                         } label: {
                             Label("Draw", systemImage: configuration.mode == .draw ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
                         }
-                        .keyboardShortcut("d", modifiers: [.command, .shift])
                         .help("Write on the page with the pencil")
                     }
                     .sharedBackgroundVisibility(.hidden)

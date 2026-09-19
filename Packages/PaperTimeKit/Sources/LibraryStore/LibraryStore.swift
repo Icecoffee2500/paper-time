@@ -629,4 +629,35 @@ public actor LibraryStore {
             .compactMap { LibraryLayout.pageIndex(fromInkFileName: $0.lastPathComponent) }
             .sorted()
     }
+
+    // MARK: - Sketch sidecars
+
+    public func loadSketch(pageIndex: Int, in folder: PaperFolder) throws -> Data? {
+        let url = folder.sketchURL(pageIndex: pageIndex)
+        guard FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) else {
+            return nil
+        }
+        return try FileOperations.read(contentsOf: url)
+    }
+
+    public func saveSketch(_ data: Data, pageIndex: Int, in folder: PaperFolder) throws {
+        try FileOperations.ensureDirectory(at: folder.sketchDirectoryURL)
+        try FileOperations.write(data, to: folder.sketchURL(pageIndex: pageIndex))
+    }
+
+    public func removeSketch(pageIndex: Int, in folder: PaperFolder) throws {
+        let url = folder.sketchURL(pageIndex: pageIndex)
+        guard FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) else {
+            return
+        }
+        try FileManager.default.removeItem(at: url)
+    }
+
+    /// Page indices that have shapes drawn on them.
+    public func sketchPageIndices(in folder: PaperFolder) -> [Int] {
+        let contents = try? FileOperations.visibleContents(of: folder.sketchDirectoryURL)
+        return (contents ?? [])
+            .compactMap { LibraryLayout.pageIndex(fromSketchFileName: $0.lastPathComponent) }
+            .sorted()
+    }
 }
