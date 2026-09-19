@@ -237,13 +237,13 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
-            version: "0.4.2",
+            version: "0.4.3",
             date: Text2("2026년 9월", "September 2026"),
-            note: Text2("스타일 패널이 잘리지 않고, 칸마다 닫는 단추가 생겼다.", "The style panel is no longer cut off, and each column has its own button."),
+            note: Text2("스타일 패널이 잘리지 않고, 칸마다 단추가 하나씩.", "The style panel is no longer cut off, and each pane has its own button."),
             added: [
                 Entry(
-                    Text2("칸마다 닫는 단추", "A button to close each column"),
-                    Text2("논문 목록·논문·인스펙터 세 칸의 머리줄마다 그 칸을 닫는 단추가 있다 — 키와 창 메뉴만이 아니라. 다시 여는 것은 키(⌘P·⌘\\·⌘])나 창 메뉴로.", "Each of the three columns — the list, the paper, the inspector — has a button on its header row that hides that column, not only its key and the panes menu. Bring one back with its key (⌘P, ⌘\\, ⌘]) or the panes menu."),
+                    Text2("칸 단추 넷", "Four pane buttons"),
+                    Text2("도구 막대의 '칸' 메뉴 하나가 단추 넷이 되었다 — 사이드바·논문 목록·논문·인스펙터. 각각 제 칸을 켜고 끄고, 켜진 것은 채워진 아이콘. 단추는 도구 막대에 남으니 닫은 칸을 다시 열 수 있다.", "The toolbar's one panes menu became four buttons — sidebar, paper list, paper, inspector. Each shows and hides its own pane, filled when on. They stay on the toolbar, so a closed pane can be opened again."),
                     action: .inspector,
                     devices: [.mac]
                 ),

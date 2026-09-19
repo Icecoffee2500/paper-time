@@ -1299,7 +1299,7 @@ final class ReaderCoordinator: NSObject {
             say("sketch probe: page \(index) quartz top-left \(Int(onScreen.minX)) \(Int(screenHeight - onScreen.maxY)) size \(Int(onScreen.width)) \(Int(onScreen.height))")
             guard let path = Boot.setting("PAPERTIME_SKETCH_SHOT") else { return }
             try? await Task.sleep(for: .seconds(after))
-            guard let content = window.contentView,
+            guard let content = window.contentView?.superview ?? window.contentView,
                   let rep = content.bitmapImageRepForCachingDisplay(in: content.bounds) else { return say("sketch probe: no bitmap") }
             content.cacheDisplay(in: content.bounds, to: rep)
             if let png = rep.representation(using: .png, properties: [:]) {
