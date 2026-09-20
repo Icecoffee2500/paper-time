@@ -24,3 +24,8 @@ Config/Signing.local.xcconfig
 *.dmg
 .build/
 dist/
+
+# The cross-platform build (Portable/) — everything here is generated
+Portable/node_modules/
+Portable/out/
+Portable/dist/
