@@ -254,17 +254,17 @@ final class MarkupBarView: NSVisualEffectView {
             return button
         }
         views.append(Self.divider())
-        let underline = symbolButton("underline", "Underline", #selector(armUnderline))
-        let strike = symbolButton("strikethrough", "Strikethrough", #selector(armStrikethrough))
+        let underline = symbolButton("underline", L("밑줄", "Underline"), #selector(armUnderline))
+        let strike = symbolButton("strikethrough", L("취소선", "Strikethrough"), #selector(armStrikethrough))
         underlineButton = underline
         strikeButton = strike
         views.append(underline)
         views.append(strike)
         views.append(Self.divider())
-        views.append(symbolButton("note.text.badge.plus", "Add Note", #selector(note)))
-        views.append(symbolButton("doc.on.doc", "Copy", #selector(copyText)))
+        views.append(symbolButton("note.text.badge.plus", L("노트 더하기", "Add Note"), #selector(note)))
+        views.append(symbolButton("doc.on.doc", L("복사", "Copy"), #selector(copyText)))
         views.append(symbolButton(
-            "function", "Ultracopy — copy with formulas as LaTeX (⌘⇧C)",
+            "function", L("Ultracopy — 수식은 LaTeX로 복사 (⌘⇧C)", "Ultracopy — copy with formulas as LaTeX (⌘⇧C)"),
             #selector(ultraCopyText)
         ))
 
@@ -403,7 +403,7 @@ private final class MarkEditorView: NSVisualEffectView {
             button.isBordered = false
             button.tag = index
             button.toolTip = color.displayName
-            button.setAccessibilityLabel("Change to \(color.displayName)")
+            button.setAccessibilityLabel(L("색 바꾸기: \(color.displayName)", "Change to \(color.displayName)"))
             return button
         }
         let separator = NSBox()
@@ -413,15 +413,15 @@ private final class MarkEditorView: NSVisualEffectView {
         views.append(separator)
 
         let trash = NSButton(
-            image: NSImage(systemSymbolName: "trash", accessibilityDescription: "Remove Mark")
+            image: NSImage(systemSymbolName: "trash", accessibilityDescription: L("표시 지우기", "Remove Mark"))
                 ?? NSImage(),
             target: self,
             action: #selector(delete)
         )
         trash.isBordered = false
         trash.contentTintColor = .systemRed
-        trash.toolTip = "Remove Mark"
-        trash.setAccessibilityLabel("Remove Mark")
+        trash.toolTip = L("표시 지우기", "Remove Mark")
+        trash.setAccessibilityLabel(L("표시 지우기", "Remove Mark"))
         views.append(trash)
 
         let stack = NSStackView(views: views)
@@ -476,15 +476,15 @@ private final class NoteComposerView: NSVisualEffectView, NSTextFieldDelegate {
         quote.lineBreakMode = .byTruncatingTail
         quote.maximumNumberOfLines = 2
 
-        field.placeholderString = "Note"
+        field.placeholderString = L("노트", "Note")
         field.font = .preferredFont(forTextStyle: .body)
         field.delegate = self
         field.target = self
         field.action = #selector(save)
 
-        let cancel = NSButton(title: "Cancel", target: self, action: #selector(cancel))
+        let cancel = NSButton(title: L("취소", "Cancel"), target: self, action: #selector(cancel))
         cancel.keyEquivalent = "\u{1b}"
-        let save = NSButton(title: "Save", target: self, action: #selector(self.save))
+        let save = NSButton(title: L("저장", "Save"), target: self, action: #selector(self.save))
         save.keyEquivalent = "\r"
         save.bezelStyle = .rounded
 

@@ -20,6 +20,15 @@ const override = process.argv
   .find((argument) => argument.startsWith('--papertime-chrome='))
   ?.slice('--papertime-chrome='.length)
 
+/**
+ * Which language the interface speaks, decided by the main process from the
+ * desktop's locale and the reader's override. Handed over rather than worked
+ * out again here, so the window cannot disagree with its own menu bar.
+ */
+const language = process.argv
+  .find((argument) => argument.startsWith('--papertime-lang='))
+  ?.slice('--papertime-lang='.length)
+
 contextBridge.exposeInMainWorld('papertime', {
   invoke: (name: string, args?: unknown) => ipcRenderer.invoke(CHANNEL.invoke, name, args),
   on: (handler: (event: string, payload: unknown) => void) => {
@@ -28,4 +37,5 @@ contextBridge.exposeInMainWorld('papertime', {
     return () => ipcRenderer.removeListener(CHANNEL.event, listener)
   },
   platform: override ?? process.platform,
+  korean: language === 'ko',
 })

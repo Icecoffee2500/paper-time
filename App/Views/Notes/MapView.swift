@@ -47,7 +47,7 @@ struct MapView: View {
             Label(map.displayTitle, systemImage: "map")
                 .font(.title2.weight(.semibold))
                 .lineLimit(1)
-            Text("\(map.outline.reduce(0) { $0 + $1.entries.count }) notes")
+            Text(L("노트 \(map.outline.reduce(0) { $0 + $1.entries.count })개", "\(map.outline.reduce(0) { $0 + $1.entries.count }) notes"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer(minLength: 0)
@@ -63,12 +63,12 @@ struct MapView: View {
         Button {
             withAnimation(.snappy(duration: 0.2)) { editsText.toggle() }
         } label: {
-            Label(editsText ? "Show as Map" : "Edit as Text",
+            Label(editsText ? L("지도로 보기", "Show as Map") : L("글로 편집하기", "Edit as Text"),
                   systemImage: editsText ? "map" : "chevron.left.forwardslash.chevron.right")
                 .labelStyle(.iconOnly)
         }
         .buttonStyle(.borderless)
-        .help(editsText ? "Show the map as a board" : "Edit the map as Markdown")
+        .help(editsText ? L("지도를 보드로 보기", "Show the map as a board") : L("지도를 Markdown으로 편집하기", "Edit the map as Markdown"))
     }
 
     /// One heading and its cards.
@@ -131,7 +131,7 @@ struct MapView: View {
             .filter { $0.note.kind == .note }
         if !echoes.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Label("Resonates, not filed", systemImage: "waveform")
+                Label(L("울리지만 아직 안 올린 노트", "Resonates, not filed"), systemImage: "waveform")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.tint)
                     .padding(.horizontal, 4)
@@ -148,7 +148,7 @@ struct MapView: View {
                             Image(systemName: "plus.circle.fill")
                         }
                         .buttonStyle(.borderless)
-                        .help("Put this note on the map")
+                        .help(L("이 노트를 지도에 올리기", "Put this note on the map"))
                     }
                     .padding(10)
                     .background(RoundedRectangle(cornerRadius: Corner.row, style: .continuous).fill(Color.accentColor.opacity(0.07)))

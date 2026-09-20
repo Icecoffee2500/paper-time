@@ -36,7 +36,7 @@ struct ShortcutRecorder: View {
         Button {
             recording.wrappedValue.toggle()
         } label: {
-            Text(isRecording ? "Press a key…" : (isUnset ? "—" : shortcut.display))
+            Text(isRecording ? L("키를 누르라…", "Press a key…") : (isUnset ? "—" : shortcut.display))
                 .font(.body.monospaced())
                 .foregroundStyle(isRecording ? .secondary : (isUnset ? .tertiary : .primary))
                 .frame(minWidth: 74)
@@ -63,7 +63,7 @@ struct ShortcutRecorder: View {
             }
             .allowsHitTesting(false)
         )
-        .help("Click, then press the keys you want")
+        .help(L("누른 다음 원하는 키를 누른다", "Click, then press the keys you want"))
     }
 }
 

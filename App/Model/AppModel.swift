@@ -131,6 +131,32 @@ public final class AppModel {
 
     /// Whether the introduction is on screen.
     public var showsReleaseNotes = false
+    /// The one sheet anybody can reach from anywhere, with ⌥⌘/.
+    public var showsFeedback = false
+    /// Held here rather than inside the sheet: closing the sheet by accident
+    /// should not throw away what somebody had already written.
+    public var feedbackDraft = FeedbackDraft()
+    /// Whether the last run ended badly. Read once at launch; the moment
+    /// somebody is most willing to say what happened is the moment after it
+    /// happened to them.
+    public private(set) var cameBackFromCrash = false
+
+    /// Opens the report sheet. The screenshot is taken inside the sheet's own
+    /// `task`, one runloop later, so the sheet is not in its own picture.
+    public func askForFeedback() {
+        showsFeedback = true
+    }
+
+    public func noteLaunch() {
+        cameBackFromCrash = Feedback.Crash.markLaunched()
+        #if os(macOS)
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification, object: nil, queue: .main
+        ) { _ in
+            MainActor.assumeIsolated { Feedback.Crash.markCleanExit() }
+        }
+        #endif
+    }
 
     /// The version whose notes have been read.
     ///

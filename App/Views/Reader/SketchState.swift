@@ -26,15 +26,15 @@ enum SketchTool: String, CaseIterable, Identifiable, Sendable {
 
     var label: String {
         switch self {
-        case .select: ReleaseNotes.string("선택", "Select")
-        case .pen: ReleaseNotes.string("펜", "Pen")
-        case .highlighter: ReleaseNotes.string("형광펜", "Highlighter")
-        case .eraser: ReleaseNotes.string("지우개", "Eraser")
-        case .rectangle: ReleaseNotes.string("네모", "Rectangle")
-        case .ellipse: ReleaseNotes.string("동그라미", "Ellipse")
-        case .arrow: ReleaseNotes.string("화살표", "Arrow")
-        case .line: ReleaseNotes.string("선", "Line")
-        case .text: ReleaseNotes.string("글", "Text")
+        case .select: L("선택", "Select")
+        case .pen: L("펜", "Pen")
+        case .highlighter: L("형광펜", "Highlighter")
+        case .eraser: L("지우개", "Eraser")
+        case .rectangle: L("네모", "Rectangle")
+        case .ellipse: L("동그라미", "Ellipse")
+        case .arrow: L("화살표", "Arrow")
+        case .line: L("선", "Line")
+        case .text: L("글", "Text")
         }
     }
 

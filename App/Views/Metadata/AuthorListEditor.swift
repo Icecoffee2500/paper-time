@@ -23,13 +23,13 @@ struct AuthorListEditor: View {
     @State private var isEditing = false
 
     var body: some View {
-        Section("Authors") {
+        Section(L("저자", "Authors")) {
             DisclosureGroup(isExpanded: $isEditing) {
                 ForEach(authors.indices, id: \.self) { index in
                     HStack {
-                        TextField("Given", text: binding(at: index, \.given))
+                        TextField(L("이름", "Given"), text: binding(at: index, \.given))
                             .textContentType(.givenName)
-                        TextField("Family", text: binding(at: index, \.family))
+                        TextField(L("성", "Family"), text: binding(at: index, \.family))
                             .textContentType(.familyName)
                     }
                 }
@@ -39,20 +39,20 @@ struct AuthorListEditor: View {
                 Button {
                     authors.append(CSLName())
                 } label: {
-                    Label("Add Author", systemImage: "person.badge.plus")
+                    Label(L("저자 더하기", "Add Author"), systemImage: "person.badge.plus")
                 }
 
                 Button {
                     pasteNames()
                 } label: {
-                    Label("Paste Names", systemImage: "doc.on.clipboard")
+                    Label(L("이름 붙여넣기", "Paste Names"), systemImage: "doc.on.clipboard")
                 }
             } label: {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(byline)
                         .lineLimit(isEditing ? 1 : 3)
                         .foregroundStyle(authors.isEmpty ? .secondary : .primary)
-                    Text(authors.count == 1 ? "1 author" : "\(authors.count) authors")
+                    Text(authors.count == 1 ? L("저자 1명", "1 author") : L("저자 \(authors.count)명", "\(authors.count) authors"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -62,7 +62,7 @@ struct AuthorListEditor: View {
 
     private var byline: String {
         authors.isEmpty
-            ? "No authors"
+            ? L("저자 없음", "No authors")
             : authors.map(\.displayName).joined(separator: ", ")
     }
 

@@ -33,7 +33,7 @@ struct FindBar: View {
                     .accessibilityHidden(true)
             }
 
-            TextField("Find in Document", text: queryBinding)
+            TextField(L("이 논문에서 찾기", "Find in Document"), text: queryBinding)
                 .textFieldStyle(.plain)
                 .focused($isFocused)
                 .frame(minWidth: 140)
@@ -58,7 +58,7 @@ struct FindBar: View {
                 Image(systemName: "chevron.up")
             }
             .disabled(finder.matchCount == 0)
-            .accessibilityLabel("Previous Match")
+            .accessibilityLabel(L("이전 결과", "Previous Match"))
 
             Button {
                 navigate(to: finder.next)
@@ -66,7 +66,7 @@ struct FindBar: View {
                 Image(systemName: "chevron.down")
             }
             .disabled(finder.matchCount == 0)
-            .accessibilityLabel("Next Match")
+            .accessibilityLabel(L("다음 결과", "Next Match"))
 
             Button {
                 dismiss()
@@ -74,7 +74,7 @@ struct FindBar: View {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundStyle(.secondary)
             }
-            .accessibilityLabel("Close Find Bar")
+            .accessibilityLabel(L("찾기 막대 닫기", "Close Find Bar"))
         }
         .buttonStyle(.borderless)
         .padding(.horizontal, 12)

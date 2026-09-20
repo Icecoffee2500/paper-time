@@ -46,7 +46,7 @@ struct ZettelEditorView: View {
             HStack(spacing: 8) {
                 if let onClose {
                     Button(action: onClose) {
-                        Label("Notes", systemImage: "chevron.left")
+                        Label(L("노트", "Notes"), systemImage: "chevron.left")
                             .labelStyle(.titleAndIcon)
                     }
                     .buttonStyle(.borderless)
@@ -63,7 +63,7 @@ struct ZettelEditorView: View {
                 .toggleStyle(.button)
                 .buttonStyle(.borderless)
                 .controlSize(.small)
-                .help("Show the note as Markdown, syntax and all")
+                .help(L("노트를 Markdown 원문으로 보기 — 기호까지 그대로", "Show the note as Markdown, syntax and all"))
 
                 Menu {
                     if let note {
@@ -76,7 +76,7 @@ struct ZettelEditorView: View {
                             NSPasteboard.general.setString(note.id, forType: .string)
                             #endif
                         } label: {
-                            Label("Copy Identifier — \(note.id)", systemImage: "number")
+                            Label(L("식별자 복사 — \(note.id)", "Copy Identifier — \(note.id)"), systemImage: "number")
                         }
                         Divider()
                     }
@@ -84,7 +84,7 @@ struct ZettelEditorView: View {
                         notes.delete(noteID)
                         onClose?()
                     } label: {
-                        Label("Delete Note", systemImage: "trash")
+                        Label(L("노트 지우기", "Delete Note"), systemImage: "trash")
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")
@@ -94,7 +94,7 @@ struct ZettelEditorView: View {
             }
 
             // The one thing on this surface that should be read first.
-            TextField("Title", text: $title)
+            TextField(L("제목", "Title"), text: $title)
                 .textFieldStyle(.plain)
                 .font(.title2.weight(.semibold))
 
@@ -148,13 +148,22 @@ struct ZettelEditorView: View {
             )
             if body_.isEmpty {
                 Text(
-                    """
-                    One thought, in your own words.
+                    L(
+                        """
+                        생각 하나를, 내 말로.
 
-                    [[ links to another note. #tag files it.
-                    Markdown and LaTeX are set as you write them.
-                    ⌘L drops a link to the passage you selected.
-                    """
+                        [[ 로 다른 노트에 잇고, #태그 로 묶는다.
+                        Markdown과 LaTeX는 쓰는 대로 조판된다.
+                        ⌘L은 고른 구절로 가는 링크를 놓는다.
+                        """,
+                        """
+                        One thought, in your own words.
+
+                        [[ links to another note. #tag files it.
+                        Markdown and LaTeX are set as you write them.
+                        ⌘L drops a link to the passage you selected.
+                        """
+                    )
                 )
                 .font(.callout)
                 .foregroundStyle(.tertiary)
@@ -197,10 +206,10 @@ struct ZettelEditorView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     if !outbound.isEmpty {
-                        connectionList("Links to", notes: outbound, symbol: "arrow.up.right")
+                        connectionList(L("내가 가리키는 노트", "Links to"), notes: outbound, symbol: "arrow.up.right")
                     }
                     if !inbound.isEmpty {
-                        connectionList("Linked from", notes: inbound, symbol: "arrow.down.left")
+                        connectionList(L("나를 가리키는 노트", "Linked from"), notes: inbound, symbol: "arrow.down.left")
                     }
                     if !echoes.isEmpty {
                         echoList(echoes)
@@ -218,7 +227,7 @@ struct ZettelEditorView: View {
     /// a way to make the echo a link with one press.
     private func echoList(_ echoes: [(note: Zettel, shared: [String])]) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Resonates with".uppercased())
+            Text(L("함께 울리는 노트", "Resonates with").uppercased())
                 .font(.caption2.weight(.semibold))
                 .tracking(0.6)
                 .foregroundStyle(.tertiary)
@@ -270,7 +279,7 @@ struct ZettelEditorView: View {
                             .font(.caption)
                     }
                     .buttonStyle(.borderless)
-                    .help(echo.note.kind == .map ? "Put this note on the map" : "Link this note to it")
+                    .help(echo.note.kind == .map ? L("이 노트를 지도에 올리기", "Put this note on the map") : L("이 노트를 그 노트에 잇기", "Link this note to it"))
                 }
             }
         }

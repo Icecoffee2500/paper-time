@@ -10,6 +10,7 @@ import { icon } from '../icons.js'
 import { clear, el, on } from '../dom.js'
 import { store, type Paper } from '../state.js'
 import { fullName, type CSLName } from '../../shared/model.js'
+import { L } from '../../shared/lang.js'
 
 export interface InspectorActions {
   editMeta: (id: string, patch: Record<string, unknown>) => void
@@ -29,8 +30,8 @@ export function buildInspector(actions: InspectorActions): { node: HTMLElement; 
     const paper = store.papers.find((entry) => entry.id === store.selectedID)
     if (!paper) {
       body.append(el('div', { class: 'empty' }, [
-        el('h2', { text: 'No paper selected' }),
-        el('p', { text: 'Pick one from the list to see its record.' }),
+        el('h2', { text: L('고른 논문이 없다', 'No paper selected') }),
+        el('p', { text: L('목록에서 하나를 고르면 그 기록이 보인다.', 'Pick one from the list to see its record.') }),
       ]))
       return
     }
@@ -82,20 +83,20 @@ function editable(
   ])
 }
 
-const CONFIDENCE_LABEL: Record<string, string> = {
-  unparsed: 'Not read yet',
-  low: 'Low confidence',
-  medium: 'Medium confidence',
-  high: 'High confidence',
-  verified: 'Verified against a registrar',
-  manual: 'Edited by you',
-  needsReview: 'Needs review',
-}
+const CONFIDENCE_LABEL = (): Record<string, string> => ({
+  unparsed: L('아직 안 읽음', 'Not read yet'),
+  low: L('확신 낮음', 'Low confidence'),
+  medium: L('확신 보통', 'Medium confidence'),
+  high: L('확신 높음', 'High confidence'),
+  verified: L('등록기관에서 확인함', 'Verified against a registrar'),
+  manual: L('직접 고침', 'Edited by you'),
+  needsReview: L('살펴볼 것', 'Needs review'),
+})
 
 function details(body: HTMLElement, paper: Paper, actions: InspectorActions) {
   const meta = paper.meta
 
-  body.append(editable('Title', meta.csl.title ?? '', (next) => {
+  body.append(editable(L('제목', 'Title'), meta.csl.title ?? '', (next) => {
     actions.editMeta(paper.id, { csl: { ...meta.csl, title: next }, confidence: 'manual' })
   }, { multiline: true }))
 
@@ -107,28 +108,32 @@ function details(body: HTMLElement, paper: Paper, actions: InspectorActions) {
   }
   if (authors.childElementCount > 0) {
     body.append(el('div', { class: 'field' }, [
-      el('div', { class: 'field-label', text: 'Authors' }),
+      el('div', { class: 'field-label', text: L('저자', 'Authors') }),
       authors,
     ]))
   }
 
-  body.append(editable('Venue', meta.csl['container-title'] ?? '', (next) => {
+  body.append(editable(L('학술지·학회', 'Venue'), meta.csl['container-title'] ?? '', (next) => {
     actions.editMeta(paper.id, { csl: { ...meta.csl, 'container-title': next }, confidence: 'manual' })
   }))
 
-  body.append(editable('Year', meta.year ? String(meta.year) : '', (next) => {
+  body.append(editable(L('해', 'Year'), meta.year ? String(meta.year) : '', (next) => {
     const year = Number(next)
     const issued = Number.isInteger(year) && year > 0 ? { 'date-parts': [[year]] } : undefined
     actions.editMeta(paper.id, { csl: { ...meta.csl, issued }, confidence: 'manual' })
   }))
 
   if (meta.csl.DOI) body.append(field('DOI', meta.csl.DOI))
-  body.append(editable('Citation key', meta.bibKey, (next) => {
+  body.append(editable(L('인용 키', 'Citation key'), meta.bibKey, (next) => {
     actions.editMeta(paper.id, { bibKey: next })
   }))
 
   const status = el('div', { class: 'choices' })
-  for (const [value, label] of [['unread', 'Unread'], ['reading', 'Reading'], ['read', 'Read']] as const) {
+  for (const [value, label] of [
+    ['unread', L('안 읽음', 'Unread')],
+    ['reading', L('읽는 중', 'Reading')],
+    ['read', L('읽음', 'Read')],
+  ] as const) {
     const button = el('button', {
       text: label,
       'aria-pressed': String(paper.state.readingStatus === value),
@@ -137,19 +142,19 @@ function details(body: HTMLElement, paper: Paper, actions: InspectorActions) {
     status.append(button)
   }
   body.append(el('div', { class: 'field' }, [
-    el('div', { class: 'field-label', text: 'Reading' }),
+    el('div', { class: 'field-label', text: L('읽기 상태', 'Reading') }),
     status,
   ]))
 
-  body.append(field('Confidence', CONFIDENCE_LABEL[meta.confidence] ?? meta.confidence))
-  body.append(field('File', meta.file.originalName || meta.file.relativePath))
-  body.append(field('Pages', String(meta.file.pageCount)))
-  body.append(field('Added', meta.addedAt.toLocaleDateString()))
+  body.append(field(L('확신', 'Confidence'), CONFIDENCE_LABEL()[meta.confidence] ?? meta.confidence))
+  body.append(field(L('파일', 'File'), meta.file.originalName || meta.file.relativePath))
+  body.append(field(L('쪽', 'Pages'), String(meta.file.pageCount)))
+  body.append(field(L('더한 날', 'Added'), meta.addedAt.toLocaleDateString()))
 
   const row = el('div', { class: 'field' })
-  const reveal = el('button', { class: 'plain-button', text: 'Show in Folder' })
+  const reveal = el('button', { class: 'plain-button', text: L('폴더에서 보기', 'Show in Folder') })
   on(reveal, 'click', () => actions.reveal(paper.id))
-  const copy = el('button', { class: 'plain-button', text: 'Copy Citation Key' })
+  const copy = el('button', { class: 'plain-button', text: L('인용 키 복사', 'Copy Citation Key') })
   on(copy, 'click', () => actions.copyKey(paper.id))
   row.append(el('div', { class: 'chip-row' }, [reveal, copy]))
   body.append(row, el('div', { style: 'height: 14px' }))
@@ -158,10 +163,13 @@ function details(body: HTMLElement, paper: Paper, actions: InspectorActions) {
 function marks(body: HTMLElement, paper: Paper) {
   body.append(el('div', { class: 'empty' }, [
     el('span', { html: icon('highlighter') }),
-    el('h2', { text: 'Marks' }),
+    el('h2', { text: L('표시', 'Marks') }),
     el('p', {
-      text: 'Highlights and underlines made on the page will be listed here. '
-        + 'Everything drawn with the pen is already written into the PDF itself.',
+      text: L(
+        '쪽에 칠한 형광펜과 밑줄이 여기에 나열될 것이다. 펜으로 그린 것은 이미 PDF 자체에 적혀 있다.',
+        'Highlights and underlines made on the page will be listed here. '
+          + 'Everything drawn with the pen is already written into the PDF itself.',
+      ),
     }),
   ]))
 }
@@ -169,7 +177,7 @@ function marks(body: HTMLElement, paper: Paper) {
 function note(body: HTMLElement, paper: Paper, actions: InspectorActions) {
   const area = el('textarea', {
     rows: '20',
-    placeholder: 'A note about this paper…',
+    placeholder: L('이 논문에 대한 노트…', 'A note about this paper…'),
   }) as HTMLTextAreaElement
   area.value = paper.state.summaryNote
   area.style.minHeight = '60vh'

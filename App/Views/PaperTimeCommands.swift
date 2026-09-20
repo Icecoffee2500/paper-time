@@ -29,19 +29,19 @@ struct PaperTimeCommands: Commands {
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
-            command("Add Papers…", .addPapers, post: .paperTimeAddPapers)
+            command(L("논문 더하기…", "Add Papers…"), .addPapers, post: .paperTimeAddPapers)
                 .disabled(model.library == nil)
         }
 
         CommandGroup(after: .newItem) {
             Divider()
-            command("Export BibTeX…", .exportBibTeX, post: .paperTimeExportBibTeX)
+            command(L("BibTeX 내보내기…", "Export BibTeX…"), .exportBibTeX, post: .paperTimeExportBibTeX)
                 .disabled(model.library == nil)
-            command("Copy Citation Key", .copyCitationKey, post: .paperTimeCopyCitationKey)
+            command(L("인용 키 복사", "Copy Citation Key"), .copyCitationKey, post: .paperTimeCopyCitationKey)
         }
 
-        CommandMenu("Library") {
-            command("Resolve Missing Metadata", .resolveMetadata) {
+        CommandMenu(L("라이브러리", "Library")) {
+            command(L("빠진 서지 채우기", "Resolve Missing Metadata"), .resolveMetadata) {
                 guard let library = model.library else { return }
                 Task { await library.resolveAllPending() }
             }
@@ -49,42 +49,42 @@ struct PaperTimeCommands: Commands {
             // it has not brought, read the folder again, and tell the open
             // paper to look at its own files. Posted rather than done here,
             // because the reader's session is the window's, not the menu's.
-            command("Sync Now", .refreshFolder, post: .paperTimeSyncNow)
+            command(L("지금 맞추기", "Sync Now"), .refreshFolder, post: .paperTimeSyncNow)
 
             Divider()
 
-            Button("Change Library Folder…") {
+            Button(L("라이브러리 폴더 바꾸기…", "Change Library Folder…")) {
                 model.isChoosingLibraryFolder = true
             }
         }
 
         CommandGroup(after: .textEditing) {
-            command("Search Everything…", .searchEverything) {
+            command(L("전부 찾기…", "Search Everything…"), .searchEverything) {
                 model.showsSearchPalette = true
             }
             .disabled(model.library == nil)
 
-            command("Find in Document…", .findInDocument, post: .paperTimeFindInDocument)
+            command(L("이 논문에서 찾기…", "Find in Document…"), .findInDocument, post: .paperTimeFindInDocument)
                 .disabled(model.library?.selectedPaperID == nil)
 
             command("Ultracopy", .ultracopy, post: .paperTimeUltraCopy)
                 .disabled(model.library?.selectedPaperID == nil)
-                .help("Copy the selection, with formulas as LaTeX")
+                .help(L("고른 곳 복사, 수식은 LaTeX로", "Copy the selection, with formulas as LaTeX"))
 
-            command("Link Selection to Note", .linkToNote, post: .paperTimeLinkToNote)
+            command(L("고른 곳을 노트로", "Link Selection to Note"), .linkToNote, post: .paperTimeLinkToNote)
                 .disabled(model.library?.selectedPaperID == nil)
 
             Divider()
 
-            command("Highlight Selection", .highlight, post: .paperTimeHighlight)
+            command(L("고른 곳에 형광펜", "Highlight Selection"), .highlight, post: .paperTimeHighlight)
                 .disabled(model.library?.selectedPaperID == nil)
-            command("Underline Selection", .underline, post: .paperTimeUnderline)
+            command(L("고른 곳에 밑줄", "Underline Selection"), .underline, post: .paperTimeUnderline)
                 .disabled(model.library?.selectedPaperID == nil)
-            command("New Note", .newNote, post: .paperTimeNewNote)
+            command(L("새 노트", "New Note"), .newNote, post: .paperTimeNewNote)
                 .disabled(model.library == nil)
             // The pencil, the shapes and the arrows: the Mac's own drawing
             // mode, which the iPad reaches with the pencil itself.
-            command("Draw on the Page", .draw, post: .paperTimeToggleDraw)
+            command(L("쪽에 그리기", "Draw on the Page"), .draw, post: .paperTimeToggleDraw)
                 .disabled(model.library?.selectedPaperID == nil)
         }
 
@@ -92,59 +92,71 @@ struct PaperTimeCommands: Commands {
         // does not get to keep it.
         CommandGroup(replacing: .printItem) {}
 
+        // In Help, where a Mac user looks for it, and on ⌥⌘/ from anywhere.
+        // One keystroke is the whole design: the screenshot is already taken
+        // by the time the sheet is on screen.
+        CommandGroup(replacing: .help) {
+            command(L("한마디 보내기…", "Send Feedback…"), .feedback) {
+                model.askForFeedback()
+            }
+            Divider()
+            Link(L("함께 만드는 중", "Built together"),
+                 destination: URL(string: "https://icecoffee2500.github.io/paper-time/#together")!)
+        }
+
         CommandGroup(after: .toolbar) {
             command(
-                model.isSidebarVisible ? "Hide Sidebar" : "Show Sidebar", .sidebar
+                model.isSidebarVisible ? L("옆 목록 숨기기", "Hide Sidebar") : L("옆 목록 보이기", "Show Sidebar"), .sidebar
             ) { model.toggleSidebar() }
                 .disabled(model.library == nil)
 
             command(
-                model.showsPaperList ? "Hide Paper List" : "Show Paper List", .paperList
+                model.showsPaperList ? L("논문 목록 숨기기", "Hide Paper List") : L("논문 목록 보이기", "Show Paper List"), .paperList
             ) { model.togglePaperList() }
                 .disabled(model.library == nil)
 
             command(
-                model.showsReader && !model.isFocusMode ? "Hide Paper" : "Show Paper", .reader
+                model.showsReader && !model.isFocusMode ? L("논문 숨기기", "Hide Paper") : L("논문 보이기", "Show Paper"), .reader
             ) { model.toggleReader() }
                 .disabled(model.library == nil)
 
             command(
-                model.showsInspector ? "Hide Inspector" : "Show Inspector", .inspector
+                model.showsInspector ? L("정보 패널 숨기기", "Hide Inspector") : L("정보 패널 보이기", "Show Inspector"), .inspector
             ) { model.toggleInspector() }
 
             command(
-                model.isFocusMode ? "Leave Focus" : "Focus on the Paper", .focus
+                model.isFocusMode ? L("집중에서 나오기", "Leave Focus") : L("논문에 집중", "Focus on the Paper"), .focus
             ) { model.toggleFocusMode() }
                 .disabled(model.library == nil)
 
-            command("Table of Contents", .floatingList) { model.toggleFloatingList() }
+            command(L("차례", "Table of Contents"), .floatingList) { model.toggleFloatingList() }
                 .disabled(model.library?.selectedPaperID == nil)
 
             Divider()
 
-            command("Continuous", .layoutContinuous, post: .paperTimeLayoutContinuous)
+            command(L("이어서 보기", "Continuous"), .layoutContinuous, post: .paperTimeLayoutContinuous)
                 .disabled(model.library?.selectedPaperID == nil)
-            command("Single Page", .layoutSinglePage, post: .paperTimeLayoutSinglePage)
+            command(L("한 쪽씩 보기", "Single Page"), .layoutSinglePage, post: .paperTimeLayoutSinglePage)
                 .disabled(model.library?.selectedPaperID == nil)
-            command("Book", .layoutBook, post: .paperTimeLayoutBook)
+            command(L("책처럼 보기", "Book"), .layoutBook, post: .paperTimeLayoutBook)
                 .disabled(model.library?.selectedPaperID == nil)
 
             Divider()
 
-            command("Zoom In", .zoomIn, post: .paperTimeZoomIn)
-            command("Zoom Out", .zoomOut, post: .paperTimeZoomOut)
-            command("Actual Size", .actualSize, post: .paperTimeActualSize)
+            command(L("크게", "Zoom In"), .zoomIn, post: .paperTimeZoomIn)
+            command(L("작게", "Zoom Out"), .zoomOut, post: .paperTimeZoomOut)
+            command(L("실제 크기", "Actual Size"), .actualSize, post: .paperTimeActualSize)
 
             Divider()
 
-            command("Next Page", .nextPage, post: .paperTimeNextPage)
-            command("Previous Page", .previousPage, post: .paperTimePreviousPage)
-            command("Next Paper", .nextPaper, post: .paperTimeNextPaper)
+            command(L("다음 쪽", "Next Page"), .nextPage, post: .paperTimeNextPage)
+            command(L("이전 쪽", "Previous Page"), .previousPage, post: .paperTimePreviousPage)
+            command(L("다음 논문", "Next Paper"), .nextPaper, post: .paperTimeNextPaper)
                 .disabled(model.library == nil)
-            command("Previous Paper", .previousPaper, post: .paperTimePreviousPaper)
+            command(L("이전 논문", "Previous Paper"), .previousPaper, post: .paperTimePreviousPaper)
                 .disabled(model.library == nil)
-            command("Back", .back, post: .paperTimeGoBack)
-            command("Forward", .forward, post: .paperTimeGoForward)
+            command(L("뒤로", "Back"), .back, post: .paperTimeGoBack)
+            command(L("앞으로", "Forward"), .forward, post: .paperTimeGoForward)
         }
     }
 }

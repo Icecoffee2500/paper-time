@@ -52,6 +52,20 @@ struct SettingsView: View {
 
         var id: String { rawValue }
 
+        /// The name a reader sees. The raw value is the identifier and stays
+        /// as it is.
+        var title: String {
+            switch self {
+            case .library: L("라이브러리", "Library")
+            case .metadata: L("서지", "Metadata")
+            case .bibtex: "BibTeX"
+            case .reading: L("읽기", "Reading")
+            case .shortcuts: L("단축키", "Shortcuts")
+            case .log: L("기록", "Log")
+            case .about: L("정보", "About")
+            }
+        }
+
         var symbol: String {
             switch self {
             case .library: "folder"
@@ -86,15 +100,18 @@ struct SettingsView: View {
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                         } label: {
-                            Label(page.rawValue, systemImage: page.symbol)
+                            Label(page.title, systemImage: page.symbol)
                         }
                     }
                 }
             } footer: {
-                Text("Papers are ordinary files in the folder you chose — nothing lives only inside this app.")
+                Text(L(
+                    "논문은 내가 고른 폴더에 평범한 파일로 있다 — 이 앱 안에만 있는 것은 없다.",
+                    "Papers are ordinary files in the folder you chose — nothing lives only inside this app."
+                ))
             }
         }
-        .navigationTitle("Settings")
+        .navigationTitle(L("설정", "Settings"))
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(for: Pane.self) { settingsPage($0) }
         #else
@@ -114,7 +131,7 @@ struct SettingsView: View {
                 // The window's title, here rather than centred over the page:
                 // the panel reaches the top of the window now, and a title
                 // drawn across it would have sat on the page.
-                Text("Settings")
+                Text(L("설정", "Settings"))
                     .font(.headline)
                     .padding(.horizontal, 10)
                     .padding(.bottom, 8)
@@ -125,7 +142,7 @@ struct SettingsView: View {
                         pane = page
                     } label: {
                         Label {
-                            Text(page.rawValue)
+                            Text(page.title)
                         } icon: {
                             Image(systemName: page.symbol)
                                 .foregroundStyle(isCurrent ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
@@ -223,9 +240,9 @@ struct SettingsView: View {
     private func summary(for page: Pane) -> String {
         switch page {
         case .library:
-            app.library?.location.url.lastPathComponent ?? "Not Connected"
+            app.library?.location.url.lastPathComponent ?? L("연결 안 됨", "Not Connected")
         case .metadata:
-            app.settings.resolvesMetadataOnImport ? "On Import" : "Off"
+            app.settings.resolvesMetadataOnImport ? L("들여올 때", "On Import") : L("끔", "Off")
         case .bibtex:
             BibTeXExportOptions.PreprintStyle(rawValue: app.settings.preferredPreprintStyle)?.displayName ?? ""
         case .reading:
@@ -246,16 +263,22 @@ struct SettingsView: View {
         Group {
             switch page {
             case .library:
-                Form { librarySection }
+                Form {
+                    librarySection
+                    languageSection
+                }
                     .confirmationDialog(
-                        "Change Library Folder?",
+                        L("라이브러리 폴더를 바꿀까?", "Change Library Folder?"),
                         isPresented: $showsChangeFolderConfirmation,
                         titleVisibility: .visible
                     ) {
-                        Button("Change Folder", role: .destructive) { app.forgetLibrary() }
-                        Button("Cancel", role: .cancel) {}
+                        Button(L("폴더 바꾸기", "Change Folder"), role: .destructive) { app.forgetLibrary() }
+                        Button(L("취소", "Cancel"), role: .cancel) {}
                     } message: {
-                        Text("This doesn't delete anything. Your papers stay exactly where they are — you'll just choose a folder again, on this device.")
+                        Text(L(
+                            "아무것도 지우지 않는다. 논문은 있던 자리에 그대로 있고, 이 기기에서 폴더를 다시 고르기만 한다.",
+                            "This doesn't delete anything. Your papers stay exactly where they are — you'll just choose a folder again, on this device."
+                        ))
                     }
             case .metadata:
                 Form { metadataSection(settings: settings) }
@@ -274,7 +297,7 @@ struct SettingsView: View {
                 AboutView()
             }
         }
-        .navigationTitle(page.rawValue)
+        .navigationTitle(page.title)
         .navigationBarTitleDisplayMode(.inline)
     }
 
@@ -308,7 +331,9 @@ struct SettingsView: View {
         let settings = app.settings
         return Form {
             switch pane {
-            case .library: librarySection
+            case .library:
+                librarySection
+                languageSection
             case .metadata: metadataSection(settings: settings)
             case .bibtex: bibTeXSection(settings: settings)
             case .reading:
@@ -322,18 +347,19 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
         .confirmationDialog(
-            "Change Library Folder?",
+            L("라이브러리 폴더를 바꿀까?", "Change Library Folder?"),
             isPresented: $showsChangeFolderConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Change Folder", role: .destructive) {
+            Button(L("폴더 바꾸기", "Change Folder"), role: .destructive) {
                 app.forgetLibrary()
             }
-            Button("Cancel", role: .cancel) {}
+            Button(L("취소", "Cancel"), role: .cancel) {}
         } message: {
-            Text(
+            Text(L(
+                "아무것도 지우지 않는다. 논문은 있던 자리에 그대로 있고, 이 기기에서 폴더를 다시 고르기만 한다.",
                 "This doesn't delete anything. Your papers stay exactly where they are — you'll just choose a folder again, on this device."
-            )
+            ))
         }
     }
 #endif
@@ -360,8 +386,8 @@ struct SettingsView: View {
             // the path is four: wrapped into a row it left a hole the height
             // of the card on the phone and the iPad, and it was unreadable
             // in either place. Down here it can take the width it needs.
-            LabeledContent("Folder") {
-                Text(app.library?.location.url.lastPathComponent ?? "Not Connected")
+            LabeledContent(L("폴더", "Folder")) {
+                Text(app.library?.location.url.lastPathComponent ?? L("연결 안 됨", "Not Connected"))
                     .foregroundStyle(.secondary)
             }
             if let provider = app.library?.location.provider {
@@ -369,21 +395,21 @@ struct SettingsView: View {
                 // a Label handed to a form row's value side was given the
                 // whole column and grew a card's worth of empty space under
                 // itself on the phone and the iPad.
-                LabeledContent("Synced Via") {
+                LabeledContent(L("동기화", "Synced Via")) {
                     HStack(spacing: 6) {
                         Image(systemName: provider.symbolName)
                         Text(provider.displayName)
                     }
                     .foregroundStyle(.secondary)
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Synced via \(provider.displayName)")
+                    .accessibilityLabel(L("\(provider.displayName)로 동기화", "Synced via \(provider.displayName)"))
                 }
             }
-            Button("Change Library Folder…") {
+            Button(L("라이브러리 폴더 바꾸기…", "Change Library Folder…")) {
                 app.isChoosingLibraryFolder = true
             }
         } header: {
-            pageHeader("Library")
+            pageHeader(L("라이브러리", "Library"))
         } footer: {
             VStack(alignment: .leading, spacing: 10) {
                 if let path = app.library?.location.url.path(percentEncoded: false) {
@@ -392,10 +418,37 @@ struct SettingsView: View {
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                Text(
+                Text(L(
+                    "라이브러리를 옮기려면 폴더를 통째로 옮긴다 — 안에 숨은 .papertime 폴더까지. 서지·노트·잉크·읽던 자리가 거기에 있다. PDF만 복사하면 새 라이브러리가 시작되고 노트는 뒤에 남는다.",
                     "To move the library, move the whole folder — including the hidden .papertime folder inside it, which holds the records, notes, ink and reading progress. Copying only the PDFs starts a fresh library and leaves the notes behind."
-                )
+                ))
             }
+        }
+    }
+
+    // MARK: - Language
+
+    /// The interface follows the system unless a reader says otherwise. A
+    /// Korean system gets Korean; everything else gets English. The override
+    /// is here because "my system is Korean but I want the English words" is
+    /// a real preference among people who read English papers all day.
+    private var languageSection: some View {
+        Section {
+            Picker(L("말", "Language"), selection: Binding(
+                get: { Language.choice },
+                set: { Language.choice = $0 }
+            )) {
+                ForEach(Language.Choice.allCases) { choice in
+                    Text(choice.title).tag(choice)
+                }
+            }
+        } header: {
+            pageHeader(L("말", "Language"))
+        } footer: {
+            Text(L(
+                "고르지 않으면 시스템을 따른다 — 시스템이 한국어면 한국어, 그 밖이면 영어다.",
+                "Left to the system, the interface is Korean when the system is Korean and English otherwise."
+            ))
         }
     }
 
@@ -403,7 +456,7 @@ struct SettingsView: View {
 
     private func metadataSection(settings: AppSettings) -> some View {
         Section {
-            Toggle("Resolve Metadata on Import", isOn: Bindable(settings).resolvesMetadataOnImport)
+            Toggle(L("들여올 때 서지 채우기", "Resolve Metadata on Import"), isOn: Bindable(settings).resolvesMetadataOnImport)
             // Its own row rather than a value beside a label: the message is
             // a sentence, and a sentence in the value column of a form row is
             // either squeezed into a corner or given the whole card to fall
@@ -411,8 +464,8 @@ struct SettingsView: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Image(systemName: "info.circle")
                     .foregroundStyle(.secondary)
-                    .accessibilityLabel("Information")
-                Text(app.library?.onDeviceModelMessage ?? "Open a library to check availability.")
+                    .accessibilityLabel(L("정보", "Information"))
+                Text(app.library?.onDeviceModelMessage ?? L("쓸 수 있는지는 라이브러리를 열어야 안다.", "Open a library to check availability."))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -422,8 +475,8 @@ struct SettingsView: View {
             // read "optional" and nothing else. The name goes beside it, the
             // way every other row on the page is named.
             #if os(iOS)
-            LabeledContent("Contact Email") {
-                TextField("optional", text: Bindable(settings).metadataContactEmail)
+            LabeledContent(L("연락 이메일", "Contact Email")) {
+                TextField(L("선택 사항", "optional"), text: Bindable(settings).metadataContactEmail)
                     .multilineTextAlignment(.trailing)
                     .textInputAutocapitalization(.never)
                     .keyboardType(.emailAddress)
@@ -431,23 +484,28 @@ struct SettingsView: View {
             }
             #else
             TextField(
-                "Contact Email",
+                L("연락 이메일", "Contact Email"),
                 text: Bindable(settings).metadataContactEmail,
-                prompt: Text("optional")
+                prompt: Text(L("선택 사항", "optional"))
             )
             .autocorrectionDisabled()
             #endif
         } header: {
-            pageHeader("Metadata")
+            pageHeader(L("서지", "Metadata"))
         } footer: {
-            Text(
+            Text(L(
+                """
+                Crossref와 OpenAlex는 연락처를 밝힌 요청에 더 빠르고 안정된 응답을 준다. \
+                비워 두어도 되고, 다만 논문 여럿을 한꺼번에 채울 때 느려진다. \
+                주소는 그 두 곳에만 보낸다.
+                """,
                 """
                 Crossref and OpenAlex give faster, more reliable service to \
                 requests that identify a contact address. Leaving this empty \
                 still works; lookups are just slower when many papers resolve \
                 at once. Your address is sent only to those services.
                 """
-            )
+            ))
         }
     }
 
@@ -455,13 +513,13 @@ struct SettingsView: View {
 
     private func bibTeXSection(settings: AppSettings) -> some View {
         Section {
-            Picker("Preprint Style", selection: Bindable(settings).preferredPreprintStyle) {
+            Picker(L("프리프린트 양식", "Preprint Style"), selection: Bindable(settings).preferredPreprintStyle) {
                 ForEach(BibTeXExportOptions.PreprintStyle.allCases, id: \.rawValue) { style in
                     Text(style.displayName).tag(style.rawValue)
                 }
             }
-            Toggle("Protect Case in Titles", isOn: Bindable(settings).protectsCase)
-            Toggle("Include Unverified Records in Export", isOn: Bindable(settings).includesUnverifiedInExport)
+            Toggle(L("제목 대소문자 지키기", "Protect Case in Titles"), isOn: Bindable(settings).protectsCase)
+            Toggle(L("확인 안 된 항목도 내보내기", "Include Unverified Records in Export"), isOn: Bindable(settings).includesUnverifiedInExport)
         } header: {
             pageHeader("BibTeX")
         }
@@ -490,7 +548,7 @@ struct SettingsView: View {
                 )
             }
         } header: {
-            Text("Under the Title")
+            Text(L("제목 아래에", "Under the Title"))
         } footer: {
             Text(chosen.map(\.displayName).joined(separator: " · "))
                 .font(.footnote)
@@ -540,7 +598,7 @@ struct SettingsView: View {
                                     Text(action.fallback.display)
                                         .font(.body.monospaced())
                                         .foregroundStyle(.secondary)
-                                        .help("Set by macOS")
+                                        .help(L("macOS가 정한 것", "Set by macOS"))
                                 } else {
                                     ShortcutRecorder(
                                         shortcut: app.shortcut(for: action),
@@ -563,7 +621,7 @@ struct SettingsView: View {
             Section {
                 HStack {
                     Spacer()
-                    Button("Restore Defaults") { app.resetShortcuts() }
+                    Button(L("기본값으로 복원", "Restore Defaults")) { app.resetShortcuts() }
                         .disabled(app.paneShortcuts.isEmpty)
                 }
             }
@@ -630,20 +688,23 @@ struct SettingsView: View {
         // heard of Glass — so a tint chosen on the page had no name here and
         // one chosen here was called something else there.
         Section {
-            Picker("Page Layout", selection: Bindable(settings).readerPageMode) {
+            Picker(L("쪽 배치", "Page Layout"), selection: Bindable(settings).readerPageMode) {
                 ForEach(ReaderConfiguration.PageLayout.allCases) { layout in
                     Label(layout.label, systemImage: layout.symbolName).tag(layout.rawValue)
                 }
             }
-            Picker("Page Tint", selection: Bindable(settings).readerTint) {
+            Picker(L("쪽 색조", "Page Tint"), selection: Bindable(settings).readerTint) {
                 ForEach(ReaderConfiguration.PageTint.allCases) { tint in
                     Text(tint.label).tag(tint.rawValue)
                 }
             }
         } header: {
-            pageHeader("Reading")
+            pageHeader(L("읽기", "Reading"))
         } footer: {
-            Text("What a paper opens as. The page's own AA menu changes the one you are reading without changing this.")
+            Text(L(
+                "논문이 열릴 때의 모양이다. 쪽의 AA 메뉴는 읽고 있는 논문만 바꾸고 이것은 건드리지 않는다.",
+                "What a paper opens as. The page's own AA menu changes the one you are reading without changing this."
+            ))
         }
     }
 
@@ -924,6 +985,6 @@ struct SettingsView: View {
         guard let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String else {
             return "—"
         }
-        return "Version \(version)"
+        return L("버전 \(version)", "Version \(version)")
     }
 }

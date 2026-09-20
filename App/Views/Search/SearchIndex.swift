@@ -32,12 +32,12 @@ struct SearchResult: Identifiable, Hashable {
 
         var title: String {
             switch self {
-            case .addPDFs: "Add PDFs…"
-            case .exportBibTeX: "Export BibTeX…"
-            case .resolveMetadata: "Resolve Missing Metadata"
-            case .refresh: "Refresh Library"
-            case .importLibrary: "Import Existing Library…"
-            case .settings: "Settings…"
+            case .addPDFs: L("PDF 더하기…", "Add PDFs…")
+            case .exportBibTeX: L("BibTeX 내보내기…", "Export BibTeX…")
+            case .resolveMetadata: L("빠진 서지 채우기", "Resolve Missing Metadata")
+            case .refresh: L("라이브러리 다시 읽기", "Refresh Library")
+            case .importLibrary: L("기존 라이브러리 들여오기…", "Import Existing Library…")
+            case .settings: L("설정…", "Settings…")
             }
         }
 
@@ -140,11 +140,11 @@ struct SearchSuggestions {
         func ago(_ date: Date) -> String {
             let days = Int(now.timeIntervalSince(date) / 86_400)
             switch days {
-            case 0: return "today"
-            case 1: return "yesterday"
-            case 2..<14: return "\(days) days ago"
-            case 14..<60: return "\(days / 7) weeks ago"
-            default: return "\(days / 30) months ago"
+            case 0: return L("오늘", "today")
+            case 1: return L("어제", "yesterday")
+            case 2..<14: return L("\(days)일 전", "\(days) days ago")
+            case 14..<60: return L("\(days / 7)주 전", "\(days / 7) weeks ago")
+            default: return L("\(days / 30)달 전", "\(days / 30) months ago")
             }
         }
 
@@ -158,11 +158,11 @@ struct SearchSuggestions {
         .sorted { ($0.state.lastOpenedAt ?? .distantPast) > ($1.state.lastOpenedAt ?? .distantPast) }
         .prefix(3)
         if !unfinished.isEmpty {
-            groups.append(Group(title: "Continue", results: unfinished.map { paper in
+            groups.append(Group(title: L("이어서 읽기", "Continue"), results: unfinished.map { paper in
                 let pages = paper.meta.file.pageCount
                 let left = pages - 1 - paper.state.lastPageIndex
                 let progress = Double(paper.state.lastPageIndex + 1) / Double(pages)
-                let reason = "\(Int(progress * 100))% · \(left == 1 ? "1 page" : "\(left) pages") left · \(ago(paper.state.lastOpenedAt ?? now))"
+                let reason = L("\(Int(progress * 100))% · \(left)쪽 남음 · \(ago(paper.state.lastOpenedAt ?? now))", "\(Int(progress * 100))% · \(left == 1 ? "1 page" : "\(left) pages") left · \(ago(paper.state.lastOpenedAt ?? now))")
                 return row(paper, reason, progress: progress, symbol: "book.pages")
             }))
         }
@@ -182,9 +182,9 @@ struct SearchSuggestions {
                 let rows = neighbours.compactMap { match -> SearchResult? in
                     guard let id = UUID(uuidString: match.id), let paper = papers.first(where: { $0.id == id }) else { return nil }
                     let short = recent.meta.displayTitle.split(separator: " ").prefix(4).joined(separator: " ")
-                    return row(paper, "shares \(match.shared.prefix(2).joined(separator: " · ")) with “\(short)…”", symbol: "waveform")
+                    return row(paper, L("“\(short)…”에도 나오는 말: \(match.shared.prefix(2).joined(separator: " · "))", "shares \(match.shared.prefix(2).joined(separator: " · ")) with “\(short)…”"), symbol: "waveform")
                 }
-                if !rows.isEmpty { groups.append(Group(title: "Because you read", results: rows)) }
+                if !rows.isEmpty { groups.append(Group(title: L("읽은 논문과 울리는", "Because you read"), results: rows)) }
             }
         }
 
@@ -197,9 +197,9 @@ struct SearchSuggestions {
         .sorted { model.notes.notes(forPaper: $0.id).count > model.notes.notes(forPaper: $1.id).count }
         .prefix(2)
         if !toRevisit.isEmpty {
-            groups.append(Group(title: "Revisit", results: toRevisit.map { paper in
+            groups.append(Group(title: L("다시 보기", "Revisit"), results: toRevisit.map { paper in
                 let count = model.notes.notes(forPaper: paper.id).count
-                return row(paper, "read \(ago(paper.state.lastOpenedAt ?? now)) · \(count == 1 ? "1 note" : "\(count) notes") — a look now keeps it", symbol: "arrow.counterclockwise")
+                return row(paper, L("\(ago(paper.state.lastOpenedAt ?? now)) 읽음 · 노트 \(count)개 — 지금 한 번 보면 남는다", "read \(ago(paper.state.lastOpenedAt ?? now)) · \(count == 1 ? "1 note" : "\(count) notes") — a look now keeps it"), symbol: "arrow.counterclockwise")
             }))
         }
 
@@ -208,7 +208,7 @@ struct SearchSuggestions {
             .sorted { $0.meta.addedAt > $1.meta.addedAt }
             .prefix(2)
         if !fresh.isEmpty {
-            groups.append(Group(title: "New this week", results: fresh.map { row($0, "added \(ago($0.meta.addedAt))", symbol: "sparkles") }))
+            groups.append(Group(title: L("이번 주 새 논문", "New this week"), results: fresh.map { row($0, L("\(ago($0.meta.addedAt)) 더함", "added \(ago($0.meta.addedAt))"), symbol: "sparkles") }))
         }
         return groups
     }
@@ -241,8 +241,8 @@ enum SearchIndex {
             results.append(
                 SearchResult(
                     kind: .showAll(trimmed),
-                    title: "Show All Results for \u{201C}\(trimmed)\u{201D}",
-                    subtitle: "\(matchedPapers) papers",
+                    title: L("\u{201C}\(trimmed)\u{201D}에 맞는 논문 모두 보기", "Show All Results for \u{201C}\(trimmed)\u{201D}"),
+                    subtitle: L("논문 \(matchedPapers)편", "\(matchedPapers) papers"),
                     symbolName: "line.3.horizontal.decrease.circle",
                     score: 2
                 )
@@ -272,7 +272,7 @@ enum SearchIndex {
                 SearchResult(
                     kind: .note(note.id),
                     title: note.displayTitle,
-                    subtitle: note.kind == .map ? "Map" : note.kind == .draft ? "Draft" : "Note",
+                    subtitle: note.kind == .map ? L("지도", "Map") : note.kind == .draft ? L("초안", "Draft") : L("노트", "Note"),
                     symbolName: note.kind == .map ? "map" : note.kind == .draft ? "doc.text" : "note.text",
                     score: score - 0.05
                 )
@@ -286,7 +286,7 @@ enum SearchIndex {
                 SearchResult(
                     kind: .collection(collection.id),
                     title: collection.name,
-                    subtitle: collection.isSmart ? "Smart Collection" : "Collection",
+                    subtitle: collection.isSmart ? L("스마트 컬렉션", "Smart Collection") : L("컬렉션", "Collection"),
                     symbolName: collection.symbolName,
                     score: score
                 )
@@ -300,7 +300,7 @@ enum SearchIndex {
                 SearchResult(
                     kind: .tag(tag.id),
                     title: tag.name,
-                    subtitle: "Tag",
+                    subtitle: L("태그", "Tag"),
                     symbolName: "tag",
                     score: score
                 )
@@ -314,7 +314,7 @@ enum SearchIndex {
                 SearchResult(
                     kind: .action(action),
                     title: action.title,
-                    subtitle: "Action",
+                    subtitle: L("동작", "Action"),
                     symbolName: action.symbolName,
                     score: score
                 )

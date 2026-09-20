@@ -18,7 +18,7 @@ struct SlipBoxList: View {
             // under the title and pushed the first note down a line for no
             // reason a reader could see.
             HStack(spacing: 10) {
-                Text("Notes")
+                Text(L("노트", "Notes"))
                     .font(.headline)
 
                 // A capsule with a glass in it, not a bordered box. The
@@ -29,7 +29,7 @@ struct SlipBoxList: View {
                     Image(systemName: "magnifyingglass")
                         .font(.callout)
                         .foregroundStyle(.tertiary)
-                    TextField("Search notes", text: $notes.query)
+                    TextField(L("노트 찾기", "Search notes"), text: $notes.query)
                         .textFieldStyle(.plain)
                     if !notes.query.isEmpty {
                         Button {
@@ -39,7 +39,7 @@ struct SlipBoxList: View {
                                 .foregroundStyle(.tertiary)
                         }
                         .buttonStyle(.plain)
-                        .help("Clear the search")
+                        .help(L("찾을 말 지우기", "Clear the search"))
                     }
                 }
                 .padding(.horizontal, 10)
@@ -49,19 +49,19 @@ struct SlipBoxList: View {
                 Menu {
                     Button {
                         notes.openNoteID = notes.create(paperID: nil).id
-                    } label: { Label("New Note", systemImage: "note.text") }
+                    } label: { Label(L("새 노트", "New Note"), systemImage: "note.text") }
                     Button {
                         notes.openNoteID = notes.create(paperID: nil, kind: .map).id
-                    } label: { Label("New Map", systemImage: "map") }
+                    } label: { Label(L("새 지도", "New Map"), systemImage: "map") }
                     Button {
                         notes.openNoteID = notes.create(paperID: nil, kind: .draft).id
-                    } label: { Label("New Draft", systemImage: "doc.text") }
+                    } label: { Label(L("새 초안", "New Draft"), systemImage: "doc.text") }
                 } label: {
                     Image(systemName: "square.and.pencil")
                 }
                 .menuStyle(.borderlessButton)
                 .fixedSize()
-                .help("Write a note, a map, or a draft")
+                .help(L("노트·지도·초안 쓰기", "Write a note, a map, or a draft"))
             }
             .padding(.horizontal, 16)
             .padding(.top, 10)
@@ -88,12 +88,12 @@ struct SlipBoxList: View {
 
             if notes.visible.isEmpty {
                 ContentUnavailableView {
-                    Label(notes.notes.isEmpty ? "The Box Is Empty" : "Nothing Matches",
+                    Label(notes.notes.isEmpty ? L("슬립박스가 비어 있다", "The Box Is Empty") : L("맞는 것이 없다", "Nothing Matches"),
                           systemImage: "tray")
                 } description: {
                     Text(notes.notes.isEmpty
-                         ? "Notes you write while reading appear here, linked to the passage that caused them."
-                         : "No note matches what you are looking for.")
+                         ? L("읽으면서 쓴 노트가 여기에 모인다 — 그것을 쓰게 만든 구절에 이어진 채로.", "Notes you write while reading appear here, linked to the passage that caused them.")
+                         : L("찾는 말에 맞는 노트가 없다.", "No note matches what you are looking for."))
                 }
                 .frame(maxHeight: .infinity)
             } else {
@@ -188,7 +188,7 @@ struct SlipBoxList: View {
             Image(systemName: "map")
                 .foregroundStyle(.tint)
             VStack(alignment: .leading, spacing: 2) {
-                Text("\(squeeze.noteIDs.count) notes are one subject")
+                Text(L("노트 \(squeeze.noteIDs.count)개가 한 주제다", "\(squeeze.noteIDs.count) notes are one subject"))
                     .font(.callout.weight(.medium))
                 Text(squeeze.words.joined(separator: " · "))
                     .font(.caption)
@@ -196,7 +196,7 @@ struct SlipBoxList: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 4)
-            Button("Make a Map") {
+            Button(L("지도 만들기", "Make a Map")) {
                 let map = model.notes.createMap(from: squeeze) { model.paper($0)?.meta.csl.fullTitle }
                 model.notes.openNoteID = map.id
             }
@@ -219,9 +219,9 @@ struct SlipBoxList: View {
         var found: [NoteGroup] = []
         var index: [String: Int] = [:]
         let maps = notes.visible.filter { $0.kind == .map }
-        if !maps.isEmpty { found.append(NoteGroup(id: "maps", title: "Maps", notes: maps)); index["maps"] = found.count - 1 }
+        if !maps.isEmpty { found.append(NoteGroup(id: "maps", title: L("지도", "Maps"), notes: maps)); index["maps"] = found.count - 1 }
         let drafts = notes.visible.filter { $0.kind == .draft }
-        if !drafts.isEmpty { found.append(NoteGroup(id: "drafts", title: "Drafts", notes: drafts)); index["drafts"] = found.count - 1 }
+        if !drafts.isEmpty { found.append(NoteGroup(id: "drafts", title: L("초안", "Drafts"), notes: drafts)); index["drafts"] = found.count - 1 }
         for note in notes.visible where note.kind == .note {
             // A paper this library no longer has is no group of its own:
             // three chips all saying "Notes of my own" said nothing.
@@ -230,7 +230,7 @@ struct SlipBoxList: View {
             if let at = index[key] {
                 found[at].notes.append(note)
             } else {
-                let title = paper?.meta.csl.fullTitle ?? paper?.meta.displayTitle ?? "Notes of my own"
+                let title = paper?.meta.csl.fullTitle ?? paper?.meta.displayTitle ?? L("따로 쓴 노트", "Notes of my own")
                 index[key] = found.count
                 found.append(NoteGroup(id: key, title: title, notes: [note]))
             }
@@ -285,9 +285,9 @@ struct SlipBoxDetail: View {
                 }
         } else {
             ContentUnavailableView {
-                Label("No Note Selected", systemImage: "note.text")
+                Label(L("고른 노트가 없다", "No Note Selected"), systemImage: "note.text")
             } description: {
-                Text("Choose a note, or write a new one.")
+                Text(L("노트를 고르거나, 새로 쓴다.", "Choose a note, or write a new one."))
             }
             // An empty panel is still a panel. Without this it shrank to the
             // size of the words in it and sat on the ground as a card.
@@ -309,14 +309,14 @@ private struct NoteMenu: View {
             let maps = model.notes.maps
             let drafts = model.notes.drafts
             if !maps.isEmpty {
-                Menu("Put on Map") {
+                Menu(L("지도에 올리기", "Put on Map")) {
                     ForEach(maps) { map in
                         Button(map.displayTitle) { model.notes.add(note.id, toMap: map.id) }
                     }
                 }
             }
             if !drafts.isEmpty {
-                Menu("Add to Draft") {
+                Menu(L("초안에 넣기", "Add to Draft")) {
                     ForEach(drafts) { draft in
                         Button(draft.displayTitle) { model.notes.add(note.id, toMap: draft.id) }
                     }
@@ -324,7 +324,7 @@ private struct NoteMenu: View {
             }
         }
         Button(role: .destructive) { model.notes.delete(note.id) } label: {
-            Label("Delete", systemImage: "trash")
+            Label(L("지우기", "Delete"), systemImage: "trash")
         }
     }
 }

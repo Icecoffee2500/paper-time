@@ -34,6 +34,7 @@ import { undoStack } from './ui/sketchInput.js'
 import type { LibrarySnapshot } from '../shared/api.js'
 import { SketchElement, rectInset } from '../shared/sketch.js'
 import { icon } from './icons.js'
+import { L } from '../shared/lang.js'
 
 document.body.dataset.platform = platform
 
@@ -48,7 +49,7 @@ const sidebar = buildSidebar({
     changed('shelf')
   },
   newCollection: async () => {
-    const name = await prompt('New collection')
+    const name = await prompt(L('새 컬렉션', 'New collection'))
     if (!name) return
     const collections = [...store.collections, {
       id: crypto.randomUUID().toUpperCase(),
@@ -59,7 +60,7 @@ const sidebar = buildSidebar({
     await call('collections:save', { collections })
     await reload()
   },
-  openGraph: () => toast('The citation graph is not in this build yet.'),
+  openGraph: () => toast(L('인용 그래프는 이 빌드에 아직 없다.', 'The citation graph is not in this build yet.')),
   chooseLibrary: () => void chooseLibrary(),
 })
 
@@ -83,12 +84,14 @@ const paperList = buildPaperList({
     const entry = findPaper(id)
     if (!entry) return
     showMenu(anchor, [
-      { label: 'Open', icon: 'text.page', action: () => openPaper(id) },
-      { label: 'Show in Folder', icon: 'folder', action: () => void call('paper:reveal', { id }) },
-      { label: 'Copy Citation Key', icon: 'doc.on.doc', action: () => copyKey(id) },
+      { label: L('열기', 'Open'), icon: 'text.page', action: () => openPaper(id) },
+      { label: L('폴더에서 보기', 'Show in Folder'), icon: 'folder', action: () => void call('paper:reveal', { id }) },
+      { label: L('인용 키 복사', 'Copy Citation Key'), icon: 'doc.on.doc', action: () => copyKey(id) },
       { separator: true },
       {
-        label: entry.state.isFavorite ? 'Remove from Favorites' : 'Add to Favorites',
+        label: entry.state.isFavorite
+          ? L('즐겨찾기에서 빼기', 'Remove from Favorites')
+          : L('즐겨찾기에 더하기', 'Add to Favorites'),
         icon: 'star',
         action: async () => {
           await call('paper:state', { id, patch: { isFavorite: !entry.state.isFavorite } })
@@ -97,10 +100,13 @@ const paperList = buildPaperList({
       },
       { separator: true },
       {
-        label: 'Move to Trash',
+        label: L('휴지통에 넣기', 'Move to Trash'),
         icon: 'trash',
         action: async () => {
-          if (!confirm(`Move “${entry.meta.displayTitle}” to the library's Trash?\n\nNothing is deleted — the PDF and its record move to the Trash folder inside the library.`)) return
+          if (!confirm(L(
+            `“${entry.meta.displayTitle}” — 라이브러리의 휴지통에 넣을까?\n\n지워지는 것은 없다 — PDF와 그 기록은 라이브러리 안의 휴지통 폴더로 옮겨진다.`,
+            `Move “${entry.meta.displayTitle}” to the library's Trash?\n\nNothing is deleted — the PDF and its record move to the Trash folder inside the library.`,
+          ))) return
           await call('library:trash', { id })
           if (store.selectedID === id) store.selectedID = null
           await reload()
@@ -297,31 +303,37 @@ const toolbar = buildToolbar({
   },
   moreMenu: (anchor) => {
     showMenu(anchor, [
-      { label: 'Refresh Folder', icon: 'arrow.clockwise', action: () => void reload() },
-      { label: 'Choose Library Folder…', icon: 'folder', action: () => void chooseLibrary() },
+      { label: L('폴더에서 새로 읽기', 'Refresh Folder'), icon: 'arrow.clockwise', action: () => void reload() },
+      { label: L('라이브러리 폴더 고르기…', 'Choose Library Folder…'), icon: 'folder', action: () => void chooseLibrary() },
       { separator: true },
-      { caption: 'Sort By' },
+      { caption: L('정렬 기준', 'Sort By') },
       ...(['title', 'author', 'year', 'added', 'opened'] as const).map((field) => ({
-        label: { title: 'Title', author: 'Author', year: 'Year', added: 'Date Added', opened: 'Last Opened' }[field],
+        label: {
+          title: L('제목', 'Title'),
+          author: L('저자', 'Author'),
+          year: L('해', 'Year'),
+          added: L('더한 날', 'Date Added'),
+          opened: L('마지막으로 연 날', 'Last Opened'),
+        }[field],
         checked: store.settings.sort.field === field,
         action: () => setSort(field, store.settings.sort.ascending),
       })),
       {
-        label: 'Ascending',
+        label: L('오름차순', 'Ascending'),
         checked: store.settings.sort.ascending,
         action: () => setSort(store.settings.sort.field, !store.settings.sort.ascending),
       },
       { separator: true },
-      { caption: 'Page Layout' },
+      { caption: L('쪽 배치', 'Page Layout') },
       ...(['continuous', 'single'] as const).map((layout) => ({
-        label: { continuous: 'Continuous', single: 'Single Page' }[layout],
+        label: { continuous: L('이어서 보기', 'Continuous'), single: L('한 쪽씩 보기', 'Single Page') }[layout],
         checked: store.settings.pageLayout === layout,
         action: () => setLayout(layout),
       })),
       { separator: true },
-      { caption: 'Page Tint' },
+      { caption: L('쪽 색조', 'Page Tint') },
       ...(['none', 'sepia', 'grey', 'night'] as const).map((tint) => ({
-        label: { none: 'None', sepia: 'Sepia', grey: 'Grey', night: 'Night' }[tint],
+        label: { none: L('없음', 'None'), sepia: L('세피아', 'Sepia'), grey: L('회색', 'Grey'), night: L('밤', 'Night') }[tint],
         checked: store.settings.pageTint === tint,
         action: () => {
           store.settings.pageTint = tint
@@ -330,9 +342,9 @@ const toolbar = buildToolbar({
         },
       })),
       { separator: true },
-      { caption: 'Appearance' },
+      { caption: L('화면 모드', 'Appearance') },
       ...(['system', 'light', 'dark'] as const).map((appearance) => ({
-        label: { system: 'System', light: 'Light', dark: 'Dark' }[appearance],
+        label: { system: L('시스템에 따라', 'System'), light: L('밝게', 'Light'), dark: L('어둡게', 'Dark') }[appearance],
         checked: store.settings.appearance === appearance,
         action: () => {
           store.settings.appearance = appearance
@@ -523,7 +535,7 @@ async function copyKey(id: string) {
   const entry = findPaper(id)
   if (!entry) return
   await navigator.clipboard.writeText(entry.meta.bibKey || entry.meta.displayTitle)
-  toast('Citation key copied')
+  toast(L('인용 키를 복사했다', 'Citation key copied'))
 }
 
 // ------------------------------------------------------------------- search
@@ -532,7 +544,7 @@ let palette: HTMLElement | null = null
 
 function openSearch() {
   if (palette) return closeSearch()
-  const input = el('input', { type: 'text', placeholder: 'Search papers…', spellcheck: 'false' }) as HTMLInputElement
+  const input = el('input', { type: 'text', placeholder: L('논문 찾기…', 'Search papers…'), spellcheck: 'false' }) as HTMLInputElement
   const results = el('div', { class: 'results' })
   const box = el('div', { class: 'palette' }, [input, results])
   const scrim = el('div', { class: 'scrim' })
@@ -803,10 +815,10 @@ function runMenuCommand(command: string) {
       changed('sketch')
       break
     case 'highlight':
-      if (!reader.markSelection('highlight')) toast('Select some text first.')
+      if (!reader.markSelection('highlight')) toast(L('고른 글이 없다.', 'Select some text first.'))
       break
     case 'underline':
-      if (!reader.markSelection('underline')) toast('Select some text first.')
+      if (!reader.markSelection('underline')) toast(L('고른 글이 없다.', 'Select some text first.'))
       break
     case 'exportBibTeX':
       void (async () => {
@@ -815,7 +827,10 @@ function runMenuCommand(command: string) {
         )
         if (result.cancelled) return
         if (result.error) return toast(result.error)
-        toast(`${result.written} ${result.written === 1 ? 'entry' : 'entries'} exported`)
+        toast(L(
+          `${result.written}개를 내보냈다`,
+          `${result.written} ${result.written === 1 ? 'entry' : 'entries'} exported`,
+        ))
       })()
       break
     case 'copyCitationKey':
@@ -825,7 +840,7 @@ function runMenuCommand(command: string) {
     case 'layoutContinuous': setLayout('continuous'); break
     case 'layoutSinglePage': setLayout('single'); break
     default:
-      toast(`“${command}” is not in this build yet.`)
+      toast(L(`“${command}” — 이 빌드에 아직 없다.`, `“${command}” is not in this build yet.`))
   }
 }
 

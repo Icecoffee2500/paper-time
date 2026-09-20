@@ -17,7 +17,7 @@ struct RootView: View {
         Group {
             switch app.phase {
             case .launching:
-                ProgressView("Opening your library")
+                ProgressView(L("라이브러리를 여는 중", "Opening your library"))
                     .controlSize(.large)
             case .needsLibraryFolder:
                 LibrarySetupView()
@@ -31,6 +31,10 @@ struct RootView: View {
                 LibraryUnavailableView(message: message)
             }
         }
+        // Changing the interface's language changes every string below this
+        // point, and none of them is a stored property SwiftUI can watch.
+        // Rebuilding the tree once is the honest answer.
+        .id(Language.Switch.shared.generation)
         // Every scroll view in the window, in one place: the indicator is an
         // environment value, so the whole tree inherits it.
         .scrollIndicators(.hidden)
@@ -47,6 +51,12 @@ struct RootView: View {
             // After the library is up, not before: an introduction over an
             // empty window is an introduction to nothing.
             app.showReleaseNotesIfNew()
+            #if os(macOS)
+            FeedbackProbe.runIfAsked(app: app)
+            #endif
+        }
+        .sheet(isPresented: Bindable(app).showsFeedback) {
+            FeedbackView()
         }
         .sheet(isPresented: Bindable(app).showsReleaseNotes) {
             WhatsNewView()
@@ -203,7 +213,7 @@ struct LibraryWindow: View {
                         .environment(app)
                         .toolbar {
                             ToolbarItem(placement: .confirmationAction) {
-                                Button("Done") { showsSettings = false }
+                                Button(L("완료", "Done")) { showsSettings = false }
                             }
                         }
                 }
@@ -224,7 +234,7 @@ struct LibraryWindow: View {
             .sheet(isPresented: $app.showsScopePanel) {
                 NavigationStack {
                     LibrarySidebar(model: model)
-                        .navigationTitle("Library")
+                        .navigationTitle(L("라이브러리", "Library"))
                         .navigationBarTitleDisplayMode(.inline)
                         .toolbar {
                             ToolbarItem(placement: .topBarLeading) {
@@ -232,11 +242,11 @@ struct LibraryWindow: View {
                                     app.showsScopePanel = false
                                     showsSettings = true
                                 } label: {
-                                    Label("Settings", systemImage: "gearshape")
+                                    Label(L("설정", "Settings"), systemImage: "gearshape")
                                 }
                             }
                             ToolbarItem(placement: .confirmationAction) {
-                                Button("Done") { app.showsScopePanel = false }
+                                Button(L("완료", "Done")) { app.showsScopePanel = false }
                             }
                         }
                 }
@@ -396,7 +406,7 @@ struct LibraryWindow: View {
                 Button {
                     withAnimation(.snappy(duration: 0.25)) { slipBoxPaperID = nil }
                 } label: {
-                    Label("Notes", systemImage: "chevron.left")
+                    Label(L("노트", "Notes"), systemImage: "chevron.left")
                         .font(.subheadline)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
@@ -437,7 +447,7 @@ struct LibraryWindow: View {
                 Button {
                     showsSettings = true
                 } label: {
-                    Label("Settings", systemImage: "gearshape")
+                    Label(L("설정", "Settings"), systemImage: "gearshape")
                 }
                 .keyboardShortcut(",", modifiers: .command)
             }
@@ -449,7 +459,7 @@ struct LibraryWindow: View {
                     .environment(app)
                     .toolbar {
                         ToolbarItem(placement: .confirmationAction) {
-                            Button("Done") { showsSettings = false }
+                            Button(L("완료", "Done")) { showsSettings = false }
                         }
                     }
             }
@@ -505,7 +515,7 @@ struct LibraryWindow: View {
                     CitationStyleView(item: paper.meta.csl)
                         .toolbar {
                             ToolbarItem(placement: .confirmationAction) {
-                                Button("Done") { showsCitationStyles = false }
+                                Button(L("완료", "Done")) { showsCitationStyles = false }
                             }
                         }
                 }
@@ -643,36 +653,36 @@ struct LibraryWindow: View {
                 Button {
                     app.showsSearchPalette = true
                 } label: {
-                    Label("Search Everything", systemImage: "magnifyingglass").toolbarIcon()
+                    Label(L("전부 찾기", "Search Everything"), systemImage: "magnifyingglass").toolbarIcon()
                 }
-                .help("Search papers, notes, maps and drafts (Command-K)")
+                .help(L("논문·노트·지도·초안에서 찾기 (Command-K)", "Search papers, notes, maps and drafts (Command-K)"))
                 .toolbarHover()
                 Button(action: chooseDocumentsToAdd) {
-                    Label("Add PDFs", systemImage: "plus").toolbarIcon()
+                    Label(L("PDF 더하기", "Add PDFs"), systemImage: "plus").toolbarIcon()
                 }
-                .help("Add PDFs to the library (Command-O)")
+                .help(L("라이브러리에 PDF 더하기 (Command-O)", "Add PDFs to the library (Command-O)"))
                 .toolbarHover()
                 Divider().frame(height: 14).padding(.horizontal, 4)
                 paneButton(.reader, symbol: "text.page", on: app.showsReader && !app.isFocusMode) { app.toggleReader() }
                 paneButton(.inspector, symbol: "sidebar.right", on: app.showsInspector) { app.toggleInspector() }
                 Divider().frame(height: 14).padding(.horizontal, 4)
                 Menu {
-                    Button(action: syncNow) { Label("Sync Now", systemImage: "arrow.clockwise") }
+                    Button(action: syncNow) { Label(L("지금 맞추기", "Sync Now"), systemImage: "arrow.clockwise") }
                         .disabled(model.isScanning)
                     Divider()
-                    Picker("Sort By", selection: sortOrderBinding) {
+                    Picker(L("정렬 기준", "Sort By"), selection: sortOrderBinding) {
                         ForEach(LibraryModel.SortOrder.allCases) { order in
                             Text(order.displayName).tag(order)
                         }
                     }
-                    Toggle("Ascending", isOn: sortAscendingBinding)
+                    Toggle(L("오름차순", "Ascending"), isOn: sortAscendingBinding)
                     Divider()
-                    Picker("Page Layout", selection: $configuration.layout) {
+                    Picker(L("쪽 배치", "Page Layout"), selection: $configuration.layout) {
                         ForEach(ReaderConfiguration.PageLayout.allCases) { layout in
                             Label(layout.label, systemImage: layout.symbolName).tag(layout)
                         }
                     }
-                    Picker("Page Tint", selection: $configuration.tint) {
+                    Picker(L("쪽 색조", "Page Tint"), selection: $configuration.tint) {
                         ForEach(ReaderConfiguration.PageTint.allCases) { tint in
                             Text(tint.label).tag(tint)
                         }
@@ -680,9 +690,9 @@ struct LibraryWindow: View {
                     Divider()
                     shareMenu
                 } label: {
-                    Label("More", systemImage: "ellipsis").toolbarIcon()
+                    Label(L("더 보기", "More"), systemImage: "ellipsis").toolbarIcon()
                 }
-                .help("Sync, sort, page layout, share")
+                .help(L("맞추기·정렬·쪽 배치·공유", "Sync, sort, page layout, share"))
                 .toolbarHover()
             }
             .toolbarButtons()
@@ -708,16 +718,16 @@ struct LibraryWindow: View {
                 // Back and forward through the papers opened, like a
                 // browser's; grey when there is nowhere to go.
                 Button { NotificationCenter.default.post(name: .paperTimeGoBack, object: nil) } label: {
-                    Label("Back", systemImage: "chevron.left").toolbarIcon()
+                    Label(L("뒤로", "Back"), systemImage: "chevron.left").toolbarIcon()
                 }
                 .disabled(!(model.canGoBack || link.canGoBackInDocument))
-                .help("Back to the paper you came from (\(app.shortcut(for: .back).display))")
+                .help(L("왔던 논문으로 돌아가기 (\(app.shortcut(for: .back).display))", "Back to the paper you came from (\(app.shortcut(for: .back).display))"))
                 .toolbarHover()
                 Button { NotificationCenter.default.post(name: .paperTimeGoForward, object: nil) } label: {
-                    Label("Forward", systemImage: "chevron.right").toolbarIcon()
+                    Label(L("앞으로", "Forward"), systemImage: "chevron.right").toolbarIcon()
                 }
                 .disabled(!(model.canGoForward || link.canGoForwardInDocument))
-                .help("Forward again (\(app.shortcut(for: .forward).display))")
+                .help(L("다시 앞으로 (\(app.shortcut(for: .forward).display))", "Forward again (\(app.shortcut(for: .forward).display))"))
                 .toolbarHover()
             }
             .toolbarButtons()
@@ -731,18 +741,18 @@ struct LibraryWindow: View {
                 Button {
                     withAnimation(AppModel.paneMotion) { app.showsScopePanel.toggle() }
                 } label: {
-                    Label("Library", systemImage: "square.grid.2x2").toolbarIcon()
+                    Label(L("라이브러리", "Library"), systemImage: "square.grid.2x2").toolbarIcon()
                 }
-                .help("The library's shelves: scopes, collections, tags")
+                .help(L("라이브러리 목록: 분류·컬렉션·태그", "The library's shelves: scopes, collections, tags"))
                 .keyboardShortcut("1", modifiers: [.command, .control])
                 .toolbarHover()
                 #endif
                 Button {
                     isImportingPDFs = true
                 } label: {
-                    Label("Add PDFs", systemImage: "plus").toolbarIcon()
+                    Label(L("PDF 더하기", "Add PDFs"), systemImage: "plus").toolbarIcon()
                 }
-                .help("Add PDFs to the library (Command-O)")
+                .help(L("라이브러리에 PDF 더하기 (Command-O)", "Add PDFs to the library (Command-O)"))
                 .toolbarHover()
 
                 // Not a plain magnifier: the reader's bar has one of those
@@ -753,17 +763,17 @@ struct LibraryWindow: View {
                 Button {
                     app.showsSearchPalette = true
                 } label: {
-                    Label("Search Everything", systemImage: "rectangle.and.text.magnifyingglass").toolbarIcon()
+                    Label(L("전부 찾기", "Search Everything"), systemImage: "rectangle.and.text.magnifyingglass").toolbarIcon()
                 }
-                .help("Search papers, notes, maps and drafts (Command-K)")
+                .help(L("논문·노트·지도·초안에서 찾기 (Command-K)", "Search papers, notes, maps and drafts (Command-K)"))
                 .toolbarHover()
 
                 // Marks and ink travel in small files that iCloud brings when
                 // it is ready — usually seconds. This asks for them now.
                 Button(action: syncNow) {
-                    Label("Sync Now", systemImage: "arrow.clockwise").toolbarIcon()
+                    Label(L("지금 맞추기", "Sync Now"), systemImage: "arrow.clockwise").toolbarIcon()
                 }
-                .help("Fetch what the other devices have written (Command-R)")
+                .help(L("다른 기기가 쓴 것을 가져오기 (Command-R)", "Fetch what the other devices have written (Command-R)"))
                 // On the Mac the same key is on the Library menu, and two
                 // owners of one key is one too many.
                 #if os(iOS)
@@ -810,36 +820,36 @@ struct LibraryWindow: View {
         // behind the ones that are on — three squares side by side ran into
         // one another and read as a single block.
         .tint(on ? Color.accentColor : Color.secondary)
-        .help("\(on ? "Hide" : "Show") the \(pane.title.lowercased()) (\(app.shortcut(for: pane).display))")
+        .help(L("\(pane.title) \(on ? "숨기기" : "보이기") (\(app.shortcut(for: pane).display))", "\(on ? "Hide" : "Show") the \(pane.title.lowercased()) (\(app.shortcut(for: pane).display))"))
         .toolbarHover()
     }
 
     @ViewBuilder
     private var sortMenu: some View {
         Menu {
-            Picker("Sort By", selection: sortOrderBinding) {
+            Picker(L("정렬 기준", "Sort By"), selection: sortOrderBinding) {
                 ForEach(LibraryModel.SortOrder.allCases) { order in
                     Text(order.displayName).tag(order)
                 }
             }
             Divider()
-            Toggle("Ascending", isOn: sortAscendingBinding)
+            Toggle(L("오름차순", "Ascending"), isOn: sortAscendingBinding)
         } label: {
-            Label("Sort", systemImage: "arrow.up.arrow.down").toolbarIcon()
+            Label(L("정렬", "Sort"), systemImage: "arrow.up.arrow.down").toolbarIcon()
         }
-        .help("Sort the list")
+        .help(L("목록 정렬", "Sort the list"))
         .toolbarHover()
     }
 
     @ViewBuilder
     private var viewMenu: some View {
         Menu {
-                Picker("Page Layout", selection: $configuration.layout) {
+                Picker(L("쪽 배치", "Page Layout"), selection: $configuration.layout) {
                     ForEach(ReaderConfiguration.PageLayout.allCases) { layout in
                         Label(layout.label, systemImage: layout.symbolName).tag(layout)
                     }
                 }
-                Picker("Page Tint", selection: $configuration.tint) {
+                Picker(L("쪽 색조", "Page Tint"), selection: $configuration.tint) {
                     ForEach(ReaderConfiguration.PageTint.allCases) { tint in
                         Text(tint.label).tag(tint)
                     }
@@ -848,12 +858,12 @@ struct LibraryWindow: View {
                     app.settings.readerTint = tint.rawValue
                 }
             #if os(iOS)
-            Toggle("Draw with Finger", isOn: $configuration.fingerDrawing)
+            Toggle(L("손가락으로 그리기", "Draw with Finger"), isOn: $configuration.fingerDrawing)
             #endif
         } label: {
-            Label("View Options", systemImage: "textformat.size").toolbarIcon()
+            Label(L("보기 방식", "View Options"), systemImage: "textformat.size").toolbarIcon()
         }
-        .help("Page layout and tint")
+        .help(L("쪽 배치와 색조", "Page layout and tint"))
         .disabled(model.selectedPaper == nil)
         .toolbarHover()
     }
@@ -864,12 +874,12 @@ struct LibraryWindow: View {
                 Button {
                     showsExport = true
                 } label: {
-                    Label("Export BibTeX…", systemImage: "square.and.arrow.up")
+                    Label(L("BibTeX 내보내기…", "Export BibTeX…"), systemImage: "square.and.arrow.up")
                 }
                 Button {
                     showsCitationStyles = true
                 } label: {
-                    Label("Citation Styles…", systemImage: "text.quote")
+                    Label(L("인용 스타일…", "Citation Styles…"), systemImage: "text.quote")
                 }
                 .disabled(model.selectedPaper == nil)
                 Divider()
@@ -877,14 +887,14 @@ struct LibraryWindow: View {
                 showsMigration = true
             } label: {
                 Label(
-                    "Import Existing Library…",
+                    L("기존 라이브러리 들여오기…", "Import Existing Library…"),
                     systemImage: "square.and.arrow.down.on.square"
                 )
             }
         } label: {
-            Label("Share", systemImage: "square.and.arrow.up").toolbarIcon()
+            Label(L("공유", "Share"), systemImage: "square.and.arrow.up").toolbarIcon()
         }
-        .help("Export and import")
+        .help(L("내보내기와 들여오기", "Export and import"))
         .toolbarHover()
     }
 
@@ -897,14 +907,14 @@ struct LibraryWindow: View {
         // is also what a Mac uses for this, where the column had a bespoke one.
         ToolbarItem(id: "inspector-tab", placement: .primaryAction) {
             if app.showsInspector, model.selectedPaper != nil {
-                Picker("Inspector", selection: $inspectorTab) {
+                Picker(L("정보 패널", "Inspector"), selection: $inspectorTab) {
                     ForEach(InspectorTab.allCases) { tab in
                         Text(tab.label).tag(tab)
                     }
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
-                .help("What the inspector shows")
+                .help(L("정보 패널에 보일 것", "What the inspector shows"))
             }
         }
 
@@ -921,7 +931,7 @@ struct LibraryWindow: View {
         panel.allowedContentTypes = [.pdf]
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
-        panel.message = "Choose PDFs to add to the library"
+        panel.message = L("라이브러리에 더할 PDF를 고른다", "Choose PDFs to add to the library")
         panel.begin { response in
             guard response == .OK, !panel.urls.isEmpty else { return }
             let urls = panel.urls
@@ -976,21 +986,21 @@ struct LibraryWindow: View {
 
     private var scopeTitle: String {
         switch model.scope {
-        case .all: "All Papers"
-        case .notes: "Notes"
-        case .graph: "Graph"
-        case .searchResults: "Search Results"
-        case .unread: "Unread"
-        case .reading: "Reading"
-        case .read: "Read"
-        case .favorites: "Favorites"
-        case .needsReview: "Needs Review"
+        case .all: L("모든 논문", "All Papers")
+        case .notes: L("노트", "Notes")
+        case .graph: L("그래프", "Graph")
+        case .searchResults: L("찾은 것", "Search Results")
+        case .unread: L("안 읽음", "Unread")
+        case .reading: L("읽는 중", "Reading")
+        case .read: L("읽음", "Read")
+        case .favorites: L("즐겨찾기", "Favorites")
+        case .needsReview: L("확인할 것", "Needs Review")
         case let .collection(id):
-            model.collections.collections.first { $0.id == id }?.name ?? "Collection"
+            model.collections.collections.first { $0.id == id }?.name ?? L("컬렉션", "Collection")
         case let .tag(id):
-            model.manifest.tags.first { $0.id == id }?.name ?? "Tag"
+            model.manifest.tags.first { $0.id == id }?.name ?? L("태그", "Tag")
         case let .author(key):
-            model.authorRanking.first { $0.key == key }?.name ?? "Author"
+            model.authorRanking.first { $0.key == key }?.name ?? L("저자", "Author")
         }
     }
 }
@@ -1002,9 +1012,9 @@ enum InspectorTab: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .details: "Details"
-        case .marks: "Marks"
-        case .note: "Note"
+        case .details: L("정보", "Details")
+        case .marks: L("표시", "Marks")
+        case .note: L("노트", "Note")
         }
     }
 }
@@ -1252,14 +1262,14 @@ struct PaperDetailColumn: View {
                         Button {
                             configuration.mode = configuration.mode == .draw ? .read : .draw
                         } label: {
-                            Label("Draw", systemImage: configuration.mode == .draw ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
+                            Label(L("그리기", "Draw"), systemImage: configuration.mode == .draw ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
                                 .labelStyle(.iconOnly)
                                 .toolbarIcon()
                         }
                         .buttonStyle(.borderless)
                         .tint(configuration.mode == .draw ? Color.accentColor : .primary)
                         .toolbarHover()
-                        .help("Draw on the page (\(app.shortcut(for: .draw).display))")
+                        .help(L("쪽에 그리기 (\(app.shortcut(for: .draw).display))", "Draw on the page (\(app.shortcut(for: .draw).display))"))
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 10)
@@ -1300,18 +1310,18 @@ struct PaperDetailColumn: View {
                         Button {
                             app.toggleFloatingList()
                         } label: {
-                            Label("Table of Contents", systemImage: "list.bullet.indent")
+                            Label(L("차례", "Table of Contents"), systemImage: "list.bullet.indent")
                         }
                         .keyboardShortcut("l", modifiers: [.command, .shift])
-                        .help("Table of contents")
+                        .help(L("차례", "Table of contents"))
                         // Its key is the menu command's, so it is not pressed
                         // twice for one press.
                         Button {
                             configuration.mode = configuration.mode == .draw ? .read : .draw
                         } label: {
-                            Label("Draw", systemImage: configuration.mode == .draw ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
+                            Label(L("그리기", "Draw"), systemImage: configuration.mode == .draw ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
                         }
-                        .help("Write on the page with the pencil")
+                        .help(L("연필로 쪽에 쓰기", "Write on the page with the pencil"))
                     }
                     .sharedBackgroundVisibility(.hidden)
                     // On a phone the reader is a screen of its own, so the
@@ -1322,12 +1332,12 @@ struct PaperDetailColumn: View {
                     // search and the way back come along with it.
                     ToolbarItem(placement: .topBarTrailing) {
                             Menu {
-                                Picker("Page Layout", selection: Bindable(configuration).layout) {
+                                Picker(L("쪽 배치", "Page Layout"), selection: Bindable(configuration).layout) {
                                     ForEach(ReaderConfiguration.PageLayout.allCases) { layout in
                                         Label(layout.label, systemImage: layout.symbolName).tag(layout)
                                     }
                                 }
-                                Picker("Page Tint", selection: Bindable(configuration).tint) {
+                                Picker(L("쪽 색조", "Page Tint"), selection: Bindable(configuration).tint) {
                                     ForEach(ReaderConfiguration.PageTint.allCases) { tint in
                                         Text(tint.label).tag(tint)
                                     }
@@ -1335,7 +1345,7 @@ struct PaperDetailColumn: View {
                                 Button {
                                     app.toggleFloatingList()
                                 } label: {
-                                    Label("Table of Contents", systemImage: "list.bullet.indent")
+                                    Label(L("차례", "Table of Contents"), systemImage: "list.bullet.indent")
                                 }
                                 Divider()
                                 // The whole library, from inside a paper —
@@ -1345,16 +1355,16 @@ struct PaperDetailColumn: View {
                                 Button {
                                     app.showsSearchPalette = true
                                 } label: {
-                                    Label("Search Everything", systemImage: "rectangle.and.text.magnifyingglass")
+                                    Label(L("전부 찾기", "Search Everything"), systemImage: "rectangle.and.text.magnifyingglass")
                                 }
                                 // Also here: with the list stepped aside for
                                 // a book, the bar it lives on is gone.
                                 Button(action: syncNow) {
-                                    Label("Sync Now", systemImage: "arrow.clockwise")
+                                    Label(L("지금 맞추기", "Sync Now"), systemImage: "arrow.clockwise")
                                 }
                                 .disabled(model.isScanning)
                             } label: {
-                                Label("View Options", systemImage: "textformat.size")
+                                Label(L("보기 방식", "View Options"), systemImage: "textformat.size")
                             }
                         }
                         .sharedBackgroundVisibility(.hidden)
@@ -1366,7 +1376,7 @@ struct PaperDetailColumn: View {
                         Button {
                             link.isFinding = true
                         } label: {
-                            Label("Find in Paper", systemImage: "magnifyingglass")
+                            Label(L("이 논문에서 찾기", "Find in Paper"), systemImage: "magnifyingglass")
                         }
                         .keyboardShortcut("f", modifiers: .command)
                     }
@@ -1376,7 +1386,7 @@ struct PaperDetailColumn: View {
                         Button {
                             app.toggleInspector()
                         } label: {
-                            Label("Marks and Notes", systemImage: app.showsInspector ? "sidebar.trailing" : "sidebar.trailing")
+                            Label(L("표시와 노트", "Marks and Notes"), systemImage: app.showsInspector ? "sidebar.trailing" : "sidebar.trailing")
                                 .symbolVariant(app.showsInspector ? .fill : .none)
                         }
                     }
@@ -1385,9 +1395,9 @@ struct PaperDetailColumn: View {
                 #endif
             } else {
                 ContentUnavailableView(
-                    "No Paper Selected",
+                    L("고른 논문이 없다", "No Paper Selected"),
                     systemImage: "doc.text",
-                    description: Text("Choose a paper to start reading.")
+                    description: Text(L("읽을 논문을 고른다.", "Choose a paper to start reading."))
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -1422,7 +1432,7 @@ struct PaperDetailColumn: View {
                         MarkupListView(session: session, link: link)
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     } else {
-                        ContentUnavailableView("Opening the Paper", systemImage: "hourglass")
+                        ContentUnavailableView(L("논문을 여는 중", "Opening the Paper"), systemImage: "hourglass")
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 case .note:
@@ -1432,7 +1442,7 @@ struct PaperDetailColumn: View {
                     }
                 }
             } else {
-                ContentUnavailableView("Nothing Selected", systemImage: "sidebar.right")
+                ContentUnavailableView(L("고른 것이 없다", "Nothing Selected"), systemImage: "sidebar.right")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
@@ -1448,17 +1458,17 @@ struct LibraryUnavailableView: View {
 
     var body: some View {
         ContentUnavailableView {
-            Label("Library Folder Unavailable", systemImage: "externaldrive.badge.questionmark")
+            Label(L("라이브러리 폴더를 열 수 없다", "Library Folder Unavailable"), systemImage: "externaldrive.badge.questionmark")
         } description: {
             Text(message)
         } actions: {
-            Button("Try Again") {
+            Button(L("다시 시도", "Try Again")) {
                 Task { await app.restore() }
             }
             .buttonStyle(.borderedProminent)
             .buttonBorderShape(.capsule)
 
-            Button("Choose a Different Folder…") {
+            Button(L("다른 폴더 고르기…", "Choose a Different Folder…")) {
                 app.isChoosingLibraryFolder = true
             }
         }

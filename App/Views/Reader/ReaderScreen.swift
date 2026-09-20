@@ -38,14 +38,14 @@ struct ReaderScreen: View {
                 reader(session)
             } else if let loadError {
                 ContentUnavailableView {
-                    Label("Can't Open This Paper", systemImage: "doc.questionmark")
+                    Label(L("이 논문을 열 수 없다", "Can't Open This Paper"), systemImage: "doc.questionmark")
                 } description: {
                     Text(loadError)
                 } actions: {
-                    Button("Try Again") { Task { await load() } }
+                    Button(L("다시 시도", "Try Again")) { Task { await load() } }
                 }
             } else {
-                ProgressView("Opening \(paper.meta.displayTitle)")
+                ProgressView(L("\(paper.meta.displayTitle) 여는 중", "Opening \(paper.meta.displayTitle)"))
                     .controlSize(.large)
             }
         }
@@ -203,7 +203,7 @@ struct ReaderScreen: View {
                 // they are — the two things a bookmark tells you.
                 let left = currentPageIndex - currentPageIndex % 2 + 1
                 let right = min(left + 1, count)
-                Text(left == right ? "Page \(left) of \(count)" : "Pages \(left)–\(right) of \(count)")
+                Text(left == right ? L("\(count)쪽 중 \(left)쪽", "Page \(left) of \(count)") : L("\(count)쪽 중 \(left)–\(right)쪽", "Pages \(left)–\(right) of \(count)"))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
@@ -212,7 +212,7 @@ struct ReaderScreen: View {
                     .tint(.secondary.opacity(0.6))
                     .frame(width: 140)
             } else {
-                Text("Page \(currentPageIndex + 1) of \(count)")
+                Text(L("\(count)쪽 중 \(currentPageIndex + 1)쪽", "Page \(currentPageIndex + 1) of \(count)"))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
@@ -224,13 +224,13 @@ struct ReaderScreen: View {
             case .idle:
                 EmptyView()
             case .pending:
-                Label("Unsaved changes", systemImage: "circle.dotted")
+                Label(L("저장 전", "Unsaved changes"), systemImage: "circle.dotted")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             case .saving:
                 ProgressView().controlSize(.small)
             case .mergedExternalChanges:
-                Label("Merged changes from another device", systemImage: "arrow.triangle.merge")
+                Label(L("다른 기기의 변경을 합쳤다", "Merged changes from another device"), systemImage: "arrow.triangle.merge")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             case let .failed(message):
@@ -241,14 +241,17 @@ struct ReaderScreen: View {
             }
 
             if session.hasForeignInk {
-                Label("Contains ink from another app", systemImage: "hand.draw")
+                Label(L("다른 앱의 잉크가 있다", "Contains ink from another app"), systemImage: "hand.draw")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .help(
-                        """
-                        This PDF already had freehand ink when it was imported. \
-                        Drawing here will replace it.
-                        """
+                        L(
+                            "이 PDF에는 들여올 때부터 손으로 그린 잉크가 있었다. 여기서 그리면 그것을 덮어쓴다.",
+                            """
+                            This PDF already had freehand ink when it was imported. \
+                            Drawing here will replace it.
+                            """
+                        )
                     )
             }
         }
@@ -288,7 +291,7 @@ struct ReaderScreen: View {
                 onCopy: {
                     UIPasteboard.general.string = selection.string
                     dismissSelectionControls()
-                    show(toast: "Copied")
+                    show(toast: L("복사했다", "Copied"))
                 }
             )
             .offset(anchoredTo: selectionFrame, width: 260, below: true)
@@ -304,7 +307,7 @@ struct ReaderScreen: View {
                     guard !trimmed.isEmpty else { dismissSelectionControls(); return }
                     session.addNote(for: noteSelection, comment: trimmed)
                     dismissSelectionControls()
-                    show(toast: "Note added")
+                    show(toast: L("노트를 더했다", "Note added"))
                 }
             )
             .frame(width: 300)

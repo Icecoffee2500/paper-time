@@ -10,7 +10,7 @@ struct GraphSidePanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("Graph")
+                Text(L("그래프", "Graph"))
                     .font(.headline)
                 Spacer()
                 Button {
@@ -20,13 +20,13 @@ struct GraphSidePanel: View {
                 }
                 .buttonStyle(.borderless)
                 .disabled(graph.isBuilding)
-                .help("Look for connections again")
+                .help(L("연결 다시 찾기", "Look for connections again"))
             }
             .padding(.horizontal, 16)
             .padding(.top, 10)
             .padding(.bottom, 8)
 
-            Text("Papers are joined when one cites the other, when your notes link them, when they share an author, or when you filed them together.")
+            Text(L("논문은 한쪽이 다른 쪽을 인용할 때, 내 노트가 둘을 이을 때, 공저자가 있을 때, 같은 컬렉션에 넣었을 때 이어진다.", "Papers are joined when one cites the other, when your notes link them, when they share an author, or when you filed them together."))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 16)
@@ -37,12 +37,12 @@ struct GraphSidePanel: View {
             // rather than as not-yet — and the panel below it was meanwhile
             // telling the reader to turn it on.
             VStack(alignment: .leading, spacing: 2) {
-                Toggle("Focus on selection", isOn: Bindable(graph).focusesOnSelection)
+                Toggle(L("고른 것에 집중", "Focus on selection"), isOn: Bindable(graph).focusesOnSelection)
                     .toggleStyle(.switch)
                     .controlSize(.small)
                     .disabled(graph.selection == nil)
                 if graph.selection == nil {
-                    Text("Click a paper in the graph first.")
+                    Text(L("먼저 그래프에서 논문을 하나 누른다.", "Click a paper in the graph first."))
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
@@ -57,7 +57,7 @@ struct GraphSidePanel: View {
             if graph.selection == nil { howToUse }
 
             List {
-                Section("Most connected") {
+                Section(L("가장 많이 이어진", "Most connected")) {
                     ForEach(graph.mostConnected()) { node in
                         Button {
                             graph.selection = node.id
@@ -99,7 +99,7 @@ struct GraphSidePanel: View {
                             }
                             .buttonStyle(.plain)
                         }
-                        Button("Open This Paper") {
+                        Button(L("이 논문 열기", "Open This Paper")) {
                             model.scope = .all
                             model.selectedPaperID = id
                         }
@@ -124,21 +124,21 @@ struct GraphSidePanel: View {
     /// which part of it answers a question you have.
     private var howToUse: some View {
         VStack(alignment: .leading, spacing: 9) {
-            Text("HOW TO USE IT")
+            Text(L("쓰는 법", "HOW TO USE IT"))
                 .font(.caption2.weight(.semibold))
                 .tracking(0.6)
                 .foregroundStyle(.tertiary)
 
-            step("hand.tap", "Click a dot",
-                 "Its neighbours light up, and this panel lists every one with the reason they are joined.")
-            step("scope", "Turn on Focus on selection",
-                 "Everything unrelated drops away, so one paper's neighbourhood is all that is left.")
-            step("line.3.horizontal.decrease", "Switch a line off in the legend",
-                 "Hide citations to see only what your own notes have joined — that is your reading, not the literature's.")
-            step("arrow.up.left.and.arrow.down.right", "Pinch to zoom, drag to pan",
-                 "Titles appear as you go in. Double-click a dot to open the paper.")
+            step("hand.tap", L("점을 누른다", "Click a dot"),
+                 L("이웃이 밝아지고, 이 패널이 그 하나하나를 이어진 이유와 함께 늘어놓는다.", "Its neighbours light up, and this panel lists every one with the reason they are joined."))
+            step("scope", L("'고른 것에 집중'을 켠다", "Turn on Focus on selection"),
+                 L("관계없는 것은 다 물러나고, 논문 하나의 이웃만 남는다.", "Everything unrelated drops away, so one paper's neighbourhood is all that is left."))
+            step("line.3.horizontal.decrease", L("범례에서 선 하나를 끈다", "Switch a line off in the legend"),
+                 L("인용을 숨기면 내 노트가 이은 것만 남는다 — 문헌의 관계가 아니라 내 읽기다.", "Hide citations to see only what your own notes have joined — that is your reading, not the literature's."))
+            step("arrow.up.left.and.arrow.down.right", L("핀치로 확대, 드래그로 이동", "Pinch to zoom, drag to pan"),
+                 L("들어갈수록 제목이 나타난다. 점을 두 번 누르면 논문이 열린다.", "Titles appear as you go in. Double-click a dot to open the paper."))
 
-            Text("Start below: the most connected papers are the ones the rest of your library hangs off.")
+            Text(L("아래에서 시작한다: 가장 많이 이어진 논문에 나머지 라이브러리가 매달려 있다.", "Start below: the most connected papers are the ones the rest of your library hangs off."))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .padding(.top, 2)

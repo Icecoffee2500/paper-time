@@ -18,11 +18,11 @@ struct SketchToolbar: View {
             Button { NSApp.sendAction(Selector(("undo:")), to: nil, from: nil) } label: {
                 Image(systemName: "arrow.uturn.backward").frame(width: 26, height: 26)
             }
-            .help(ReleaseNotes.string("되돌리기 (⌘Z)", "Undo (⌘Z)"))
+            .help(L("되돌리기 (⌘Z)", "Undo (⌘Z)"))
             Button { NSApp.sendAction(Selector(("redo:")), to: nil, from: nil) } label: {
                 Image(systemName: "arrow.uturn.forward").frame(width: 26, height: 26)
             }
-            .help(ReleaseNotes.string("다시 하기 (⇧⌘Z)", "Redo (⇧⌘Z)"))
+            .help(L("다시 하기 (⇧⌘Z)", "Redo (⇧⌘Z)"))
 
             divider
 
@@ -33,9 +33,9 @@ struct SketchToolbar: View {
 
             divider
 
-            Button(ReleaseNotes.string("끝", "Done")) { configuration.mode = .read }
+            Button(L("끝", "Done")) { configuration.mode = .read }
                 .fontWeight(.medium)
-                .help(ReleaseNotes.string("펜을 내려놓는다 (esc)", "Put the pencil down (esc)"))
+                .help(L("펜을 내려놓는다 (esc)", "Put the pencil down (esc)"))
         }
         .buttonStyle(.borderless)
         .padding(.horizontal, 10)
@@ -117,8 +117,8 @@ struct SketchStylePanel: View {
             if state.hasSelection {
                 let count = state.selectedElements.count + state.selectedStrokeCount
                 Text(count == 1
-                     ? ReleaseNotes.string("선택한 것", "Selection")
-                     : ReleaseNotes.string("선택한 것 \(count)개", "\(count) selected"))
+                     ? L("선택한 것", "Selection")
+                     : L("선택한 것 \(count)개", "\(count) selected"))
             } else {
                 Text(state.tool.label)
             }
@@ -134,12 +134,12 @@ struct SketchStylePanel: View {
     private func inkControls(_ ink: InkTool) -> some View {
         switch ink {
         case .pen:
-            section(ReleaseNotes.string("색", "Colour")) {
+            section(L("색", "Colour")) {
                 swatches(PenColor.allCases, chosen: configuration.presets.penColor, color: \.color) { color in
                     configuration.presets.penColors[configuration.presets.penColorIndex] = color
                 }
             }
-            section(ReleaseNotes.string("굵기", "Width")) {
+            section(L("굵기", "Width")) {
                 HStack(spacing: 6) {
                     ForEach(0..<3, id: \.self) { index in
                         let width = configuration.presets.penWidths[index]
@@ -152,12 +152,12 @@ struct SketchStylePanel: View {
                 }
             }
         case .highlighter:
-            section(ReleaseNotes.string("색", "Colour")) {
+            section(L("색", "Colour")) {
                 swatches(MarkupColor.allCases, chosen: configuration.presets.highlighterColor, color: { Color($0.platformColor) }) { color in
                     configuration.presets.highlighterColors[configuration.presets.highlighterColorIndex] = color
                 }
             }
-            section(ReleaseNotes.string("굵기", "Width")) {
+            section(L("굵기", "Width")) {
                 HStack(spacing: 6) {
                     ForEach(0..<3, id: \.self) { index in
                         let width = configuration.presets.highlighterWidths[index]
@@ -169,14 +169,14 @@ struct SketchStylePanel: View {
                     }
                 }
             }
-            Toggle(ReleaseNotes.string("글자에 맞추기", "Fit to Text"), isOn: $configuration.presets.fitsToText)
+            Toggle(L("글자에 맞추기", "Fit to Text"), isOn: $configuration.presets.fitsToText)
                 .toggleStyle(.checkbox)
                 .font(.caption)
         case .eraser:
-            Toggle(ReleaseNotes.string("하이라이트도 지우기", "Erase Highlights Too"), isOn: $configuration.presets.eraserErasesMarks)
+            Toggle(L("하이라이트도 지우기", "Erase Highlights Too"), isOn: $configuration.presets.eraserErasesMarks)
                 .toggleStyle(.checkbox)
                 .font(.caption)
-            Text(ReleaseNotes.string("선과 모양은 통째로 지워진다.", "Strokes and shapes go whole."))
+            Text(L("선과 모양은 통째로 지워진다.", "Strokes and shapes go whole."))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
@@ -193,13 +193,13 @@ struct SketchStylePanel: View {
         let onlyStrokes = state.hasSelection && state.selectedElements.isEmpty
 
         if !onlyStrokes {
-            section(ReleaseNotes.string("선", "Stroke")) {
+            section(L("선", "Stroke")) {
                 swatches(SketchColor.strokes, chosen: style.stroke, color: { Color(cgColor: $0.cgColor) }, matches: { $0.matches($1) }) { color in
                     state.change { $0.stroke = color }
                 }
             }
             if hasBoxes || kinds.isEmpty {
-                section(ReleaseNotes.string("채우기", "Fill")) {
+                section(L("채우기", "Fill")) {
                     HStack(spacing: 5) {
                         option(chosen: style.fill == nil) {
                             state.change { $0.fill = nil }
@@ -218,7 +218,7 @@ struct SketchStylePanel: View {
                     }
                 }
             }
-            section(ReleaseNotes.string("굵기", "Width")) {
+            section(L("굵기", "Width")) {
                 HStack(spacing: 6) {
                     ForEach(SketchStyle.widths, id: \.self) { width in
                         option(chosen: abs(style.width - width) < 0.01) {
@@ -229,7 +229,7 @@ struct SketchStylePanel: View {
                     }
                 }
             }
-            section(ReleaseNotes.string("선 모양", "Dash")) {
+            section(L("선 모양", "Dash")) {
                 HStack(spacing: 6) {
                     ForEach(SketchStyle.Dash.allCases, id: \.self) { dash in
                         option(chosen: style.dash == dash) {
@@ -242,7 +242,7 @@ struct SketchStylePanel: View {
                 }
             }
             if hasBoxes || kinds.isEmpty {
-                section(ReleaseNotes.string("모서리", "Corners")) {
+                section(L("모서리", "Corners")) {
                     HStack(spacing: 6) {
                         option(chosen: style.corners == .sharp) { state.change { $0.corners = .sharp } } label: {
                             Rectangle().strokeBorder(.primary, lineWidth: 1.5).frame(width: 14, height: 12)
@@ -254,7 +254,7 @@ struct SketchStylePanel: View {
                 }
             }
             if hasConnectors {
-                section(ReleaseNotes.string("화살표 끝", "Arrowheads")) {
+                section(L("화살표 끝", "Arrowheads")) {
                     VStack(alignment: .leading, spacing: 4) {
                         heads(style.startHead, flipped: true) { head in state.change { $0.startHead = head } }
                         heads(style.endHead, flipped: false) { head in state.change { $0.endHead = head } }
@@ -262,7 +262,7 @@ struct SketchStylePanel: View {
                 }
             }
             if hasWords || kinds.contains(.text) || kinds.isEmpty {
-                section(ReleaseNotes.string("글자 크기", "Text Size")) {
+                section(L("글자 크기", "Text Size")) {
                     HStack(spacing: 6) {
                         ForEach(SketchStyle.TextSize.allCases, id: \.self) { size in
                             option(chosen: style.textSize == size) {
@@ -275,14 +275,14 @@ struct SketchStylePanel: View {
                 }
             }
             if kinds.contains(.text) {
-                Toggle(ReleaseNotes.string("테두리", "Border"), isOn: Binding(
+                Toggle(L("테두리", "Border"), isOn: Binding(
                     get: { style.border },
                     set: { on in state.change { $0.border = on } }
                 ))
                 .toggleStyle(.checkbox)
                 .font(.caption)
             }
-            section(ReleaseNotes.string("투명도", "Opacity")) {
+            section(L("투명도", "Opacity")) {
                 Slider(value: Binding(
                     get: { Double(style.opacity) },
                     set: { value in state.change { $0.opacity = CGFloat(value) } }
@@ -297,15 +297,15 @@ struct SketchStylePanel: View {
         VStack(alignment: .leading, spacing: 6) {
             Divider()
             HStack(spacing: 4) {
-                actionButton("rectangle.dashed", ReleaseNotes.string("테두리 두르기 (B)", "Frame (B)")) { state.editor?.frameSelection() }
-                actionButton("plus.square.on.square", ReleaseNotes.string("복제 (⌘D)", "Duplicate (⌘D)")) { state.editor?.duplicateSelection() }
+                actionButton("rectangle.dashed", L("테두리 두르기 (B)", "Frame (B)")) { state.editor?.frameSelection() }
+                actionButton("plus.square.on.square", L("복제 (⌘D)", "Duplicate (⌘D)")) { state.editor?.duplicateSelection() }
                     .disabled(state.selectedElements.isEmpty)
-                actionButton("square.3.layers.3d.top.filled", ReleaseNotes.string("맨 앞으로 (⇧⌘])", "Bring to Front (⇧⌘])")) { state.editor?.bringSelectionToFront() }
+                actionButton("square.3.layers.3d.top.filled", L("맨 앞으로 (⇧⌘])", "Bring to Front (⇧⌘])")) { state.editor?.bringSelectionToFront() }
                     .disabled(state.selectedElements.isEmpty)
-                actionButton("square.3.layers.3d.bottom.filled", ReleaseNotes.string("맨 뒤로 (⇧⌘[)", "Send to Back (⇧⌘[)")) { state.editor?.sendSelectionToBack() }
+                actionButton("square.3.layers.3d.bottom.filled", L("맨 뒤로 (⇧⌘[)", "Send to Back (⇧⌘[)")) { state.editor?.sendSelectionToBack() }
                     .disabled(state.selectedElements.isEmpty)
                 Spacer(minLength: 0)
-                actionButton("trash", ReleaseNotes.string("지우기 (⌫)", "Delete (⌫)")) { state.editor?.deleteSelection() }
+                actionButton("trash", L("지우기 (⌫)", "Delete (⌫)")) { state.editor?.deleteSelection() }
             }
             .buttonStyle(.borderless)
         }

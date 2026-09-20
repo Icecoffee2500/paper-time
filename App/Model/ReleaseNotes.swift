@@ -36,11 +36,11 @@ enum ReleaseNotes {
             self.en = en
         }
 
-        var value: String { Text2.prefersKorean ? ko : en }
+        var value: String { Language.prefersKorean ? ko : en }
 
-        static let prefersKorean: Bool = {
-            Locale.preferredLanguages.first?.hasPrefix("ko") ?? false
-        }()
+        /// Kept as a name of its own because the demos read it, but the
+        /// answer now comes from `Language`, which Settings can override.
+        static var prefersKorean: Bool { Language.prefersKorean }
     }
 
     static func string(_ ko: String, _ en: String) -> String { Text2(ko, en).value }

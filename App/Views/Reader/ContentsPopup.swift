@@ -99,7 +99,7 @@ struct ContentsPopup: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Contents")
+            Text(L("차례", "Contents"))
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 14)
@@ -107,7 +107,7 @@ struct ContentsPopup: View {
                 .padding(.bottom, 6)
 
             if items.isEmpty {
-                Text(reading ? "Reading the paper for its headings…" : "No headings could be found in this PDF.")
+                Text(reading ? L("논문에서 제목을 읽고 있다…", "Reading the paper for its headings…") : L("이 PDF에서 제목을 찾지 못했다.", "No headings could be found in this PDF."))
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

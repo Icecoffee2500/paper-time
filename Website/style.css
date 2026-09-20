@@ -485,3 +485,150 @@ dialog::backdrop { background: rgba(12, 16, 24, .4); backdrop-filter: blur(4px);
   * { transition-duration: .01ms !important; animation-duration: .01ms !important; }
   html { scroll-behavior: auto; }
 }
+
+/* ═════════════════════════════ two languages ══════════════════════════════
+   Both are in the markup, side by side, so they have to be edited together;
+   the page shows one. Decided in the head before anything paints, so there is
+   no flash of the language you do not read. */
+html[lang="ko"] [data-l="en"] { display: none !important; }
+html[lang="en"] [data-l="ko"] { display: none !important; }
+
+.hero-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 18px; width: 100%;
+}
+.lang { display: inline-flex; gap: 2px; padding: 3px; border-radius: 9px;
+        background: var(--panel-2); flex: 0 0 auto; }
+.lang button {
+  border: 0; background: transparent; cursor: pointer; border-radius: 6px;
+  padding: 4px 9px; font: inherit; font-size: 12.5px; font-weight: 500;
+  color: var(--ink-3); transition: background .15s, color .15s;
+}
+.lang button.on { background: var(--panel); color: var(--ink); box-shadow: var(--shadow-1); }
+.lang button:hover { color: var(--ink); }
+
+/* ══════════════════ the first screen, rebuilt around the proof ════════════
+   The demonstration comes before the claim: somebody who has copied a formula
+   out of a PDF understands this in five seconds, and no sentence does that. */
+.hero {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: clamp(14px, 2.4vh, 26px);
+}
+.hero .wordmark { margin: 0; }
+.hero-demo {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+}
+.hero-demo .demo-shell { min-height: 0; }
+.hero .lede { max-width: none; text-align: center; margin: 0 auto; }
+.hero .actions { justify-content: center; }
+
+/* ═══════════════════════════ the three pillars ═══════════════════════════ */
+.pillars {
+  max-width: 1240px; margin: 0 auto; width: 100%;
+  padding: clamp(40px, 8vh, 92px) 22px clamp(20px, 4vh, 40px);
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(18px, 2.4vw, 34px);
+}
+.pillar h3 {
+  font-size: clamp(16px, 1.5vw, 19px); font-weight: 650; letter-spacing: -.012em;
+  margin: 16px 0 7px; line-height: 1.32;
+}
+.pillar p { margin: 0; font-size: 14px; line-height: 1.62; color: var(--ink-2); }
+.pillar code {
+  font: 12.5px/1 var(--mono); background: var(--panel-2);
+  padding: 2px 5px; border-radius: 4px;
+}
+.pillar-demo {
+  border-radius: var(--panel-radius, 12px); overflow: hidden;
+  background: var(--panel); box-shadow: var(--shadow-1);
+  aspect-ratio: 4 / 3;
+}
+.pillar-demo .demo-shell { height: 100%; min-height: 0; padding: 12px; }
+
+/* ═════════════════════════════ the loop, named ═══════════════════════════ */
+.loop {
+  max-width: 900px; margin: 0 auto;
+  padding: clamp(50px, 10vh, 120px) 22px clamp(30px, 6vh, 70px);
+  text-align: center;
+}
+.loop-line {
+  font-size: clamp(22px, 3.4vw, 38px); font-weight: 600; line-height: 1.34;
+  letter-spacing: -.022em; margin: 0 0 clamp(26px, 5vh, 52px);
+}
+.loop-steps {
+  list-style: none; margin: 0 0 26px; padding: 0;
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; text-align: left;
+}
+.loop-steps li {
+  padding: 15px 15px 16px; border-radius: var(--panel-radius, 12px);
+  background: var(--panel); box-shadow: var(--shadow-1);
+  display: flex; flex-direction: column; gap: 5px;
+}
+.loop-n {
+  width: 21px; height: 21px; border-radius: 50%; background: var(--accent); color: #fff;
+  font-size: 11.5px; font-weight: 700; display: grid; place-items: center; margin-bottom: 3px;
+}
+.loop-steps b { font-size: 15px; font-weight: 650; }
+.loop-steps span:not(.loop-n) { font-size: 13px; line-height: 1.55; color: var(--ink-2); }
+.loop-claim { font-size: 15px; line-height: 1.68; color: var(--ink-2); margin: 0; }
+
+/* ════════════════════════════ keeping Zotero ═════════════════════════════ */
+.coexist {
+  max-width: 760px; margin: 0 auto;
+  padding: clamp(20px, 4vh, 44px) 22px clamp(40px, 8vh, 90px); text-align: center;
+}
+.coexist h2 {
+  font-size: clamp(20px, 2.6vw, 30px); font-weight: 650; letter-spacing: -.02em;
+  margin: 0 0 12px;
+}
+.coexist p { margin: 0; font-size: 15.5px; line-height: 1.7; color: var(--ink-2); }
+.coexist code { font: 13px/1 var(--mono); background: var(--panel-2); padding: 2px 5px; border-radius: 4px; }
+
+/* ═══════════════════════════ built together ══════════════════════════════ */
+.together {
+  max-width: 880px; margin: 0 auto;
+  padding: clamp(46px, 9vh, 110px) 22px clamp(30px, 6vh, 64px);
+}
+.together h2 {
+  font-size: clamp(22px, 2.8vw, 32px); font-weight: 650; letter-spacing: -.02em; margin: 0 0 10px;
+}
+.together .sub { margin: 0 0 26px; font-size: 14.5px; line-height: 1.66; color: var(--ink-2); }
+.tally-row { display: flex; gap: 28px; margin-bottom: 22px; flex-wrap: wrap; }
+.tally-row div { display: flex; flex-direction: column; gap: 2px; }
+.tally-row .n { font-size: 27px; font-weight: 700; letter-spacing: -.02em; line-height: 1; }
+.tally-row .k { font-size: 12px; color: var(--ink-3); }
+.board { display: flex; flex-direction: column; gap: 1px; border-radius: var(--panel-radius, 12px);
+         overflow: hidden; background: var(--rule); }
+.board a, .board .row {
+  display: flex; align-items: baseline; gap: 11px; padding: 12px 15px;
+  background: var(--panel); text-decoration: none; color: inherit;
+  transition: background .13s;
+}
+.board a:hover { background: var(--panel-2); }
+.board .st { flex: 0 0 auto; font-size: 13px; width: 15px; text-align: center; }
+.board .st.done { color: var(--green); font-weight: 700; }
+.board .st.open { color: var(--ink-3); }
+.board .ttl { flex: 1 1 auto; font-size: 14.5px; line-height: 1.45; }
+.board .meta { flex: 0 0 auto; font-size: 12px; color: var(--ink-3); white-space: nowrap; }
+.board .who { color: var(--ink-3); font-size: 12px; white-space: nowrap; }
+.credits { margin: 26px 0 0; display: flex; flex-wrap: wrap; gap: 7px; }
+.credits .name {
+  font-size: 12.5px; padding: 4px 10px; border-radius: 20px;
+  background: var(--panel-2); color: var(--ink-2);
+}
+.together .ask { margin: 26px 0 0; font-size: 14px; line-height: 1.7; color: var(--ink-2); }
+
+@media (max-width: 980px) {
+  .pillars { grid-template-columns: 1fr; }
+  .pillar-demo { aspect-ratio: 16 / 9; }
+  .loop-steps { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 560px) {
+  .loop-steps { grid-template-columns: 1fr; }
+  .hero-head { flex-direction: row; align-items: center; }
+  .tally-row { gap: 20px; }
+  .board .meta { display: none; }
+}
