@@ -548,6 +548,55 @@ function panes() {
 
 /* ════════════════════ 9 · One folder, three devices ════════════════════ */
 
+/* One folder, three desktops.
+   A different claim from the one below it: that is about how *fast* a mark
+   crosses between Apple devices; this is about there being no wall at all. */
+function everyDesktop() {
+  const desk = (name, ratio, delay) => {
+    const mark = el("div", {
+      style: "height:9px;border-radius:3px;background:var(--mark);width:64%;opacity:0;transition:opacity .4s",
+    });
+    const box = el("div", {
+      style: "flex:1;min-width:0;display:flex;flex-direction:column;gap:8px;align-items:center",
+    },
+      el("div", {
+        style:
+          `width:100%;aspect-ratio:${ratio};background:var(--card);border:1px solid var(--rule);` +
+          "border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:6px;overflow:hidden",
+      },
+        el("div", { style: "height:7px;border-radius:3px;background:var(--rule);width:86%" }),
+        mark,
+        el("div", { style: "height:7px;border-radius:3px;background:var(--rule);width:74%" }),
+        el("div", { style: "height:7px;border-radius:3px;background:var(--rule);width:58%" })),
+      el("div", { style: "font-size:11.5px;color:var(--ink-3)" }, name));
+    box.mark = mark;
+    box.delay = delay;
+    return box;
+  };
+
+  const mac = desk("맥", "16/10", 0);
+  const win = desk("윈도우", "16/10", 900);
+  const linux = desk("리눅스", "16/10", 900);
+  const caption = el("p", { class: "hint" },
+    "라이브러리는 폴더 하나. 클라우드 폴더든 USB든, 파일이 닿는 곳이면 된다.");
+
+  const run = () => {
+    for (const d of [mac, win, linux]) {
+      d.mark.style.opacity = "0";
+      setTimeout(() => { d.mark.style.opacity = "1"; }, d.delay);
+    }
+    caption.innerHTML =
+      "표시가 <b>PDF 파일 안에</b> 쓰였고, 폴더가 그 파일을 옮겼을 뿐이다. 계정도, 서버도, 내보내기도 없다.";
+  };
+
+  return el("div", { class: "demo-shell", style: "flex-direction:column;gap:14px" },
+    el("div", { style: "display:flex;gap:8px;flex-wrap:wrap;align-items:center" },
+      el("button", { class: "btn btn-primary", onclick: run }, "맥에서 하이라이트 긋기"),
+      el("span", { class: "hint" }, "0.5.0부터 윈도우·리눅스에서도")),
+    el("div", { style: "display:flex;gap:12px;align-items:flex-end;width:100%" }, mac, win, linux),
+    caption);
+}
+
 function threeDevices() {
   const device = (name, ratio, delay) => {
     const mark = el("div", {
@@ -685,6 +734,9 @@ const SLIDES = [
   { t: 1, n: "Search Everything", h: "논문 안의 한 줄까지 찾는다",
     p: "논문·노트·지도·초안·태그·동작이 한 칸에 있고, 제목에 없는 낱말은 본문에서 찾는다 — 고르면 그 논문의 그 줄로 간다. 빈칸일 때는 이어 읽을 것과 다시 볼 것을 이유와 함께 먼저 내놓는다.",
     make: searchEverything },
+  { t: 1, n: "어디서나", h: "맥에서 긋고 윈도우에서 읽는다",
+    p: "표시는 PDF 파일 안에 쓰이고 라이브러리는 그냥 폴더다. 그래서 같은 폴더가 맥에서도, 윈도우에서도, 리눅스에서도 열린다 — 하이라이트도 손글씨도 굽은 화살표도 그대로. 계정도 서버도 내보내기도 없다.",
+    make: everyDesktop },
 
   { t: 2, n: "Book mode", h: "책처럼 펴고, 목차로 건너뛴다",
     p: "두 쪽이 마주 보고, 여백은 잘려 본문만 남는다. 목차는 단축키 하나 — 절 이름을 누르면 그 절로 바로 간다.",
@@ -695,8 +747,8 @@ const SLIDES = [
   { t: 2, n: "창", h: "필요한 창만 켠다",
     p: "서가·목록·논문·인스펙터를 하나씩 껐다 켠다. 읽을 때는 논문만, 정리할 때는 넷 다. 열의 너비는 창이 허락하는 데까지 늘어난다.",
     make: panes },
-  { t: 2, n: "세 기기", h: "폴더 하나, 기기 셋",
-    p: "맥·아이패드·아이폰이 같은 폴더를 본다. 표시는 작은 저널로 먼저 건너가고 PDF는 뒤따라온다.",
+  { t: 2, n: "세 기기", h: "긋자마자 건너간다",
+    p: "맥·아이패드·아이폰 사이에서는 표시가 몇 KB짜리 저널로 먼저 건너가고, 20 MB PDF는 뒤따라온다. 아무도 파일 동기화를 기다리지 않는다.",
     make: threeDevices },
 
   { t: 3, n: "노트 ↔ 노트", h: "노트가 서로를 안다",
@@ -785,12 +837,58 @@ function mountCarousel() {
 
 const mb = (n) => (n / 1048576).toFixed(1) + " MB";
 
+const OS = {
+  mac:     { name: "macOS",   note: "14 Sonoma 이상 · Apple Silicon" },
+  windows: { name: "Windows", note: "10 이상 · 64비트와 ARM" },
+  linux:   { name: "Linux",   note: "x86_64와 ARM64" },
+};
+
+/* Which desktop the visitor is on.
+   Almost nobody downloads for a machine they are not sitting at, so this is
+   the right default — and it is only a default, because somebody is. */
+function detectOS() {
+  const ua = navigator.userAgent;
+  const platform = navigator.userAgentData?.platform || navigator.platform || "";
+  if (/Win/i.test(platform) || /Windows/i.test(ua)) return "windows";
+  if (/Linux|X11/i.test(platform) || (/Linux/i.test(ua) && !/Android/i.test(ua))) return "linux";
+  if (/Mac/i.test(platform) || /Mac OS X/i.test(ua)) return "mac";
+  return "mac";
+}
+
+let chosenOS = detectOS();
+
+/* A release's files for one platform. Older versions carry only the Mac's
+   disk image, under the key it has always had. */
+function buildsFor(release, os) {
+  if (release.builds && release.builds[os]) return release.builds[os];
+  if (os === "mac" && release.asset) {
+    return [{ label: "디스크 이미지", arch: "Apple Silicon", url: release.asset, size: release.size }];
+  }
+  return [];
+}
+
+function picker(node, onPick) {
+  node.replaceChildren(...Object.entries(OS).map(([os, meta]) => {
+    const b = el("button", { type: "button", class: "pick", "data-os": os }, meta.name);
+    b.addEventListener("click", () => onPick(os));
+    return b;
+  }));
+}
+
+function markPicker(node, os) {
+  for (const b of node.querySelectorAll(".pick")) {
+    b.setAttribute("aria-pressed", String(b.dataset.os === os));
+  }
+}
+
 async function mountDownloads() {
   const primary = document.getElementById("get");
   const list = document.getElementById("versions-list");
+  const pick = document.getElementById("picker");
+  const variants = document.getElementById("variants");
   try {
     const data = await (await fetch("releases.json", { cache: "no-cache" })).json();
-    const releases = (data.releases || []).filter((r) => r.asset);
+    const releases = (data.releases || []).filter((r) => r.asset || r.builds);
     if (data.repo) {
       const link = document.getElementById("repo-link");
       link.href = "https://github.com/" + data.repo;
@@ -799,24 +897,58 @@ async function mountDownloads() {
     if (!releases.length) throw new Error("empty");
 
     const latest = releases[0];
-    primary.href = latest.asset;
-    primary.querySelector(".label").textContent = `${latest.version} 받기`;
-    primary.querySelector(".sub").textContent = `macOS · ${mb(latest.size)}`;
 
-    // How many times each disk image has been taken. GitHub counts every
-    // download of a release asset, and has since the first one was put
-    // up, so the tally reaches back before the page showed it. The number
-    // written at publish time is shown first; the live one replaces it
-    // when the API answers (sixty asks an hour per visitor, more than
-    // enough for a landing page).
+    /* The button, and the alternatives under it. */
+    const showOS = (os) => {
+      chosenOS = os;
+      markPicker(pick, os);
+      const files = buildsFor(latest, os);
+      if (!files.length) {
+        primary.href = "https://github.com/" + (data.repo || "Icecoffee2500/paper-time") + "/releases";
+        primary.querySelector(".label").textContent = "GitHub에서 받기";
+        primary.querySelector(".sub").textContent = `${OS[os].name} — 이 버전엔 없다`;
+        variants.textContent = "";
+        return;
+      }
+      const first = files[0];
+      primary.href = first.url;
+      primary.querySelector(".label").textContent = `${latest.version} 받기`;
+      primary.querySelector(".sub").textContent =
+        `${OS[os].name} · ${first.arch ? first.arch + " · " : ""}${first.size ? mb(first.size) : ""}`;
+      /* Everything else for this platform, small, on one line. */
+      const rest = files.slice(1);
+      variants.replaceChildren(
+        ...(rest.length
+          ? [el("span", {}, "다른 갈래: "),
+             ...rest.flatMap((f, i) => [
+               i ? el("span", {}, " · ") : "",
+               el("a", { href: f.url }, `${f.label}${f.arch ? ` (${f.arch})` : ""}`),
+             ])]
+          : [el("span", {}, OS[os].note)]),
+      );
+    };
+
+    picker(pick, showOS);
+    showOS(chosenOS);
+
+    /* How many times each version has been taken, across every file of it.
+       GitHub counts every download of a release asset, and has since the
+       first one was put up, so the tally reaches back before the page showed
+       it. The number written at publish time is shown first; the live one
+       replaces it when the API answers (sixty asks an hour per visitor, more
+       than enough for a landing page). */
     const render = (counts) => {
       list.replaceChildren(...releases.map((r) => {
         const n = counts[r.version];
+        const links = ["mac", "windows", "linux"].flatMap((os) => {
+          const files = buildsFor(r, os);
+          if (!files.length) return [];
+          return [el("a", { href: files[0].url, class: "vget" }, OS[os].name)];
+        });
         return el("div", { class: "vrow" },
           el("span", { class: "v" }, r.version),
           el("span", { class: "n" }, r.note || ""),
-          el("a", { href: r.asset }, "DMG 받기"),
-          el("span", { class: "s" }, r.size ? mb(r.size) : ""),
+          el("span", { class: "vlinks" }, ...links),
           el("span", { class: "d" }, n == null ? "" : `${n.toLocaleString("ko-KR")}번 받음`));
       }));
       const total = Object.values(counts).reduce((a, b) => a + (b || 0), 0);
@@ -833,7 +965,9 @@ async function mountDownloads() {
   }
 }
 
-/* The live tally, from GitHub's releases API — or nothing, quietly. */
+/* The live tally, from GitHub's releases API — or nothing, quietly.
+   Summed across every file of a version, not just the disk image: a download
+   is a download whichever desktop it was for. */
 async function fetchDownloadCounts(repo) {
   try {
     const res = await fetch(`https://api.github.com/repos/${repo}/releases?per_page=100`, {
@@ -842,13 +976,31 @@ async function fetchDownloadCounts(repo) {
     if (!res.ok) return null;
     const counts = {};
     for (const release of await res.json()) {
-      const dmg = (release.assets || []).find((a) => /\.dmg$/i.test(a.name));
-      if (dmg) counts[release.tag_name] = dmg.download_count;
+      const total = (release.assets || [])
+        .filter((a) => /\.(dmg|exe|zip|AppImage|deb|rpm|tar\.gz)$/i.test(a.name))
+        .reduce((sum, a) => sum + (a.download_count || 0), 0);
+      if (total || (release.assets || []).length) counts[release.tag_name] = total;
     }
     return Object.keys(counts).length ? counts : null;
   } catch {
     return null;
   }
+}
+
+/* The install sheet shows one desktop's steps at a time. */
+function mountHowPicker() {
+  const node = document.getElementById("how-picker");
+  if (!node) return;
+  const show = (os) => {
+    markPicker(node, os);
+    for (const panel of document.querySelectorAll(".how-panel")) {
+      panel.hidden = panel.dataset.os !== os;
+    }
+  };
+  picker(node, show);
+  show(chosenOS);
+  /* Opening the sheet follows whatever the hero is offering. */
+  document.getElementById("how").addEventListener("click", () => show(chosenOS));
 }
 
 function mountDialogs() {
@@ -863,3 +1015,4 @@ function mountDialogs() {
 mountCarousel();
 mountDownloads();
 mountDialogs();
+mountHowPicker();

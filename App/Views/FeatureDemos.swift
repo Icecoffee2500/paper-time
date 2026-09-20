@@ -50,6 +50,7 @@ struct FeatureDemoView: View {
             case .sync: SyncDemo(scale: scale)
             case .penTools: PenToolsDemo(scale: scale)
             case .sketch: SketchDemo(scale: scale)
+            case .crossPlatform: CrossPlatformDemo(scale: scale)
             }
         }
         .padding(scale.pad)
@@ -2745,6 +2746,118 @@ private struct SyncDemo: View {
             .padding(scale.pad)
             .frame(maxWidth: .infinity, alignment: .leading)
             .frame(height: scale.stage * 0.6, alignment: .top)
+            .background(
+                RoundedRectangle(cornerRadius: scale.corner, style: .continuous)
+                    .fill(.background)
+                    .shadow(color: .black.opacity(0.08), radius: 2, y: 1)
+            )
+        }
+    }
+}
+
+
+// MARK: - One folder, three desktops
+
+/// The same library open on a Mac, a PC and a Linux machine.
+///
+/// The point is not that the app was built three times — it is that there is
+/// nothing in between. A highlight goes into the PDF, the PDF is in the
+/// folder, and the folder is wherever you keep it. So the mark appears on the
+/// other two the moment the folder catches up, with no account, no server and
+/// no export.
+private struct CrossPlatformDemo: View {
+    let scale: DemoScale
+    /// 0: nothing marked. 1: marked here, on its way. 2: on all three.
+    @State private var step: Int
+
+    init(scale: DemoScale, step: Int = 0) {
+        self.scale = scale
+        _step = State(initialValue: step)
+    }
+
+    private var lines: [String] {
+        [
+            ReleaseNotes.string("잊는다는 것은 지우는 것이", "Forgetting is not erasure"),
+            ReleaseNotes.string("아니라 압축하는 것이다.", "but compression."),
+        ]
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: scale.gap) {
+            HStack(alignment: .top, spacing: scale.gap) {
+                desktop(ReleaseNotes.string("맥", "Mac"), symbol: "macbook", marked: step >= 1)
+                desktop(ReleaseNotes.string("윈도우", "Windows"), symbol: "pc", marked: step >= 2)
+                desktop(ReleaseNotes.string("리눅스", "Linux"), symbol: "desktopcomputer", marked: step >= 2)
+            }
+
+            HStack(spacing: 6) {
+                Image(systemName: step == 1 ? "folder.fill.badge.person.crop" : "folder")
+                    .symbolEffect(.pulse, isActive: step == 1)
+                    .foregroundStyle(step == 1 ? Color.accentColor : .secondary)
+                Text(folderCaption)
+                    .font(scale.small)
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack {
+                Button {
+                    withAnimation(.snappy(duration: 0.3)) { step = 1 }
+                    Task {
+                        try? await Task.sleep(for: .seconds(1.4))
+                        withAnimation(.snappy(duration: 0.35)) { step = 2 }
+                    }
+                } label: {
+                    Label(ReleaseNotes.string("맥에서 하이라이트", "Highlight on the Mac"), systemImage: "highlighter")
+                }
+                .disabled(step != 0)
+                if step == 2 {
+                    Button(ReleaseNotes.string("다시", "Again")) { withAnimation { step = 0 } }
+                }
+                Spacer()
+                Text(caption)
+                    .font(scale.small)
+                    .foregroundStyle(.secondary)
+            }
+            .font(scale.body)
+            .buttonStyle(.bordered)
+            .controlSize(scale.isFull ? .regular : .small)
+        }
+    }
+
+    private var folderCaption: String {
+        switch step {
+        case 1: ReleaseNotes.string("표시는 PDF 안에 — 폴더가 그 파일을 옮긴다", "The mark is inside the PDF; the folder carries the file")
+        case 2: ReleaseNotes.string("계정도, 서버도, 내보내기도 없다", "No account, no server, nothing exported")
+        default: ReleaseNotes.string("한 폴더 — 클라우드든 USB든", "One folder — a cloud drive, or a memory stick")
+        }
+    }
+
+    private var caption: String {
+        switch step {
+        case 1: ReleaseNotes.string("PDF에 쓰고, 폴더가 나른다", "Written into the PDF; the folder does the rest")
+        case 2: ReleaseNotes.string("셋이 같은 것을 본다", "All three are looking at the same thing")
+        default: ReleaseNotes.string("0.5.0부터 윈도우·리눅스에서도", "Windows and Linux from 0.5.0")
+        }
+    }
+
+    private func desktop(_ name: String, symbol: String, marked: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label(name, systemImage: symbol)
+                .font(scale.small)
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: scale.isFull ? 5 : 3) {
+                ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
+                    Text(line)
+                        .font(scale.small)
+                        .padding(.horizontal, 3)
+                        .background(
+                            Capsule().fill(Color.yellow.opacity(marked && index == 0 ? 0.55 : 0))
+                        )
+                }
+            }
+            .padding(scale.pad)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: scale.stage * 0.5, alignment: .top)
             .background(
                 RoundedRectangle(cornerRadius: scale.corner, style: .continuous)
                     .fill(.background)
