@@ -14,17 +14,21 @@ import { icon } from '../icons.js'
 import { clear, el, on } from '../dom.js'
 import { store, type SketchTool } from '../state.js'
 import { SketchColor, STYLE_WIDTHS, type Dash, type Head, type TextSize } from '../../shared/sketch.js'
+import { L } from '../../shared/lang.js'
 
+// The labels are getters so they are read when a button is built, not when
+// the module loads — the language is settled before anything draws, and this
+// keeps that true whatever order the modules happen to load in.
 export const TOOLS: { tool: SketchTool; key: string; icon: string; label: string }[] = [
-  { tool: 'select', key: 'V', icon: 'cursorarrow', label: 'Select' },
-  { tool: 'pen', key: 'P', icon: 'pen', label: 'Pen' },
-  { tool: 'highlighter', key: 'H', icon: 'highlighter', label: 'Highlighter' },
-  { tool: 'eraser', key: 'E', icon: 'eraser', label: 'Eraser' },
-  { tool: 'rectangle', key: 'R', icon: 'rectangle', label: 'Rectangle' },
-  { tool: 'ellipse', key: 'O', icon: 'ellipse', label: 'Ellipse' },
-  { tool: 'arrow', key: 'A', icon: 'arrow', label: 'Arrow' },
-  { tool: 'line', key: 'L', icon: 'line', label: 'Line' },
-  { tool: 'text', key: 'T', icon: 'textbox', label: 'Text' },
+  { tool: 'select', key: 'V', icon: 'cursorarrow', get label() { return L('선택', 'Select') } },
+  { tool: 'pen', key: 'P', icon: 'pen', get label() { return L('펜', 'Pen') } },
+  { tool: 'highlighter', key: 'H', icon: 'highlighter', get label() { return L('형광펜', 'Highlighter') } },
+  { tool: 'eraser', key: 'E', icon: 'eraser', get label() { return L('지우개', 'Eraser') } },
+  { tool: 'rectangle', key: 'R', icon: 'rectangle', get label() { return L('네모', 'Rectangle') } },
+  { tool: 'ellipse', key: 'O', icon: 'ellipse', get label() { return L('동그라미', 'Ellipse') } },
+  { tool: 'arrow', key: 'A', icon: 'arrow', get label() { return L('화살표', 'Arrow') } },
+  { tool: 'line', key: 'L', icon: 'line', get label() { return L('선', 'Line') } },
+  { tool: 'text', key: 'T', icon: 'textbox', get label() { return L('글', 'Text') } },
 ]
 
 export interface SketchToolbarActions {
@@ -79,7 +83,7 @@ export function buildStylePanel(actions: SketchToolbarActions): { node: HTMLElem
     if (allowNone) {
       const none = el('button', {
         class: 'swatch',
-        title: 'No fill',
+        title: L('채우기 없음', 'No fill'),
         style: 'background: transparent',
         'aria-pressed': String(current() === null),
       })
@@ -140,73 +144,73 @@ export function buildStylePanel(actions: SketchToolbarActions): { node: HTMLElem
     if (!shouldShow()) return
     const style = store.sketch.style
 
-    node.append(heading('Stroke'))
+    node.append(heading(L('선', 'Stroke')))
     node.append(swatches(SketchColor.strokes, () => style.stroke, (colour) => {
       if (colour) actions.restyle((s) => { s.stroke = colour })
     }, false))
 
-    node.append(heading('Fill'))
+    node.append(heading(L('채우기', 'Fill')))
     node.append(swatches(SketchColor.fills, () => style.fill, (colour) => {
       actions.restyle((s) => { s.fill = colour })
     }, true))
 
-    node.append(heading('Width'))
+    node.append(heading(L('굵기', 'Width')))
     node.append(choices<number>(
       STYLE_WIDTHS.map((width, index) => ({
         value: width,
-        label: ['Thin', 'Regular', 'Bold'][index],
-        title: `${['Thin', 'Regular', 'Bold'][index]} line`,
+        label: [L('가늘게', 'Thin'), L('보통', 'Regular'), L('굵게', 'Bold')][index],
+        title: L(`${['가는', '보통', '굵은'][index]} 선`, `${['Thin', 'Regular', 'Bold'][index]} line`),
       })),
       () => style.width,
       (width) => actions.restyle((s) => { s.width = width }),
     ))
 
-    node.append(heading('Line'))
+    node.append(heading(L('선 모양', 'Line')))
     node.append(choices<Dash>(
       [
-        { value: 'solid', icon: 'line.solid', title: 'Solid' },
-        { value: 'dashed', icon: 'line.dashed', title: 'Dashed' },
-        { value: 'dotted', icon: 'line.dotted', title: 'Dotted' },
+        { value: 'solid', icon: 'line.solid', title: L('실선', 'Solid') },
+        { value: 'dashed', icon: 'line.dashed', title: L('파선', 'Dashed') },
+        { value: 'dotted', icon: 'line.dotted', title: L('점선', 'Dotted') },
       ],
       () => style.dash,
       (dash) => actions.restyle((s) => { s.dash = dash }),
     ))
 
-    node.append(heading('Corners'))
+    node.append(heading(L('모서리', 'Corners')))
     node.append(choices<'sharp' | 'round'>(
       [
-        { value: 'sharp', icon: 'corner.sharp', title: 'Sharp corners' },
-        { value: 'round', icon: 'corner.round', title: 'Rounded corners' },
+        { value: 'sharp', icon: 'corner.sharp', title: L('각진 모서리', 'Sharp corners') },
+        { value: 'round', icon: 'corner.round', title: L('둥근 모서리', 'Rounded corners') },
       ],
       () => style.corners,
       (corners) => actions.restyle((s) => { s.corners = corners }),
     ))
 
-    node.append(heading('Ends'))
+    node.append(heading(L('화살표 끝', 'Ends')))
     node.append(choices<Head>(
       [
-        { value: 'none', icon: 'head.none', title: 'No head' },
-        { value: 'arrow', icon: 'head.arrow', title: 'Arrowhead' },
-        { value: 'triangle', icon: 'head.triangle', title: 'Solid head' },
-        { value: 'bar', icon: 'head.bar', title: 'Bar' },
-        { value: 'dot', icon: 'head.dot', title: 'Dot' },
+        { value: 'none', icon: 'head.none', title: L('없음', 'No head') },
+        { value: 'arrow', icon: 'head.arrow', title: L('화살촉', 'Arrowhead') },
+        { value: 'triangle', icon: 'head.triangle', title: L('채운 화살촉', 'Solid head') },
+        { value: 'bar', icon: 'head.bar', title: L('막대', 'Bar') },
+        { value: 'dot', icon: 'head.dot', title: L('점', 'Dot') },
       ],
       () => style.endHead,
       (head) => actions.restyle((s) => { s.endHead = head }),
     ))
 
-    node.append(heading('Text'))
+    node.append(heading(L('글자 크기', 'Text')))
     node.append(choices<TextSize>(
       [
-        { value: 'small', icon: 'text.small', title: 'Small' },
-        { value: 'medium', icon: 'text.medium', title: 'Medium' },
-        { value: 'large', icon: 'text.large', title: 'Large' },
+        { value: 'small', icon: 'text.small', title: L('작게', 'Small') },
+        { value: 'medium', icon: 'text.medium', title: L('보통', 'Medium') },
+        { value: 'large', icon: 'text.large', title: L('크게', 'Large') },
       ],
       () => style.textSize,
       (size) => actions.restyle((s) => { s.textSize = size }),
     ))
 
-    node.append(heading('Opacity'))
+    node.append(heading(L('투명도', 'Opacity')))
     const slider = el('input', {
       type: 'range', min: '20', max: '100', step: '5',
       value: String(Math.round(style.opacity * 100)),
@@ -215,7 +219,7 @@ export function buildStylePanel(actions: SketchToolbarActions): { node: HTMLElem
     on(slider, 'input', () => actions.restyle((s) => { s.opacity = Number(slider.value) / 100 }))
     node.append(slider)
 
-    node.append(heading('Selection'))
+    node.append(heading(L('선택한 것', 'Selection')))
     const row = el('div', { class: 'choices' })
     const action = (name: string, title: string, run: () => void) => {
       const button = el('button', { title, html: icon(name) })
@@ -223,11 +227,11 @@ export function buildStylePanel(actions: SketchToolbarActions): { node: HTMLElem
       return button
     }
     row.append(
-      action('border', 'Draw a frame round the selection (B)', actions.frameSelection),
-      action('front', 'Bring to front', actions.bringToFront),
-      action('back', 'Send to back', actions.sendToBack),
-      action('doc.on.doc', 'Duplicate', actions.duplicateSelection),
-      action('trash', 'Delete', actions.deleteSelection),
+      action('border', L('선택한 것에 테두리 두르기 (B)', 'Draw a frame round the selection (B)'), actions.frameSelection),
+      action('front', L('맨 앞으로', 'Bring to front'), actions.bringToFront),
+      action('back', L('맨 뒤로', 'Send to back'), actions.sendToBack),
+      action('doc.on.doc', L('복제', 'Duplicate'), actions.duplicateSelection),
+      action('trash', L('지우기', 'Delete'), actions.deleteSelection),
     )
     node.append(row)
   }

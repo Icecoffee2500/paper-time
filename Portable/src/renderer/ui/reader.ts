@@ -29,6 +29,7 @@ import { makeUUID } from '../../shared/coding.js'
 import { call } from '../bridge.js'
 import { attachSketchInput, type SketchInput } from './sketchInput.js'
 import { icon } from '../icons.js'
+import { L } from '../../shared/lang.js'
 
 const TINTS: Record<string, string | null> = {
   none: null,
@@ -257,7 +258,7 @@ export class Reader {
       this.watchVisibility()
       this.update()
     } catch (error) {
-      this.actions.toast(`This PDF could not be opened: ${String(error)}`)
+      this.actions.toast(L(`이 PDF를 열 수 없어요. 파일이 깨졌을 수 있어요 — ${String(error)}`, `Paper Time can't open this PDF. It may be damaged — ${String(error)}`))
     }
   }
 
@@ -410,10 +411,11 @@ export class Reader {
     }
     if (adopted.unreadable.length > 0) {
       const pages = adopted.unreadable.map((index) => index + 1).join(', ')
-      this.actions.toast(
-        `Handwriting on page ${pages} was made on a Mac and has not been written into the PDF yet. `
-        + 'Open the paper on the Mac once and it will come across.',
-      )
+      this.actions.toast(L(
+        `${pages}쪽 손글씨는 맥에서 쓴 거예요. 맥이 아직 PDF에는 쓰지 않았어요. 맥에서 이 논문을 한 번 열면 건너와요.`,
+        `Handwriting on page ${pages} came from a Mac and is not in the PDF yet. `
+        + 'Open the paper on the Mac once, and it comes across.',
+      ))
     }
   }
 
@@ -560,9 +562,16 @@ export class Reader {
     if (!this.markBar) {
       this.markBar = el('div', { class: 'mark-bar' })
       for (const name of MARK_COLOR_NAMES) {
+        const colour = ({
+          yellow: L('노랑', 'yellow'),
+          green: L('초록', 'green'),
+          blue: L('파랑', 'blue'),
+          pink: L('분홍', 'pink'),
+          purple: L('보라', 'purple'),
+        } as Record<string, string>)[name] ?? name
         const swatch = el('button', {
           class: 'mark-swatch',
-          title: `Highlight in ${name}`,
+          title: L(`${colour} 형광펜`, `Highlight in ${colour}`),
           style: `background: ${cssColor(MARK_COLORS[name] as [number, number, number])}`,
         })
         // The selection has to survive the press, so the default mousedown
@@ -574,7 +583,7 @@ export class Reader {
         })
         this.markBar.append(swatch)
       }
-      const underline = el('button', { class: 'mark-action', title: 'Underline', html: icon('line.solid') })
+      const underline = el('button', { class: 'mark-action', title: L('밑줄', 'Underline'), html: icon('line.solid') })
       on(underline, 'mousedown', (event: MouseEvent) => event.preventDefault())
       on(underline, 'click', () => {
         this.markSelection('underline', 'yellow')
@@ -628,7 +637,7 @@ export class Reader {
     if (paper) {
       const draw = el('button', {
         class: 'icon-button',
-        title: 'Draw on the Page',
+        title: L('쪽에 그리기', 'Draw on the Page'),
         'aria-pressed': String(store.reader.drawing),
         html: icon('pen'),
       })
@@ -646,14 +655,17 @@ export class Reader {
     clear(this.footer)
     if (!this.document) return
     const position = el('span', {
-      text: `Page ${store.reader.currentPage + 1} of ${store.reader.pageCount}`,
+      text: L(
+        `${store.reader.currentPage + 1} / ${store.reader.pageCount}쪽`,
+        `Page ${store.reader.currentPage + 1} of ${store.reader.pageCount}`,
+      ),
     })
     this.footer.append(position)
     if (store.settings.pageLayout === 'single') {
       const turn = (label: string, by: number, disabled: boolean) => {
         const button = el('button', {
           class: 'icon-button',
-          title: by < 0 ? 'Previous page' : 'Next page',
+          title: by < 0 ? L('이전 쪽', 'Previous page') : L('다음 쪽', 'Next page'),
           html: icon(label),
         })
         button.toggleAttribute('disabled', disabled)

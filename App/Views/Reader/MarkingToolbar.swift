@@ -29,13 +29,13 @@ struct MarkingToolbar: View {
                 } label: {
                     Image(systemName: "arrow.uturn.backward")
                 }
-                .help("Undo")
+                .help(L("되돌리기", "Undo"))
                 Button {
                     NotificationCenter.default.post(name: .paperTimeInkRedo, object: nil)
                 } label: {
                     Image(systemName: "arrow.uturn.forward")
                 }
-                .help("Redo")
+                .help(L("다시 하기", "Redo"))
 
                 divider
 
@@ -72,7 +72,7 @@ struct MarkingToolbar: View {
 
                 Spacer(minLength: 12)
 
-                Button("Done") { configuration.mode = .read }
+                Button(L("끝", "Done")) { configuration.mode = .read }
                     .fontWeight(.medium)
             }
             .buttonStyle(.borderless)
@@ -190,7 +190,7 @@ struct MarkingToolbar: View {
 
         private func widthSlider(_ value: Binding<CGFloat>, range: ClosedRange<CGFloat>) -> some View {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Thickness")
+                Text(L("굵기", "Thickness"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 HStack {
@@ -214,16 +214,16 @@ private struct ToolOptions: View {
         Form {
             switch tool {
             case .pen:
-                Toggle("Draw with Finger", isOn: $configuration.fingerDrawing)
+                Toggle(L("손가락으로 그리기", "Draw with Finger"), isOn: $configuration.fingerDrawing)
             case .highlighter:
-                Toggle("Fit to Text", isOn: $configuration.presets.fitsToText)
-                Text("Over words, a stroke becomes a highlight fitted to them; under them, an underline. Off, it stays as drawn.")
+                Toggle(L("글자에 맞추기", "Fit to Text"), isOn: $configuration.presets.fitsToText)
+                Text(L("글자 위에 그으면 글자에 맞춘 하이라이트가 돼요. 글자 밑에 그으면 밑줄이 되고요. 끄면 그은 그대로 남아요.", "A stroke over words becomes a highlight; under them, an underline. Off, it stays as drawn."))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
-                Toggle("Draw with Finger", isOn: $configuration.fingerDrawing)
+                Toggle(L("손가락으로 그리기", "Draw with Finger"), isOn: $configuration.fingerDrawing)
             case .eraser:
-                Toggle("Erase Highlights Too", isOn: $configuration.presets.eraserErasesMarks)
-                Text("Strokes are erased whole. With this on, running the eraser over a highlight or an underline removes it as well.")
+                Toggle(L("하이라이트도 지우기", "Erase Highlights Too"), isOn: $configuration.presets.eraserErasesMarks)
+                Text(L("지우개는 선을 통째로 지워요. 켜 두면 하이라이트나 밑줄 위를 지날 때 그것도 지워요.", "The eraser removes a stroke whole. With this on, it takes highlights and underlines too."))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

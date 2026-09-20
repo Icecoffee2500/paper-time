@@ -42,6 +42,18 @@ struct SearchPalette: View {
         /// Last on purpose: a title match is a surer thing than a word in
         /// the middle of page nine, and these arrive a moment later anyway.
         case passages = "In the Papers"
+
+        var title: String {
+            switch self {
+            case .library: L("라이브러리", "Library")
+            case .papers: L("논문", "Papers")
+            case .notes: L("노트", "Notes")
+            case .collections: L("컬렉션", "Collections")
+            case .tags: L("태그", "Tags")
+            case .actions: L("동작", "Actions")
+            case .passages: L("논문 본문", "In the Papers")
+            }
+        }
     }
 
     private let rowHeight: CGFloat = 44
@@ -100,7 +112,7 @@ struct SearchPalette: View {
         var ordered: [SearchResultGroup] = []
         for group in ResultGroup.allCases {
             guard let rows = byGroup[group], !rows.isEmpty else { continue }
-            ordered.append(SearchResultGroup(group: group, title: group.rawValue, rows: rows))
+            ordered.append(SearchResultGroup(group: group, title: group.title, rows: rows))
         }
         return ordered
     }
@@ -220,11 +232,11 @@ struct SearchPalette: View {
                 .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
 
-            TextField(offered.isEmpty ? "Paper Time Search" : "Search — or pick up where you were", text: $query)
+            TextField(offered.isEmpty ? L("Paper Time 찾기", "Paper Time Search") : L("찾기 — 또는 읽던 자리로", "Search — or pick up where you were"), text: $query)
                 .textFieldStyle(.plain)
                 .font(.system(size: 26, weight: .regular))
                 .focused($isFieldFocused)
-                .accessibilityLabel("Paper Time Search")
+                .accessibilityLabel(L("Paper Time 찾기", "Paper Time Search"))
                 .onSubmit { activateHighlighted() }
         }
         .padding(.horizontal, 20)

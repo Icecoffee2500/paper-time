@@ -22,6 +22,8 @@ export interface Settings {
   sort: { field: 'title' | 'author' | 'year' | 'added' | 'opened'; ascending: boolean }
   /** 'system' follows the desktop; the other two are the reader's choice. */
   appearance: 'system' | 'light' | 'dark'
+  /** Same shape as `appearance`: the desktop's locale, or the reader's word. */
+  language: 'system' | 'ko' | 'en'
   /** A wash over the page, for reading at night or on a bright screen. */
   pageTint: 'none' | 'sepia' | 'grey' | 'night'
   pageLayout: 'single' | 'continuous'
@@ -37,6 +39,7 @@ const DEFAULTS: Settings = {
   inspectorTab: 'details',
   sort: { field: 'added', ascending: false },
   appearance: 'system',
+  language: 'system',
   pageTint: 'none',
   pageLayout: 'continuous',
   selectedPaperID: null,

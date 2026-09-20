@@ -30,11 +30,11 @@ struct MarkupListView: View {
 
         var label: String {
             switch self {
-            case .all: "All"
-            case .highlights: "Highlights"
-            case .underlines: "Underlines"
-            case .strikethroughs: "Strikethroughs"
-            case .notes: "Notes"
+            case .all: L("전부", "All")
+            case .highlights: L("형광펜", "Highlights")
+            case .underlines: L("밑줄", "Underlines")
+            case .strikethroughs: L("취소선", "Strikethroughs")
+            case .notes: L("노트", "Notes")
             }
         }
 
@@ -182,7 +182,7 @@ struct MarkupListView: View {
                             .fill(color(for: markup.color))
                             .frame(width: 10, height: 10)
                             .accessibilityLabel(markup.color.displayName)
-                        Text("Page \(markup.pageIndex + 1)")
+                        Text(L("\(markup.pageIndex + 1)쪽", "Page \(markup.pageIndex + 1)"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Spacer()
@@ -211,11 +211,11 @@ struct MarkupListView: View {
 
             if editingID == markup.id {
                 HStack(spacing: 8) {
-                    TextField("Note", text: $commentDraft, axis: .vertical)
+                    TextField(L("노트", "Note"), text: $commentDraft, axis: .vertical)
                         .textFieldStyle(.roundedBorder)
                         .lineLimit(1...4)
                         .onSubmit { commitComment(for: markup) }
-                    Button("Done") { commitComment(for: markup) }
+                    Button(L("끝", "Done")) { commitComment(for: markup) }
                         .buttonStyle(.borderedProminent)
                         .buttonBorderShape(.capsule)
                         .controlSize(.small)
@@ -234,32 +234,32 @@ struct MarkupListView: View {
                 startEditing(markup)
             } label: {
                 Label(
-                    markup.comment.isEmpty ? "Add Note…" : "Edit Note…",
+                    markup.comment.isEmpty ? L("노트 더하기…", "Add Note…") : L("노트 고치기…", "Edit Note…"),
                     systemImage: "square.and.pencil"
                 )
             }
             Button {
                 copy(markup.quotedText)
             } label: {
-                Label("Copy Text", systemImage: "doc.on.doc")
+                Label(L("글 복사", "Copy Text"), systemImage: "doc.on.doc")
             }
             Divider()
             Button(role: .destructive) {
                 delete(markup)
             } label: {
-                Label("Delete", systemImage: "trash")
+                Label(L("지우기", "Delete"), systemImage: "trash")
             }
         }
         .swipeActions {
             Button(role: .destructive) {
                 delete(markup)
             } label: {
-                Label("Delete", systemImage: "trash")
+                Label(L("지우기", "Delete"), systemImage: "trash")
             }
             Button {
                 startEditing(markup)
             } label: {
-                Label("Note", systemImage: "square.and.pencil")
+                Label(L("노트", "Note"), systemImage: "square.and.pencil")
             }
             .tint(.accentColor)
         }
@@ -274,14 +274,14 @@ struct MarkupListView: View {
     }
 
     private var emptyTitle: String {
-        filter == .all ? "No Marks Yet" : "Nothing \(filter.label) Yet"
+        filter == .all ? L("아직 표시가 없어요", "No Marks Yet") : L("아직 \(filter.label) 표시가 없어요", "Nothing \(filter.label) Yet")
     }
 
     private var emptyMessage: String {
         switch filter {
-        case .all: "Select text to highlight it, or draw with your pencil."
-        case .notes: "Select a passage and choose the note button to write about it."
-        default: "Select text in the paper and pick \(filter.label.lowercased()) from the bar."
+        case .all: L("글자를 골라 형광펜을 칠하거나, 펜슬로 그려보세요.", "Select text to highlight it, or draw with the pencil.")
+        case .notes: L("구절을 고르고 노트 단추를 누르면 돼요.", "Select a passage, then choose the note button.")
+        default: L("논문에서 글자를 고르고, 표시 막대에서 \(filter.label.lowercased())을 고르면 돼요.", "Select text in the paper and pick \(filter.label.lowercased()) from the bar.")
         }
     }
 
@@ -309,7 +309,7 @@ struct MarkupListView: View {
     private func delete(_ markup: MarkupDescriptor) {
         session.removeMarkup(id: markup.id)
         MarkupUndo.registerRemoval(
-            [markup], name: "Delete Mark", in: session, with: undoManager
+            [markup], name: L("표시 지우기", "Delete Mark"), in: session, with: undoManager
         )
     }
 
@@ -325,10 +325,10 @@ struct MarkupListView: View {
 
     private func name(for markup: MarkupDescriptor) -> String {
         switch markup.kind {
-        case .highlight: return "Highlight"
-        case .underline: return "Underline"
-        case .strikethrough: return "Strikethrough"
-        case .note: return "Note"
+        case .highlight: return L("형광펜", "Highlight")
+        case .underline: return L("밑줄", "Underline")
+        case .strikethrough: return L("취소선", "Strikethrough")
+        case .note: return L("노트", "Note")
         }
     }
 

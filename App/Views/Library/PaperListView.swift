@@ -45,23 +45,32 @@ struct PaperListView: View {
     private var emptyShelf: (title: String, symbol: String, note: String) {
         switch model.scope {
         case .unread:
-            ("Nothing Unread", "circle", "Every paper in the library has been opened.")
+            (L("안 읽은 논문이 없어요", "Nothing Unread"), "circle",
+             L("여기 있는 논문은 모두 열어봤어요.", "Every paper here has been opened."))
         case .reading:
-            ("Nothing Being Read", "circle.lefthalf.filled", "Set a paper's status to Reading and it will wait for you here.")
+            (L("읽는 중인 논문이 없어요", "Nothing Being Read"), "circle.lefthalf.filled",
+             L("논문을 읽는 중으로 바꿔두면 여기서 기다려요.", "Mark a paper as Reading and it waits here."))
         case .read:
-            ("Nothing Read Yet", "checkmark.circle", "Papers you mark as Read gather here.")
+            (L("읽은 논문이 아직 없어요", "Nothing Read Yet"), "checkmark.circle",
+             L("읽음으로 바꾼 논문이 여기 모여요.", "Papers marked as Read collect here."))
         case .favorites:
-            ("No Favorites", "star", "Star a paper and it will be here whenever you want it.")
+            (L("즐겨찾기가 아직 없어요", "No Favorites"), "star",
+             L("논문에 별을 달아두면 언제든 여기서 찾을 수 있어요.", "Star a paper and it stays here."))
         case .needsReview:
-            ("Nothing to Review", "exclamationmark.triangle", "No paper's details are in doubt.")
+            (L("살펴볼 것이 없어요", "Nothing to Review"), "exclamationmark.triangle",
+             L("서지를 한번 봐야 할 논문이 없어요.", "Every record looks right."))
         case .collection:
-            ("This Collection Is Empty", "folder", "Drag papers onto it in the sidebar to put them in.")
+            (L("이 컬렉션은 비어 있어요", "This Collection Is Empty"), "folder",
+             L("옆 목록의 컬렉션 위로 논문을 끌어다 놓아보세요.", "Drag papers onto it in the sidebar."))
         case .tag:
-            ("Nothing With This Tag", "tag", "Tag a paper and it will appear here.")
+            (L("이 태그를 단 논문이 없어요", "Nothing With This Tag"), "tag",
+             L("논문에 이 태그를 달면 여기 나와요.", "Tag a paper and it appears here."))
         case .author:
-            ("Nothing by This Author", "person", "No paper in the library carries this name.")
+            (L("이 저자의 논문이 없어요", "Nothing by This Author"), "person",
+             L("이 이름이 실린 논문이 라이브러리에 없어요.", "No paper here carries this name."))
         default:
-            ("Nothing Here", "tray", "This shelf is empty.")
+            (L("아직 아무것도 없어요", "Nothing Here"), "tray",
+             L("이 선반은 비어 있어요.", "This shelf is empty."))
         }
     }
 
@@ -70,20 +79,21 @@ struct PaperListView: View {
         if model.papers.isEmpty {
             if model.looseDocuments.isEmpty {
                 ContentUnavailableView(
-                    "No Papers Yet",
+                    L("아직 논문이 없어요", "No Papers Yet"),
                     systemImage: "doc.badge.plus",
-                    description: Text("Drag PDFs here, or use Add PDFs to build your library.")
+                    description: Text(L("PDF를 여기 끌어다 놓아보세요. 도구 막대의 PDF 더하기로 골라도 돼요.",
+                                        "Drag in a PDF, or choose Add PDFs."))
                 )
             } else {
                 // Pointing the app at a folder that already holds PDFs is the
                 // obvious thing to do; landing on an empty library after doing
                 // it is not.
                 ContentUnavailableView {
-                    Label("Papers Found in This Folder", systemImage: "tray.and.arrow.down")
+                    Label(L("이 폴더에서 찾은 논문", "Papers Found in This Folder"), systemImage: "tray.and.arrow.down")
                 } description: {
                     Text(looseDescription)
                 } actions: {
-                    Button("Add \(model.looseDocuments.count) PDFs") {
+                    Button(L("PDF \(model.looseDocuments.count)개 더하기", "Add \(model.looseDocuments.count) PDFs")) {
                         Task { await model.adoptLooseDocuments() }
                     }
                     .buttonStyle(.borderedProminent)
@@ -111,7 +121,8 @@ struct PaperListView: View {
                             Task { await model.adoptLooseDocuments() }
                         } label: {
                             Label(
-                                "Add \(model.looseDocuments.count) more PDFs from this folder",
+                                L("이 폴더에 남은 PDF \(model.looseDocuments.count)개 더하기",
+                                  "Add \(model.looseDocuments.count) more PDFs from this folder"),
                                 systemImage: "tray.and.arrow.down"
                             )
                         }
@@ -143,19 +154,19 @@ struct PaperListView: View {
                     // list is one list and a heading over it would be a label
                     // on a thing that has no counterpart.
                     if hasPassages, !model.visiblePapers.isEmpty {
-                        Text("In the Titles")
+                        Text(L("제목에서", "In the Titles"))
                     }
                 }
 
                 if hasPassages {
-                    Section("In the Papers") {
+                    Section(L("논문 안에서", "In the Papers")) {
                         ForEach(passages, id: \.passage) { hit in
                             passageRow(hit)
                         }
                         if scanning {
                             HStack(spacing: 8) {
                                 ProgressView().controlSize(.small)
-                                Text("Reading the papers…")
+                                Text(L("논문 본문을 읽는 중…", "Reading the papers…"))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -278,7 +289,7 @@ struct PaperListView: View {
         let armed = pull > Self.pullThreshold * 0.9
         return HStack(spacing: 6) {
             Image(systemName: "rectangle.and.text.magnifyingglass")
-            Text("Search Everything")
+            Text(L("전부 찾기", "Search Everything"))
         }
         .font(.footnote.weight(.medium))
         .foregroundStyle(armed ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
@@ -295,11 +306,18 @@ struct PaperListView: View {
     private var looseDescription: String {
         let count = model.looseDocuments.count
         let noun = count == 1 ? "PDF" : "PDFs"
-        return """
-            This folder already holds \(count) \(noun). Adding them looks each one \
-            up and gives it a record. The PDFs are not moved, renamed or copied — \
-            they stay exactly where they are.
+        return L(
             """
+            이 폴더에 PDF가 벌써 \(count)개 있어요. 더하면 하나씩 서지를 찾아 기록을 \
+            만들어요. PDF는 있던 자리에 그대로 있어요 — 옮기지도, 이름을 바꾸지도, \
+            복사하지도 않아요.
+            """,
+            """
+            This folder already holds \(count) \(noun). Adding them looks up each \
+            one and gives it a record. Paper Time never moves, renames or copies \
+            a file.
+            """
+        )
     }
 
 }
@@ -373,12 +391,12 @@ struct PaperRow: View, Equatable {
             if isResolving {
                 ProgressView()
                     .controlSize(.small)
-                    .accessibilityLabel("Resolving metadata")
+                    .accessibilityLabel(L("서지를 찾는 중", "Resolving metadata"))
             } else if needsReview(paper) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
-                    .help("Metadata needs review")
-                    .accessibilityLabel("Metadata needs review")
+                    .help(L("서지를 한번 봐주세요", "Check this record"))
+                    .accessibilityLabel(L("서지를 한번 봐주세요", "Check this record"))
             }
         }
         .padding(.vertical, 2)
@@ -424,8 +442,8 @@ struct PaperRow: View, Equatable {
             .buttonBorderShape(.capsule)
             .buttonBorderShape(.capsule)
             .controlSize(.small)
-            .help("Supplementary material")
-            .accessibilityLabel("\(attachmentCount) supplementary files")
+            .help(L("보충 자료", "Supplementary material"))
+            .accessibilityLabel(L("보충 자료 \(attachmentCount)개", "\(attachmentCount) supplementary files"))
             .popover(isPresented: $showsAttachments, arrowEdge: .bottom) {
                 AttachmentPopover(
                     parent: paper,
@@ -443,7 +461,7 @@ struct PaperRow: View, Equatable {
     @ViewBuilder
     private func statusButton(_ paper: LoadedPaper) -> some View {
         Menu {
-            Picker("Reading Status", selection: statusBinding(paper)) {
+            Picker(L("읽기 상태", "Reading Status"), selection: statusBinding(paper)) {
                 ForEach(PaperState.ReadingStatus.allCases, id: \.self) { status in
                     Label(label(for: status), systemImage: status.symbolName)
                         .tag(status)
@@ -458,8 +476,8 @@ struct PaperRow: View, Equatable {
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .fixedSize()
-        .help("Reading status: \(label(for: paper.state.readingStatus))")
-        .accessibilityLabel("Reading status: \(label(for: paper.state.readingStatus))")
+        .help(L("읽기 상태: \(label(for: paper.state.readingStatus))", "Reading status: \(label(for: paper.state.readingStatus))"))
+        .accessibilityLabel(L("읽기 상태: \(label(for: paper.state.readingStatus))", "Reading status: \(label(for: paper.state.readingStatus))"))
     }
 
     private func statusBinding(_ paper: LoadedPaper) -> Binding<PaperState.ReadingStatus> {
@@ -481,8 +499,8 @@ struct PaperRow: View, Equatable {
                 .contentTransition(.symbolEffect(.replace))
         }
         .buttonStyle(.plain)
-        .help(paper.state.isFavorite ? "Remove from Favorites" : "Add to Favorites")
-        .accessibilityLabel(paper.state.isFavorite ? "Favorite" : "Not a favorite")
+        .help(paper.state.isFavorite ? L("즐겨찾기에서 빼기", "Remove from Favorites") : L("즐겨찾기에 더하기", "Add to Favorites"))
+        .accessibilityLabel(paper.state.isFavorite ? L("즐겨찾기", "Favorite") : L("즐겨찾기 아님", "Not a favorite"))
         .accessibilityAddTraits(paper.state.isFavorite ? [.isSelected] : [])
     }
 
@@ -496,9 +514,9 @@ struct PaperRow: View, Equatable {
 
     private func label(for status: PaperState.ReadingStatus) -> String {
         switch status {
-        case .unread: "Unread"
-        case .reading: "Reading"
-        case .read: "Read"
+        case .unread: L("안 읽음", "Unread")
+        case .reading: L("읽는 중", "Reading")
+        case .read: L("읽음", "Read")
         }
     }
 
@@ -524,10 +542,10 @@ private struct PaperMenu: View {
         Button {
             model.selectedPaperID = paper.id
         } label: {
-            Label("Open", systemImage: "book")
+            Label(L("열기", "Open"), systemImage: "book")
         }
 
-        Picker("Reading Status", selection: statusBinding(paper)) {
+        Picker(L("읽기 상태", "Reading Status"), selection: statusBinding(paper)) {
             ForEach(PaperState.ReadingStatus.allCases, id: \.self) { status in
                 Label(label(for: status), systemImage: status.symbolName).tag(status)
             }
@@ -537,13 +555,13 @@ private struct PaperMenu: View {
             Task { await model.toggleFavorite(for: paper.id) }
         } label: {
             Label(
-                paper.state.isFavorite ? "Remove from Favorites" : "Add to Favorites",
+                paper.state.isFavorite ? L("즐겨찾기에서 빼기", "Remove from Favorites") : L("즐겨찾기에 더하기", "Add to Favorites"),
                 systemImage: paper.state.isFavorite ? "star.slash" : "star"
             )
         }
 
         let candidates = self.candidates
-        Menu("Attach To") {
+        Menu(L("다른 논문에 붙이기", "Attach To")) {
             ForEach(candidates.prefix(30)) { candidate in
                 Button(candidate.meta.displayTitle) {
                     Task { await model.attach(paper.id, to: candidate.id) }
@@ -560,7 +578,7 @@ private struct PaperMenu: View {
             Button {
                 Task { await model.detach(paper.id) }
             } label: {
-                Label("Detach from Paper", systemImage: "paperclip.badge.ellipsis")
+                Label(L("논문에서 떼기", "Detach from Paper"), systemImage: "paperclip.badge.ellipsis")
             }
         }
 
@@ -569,21 +587,21 @@ private struct PaperMenu: View {
         Button {
             copyToPasteboard(paper.meta.bibKey)
         } label: {
-            Label("Copy BibTeX Key", systemImage: "doc.on.doc")
+            Label(L("BibTeX 키 복사", "Copy BibTeX Key"), systemImage: "doc.on.doc")
         }
 
         #if os(macOS)
         Button {
             NSWorkspace.shared.activateFileViewerSelecting([paper.documentURL])
         } label: {
-            Label("Reveal in Finder", systemImage: "folder")
+            Label(L("Finder에서 보기", "Reveal in Finder"), systemImage: "folder")
         }
         #endif
 
         Button {
             Task { await model.resolveMetadata(for: paper.id) }
         } label: {
-            Label("Re-run Metadata", systemImage: "arrow.triangle.2.circlepath")
+            Label(L("서지 다시 찾기", "Re-run Metadata"), systemImage: "arrow.triangle.2.circlepath")
         }
 
         Divider()
@@ -591,7 +609,7 @@ private struct PaperMenu: View {
         Button(role: .destructive) {
             Task { await model.moveToTrash(paper.id) }
         } label: {
-            Label("Move to Trash", systemImage: "trash")
+            Label(L("휴지통에 넣기", "Move to Trash"), systemImage: "trash")
         }
     }
 
@@ -613,9 +631,9 @@ private struct PaperMenu: View {
 
     private func label(for status: PaperState.ReadingStatus) -> String {
         switch status {
-        case .unread: "Unread"
-        case .reading: "Reading"
-        case .read: "Read"
+        case .unread: L("안 읽음", "Unread")
+        case .reading: L("읽는 중", "Reading")
+        case .read: L("읽음", "Read")
         }
     }
 
@@ -642,7 +660,7 @@ private struct AttachmentPopover: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Supplementary Material")
+            Text(L("보충 자료", "Supplementary Material"))
                 .font(.subheadline.weight(.semibold))
                 .padding(.horizontal, 14)
                 .padding(.top, 12)
@@ -683,7 +701,7 @@ private struct AttachmentPopover: View {
                         Task { await model.detach(attachment.id) }
                         isPresented = false
                     } label: {
-                        Label("Detach from Paper", systemImage: "paperclip.badge.ellipsis")
+                        Label(L("논문에서 떼기", "Detach from Paper"), systemImage: "paperclip.badge.ellipsis")
                     }
                 }
             }
@@ -694,7 +712,7 @@ private struct AttachmentPopover: View {
                 model.selectedPaperID = parent.id
                 isPresented = false
             } label: {
-                Label("Back to the Paper", systemImage: "arrow.uturn.backward")
+                Label(L("논문으로 돌아가기", "Back to the Paper"), systemImage: "arrow.uturn.backward")
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
                     .contentShape(.rect)

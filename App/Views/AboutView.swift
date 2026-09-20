@@ -10,6 +10,7 @@ import SwiftUI
 /// demonstrations here are full size and come first, with the prose above them
 /// as a caption rather than the other way round.
 struct AboutView: View {
+    @Environment(AppModel.self) private var app
     @State private var showsReleaseNotes = false
     @State private var showsFeatureLog = false
 
@@ -17,6 +18,7 @@ struct AboutView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 30) {
                 FeatureShowcase(header: { AboutHeader() })
+                together
                 footer
             }
             .padding(.horizontal, 26)
@@ -35,6 +37,46 @@ struct AboutView: View {
                     .keyboardShortcut(.defaultAction)
                     .padding(.bottom, 16)
             }
+        }
+    }
+
+    /// Who asked for what is in this version.
+    ///
+    /// Baked in at release time rather than fetched, because the app asks no
+    /// server for anything and a wall that needed a network call would mostly
+    /// be an empty one. Somebody who reported a bug opens this page and finds
+    /// their own name inside the app they use — which is the whole reward, and
+    /// the right one.
+    @ViewBuilder
+    private var together: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Divider().opacity(0.5)
+
+            Text(L("함께 만들고 있어요", "Built together"))
+                .font(.headline)
+
+            if Contributors.all.isEmpty {
+                Text(L(
+                    "아직 아무도 한마디를 보내지 않았어요. \(app.shortcut(for: .feedback).display)를 누르면 화면이 이미 찍힌 채로 창이 열려요.",
+                    "Nobody has sent anything yet. Press \(app.shortcut(for: .feedback).display) and the sheet opens with the screenshot already taken."
+                ))
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text(L(
+                    "\(Contributors.all.count)명이 \(Contributors.total)가지를 알려줬고, 그 덕분에 고쳐진 것들이 이 버전에 들어 있어요.",
+                    "\(Contributors.all.count) people sent \(Contributors.total) reports. What they found is in this version."
+                ))
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+                FlowingNames(people: Contributors.all)
+            }
+
+            Button(L("한마디 보내기…", "Send Feedback…")) { app.askForFeedback() }
+                .padding(.top, 2)
         }
     }
 
@@ -183,4 +225,60 @@ private struct AboutHeader: View {
         }
     }
 
+}
+
+
+/// The names, wrapped like words rather than listed like rows: a wall, not a
+/// table. Somebody who sent two things is shown as having sent two.
+private struct FlowingNames: View {
+    let people: [Contributor]
+
+    var body: some View {
+        FlowLayout(spacing: 6) {
+            ForEach(people) { person in
+                Text(person.reports > 1 ? "\(person.name) ×\(person.reports)" : person.name)
+                    .font(.caption)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 4)
+                    .background(.quaternary.opacity(0.5), in: Capsule())
+            }
+        }
+    }
+}
+
+/// A row that wraps. `Layout` rather than a grid because the names are all
+/// different widths and a grid would leave holes.
+private struct FlowLayout: Layout {
+    var spacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? .infinity
+        var x: CGFloat = 0, y: CGFloat = 0, lineHeight: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > width {
+                x = 0
+                y += lineHeight + spacing
+                lineHeight = 0
+            }
+            x += size.width + spacing
+            lineHeight = max(lineHeight, size.height)
+        }
+        return CGSize(width: proposal.width ?? x, height: y + lineHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX, y = bounds.minY, lineHeight: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x > bounds.minX, x + size.width > bounds.maxX {
+                x = bounds.minX
+                y += lineHeight + spacing
+                lineHeight = 0
+            }
+            view.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            lineHeight = max(lineHeight, size.height)
+        }
+    }
 }

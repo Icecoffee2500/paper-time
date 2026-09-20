@@ -1,3 +1,5 @@
+import { setKorean } from '../shared/lang.js'
+
 /** The typed side of the one channel the window is given. */
 declare global {
   interface Window {
@@ -5,11 +7,16 @@ declare global {
       invoke: (name: string, args?: unknown) => Promise<unknown>
       on: (handler: (event: string, payload: unknown) => void) => () => void
       platform: string
+      korean: boolean
     }
   }
 }
 
 export const platform = window.papertime.platform
+
+// Before anything draws: the main process already decided, and every string
+// below this line reads the answer.
+setKorean(window.papertime.korean)
 
 export function call<T = unknown>(name: string, args?: unknown): Promise<T> {
   return window.papertime.invoke(name, args) as Promise<T>

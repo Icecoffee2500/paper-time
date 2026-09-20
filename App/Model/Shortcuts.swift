@@ -129,6 +129,7 @@ public enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
     case nextPage, previousPage, nextPaper, previousPaper, back, forward
     // The app itself
     case settings
+    case feedback
 
     public var id: String { rawValue }
 
@@ -159,43 +160,46 @@ public enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
             .moving
         case .settings:
             .app
+        case .feedback:
+            .app
         }
     }
 
     public var title: String {
         switch self {
-        case .addPapers: "Add Papers"
-        case .exportBibTeX: "Export BibTeX"
-        case .copyCitationKey: "Copy Citation Key"
-        case .resolveMetadata: "Resolve Missing Metadata"
-        case .refreshFolder: "Sync Now"
-        case .searchEverything: "Search Everything"
-        case .findInDocument: "Find in Document"
+        case .addPapers: L("논문 더하기", "Add Papers")
+        case .exportBibTeX: L("BibTeX 내보내기", "Export BibTeX")
+        case .copyCitationKey: L("인용 키 복사", "Copy Citation Key")
+        case .resolveMetadata: L("빠진 서지 채우기", "Resolve Missing Metadata")
+        case .refreshFolder: L("지금 맞추기", "Sync Now")
+        case .searchEverything: L("전부 찾기", "Search Everything")
+        case .findInDocument: L("이 논문에서 찾기", "Find in Document")
         case .ultracopy: "Ultracopy"
-        case .linkToNote: "Link Selection to Note"
-        case .layoutContinuous: "Continuous Layout"
-        case .layoutSinglePage: "Single Page Layout"
-        case .layoutBook: "Book Layout"
-        case .highlight: "Highlight Selection"
-        case .underline: "Underline Selection"
-        case .newNote: "New Note"
-        case .draw: "Draw on the Page"
-        case .sidebar: "Sidebar"
-        case .paperList: "Paper List"
-        case .reader: "Paper"
-        case .inspector: "Inspector"
-        case .focus: "Focus on the Paper"
-        case .floatingList: "Table of Contents"
-        case .zoomIn: "Zoom In"
-        case .zoomOut: "Zoom Out"
-        case .actualSize: "Actual Size"
-        case .nextPage: "Next Page"
-        case .previousPage: "Previous Page"
-        case .nextPaper: "Next Paper"
-        case .previousPaper: "Previous Paper"
-        case .back: "Back"
-        case .forward: "Forward"
-        case .settings: "Settings"
+        case .linkToNote: L("고른 곳을 노트로", "Link Selection to Note")
+        case .layoutContinuous: L("이어서 보기", "Continuous Layout")
+        case .layoutSinglePage: L("한 쪽씩 보기", "Single Page Layout")
+        case .layoutBook: L("책처럼 보기", "Book Layout")
+        case .highlight: L("고른 곳에 형광펜", "Highlight Selection")
+        case .underline: L("고른 곳에 밑줄", "Underline Selection")
+        case .newNote: L("새 노트", "New Note")
+        case .draw: L("쪽에 그리기", "Draw on the Page")
+        case .sidebar: L("옆 목록", "Sidebar")
+        case .paperList: L("논문 목록", "Paper List")
+        case .reader: L("논문", "Paper")
+        case .inspector: L("정보 패널", "Inspector")
+        case .focus: L("논문에 집중", "Focus on the Paper")
+        case .floatingList: L("차례", "Table of Contents")
+        case .zoomIn: L("크게", "Zoom In")
+        case .zoomOut: L("작게", "Zoom Out")
+        case .actualSize: L("실제 크기", "Actual Size")
+        case .nextPage: L("다음 쪽", "Next Page")
+        case .previousPage: L("이전 쪽", "Previous Page")
+        case .nextPaper: L("다음 논문", "Next Paper")
+        case .previousPaper: L("이전 논문", "Previous Paper")
+        case .back: L("뒤로", "Back")
+        case .forward: L("앞으로", "Forward")
+        case .settings: L("설정", "Settings")
+        case .feedback: L("한마디 보내기", "Send Feedback")
         }
     }
 
@@ -244,6 +248,7 @@ public enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
         case .back: Shortcut("[", [.command, .option])
         case .forward: Shortcut("]", [.command, .option])
         case .settings: Shortcut(",")
+        case .feedback: Shortcut("/", [.command, .option])
         }
     }
 }

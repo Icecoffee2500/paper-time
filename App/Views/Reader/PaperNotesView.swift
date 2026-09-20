@@ -75,17 +75,17 @@ struct PaperNotesView: View {
                 Divider()
             }
             HStack(spacing: 8) {
-                Text(mine.count == 1 ? "1 note" : "\(mine.count) notes")
+                Text(mine.count == 1 ? L("노트 1개", "1 note") : L("노트 \(mine.count)개", "\(mine.count) notes"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 0)
                 Button {
                     openID = notes.create(paperID: paperID).id
                 } label: {
-                    Label("New Note", systemImage: "square.and.pencil")
+                    Label(L("새 노트", "New Note"), systemImage: "square.and.pencil")
                 }
                 .buttonStyle(.borderless)
-                .help("Write a new note about this paper")
+                .help(L("이 논문에 새 노트 쓰기", "Write a new note about this paper"))
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
@@ -93,9 +93,9 @@ struct PaperNotesView: View {
 
             if mine.isEmpty {
                 ContentUnavailableView {
-                    Label("No Notes Yet", systemImage: "note.text")
+                    Label(L("아직 노트가 없어요", "No Notes Yet"), systemImage: "note.text")
                 } description: {
-                    Text("One thought per note. Select a passage and press ⌘L to link to it.")
+                    Text(L("노트 하나에 생각 하나. 구절을 고르고 ⌘L을 누르면 그 자리에 이어져요.", "One thought per note. Select a passage and press ⌘L to link to it."))
                 }
             } else {
                 List {
@@ -106,7 +106,7 @@ struct PaperNotesView: View {
                             .onTapGesture { openID = note.id }
                             .contextMenu {
                                 Button(role: .destructive) { notes.delete(note.id) } label: {
-                                    Label("Delete", systemImage: "trash")
+                                    Label(L("지우기", "Delete"), systemImage: "trash")
                                 }
                             }
                     }
@@ -134,15 +134,15 @@ extension PaperNotesView {
     private var resonance: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Label("Resonance", systemImage: "waveform")
+                Label(L("공명", "Resonance"), systemImage: "waveform")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.tint)
-                Text("from other papers")
+                Text(L("다른 논문에서", "from other papers"))
                     .font(.caption)
                     .foregroundStyle(.tertiary)
                 Spacer(minLength: 0)
             }
-            .help("Notes written against other papers that share this page's rarer words — the shared words are shown in blue. Click one to open it; select a passage on the page and ❝ drops it into that note.")
+            .help(L("이 쪽의 드문 낱말을 함께 쓰는 다른 논문의 노트예요. 함께 쓰는 낱말은 파란색으로 보여요. 누르면 열려요. 쪽에서 구절을 고르고 ❝를 누르면 그 노트에 들어가요.", "Notes on other papers that share this page's rarer words. The shared words appear in blue. Click one to open it; select a passage and ❝ drops it into that note."))
             .padding(.horizontal, 16)
             .padding(.top, 10)
             .padding(.bottom, 2)
@@ -177,7 +177,7 @@ extension PaperNotesView {
                                 .font(.caption)
                         }
                         .buttonStyle(.borderless)
-                        .help("Drop the selected passage into this note")
+                        .help(L("고른 구절을 이 노트로", "Drop the selected passage into this note"))
                     }
                 }
                 if let source = source(of: echo.note) {
@@ -206,7 +206,7 @@ extension PaperNotesView {
     /// citation attached, which is what makes it a citation later.
     private var draftsStrip: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Label("Into a draft", systemImage: "doc.text")
+            Label(L("초안으로", "Into a draft"), systemImage: "doc.text")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.tint)
                 .padding(.horizontal, 16)
@@ -235,7 +235,7 @@ extension PaperNotesView {
 
     /// The paper a note was written against, named.
     private func source(of note: Zettel) -> String? {
-        guard let paperID = note.paperID else { return "A note of your own" }
+        guard let paperID = note.paperID else { return L("논문 없이 쓴 노트", "A note of your own") }
         return model.paper(paperID)?.meta.csl.fullTitle
     }
 

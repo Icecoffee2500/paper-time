@@ -11,6 +11,7 @@ import { icon } from '../icons.js'
 import { el, on, place, clear } from '../dom.js'
 import { canGoBack, canGoForward, store, type InspectorTab, type Pane } from '../state.js'
 import { platform } from '../bridge.js'
+import { L } from '../../shared/lang.js'
 
 export interface ToolbarActions {
   togglePane: (pane: Pane) => void
@@ -49,10 +50,10 @@ export function buildToolbar(actions: ToolbarActions): { node: HTMLElement; upda
     button(name, label, () => actions.togglePane(pane), { pressed: store.settings.panes[pane] })
 
   // ------------------------------------------------------------- leading
-  const sidebarButton = paneButton('sidebar', 'sidebar.left', 'Sidebar')
-  const listButton = paneButton('paperList', 'list.bullet.rectangle.portrait', 'Paper List')
-  const backButton = button('chevron.left', 'Back', actions.back)
-  const forwardButton = button('chevron.right', 'Forward', actions.forward)
+  const sidebarButton = paneButton('sidebar', 'sidebar.left', L('옆 목록', 'Sidebar'))
+  const listButton = paneButton('paperList', 'list.bullet.rectangle.portrait', L('논문 목록', 'Paper List'))
+  const backButton = button('chevron.left', L('뒤로', 'Back'), actions.back)
+  const forwardButton = button('chevron.right', L('앞으로', 'Forward'), actions.forward)
 
   node.append(
     el('div', { class: 'toolbar-group' }, [
@@ -66,17 +67,17 @@ export function buildToolbar(actions: ToolbarActions): { node: HTMLElement; upda
   )
 
   // ------------------------------------------------------------ trailing
-  const readerButton = paneButton('reader', 'text.page', 'Paper')
-  const inspectorButton = paneButton('inspector', 'sidebar.right', 'Inspector')
-  const moreButton = button('ellipsis', 'More', (event) =>
+  const readerButton = paneButton('reader', 'text.page', L('논문', 'Paper'))
+  const inspectorButton = paneButton('inspector', 'sidebar.right', L('정보 패널', 'Inspector'))
+  const moreButton = button('ellipsis', L('더 보기', 'More'), (event) =>
     actions.moreMenu(event.currentTarget as Element))
 
   const tabs = el('div', { class: 'segmented', role: 'tablist' })
   const tabButtons: Record<string, HTMLElement> = {}
   for (const [tab, label] of [
-    ['details', 'Details'],
-    ['marks', 'Marks'],
-    ['note', 'Note'],
+    ['details', L('정보', 'Details')],
+    ['marks', L('표시', 'Marks')],
+    ['note', L('노트', 'Note')],
   ] as const) {
     const b = el('button', { role: 'tab', text: label })
     on(b, 'click', () => actions.setInspectorTab(tab))
@@ -86,8 +87,8 @@ export function buildToolbar(actions: ToolbarActions): { node: HTMLElement; upda
 
   node.append(
     el('div', { class: 'toolbar-group' }, [
-      button('magnifyingglass', 'Search Everything', actions.search),
-      button('plus', 'Add PDFs', actions.addPapers),
+      button('magnifyingglass', L('전부 찾기', 'Search Everything'), actions.search),
+      button('plus', L('PDF 더하기', 'Add PDFs'), actions.addPapers),
       el('div', { class: 'toolbar-divider' }),
       readerButton,
       inspectorButton,
@@ -107,9 +108,9 @@ export function buildToolbar(actions: ToolbarActions): { node: HTMLElement; upda
       return b
     }
     windowButtons.append(
-      wb('window.minimize', 'Minimise', actions.minimize),
-      wb('window.maximize', 'Maximise', actions.toggleMaximize),
-      wb('window.close', 'Close', actions.close, 'close'),
+      wb('window.minimize', L('최소화', 'Minimise'), actions.minimize),
+      wb('window.maximize', L('최대화', 'Maximise'), actions.toggleMaximize),
+      wb('window.close', L('닫기', 'Close'), actions.close, 'close'),
     )
     node.append(windowButtons)
   }

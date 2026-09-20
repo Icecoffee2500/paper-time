@@ -22,12 +22,12 @@ struct DraftView: View {
                 Button {
                     exporting = true
                 } label: {
-                    Label("Export", systemImage: "square.and.arrow.up")
+                    Label(L("내보내기", "Export"), systemImage: "square.and.arrow.up")
                         .labelStyle(.iconOnly)
                 }
                 .buttonStyle(.borderless)
                 .keyboardShortcut("e", modifiers: [.command, .shift])
-                .help("Render the draft for the manuscript (Shift-Command-E)")
+                .help(L("초안을 원고로 렌더하기 (Shift-Command-E)", "Render the draft for the manuscript (Shift-Command-E)"))
                 .padding(.trailing, 60)
                 .padding(.top, 14)
             }
@@ -62,25 +62,25 @@ struct DraftExportSheet: View {
             HStack {
                 Text(draft.displayTitle).font(.headline)
                 Spacer()
-                Picker("Format", selection: $format) {
+                Picker(L("형식", "Format"), selection: $format) {
                     Text("LaTeX").tag(DraftRenderer.Format.latex)
                     Text("Markdown").tag(DraftRenderer.Format.markdown)
                 }
                 .pickerStyle(.segmented)
                 .frame(width: 200)
             }
-            Text(made.count == 1 ? "1 paper cited" : "\(made.count) papers cited")
+            Text(made.count == 1 ? L("인용한 논문 1편", "1 paper cited") : L("인용한 논문 \(made.count)편", "\(made.count) papers cited"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            pane("Text", made.text)
+            pane(L("본문", "Text"), made.text)
             pane("references.bib", made.bib)
             HStack {
                 Spacer()
-                Button("Copy .bib") { copy(made.bib) }
-                Button("Copy Text") { copy(made.text) }
-                Button("Copy Both") { copy(made.text + "\n\n" + made.bib) }
+                Button(L(".bib 복사", "Copy .bib")) { copy(made.bib) }
+                Button(L("본문 복사", "Copy Text")) { copy(made.text) }
+                Button(L("둘 다 복사", "Copy Both")) { copy(made.text + "\n\n" + made.bib) }
                     .buttonStyle(.borderedProminent)
-                Button("Done") { dismiss() }
+                Button(L("완료", "Done")) { dismiss() }
             }
         }
         .padding(20)

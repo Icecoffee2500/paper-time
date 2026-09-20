@@ -21,9 +21,9 @@ struct PaperInspector: View {
                 .id(paper.id)
         } else {
             ContentUnavailableView(
-                "No Paper Selected",
+                L("고른 논문이 없어요", "No Paper Selected"),
                 systemImage: "doc.text.magnifyingglass",
-                description: Text("Select a paper to see and edit its details.")
+                description: Text(L("논문을 고르면 서지를 보고 고칠 수 있어요.", "Choose a paper to see its details."))
             )
         }
     }
@@ -107,16 +107,16 @@ private struct PaperInspectorForm: View {
     private func confidenceBadge(for confidence: MetadataConfidence) -> some View {
         switch confidence {
         case .verified:
-            Label("Confirmed", systemImage: "checkmark.seal.fill")
+            Label(L("확인됨", "Confirmed"), systemImage: "checkmark.seal.fill")
                 .foregroundStyle(.green)
         case .needsReview:
-            Label("Needs Review", systemImage: "exclamationmark.triangle.fill")
+            Label(L("살펴볼 것", "Needs Review"), systemImage: "exclamationmark.triangle.fill")
                 .foregroundStyle(.orange)
         case .manual:
-            Label("Edited by You", systemImage: "person.fill.checkmark")
+            Label(L("직접 고침", "Edited by You"), systemImage: "person.fill.checkmark")
                 .foregroundStyle(.blue)
         case .unparsed:
-            Label("Unresolved", systemImage: "questionmark.circle")
+            Label(L("아직 모름", "Unresolved"), systemImage: "questionmark.circle")
                 .foregroundStyle(.secondary)
         }
     }
@@ -125,13 +125,13 @@ private struct PaperInspectorForm: View {
 
     @ViewBuilder
     private func candidatesSection(for paper: LoadedPaper) -> some View {
-        Section("Is this the right paper?") {
+        Section(L("이 논문이 맞나요?", "Is this the right paper?")) {
             ForEach(paper.meta.candidates) { candidate in
                 Button {
                     Task { await model.acceptCandidate(candidate, for: paperID) }
                 } label: {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(candidate.csl.fullTitle ?? "Untitled")
+                        Text(candidate.csl.fullTitle ?? L("제목 없음", "Untitled"))
                             .font(.headline)
                         if !candidate.csl.author.isEmpty {
                             Text(candidate.csl.author.map(\.displayName).joined(separator: ", "))
@@ -153,7 +153,7 @@ private struct PaperInspectorForm: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
-                        Text("\(Int((candidate.score * 100).rounded()))% match")
+                        Text(L("\(Int((candidate.score * 100).rounded()))% 일치", "\(Int((candidate.score * 100).rounded()))% match"))
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.blue)
                     }
@@ -169,21 +169,21 @@ private struct PaperInspectorForm: View {
     @ViewBuilder
     private func supplementsSection(for paper: LoadedPaper) -> some View {
         if let parent = model.parent(of: paperID) {
-            Section("Belongs To") {
+            Section(L("붙어 있는 논문", "Belongs To")) {
                 Button {
                     model.selectedPaperID = parent.id
                 } label: {
                     Label(parent.meta.displayTitle, systemImage: "doc.text")
                 }
                 .buttonStyle(.plain)
-                Button("Make a Paper of Its Own") {
+                Button(L("따로 논문으로 두기", "Make a Paper of Its Own")) {
                     Task { await model.detach(paperID) }
                 }
             }
         } else {
             let attachments = model.attachments(of: paperID)
             if !attachments.isEmpty {
-                Section("Supplementary Material") {
+                Section(L("보충 자료", "Supplementary Material")) {
                     ForEach(attachments) { attachment in
                         HStack {
                             Button {
@@ -196,7 +196,7 @@ private struct PaperInspectorForm: View {
                             }
                             .buttonStyle(.plain)
                             Spacer()
-                            Button("Detach") {
+                            Button(L("떼기", "Detach")) {
                                 Task { await model.detach(attachment.id) }
                             }
                             .buttonStyle(.borderless)
@@ -208,12 +208,12 @@ private struct PaperInspectorForm: View {
             if let suggested = model.suggestedParent(for: paperID) {
                 Section {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("This looks like supplementary material.")
+                        Text(L("보충 자료 같아 보여요.", "This looks like supplementary material."))
                             .font(.subheadline)
                         Text(suggested.meta.displayTitle)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
-                        Button("Attach to This Paper") {
+                        Button(L("이 논문에 붙이기", "Attach to This Paper")) {
                             Task { await model.attach(paperID, to: suggested.id) }
                         }
                         .buttonStyle(.borderedProminent)
@@ -228,21 +228,21 @@ private struct PaperInspectorForm: View {
     // MARK: - Editable fields
 
     private var detailsSection: some View {
-        Section("Details") {
-            TextField("Title", text: stringBinding(\.title))
-            TextField("Subtitle", text: stringBinding(\.subtitle))
-            TextField("Year", text: yearBinding)
+        Section(L("서지 정보", "Details")) {
+            TextField(L("제목", "Title"), text: stringBinding(\.title))
+            TextField(L("부제", "Subtitle"), text: stringBinding(\.subtitle))
+            TextField(L("해", "Year"), text: yearBinding)
                 #if os(iOS)
                 .keyboardType(.numberPad)
                 #endif
-            TextField("Venue", text: stringBinding(\.containerTitle))
-            TextField("Volume", text: stringBinding(\.volume))
-            TextField("Issue", text: stringBinding(\.issue))
-            TextField("Pages", text: stringBinding(\.page))
-            TextField("Publisher", text: stringBinding(\.publisher))
+            TextField(L("학술지·학회", "Venue"), text: stringBinding(\.containerTitle))
+            TextField(L("권", "Volume"), text: stringBinding(\.volume))
+            TextField(L("호", "Issue"), text: stringBinding(\.issue))
+            TextField(L("쪽", "Pages"), text: stringBinding(\.page))
+            TextField(L("출판사", "Publisher"), text: stringBinding(\.publisher))
             TextField("DOI", text: stringBinding(\.doi))
             TextField("URL", text: stringBinding(\.url))
-            Picker("Type", selection: $draft.type) {
+            Picker(L("종류", "Type"), selection: $draft.type) {
                 ForEach(CSLType.allCases, id: \.self) { type in
                     Text(displayName(for: type)).tag(type)
                 }
@@ -253,14 +253,14 @@ private struct PaperInspectorForm: View {
     private var saveRevertSection: some View {
         Section {
             HStack {
-                Button("Revert") {
+                Button(L("되돌리기", "Revert")) {
                     if let paper { draft = paper.meta.csl }
                 }
                 .disabled(!isDirty)
 
                 Spacer()
 
-                Button("Save") {
+                Button(L("저장", "Save")) {
                     guard var meta = paper?.meta else { return }
                     meta.csl = draft
                     Task { await model.update(meta: meta, for: paperID) }
@@ -297,19 +297,19 @@ private struct PaperInspectorForm: View {
 
     private func displayName(for type: CSLType) -> String {
         switch type {
-        case .articleJournal: "Journal Article"
-        case .paperConference: "Conference Paper"
-        case .book: "Book"
-        case .chapter: "Book Chapter"
-        case .thesis: "Thesis"
-        case .report: "Report"
-        case .dataset: "Dataset"
-        case .software: "Software"
-        case .webpage: "Web Page"
-        case .patent: "Patent"
-        case .speech: "Speech"
-        case .manuscript: "Preprint / Manuscript"
-        case .other: "Other"
+        case .articleJournal: L("학술지 논문", "Journal Article")
+        case .paperConference: L("학회 논문", "Conference Paper")
+        case .book: L("책", "Book")
+        case .chapter: L("책의 장", "Book Chapter")
+        case .thesis: L("학위 논문", "Thesis")
+        case .report: L("보고서", "Report")
+        case .dataset: L("데이터셋", "Dataset")
+        case .software: L("소프트웨어", "Software")
+        case .webpage: L("웹 페이지", "Web Page")
+        case .patent: L("특허", "Patent")
+        case .speech: L("발표", "Speech")
+        case .manuscript: L("프리프린트 / 원고", "Preprint / Manuscript")
+        case .other: L("그 밖", "Other")
         }
     }
 
@@ -322,19 +322,19 @@ private struct PaperInspectorForm: View {
     /// sidebar — never showed here, and a change made here was written from a
     /// snapshot that had since gone stale.
     private var readingStateSection: some View {
-        Section("Reading") {
-            Picker("Status", selection: readingStatusBinding) {
+        Section(L("읽기", "Reading")) {
+            Picker(L("상태", "Status"), selection: readingStatusBinding) {
                 ForEach(PaperState.ReadingStatus.allCases, id: \.self) { status in
                     Label(readingStatusLabel(status), systemImage: status.symbolName)
                         .tag(status)
                 }
             }
 
-            Toggle("Favorite", isOn: favoriteBinding)
+            Toggle(L("즐겨찾기", "Favorite"), isOn: favoriteBinding)
 
             ratingControl
 
-            TextField("Notes", text: $noteDraft, axis: .vertical)
+            TextField(L("메모", "Note"), text: $noteDraft, axis: .vertical)
                 .lineLimit(3 ... 8)
                 .onSubmit { saveNoteIfNeeded() }
         }
@@ -361,7 +361,7 @@ private struct PaperInspectorForm: View {
     private var ratingControl: some View {
         let rating = paper?.state.rating ?? 0
         return HStack {
-            Text("Rating")
+            Text(L("별점", "Rating"))
             Spacer()
             HStack(spacing: 2) {
                 ForEach(1 ... 5, id: \.self) { value in
@@ -375,7 +375,7 @@ private struct PaperInspectorForm: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(rating >= value ? .yellow : .secondary)
-                    .accessibilityLabel("\(value) star\(value == 1 ? "" : "s")")
+                    .accessibilityLabel(L("별 \(value)개", "\(value) star\(value == 1 ? "" : "s")"))
                     .accessibilityAddTraits(rating >= value ? [.isSelected] : [])
                 }
             }
@@ -384,9 +384,9 @@ private struct PaperInspectorForm: View {
 
     private func readingStatusLabel(_ status: PaperState.ReadingStatus) -> String {
         switch status {
-        case .unread: "Unread"
-        case .reading: "Reading"
-        case .read: "Read"
+        case .unread: L("안 읽음", "Unread")
+        case .reading: L("읽는 중", "Reading")
+        case .read: L("읽음", "Read")
         }
     }
 
@@ -401,11 +401,11 @@ private struct PaperInspectorForm: View {
 
     @ViewBuilder
     private func identifiersSection(for paper: LoadedPaper) -> some View {
-        Section("Identifiers") {
+        Section(L("식별자", "Identifiers")) {
             identifierRow(label: "DOI", value: paper.meta.identifiers.doi)
             identifierRow(label: "arXiv", value: paper.meta.identifiers.arxiv)
             identifierRow(label: "PMID", value: paper.meta.identifiers.pmid)
-            identifierRow(label: "BibTeX Key", value: paper.meta.bibKey)
+            identifierRow(label: L("BibTeX 키", "BibTeX Key"), value: paper.meta.bibKey)
         }
     }
 
@@ -424,7 +424,7 @@ private struct PaperInspectorForm: View {
                     Image(systemName: "doc.on.doc")
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Copy \(label)")
+                .accessibilityLabel(L("\(label) 복사", "Copy \(label)"))
             }
         }
     }
@@ -445,9 +445,12 @@ private struct PaperInspectorForm: View {
     private func provenanceFooter(for paper: LoadedPaper) -> some View {
         Section {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Source: \(humanized(paper.meta.provenance.source))")
+                Text(L("출처: \(humanized(paper.meta.provenance.source))", "Source: \(humanized(paper.meta.provenance.source))"))
                 Text(
-                    "Fetched \(paper.meta.provenance.fetchedAt.formatted(date: .abbreviated, time: .shortened))"
+                    L(
+                        "\(paper.meta.provenance.fetchedAt.formatted(date: .abbreviated, time: .shortened))에 가져옴",
+                        "Fetched \(paper.meta.provenance.fetchedAt.formatted(date: .abbreviated, time: .shortened))"
+                    )
                 )
             }
             .font(.caption)
@@ -457,17 +460,17 @@ private struct PaperInspectorForm: View {
 
     private func humanized(_ source: Provenance.Source) -> String {
         switch source {
-        case .doiContentNegotiation: "DOI Content Negotiation"
+        case .doiContentNegotiation: L("DOI 콘텐츠 협상", "DOI Content Negotiation")
         case .crossref: "Crossref"
         case .openAlex: "OpenAlex"
         case .arxiv: "arXiv"
         case .semanticScholar: "Semantic Scholar"
-        case .pdfDocumentInfo: "PDF Document Info"
-        case .onDeviceModel: "On-Device Model"
-        case .heuristic: "Heuristic Extraction"
-        case .importedBibTeX: "Imported BibTeX"
-        case .importedRIS: "Imported RIS"
-        case .manual: "Entered by You"
+        case .pdfDocumentInfo: L("PDF 문서 정보", "PDF Document Info")
+        case .onDeviceModel: L("온디바이스 모델", "On-Device Model")
+        case .heuristic: L("조판 규칙으로 읽음", "Heuristic Extraction")
+        case .importedBibTeX: L("BibTeX에서 들여옴", "Imported BibTeX")
+        case .importedRIS: L("RIS에서 들여옴", "Imported RIS")
+        case .manual: L("직접 적음", "Entered by You")
         }
     }
 }

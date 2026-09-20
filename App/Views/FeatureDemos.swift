@@ -51,6 +51,9 @@ struct FeatureDemoView: View {
             case .penTools: PenToolsDemo(scale: scale)
             case .sketch: SketchDemo(scale: scale)
             case .crossPlatform: CrossPlatformDemo(scale: scale)
+            case .feedback: FeedbackDemo(scale: scale)
+            case .together: TogetherDemo(scale: scale)
+            case .twoLanguages: TwoLanguagesDemo(scale: scale)
             }
         }
         .padding(scale.pad)
@@ -3143,5 +3146,196 @@ private struct Scribble: Shape {
             x = next
         }
         return path
+    }
+}
+
+
+// MARK: - Sending a word back
+
+/// The report sheet in miniature, with the thing that makes it different put
+/// where it can be seen: the picture is already there, and the public row it
+/// becomes is shown before the send rather than after.
+private struct FeedbackDemo: View {
+    let scale: DemoScale
+    @State private var marked = false
+    @State private var sent = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: scale.gap) {
+            Text(L("⌥⌘/ 한 번이면 이만큼이 이미 채워져 있어요.",
+                   "One press of ⌥⌘/ and this much is already filled in."))
+                .font(scale.small)
+                .foregroundStyle(.secondary)
+
+            // The shot, already taken, with a mark landing on it.
+            ZStack(alignment: .topLeading) {
+                RoundedRectangle(cornerRadius: scale.corner, style: .continuous)
+                    .fill(.quaternary.opacity(0.45))
+                HStack(spacing: 3) {
+                    RoundedRectangle(cornerRadius: 2).fill(.quaternary.opacity(0.7))
+                        .frame(width: scale.isFull ? 44 : 24)
+                    VStack(spacing: 3) {
+                        ForEach(0..<4, id: \.self) { _ in
+                            RoundedRectangle(cornerRadius: 1.5).fill(.quaternary.opacity(0.7))
+                                .frame(height: scale.isFull ? 7 : 4)
+                        }
+                    }
+                }
+                .padding(5)
+
+                if marked {
+                    RoundedRectangle(cornerRadius: 3)
+                        .strokeBorder(.red, lineWidth: 1.5)
+                        .frame(width: scale.isFull ? 92 : 52, height: scale.isFull ? 26 : 15)
+                        .offset(x: scale.isFull ? 56 : 30, y: scale.isFull ? 20 : 11)
+                        .transition(.opacity)
+                }
+            }
+            .frame(height: scale.isFull ? 92 : 52)
+
+            Button(marked ? L("표시했어요", "Marked") : L("여기가 문제예요", "Mark the problem")) {
+                withAnimation(.snappy) { marked = true }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(marked)
+
+            // The row it becomes, before it becomes it.
+            VStack(alignment: .leading, spacing: 4) {
+                Text(sent ? L("목록에 올라갔어요", "It's on the list")
+                          : L("보내면 이렇게 올라가요", "This is the row it becomes"))
+                    .font(scale.small)
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    Text(sent ? "✓" : "○")
+                        .foregroundStyle(sent ? AnyShapeStyle(.green) : AnyShapeStyle(.tertiary))
+                    Text(L("표가 있는 쪽에서 스크롤이 멈춰요", "Scrolling stalls on pages with tables"))
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text(sent ? L("보고 있어요", "in hand") : L("기다리는 중", "open"))
+                        .font(scale.small)
+                        .foregroundStyle(.secondary)
+                }
+                .font(scale.body)
+                .padding(7)
+                .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: scale.corner))
+            }
+
+            Button(sent ? L("고마워요", "Thank you") : L("보내기", "Send")) {
+                withAnimation(.snappy) { sent = true }
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .disabled(!marked || sent)
+        }
+    }
+}
+
+/// The list on the download page. The check is not a picture of a check: it is
+/// the issue being closed, read live from GitHub.
+private struct TogetherDemo: View {
+    let scale: DemoScale
+    @State private var fixedCount = 2
+
+    private struct Row: Identifiable {
+        let id = UUID()
+        let title: String
+        let who: String
+        var done: Bool
+    }
+
+    @State private var rows: [Row] = [
+        Row(title: L("표가 있는 쪽에서 앱이 닫혔어요", "The app quit on pages with tables"), who: "@hyun", done: true),
+        Row(title: L("⌘L이 쪽수를 빼먹었어요", "⌘L dropped the page number"), who: L("김연구", "Sam"), done: true),
+        Row(title: L("주석 색을 더 늘려주세요", "More annotation colours, please"), who: L("익명", "anonymous"), done: false),
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: scale.gap) {
+            HStack(spacing: scale.isFull ? 22 : 14) {
+                tally("\(rows.count)", L("제보", "reported"))
+                tally("\(rows.filter(\.done).count)", L("고쳤어요", "fixed"))
+                tally("\(rows.filter { !$0.done }.count)", L("보고 있어요", "in hand"))
+            }
+
+            VStack(spacing: 1) {
+                ForEach($rows) { $row in
+                    HStack(spacing: 8) {
+                        Text(row.done ? "✓" : "○")
+                            .foregroundStyle(row.done ? AnyShapeStyle(.green) : AnyShapeStyle(.tertiary))
+                        Text(row.title).lineLimit(1)
+                        Spacer(minLength: 4)
+                        Text("— \(row.who)")
+                            .font(scale.small)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .font(scale.body)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .background(.quaternary.opacity(0.35))
+                    .contentShape(Rectangle())
+                    .onTapGesture { withAnimation(.snappy) { row.done.toggle() } }
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: scale.corner, style: .continuous))
+
+            Text(L("눌러서 고쳐진 셈 쳐 보세요 — 실제로는 GitHub에서 그 항목이 닫히면 체크가 돼요.",
+                   "Tap one to mark it done — in the real list, the check is the issue being closed on GitHub."))
+                .font(scale.small)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func tally(_ number: String, _ caption: String) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(number).font(scale.isFull ? .title2.weight(.semibold) : .headline)
+            Text(caption).font(scale.small).foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// The same window in the two languages it speaks. Not a translation table —
+/// the point is that neither side reads like a translation of the other.
+private struct TwoLanguagesDemo: View {
+    let scale: DemoScale
+    @State private var korean = Language.prefersKorean
+
+    private var rows: [(String, String)] {
+        [
+            ("논문 더하기", "Add Papers"),
+            ("아직 논문이 없어요", "No papers yet"),
+            ("표시는 PDF 안에 남아요", "Marks live in the PDF"),
+            ("전부 찾기", "Search Everything"),
+        ]
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: scale.gap) {
+            Picker("", selection: $korean) {
+                Text("한국어").tag(true)
+                Text("English").tag(false)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(maxWidth: scale.isFull ? 220 : 160)
+
+            VStack(alignment: .leading, spacing: 5) {
+                ForEach(rows, id: \.0) { pair in
+                    Text(korean ? pair.0 : pair.1)
+                        .font(scale.body)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: scale.corner))
+                }
+            }
+            .animation(.snappy, value: korean)
+
+            Text(L("시스템 언어를 따라가고, 설정에서 직접 고를 수도 있어요.",
+                   "It follows the system, and you can pick one in Settings."))
+                .font(scale.small)
+                .foregroundStyle(.secondary)
+        }
     }
 }

@@ -26,8 +26,8 @@ struct SelectionMarkupBar: View {
                         )
                 }
                 .buttonStyle(.plain)
-                .help("Highlight \(color.displayName)")
-                .accessibilityLabel("Highlight \(color.displayName)")
+                .help(L("\(color.displayName) 형광펜", "Highlight \(color.displayName)"))
+                .accessibilityLabel(L("\(color.displayName) 형광펜", "Highlight \(color.displayName)"))
             }
 
             Divider().frame(height: 18)
@@ -38,8 +38,8 @@ struct SelectionMarkupBar: View {
                 Image(systemName: "underline")
             }
             .buttonStyle(.plain)
-            .help("Underline")
-            .accessibilityLabel("Underline")
+            .help(L("밑줄", "Underline"))
+            .accessibilityLabel(L("밑줄", "Underline"))
 
             Button {
                 onMark(.strikethrough, .yellow)
@@ -47,8 +47,8 @@ struct SelectionMarkupBar: View {
                 Image(systemName: "strikethrough")
             }
             .buttonStyle(.plain)
-            .help("Strikethrough")
-            .accessibilityLabel("Strikethrough")
+            .help(L("취소선", "Strikethrough"))
+            .accessibilityLabel(L("취소선", "Strikethrough"))
 
             Divider().frame(height: 18)
 
@@ -56,15 +56,15 @@ struct SelectionMarkupBar: View {
                 Image(systemName: "note.text.badge.plus")
             }
             .buttonStyle(.plain)
-            .help("Add a note about this passage")
-            .accessibilityLabel("Add Note")
+            .help(L("이 구절에 노트 달기", "Add a note about this passage"))
+            .accessibilityLabel(L("노트 더하기", "Add Note"))
 
             Button(action: onCopy) {
                 Image(systemName: "doc.on.doc")
             }
             .buttonStyle(.plain)
-            .help("Copy")
-            .accessibilityLabel("Copy")
+            .help(L("복사", "Copy"))
+            .accessibilityLabel(L("복사", "Copy"))
         }
         .font(.body)
         .padding(.horizontal, 12)
@@ -114,7 +114,7 @@ struct NoteComposer: View {
                     }
             }
 
-            TextField("Note", text: $text, axis: .vertical)
+            TextField(L("노트", "Note"), text: $text, axis: .vertical)
                 .textFieldStyle(.plain)
                 .lineLimit(2...6)
                 .focused($isFocused)
@@ -122,9 +122,9 @@ struct NoteComposer: View {
 
             HStack {
                 Spacer()
-                Button("Cancel", role: .cancel, action: onCancel)
+                Button(L("취소", "Cancel"), role: .cancel, action: onCancel)
                     .keyboardShortcut(.cancelAction)
-                Button("Save", action: onSave)
+                Button(L("저장", "Save"), action: onSave)
                     .keyboardShortcut(.defaultAction)
                     .buttonStyle(.borderedProminent)
                     .buttonBorderShape(.capsule)
@@ -167,7 +167,7 @@ struct PageTurnZone: View {
         .frame(width: 64)
         .onHover { isHovering = $0 }
         .animation(.snappy(duration: 0.18), value: isHovering)
-        .accessibilityLabel(edge == .leading ? "Previous Page" : "Next Page")
+        .accessibilityLabel(edge == .leading ? L("이전 쪽", "Previous Page") : L("다음 쪽", "Next Page"))
     }
 }
 

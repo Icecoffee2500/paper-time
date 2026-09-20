@@ -1083,3 +1083,102 @@ body[data-platform='darwin'] .window-buttons {
   width: 15px;
   height: 15px;
 }
+
+/* ═══════════════════════════ the report sheet ═════════════════════════════
+   The same window the Mac has, down to the order of the parts: the picture
+   first because it is already taken, then the one sentence, then who you are,
+   then the row this becomes on the public list — shown before the send, not
+   after it. */
+.sheet-backdrop {
+  position: fixed; inset: 0; z-index: 900;
+  background: rgba(0, 0, 0, 0.32);
+  display: grid; place-items: center;
+  -webkit-app-region: no-drag;
+}
+.fb-sheet {
+  width: 560px; max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 48px);
+  display: flex; flex-direction: column;
+  background: var(--panel); color: var(--text);
+  border-radius: 14px; box-shadow: 0 18px 60px rgba(0, 0, 0, 0.32);
+  overflow: hidden;
+}
+.fb-title {
+  margin: 0; padding: 20px 20px 12px;
+  font-size: 19px; font-weight: 650; letter-spacing: -0.01em; text-align: center;
+}
+.fb-kinds {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 3px;
+  margin: 0 20px 14px; padding: 3px; border-radius: 9px; background: var(--panel-soft);
+}
+.fb-kinds button {
+  border: 0; background: transparent; cursor: pointer; font: inherit; font-size: 13.5px;
+  padding: 6px 10px; border-radius: 6px; color: var(--text-secondary);
+  transition: background 0.14s, color 0.14s;
+}
+.fb-kinds button.on { background: var(--accent); color: #fff; }
+.fb-scroll {
+  flex: 1 1 auto; overflow-y: auto; padding: 0 20px 18px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.fb-row { display: flex; align-items: center; gap: 8px; }
+.fb-spacer { flex: 1 1 auto; }
+.fb-label { font-size: 13px; font-weight: 500; white-space: nowrap; }
+.fb-hint { margin: 0; font-size: 12px; line-height: 1.55; color: var(--text-tertiary); }
+.fb-tools { display: inline-flex; gap: 2px; }
+.fb-tools button, .fb-drop {
+  border: 0; background: transparent; cursor: pointer; font: inherit; font-size: 13px;
+  width: 26px; height: 22px; border-radius: 5px; color: var(--text-tertiary);
+}
+.fb-tools button.on { background: var(--accent-soft); color: var(--accent-text); }
+.fb-tools button:disabled { opacity: 0.35; cursor: default; }
+.fb-shot {
+  height: 168px; border-radius: 10px; overflow: hidden;
+  background: var(--panel-soft); border: 1px solid var(--separator-strong);
+}
+.fb-canvas { width: 100%; height: 100%; display: block; cursor: crosshair; touch-action: none; }
+.fb-body {
+  width: 100%; height: 82px; resize: none; padding: 9px 11px;
+  font: inherit; font-size: 14px; line-height: 1.6;
+  color: var(--text); background: var(--panel-soft);
+  border: 1px solid var(--separator-strong); border-radius: 8px;
+}
+.fb-body:focus, .fb-input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.fb-who { display: flex; align-items: center; gap: 8px; }
+.fb-input {
+  flex: 1 1 auto; min-width: 0; padding: 6px 9px;
+  font: inherit; font-size: 13.5px; color: var(--text);
+  background: var(--panel-soft);
+  border: 1px solid var(--separator-strong); border-radius: 7px;
+}
+.fb-who .fb-input:first-of-type { max-width: 150px; }
+.fb-preview {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 10px 12px; border-radius: 8px; background: var(--panel-soft);
+  font-size: 13.5px;
+}
+.fb-pv-mark { color: var(--text-tertiary); }
+.fb-pv-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fb-pv-title.dim { color: var(--text-tertiary); }
+.fb-pv-state, .fb-pv-who { font-size: 12px; color: var(--text-tertiary); white-space: nowrap; }
+.fb-foot {
+  display: flex; align-items: center; gap: 9px; padding: 13px 16px;
+  border-top: 1px solid var(--separator);
+}
+.fb-status { font-size: 13px; color: var(--text-secondary); }
+
+/* The sheet's own two buttons. The rest of this app has no buttons like
+   these — every other control is an icon in a bar — so they live here. */
+.fb-foot .btn {
+  border: 1px solid var(--separator-strong);
+  background: var(--panel); color: var(--text);
+  font: inherit; font-size: 13.5px; font-weight: 500;
+  padding: 6px 15px; border-radius: 7px; cursor: pointer;
+  transition: background 0.14s, filter 0.14s;
+}
+.fb-foot .btn:hover { background: var(--panel-soft); }
+.fb-foot .btn-primary {
+  background: var(--accent); border-color: transparent; color: #fff;
+}
+.fb-foot .btn-primary:hover { filter: brightness(1.07); }
+.fb-foot .btn-primary:disabled { opacity: 0.45; cursor: default; filter: none; }

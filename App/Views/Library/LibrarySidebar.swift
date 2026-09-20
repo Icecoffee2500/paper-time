@@ -108,8 +108,8 @@ struct LibrarySidebar: View {
         .opacity(dismissShown ? 1 : 0)
         .animation(.easeOut(duration: 0.12), value: dismissShown)
         .animation(.easeOut(duration: 0.1), value: hoveringDismiss)
-        .accessibilityLabel("Clear Search")
-        .help("Clear Search")
+        .accessibilityLabel(L("찾기 끝내기", "Clear Search"))
+        .help(L("찾기 끝내기", "Clear Search"))
     }
 
     private var list: some View {
@@ -121,7 +121,7 @@ struct LibrarySidebar: View {
                 Section {
                     Label {
                         VStack(alignment: .leading, spacing: 1) {
-                            Text("Search Results")
+                            Text(L("찾은 것", "Search Results"))
                             Text(model.searchQuery)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
@@ -144,39 +144,39 @@ struct LibrarySidebar: View {
                     .overlay(alignment: .topTrailing) { dismissSearch }
                     .onHover { hoveringSearch = $0 }
                     .contextMenu {
-                        Button("Clear Search") { model.clearSearchResults() }
+                        Button(L("찾기 끝내기", "Clear Search")) { model.clearSearchResults() }
                     }
                 }
             }
 
             Section {
-                Label("All Papers", systemImage: "tray.full")
+                Label(L("모든 논문", "All Papers"), systemImage: "tray.full")
                     .count(model.counts.all, current: model.scope == .all)
                     .scopeRow(.all, in: model)
-                Label("Unread", systemImage: "circle")
+                Label(L("안 읽음", "Unread"), systemImage: "circle")
                     .count(model.counts.unread, current: model.scope == .unread)
                     .scopeRow(.unread, in: model)
                     .dropTarget(in: model) { await model.setReadingStatus(.unread, for: $0) }
-                Label("Reading", systemImage: "circle.lefthalf.filled")
+                Label(L("읽는 중", "Reading"), systemImage: "circle.lefthalf.filled")
                     .count(model.counts.reading, current: model.scope == .reading)
                     .scopeRow(.reading, in: model)
                     .dropTarget(in: model) { await model.setReadingStatus(.reading, for: $0) }
-                Label("Read", systemImage: "checkmark.circle")
+                Label(L("읽음", "Read"), systemImage: "checkmark.circle")
                     .count(model.counts.read, current: model.scope == .read)
                     .scopeRow(.read, in: model)
                     .dropTarget(in: model) { await model.setReadingStatus(.read, for: $0) }
-                Label("Favorites", systemImage: "star")
+                Label(L("즐겨찾기", "Favorites"), systemImage: "star")
                     .count(model.counts.favorites, current: model.scope == .favorites)
                     .scopeRow(.favorites, in: model)
                     .dropTarget(in: model) { await model.setFavorite(true, for: $0) }
-                Label("Needs Review", systemImage: "exclamationmark.triangle")
+                Label(L("살펴볼 것", "Needs Review"), systemImage: "exclamationmark.triangle")
                     .count(model.counts.needsReview, current: model.scope == .needsReview)
                     .scopeRow(.needsReview, in: model)
             } header: {
                 // The folder's name, small, where a headline used to sit
                 // over the whole list saying the same thing louder.
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text("Library")
+                    Text(L("라이브러리", "Library"))
                     // The folder as a chip — the same shape a passage from a
                     // paper takes in a note, and for the same reason: it
                     // names where something came from. Plain accent type
@@ -199,7 +199,7 @@ struct LibrarySidebar: View {
                             .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
-                    .help("Change the library folder")
+                    .help(L("라이브러리 폴더 바꾸기", "Change the library folder"))
                 }
                 // Lines the first row up with the first paper across the way:
                 // the list column's header is taller than this one, and the
@@ -207,13 +207,13 @@ struct LibrarySidebar: View {
                 .padding(.bottom, 13)
             }
 
-            Section("Slip-Box") {
-                Label("Notes", systemImage: "tray.full")
+            Section(L("슬립박스", "Slip-Box")) {
+                Label(L("노트", "Notes"), systemImage: "tray.full")
                     .count(model.notes.notes.count, current: model.scope == .notes)
                     .scopeRow(.notes, in: model)
             }
 
-            Section("Collections") {
+            Section(L("컬렉션", "Collections")) {
                 ForEach(model.collections.collections) { collection in
                     Label(collection.name, systemImage: symbolName(for: collection))
                         .count(model.counts.collections[collection.id] ?? 0, current: model.scope == .collection(collection.id))
@@ -226,7 +226,7 @@ struct LibrarySidebar: View {
                     newCollectionName = ""
                     isPresentingNewCollection = true
                 } label: {
-                    Label("New Collection…", systemImage: "plus.circle")
+                    Label(L("새 컬렉션…", "New Collection…"), systemImage: "plus.circle")
                         .foregroundStyle(.secondary)
                         .contentShape(.rect)
                 }
@@ -235,7 +235,7 @@ struct LibrarySidebar: View {
                 .buttonStyle(.plain)
             }
 
-            Section("Tags") {
+            Section(L("태그", "Tags")) {
                 ForEach(model.manifest.tags) { tag in
                     Label {
                         Text(tag.name)
@@ -255,7 +255,7 @@ struct LibrarySidebar: View {
 
             Section {
                 Label {
-                    Text("Graph")
+                    Text(L("그래프", "Graph"))
                 } icon: {
                     GraphSymbol(colored: model.scope == .graph)
                 }
@@ -290,14 +290,14 @@ struct LibrarySidebar: View {
     private var authorsSection: some View {
         let ranking = model.authorRanking
         if !ranking.isEmpty {
-            Section("Authors", isExpanded: $authorsAreShown) {
+            Section(L("저자", "Authors"), isExpanded: $authorsAreShown) {
                 ForEach(showsAllAuthors ? ranking : Array(ranking.prefix(10))) { author in
                     Label(author.name, systemImage: "person")
                         .count(author.count, current: model.scope == .author(author.key))
                         .scopeRow(.author(author.key), in: model)
                 }
                 if ranking.count > 10 {
-                    Button(showsAllAuthors ? "Show Fewer" : "Show All \(ranking.count)") {
+                    Button(showsAllAuthors ? L("줄이기", "Show Fewer") : L("\(ranking.count)명 모두 보기", "Show All \(ranking.count)")) {
                         withAnimation(.snappy(duration: 0.2)) { showsAllAuthors.toggle() }
                     }
                     .buttonStyle(.plain)
@@ -323,19 +323,19 @@ private struct NewCollectionSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                TextField("Collection Name", text: $name)
+                TextField(L("컬렉션 이름", "Collection Name"), text: $name)
             }
             .formStyle(.grouped)
-            .navigationTitle("New Collection")
+            .navigationTitle(L("새 컬렉션", "New Collection"))
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button(L("취소", "Cancel")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Create") {
+                    Button(L("만들기", "Create")) {
                         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
                         guard !trimmed.isEmpty else { return }
                         onCreate(trimmed)

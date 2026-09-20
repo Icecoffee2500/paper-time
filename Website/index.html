@@ -22,7 +22,18 @@
 <meta name="twitter:image" content="https://icecoffee2500.github.io/paper-time/img/preview.jpg">
 <link rel="icon" type="image/png" sizes="32x32" href="img/icon-32.png">
 <link rel="apple-touch-icon" sizes="180x180" href="img/icon-180.png">
-<link rel="stylesheet" href="style.css?v=0.5.0">
+<!-- The language, decided before anything paints. A Korean desktop gets
+     Korean; everything else gets English. A reader who says otherwise is
+     remembered. Inline and first so there is no flash of the wrong language. -->
+<script>
+(function () {
+  var stored = null;
+  try { stored = localStorage.getItem("papertime.lang"); } catch (e) {}
+  var lang = stored || ((navigator.language || "en").toLowerCase().indexOf("ko") === 0 ? "ko" : "en");
+  document.documentElement.lang = lang;
+})();
+</script>
+<link rel="stylesheet" href="style.css?v=0.7.0">
 </head>
 <body>
 
@@ -30,97 +41,228 @@
 <div class="screen">
 
   <header class="hero">
-    <div>
+    <div class="hero-head">
       <h1 class="wordmark">Paper <span class="t">Time</span></h1>
-      <p class="lede">논문에만 집중할 수 있게.<br>
-        나머지는 <b class="mark">앱이 알아서</b> 한다.</p>
+      <!-- Written out rather than an icon: a globe means "settings I have to
+           go find", and this is one tap. -->
+      <div class="lang" id="lang" role="group" aria-label="Language"></div>
     </div>
+
+    <!-- The demonstration, before any claim about it. Somebody who has ever
+         copied a formula out of a PDF understands this in five seconds, and
+         no sentence does that. -->
+    <div class="hero-demo" id="hero-demo"></div>
+
+    <p class="lede" data-l="ko">수식이 든 문단을, <b class="mark">수식인 채로</b>.</p>
+    <p class="lede" data-l="en">Copy a paragraph with mathematics in it. <b class="mark">The mathematics survives.</b></p>
 
     <div class="actions">
       <a class="btn btn-primary" id="get" href="https://github.com/Icecoffee2500/paper-time/releases">
         <span>
-          <span class="label">받기</span><br>
+          <span class="label" data-l="ko">받기</span><span class="label" data-l="en">Download</span><br>
           <span class="sub">macOS</span>
         </span>
       </a>
-      <button class="btn btn-ghost" id="how">설치하는 법</button>
-      <button class="btn btn-ghost" id="older">이전 버전</button>
+      <a class="btn btn-ghost" id="watch" href="film.html"><span data-l="ko">영상 보기</span><span data-l="en">Watch</span></a>
+      <button class="btn btn-ghost" id="how"><span data-l="ko">설치하는 법</span><span data-l="en">How to install</span></button>
+      <button class="btn btn-ghost" id="older"><span data-l="ko">이전 버전</span><span data-l="en">Older versions</span></button>
       <!-- Which desktop the button points at. Set from the visitor's own to
            begin with, because almost nobody is downloading for a machine they
            are not sitting at — but switchable, because somebody is. -->
-      <div class="picker" id="picker" role="group" aria-label="운영체제"></div>
+      <div class="picker" id="picker" role="group" aria-label="OS"></div>
       <p class="hint variants" id="variants"></p>
       <p class="hint tally" id="tally"></p>
     </div>
   </header>
+</div>
 
+<!-- ───────────────── the other three quarters of the loop ──────────────── -->
+<section class="pillars">
+  <article class="pillar">
+    <div class="pillar-demo" id="pillar-ink"></div>
+    <h3 data-l="ko">손 가는 대로 그어도, 자국은 파일에 남아요</h3>
+    <h3 data-l="en">Draw anything. The marks stay in the file</h3>
+    <p data-l="ko">하이라이트도 밑줄도 손글씨도 굽은 화살표도 평범한 PDF 주석으로 들어가요.
+      Preview에서도, Zotero에서도, 지도교수의 아이패드에서도 보여요.
+      앱을 지워도 자국은 남아 있어요.</p>
+    <p data-l="en">Highlights, underlines, handwriting, bent arrows — all of it goes into the PDF
+      as ordinary annotations. They show up in Preview, in Zotero, on your advisor's iPad.
+      Delete the app; the marks stay.</p>
+  </article>
+
+  <article class="pillar">
+    <div class="pillar-demo" id="pillar-quote"></div>
+    <h3 data-l="ko">구절이 주소를 들고 노트로 가요</h3>
+    <h3 data-l="en">A passage arrives with its address</h3>
+    <p data-l="ko">고른 문장을 노트로 보내면 세로줄이 선 인용이 되고, 끝에 쪽수가 붙어요.
+      그 쪽수를 누르면 논문의 그 줄로 돌아가요. 수식이 든 문장은 수식째로 가요.</p>
+    <p data-l="en">Send a sentence to a note. It lands as a quotation, ruled down the side,
+      page number at the end. Click the number and the paper opens at that line.
+      Formulas travel as formulas.</p>
+  </article>
+
+  <article class="pillar">
+    <div class="pillar-demo" id="pillar-links"></div>
+    <h3 data-l="ko">노트끼리 부르다 보면, 어느 날 초고가 돼요</h3>
+    <h3 data-l="en">Notes call each other. One day they are a draft</h3>
+    <p data-l="ko">노트 안에서 다른 노트를 이름으로 불러요. 읽은 것을 쌓아 두지 않고 엮어요.
+      초안도 노트 하나예요. ⇧⌘E를 누르면 인용이 <code>\cite{키}</code>가 되고,
+      인용한 논문만 담은 <code>.bib</code>이 같이 나와요.</p>
+    <p data-l="en">Call another note by name from inside a note. What you read gets woven, not
+      stacked. A draft is another note: press ⇧⌘E and its quotations become <code>\cite{key}</code>,
+      beside a <code>.bib</code> holding only the papers you cited.</p>
+  </article>
+</section>
+
+<!-- ─────────────────────── the loop, named at last ──────────────────────── -->
+<section class="loop">
+  <p class="loop-line" data-l="ko">논문을 읽는 곳과 글을 쓰는 곳 사이에,<br><b class="mark">아무것도 없다.</b></p>
+  <p class="loop-line" data-l="en">Between where you read a paper and where you write,<br><b class="mark">nothing at all.</b></p>
+
+  <ol class="loop-steps">
+    <li><span class="loop-n">1</span><b data-l="ko">읽기</b><b data-l="en">Read</b>
+      <span data-l="ko">여백을 자르고, 책처럼 펴고, 본문 한 줄까지 찾아요.</span>
+      <span data-l="en">Margins trimmed, pages spread like a book, every line searchable.</span></li>
+    <li><span class="loop-n">2</span><b data-l="ko">표시하기</b><b data-l="en">Mark</b>
+      <span data-l="ko">그은 것이 앱이 아니라 파일에 남아요.</span>
+      <span data-l="en">What you draw lands in the file, not in an app's database.</span></li>
+    <li><span class="loop-n">3</span><b data-l="ko">옮겨 적기</b><b data-l="en">Carry over</b>
+      <span data-l="ko">구절은 쪽수째로, 수식은 LaTeX으로.</span>
+      <span data-l="en">Passages with their page numbers, formulas as LaTeX.</span></li>
+    <li><span class="loop-n">4</span><b data-l="ko">잇기</b><b data-l="en">Connect</b>
+      <span data-l="ko">노트가 노트를 부르고, 그게 글이 돼요.</span>
+      <span data-l="en">Notes link to notes, and the links become writing.</span></li>
+  </ol>
+
+  <p class="loop-claim" data-l="ko">다른 도구들도 이 고리의 한 칸씩은 아주 잘해요.
+    그런데 칸과 칸 사이마다 내보내기와 붙여넣기가 있어요.</p>
+  <p class="loop-claim" data-l="en">Other tools do one link of this chain very well.
+    Between every two links sits an export and a paste.</p>
+</section>
+
+<!-- ───────────────────────── you can keep Zotero ────────────────────────── -->
+<section class="coexist">
+  <h2 data-l="ko">Zotero를 버리지 않아도 된다</h2>
+  <h2 data-l="en">You don't have to leave Zotero</h2>
+  <p data-l="ko">라이브러리가 그냥 폴더라서, Zotero의 <code>storage</code> 폴더 <b>옆에</b> 앉아도 돼요.
+    모으고 인용 관리하는 자리는 계속 Zotero, <b class="mark">읽고 쓰는 자리만</b> Paper Time이면 돼요.
+    옮길 것도, 버릴 것도 없어요.</p>
+  <p data-l="en">A library is one folder, so it can sit <b>beside</b> Zotero's <code>storage</code> folder.
+    Collect and manage citations in Zotero; let Paper Time be <b class="mark">the place you read and write</b>, and nothing else.
+    Nothing to migrate, nothing to abandon.</p>
+</section>
+
+<div class="screen screen-stage">
   <main class="stage">
     <div class="viewport">
-      <button class="arrow prev" id="prev" aria-label="이전 기능">‹</button>
+      <button class="arrow prev" id="prev" aria-label="Previous">‹</button>
       <div class="track" id="track"></div>
-      <button class="arrow next" id="next" aria-label="다음 기능">›</button>
+      <button class="arrow next" id="next" aria-label="Next">›</button>
     </div>
-    <nav class="rail" id="rail" aria-label="기능 목록"></nav>
+    <nav class="rail" id="rail" aria-label="Features"></nav>
   </main>
-
 </div>
 
 <!-- ───────────────────────────── why it exists ──────────────────────────── -->
 <section class="why">
-  <p class="big">논문을 읽는 시간의 절반은<br>논문을 읽는 데 쓰이지 않는다.</p>
+  <p class="big" data-l="ko">논문을 읽는 시간의 절반은<br>논문을 읽는 데 가지 않는다.</p>
+  <p class="big" data-l="en">Half of reading a paper<br>is not reading the paper.</p>
 
-  <p>파일 이름을 고치고, 어느 폴더에 넣었는지 기억해 내고, 표시해 둔 문장을 다시 찾고,
-    인용 키를 손으로 옮기고, 수식을 복사했다가 깨진 것을 다시 타이핑한다.
-    <b>그 모든 일이 이해와는 아무 상관이 없다.</b></p>
+  <p data-l="ko">파일 이름을 고치고, 어느 폴더에 넣었는지 떠올리고, 표시해 둔 문장을 다시 찾고,
+    인용 키를 손으로 옮기고, 수식을 복사했다가 깨진 걸 다시 쳐요.
+    <b>그 모든 일이 이해와는 아무 상관이 없어요.</b></p>
+  <p data-l="en">Renaming a file. Remembering which folder a paper went into. Finding that marked sentence
+    all over again. Carrying a citation key over by hand. Retyping a formula that broke on the way out.
+    <b>None of it has anything to do with understanding.</b></p>
 
-  <p>Paper Time은 그 일들을 대신 하기 위해 만들었다. 남은 시간에 하라는 것은 하나뿐이다 —
+  <p data-l="ko">Paper Time은 그 일들을 대신하려고 만들었어요. 남은 시간에 할 일은 하나예요 —
     <b class="mark">읽고, 이해하고, 그 이해를 남기는 것.</b> 표시는 문장 위에 남고,
-    문장은 주소를 가진 채 노트로 가고, 노트는 서로를 부르다가 어느 날 초고가 된다.</p>
+    문장은 주소를 들고 노트로 가고, 노트끼리 부르다 보면 어느 날 초고가 돼요.</p>
+  <p data-l="en">Paper Time does that work instead. What is left of the hour goes to one thing —
+    <b class="mark">read, understand, keep the understanding.</b> The marks stay on the sentence,
+    the sentence goes to a note with its address, and the notes call each other until one day they are a draft.</p>
 
   <div class="facts">
     <div class="fact">
-      <h3>파일이 진실</h3>
-      <p>라이브러리는 폴더 하나다. 논문은 평범한 PDF, 노트는 Markdown.
-        앱을 지워도 읽던 것은 그대로 남는다.</p>
+      <h3 data-l="ko">파일이 진실</h3>
+      <h3 data-l="en">The files are the truth</h3>
+      <p data-l="ko">라이브러리는 폴더 하나예요. 논문은 평범한 PDF, 노트는 Markdown이에요.
+        앱을 지워도 읽던 것은 그대로 있어요.</p>
+      <p data-l="en">A library is one folder. Papers are ordinary PDFs, notes are Markdown.
+        Delete the app; what you were reading is still there.</p>
     </div>
     <div class="fact">
-      <h3>표시는 PDF 안에</h3>
-      <p>하이라이트·밑줄·연필 자국이 PDF 주석으로 들어간다.
-        Preview에서도, Zotero에서도, 지도교수의 아이패드에서도 보인다.</p>
+      <h3 data-l="ko">표시는 PDF 안에</h3>
+      <h3 data-l="en">Marks live in the PDF</h3>
+      <p data-l="ko">하이라이트·밑줄·연필 자국이 PDF 주석으로 들어가요.
+        Preview에서도, Zotero에서도, 지도교수의 아이패드에서도 보여요.</p>
+      <p data-l="en">Highlights, underlines and pencil strokes go in as PDF annotations.
+        They show up in Preview, in Zotero, on your advisor's iPad.</p>
     </div>
     <div class="fact">
-      <h3>어느 데스크톱이든, 폴더 하나</h3>
-      <p>맥·윈도우·리눅스가 같은 폴더를 본다. 아이패드·아이폰도.
-        클라우드 폴더면 충분하고, 계정도 서버도 없다.</p>
+      <h3 data-l="ko">어느 데스크톱이든, 폴더 하나</h3>
+      <h3 data-l="en">One folder. Every desktop</h3>
+      <p data-l="ko">맥도 윈도우도 리눅스도 같은 폴더를 봐요. 아이패드와 아이폰도요.
+        클라우드 폴더 하나면 되고, 계정도 서버도 없어요.</p>
+      <p data-l="en">Mac, Windows and Linux look at the same folder. So do iPad and iPhone.
+        A cloud folder is enough; there is no account and no server.</p>
     </div>
     <div class="fact">
-      <h3>클라우드 LLM 없음</h3>
-      <p>온디바이스 모델만 쓴다. 읽고 있는 논문이 어디로도 올라가지 않는다.</p>
+      <h3 data-l="ko">클라우드 LLM 없음</h3>
+      <h3 data-l="en">No cloud LLM</h3>
+      <p data-l="ko">온디바이스 모델만 써요. 읽고 있는 논문은 어디로도 올라가지 않아요.</p>
+      <p data-l="en">On-device models only. Nothing you read is uploaded anywhere.</p>
     </div>
   </div>
 </section>
 
+<!-- ────────────────────── what readers asked for ───────────────────────── -->
+<section class="together" id="together">
+  <h2 data-l="ko">함께 만드는 중</h2>
+  <h2 data-l="en">Built together</h2>
+  <p class="sub" data-l="ko">이 목록은 쓰는 사람들이 보내온 거예요. 고치면 체크가 붙고,
+    누르면 GitHub의 그 자리로 가요. 지어낸 표가 아니라는 뜻이에요.</p>
+  <p class="sub" data-l="en">Readers sent in this list. A fix gets a check —
+    click it and GitHub opens at that spot. None of this is decoration.</p>
+
+  <div class="tally-row" id="together-tally"></div>
+  <div class="board" id="together-board"><p class="hint" data-l="ko">불러오는 중…</p><p class="hint" data-l="en">Loading…</p></div>
+
+  <div class="credits" id="credits"></div>
+
+  <p class="ask" data-l="ko">앱에서 <b class="key">⌥⌘/</b>를 눌러보세요. 화면은 이미 찍어뒀어요.
+    위에 바로 그려도 돼요. 이름을 적으면 이 목록에 그 이름으로 올라가요.</p>
+  <p class="ask" data-l="en">Press <b class="key">⌥⌘/</b> in the app. The screenshot is already here.
+    Draw on it. Leave a name and it appears on this list.</p>
+</section>
+
 <footer>
-  <span>Paper Time · 알파. 아직 만드는 중이고, 고장 나면 고친다.</span>
-  <span>소스: <a id="repo-link" href="https://github.com/Icecoffee2500/paper-time">Icecoffee2500/paper-time</a></span>
+  <span data-l="ko">Paper Time · 베타. 아직 만드는 중이고, 고장 나면 고쳐요.</span>
+  <span data-l="en">Paper Time · beta. Still being made. When something breaks, it gets fixed.</span>
+  <span><span data-l="ko">소스</span><span data-l="en">Source</span>: <a id="repo-link" href="https://github.com/Icecoffee2500/paper-time">Icecoffee2500/paper-time</a> · <a href="https://github.com/Icecoffee2500/paper-time/blob/main/LICENSE">MIT</a></span>
 </footer>
 
 <!-- ────────────────────────────── how to install ────────────────────────── -->
 <dialog id="how-dialog">
   <div class="sheet">
-    <button class="sheet-close" aria-label="닫기">✕</button>
-    <h2>설치하는 법</h2>
-    <div class="picker" id="how-picker" role="group" aria-label="운영체제"></div>
+    <button class="sheet-close" aria-label="Close">✕</button>
+    <h2 data-l="ko">설치하는 법</h2>
+    <h2 data-l="en">How to install</h2>
+    <div class="picker" id="how-picker" role="group" aria-label="OS"></div>
 
     <div class="how-panel" data-os="mac">
-    <p class="sub">세 걸음이고, 두 번째와 세 번째는 <b>처음 한 번만</b> 하면 된다.<br>
-      무료 개발자 계정으로 만든 앱이라 Apple의 공증(notarization)을 받지 않았다.</p>
+    <p class="sub" data-l="ko">세 걸음이에요. 두 번째와 세 번째는 <b>처음 한 번만</b> 하면 돼요.<br>
+      무료 개발자 계정으로 만든 앱이라 Apple의 공증(notarization)을 받지 않았어요.</p>
+    <p class="sub" data-l="en">Three steps. The second and third happen <b>only once, the first time</b>.<br>
+      The app comes from a free developer account, so Apple has not notarized it.</p>
 
     <div class="step">
       <div class="no">1</div>
       <div class="body">
-        <h3>DMG를 열고 Applications로 끌어 놓는다</h3>
-        <p>받은 파일을 두 번 누르면 이 창이 열린다. Paper Time을 Applications 위로 끌면 설치가 끝난다.</p>
+        <h3 data-l="ko">DMG를 열고 Applications로 끌어 놓기</h3>
+        <h3 data-l="en">Open the DMG and drag the app into Applications</h3>
+        <p data-l="ko">받은 파일을 두 번 누르면 이 창이 열려요. Paper Time을 Applications 위로 끌어다 놓으면 끝이에요.</p>
+        <p data-l="en">Double-click the file you downloaded and this window opens. Drag Paper Time onto Applications. Done.</p>
         <img src="img/install-1-dmg.jpg" alt="Paper Time 디스크 이미지 창 — 앱 아이콘과 Applications 폴더" loading="lazy">
       </div>
     </div>
@@ -128,9 +270,12 @@
     <div class="step">
       <div class="no">2</div>
       <div class="body">
-        <h3>처음 열면 macOS가 막는다 — 정상이다</h3>
-        <p>“Apple은 악성 코드가 없음을 확인할 수 없습니다”라고 나온다.
-          Apple에 돈을 내지 않은 앱은 전부 이렇게 나온다. <b>완료</b>를 누르고 3번으로 간다.</p>
+        <h3 data-l="ko">처음 열면 macOS가 막아요 — 원래 그래요</h3>
+        <h3 data-l="en">macOS blocks it the first time. That is normal</h3>
+        <p data-l="ko">“Apple은 악성 코드가 없음을 확인할 수 없습니다”라고 나와요.
+          Apple에 돈을 내지 않은 앱은 전부 이렇게 나와요. <b>완료</b>를 누르고 3번으로 가면 돼요.</p>
+        <p data-l="en">It says “Apple could not verify that it is free of malware.”
+          Every app whose maker has not paid Apple gets this. Click <b>Done</b>, then go to step 3.</p>
         <img class="shot-sm" src="img/install-2-blocked.jpg" alt="‘Paper Time’을 열지 않음 — macOS의 차단 알림" loading="lazy">
       </div>
     </div>
@@ -138,81 +283,118 @@
     <div class="step">
       <div class="no">3</div>
       <div class="body">
-        <h3>시스템 설정 → 개인정보 보호 및 보안 → <b>그래도 열기</b></h3>
-        <p>맨 아래 <b>보안</b> 항목에 방금 막힌 앱이 적혀 있다. 오른쪽 <b>그래도 열기</b>를 누르고,
-          이어서 나오는 창에서 한 번 더 <b>그래도 열기</b>를 누르면 끝이다.
-          다음부터는 평범하게 두 번 눌러 열린다.</p>
+        <h3 data-l="ko">시스템 설정 → 개인정보 보호 및 보안 → <b>그래도 열기</b></h3>
+        <h3 data-l="en">System Settings → Privacy &amp; Security → <b>Open Anyway</b></h3>
+        <p data-l="ko">맨 아래 <b>보안</b>에 방금 막힌 앱이 적혀 있어요. 오른쪽 <b>그래도 열기</b>를 누르고,
+          이어서 나오는 창에서 한 번 더 <b>그래도 열기</b>를 누르면 끝이에요.
+          다음부터는 평범하게 두 번 눌러서 열려요.</p>
+        <p data-l="en">Under <b>Security</b> at the bottom you will find the app that was blocked. Click <b>Open Anyway</b> on the right,
+          then <b>Open Anyway</b> once more in the window that follows.
+          From then on it opens with an ordinary double-click.</p>
         <img src="img/install-3-allow.jpg" alt="시스템 설정의 보안 항목 — Mac을 보호하기 위해 Paper Time을 차단했습니다, 그래도 열기 단추" loading="lazy">
         <img class="shot-sm" style="margin-top:10px" src="img/install-4-confirm.jpg" alt="‘Paper Time’을 열겠습니까? — 그래도 열기" loading="lazy">
       </div>
     </div>
 
-    <p class="hint" style="margin-top:16px">
-      macOS 14 Sonoma 이상 · Apple Silicon. 온디바이스 모델로 제목·저자를 읽는 것만 macOS 26이 필요하고, 그 아래에서는 조판 규칙으로 읽는다. 14를 위해 짓고 확인했지만 실제 Sonoma 맥에서 켜 본 것은 아직 없다 — 그 맥이 있으면 어땠는지 알려주면 고맙다. 아이패드·아이폰 앱은 아직 App Store에 없다 —
-      소스를 받아 Xcode에서 자기 기기로 직접 빌드하면 무료 계정으로도 쓸 수 있다.
+    <p class="hint" style="margin-top:16px" data-l="ko">
+      macOS 14 Sonoma 이상 · Apple Silicon. 온디바이스 모델로 제목과 저자를 읽는 것만 macOS 26이 필요하고, 그 아래에서는 조판 규칙으로 읽어요. 14에 맞춰 짓고 확인했지만, 진짜 Sonoma 맥에서 켜 본 적은 아직 없어요 — 그런 맥이 있으면 어땠는지 알려주면 고마워요. 아이패드·아이폰 앱은 아직 App Store에 없어요.
+      소스를 받아 Xcode에서 자기 기기로 직접 빌드하면 무료 계정으로도 쓸 수 있어요.
+    </p>
+    <p class="hint" style="margin-top:16px" data-l="en">
+      macOS 14 Sonoma or later · Apple Silicon. Only the on-device model that reads titles and authors needs macOS 26; below that, typesetting rules do the reading. Paper Time is built and checked for 14, though no one has launched it on a real Sonoma Mac yet — if you have one, say how it went. The iPad and iPhone apps are not on the App Store yet.
+      Download the source and build onto your own device from Xcode; a free account covers that.
     </p>
     </div><!-- /mac -->
 
     <div class="how-panel" data-os="windows" hidden>
-    <p class="sub">두 걸음이고, 두 번째는 <b>처음 한 번만</b> 하면 된다.<br>
-      서명 인증서를 사지 않은 앱이라 Windows가 한 번 묻는다.</p>
+    <p class="sub" data-l="ko">두 걸음이에요. 두 번째는 <b>처음 한 번만</b> 하면 돼요.<br>
+      서명 인증서를 사지 않은 앱이라 Windows가 한 번 물어요.</p>
+    <p class="sub" data-l="en">Two steps. The second happens <b>only once, the first time</b>.<br>
+      Nobody bought a signing certificate for this app, so Windows asks once.</p>
 
     <div class="step">
       <div class="no">1</div>
       <div class="body">
-        <h3>설치본을 받아 두 번 누른다</h3>
-        <p>관리자 권한은 필요 없다. 내 계정에만 깔린다.
-          설치를 못 하는 컴퓨터(회사 것이거나 공용이거나)라면 <b>압축본</b>을 받아 아무 폴더에나 풀면 된다 — USB에 넣어 다녀도 된다.</p>
+        <h3 data-l="ko">설치본을 받아서 두 번 누르기</h3>
+        <h3 data-l="en">Download the installer and double-click it</h3>
+        <p data-l="ko">관리자 권한은 필요 없어요. 내 계정에만 깔려요.
+          설치를 못 하는 컴퓨터(회사 것이거나 여럿이 같이 쓰거나)라면 <b>압축본</b>을 받아 아무 폴더에나 풀면 돼요. USB에 넣어 다녀도 돼요.</p>
+        <p data-l="en">No administrator rights; it installs for your account alone.
+          On a machine where you cannot install anything — work-owned, or shared — take the <b>zip</b> and unpack it into any folder. It runs from a USB stick.</p>
       </div>
     </div>
 
     <div class="step">
       <div class="no">2</div>
       <div class="body">
-        <h3>“Windows의 PC 보호” 파란 창 → <b>추가 정보</b> → <b>실행</b></h3>
-        <p>SmartScreen이 “이 앱은 알 수 없는 게시자가 만들었다”고 말하는 것이다.
-          서명 인증서는 해마다 수십만 원이고 이 프로젝트는 그걸 사지 않았다. 서명 없는 앱은 전부 이렇게 나온다.
-          <b>추가 정보</b>를 누르면 아래에 <b>실행</b>이 생긴다. 다음부터는 묻지 않는다.</p>
+        <h3 data-l="ko">“Windows의 PC 보호” 파란 창 → <b>추가 정보</b> → <b>실행</b></h3>
+        <h3 data-l="en">The blue “Windows protected your PC” screen → <b>More info</b> → <b>Run anyway</b></h3>
+        <p data-l="ko">SmartScreen이 “이 앱은 알 수 없는 게시자가 만들었다”고 말하는 거예요.
+          서명 인증서는 해마다 수십만 원인데, 이 프로젝트는 그걸 사지 않았어요. 서명 없는 앱은 전부 이렇게 나와요.
+          <b>추가 정보</b>를 누르면 아래에 <b>실행</b>이 생겨요. 다음부터는 묻지 않아요.</p>
+        <p data-l="en">SmartScreen is saying the app comes from an unknown publisher.
+          A signing certificate costs a few hundred dollars a year, and this project has not bought one. Every unsigned app gets this screen.
+          Click <b>More info</b> and <b>Run anyway</b> appears underneath. Windows does not ask again.</p>
       </div>
     </div>
 
-    <p class="hint" style="margin-top:16px">
-      Windows 10 이상 · 64비트와 ARM 둘 다. 설정은 <code>%APPDATA%\Paper Time\</code>에, 앱은 <code>%LOCALAPPDATA%\Programs\paper-time\</code>에 들어간다.
-      <b>라이브러리 폴더는 네가 고른 그 자리 그대로다</b> — 지워도 논문은 건드리지 않는다.
-      Surface 펜이나 태블릿의 필압은 선 굵기로 들어가고, 마우스는 압력이 없으니 고른 선이 된다.
+    <p class="hint" style="margin-top:16px" data-l="ko">
+      Windows 10 이상 · 64비트와 ARM 둘 다 돼요. 설정은 <code>%APPDATA%\Paper Time\</code>에, 앱은 <code>%LOCALAPPDATA%\Programs\paper-time\</code>에 들어가요.
+      <b>라이브러리 폴더는 고른 자리 그대로예요</b> — 앱을 지워도 논문은 건드리지 않아요.
+      Surface 펜이나 태블릿의 필압은 선 굵기로 들어가고, 마우스는 압력이 없어서 고른 선이 나와요.
+    </p>
+    <p class="hint" style="margin-top:16px" data-l="en">
+      Windows 10 or later · both 64-bit and ARM. Settings go in <code>%APPDATA%\Paper Time\</code>, the app in <code>%LOCALAPPDATA%\Programs\paper-time\</code>.
+      <b>The library folder stays exactly where you put it</b> — uninstalling does not touch your papers.
+      Pressure from a Surface pen or a tablet goes into the stroke width; a mouse has no pressure, so its lines come out even.
     </p>
     </div><!-- /windows -->
 
     <div class="how-panel" data-os="linux" hidden>
-    <p class="sub">AppImage면 어느 배포판에서나 한 걸음이다. 설치라는 게 없다.</p>
+    <p class="sub" data-l="ko">AppImage면 어느 배포판에서나 한 걸음이에요. 설치랄 게 없어요.</p>
+    <p class="sub" data-l="en">One step on any distribution, with the AppImage. Nothing to install.</p>
 
     <div class="step">
       <div class="no">1</div>
       <div class="body">
-        <h3>실행 권한을 주고 실행한다</h3>
-        <pre class="code">chmod +x 'Paper Time-0.5.0-x86_64.AppImage'
-./'Paper Time-0.5.0-x86_64.AppImage'</pre>
-        <p>메뉴에 넣고 싶으면 <a href="https://github.com/TheAssassin/AppImageLauncher" target="_blank" rel="noopener">AppImageLauncher</a>를 쓰거나,
-          <code>~/.local/bin</code>에 옮기고 <code>.desktop</code> 파일을 하나 쓰면 된다. 자세한 것은 저장소의 <code>Docs/Linux.md</code>에.</p>
+        <h3 data-l="ko">실행 권한을 주고 열기</h3>
+        <h3 data-l="en">Make it executable and run it</h3>
+        <pre class="code">chmod +x 'Paper Time-0.7.0-x86_64.AppImage'
+./'Paper Time-0.7.0-x86_64.AppImage'</pre>
+        <p data-l="ko">메뉴에 넣고 싶으면 <a href="https://github.com/TheAssassin/AppImageLauncher" target="_blank" rel="noopener">AppImageLauncher</a>를 쓰거나,
+          <code>~/.local/bin</code>으로 옮기고 <code>.desktop</code> 파일을 하나 쓰면 돼요. 자세한 건 저장소의 <code>Docs/Linux.md</code>에 있어요.</p>
+        <p data-l="en">To put it in your menu, use <a href="https://github.com/TheAssassin/AppImageLauncher" target="_blank" rel="noopener">AppImageLauncher</a>,
+          or move it to <code>~/.local/bin</code> and write a <code>.desktop</code> file. The details are in <code>Docs/Linux.md</code> in the repository.</p>
       </div>
     </div>
 
     <div class="step">
       <div class="no">2</div>
       <div class="body">
-        <h3>Wayland와 샌드박스 — 걸리면 이것 때문이다</h3>
-        <p>앱은 세션이 Wayland면 Wayland를 쓴다. XWayland로 가면 배율이 소수인 화면에서 창이 흐려지고,
-          그리기 앱에서는 더 나쁘게 <b>펜의 좌표가 어긋난다</b>. 컴포지터가 말썽이면 <code>--ozone-platform-hint=x11</code>로 되돌리면 된다.</p>
-        <p>tar.gz을 풀어 쓸 때만 나오는 <code>SUID sandbox helper</code> 오류는 <code>chrome-sandbox</code>에 권한을 한 번 주면 끝난다.
-          AppImage와 deb는 알아서 한다. <code>--no-sandbox</code>로 넘길 수도 있지만, 남이 쓴 파일을 여는 앱에서 그걸 끄는 것이 무엇을 뜻하는지는 알고 하는 게 좋다.</p>
+        <h3 data-l="ko">Wayland와 샌드박스 — 걸린다면 둘 중 하나예요</h3>
+        <h3 data-l="en">Wayland and the sandbox — if something trips you up, it is one of these two</h3>
+        <p data-l="ko">세션이 Wayland면 앱도 Wayland를 써요. XWayland로 가면 배율이 소수인 화면에서 창이 흐려지고,
+          그리기 앱에서는 더 나쁘게 <b>펜의 좌표가 어긋나요</b>. 컴포지터가 말썽이면 <code>--ozone-platform-hint=x11</code>로 되돌리면 돼요.</p>
+        <p data-l="en">The app uses Wayland when the session is Wayland. Under XWayland the window goes blurry on a display with a fractional scale,
+          and — worse, for a drawing app — <b>the pen's coordinates land in the wrong place</b>. If your compositor misbehaves, <code>--ozone-platform-hint=x11</code> switches it back.</p>
+        <p data-l="ko">tar.gz을 풀어 쓸 때만 나오는 <code>SUID sandbox helper</code> 오류는 <code>chrome-sandbox</code>에 권한을 한 번 주면 끝나요.
+          AppImage와 deb는 알아서 해요. <code>--no-sandbox</code>로 넘길 수도 있지만, 남이 쓴 파일을 여는 앱에서 그걸 끄는 게 무슨 뜻인지는 알고 하는 게 좋아요.</p>
+        <p data-l="en">The <code>SUID sandbox helper</code> error appears only when you run from the unpacked tar.gz; setting the permissions on <code>chrome-sandbox</code> once settles it.
+          The AppImage and the deb take care of this themselves. <code>--no-sandbox</code> gets past it too, but in an app that opens files other people wrote, know what turning that off means before you do.</p>
       </div>
     </div>
 
-    <p class="hint" style="margin-top:16px">
-      x86_64와 ARM64 둘 다. 설정은 <code>~/.config/Paper Time/</code>에 들어가고,
-      <b>라이브러리 폴더는 네가 고른 그 자리 그대로다</b>. 글꼴은 앱이 들고 다니니 배포판이 무엇을 깔았든 같아 보이고,
-      논문의 한글·일본어는 pdf.js가 들고 있는 문자 지도로 아무것도 안 깔고 나온다.
-      Wacom 같은 태블릿의 필압은 libinput을 거쳐 선 굵기로 들어간다.
+    <p class="hint" style="margin-top:16px" data-l="ko">
+      x86_64와 ARM64 둘 다 돼요. 설정은 <code>~/.config/Paper Time/</code>에 들어가고,
+      <b>라이브러리 폴더는 고른 자리 그대로예요</b>. 글꼴은 앱이 들고 다녀서 배포판이 무엇을 깔았든 같아 보이고,
+      논문의 한글·일본어는 pdf.js가 들고 있는 문자 지도로 아무것도 안 깔고 나와요.
+      Wacom 같은 태블릿의 필압은 libinput을 거쳐 선 굵기로 들어가요.
+    </p>
+    <p class="hint" style="margin-top:16px" data-l="en">
+      Both x86_64 and ARM64. Settings go in <code>~/.config/Paper Time/</code>, and
+      <b>the library folder stays exactly where you put it</b>. The app carries its own fonts, so it looks the same whatever your distribution installed,
+      and Korean and Japanese in papers render from the character maps pdf.js ships with — nothing to install.
+      Pressure from a Wacom or similar tablet reaches the stroke width through libinput.
     </p>
     </div><!-- /linux -->
   </div>
@@ -221,13 +403,15 @@
 <!-- ─────────────────────────────── versions ─────────────────────────────── -->
 <dialog id="versions-dialog">
   <div class="sheet">
-    <button class="sheet-close" aria-label="닫기">✕</button>
-    <h2>버전</h2>
-    <p class="sub">닫힌 버전마다 한 줄. 옛 버전도 계속 받을 수 있다.</p>
-    <div id="versions-list"><p class="hint">불러오는 중…</p></div>
+    <button class="sheet-close" aria-label="Close">✕</button>
+    <h2 data-l="ko">버전</h2>
+    <h2 data-l="en">Versions</h2>
+    <p class="sub" data-l="ko">닫힌 버전마다 한 줄이에요. 옛 버전도 계속 받을 수 있어요.</p>
+    <p class="sub" data-l="en">One line per closed version. The old ones are still there to download.</p>
+    <div id="versions-list"><p class="hint" data-l="ko">불러오는 중…</p><p class="hint" data-l="en">Loading…</p></div>
   </div>
 </dialog>
 
-<script src="demos.js?v=0.5.0"></script>
+<script src="demos.js?v=0.7.0"></script>
 </body>
 </html>
