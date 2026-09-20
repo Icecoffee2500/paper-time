@@ -20,13 +20,17 @@ const dist = path.join(root, 'dist')
 
 /** Targets that can honestly be built on this machine. */
 const TARGETS = {
-  win: { flag: '--win', targets: ['nsis', 'zip'], on: 'any' },
-  linux: { flag: '--linux', targets: ['AppImage', 'tar.gz'], on: 'any' },
+  // The architectures are named here rather than left to the configuration:
+  // electron-builder's CLI quietly narrows to the host's architecture, so on
+  // an Apple Silicon Mac a "linux build" is an arm64 build and the x86_64
+  // package everyone actually wants is silently missing.
+  win: { flag: '--win', targets: ['nsis', 'zip'], arch: ['--x64', '--arm64'], on: 'any' },
+  linux: { flag: '--linux', targets: ['AppImage', 'tar.gz'], arch: ['--x64', '--arm64'], on: 'any' },
   // `.deb` and `.rpm` go through fpm, which needs GNU `ar` and GNU `tar`.
   // On a Mac those are Apple's, and the package comes out empty. Build these
   // on Linux — or on a Mac with `brew install binutils gnu-tar` on PATH.
-  'linux-packages': { flag: '--linux', targets: ['deb', 'rpm'], on: 'linux' },
-  mac: { flag: '--mac', targets: ['dir'], on: 'darwin' },
+  'linux-packages': { flag: '--linux', targets: ['deb', 'rpm'], arch: ['--x64'], on: 'linux' },
+  mac: { flag: '--mac', targets: ['dir'], arch: ['--arm64'], on: 'darwin' },
 }
 
 const wanted = process.argv.slice(2)
@@ -53,7 +57,7 @@ for (const name of wanted) {
   console.log(`\n── ${name} ──`)
   execFileSync(
     'npx',
-    ['electron-builder', target.flag, ...target.targets, '--publish', 'never'],
+    ['electron-builder', target.flag, ...target.targets, ...(target.arch ?? []), '--publish', 'never'],
     { cwd: root, stdio: 'inherit' },
   )
 }
