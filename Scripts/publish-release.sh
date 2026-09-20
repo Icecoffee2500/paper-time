@@ -17,6 +17,9 @@ set -e
 
 TAG="$1"; [ -n "$TAG" ] || { echo "usage: $0 <tag> [note]"; exit 64; }
 NOTE="$2"
+# The same line in English. The page is read in two languages, so a note
+# that exists only in Korean is a Korean sentence in an English list.
+NOTE_EN="${3:-}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
@@ -68,10 +71,10 @@ fi
 
 # The page reads this and nothing else: one entry per version, newest first,
 # with every platform's file under it.
-python3 - "$REPO" "$TAG" "$NOTE" <<'PY'
+python3 - "$REPO" "$TAG" "$NOTE" "$NOTE_EN" <<'PY'
 import json, subprocess, sys, pathlib
 
-repo, tag, note = sys.argv[1], sys.argv[2], sys.argv[3]
+repo, tag, note, note_en = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 
 raw = subprocess.run(
     ["gh", "api", "repos/" + repo + "/releases", "--paginate"],
@@ -91,23 +94,34 @@ def platform_of(name):
 
 
 def describe(name):
-    """What to call it, and which machines it is for."""
+    """What to call it, and which machines it is for — in both languages.
+
+    The page is read in Korean or in English, so a label that exists only in
+    Korean is a Korean word sitting in an English sentence. Both travel; the
+    page picks."""
     lower = name.lower()
+    arm = "arm64" in lower
     if lower.endswith(".dmg"):
-        return "디스크 이미지", "Apple Silicon"
+        return ("디스크 이미지", "Disk image"), ("Apple Silicon", "Apple Silicon")
     if lower.endswith(".exe"):
-        return "설치본", "64비트 · ARM"
+        return ("설치본", "Installer"), ("64비트 · ARM", "64-bit and ARM")
     if lower.endswith(".zip"):
-        return "압축본 — 설치 없이", "ARM64" if "arm64" in lower else "64비트"
+        return ("압축본 — 설치 없이", "Zip — no install"), (
+            ("ARM64", "ARM64") if arm else ("64비트", "64-bit")
+        )
     if lower.endswith(".appimage"):
-        return "AppImage", "ARM64" if "arm64" in lower else "x86_64"
+        return ("AppImage", "AppImage"), (("ARM64", "ARM64") if arm else ("x86_64", "x86_64"))
     if lower.endswith(".deb"):
-        return "deb — 데비안·우분투", "ARM64" if "arm64" in lower else "x86_64"
+        return ("deb — 데비안·우분투", "deb — Debian and Ubuntu"), (
+            ("ARM64", "ARM64") if arm else ("x86_64", "x86_64")
+        )
     if lower.endswith(".rpm"):
-        return "rpm — 페도라", "x86_64"
+        return ("rpm — 페도라", "rpm — Fedora"), ("x86_64", "x86_64")
     if lower.endswith(".tar.gz"):
-        return "tar.gz — 풀어서 실행", "ARM64" if "arm64" in lower else "x86_64"
-    return name, ""
+        return ("tar.gz — 풀어서 실행", "tar.gz — unpack and run"), (
+            ("ARM64", "ARM64") if arm else ("x86_64", "x86_64")
+        )
+    return (name, name), ("", "")
 
 
 # The order a platform's files are offered in: the one most people want first.
@@ -133,8 +147,10 @@ for item in json.loads(raw):
         label, arch = describe(asset["name"])
         total += asset.get("download_count", 0)
         builds.setdefault(platform, []).append({
-            "label": label,
-            "arch": arch,
+            "label": label[0],
+            "label_en": label[1],
+            "arch": arch[0],
+            "arch_en": arch[1],
             "url": asset["browser_download_url"],
             "size": asset.get("size"),
             "downloads": asset.get("download_count", 0),
@@ -155,6 +171,7 @@ for item in json.loads(raw):
         "downloads": total,
         "builds": builds,
         "note": note if item["tag_name"] == tag and note else None,
+        "note_en": note_en if item["tag_name"] == tag and note_en else None,
     })
 
 # Newest first, by version number rather than by the day it was pushed.
@@ -166,11 +183,14 @@ releases.sort(key=key, reverse=True)
 # A note written for one version stays with it across later runs.
 page = pathlib.Path("Website/releases.json")
 if page.exists():
-    old = {r["version"]: r.get("note")
-           for r in json.loads(page.read_text()).get("releases", [])}
+    kept = {r["version"]: (r.get("note"), r.get("note_en"))
+            for r in json.loads(page.read_text()).get("releases", [])}
     for entry in releases:
+        was = kept.get(entry["version"], (None, None))
         if not entry["note"]:
-            entry["note"] = old.get(entry["version"])
+            entry["note"] = was[0]
+        if not entry["note_en"]:
+            entry["note_en"] = was[1]
 
 page.write_text(json.dumps({"repo": repo, "releases": releases},
                            indent=2, ensure_ascii=False) + "\n")

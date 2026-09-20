@@ -620,8 +620,8 @@ function panes() {
   return el("div", { class: "demo-shell", style: "flex-direction:column;gap:12px" },
     toggles, window_,
     el("p", { class: "hint" },
-      L("읽을 때는 논문만 두고, 정리할 때는 넷을 다 편다. 창은 껐다 켜는 것이지 참고 보는 것이 아니다.",
-        "Reading, keep only the paper; sorting, open all four. A pane is switched off and on, not put up with.")));
+      L("읽을 때는 논문만 두고, 정리할 때는 넷을 다 펴요. 창은 껐다 켜는 거지, 참으면서 보는 게 아니에요.",
+        "Keep only the paper while you read. Open all four while you sort. A pane switches off and on — you never put up with it.")));
 }
 
 /* ════════════════════ 9 · One folder, three devices ════════════════════ */
@@ -656,7 +656,7 @@ function everyDesktop() {
   const win = desk(L("윈도우", "Windows"), "16/10", 900);
   const linux = desk(L("리눅스", "Linux"), "16/10", 900);
   const caption = el("p", { class: "hint" },
-    L("라이브러리는 폴더 하나. 클라우드 폴더든 USB든, 파일이 닿는 곳이면 된다.",
+    L("라이브러리는 폴더 하나예요. 클라우드 폴더든 USB든, 파일이 닿는 곳이면 돼요.",
       "The library is one folder. A cloud folder or a USB stick — anywhere the files can reach."));
 
   const run = () => {
@@ -665,7 +665,7 @@ function everyDesktop() {
       setTimeout(() => { d.mark.style.opacity = "1"; }, d.delay);
     }
     caption.innerHTML = L(
-      "표시가 <b>PDF 파일 안에</b> 쓰였고, 폴더가 그 파일을 옮겼을 뿐이다. 계정도, 서버도, 내보내기도 없다.",
+      "표시는 <b>PDF 파일 안에</b> 쓰고, 폴더는 그 파일을 옮겼을 뿐이에요. 계정도, 서버도, 내보내기도 없어요.",
       "The mark was written <b>into the PDF file</b>, and the folder only carried the file across. No account, no server, no export.");
   };
 
@@ -706,7 +706,7 @@ function threeDevices() {
   const pad = device(L("아이패드", "iPad"), "4/3", 1100);
   const phone = device(L("아이폰", "iPhone"), "9/16", 1900);
   const caption = el("p", { class: "hint" },
-    L("맥에서 긋고, 다른 두 기기가 몇 초 안에 같은 줄을 보인다.",
+    L("맥에서 그으면, 다른 두 기기도 몇 초 안에 같은 줄을 보여줘요.",
       "Draw on the Mac, and within seconds the other two show the same line."));
 
   const run = () => {
@@ -715,14 +715,14 @@ function threeDevices() {
       setTimeout(() => { d.mark.style.opacity = "1"; }, d.delay);
     }
     caption.innerHTML = L(
-      "표시는 몇 KB짜리 저널로 먼저 건너가고, <b>20 MB PDF는 뒤따라온다.</b> 아무도 파일을 기다리지 않는다.",
+      "표시는 몇 KB짜리 저널로 먼저 건너가고, <b>20 MB PDF는 뒤따라와요.</b> 파일을 기다릴 일이 없어요.",
       "The mark crosses first as a journal of a few KB; <b>the 20 MB PDF follows.</b> Nobody waits for the file.");
   };
 
   return el("div", { class: "demo-shell", style: "flex-direction:column;gap:14px" },
     el("div", { style: "display:flex;gap:8px;flex-wrap:wrap;align-items:center" },
       el("button", { class: "btn btn-primary", onclick: run }, L("맥에서 하이라이트 긋기", "Highlight on the Mac")),
-      el("span", { class: "hint", style: "margin:0" }, L("iCloud Drive 폴더 하나면 된다.", "One iCloud Drive folder is all it takes."))),
+      el("span", { class: "hint", style: "margin:0" }, L("iCloud Drive 폴더 하나면 돼요.", "One iCloud Drive folder is all it takes."))),
     el("div", { class: "pane", style: "flex:1;min-height:0;display:flex;gap:16px;align-items:center;justify-content:center" },
       mac, pad, phone),
     caption);
@@ -765,9 +765,9 @@ function draftToManuscript() {
 
   const render = () => {
     if (!rendered) {
-      out.textContent = L("⇧⌘E를 누르면 여기에 원고가 나온다.", "Press ⇧⌘E and the manuscript appears here.");
+      out.textContent = L("⇧⌘E를 누르면 여기에 원고가 나와요.", "Press ⇧⌘E and the manuscript appears here.");
       out.style.color = "var(--ink-3)";
-      hint.innerHTML = L("초안은 노트 하나다 — 구절과 링크로 짓는다.", "A draft is one note — built from passages and links.");
+      hint.innerHTML = L("초안도 노트 하나예요 — 구절과 링크로 지어요.", "A draft is one note, built from passages and links.");
       return;
     }
     out.style.color = "var(--ink)";
@@ -782,8 +782,8 @@ function draftToManuscript() {
       "  author = {Kirkpatrick, James and Pascanu, Razvan and others},\n" +
       "  year   = {2017}, journal = {PNAS}\n}";
     hint.innerHTML = L(
-      "<b style='color:var(--green)'>Overleaf에 붙이면 컴파일된다.</b> 인용 키도, .bib도 손으로 옮기지 않았다.",
-      "<b style='color:var(--green)'>Paste it into Overleaf and it compiles.</b> Neither the citation key nor the .bib was carried over by hand.");
+      "<b style='color:var(--green)'>Overleaf에 붙이면 그대로 컴파일돼요.</b> 인용 키도, .bib도 손으로 옮기지 않았어요.",
+      "<b style='color:var(--green)'>Paste it into Overleaf and it compiles.</b> Nobody typed the citation key or the .bib.");
   };
 
   const go = el("button", {
@@ -946,6 +946,21 @@ let chosenOS = detectOS();
 
 /* A release's files for one platform. Older versions carry only the Mac's
    disk image, under the key it has always had. */
+/** A build's label in the language the page is being read in. */
+/** A version's one-line note, in the language being read. Old versions have
+ *  only the Korean one; it is better to show that than a blank line. */
+function releaseNote(release) {
+  return (KO ? release.note : release.note_en || release.note) || "";
+}
+
+function buildLabel(build) {
+  return (KO ? build.label : build.label_en || build.label) || "";
+}
+
+function buildArch(build) {
+  return (KO ? build.arch : build.arch_en || build.arch) || "";
+}
+
 function buildsFor(release, os) {
   if (release.builds && release.builds[os]) return release.builds[os];
   if (os === "mac" && release.asset) {
@@ -1009,7 +1024,7 @@ async function mountDownloads() {
       primary.href = first.url;
       setLabel(primary, L(`${latest.version} 받기`, `Download ${latest.version}`));
       primary.querySelector(".sub").textContent =
-        `${OS[os].name} · ${first.arch ? first.arch + " · " : ""}${first.size ? mb(first.size) : ""}`;
+        `${OS[os].name} · ${buildArch(first) ? buildArch(first) + " · " : ""}${first.size ? mb(first.size) : ""}`;
       /* Everything else for this platform, small, on one line. */
       const rest = files.slice(1);
       variants.replaceChildren(
@@ -1017,7 +1032,7 @@ async function mountDownloads() {
           ? [el("span", {}, L("다른 갈래: ", "Other builds: ")),
              ...rest.flatMap((f, i) => [
                i ? el("span", {}, " · ") : "",
-               el("a", { href: f.url }, `${f.label}${f.arch ? ` (${f.arch})` : ""}`),
+               el("a", { href: f.url }, `${buildLabel(f)}${buildArch(f) ? ` (${buildArch(f)})` : ""}`),
              ])]
           : [el("span", {}, OS[os].note)]),
       );
@@ -1042,7 +1057,7 @@ async function mountDownloads() {
         });
         return el("div", { class: "vrow" },
           el("span", { class: "v" }, r.version),
-          el("span", { class: "n" }, r.note || ""),
+          el("span", { class: "n" }, releaseNote(r)),
           el("span", { class: "vlinks" }, ...links),
           el("span", { class: "d" }, n == null ? "" :
             L(`${n.toLocaleString("ko-KR")}번 받음`, `${n.toLocaleString("en-US")} downloads`)));
