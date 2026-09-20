@@ -11,6 +11,7 @@ import { shelfPapers, store, type Paper } from '../state.js'
 import { showMenu } from './toolbar.js'
 
 export interface PaperListActions {
+  chooseLibrary: () => void
   open: (id: string) => void
   cycleStatus: (id: string) => void
   toggleFavorite: (id: string) => void
@@ -130,9 +131,16 @@ function shelfTitle(): string {
 function emptyState(actions: PaperListActions): HTMLElement {
   const wrap = el('div', { class: 'empty' })
   if (!store.root) {
+    const choose = el('button', { class: 'filled-button', text: 'Choose Library Folder…' })
+    on(choose, 'click', actions.chooseLibrary)
     wrap.append(
       el('h2', { text: 'No library folder yet' }),
-      el('p', { text: 'Choose the folder your papers live in. A cloud folder works, and is how a library follows you between machines.' }),
+      el('p', {
+        text: 'Choose the folder your papers live in. A cloud folder works, and is how a '
+          + 'library follows you between machines — the same papers, the same marks, on a Mac '
+          + 'and on a PC.',
+      }),
+      choose,
     )
     return wrap
   }

@@ -64,6 +64,7 @@ const sidebar = buildSidebar({
 })
 
 const paperList = buildPaperList({
+  chooseLibrary: () => void chooseLibrary(),
   open: (id) => openPaper(id),
   cycleStatus: async (id) => {
     const entry = findPaper(id)
