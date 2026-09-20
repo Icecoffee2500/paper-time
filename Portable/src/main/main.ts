@@ -509,6 +509,18 @@ async function pageCount(file: string): Promise<number> {
 
 // MARK: - Launch
 
+/**
+ * Wayland, when the session is Wayland.
+ *
+ * Electron still defaults to X11 through XWayland, which on a fractional-scale
+ * display means a blurred window and a pen whose coordinates are a scale
+ * factor out — on a drawing app, the second one is fatal. The hint uses
+ * Wayland where the session offers it and falls back to X11 where it does not.
+ */
+if (process.platform === 'linux' && !app.commandLine.hasSwitch('ozone-platform-hint')) {
+  app.commandLine.appendSwitch('ozone-platform-hint', 'auto')
+}
+
 app.whenReady().then(async () => {
   createWindow()
   buildMenu({
