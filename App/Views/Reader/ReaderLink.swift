@@ -70,6 +70,11 @@ final class ReaderLink {
     }
 
     var hasSelection: Bool { selection?.string?.isEmpty == false }
+    /// Whether the PDF view has a place to go back or forward to inside the
+    /// paper — a link that was followed. Kept here so the toolbar can grey
+    /// its arrows without a hand on the view.
+    var canGoBackInDocument = false
+    var canGoForwardInDocument = false
 
     /// The place the current selection points at, ready to be written into a
     /// note. Nil when nothing is selected.
