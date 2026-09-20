@@ -54,7 +54,7 @@ function mountMetadata() {
     if (node) node.setAttribute("content", value);
   };
   set('meta[name="description"]', L(
-    "논문을 읽고, 표시하고, 그 표시를 생각으로 바꾸기 위한 앱. 맥·윈도우·리눅스에서 같은 라이브러리 폴더를 연다. 수식은 LaTeX으로 복사되고, 구절은 주소째로 노트가 된다.",
+    "논문을 읽고, 표시하고, 그 표시를 생각으로 바꾸기 위한 앱. 맥·윈도우·리눅스에서 같은 라이브러리 폴더를 열어요. 수식은 LaTeX으로 나오고, 구절은 주소째로 노트가 돼요.",
     "An app for reading papers, marking them up, and turning those marks into writing. The same library folder opens on macOS, Windows and Linux. Formulas copy out as LaTeX; passages become notes with their page numbers attached."
   ));
   set('meta[property="og:description"]', L(
@@ -665,8 +665,8 @@ function everyDesktop() {
       setTimeout(() => { d.mark.style.opacity = "1"; }, d.delay);
     }
     caption.innerHTML = L(
-      "표시는 <b>PDF 파일 안에</b> 쓰고, 폴더는 그 파일을 옮겼을 뿐이에요. 계정도, 서버도, 내보내기도 없어요.",
-      "The mark was written <b>into the PDF file</b>, and the folder only carried the file across. No account, no server, no export.");
+      "표시를 <b>PDF 파일 안에</b> 썼고, 폴더는 그 파일을 옮겼을 뿐이에요. 계정도, 서버도, 내보내기도 없어요.",
+      "The mark went <b>into the PDF file</b>, and the folder only carried the file across. No account, no server, no export.");
   };
 
   return el("div", { class: "demo-shell", style: "flex-direction:column;gap:14px" },

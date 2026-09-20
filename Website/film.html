@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Paper Time — 영상</title>
+<meta name="description" content="Paper Time이 무엇인지 35초로.">
+<meta property="og:title" content="Paper Time">
+<meta property="og:description" content="논문을 읽는 곳과 글을 쓰는 곳 사이에, 아무것도 없다.">
+<meta property="og:image" content="https://icecoffee2500.github.io/paper-time/img/preview.jpg">
+<link rel="icon" type="image/png" sizes="32x32" href="img/icon-32.png">
+<script>
+(function () {
+  var stored = null;
+  try { stored = localStorage.getItem("papertime.lang"); } catch (e) {}
+  document.documentElement.lang =
+    stored || ((navigator.language || "en").toLowerCase().indexOf("ko") === 0 ? "ko" : "en");
+})();
+</script>
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   One shot, pulling back the whole way.
+
+   The film starts on a single character and ends on three desktops, and every
+   push-in between is a breath inside that one movement. Built as a page rather
+   than a video file because a video goes stale the first time the app it shows
+   is redrawn, and because this stays sharp at any size. Record the stage for
+   the clip that travels.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --ink: #f4f4f6;
+  --dim: #8b8b96;
+  --paper: #fbfbfc;
+  --paper-ink: #1a1a1f;
+  --accent: #4d8bff;
+  --pen: #ef4444;
+  --mark: rgba(255, 214, 51, .58);
+  --sans: -apple-system, BlinkMacSystemFont, "Pretendard Variable", Pretendard,
+          "Apple SD Gothic Neo", "Segoe UI", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
+  --serif: "Times New Roman", Times, serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; height: 100%;
+  background: #08080a; color: var(--ink);
+  font-family: var(--sans);
+  overflow: hidden;
+}
+
+html[lang="ko"] [data-l="en"],
+html[lang="en"] [data-l="ko"] { display: none !important; }
+
+/* The frame everything happens in: a fixed 16:9 canvas scaled to the window,
+   so one set of coordinates works at every size. */
+#fit {
+  position: fixed; inset: 0;
+  display: grid; place-items: center;
+}
+#stage {
+  position: relative;
+  width: 1280px; height: 720px;
+  background: #08080a;
+  overflow: hidden;
+  transform-origin: 50% 50%;
+}
+
+.scene {
+  position: absolute; inset: 0;
+  opacity: 0;
+  transition: opacity .55s ease;
+  display: grid; place-items: center;
+}
+.scene.on { opacity: 1; }
+
+/* Type. One line, held, gone. */
+.cap {
+  position: absolute; left: 0; right: 0; bottom: 74px;
+  text-align: center;
+  font-size: 27px; font-weight: 550; letter-spacing: -.015em;
+  opacity: 0; transform: translateY(9px);
+  transition: opacity .6s ease, transform .6s cubic-bezier(.2,.7,.3,1);
+}
+.cap.on { opacity: 1; transform: none; }
+
+/* ── the paper ───────────────────────────────────────────────────────────── */
+.page {
+  background: var(--paper); color: var(--paper-ink);
+  border-radius: 3px;
+  box-shadow: 0 30px 90px rgba(0,0,0,.6);
+  padding: 26px 30px;
+  font-family: var(--serif);
+  text-align: left;
+}
+.line { height: 5px; border-radius: 2px; background: #d9d9de; margin: 7px 0; }
+.line.s { width: 62%; }
+.line.m { width: 86%; }
+.head { height: 8px; width: 46%; border-radius: 2px; background: #b4b4bc; margin: 0 0 13px; }
+
+/* ── 1 · the dot ─────────────────────────────────────────────────────────── */
+#s1 .zoom {
+  transform: scale(38);
+  transition: transform 4.4s cubic-bezier(.42,0,.3,1);
+  transform-origin: 50% 46%;
+}
+#s1.pull .zoom { transform: scale(1); }
+#s1 .page { width: 560px; }
+#s1 .dot {
+  display: inline-block; width: 5px; height: 5px; border-radius: 50%;
+  background: var(--paper-ink); vertical-align: baseline;
+}
+#s1 .sentence { font-size: 13px; line-height: 2; color: #3a3a42; }
+
+/* ── 2 · the mark ────────────────────────────────────────────────────────── */
+#s2 .zoom {
+  transform: scale(1);
+  transition: transform 2.6s cubic-bezier(.4,0,.25,1);
+}
+#s2.push .zoom { transform: scale(1.32) translate(2%, 3%); }
+#s2 .page { width: 430px; position: relative; padding: 30px 34px; }
+#s2 .rule {
+  position: absolute; height: 2.5px; border-radius: 2px; background: var(--pen);
+  left: 34px; top: 118px; width: 0;
+  transition: width .85s cubic-bezier(.3,.7,.3,1);
+}
+#s2.drawn .rule { width: 232px; }
+#s2 .arrow {
+  position: absolute; right: 24px; top: 58px;
+  opacity: 0; transform: translate(10px, -6px);
+  transition: opacity .45s ease, transform .5s cubic-bezier(.2,.8,.3,1);
+}
+#s2.drawn .arrow { opacity: 1; transform: none; }
+#s2 .why {
+  position: absolute; right: 26px; top: 40px;
+  font-family: var(--sans); font-size: 15px; font-weight: 600; color: var(--pen);
+  opacity: 0; transition: opacity .4s ease .18s;
+}
+#s2.drawn .why { opacity: 1; }
+
+/* the same file, opened by something else */
+#s3 .frame {
+  width: 470px; border-radius: 10px; overflow: hidden;
+  box-shadow: 0 30px 90px rgba(0,0,0,.6);
+  background: #ececf0;
+}
+#s3 .bar {
+  height: 30px; display: flex; align-items: center; gap: 6px; padding: 0 11px;
+  background: #e2e2e8; border-bottom: 1px solid #d2d2d9;
+}
+#s3 .bar i { width: 10px; height: 10px; border-radius: 50%; background: #c9c9d1; }
+#s3 .bar span {
+  margin-left: 8px; font-size: 11.5px; color: #6b6b74; font-family: var(--sans);
+}
+#s3 .page { border-radius: 0; box-shadow: none; width: 100%; position: relative; }
+#s3 .rule {
+  position: absolute; height: 2.5px; border-radius: 2px; background: var(--pen);
+  left: 34px; top: 118px; width: 232px;
+}
+#s3 .why {
+  position: absolute; right: 26px; top: 40px;
+  font-family: var(--sans); font-size: 15px; font-weight: 600; color: var(--pen);
+}
+
+/* ── 4 · the formula ─────────────────────────────────────────────────────── */
+#s4 .rows { display: flex; flex-direction: column; gap: 22px; align-items: center; }
+#s4 .page { width: 620px; font-size: 15px; line-height: 1.9; position: relative; }
+#s4 .sel {
+  background: transparent; border-radius: 3px;
+  transition: background .45s ease;
+  padding: 1px 2px;
+}
+#s4.picked .sel { background: var(--mark); }
+#s4 .out {
+  width: 620px; min-height: 66px;
+  border-radius: 9px; padding: 14px 16px;
+  background: #16161b; border: 1px solid #26262e;
+  font-family: var(--mono); font-size: 13px; line-height: 1.7;
+  color: var(--dim);
+  display: flex; align-items: center;
+}
+#s4 .out.good { color: #eaeaef; }
+#s4 .keys {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: 128px;
+  display: flex; gap: 7px;
+}
+.key {
+  font-family: var(--sans); font-size: 14px; font-weight: 600;
+  padding: 5px 11px; border-radius: 7px;
+  background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.16);
+  opacity: 0; transform: scale(.9);
+  transition: opacity .2s ease, transform .2s ease;
+}
+.key.hit { opacity: 1; transform: none; background: rgba(255,255,255,.2); }
+.key.hot { background: var(--accent); border-color: transparent; }
+
+/* ── 5 · into the note ───────────────────────────────────────────────────── */
+#s5 .zoom {
+  transform: scale(1.15);
+  transition: transform 3s cubic-bezier(.4,0,.3,1);
+}
+#s5.wide .zoom { transform: scale(.72); }
+#s5 .panes { display: flex; gap: 16px; align-items: flex-start; }
+#s5 .page { width: 400px; font-size: 13px; line-height: 1.9; }
+#s5 .note {
+  width: 400px; min-height: 250px; border-radius: 9px; padding: 18px 20px;
+  background: #15151a; border: 1px solid #26262e;
+  font-size: 13.5px; line-height: 1.85; color: #d7d7de;
+}
+#s5 .quote {
+  border-left: 2.5px solid var(--accent); padding-left: 11px; margin: 0 0 12px;
+  opacity: 0; transform: translateX(-16px);
+  transition: opacity .5s ease, transform .6s cubic-bezier(.2,.8,.3,1);
+}
+#s5.sent .quote { opacity: 1; transform: none; }
+#s5 .pin {
+  display: inline-block; margin-left: 7px;
+  font-size: 11.5px; color: var(--accent);
+  padding: 1px 7px; border-radius: 20px; background: rgba(77,139,255,.16);
+}
+#s5 .link { color: var(--accent); opacity: 0; transition: opacity .45s ease; }
+#s5.tied .link { opacity: 1; }
+#s5 .web { margin-top: 14px; opacity: 0; transition: opacity .6s ease; }
+#s5.tied .web { opacity: 1; }
+
+/* ── 6 · three desktops ──────────────────────────────────────────────────── */
+#s6 .row { display: flex; gap: 20px; align-items: center; }
+#s6 .win {
+  width: 300px; border-radius: 9px; overflow: hidden;
+  background: #ececf0; box-shadow: 0 22px 60px rgba(0,0,0,.55);
+  opacity: 0; transform: translateY(16px) scale(.97);
+  transition: opacity .6s ease, transform .7s cubic-bezier(.2,.8,.3,1);
+}
+#s6.up .win { opacity: 1; transform: none; }
+#s6.up .win:nth-child(2) { transition-delay: .14s; }
+#s6.up .win:nth-child(3) { transition-delay: .28s; }
+#s6 .chrome {
+  height: 26px; display: flex; align-items: center; padding: 0 9px;
+  background: #e2e2e8; border-bottom: 1px solid #d2d2d9;
+  font-size: 10.5px; color: #6b6b74;
+}
+#s6 .chrome .dots { display: flex; gap: 5px; }
+#s6 .chrome i { width: 8px; height: 8px; border-radius: 50%; background: #c9c9d1; }
+#s6 .chrome .right { margin-left: auto; letter-spacing: 2px; color: #9a9aa3; }
+#s6 .mini { background: var(--paper); padding: 13px 14px; position: relative; }
+#s6 .mini .rule {
+  position: absolute; left: 14px; top: 44px; width: 130px; height: 2px;
+  border-radius: 2px; background: var(--pen);
+}
+
+/* ── 7 · end card ────────────────────────────────────────────────────────── */
+#s7 .card { text-align: center; }
+#s7 .mark {
+  font-size: 46px; font-weight: 700; letter-spacing: -.03em; margin: 0 0 16px;
+}
+#s7 .mark b { color: var(--accent); font-weight: 700; }
+#s7 .said { font-size: 20px; color: var(--dim); margin: 0 0 26px; line-height: 1.6; }
+#s7 .url { font-size: 15px; color: var(--dim); font-family: var(--mono); }
+
+/* ── controls, outside the film ──────────────────────────────────────────── */
+#bar {
+  position: fixed; left: 0; right: 0; bottom: 18px;
+  display: flex; gap: 10px; justify-content: center;
+  opacity: 0; transition: opacity .3s ease;
+  z-index: 5;
+}
+#fit:hover + #bar, #bar:hover, #bar.show { opacity: 1; }
+#bar button, #bar a {
+  font: inherit; font-size: 13px; font-weight: 500;
+  padding: 7px 15px; border-radius: 8px; cursor: pointer;
+  background: rgba(255,255,255,.1); color: var(--ink);
+  border: 1px solid rgba(255,255,255,.14);
+  text-decoration: none;
+}
+#bar button:hover, #bar a:hover { background: rgba(255,255,255,.18); }
+
+@media (prefers-reduced-motion: reduce) {
+  .scene, .cap, .zoom, .rule, .arrow, .why, .quote, .win, .key, .sel, .out,
+  .link, .web { transition-duration: .01ms !important; }
+}
+</style>
+</head>
+<body>
+
+<div id="fit">
+<div id="stage">
+
+  <!-- 1 · one character, and then everything around it -->
+  <section class="scene" id="s1">
+    <div class="zoom">
+      <div class="page">
+        <div class="head"></div>
+        <p class="sentence" style="margin:0 0 10px">
+          Representation unlearning asks a narrower question than machine
+          unlearning does<span class="dot"></span>
+        </p>
+        <div class="line m"></div><div class="line m"></div><div class="line s"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 · a mark, made by hand -->
+  <section class="scene" id="s2">
+    <div class="zoom">
+      <div class="page">
+        <div class="head"></div>
+        <div class="line m"></div><div class="line m"></div>
+        <div class="line m"></div><div class="line s"></div>
+        <div class="line m"></div><div class="line m"></div><div class="line m"></div>
+        <div class="line s"></div><div class="line m"></div><div class="line m"></div>
+        <div class="line m"></div><div class="line s"></div><div class="line m"></div>
+        <div class="line m"></div><div class="line m"></div><div class="line s"></div>
+        <div class="rule"></div>
+        <div class="why">why?</div>
+        <svg class="arrow" width="70" height="46" viewBox="0 0 70 46" fill="none">
+          <path d="M64 8 C44 10, 26 20, 9 36" stroke="#ef4444" stroke-width="2.4"
+                stroke-linecap="round" fill="none"/>
+          <path d="M9 36 L20 32 M9 36 L13 25" stroke="#ef4444" stroke-width="2.4"
+                stroke-linecap="round"/>
+        </svg>
+      </div>
+    </div>
+    <p class="cap" data-l="ko">표시는 파일 안에 남아요</p>
+    <p class="cap" data-l="en">The marks live in the file</p>
+  </section>
+
+  <!-- 3 · the same file, opened by something that is not this app -->
+  <section class="scene" id="s3">
+    <div class="frame">
+      <div class="bar"><i></i><i></i><i></i><span>Preview</span></div>
+      <div class="page">
+        <div class="head"></div>
+        <div class="line m"></div><div class="line m"></div>
+        <div class="line m"></div><div class="line s"></div>
+        <div class="line m"></div><div class="line m"></div><div class="line m"></div>
+        <div class="line s"></div><div class="line m"></div><div class="line m"></div>
+        <div class="line m"></div><div class="line s"></div><div class="line m"></div>
+        <div class="line m"></div><div class="line m"></div><div class="line s"></div>
+        <div class="rule"></div>
+        <div class="why">why?</div>
+      </div>
+    </div>
+    <p class="cap" data-l="ko">다른 앱에서 열어도 그대로 있어요</p>
+    <p class="cap" data-l="en">Open it anywhere else. Still there.</p>
+  </section>
+
+  <!-- 4 · the one that makes people sit up -->
+  <section class="scene" id="s4">
+    <div class="rows">
+      <div class="page">
+        <div class="line m"></div>
+        <p style="margin:12px 0 10px">
+          <span class="sel">각 단계에서 롤아웃 손실
+            <i style="font-family:var(--serif)">&#x2112;</i><sub style="font-size:.7em">rollout</sub><i style="font-family:var(--serif)">(&phi;)</i>
+            := &#8214;<i style="font-family:var(--serif)">P</i><sub style="font-size:.7em">&phi;</sub><i style="font-family:var(--serif)">(a</i><sub style="font-size:.7em">1:T</sub><i style="font-family:var(--serif)">)</i> &minus;
+            <i style="font-family:var(--serif)">z</i><sub style="font-size:.7em">T+1</sub>&#8214;<sub style="font-size:.7em">1</sub>
+            을 최소화한다.</span>
+        </p>
+        <div class="line m"></div><div class="line s"></div>
+      </div>
+      <div class="out" id="paste">&nbsp;</div>
+    </div>
+    <div class="keys">
+      <span class="key" id="k1">⌘C</span>
+      <span class="key hot" id="k2">⇧⌘C</span>
+    </div>
+    <p class="cap" data-l="ko">수식은 수식인 채로</p>
+    <p class="cap" data-l="en">The mathematics, still mathematics</p>
+  </section>
+
+  <!-- 5 · the passage keeps its address, and notes find each other -->
+  <section class="scene" id="s5">
+    <div class="zoom">
+      <div class="panes">
+        <div class="page">
+          <div class="head"></div>
+          <div class="line m"></div><div class="line m"></div>
+          <div class="line m" style="background:var(--mark)"></div>
+          <div class="line s"></div><div class="line m"></div><div class="line m"></div>
+        </div>
+        <div class="note">
+          <p class="quote" style="margin:0 0 14px">
+            forgetting is not erasure but compression
+            <span class="pin">p. 7</span>
+          </p>
+          <div class="line m" style="background:#2c2c34"></div>
+          <div class="line s" style="background:#2c2c34"></div>
+          <p style="margin:12px 0 0">
+            <span class="link">[[정보 병목]]</span>
+          </p>
+          <svg class="web" width="300" height="72" viewBox="0 0 300 72" fill="none">
+            <line x1="40" y1="46" x2="124" y2="20" stroke="#4d8bff" stroke-width="1.4" opacity=".7"/>
+            <line x1="124" y1="20" x2="212" y2="50" stroke="#4d8bff" stroke-width="1.4" opacity=".7"/>
+            <line x1="124" y1="20" x2="188" y2="12" stroke="#4d8bff" stroke-width="1.4" opacity=".5"/>
+            <line x1="212" y1="50" x2="266" y2="30" stroke="#4d8bff" stroke-width="1.4" opacity=".5"/>
+            <circle cx="40" cy="46" r="5" fill="#4d8bff"/>
+            <circle cx="124" cy="20" r="6.5" fill="#4d8bff"/>
+            <circle cx="212" cy="50" r="5" fill="#4d8bff"/>
+            <circle cx="188" cy="12" r="4" fill="#4d8bff" opacity=".75"/>
+            <circle cx="266" cy="30" r="4" fill="#4d8bff" opacity=".75"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+    <p class="cap" data-l="ko">읽은 것이 글이 돼요</p>
+    <p class="cap" data-l="en">What you read becomes what you write</p>
+  </section>
+
+  <!-- 6 · and all of it, on any desktop -->
+  <section class="scene" id="s6">
+    <div class="row">
+      <div class="win">
+        <div class="chrome"><div class="dots"><i></i><i></i><i></i></div></div>
+        <div class="mini">
+          <div class="head"></div><div class="line m"></div><div class="line m"></div>
+          <div class="line s"></div><div class="rule"></div>
+        </div>
+      </div>
+      <div class="win">
+        <div class="chrome"><span class="right">─ □ ✕</span></div>
+        <div class="mini">
+          <div class="head"></div><div class="line m"></div><div class="line m"></div>
+          <div class="line s"></div><div class="rule"></div>
+        </div>
+      </div>
+      <div class="win">
+        <div class="chrome"><span class="right">─ □ ✕</span></div>
+        <div class="mini">
+          <div class="head"></div><div class="line m"></div><div class="line m"></div>
+          <div class="line s"></div><div class="rule"></div>
+        </div>
+      </div>
+    </div>
+    <p class="cap" data-l="ko">폴더 하나. 어느 데스크톱에서나.</p>
+    <p class="cap" data-l="en">One folder. Every desktop.</p>
+  </section>
+
+  <!-- 7 -->
+  <section class="scene" id="s7">
+    <div class="card">
+      <p class="mark">Paper <b>Time</b></p>
+      <p class="said" data-l="ko">논문을 읽는 곳과 글을 쓰는 곳 사이에,<br>아무것도 없다.</p>
+      <p class="said" data-l="en">Between where you read a paper and where you write,<br>nothing at all.</p>
+      <p class="url">icecoffee2500.github.io/paper-time</p>
+    </div>
+  </section>
+
+</div>
+</div>
+
+<div id="bar" class="show">
+  <button id="replay"><span data-l="ko">다시 보기</span><span data-l="en">Replay</span></button>
+  <a href="./"><span data-l="ko">받으러 가기</span><span data-l="en">Get it</span></a>
+</div>
+
+<script>
+const KO = document.documentElement.lang !== "en";
+
+/* The stage is a fixed 1280×720; the window scales it. One set of coordinates
+   for every screen, and a recording is whatever size the window is. */
+function fit() {
+  const stage = document.getElementById("stage");
+  const scale = Math.min(window.innerWidth / 1280, window.innerHeight / 720);
+  stage.style.transform = `scale(${scale})`;
+}
+addEventListener("resize", fit);
+fit();
+
+const $ = (id) => document.getElementById(id);
+const scenes = ["s1", "s2", "s3", "s4", "s5", "s6", "s7"];
+
+/* The paste panel's two answers: what a copy gives you, and what this gives
+   you. The first is the whole argument for the second. */
+const BROKEN = "각 단계에서 롤아웃 손실 L rollout (ϕ) := ∥P ϕ (a 1:T ) − z T+1 ∥ 1 을 최소화한다.";
+const CLEAN =
+  "각 단계에서 롤아웃 손실 $\\mathcal{L}_{\\mathrm{rollout}}(\\phi) := " +
+  "\\lVert P_\\phi(a_{1:T}) - z_{T+1} \\rVert_1$ 을 최소화한다.";
+
+let timers = [];
+const at = (ms, fn) => timers.push(setTimeout(fn, ms));
+
+function show(id) {
+  for (const name of scenes) $(name).classList.toggle("on", name === id);
+}
+function caption(id, on) {
+  for (const node of $(id).querySelectorAll(".cap")) node.classList.toggle("on", on);
+}
+
+function run() {
+  for (const t of timers) clearTimeout(t);
+  timers = [];
+  for (const name of scenes) $(name).className = "scene";
+  for (const node of document.querySelectorAll(".cap")) node.classList.remove("on");
+  $("paste").textContent = " ";
+  $("paste").classList.remove("good");
+  $("k1").className = "key";
+  $("k2").className = "key hot";
+  $("bar").classList.remove("show");
+
+  // 1 · one character, and then everything around it
+  show("s1");
+  at(220, () => $("s1").classList.add("pull"));
+
+  // 2 · a mark, made by hand
+  at(4400, () => { show("s2"); $("s2").classList.add("push"); });
+  at(5600, () => $("s2").classList.add("drawn"));
+  at(6400, () => caption("s2", true));
+
+  // 3 · the same file, somewhere else
+  at(9200, () => { show("s3"); caption("s2", false); });
+  at(9900, () => caption("s3", true));
+
+  // 4 · the peak
+  at(12600, () => { show("s4"); caption("s3", false); });
+  at(13400, () => $("s4").classList.add("picked"));
+  at(14200, () => $("k1").classList.add("hit"));
+  at(14600, () => { $("paste").textContent = BROKEN; });
+  at(16400, () => { $("k1").classList.remove("hit"); $("paste").textContent = " "; });
+  at(17000, () => $("k2").classList.add("hit"));
+  at(17400, () => { $("paste").textContent = CLEAN; $("paste").classList.add("good"); });
+  at(18200, () => caption("s4", true));
+
+  // 5 · the passage keeps its address
+  at(21600, () => { show("s5"); caption("s4", false); });
+  at(22300, () => $("s5").classList.add("sent"));
+  at(23600, () => { $("s5").classList.add("tied"); $("s5").classList.add("wide"); });
+  at(24400, () => caption("s5", true));
+
+  // 6 · every desktop
+  at(27600, () => { show("s6"); caption("s5", false); });
+  at(28100, () => $("s6").classList.add("up"));
+  at(29000, () => caption("s6", true));
+
+  // 7
+  at(32000, () => { show("s7"); caption("s6", false); });
+  at(34500, () => $("bar").classList.add("show"));
+}
+
+$("replay").addEventListener("click", run);
+addEventListener("keydown", (e) => { if (e.key === " ") { e.preventDefault(); run(); } });
+run();
+</script>
+</body>
+</html>
