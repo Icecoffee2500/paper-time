@@ -296,7 +296,46 @@ export class Reader {
       page.applyTint()
       page.setDrawing(store.reader.drawing)
     }
+    this.applyLayout()
     this.renderVisible()
+  }
+
+  /**
+   * One page at a time, or all of them.
+   *
+   * Single-page reading is not a smaller continuous scroll — it is a
+   * different way of reading, where the page is the unit and turning it is
+   * deliberate. So the others are taken out of the flow entirely rather than
+   * scrolled past, and the arrow keys turn pages instead of nudging the
+   * scroll by a line.
+   */
+  applyLayout() {
+    const single = store.settings.pageLayout === 'single'
+    for (const page of this.pages) {
+      page.root.style.display = !single || page.index === store.reader.currentPage ? '' : 'none'
+    }
+    if (single) this.scroll.scrollTop = 0
+  }
+
+  /** Moves by whole pages. Only meaningful when one page is showing. */
+  turnPage(by: number) {
+    const next = Math.max(0, Math.min(store.reader.currentPage + by, this.pages.length - 1))
+    if (next === store.reader.currentPage) return
+    store.reader.currentPage = next
+    if (store.settings.pageLayout === 'single') {
+      this.applyLayout()
+      void this.pages[next]?.render()
+      this.updateFooter()
+    } else {
+      this.scrollToPage(next)
+    }
+  }
+
+  setLayout(layout: 'single' | 'continuous') {
+    store.settings.pageLayout = layout
+    this.applyLayout()
+    this.renderVisible()
+    this.updateFooter()
   }
 
   zoomBy(factor: number) {
@@ -562,6 +601,9 @@ export class Reader {
   }
 
   private noteCurrentPage() {
+    // In single-page mode the scroll position says nothing about which page
+    // is showing; the page is whatever was turned to.
+    if (store.settings.pageLayout === 'single') return
     const middle = this.scroll.scrollTop + this.scroll.clientHeight / 2
     let current = 0
     for (const page of this.pages) {
@@ -603,10 +645,27 @@ export class Reader {
   private updateFooter() {
     clear(this.footer)
     if (!this.document) return
-    this.footer.append(
-      el('span', { text: `Page ${store.reader.currentPage + 1} of ${store.reader.pageCount}` }),
-      el('span', { text: `${Math.round(store.reader.zoom * 100)}%` }),
-    )
+    const position = el('span', {
+      text: `Page ${store.reader.currentPage + 1} of ${store.reader.pageCount}`,
+    })
+    this.footer.append(position)
+    if (store.settings.pageLayout === 'single') {
+      const turn = (label: string, by: number, disabled: boolean) => {
+        const button = el('button', {
+          class: 'icon-button',
+          title: by < 0 ? 'Previous page' : 'Next page',
+          html: icon(label),
+        })
+        button.toggleAttribute('disabled', disabled)
+        on(button, 'click', () => this.turnPage(by))
+        return button
+      }
+      this.footer.append(el('div', { class: 'toolbar-group' }, [
+        turn('chevron.left', -1, store.reader.currentPage === 0),
+        turn('chevron.right', 1, store.reader.currentPage >= store.reader.pageCount - 1),
+      ]))
+    }
+    this.footer.append(el('span', { text: `${Math.round(store.reader.zoom * 100)}%` }))
   }
 
   /** Redraws every page that has a drawing on it. */
