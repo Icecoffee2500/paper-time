@@ -35,7 +35,7 @@ struct SketchToolbar: View {
 
             Button(L("끝", "Done")) { configuration.mode = .read }
                 .fontWeight(.medium)
-                .help(L("펜을 내려놓는다 (esc)", "Put the pencil down (esc)"))
+                .help(L("펜 내려놓기 (esc)", "Put the Pencil Down (esc)"))
         }
         .buttonStyle(.borderless)
         .padding(.horizontal, 10)
@@ -176,7 +176,7 @@ struct SketchStylePanel: View {
             Toggle(L("하이라이트도 지우기", "Erase Highlights Too"), isOn: $configuration.presets.eraserErasesMarks)
                 .toggleStyle(.checkbox)
                 .font(.caption)
-            Text(L("선과 모양은 통째로 지워진다.", "Strokes and shapes go whole."))
+            Text(L("지우개는 선과 모양을 통째로 지워요.", "The eraser removes a stroke or shape whole."))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }

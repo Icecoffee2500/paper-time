@@ -33,7 +33,7 @@ struct CitationStyleView: View {
                     copy(CitationFormatter.format(item, style: style))
                 } label: {
                     Label(
-                        copiedStyle == style ? L("복사됨", "Copied") : L("참고문헌 복사", "Copy Reference"),
+                        copiedStyle == style ? L("복사했어요", "Copied") : L("참고문헌 복사", "Copy Reference"),
                         systemImage: copiedStyle == style ? "checkmark" : "doc.on.doc"
                     )
                 }
@@ -45,7 +45,7 @@ struct CitationStyleView: View {
                     .font(.callout.monospaced())
             }
 
-            Section(L("언제 쓰나", "When to Use It")) {
+            Section(L("언제 쓰나요", "When to Use It")) {
                 Text(style.guidance)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -56,14 +56,14 @@ struct CitationStyleView: View {
                 Text(
                     L(
                         """
-                        마지막 모양은 LaTeX 템플릿이 정한다. \
-                        여기 있는 것은 참고문헌을 눈으로 확인하고, \
-                        메일이나 슬라이드에 하나 붙일 때 쓴다.
+                        마지막 모양은 LaTeX 템플릿이 정해요. \
+                        여기 있는 건 눈으로 한번 훑어보거나, \
+                        메일이나 슬라이드에 하나 붙일 때 쓰면 돼요.
                         """,
                         """
-                        Your LaTeX template decides the final formatting. \
-                        These are here to check a reference by eye and to paste one \
-                        into an email or a slide.
+                        The LaTeX template decides the final formatting. \
+                        Use these to check a reference, or to paste one into an \
+                        email or a slide.
                         """
                     )
                 )

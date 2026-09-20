@@ -38,7 +38,7 @@ struct ReaderScreen: View {
                 reader(session)
             } else if let loadError {
                 ContentUnavailableView {
-                    Label(L("이 논문을 열 수 없다", "Can't Open This Paper"), systemImage: "doc.questionmark")
+                    Label(L("이 논문을 열지 못했어요", "Can't Open This Paper"), systemImage: "doc.questionmark")
                 } description: {
                     Text(loadError)
                 } actions: {
@@ -230,7 +230,7 @@ struct ReaderScreen: View {
             case .saving:
                 ProgressView().controlSize(.small)
             case .mergedExternalChanges:
-                Label(L("다른 기기의 변경을 합쳤다", "Merged changes from another device"), systemImage: "arrow.triangle.merge")
+                Label(L("다른 기기의 변경을 합쳤어요", "Merged changes from another device"), systemImage: "arrow.triangle.merge")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             case let .failed(message):
@@ -241,15 +241,15 @@ struct ReaderScreen: View {
             }
 
             if session.hasForeignInk {
-                Label(L("다른 앱의 잉크가 있다", "Contains ink from another app"), systemImage: "hand.draw")
+                Label(L("다른 앱의 잉크가 있어요", "Contains ink from another app"), systemImage: "hand.draw")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .help(
                         L(
-                            "이 PDF에는 들여올 때부터 손으로 그린 잉크가 있었다. 여기서 그리면 그것을 덮어쓴다.",
+                            "이 PDF에는 들여올 때부터 손으로 그린 잉크가 있었어요. 여기서 그리면 그 위에 덮어써요.",
                             """
-                            This PDF already had freehand ink when it was imported. \
-                            Drawing here will replace it.
+                            This PDF already had freehand ink when it arrived. \
+                            Drawing here replaces it.
                             """
                         )
                     )
@@ -291,7 +291,7 @@ struct ReaderScreen: View {
                 onCopy: {
                     UIPasteboard.general.string = selection.string
                     dismissSelectionControls()
-                    show(toast: L("복사했다", "Copied"))
+                    show(toast: L("복사했어요", "Copied"))
                 }
             )
             .offset(anchoredTo: selectionFrame, width: 260, below: true)
@@ -307,7 +307,7 @@ struct ReaderScreen: View {
                     guard !trimmed.isEmpty else { dismissSelectionControls(); return }
                     session.addNote(for: noteSelection, comment: trimmed)
                     dismissSelectionControls()
-                    show(toast: L("노트를 더했다", "Note added"))
+                    show(toast: L("노트를 더했어요", "Note added"))
                 }
             )
             .frame(width: 300)

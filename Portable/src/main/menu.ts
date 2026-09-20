@@ -6,7 +6,7 @@
  * letters themselves are the Mac's, taken from `Shortcuts.swift`: someone who
  * reads on a Mac and writes on a PC should not have to learn the app twice.
  */
-import { Menu, app, type MenuItemConstructorOptions } from 'electron'
+import { Menu, app, shell, type MenuItemConstructorOptions } from 'electron'
 import { L } from '../shared/lang.js'
 
 const isMac = process.platform === 'darwin'
@@ -124,6 +124,25 @@ export function buildMenu({ send, chooseLibrary }: MenuActions) {
             { role: 'minimize', label: L('최소화', 'Minimize') },
             { role: 'zoom', label: L('확대/축소', 'Zoom') },
           ],
+    },
+    {
+      // Where a desktop user looks for it, and on the same key the Mac uses.
+      label: L('도움말(&H)', '&Help'),
+      role: 'help',
+      submenu: [
+        {
+          label: L('한마디 보내기…', 'Send Feedback…'),
+          accelerator: 'CmdOrCtrl+Alt+/',
+          click: () => send('menu:feedback'),
+        },
+        { type: 'separator' },
+        {
+          label: L('함께 만드는 중', 'Built together'),
+          click: () => {
+            void shell.openExternal('https://icecoffee2500.github.io/paper-time/#together')
+          },
+        },
+      ],
     },
   ]
 

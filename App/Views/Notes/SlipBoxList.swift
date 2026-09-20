@@ -88,12 +88,12 @@ struct SlipBoxList: View {
 
             if notes.visible.isEmpty {
                 ContentUnavailableView {
-                    Label(notes.notes.isEmpty ? L("슬립박스가 비어 있다", "The Box Is Empty") : L("맞는 것이 없다", "Nothing Matches"),
+                    Label(notes.notes.isEmpty ? L("아직 노트가 없어요", "No Notes Yet") : L("맞는 노트가 없어요", "Nothing Matches"),
                           systemImage: "tray")
                 } description: {
                     Text(notes.notes.isEmpty
-                         ? L("읽으면서 쓴 노트가 여기에 모인다 — 그것을 쓰게 만든 구절에 이어진 채로.", "Notes you write while reading appear here, linked to the passage that caused them.")
-                         : L("찾는 말에 맞는 노트가 없다.", "No note matches what you are looking for."))
+                         ? L("읽으면서 쓴 노트가 여기 모여요. 그 노트를 쓰게 만든 구절에 이어진 채로요.", "Notes you write while reading collect here, linked to the passage that prompted them.")
+                         : L("찾는 말에 맞는 노트가 없어요.", "No note matches that search."))
                 }
                 .frame(maxHeight: .infinity)
             } else {
@@ -188,7 +188,7 @@ struct SlipBoxList: View {
             Image(systemName: "map")
                 .foregroundStyle(.tint)
             VStack(alignment: .leading, spacing: 2) {
-                Text(L("노트 \(squeeze.noteIDs.count)개가 한 주제다", "\(squeeze.noteIDs.count) notes are one subject"))
+                Text(L("노트 \(squeeze.noteIDs.count)개가 한 주제를 보고 있어요", "\(squeeze.noteIDs.count) notes circle one subject"))
                     .font(.callout.weight(.medium))
                 Text(squeeze.words.joined(separator: " · "))
                     .font(.caption)
@@ -285,9 +285,9 @@ struct SlipBoxDetail: View {
                 }
         } else {
             ContentUnavailableView {
-                Label(L("고른 노트가 없다", "No Note Selected"), systemImage: "note.text")
+                Label(L("고른 노트가 없어요", "No Note Selected"), systemImage: "note.text")
             } description: {
-                Text(L("노트를 고르거나, 새로 쓴다.", "Choose a note, or write a new one."))
+                Text(L("노트를 고르거나 새로 쓰면 돼요.", "Choose a note, or write a new one."))
             }
             // An empty panel is still a panel. Without this it shrank to the
             // size of the words in it and sat on the ground as a card.

@@ -273,9 +273,9 @@ struct PaperGraphView: View {
             ))
         } else if graph.nodes.isEmpty {
             ContentUnavailableView {
-                Label(L("아직 이을 것이 없다", "Nothing to Connect Yet"), systemImage: "point.3.connected.trianglepath.dotted")
+                Label(L("아직 이을 것이 없어요", "Nothing to Connect Yet"), systemImage: "point.3.connected.trianglepath.dotted")
             } description: {
-                Text(L("논문을 몇 편 더하면, 무엇을 나누는지 그래프가 보여준다.", "Add a few papers, and the graph will show what they have in common."))
+                Text(L("논문을 몇 편 더하면, 무엇을 나누는지 그래프가 보여줘요.", "Add a few papers. The graph shows what they have in common."))
             }
         }
     }

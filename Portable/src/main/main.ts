@@ -32,6 +32,7 @@ import { resolveKorean, setKorean } from '../shared/lang.js'
 import { buildMenu } from './menu.js'
 import { watchLibrary } from './watcher.js'
 import { captureAndQuit, probeArgument, runProbe } from './probe.js'
+import { capture as captureWindow, send as sendFeedback } from './feedback.js'
 
 const isMac = process.platform === 'darwin'
 /** See `--papertime-chrome` in `preload.ts`. */
@@ -316,6 +317,29 @@ const handlers: Record<string, Handler> = {
   'window:toggleMaximize': () => (window?.isMaximized() ? window.unmaximize() : window?.maximize()),
   'window:close': () => window?.close(),
   'window:state': () => windowState(),
+  // The app speaks to the outside world here and nowhere else, and only
+  // because somebody pressed 보내기.
+  'feedback:capture': () => captureWindow(window),
+  'feedback:send': ((report: {
+    kind: 'bug' | 'wish'
+    body: string
+    name: string
+    reply?: string | null
+    shot?: string | null
+  }) =>
+    sendFeedback({
+      ...report,
+      context: {
+        window: window && !window.isDestroyed()
+          ? `${window.getBounds().width}×${window.getBounds().height}`
+          : undefined,
+        layout: settings().pageLayout,
+        paperCount: library?.papers.length,
+        libraryCloud: undefined,
+        recent: [],
+      },
+    })) as Handler,
+
   'shell:openExternal': (({ url }: { url: string }) => {
     if (/^https?:/.test(url)) shell.openExternal(url)
   }) as Handler,

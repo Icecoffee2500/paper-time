@@ -258,7 +258,7 @@ export class Reader {
       this.watchVisibility()
       this.update()
     } catch (error) {
-      this.actions.toast(L(`이 PDF를 열 수 없다: ${String(error)}`, `This PDF could not be opened: ${String(error)}`))
+      this.actions.toast(L(`이 PDF를 열 수 없어요. 파일이 깨졌을 수 있어요 — ${String(error)}`, `Paper Time can't open this PDF. It may be damaged — ${String(error)}`))
     }
   }
 
@@ -412,9 +412,9 @@ export class Reader {
     if (adopted.unreadable.length > 0) {
       const pages = adopted.unreadable.map((index) => index + 1).join(', ')
       this.actions.toast(L(
-        `${pages}쪽의 손글씨는 맥에서 쓴 것인데 아직 PDF에 기록되지 않았다. 맥에서 이 논문을 한 번 열면 건너온다.`,
-        `Handwriting on page ${pages} was made on a Mac and has not been written into the PDF yet. `
-        + 'Open the paper on the Mac once and it will come across.',
+        `${pages}쪽 손글씨는 맥에서 쓴 거예요. 맥이 아직 PDF에는 쓰지 않았어요. 맥에서 이 논문을 한 번 열면 건너와요.`,
+        `Handwriting on page ${pages} came from a Mac and is not in the PDF yet. `
+        + 'Open the paper on the Mac once, and it comes across.',
       ))
     }
   }

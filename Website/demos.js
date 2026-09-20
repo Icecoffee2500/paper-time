@@ -87,7 +87,7 @@ function ultracopy() {
     style:
       "margin:0;font:12.5px/1.75 var(--mono);white-space:pre-wrap;word-break:break-word;" +
       "color:var(--ink-2);min-height:5.2em",
-  }, L("아래 두 단추를 눌러 보라.", "Press the two buttons below."));
+  }, L("아래 두 단추를 눌러보세요.", "Try both buttons."));
 
   const label = el("div", { class: "hint", style: "margin:0 0 6px" }, " ");
 
@@ -96,10 +96,10 @@ function ultracopy() {
     out.style.color = kind === "ultra" ? "var(--ink)" : "var(--ink-3)";
     label.innerHTML =
       kind === "ultra"
-        ? L('<b style="color:var(--green)">붙여넣으면 그대로 컴파일된다.</b>',
-            '<b style="color:var(--green)">Paste it and it compiles as it is.</b>')
-        : L('<b>수식이 글자 부스러기로 깨졌다.</b> 다시 손으로 쳐야 한다.',
-            '<b>The formula broke into crumbs of characters.</b> It has to be typed again by hand.');
+        ? L('<b style="color:var(--green)">붙여넣으면 그대로 컴파일돼요.</b>',
+            '<b style="color:var(--green)">Paste it. It compiles.</b>')
+        : L('<b>수식이 글자 부스러기로 깨졌어요.</b> 다시 손으로 쳐야 해요.',
+            '<b>The formula came apart into crumbs.</b> Type it again by hand.');
     navigator.clipboard?.writeText(text).catch(() => {});
   };
 
@@ -133,7 +133,7 @@ function searchEverything() {
     { g: G.tag, t: "continual-learning", s: L("논문 7편", "7 papers") },
     // 제목에는 없고 본문에만 있는 낱말: 이 줄이 없으면 그 논문은 떠오르지 않는다.
     { g: G.text, t: "…synaptic consolidation enables continual learning…",
-      s: L("Kirkpatrick 2017 · 1쪽 · 9번", "Kirkpatrick 2017 · p. 1 · 9 matches") },
+      s: L("Kirkpatrick 2017 · 1쪽 · 9군데", "Kirkpatrick 2017 · p. 1 · 9 matches") },
     { g: G.text, t: "…unlearning specific layers may not help the model forget…",
       s: L("Can Memorization Be Localized? · 9쪽", "Can Memorization Be Localized? · p. 9") },
     { g: G.action, t: L("PDF 추가…", "Add PDFs…"), s: "⌘O" },
@@ -141,7 +141,7 @@ function searchEverything() {
   ];
   const OFFERED = [
     { h: L("이어 읽기", "Keep reading"), t: "Overcoming catastrophic forgetting…",
-      s: L("3쪽에서 멈췄다", "Stopped on page 3") },
+      s: L("3쪽에서 멈췄어요", "Stopped on page 3") },
     { h: L("읽었으니", "Read next"), t: "Progressive Neural Networks",
       s: L("EWC를 읽었다면", "Since you read EWC") },
     { h: L("다시 보기", "Look again"), t: "Auto-Encoding Variational Bayes",
@@ -167,8 +167,8 @@ function searchEverything() {
     list.replaceChildren();
     const query = q.trim().toLowerCase();
     if (!query) {
-      caption.innerHTML = L("빈칸일 때는 <b>묻기 전에 내놓는다</b> — 이유와 함께.",
-                            "When the field is empty it <b>offers before you ask</b> — with the reason.");
+      caption.innerHTML = L("빈칸일 때는 <b>묻기 전에 먼저 보여줘요</b> — 이유와 함께.",
+                            "With the field empty, it <b>offers before you ask</b> — and says why.");
       for (const o of OFFERED) {
         list.append(el("div", {
           style: "font:600 11px/1 var(--sans);letter-spacing:.05em;color:var(--ink-3);" +
@@ -180,9 +180,9 @@ function searchEverything() {
     }
     const hits = ITEMS.filter((i) => (i.t + i.s + i.g).toLowerCase().includes(query));
     caption.innerHTML = hits.length
-      ? L(`제목도 노트도 태그도, <b>논문 본문 속 한 줄까지</b>. ${hits.length}개.`,
+      ? L(`제목도 노트도 태그도, <b>논문 본문 속 한 줄까지</b>. ${hits.length}개 찾았어요.`,
           `Titles, notes, tags, <b>down to a line inside a paper</b>. ${hits.length} found.`)
-      : L("그런 것은 없다.", "No such thing.");
+      : L("그런 건 없어요.", "No such thing.");
     for (const h of hits) list.append(row(h.t, h.s, h.g));
   };
 
@@ -344,9 +344,9 @@ function fittedHighlight() {
   const sync = () => {
     draw();
     note.innerHTML = fitted
-      ? L("<b>Paper Time</b> — 글자가 앉은 자리만 덮는다. 위아래 줄은 읽을 수 있다.",
-          "<b>Paper Time</b> — covers only where the letters sit. The lines above and below can still be read.")
-      : L("<b>다른 PDF 앱</b> — 수식의 상자 전체를 덮어 이웃한 줄까지 지운다.",
+      ? L("<b>Paper Time</b> — 글자가 앉은 자리만 덮어요. 위아래 줄은 그대로 읽을 수 있어요.",
+          "<b>Paper Time</b> — covers where the letters sit, nothing more. The lines above and below stay readable.")
+      : L("<b>다른 PDF 앱</b> — 수식의 상자를 통째로 덮어서 이웃한 줄까지 지워요.",
           "<b>Other PDF apps</b> — cover the formula's whole box and blot out the neighbouring lines.");
   };
 
@@ -403,7 +403,7 @@ function marksJump() {
         el("div", { style: "font-size:10.5px;color:var(--ink-3);margin-bottom:3px" }, m.kind),
         el("div", { style: `font-size:13px;background:${m.c};border-radius:3px;padding:0 2px;display:inline` }, m.t))),
     el("p", { class: "hint", style: "margin-top:12px" },
-      L("표시를 누르면 쪽이 그리로 간다.", "Click a mark and the page goes there.")));
+      L("표시를 누르면 쪽이 그리로 가요.", "Click a mark and the page goes there.")));
 
   return el("div", { class: "demo-shell" }, page, inspector);
 }
@@ -449,9 +449,9 @@ function passageToNote() {
     noteBody.replaceChildren();
     if (!sent) {
       noteBody.append(el("div", { style: "color:var(--ink-3);font-size:14px" },
-        L("노트는 아직 비어 있다.", "The note is still empty.")));
-      hint.innerHTML = L("논문에서 고른 문장을 <b>주소째로</b> 노트에 보낸다.",
-                         "Send the sentence you chose in the paper to the note, <b>address and all</b>.");
+        L("노트가 아직 비어 있어요.", "Nothing in the note yet.")));
+      hint.innerHTML = L("논문에서 고른 문장을 <b>주소째로</b> 노트에 보내요.",
+                         "Send the sentence you picked to the note, <b>address and all</b>.");
       return;
     }
     noteBody.append(
@@ -487,8 +487,8 @@ function passageToNote() {
       }, L("스프링의 뻣뻣함이 파라미터마다 다르다는 게 핵심이다.",
            "The point is that the spring's stiffness differs from parameter to parameter.")));
     hint.innerHTML = L(
-      "<b style='color:var(--green)'>구절이 주소를 가지고 왔다.</b> 수식은 수식으로 남는다 — 인용을 누르면 그 줄로 돌아간다.",
-      "<b style='color:var(--green)'>The passage brought its address along.</b> The formula stays a formula — click the quotation and you are back at that line.");
+      "<b style='color:var(--green)'>구절이 주소를 들고 왔어요.</b> 수식은 수식으로 남아요 — 인용을 누르면 그 줄로 돌아가요.",
+      "<b style='color:var(--green)'>The passage brought its address along.</b> The formula stays a formula — click the quotation and the paper opens at that line.");
   };
 
   const send = el("button", {
@@ -560,7 +560,7 @@ function noteLinks() {
             onclick: () => { const back = trail.pop(); if (back) open(back, false); },
           }, "← " + NOTES[trail[trail.length - 1]].t)
         : el("span", { class: "hint", style: "margin:0" },
-            L("노트 안의 이름을 누르면 그 노트가 열린다.", "Click a name inside a note and that note opens.")));
+            L("노트 안의 이름을 누르면 그 노트가 열려요.", "Click a name inside a note and that note opens.")));
   };
 
   render();

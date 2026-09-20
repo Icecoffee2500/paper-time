@@ -106,8 +106,8 @@ struct SettingsView: View {
                 }
             } footer: {
                 Text(L(
-                    "논문은 내가 고른 폴더에 평범한 파일로 있다 — 이 앱 안에만 있는 것은 없다.",
-                    "Papers are ordinary files in the folder you chose — nothing lives only inside this app."
+                    "논문은 내가 고른 폴더에 평범한 파일로 있어요. 이 앱 안에만 있는 건 하나도 없어요.",
+                    "Papers are ordinary files in the folder you chose. Nothing lives only inside Paper Time."
                 ))
             }
         }
@@ -268,7 +268,7 @@ struct SettingsView: View {
                     languageSection
                 }
                     .confirmationDialog(
-                        L("라이브러리 폴더를 바꿀까?", "Change Library Folder?"),
+                        L("라이브러리 폴더를 바꿀까요?", "Change Library Folder?"),
                         isPresented: $showsChangeFolderConfirmation,
                         titleVisibility: .visible
                     ) {
@@ -276,8 +276,8 @@ struct SettingsView: View {
                         Button(L("취소", "Cancel"), role: .cancel) {}
                     } message: {
                         Text(L(
-                            "아무것도 지우지 않는다. 논문은 있던 자리에 그대로 있고, 이 기기에서 폴더를 다시 고르기만 한다.",
-                            "This doesn't delete anything. Your papers stay exactly where they are — you'll just choose a folder again, on this device."
+                            "아무것도 지우지 않아요. 논문은 있던 자리에 그대로 있어요. 이 기기에서 폴더만 다시 고르면 돼요.",
+                            "This deletes nothing. The papers stay where they are. This device asks for the folder again."
                         ))
                     }
             case .metadata:
@@ -347,7 +347,7 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
         .confirmationDialog(
-            L("라이브러리 폴더를 바꿀까?", "Change Library Folder?"),
+            L("라이브러리 폴더를 바꿀까요?", "Change Library Folder?"),
             isPresented: $showsChangeFolderConfirmation,
             titleVisibility: .visible
         ) {
@@ -357,8 +357,8 @@ struct SettingsView: View {
             Button(L("취소", "Cancel"), role: .cancel) {}
         } message: {
             Text(L(
-                "아무것도 지우지 않는다. 논문은 있던 자리에 그대로 있고, 이 기기에서 폴더를 다시 고르기만 한다.",
-                "This doesn't delete anything. Your papers stay exactly where they are — you'll just choose a folder again, on this device."
+                "아무것도 지우지 않아요. 논문은 있던 자리에 그대로 있어요. 이 기기에서 폴더만 다시 고르면 돼요.",
+                "This deletes nothing. The papers stay where they are. This device asks for the folder again."
             ))
         }
     }
@@ -419,8 +419,8 @@ struct SettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Text(L(
-                    "라이브러리를 옮기려면 폴더를 통째로 옮긴다 — 안에 숨은 .papertime 폴더까지. 서지·노트·잉크·읽던 자리가 거기에 있다. PDF만 복사하면 새 라이브러리가 시작되고 노트는 뒤에 남는다.",
-                    "To move the library, move the whole folder — including the hidden .papertime folder inside it, which holds the records, notes, ink and reading progress. Copying only the PDFs starts a fresh library and leaves the notes behind."
+                    "라이브러리를 옮길 때는 폴더를 통째로 옮겨주세요. 안에 숨어 있는 .papertime 폴더까지요. 서지와 노트, 잉크, 읽던 자리가 거기 있어요. PDF만 복사하면 새 라이브러리가 시작되고, 노트는 따라오지 않아요.",
+                    "Move the whole folder, including the hidden .papertime inside it. That folder holds the records, notes, ink and reading progress. Copying only the PDFs starts a fresh library and leaves the notes behind."
                 ))
             }
         }
@@ -446,8 +446,8 @@ struct SettingsView: View {
             pageHeader(L("말", "Language"))
         } footer: {
             Text(L(
-                "고르지 않으면 시스템을 따른다 — 시스템이 한국어면 한국어, 그 밖이면 영어다.",
-                "Left to the system, the interface is Korean when the system is Korean and English otherwise."
+                "고르지 않으면 시스템을 따라가요. 시스템이 한국어면 한국어로, 아니면 영어로 보여요.",
+                "Paper Time follows the system: Korean when the system is Korean, English otherwise."
             ))
         }
     }
@@ -465,7 +465,7 @@ struct SettingsView: View {
                 Image(systemName: "info.circle")
                     .foregroundStyle(.secondary)
                     .accessibilityLabel(L("정보", "Information"))
-                Text(app.library?.onDeviceModelMessage ?? L("쓸 수 있는지는 라이브러리를 열어야 안다.", "Open a library to check availability."))
+                Text(app.library?.onDeviceModelMessage ?? L("쓸 수 있는지는 라이브러리를 열어야 알 수 있어요.", "Open a library to see whether it's available."))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -495,15 +495,15 @@ struct SettingsView: View {
         } footer: {
             Text(L(
                 """
-                Crossref와 OpenAlex는 연락처를 밝힌 요청에 더 빠르고 안정된 응답을 준다. \
-                비워 두어도 되고, 다만 논문 여럿을 한꺼번에 채울 때 느려진다. \
-                주소는 그 두 곳에만 보낸다.
+                Crossref와 OpenAlex는 연락처를 밝힌 요청에 더 빨리 답해줘요. \
+                비워 둬도 돼요. 대신 논문 여러 편을 한꺼번에 채울 때 느려요. \
+                주소는 이 두 곳에만 보내요.
                 """,
                 """
-                Crossref and OpenAlex give faster, more reliable service to \
-                requests that identify a contact address. Leaving this empty \
-                still works; lookups are just slower when many papers resolve \
-                at once. Your address is sent only to those services.
+                Crossref and OpenAlex answer faster when a request carries a \
+                contact address. This can stay empty; lookups slow down when \
+                many papers resolve at once. Paper Time sends the address to \
+                those two services and nowhere else.
                 """
             ))
         }
@@ -702,8 +702,8 @@ struct SettingsView: View {
             pageHeader(L("읽기", "Reading"))
         } footer: {
             Text(L(
-                "논문이 열릴 때의 모양이다. 쪽의 AA 메뉴는 읽고 있는 논문만 바꾸고 이것은 건드리지 않는다.",
-                "What a paper opens as. The page's own AA menu changes the one you are reading without changing this."
+                "논문을 열었을 때의 모양이에요. 쪽 위의 AA 메뉴는 지금 읽는 논문만 바꿔요. 이 설정은 그대로예요.",
+                "How a paper looks when it opens. The AA menu on the page changes only the paper you are reading, not this setting."
             ))
         }
     }

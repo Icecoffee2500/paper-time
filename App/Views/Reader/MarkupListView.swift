@@ -274,14 +274,14 @@ struct MarkupListView: View {
     }
 
     private var emptyTitle: String {
-        filter == .all ? L("아직 표시가 없다", "No Marks Yet") : L("아직 \(filter.label) 표시가 없다", "Nothing \(filter.label) Yet")
+        filter == .all ? L("아직 표시가 없어요", "No Marks Yet") : L("아직 \(filter.label) 표시가 없어요", "Nothing \(filter.label) Yet")
     }
 
     private var emptyMessage: String {
         switch filter {
-        case .all: L("글자를 골라 형광펜을 칠하거나, 펜슬로 그린다.", "Select text to highlight it, or draw with your pencil.")
-        case .notes: L("구절을 고르고 노트 단추를 눌러 쓴다.", "Select a passage and choose the note button to write about it.")
-        default: L("논문에서 글자를 고르고 표시 막대에서 \(filter.label.lowercased())을 고른다.", "Select text in the paper and pick \(filter.label.lowercased()) from the bar.")
+        case .all: L("글자를 골라 형광펜을 칠하거나, 펜슬로 그려보세요.", "Select text to highlight it, or draw with the pencil.")
+        case .notes: L("구절을 고르고 노트 단추를 누르면 돼요.", "Select a passage, then choose the note button.")
+        default: L("논문에서 글자를 고르고, 표시 막대에서 \(filter.label.lowercased())을 고르면 돼요.", "Select text in the paper and pick \(filter.label.lowercased()) from the bar.")
         }
     }
 

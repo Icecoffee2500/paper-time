@@ -97,7 +97,7 @@ function paperRow(entry: Paper, actions: PaperListActions): HTMLElement {
     main.append(el('div', {
       class: 'paper-subtitle',
       style: 'color: var(--danger)',
-      text: L('PDF가 폴더에 없다', 'The PDF is not in the folder'),
+      text: L('폴더에 PDF가 없어요', 'Missing from the folder'),
     }))
   }
 
@@ -144,13 +144,12 @@ function emptyState(actions: PaperListActions): HTMLElement {
     const choose = el('button', { class: 'filled-button', text: L('라이브러리 폴더 고르기…', 'Choose Library Folder…') })
     on(choose, 'click', actions.chooseLibrary)
     wrap.append(
-      el('h2', { text: L('아직 라이브러리 폴더가 없다', 'No library folder yet') }),
+      el('h2', { text: L('아직 라이브러리 폴더가 없어요', 'No library folder yet') }),
       el('p', {
         text: L(
-          '논문이 있는 폴더를 고른다. 클라우드 폴더도 되고, 그게 라이브러리가 기기를 따라다니는 길이다 — 같은 논문, 같은 표시가 맥에서도 PC에서도.',
-          'Choose the folder your papers live in. A cloud folder works, and is how a '
-            + 'library follows you between machines — the same papers, the same marks, on a Mac '
-            + 'and on a PC.',
+          '논문이 들어 있는 폴더를 골라주세요. 클라우드 폴더도 돼요. 그러면 라이브러리가 기기를 따라다녀요 — 맥에서 표시한 것이 PC에서도 그대로 보여요.',
+          'Choose the folder your papers live in. Pick a cloud folder and the library '
+            + 'travels with you — the same papers, the same marks, on a Mac and on a PC.',
         ),
       }),
       choose,
@@ -161,10 +160,10 @@ function emptyState(actions: PaperListActions): HTMLElement {
     const add = el('button', { class: 'filled-button', text: L('PDF 더하기', 'Add PDFs') })
     on(add, 'click', actions.addPapers)
     wrap.append(
-      el('h2', { text: L('아직 아무것도 없다', 'Nothing here yet') }),
+      el('h2', { text: L('아직 아무것도 없어요', 'Nothing here yet') }),
       el('p', {
         text: L(
-          'PDF를 더하거나 창에 끌어다 놓는다. 논문은 폴더 안에서 제 이름을 그대로 지킨다.',
+          'PDF를 더하거나 창에 끌어다 놓아보세요. 논문은 폴더 안에서 제 이름을 그대로 지켜요.',
           'Add a PDF, or drop one on the window. Papers keep their own names in the folder.',
         ),
       }),
@@ -172,7 +171,7 @@ function emptyState(actions: PaperListActions): HTMLElement {
     )
     return wrap
   }
-  wrap.append(el('h2', { text: L('이 선반은 비어 있다', 'Nothing on this shelf') }))
+  wrap.append(el('h2', { text: L('이 선반은 비어 있어요', 'Nothing on this shelf') }))
   return wrap
 }
 

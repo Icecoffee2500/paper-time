@@ -26,7 +26,7 @@ struct GraphSidePanel: View {
             .padding(.top, 10)
             .padding(.bottom, 8)
 
-            Text(L("논문은 한쪽이 다른 쪽을 인용할 때, 내 노트가 둘을 이을 때, 공저자가 있을 때, 같은 컬렉션에 넣었을 때 이어진다.", "Papers are joined when one cites the other, when your notes link them, when they share an author, or when you filed them together."))
+            Text(L("논문은 이럴 때 이어져요. 한쪽이 다른 쪽을 인용할 때, 내 노트가 둘을 이을 때, 저자가 겹칠 때, 같은 컬렉션에 넣었을 때요.", "Two papers join when one cites the other, when a note links them, when they share an author, or when they sit in the same collection."))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 16)
@@ -42,7 +42,7 @@ struct GraphSidePanel: View {
                     .controlSize(.small)
                     .disabled(graph.selection == nil)
                 if graph.selection == nil {
-                    Text(L("먼저 그래프에서 논문을 하나 누른다.", "Click a paper in the graph first."))
+                    Text(L("그래프에서 논문을 하나 먼저 눌러주세요.", "Click a paper in the graph first."))
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
@@ -129,16 +129,16 @@ struct GraphSidePanel: View {
                 .tracking(0.6)
                 .foregroundStyle(.tertiary)
 
-            step("hand.tap", L("점을 누른다", "Click a dot"),
-                 L("이웃이 밝아지고, 이 패널이 그 하나하나를 이어진 이유와 함께 늘어놓는다.", "Its neighbours light up, and this panel lists every one with the reason they are joined."))
-            step("scope", L("'고른 것에 집중'을 켠다", "Turn on Focus on selection"),
-                 L("관계없는 것은 다 물러나고, 논문 하나의 이웃만 남는다.", "Everything unrelated drops away, so one paper's neighbourhood is all that is left."))
-            step("line.3.horizontal.decrease", L("범례에서 선 하나를 끈다", "Switch a line off in the legend"),
-                 L("인용을 숨기면 내 노트가 이은 것만 남는다 — 문헌의 관계가 아니라 내 읽기다.", "Hide citations to see only what your own notes have joined — that is your reading, not the literature's."))
+            step("hand.tap", L("점 누르기", "Click a dot"),
+                 L("이웃이 밝아져요. 이 패널이 그 하나하나를 이어진 이유와 함께 보여줘요.", "Its neighbours light up. This panel lists each one and why it is joined."))
+            step("scope", L("'고른 것에 집중' 켜기", "Turn on Focus on selection"),
+                 L("관계없는 건 다 물러나고, 논문 하나의 이웃만 남아요.", "Everything unrelated drops away. One paper's neighbourhood is all that's left."))
+            step("line.3.horizontal.decrease", L("범례에서 선 하나 끄기", "Switch a line off in the legend"),
+                 L("인용을 숨기면 내 노트가 이은 것만 남아요. 문헌의 관계가 아니라 내 읽기예요.", "Hide citations and only your own notes remain — your reading, not the literature's."))
             step("arrow.up.left.and.arrow.down.right", L("핀치로 확대, 드래그로 이동", "Pinch to zoom, drag to pan"),
-                 L("들어갈수록 제목이 나타난다. 점을 두 번 누르면 논문이 열린다.", "Titles appear as you go in. Double-click a dot to open the paper."))
+                 L("들어갈수록 제목이 나타나요. 점을 두 번 누르면 논문이 열려요.", "Titles appear as you go in. Double-click a dot to open the paper."))
 
-            Text(L("아래에서 시작한다: 가장 많이 이어진 논문에 나머지 라이브러리가 매달려 있다.", "Start below: the most connected papers are the ones the rest of your library hangs off."))
+            Text(L("아래에서 시작해보세요. 가장 많이 이어진 논문에 나머지 라이브러리가 매달려 있어요.", "Start below. The most connected papers are the ones the rest of the library hangs off."))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .padding(.top, 2)

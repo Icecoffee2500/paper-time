@@ -30,8 +30,8 @@ export function buildInspector(actions: InspectorActions): { node: HTMLElement; 
     const paper = store.papers.find((entry) => entry.id === store.selectedID)
     if (!paper) {
       body.append(el('div', { class: 'empty' }, [
-        el('h2', { text: L('고른 논문이 없다', 'No paper selected') }),
-        el('p', { text: L('목록에서 하나를 고르면 그 기록이 보인다.', 'Pick one from the list to see its record.') }),
+        el('h2', { text: L('고른 논문이 없어요', 'No paper selected') }),
+        el('p', { text: L('목록에서 하나를 고르면 그 기록이 보여요.', 'Pick one from the list to see its record.') }),
       ]))
       return
     }
@@ -166,9 +166,9 @@ function marks(body: HTMLElement, paper: Paper) {
     el('h2', { text: L('표시', 'Marks') }),
     el('p', {
       text: L(
-        '쪽에 칠한 형광펜과 밑줄이 여기에 나열될 것이다. 펜으로 그린 것은 이미 PDF 자체에 적혀 있다.',
-        'Highlights and underlines made on the page will be listed here. '
-          + 'Everything drawn with the pen is already written into the PDF itself.',
+        '쪽에 칠한 형광펜과 밑줄이 여기에 모여요. 펜으로 그린 것은 이미 PDF 안에 있어요.',
+        'Highlights and underlines from the page will appear here. '
+          + 'Pen strokes already live in the PDF.',
       ),
     }),
   ]))

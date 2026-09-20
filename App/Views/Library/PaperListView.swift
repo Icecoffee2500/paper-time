@@ -45,32 +45,32 @@ struct PaperListView: View {
     private var emptyShelf: (title: String, symbol: String, note: String) {
         switch model.scope {
         case .unread:
-            (L("안 읽은 논문이 없다", "Nothing Unread"), "circle",
-             L("라이브러리의 논문은 모두 열어 봤다.", "Every paper in the library has been opened."))
+            (L("안 읽은 논문이 없어요", "Nothing Unread"), "circle",
+             L("여기 있는 논문은 모두 열어봤어요.", "Every paper here has been opened."))
         case .reading:
-            (L("읽는 중인 논문이 없다", "Nothing Being Read"), "circle.lefthalf.filled",
-             L("논문을 읽는 중으로 표시하면 여기서 기다린다.", "Set a paper's status to Reading and it will wait for you here."))
+            (L("읽는 중인 논문이 없어요", "Nothing Being Read"), "circle.lefthalf.filled",
+             L("논문을 읽는 중으로 바꿔두면 여기서 기다려요.", "Mark a paper as Reading and it waits here."))
         case .read:
-            (L("아직 읽은 논문이 없다", "Nothing Read Yet"), "checkmark.circle",
-             L("읽음으로 표시한 논문이 여기 모인다.", "Papers you mark as Read gather here."))
+            (L("읽은 논문이 아직 없어요", "Nothing Read Yet"), "checkmark.circle",
+             L("읽음으로 바꾼 논문이 여기 모여요.", "Papers marked as Read collect here."))
         case .favorites:
-            (L("즐겨찾기가 없다", "No Favorites"), "star",
-             L("논문에 별을 달면 언제든 여기 있다.", "Star a paper and it will be here whenever you want it."))
+            (L("즐겨찾기가 아직 없어요", "No Favorites"), "star",
+             L("논문에 별을 달아두면 언제든 여기서 찾을 수 있어요.", "Star a paper and it stays here."))
         case .needsReview:
-            (L("살펴볼 것이 없다", "Nothing to Review"), "exclamationmark.triangle",
-             L("서지를 살펴봐야 할 논문이 없다.", "No paper's details are in doubt."))
+            (L("살펴볼 것이 없어요", "Nothing to Review"), "exclamationmark.triangle",
+             L("서지를 한번 봐야 할 논문이 없어요.", "Every record looks right."))
         case .collection:
-            (L("이 컬렉션은 비어 있다", "This Collection Is Empty"), "folder",
-             L("옆 목록의 이 컬렉션에 논문을 끌어다 놓으면 들어간다.", "Drag papers onto it in the sidebar to put them in."))
+            (L("이 컬렉션은 비어 있어요", "This Collection Is Empty"), "folder",
+             L("옆 목록의 컬렉션 위로 논문을 끌어다 놓아보세요.", "Drag papers onto it in the sidebar."))
         case .tag:
-            (L("이 태그가 달린 논문이 없다", "Nothing With This Tag"), "tag",
-             L("논문에 이 태그를 달면 여기 나온다.", "Tag a paper and it will appear here."))
+            (L("이 태그를 단 논문이 없어요", "Nothing With This Tag"), "tag",
+             L("논문에 이 태그를 달면 여기 나와요.", "Tag a paper and it appears here."))
         case .author:
-            (L("이 저자의 논문이 없다", "Nothing by This Author"), "person",
-             L("라이브러리에 이 이름이 실린 논문이 없다.", "No paper in the library carries this name."))
+            (L("이 저자의 논문이 없어요", "Nothing by This Author"), "person",
+             L("이 이름이 실린 논문이 라이브러리에 없어요.", "No paper here carries this name."))
         default:
-            (L("아무것도 없다", "Nothing Here"), "tray",
-             L("이 선반은 비어 있다.", "This shelf is empty."))
+            (L("아직 아무것도 없어요", "Nothing Here"), "tray",
+             L("이 선반은 비어 있어요.", "This shelf is empty."))
         }
     }
 
@@ -79,10 +79,10 @@ struct PaperListView: View {
         if model.papers.isEmpty {
             if model.looseDocuments.isEmpty {
                 ContentUnavailableView(
-                    L("아직 논문이 없다", "No Papers Yet"),
+                    L("아직 논문이 없어요", "No Papers Yet"),
                     systemImage: "doc.badge.plus",
-                    description: Text(L("PDF를 여기 끌어다 놓거나, PDF 더하기로 라이브러리를 채운다.",
-                                        "Drag PDFs here, or use Add PDFs to build your library."))
+                    description: Text(L("PDF를 여기 끌어다 놓아보세요. 도구 막대의 PDF 더하기로 골라도 돼요.",
+                                        "Drag in a PDF, or choose Add PDFs."))
                 )
             } else {
                 // Pointing the app at a folder that already holds PDFs is the
@@ -308,14 +308,14 @@ struct PaperListView: View {
         let noun = count == 1 ? "PDF" : "PDFs"
         return L(
             """
-            이 폴더에 이미 PDF가 \(count)개 있다. 더하면 하나하나 서지를 찾아 기록을 \
-            만든다. PDF는 옮기지도, 이름을 바꾸지도, 복사하지도 않는다 — \
-            있던 자리에 그대로 있다.
+            이 폴더에 PDF가 벌써 \(count)개 있어요. 더하면 하나씩 서지를 찾아 기록을 \
+            만들어요. PDF는 있던 자리에 그대로 있어요 — 옮기지도, 이름을 바꾸지도, \
+            복사하지도 않아요.
             """,
             """
-            This folder already holds \(count) \(noun). Adding them looks each one \
-            up and gives it a record. The PDFs are not moved, renamed or copied — \
-            they stay exactly where they are.
+            This folder already holds \(count) \(noun). Adding them looks up each \
+            one and gives it a record. Paper Time never moves, renames or copies \
+            a file.
             """
         )
     }
@@ -395,8 +395,8 @@ struct PaperRow: View, Equatable {
             } else if needsReview(paper) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
-                    .help(L("서지를 살펴봐야 한다", "Metadata needs review"))
-                    .accessibilityLabel(L("서지를 살펴봐야 한다", "Metadata needs review"))
+                    .help(L("서지를 한번 봐주세요", "Check this record"))
+                    .accessibilityLabel(L("서지를 한번 봐주세요", "Check this record"))
             }
         }
         .padding(.vertical, 2)

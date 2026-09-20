@@ -217,13 +217,13 @@ private struct ToolOptions: View {
                 Toggle(L("손가락으로 그리기", "Draw with Finger"), isOn: $configuration.fingerDrawing)
             case .highlighter:
                 Toggle(L("글자에 맞추기", "Fit to Text"), isOn: $configuration.presets.fitsToText)
-                Text(L("글자 위에서는 글자에 맞춘 하이라이트가, 글자 밑에서는 밑줄이 된다. 끄면 그은 그대로 남는다.", "Over words, a stroke becomes a highlight fitted to them; under them, an underline. Off, it stays as drawn."))
+                Text(L("글자 위에 그으면 글자에 맞춘 하이라이트가 돼요. 글자 밑에 그으면 밑줄이 되고요. 끄면 그은 그대로 남아요.", "A stroke over words becomes a highlight; under them, an underline. Off, it stays as drawn."))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 Toggle(L("손가락으로 그리기", "Draw with Finger"), isOn: $configuration.fingerDrawing)
             case .eraser:
                 Toggle(L("하이라이트도 지우기", "Erase Highlights Too"), isOn: $configuration.presets.eraserErasesMarks)
-                Text(L("선은 통째로 지워진다. 켜 두면 지우개가 하이라이트나 밑줄 위를 지날 때 그것도 지운다.", "Strokes are erased whole. With this on, running the eraser over a highlight or an underline removes it as well."))
+                Text(L("지우개는 선을 통째로 지워요. 켜 두면 하이라이트나 밑줄 위를 지날 때 그것도 지워요.", "The eraser removes a stroke whole. With this on, it takes highlights and underlines too."))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

@@ -121,7 +121,7 @@ struct LibrarySidebar: View {
                 Section {
                     Label {
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(L("찾은 결과", "Search Results"))
+                            Text(L("찾은 것", "Search Results"))
                             Text(model.searchQuery)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)

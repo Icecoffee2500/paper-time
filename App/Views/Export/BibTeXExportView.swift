@@ -140,7 +140,7 @@ struct BibTeXExportView: View {
     private var previewSection: some View {
         Section(L("미리 보기", "Preview")) {
             ScrollView {
-                Text(previewText.isEmpty ? L("아직 내보낼 것이 없다.", "Nothing to export yet.") : previewText)
+                Text(previewText.isEmpty ? L("아직 내보낼 것이 없어요.", "Nothing to export yet.") : previewText)
                     .font(.system(.footnote, design: .monospaced))
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -183,7 +183,7 @@ struct BibTeXExportView: View {
         let noun = reviewCount == 1 ? "paper hasn't" : "papers haven't"
         let verb = options.includeUnverified ? "will still be included" : "will be left out of this export"
         return L(
-            "\(reviewCount)편은 아직 확인되지 않았고, \(options.includeUnverified ? "그래도 들어간다" : "이번 내보내기에서는 빠진다"). 바꾸려면 “확인 안 된 항목도 넣기”를 켠다.",
+            "\(reviewCount)편은 아직 확인하지 못했어요. \(options.includeUnverified ? "그래도 들어가요" : "이번 내보내기에서는 빠져요"). 바꾸려면 “확인 안 된 항목도 넣기”를 켜면 돼요.",
             else: "\(reviewCount) \(noun) been verified and \(verb). Turn on “Include Unverified Records” to change that."
         )
     }

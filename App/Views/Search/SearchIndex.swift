@@ -199,7 +199,7 @@ struct SearchSuggestions {
         if !toRevisit.isEmpty {
             groups.append(Group(title: L("다시 보기", "Revisit"), results: toRevisit.map { paper in
                 let count = model.notes.notes(forPaper: paper.id).count
-                return row(paper, L("\(ago(paper.state.lastOpenedAt ?? now)) 읽음 · 노트 \(count)개 — 지금 한 번 보면 남는다", "read \(ago(paper.state.lastOpenedAt ?? now)) · \(count == 1 ? "1 note" : "\(count) notes") — a look now keeps it"), symbol: "arrow.counterclockwise")
+                return row(paper, L("\(ago(paper.state.lastOpenedAt ?? now)) 읽음 · 노트 \(count)개 — 지금 한 번 보면 남아요", "read \(ago(paper.state.lastOpenedAt ?? now)) · \(count == 1 ? "1 note" : "\(count) notes") — a look now keeps it"), symbol: "arrow.counterclockwise")
             }))
         }
 

@@ -21,9 +21,9 @@ struct PaperInspector: View {
                 .id(paper.id)
         } else {
             ContentUnavailableView(
-                L("고른 논문 없음", "No Paper Selected"),
+                L("고른 논문이 없어요", "No Paper Selected"),
                 systemImage: "doc.text.magnifyingglass",
-                description: Text(L("논문을 고르면 그 서지를 보고 고칠 수 있다.", "Select a paper to see and edit its details."))
+                description: Text(L("논문을 고르면 서지를 보고 고칠 수 있어요.", "Choose a paper to see its details."))
             )
         }
     }
@@ -125,7 +125,7 @@ private struct PaperInspectorForm: View {
 
     @ViewBuilder
     private func candidatesSection(for paper: LoadedPaper) -> some View {
-        Section(L("이 논문이 맞는가?", "Is this the right paper?")) {
+        Section(L("이 논문이 맞나요?", "Is this the right paper?")) {
             ForEach(paper.meta.candidates) { candidate in
                 Button {
                     Task { await model.acceptCandidate(candidate, for: paperID) }
@@ -208,7 +208,7 @@ private struct PaperInspectorForm: View {
             if let suggested = model.suggestedParent(for: paperID) {
                 Section {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(L("보충 자료로 보인다.", "This looks like supplementary material."))
+                        Text(L("보충 자료 같아 보여요.", "This looks like supplementary material."))
                             .font(.subheadline)
                         Text(suggested.meta.displayTitle)
                             .font(.footnote)
@@ -334,7 +334,7 @@ private struct PaperInspectorForm: View {
 
             ratingControl
 
-            TextField(L("메모", "Notes"), text: $noteDraft, axis: .vertical)
+            TextField(L("메모", "Note"), text: $noteDraft, axis: .vertical)
                 .lineLimit(3 ... 8)
                 .onSubmit { saveNoteIfNeeded() }
         }

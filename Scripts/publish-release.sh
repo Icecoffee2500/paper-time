@@ -178,6 +178,11 @@ print("Website/releases.json - " + str(len(releases)) + " version(s), "
       + str(sum(len(b) for r in releases for b in r["builds"].values())) + " file(s)")
 PY
 
+# What readers asked for, photographed from the issues so the page has an
+# answer when a visitor is rate-limited and so the app's About wall — which
+# asks no server for anything — is current in this build.
+Scripts/feedback-sync.sh || true
+
 # Onto gh-pages, by the script that does only that.
 Scripts/publish-page.sh "Paper Time $TAG on the page" >/dev/null
 

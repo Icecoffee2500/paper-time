@@ -40,12 +40,12 @@ struct MigrationView: View {
                 } footer: {
                     Text(L(
                         """
-                        Bookends에서 File ▸ Export를 골라 BibTeX을 고른 다음, Paper Time에 내보낸 파일과 \
-                        Attachments 폴더를 가리켜 준다.
+                        Bookends에서 File ▸ Export를 고르고 BibTeX으로 내보내세요. 그다음 내보낸 파일과 \
+                        Attachments 폴더를 여기서 가리켜 주세요.
                         """,
                         """
-                        In Bookends choose File ▸ Export and pick BibTeX, then point Paper Time \
-                        at the exported file and at your Attachments folder.
+                        In Bookends, choose File ▸ Export and pick BibTeX. Then point Paper Time \
+                        at the exported file and the Attachments folder.
                         """
                     ))
                 }
@@ -101,14 +101,14 @@ struct MigrationView: View {
                     Section {
                         Text(L(
                             """
-                            들여온 항목은 "Needs Review"로 시작한다. Paper Time이 하나하나 DOI·arXiv·OpenAlex \
-                            기록과 다시 맞춰 보고 증명할 수 있는 것만 확인하므로, 옛 라이브러리의 실수가 \
-                            따라오지 않는다.
+                            들여온 서지는 "살펴볼 것"으로 시작해요. Paper Time이 하나씩 DOI와 arXiv, \
+                            OpenAlex 기록에 다시 맞춰 봐요. 증명할 수 있는 것만 확인하니까, 옛 \
+                            라이브러리의 실수는 따라오지 않아요.
                             """,
                             """
-                            Imported records start as "needs review". Paper Time re-checks each \
-                            one against the DOI, arXiv and OpenAlex records and confirms the ones \
-                            it can prove, so mistakes in the old library do not carry over.
+                            Imported records start as Needs Review. Paper Time checks each one \
+                            against the DOI, arXiv and OpenAlex records and confirms only what it \
+                            can prove, so mistakes in the old library stay behind.
                             """
                         ))
                         .font(.footnote)

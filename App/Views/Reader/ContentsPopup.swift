@@ -107,7 +107,7 @@ struct ContentsPopup: View {
                 .padding(.bottom, 6)
 
             if items.isEmpty {
-                Text(reading ? L("논문에서 제목을 읽고 있다…", "Reading the paper for its headings…") : L("이 PDF에서 제목을 찾지 못했다.", "No headings could be found in this PDF."))
+                Text(reading ? L("논문에서 제목을 읽고 있어요…", "Reading the paper for its headings…") : L("이 PDF에서 제목을 찾지 못했어요.", "No headings found in this PDF."))
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

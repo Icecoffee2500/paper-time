@@ -49,6 +49,16 @@ enum ReleaseNotes {
     /// twenty is a list nobody reads.
     static let highlights: [Highlight] = [
         Highlight(
+            symbol: "bubble.and.pencil",
+            title: Text2("이제 같이 만들어요", "Now we build it together"),
+            detail: Text2(
+                "무언가 이상하거나 아쉬우면 ⌥⌘/ 를 눌러주세요. 방금 그 화면이 이미 찍힌 채로 창이 열리니까 어디서 그랬는지 설명하지 않아도 돼요. 논문에 쓰던 그 화살표와 네모로 바로 표시하면 되고, 보이면 안 되는 곳은 가리개로 덮으면 돼요. 보내주신 건 배포 페이지의 목록에 올라가고, 고쳐지면 체크가 붙어요 — 적어주신 이름과 함께요.",
+                "When something is wrong, or missing, press ⌥⌘/. The sheet opens with the screenshot already taken, so you never have to explain where you were. Mark it up with the same arrow and box you use on papers, and cover anything private. What you send lands on the list on the download page and gets a check when it is fixed — with the name you chose beside it."
+            ),
+            demo: .feedback,
+            tier: .one
+        ),
+        Highlight(
             symbol: "macwindow.on.rectangle",
             title: Text2("라이브러리가 어느 데스크톱에서나 열린다", "One library, on every desktop"),
             detail: Text2(
@@ -246,6 +256,39 @@ enum ReleaseNotes {
     /// thing they care about moved; making them read a paragraph to find out
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
+        Release(
+            version: "0.7.0",
+            date: Text2("2026년 9월", "September 2026"),
+            note: Text2("이제 같이 만들어요.", "Now we build it together."),
+            added: [
+                Entry(
+                    Text2("한마디 보내기 — 화면은 이미 찍혀 있어요", "Send feedback — the screenshot is already taken"),
+                    Text2(
+                        "⌥⌘/ 를 누르면 방금 그 화면이 이미 찍힌 채로 창이 열려요. 어디서 그랬는지 설명하지 않아도 되고, 논문에 쓰던 그 화살표와 네모로 바로 위에 표시하면 돼요. 남에게 보이면 안 되는 곳은 가리개로 덮으면 되고요. 함께 보내는 것은 전부 목록으로 보여줘요 — 버전이나 창 크기 같은 앱 이야기뿐이고, 논문 제목도 파일 경로도 쓰신 글도 가지 않아요. 보내기 전에 이 제보가 공개 목록의 어떤 줄이 될지도 미리 보여줘요.",
+                        "Press ⌥⌘/ and the sheet opens with the screenshot already taken. You never have to explain where you were, and you mark it up with the same arrow and box you use on papers. Cover anything private with Hide. Everything that travels with the report is listed for you — the app's own version and window size, never a paper title, a path, or a word you wrote. Before you send, the sheet shows you the row it becomes on the public list."
+                    ),
+                    action: .feedback,
+                    demo: .feedback
+                ),
+                Entry(
+                    Text2("함께 만드는 중 — 고치면 체크가 돼요", "Built together — fixed things get a check"),
+                    Text2(
+                        "보내주신 것은 배포 페이지의 목록에 올라가고, 고쳐지면 체크 표시가 붙어요. 누르면 GitHub의 그 자리로 가니까 지어낸 표가 아니라는 걸 바로 확인할 수 있어요. 이름을 적으면 그 이름으로 올라가고, About에도 남아요.",
+                        "What you send lands on a list on the download page, and gets a check when it is fixed. Click through and you land on it in GitHub, so none of it is decoration. Leave a name and it appears there — and in About, inside the app."
+                    ),
+                    demo: .together
+                ),
+                Entry(
+                    Text2("쓰는 말에 따라 한국어로, 영어로", "Korean or English, whichever you read"),
+                    Text2(
+                        "시스템 언어가 한국어면 앱도 배포 페이지도 한국어로, 그 밖이면 영어로 나와요. 설정에서 직접 고를 수도 있어요. 맥과 윈도우와 리눅스 모두 같아요.",
+                        "A Korean system gets Korean, everything else gets English — the app and the download page both. You can also pick one in Settings. The same on macOS, Windows and Linux."
+                    ),
+                    demo: .twoLanguages
+                ),
+            ],
+            fixed: []
+        ),
         Release(
             version: "0.5.0",
             date: Text2("2026년 9월", "September 2026"),
@@ -950,6 +993,14 @@ enum ReleaseNotes {
     /// and full size in About, where there is room to make them the real
     /// thing rather than a diagram of it.
     enum Demo: String, Identifiable, CaseIterable {
+        /// The report sheet: a screenshot already taken, marked up with the
+        /// app's own pen, and the public row it is about to become.
+        case feedback
+        /// The list on the download page, and a check mark that is the issue
+        /// being closed rather than a picture of one.
+        case together
+        /// The same window, in the two languages it speaks.
+        case twoLanguages
         /// A mark on the page and its row in the inspector, either one
         /// reaching the other.
         case annotations

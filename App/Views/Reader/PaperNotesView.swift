@@ -93,9 +93,9 @@ struct PaperNotesView: View {
 
             if mine.isEmpty {
                 ContentUnavailableView {
-                    Label(L("아직 노트가 없다", "No Notes Yet"), systemImage: "note.text")
+                    Label(L("아직 노트가 없어요", "No Notes Yet"), systemImage: "note.text")
                 } description: {
-                    Text(L("노트 하나에 생각 하나. 구절을 고르고 ⌘L을 누르면 그곳에 이어진다.", "One thought per note. Select a passage and press ⌘L to link to it."))
+                    Text(L("노트 하나에 생각 하나. 구절을 고르고 ⌘L을 누르면 그 자리에 이어져요.", "One thought per note. Select a passage and press ⌘L to link to it."))
                 }
             } else {
                 List {
@@ -142,7 +142,7 @@ extension PaperNotesView {
                     .foregroundStyle(.tertiary)
                 Spacer(minLength: 0)
             }
-            .help(L("이 쪽의 드문 낱말을 함께 쓰는 다른 논문의 노트다 — 함께 쓰는 낱말은 파란색으로 보인다. 누르면 열리고, 쪽에서 구절을 고르고 ❝를 누르면 그 노트에 들어간다.", "Notes written against other papers that share this page's rarer words — the shared words are shown in blue. Click one to open it; select a passage on the page and ❝ drops it into that note."))
+            .help(L("이 쪽의 드문 낱말을 함께 쓰는 다른 논문의 노트예요. 함께 쓰는 낱말은 파란색으로 보여요. 누르면 열려요. 쪽에서 구절을 고르고 ❝를 누르면 그 노트에 들어가요.", "Notes on other papers that share this page's rarer words. The shared words appear in blue. Click one to open it; select a passage and ❝ drops it into that note."))
             .padding(.horizontal, 16)
             .padding(.top, 10)
             .padding(.bottom, 2)

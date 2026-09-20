@@ -37,14 +37,14 @@ struct LibrarySetupView: View {
                         Text(
                             L(
                                 """
-                                Paper Time은 논문을 평범한 파일로 둔다. \
-                                iCloud Drive, Google Drive, 아니면 어디든 폴더 하나를 고르고, \
-                                다른 기기에서도 같은 폴더를 고르면 서로 맞춰진다.
+                                Paper Time은 논문을 그냥 파일로 둬요. \
+                                iCloud Drive든 Google Drive든 폴더를 하나 고르면 돼요. \
+                                다른 기기에서 같은 폴더를 고르면 거기서도 똑같이 보여요.
                                 """,
                                 """
-                                Paper Time keeps your papers as ordinary files. \
-                                Pick a folder in iCloud Drive, Google Drive, or anywhere else, \
-                                and choose the same folder on your other devices to keep them in step.
+                                Paper Time keeps papers as ordinary files. \
+                                Choose a folder in iCloud Drive, Google Drive, or anywhere else. \
+                                Point another device at the same folder and the library follows.
                                 """
                             )
                         )
@@ -86,15 +86,15 @@ struct LibrarySetupView: View {
                         .buttonBorderShape(.capsule)
                         .controlSize(.large)
 
-                    Text(L("논문은 그 폴더에 그대로 있다. 앱을 지워도 논문은 지워지지 않는다.", "Your papers stay in that folder. Deleting the app never deletes them."))
+                    Text(L("논문은 그 폴더에 그대로 있어요. 앱을 지워도 논문은 남아요.", "Papers stay in that folder. Deleting the app leaves them there."))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                     #if os(iOS)
                     // Said before the picker spins forever: Google's Files
                     // provider on iOS lets a file be picked but not a folder,
                     // and the picker shows "Loading" for as long as you wait.
-                    Text(L("아이폰과 아이패드에서는 iCloud Drive나 이 기기 안의 폴더를 고른다. Google Drive의 파일 제공자로는 여기서 폴더를 고를 수 없다 — 고르는 창이 '로드 중'에서 멈춘다 — 그래서 Google Drive 라이브러리는 맥에서 쓰고, 이 기기들에서는 같은 논문을 iCloud Drive에 둔다.",
-                           "On iPhone and iPad, choose a folder in iCloud Drive or on this device. Google Drive's Files provider does not allow a folder to be chosen here — its picker loads without end — so a Google Drive library can be used from the Mac, and the same papers kept in iCloud Drive for these devices."))
+                    Text(L("아이폰과 아이패드에서는 iCloud Drive나 이 기기 안의 폴더를 골라주세요. Google Drive에서는 폴더를 고를 수 없어요. 고르는 창이 '로드 중'에서 멈춰버려요. Google Drive 라이브러리는 맥에서 쓰고, 이 기기에서는 같은 논문을 iCloud Drive에 두면 돼요.",
+                           "On iPhone and iPad, choose a folder in iCloud Drive or on this device. Google Drive can't hand over a folder here — its picker loads forever. Keep a Google Drive library on the Mac, and keep the same papers in iCloud Drive for these devices."))
                         .font(.footnote)
                         .foregroundStyle(.tertiary)
                         .multilineTextAlignment(.center)

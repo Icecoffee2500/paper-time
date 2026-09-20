@@ -152,15 +152,15 @@ struct ZettelEditorView: View {
                         """
                         생각 하나를, 내 말로.
 
-                        [[ 로 다른 노트에 잇고, #태그 로 묶는다.
-                        Markdown과 LaTeX는 쓰는 대로 조판된다.
-                        ⌘L은 고른 구절로 가는 링크를 놓는다.
+                        [[ 로 다른 노트에 잇고, #태그 로 묶어요.
+                        Markdown과 LaTeX는 쓰는 대로 조판해서 보여줘요.
+                        ⌘L은 고른 구절로 가는 링크를 놓아요.
                         """,
                         """
                         One thought, in your own words.
 
                         [[ links to another note. #tag files it.
-                        Markdown and LaTeX are set as you write them.
+                        Markdown and LaTeX render as you write.
                         ⌘L drops a link to the passage you selected.
                         """
                     )

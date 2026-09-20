@@ -931,7 +931,7 @@ struct LibraryWindow: View {
         panel.allowedContentTypes = [.pdf]
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
-        panel.message = L("라이브러리에 더할 PDF를 고른다", "Choose PDFs to add to the library")
+        panel.message = L("라이브러리에 더할 PDF를 골라주세요", "Choose PDFs to add to the library")
         panel.begin { response in
             guard response == .OK, !panel.urls.isEmpty else { return }
             let urls = panel.urls
@@ -994,7 +994,7 @@ struct LibraryWindow: View {
         case .reading: L("읽는 중", "Reading")
         case .read: L("읽음", "Read")
         case .favorites: L("즐겨찾기", "Favorites")
-        case .needsReview: L("확인할 것", "Needs Review")
+        case .needsReview: L("살펴볼 것", "Needs Review")
         case let .collection(id):
             model.collections.collections.first { $0.id == id }?.name ?? L("컬렉션", "Collection")
         case let .tag(id):
@@ -1395,9 +1395,9 @@ struct PaperDetailColumn: View {
                 #endif
             } else {
                 ContentUnavailableView(
-                    L("고른 논문이 없다", "No Paper Selected"),
+                    L("고른 논문이 없어요", "No Paper Selected"),
                     systemImage: "doc.text",
-                    description: Text(L("읽을 논문을 고른다.", "Choose a paper to start reading."))
+                    description: Text(L("읽을 논문을 하나 골라보세요.", "Choose a paper to start reading."))
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -1442,7 +1442,7 @@ struct PaperDetailColumn: View {
                     }
                 }
             } else {
-                ContentUnavailableView(L("고른 것이 없다", "Nothing Selected"), systemImage: "sidebar.right")
+                ContentUnavailableView(L("고른 것이 없어요", "Nothing Selected"), systemImage: "sidebar.right")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
@@ -1458,7 +1458,7 @@ struct LibraryUnavailableView: View {
 
     var body: some View {
         ContentUnavailableView {
-            Label(L("라이브러리 폴더를 열 수 없다", "Library Folder Unavailable"), systemImage: "externaldrive.badge.questionmark")
+            Label(L("라이브러리 폴더를 열 수 없어요", "Library Folder Unavailable"), systemImage: "externaldrive.badge.questionmark")
         } description: {
             Text(message)
         } actions: {

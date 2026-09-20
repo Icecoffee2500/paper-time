@@ -8,6 +8,9 @@
  */
 import { call, isCommand, onEvent, platform } from './bridge.js'
 import { clear, el, on } from './dom.js'
+// Imported for its side effect: the sheet registers its own ⌥⌘/ so nothing
+// in the shell has to know it exists.
+import { showFeedback } from './ui/feedback.js'
 import {
   adopt,
   canGoBack,
@@ -60,7 +63,7 @@ const sidebar = buildSidebar({
     await call('collections:save', { collections })
     await reload()
   },
-  openGraph: () => toast(L('인용 그래프는 이 빌드에 아직 없다.', 'The citation graph is not in this build yet.')),
+  openGraph: () => toast(L('인용 그래프는 아직 이 빌드에 없어요.', 'The citation graph is not in this build yet.')),
   chooseLibrary: () => void chooseLibrary(),
 })
 
@@ -104,8 +107,8 @@ const paperList = buildPaperList({
         icon: 'trash',
         action: async () => {
           if (!confirm(L(
-            `“${entry.meta.displayTitle}” — 라이브러리의 휴지통에 넣을까?\n\n지워지는 것은 없다 — PDF와 그 기록은 라이브러리 안의 휴지통 폴더로 옮겨진다.`,
-            `Move “${entry.meta.displayTitle}” to the library's Trash?\n\nNothing is deleted — the PDF and its record move to the Trash folder inside the library.`,
+            `“${entry.meta.displayTitle}”\n\n라이브러리 휴지통에 넣을까요? 아무것도 지우지 않아요. PDF와 그 기록은 라이브러리 안 휴지통 폴더로 옮겨가요.`,
+            `Move “${entry.meta.displayTitle}” to the library's Trash?\n\nThe PDF and its record move to the Trash folder inside the library. Nothing is deleted.`,
           ))) return
           await call('library:trash', { id })
           if (store.selectedID === id) store.selectedID = null
@@ -535,7 +538,7 @@ async function copyKey(id: string) {
   const entry = findPaper(id)
   if (!entry) return
   await navigator.clipboard.writeText(entry.meta.bibKey || entry.meta.displayTitle)
-  toast(L('인용 키를 복사했다', 'Citation key copied'))
+  toast(L('인용 키를 복사했어요', 'Citation key copied'))
 }
 
 // ------------------------------------------------------------------- search
@@ -770,6 +773,9 @@ subscribe((keys) => {
 
 onEvent((event, payload) => {
   switch (event) {
+    case 'menu:feedback':
+      void showFeedback()
+      break
     case 'library:changed':
       void reload()
       break
@@ -815,10 +821,10 @@ function runMenuCommand(command: string) {
       changed('sketch')
       break
     case 'highlight':
-      if (!reader.markSelection('highlight')) toast(L('고른 글이 없다.', 'Select some text first.'))
+      if (!reader.markSelection('highlight')) toast(L('먼저 글을 골라주세요.', 'Select some text first.'))
       break
     case 'underline':
-      if (!reader.markSelection('underline')) toast(L('고른 글이 없다.', 'Select some text first.'))
+      if (!reader.markSelection('underline')) toast(L('먼저 글을 골라주세요.', 'Select some text first.'))
       break
     case 'exportBibTeX':
       void (async () => {
@@ -828,8 +834,8 @@ function runMenuCommand(command: string) {
         if (result.cancelled) return
         if (result.error) return toast(result.error)
         toast(L(
-          `${result.written}개를 내보냈다`,
-          `${result.written} ${result.written === 1 ? 'entry' : 'entries'} exported`,
+          `${result.written}편을 내보냈어요`,
+          `Exported ${result.written} ${result.written === 1 ? 'entry' : 'entries'}`,
         ))
       })()
       break
@@ -840,7 +846,7 @@ function runMenuCommand(command: string) {
     case 'layoutContinuous': setLayout('continuous'); break
     case 'layoutSinglePage': setLayout('single'); break
     default:
-      toast(L(`“${command}” — 이 빌드에 아직 없다.`, `“${command}” is not in this build yet.`))
+      toast(L(`“${command}”은 아직 이 빌드에 없어요.`, `“${command}” is not in this build yet.`))
   }
 }
 

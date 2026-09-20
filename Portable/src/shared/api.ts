@@ -38,6 +38,18 @@ export interface Requests {
   'window:close': { args: void; result: void }
   'window:state': { args: void; result: WindowState }
   'shell:openExternal': { args: { url: string }; result: void }
+  /** The window's own page, as a PNG data URL, for the report sheet. */
+  'feedback:capture': { args: void; result: string | null }
+  'feedback:send': {
+    args: {
+      kind: 'bug' | 'wish'
+      body: string
+      name: string
+      reply?: string | null
+      shot?: string | null
+    }
+    result: { ok: boolean; url?: string; kept?: string; error?: string }
+  }
 }
 
 export type RequestName = keyof Requests
