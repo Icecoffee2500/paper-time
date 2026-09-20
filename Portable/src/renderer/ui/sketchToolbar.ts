@@ -120,10 +120,24 @@ export function buildStylePanel(actions: SketchToolbarActions): { node: HTMLElem
     return row
   }
 
+  /**
+   * The panel is only up when it has something to say.
+   *
+   * With the select tool and nothing selected there is nothing to style, and
+   * a panel covering a third of the page to offer choices about nothing is
+   * the sort of clutter this app is supposed to be the alternative to. Pick a
+   * tool or pick a shape and it comes back.
+   */
+  function shouldShow(): boolean {
+    if (!store.reader.drawing) return false
+    if (store.sketch.selection) return true
+    return store.sketch.tool !== 'select' && store.sketch.tool !== 'eraser'
+  }
+
   function update() {
     clear(node)
-    node.style.display = store.reader.drawing ? '' : 'none'
-    if (!store.reader.drawing) return
+    node.style.display = shouldShow() ? '' : 'none'
+    if (!shouldShow()) return
     const style = store.sketch.style
 
     node.append(heading('Stroke'))
