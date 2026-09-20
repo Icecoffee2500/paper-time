@@ -125,6 +125,7 @@ struct LibraryWindow: View {
                 .toolbar(id: "library") {
                     toolbarContent.sharedBackgroundVisibility(.hidden)
                     ToolbarSpacer(.flexible)
+                    trailingToolbarContent.sharedBackgroundVisibility(.hidden)
                     inspectorToolbarContent.sharedBackgroundVisibility(.hidden)
                 }
                 // Hidden, so the toolbar has no colour of its own: the window's
@@ -140,6 +141,7 @@ struct LibraryWindow: View {
                 .toolbar(id: "library") {
                     toolbarContent
                     ToolbarItem(id: "space", placement: .automatic) { Spacer() }
+                    trailingToolbarContent
                     inspectorToolbarContent
                 }
                 .toolbarBackground(.hidden, for: .windowToolbar)
@@ -626,10 +628,92 @@ struct LibraryWindow: View {
         #endif
     }
 
+    #if os(macOS)
+    /// The trailing group: search, the plus, the three panes, and the menu.
+    @ToolbarContentBuilder
+    private var trailingToolbarContent: some CustomizableToolbarContent {
+        ToolbarItem(id: "trailing", placement: .automatic) {
+            HStack(spacing: 2) {
+                Button {
+                    app.showsSearchPalette = true
+                } label: {
+                    Label("Search Everything", systemImage: "magnifyingglass").toolbarIcon()
+                }
+                .help("Search papers, notes, maps and drafts (Command-K)")
+                .toolbarHover()
+                Button {
+                    isImportingPDFs = true
+                } label: {
+                    Label("Add PDFs", systemImage: "plus").toolbarIcon()
+                }
+                .help("Add PDFs to the library (Command-O)")
+                .toolbarHover()
+                Divider().frame(height: 14).padding(.horizontal, 4)
+                paneButton(.paperList, symbol: "list.bullet", on: app.showsPaperList) { app.togglePaperList() }
+                paneButton(.reader, symbol: "doc", on: app.showsReader && !app.isFocusMode) { app.toggleReader() }
+                paneButton(.inspector, symbol: "sidebar.right", on: app.showsInspector) { app.toggleInspector() }
+                Divider().frame(height: 14).padding(.horizontal, 4)
+                Menu {
+                    Button(action: syncNow) { Label("Sync Now", systemImage: "arrow.clockwise") }
+                        .disabled(model.isScanning)
+                    Divider()
+                    Picker("Sort By", selection: sortOrderBinding) {
+                        ForEach(LibraryModel.SortOrder.allCases) { order in
+                            Text(order.displayName).tag(order)
+                        }
+                    }
+                    Toggle("Ascending", isOn: sortAscendingBinding)
+                    Divider()
+                    Picker("Page Layout", selection: $configuration.layout) {
+                        ForEach(ReaderConfiguration.PageLayout.allCases) { layout in
+                            Label(layout.label, systemImage: layout.symbolName).tag(layout)
+                        }
+                    }
+                    Picker("Page Tint", selection: $configuration.tint) {
+                        ForEach(ReaderConfiguration.PageTint.allCases) { tint in
+                            Text(tint.label).tag(tint)
+                        }
+                    }
+                    Divider()
+                    shareMenu
+                } label: {
+                    Label("More", systemImage: "ellipsis").toolbarIcon()
+                }
+                .help("Sync, sort, page layout, share")
+                .toolbarHover()
+            }
+            .toolbarButtons()
+        }
+    }
+    #endif
+
     @ToolbarContentBuilder
     private var toolbarContent: some CustomizableToolbarContent {
         // One group rather than one item each: separate toolbar items are what
         // drew the little vertical rules between the buttons.
+        #if os(macOS)
+        // Two quiet groups, the way Aside and Claude Code lay a bar out: at
+        // the leading edge the sidebar and the way back and forward, and at
+        // the trailing edge the three panes, the search, the plus, and one
+        // menu for everything done rarely. Eleven icons in a row read as a
+        // control panel; a paper is not a control panel.
+        ToolbarItem(id: "leading", placement: .navigation) {
+            HStack(spacing: 2) {
+                paneButton(.sidebar, symbol: "sidebar.left", on: app.isSidebarVisible) { app.toggleSidebar() }
+                Button { NotificationCenter.default.post(name: .paperTimeGoBack, object: nil) } label: {
+                    Label("Back", systemImage: "chevron.left").toolbarIcon()
+                }
+                .help("Back (\(app.shortcut(for: .back).display))")
+                .toolbarHover()
+                Button { NotificationCenter.default.post(name: .paperTimeGoForward, object: nil) } label: {
+                    Label("Forward", systemImage: "chevron.right").toolbarIcon()
+                }
+                .help("Forward (\(app.shortcut(for: .forward).display))")
+                .toolbarHover()
+            }
+            .toolbarButtons()
+        }
+        #else
         ToolbarItem(id: "actions", placement: barPlacement) {
             HStack(spacing: 4) {
                 #if os(iOS)
@@ -682,16 +766,11 @@ struct LibraryWindow: View {
                 sortMenu
                 // On the iPad the page's options sit on the page's own bar;
                 // here they only crowded the column into an overflow menu.
-                #if os(macOS)
-                viewMenu
-                #endif
                 shareMenu
-                #if os(macOS)
-                paneMenu
-                #endif
             }
             .toolbarButtons()
         }
+        #endif
     }
 
     /// The four panes, behind one button.
@@ -716,8 +795,12 @@ struct LibraryWindow: View {
         Button(action: toggle) {
             Label(pane.title, systemImage: symbol)
                 .labelStyle(.iconOnly)
-                .symbolVariant(on ? .fill : .none)
                 .toolbarIcon()
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(Color.accentColor.opacity(on ? 0.14 : 0))
+                        .padding(-3)
+                )
         }
         .tint(on ? Color.accentColor : .primary)
         .help("\(on ? "Hide" : "Show") the \(pane.title.lowercased()) (\(app.shortcut(for: pane).display))")
@@ -1382,7 +1465,7 @@ extension View {
     /// answered with nothing, and a row of icons that does not react does
     /// not look like a row of buttons.
     func toolbarIcon() -> some View {
-        font(.system(size: 14, weight: .medium))
+        font(.system(size: 13.5, weight: .regular))
             .frame(width: 22, height: 22)
             .contentShape(.rect)
     }

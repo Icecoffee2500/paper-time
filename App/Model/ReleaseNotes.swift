@@ -237,10 +237,15 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
-            version: "0.4.3",
+            version: "0.4.4",
             date: Text2("2026년 9월", "September 2026"),
-            note: Text2("스타일 패널이 잘리지 않고, 칸마다 단추가 하나씩.", "The style panel is no longer cut off, and each pane has its own button."),
+            note: Text2("도구 막대가 조용해졌다.", "A quieter toolbar."),
             added: [
+                Entry(
+                    Text2("도구 막대 둘로", "The toolbar in two groups"),
+                    Text2("열한 개가 한 줄로 서 있던 도구 막대를 둘로 나눴다. 왼쪽에는 사이드바와 뒤로·앞으로, 오른쪽에는 검색·추가, 세 칸 단추(목록·논문·인스펙터), 그리고 드물게 쓰는 것(동기화·정렬·쪽 배치·색조·공유)을 담은 메뉴 하나. 아이콘은 가늘게, 켜진 칸은 연한 바탕으로.", "Eleven icons in one row became two groups: at the left the sidebar and back/forward; at the right search, add, the three pane buttons (list, paper, inspector) and one menu for what is done rarely — sync, sort, page layout, tint, share. Thinner icons; a pane that is on gets a soft square behind it."),
+                    devices: [.mac]
+                ),
                 Entry(
                     Text2("칸 단추 넷", "Four pane buttons"),
                     Text2("도구 막대의 '칸' 메뉴 하나가 단추 넷이 되었다 — 사이드바·논문 목록·논문·인스펙터. 각각 제 칸을 켜고 끄고, 켜진 것은 채워진 아이콘. 단추는 도구 막대에 남으니 닫은 칸을 다시 열 수 있다.", "The toolbar's one panes menu became four buttons — sidebar, paper list, paper, inspector. Each shows and hides its own pane, filled when on. They stay on the toolbar, so a closed pane can be opened again."),
