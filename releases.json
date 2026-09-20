@@ -37,6 +37,15 @@
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.7.0/Paper.Time-0.7.0-win.zip",
             "size": 115507387,
             "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.7.0/Paper.Time-0.7.0-arm64-win.zip",
+            "size": 120455061,
+            "downloads": 0
           }
         ],
         "linux": [
@@ -56,6 +65,24 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.7.0/Paper.Time-0.7.0-arm64.AppImage",
             "size": 112837828,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.7.0/paper-time-0.7.0.tar.gz",
+            "size": 106723698,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.7.0/paper-time-0.7.0-arm64.tar.gz",
+            "size": 111220064,
             "downloads": 0
           }
         ]
