@@ -410,6 +410,10 @@ dialog::backdrop { background: rgba(12, 16, 24, .4); backdrop-filter: blur(4px);
 
 /* Which desktop the download button points at. Small, because the right one
    is already chosen — this is for the visitor who wants a different one. */
+/* Until the script fills it — or if the script never arrives — it is nothing
+   rather than an empty bordered box. */
+.picker:empty { display: none; }
+
 .picker {
   display: inline-flex; align-items: stretch; gap: 2px;
   padding: 3px; border-radius: 10px;
