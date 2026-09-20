@@ -2,6 +2,14 @@
   "repo": "Icecoffee2500/paper-time",
   "releases": [
     {
+      "version": "0.4.4",
+      "date": "2026-09-20T02:55:07Z",
+      "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.4.4/Paper.Time.0.4.4.dmg",
+      "size": 5222701,
+      "downloads": 0,
+      "note": "도구 막대를 둘로 — 왼쪽 사이드바·뒤로·앞으로, 오른쪽 검색·추가·칸 셋·메뉴."
+    },
+    {
       "version": "0.4.3",
       "date": "2026-09-19T07:14:03Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.4.3/Paper.Time.0.4.3.dmg",
