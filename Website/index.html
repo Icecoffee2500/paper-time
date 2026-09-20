@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Paper Time — 논문에만 집중하기 위한 앱</title>
-<meta name="description" content="논문을 읽고, 표시하고, 그 표시를 생각으로 바꾸기 위한 맥·아이패드·아이폰 앱. 수식은 LaTeX으로 복사되고, 구절은 주소째로 노트가 된다.">
+<meta name="description" content="논문을 읽고, 표시하고, 그 표시를 생각으로 바꾸기 위한 앱. 맥·윈도우·리눅스에서 같은 라이브러리 폴더를 연다. 수식은 LaTeX으로 복사되고, 구절은 주소째로 노트가 된다.">
 <meta property="og:title" content="Paper Time">
 <meta property="og:description" content="논문을 읽고, 표시하고, 그 표시를 생각으로 바꾸기 위한 앱.">
 <meta property="og:type" content="website">
@@ -45,6 +45,11 @@
       </a>
       <button class="btn btn-ghost" id="how">설치하는 법</button>
       <button class="btn btn-ghost" id="older">이전 버전</button>
+      <!-- Which desktop the button points at. Set from the visitor's own to
+           begin with, because almost nobody is downloading for a machine they
+           are not sitting at — but switchable, because somebody is. -->
+      <div class="picker" id="picker" role="group" aria-label="운영체제"></div>
+      <p class="hint variants" id="variants"></p>
       <p class="hint tally" id="tally"></p>
     </div>
   </header>
@@ -84,9 +89,9 @@
         Preview에서도, Zotero에서도, 지도교수의 아이패드에서도 보인다.</p>
     </div>
     <div class="fact">
-      <h3>기기 셋, 폴더 하나</h3>
-      <p>맥·아이패드·아이폰이 같은 폴더를 본다.
-        iCloud Drive면 충분하고, 계정도 서버도 없다.</p>
+      <h3>어느 데스크톱이든, 폴더 하나</h3>
+      <p>맥·윈도우·리눅스가 같은 폴더를 본다. 아이패드·아이폰도.
+        클라우드 폴더면 충분하고, 계정도 서버도 없다.</p>
     </div>
     <div class="fact">
       <h3>클라우드 LLM 없음</h3>
@@ -105,6 +110,9 @@
   <div class="sheet">
     <button class="sheet-close" aria-label="닫기">✕</button>
     <h2>설치하는 법</h2>
+    <div class="picker" id="how-picker" role="group" aria-label="운영체제"></div>
+
+    <div class="how-panel" data-os="mac">
     <p class="sub">세 걸음이고, 두 번째와 세 번째는 <b>처음 한 번만</b> 하면 된다.<br>
       무료 개발자 계정으로 만든 앱이라 Apple의 공증(notarization)을 받지 않았다.</p>
 
@@ -143,6 +151,70 @@
       macOS 14 Sonoma 이상 · Apple Silicon. 온디바이스 모델로 제목·저자를 읽는 것만 macOS 26이 필요하고, 그 아래에서는 조판 규칙으로 읽는다. 14를 위해 짓고 확인했지만 실제 Sonoma 맥에서 켜 본 것은 아직 없다 — 그 맥이 있으면 어땠는지 알려주면 고맙다. 아이패드·아이폰 앱은 아직 App Store에 없다 —
       소스를 받아 Xcode에서 자기 기기로 직접 빌드하면 무료 계정으로도 쓸 수 있다.
     </p>
+    </div><!-- /mac -->
+
+    <div class="how-panel" data-os="windows" hidden>
+    <p class="sub">두 걸음이고, 두 번째는 <b>처음 한 번만</b> 하면 된다.<br>
+      서명 인증서를 사지 않은 앱이라 Windows가 한 번 묻는다.</p>
+
+    <div class="step">
+      <div class="no">1</div>
+      <div class="body">
+        <h3>설치본을 받아 두 번 누른다</h3>
+        <p>관리자 권한은 필요 없다. 내 계정에만 깔린다.
+          설치를 못 하는 컴퓨터(회사 것이거나 공용이거나)라면 <b>압축본</b>을 받아 아무 폴더에나 풀면 된다 — USB에 넣어 다녀도 된다.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="no">2</div>
+      <div class="body">
+        <h3>“Windows의 PC 보호” 파란 창 → <b>추가 정보</b> → <b>실행</b></h3>
+        <p>SmartScreen이 “이 앱은 알 수 없는 게시자가 만들었다”고 말하는 것이다.
+          서명 인증서는 해마다 수십만 원이고 이 프로젝트는 그걸 사지 않았다. 서명 없는 앱은 전부 이렇게 나온다.
+          <b>추가 정보</b>를 누르면 아래에 <b>실행</b>이 생긴다. 다음부터는 묻지 않는다.</p>
+      </div>
+    </div>
+
+    <p class="hint" style="margin-top:16px">
+      Windows 10 이상 · 64비트와 ARM 둘 다. 설정은 <code>%APPDATA%\Paper Time\</code>에, 앱은 <code>%LOCALAPPDATA%\Programs\paper-time\</code>에 들어간다.
+      <b>라이브러리 폴더는 네가 고른 그 자리 그대로다</b> — 지워도 논문은 건드리지 않는다.
+      Surface 펜이나 태블릿의 필압은 선 굵기로 들어가고, 마우스는 압력이 없으니 고른 선이 된다.
+    </p>
+    </div><!-- /windows -->
+
+    <div class="how-panel" data-os="linux" hidden>
+    <p class="sub">AppImage면 어느 배포판에서나 한 걸음이다. 설치라는 게 없다.</p>
+
+    <div class="step">
+      <div class="no">1</div>
+      <div class="body">
+        <h3>실행 권한을 주고 실행한다</h3>
+        <pre class="code">chmod +x 'Paper Time-0.5.0-x86_64.AppImage'
+./'Paper Time-0.5.0-x86_64.AppImage'</pre>
+        <p>메뉴에 넣고 싶으면 <a href="https://github.com/TheAssassin/AppImageLauncher" target="_blank" rel="noopener">AppImageLauncher</a>를 쓰거나,
+          <code>~/.local/bin</code>에 옮기고 <code>.desktop</code> 파일을 하나 쓰면 된다. 자세한 것은 저장소의 <code>Docs/Linux.md</code>에.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="no">2</div>
+      <div class="body">
+        <h3>Wayland와 샌드박스 — 걸리면 이것 때문이다</h3>
+        <p>앱은 세션이 Wayland면 Wayland를 쓴다. XWayland로 가면 배율이 소수인 화면에서 창이 흐려지고,
+          그리기 앱에서는 더 나쁘게 <b>펜의 좌표가 어긋난다</b>. 컴포지터가 말썽이면 <code>--ozone-platform-hint=x11</code>로 되돌리면 된다.</p>
+        <p>tar.gz을 풀어 쓸 때만 나오는 <code>SUID sandbox helper</code> 오류는 <code>chrome-sandbox</code>에 권한을 한 번 주면 끝난다.
+          AppImage와 deb는 알아서 한다. <code>--no-sandbox</code>로 넘길 수도 있지만, 남이 쓴 파일을 여는 앱에서 그걸 끄는 것이 무엇을 뜻하는지는 알고 하는 게 좋다.</p>
+      </div>
+    </div>
+
+    <p class="hint" style="margin-top:16px">
+      x86_64와 ARM64 둘 다. 설정은 <code>~/.config/Paper Time/</code>에 들어가고,
+      <b>라이브러리 폴더는 네가 고른 그 자리 그대로다</b>. 글꼴은 앱이 들고 다니니 배포판이 무엇을 깔았든 같아 보이고,
+      논문의 한글·일본어는 pdf.js가 들고 있는 문자 지도로 아무것도 안 깔고 나온다.
+      Wacom 같은 태블릿의 필압은 libinput을 거쳐 선 굵기로 들어간다.
+    </p>
+    </div><!-- /linux -->
   </div>
 </dialog>
 
@@ -151,7 +223,7 @@
   <div class="sheet">
     <button class="sheet-close" aria-label="닫기">✕</button>
     <h2>버전</h2>
-    <p class="sub">닫힌 버전마다 디스크 이미지 하나. 옛 버전도 계속 받을 수 있다.</p>
+    <p class="sub">닫힌 버전마다 한 줄. 옛 버전도 계속 받을 수 있다.</p>
     <div id="versions-list"><p class="hint">불러오는 중…</p></div>
   </div>
 </dialog>
