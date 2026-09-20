@@ -161,7 +161,7 @@ enum NoteMarkdown {
         // tooltip says more: not just that it goes somewhere, but where.
         if let anchor = NoteAnchor(url: url) {
             attributes[.toolTip] = ReleaseNotes.string(
-                "논문 \(anchor.pageIndex + 1)쪽의 이 구절로 간다",
+                "논문 \(anchor.pageIndex + 1)쪽의 이 구절로 가요",
                 "Goes to this passage on page \(anchor.pageIndex + 1) of the paper"
             )
         }
@@ -204,7 +204,7 @@ enum NoteMarkdown {
         attributes[.cursor] = NSCursor.pointingHand
         if let anchor = NoteAnchor(url: url) {
             attributes[.toolTip] = ReleaseNotes.string(
-                "논문 \(anchor.pageIndex + 1)쪽의 이 구절로 간다",
+                "논문 \(anchor.pageIndex + 1)쪽의 이 구절로 가요",
                 "Goes to this passage on page \(anchor.pageIndex + 1) of the paper"
             )
         }

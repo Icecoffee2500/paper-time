@@ -790,7 +790,7 @@ function draftToManuscript() {
     class: "btn btn-primary",
     onclick: () => { rendered = !rendered; render(); },
   }, el("span", { class: "key", style: "background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.3);color:#fff" }, "⇧⌘E"),
-     L("원고로 렌더", "Render as manuscript"));
+     L("원고로 만들기", "Render as manuscript"));
 
   render();
   return el("div", { class: "demo-shell", style: "flex-direction:column;gap:12px" },
@@ -814,35 +814,35 @@ const TIERS = [
 ];
 
 const SLIDES = [
-  { t: 1, n: "Search Everything", h: L("논문 안의 한 줄까지 찾는다", "Finds a single line inside a paper"),
-    p: L("논문·노트·지도·초안·태그·동작이 한 칸에 있고, 제목에 없는 낱말은 본문에서 찾는다 — 고르면 그 논문의 그 줄로 간다. 빈칸일 때는 이어 읽을 것과 다시 볼 것을 이유와 함께 먼저 내놓는다.",
-         "Papers, notes, maps, drafts, tags and actions in one field, and a word that is in no title is found in the text — pick it and you land on that line of that paper. When the field is empty it offers what to keep reading and what to look at again, each with its reason."),
+  { t: 1, n: "Search Everything", h: L("논문 안의 한 줄까지 찾아요", "Finds a single line inside a paper"),
+    p: L("논문·노트·지도·초안·태그·동작이 한 칸에 있어요. 제목에 없는 낱말은 본문에서 찾아요 — 고르면 그 논문의 그 줄로 가요. 빈칸일 때는 이어 읽을 것과 다시 볼 것을 이유와 함께 먼저 보여줘요.",
+         "Papers, notes, maps, drafts, tags and actions share one field. A word that appears in no title turns up in the text — pick it and you land on that line of that paper. With the field empty, it offers what to read next and what to look at again, each with its reason."),
     make: searchEverything },
-  { t: 1, n: L("어디서나", "Anywhere"), h: L("맥에서 긋고 윈도우에서 읽는다", "Mark on a Mac, read on Windows"),
-    p: L("표시는 PDF 파일 안에 쓰이고 라이브러리는 그냥 폴더다. 그래서 같은 폴더가 맥에서도, 윈도우에서도, 리눅스에서도 열린다 — 하이라이트도 손글씨도 굽은 화살표도 그대로. 계정도 서버도 내보내기도 없다.",
-         "Marks are written into the PDF file and the library is just a folder. So the same folder opens on a Mac, on Windows and on Linux — highlights, handwriting and bent arrows intact. No account, no server, no export."),
+  { t: 1, n: L("어디서나", "Anywhere"), h: L("맥에서 긋고 윈도우에서 읽어요", "Mark on a Mac, read on Windows"),
+    p: L("표시는 PDF 파일 안에 쓰고, 라이브러리는 그냥 폴더예요. 그래서 같은 폴더가 맥에서도, 윈도우에서도, 리눅스에서도 열려요 — 하이라이트도 손글씨도 굽은 화살표도 그대로요. 계정도 서버도 내보내기도 없어요.",
+         "Marks go into the PDF file, and a library is one folder. The same folder opens on a Mac, on Windows and on Linux — highlights, handwriting and bent arrows intact. No account, no server, no export."),
     make: everyDesktop },
 
-  { t: 2, n: "Book mode", h: L("책처럼 펴고, 목차로 건너뛴다", "Spread like a book, jump by the contents"),
-    p: L("두 쪽이 마주 보고, 여백은 잘려 본문만 남는다. 목차는 단축키 하나 — 절 이름을 누르면 그 절로 바로 간다.",
+  { t: 2, n: "Book mode", h: L("책처럼 펴고, 목차로 건너뛰어요", "Spread like a book, jump by the contents"),
+    p: L("두 쪽이 마주 보고, 여백은 잘려서 본문만 남아요. 목차는 단축키 하나예요 — 절 이름을 누르면 그 절로 바로 가요.",
          "Two pages face each other, the margins are trimmed and only the text remains. The contents are one shortcut away — click a section's name and you are there."),
     make: bookMode },
-  { t: 2, n: "Marks", h: L("표시 목록은 문이다", "The list of marks is a set of doors"),
-    p: L("인스펙터의 하이라이트·밑줄·메모를 누르면 논문이 그 자리로 간다. 무엇을 표시했는지가 아니라 어디에 표시했는지가 남는다.",
+  { t: 2, n: "Marks", h: L("표시 목록은 문이에요", "The list of marks is a set of doors"),
+    p: L("인스펙터의 하이라이트·밑줄·메모를 누르면 논문이 그 자리로 가요. 무엇을 표시했는지가 아니라 어디에 표시했는지가 남아요.",
          "Click a highlight, underline or note in the inspector and the paper goes to that spot. What stays is not what you marked but where."),
     make: marksJump },
-  { t: 2, n: L("창", "Panes"), h: L("필요한 창만 켠다", "Turn on only the panes you need"),
-    p: L("서가·목록·논문·인스펙터를 하나씩 껐다 켠다. 읽을 때는 논문만, 정리할 때는 넷 다. 열의 너비는 창이 허락하는 데까지 늘어난다.",
-         "Shelf, list, paper and inspector switch off and on one at a time. Reading, just the paper; sorting, all four. A column grows as wide as the window allows."),
+  { t: 2, n: L("창", "Panes"), h: L("필요한 창만 켜요", "Turn on only the panes you need"),
+    p: L("서가·목록·논문·인스펙터를 하나씩 껐다 켜요. 읽을 때는 논문만, 정리할 때는 넷 다요. 열 너비는 창이 허락하는 데까지 늘어나요.",
+         "Shelf, list, paper and inspector switch off and on one at a time. Reading, the paper alone; sorting, all four. A column grows as wide as the window allows."),
     make: panes },
-  { t: 2, n: L("세 기기", "Three devices"), h: L("긋자마자 건너간다", "Crosses over the moment it is drawn"),
-    p: L("맥·아이패드·아이폰 사이에서는 표시가 몇 KB짜리 저널로 먼저 건너가고, 20 MB PDF는 뒤따라온다. 아무도 파일 동기화를 기다리지 않는다.",
+  { t: 2, n: L("세 기기", "Three devices"), h: L("긋자마자 건너가요", "Crosses the moment you draw it"),
+    p: L("맥·아이패드·아이폰 사이에서는 표시가 몇 KB짜리 저널로 먼저 건너가고, 20 MB PDF는 뒤따라와요. 파일 동기화를 기다릴 일이 없어요.",
          "Between Mac, iPad and iPhone a mark crosses first as a journal of a few KB, and the 20 MB PDF follows. Nobody waits for the file to sync."),
     make: threeDevices },
 
-  { t: 3, n: L("초안 → 원고", "Draft → manuscript"), h: L("노트는 글이 되어야 한다", "Notes have to become writing"),
-    p: L("초안도 노트 하나다. 구절은 ❝로, 노트는 [[링크]]로 넣고 ⇧⌘E를 누르면 구절이 \\cite{키}가 되고, 인용한 논문만 담은 .bib이 함께 나온다.",
-         "A draft is just another note. Put passages in as ❝ and notes as [[links]]; press ⇧⌘E and each passage becomes \\cite{key}, with a .bib holding only the papers you cited."),
+  { t: 3, n: L("초안 → 원고", "Draft → manuscript"), h: L("노트는 글이 되어야 해요", "Notes have to become writing"),
+    p: L("초안도 노트 하나예요. 구절은 ❝로, 노트는 [[링크]]로 넣고 ⇧⌘E를 누르면 구절이 \\cite{키}가 되고, 인용한 논문만 담은 .bib이 같이 나와요.",
+         "A draft is another note. Put passages in as ❝ and notes as [[links]]; press ⇧⌘E and each passage becomes \\cite{key}, with a .bib holding only the papers you cited."),
     make: draftToManuscript },
 ];
 
@@ -1016,7 +1016,7 @@ async function mountDownloads() {
         primary.href = "https://github.com/" + (data.repo || "Icecoffee2500/paper-time") + "/releases";
         setLabel(primary, L("GitHub에서 받기", "Get it from GitHub"));
         primary.querySelector(".sub").textContent =
-          L(`${OS[os].name} — 이 버전엔 없다`, `${OS[os].name} — not in this version`);
+          L(`${OS[os].name} — 이 버전엔 없어요`, `${OS[os].name} — not in this version`);
         variants.textContent = "";
         return;
       }
@@ -1067,7 +1067,7 @@ async function mountDownloads() {
       if (tally) tally.replaceChildren(
         L("지금까지 ", "Downloaded "),
         el("b", {}, L(`${total.toLocaleString("ko-KR")}번`, `${total.toLocaleString("en-US")} times`)),
-        L(" 받아갔다 · 버전별은 이전 버전에서", " so far · per version under Older versions"));
+        L(" 받아갔어요 · 버전별은 이전 버전에서", " so far · per version under Older versions"));
     };
     render(Object.fromEntries(releases.map((r) => [r.version, r.downloads])));
     if (data.repo) fetchDownloadCounts(data.repo).then((live) => { if (live) render(live); });
@@ -1075,7 +1075,7 @@ async function mountDownloads() {
     setLabel(primary, L("GitHub에서 받기", "Get it from GitHub"));
     primary.href = "https://github.com/Icecoffee2500/paper-time/releases";
     list.replaceChildren(el("p", { class: "hint" },
-      L("버전 목록을 불러오지 못했다.", "The list of versions could not be loaded.")));
+      L("버전 목록을 불러오지 못했어요.", "The list of versions didn't load.")));
   }
 }
 
@@ -1175,7 +1175,7 @@ function paintBoard(issues) {
   if (!issues.length) {
     board.replaceChildren(el("div", { class: "row" },
       el("span", { class: "ttl hint" },
-        L("아직 아무도 아무 말도 하지 않았다. 첫 번째가 되어 달라.",
+        L("아직 아무 얘기도 없어요. 첫 번째가 되어 주세요.",
           "Nobody has said anything yet. Be the first."))));
     if (tally) tally.replaceChildren();
     return;
@@ -1195,9 +1195,9 @@ function paintBoard(issues) {
       el("div", {}, el("span", { class: "n" }, String(issues.length)),
         el("span", { class: "k" }, L("제보", "reported"))),
       el("div", {}, el("span", { class: "n" }, String(closed)),
-        el("span", { class: "k" }, L("고쳤다", "fixed"))),
+        el("span", { class: "k" }, L("고침", "fixed"))),
       el("div", {}, el("span", { class: "n" }, String(issues.length - closed)),
-        el("span", { class: "k" }, L("보고 있다", "in hand"))));
+        el("span", { class: "k" }, L("보는 중", "in hand"))));
   }
 
   if (credits) {
@@ -1209,7 +1209,7 @@ function paintBoard(issues) {
     const names = [...counts.entries()].sort((a, b) => b[1] - a[1]);
     credits.replaceChildren(
       el("span", { class: "name", style: "background:transparent;padding-left:0" },
-        L("고맙습니다 —", "Thank you —")),
+        L("고마워요 —", "Thank you —")),
       ...names.map(([who, n]) =>
         el("span", { class: "name" }, n > 1 ? who + " ×" + n : who)));
   }

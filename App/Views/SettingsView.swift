@@ -573,8 +573,8 @@ struct SettingsView: View {
         if matchingActions.isEmpty {
             Section {
                 Text(capturedKey == nil
-                     ? ReleaseNotes.string("그런 키도, 그런 이름도 없다.", "Nothing is on that key, and nothing is called that.")
-                     : ReleaseNotes.string("\(shortcutQuery)에는 아무것도 없다.", "Nothing is on \(shortcutQuery)."))
+                     ? ReleaseNotes.string("그런 키도, 그런 이름도 없어요.", "Nothing is on that key, and nothing is called that.")
+                     : ReleaseNotes.string("\(shortcutQuery)에는 아무것도 없어요.", "Nothing is on \(shortcutQuery)."))
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -754,7 +754,7 @@ struct SettingsView: View {
             Image(systemName: "keyboard")
                 .foregroundStyle(searchIsFocused ? AnyShapeStyle(.tint) : AnyShapeStyle(.tertiary))
                 .help(ReleaseNotes.string(
-                    "칸을 누른 다음 키 조합을 누르면, 그 키를 가진 기능이 나온다.",
+                    "칸을 누른 다음 키 조합을 누르면, 그 키를 쓰는 기능이 나와요.",
                     "Click the field, then press a combination to find what owns it."
                 ))
         }
@@ -812,7 +812,7 @@ struct SettingsView: View {
                     legend("minus", .secondary, ReleaseNotes.string("뺀 것", "Removed"))
                     legend("wrench.adjustable", .orange, ReleaseNotes.string("고친 것", "Fixed"))
                     Spacer(minLength: 8)
-                    Text(ReleaseNotes.string("버전과 항목은 눌러서 펼친다", "Versions and entries open when clicked"))
+                    Text(ReleaseNotes.string("버전과 항목은 눌러서 펼쳐요", "Versions and entries open when clicked"))
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
