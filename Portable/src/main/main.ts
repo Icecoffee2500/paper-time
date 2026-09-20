@@ -509,6 +509,11 @@ async function pageCount(file: string): Promise<number> {
 
 // MARK: - Launch
 
+// Windows groups taskbar buttons and notifications by this, not by the
+// executable's name. Without it a pinned Paper Time and a running Paper Time
+// are two different buttons.
+if (process.platform === 'win32') app.setAppUserModelId('com.imtaeheon.PaperTime')
+
 /**
  * Wayland, when the session is Wayland.
  *
