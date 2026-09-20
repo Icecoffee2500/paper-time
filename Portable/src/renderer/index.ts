@@ -312,6 +312,13 @@ const toolbar = buildToolbar({
         action: () => setSort(store.settings.sort.field, !store.settings.sort.ascending),
       },
       { separator: true },
+      { caption: 'Page Layout' },
+      ...(['continuous', 'single'] as const).map((layout) => ({
+        label: { continuous: 'Continuous', single: 'Single Page' }[layout],
+        checked: store.settings.pageLayout === layout,
+        action: () => setLayout(layout),
+      })),
+      { separator: true },
       { caption: 'Page Tint' },
       ...(['none', 'sepia', 'grey', 'night'] as const).map((tint) => ({
         label: { none: 'None', sepia: 'Sepia', grey: 'Grey', night: 'Night' }[tint],
@@ -479,6 +486,33 @@ function goForward() {
   void openPaper(id).finally(() => { store.travelling = false })
 }
 
+/**
+ * The paper and nothing else — and the way back.
+ *
+ * What it hid has to be remembered, or leaving focus mode means putting three
+ * columns back by hand. Leaving restores exactly what was open on the way in.
+ */
+let beforeFocus: typeof store.settings.panes | null = null
+
+function toggleFocus() {
+  if (beforeFocus) {
+    store.settings.panes = { ...beforeFocus }
+    beforeFocus = null
+  } else {
+    beforeFocus = { ...store.settings.panes }
+    store.settings.panes = { sidebar: false, paperList: false, reader: true, inspector: false }
+  }
+  void call('settings:set', { panes: store.settings.panes })
+  layoutPanes()
+  toolbar.update()
+  reader.relayout()
+}
+
+function setLayout(layout: 'single' | 'continuous') {
+  reader.setLayout(layout)
+  void call('settings:set', { pageLayout: layout })
+}
+
 function setSort(field: typeof store.settings.sort.field, ascending: boolean) {
   store.settings.sort = { field, ascending }
   void call('settings:set', { sort: store.settings.sort })
@@ -607,6 +641,17 @@ on(window, 'keydown', (event: KeyboardEvent) => {
       deleteSelection()
     }
     return
+  }
+
+  if (store.settings.pageLayout === 'single' && !store.reader.drawing) {
+    if (event.key === 'PageDown' || event.key === 'ArrowRight') {
+      event.preventDefault()
+      return reader.turnPage(1)
+    }
+    if (event.key === 'PageUp' || event.key === 'ArrowLeft') {
+      event.preventDefault()
+      return reader.turnPage(-1)
+    }
   }
 
   if (store.reader.drawing) {
@@ -776,14 +821,9 @@ function runMenuCommand(command: string) {
     case 'copyCitationKey':
       if (store.selectedID) void copyKey(store.selectedID)
       break
-    case 'focus':
-      store.settings.panes.sidebar = false
-      store.settings.panes.paperList = false
-      store.settings.panes.inspector = false
-      layoutPanes()
-      toolbar.update()
-      reader.relayout()
-      break
+    case 'focus': toggleFocus(); break
+    case 'layoutContinuous': setLayout('continuous'); break
+    case 'layoutSinglePage': setLayout('single'); break
     default:
       toast(`“${command}” is not in this build yet.`)
   }
