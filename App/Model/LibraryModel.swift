@@ -140,7 +140,45 @@ public final class LibraryModel {
             let wanted = newValue.map { Set([$0]) } ?? []
             if selection != wanted { selection = wanted }
             openPaperID = newValue
+            if !isTravellingHistory { remember(newValue) }
         }
+    }
+
+    // MARK: - Where you have been
+
+    /// The papers opened, in order, and where in that trail the reader is —
+    /// what a browser's back and forward are, for papers. Opening a paper
+    /// adds it after the current place and forgets what lay beyond it, the
+    /// way a browser does.
+    public private(set) var trail: [UUID] = []
+    public private(set) var trailIndex = -1
+    private var isTravellingHistory = false
+
+    private func remember(_ id: UUID?) {
+        guard let id, trail.indices.contains(trailIndex) == false || trail[trailIndex] != id else { return }
+        if trailIndex < trail.count - 1 { trail.removeSubrange((trailIndex + 1)...) }
+        trail.append(id)
+        trailIndex = trail.count - 1
+    }
+
+    public var canGoBack: Bool { trailIndex > 0 }
+    public var canGoForward: Bool { trailIndex < trail.count - 1 }
+
+    public func goBack() {
+        guard canGoBack else { return }
+        travel(to: trailIndex - 1)
+    }
+
+    public func goForward() {
+        guard canGoForward else { return }
+        travel(to: trailIndex + 1)
+    }
+
+    private func travel(to index: Int) {
+        trailIndex = index
+        isTravellingHistory = true
+        selectedPaperID = trail[index]
+        isTravellingHistory = false
     }
 
     /// Papers currently being resolved, so rows can show a spinner.

@@ -1,0 +1,58 @@
+/** The names on the bridge between the window and the process that owns the
+ *  files. Kept in one place so both ends refer to the same strings. */
+export const CHANNEL = {
+  invoke: 'papertime:invoke',
+  event: 'papertime:event',
+} as const
+
+export interface WindowState {
+  maximized: boolean
+  fullScreen: boolean
+  focused: boolean
+}
+
+/** What the window can ask the file-owning process to do. */
+export interface Requests {
+  'settings:get': { args: void; result: unknown }
+  'settings:set': { args: Record<string, unknown>; result: unknown }
+  'library:choose': { args: void; result: string | null }
+  'library:open': { args: { root: string }; result: LibrarySnapshot | { error: string } }
+  'library:reload': { args: void; result: LibrarySnapshot | { error: string } }
+  'library:import': { args: { paths?: string[] }; result: LibrarySnapshot | { error: string } }
+  'library:adoptLoose': { args: void; result: LibrarySnapshot | { error: string } }
+  'library:trash': { args: { id: string }; result: LibrarySnapshot }
+  'paper:bytes': { args: { id: string }; result: { data: Uint8Array } | { error: string } }
+  'paper:state': { args: { id: string; patch: Record<string, unknown> }; result: unknown }
+  'paper:meta': { args: { id: string; patch: Record<string, unknown> }; result: unknown }
+  'paper:reveal': { args: { id: string }; result: void }
+  'sketch:load': { args: { id: string; pageIndex: number }; result: unknown[] | null }
+  'sketch:save': { args: { id: string; pageIndex: number; elements: unknown[] }; result: void }
+  'ink:load': { args: { id: string; pageIndex: number }; result: unknown[] | null }
+  'ink:save': { args: { id: string; pageIndex: number; strokes: unknown[] }; result: void }
+  'drawing:pages': { args: { id: string }; result: { sketch: number[]; ink: number[]; appleInk: number[] } }
+  'drawing:adoptFromFile': { args: { id: string }; result: Record<number, { elements: unknown[]; strokes: unknown[] }> }
+  'drawing:flush': { args: { id: string }; result: { written: number } | { error: string } }
+  'collections:save': { args: { collections: unknown[] }; result: unknown }
+  'window:minimize': { args: void; result: void }
+  'window:toggleMaximize': { args: void; result: void }
+  'window:close': { args: void; result: void }
+  'window:state': { args: void; result: WindowState }
+  'shell:openExternal': { args: { url: string }; result: void }
+}
+
+export type RequestName = keyof Requests
+
+export interface PaperRowDTO {
+  id: string
+  meta: Record<string, unknown>
+  state: Record<string, unknown>
+  exists: boolean
+}
+
+export interface LibrarySnapshot {
+  root: string
+  manifest: Record<string, unknown>
+  collections: Record<string, unknown>
+  papers: PaperRowDTO[]
+  looseCount: number
+}

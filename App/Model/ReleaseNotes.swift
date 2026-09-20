@@ -49,6 +49,16 @@ enum ReleaseNotes {
     /// twenty is a list nobody reads.
     static let highlights: [Highlight] = [
         Highlight(
+            symbol: "macwindow.on.rectangle",
+            title: Text2("라이브러리가 어느 데스크톱에서나 열린다", "One library, on every desktop"),
+            detail: Text2(
+                "표시는 PDF 파일 안에 쓰이고 라이브러리는 그냥 폴더다. 그래서 같은 폴더를 맥에서도, 윈도우에서도, 리눅스에서도 연다 — 하이라이트도 손글씨도 굽은 화살표도 그대로. 계정도 서버도 내보내기도 없고, 클라우드 폴더든 USB든 파일이 닿는 곳이면 된다. 아래에서 표시 하나가 셋에 닿는 것을 눌러 보라.",
+                "The marks are written into the PDF and the library is only a folder, so the same folder opens on a Mac, on Windows and on Linux — the highlights, the handwriting, the bent arrows, all of it. No account, no server, nothing exported: a cloud folder or a memory stick will do. Press below and watch one mark reach all three."
+            ),
+            demo: .crossPlatform,
+            tier: .one
+        ),
+        Highlight(
             symbol: "function",
             title: Text2("Ultracopy — 수식은 LaTeX으로, 글은 글로", "Ultracopy — the words as words, the mathematics as LaTeX"),
             detail: Text2(
@@ -236,6 +246,41 @@ enum ReleaseNotes {
     /// thing they care about moved; making them read a paragraph to find out
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
+        Release(
+            version: "0.5.0",
+            date: Text2("2026년 9월", "September 2026"),
+            note: Text2("라이브러리가 맥 밖으로 나갔다.", "The library leaves the Mac."),
+            added: [
+                Entry(
+                    Text2("윈도우와 리눅스에서도 연다", "It opens on Windows and Linux too"),
+                    Text2(
+                        "같은 라이브러리 폴더를 윈도우와 리눅스에서도 연다. 하이라이트도, 밑줄도, 손글씨도, 도형과 화살표도 그대로 — 표시가 PDF 파일 안에 쓰이고 라이브러리는 그냥 폴더이기 때문이다. 계정도 서버도 내보내기도 없고, 클라우드 폴더든 USB든 파일이 닿는 곳이면 된다. 맥에서 그린 굽은 화살표가 PC에서 같은 곡선으로 열린다.",
+                        "The same library folder opens on Windows and on Linux. The highlights, the underlines, the handwriting, the shapes and arrows — all of it, because the marks are written into the PDF and the library is only a folder. No account, no server, nothing exported: a cloud folder or a memory stick will do. A bent arrow drawn on the Mac opens on a PC with the same curve."
+                    ),
+                    demo: .crossPlatform
+                ),
+                Entry(
+                    Text2("칸 단추가 둘씩 양쪽으로", "The pane buttons, two and two"),
+                    Text2("넷이 한 덩어리로 붙어 있던 칸 단추를 양쪽으로 갈랐다 — 왼쪽에 사이드바와 논문 목록, 오른쪽에 논문과 인스펙터. 단추가 제가 여는 칸 쪽에 선다. 켜진 칸은 네모 바탕 대신 색으로만 말한다(네모 넷이 나란히 서면 한 덩어리로 읽혔다). 목록과 논문 아이콘도 칸의 모양이 보이는 것으로 바꿨다.", "The four pane buttons were one block; now they are two and two — sidebar and paper list at the left, paper and inspector at the right, each beside the pane it opens. A pane that is on says so with colour rather than a filled square: four squares in a row read as one block. The list and paper icons now look like the panes they open."),
+                    action: .sidebar,
+                    devices: [.mac]
+                ),
+            ],
+            fixed: [
+                Entry(
+                    Text2("＋를 눌러도 아무것도 안 떴다", "The + button did nothing"),
+                    Text2("도구 막대의 ＋가 처음 한 번만 열리고 그 뒤로는 눌러도 조용했다. SwiftUI의 파일 가져오기 시트를 도구 막대에서 띄운 탓이라, 여는 창을 직접 띄우도록 바꿨다. 이제 누를 때마다 뜬다.", "The toolbar's + opened once and was silent after that — a SwiftUI file importer presented from a toolbar fires once. It opens an open panel directly now, every time."),
+                    action: .addPapers,
+                    devices: [.mac]
+                ),
+                Entry(
+                    Text2("뒤로·앞으로가 아무 데도 안 갔다", "Back and forward went nowhere"),
+                    Text2("화살표가 PDF 안의 링크 기록에만 묶여 있어서, 논문 속 링크를 누른 적이 없으면 갈 곳이 없었다. 이제 브라우저처럼 연 논문들의 발자취를 따라간다 — 뒤로 간 뒤 새 논문을 열면 그 앞의 발자취는 잊고, 논문 안에서 참고문헌 링크를 눌러 이동했다면 먼저 그 자리로 돌아간다. 갈 곳이 없으면 흐리게 꺼진다.", "The arrows drove PDFKit's in-document link history, which is empty until a link has been followed. They now walk the trail of papers opened, browser-style: opening a paper after going back forgets what lay ahead, and a link followed inside a paper is stepped back through first. They grey out when there is nowhere to go."),
+                    action: .back,
+                    devices: [.mac]
+                ),
+            ]
+        ),
         Release(
             version: "0.4.4",
             date: Text2("2026년 9월", "September 2026"),
@@ -947,6 +992,9 @@ enum ReleaseNotes {
         /// icon: a card with words, a bent arrow that follows it when it is
         /// dragged, a frame round handwriting, and the row of one-key tools.
         case sketch
+        /// One folder, three desktops: a mark made on any of them is in the
+        /// PDF, so the other two have it the moment the folder catches up.
+        case crossPlatform
 
         var id: String { rawValue }
     }

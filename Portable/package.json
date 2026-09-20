@@ -1,0 +1,44 @@
+{
+  "name": "paper-time",
+  "productName": "Paper Time",
+  "version": "0.5.0",
+  "description": "A reader, a pen and a bibliography for papers \u2014 the same on every desktop.",
+  "author": "Taeheon Im <icecoffee2500@korea.ac.kr>",
+  "license": "MIT",
+  "private": true,
+  "main": "out/main/main.js",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch",
+    "start": "npm run build && electron .",
+    "dev": "npm run build && electron . --papertime-dev",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build:test && node out/test/run.js",
+    "build:test": "node build.mjs --test",
+    "dist:win": "npm run build && node tools/package.mjs win",
+    "dist:linux": "npm run build && node tools/package.mjs linux",
+    "dist:mac": "npm run build && node tools/package.mjs mac",
+    "dist:linux-packages": "npm run build && node tools/package.mjs linux-packages",
+    "icons": "node tools/make-ico.mjs",
+    "latex-table": "node tools/generate-latex-table.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "electron": "^33.3.1",
+    "electron-builder": "^25.1.8",
+    "esbuild": "^0.24.2",
+    "typescript": "^5.7.2"
+  },
+  "dependencies": {
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^4.10.38"
+  },
+  "homepage": "https://icecoffee2500.github.io/paper-time/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Icecoffee2500/paper-time.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Icecoffee2500/paper-time/issues"
+  }
+}
