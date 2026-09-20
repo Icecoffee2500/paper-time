@@ -17,7 +17,7 @@ struct LibraryToolbarItems: ToolbarContent {
             Button {
                 isImportingPDFs = true
             } label: {
-                Label("Add PDFs", systemImage: "doc.badge.plus")
+                Label(L("PDF 더하기", "Add PDFs"), systemImage: "doc.badge.plus")
             }
             .fileImporter(
                 isPresented: $isImportingPDFs,

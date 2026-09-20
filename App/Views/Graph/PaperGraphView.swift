@@ -182,7 +182,7 @@ struct PaperGraphView: View {
     /// off, which is the whole use of the thing.
     private var controls: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("SHOWING")
+            Text(L("보이는 것", "SHOWING"))
                 .font(.caption2.weight(.semibold))
                 .tracking(0.6)
                 .foregroundStyle(.tertiary)
@@ -244,7 +244,7 @@ struct PaperGraphView: View {
         var parts: [String] = []
         if let year = node.year { parts.append(String(year)) }
         let links = graph.visibleEdges.filter { $0.a == id || $0.b == id }
-        parts.append(links.count == 1 ? "1 connection" : "\(links.count) connections")
+        parts.append(links.count == 1 ? L("연결 1개", "1 connection") : L("연결 \(links.count)개", "\(links.count) connections"))
         let kinds = Set(links.flatMap(\.kinds)).sorted { $0.label < $1.label }
         if !kinds.isEmpty {
             parts.append(kinds.map(\.label).joined(separator: " · "))
@@ -258,11 +258,11 @@ struct PaperGraphView: View {
             VStack(spacing: 10) {
                 ProgressView()
                 if let progress = graph.progress {
-                    Text("Reading papers for references… \(progress.done) of \(progress.total)")
+                    Text(L("논문에서 참고문헌을 읽는 중… \(progress.total)편 중 \(progress.done)편", "Reading papers for references… \(progress.done) of \(progress.total)"))
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 } else {
-                    Text("Working out the connections…")
+                    Text(L("연결을 찾는 중…", "Working out the connections…"))
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
@@ -273,9 +273,9 @@ struct PaperGraphView: View {
             ))
         } else if graph.nodes.isEmpty {
             ContentUnavailableView {
-                Label("Nothing to Connect Yet", systemImage: "point.3.connected.trianglepath.dotted")
+                Label(L("아직 이을 것이 없어요", "Nothing to Connect Yet"), systemImage: "point.3.connected.trianglepath.dotted")
             } description: {
-                Text("Add a few papers, and the graph will show what they have in common.")
+                Text(L("논문을 몇 편 더하면, 무엇을 나누는지 그래프가 보여줘요.", "Add a few papers. The graph shows what they have in common."))
             }
         }
     }

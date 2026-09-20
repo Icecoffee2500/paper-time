@@ -44,6 +44,9 @@ Apple 네이티브(macOS/iPadOS/iOS 26) 논문 리더 + 필기 + 서지관리 �
 - **패키징.** `npm run dist:win`(NSIS + zip), `npm run dist:linux`(AppImage + tar.gz, x64·arm64)은 어느 OS에서든 된다. **`.deb`·`.rpm`은 맥에서 만들면 안 된다** — fpm이 GNU `ar`을 부르는데 맥의 `ar`은 Mach-O 아카이브를 만들고, 그 결과 96바이트짜리 패키지가 나오는데 electron-builder는 성공으로 보고한다. `tools/package.mjs`가 만들어진 것들의 크기를 재서 그런 게 나오면 실패시키고, `dist:linux-packages`는 리눅스가 아니면 아예 거절한다.
 - 플랫폼 분기: AppKit 전용 파일은 `#if os(macOS)`로 통째로 감싸고 UIKit 쌍을 옆에 둔다(`MarkOverlayView`, `MarginMaskView`, `PageOverlay`). 색은 `PlatformColorShims.swift`가 AppKit 이름을 UIKit에 준다.
 
+## 말투
+앱과 배포 페이지의 **한국어는 토스의 말투(해요체), 영어는 애플의 말투**다. 정본은 `Docs/Voice.md`이고, 문자열을 새로 쓰거나 고칠 때마다 그 문서의 마지막 절(고칠 때 확인하는 것)을 지나야 한다. 요약하면: 한국어는 해요체로 쓰고 피동형과 한자어를 피하며 한 문장에 한 가지만 담는다(단추는 "보내기"처럼 명사형, "보내요"가 아니다). 영어는 능동태 현재형 짧은 평서문이고 *powerful·seamless·simply·easy* 같은 말을 쓰지 않으며 메뉴와 단추는 Title Case, 문장은 sentence case다. **둘은 번역 관계가 아니다** — 한 쪽을 직역하면 둘 다 어색해진다. 두 언어는 `L(ko, en)`(맥)과 `L(ko, en)`(`Portable/src/shared/lang.ts`)로 소스에 나란히 두고, 배포 페이지는 `data-l="ko"`/`data-l="en"` 쌍으로 마크업에 나란히 둔다 — 어느 쪽도 카탈로그로 빼지 않는 이유는 같다. 떨어뜨려 두면 한 쪽이 조용히 썩는다. 어느 말로 보일지는 시스템 언어가 정하고(한국어면 한국어, 그 밖이면 영어), 사용자가 뒤집을 수 있다.
+
 ## 기능 소개(스니펫) 규칙
 새 기능이 **중요한 기능**이면 — 즉 한 문장으로는 무엇인지 와닿지 않거나, 사용자가 모르면 영영 안 쓰게 될 기능이면 — 코드만 쓰고 끝내지 않는다. 다음을 **같은 커밋에서** 함께 한다.
 

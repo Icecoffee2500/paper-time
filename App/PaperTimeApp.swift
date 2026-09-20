@@ -31,6 +31,9 @@ struct PaperTimeApp: App {
                 .task {
                     Trace.mark("window on screen")
                     Hitches.watch()
+                    // Set now, cleared on a clean quit. Finding it still set
+                    // next launch is how the app knows it died.
+                    model.noteLaunch()
                 }
         }
         .commands { PaperTimeCommands(model: model) }

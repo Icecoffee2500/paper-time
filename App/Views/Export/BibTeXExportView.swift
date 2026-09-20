@@ -28,10 +28,10 @@ struct BibTeXExportView: View {
 
         var label: String {
             switch self {
-            case .selectedPaper: "Selected Paper"
-            case .currentView: "Current View"
-            case .wholeLibrary: "Whole Library"
-            case .collection: "Collection"
+            case .selectedPaper: L("고른 논문", "Selected Paper")
+            case .currentView: L("지금 보이는 목록", "Current View")
+            case .wholeLibrary: L("라이브러리 전체", "Whole Library")
+            case .collection: L("컬렉션", "Collection")
             }
         }
     }
@@ -56,23 +56,23 @@ struct BibTeXExportView: View {
                 previewSection
             }
             .formStyle(.grouped)
-            .navigationTitle("Export BibTeX")
+            .navigationTitle(L("BibTeX 내보내기", "Export BibTeX"))
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button(L("취소", "Cancel")) { dismiss() }
                 }
                 ToolbarItemGroup(placement: .confirmationAction) {
-                    Button("Copy") { copyToClipboard() }
+                    Button(L("복사", "Copy")) { copyToClipboard() }
                         .disabled(papersInScope.isEmpty)
-                    Button("Save…") {
+                    Button(L("저장…", "Save…")) {
                         exportDocument = BibTeXDocument(text: makeBibTeX())
                         isExporting = true
                     }
                     .disabled(papersInScope.isEmpty)
-                    Button("Done") { dismiss() }
+                    Button(L("완료", "Done")) { dismiss() }
                         .fontWeight(.semibold)
                 }
             }
@@ -92,15 +92,15 @@ struct BibTeXExportView: View {
     // MARK: - Sections
 
     private var scopeSection: some View {
-        Section("Export") {
-            Picker("Scope", selection: $scopeKind) {
+        Section(L("내보내기", "Export")) {
+            Picker(L("범위", "Scope"), selection: $scopeKind) {
                 ForEach(ScopeKind.allCases) { kind in
                     Text(kind.label).tag(kind)
                 }
             }
             if scopeKind == .collection {
-                Picker("Collection", selection: $selectedCollectionID) {
-                    Text("Choose a Collection").tag(UUID?.none)
+                Picker(L("컬렉션", "Collection"), selection: $selectedCollectionID) {
+                    Text(L("컬렉션 고르기", "Choose a Collection")).tag(UUID?.none)
                     ForEach(model?.collections.collections ?? []) { collection in
                         Text(collection.name).tag(Optional(collection.id))
                     }
@@ -110,18 +110,18 @@ struct BibTeXExportView: View {
     }
 
     private var optionsSection: some View {
-        Section("Options") {
-            Picker("Preprint Style", selection: $options.preprintStyle) {
+        Section(L("옵션", "Options")) {
+            Picker(L("프리프린트 양식", "Preprint Style"), selection: $options.preprintStyle) {
                 ForEach(BibTeXExportOptions.PreprintStyle.allCases, id: \.self) { style in
                     Text(style.displayName).tag(style)
                 }
             }
-            Toggle("Protect Case in Titles", isOn: $options.protectCase)
-            Toggle("Abbreviate Journal Names", isOn: $options.abbreviateJournals)
-            Toggle("Include Abstract", isOn: $options.includeAbstract)
-            Toggle("Include Keywords", isOn: $options.includeKeywords)
-            Toggle("Include URL", isOn: $options.includeURL)
-            Toggle("Include Unverified Records", isOn: $options.includeUnverified)
+            Toggle(L("제목 대소문자 지키기", "Protect Case in Titles"), isOn: $options.protectCase)
+            Toggle(L("학술지 이름 줄이기", "Abbreviate Journal Names"), isOn: $options.abbreviateJournals)
+            Toggle(L("초록 넣기", "Include Abstract"), isOn: $options.includeAbstract)
+            Toggle(L("키워드 넣기", "Include Keywords"), isOn: $options.includeKeywords)
+            Toggle(L("URL 넣기", "Include URL"), isOn: $options.includeURL)
+            Toggle(L("확인 안 된 항목도 넣기", "Include Unverified Records"), isOn: $options.includeUnverified)
         }
     }
 
@@ -130,7 +130,7 @@ struct BibTeXExportView: View {
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
-                    .accessibilityLabel("Warning")
+                    .accessibilityLabel(L("경고", "Warning"))
                 Text(warningText)
                     .font(.callout)
             }
@@ -138,9 +138,9 @@ struct BibTeXExportView: View {
     }
 
     private var previewSection: some View {
-        Section("Preview") {
+        Section(L("미리 보기", "Preview")) {
             ScrollView {
-                Text(previewText.isEmpty ? "Nothing to export yet." : previewText)
+                Text(previewText.isEmpty ? L("아직 내보낼 것이 없어요.", "Nothing to export yet.") : previewText)
                     .font(.system(.footnote, design: .monospaced))
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -182,7 +182,10 @@ struct BibTeXExportView: View {
     private var warningText: String {
         let noun = reviewCount == 1 ? "paper hasn't" : "papers haven't"
         let verb = options.includeUnverified ? "will still be included" : "will be left out of this export"
-        return "\(reviewCount) \(noun) been verified and \(verb). Turn on “Include Unverified Records” to change that."
+        return L(
+            "\(reviewCount)편은 아직 확인하지 못했어요. \(options.includeUnverified ? "그래도 들어가요" : "이번 내보내기에서는 빠져요"). 바꾸려면 “확인 안 된 항목도 넣기”를 켜면 돼요.",
+            else: "\(reviewCount) \(noun) been verified and \(verb). Turn on “Include Unverified Records” to change that."
+        )
     }
 
     // MARK: - Generation
@@ -221,7 +224,7 @@ struct BibTeXExportView: View {
             return
         }
         let shown = lines.prefix(200).joined(separator: "\n")
-        previewText = "\(shown)\n… and \(lines.count - 200) more lines"
+        previewText = L("\(shown)\n… 그리고 \(lines.count - 200)줄 더", "\(shown)\n… and \(lines.count - 200) more lines")
     }
 
     private func copyToClipboard() {

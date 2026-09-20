@@ -15,7 +15,7 @@ struct CitationStyleView: View {
     var body: some View {
         Form {
             Section {
-                Picker("Style", selection: $style) {
+                Picker(L("양식", "Style"), selection: $style) {
                     ForEach(CitationStyle.allCases) { candidate in
                         Text(candidate.displayName).tag(candidate)
                     }
@@ -23,7 +23,7 @@ struct CitationStyleView: View {
                 .pickerStyle(.menu)
             }
 
-            Section("Reference List") {
+            Section(L("참고문헌", "Reference List")) {
                 Text(CitationFormatter.format(item, style: style))
                     .textSelection(.enabled)
                     .font(.callout)
@@ -33,19 +33,19 @@ struct CitationStyleView: View {
                     copy(CitationFormatter.format(item, style: style))
                 } label: {
                     Label(
-                        copiedStyle == style ? "Copied" : "Copy Reference",
+                        copiedStyle == style ? L("복사했어요", "Copied") : L("참고문헌 복사", "Copy Reference"),
                         systemImage: copiedStyle == style ? "checkmark" : "doc.on.doc"
                     )
                 }
             }
 
-            Section("In Text") {
+            Section(L("본문 인용", "In Text")) {
                 Text(style.inTextExample(for: item, number: 1))
                     .textSelection(.enabled)
                     .font(.callout.monospaced())
             }
 
-            Section("When to Use It") {
+            Section(L("언제 쓰나요", "When to Use It")) {
                 Text(style.guidance)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -54,18 +54,25 @@ struct CitationStyleView: View {
 
             Section {
                 Text(
-                    """
-                    Your LaTeX template decides the final formatting. \
-                    These are here to check a reference by eye and to paste one \
-                    into an email or a slide.
-                    """
+                    L(
+                        """
+                        마지막 모양은 LaTeX 템플릿이 정해요. \
+                        여기 있는 건 눈으로 한번 훑어보거나, \
+                        메일이나 슬라이드에 하나 붙일 때 쓰면 돼요.
+                        """,
+                        """
+                        The LaTeX template decides the final formatting. \
+                        Use these to check a reference, or to paste one into an \
+                        email or a slide.
+                        """
+                    )
                 )
                 .font(.footnote)
                 .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
-        .navigationTitle("Citation Styles")
+        .navigationTitle(L("인용 양식", "Citation Styles"))
     }
 
     private func copy(_ text: String) {

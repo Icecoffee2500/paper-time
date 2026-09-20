@@ -385,7 +385,7 @@ final class SketchInputView: NSView, SketchEditing {
             let elementsAfter = elements(on: index)
             guard drawingAfter != drawingBefore || elementsAfter != elementsBefore else { return }
             registerUndo(
-                name: ReleaseNotes.string("지우기", "Erase"), on: index,
+                name: L("지우기", "Erase"), on: index,
                 elements: (elementsBefore, elementsAfter), drawing: (drawingBefore, drawingAfter)
             )
         case let .move(elementsBefore, drawingBefore, _, moved):
@@ -398,7 +398,7 @@ final class SketchInputView: NSView, SketchEditing {
             if after != elementsBefore { session.setSketch(after, forPage: index) }
             if drawingAfter != drawingBefore { session.setDrawing(drawingAfter, forPage: index) }
             registerUndo(
-                name: ReleaseNotes.string("옮기기", "Move"), on: index,
+                name: L("옮기기", "Move"), on: index,
                 elements: (elementsBefore, after), drawing: (drawingBefore, drawingAfter)
             )
             refreshPage?(index)
@@ -406,7 +406,7 @@ final class SketchInputView: NSView, SketchEditing {
             guard let changed = working.first, changed != original else { refreshPage?(index); return }
             var after = elementsBefore
             if let i = after.firstIndex(where: { $0.id == changed.id }) { after[i] = changed }
-            commit(after, on: index, before: elementsBefore, name: ReleaseNotes.string("모양 바꾸기", "Reshape"))
+            commit(after, on: index, before: elementsBefore, name: L("모양 바꾸기", "Reshape"))
         case .marquee, .pendingClick:
             break
         }
@@ -432,14 +432,14 @@ final class SketchInputView: NSView, SketchEditing {
         menu.autoenablesItems = false
         let has = hasSelection
         let one = selection.elements.count == 1 && selection.strokes.isEmpty
-        add(ReleaseNotes.string("글 고치기", "Edit Text"), #selector(editTextFromMenu), enabled: one)
-        add(ReleaseNotes.string("테두리 두르기", "Frame Selection"), #selector(frameFromMenu), enabled: has)
+        add(L("글 고치기", "Edit Text"), #selector(editTextFromMenu), enabled: one)
+        add(L("테두리 두르기", "Frame Selection"), #selector(frameFromMenu), enabled: has)
         menu.addItem(.separator())
-        add(ReleaseNotes.string("복제", "Duplicate"), #selector(duplicateFromMenu), enabled: !selection.elements.isEmpty)
-        add(ReleaseNotes.string("맨 앞으로", "Bring to Front"), #selector(frontFromMenu), enabled: !selection.elements.isEmpty)
-        add(ReleaseNotes.string("맨 뒤로", "Send to Back"), #selector(backFromMenu), enabled: !selection.elements.isEmpty)
+        add(L("복제", "Duplicate"), #selector(duplicateFromMenu), enabled: !selection.elements.isEmpty)
+        add(L("맨 앞으로", "Bring to Front"), #selector(frontFromMenu), enabled: !selection.elements.isEmpty)
+        add(L("맨 뒤로", "Send to Back"), #selector(backFromMenu), enabled: !selection.elements.isEmpty)
         menu.addItem(.separator())
-        add(ReleaseNotes.string("지우기", "Delete"), #selector(deleteFromMenu), enabled: has)
+        add(L("지우기", "Delete"), #selector(deleteFromMenu), enabled: has)
         return menu
     }
 
@@ -707,7 +707,7 @@ final class SketchInputView: NSView, SketchEditing {
         strokes.append(stroke)
         let after = PKDrawing(strokes: strokes)
         session.setDrawing(after, forPage: index)
-        registerUndo(name: ReleaseNotes.string("펜", "Pen Stroke"), on: index, elements: nil, drawing: (before, after))
+        registerUndo(name: L("펜", "Pen Stroke"), on: index, elements: nil, drawing: (before, after))
         refreshPage?(index)
     }
 
@@ -844,7 +844,7 @@ final class SketchInputView: NSView, SketchEditing {
         if elements != editing.before {
             session.setSketch(elements, forPage: index)
             registerUndo(
-                name: ReleaseNotes.string(editing.isNew ? "글 쓰기" : "글 고치기", editing.isNew ? "Add Text" : "Edit Text"),
+                name: L(editing.isNew ? "글 쓰기" : "글 고치기", editing.isNew ? "Add Text" : "Edit Text"),
                 on: index, elements: (editing.before, elements), drawing: nil
             )
         } else {
@@ -924,7 +924,7 @@ final class SketchInputView: NSView, SketchEditing {
         }
         if after != before { session.setSketch(after, forPage: index) }
         if drawingAfter != drawingBefore { session.setDrawing(drawingAfter, forPage: index) }
-        registerUndo(name: ReleaseNotes.string("옮기기", "Move"), on: index, elements: (before, after), drawing: (drawingBefore, drawingAfter))
+        registerUndo(name: L("옮기기", "Move"), on: index, elements: (before, after), drawing: (drawingBefore, drawingAfter))
         refreshPage?(index)
         refreshSelectionState()
     }
@@ -948,7 +948,7 @@ final class SketchInputView: NSView, SketchEditing {
             return changed
         }
         guard after != before else { return }
-        commit(after, on: index, before: before, name: ReleaseNotes.string("스타일", "Restyle"))
+        commit(after, on: index, before: before, name: L("스타일", "Restyle"))
         refreshSelectionState()
     }
 
@@ -964,7 +964,7 @@ final class SketchInputView: NSView, SketchEditing {
         selection = Selection()
         if after != before { session.setSketch(after, forPage: index) }
         if drawingAfter != drawingBefore { session.setDrawing(drawingAfter, forPage: index) }
-        registerUndo(name: ReleaseNotes.string("지우기", "Delete"), on: index, elements: (before, after), drawing: (drawingBefore, drawingAfter))
+        registerUndo(name: L("지우기", "Delete"), on: index, elements: (before, after), drawing: (drawingBefore, drawingAfter))
         refreshPage?(index)
     }
 
@@ -980,7 +980,7 @@ final class SketchInputView: NSView, SketchEditing {
             after.append(copy)
             copies.insert(copy.id)
         }
-        commit(after, on: index, before: before, name: ReleaseNotes.string("복제", "Duplicate"))
+        commit(after, on: index, before: before, name: L("복제", "Duplicate"))
         selection = Selection(pageIndex: index, elements: copies)
     }
 
@@ -1011,7 +1011,7 @@ final class SketchInputView: NSView, SketchEditing {
         var after = before
         let lowest = after.indices.first { selection.elements.contains(after[$0].id) } ?? after.count
         after.insert(frame, at: lowest)
-        commit(after, on: index, before: before, name: ReleaseNotes.string("테두리", "Frame"))
+        commit(after, on: index, before: before, name: L("테두리", "Frame"))
         selection = Selection(pageIndex: index, elements: [frame.id])
     }
 
@@ -1019,14 +1019,14 @@ final class SketchInputView: NSView, SketchEditing {
         guard let index = selection.pageIndex, !selection.elements.isEmpty else { return }
         let before = elements(on: index)
         let after = before.filter { !selection.elements.contains($0.id) } + before.filter { selection.elements.contains($0.id) }
-        commit(after, on: index, before: before, name: ReleaseNotes.string("맨 앞으로", "Bring to Front"))
+        commit(after, on: index, before: before, name: L("맨 앞으로", "Bring to Front"))
     }
 
     func sendSelectionToBack() {
         guard let index = selection.pageIndex, !selection.elements.isEmpty else { return }
         let before = elements(on: index)
         let after = before.filter { selection.elements.contains($0.id) } + before.filter { !selection.elements.contains($0.id) }
-        commit(after, on: index, before: before, name: ReleaseNotes.string("맨 뒤로", "Send to Back"))
+        commit(after, on: index, before: before, name: L("맨 뒤로", "Send to Back"))
     }
 
     func selectAllOnPage() {
@@ -1051,11 +1051,11 @@ final class SketchInputView: NSView, SketchEditing {
 
     private func undoName(for kind: SketchElement.Kind) -> String {
         switch kind {
-        case .rectangle: ReleaseNotes.string("네모", "Rectangle")
-        case .ellipse: ReleaseNotes.string("동그라미", "Ellipse")
-        case .arrow: ReleaseNotes.string("화살표", "Arrow")
-        case .line: ReleaseNotes.string("선", "Line")
-        case .text: ReleaseNotes.string("글", "Text")
+        case .rectangle: L("네모", "Rectangle")
+        case .ellipse: L("동그라미", "Ellipse")
+        case .arrow: L("화살표", "Arrow")
+        case .line: L("선", "Line")
+        case .text: L("글", "Text")
         }
     }
 

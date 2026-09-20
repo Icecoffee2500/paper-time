@@ -25,43 +25,47 @@ struct MigrationView: View {
         NavigationStack {
             Form {
                 Section {
-                    LabeledContent("Bibliography") {
-                        Button(bibliographyURL?.lastPathComponent ?? "Choose .bib or .ris…") {
+                    LabeledContent(L("서지 파일", "Bibliography")) {
+                        Button(bibliographyURL?.lastPathComponent ?? L(".bib 또는 .ris 고르기…", "Choose .bib or .ris…")) {
                             isChoosingBibliography = true
                         }
                     }
-                    LabeledContent("PDF Folder") {
-                        Button(attachmentsURL?.lastPathComponent ?? "Choose folder…") {
+                    LabeledContent(L("PDF 폴더", "PDF Folder")) {
+                        Button(attachmentsURL?.lastPathComponent ?? L("폴더 고르기…", "Choose folder…")) {
                             isChoosingAttachments = true
                         }
                     }
                 } header: {
-                    Text("What to Import")
+                    Text(L("들여올 것", "What to Import"))
                 } footer: {
-                    Text(
+                    Text(L(
                         """
-                        In Bookends choose File ▸ Export and pick BibTeX, then point Paper Time \
-                        at the exported file and at your Attachments folder.
+                        Bookends에서 File ▸ Export를 고르고 BibTeX으로 내보내세요. 그다음 내보낸 파일과 \
+                        Attachments 폴더를 여기서 가리켜 주세요.
+                        """,
                         """
-                    )
+                        In Bookends, choose File ▸ Export and pick BibTeX. Then point Paper Time \
+                        at the exported file and the Attachments folder.
+                        """
+                    ))
                 }
 
                 if let plan {
-                    Section("Preview") {
-                        LabeledContent("Records found", value: "\(plan.totalRecords)")
-                        LabeledContent("PDFs matched", value: "\(plan.matched.count)")
+                    Section(L("미리 보기", "Preview")) {
+                        LabeledContent(L("찾은 항목", "Records found"), value: "\(plan.totalRecords)")
+                        LabeledContent(L("짝지은 PDF", "PDFs matched"), value: "\(plan.matched.count)")
                         LabeledContent(
-                            "Records without a PDF",
+                            L("PDF 없는 항목", "Records without a PDF"),
                             value: "\(plan.withoutDocuments.count)"
                         )
                         LabeledContent(
-                            "PDFs no record mentions",
+                            L("어느 항목도 가리키지 않는 PDF", "PDFs no record mentions"),
                             value: "\(plan.orphanedDocuments.count)"
                         )
                     }
 
                     if !plan.matched.isEmpty {
-                        Section("Matches") {
+                        Section(L("짝지은 것", "Matches")) {
                             ForEach(plan.matched.prefix(50)) { entry in
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(entry.record.csl.fullTitle ?? entry.record.bibKey)
@@ -77,7 +81,7 @@ struct MigrationView: View {
                                 }
                             }
                             if plan.matched.count > 50 {
-                                Text("and \(plan.matched.count - 50) more")
+                                Text(L("그리고 \(plan.matched.count - 50)개 더", "and \(plan.matched.count - 50) more"))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -85,7 +89,7 @@ struct MigrationView: View {
                     }
 
                     if !plan.warnings.isEmpty {
-                        Section("Warnings") {
+                        Section(L("경고", "Warnings")) {
                             ForEach(plan.warnings.prefix(20), id: \.self) { warning in
                                 Label(warning, systemImage: "exclamationmark.triangle")
                                     .font(.caption)
@@ -95,23 +99,28 @@ struct MigrationView: View {
                     }
 
                     Section {
-                        Text(
+                        Text(L(
                             """
-                            Imported records start as "needs review". Paper Time re-checks each \
-                            one against the DOI, arXiv and OpenAlex records and confirms the ones \
-                            it can prove, so mistakes in the old library do not carry over.
+                            들여온 서지는 "살펴볼 것"으로 시작해요. Paper Time이 하나씩 DOI와 arXiv, \
+                            OpenAlex 기록에 다시 맞춰 봐요. 증명할 수 있는 것만 확인하니까, 옛 \
+                            라이브러리의 실수는 따라오지 않아요.
+                            """,
                             """
-                        )
+                            Imported records start as Needs Review. Paper Time checks each one \
+                            against the DOI, arXiv and OpenAlex records and confirms only what it \
+                            can prove, so mistakes in the old library stay behind.
+                            """
+                        ))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                     }
                 }
 
                 if let result {
-                    Section("Done") {
-                        LabeledContent("Papers added", value: "\(result.imported)")
+                    Section(L("끝", "Done")) {
+                        LabeledContent(L("더한 논문", "Papers added"), value: "\(result.imported)")
                         if result.failed > 0 {
-                            LabeledContent("Failed", value: "\(result.failed)")
+                            LabeledContent(L("실패", "Failed"), value: "\(result.failed)")
                                 .foregroundStyle(.orange)
                         }
                     }
@@ -125,13 +134,13 @@ struct MigrationView: View {
                 }
             }
             .formStyle(.grouped)
-            .navigationTitle("Import Existing Library")
+            .navigationTitle(L("있던 라이브러리 들여오기", "Import Existing Library"))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
+                    Button(L("닫기", "Close")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(isImporting ? "Importing…" : "Import") {
+                    Button(isImporting ? L("들여오는 중…", "Importing…") : L("들여오기", "Import")) {
                         Task { await runImport() }
                     }
                     .disabled(plan == nil || isImporting)

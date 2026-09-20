@@ -28,13 +28,22 @@ import {
   type PageDrawing,
 } from './pdfwrite.js'
 import { rememberLibrary, settings, update } from './settings.js'
+import { resolveKorean, setKorean } from '../shared/lang.js'
 import { buildMenu } from './menu.js'
 import { watchLibrary } from './watcher.js'
 import { captureAndQuit, probeArgument, runProbe } from './probe.js'
+import { capture as captureWindow, send as sendFeedback } from './feedback.js'
 
 const isMac = process.platform === 'darwin'
 /** See `--papertime-chrome` in `preload.ts`. */
 const chromeOverride = probeArgument('chrome')
+/**
+ * Decided here, once, and handed to the window as an argument: the menu is
+ * built in this process and the interface in the other, and the two must not
+ * answer the question separately and disagree. Settled at `whenReady` because
+ * neither the locale nor the settings file is readable before that.
+ */
+let wantsKorean = false
 
 let window: BrowserWindow | null = null
 let library: Library | null = null
@@ -74,7 +83,10 @@ function createWindow() {
       spellcheck: true,
       // The renderer gets its own argv; the app's is not passed down, so the
       // one flag the window needs is handed over explicitly.
-      additionalArguments: chromeOverride ? [`--papertime-chrome=${chromeOverride}`] : [],
+      additionalArguments: [
+        ...(chromeOverride ? [`--papertime-chrome=${chromeOverride}`] : []),
+        `--papertime-lang=${wantsKorean ? 'ko' : 'en'}`,
+      ],
     },
   })
 
@@ -305,6 +317,29 @@ const handlers: Record<string, Handler> = {
   'window:toggleMaximize': () => (window?.isMaximized() ? window.unmaximize() : window?.maximize()),
   'window:close': () => window?.close(),
   'window:state': () => windowState(),
+  // The app speaks to the outside world here and nowhere else, and only
+  // because somebody pressed 보내기.
+  'feedback:capture': () => captureWindow(window),
+  'feedback:send': ((report: {
+    kind: 'bug' | 'wish'
+    body: string
+    name: string
+    reply?: string | null
+    shot?: string | null
+  }) =>
+    sendFeedback({
+      ...report,
+      context: {
+        window: window && !window.isDestroyed()
+          ? `${window.getBounds().width}×${window.getBounds().height}`
+          : undefined,
+        layout: settings().pageLayout,
+        paperCount: library?.papers.length,
+        libraryCloud: undefined,
+        recent: [],
+      },
+    })) as Handler,
+
   'shell:openExternal': (({ url }: { url: string }) => {
     if (/^https?:/.test(url)) shell.openExternal(url)
   }) as Handler,
@@ -527,6 +562,8 @@ if (process.platform === 'linux' && !app.commandLine.hasSwitch('ozone-platform-h
 }
 
 app.whenReady().then(async () => {
+  wantsKorean = resolveKorean(settings().language, app.getLocale())
+  setKorean(wantsKorean)
   createWindow()
   buildMenu({
     send,
