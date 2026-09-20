@@ -408,6 +408,42 @@ dialog::backdrop { background: rgba(12, 16, 24, .4); backdrop-filter: blur(4px);
 }
 .step .shot-sm { max-width: 300px; }
 
+/* Which desktop the download button points at. Small, because the right one
+   is already chosen — this is for the visitor who wants a different one. */
+.picker {
+  display: inline-flex; align-items: stretch; gap: 2px;
+  padding: 3px; border-radius: 10px;
+  background: var(--panel-2); border: 1px solid var(--rule);
+}
+.picker .pick {
+  border: 0; background: none; cursor: pointer;
+  padding: 6px 12px; border-radius: 7px;
+  font: inherit; font-size: 13px; font-weight: 550; color: var(--ink-2);
+  transition: background .12s ease, color .12s ease;
+}
+.picker .pick:hover { color: var(--ink); }
+.picker .pick[aria-pressed="true"] {
+  background: var(--panel); color: var(--ink); box-shadow: var(--shadow-1);
+}
+
+/* The other files for the chosen desktop — the installer's alternatives. */
+.variants { flex-basis: 100%; margin: 2px 0 0; }
+.variants a { color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px; }
+.variants a:hover { color: var(--accent); }
+
+.sheet .picker { margin: 0 0 18px; }
+
+.code {
+  margin: 0 0 10px; padding: 10px 12px;
+  border-radius: 9px; border: 1px solid var(--rule); background: var(--panel-2);
+  font-family: ui-monospace, "SF Mono", "Cascadia Mono", monospace;
+  font-size: 12.5px; line-height: 1.7; color: var(--ink);
+  overflow-x: auto; white-space: pre;
+}
+
+.vlinks { display: inline-flex; gap: 10px; flex-wrap: wrap; }
+.vget { white-space: nowrap; }
+
 .vrow {
   display: flex; align-items: baseline; gap: 14px;
   padding: 13px 0; border-top: 1px solid var(--rule); flex-wrap: wrap;

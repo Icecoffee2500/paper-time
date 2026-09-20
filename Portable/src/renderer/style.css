@@ -1,0 +1,1085 @@
+/*
+ * The window's whole appearance, in one file.
+ *
+ * Everything here is deliberately independent of the host: the typeface is
+ * bundled, the colours are written down rather than asked for, and nothing
+ * uses a system control. That is what makes the Windows build and the Linux
+ * build the same program to look at — and it is why this file is long, since
+ * on the Mac most of it came free from AppKit.
+ *
+ * The shape follows the Mac's window: a ground, and rounded panels floating on
+ * it with a margin of 8 and a gap of 10 between them. The gap is the resize
+ * handle; there is no hairline, because a line ruled across a window with
+ * rounded corners is the one shape the rest of the app never uses.
+ */
+
+@font-face {
+  font-family: 'Pretendard Variable';
+  src: url('fonts/PretendardVariable.woff2') format('woff2-variations');
+  font-weight: 45 920;
+  font-style: normal;
+  font-display: block;
+}
+
+:root {
+  --margin: 8px;
+  --gap: 10px;
+  --toolbar-height: 48px;
+  --panel-radius: 12px;
+  --row-radius: 7px;
+
+  --font: 'Pretendard Variable', Pretendard, -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'DejaVu Sans Mono', monospace;
+
+  /* Light. The ground is a touch darker than the panels so the panels read as
+     floating rather than as areas of one flat surface. */
+  --ground: #e9eaec;
+  --ground-edge: #dcdde0;
+  --panel: #ffffff;
+  --panel-soft: #fbfbfc;
+  --panel-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.05);
+
+  --text: #1c1c1e;
+  --text-secondary: #6b6b70;
+  --text-tertiary: #9a9aa0;
+  --separator: rgba(0, 0, 0, 0.08);
+  --separator-strong: rgba(0, 0, 0, 0.14);
+
+  --accent: #2f6ef0;
+  --accent-soft: #e8efff;
+  --accent-text: #2f6ef0;
+  --hover: rgba(0, 0, 0, 0.045);
+  --pressed: rgba(0, 0, 0, 0.08);
+
+  --page-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.1), 0 2px 10px rgba(0, 0, 0, 0.09);
+  --reader-ground: #f4f4f6;
+
+  --danger: #d9382b;
+  --star: #f0a82f;
+}
+
+:root[data-theme='dark'] {
+  --ground: #131315;
+  --ground-edge: #0d0d0f;
+  --panel: #1e1e21;
+  --panel-soft: #232326;
+  --panel-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.07), 0 1px 3px rgba(0, 0, 0, 0.4);
+
+  --text: #f2f2f4;
+  --text-secondary: #9e9ea6;
+  --text-tertiary: #6f6f78;
+  --separator: rgba(255, 255, 255, 0.09);
+  --separator-strong: rgba(255, 255, 255, 0.16);
+
+  --accent: #5b8dff;
+  --accent-soft: #1e2b47;
+  --accent-text: #7ea4ff;
+  --hover: rgba(255, 255, 255, 0.06);
+  --pressed: rgba(255, 255, 255, 0.11);
+
+  --page-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.08), 0 2px 12px rgba(0, 0, 0, 0.55);
+  --reader-ground: #17171a;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-user-drag: none;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--text);
+  background: var(--ground);
+  /* The window is the app's; text is selected where text is meant to be. */
+  user-select: none;
+  cursor: default;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: default;
+}
+
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+  user-select: text;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 134, 0.35);
+  border-radius: 5px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 134, 0.6);
+  background-clip: padding-box;
+  border: 3px solid transparent;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ------------------------------------------------------------------ toolbar */
+
+.toolbar {
+  height: var(--toolbar-height);
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  /* The whole bar drags the window, and every control in it opts back out. */
+  -webkit-app-region: drag;
+  position: relative;
+  z-index: 20;
+}
+
+/* A Mac keeps its traffic lights where a Mac user reaches for them. */
+body[data-platform='darwin'] .toolbar {
+  padding-left: 82px;
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  -webkit-app-region: no-drag;
+}
+
+.toolbar-spacer {
+  flex: 1 1 auto;
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 15px;
+  margin: 0 5px;
+  background: var(--separator-strong);
+  flex: 0 0 auto;
+}
+
+.icon-button {
+  width: 28px;
+  height: 26px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  -webkit-app-region: no-drag;
+  transition: background-color 90ms ease, color 90ms ease;
+}
+
+.icon-button:hover {
+  background: var(--hover);
+}
+
+.icon-button:active {
+  background: var(--pressed);
+}
+
+/*
+ * A pane button that is on says so with its colour, not with a filled square
+ * behind it. Four filled squares side by side read as one block — which is
+ * exactly what they looked like — and the tint carries the state on its own.
+ */
+.icon-button[aria-pressed='true'] {
+  color: var(--accent);
+  background: none;
+}
+
+.icon-button[aria-pressed='true']:hover {
+  background: var(--hover);
+}
+
+.icon-button[disabled] {
+  color: var(--text-tertiary);
+  opacity: 0.45;
+}
+
+.icon-button[disabled]:hover {
+  background: none;
+}
+
+.icon-button svg {
+  width: 17px;
+  height: 17px;
+  display: block;
+}
+
+/* The inspector's tabs: one segmented control, as on the Mac. */
+.segmented {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--hover);
+  -webkit-app-region: no-drag;
+  gap: 2px;
+}
+
+.segmented button {
+  padding: 3px 11px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.segmented button[aria-selected='true'] {
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+/* Windows and Linux draw their own window buttons, in their own idiom. */
+.window-buttons {
+  display: flex;
+  /* Out to the window's own edge, where these buttons belong, with enough
+     room before them that the app's last control is not mistaken for one. */
+  margin-right: -10px;
+  margin-left: 14px;
+  -webkit-app-region: no-drag;
+}
+
+body[data-platform='darwin'] .window-buttons {
+  display: none;
+}
+
+.window-buttons button {
+  width: 44px;
+  height: var(--toolbar-height);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+}
+
+.window-buttons button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.window-buttons button.close:hover {
+  background: #e81123;
+  color: #fff;
+}
+
+/* -------------------------------------------------------------------- panes */
+
+.panes {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: stretch;
+  padding: 0 var(--margin) var(--margin);
+  min-height: 0;
+}
+
+.panel {
+  background: var(--panel);
+  border-radius: var(--panel-radius);
+  box-shadow: var(--panel-shadow);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.panel-header {
+  flex: 0 0 auto;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.panel-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+
+/*
+ * The strip between two panels. It is the gap itself — wide enough for a
+ * pointer, which a hairline never was — and dragging it resizes the panel on
+ * the side it belongs to.
+ */
+.divider {
+  flex: 0 0 var(--gap);
+  cursor: col-resize;
+  position: relative;
+}
+
+.divider::after {
+  content: '';
+  position: absolute;
+  inset: 40% 4px;
+  border-radius: 1px;
+  background: transparent;
+  transition: background-color 120ms ease;
+}
+
+.divider:hover::after,
+.divider.dragging::after {
+  background: var(--separator-strong);
+}
+
+/* ------------------------------------------------------------------ sidebar */
+
+.sidebar-section {
+  padding: 6px 8px 2px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  letter-spacing: 0.01em;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 1px 8px;
+  padding: 6px 8px;
+  border-radius: var(--row-radius);
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.25;
+}
+
+.row:hover {
+  background: var(--hover);
+}
+
+.row[aria-selected='true'] {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-weight: 500;
+}
+
+.row[aria-selected='true'] .row-icon {
+  color: var(--accent);
+}
+
+.row-icon {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.row-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.row-label {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row-count {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.library-crumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px 2px;
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+}
+
+.library-crumb .name {
+  color: var(--accent-text);
+  background: var(--accent-soft);
+  border-radius: 5px;
+  padding: 1px 6px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------------- paper list */
+
+.paper-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 2px 8px;
+  padding: 9px 10px;
+  border-radius: 9px;
+}
+
+.paper-row:hover {
+  background: var(--hover);
+}
+
+.paper-row[aria-selected='true'] {
+  background: var(--hover);
+  box-shadow: inset 0 0 0 1px var(--separator);
+}
+
+.paper-status {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--text-tertiary);
+}
+
+.paper-status svg {
+  width: 15px;
+  height: 15px;
+  display: block;
+}
+
+.paper-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.paper-title {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.32;
+  color: var(--text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.paper-subtitle {
+  margin-top: 3px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.paper-star {
+  flex: 0 0 auto;
+  color: var(--text-tertiary);
+  padding: 1px;
+}
+
+.paper-star svg {
+  width: 15px;
+  height: 15px;
+  display: block;
+}
+
+.paper-star[data-on='true'] {
+  color: var(--star);
+}
+
+/* ------------------------------------------------------------------- reader */
+
+.reader-header {
+  flex: 0 0 auto;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+}
+
+.reader-title {
+  flex: 1 1 auto;
+  font-size: 13.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reader-panel {
+  position: relative;
+}
+
+.reader-scroll {
+  flex: 1 1 auto;
+  overflow: auto;
+  background: var(--reader-ground);
+  position: relative;
+  min-height: 0;
+}
+
+/*
+ * The layer the rack and the style panel live on. It covers the reader and
+ * lets every click through except the ones that land on a control, so the
+ * page underneath can still be scrolled and drawn on.
+ */
+.reader-overlay {
+  position: absolute;
+  inset: 38px 0 30px 0;
+  pointer-events: none;
+  z-index: 25;
+}
+
+.reader-overlay > * {
+  pointer-events: auto;
+}
+
+.reader-pages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 0 20px;
+}
+
+.page {
+  position: relative;
+  background: #fff;
+  box-shadow: var(--page-shadow);
+  flex: 0 0 auto;
+}
+
+.page canvas {
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.page canvas.page-canvas {
+  z-index: 0;
+}
+
+/* The drawing sits above the page and below the words you can select. */
+.page canvas.draw-canvas {
+  z-index: 2;
+  pointer-events: none;
+}
+
+.page .text-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  overflow: hidden;
+  line-height: 1;
+  opacity: 1;
+  user-select: text;
+  cursor: text;
+}
+
+.page .text-layer span {
+  position: absolute;
+  white-space: pre;
+  transform-origin: 0 0;
+  color: transparent;
+}
+
+.page .text-layer ::selection {
+  background: rgba(47, 110, 240, 0.28);
+}
+
+/* While the pen is out the whole page takes the mouse, and the words below
+   stop being selectable — the same swap the Mac makes when it lays its input
+   view over the PDF. */
+.page[data-drawing='true'] .text-layer {
+  pointer-events: none;
+  user-select: none;
+}
+
+.page .sketch-input {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: none;
+}
+
+.page[data-drawing='true'] .sketch-input {
+  display: block;
+}
+
+.page-tint {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+}
+
+.reader-footer .icon-button {
+  width: 24px;
+  height: 22px;
+}
+
+.reader-footer .icon-button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.reader-footer {
+  flex: 0 0 auto;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 14px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  border-top: 1px solid var(--separator);
+}
+
+/* ---------------------------------------------------------------- inspector */
+
+.field {
+  padding: 10px 14px 0;
+}
+
+.field-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  margin-bottom: 3px;
+}
+
+.field-value {
+  font-size: 13px;
+  line-height: 1.4;
+  user-select: text;
+  word-break: break-word;
+}
+
+.field input,
+.field textarea {
+  width: 100%;
+  background: var(--panel-soft);
+  border: 1px solid var(--separator);
+  border-radius: 6px;
+  padding: 5px 7px;
+  font-size: 13px;
+  outline: none;
+  resize: vertical;
+}
+
+.field input:focus,
+.field textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 4px;
+}
+
+.chip {
+  font-size: 11.5px;
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: var(--hover);
+  color: var(--text-secondary);
+}
+
+/* ------------------------------------------------------- the drawing layer */
+
+/*
+ * The tool rack floats over the page rather than sitting in the toolbar: the
+ * tools belong to the page you are drawing on, and reaching to the top of the
+ * window for a pen breaks the line you were about to draw.
+ */
+.sketch-rack {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
+  backdrop-filter: blur(20px) saturate(1.5);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.08), 0 4px 16px rgba(0, 0, 0, 0.14);
+}
+
+.sketch-rack button {
+  width: 30px;
+  height: 28px;
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  position: relative;
+}
+
+.sketch-rack button:hover {
+  background: var(--hover);
+}
+
+.sketch-rack button[aria-pressed='true'] {
+  background: var(--accent);
+  color: #fff;
+}
+
+.sketch-rack button svg {
+  width: 17px;
+  height: 17px;
+}
+
+.sketch-rack .key {
+  position: absolute;
+  right: 2px;
+  bottom: 1px;
+  font-size: 8px;
+  font-weight: 700;
+  opacity: 0.5;
+  letter-spacing: 0;
+}
+
+.sketch-panel {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 30;
+  width: 168px;
+  max-height: calc(100% - 20px);
+  overflow-y: auto;
+  padding: 9px;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
+  backdrop-filter: blur(20px) saturate(1.5);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.08), 0 4px 16px rgba(0, 0, 0, 0.14);
+}
+
+.sketch-rack,
+.sketch-panel {
+  transition: opacity 140ms ease;
+}
+
+/* Out of the way while a gesture is in progress, so the panel never hides the
+   thing being drawn. */
+.reader-overlay[data-busy='true'] .sketch-panel {
+  opacity: 0.25;
+}
+
+.sketch-panel h4 {
+  margin: 7px 0 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  letter-spacing: 0.02em;
+}
+
+.sketch-panel h4:first-child {
+  margin-top: 0;
+}
+
+.swatches {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.swatch {
+  width: 19px;
+  height: 19px;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+  position: relative;
+}
+
+.swatch[aria-pressed='true']::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 8px;
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.choices {
+  display: flex;
+  gap: 4px;
+}
+
+.choices button {
+  flex: 1 1 0;
+  height: 24px;
+  min-width: 0;
+  border-radius: 6px;
+  background: var(--hover);
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.choices button[aria-pressed='true'] {
+  background: var(--accent);
+  color: #fff;
+}
+
+.choices button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.sketch-text-editor {
+  position: absolute;
+  z-index: 40;
+  border: 0;
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.96);
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+  resize: none;
+  color: #111;
+  line-height: 1.18;
+}
+
+/* ------------------------------------------------------------------ overlay */
+
+.empty {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--text-tertiary);
+  text-align: center;
+  padding: 30px;
+}
+
+.empty h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.empty p {
+  margin: 0;
+  font-size: 12.5px;
+  max-width: 340px;
+  line-height: 1.5;
+}
+
+.filled-button {
+  -webkit-app-region: no-drag;
+  padding: 6px 14px;
+  border-radius: 7px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.filled-button:hover {
+  filter: brightness(1.06);
+}
+
+.plain-button {
+  padding: 5px 12px;
+  border-radius: 7px;
+  background: var(--hover);
+  font-size: 12.5px;
+}
+
+.plain-button:hover {
+  background: var(--pressed);
+}
+
+/* The menu that hangs off ⋯, and the pop-ups in the inspector. */
+.menu {
+  position: fixed;
+  z-index: 100;
+  min-width: 200px;
+  padding: 5px;
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.1), 0 8px 28px rgba(0, 0, 0, 0.2);
+}
+
+.menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 5px 9px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.menu button:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.menu button svg {
+  width: 15px;
+  height: 15px;
+  opacity: 0.8;
+}
+
+.menu .menu-separator {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--separator);
+}
+
+.menu .menu-caption {
+  padding: 5px 9px 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+}
+
+/* The search palette. */
+.palette {
+  position: fixed;
+  top: 12vh;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(620px, 82vw);
+  z-index: 110;
+  border-radius: 13px;
+  background: var(--panel);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.1), 0 20px 60px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+.palette input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: none;
+  padding: 15px 17px;
+  font-size: 16px;
+}
+
+.palette .results {
+  max-height: 46vh;
+  overflow-y: auto;
+  border-top: 1px solid var(--separator);
+}
+
+.palette .results:empty {
+  display: none;
+}
+
+.toast {
+  position: fixed;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 120;
+  padding: 8px 15px;
+  border-radius: 9px;
+  background: rgba(28, 28, 30, 0.94);
+  color: #fff;
+  font-size: 12.5px;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.28);
+  pointer-events: none;
+}
+
+/* The bar over a selection: five colours and an underline, and nothing else. */
+.mark-bar {
+  position: absolute;
+  z-index: 35;
+  display: none;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 6px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel) 96%, transparent);
+  backdrop-filter: blur(20px) saturate(1.5);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.1), 0 5px 18px rgba(0, 0, 0, 0.2);
+}
+
+.mark-swatch {
+  width: 19px;
+  height: 19px;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
+}
+
+.mark-swatch:hover {
+  transform: scale(1.12);
+}
+
+.mark-action {
+  width: 24px;
+  height: 21px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  margin-left: 2px;
+  box-shadow: inset 1px 0 0 var(--separator);
+}
+
+.mark-action:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.mark-action svg {
+  width: 15px;
+  height: 15px;
+}

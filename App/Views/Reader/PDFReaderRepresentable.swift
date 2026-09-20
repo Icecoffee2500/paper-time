@@ -953,6 +953,7 @@ final class ReaderCoordinator: NSObject {
     // MARK: - Notifications
 
     @objc private func pageChanged(_ notification: Notification) {
+        noteDocumentHistory()
         guard let view = pdfView, let page = view.currentPage else { return }
         #if os(macOS)
         if appliedLayout == .book { trimAround(page, in: view) }
@@ -1022,9 +1023,20 @@ final class ReaderCoordinator: NSObject {
     }
     #endif
 
+    /// Back: to where a followed link came from, if there is such a place;
+    /// otherwise to the paper opened before this one.
     @objc private func goBackInHistory() {
-        guard let view = pdfView, view.canGoBack else { return }
-        view.goBack(nil)
+        if let view = pdfView, view.canGoBack {
+            view.goBack(nil)
+        } else {
+            NotificationCenter.default.post(name: .paperTimeBackToPreviousPaper, object: nil)
+        }
+        noteDocumentHistory()
+    }
+
+    private func noteDocumentHistory() {
+        link.canGoBackInDocument = pdfView?.canGoBack ?? false
+        link.canGoForwardInDocument = pdfView?.canGoForward ?? false
     }
 
     @objc private func zoomIn() {
@@ -1044,8 +1056,12 @@ final class ReaderCoordinator: NSObject {
     }
 
     @objc private func goForwardInHistory() {
-        guard let view = pdfView, view.canGoForward else { return }
-        view.goForward(nil)
+        if let view = pdfView, view.canGoForward {
+            view.goForward(nil)
+        } else {
+            NotificationCenter.default.post(name: .paperTimeForwardToNextPaper, object: nil)
+        }
+        noteDocumentHistory()
     }
 
     @objc private func selectionChanged(_ notification: Notification) {

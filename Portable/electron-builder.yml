@@ -1,0 +1,105 @@
+# How Paper Time is packaged for Windows and Linux.
+#
+# The same `out/` bundle goes into every package — one Chromium, one
+# stylesheet, one bundled typeface — so the three builds differ only in how
+# the operating system is told to install them.
+appId: com.imtaeheon.PaperTime
+productName: Paper Time
+copyright: © 2026 Taeheon Im
+
+directories:
+  output: dist
+  buildResources: assets
+
+files:
+  - out/**/*
+  - package.json
+  - '!**/*.map'
+  - '!node_modules/**/*'
+
+# pdf-lib and pdfjs-dist are bundled into `out/` by esbuild, so nothing from
+# node_modules needs to travel with the app.
+asar: true
+
+# ---------------------------------------------------------------- Windows
+win:
+  icon: assets/icons/icon.ico
+  target:
+    # The installer most people will use…
+    - target: nsis
+      arch: [x64, arm64]
+    # …and a folder that runs from a memory stick, for a machine where
+    # installing anything needs an administrator.
+    - target: portable
+      arch: [x64]
+    - target: zip
+      arch: [x64]
+  # An unsigned build is what a free developer account can make. Windows will
+  # show SmartScreen's warning the first time; the install page says so.
+  signAndEditExecutable: true
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Paper Time
+  installerIcon: assets/icons/icon.ico
+  uninstallerIcon: assets/icons/icon.ico
+  # A library folder is the user's own; uninstalling the app never touches it.
+  deleteAppDataOnUninstall: false
+
+portable:
+  artifactName: '${productName} ${version} portable.${ext}'
+
+# ------------------------------------------------------------------ Linux
+linux:
+  icon: assets/icons
+  category: Office
+  synopsis: A reader, a pen and a bibliography for papers
+  description: >
+    Paper Time is a reader for academic papers that writes what you mark into
+    the PDF itself — highlights, underlines, handwriting, shapes and arrows —
+    so the file alone carries your reading, and your library is a folder you
+    can put anywhere.
+  desktop:
+    entry:
+      Name: Paper Time
+      Comment: Read, annotate and cite papers
+      Keywords: pdf;paper;research;bibliography;annotate;
+      MimeType: application/pdf
+  target:
+    - target: AppImage
+      arch: [x64, arm64]
+    - target: deb
+      arch: [x64, arm64]
+    - target: rpm
+      arch: [x64]
+    - target: tar.gz
+      arch: [x64, arm64]
+
+deb:
+  depends:
+    - libgtk-3-0
+    - libnotify4
+    - libnss3
+    - libxss1
+    - libxtst6
+    - xdg-utils
+    - libatspi2.0-0
+    - libuuid1
+    - libsecret-1-0
+
+appImage:
+  artifactName: '${productName}-${version}-${arch}.${ext}'
+
+# -------------------------------------------------------------------- Mac
+# Here mainly so the same build can be run and checked on the machine it is
+# written on; the Mac's own app is the Swift one.
+mac:
+  icon: assets/icons/icon.png
+  category: public.app-category.productivity
+  target:
+    - target: dir
+      arch: [arm64]

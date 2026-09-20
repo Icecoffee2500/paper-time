@@ -511,8 +511,14 @@ struct LibraryWindow: View {
                 }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .paperTimeBackToPreviousPaper)) { _ in
+            model.goBack()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .paperTimeForwardToNextPaper)) { _ in
+            model.goForward()
+        }
         .onReceive(NotificationCenter.default.publisher(for: .paperTimeAddPapers)) { _ in
-            isImportingPDFs = true
+            chooseDocumentsToAdd()
         }
         .onReceive(NotificationCenter.default.publisher(for: .paperTimeExportBibTeX)) { _ in
             showsExport = true
@@ -633,7 +639,7 @@ struct LibraryWindow: View {
     @ToolbarContentBuilder
     private var trailingToolbarContent: some CustomizableToolbarContent {
         ToolbarItem(id: "trailing", placement: .automatic) {
-            HStack(spacing: 2) {
+            HStack(spacing: 6) {
                 Button {
                     app.showsSearchPalette = true
                 } label: {
@@ -641,16 +647,13 @@ struct LibraryWindow: View {
                 }
                 .help("Search papers, notes, maps and drafts (Command-K)")
                 .toolbarHover()
-                Button {
-                    isImportingPDFs = true
-                } label: {
+                Button(action: chooseDocumentsToAdd) {
                     Label("Add PDFs", systemImage: "plus").toolbarIcon()
                 }
                 .help("Add PDFs to the library (Command-O)")
                 .toolbarHover()
                 Divider().frame(height: 14).padding(.horizontal, 4)
-                paneButton(.paperList, symbol: "list.bullet", on: app.showsPaperList) { app.togglePaperList() }
-                paneButton(.reader, symbol: "doc", on: app.showsReader && !app.isFocusMode) { app.toggleReader() }
+                paneButton(.reader, symbol: "text.page", on: app.showsReader && !app.isFocusMode) { app.toggleReader() }
                 paneButton(.inspector, symbol: "sidebar.right", on: app.showsInspector) { app.toggleInspector() }
                 Divider().frame(height: 14).padding(.horizontal, 4)
                 Menu {
@@ -698,17 +701,23 @@ struct LibraryWindow: View {
         // menu for everything done rarely. Eleven icons in a row read as a
         // control panel; a paper is not a control panel.
         ToolbarItem(id: "leading", placement: .navigation) {
-            HStack(spacing: 2) {
+            HStack(spacing: 6) {
                 paneButton(.sidebar, symbol: "sidebar.left", on: app.isSidebarVisible) { app.toggleSidebar() }
+                paneButton(.paperList, symbol: "list.bullet.rectangle.portrait", on: app.showsPaperList) { app.togglePaperList() }
+                Divider().frame(height: 14).padding(.horizontal, 4)
+                // Back and forward through the papers opened, like a
+                // browser's; grey when there is nowhere to go.
                 Button { NotificationCenter.default.post(name: .paperTimeGoBack, object: nil) } label: {
                     Label("Back", systemImage: "chevron.left").toolbarIcon()
                 }
-                .help("Back (\(app.shortcut(for: .back).display))")
+                .disabled(!(model.canGoBack || link.canGoBackInDocument))
+                .help("Back to the paper you came from (\(app.shortcut(for: .back).display))")
                 .toolbarHover()
                 Button { NotificationCenter.default.post(name: .paperTimeGoForward, object: nil) } label: {
                     Label("Forward", systemImage: "chevron.right").toolbarIcon()
                 }
-                .help("Forward (\(app.shortcut(for: .forward).display))")
+                .disabled(!(model.canGoForward || link.canGoForwardInDocument))
+                .help("Forward again (\(app.shortcut(for: .forward).display))")
                 .toolbarHover()
             }
             .toolbarButtons()
@@ -796,13 +805,11 @@ struct LibraryWindow: View {
             Label(pane.title, systemImage: symbol)
                 .labelStyle(.iconOnly)
                 .toolbarIcon()
-                .background(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Color.accentColor.opacity(on ? 0.14 : 0))
-                        .padding(-3)
-                )
         }
-        .tint(on ? Color.accentColor : .primary)
+        // On: the accent. Off: the quiet grey of the other icons. No square
+        // behind the ones that are on — three squares side by side ran into
+        // one another and read as a single block.
+        .tint(on ? Color.accentColor : Color.secondary)
         .help("\(on ? "Hide" : "Show") the \(pane.title.lowercased()) (\(app.shortcut(for: pane).display))")
         .toolbarHover()
     }
@@ -904,6 +911,26 @@ struct LibraryWindow: View {
     }
 
     // MARK: - Actions
+
+    /// Asks for PDFs to add. On the Mac this is AppKit's own open panel: the
+    /// SwiftUI importer, presented from the toolbar, opened once and never
+    /// again, and a plus that does nothing is worse than no plus.
+    private func chooseDocumentsToAdd() {
+        #if os(macOS)
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.pdf]
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.message = "Choose PDFs to add to the library"
+        panel.begin { response in
+            guard response == .OK, !panel.urls.isEmpty else { return }
+            let urls = panel.urls
+            Task { await model.importDocuments(at: urls) }
+        }
+        #else
+        isImportingPDFs = true
+        #endif
+    }
 
     private var sortOrderBinding: Binding<LibraryModel.SortOrder> {
         Binding(get: { model.sortOrder }, set: { model.sortOrder = $0 })

@@ -175,5 +175,7 @@ extension Notification.Name {
     static let paperTimeNewNote = Notification.Name("PaperTime.newNote")
     static let paperTimeNextPaper = Notification.Name("PaperTime.nextPaper")
     static let paperTimeToggleDraw = Notification.Name("PaperTime.toggleDraw")
+    static let paperTimeBackToPreviousPaper = Notification.Name("PaperTime.backToPreviousPaper")
+    static let paperTimeForwardToNextPaper = Notification.Name("PaperTime.forwardToNextPaper")
     static let paperTimePreviousPaper = Notification.Name("PaperTime.previousPaper")
 }
