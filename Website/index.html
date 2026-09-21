@@ -33,7 +33,7 @@
   document.documentElement.lang = lang;
 })();
 </script>
-<link rel="stylesheet" href="style.css?v=0.7.0">
+<link rel="stylesheet" href="style.css?v=0.8.0">
 </head>
 <body>
 
@@ -76,43 +76,21 @@
   </header>
 </div>
 
-<!-- ───────────────── the other three quarters of the loop ──────────────── -->
-<section class="pillars">
-  <article class="pillar">
-    <div class="pillar-demo" id="pillar-ink"></div>
-    <h3 data-l="ko">손 가는 대로 그어도, 자국은 파일에 남아요</h3>
-    <h3 data-l="en">Draw anything. The marks stay in the file</h3>
-    <p data-l="ko">하이라이트도 밑줄도 손글씨도 굽은 화살표도 평범한 PDF 주석으로 들어가요.
-      Preview에서도, Zotero에서도, 지도교수의 아이패드에서도 보여요.
-      앱을 지워도 자국은 남아 있어요.</p>
-    <p data-l="en">Highlights, underlines, handwriting, bent arrows — all of it goes into the PDF
-      as ordinary annotations. They show up in Preview, in Zotero, on your advisor's iPad.
-      Delete the app; the marks stay.</p>
-  </article>
+<!-- ─────────── what it does, shown one at a time, right after the proof ───
+     The tour used to sit two thirds of the way down the page, under three
+     cards that said the same things in prose. The demonstrations are the
+     argument; the prose is the caption. -->
+<div class="screen screen-stage">
+  <main class="stage">
+    <div class="viewport">
+      <button class="arrow prev" id="prev" aria-label="Previous">‹</button>
+      <div class="track" id="track"></div>
+      <button class="arrow next" id="next" aria-label="Next">›</button>
+    </div>
+    <nav class="rail" id="rail" aria-label="Features"></nav>
+  </main>
+</div>
 
-  <article class="pillar">
-    <div class="pillar-demo" id="pillar-quote"></div>
-    <h3 data-l="ko">구절이 주소를 들고 노트로 가요</h3>
-    <h3 data-l="en">A passage arrives with its address</h3>
-    <p data-l="ko">고른 문장을 노트로 보내면 세로줄이 선 인용이 되고, 끝에 쪽수가 붙어요.
-      그 쪽수를 누르면 논문의 그 줄로 돌아가요. 수식이 든 문장은 수식째로 가요.</p>
-    <p data-l="en">Send a sentence to a note. It lands as a quotation, ruled down the side,
-      page number at the end. Click the number and the paper opens at that line.
-      Formulas travel as formulas.</p>
-  </article>
-
-  <article class="pillar">
-    <div class="pillar-demo" id="pillar-links"></div>
-    <h3 data-l="ko">노트끼리 부르다 보면, 어느 날 초고가 돼요</h3>
-    <h3 data-l="en">Notes call each other. One day they are a draft</h3>
-    <p data-l="ko">노트 안에서 다른 노트를 이름으로 불러요. 읽은 것을 쌓아 두지 않고 엮어요.
-      초안도 노트 하나예요. ⇧⌘E를 누르면 인용이 <code>\cite{키}</code>가 되고,
-      인용한 논문만 담은 <code>.bib</code>이 같이 나와요.</p>
-    <p data-l="en">Call another note by name from inside a note. What you read gets woven, not
-      stacked. A draft is another note: press ⇧⌘E and its quotations become <code>\cite{key}</code>,
-      beside a <code>.bib</code> holding only the papers you cited.</p>
-  </article>
-</section>
 
 <!-- ─────────────────────── the loop, named at last ──────────────────────── -->
 <section class="loop">
@@ -152,16 +130,43 @@
     Nothing to migrate, nothing to abandon.</p>
 </section>
 
-<div class="screen screen-stage">
-  <main class="stage">
-    <div class="viewport">
-      <button class="arrow prev" id="prev" aria-label="Previous">‹</button>
-      <div class="track" id="track"></div>
-      <button class="arrow next" id="next" aria-label="Next">›</button>
-    </div>
-    <nav class="rail" id="rail" aria-label="Features"></nav>
-  </main>
-</div>
+<!-- ───────────────── the other three quarters of the loop ──────────────── -->
+<section class="pillars">
+  <article class="pillar">
+    <div class="pillar-demo" id="pillar-ink"></div>
+    <h3 data-l="ko">손 가는 대로 그어도, 자국은 파일에 남아요</h3>
+    <h3 data-l="en">Draw anything. The marks stay in the file</h3>
+    <p data-l="ko">하이라이트도 밑줄도 손글씨도 굽은 화살표도 평범한 PDF 주석으로 들어가요.
+      Preview에서도, Zotero에서도, 지도교수의 아이패드에서도 보여요.
+      앱을 지워도 자국은 남아 있어요.</p>
+    <p data-l="en">Highlights, underlines, handwriting, bent arrows — all of it goes into the PDF
+      as ordinary annotations. They show up in Preview, in Zotero, on your advisor's iPad.
+      Delete the app; the marks stay.</p>
+  </article>
+
+  <article class="pillar">
+    <div class="pillar-demo" id="pillar-quote"></div>
+    <h3 data-l="ko">구절이 주소를 들고 노트로 가요</h3>
+    <h3 data-l="en">A passage arrives with its address</h3>
+    <p data-l="ko">고른 문장을 노트로 보내면 세로줄이 선 인용이 되고, 끝에 쪽수가 붙어요.
+      그 쪽수를 누르면 논문의 그 줄로 돌아가요. 수식이 든 문장은 수식째로 가요.</p>
+    <p data-l="en">Send a sentence to a note. It lands as a quotation, ruled down the side,
+      page number at the end. Click the number and the paper opens at that line.
+      Formulas travel as formulas.</p>
+  </article>
+
+  <article class="pillar">
+    <div class="pillar-demo" id="pillar-links"></div>
+    <h3 data-l="ko">노트끼리 부르다 보면, 어느 날 초고가 돼요</h3>
+    <h3 data-l="en">Notes call each other. One day they are a draft</h3>
+    <p data-l="ko">노트 안에서 다른 노트를 이름으로 불러요. 읽은 것을 쌓아 두지 않고 엮어요.
+      초안도 노트 하나예요. ⇧⌘E를 누르면 인용이 <code>\cite{키}</code>가 되고,
+      인용한 논문만 담은 <code>.bib</code>이 같이 나와요.</p>
+    <p data-l="en">Call another note by name from inside a note. What you read gets woven, not
+      stacked. A draft is another note: press ⇧⌘E and its quotations become <code>\cite{key}</code>,
+      beside a <code>.bib</code> holding only the papers you cited.</p>
+  </article>
+</section>
 
 <!-- ───────────────────────────── why it exists ──────────────────────────── -->
 <section class="why">
