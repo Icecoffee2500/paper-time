@@ -11,9 +11,9 @@ import { PaperMeta, PaperState, type Collection, type Tag } from '../shared/mode
 import { SketchColor, SketchStyle } from '../shared/sketch.js'
 
 export type Pane = 'sidebar' | 'paperList' | 'reader' | 'inspector'
-export type InspectorTab = 'details' | 'marks' | 'note'
+export type InspectorTab = 'details' | 'marks' | 'note' | 'tools'
 export type SketchTool =
-  | 'select' | 'pen' | 'highlighter' | 'eraser'
+  | 'select' | 'frame' | 'pen' | 'highlighter' | 'eraser'
   | 'rectangle' | 'ellipse' | 'arrow' | 'line' | 'text'
 
 /** Which shelf of the library is showing. */
