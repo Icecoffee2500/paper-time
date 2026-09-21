@@ -294,7 +294,10 @@ async function vocabulary(): Promise<{ tags: Tag[]; collections: Collection[] }>
       collections.push(collection)
     }
   }
-  collections.sort((a, b) => (a.sortIndex ?? 0) - (b.sortIndex ?? 0))
+  // The name breaks a tie, as on the Mac: every folder numbers its own
+  // collections from nought.
+  collections.sort((a, b) =>
+    (a.sortIndex ?? 0) - (b.sortIndex ?? 0) || a.name.localeCompare(b.name))
   return { tags, collections }
 }
 

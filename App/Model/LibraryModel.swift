@@ -1265,7 +1265,13 @@ public final class LibraryModel {
         home.tags = tags
         manifest = home
         var set = collectionSets[location.url] ?? collections
-        set.collections = found.sorted { $0.sortIndex < $1.sortIndex }
+        // The name breaks a tie: every folder numbers its own collections
+        // from nought, so without it the order of two folders' collections
+        // would depend on how the sort happened to fall and the list would
+        // rearrange itself between reads.
+        set.collections = found.sorted {
+            $0.sortIndex == $1.sortIndex ? $0.name < $1.name : $0.sortIndex < $1.sortIndex
+        }
         collections = set
     }
 
