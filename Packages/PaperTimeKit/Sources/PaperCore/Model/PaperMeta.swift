@@ -18,6 +18,19 @@ public struct PaperMeta: Codable, Hashable, Sendable, Identifiable {
     public var provenance: Provenance
     /// Alternatives offered in the review sheet. Cleared once confirmed.
     public var candidates: [MetadataCandidate]
+    /// Whether this is a paper or an ordinary document — and whether anybody
+    /// has said so yet.
+    ///
+    /// `nil` means the question has not been answered. The app guesses when a
+    /// file arrives and asks in the inspector, because the answer changes
+    /// what the record is *for*: a paper wants a venue, a year and a citation
+    /// key, and a manual wants none of those. Absent from a record written
+    /// before there was a question, and written only once there is an answer,
+    /// so a library read by an older build comes back unchanged.
+    public var kind: DocumentKind?
+    /// What the app thought when the file arrived, so the question can offer
+    /// an answer instead of a blank. Never overwrites `kind`.
+    public var guessedKind: DocumentKind?
     public var file: FileInfo
     public var tagIDs: [UUID]
     public var collectionIDs: [UUID]
@@ -103,6 +116,8 @@ public struct PaperMeta: Codable, Hashable, Sendable, Identifiable {
         identifiers: Identifiers = Identifiers(),
         provenance: Provenance = Provenance(source: .heuristic),
         candidates: [MetadataCandidate] = [],
+        kind: DocumentKind? = nil,
+        guessedKind: DocumentKind? = nil,
         file: FileInfo = FileInfo(),
         tagIDs: [UUID] = [],
         collectionIDs: [UUID] = [],
@@ -119,6 +134,8 @@ public struct PaperMeta: Codable, Hashable, Sendable, Identifiable {
         self.identifiers = identifiers
         self.provenance = provenance
         self.candidates = candidates
+        self.kind = kind
+        self.guessedKind = guessedKind
         self.file = file
         self.tagIDs = tagIDs
         self.collectionIDs = collectionIDs
@@ -138,6 +155,15 @@ public struct PaperMeta: Codable, Hashable, Sendable, Identifiable {
         }
         return "Untitled"
     }
+
+    /// What the app treats this as until somebody says otherwise: the
+    /// answer, then the guess, then a paper — which is what this app was for
+    /// before it read anything else, and what a library full of old records
+    /// is.
+    public var effectiveKind: DocumentKind { kind ?? guessedKind ?? .paper }
+
+    /// Whether the inspector should still be asking.
+    public var kindIsUnanswered: Bool { kind == nil }
 
     public var displayAuthors: String {
         let names = csl.author.compactMap(\.sortingSurname)

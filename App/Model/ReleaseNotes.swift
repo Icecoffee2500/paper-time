@@ -49,6 +49,16 @@ enum ReleaseNotes {
     /// twenty is a list nobody reads.
     static let highlights: [Highlight] = [
         Highlight(
+            symbol: "doc.questionmark",
+            title: Text2("논문만이 아니라, 모든 PDF", "Not only papers"),
+            detail: Text2(
+                "PDF를 더하면 먼저 물어봐요 — 논문인가요, 일반 문서인가요. 앱이 짐작한 답을 미리 골라 두니 한 번만 누르면 돼요. 논문이면 예전처럼 서지를 찾아 채우고, 일반 문서면 학술지나 DOI 같은 칸은 아예 사라져요. 계약서에 학술지를 묻지 않아요. 표시도, 필기도, 노트도 그대로 되고요.",
+                "Add a PDF and it asks: a paper, or a document? The app has already guessed, so it is one press. A paper gets its record looked up as before; a document loses the journal and the DOI, which it never had. Nobody asks a contract for its volume number. Marking, writing and notes work the same on both."
+            ),
+            demo: .kindQuestion,
+            tier: .one
+        ),
+        Highlight(
             symbol: "bubble.and.pencil",
             title: Text2("이제 같이 만들어요", "Now we build it together"),
             detail: Text2(
@@ -256,6 +266,39 @@ enum ReleaseNotes {
     /// thing they care about moved; making them read a paragraph to find out
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
+        Release(
+            version: "0.9.0",
+            date: Text2("2026년 9월", "September 2026"),
+            note: Text2(
+                "논문만이 아니라 모든 PDF를 위한 앱이 됐어요. 새 PDF에는 먼저 논문인지 일반 문서인지 물어보고, 답에 따라 정보 칸이 바뀌어요. 차례가 없는 문서는 쪽 그림으로 넘겨요.",
+                "Not only papers now. A new PDF is asked what it is — a paper or a document — and the fields follow the answer. A document with no headings is turned by the look of its pages."
+            ),
+            added: [
+                Entry(
+                    Text2("논문인지 먼저 물어봐요", "It asks what the PDF is"),
+                    Text2(
+                        "새 PDF를 더하면 인스펙터가 먼저 물어요 — 논문인가요, 일반 문서인가요. 앱이 먼저 짐작해서 하나를 골라 두고요(안에 DOI나 참고문헌이 보이면 논문). 논문이라고 하면 서지를 찾아 채우고 비슷한 후보를 보여줘요. 일반 문서라고 하면 학술지·권·호·DOI·인용 키 같은 칸이 사라지고, 펴낸 곳·해·종류·파일처럼 문서에 있는 것만 남아요. 논문이 아닌 PDF는 등록기관에 묻지도 않아요 — 계약서 제목을 밖으로 보낼 일이 없어요. 한 번 답하면 그 질문은 사라져요. 잘못 눌렀으면 도구 막대의 ⋯ 메뉴나 목록의 오른쪽 클릭 메뉴에서 바꾸면 돼요.",
+                        "Add a PDF and the inspector asks first: a paper, or a document? The app has already guessed one of them — a DOI or a reference list inside means a paper. Say paper and it looks the record up and offers the near matches, as before. Say document and the journal, volume, issue, DOI and citation key go away, leaving what a document actually has: where it came from, its year, its kind, its file. A PDF that is not a paper is never looked up online, so a contract's title never leaves the machine. Answered once, the question goes away. Pressed the wrong one? Change it from the ⋯ menu in the toolbar, or from the row's own menu."
+                    ),
+                    demo: .kindQuestion, featured: true
+                ),
+                Entry(
+                    Text2("쪽 그림으로 넘겨요", "Turn by the look of the pages"),
+                    Text2(
+                        "차례(⇧⌘L)에 '쪽' 칸이 생겼어요. 모든 쪽을 작게 늘어놓고, 누르면 그 쪽으로 가요. 지금 보는 쪽에는 테두리가 있어요. 제목을 찾지 못한 PDF — 스캔한 계약서나 '1장'만 반복되는 안내서 — 는 이 칸으로 바로 열려요. 윈도우·리눅스에서도 같은 키예요.",
+                        "The contents (⇧⌘L) has a Pages tab: every page, small, and a click goes there. The page you are on is ringed. A PDF whose headings could not be read — a scanned contract, a handbook whose every heading is \"Chapter 7\" — opens straight to it. Same key on Windows and Linux."
+                    )
+                ),
+                Entry(
+                    Text2("문서와 논문을 나눠서 봐요", "Papers and documents, side by side in the shelf"),
+                    Text2(
+                        "라이브러리에 둘 다 있으면 사이드바에 '논문'과 '문서' 줄이 생겨요. 논문만 있는 라이브러리는 예전 그대로예요. '살펴볼 것'에는 논문만 올라와요 — 등록기관이 문서에 대해 할 말은 없으니까요.",
+                        "Once a library holds both, the sidebar gets a Papers row and a Documents row. A library of nothing but papers looks exactly as it did. Needs Review holds only papers now: no registrar has an opinion about a manual."
+                    )
+                ),
+            ],
+            fixed: []
+        ),
         Release(
             version: "0.8.3",
             date: Text2("2026년 9월", "September 2026"),
@@ -1077,6 +1120,9 @@ enum ReleaseNotes {
                     Text2("나머지가 비켜선다. 절을 옮길 때는 ⇧⌘L로 목차를 불러낸다.", "Everything else steps aside; ⇧⌘L brings the table of contents when you want another section."), action: .focus),
             Feature(Text2("목차", "Table of contents"),
                     Text2("PDF가 가진 목차를 페이지 위에 띄운다. 절을 누르면 그리로.", "The PDF's own outline, floated over the page. Click a section to go there."), action: .floatingList),
+            Feature(Text2("쪽 그림으로 넘기기", "Turn by the look of the pages"),
+                    Text2("같은 창(⇧⌘L)의 «쪽» 칸. 모든 쪽을 작게 세로로 늘어놓고, 누르면 그 쪽으로 간다. 지금 보는 쪽에는 테두리가 있다. 제목을 하나도 찾지 못한 PDF — 스캔한 계약서나 모든 제목이 «1장»인 안내서 — 는 이 칸으로 바로 열린다.",
+                            "The Pages tab of the same panel (⇧⌘L): every page, small, in a column; click one to go there, and the page you are on is ringed. A PDF whose headings could not be read — a scanned contract, a handbook whose every heading is \"Chapter 7\" — opens straight to it."), action: .floatingList),
             Feature(Text2("이동", "Move about"),
                     Text2("다음·이전 페이지, 다음·이전 논문, 그리고 지나온 자리로 뒤로·앞으로.", "Next and previous page, next and previous paper, and back and forward through where you have been."), action: .nextPage),
         ]),
@@ -1121,6 +1167,31 @@ enum ReleaseNotes {
         Group(Text2("라이브러리", "The library"), symbol: "books.vertical", features: [
             Feature(Text2("논문 추가", "Add papers"),
                     Text2("PDF를 끌어다 놓거나, 이 키로.", "Drag PDFs in, or use this."), action: .addPapers),
+            Feature(Text2("논문인지 일반 문서인지", "A paper, or a document"),
+                    Text2("""
+                        PDF를 더하면 인스펙터가 한 번 묻는다 — 논문인가요, 일반 문서인가요. \
+                        앱이 먼저 짐작해서 하나를 골라 두니 대개 그대로 누르면 된다(안에 DOI나 \
+                        arXiv 번호가 있으면 논문, 없으면 초록과 참고문헌이 둘 다 있을 때만 논문). \
+                        논문이라고 하면 예전처럼 서지를 찾아 채우고 비슷한 후보를 보여준다. \
+                        일반 문서라고 하면 학술지·권·호·DOI·인용 키 칸이 사라지고 펴낸 곳·해·종류·파일만 남으며, \
+                        등록기관에 묻지도 않는다 — 계약서 제목이 밖으로 나갈 일이 없다.
+                        """,
+                        """
+                        Adding a PDF asks once, in the inspector: a paper, or a document? \
+                        The app has already guessed one of them, so it is usually one press — \
+                        a DOI or an arXiv identifier inside means a paper, and without one it \
+                        takes an abstract and a reference list together. Say paper and the record \
+                        is looked up and the near matches offered, as before. Say document and the \
+                        journal, volume, issue, DOI and citation key go away, leaving where it came \
+                        from, its year, its kind and its file — and nothing is asked of a registrar, \
+                        so a contract's title never leaves the machine.
+                        """)),
+            Feature(Text2("종류를 나중에 바꾸기", "Changing that answer"),
+                    Text2("잘못 눌렀으면 도구 막대의 ⋯ 메뉴에서 «종류»를, 또는 목록에서 그 줄을 오른쪽 클릭해 바꾼다. 한 번 정하는 것이라 폼에는 두지 않았다.",
+                            "Pressed the wrong one? Change it under Kind in the ⋯ menu in the toolbar, or by right-clicking the row in the list. It is decided once, so it does not stand in the form.")),
+            Feature(Text2("논문 선반과 문서 선반", "Papers and documents in the shelf"),
+                    Text2("라이브러리에 둘 다 있으면 사이드바에 «논문»과 «문서» 줄이 생긴다. 논문만 있으면 예전 그대로다. «살펴볼 것»에는 논문만 올라온다 — 등록기관이 안내서에 대해 할 말은 없다.",
+                            "Once a library holds both, the sidebar gets a Papers row and a Documents row; a library of nothing but papers looks as it did. Needs Review holds only papers: no registrar has an opinion about a manual.")),
             Feature(Text2("서지 정보", "Metadata"),
                     Text2("제목·저자·연도를 논문에서 읽는다. 확신이 없는 것은 조용히 저장하지 않고 Needs Review로 남긴다.", "Title, authors and year are read from the paper. What it is unsure of is marked Needs Review rather than saved quietly.")),
             Feature(Text2("빠진 서지 정보 채우기", "Resolve missing metadata"),
@@ -1154,6 +1225,12 @@ enum ReleaseNotes {
                             "Settings → Shortcuts. Knowing the name finds the key; knowing the key finds what owns it — and the second is the one that is usually impossible. Type it as it is drawn (⌘F) or as it is spoken (\"cmd\").")),
             Feature(Text2("설정은 왼쪽에서 고른다", "Settings has pages"),
                     Text2("라이브러리·서지·BibTeX·읽기·단축키·정보. 한 화면을 끝없이 내리는 대신 찾는 곳으로 바로 간다.", "Library, Metadata, BibTeX, Reading, Shortcuts and About — rather than one scroll with all of it in.")),
+            Feature(Text2("열린 논문 선반", "The Open Papers shelf"),
+                    Text2("쓴 논문이 남는 선반이다. 쪽을 클릭해 들어가거나 나란히 놓으면 남고, 그냥 훑어본 것은 다음 논문을 보면 빠진다 — 편집기의 미리보기 탭과 같다. ⇧⌘O로 쪽 위에 띄우고, 한 줄을 창 밖으로 끌면 그 논문만 담은 창이 된다.",
+                            "The shelf of what you have used. Click into a paper, or put it beside another, and it stays; one merely looked at leaves when the next is shown — the rule an editor's preview tab follows. ⇧⌘O floats it over the page, and a row dragged out of the window becomes a window of its own."), action: .openPapers),
+            Feature(Text2("핀은 직접 꽂는 것", "The pin is yours"),
+                    Text2("목록 줄 앞의 핀은 사람이 누른 것만 켜진다. 앱이 «쓰는 중»으로 남겨 두는 것은 선반에만 보이고 핀을 켜지 않는다 — 읽었다고 핀이 꽂히면 그건 핀이 아니다. 핀을 한 번 더 누르면 그 논문을 닫는다.",
+                            "The pin at the head of a row lights only for what you pinned. What the app keeps because you were using it shows on the shelf and nowhere else — a pin that appears by itself is not a pin. Press it again to close the paper.")),
         ]),
     ]
 
@@ -1280,6 +1357,9 @@ enum ReleaseNotes {
         /// A frame with three cards in it, and the auto layout that keeps
         /// them in a column or a row — press the flow and they move.
         case frames
+        /// The question every PDF is asked, and the two forms it decides
+        /// between.
+        case kindQuestion
         /// One folder, three desktops: a mark made on any of them is in the
         /// PDF, so the other two have it the moment the folder catches up.
         case crossPlatform

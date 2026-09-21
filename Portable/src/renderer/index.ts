@@ -26,6 +26,7 @@ import {
   closeOtherOpenPapers,
   dock,
   isOpenPaper,
+  isPinned,
   keepOpen,
   panePapers,
   paper as findPaper,
@@ -55,6 +56,7 @@ import {
   refreshOpenPapers,
   toggleOpenPapers,
 } from './ui/openPapers.js'
+import { closePages, isPagesShowing, togglePages } from './ui/pages.js'
 import type { LibrarySnapshot, WindowBounds } from '../shared/api.js'
 import { expandedIDs } from '../shared/sketch.js'
 import {
@@ -70,6 +72,7 @@ import {
 import { icon } from './icons.js'
 import { L } from '../shared/lang.js'
 import { type PDFLock } from '../shared/pdfLock.js'
+import { type DocumentKind } from '../shared/documentKind.js'
 
 document.body.dataset.platform = platform
 /** This window shows one paper on its own: no library columns. */
@@ -140,8 +143,8 @@ const paperList = buildPaperList({
     await reload()
   },
   togglePin: (id) => {
-    if (isOpenPaper(id)) closePaper(id)
-    else keepPaper(id)
+    if (isPinned(id)) closePaper(id)
+    else keepPaper(id, true)
   },
   close: (id) => closePaper(id),
   contextMenu: (id, anchor) => {
@@ -166,11 +169,20 @@ const paperList = buildPaperList({
               ? [{ label: L('다른 논문 모두 닫기', 'Close Other Papers'), icon: 'xmark.circle.fill', action: () => closeOthers(id) }]
               : []),
           ]
-        : [{ label: L('열어 두기', 'Keep Open'), icon: 'pin', action: () => keepPaper(id) }]),
+        : [{ label: L('열어 두기', 'Keep Open'), icon: 'pin', action: () => keepPaper(id, true) }]),
       { label: L('새 창으로 열기', 'Open in New Window'), icon: 'macwindow.badge.plus', action: () => openInWindow(id) },
       { separator: true },
+      // The same answer the inspector asks for, where a handful of rows can
+      // be corrected one after another — which is what a wrongly answered
+      // import feels like.
+      entry.meta.effectiveKind === 'paper'
+        ? { label: L('일반 문서로 바꾸기', 'Make It a Document'), icon: 'note', action: () => void setKind(id, 'document') }
+        : { label: L('논문으로 바꾸기', 'Make It a Paper'), icon: 'text.document', action: () => void setKind(id, 'paper') },
+      { separator: true },
       { label: L('폴더에서 보기', 'Show in Folder'), icon: 'folder', action: () => void call('paper:reveal', { id }) },
-      { label: L('인용 키 복사', 'Copy Citation Key'), icon: 'doc.on.doc', action: () => copyKey(id) },
+      ...(entry.meta.effectiveKind === 'paper'
+        ? [{ label: L('인용 키 복사', 'Copy Citation Key'), icon: 'doc.on.doc', action: () => copyKey(id) }]
+        : []),
       { separator: true },
       {
         label: entry.state.isFavorite
@@ -210,6 +222,16 @@ const paperList = buildPaperList({
   },
 })
 
+/** The answer to "paper or document?", from the inspector or the row's menu. */
+async function setKind(id: string, kind: DocumentKind) {
+  // A document has no registrar to disagree with, so it leaves the shelf of
+  // things to look at.
+  const patch: Record<string, unknown> = { kind }
+  if (kind === 'document') patch.confidence = 'unparsed'
+  await call('paper:meta', { id, patch })
+  await reload()
+}
+
 const inspector = buildInspector({
   editMeta: async (id, patch) => {
     await call('paper:meta', { id, patch })
@@ -221,6 +243,7 @@ const inspector = buildInspector({
   },
   reveal: (id) => void call('paper:reveal', { id }),
   copyKey,
+  setKind,
   openAuthor: (name) => {
     store.shelf = { kind: 'author', name }
     changed('shelf')
@@ -270,6 +293,15 @@ function readerFor(id: string, pane: boolean): Reader {
       }
     },
     close: () => closePaper(id),
+    guessed: (kind) => {
+      // Only ever a guess, and only when nobody has one: the answer belongs
+      // to the reader and is given in the inspector.
+      const paper = store.papers.find((p) => p.id === id)
+      if (!paper || paper.meta.guessedKind || paper.meta.kind) return
+      paper.meta.guessedKind = kind
+      void call('paper:meta', { id, patch: { guessedKind: kind } })
+      changed('papers', 'inspector')
+    },
   }, { pane })
   readers.set(id, reader)
   void loadInto(reader, id)
@@ -374,8 +406,8 @@ function focusChanged() {
 // ---------------------------------------------------------- open papers
 
 /** Keeps a paper on the open shelf without changing what is showing. */
-function keepPaper(id: string) {
-  keepOpen(id)
+function keepPaper(id: string, byHand = false) {
+  keepOpen(id, byHand)
   changed('papers')
 }
 
@@ -415,6 +447,19 @@ function openInWindow(id: string, at?: { x: number; y: number }) {
 async function insideOurWindows(x: number, y: number): Promise<boolean> {
   const bounds = await call<WindowBounds[]>('window:bounds')
   return bounds.some((b) => x >= b.x && x <= b.x + b.width && y >= b.y && y <= b.y + b.height)
+}
+
+/** Every page of what is showing, small — the way into a document that has
+ *  no headings to list. */
+function showPagesPopup() {
+  const reader = focused()
+  if (!reader) return
+  togglePages(pageArea, {
+    pageCount: () => reader.pages_count,
+    currentPage: () => Math.max(0, reader.state.currentPage - 1),
+    draw: (index, width) => reader.thumbnail(index, width),
+    go: (index) => reader.scrollToPage(index),
+  })
 }
 
 function showOpenPapersPopup() {
@@ -1177,6 +1222,7 @@ function runMenuCommand(command: string) {
     case 'layoutContinuous': setLayout('continuous'); break
     case 'layoutSinglePage': setLayout('single'); break
     case 'openPapers': if (!solo) showOpenPapersPopup(); break
+    case 'pages': showPagesPopup(); break
     case 'openInNewWindow': if (store.selectedID) openInWindow(store.selectedID); break
     case 'closeWindow': closeWindowOrPane(); break
     default:

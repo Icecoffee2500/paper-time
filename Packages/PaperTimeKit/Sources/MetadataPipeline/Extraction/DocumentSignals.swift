@@ -27,6 +27,10 @@ public struct DocumentSignals: Hashable, Sendable {
     /// The text drawn in the largest font on page one, excluding stamps.
     public var largestFontText: String?
     public var hasTextLayer: Bool
+    /// Something that reads as an abstract near the top of the first page.
+    public var hasAbstract: Bool
+    /// A references or bibliography heading near the end.
+    public var hasReferences: Bool
 
     public init(
         pageCount: Int = 0,
@@ -37,7 +41,9 @@ public struct DocumentSignals: Hashable, Sendable {
         firstPageLines: [String] = [],
         openingText: String = "",
         largestFontText: String? = nil,
-        hasTextLayer: Bool = false
+        hasTextLayer: Bool = false,
+        hasAbstract: Bool = false,
+        hasReferences: Bool = false
     ) {
         self.pageCount = pageCount
         self.embeddedTitle = embeddedTitle
@@ -48,6 +54,22 @@ public struct DocumentSignals: Hashable, Sendable {
         self.openingText = openingText
         self.largestFontText = largestFontText
         self.hasTextLayer = hasTextLayer
+        self.hasAbstract = hasAbstract
+        self.hasReferences = hasReferences
+    }
+
+    /// Whether this reads as a paper or as something else somebody reads.
+    ///
+    /// The identifier is near proof: nobody prints a DOI on a car manual.
+    /// Without one, an abstract and a reference list together are what make a
+    /// paper look like a paper. Everything else is a document, and being
+    /// wrong costs one tap in the inspector.
+    public var guess: DocumentGuess {
+        DocumentGuess.of(
+            hasIdentifier: !IdentifierScanner.scan(openingText).isEmpty,
+            hasAbstract: hasAbstract,
+            hasReferences: hasReferences
+        )
     }
 }
 
@@ -95,9 +117,53 @@ public enum DocumentSignalsExtractor {
         }
         signals.openingText = TextNormalization.repairingHyphenation(opening)
         signals.largestFontText = largestFontText(on: firstPage)
+        signals.hasAbstract = looksLikeAbstract(firstPageText)
+        signals.hasReferences = hasReferenceSection(in: document)
 
         return signals
     }
+
+    /// An abstract, in the place a paper puts one: a heading near the top of
+    /// the first page, in either language this app is read in.
+    static func looksLikeAbstract(_ firstPageText: String) -> Bool {
+        let head = String(firstPageText.prefix(2500)).lowercased()
+        return ["abstract", "초록", "요약", "résumé", "zusammenfassung"].contains { head.contains($0) }
+    }
+
+    /// A reference list, which is the other half of what makes a paper a
+    /// paper.
+    ///
+    /// Looked for at the end and then through the second half, because that
+    /// is where it turns out to be: measured over this corpus, a paper with
+    /// appendices puts its bibliography in the middle — one of the two papers
+    /// tried here has it on page 9 of 23 — and looking only at the last pages
+    /// called it a manual. At most a dozen pages are read, so a five-hundred
+    /// page book costs the same as a ten-page paper.
+    static func hasReferenceSection(in document: PDFDocument) -> Bool {
+        let count = document.pageCount
+        guard count > 0 else { return false }
+        var indices: [Int]
+        if count <= 40 {
+            // A paper is short enough to read all of, and its bibliography
+            // can be anywhere: of the two papers this was tried on, one has
+            // it on page 9 of 23, with appendices after it.
+            indices = Array(0..<count)
+        } else {
+            indices = Array(stride(from: count - 1, through: max(0, count - 8), by: -1))
+            let step = max(1, count / 12)
+            indices += stride(from: 0, to: count, by: step).prefix(12)
+        }
+        for index in Set(indices).sorted(by: >) {
+            let text = (document.page(at: index)?.string ?? "").lowercased()
+            if Self.referenceHeadings.contains(where: { text.contains($0) }) { return true }
+        }
+        return false
+    }
+
+    static let referenceHeadings = [
+        "references", "bibliography", "works cited",
+        "참고문헌", "참고 문헌", "인용문헌",
+    ]
 
     public static func extract(fromFileAt url: URL) -> DocumentSignals? {
         guard let document = PDFDocument(url: url) else { return nil }
