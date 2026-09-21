@@ -302,6 +302,18 @@ public final class AppModel {
     public func toggleFloatingList() {
         withAnimation(AppModel.paneMotion) {
             showsFloatingList.toggle()
+            if showsFloatingList { showsOpenPapers = false }
+        }
+    }
+
+    /// The open papers, summoned over the page the way the contents are —
+    /// a key, a list, a choice.
+    public var showsOpenPapers = false
+
+    public func toggleOpenPapers() {
+        withAnimation(AppModel.paneMotion) {
+            showsOpenPapers.toggle()
+            if showsOpenPapers { showsFloatingList = false }
         }
     }
 

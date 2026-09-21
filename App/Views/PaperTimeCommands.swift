@@ -131,6 +131,8 @@ struct PaperTimeCommands: Commands {
 
             command(L("차례", "Table of Contents"), .floatingList) { model.toggleFloatingList() }
                 .disabled(model.library?.selectedPaperID == nil)
+            command(L("열린 논문", "Open Papers"), .openPapers) { model.toggleOpenPapers() }
+                .disabled(model.library == nil)
 
             Divider()
 

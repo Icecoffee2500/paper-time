@@ -327,6 +327,14 @@ enum ReleaseNotes {
                         "The sidebar has Open Papers: the papers opened this session, in order. Drag one onto the left or right of the page for halves, or into a corner for up to four at once — the way a Mac tiles a window dragged to the edge of the screen. Open Side by Side in the context menu does the same. The pane you click is the paper you are reading; Info, Marks and Note are about it."
                     )
                 ),
+                Entry(
+                    Text2("열린 논문 팝업과 새 창", "The Open Papers popup, and a window of its own"),
+                    Text2(
+                        "⇧⌘O로 열린 논문 목록이 차례처럼 쪽 위에 떠요. 누르면 그 논문, ⌘클릭이면 새 창. 줄을 창 밖으로 끌어 놓으면 거기에 새 창이 생기고, 쪽의 가장자리에 놓으면 옆에 붙어요. 선반에 남는 것은 쓴 논문이에요. 목록을 훑어보기만 한 것은 '미리보기'로 잠깐 있다가 빠져요.",
+                        "⇧⌘O brings the open papers up over the page, as the contents come. Click for that paper, ⌘-click for a new window. Drag a row off the window and a window opens where you let go; drag it to the page's edge and it docks beside. What stays on the shelf is what you used; a paper only glanced at from the list sits there as a preview and leaves with the next."
+                    ),
+                    action: .openPapers
+                ),
             ],
             fixed: [
                 Entry(

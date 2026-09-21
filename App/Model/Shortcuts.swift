@@ -123,7 +123,7 @@ public enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
     // Marking
     case highlight, underline, newNote, draw
     // Panes
-    case sidebar, paperList, reader, inspector, focus, floatingList
+    case sidebar, paperList, reader, inspector, focus, floatingList, openPapers
     // Moving about
     case zoomIn, zoomOut, actualSize
     case nextPage, previousPage, nextPaper, previousPaper, back, forward
@@ -153,7 +153,7 @@ public enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
             .reading
         case .highlight, .underline, .newNote, .draw:
             .marking
-        case .sidebar, .paperList, .reader, .inspector, .focus, .floatingList:
+        case .sidebar, .paperList, .reader, .inspector, .focus, .floatingList, .openPapers:
             .panes
         case .zoomIn, .zoomOut, .actualSize, .nextPage, .previousPage,
              .nextPaper, .previousPaper, .back, .forward:
@@ -189,6 +189,7 @@ public enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
         case .inspector: L("정보 패널", "Inspector")
         case .focus: L("논문에 집중", "Focus on the Paper")
         case .floatingList: L("차례", "Table of Contents")
+        case .openPapers: L("열린 논문", "Open Papers")
         case .zoomIn: L("크게", "Zoom In")
         case .zoomOut: L("작게", "Zoom Out")
         case .actualSize: L("실제 크기", "Actual Size")
@@ -238,6 +239,7 @@ public enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
         // which is what made Focus look broken.
         case .focus: Shortcut("f", [.command, .shift])
         case .floatingList: Shortcut("l", [.command, .shift])
+        case .openPapers: Shortcut("o", [.command, .shift])
         case .zoomIn: Shortcut("+")
         case .zoomOut: Shortcut("-")
         case .actualSize: Shortcut("0")

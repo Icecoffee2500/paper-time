@@ -127,6 +127,11 @@ struct LibraryWindow: View {
             // hand on the machine.
             .preferredColorScheme(Boot.isSet("PAPERTIME_DARK") ? .dark : nil)
             .task {
+                if Boot.isSet("PAPERTIME_OPEN_PAPERS") {
+                    try? await Task.sleep(for: .seconds(2))
+                    if let first = model.visiblePapers.first { model.keepOpen(first.id) }
+                    app.toggleOpenPapers()
+                }
                 guard Boot.isSet("PAPERTIME_SPLIT") else { return }
                 try? await Task.sleep(for: .seconds(2))
                 let papers = model.visiblePapers
@@ -1068,6 +1073,7 @@ struct PaperDetailColumn: View {
         // column, which in a book spread puts it in the gutter between the
         // two pages where there are no words to cover.
         .overlay { contents }
+
         .animation(.snappy(duration: 0.22), value: app.showsFloatingList)
         // A passage of another paper, followed from a note here: that paper
         // opens, and its reader takes the request from there.
@@ -1279,6 +1285,14 @@ struct PaperDetailColumn: View {
             // quarter of it — the way a window tiles when dragged to an edge.
             .overlay { DockZoneOverlay(zone: dockZone, size: pageSize) }
             .onGeometryChange(for: CGSize.self) { $0.size } action: { pageSize = $0 }
+            // The open papers, the way the contents come: a key brings the
+            // list up over the page, a choice or Escape puts it away.
+            .overlay {
+                if app.showsOpenPapers {
+                    OpenPapersPopup(model: model) { app.toggleOpenPapers() }
+                        .transition(.scale(scale: 0.96).combined(with: .opacity))
+                }
+            }
             .onDrop(of: [.paperTimePaper], delegate: DockDropDelegate(
                 size: { pageSize },
                 zone: $dockZone,

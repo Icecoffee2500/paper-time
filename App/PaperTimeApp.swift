@@ -45,6 +45,15 @@ struct PaperTimeApp: App {
         #endif
 
         #if os(macOS)
+        // A paper in a window of its own: what a paper dragged out of the
+        // open list becomes, the way a tab dragged out of a browser does.
+        WindowGroup(id: "paper", for: UUID.self) { $paperID in
+            PaperWindow(paperID: paperID)
+                .environment(model)
+        }
+        .defaultSize(width: 760, height: 920)
+        .windowToolbarStyle(.unifiedCompact(showsTitle: true))
+
         Settings {
             SettingsView()
                 .environment(model)
