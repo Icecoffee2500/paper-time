@@ -63,6 +63,16 @@ enum Glass {
         }
     }
 
+    /// The body it has in the dark: a pane and a floating surface deepen
+    /// what is behind them, a control lifts off the pane it lies on.
+    var darkBody: Color {
+        switch self {
+        case .pane: Color.black.opacity(0.30)
+        case .control: Color.white.opacity(0.10)
+        case .floating: Color.black.opacity(0.42)
+        }
+    }
+
     /// What lifts it off whatever it is lying on, in two layers: one tight
     /// against the edge and one spread wide beneath it.
     ///
@@ -126,13 +136,18 @@ private struct LiquidGlass<S: InsettableShape>: ViewModifier {
             if kind.blursOwnBackdrop {
                 shape.fill(.ultraThinMaterial)
             }
-            // The glass's own body. White in the light, and a lifted grey in
-            // the dark — a dark surface tinted white goes milky, not glassy.
-            shape.fill(
-                scheme == .dark
-                    ? Color.white.opacity(kind.body * 0.14)
-                    : Color.white.opacity(kind.body)
-            )
+            // The glass's own body: white in the light, and in the dark a
+            // deepening rather than a lightening.
+            //
+            // It used to be white there too, faintly, and the panes came out
+            // *paler* than the ground around them — light grey behind white
+            // text, which is the one combination a dark window must not
+            // have. Dark mode is not light mode turned down; the surface you
+            // read on is the darkest thing in the window, and the ground
+            // behind it is what is lighter. Only a control keeps a white
+            // body, because a control sits on a pane and has to read as
+            // raised from it.
+            shape.fill(scheme == .dark ? kind.darkBody : Color.white.opacity(kind.body))
         }
         .compositingGroup()
         .shadows(kind.shadows)

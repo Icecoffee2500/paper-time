@@ -1685,12 +1685,19 @@ enum Column {
     ///
     /// The white over it is there because a dark wallpaper otherwise drags the
     /// whole window down with it, and this is an app for reading in.
-    @ViewBuilder
-    static var ground: some View {
-        Rectangle()
-            .fill(.ultraThinMaterial)
-            .overlay(Color.white.opacity(0.28))
-            .ignoresSafeArea()
+    /// In the dark the white would have to go the other way: a pale ground
+    /// under panes that are darker than it reads as fog, not as depth.
+    static var ground: some View { Ground() }
+
+    private struct Ground: View {
+        @Environment(\.colorScheme) private var scheme
+
+        var body: some View {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .overlay(scheme == .dark ? Color.black.opacity(0.18) : Color.white.opacity(0.28))
+                .ignoresSafeArea()
+        }
     }
 
     static var shape: RoundedRectangle {

@@ -101,7 +101,7 @@ function makeWindow(shape: WindowShape, extraArguments: string[] = []): BrowserW
     frame: false,
     titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
     trafficLightPosition: isMac ? { x: 14, y: 16 } : undefined,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1c1c1e' : '#ebeced',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#202024' : '#ebeced',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
