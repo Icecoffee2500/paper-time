@@ -2,6 +2,95 @@
   "repo": "Icecoffee2500/paper-time",
   "releases": [
     {
+      "version": "0.9.0",
+      "date": "2026-09-21T14:11:33Z",
+      "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.0/Paper.Time.0.9.0.dmg",
+      "size": 6182337,
+      "downloads": 0,
+      "builds": {
+        "mac": [
+          {
+            "label": "디스크 이미지",
+            "label_en": "Disk image",
+            "arch": "Apple Silicon",
+            "arch_en": "Apple Silicon",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.0/Paper.Time.0.9.0.dmg",
+            "size": 6182337,
+            "downloads": 0
+          }
+        ],
+        "windows": [
+          {
+            "label": "설치본",
+            "label_en": "Installer",
+            "arch": "64비트 · ARM",
+            "arch_en": "64-bit and ARM",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.0/Paper.Time.Setup.0.9.0.exe",
+            "size": 176994830,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "64비트",
+            "arch_en": "64-bit",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.0/Paper.Time-0.9.0-win.zip",
+            "size": 116172393,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.0/Paper.Time-0.9.0-arm64-win.zip",
+            "size": 121120077,
+            "downloads": 0
+          }
+        ],
+        "linux": [
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.0/Paper.Time-0.9.0-x86_64.AppImage",
+            "size": 113189047,
+            "downloads": 0
+          },
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.0/Paper.Time-0.9.0-arm64.AppImage",
+            "size": 113571522,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.0/paper-time-0.9.0.tar.gz",
+            "size": 107387378,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.0/paper-time-0.9.0-arm64.tar.gz",
+            "size": 111885320,
+            "downloads": 0
+          }
+        ]
+      },
+      "note": "논문만이 아니라 모든 PDF를 위한 앱이 됐어요. 새 PDF에는 논문인지 일반 문서인지 먼저 물어보고, 답에 따라 정보 칸이 바뀌어요. 차례가 없는 문서는 쪽 그림으로 넘겨요.",
+      "note_en": "Not only papers. A new PDF is asked what it is — a paper or a document — and the fields follow the answer. A document with no headings is turned by the look of its pages."
+    },
+    {
       "version": "0.8.3",
       "date": "2026-09-21T12:39:19Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.8.3/Paper.Time.0.8.3.dmg",
