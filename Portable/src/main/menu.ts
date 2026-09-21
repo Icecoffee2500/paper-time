@@ -42,6 +42,9 @@ export function buildMenu({ send, chooseLibrary }: MenuActions) {
       label: L('파일(&F)', '&File'),
       submenu: [
         { label: L('PDF 더하기…', 'Add PDFs…'), accelerator: 'CmdOrCtrl+O', click: command('addPapers') },
+        // Both halves: another folder to read beside this one, and a
+        // different folder to start from.
+        { label: L('라이브러리 더하기…', 'Add Library…'), click: command('addFolder') },
         { label: L('라이브러리 폴더 고르기…', 'Choose Library Folder…'), click: () => void chooseLibrary() },
         { label: L('폴더에서 새로 읽기', 'Refresh Folder'), accelerator: 'CmdOrCtrl+R', click: command('refreshFolder') },
         { type: 'separator' },

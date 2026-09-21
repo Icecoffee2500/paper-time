@@ -87,19 +87,22 @@ const panes = el('div', { class: 'panes' })
 
 // ---------------------------------------------------------------- the panes
 
+/** Another folder, read beside the ones already open. Also on the File menu. */
+function addLibraryFolder() {
+  void (async () => {
+    const snapshot = await call<LibrarySnapshot>('library:addFolder', {})
+    if ('error' in snapshot) return
+    adopt(snapshot)
+    changed('papers', 'shelf', 'sidebar')
+  })()
+}
+
 const sidebar = buildSidebar({
   select: (shelf: Shelf) => {
     store.shelf = shelf
     changed('shelf')
   },
-  addFolder: () => {
-    void (async () => {
-      const snapshot = await call<LibrarySnapshot>('library:addFolder', {})
-      if ('error' in snapshot) return
-      adopt(snapshot)
-      changed('papers', 'shelf', 'sidebar')
-    })()
-  },
+  addFolder: () => addLibraryFolder(),
   removeFolder: (root: string) => {
     void (async () => {
       const snapshot = await call<LibrarySnapshot>('library:removeFolder', { root })
@@ -1216,6 +1219,7 @@ function runMenuCommand(command: string) {
   switch (command) {
     case 'addPapers': void addPapers(); break
     case 'refreshFolder': void reload(); break
+    case 'addFolder': addLibraryFolder(); break
     case 'searchEverything': openSearch(); break
     case 'sidebar': togglePane('sidebar'); break
     case 'paperList': togglePane('paperList'); break

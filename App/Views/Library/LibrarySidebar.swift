@@ -237,6 +237,12 @@ struct LibrarySidebar: View {
                 Label(L("살펴볼 것", "Needs Review"), systemImage: "exclamationmark.triangle")
                     .count(model.counts.needsReview, current: model.scope == .needsReview)
                     .scopeRow(.needsReview, in: model)
+            } header: {
+                // No name: these are not a category, they are the list. The
+                // header is here only for the air a section gets from having
+                // one — without it the shelves sit flush against the
+                // libraries above them.
+                Color.clear.frame(height: 8)
             }
 
             Section(L("슬립박스", "Slip-Box")) {
