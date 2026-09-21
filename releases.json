@@ -549,7 +549,8 @@
         ]
       },
       "note": "Sonoma를 위해 지었다 — macOS 14부터. 아직 Sonoma에서 켜 본 것은 아니다.",
-      "note_en": null
+      "note_en": null,
+      "ours": 3
     },
     {
       "version": "0.2.4",
@@ -571,7 +572,8 @@
         ]
       },
       "note": "표 위에서도 마음대로 드래그한다.",
-      "note_en": null
+      "note_en": null,
+      "ours": 1
     },
     {
       "version": "0.2.3",
@@ -593,7 +595,8 @@
         ]
       },
       "note": "표의 셀이 노랗게 칠해진다.",
-      "note_en": null
+      "note_en": null,
+      "ours": 1
     },
     {
       "version": "0.2.2",
@@ -615,7 +618,8 @@
         ]
       },
       "note": "표에서 죽던 진짜 이유를 찾았다.",
-      "note_en": null
+      "note_en": null,
+      "ours": 1
     },
     {
       "version": "0.2.1",
@@ -637,7 +641,8 @@
         ]
       },
       "note": "표 안에서도 형광펜이 통한다.",
-      "note_en": null
+      "note_en": null,
+      "ours": 1
     },
     {
       "version": "0.2.0",

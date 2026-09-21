@@ -990,6 +990,27 @@ const setLabel = (button, text) => {
   for (const node of button.querySelectorAll(".label")) node.textContent = text;
 };
 
+/* The day a version went up. Short, and in the reader's own order —
+   the row is about the download, and the date is the smaller half of it. */
+function day(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d)) return "";
+  return KO
+    ? `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}.`
+    : d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+}
+
+/* What other people took. GitHub counts every download of an asset, and the
+   ones we made while checking a build are in there too — a release we tried
+   on three desktops reads as three strangers. Each version carries how many
+   of its downloads were ours (`ours` in releases.json, written by
+   `Scripts/note-download.sh`), and the page takes them off. */
+function ours(release, count) {
+  if (count == null) return null;
+  return Math.max(0, count - (release.ours || 0));
+}
+
 async function mountDownloads() {
   const primary = document.getElementById("get");
   const list = document.getElementById("versions-list");
@@ -1049,7 +1070,7 @@ async function mountDownloads() {
        than enough for a landing page). */
     const render = (counts) => {
       list.replaceChildren(...releases.map((r) => {
-        const n = counts[r.version];
+        const n = ours(r, counts[r.version]);
         const links = ["mac", "windows", "linux"].flatMap((os) => {
           const files = buildsFor(r, os);
           if (!files.length) return [];
@@ -1057,12 +1078,14 @@ async function mountDownloads() {
         });
         return el("div", { class: "vrow" },
           el("span", { class: "v" }, r.version),
+          el("span", { class: "when" }, day(r.date)),
           el("span", { class: "n" }, releaseNote(r)),
           el("span", { class: "vlinks" }, ...links),
           el("span", { class: "d" }, n == null ? "" :
-            L(`${n.toLocaleString("ko-KR")}번 받음`, `${n.toLocaleString("en-US")} downloads`)));
+            L(`${n.toLocaleString("ko-KR")}번 받음`,
+              `${n.toLocaleString("en-US")} download${n === 1 ? "" : "s"}`)));
       }));
-      const total = Object.values(counts).reduce((a, b) => a + (b || 0), 0);
+      const total = releases.reduce((sum, r) => sum + (ours(r, counts[r.version]) || 0), 0);
       const tally = document.getElementById("tally");
       if (tally) tally.replaceChildren(
         L("지금까지 ", "Downloaded "),
