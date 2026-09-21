@@ -94,7 +94,7 @@ public enum SketchWriter {
         var made: [PDFAnnotation] = []
         let primary: PDFAnnotation
         switch element.kind {
-        case .rectangle, .ellipse:
+        case .rectangle, .ellipse, .frame:
             primary = box(element)
             if !element.text.isEmpty {
                 made.append(label(element))
@@ -103,6 +103,14 @@ public enum SketchWriter {
             primary = connector(element)
         case .text:
             primary = freeText(element)
+        case .group:
+            // A group draws nothing, but it has to be in the file for a
+            // device without the sidecar to rebuild it: a square with no
+            // edge and no colour, hidden, carrying the payload.
+            let ghost = PDFAnnotation(bounds: element.rect, forType: .square, withProperties: nil)
+            ghost.border = border(for: element.style, width: 0)
+            ghost.shouldDisplay = false
+            primary = ghost
         }
         primary.setValue(payload(for: element) ?? "", forAnnotationKey: payloadKey)
         made.insert(primary, at: 0)
@@ -138,7 +146,8 @@ public enum SketchWriter {
         if let fill = element.style.fill {
             annotation.interiorColor = color(fill.flattenedOnWhite)
         }
-        annotation.border = border(for: element.style)
+        // An edge left undrawn is a border of no width.
+        annotation.border = border(for: element.style, width: element.style.drawsOutline(for: element.kind) ? nil : 0)
         return annotation
     }
 
@@ -192,12 +201,16 @@ public enum SketchWriter {
     private static func freeText(_ element: SketchElement) -> PDFAnnotation {
         let annotation = PDFAnnotation(bounds: element.rect, forType: .freeText, withProperties: nil)
         annotation.contents = element.text
-        annotation.font = PlatformFont.systemFont(ofSize: element.style.textSize.points)
+        annotation.font = PlatformFont.systemFont(ofSize: element.style.points)
         annotation.fontColor = color(element.style.stroke)
         // The card behind the words, or nothing. PDFKit fills a free text's
         // box in its colour; clear is written as no colour at all.
         annotation.color = element.style.fill.map { color($0.flattenedOnWhite) } ?? PlatformColor.clear
-        annotation.alignment = .left
+        switch element.style.textAlign {
+        case .left: annotation.alignment = .left
+        case .center: annotation.alignment = .center
+        case .right: annotation.alignment = .right
+        }
         annotation.border = border(for: element.style, width: element.style.border ? element.style.width : 0)
         return annotation
     }
@@ -207,7 +220,7 @@ public enum SketchWriter {
         let inner = element.rect.insetBy(dx: SketchTypesetter.padding, dy: SketchTypesetter.padding)
         let annotation = PDFAnnotation(bounds: inner, forType: .freeText, withProperties: nil)
         annotation.contents = element.text
-        annotation.font = PlatformFont.systemFont(ofSize: element.style.textSize.points)
+        annotation.font = PlatformFont.systemFont(ofSize: element.style.points)
         annotation.fontColor = color(element.style.stroke)
         annotation.color = PlatformColor.clear
         annotation.alignment = .center

@@ -35,7 +35,7 @@ import { Reader } from './ui/reader.js'
 import { buildSketchRack, buildStylePanel, TOOLS } from './ui/sketchToolbar.js'
 import { undoStack } from './ui/sketchInput.js'
 import type { LibrarySnapshot } from '../shared/api.js'
-import { SketchElement, rectInset } from '../shared/sketch.js'
+import { SketchElement, expandedIDs, rectInset } from '../shared/sketch.js'
 import { icon } from './icons.js'
 import { L } from '../shared/lang.js'
 
@@ -225,7 +225,8 @@ function deleteSelection() {
   const page = selectedPage()
   const selection = store.sketch.selection
   if (!page || !selection) return
-  page.elements = page.elements.filter((element) => !selection.ids.includes(element.id))
+  const gone = expandedIDs(page.elements, selection.ids)
+  page.elements = page.elements.filter((element) => !gone.has(element.id))
   store.sketch.selection = null
   page.redraw()
   void reader.save(page)
@@ -236,13 +237,19 @@ function duplicateSelection() {
   const page = selectedPage()
   const chosen = selectedElements()
   if (!page || chosen.length === 0) return
-  const copies = chosen.map((element) => {
+  // With everything inside them, the parent links carried across.
+  const taking = expandedIDs(page.elements, chosen.map((element) => element.id))
+  const newID = new Map<string, string>()
+  for (const id of taking) newID.set(id, crypto.randomUUID().toUpperCase())
+  const copies = page.elements.filter((element) => taking.has(element.id)).map((element) => {
     const copy = element.translated({ x: 12, y: -12 })
-    copy.id = crypto.randomUUID().toUpperCase()
+    copy.id = newID.get(element.id)!
+    copy.parent = element.parent && newID.has(element.parent) ? newID.get(element.parent)! : element.parent
     return copy
   })
   page.elements.push(...copies)
-  store.sketch.selection = { pageIndex: page.index, ids: copies.map((c) => c.id), strokeIDs: [] }
+  const roots = chosen.map((element) => newID.get(element.id)!)
+  store.sketch.selection = { pageIndex: page.index, ids: roots, strokeIDs: [] }
   page.redraw()
   void reader.save(page)
   changed('sketch')
@@ -700,8 +707,9 @@ function nudge(key: string, distance: number) {
     ArrowDown: { x: 0, y: -distance },
   }[key]
   if (!offset) return
+  const moving = expandedIDs(page.elements, selection.ids)
   page.elements = page.elements.map((element) =>
-    selection.ids.includes(element.id) ? element.translated(offset) : element)
+    moving.has(element.id) ? element.translated(offset) : element)
   page.redraw()
   void reader.save(page)
 }

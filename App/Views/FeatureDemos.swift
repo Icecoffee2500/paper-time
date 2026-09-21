@@ -50,6 +50,7 @@ struct FeatureDemoView: View {
             case .sync: SyncDemo(scale: scale)
             case .penTools: PenToolsDemo(scale: scale)
             case .sketch: SketchDemo(scale: scale)
+            case .frames: FramesDemo(scale: scale)
             case .crossPlatform: CrossPlatformDemo(scale: scale)
             case .feedback: FeedbackDemo(scale: scale)
             case .together: TogetherDemo(scale: scale)
@@ -3337,5 +3338,113 @@ private struct TwoLanguagesDemo: View {
                 .font(scale.small)
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+/// A frame with three cards in it, and the layout that keeps them in a
+/// column or a row — the thing Figma's auto layout does, on a paper. Press
+/// the direction and the cards move; the frame hugs them either way.
+private struct FramesDemo: View {
+    let scale: DemoScale
+    @State private var horizontal = false
+    @State private var gap: CGFloat = 8
+
+    var body: some View {
+        let full = scale.isFull
+        let card = CGSize(width: full ? 84 : 54, height: full ? 30 : 20)
+        let pad: CGFloat = full ? 10 : 7
+        return VStack(alignment: .leading, spacing: scale.gap) {
+            HStack(alignment: .top, spacing: scale.gap) {
+                ZStack(alignment: .topLeading) {
+                    Paper(scale: scale) {
+                        VStack(alignment: .leading, spacing: full ? 7 : 4) {
+                            Rule(); Rule(width: 90); Rule(); Rule(width: 60); Rule(); Rule(width: 110)
+                        }
+                        .frame(height: scale.stage * 0.62)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(ReleaseNotes.string("프레임 1", "Frame 1"))
+                            .font(.system(size: full ? 9 : 7, weight: .medium))
+                            .foregroundStyle(Color.accentColor)
+                        // The frame, as wide and as tall as its children plus
+                        // the padding — hugging, as the inspector calls it.
+                        Group {
+                            if horizontal {
+                                HStack(spacing: gap) { cards(card) }
+                            } else {
+                                VStack(alignment: .leading, spacing: gap) { cards(card) }
+                            }
+                        }
+                        .padding(pad)
+                        .background(
+                            RoundedRectangle(cornerRadius: full ? 8 : 5, style: .continuous)
+                                .strokeBorder(Color.accentColor, lineWidth: 1.2)
+                        )
+                    }
+                    .offset(x: full ? 18 : 10, y: full ? 14 : 8)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                // The inspector's layout section, small.
+                VStack(alignment: .leading, spacing: full ? 8 : 5) {
+                    Text(ReleaseNotes.string("레이아웃", "Layout"))
+                        .font(scale.small.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    HStack(spacing: 4) {
+                        Text(ReleaseNotes.string("흐름", "Flow")).font(scale.small).foregroundStyle(.secondary)
+                        flow(false, symbol: "arrow.down")
+                        flow(true, symbol: "arrow.right")
+                    }
+                    HStack(spacing: 4) {
+                        Text(ReleaseNotes.string("간격", "Gap")).font(scale.small).foregroundStyle(.secondary)
+                        ForEach([4, 8, 16] as [CGFloat], id: \.self) { value in
+                            Button { withAnimation(.snappy(duration: 0.2)) { gap = value } } label: {
+                                Text("\(Int(value))")
+                                    .font(scale.small.monospacedDigit())
+                                    .frame(width: full ? 24 : 18, height: full ? 20 : 16)
+                                    .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Color.accentColor.opacity(gap == value ? 0.18 : 0.05)))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    // Drawn, not a control: `ImageRenderer` cannot draw a
+                    // checkbox and shows a slashed circle in its place.
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.square.fill").foregroundStyle(Color.accentColor)
+                        Text(ReleaseNotes.string("내용에 맞춤", "Hug contents"))
+                    }
+                    .font(scale.small)
+                }
+                .padding(full ? 10 : 7)
+                .background(RoundedRectangle(cornerRadius: scale.corner, style: .continuous).fill(Color.primary.opacity(0.04)))
+            }
+            Text(ReleaseNotes.string("흐름을 바꾸면 카드가 열에서 줄로 옮겨 앉고, 프레임이 따라 줄어들어요.", "Change the flow and the cards move from a column to a row; the frame shrinks to fit."))
+                .font(scale.small)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private func cards(_ size: CGSize) -> some View {
+        let full = scale.isFull
+        ForEach(Array(zip([Color.yellow, Color.green, Color.blue], [
+            ReleaseNotes.string("주장", "Claim"), ReleaseNotes.string("근거", "Evidence"), ReleaseNotes.string("한계", "Limits"),
+        ]).enumerated()), id: \.offset) { _, pair in
+            RoundedRectangle(cornerRadius: full ? 5 : 3, style: .continuous)
+                .fill(pair.0.opacity(0.25))
+                .overlay(RoundedRectangle(cornerRadius: full ? 5 : 3, style: .continuous).strokeBorder(.primary.opacity(0.5), lineWidth: 0.8))
+                .overlay(Text(pair.1).font(.system(size: full ? 10 : 7)))
+                .frame(width: size.width, height: size.height)
+        }
+    }
+
+    private func flow(_ value: Bool, symbol: String) -> some View {
+        Button { withAnimation(.snappy(duration: 0.25)) { horizontal = value } } label: {
+            Image(systemName: symbol)
+                .font(.system(size: scale.isFull ? 10 : 8, weight: .medium))
+                .frame(width: scale.isFull ? 22 : 18, height: scale.isFull ? 20 : 16)
+                .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Color.accentColor.opacity(horizontal == value ? 0.18 : 0.05)))
+        }
+        .buttonStyle(.plain)
     }
 }

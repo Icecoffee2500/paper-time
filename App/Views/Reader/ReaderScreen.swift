@@ -119,9 +119,9 @@ struct ReaderScreen: View {
         .animation(.snappy(duration: 0.16), value: selectionFrame)
         #if os(macOS)
         // The pencil's tools, floating over the top of the page while it
-        // is out, and the style of what it draws down the left — where
-        // Excalidraw keeps them, and for the same reason: they are about
-        // the page, so they sit on it.
+        // is out, and the inspector down the right — where Figma keeps
+        // them, and for the same reason: they are about the page, so they
+        // sit on it.
         .overlay(alignment: .top) {
             if configuration.mode == .draw {
                 SketchToolbar(configuration: configuration)
@@ -129,21 +129,16 @@ struct ReaderScreen: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .overlay(alignment: .topLeading) {
+        .overlay(alignment: .topTrailing) {
             if configuration.mode == .draw {
-                // Scrolls when the window is shorter than the panel — the
-                // text tool's panel is a tall one — instead of running off
-                // the bottom with its last controls cut away.
-                ScrollView(.vertical, showsIndicators: false) {
-                    SketchStylePanel(configuration: configuration)
-                        .padding(.leading, 12)
-                        .padding(.top, 60)
-                        .padding(.bottom, Self.statusBarClearance + 12)
-                        .padding(.trailing, 12)
-                }
-                .scrollBounceBehavior(.basedOnSize)
-                .fixedSize(horizontal: true, vertical: false)
-                .transition(.move(edge: .leading).combined(with: .opacity))
+                // The inspector, down the right — where Figma keeps the
+                // numbers about what is selected. It scrolls inside itself
+                // when the window is shorter than it is.
+                SketchInspector(configuration: configuration)
+                    .padding(.trailing, 12)
+                    .padding(.top, 60)
+                    .padding(.bottom, Self.statusBarClearance + 12)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
         .animation(.snappy(duration: 0.22), value: configuration.mode)

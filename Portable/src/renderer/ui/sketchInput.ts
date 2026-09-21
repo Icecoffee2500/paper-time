@@ -26,6 +26,9 @@ import {
   rectMaxY,
   rectMidX,
   rectMidY,
+  expandedIDs,
+  selectableFor,
+  treeBounds,
   type Point,
   type Rect,
 } from '../../shared/sketch.js'
@@ -34,6 +37,7 @@ import {
   cardSize,
   drawElement,
   drawInkStroke,
+  fittedRect,
   SKETCH_FONT_STACK,
   TEXT_PADDING,
 } from '../../shared/sketchRender.js'
@@ -127,11 +131,21 @@ export function attachSketchInput(
   // ------------------------------------------------------------ hit testing
 
   function elementAt(point: Point): SketchElement | null {
-    // Topmost first: the last drawn is the one on top.
+    // Topmost first: the last drawn is the one on top — and a hit inside a
+    // group picks up the group, as it does on the Mac.
     for (let index = page.elements.length - 1; index >= 0; index -= 1) {
-      if (page.elements[index].hits(point, tolerance())) return page.elements[index]
+      if (page.elements[index].hits(point, tolerance())) {
+        const chosen = selectableFor(page.elements, page.elements[index].id)
+        return page.elements.find((element) => element.id === chosen) ?? page.elements[index]
+      }
     }
     return null
+  }
+
+  /** The selection and everything inside it — what a move or a resize takes along. */
+  function selectionWithin(): SketchElement[] {
+    const ids = expandedIDs(page.elements, selection().map((element) => element.id))
+    return page.elements.filter((element) => ids.has(element.id))
   }
 
   function handleAt(point: Point): Handle | null {
@@ -160,7 +174,7 @@ export function attachSketchInput(
   function selectionRect(elements: SketchElement[]): Rect | null {
     if (elements.length === 0) return null
     return elements
-      .map((element) => (element.isConnector ? element.bounds : element.rect))
+      .map((element) => treeBounds(page.elements, element.id) ?? element.rect)
       .reduce((a, b) => {
         const minX = Math.min(a.x, b.x)
         const minY = Math.min(a.y, b.y)
@@ -227,9 +241,11 @@ export function attachSketchInput(
       begin()
       const element = new SketchElement({
         kind: 'text',
-        points: [point, { x: point.x + 90, y: point.y - 22 }],
+        points: [point, { x: point.x + 24, y: point.y - 1 }],
         style: store.sketch.style.copy(),
       })
+      element.textSizing = 'autoWidth'
+      element.setRect(fittedRect(element))
       page.elements.push(element)
       select([element])
       startTextEditing(element, true)
@@ -262,7 +278,7 @@ export function attachSketchInput(
         drag = { kind: 'resize', handle, origin: chosen[0].rect, before: chosen.map((e) => e.copy()) }
       } else {
         const box = selectionRect(chosen)!
-        drag = { kind: 'resize', handle, origin: box, before: chosen.map((e) => e.copy()) }
+        drag = { kind: 'resize', handle, origin: box, before: selectionWithin().map((e) => e.copy()) }
       }
       return
     }
@@ -277,7 +293,7 @@ export function attachSketchInput(
         select([hit])
       }
       begin()
-      drag = { kind: 'move', origin: point, before: selection().map((e) => e.copy()) }
+      drag = { kind: 'move', origin: point, before: selectionWithin().map((e) => e.copy()) }
       return
     }
 
@@ -461,7 +477,8 @@ export function attachSketchInput(
     lastErase = point
     for (const step of path) {
       page.strokes = page.strokes.filter((stroke) => !strokeTouches(stroke, step, reach))
-      page.elements = page.elements.filter((element) => !element.hits(step, reach))
+      const gone = expandedIDs(page.elements, page.elements.filter((element) => element.hits(step, reach)).map((e) => e.id))
+      page.elements = page.elements.filter((element) => !gone.has(element.id))
     }
   }
 
@@ -497,11 +514,11 @@ export function attachSketchInput(
     area.style.left = `${topLeft.x}px`
     area.style.top = `${topLeft.y}px`
     area.style.width = `${Math.max(box.width * size, 40)}px`
-    area.style.height = `${Math.max(box.height * size, TEXT_POINTS[element.style.textSize] * size * 1.2)}px`
+    area.style.height = `${Math.max(box.height * size, element.style.points * size * 1.2)}px`
     area.style.fontFamily = SKETCH_FONT_STACK
-    area.style.fontSize = `${TEXT_POINTS[element.style.textSize] * size}px`
+    area.style.fontSize = `${element.style.points * size}px`
     area.style.color = element.style.stroke.css
-    area.style.textAlign = element.kind === 'text' ? 'left' : 'center'
+    area.style.textAlign = element.kind === 'text' ? element.style.textAlign : 'center'
     page.root.append(area)
     editor = area
     area.focus()
@@ -513,18 +530,15 @@ export function attachSketchInput(
       if (!editing) return
       editing.text = area.value
       if (editing.kind === 'text') {
-        // A text card is only as big as its words.
-        const measured = cardSize(area.value || ' ', editing.style.textSize)
-        const origin = { x: editing.rect.x, y: rectMaxY(editing.rect) }
-        editing.points = [
-          { x: origin.x, y: origin.y - measured.height },
-          { x: origin.x + measured.width, y: origin.y },
-        ]
-        const corner = page.toView(editing.rect.x, rectMaxY(editing.rect))
+        // A text card follows its words: wider when it sizes to its width,
+        // taller when it sizes to its height.
+        const fitted = fittedRect(editing)
+        editing.setRect(fitted)
+        const corner = page.toView(fitted.x, rectMaxY(fitted))
         area.style.left = `${corner.x}px`
         area.style.top = `${corner.y}px`
-        area.style.width = `${measured.width * size}px`
-        area.style.height = `${measured.height * size}px`
+        area.style.width = `${fitted.width * size}px`
+        area.style.height = `${fitted.height * size}px`
       }
     }
     on(area, 'input', grow)

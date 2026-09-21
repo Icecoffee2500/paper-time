@@ -83,8 +83,8 @@ enum ReleaseNotes {
             symbol: "pencil.and.outline",
             title: Text2("맥에서도 자유롭게 그린다 — 도형·화살표·카드·손글씨", "Draw freely on the Mac: shapes, arrows, cards, handwriting"),
             detail: Text2(
-                "PDF 앱의 필기는 딱딱하다 — 네모 하나, 메모 아이콘 하나. 여기서는 펜을 들면(⇧⌘D) 쪽 위에 Excalidraw의 도구 줄이 뜬다: 선택 V, 펜 P, 형광펜 H, 지우개 E, 네모 R, 동그라미 O, 화살표 A, 선 L, 글 T — 한 글자로 바꾼다. 화살표는 가운데 손잡이를 끌면 XMind처럼 구부러지고, 상자를 두 번 누르면 그 안에 글을 쓰고, 글 카드에는 배경색과 테두리를 준다. 손글씨든 도형이든 골라서 옮기고, B를 누르면 그 둘레에 테두리가 둘러진다(마인드맵의 토픽처럼). 왼쪽 패널에서 선 색·채움·굵기·점선·모서리·화살표 끝·글자 크기·투명도. 형광펜은 아이패드처럼 글자에 맞춰지고, 지우개는 선·도형·하이라이트를 함께 지운다. 모두 ⌘Z. 그리고 전부 PDF 안에 표준 주석으로도 기록되어 아이패드·아이폰·Preview에서 같은 자리에 보인다. 아래 카드를 끌어 보라 — 화살표가 따라온다.",
-                "Drawing in a PDF app is stiff: one box, one note icon. Here, take the pencil out (⇧⌘D) and Excalidraw's tool rack floats over the page: select V, pen P, highlighter H, eraser E, rectangle R, ellipse O, arrow A, line L, text T — one letter each. An arrow bends when its middle handle is pulled, the way XMind's do; double-click a box to write inside it; a text card takes a background and a border. Select handwriting or shapes and move them, and B draws a frame round the lot, like a mind map's topic. The panel on the left has stroke, fill, width, dash, corners, arrowheads, text size and opacity. The highlighter fits itself to the words as on the iPad; the eraser takes strokes, shapes and highlights together. All of it undoes with ⌘Z. And all of it is written into the PDF as standard annotations too, so the iPad, the iPhone and Preview show it in the same place. Drag the card below — the arrow follows."
+                "PDF 앱의 필기는 딱딱하다 — 네모 하나, 메모 아이콘 하나. 여기서는 펜을 들면(⇧⌘D) 쪽 위에 Figma의 도구 줄이 뜬다: 선택 V, 프레임 F, 도형(네모 R·동그라미 O·선 L·화살표 A), 펜(P·형광펜 H·지우개 E), 글 T — 한 글자로 바꾼다. 화살표는 가운데 손잡이를 끌면 XMind처럼 구부러지고, 상자를 두 번 누르면 그 안에 글을 쓰고, 글은 종이 위에 바로 쓴다. 프레임 안에 넣고(F), 묶고(⌘G), 줄이나 열로 정렬한다(⇧A). 오른쪽 인스펙터에 위치·크기·간격·투명도·모서리·채움·외곽선·글자 크기가 숫자로 있다. 형광펜은 아이패드처럼 글자에 맞춰지고, 지우개는 선·도형·하이라이트를 함께 지운다. 모두 ⌘Z. 그리고 전부 PDF 안에 표준 주석으로도 기록되어 아이패드·아이폰·Preview에서 같은 자리에 보인다. 아래 카드를 끌어 보라 — 화살표가 따라온다.",
+                "Drawing in a PDF app is stiff: one box, one note icon. Here, take the pencil out (⇧⌘D) and Figma's tool rack floats over the page: Select V, Frame F, the shapes (rectangle R, ellipse O, line L, arrow A), the pen (P, highlighter H, eraser E), Text T — one letter each. An arrow bends when its middle handle is pulled, the way XMind's do; double-click a box to write inside it; text is typed straight onto the page. Put things in a frame (F), group them (⌘G), line them up in a row or a column (⇧A). The inspector on the right has position, size, gap, opacity, corners, fill, stroke and text size as numbers. The highlighter fits itself to the words as on the iPad; the eraser takes strokes, shapes and highlights together. All of it undoes with ⌘Z. And all of it is written into the PDF as standard annotations too, so the iPad, the iPhone and Preview show it in the same place. Drag the card below — the arrow follows."
             ),
             action: .draw,
             demo: .sketch,
@@ -256,6 +256,65 @@ enum ReleaseNotes {
     /// thing they care about moved; making them read a paragraph to find out
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
+        Release(
+            version: "0.8.0",
+            date: Text2("2026년 9월", "September 2026"),
+            note: Text2(
+                "그리기가 Figma처럼 됐어요. 프레임·묶음·오토 레이아웃, 숫자로 고치는 인스펙터, 종이 위에 바로 쓰는 글. 고른 것을 다음 쪽으로 끌어 옮길 수 있고, 펜을 든 채로도 핀치 줌이 돼요.",
+                "Drawing works the way Figma does: frames, groups and auto layout, an inspector with the numbers in it, and text typed straight onto the page. A selection drags onto the next page, and pinch to zoom works with the pen out."
+            ),
+            added: [
+                Entry(
+                    Text2("프레임·묶음·오토 레이아웃", "Frames, groups, auto layout"),
+                    Text2(
+                        "F로 프레임을 그리면 그 안에 있던 것들이 자식으로 들어가요. ⌘G로 묶고, ⇧⌘G로 풀어요. 프레임을 골라 ⇧A를 누르면 자식들이 줄이나 열로 정렬되고, 간격과 여백은 숫자로 정해요. 한 카드에 글을 더 쓰면 옆 카드가 비켜 앉아요. 묶음은 한 번에 잡히고, 두 번 누르면 안으로 들어가요. 프레임에는 이름이 붙고, 넘친 내용은 숨길 수 있어요. 아래에서 흐름을 바꿔 보세요.",
+                        "Draw a frame with F and whatever was inside becomes its child. Group with ⌘G, ungroup with ⇧⌘G. Select a frame and press ⇧A: its children line up in a row or a column, with a gap and a padding you set as numbers. Type more into one card and its neighbours make room. A group is picked up whole; double-click to go inside it. A frame has a name, and can hide what spills past its edge. Change the flow below."
+                    ),
+                    action: .draw, demo: .frames, featured: true
+                ),
+                Entry(
+                    Text2("인스펙터", "The inspector"),
+                    Text2(
+                        "왼쪽에 있던 스타일 패널이 오른쪽 인스펙터가 됐어요. 위치(정렬 여섯 가지, X와 Y), 레이아웃(W와 H, 흐름, 간격, 여백), 외형(투명도, 모서리 반경), 채우기와 외곽선(색상 패널, hex, %), 글(크기, 정렬, 자동 너비와 자동 높이). 여러 개를 고르면 서로 맞추고, 하나면 프레임이나 쪽에 맞춰요.",
+                        "The style panel on the left is now the inspector on the right. Position, with six alignments and X and Y. Layout, with W and H, flow, gap and padding. Appearance, with opacity and corner radius. Fill and Stroke, with the colour panel, a hex and a percentage. Text, with size, alignment, auto width and auto height. Several things align to each other; one thing aligns to its frame, or to the page."
+                    ),
+                    action: .draw
+                ),
+                Entry(
+                    Text2("글은 종이 위에 바로", "Text, typed on the page"),
+                    Text2(
+                        "T로 누르면 그 자리에 커서가 서고, 쓰는 대로 종이 위에 글자가 보여요. 입력 상자 같은 배경은 없어요. 글이 길어지면 카드가 옆으로 자라요. T로 끌어서 너비를 정하면 그 안에서 줄이 바뀌어요.",
+                        "Press T and a caret appears where you clicked. The words show on the page as you type, in their own face and colour, with no field around them. The card grows with its words. Drag with T to set a width, and the lines wrap inside it."
+                    ),
+                    action: .draw
+                ),
+                Entry(
+                    Text2("다른 쪽으로 끌어 옮기기", "Drag to another page"),
+                    Text2(
+                        "고른 것을 다음 쪽까지 끌고 가면 거기에 놓여요. 손글씨도 같이 가요. ⌘Z 한 번이면 두 쪽이 함께 돌아와요.",
+                        "Drag a selection onto the next page and it lands there, handwriting included. One ⌘Z brings both pages back."
+                    ),
+                    action: .draw
+                ),
+                Entry(
+                    Text2("도구 줄", "The tool rack"),
+                    Text2(
+                        "Figma의 도구 줄처럼 다섯 단추예요. 선택, 프레임, 도형, 펜, 글. 도형과 펜은 옆 화살표에서 종류를 골라요. 한 글자 키는 그대로예요.",
+                        "Five buttons, as in Figma: Select, Frame, a shape, the pen, Text. The shapes and the pen tools open from the chevron beside them. Every one-letter key still works."
+                    ),
+                    action: .draw
+                ),
+            ],
+            fixed: [
+                Entry(
+                    Text2("펜을 든 채로 핀치 줌이 안 됐어요", "Pinch to zoom did nothing with the pen out"),
+                    Text2(
+                        "PDFKit은 스크롤 뷰의 확대로 줌하는데, 그리기 층이 핀치를 PDF 뷰에 넘기고 있었어요. 이제 스크롤 뷰로 보내요.",
+                        "PDFKit zooms with its scroll view's magnification, and the drawing layer was handing the pinch to the PDF view instead. It now goes to the scroll view."
+                    )
+                ),
+            ]
+        ),
         Release(
             version: "0.7.2",
             date: Text2("2026년 9월", "September 2026"),
@@ -917,6 +976,8 @@ enum ReleaseNotes {
                     Text2("논문 안의 모든 표시를 종류별로. 인스펙터의 Marks 탭에 있고, 누르면 그 자리로 간다.", "Every mark in the paper, filtered by kind, in the inspector's Marks tab. Click one to go to it.")),
             Feature(Text2("다른 앱이 남긴 필기", "Ink from other apps"),
                     Text2("다른 앱이 PDF에 남긴 손글씨를 그대로 보여주고, 그 위에 그리기 전까지 건드리지 않는다.", "Freehand drawing another app left in the PDF is shown and left alone until you draw over it.")),
+            Feature(Text2("프레임·묶음·오토 레이아웃", "Frames, groups, auto layout"),
+                    Text2("F로 프레임, ⌘G로 묶음, ⇧A로 오토 레이아웃. 위치·크기·간격은 오른쪽 인스펙터에서 숫자로.", "F for a frame, ⌘G to group, ⇧A for auto layout. Position, size and gap as numbers in the inspector on the right."), action: .draw),
             Feature(Text2("맥에서 그리기", "Drawing on the Mac"),
                     Text2("펜을 들면 쪽 위에 도구 줄: 펜·형광펜·지우개와 네모·동그라미·화살표·선·글, 한 글자 키. 펜 선은 아이패드와 같은 잉크로.", "Take the pencil out and a tool rack floats over the page: pen, highlighter, eraser, and rectangle, ellipse, arrow, line, text, one letter each. Pen strokes are the iPad's ink."), action: .draw),
             Feature(Text2("도형·화살표·글 카드", "Shapes, arrows, text cards"),
@@ -1101,6 +1162,9 @@ enum ReleaseNotes {
         /// icon: a card with words, a bent arrow that follows it when it is
         /// dragged, a frame round handwriting, and the row of one-key tools.
         case sketch
+        /// A frame with three cards in it, and the auto layout that keeps
+        /// them in a column or a row — press the flow and they move.
+        case frames
         /// One folder, three desktops: a mark made on any of them is in the
         /// PDF, so the other two have it the moment the folder catches up.
         case crossPlatform

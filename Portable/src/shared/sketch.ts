@@ -143,6 +143,7 @@ export type Dash = 'solid' | 'dashed' | 'dotted'
 export type Corners = 'sharp' | 'round'
 export type Head = 'none' | 'arrow' | 'triangle' | 'bar' | 'dot'
 export type TextSize = 'small' | 'medium' | 'large'
+export type TextAlign = 'left' | 'center' | 'right'
 
 export const TEXT_POINTS: Record<TextSize, number> = { small: 9, medium: 12, large: 17 }
 export const STYLE_WIDTHS = [1, 2, 3.5]
@@ -158,6 +159,14 @@ export class SketchStyle {
   opacity = 1
   textSize: TextSize = 'medium'
   border = false
+  /** For a box, an oval or a frame: the edge left undrawn. The opposite
+   *  sense to `border`, so files from before it existed keep their edges. */
+  strokeHidden = false
+  /** A corner radius set by hand, in page points; null is the automatic one. */
+  cornerRadius: number | null = null
+  /** Lettering in exact points, when set by hand; null is `textSize`. */
+  fontSize: number | null = null
+  textAlign: TextAlign = 'left'
 
   /** Every field defaults, so a file written by a version that knows more
    *  fields still reads, and one written by a version that knew fewer does
@@ -175,9 +184,15 @@ export class SketchStyle {
     if (typeof r.opacity === 'number') style.opacity = r.opacity
     if (typeof r.textSize === 'string') style.textSize = r.textSize as TextSize
     if (typeof r.border === 'boolean') style.border = r.border
+    if (typeof r.strokeHidden === 'boolean') style.strokeHidden = r.strokeHidden
+    if (typeof r.cornerRadius === 'number') style.cornerRadius = r.cornerRadius
+    if (typeof r.fontSize === 'number') style.fontSize = r.fontSize
+    if (typeof r.textAlign === 'string') style.textAlign = r.textAlign as TextAlign
     return style
   }
 
+  // The newer fields are written only when set — exactly as the Mac writes
+  // them — so a file this build merely opened comes back byte for byte.
   encode(): Record<string, unknown> {
     return {
       stroke: this.stroke.encode(),
@@ -190,6 +205,25 @@ export class SketchStyle {
       opacity: this.opacity,
       textSize: this.textSize,
       border: this.border,
+      strokeHidden: this.strokeHidden ? true : undefined,
+      cornerRadius: this.cornerRadius ?? undefined,
+      fontSize: this.fontSize ?? undefined,
+      textAlign: this.textAlign !== 'left' ? this.textAlign : undefined,
+    }
+  }
+
+  /** The size the words are set in. */
+  get points(): number {
+    return this.fontSize ?? TEXT_POINTS[this.textSize]
+  }
+
+  /** Whether this kind of element draws its outline in this style. */
+  drawsOutline(kind: Kind): boolean {
+    switch (kind) {
+      case 'text': return this.border
+      case 'rectangle': case 'ellipse': case 'frame': return !this.strokeHidden
+      case 'line': case 'arrow': return true
+      case 'group': return false
     }
   }
 
@@ -213,7 +247,18 @@ export class SketchStyle {
 
 // MARK: - Element
 
-export type Kind = 'rectangle' | 'ellipse' | 'line' | 'arrow' | 'text'
+export type Kind = 'rectangle' | 'ellipse' | 'line' | 'arrow' | 'text' | 'frame' | 'group'
+export type TextSizing = 'autoWidth' | 'autoHeight'
+
+/** How a frame arranges its children — `SketchLayout` on the Mac. Carried
+ *  and drawn here; the arranging itself is the Mac's, for now. */
+export interface SketchLayout {
+  direction: 'vertical' | 'horizontal'
+  gap: number
+  padding: number
+  align: 'start' | 'center' | 'end'
+  hugs: boolean
+}
 
 export class SketchElement {
   id: string
@@ -225,6 +270,21 @@ export class SketchElement {
   style: SketchStyle
   text: string
   createdAt: Date
+  /** The frame or group this lies in. Coordinates stay the page's. */
+  parent: string | null = null
+  /** What a frame or group is called, when it has been named. */
+  name: string | null = null
+  /** For a frame: whether what spills past its edge is hidden. */
+  clips = false
+  layout: SketchLayout | null = null
+  /** For a text card; null in files from before there was a choice. */
+  textSizing: TextSizing | null = null
+  /**
+   * Fields this build does not know, kept and written back as they came —
+   * a newer Mac may have put something here, and dropping it would be
+   * silent data loss on the next save.
+   */
+  private extra: Record<string, unknown> = {}
   /**
    * The number the file actually held.
    *
@@ -268,11 +328,28 @@ export class SketchElement {
       createdAt: typeof r.createdAt === 'number' ? dateFromAppleTimestamp(r.createdAt) : new Date(),
     })
     if (typeof r.createdAt === 'number') element.createdAtRaw = r.createdAt
+    if (typeof r.parent === 'string') element.parent = r.parent
+    if (typeof r.name === 'string') element.name = r.name
+    if (typeof r.clips === 'boolean') element.clips = r.clips
+    if (r.layout && typeof r.layout === 'object') {
+      const l = r.layout as Record<string, unknown>
+      element.layout = {
+        direction: l.direction === 'horizontal' ? 'horizontal' : 'vertical',
+        gap: typeof l.gap === 'number' ? l.gap : 8,
+        padding: typeof l.padding === 'number' ? l.padding : 8,
+        align: l.align === 'center' || l.align === 'end' ? l.align : 'start',
+        hugs: typeof l.hugs === 'boolean' ? l.hugs : true,
+      }
+    }
+    if (r.textSizing === 'autoWidth' || r.textSizing === 'autoHeight') element.textSizing = r.textSizing
+    const known = new Set(['id', 'kind', 'points', 'bend', 'style', 'text', 'createdAt', 'parent', 'name', 'clips', 'layout', 'textSizing'])
+    for (const key of Object.keys(r)) if (!known.has(key)) element.extra[key] = r[key]
     return element
   }
 
   encode(): Record<string, unknown> {
     return {
+      ...this.extra,
       id: this.id,
       kind: this.kind,
       points: this.points.map((p) => [p.x, p.y]),
@@ -280,6 +357,11 @@ export class SketchElement {
       style: this.style.encode(),
       text: this.text,
       createdAt: this.createdAtRaw ?? appleTimestamp(this.createdAt),
+      parent: this.parent ?? undefined,
+      name: this.name ?? undefined,
+      clips: this.clips ? true : undefined,
+      layout: this.layout ?? undefined,
+      textSizing: this.textSizing ?? undefined,
     }
   }
 
@@ -288,7 +370,16 @@ export class SketchElement {
   }
 
   get isBox(): boolean {
-    return this.kind === 'rectangle' || this.kind === 'ellipse' || this.kind === 'text'
+    return this.kind === 'rectangle' || this.kind === 'ellipse' || this.kind === 'text' || this.kind === 'frame'
+  }
+
+  get isContainer(): boolean {
+    return this.kind === 'frame' || this.kind === 'group'
+  }
+
+  /** How a text card sizes itself; the old files were all made to a width. */
+  get sizing(): TextSizing {
+    return this.textSizing ?? 'autoHeight'
   }
 
   get isConnector(): boolean {
@@ -377,6 +468,10 @@ export class SketchElement {
 
   /** A share of the smaller side, so a small box is not all corner. */
   get cornerRadius(): number {
+    const r0 = this.rect
+    if (this.style.cornerRadius !== null) {
+      return Math.max(0, Math.min(this.style.cornerRadius, Math.min(r0.width, r0.height) / 2))
+    }
     if (this.style.corners !== 'round') return 0
     const r = this.rect
     return Math.min(Math.min(r.width, r.height) * 0.22, 10)
@@ -420,7 +515,11 @@ export class SketchElement {
       }
       case 'text':
         return rectContains(rectInset(this.rect, -tolerance, -tolerance), p)
-      case 'rectangle': {
+      case 'group':
+        // Never hit for itself; a click on a child is what selects it.
+        return false
+      case 'rectangle':
+      case 'frame': {
         const outer = rectInset(this.rect, -reach, -reach)
         if (!rectContains(outer, p)) return false
         if (this.style.fill || this.text) return true
@@ -481,6 +580,66 @@ export function distanceToSegment(p: Point, a: Point, b: Point): number {
   if (length <= 0.0001) return Math.hypot(p.x - a.x, p.y - a.y)
   const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / length))
   return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy))
+}
+
+// MARK: - The tree
+
+/** The direct children of a container, in the order they lie. */
+export function childrenOf(elements: SketchElement[], id: string): SketchElement[] {
+  return elements.filter((element) => element.parent === id)
+}
+
+/** Everything inside a container, at any depth. */
+export function descendantIDs(elements: SketchElement[], id: string): Set<string> {
+  const out = new Set<string>()
+  const walk = (parent: string) => {
+    for (const child of elements) {
+      if (child.parent === parent && !out.has(child.id)) {
+        out.add(child.id)
+        walk(child.id)
+      }
+    }
+  }
+  walk(id)
+  return out
+}
+
+/** These ids and everything inside them. */
+export function expandedIDs(elements: SketchElement[], ids: string[]): Set<string> {
+  const out = new Set(ids)
+  for (const id of ids) for (const inner of descendantIDs(elements, id)) out.add(inner)
+  return out
+}
+
+/**
+ * What a click on an element selects — Figma's rule: the outermost group
+ * round it, while a frame lets the click through to its children.
+ */
+export function selectableFor(elements: SketchElement[], id: string): string {
+  const byID = new Map(elements.map((element) => [element.id, element]))
+  let chosen = id
+  let current = byID.get(id)?.parent ?? null
+  const seen = new Set([id])
+  while (current && !seen.has(current)) {
+    const ancestor = byID.get(current)
+    if (!ancestor) break
+    seen.add(current)
+    if (ancestor.kind === 'group') chosen = ancestor.id
+    current = ancestor.parent
+  }
+  return chosen
+}
+
+/** Everything an element covers, its descendants included. */
+export function treeBounds(elements: SketchElement[], id: string): Rect | null {
+  const element = elements.find((e) => e.id === id)
+  if (!element) return null
+  if (element.kind === 'group') {
+    const inner = childrenOf(elements, id).map((child) => treeBounds(elements, child.id)).filter((r): r is Rect => r !== null)
+    return inner.length === 0 ? element.rect : rectUnionAll(inner)
+  }
+  if (element.isConnector) return element.bounds
+  return element.rect
 }
 
 // MARK: - A page's worth

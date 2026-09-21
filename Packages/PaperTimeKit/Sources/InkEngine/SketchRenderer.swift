@@ -22,9 +22,11 @@ public enum SketchTypesetter {
 
     /// The system's own face, which every device has and which sets Korean
     /// beside Latin without being asked.
-    public static func font(_ size: SketchStyle.TextSize) -> CTFont {
-        CTFontCreateUIFontForLanguage(.system, size.points, nil)
-            ?? CTFontCreateWithName("Helvetica" as CFString, size.points, nil)
+    public static func font(_ size: SketchStyle.TextSize) -> CTFont { font(points: size.points) }
+
+    public static func font(points: CGFloat) -> CTFont {
+        CTFontCreateUIFontForLanguage(.system, points, nil)
+            ?? CTFontCreateWithName("Helvetica" as CFString, points, nil)
     }
 
     /// The space between the words and the edge of the card they sit on.
@@ -36,7 +38,14 @@ public enum SketchTypesetter {
         _ text: String, size: SketchStyle.TextSize, color: CGColor, width: CGFloat? = nil,
         centered: Bool = false
     ) -> Layout {
-        let font = font(size)
+        layout(text, points: size.points, color: color, width: width, align: centered ? .center : .left)
+    }
+
+    public static func layout(
+        _ text: String, points: CGFloat, color: CGColor, width: CGFloat? = nil,
+        align: SketchStyle.TextAlign = .left
+    ) -> Layout {
+        let font = font(points: points)
         let attributed = NSAttributedString(
             string: text.isEmpty ? " " : text,
             attributes: [
@@ -68,17 +77,43 @@ public enum SketchTypesetter {
             bottom = max(bottom, baseline + descent)
         }
         let blockWidth = width ?? widest
-        if centered {
+        switch align {
+        case .left: break
+        case .center:
             result = result.map { Line(line: $0.line, x: (blockWidth - $0.width) / 2, baseline: $0.baseline, width: $0.width) }
+        case .right:
+            result = result.map { Line(line: $0.line, x: blockWidth - $0.width, baseline: $0.baseline, width: $0.width) }
         }
         return Layout(lines: result, size: CGSize(width: blockWidth, height: bottom))
     }
 
     /// How big a block of text is, alone on the page, plus its padding.
     public static func cardSize(for text: String, size: SketchStyle.TextSize, width: CGFloat? = nil) -> CGSize {
+        cardSize(for: text, points: size.points, width: width)
+    }
+
+    public static func cardSize(for text: String, points: CGFloat, width: CGFloat? = nil) -> CGSize {
         let inner = width.map { $0 - padding * 2 }
-        let block = layout(text, size: size, color: CGColor(gray: 0, alpha: 1), width: inner).size
+        let block = layout(text, points: points, color: CGColor(gray: 0, alpha: 1), width: inner).size
         return CGSize(width: block.width + padding * 2, height: block.height + padding * 2)
+    }
+
+    /// The box a text card takes for its words: as wide as its longest line
+    /// when it sizes to its width, and as tall as its lines at the width it
+    /// was given otherwise. Anchored at its top-left corner, which is where
+    /// the eye has it while typing.
+    public static func fittedRect(for element: SketchElement) -> CGRect {
+        let r = element.rect
+        let size: CGSize
+        switch element.sizing {
+        case .autoWidth:
+            let natural = cardSize(for: element.text, points: element.style.points)
+            size = CGSize(width: max(natural.width, 24), height: natural.height)
+        case .autoHeight:
+            let width = max(r.width, 24)
+            size = CGSize(width: width, height: cardSize(for: element.text, points: element.style.points, width: width).height)
+        }
+        return CGRect(x: r.minX, y: r.maxY - size.height, width: size.width, height: size.height)
     }
 }
 
@@ -101,8 +136,25 @@ public enum SketchRenderer {
         }
     }
 
+    /// Draws a page's elements as the tree they are: roots in the order
+    /// they lie, each container followed by its children, a clipping frame
+    /// hiding what its children spill past its edge.
     public static func draw(_ elements: [SketchElement], in context: CGContext, options: Options = Options()) {
-        for element in elements { draw(element, in: context, options: options) }
+        let tree = SketchTree(elements)
+        func drawSubtree(_ id: UUID) {
+            guard let element = tree[id] else { return }
+            let children = tree.children(of: id)
+            draw(element, in: context, options: options)
+            guard !children.isEmpty else { return }
+            context.saveGState()
+            if element.kind == .frame, element.clips {
+                context.addPath(path(of: element))
+                context.clip()
+            }
+            for child in children { drawSubtree(child.id) }
+            context.restoreGState()
+        }
+        for root in tree.roots { drawSubtree(root) }
     }
 
     public static func draw(_ element: SketchElement, in context: CGContext, options: Options = Options()) {
@@ -114,12 +166,15 @@ public enum SketchRenderer {
             context.beginTransparencyLayer(auxiliaryInfo: nil)
         }
         switch element.kind {
-        case .rectangle, .ellipse:
+        case .rectangle, .ellipse, .frame:
             drawBox(element, in: context, options: options)
         case .line, .arrow:
             drawConnector(element, in: context)
         case .text:
             drawText(element, in: context, options: options)
+        case .group:
+            // Nothing of its own: a group is its children.
+            break
         }
         if translucent { context.endTransparencyLayer() }
     }
@@ -129,7 +184,7 @@ public enum SketchRenderer {
     /// The outline of a box or an oval, or the curve of a connector.
     public static func path(of element: SketchElement) -> CGPath {
         switch element.kind {
-        case .rectangle, .text:
+        case .rectangle, .text, .frame, .group:
             let radius = element.cornerRadius
             let box = element.rect
             guard radius > 0, box.width > radius * 2, box.height > radius * 2 else { return CGPath(rect: box, transform: nil) }
@@ -167,9 +222,11 @@ public enum SketchRenderer {
             context.setFillColor(fill.withAlpha(fill.alpha * options.fillAlphaScale).cgColor)
             context.fillPath()
         }
-        context.addPath(outline)
-        applyStroke(element.style, to: context)
-        context.strokePath()
+        if element.style.drawsOutline(for: element.kind) {
+            context.addPath(outline)
+            applyStroke(element.style, to: context)
+            context.strokePath()
+        }
         if !element.text.isEmpty {
             drawLabel(element, in: context, options: options)
         }
@@ -251,10 +308,23 @@ public enum SketchRenderer {
         }
         guard !element.text.isEmpty else { return }
         let inner = box.insetBy(dx: SketchTypesetter.padding, dy: SketchTypesetter.padding)
+        // A card sized to its width is set as one line per paragraph; one
+        // sized to its height wraps at its edge.
         let layout = SketchTypesetter.layout(
-            element.text, size: element.style.textSize, color: element.style.stroke.cgColor, width: inner.width
+            element.text, points: element.style.points, color: element.style.stroke.cgColor,
+            width: element.sizing == .autoWidth ? nil : inner.width, align: element.style.textAlign
         )
-        drawLines(layout, at: CGPoint(x: inner.minX, y: inner.maxY), in: context, options: options)
+        // With no wrapping the block can be narrower than the card (the
+        // card was made wider by hand); the alignment says where it sits.
+        var x = inner.minX
+        if element.sizing == .autoWidth, layout.size.width < inner.width {
+            switch element.style.textAlign {
+            case .left: break
+            case .center: x = inner.midX - layout.size.width / 2
+            case .right: x = inner.maxX - layout.size.width
+            }
+        }
+        drawLines(layout, at: CGPoint(x: x, y: inner.maxY), in: context, options: options)
     }
 
     /// The words inside a box, centred on it.
@@ -262,8 +332,8 @@ public enum SketchRenderer {
         let inner = element.rect.insetBy(dx: SketchTypesetter.padding, dy: SketchTypesetter.padding)
         guard inner.width > 4 else { return }
         let layout = SketchTypesetter.layout(
-            element.text, size: element.style.textSize, color: element.style.stroke.cgColor,
-            width: inner.width, centered: true
+            element.text, points: element.style.points, color: element.style.stroke.cgColor,
+            width: inner.width, align: .center
         )
         let top = inner.midY + layout.size.height / 2
         context.saveGState()

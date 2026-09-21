@@ -20,6 +20,8 @@ import {
   type Head,
   type Point,
   type Rect,
+  type TextAlign,
+  childrenOf,
   rectInset,
   rectMaxY,
   rectMidX,
@@ -93,7 +95,16 @@ export function layoutText(
   width: number | null = null,
   centered = false,
 ): Layout {
-  const points = TEXT_POINTS[size]
+  return layoutTextAt(text, TEXT_POINTS[size], width, centered ? 'center' : 'left')
+}
+
+/** The same, at an exact size and with an alignment — `SketchTypesetter.layout(_:points:…)`. */
+export function layoutTextAt(
+  text: string,
+  points: number,
+  width: number | null = null,
+  align: TextAlign = 'left',
+): Layout {
   const ctx = measuringContext()
   const { ascent, descent, lineHeight } = metrics(ctx, points)
   ctx.font = fontSpec(points)
@@ -119,9 +130,11 @@ export function layoutText(
   })
 
   const blockWidth = width ?? widest
-  const positioned = centered
+  const positioned = align === 'center'
     ? laid.map((line) => ({ ...line, x: (blockWidth - line.width) / 2 }))
-    : laid
+    : align === 'right'
+      ? laid.map((line) => ({ ...line, x: blockWidth - line.width }))
+      : laid
   const bottom = laid.length === 0 ? 0 : laid[laid.length - 1].baseline + descent
   return { lines: positioned, size: { width: blockWidth, height: bottom } }
 }
@@ -171,9 +184,31 @@ export function cardSize(
   size: keyof typeof TEXT_POINTS,
   width: number | null = null,
 ): { width: number; height: number } {
+  return cardSizeAt(text, TEXT_POINTS[size], width)
+}
+
+export function cardSizeAt(text: string, points: number, width: number | null = null): { width: number; height: number } {
   const inner = width === null ? null : width - TEXT_PADDING * 2
-  const block = layoutText(text, size, inner).size
+  const block = layoutTextAt(text, points, inner).size
   return { width: block.width + TEXT_PADDING * 2, height: block.height + TEXT_PADDING * 2 }
+}
+
+/**
+ * The box a text card takes for its words — `SketchTypesetter.fittedRect`:
+ * as wide as its longest line when it sizes to its width, as tall as its
+ * lines at the width it was given otherwise, anchored at its top-left.
+ */
+export function fittedRect(element: SketchElement): Rect {
+  const r = element.rect
+  let size: { width: number; height: number }
+  if (element.sizing === 'autoWidth') {
+    const natural = cardSizeAt(element.text, element.style.points)
+    size = { width: Math.max(natural.width, 24), height: natural.height }
+  } else {
+    const width = Math.max(r.width, 24)
+    size = { width, height: cardSizeAt(element.text, element.style.points, width).height }
+  }
+  return { x: r.x, y: rectMaxY(r) - size.height, width: size.width, height: size.height }
 }
 
 // MARK: - Drawing
@@ -183,8 +218,29 @@ export interface RenderOptions {
   fillAlphaScale?: number
 }
 
+/**
+ * Draws a page's elements as the tree they are — `SketchRenderer.draw`:
+ * roots in the order they lie, each container followed by its children, a
+ * clipping frame hiding what its children spill past its edge.
+ */
 export function drawElements(elements: SketchElement[], ctx: Ctx, options: RenderOptions = {}) {
-  for (const element of elements) drawElement(element, ctx, options)
+  const ids = new Set(elements.map((element) => element.id))
+  const drawSubtree = (element: SketchElement) => {
+    drawElement(element, ctx, options)
+    const children = childrenOf(elements, element.id)
+    if (children.length === 0) return
+    ctx.save()
+    if (element.kind === 'frame' && element.clips) {
+      pathOf(element, ctx)
+      ctx.clip()
+    }
+    for (const child of children) drawSubtree(child)
+    ctx.restore()
+  }
+  for (const element of elements) {
+    // A parent that is not on the page makes its children roots for now.
+    if (element.parent === null || !ids.has(element.parent) || element.parent === element.id) drawSubtree(element)
+  }
 }
 
 export function drawElement(element: SketchElement, ctx: Ctx, options: RenderOptions = {}) {
@@ -193,6 +249,7 @@ export function drawElement(element: SketchElement, ctx: Ctx, options: RenderOpt
   switch (element.kind) {
     case 'rectangle':
     case 'ellipse':
+    case 'frame':
       drawBox(element, ctx, options)
       break
     case 'line':
@@ -201,6 +258,9 @@ export function drawElement(element: SketchElement, ctx: Ctx, options: RenderOpt
       break
     case 'text':
       drawTextCard(element, ctx, options)
+      break
+    case 'group':
+      // Nothing of its own: a group is its children.
       break
   }
   ctx.restore()
@@ -211,7 +271,9 @@ export function pathOf(element: SketchElement, ctx: Ctx) {
   ctx.beginPath()
   switch (element.kind) {
     case 'rectangle':
-    case 'text': {
+    case 'text':
+    case 'frame':
+    case 'group': {
       const radius = element.cornerRadius
       const box = element.rect
       if (radius > 0 && box.width > radius * 2 && box.height > radius * 2) {
@@ -252,9 +314,11 @@ function drawBox(element: SketchElement, ctx: Ctx, options: RenderOptions) {
     ctx.fillStyle = element.style.fill.withAlpha(element.style.fill.alpha * scale).css
     ctx.fill()
   }
-  pathOf(element, ctx)
-  applyStroke(element, ctx)
-  ctx.stroke()
+  if (element.style.drawsOutline(element.kind)) {
+    pathOf(element, ctx)
+    applyStroke(element, ctx)
+    ctx.stroke()
+  }
   if (element.text) drawLabel(element, ctx)
 }
 
@@ -354,21 +418,29 @@ function drawTextCard(element: SketchElement, ctx: Ctx, options: RenderOptions) 
   }
   if (!element.text) return
   const inner = rectInset(element.rect, TEXT_PADDING, TEXT_PADDING)
-  const layout = layoutText(element.text, element.style.textSize, inner.width)
-  drawLines(layout, { x: inner.x, y: rectMaxY(inner) }, element.style.stroke, element.style.textSize, ctx)
+  // A card sized to its width is set one line per paragraph; one sized to
+  // its height wraps at its edge.
+  const wrapAt = element.sizing === 'autoWidth' ? null : inner.width
+  const layout = layoutTextAt(element.text, element.style.points, wrapAt, element.style.textAlign)
+  let x = inner.x
+  if (wrapAt === null && layout.size.width < inner.width) {
+    if (element.style.textAlign === 'center') x = rectMidX(inner) - layout.size.width / 2
+    if (element.style.textAlign === 'right') x = inner.x + inner.width - layout.size.width
+  }
+  drawLines(layout, { x, y: rectMaxY(inner) }, element.style.stroke, element.style.points, ctx)
 }
 
 /** The words inside a box, centred on it. */
 function drawLabel(element: SketchElement, ctx: Ctx) {
   const inner = rectInset(element.rect, TEXT_PADDING, TEXT_PADDING)
   if (inner.width <= 4) return
-  const layout = layoutText(element.text, element.style.textSize, inner.width, true)
+  const layout = layoutTextAt(element.text, element.style.points, inner.width, 'center')
   const top = rectMidY(inner) + layout.size.height / 2
   ctx.save()
   ctx.beginPath()
   ctx.rect(inner.x, inner.y, inner.width, inner.height)
   ctx.clip()
-  drawLines(layout, { x: inner.x, y: top }, element.style.stroke, element.style.textSize, ctx)
+  drawLines(layout, { x: inner.x, y: top }, element.style.stroke, element.style.points, ctx)
   ctx.restore()
 }
 
@@ -384,13 +456,13 @@ function drawLines(
   layout: Layout,
   origin: Point,
   color: SketchColor,
-  size: keyof typeof TEXT_POINTS,
+  points: number,
   ctx: Ctx,
 ) {
   ctx.save()
   ctx.setLineDash([])
   ctx.fillStyle = color.css
-  ctx.font = fontSpec(TEXT_POINTS[size])
+  ctx.font = fontSpec(points)
   ctx.textBaseline = 'alphabetic'
   ctx.textAlign = 'left'
   for (const line of layout.lines) {
