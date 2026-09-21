@@ -2,11 +2,100 @@
   "repo": "Icecoffee2500/paper-time",
   "releases": [
     {
+      "version": "0.8.0",
+      "date": "2026-09-21T08:47:53Z",
+      "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.8.0/Paper.Time.0.8.0.dmg",
+      "size": 6051642,
+      "downloads": 0,
+      "builds": {
+        "mac": [
+          {
+            "label": "디스크 이미지",
+            "label_en": "Disk image",
+            "arch": "Apple Silicon",
+            "arch_en": "Apple Silicon",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.8.0/Paper.Time.0.8.0.dmg",
+            "size": 6051642,
+            "downloads": 0
+          }
+        ],
+        "windows": [
+          {
+            "label": "설치본",
+            "label_en": "Installer",
+            "arch": "64비트 · ARM",
+            "arch_en": "64-bit and ARM",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.8.0/Paper.Time.Setup.0.8.0.exe",
+            "size": 176984446,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "64비트",
+            "arch_en": "64-bit",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.8.0/Paper.Time-0.8.0-win.zip",
+            "size": 116166927,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.8.0/Paper.Time-0.8.0-arm64-win.zip",
+            "size": 121114603,
+            "downloads": 0
+          }
+        ],
+        "linux": [
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.8.0/Paper.Time-0.8.0-x86_64.AppImage",
+            "size": 113185213,
+            "downloads": 0
+          },
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.8.0/Paper.Time-0.8.0-arm64.AppImage",
+            "size": 113567678,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.8.0/paper-time-0.8.0.tar.gz",
+            "size": 107382333,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.8.0/paper-time-0.8.0-arm64.tar.gz",
+            "size": 111877365,
+            "downloads": 0
+          }
+        ]
+      },
+      "note": "그리기가 Figma처럼 됐어요. 프레임·묶음·오토 레이아웃, Tools 탭, 카드 속 수식, 논문 나란히 넷, 열린 논문 팝업. 세 데스크톱 모두요.",
+      "note_en": "Drawing the way Figma does it: frames, groups, auto layout, a Tools tab, formulas in a card, four papers side by side, an Open Papers popup. On all three desktops."
+    },
+    {
       "version": "0.7.2",
       "date": "2026-09-21T02:30:34Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.7.2/Paper.Time.0.7.2.dmg",
       "size": 5549416,
-      "downloads": 0,
+      "downloads": 2,
       "builds": {
         "mac": [
           {
@@ -16,7 +105,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.7.2/Paper.Time.0.7.2.dmg",
             "size": 5549416,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "windows": [
@@ -27,7 +116,7 @@
             "arch_en": "64-bit and ARM",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.7.2/Paper.Time.Setup.0.7.2.exe",
             "size": 175925542,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
