@@ -222,6 +222,26 @@ Scripts/feedback-sync.sh || true
 # Onto gh-pages, by the script that does only that.
 Scripts/publish-page.sh "Paper Time $TAG on the page" >/dev/null
 
+# Only the version that just went up stays on this disk. The release holds
+# the copies that matter — these are for installing and checking before that,
+# and a year of them is gigabytes of packages nobody will open again. Run
+# after the upload, so nothing is thrown away until GitHub has it.
+prune() {
+  local dir="$1" kept=0 gone=0
+  [ -d "$dir" ] || return 0
+  while IFS= read -r -d "" file; do
+    case "$(basename "$file")" in
+      *"$TAG"*) kept=$((kept + 1)) ;;
+      README.md|*.yml) ;;
+      *) rm -rf "$file"; gone=$((gone + 1)) ;;
+    esac
+  done < <(find "$dir" -mindepth 1 -maxdepth 1 -print0)
+  [ "$gone" -gt 0 ] && echo "$dir - kept $kept file(s) of $TAG, removed $gone older one(s)"
+  return 0
+}
+prune Installers
+prune Portable/dist
+
 echo "published $TAG to $REPO"
 echo "the page: https://$(echo "$REPO" | cut -d/ -f1 | tr "A-Z" "a-z").github.io/$(echo "$REPO" | cut -d/ -f2)/"
 echo "commit Website/releases.json here too, so the source keeps the list"

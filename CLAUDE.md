@@ -98,7 +98,7 @@ Scripts/publish-release.sh 0.1.0  # DMG를 만들어 릴리스에 올리고 배�
 git push origin main --tags
 ```
 
-**고친 것을 바로 배포하지 않는다.** 먼저 `Scripts/build-installers.sh`로 작업 중인 코드 그대로 구워서 `Installers/`에 두고, **사용자가 직접 설치해서 확인한 뒤에** `Scripts/publish-release.sh`로 올린다. 순서를 지키는 이유는 0.7.1에서 겪었다 — 창 뒤에 깔려던 바탕이 앱을 통째로 덮었는데, 디버그 빌드에서는 우연히 뒤에 남아 있어서 배포 빌드에서만 드러났다. 확인은 **Release 빌드**로, 그것도 **설치된 사본**으로 해야 한다. `Installers/`는 git에 들어가지 않고(수백 MB), 남는 사본은 릴리스 쪽이다. 배포 스크립트는 electron-builder가 돌고 있으면 시작을 거부한다 — 다 써지지 않은 패키지를 올리면 GitHub이 릴리스 전체를 되돌린다.
+**고친 것을 바로 배포하지 않는다.** 먼저 `Scripts/build-installers.sh`로 작업 중인 코드 그대로 구워서 `Installers/`에 두고, **사용자가 직접 설치해서 확인한 뒤에** `Scripts/publish-release.sh`로 올린다. 순서를 지키는 이유는 0.7.1에서 겪었다 — 창 뒤에 깔려던 바탕이 앱을 통째로 덮었는데, 디버그 빌드에서는 우연히 뒤에 남아 있어서 배포 빌드에서만 드러났다. 확인은 **Release 빌드**로, 그것도 **설치된 사본**으로 해야 한다. `Installers/`는 git에 들어가지 않고(수백 MB), 남는 사본은 릴리스 쪽이다. 그래서 배포가 끝나면 `publish-release.sh`가 `Installers/`와 `Portable/dist/`에서 방금 올린 버전이 아닌 것을 지운다 — 올리기 전이 아니라 올린 뒤에 지우니, 업로드가 실패하면 아무것도 잃지 않는다. 배포 스크립트는 electron-builder가 돌고 있으면 시작을 거부한다 — 다 써지지 않은 패키지를 올리면 GitHub이 릴리스 전체를 되돌린다.
 
 배포 페이지는 `Website/`에 있고 `gh-pages` 가지에서 서비스된다 —
 <https://icecoffee2500.github.io/paper-time/>. `Scripts/publish-release.sh <tag>`가

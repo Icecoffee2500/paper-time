@@ -29,3 +29,5 @@ Scripts/build-installers.sh portable  # 윈도우·리눅스만
 ```bash
 Scripts/publish-release.sh <버전> "한 줄" "one line"
 ```
+
+배포가 끝나면 방금 올린 버전만 남고 지난 버전은 지워져요 — 남는 사본은 릴리스 쪽이에요.
