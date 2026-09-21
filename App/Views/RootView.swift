@@ -45,6 +45,8 @@ struct RootView: View {
         // view's own environment, not in the one it hands to its children.
         .measuringWindowToolbarBand()
         .translucentWindow()
+        // Behind everything, and inside SwiftUI's own order so it stays there.
+        .windowBackdrop()
         #endif
         .task {
             guard app.phase == .launching else { return }

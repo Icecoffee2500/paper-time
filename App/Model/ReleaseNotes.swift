@@ -257,6 +257,22 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.7.2",
+            date: Text2("2026년 9월", "September 2026"),
+            note: Text2("0.7.1에서 창이 비어 보이던 것을 고쳤어요.", "The empty window in 0.7.1 is fixed."),
+            added: [],
+            fixed: [
+                Entry(
+                    Text2("창이 텅 비어서 열렸어요", "The window opened empty"),
+                    Text2(
+                        "0.7.1에서 창 뒤에 깔아 둔 바탕이 앱을 통째로 덮어버렸어요. 그 바탕을 AppKit 쪽에서 창의 내용 뷰에 끼워 넣었는데, 그 안의 순서는 SwiftUI가 정하는 것이라 자리가 밀렸어요 — 디버그 빌드에서는 우연히 뒤에 남아 있었고, 배포 빌드에서만 앞으로 나왔고요. 이제 바탕이 SwiftUI 안에 들어가 있어서 순서가 더는 운에 달려 있지 않아요. 배포 빌드로 직접 확인했어요.",
+                        "In 0.7.1 the backdrop meant to sit behind the window covered the whole app. It was inserted into the window's content view from AppKit, but the order inside that view is SwiftUI's to decide — in a debug build it happened to stay at the back, and only the release build moved it to the front. The backdrop now lives inside the SwiftUI tree, where the order is not a matter of luck, and this was checked in a release build."
+                    ),
+                    devices: [.mac]
+                ),
+            ]
+        ),
+        Release(
             version: "0.7.1",
             date: Text2("2026년 9월", "September 2026"),
             note: Text2("보내주신 네 가지를 고쳤어요.", "Four things you told us about."),
