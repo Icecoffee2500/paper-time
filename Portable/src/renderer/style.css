@@ -1568,3 +1568,277 @@ body[data-platform='darwin'] .window-buttons {
 }
 .fb-foot .btn-primary:hover { filter: brightness(1.07); }
 .fb-foot .btn-primary:disabled { opacity: 0.45; cursor: default; filter: none; }
+
+/* -------------------------------------------------------------- open papers */
+
+/* The pin at the head of a row: filled and in the accent when the paper is
+ * kept open, faint when it is only being looked at. */
+.paper-pin {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--text-tertiary);
+  opacity: 0.55;
+}
+
+.paper-pin svg {
+  width: 15px;
+  height: 15px;
+  display: block;
+}
+
+.paper-pin[data-on='true'] {
+  color: var(--accent);
+  opacity: 1;
+}
+
+.paper-row:hover .paper-pin {
+  opacity: 1;
+}
+
+.paper-close {
+  flex: 0 0 auto;
+  color: var(--text-tertiary);
+  padding: 1px;
+}
+
+.paper-close svg {
+  width: 13px;
+  height: 13px;
+  display: block;
+}
+
+.paper-close:hover {
+  color: var(--text);
+}
+
+.paper-preview {
+  color: var(--text-tertiary);
+}
+
+/* The menu item that opens a submenu, and the submenu beside it. */
+.menu .menu-label {
+  flex: 1 1 auto;
+}
+
+.menu .menu-chevron svg {
+  width: 12px;
+  height: 12px;
+  opacity: 0.6;
+}
+
+/* The popup over the page: the open papers, ⇧⌘O. */
+.open-papers {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(420px, calc(100% - 24px));
+  max-height: min(460px, calc(100% - 20px));
+  display: flex;
+  flex-direction: column;
+  z-index: 60;
+  border-radius: var(--radius-panel);
+  background: var(--panel);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.12), 0 6px 18px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+}
+
+.open-papers-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.open-papers-hint {
+  font-weight: 400;
+  color: var(--text-tertiary);
+}
+
+.open-papers-list {
+  overflow-y: auto;
+  padding: 0 6px 8px;
+}
+
+.open-papers-empty {
+  padding: 0 8px 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.open-papers-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: var(--radius-row);
+}
+
+.open-papers-row:hover {
+  background: var(--hover);
+}
+
+.open-papers-row[data-showing='true'] {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.open-papers-dot {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin: 0 4px 0 2px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-secondary) 40%, transparent);
+}
+
+.open-papers-row[data-showing='true'] .open-papers-dot {
+  background: var(--accent);
+  box-shadow: none;
+}
+
+.open-papers-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.open-papers-title {
+  font-size: 13px;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.open-papers-row[data-showing='true'] .open-papers-title {
+  font-weight: 600;
+}
+
+.open-papers-sub {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.open-papers-preview {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+.open-papers-row .icon-button {
+  width: 24px;
+  height: 22px;
+}
+
+.open-papers-row .icon-button svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* ------------------------------------------------------------ side by side */
+
+/* The page area: one reader, or up to four panes, and the zone that lights
+ * up while a paper is dragged over it. */
+.page-area {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+.page-area > .panel {
+  flex: 1 1 auto;
+}
+
+.split {
+  flex: 1 1 auto;
+  display: flex;
+  gap: var(--margin);
+  min-width: 0;
+  min-height: 0;
+}
+
+.split-column {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--margin);
+  min-width: 0;
+  min-height: 0;
+}
+
+.split-column > .panel {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+/* The pane in focus says so with its border; the others keep a hairline. */
+.reader-panel.pane {
+  box-shadow: var(--panel-shadow), inset 0 0 0 0.5px color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.reader-panel.pane.focused {
+  box-shadow: var(--panel-shadow), inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+.reader-panel.pane .reader-header {
+  cursor: default;
+  -webkit-app-region: no-drag;
+}
+
+.reader-panel.pane .reader-title {
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+.reader-panel.pane .reader-header.focused .reader-title {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.pane-close svg {
+  width: 12px;
+  height: 12px;
+}
+
+.dock-zone {
+  position: absolute;
+  display: none;
+  z-index: 70;
+  pointer-events: none;
+  border-radius: var(--radius-popover);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 80%, transparent);
+  transition: left 120ms ease, top 120ms ease, width 120ms ease, height 120ms ease;
+}
+
+.dock-zone[data-on='true'] {
+  display: block;
+}
+
+/* A window for one paper: the toolbar keeps only the window's own buttons,
+ * and the reader's title strip is what moves the window. */
+body[data-solo='true'] .toolbar-group,
+body[data-solo='true'] .toolbar-spacer {
+  display: none;
+}
+
+body[data-solo='true'] .toolbar {
+  justify-content: flex-end;
+}
+
+body[data-solo='true'] .reader-header {
+  -webkit-app-region: drag;
+}
+
+body[data-solo='true'] .reader-header button {
+  -webkit-app-region: no-drag;
+}

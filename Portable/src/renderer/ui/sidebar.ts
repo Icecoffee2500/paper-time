@@ -64,6 +64,9 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
 
     body.append(
       row({ kind: 'all' }, 'tray.full', L('모든 논문', 'All Papers'), papers.length),
+      // What is open right now — a row of tabs, as a shelf. From here a
+      // paper is closed, or put beside another.
+      row({ kind: 'open' }, 'rectangle.on.rectangle', L('열린 논문', 'Open Papers'), store.openPaperIDs.length),
       row({ kind: 'status', status: 'unread' }, 'circle', L('안 읽음', 'Unread'), count((e) => e.state.readingStatus === 'unread')),
       row({ kind: 'status', status: 'reading' }, 'circle.lefthalf.filled', L('읽는 중', 'Reading'), count((e) => e.state.readingStatus === 'reading')),
       row({ kind: 'status', status: 'read' }, 'checkmark.circle', L('읽음', 'Read'), count((e) => e.state.readingStatus === 'read')),

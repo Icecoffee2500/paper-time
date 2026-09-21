@@ -1,21 +1,29 @@
 /**
  * The list of papers on whichever shelf is showing.
  *
- * A row is the title, who wrote it and where, and two things you can act on
- * without opening anything: the reading status on the left, which cycles, and
- * the star on the right.
+ * A row is the title, who wrote it and where, and three things you can act
+ * on without opening anything: the pin at the head of the row, which keeps
+ * the paper open, and on the right the star and the reading status, which
+ * cycles. On the Open Papers shelf a kept row has an × as well, the way a
+ * tab does. Every row can be dragged — to the page's edge, to put the paper
+ * beside the one showing.
  */
 import { icon } from '../icons.js'
 import { clear, el, on } from '../dom.js'
-import { shelfPapers, store, type Paper } from '../state.js'
+import { isOpenPaper, shelfPapers, store, type Paper } from '../state.js'
 import { showMenu } from './toolbar.js'
 import { L } from '../../shared/lang.js'
+import { PAPER_DRAG_TYPE } from '../../shared/split.js'
 
 export interface PaperListActions {
   chooseLibrary: () => void
   open: (id: string) => void
   cycleStatus: (id: string) => void
   toggleFavorite: (id: string) => void
+  /** The pin: keep the paper open, or close it. */
+  togglePin: (id: string) => void
+  /** The × on the Open Papers shelf. */
+  close: (id: string) => void
   contextMenu: (id: string, anchor: Element) => void
   addPapers: () => void
   adoptLoose: () => void
@@ -71,7 +79,22 @@ export function buildPaperList(actions: PaperListActions): { node: HTMLElement; 
 
 function paperRow(entry: Paper, actions: PaperListActions): HTMLElement {
   const selected = store.selectedID === entry.id
-  const row = el('div', { class: 'paper-row', role: 'option', 'aria-selected': String(selected) })
+  const kept = isOpenPaper(entry.id)
+  const row = el('div', { class: 'paper-row', role: 'option', 'aria-selected': String(selected), draggable: 'true' })
+
+  // Kept open, or not: a pinned paper stays on the Open Papers shelf; one
+  // merely looked at leaves it with the next paper shown.
+  const pin = el('button', {
+    class: 'paper-pin',
+    'data-on': String(kept),
+    title: kept ? L('열어 둔 논문 — 누르면 닫아요', 'Kept open — click to close') : L('열어 두기', 'Keep Open'),
+    'aria-label': kept ? L('열어 둔 논문', 'Kept open') : L('열어 두지 않음', 'Not kept open'),
+    html: icon(kept ? 'pin.fill' : 'pin'),
+  })
+  on(pin, 'click', (event: MouseEvent) => {
+    event.stopPropagation()
+    actions.togglePin(entry.id)
+  })
 
   const status = el('button', {
     class: 'paper-status',
@@ -100,6 +123,9 @@ function paperRow(entry: Paper, actions: PaperListActions): HTMLElement {
       text: L('폴더에 PDF가 없어요', 'Missing from the folder'),
     }))
   }
+  if (store.shelf.kind === 'open' && !kept) {
+    main.append(el('div', { class: 'paper-subtitle paper-preview', text: L('미리보기', 'Preview') }))
+  }
 
   const star = el('button', {
     class: 'paper-star',
@@ -114,11 +140,31 @@ function paperRow(entry: Paper, actions: PaperListActions): HTMLElement {
     actions.toggleFavorite(entry.id)
   })
 
-  row.append(status, main, star)
+  row.append(pin, main, star, status)
+  if (store.shelf.kind === 'open' && kept) {
+    // Kept open: closed here, the way a tab is.
+    const close = el('button', {
+      class: 'paper-close',
+      title: L('닫기', 'Close'),
+      'aria-label': L('닫기', 'Close'),
+      html: icon('xmark'),
+    })
+    on(close, 'click', (event: MouseEvent) => {
+      event.stopPropagation()
+      actions.close(entry.id)
+    })
+    row.append(close)
+  }
   on(row, 'click', () => actions.open(entry.id))
   on(row, 'contextmenu', (event: MouseEvent) => {
     event.preventDefault()
     actions.contextMenu(entry.id, row)
+  })
+  on(row, 'dragstart', (event: DragEvent) => {
+    if (!event.dataTransfer) return
+    event.dataTransfer.setData(PAPER_DRAG_TYPE, entry.id)
+    event.dataTransfer.setData('text/plain', entry.meta.displayTitle)
+    event.dataTransfer.effectAllowed = 'copyMove'
   })
   return row
 }
@@ -126,6 +172,7 @@ function paperRow(entry: Paper, actions: PaperListActions): HTMLElement {
 function shelfTitle(): string {
   switch (store.shelf.kind) {
     case 'all': return L('모든 논문', 'All Papers')
+    case 'open': return L('열린 논문', 'Open Papers')
     case 'status': return statusName(store.shelf.status)
     case 'favorites': return L('즐겨찾기', 'Favorites')
     case 'review': return L('살펴볼 것', 'Needs Review')
@@ -168,6 +215,18 @@ function emptyState(actions: PaperListActions): HTMLElement {
         ),
       }),
       add,
+    )
+    return wrap
+  }
+  if (store.shelf.kind === 'open') {
+    wrap.append(
+      el('h2', { text: L('열린 논문이 없어요', 'Nothing is open') }),
+      el('p', {
+        text: L(
+          '논문을 클릭해 들어가거나 핀을 누르면 여기에 남아요.',
+          'Click into a paper, or pin it, and it stays here.',
+        ),
+      }),
     )
     return wrap
   }

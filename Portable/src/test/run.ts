@@ -33,6 +33,7 @@ import { entryFor, formatEntry, protectTitle } from '../shared/bibtex.js'
 import { escapeLaTeX } from '../shared/latexTable.js'
 import { readDrawings, writeDrawings, stripOwnedForDisplay } from '../main/pdfwrite.js'
 import { encodeSwiftJSON as encode } from '../shared/coding.js'
+import { splitDock, splitPapers, splitRemove, zoneAt, zoneRect } from '../shared/split.js'
 
 let passed = 0
 let failed = 0
@@ -566,6 +567,62 @@ async function main() {
   } else {
     process.stdout.write('  – no sample PDF on this machine; the file tests were skipped\n')
   }
+
+  // ------------------------------------------------------------ side by side
+  suite('Papers side by side, as the Mac arranges them')
+
+  await test('docking on the right puts the paper showing on the left', () => {
+    const arranged = splitDock({ left: { top: 'A' } }, 'B', 'right')
+    assert.deepEqual(splitPapers(arranged), ['A', 'B'])
+    assert.equal(arranged.right?.top, 'B')
+  })
+
+  await test('docking on the left slides the rest to the right column, two at most', () => {
+    const arranged = splitDock({ left: { top: 'A', bottom: 'B' }, right: { top: 'C', bottom: 'D' } }, 'E', 'left')
+    assert.deepEqual(arranged.left, { top: 'E' })
+    assert.deepEqual(arranged.right, { top: 'A', bottom: 'B' })
+    assert.deepEqual(splitPapers(arranged), ['E', 'A', 'B'])
+  })
+
+  await test('a quarter keeps one neighbour in its column and spills the other', () => {
+    const arranged = splitDock({ left: { top: 'A', bottom: 'B' }, right: { top: 'C' } }, 'D', 'bottomLeft')
+    assert.deepEqual(arranged.left, { top: 'A', bottom: 'D' })
+    assert.deepEqual(arranged.right, { top: 'C', bottom: 'B' })
+  })
+
+  await test('a right quarter with nothing else becomes the left column', () => {
+    const arranged = splitDock({ left: { top: 'A' } }, 'A', 'topRight')
+    assert.deepEqual(arranged, { left: { top: 'A' } })
+  })
+
+  await test('a paper already in the arrangement moves rather than doubles', () => {
+    const arranged = splitDock({ left: { top: 'A' }, right: { top: 'B' } }, 'B', 'left')
+    assert.deepEqual(splitPapers(arranged), ['B', 'A'])
+  })
+
+  await test('removing a paper closes up the space it leaves', () => {
+    const arranged = splitRemove({ left: { top: 'A', bottom: 'B' }, right: { top: 'C' } }, 'A')
+    assert.deepEqual(arranged, { left: { top: 'B' }, right: { top: 'C' } })
+    const last = splitRemove({ left: { top: 'A' }, right: { top: 'C' } }, 'A')
+    assert.deepEqual(last, { left: { top: 'C' }, right: undefined })
+  })
+
+  await test('the middle of the page is no zone; the edges are halves and quarters', () => {
+    const size = { width: 1000, height: 900 }
+    assert.equal(zoneAt(500, 450, size), null)
+    assert.equal(zoneAt(350, 450, size), null)
+    assert.equal(zoneAt(100, 450, size), 'left')
+    assert.equal(zoneAt(900, 450, size), 'right')
+    assert.equal(zoneAt(100, 100, size), 'topLeft')
+    assert.equal(zoneAt(900, 100, size), 'topRight')
+    assert.equal(zoneAt(100, 800, size), 'bottomLeft')
+    assert.equal(zoneAt(900, 800, size), 'bottomRight')
+  })
+
+  await test('a zone is drawn inset eight points, as on the Mac', () => {
+    const rect = zoneRect('right', { width: 1000, height: 900 })
+    assert.deepEqual(rect, { x: 504, y: 8, width: 488, height: 884 })
+  })
 
   process.stdout.write(`\n${passed} passed, ${failed} failed\n`)
   if (failures.length > 0) {

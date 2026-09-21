@@ -11,7 +11,7 @@
  * `--papertime-probe=<file.json>` runs a list of steps and writes what it saw
  * beside them; `--papertime-shot=<file.png>` captures the window and quits.
  */
-import { app, type BrowserWindow } from 'electron'
+import { BrowserWindow, app } from 'electron'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 
@@ -22,6 +22,9 @@ export interface ProbeStep {
   eval?: string
   /** Capture the window to this path. */
   shot?: string
+  /** Which window to capture: 0 is the window the probe runs in; a paper
+   *  opened in a window of its own is the next one. */
+  window?: number
   /**
    * Capture only this region, in window points.
    *
@@ -122,7 +125,8 @@ export async function runProbe(window: BrowserWindow, file: string) {
         results.push(await window.webContents.executeJavaScript(
           `window.__probe.key(${JSON.stringify(step.key.key)}, ${Boolean(step.key.shift)}, ${Boolean(step.key.meta)})`))
       } else if (step.shot) {
-        const image = await window.webContents.capturePage(step.rect)
+        const target = step.window ? BrowserWindow.getAllWindows().filter((w) => w !== window)[step.window - 1] ?? window : window
+        const image = await target.webContents.capturePage(step.rect)
         await fsp.mkdir(path.dirname(step.shot), { recursive: true })
         await fsp.writeFile(step.shot, image.toPNG())
         results.push(`shot: ${step.shot}`)

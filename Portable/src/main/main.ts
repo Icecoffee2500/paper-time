@@ -45,23 +45,50 @@ const chromeOverride = probeArgument('chrome')
  */
 let wantsKorean = false
 
+/** `--papertime-split=1`: the first two papers side by side, for a probe. */
+const wantsSplit = probeArgument('split') === '1'
+
 let window: BrowserWindow | null = null
 let library: Library | null = null
 let stopWatching: (() => void) | null = null
 
+/** What every window should hear: the library changed, the theme changed. */
 function send(event: string, payload?: unknown) {
-  window?.webContents.send(CHANNEL.event, event, payload)
+  for (const target of BrowserWindow.getAllWindows()) {
+    if (!target.isDestroyed()) target.webContents.send(CHANNEL.event, event, payload)
+  }
+}
+
+/** A menu command goes to the window it was meant for — the one in front. */
+function sendToFocused(event: string, payload?: unknown) {
+  const target = BrowserWindow.getFocusedWindow() ?? window
+  target?.webContents.send(CHANNEL.event, event, payload)
+}
+
+function sendTo(target: BrowserWindow | null, event: string, payload?: unknown) {
+  if (target && !target.isDestroyed()) target.webContents.send(CHANNEL.event, event, payload)
 }
 
 // MARK: - The window
 
-function createWindow() {
-  const saved = settings().window
-  window = new BrowserWindow({
-    width: saved.width,
-    height: saved.height,
-    x: saved.x,
-    y: saved.y,
+interface WindowShape {
+  width: number
+  height: number
+  x?: number
+  y?: number
+}
+
+/**
+ * One window, the library's or a paper's own. Both are the same page with
+ * the same chrome; a paper's window is told which paper it is for and shows
+ * that paper's reader and nothing else.
+ */
+function makeWindow(shape: WindowShape, extraArguments: string[] = []): BrowserWindow {
+  const made = new BrowserWindow({
+    width: shape.width,
+    height: shape.height,
+    x: shape.x,
+    y: shape.y,
     minWidth: 720,
     minHeight: 480,
     show: false,
@@ -86,13 +113,33 @@ function createWindow() {
       additionalArguments: [
         ...(chromeOverride ? [`--papertime-chrome=${chromeOverride}`] : []),
         `--papertime-lang=${wantsKorean ? 'ko' : 'en'}`,
+        ...extraArguments,
       ],
     },
   })
 
+  made.loadFile(path.join(__dirname, '../renderer/index.html'))
+  made.once('ready-to-show', () => made.show())
+  for (const event of ['maximize', 'unmaximize', 'enter-full-screen', 'leave-full-screen', 'focus', 'blur']) {
+    made.on(event as 'maximize', () => sendTo(made, 'window:state', windowState(made)))
+  }
+
+  // A page in the reader must never navigate the app away from itself, and a
+  // link in a paper belongs in the user's browser, not inside this window.
+  made.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:/.test(url)) shell.openExternal(url)
+    return { action: 'deny' }
+  })
+  made.webContents.on('will-navigate', (event, url) => {
+    if (!url.startsWith('file://')) event.preventDefault()
+  })
+  return made
+}
+
+function createWindow() {
+  const saved = settings().window
+  window = makeWindow(saved, wantsSplit ? ['--papertime-split=1'] : [])
   if (saved.maximized) window.maximize()
-  window.loadFile(path.join(__dirname, '../renderer/index.html'))
-  window.once('ready-to-show', () => window?.show())
 
   const remember = () => {
     if (!window || window.isDestroyed()) return
@@ -101,32 +148,48 @@ function createWindow() {
   }
   window.on('resize', remember)
   window.on('move', remember)
-  for (const event of ['maximize', 'unmaximize', 'enter-full-screen', 'leave-full-screen']) {
-    window.on(event as 'maximize', () => send('window:state', windowState()))
-  }
-  window.on('focus', () => send('window:state', windowState()))
-  window.on('blur', () => send('window:state', windowState()))
   window.on('closed', () => {
     window = null
   })
-
-  // A page in the reader must never navigate the app away from itself, and a
-  // link in a paper belongs in the user's browser, not inside this window.
-  window.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:/.test(url)) shell.openExternal(url)
-    return { action: 'deny' }
-  })
-  window.webContents.on('will-navigate', (event, url) => {
-    if (!url.startsWith('file://')) event.preventDefault()
-  })
 }
 
-function windowState() {
-  return {
-    maximized: window?.isMaximized() ?? false,
-    fullScreen: window?.isFullScreen() ?? false,
-    focused: window?.isFocused() ?? true,
+/**
+ * A window of its own for one paper, the way a browser tab torn off becomes
+ * a window. Put with its top-left corner near the point when there is one —
+ * where a drag ended — and beside the main window otherwise.
+ */
+function createPaperWindow(id: string, at?: { x: number; y: number }) {
+  const shape: WindowShape = { width: 900, height: 760 }
+  if (at) {
+    shape.x = Math.round(at.x - 40)
+    shape.y = Math.round(at.y - 20)
+  } else if (window && !window.isDestroyed()) {
+    const bounds = window.getBounds()
+    shape.x = bounds.x + 60
+    shape.y = bounds.y + 60
   }
+  const made = makeWindow(shape, [`--papertime-paper=${id}`])
+  paperWindows.add(made)
+  made.on('closed', () => paperWindows.delete(made))
+  return made
+}
+
+const paperWindows = new Set<BrowserWindow>()
+
+function windowState(target: BrowserWindow | null = window) {
+  const live = target && !target.isDestroyed() ? target : null
+  return {
+    maximized: live?.isMaximized() ?? false,
+    fullScreen: live?.isFullScreen() ?? false,
+    focused: live?.isFocused() ?? true,
+  }
+}
+
+/** Every window of ours, in screen points. */
+function allBounds() {
+  return BrowserWindow.getAllWindows()
+    .filter((target) => !target.isDestroyed() && target.isVisible())
+    .map((target) => target.getBounds())
 }
 
 // MARK: - The library
@@ -162,7 +225,8 @@ async function openLibrary(root: string) {
 
 // MARK: - Requests
 
-type Handler = (args: never) => unknown | Promise<unknown>
+/** A request, with the window that made it — dialogs hang off that one. */
+type Handler = (args: never, sender: BrowserWindow | null) => unknown | Promise<unknown>
 
 const handlers: Record<string, Handler> = {
   // The effective root, not the remembered one: a probe run opens a folder
@@ -170,8 +234,8 @@ const handlers: Record<string, Handler> = {
   'settings:get': () => ({ ...settings(), libraryRoot: library?.root ?? settings().libraryRoot }),
   'settings:set': ((patch: Record<string, unknown>) => update(patch)) as Handler,
 
-  'library:choose': async () => {
-    const result = await dialog.showOpenDialog(window!, {
+  'library:choose': async (_args: never, sender: BrowserWindow | null) => {
+    const result = await dialog.showOpenDialog(sender ?? window!, {
       title: 'Choose your library folder',
       message: 'Pick the folder your papers live in — a cloud folder works, and is how a library follows you between machines.',
       properties: ['openDirectory', 'createDirectory'],
@@ -184,11 +248,11 @@ const handlers: Record<string, Handler> = {
   'library:open': (async ({ root }: { root: string }) => openLibrary(root)) as Handler,
   'library:reload': async () => snapshot(),
 
-  'library:import': (async ({ paths }: { paths?: string[] }) => {
+  'library:import': (async ({ paths }: { paths?: string[] }, sender: BrowserWindow | null) => {
     if (!library) return { error: 'No library is open.' }
     let chosen = paths
     if (!chosen || chosen.length === 0) {
-      const result = await dialog.showOpenDialog(window!, {
+      const result = await dialog.showOpenDialog(sender ?? window!, {
         title: 'Add PDFs',
         message: 'Choose PDFs to add to the library',
         filters: [{ name: 'PDF', extensions: ['pdf'] }],
@@ -294,13 +358,13 @@ const handlers: Record<string, Handler> = {
 
   'drawing:flush': (async ({ id }: { id: string }) => flushToPDF(id)) as Handler,
 
-  'bibtex:export': (async ({ ids }: { ids?: string[] }) => {
+  'bibtex:export': (async ({ ids }: { ids?: string[] }, sender: BrowserWindow | null) => {
     if (!library) return { error: 'No library is open.' }
     const rows = await library.papers()
     const chosen = ids && ids.length > 0 ? rows.filter((row) => ids.includes(row.id)) : rows
     if (chosen.length === 0) return { error: 'There is nothing to export.' }
     const text = formatBibliography(chosen.map((row) => new PaperMeta(row.meta)), DEFAULT_EXPORT)
-    const result = await dialog.showSaveDialog(window!, {
+    const result = await dialog.showSaveDialog(sender ?? window!, {
       title: 'Export BibTeX',
       defaultPath: `${path.basename(library.root)}.bib`,
       filters: [{ name: 'BibTeX', extensions: ['bib'] }],
@@ -313,13 +377,21 @@ const handlers: Record<string, Handler> = {
   'collections:save': (async ({ collections }: { collections: unknown[] }) =>
     library?.saveCollections(collections as never) ?? null) as Handler,
 
-  'window:minimize': () => window?.minimize(),
-  'window:toggleMaximize': () => (window?.isMaximized() ? window.unmaximize() : window?.maximize()),
-  'window:close': () => window?.close(),
-  'window:state': () => windowState(),
+  'window:minimize': (_args: never, sender: BrowserWindow | null) => (sender ?? window)?.minimize(),
+  'window:toggleMaximize': (_args: never, sender: BrowserWindow | null) => {
+    const target = sender ?? window
+    if (target?.isMaximized()) target.unmaximize()
+    else target?.maximize()
+  },
+  'window:close': (_args: never, sender: BrowserWindow | null) => (sender ?? window)?.close(),
+  'window:state': (_args: never, sender: BrowserWindow | null) => windowState(sender ?? window),
+  'window:bounds': () => allBounds(),
+  'paper:openWindow': (({ id, x, y }: { id: string; x?: number; y?: number }) => {
+    createPaperWindow(id, typeof x === 'number' && typeof y === 'number' ? { x, y } : undefined)
+  }) as Handler,
   // The app speaks to the outside world here and nowhere else, and only
   // because somebody pressed 보내기.
-  'feedback:capture': () => captureWindow(window),
+  'feedback:capture': (_args: never, sender: BrowserWindow | null) => captureWindow(sender ?? window),
   'feedback:send': ((report: {
     kind: 'bug' | 'wish'
     body: string
@@ -345,10 +417,10 @@ const handlers: Record<string, Handler> = {
   }) as Handler,
 }
 
-ipcMain.handle(CHANNEL.invoke, async (_event, name: string, args: unknown) => {
+ipcMain.handle(CHANNEL.invoke, async (event, name: string, args: unknown) => {
   const handler = handlers[name]
   if (!handler) throw new Error(`Unknown request: ${name}`)
-  return handler(args as never)
+  return handler(args as never, BrowserWindow.fromWebContents(event.sender))
 })
 
 // MARK: - The file, written behind the reader
@@ -566,9 +638,9 @@ app.whenReady().then(async () => {
   setKorean(wantsKorean)
   createWindow()
   buildMenu({
-    send,
+    send: sendToFocused,
     chooseLibrary: async () => {
-      const chosen = await handlers['library:choose'](undefined as never)
+      const chosen = await handlers['library:choose'](undefined as never, window)
       if (typeof chosen === 'string') {
         await openLibrary(chosen)
         send('library:opened', await snapshot())

@@ -49,9 +49,14 @@ export function buildMenu({ send, chooseLibrary }: MenuActions) {
         { label: L('BibTeX 내보내기…', 'Export BibTeX…'), accelerator: 'CmdOrCtrl+Shift+E', click: command('exportBibTeX') },
         { label: L('인용 키 복사', 'Copy Citation Key'), accelerator: 'CmdOrCtrl+Shift+K', click: command('copyCitationKey') },
         { type: 'separator' },
+        // Not the `close` role: with papers side by side the key closes the
+        // pane in focus and leaves the window standing, and only the window
+        // knows how many panes it has.
+        { label: L('닫기', 'Close'), accelerator: 'CmdOrCtrl+W', click: command('closeWindow') },
         ...(isMac
-          ? ([{ role: 'close' }] as MenuItemConstructorOptions[])
+          ? []
           : ([
+              { type: 'separator' },
               { label: L('설정…', 'Settings…'), accelerator: 'CmdOrCtrl+,', click: command('settings') },
               { type: 'separator' },
               { role: 'quit', label: L('끝내기', 'Exit') },
@@ -113,17 +118,15 @@ export function buildMenu({ send, chooseLibrary }: MenuActions) {
     },
     {
       label: L('창(&W)', '&Window'),
-      submenu: isMac
-        ? [
-            { role: 'minimize', label: L('최소화', 'Minimize') },
-            { role: 'zoom', label: L('확대/축소', 'Zoom') },
-            { type: 'separator' },
-            { role: 'front' },
-          ]
-        : [
-            { role: 'minimize', label: L('최소화', 'Minimize') },
-            { role: 'zoom', label: L('확대/축소', 'Zoom') },
-          ],
+      submenu: [
+        { role: 'minimize', label: L('최소화', 'Minimize') },
+        { role: 'zoom', label: L('확대/축소', 'Zoom') },
+        { type: 'separator' },
+        // The open papers, over the page — the same key as the Mac's.
+        { label: L('열린 논문', 'Open Papers'), accelerator: 'CmdOrCtrl+Shift+O', click: command('openPapers') },
+        { label: L('새 창으로 열기', 'Open in New Window'), click: command('openInNewWindow') },
+        ...(isMac ? ([{ type: 'separator' }, { role: 'front' }] as MenuItemConstructorOptions[]) : []),
+      ],
     },
     {
       // Where a desktop user looks for it, and on the same key the Mac uses.

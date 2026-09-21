@@ -5,6 +5,13 @@ export const CHANNEL = {
   event: 'papertime:event',
 } as const
 
+export interface WindowBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
 export interface WindowState {
   maximized: boolean
   fullScreen: boolean
@@ -37,6 +44,10 @@ export interface Requests {
   'window:toggleMaximize': { args: void; result: void }
   'window:close': { args: void; result: void }
   'window:state': { args: void; result: WindowState }
+  /** Every window of ours, in screen points — to tell a drag out from a drop. */
+  'window:bounds': { args: void; result: WindowBounds[] }
+  /** A window of its own for one paper, put at the point when there is one. */
+  'paper:openWindow': { args: { id: string; x?: number; y?: number }; result: void }
   'shell:openExternal': { args: { url: string }; result: void }
   /** The window's own page, as a PNG data URL, for the report sheet. */
   'feedback:capture': { args: void; result: string | null }

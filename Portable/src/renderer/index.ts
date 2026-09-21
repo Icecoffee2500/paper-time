@@ -5,8 +5,14 @@
  * lot. The arrangement is the Mac's, down to the eight-point margin and the
  * ten-point gap that doubles as the resize handle, because a person who reads
  * on one machine and writes on another should not have to find anything twice.
+ *
+ * The page area holds one reader, or up to four side by side; each pane is a
+ * `Reader` of its own, and the one in focus is the paper the window is
+ * "about" — the inspector, the notes and the keys act on it. A window opened
+ * for one paper (`--papertime-paper=<id>`) is this same page showing only
+ * that reader.
  */
-import { call, isCommand, onEvent, platform } from './bridge.js'
+import { call, flags, isCommand, onEvent, platform, soloPaperID } from './bridge.js'
 import { clear, el, on } from './dom.js'
 // Imported for its side effect: the sheet registers its own ⌥⌘/ so nothing
 // in the shell has to know it exists.
@@ -16,6 +22,12 @@ import {
   canGoBack,
   canGoForward,
   changed,
+  closeOpenPaper,
+  closeOtherOpenPapers,
+  dock,
+  isOpenPaper,
+  keepOpen,
+  panePapers,
   paper as findPaper,
   remember,
   shelfPapers,
@@ -23,6 +35,7 @@ import {
   setSketchTool,
   subscribe,
   travel,
+  undock,
   type InspectorTab,
   type Pane,
   type Shelf,
@@ -36,12 +49,31 @@ import { Reader } from './ui/reader.js'
 import { buildSketchRack, TOOLS } from './ui/sketchToolbar.js'
 import { undoStack, type SketchInputEditing } from './ui/sketchInput.js'
 import { sketchEditor, sketchSelectionChanged } from './ui/sketchEditing.js'
-import type { LibrarySnapshot } from '../shared/api.js'
+import {
+  closeOpenPapers,
+  isOpenPapersShowing,
+  refreshOpenPapers,
+  toggleOpenPapers,
+} from './ui/openPapers.js'
+import type { LibrarySnapshot, WindowBounds } from '../shared/api.js'
 import { expandedIDs } from '../shared/sketch.js'
+import {
+  DOCK_ZONES,
+  PAPER_DRAG_TYPE,
+  splitContains,
+  splitPapers,
+  zoneAt,
+  zoneRect,
+  type DockZone,
+  type SplitArrangement,
+} from '../shared/split.js'
 import { icon } from './icons.js'
 import { L } from '../shared/lang.js'
 
 document.body.dataset.platform = platform
+/** This window shows one paper on its own: no library columns. */
+const solo = soloPaperID !== null
+if (solo) document.body.dataset.solo = 'true'
 // For the in-page probe (`--papertime-probe`): the drawing contract, so a
 // test can stand in for the page's editor and look at the Tools tab.
 ;(window as unknown as { __papertimeSketch: unknown }).__papertimeSketch = { sketchEditor, sketchSelectionChanged, store }
@@ -72,9 +104,27 @@ const sidebar = buildSidebar({
   chooseLibrary: () => void chooseLibrary(),
 })
 
+const ZONE_LABELS = (): Record<DockZone, string> => ({
+  left: L('왼쪽에', 'Left Half'),
+  right: L('오른쪽에', 'Right Half'),
+  topLeft: L('왼쪽 위에', 'Top Left'),
+  topRight: L('오른쪽 위에', 'Top Right'),
+  bottomLeft: L('왼쪽 아래에', 'Bottom Left'),
+  bottomRight: L('오른쪽 아래에', 'Bottom Right'),
+})
+
+const ZONE_ICONS: Record<DockZone, string> = {
+  left: 'rectangle.lefthalf.inset.filled',
+  right: 'rectangle.righthalf.inset.filled',
+  topLeft: 'rectangle.inset.topleft.filled',
+  topRight: 'rectangle.inset.topright.filled',
+  bottomLeft: 'rectangle.inset.bottomleft.filled',
+  bottomRight: 'rectangle.inset.bottomright.filled',
+}
+
 const paperList = buildPaperList({
   chooseLibrary: () => void chooseLibrary(),
-  open: (id) => openPaper(id),
+  open: (id) => void showPaper(id),
   cycleStatus: async (id) => {
     const entry = findPaper(id)
     if (!entry) return
@@ -88,11 +138,36 @@ const paperList = buildPaperList({
     await call('paper:state', { id, patch: { isFavorite: !entry.state.isFavorite } })
     await reload()
   },
+  togglePin: (id) => {
+    if (isOpenPaper(id)) closePaper(id)
+    else keepPaper(id)
+  },
+  close: (id) => closePaper(id),
   contextMenu: (id, anchor) => {
     const entry = findPaper(id)
     if (!entry) return
+    const labels = ZONE_LABELS()
     showMenu(anchor, [
-      { label: L('열기', 'Open'), icon: 'text.page', action: () => openPaper(id) },
+      { label: L('열기', 'Open'), icon: 'text.page', action: () => void showPaper(id) },
+      // Beside the paper already open: a half, or a quarter, of the page.
+      {
+        label: L('나란히 열기', 'Open Side by Side'),
+        icon: 'rectangle.split.2x1',
+        children: DOCK_ZONES.flatMap((zone, index) => [
+          ...(index === 2 ? [{ separator: true }] : []),
+          { label: labels[zone], icon: ZONE_ICONS[zone], action: () => dockPaper(id, zone) },
+        ]),
+      },
+      ...(isOpenPaper(id)
+        ? [
+            { label: L('닫기', 'Close'), icon: 'xmark.circle', action: () => closePaper(id) },
+            ...(store.openPaperIDs.length > 1
+              ? [{ label: L('다른 논문 모두 닫기', 'Close Other Papers'), icon: 'xmark.circle.fill', action: () => closeOthers(id) }]
+              : []),
+          ]
+        : [{ label: L('열어 두기', 'Keep Open'), icon: 'pin', action: () => keepPaper(id) }]),
+      { label: L('새 창으로 열기', 'Open in New Window'), icon: 'macwindow.badge.plus', action: () => openInWindow(id) },
+      { separator: true },
       { label: L('폴더에서 보기', 'Show in Folder'), icon: 'folder', action: () => void call('paper:reveal', { id }) },
       { label: L('인용 키 복사', 'Copy Citation Key'), icon: 'doc.on.doc', action: () => copyKey(id) },
       { separator: true },
@@ -116,8 +191,11 @@ const paperList = buildPaperList({
             `Move “${entry.meta.displayTitle}” to the library's Trash?\n\nThe PDF and its record move to the Trash folder inside the library. Nothing is deleted.`,
           ))) return
           await call('library:trash', { id })
+          undock(id)
+          closeOpenPaper(id)
           if (store.selectedID === id) store.selectedID = null
           await reload()
+          reconcileReaders()
         },
       },
     ])
@@ -129,11 +207,6 @@ const paperList = buildPaperList({
     adopt(snapshot)
     changed('papers')
   },
-})
-
-const reader = new Reader({
-  changed: () => changed('sketch'),
-  toast,
 })
 
 const inspector = buildInspector({
@@ -152,6 +225,257 @@ const inspector = buildInspector({
     changed('shelf')
   },
   sketchChanged: () => changed('sketch'),
+})
+
+// ------------------------------------------------------------ the page area
+
+/**
+ * The readers, one per paper in the page area. In the ordinary case that is
+ * the one paper showing; with papers side by side, one per pane. A reader
+ * whose paper leaves the page area is taken down, canvases and all.
+ */
+const readers = new Map<string, Reader>()
+const pageArea = el('div', { class: 'page-area' })
+const dockZone = el('div', { class: 'dock-zone', 'data-on': 'false' })
+/** What the page area shows when nothing is open. */
+const emptyReader = el('div', { class: 'panel reader-panel' }, [
+  el('div', { class: 'reader-header' }),
+  el('div', { class: 'reader-scroll' }),
+])
+pageArea.append(emptyReader, dockZone)
+
+/** The reader in focus: the pane showing `store.selectedID`. */
+function focused(): Reader | null {
+  return store.selectedID ? readers.get(store.selectedID) ?? null : null
+}
+
+function readerFor(id: string, pane: boolean): Reader {
+  const existing = readers.get(id)
+  if (existing) return existing
+  const reader = new Reader({
+    changed: () => changed('sketch'),
+    toast,
+    activated: () => {
+      // A press in a pane makes it the one in use: the pane in focus, and a
+      // paper kept open.
+      keepOpen(id)
+      if (store.selectedID !== id) {
+        store.selectedID = id
+        void call('settings:set', { selectedPaperID: id })
+        focusChanged()
+        changed('papers', 'selection')
+      } else {
+        changed('papers')
+      }
+    },
+    close: () => closePaper(id),
+  }, { pane })
+  readers.set(id, reader)
+  void loadInto(reader, id)
+  return reader
+}
+
+async function loadInto(reader: Reader, id: string) {
+  const result = await call<{ data: Uint8Array } | { error: string }>('paper:bytes', { id })
+  if (!readers.has(id) || readers.get(id) !== reader) return
+  if ('error' in result) return toast(result.error)
+  await reader.open(id, new Uint8Array(result.data))
+  reader.setDrawing(reader.state.drawing)
+  reader.update()
+  if (focused() === reader) focusChanged()
+}
+
+/**
+ * Makes the readers match the arrangement: one per paper in the page area,
+ * laid out as the arrangement says, the one in focus marked and given the
+ * rack. Everything that changes what is in the page area ends here.
+ */
+function reconcileReaders() {
+  const wanted = panePapers()
+  const split = store.split
+  const previous = focused()
+  // A reader keeps its pen state across a change of arrangement — but one
+  // built for a pane and one built for the whole area differ in chrome, so
+  // the readers are rebuilt when the arrangement appears or goes.
+  for (const [id, reader] of [...readers]) {
+    if (!wanted.includes(id) || reader.isPane !== Boolean(split)) {
+      const drawing = reader.state.drawing
+      reader.dispose()
+      readers.delete(id)
+      if (wanted.includes(id)) inheritedDrawing.set(id, drawing)
+    }
+  }
+  for (const id of wanted) {
+    const reader = readerFor(id, Boolean(split))
+    const drawing = inheritedDrawing.get(id) ?? (previous && !readers.has(previous.paperID ?? '') ? previous.state.drawing : undefined)
+    if (drawing !== undefined) {
+      reader.state.drawing = drawing
+      inheritedDrawing.delete(id)
+    }
+  }
+
+  clear(pageArea)
+  if (split) {
+    const column = (ids: string[]) => el('div', { class: 'split-column' }, ids.map((id) => readerFor(id, true).node))
+    const grid = el('div', { class: 'split' }, [column(columnIDs(split, 'left'))])
+    if (split.right) grid.append(column(columnIDs(split, 'right')))
+    pageArea.append(grid)
+  } else if (wanted[0]) {
+    pageArea.append(readerFor(wanted[0], false).node)
+  } else {
+    pageArea.append(emptyReader)
+  }
+  pageArea.append(dockZone)
+  focusChanged()
+  for (const reader of readers.values()) reader.relayout()
+}
+
+const inheritedDrawing = new Map<string, boolean>()
+
+function columnIDs(split: SplitArrangement, side: 'left' | 'right'): string[] {
+  const column = side === 'left' ? split.left : split.right
+  if (!column) return []
+  return column.bottom ? [column.top, column.bottom] : [column.top]
+}
+
+/**
+ * The pane in focus is the paper the window is about: its state is the
+ * store's, the rack sits over it, the drawing editor is its own.
+ */
+function focusChanged() {
+  const reader = focused()
+  for (const [id, other] of readers) other.setFocused(id === store.selectedID && Boolean(store.split))
+  if (reader) {
+    if (store.reader !== reader.state) {
+      store.reader = reader.state
+      store.sketch.selection = null
+    }
+    reader.overlayContainer.append(rack.node)
+    if (reader.state.drawing) reader.setDrawing(true)
+    else if (sketchEditor.current) sketchEditor.current = null
+  } else {
+    store.reader = { pageCount: 0, currentPage: 0, zoom: 1, drawing: false }
+    sketchEditor.current = null
+  }
+  refreshOpenPapers()
+}
+
+// ---------------------------------------------------------- open papers
+
+/** Keeps a paper on the open shelf without changing what is showing. */
+function keepPaper(id: string) {
+  keepOpen(id)
+  changed('papers')
+}
+
+/** Closes a paper: out of its pane, off the shelf; its neighbour comes forward. */
+function closePaper(id: string) {
+  const wasSelected = store.selectedID === id
+  undock(id)
+  closeOpenPaper(id)
+  if (wasSelected && store.selectedID && store.selectedID !== id && !store.travelling) remember(store.selectedID)
+  void call('settings:set', { selectedPaperID: store.selectedID })
+  reconcileReaders()
+  changed('papers', 'selection')
+}
+
+function closeOthers(keeping: string) {
+  for (const other of store.openPaperIDs) if (other !== keeping) undock(other)
+  closeOtherOpenPapers(keeping)
+  void call('settings:set', { selectedPaperID: store.selectedID })
+  reconcileReaders()
+  changed('papers', 'selection')
+}
+
+/** Puts a paper into a zone of the page area, beside what is showing. */
+function dockPaper(id: string, zone: DockZone) {
+  if (!findPaper(id)) return
+  dock(id, zone)
+  reconcileReaders()
+  changed('papers', 'selection')
+}
+
+function openInWindow(id: string, at?: { x: number; y: number }) {
+  keepOpen(id)
+  changed('papers')
+  void call('paper:openWindow', { id, x: at?.x, y: at?.y })
+}
+
+async function insideOurWindows(x: number, y: number): Promise<boolean> {
+  const bounds = await call<WindowBounds[]>('window:bounds')
+  return bounds.some((b) => x >= b.x && x <= b.x + b.width && y >= b.y && y <= b.y + b.height)
+}
+
+function showOpenPapersPopup() {
+  toggleOpenPapers(pageArea, {
+    show: (id) => {
+      void showPaper(id)
+      keepPaper(id)
+    },
+    close: (id) => closePaper(id),
+    openWindow: (id, at) => openInWindow(id, at),
+    insideOurWindows,
+  })
+}
+
+// ------------------------------------------------------------- drop zones
+
+/**
+ * A paper dragged over the page area — a row of the list, a pane's title, a
+ * row of the popup — lights the half or the quarter it would go into, and
+ * goes there when dropped. The middle of the page is no zone at all.
+ */
+let litZone: DockZone | null = null
+
+function lightZone(zone: DockZone | null) {
+  litZone = zone
+  if (!zone) {
+    dockZone.dataset.on = 'false'
+    return
+  }
+  const size = { width: pageArea.clientWidth, height: pageArea.clientHeight }
+  const rect = zoneRect(zone, size)
+  dockZone.style.left = `${rect.x}px`
+  dockZone.style.top = `${rect.y}px`
+  dockZone.style.width = `${rect.width}px`
+  dockZone.style.height = `${rect.height}px`
+  dockZone.dataset.on = 'true'
+}
+
+function carriesPaper(event: DragEvent): boolean {
+  return Boolean(event.dataTransfer && [...event.dataTransfer.types].includes(PAPER_DRAG_TYPE))
+}
+
+on(pageArea, 'dragover', (event: DragEvent) => {
+  if (!carriesPaper(event)) return
+  event.preventDefault()
+  event.stopPropagation()
+  const box = pageArea.getBoundingClientRect()
+  const zone = zoneAt(event.clientX - box.left, event.clientY - box.top, { width: box.width, height: box.height })
+  if (event.dataTransfer) event.dataTransfer.dropEffect = zone ? 'move' : 'none'
+  if (zone !== litZone) lightZone(zone)
+})
+on(pageArea, 'dragleave', (event: DragEvent) => {
+  if (!pageArea.contains(event.relatedTarget as Node | null)) lightZone(null)
+})
+on(pageArea, 'drop', (event: DragEvent) => {
+  if (!carriesPaper(event)) return
+  event.preventDefault()
+  event.stopPropagation()
+  const id = event.dataTransfer?.getData(PAPER_DRAG_TYPE)
+  const box = pageArea.getBoundingClientRect()
+  const zone = zoneAt(event.clientX - box.left, event.clientY - box.top, { width: box.width, height: box.height })
+  lightZone(null)
+  if (!id || !zone) return
+  closeOpenPapers()
+  dockPaper(id, zone)
+})
+// A drag cancelled with Escape, or let go outside the window, sends no
+// leave; the highlight is cleared when the drag ends, and whenever the mouse
+// is found with no button down.
+on(window, 'dragend', () => lightZone(null))
+on(window, 'mousemove', (event: MouseEvent) => {
+  if (litZone && event.buttons === 0) lightZone(null)
 })
 
 // -------------------------------------------------------- the drawing layer
@@ -176,7 +500,7 @@ function pickTool(tool: SketchTool) {
 function selectedPage() {
   const selection = store.sketch.selection
   if (!selection) return null
-  return reader.pages[selection.pageIndex] ?? null
+  return focused()?.pages[selection.pageIndex] ?? null
 }
 
 // -------------------------------------------------------------- the toolbar
@@ -229,7 +553,7 @@ const toolbar = buildToolbar({
         action: () => {
           store.settings.pageTint = tint
           void call('settings:set', { pageTint: tint })
-          reader.applyTint()
+          for (const reader of readers.values()) reader.applyTint()
         },
       })),
       { separator: true },
@@ -251,17 +575,22 @@ const toolbar = buildToolbar({
 })
 
 root.append(toolbar.node, panes)
-reader.overlayContainer.append(rack.node)
 
 // ------------------------------------------------------- laying out the panes
 
 function layoutPanes() {
   clear(panes)
+  if (solo) {
+    // One paper, and nothing else: the reader fills the window.
+    pageArea.style.flex = '1 1 auto'
+    panes.append(pageArea)
+    return
+  }
   const visible = store.settings.panes
   const pieces: { pane: Pane; node: HTMLElement; width?: number; resizes?: 'leading' | 'trailing' }[] = []
   if (visible.sidebar) pieces.push({ pane: 'sidebar', node: sidebar.node, width: store.settings.columns.sidebar })
   if (visible.paperList) pieces.push({ pane: 'paperList', node: paperList.node, width: store.settings.columns.paperList })
-  if (visible.reader) pieces.push({ pane: 'reader', node: reader.node })
+  if (visible.reader) pieces.push({ pane: 'reader', node: pageArea })
   if (visible.inspector) {
     pieces.push({ pane: 'inspector', node: inspector.node, width: store.settings.columns.inspector, resizes: 'trailing' })
   }
@@ -288,6 +617,10 @@ function layoutPanes() {
   })
 }
 
+function relayoutReaders() {
+  for (const reader of readers.values()) reader.relayout()
+}
+
 function divider(pane: 'sidebar' | 'paperList' | 'inspector', inverted: boolean): HTMLElement {
   const node = el('div', { class: 'divider' })
   on(node, 'pointerdown', (event: PointerEvent) => {
@@ -301,7 +634,7 @@ function divider(pane: 'sidebar' | 'paperList' | 'inspector', inverted: boolean)
       const widest = Math.max(320, panes.clientWidth - 300)
       store.settings.columns[pane] = Math.min(Math.max(startWidth + travel, 180), widest)
       layoutPanes()
-      reader.relayout()
+      relayoutReaders()
     }
     const up = () => {
       node.classList.remove('dragging')
@@ -316,11 +649,12 @@ function divider(pane: 'sidebar' | 'paperList' | 'inspector', inverted: boolean)
 }
 
 function togglePane(pane: Pane) {
+  if (solo) return
   store.settings.panes[pane] = !store.settings.panes[pane]
   void call('settings:set', { panes: store.settings.panes })
   layoutPanes()
   toolbar.update()
-  reader.relayout()
+  relayoutReaders()
 }
 
 // ------------------------------------------------------------------ actions
@@ -347,21 +681,44 @@ async function reload() {
   const selected = store.selectedID
   adopt(snapshot)
   store.selectedID = selected
+  // Papers gone from the folder leave the shelf and the page area.
+  store.openPaperIDs = store.openPaperIDs.filter((id) => findPaper(id))
+  for (const id of panePapers()) if (!findPaper(id)) undock(id)
+  if (store.selectedID && !findPaper(store.selectedID)) store.selectedID = null
+  reconcileReaders()
   changed('papers')
+  for (const reader of readers.values()) reader.update()
 }
 
-async function openPaper(id: string) {
+/**
+ * Shows a paper. Not kept: what is merely shown is a preview on the open
+ * shelf and leaves when the next is shown. Clicking into it, pinning it, or
+ * putting it beside another keeps it.
+ *
+ * With papers side by side, the paper takes the place of the pane in focus,
+ * so the arrangement keeps its shape.
+ */
+async function showPaper(id: string) {
   if (store.selectedID === id) return
+  const previous = store.selectedID
+  if (store.split && !splitContains(store.split, id)) {
+    const target = previous && splitContains(store.split, previous) ? previous : splitPapers(store.split)[0]
+    store.split = replaceInSplit(store.split, target, id)
+  }
   store.selectedID = id
   if (!store.travelling) remember(id)
   void call('settings:set', { selectedPaperID: id })
   void call('paper:state', { id, patch: { lastOpenedAt: new Date().toISOString(), readingStatus: statusOnOpen(id) } })
-  changed('papers', 'selection')
-  const result = await call<{ data: Uint8Array } | { error: string }>('paper:bytes', { id })
-  if ('error' in result) return toast(result.error)
-  await reader.open(id, new Uint8Array(result.data))
-  reader.setDrawing(store.reader.drawing)
-  changed('reader')
+  reconcileReaders()
+  changed('papers', 'selection', 'reader')
+}
+
+function replaceInSplit(split: SplitArrangement, from: string, to: string): SplitArrangement {
+  const swap = (column: { top: string; bottom?: string } | undefined) => column && {
+    top: column.top === from ? to : column.top,
+    ...(column.bottom ? { bottom: column.bottom === from ? to : column.bottom } : {}),
+  }
+  return { left: swap(split.left)!, right: swap(split.right) }
 }
 
 function statusOnOpen(id: string): string {
@@ -378,7 +735,7 @@ function goBack() {
   const id = travel(store.trailIndex - 1)
   if (!id) return
   store.travelling = true
-  void openPaper(id).finally(() => { store.travelling = false })
+  void showPaper(id).finally(() => { store.travelling = false })
 }
 
 function goForward() {
@@ -386,7 +743,7 @@ function goForward() {
   const id = travel(store.trailIndex + 1)
   if (!id) return
   store.travelling = true
-  void openPaper(id).finally(() => { store.travelling = false })
+  void showPaper(id).finally(() => { store.travelling = false })
 }
 
 /**
@@ -398,6 +755,7 @@ function goForward() {
 let beforeFocus: typeof store.settings.panes | null = null
 
 function toggleFocus() {
+  if (solo) return
   if (beforeFocus) {
     store.settings.panes = { ...beforeFocus }
     beforeFocus = null
@@ -408,11 +766,12 @@ function toggleFocus() {
   void call('settings:set', { panes: store.settings.panes })
   layoutPanes()
   toolbar.update()
-  reader.relayout()
+  relayoutReaders()
 }
 
 function setLayout(layout: 'single' | 'continuous') {
-  reader.setLayout(layout)
+  store.settings.pageLayout = layout
+  for (const reader of readers.values()) reader.setLayout(layout)
   void call('settings:set', { pageLayout: layout })
 }
 
@@ -427,6 +786,18 @@ async function copyKey(id: string) {
   if (!entry) return
   await navigator.clipboard.writeText(entry.meta.bibKey || entry.meta.displayTitle)
   toast(L('인용 키를 복사했어요', 'Citation key copied'))
+}
+
+/**
+ * ⌘W: with papers side by side, closes the pane in focus and leaves the
+ * window standing. With one pane the window closes, as it always did.
+ */
+function closeWindowOrPane() {
+  if (store.split && store.selectedID && splitContains(store.split, store.selectedID)) {
+    closePaper(store.selectedID)
+    return
+  }
+  void call('window:close')
 }
 
 // ------------------------------------------------------------------- search
@@ -462,7 +833,7 @@ function openSearch() {
       ])
       on(row, 'click', () => {
         closeSearch()
-        void openPaper(entry.id)
+        void showPaper(entry.id)
       })
       results.append(row)
     }
@@ -495,6 +866,7 @@ function closeSearch() {
 on(window, 'keydown', (event: KeyboardEvent) => {
   const target = event.target as HTMLElement | null
   const typing = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')
+  const reader = focused()
 
   // While the pen is out the page's own editor has the Mac's whole key map
   // — Escape's three steps, the arrows, ⌘C/⌘X/⌘V, Enter into a group — and
@@ -511,16 +883,17 @@ on(window, 'keydown', (event: KeyboardEvent) => {
     // Three steps back, in the order a hand expects: finish the words, then
     // drop the selection, then put the tool away.
     if (palette) return closeSearch()
+    if (isOpenPapersShowing()) return closeOpenPapers()
     if (store.sketch.selection) {
       store.sketch.selection = null
-      reader.redrawAll()
+      reader?.redrawAll()
       return changed('sketch')
     }
     if (store.sketch.tool !== 'select') {
       setSketchTool('select')
       return changed('sketch')
     }
-    if (store.reader.drawing) {
+    if (store.reader.drawing && reader) {
       reader.setDrawing(false)
       reader.update()
       return changed('sketch')
@@ -533,6 +906,21 @@ on(window, 'keydown', (event: KeyboardEvent) => {
   const editor = sketchEditor.current
 
   if (isCommand(event)) {
+    // ⇧⌘O: the open papers, over the page. ⌘W: the pane in focus, or the
+    // window. Both are menu items too; these catch the key where a desktop
+    // hands it to the page first.
+    if (event.shiftKey && event.key.toLowerCase() === 'o') {
+      event.preventDefault()
+      showOpenPapersPopup()
+      return
+    }
+    if (event.key.toLowerCase() === 'w' && !event.shiftKey && !event.altKey) {
+      if (store.split) {
+        event.preventDefault()
+        closeWindowOrPane()
+      }
+      return
+    }
     if (event.key === 'z') {
       event.preventDefault()
       applyUndo(event.shiftKey)
@@ -578,7 +966,7 @@ on(window, 'keydown', (event: KeyboardEvent) => {
     return
   }
 
-  if (store.settings.pageLayout === 'single' && !store.reader.drawing) {
+  if (store.settings.pageLayout === 'single' && !store.reader.drawing && reader) {
     if (event.key === 'PageDown' || event.key === 'ArrowRight') {
       event.preventDefault()
       return reader.turnPage(1)
@@ -624,7 +1012,8 @@ on(window, 'keydown', (event: KeyboardEvent) => {
 function nudge(key: string, distance: number) {
   const page = selectedPage()
   const selection = store.sketch.selection
-  if (!page || !selection) return
+  const reader = focused()
+  if (!page || !selection || !reader) return
   const offset = {
     ArrowLeft: { x: -distance, y: 0 },
     ArrowRight: { x: distance, y: 0 },
@@ -644,7 +1033,7 @@ function applyUndo(redo: boolean) {
   const snapshot = redo ? undoStack.redo() : undoStack.undo()
   if (!snapshot) return
   // A step may cover two pages — a selection carried from one to the other.
-  reader.restore(snapshot)
+  focused()?.restore(snapshot)
   store.sketch.selection = null
   changed('sketch')
 }
@@ -677,6 +1066,7 @@ subscribe((keys) => {
     sidebar.update()
     paperList.update()
     inspector.update()
+    refreshOpenPapers()
   }
   if (keys.has('inspector')) inspector.update()
   if (keys.has('sketch')) {
@@ -689,10 +1079,11 @@ subscribe((keys) => {
     wasDrawing = store.reader.drawing
     rack.update()
     if (store.settings.inspectorTab === 'tools') inspector.update()
-    reader.redrawAll()
-    reader.update()
+    const reader = focused()
+    reader?.redrawAll()
+    reader?.update()
   }
-  if (keys.has('reader')) reader.update()
+  if (keys.has('reader')) focused()?.update()
   toolbar.update()
 })
 
@@ -729,6 +1120,7 @@ onEvent((event, payload) => {
 })
 
 function runMenuCommand(command: string) {
+  const reader = focused()
   switch (command) {
     case 'addPapers': void addPapers(); break
     case 'refreshFolder': void reload(); break
@@ -739,19 +1131,20 @@ function runMenuCommand(command: string) {
     case 'inspector': togglePane('inspector'); break
     case 'back': goBack(); break
     case 'forward': goForward(); break
-    case 'zoomIn': reader.zoomBy(1.15); break
-    case 'zoomOut': reader.zoomBy(1 / 1.15); break
-    case 'actualSize': reader.setZoom(1); break
+    case 'zoomIn': reader?.zoomBy(1.15); break
+    case 'zoomOut': reader?.zoomBy(1 / 1.15); break
+    case 'actualSize': reader?.setZoom(1); break
     case 'draw':
-      reader.setDrawing(!store.reader.drawing)
+      if (!reader) break
+      reader.setDrawing(!reader.state.drawing)
       reader.update()
       changed('sketch')
       break
     case 'highlight':
-      if (!reader.markSelection('highlight')) toast(L('먼저 글을 골라주세요.', 'Select some text first.'))
+      if (!reader?.markSelection('highlight')) toast(L('먼저 글을 골라주세요.', 'Select some text first.'))
       break
     case 'underline':
-      if (!reader.markSelection('underline')) toast(L('먼저 글을 골라주세요.', 'Select some text first.'))
+      if (!reader?.markSelection('underline')) toast(L('먼저 글을 골라주세요.', 'Select some text first.'))
       break
     case 'exportBibTeX':
       void (async () => {
@@ -772,6 +1165,9 @@ function runMenuCommand(command: string) {
     case 'focus': toggleFocus(); break
     case 'layoutContinuous': setLayout('continuous'); break
     case 'layoutSinglePage': setLayout('single'); break
+    case 'openPapers': if (!solo) showOpenPapersPopup(); break
+    case 'openInNewWindow': if (store.selectedID) openInWindow(store.selectedID); break
+    case 'closeWindow': closeWindowOrPane(); break
     default:
       toast(L(`“${command}”은 아직 이 빌드에 없어요.`, `“${command}” is not in this build yet.`))
   }
@@ -781,7 +1177,7 @@ function runMenuCommand(command: string) {
 
 on(window, 'dragover', (event: DragEvent) => {
   event.preventDefault()
-  if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+  if (event.dataTransfer) event.dataTransfer.dropEffect = carriesPaper(event) ? 'none' : 'copy'
 })
 
 on(window, 'drop', async (event: DragEvent) => {
@@ -796,7 +1192,7 @@ on(window, 'drop', async (event: DragEvent) => {
   changed('papers')
 })
 
-on(window, 'resize', () => reader.relayout())
+on(window, 'resize', () => relayoutReaders())
 
 // ------------------------------------------------------------------- start
 
@@ -807,17 +1203,31 @@ async function start() {
   layoutPanes()
   toolbar.update()
   store.windowState = await call('window:state')
-  reader.watchSelection()
 
   if (saved.libraryRoot) {
     const snapshot = await call<LibrarySnapshot>('library:reload')
     if (!('error' in snapshot)) {
       adopt(snapshot)
       changed('papers', 'shelf')
+      if (solo) {
+        // A window for one paper: that paper, kept, and nothing else.
+        if (findPaper(soloPaperID!)) {
+          keepOpen(soloPaperID!)
+          await showPaper(soloPaperID!)
+          document.title = findPaper(soloPaperID!)?.meta.displayTitle ?? 'Paper Time'
+        }
+        return
+      }
       const first = saved.selectedPaperID && findPaper(saved.selectedPaperID)
         ? saved.selectedPaperID
         : shelfPapers()[0]?.id
-      if (first) await openPaper(first)
+      if (first) await showPaper(first)
+      // `--papertime-split=1`: the first two papers side by side, for a
+      // probe that wants to look at the panes without a drag.
+      if (flags.split) {
+        const second = shelfPapers().find((entry) => entry.id !== store.selectedID)
+        if (second) dockPaper(second.id, 'right')
+      }
     }
   } else {
     changed('papers')

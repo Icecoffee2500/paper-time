@@ -117,6 +117,54 @@ const SHAPES: Record<string, string> = {
     <path d="M8 7.2v3.6"/>
     <circle cx="8" cy="5.2" r="0.72" fill="currentColor" stroke="none"/>`,
   checkmark: `<path d="M3 8.4 6.4 11.8 13 5.2"/>`,
+  xmark: `<path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6"/>`,
+  'xmark.circle': `
+    <circle cx="8" cy="8" r="5.6"/>
+    <path d="M5.9 5.9l4.2 4.2M10.1 5.9l-4.2 4.2"/>`,
+  'xmark.circle.fill': `
+    <circle cx="8" cy="8" r="5.6" fill="currentColor" stroke="none"/>
+    <path d="M5.9 5.9l4.2 4.2M10.1 5.9l-4.2 4.2" stroke="var(--panel, #fff)"/>`,
+  // ------------------------------------------------------------ open papers
+  // A pin: the head, the collar it sits on, and the point. Filled when the
+  // paper is kept open.
+  pin: `
+    <path d="M6.2 2.4h3.6l-.5 4.1 2.2 2.2v1.1H4.5V8.7l2.2-2.2Z"/>
+    <path d="M8 9.8v4"/>`,
+  'pin.fill': `
+    <path d="M6.2 2.4h3.6l-.5 4.1 2.2 2.2v1.1H4.5V8.7l2.2-2.2Z" fill="currentColor"/>
+    <path d="M8 9.8v4"/>`,
+  // Two pages, one behind the other — what is open right now.
+  'rectangle.on.rectangle': `
+    <rect x="1.8" y="4.6" width="9.6" height="9.4" rx="1.8"/>
+    <path d="M5.2 2.2h7.4a1.8 1.8 0 0 1 1.8 1.8v6.6"/>`,
+  // A window split down the middle: papers side by side.
+  'rectangle.split.2x1': `
+    <rect x="1.8" y="3.2" width="12.4" height="9.6" rx="1.8"/>
+    <path d="M8 3.2v9.6"/>`,
+  // A window with a plus in its corner: one of its own.
+  'macwindow.badge.plus': `
+    <path d="M9 13.2H3.6a1.8 1.8 0 0 1-1.8-1.8V4.6a1.8 1.8 0 0 1 1.8-1.8h8.8a1.8 1.8 0 0 1 1.8 1.8V8"/>
+    <path d="M1.8 6.6h12.4"/>
+    <path d="M12.4 10.2v4M10.4 12.2h4"/>`,
+  // The six zones: a window with the half or the quarter filled.
+  'rectangle.lefthalf.inset.filled': `
+    <rect x="1.8" y="3.2" width="12.4" height="9.6" rx="1.8"/>
+    <rect x="3.3" y="4.7" width="4.4" height="6.6" rx="0.8" fill="currentColor" stroke="none"/>`,
+  'rectangle.righthalf.inset.filled': `
+    <rect x="1.8" y="3.2" width="12.4" height="9.6" rx="1.8"/>
+    <rect x="8.3" y="4.7" width="4.4" height="6.6" rx="0.8" fill="currentColor" stroke="none"/>`,
+  'rectangle.inset.topleft.filled': `
+    <rect x="1.8" y="3.2" width="12.4" height="9.6" rx="1.8"/>
+    <rect x="3.3" y="4.7" width="4.4" height="2.8" rx="0.8" fill="currentColor" stroke="none"/>`,
+  'rectangle.inset.topright.filled': `
+    <rect x="1.8" y="3.2" width="12.4" height="9.6" rx="1.8"/>
+    <rect x="8.3" y="4.7" width="4.4" height="2.8" rx="0.8" fill="currentColor" stroke="none"/>`,
+  'rectangle.inset.bottomleft.filled': `
+    <rect x="1.8" y="3.2" width="12.4" height="9.6" rx="1.8"/>
+    <rect x="3.3" y="8.5" width="4.4" height="2.8" rx="0.8" fill="currentColor" stroke="none"/>`,
+  'rectangle.inset.bottomright.filled': `
+    <rect x="1.8" y="3.2" width="12.4" height="9.6" rx="1.8"/>
+    <rect x="8.3" y="8.5" width="4.4" height="2.8" rx="0.8" fill="currentColor" stroke="none"/>`,
   'doc.on.doc': `
     <rect x="5.4" y="1.9" width="8.2" height="9.4" rx="1.6"/>
     <path d="M10.6 11.3v1.6a1.6 1.6 0 0 1-1.6 1.6H4a1.6 1.6 0 0 1-1.6-1.6V5.9A1.6 1.6 0 0 1 4 4.3h1.4"/>`,

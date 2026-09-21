@@ -8,11 +8,17 @@ declare global {
       on: (handler: (event: string, payload: unknown) => void) => () => void
       platform: string
       korean: boolean
+      /** Set when this window shows one paper on its own. */
+      paper: string | null
+      flags: { split: boolean }
     }
   }
 }
 
 export const platform = window.papertime.platform
+/** The paper this window is for, when it is a window for one paper. */
+export const soloPaperID: string | null = window.papertime.paper ?? null
+export const flags = window.papertime.flags ?? { split: false }
 
 // Before anything draws: the main process already decided, and every string
 // below this line reads the answer.

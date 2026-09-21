@@ -151,13 +151,28 @@ export interface MenuEntry {
   separator?: boolean
   checked?: boolean
   action?: () => void
+  /** A submenu, opened beside the item when the pointer rests on it. */
+  children?: MenuEntry[]
 }
 
 /** A pop-up menu, dismissed by anything else being clicked. */
 export function showMenu(anchor: Element, entries: MenuEntry[], align: 'left' | 'right' = 'left') {
   closeMenu()
   const scrim = el('div', { class: 'scrim' })
+  const menu = buildMenu(entries)
+  on(scrim, 'mousedown', closeMenu)
+  document.body.append(scrim)
+  place(menu, anchor, align)
+  openMenu = { scrim, menu }
+}
+
+function buildMenu(entries: MenuEntry[]): HTMLElement {
   const menu = el('div', { class: 'menu', role: 'menu' })
+  let submenu: HTMLElement | null = null
+  const closeSubmenu = () => {
+    submenu?.remove()
+    submenu = null
+  }
   for (const entry of entries) {
     if (entry.separator) {
       menu.append(el('div', { class: 'menu-separator' }))
@@ -169,18 +184,38 @@ export function showMenu(anchor: Element, entries: MenuEntry[], align: 'left' | 
     }
     const item = el('button', { role: 'menuitem' }, [
       el('span', { html: entry.checked ? icon('checkmark') : icon(entry.icon ?? '') || spacer() }),
-      el('span', { text: entry.label ?? '' }),
+      el('span', { class: 'menu-label', text: entry.label ?? '' }),
     ])
-    on(item, 'click', () => {
-      closeMenu()
-      entry.action?.()
-    })
+    if (entry.children) {
+      item.append(el('span', { class: 'menu-chevron', html: icon('chevron.right') }))
+      const open = () => {
+        if (submenu && submenu.dataset.for === entry.label) return
+        closeSubmenu()
+        submenu = buildMenu(entry.children ?? [])
+        submenu.dataset.for = entry.label ?? ''
+        submenu.classList.add('submenu')
+        menu.append(submenu)
+        const box = item.getBoundingClientRect()
+        const size = submenu.getBoundingClientRect()
+        let left = box.right + 2
+        if (left + size.width > window.innerWidth - 8) left = box.left - size.width - 2
+        let top = box.top - 5
+        if (top + size.height > window.innerHeight - 8) top = Math.max(8, window.innerHeight - size.height - 8)
+        submenu.style.left = `${left}px`
+        submenu.style.top = `${top}px`
+      }
+      on(item, 'mouseenter', open)
+      on(item, 'click', open)
+    } else {
+      on(item, 'mouseenter', closeSubmenu)
+      on(item, 'click', () => {
+        closeMenu()
+        entry.action?.()
+      })
+    }
     menu.append(item)
   }
-  on(scrim, 'mousedown', closeMenu)
-  document.body.append(scrim)
-  place(menu, anchor, align)
-  openMenu = { scrim, menu }
+  return menu
 }
 
 function spacer() {

@@ -12,7 +12,8 @@
  * fifth surface takes the mouse and the text layer steps aside.
  */
 import { clear, el, on } from '../dom.js'
-import { store } from '../state.js'
+import { freshReaderState, store, type ReaderState } from '../state.js'
+import { PAPER_DRAG_TYPE } from '../../shared/split.js'
 import { loadDocument, TextLayer, type PDFDocumentProxy, type PDFPageProxy } from '../pdf.js'
 import { SketchElement } from '../../shared/sketch.js'
 import { InkStroke } from '../../shared/ink.js'
@@ -37,7 +38,7 @@ import {
 } from './sketchInput.js'
 import { sketchEditor } from './sketchEditing.js'
 import { pagesOf, type Snapshot } from './sketchUndo.js'
-import { installMathProvider } from '../sketchMath.js'
+import { installMathProvider, removeMathListener } from '../sketchMath.js'
 import { icon } from '../icons.js'
 import { L } from '../../shared/lang.js'
 
@@ -52,6 +53,17 @@ export interface ReaderActions {
   /** Ask the window to redraw the parts that show what is selected. */
   changed: () => void
   toast: (message: string) => void
+  /** A press landed in this reader: it is the one in use. */
+  activated?: () => void
+  /** The × in a pane's title strip: take the pane out and close the paper. */
+  close?: () => void
+}
+
+export interface ReaderOptions {
+  /** One of several side by side: the title strip is a handle and has an ×. */
+  pane?: boolean
+  /** The state this reader keeps — shared with the store while it is in focus. */
+  state?: ReaderState
 }
 
 export class PageView {
@@ -236,10 +248,17 @@ export class Reader {
   document: PDFDocumentProxy | null = null
   pages: PageView[] = []
   paperID: string | null = null
+  /** Page count, page, zoom and whether the pen is out — this reader's own. */
+  readonly state: ReaderState
+  readonly isPane: boolean
   private observer: IntersectionObserver | null = null
   private generation = 0
+  private readonly onSelectionChange = () => this.updateMarkBar()
+  private readonly onMathReady = () => this.redrawAll()
 
-  constructor(private readonly actions: ReaderActions) {
+  constructor(private readonly actions: ReaderActions, options: ReaderOptions = {}) {
+    this.state = options.state ?? freshReaderState()
+    this.isPane = options.pane ?? false
     this.scroll.append(this.pagesBox)
     // Outside the scroll view: the tool rack and the style panel belong to the
     // reader, not to the page under it, and a rack that scrolled away with the
@@ -248,6 +267,10 @@ export class Reader {
     this.node = el('div', { class: 'panel reader-panel' }, [
       this.header, this.scroll, this.overlayHost, this.footer,
     ])
+    if (this.isPane) this.node.classList.add('pane')
+    // A press anywhere in the reader — the page, the strip, the footer —
+    // makes it the one in use: the pane in focus, and a paper kept open.
+    on(this.node, 'pointerdown', () => this.actions.activated?.())
     on(this.scroll, 'scroll', () => this.noteCurrentPage(), { passive: true } as never)
     on(this.scroll, 'wheel', (event: WheelEvent) => {
       // Ctrl or ⌘ with the wheel is zoom everywhere else; it should be here.
@@ -260,7 +283,7 @@ export class Reader {
     // drawn is never a picture you have to unlock first. The same press then
     // goes to the page's surface, which was not there to receive it.
     on(this.pagesBox, 'pointerdown', (event: PointerEvent) => {
-      if (store.reader.drawing || event.button !== 0) return
+      if (this.state.drawing || event.button !== 0) return
       const page = this.pageContaining(event.target as Node)
       if (!page || !hitsDrawing(page, page.toPageFromClient(event.clientX, event.clientY))) return
       this.setDrawing(true)
@@ -270,7 +293,17 @@ export class Reader {
     })
     // A formula's picture arrives after the card was drawn; the page is
     // drawn again when it does.
-    installMathProvider(() => this.redrawAll())
+    installMathProvider(this.onMathReady)
+    on(document, 'selectionchange', this.onSelectionChange)
+    on(this.scroll, 'scroll', () => this.hideMarkBar(), { passive: true } as never)
+  }
+
+  /** Takes the reader down for good: its pages, its document, its listeners. */
+  dispose() {
+    this.close()
+    document.removeEventListener('selectionchange', this.onSelectionChange)
+    removeMathListener(this.onMathReady)
+    this.node.remove()
   }
 
   /** The page under a point in the window, if any is. */
@@ -311,7 +344,7 @@ export class Reader {
         return
       }
       this.document = document
-      store.reader.pageCount = document.numPages
+      this.state.pageCount = document.numPages
       const proxies = await Promise.all(
         Array.from({ length: document.numPages }, (_, index) => document.getPage(index + 1)),
       )
@@ -337,8 +370,8 @@ export class Reader {
     this.document?.destroy()
     this.document = null
     this.paperID = null
-    store.reader.pageCount = 0
-    store.reader.currentPage = 0
+    this.state.pageCount = 0
+    this.state.currentPage = 0
   }
 
   /**
@@ -357,11 +390,11 @@ export class Reader {
   }
 
   relayout() {
-    const scale = this.baseScale() * store.reader.zoom
+    const scale = this.baseScale() * this.state.zoom
     for (const page of this.pages) {
       page.layout(scale)
       page.applyTint()
-      page.setDrawing(store.reader.drawing)
+      page.setDrawing(this.state.drawing)
     }
     this.applyLayout()
     this.renderVisible()
@@ -379,16 +412,16 @@ export class Reader {
   applyLayout() {
     const single = store.settings.pageLayout === 'single'
     for (const page of this.pages) {
-      page.root.style.display = !single || page.index === store.reader.currentPage ? '' : 'none'
+      page.root.style.display = !single || page.index === this.state.currentPage ? '' : 'none'
     }
     if (single) this.scroll.scrollTop = 0
   }
 
   /** Moves by whole pages. Only meaningful when one page is showing. */
   turnPage(by: number) {
-    const next = Math.max(0, Math.min(store.reader.currentPage + by, this.pages.length - 1))
-    if (next === store.reader.currentPage) return
-    store.reader.currentPage = next
+    const next = Math.max(0, Math.min(this.state.currentPage + by, this.pages.length - 1))
+    if (next === this.state.currentPage) return
+    this.state.currentPage = next
     if (store.settings.pageLayout === 'single') {
       this.applyLayout()
       void this.pages[next]?.render()
@@ -406,13 +439,13 @@ export class Reader {
   }
 
   zoomBy(factor: number) {
-    store.reader.zoom = Math.max(0.35, Math.min(store.reader.zoom * factor, 6))
+    this.state.zoom = Math.max(0.35, Math.min(this.state.zoom * factor, 6))
     this.relayout()
     this.update()
   }
 
   setZoom(zoom: number) {
-    store.reader.zoom = zoom
+    this.state.zoom = zoom
     this.relayout()
     this.update()
   }
@@ -581,7 +614,7 @@ export class Reader {
   }
 
   setDrawing(drawing: boolean) {
-    store.reader.drawing = drawing
+    this.state.drawing = drawing
     for (const page of this.pages) {
       page.setDrawing(drawing)
       if (drawing && !page.input) page.input = attachSketchInput(page, this, this.sketchHost)
@@ -614,21 +647,17 @@ export class Reader {
    */
   private markBar: HTMLElement | null = null
 
-  watchSelection() {
-    on(document, 'selectionchange', () => this.updateMarkBar())
-    on(this.scroll, 'scroll', () => this.hideMarkBar(), { passive: true } as never)
-  }
-
   private updateMarkBar() {
     const selection = window.getSelection()
-    if (!selection || selection.isCollapsed || selection.rangeCount === 0 || store.reader.drawing) {
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0 || this.state.drawing) {
       return this.hideMarkBar()
     }
     const range = selection.getRangeAt(0)
     const inside = (range.commonAncestorContainer instanceof Element
       ? range.commonAncestorContainer
       : range.commonAncestorContainer.parentElement)?.closest('.text-layer')
-    if (!inside) return this.hideMarkBar()
+    // This reader's own text, not a neighbouring pane's.
+    if (!inside || !this.node.contains(inside)) return this.hideMarkBar()
 
     const rect = range.getBoundingClientRect()
     if (rect.width === 0 && rect.height === 0) return this.hideMarkBar()
@@ -692,8 +721,8 @@ export class Reader {
     for (const page of this.pages) {
       if (page.root.offsetTop <= middle) current = page.index
     }
-    if (current !== store.reader.currentPage) {
-      store.reader.currentPage = current
+    if (current !== this.state.currentPage) {
+      this.state.currentPage = current
       this.updateFooter()
     }
   }
@@ -704,23 +733,53 @@ export class Reader {
     this.scroll.scrollTo({ top: page.root.offsetTop - 14, behavior: 'smooth' })
   }
 
+  /** Says whether this is the pane in focus; the border shows it. */
+  setFocused(focused: boolean) {
+    this.node.classList.toggle('focused', focused)
+    this.header.classList.toggle('focused', focused)
+  }
+
   update() {
     clear(this.header)
-    const paper = store.papers.find((entry) => entry.id === store.selectedID)
-    this.header.append(el('span', { class: 'reader-title', text: paper?.meta.displayTitle ?? '' }))
+    const paper = store.papers.find((entry) => entry.id === this.paperID)
+    const title = el('span', { class: 'reader-title', text: paper?.meta.displayTitle ?? '' })
+    this.header.append(title)
+    if (paper && this.isPane) {
+      // The title is the handle: drag it to another zone to move the pane.
+      this.header.draggable = true
+      on(this.header, 'dragstart', (event: DragEvent) => {
+        if (!event.dataTransfer) return
+        event.dataTransfer.setData(PAPER_DRAG_TYPE, paper.id)
+        event.dataTransfer.setData('text/plain', paper.meta.displayTitle)
+        event.dataTransfer.effectAllowed = 'move'
+      })
+    }
     if (paper) {
       const draw = el('button', {
         class: 'icon-button',
         title: L('쪽에 그리기', 'Draw on the Page'),
-        'aria-pressed': String(store.reader.drawing),
+        'aria-pressed': String(this.state.drawing),
         html: icon('pen'),
       })
       on(draw, 'click', () => {
-        this.setDrawing(!store.reader.drawing)
+        this.setDrawing(!this.state.drawing)
         this.update()
         this.actions.changed()
       })
       this.header.append(draw)
+      if (this.isPane && this.actions.close) {
+        const close = el('button', {
+          class: 'icon-button pane-close',
+          title: L('닫기', 'Close'),
+          'aria-label': L('닫기', 'Close'),
+          html: icon('xmark'),
+        })
+        on(close, 'click', (event: MouseEvent) => {
+          event.stopPropagation()
+          this.actions.close?.()
+        })
+        this.header.append(close)
+      }
     }
     this.updateFooter()
   }
@@ -730,8 +789,8 @@ export class Reader {
     if (!this.document) return
     const position = el('span', {
       text: L(
-        `${store.reader.currentPage + 1} / ${store.reader.pageCount}쪽`,
-        `Page ${store.reader.currentPage + 1} of ${store.reader.pageCount}`,
+        `${this.state.currentPage + 1} / ${this.state.pageCount}쪽`,
+        `Page ${this.state.currentPage + 1} of ${this.state.pageCount}`,
       ),
     })
     this.footer.append(position)
@@ -747,11 +806,11 @@ export class Reader {
         return button
       }
       this.footer.append(el('div', { class: 'toolbar-group' }, [
-        turn('chevron.left', -1, store.reader.currentPage === 0),
-        turn('chevron.right', 1, store.reader.currentPage >= store.reader.pageCount - 1),
+        turn('chevron.left', -1, this.state.currentPage === 0),
+        turn('chevron.right', 1, this.state.currentPage >= this.state.pageCount - 1),
       ]))
     }
-    this.footer.append(el('span', { text: `${Math.round(store.reader.zoom * 100)}%` }))
+    this.footer.append(el('span', { text: `${Math.round(this.state.zoom * 100)}%` }))
   }
 
   /** Redraws every page that has a drawing on it. */

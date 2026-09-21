@@ -9,6 +9,7 @@
 import type { LibrarySnapshot, PaperRowDTO } from '../shared/api.js'
 import { PaperMeta, PaperState, type Collection, type Tag } from '../shared/model.js'
 import { SketchColor, SketchStyle } from '../shared/sketch.js'
+import { splitContains, splitDock, splitPapers, splitRemove, type DockZone, type SplitArrangement } from '../shared/split.js'
 
 export type Pane = 'sidebar' | 'paperList' | 'reader' | 'inspector'
 export type InspectorTab = 'details' | 'marks' | 'note' | 'tools'
@@ -19,6 +20,7 @@ export type SketchTool =
 /** Which shelf of the library is showing. */
 export type Shelf =
   | { kind: 'all' }
+  | { kind: 'open' }
   | { kind: 'status'; status: 'unread' | 'reading' | 'read' }
   | { kind: 'favorites' }
   | { kind: 'review' }
@@ -46,6 +48,17 @@ export interface Settings {
   selectedPaperID: string | null
 }
 
+/** What one reader — one pane — knows about the paper it shows. */
+export interface ReaderState {
+  pageCount: number
+  currentPage: number
+  zoom: number
+  /** The pen is out: the page takes the mouse instead of the text layer. */
+  drawing: boolean
+}
+
+export const freshReaderState = (): ReaderState => ({ pageCount: 0, currentPage: 0, zoom: 1, drawing: false })
+
 export interface Store {
   ready: boolean
   error: string | null
@@ -55,7 +68,21 @@ export interface Store {
   tags: Tag[]
   looseCount: number
   shelf: Shelf
+  /** The paper showing — with panes side by side, the one in focus. */
   selectedID: string | null
+  /**
+   * The papers kept open this session, in the order they were kept.
+   *
+   * Not every paper looked at: walking down the list shows each in turn, and
+   * a shelf that kept all of them would be the list again. A paper is kept
+   * when it is *used* — clicked into, put beside another, pinned — the way an
+   * editor's preview tab becomes a real tab once you type in it. The one
+   * merely showing is a preview, and leaves when the next one is shown.
+   * Per session, as on the Mac: never written to the settings file.
+   */
+  openPaperIDs: string[]
+  /** Papers side by side, when they are. Null is the one reader as always. */
+  split: SplitArrangement | null
   settings: Settings
   windowState: { maximized: boolean; fullScreen: boolean; focused: boolean }
   /** The papers opened, in order — what the back and forward arrows walk. */
@@ -65,13 +92,8 @@ export interface Store {
   travelling: boolean
   search: { open: boolean; query: string }
   toast: string | null
-  reader: {
-    pageCount: number
-    currentPage: number
-    zoom: number
-    /** The pen is out: the page takes the mouse instead of the text layer. */
-    drawing: boolean
-  }
+  /** The reader in focus. Each pane has one of these; this is the focused pane's. */
+  reader: ReaderState
   sketch: {
     tool: SketchTool
     /** The shape tool last used — the one the rack's shapes button shows. */
@@ -109,6 +131,8 @@ export const store: Store = {
   looseCount: 0,
   shelf: { kind: 'all' },
   selectedID: null,
+  openPaperIDs: [],
+  split: null,
   settings: {
     libraryRoot: null,
     panes: { sidebar: true, paperList: true, reader: true, inspector: true },
@@ -126,7 +150,7 @@ export const store: Store = {
   travelling: false,
   search: { open: false, query: '' },
   toast: null,
-  reader: { pageCount: 0, currentPage: 0, zoom: 1, drawing: false },
+  reader: freshReaderState(),
   sketch: { tool: 'select', lastShape: 'rectangle', lastInk: 'pen', style: new SketchStyle(), selection: null },
 }
 
@@ -172,6 +196,79 @@ export function paper(id: string | null): Paper | null {
   return store.papers.find((entry) => entry.id === id) ?? null
 }
 
+// MARK: - The open shelf
+
+export function isOpenPaper(id: string): boolean {
+  return store.openPaperIDs.includes(id)
+}
+
+/** Keeps a paper on the open shelf. */
+export function keepOpen(id: string) {
+  if (!paper(id) || store.openPaperIDs.includes(id)) return
+  store.openPaperIDs = [...store.openPaperIDs, id]
+}
+
+/**
+ * Takes a paper off the open shelf. If it was the one showing, its neighbour
+ * on the shelf comes forward; with the shelf empty, nothing is showing.
+ */
+export function closeOpenPaper(id: string) {
+  const at = store.openPaperIDs.indexOf(id)
+  if (at >= 0) store.openPaperIDs = store.openPaperIDs.filter((entry) => entry !== id)
+  if (store.selectedID !== id) return
+  const next = at >= 0 && at < store.openPaperIDs.length
+    ? store.openPaperIDs[at]
+    : store.openPaperIDs[store.openPaperIDs.length - 1]
+  store.selectedID = next ?? null
+}
+
+export function closeOtherOpenPapers(keeping: string) {
+  store.openPaperIDs = store.openPaperIDs.filter((entry) => entry === keeping)
+  if (store.selectedID !== keeping) store.selectedID = keeping
+}
+
+// MARK: - Side by side
+
+/**
+ * Puts a paper into a zone of the page area. With nothing side by side yet,
+ * the paper already showing takes the other half. Put beside another, a
+ * paper is in use: every paper in the arrangement stays on the open shelf.
+ */
+export function dock(id: string, zone: DockZone) {
+  const current = store.selectedID
+  const base: SplitArrangement = store.split
+    ?? (current ? { left: { top: current } } : { left: { top: id } })
+  const arrangement = splitDock(base, id, zone)
+  for (const entry of splitPapers(arrangement)) keepOpen(entry)
+  store.split = splitPapers(arrangement).length > 1 ? arrangement : null
+  if (current === null) store.selectedID = id
+}
+
+/**
+ * Takes a paper out of the side-by-side arrangement. One pane left is no
+ * arrangement at all; that paper is simply the one showing.
+ */
+export function undock(id: string) {
+  const arrangement = store.split
+  if (!arrangement || !splitContains(arrangement, id)) return
+  const remaining = splitRemove(arrangement, id)
+  const papers = splitPapers(remaining)
+  if (papers.length <= 1) {
+    store.split = null
+    const last = papers[0]
+    if (last && (store.selectedID === id || store.selectedID === null)) store.selectedID = last
+  } else {
+    store.split = remaining
+    if (store.selectedID === id) store.selectedID = papers[0]
+  }
+}
+
+/** The papers in panes, left column first — or just the one showing. */
+export function panePapers(): string[] {
+  if (store.split) return splitPapers(store.split)
+  return store.selectedID ? [store.selectedID] : []
+}
+
 // MARK: - The trail behind the arrows
 
 /**
@@ -207,6 +304,13 @@ export function shelfPapers(): Paper[] {
   let filtered = all
   switch (store.shelf.kind) {
     case 'all': break
+    case 'open': {
+      // In the order they were kept, not the list's sort: this shelf is a
+      // row of tabs. The preview — showing, not kept — is last.
+      const ids = [...store.openPaperIDs]
+      if (store.selectedID && !ids.includes(store.selectedID)) ids.push(store.selectedID)
+      return ids.map((id) => paper(id)).filter((entry): entry is Paper => Boolean(entry) && !entry!.meta.parentID)
+    }
     case 'status':
       filtered = all.filter((entry) => entry.state.readingStatus === (store.shelf as never as { status: string }).status)
       break

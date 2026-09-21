@@ -29,7 +29,19 @@ const language = process.argv
   .find((argument) => argument.startsWith('--papertime-lang='))
   ?.slice('--papertime-lang='.length)
 
+/**
+ * A window for one paper: `--papertime-paper=<id>` names it, and the window
+ * shows that paper's reader and nothing else. `--papertime-split=1` puts the
+ * first two papers side by side, for a probe.
+ */
+const soloPaper = process.argv
+  .find((argument) => argument.startsWith('--papertime-paper='))
+  ?.slice('--papertime-paper='.length)
+const wantsSplit = process.argv.includes('--papertime-split=1')
+
 contextBridge.exposeInMainWorld('papertime', {
+  paper: soloPaper ?? null,
+  flags: { split: wantsSplit },
   invoke: (name: string, args?: unknown) => ipcRenderer.invoke(CHANNEL.invoke, name, args),
   on: (handler: (event: string, payload: unknown) => void) => {
     const listener = (_: unknown, event: string, payload: unknown) => handler(event, payload)
