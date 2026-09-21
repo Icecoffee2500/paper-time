@@ -3,6 +3,12 @@ import SwiftUI
 @main
 struct PaperTimeApp: App {
     @State private var model = AppModel()
+    #if os(macOS)
+    /// Files and folders the desktop hands over — a folder dropped on the
+    /// icon becomes the library, which is the one way into a Google Drive or
+    /// Dropbox folder that needs no open panel.
+    @NSApplicationDelegateAdaptor(OpenWithFinder.self) private var opener
+    #endif
 
     init() {
         #if os(macOS)
@@ -29,6 +35,9 @@ struct PaperTimeApp: App {
             RootView()
                 .environment(model)
                 .task {
+                    #if os(macOS)
+                    OpenWithFinder.flush(into: model)
+                    #endif
                     Trace.mark("window on screen")
                     Hitches.watch()
                     // Set now, cleared on a clean quit. Finding it still set

@@ -625,6 +625,17 @@ async function main() {
     assert.deepEqual(rect, { x: 504, y: 8, width: 488, height: 884 })
   })
 
+  await test('a new record carries the date the Mac insists on', () => {
+    const meta = PaperMeta.make('095886A4-5BB4-4A93-B764-43BE22CD41C1', {
+      relativePath: 'a.pdf', byteSize: 1, pageCount: 1, importDigest: 'd', originalName: 'a.pdf',
+    }, 'pc')
+    const raw = meta.encode() as { provenance?: Record<string, unknown> }
+    // Provenance.fetchedAt is not optional on the Mac. Without it the whole
+    // record fails to decode and the paper is simply not there.
+    assert.ok(raw.provenance?.fetchedAt, 'provenance.fetchedAt is written')
+    assert.match(String(raw.provenance?.fetchedAt), /^\d{4}-\d{2}-\d{2}T/)
+  })
+
   await test('the rights handlers are the same list the Mac looks for', () => {
     // Run from Portable/, as `npm test` does.
     const swift = fs.readFileSync(

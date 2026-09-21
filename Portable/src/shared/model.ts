@@ -147,7 +147,10 @@ export class PaperMeta {
       bibKey: '',
       confidence: 'unparsed',
       identifiers: {},
-      provenance: { source: 'heuristic' },
+      // `fetchedAt` is not optional on the Mac: a record without it fails to
+      // decode, and the Mac drops the paper rather than showing it. Written
+      // the same way the Mac writes it.
+      provenance: { source: 'heuristic', fetchedAt: isoTimestamp(now) },
       candidates: [],
       file: { ...file },
       tagIDs: [],

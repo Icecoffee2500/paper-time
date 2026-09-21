@@ -1,7 +1,7 @@
 {
   "name": "paper-time",
   "productName": "Paper Time",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "description": "A reader, a pen and a bibliography for papers — the same on every desktop.",
   "author": "Taeheon Im <icecoffee2500@korea.ac.kr>",
   "license": "MIT",

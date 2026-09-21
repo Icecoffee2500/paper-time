@@ -257,6 +257,32 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.8.3",
+            date: Text2("2026년 9월", "September 2026"),
+            note: Text2(
+                "PC에서 더한 논문이 맥에서 안 보이던 것을 고쳤어요. 그리고 폴더를 앱에 끌어다 놓으면 그 폴더가 라이브러리가 돼요 — Google Drive 폴더도요.",
+                "A paper added on a PC was invisible on the Mac; that is fixed. And a folder dropped on the app becomes the library — a Google Drive folder too."
+            ),
+            added: [
+                Entry(
+                    Text2("폴더를 끌어다 놓으면 열려요", "Drop a folder and it opens"),
+                    Text2(
+                        "Finder에서 폴더를 Paper Time 아이콘이나 창에 끌어다 놓으면 그 폴더가 라이브러리가 돼요. PDF를 끌어다 놓으면 지금 라이브러리에 들어가고요. Google Drive나 Dropbox 폴더처럼 앱이 혼자서는 못 들어가는 자리도 이렇게 건네주면 열려요 — 다음부터는 앱이 알아서 기억해요.",
+                        "Drag a folder from the Finder onto Paper Time's icon or window and it becomes the library. Drag a PDF and it joins the library that is open. A folder the app cannot reach on its own — one in Google Drive or Dropbox — opens this way too, and is remembered from then on."
+                    )
+                ),
+            ],
+            fixed: [
+                Entry(
+                    Text2("PC에서 더한 논문이 맥에서 안 보였어요", "A paper added on a PC was invisible on the Mac"),
+                    Text2(
+                        "윈도우·리눅스가 쓴 기록에 날짜 한 칸이 비어 있었고, 맥은 그 기록을 읽다 실패했어요. 읽히지 않는 기록은 논문이 아니라서, PDF가 든 폴더 옆에 빈 서가가 보였어요 — 오류 하나 없이요. 이제 양쪽이 같은 칸을 쓰고, 맥은 칸이 비어 있어도 논문을 잃지 않아요. 이미 만들어진 라이브러리도 그대로 열려요.",
+                        "The Windows and Linux build left one date out of a record, and the Mac failed to read it. A record that will not read is not a paper, so the Mac showed an empty shelf beside a folder full of PDFs — with no error at all. Both builds now write the field, and the Mac no longer loses a paper over a missing one. Libraries already made open as they are."
+                    )
+                ),
+            ]
+        ),
+        Release(
             version: "0.8.2",
             date: Text2("2026년 9월", "September 2026"),
             note: Text2(
