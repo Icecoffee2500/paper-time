@@ -175,8 +175,14 @@ struct BibTeXExportView: View {
         }
     }
 
+    /// Only papers are counted here. A document is never "unverified" — it
+    /// has no registrar to be verified against — and counting manuals as
+    /// unfinished business made the warning cry wolf.
     private var reviewCount: Int {
-        papersInScope.filter { $0.meta.confidence == .needsReview || $0.meta.confidence == .unparsed }.count
+        papersInScope.filter {
+            $0.meta.effectiveKind == .paper
+                && ($0.meta.confidence == .needsReview || $0.meta.confidence == .unparsed)
+        }.count
     }
 
     private var warningText: String {

@@ -182,7 +182,7 @@ struct OpenPapersPopup: View {
     /// A window of its own for the paper, put where the drag ended when
     /// there was one.
     private func open(_ id: UUID, at point: NSPoint?) {
-        model.keepOpen(id)
+        model.keepOpen(id, byHand: true)
         openWindow(id: "paper", value: id)
         guard let point else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {

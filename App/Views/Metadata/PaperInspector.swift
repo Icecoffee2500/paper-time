@@ -59,16 +59,35 @@ private struct PaperInspectorForm: View {
             if let paper {
                 header(for: paper)
 
-                if paper.meta.confidence == .needsReview, !paper.meta.candidates.isEmpty {
+                // Before anything else: what is this? A form that asks a car
+                // manual for its journal is a form that makes the reader
+                // wrong, so the question comes before the fields it decides.
+                // Once answered it goes away — it is asked once in the life
+                // of a paper, and a form is no place for a switch that is
+                // never touched again. Changing it later is in the ⋯ menu and
+                // in the row's own menu.
+                if paper.meta.kindIsUnanswered { kindQuestion(for: paper) }
+
+                let kind = paper.meta.effectiveKind
+                if kind == .paper, paper.meta.confidence == .needsReview, !paper.meta.candidates.isEmpty {
                     candidatesSection(for: paper)
                 }
 
                 supplementsSection(for: paper)
-                detailsSection
-                AuthorListEditor(authors: $draft.author)
+                if kind == .paper {
+                    detailsSection
+                    AuthorListEditor(authors: $draft.author)
+                } else {
+                    documentSection
+                    AuthorListEditor(authors: $draft.author, title: L("쓴 사람", "Written by"))
+                }
                 saveRevertSection
                 readingStateSection
-                identifiersSection(for: paper)
+                if kind == .paper {
+                    identifiersSection(for: paper)
+                } else {
+                    fileSection(for: paper)
+                }
                 provenanceFooter(for: paper)
             }
         }
@@ -118,6 +137,59 @@ private struct PaperInspectorForm: View {
         case .unparsed:
             Label(L("아직 모름", "Unresolved"), systemImage: "questionmark.circle")
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: - What is this?
+
+    /// One question, asked once, with the app's own guess offered.
+    ///
+    /// Everything downstream hangs on the answer — which fields the form has,
+    /// whether the record is looked up online at all, whether it turns up in
+    /// a BibTeX export — so it is asked plainly rather than inferred and
+    /// quietly acted on.
+    @ViewBuilder
+    private func kindQuestion(for paper: LoadedPaper) -> some View {
+        Section {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(L("이 PDF는 무엇인가요?", "What is this PDF?"))
+                    .font(.headline)
+                Picker("", selection: kindBinding(for: paper)) {
+                    Text(L("논문", "A paper")).tag(DocumentKind.paper)
+                    Text(L("일반 문서", "A document")).tag(DocumentKind.document)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                Text(hint(for: paper.meta.guessedKind))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 4)
+        }
+    }
+
+    /// The answer, and the way back from it.
+    ///
+    /// Before there is an answer the control still shows the app's guess, so
+    /// pressing the one already marked is an answer too — "yes, that one" —
+    /// rather than a press that appears to do nothing.
+    private func kindBinding(for paper: LoadedPaper) -> Binding<DocumentKind> {
+        Binding(
+            get: { paper.meta.effectiveKind },
+            set: { kind in Task { await model.setKind(kind, for: paper.id) } }
+        )
+    }
+
+    private func hint(for guess: DocumentKind?) -> String {
+        switch guess {
+        case .paper:
+            L("논문 같아요 — 안에 DOI나 참고문헌이 보여요. 맞으면 그대로 눌러주세요.",
+              "It looks like a paper — there is a DOI or a reference list in it. Press it again to agree.")
+        case .document:
+            L("논문은 아닌 것 같아요. 일반 문서면 학술지 같은 칸은 숨길게요.",
+              "It doesn't look like a paper. As a document, the journal fields go away.")
+        case nil:
+            L("고르면 이 칸들이 그에 맞게 바뀌어요.", "The fields below follow your answer.")
         }
     }
 
@@ -246,6 +318,46 @@ private struct PaperInspectorForm: View {
                 ForEach(CSLType.allCases, id: \.self) { type in
                     Text(displayName(for: type)).tag(type)
                 }
+            }
+        }
+    }
+
+    /// The form a document gets: what it is, who made it, when — and nothing
+    /// about journals, volumes or DOIs, which it does not have.
+    private var documentSection: some View {
+        Section(L("문서 정보", "Details")) {
+            TextField(L("제목", "Title"), text: stringBinding(\.title))
+            TextField(L("부제", "Subtitle"), text: stringBinding(\.subtitle))
+            TextField(L("펴낸 곳", "From"), text: stringBinding(\.publisher))
+            TextField(L("해", "Year"), text: yearBinding)
+                #if os(iOS)
+                .keyboardType(.numberPad)
+                #endif
+            TextField("URL", text: stringBinding(\.url))
+            Picker(L("종류", "Kind"), selection: $draft.type) {
+                ForEach(Self.documentTypes, id: \.self) { type in
+                    Text(displayName(for: type)).tag(type)
+                }
+            }
+        }
+    }
+
+    /// The kinds a document can be. The bibliography's own list, minus the
+    /// half of it that only a paper is.
+    private static let documentTypes: [CSLType] = [
+        .report, .book, .chapter, .manuscript, .webpage, .speech, .dataset, .software, .patent, .other,
+    ]
+
+    /// What a document has instead of identifiers: the file it came from.
+    @ViewBuilder
+    private func fileSection(for paper: LoadedPaper) -> some View {
+        Section(L("파일", "File")) {
+            LabeledContent(L("이름", "Name"), value: paper.meta.file.originalName)
+            LabeledContent(L("쪽", "Pages"), value: "\(paper.meta.file.pageCount)")
+            Button(L("폴더에서 보기", "Show in Finder")) {
+                #if os(macOS)
+                NSWorkspace.shared.activateFileViewerSelecting([paper.documentURL])
+                #endif
             }
         }
     }

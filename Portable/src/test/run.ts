@@ -28,6 +28,7 @@ import {
 } from '../shared/sketch.js'
 import { InkStroke, resample } from '../shared/ink.js'
 import { KNOWN_HANDLERS, rightsHandler } from '../shared/pdfLock.js'
+import { guessKind, hasAbstract, hasIdentifier, hasReferences } from '../shared/documentKind.js'
 import { SketchTree, adopted, guessedDirection, ordered, pruned, copied } from '../shared/sketchTree.js'
 import { PaperMeta, PaperState } from '../shared/model.js'
 import { entryFor, formatEntry, protectTitle } from '../shared/bibtex.js'
@@ -634,6 +635,37 @@ async function main() {
     // record fails to decode and the paper is simply not there.
     assert.ok(raw.provenance?.fetchedAt, 'provenance.fetchedAt is written')
     assert.match(String(raw.provenance?.fetchedAt), /^\d{4}-\d{2}-\d{2}T/)
+  })
+
+  await test('what a PDF is, guessed the way the Mac guesses', () => {
+    assert.equal(guessKind({ identifier: true, abstract: false, references: false }).kind, 'paper')
+    assert.equal(guessKind({ identifier: false, abstract: true, references: true }).kind, 'paper')
+    // One without the other is not enough: a report has a summary, and a
+    // manual can cite a standard.
+    assert.equal(guessKind({ identifier: false, abstract: true, references: false }).kind, 'document')
+    assert.equal(guessKind({ identifier: false, abstract: false, references: false }).kind, 'document')
+
+    assert.ok(hasIdentifier('see https://doi.org/10.1145/3292500.3330701 for more'))
+    assert.ok(hasIdentifier('arXiv:2403.01234v2 [cs.LG]'))
+    assert.ok(!hasIdentifier('call 10.30 on Tuesday'))
+    assert.ok(hasAbstract('A Study of Things\nAbstract\nWe show that…'))
+    assert.ok(!hasAbstract('Coffee Machine Manual\nHow to descale your machine'))
+    assert.ok(hasReferences('…and so on.\nReferences\n[1] Someone, 2020.'))
+  })
+
+  await test('a record says nothing about its kind until somebody does', () => {
+    const meta = PaperMeta.make('095886A4-5BB4-4A93-B764-43BE22CD41C1', {
+      relativePath: 'a.pdf', byteSize: 1, pageCount: 1, importDigest: 'd', originalName: 'a.pdf',
+    }, 'pc')
+    assert.equal(meta.kindIsUnanswered, true)
+    assert.equal(meta.effectiveKind, 'paper')
+    assert.ok(!/"kind"/.test(encode(meta.encode())), 'no kind key until there is an answer')
+    meta.guessedKind = 'document'
+    assert.equal(meta.effectiveKind, 'document')
+    meta.kind = 'paper'
+    // The answer wins over the guess, always.
+    assert.equal(meta.effectiveKind, 'paper')
+    assert.match(encode(meta.encode()), /"kind" : "paper"/)
   })
 
   await test('the rights handlers are the same list the Mac looks for', () => {

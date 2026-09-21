@@ -7,6 +7,7 @@
  * from differing by way of somebody's runtime.
  */
 import type { LibrarySnapshot, PaperRowDTO } from '../shared/api.js'
+import { type DocumentKind } from '../shared/documentKind.js'
 import { PaperMeta, PaperState, type Collection, type Tag } from '../shared/model.js'
 import { SketchColor, SketchStyle } from '../shared/sketch.js'
 import { splitContains, splitDock, splitPapers, splitRemove, type DockZone, type SplitArrangement } from '../shared/split.js'
@@ -20,6 +21,8 @@ export type SketchTool =
 /** Which shelf of the library is showing. */
 export type Shelf =
   | { kind: 'all' }
+  /** The two kinds, which only appear as rows once a library holds both. */
+  | { kind: 'kind'; of: DocumentKind }
   | { kind: 'open' }
   | { kind: 'status'; status: 'unread' | 'reading' | 'read' }
   | { kind: 'favorites' }
@@ -81,6 +84,8 @@ export interface Store {
    * Per session, as on the Mac: never written to the settings file.
    */
   openPaperIDs: string[]
+  /** The ones somebody pinned, as against the ones the app kept. */
+  pinnedPaperIDs: string[]
   /** Papers side by side, when they are. Null is the one reader as always. */
   split: SplitArrangement | null
   settings: Settings
@@ -132,6 +137,7 @@ export const store: Store = {
   shelf: { kind: 'all' },
   selectedID: null,
   openPaperIDs: [],
+  pinnedPaperIDs: [],
   split: null,
   settings: {
     libraryRoot: null,
@@ -202,10 +208,24 @@ export function isOpenPaper(id: string): boolean {
   return store.openPaperIDs.includes(id)
 }
 
-/** Keeps a paper on the open shelf. */
-export function keepOpen(id: string) {
-  if (!paper(id) || store.openPaperIDs.includes(id)) return
+/**
+ * Keeps a paper on the open shelf.
+ *
+ * `byHand` is somebody asking — the pin, the row's menu, a paper put beside
+ * another. Clicking into a paper is not that: for a while both lit the pin
+ * at the head of the row, so reading a paper appeared to pin it, and a pin
+ * is something you do. What the app does on its own is visible on the shelf
+ * and nowhere else.
+ */
+export function keepOpen(id: string, byHand = false) {
+  if (!paper(id)) return
+  if (byHand) store.pinnedPaperIDs = [...new Set([...store.pinnedPaperIDs, id])]
+  if (store.openPaperIDs.includes(id)) return
   store.openPaperIDs = [...store.openPaperIDs, id]
+}
+
+export function isPinned(id: string): boolean {
+  return store.pinnedPaperIDs.includes(id)
 }
 
 /**
@@ -213,6 +233,7 @@ export function keepOpen(id: string) {
  * on the shelf comes forward; with the shelf empty, nothing is showing.
  */
 export function closeOpenPaper(id: string) {
+  store.pinnedPaperIDs = store.pinnedPaperIDs.filter((entry) => entry !== id)
   const at = store.openPaperIDs.indexOf(id)
   if (at >= 0) store.openPaperIDs = store.openPaperIDs.filter((entry) => entry !== id)
   if (store.selectedID !== id) return
@@ -304,6 +325,11 @@ export function shelfPapers(): Paper[] {
   let filtered = all
   switch (store.shelf.kind) {
     case 'all': break
+    case 'kind': {
+      const of = (store.shelf as { kind: 'kind'; of: DocumentKind }).of
+      filtered = all.filter((entry) => entry.meta.effectiveKind === of)
+      break
+    }
     case 'open': {
       // In the order they were kept, not the list's sort: this shelf is a
       // row of tabs. The preview — showing, not kept — is last.
@@ -318,7 +344,10 @@ export function shelfPapers(): Paper[] {
       filtered = all.filter((entry) => entry.state.isFavorite)
       break
     case 'review':
-      filtered = all.filter((entry) => entry.meta.confidence === 'needsReview' || entry.meta.confidence === 'unparsed')
+      // A document has no registrar to disagree with, so it is never a thing
+      // to review.
+      filtered = all.filter((entry) => entry.meta.effectiveKind === 'paper'
+        && (entry.meta.confidence === 'needsReview' || entry.meta.confidence === 'unparsed'))
       break
     case 'notes':
       filtered = all.filter((entry) => entry.state.summaryNote.trim().length > 0)

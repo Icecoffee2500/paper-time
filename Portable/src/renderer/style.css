@@ -1856,3 +1856,46 @@ body[data-solo='true'] .reader-header {
 body[data-solo='true'] .reader-header button {
   -webkit-app-region: no-drag;
 }
+
+/* ---------------------------------------------------------------- pages */
+
+/* Every page of a document, small: the way into something with no headings
+   to list. The grid is as wide as the popup and fills it row by row. */
+.pages-popup { width: min(520px, 80vw); }
+
+.pages-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 12px;
+  padding: 10px 12px 14px;
+  overflow-y: auto;
+  max-height: min(60vh, 520px);
+}
+
+.pages-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: default;
+}
+
+.pages-thumb {
+  width: 132px;
+  min-height: 90px;
+  background: #ffffff;
+  border-radius: 4px;
+  box-shadow: var(--page-shadow);
+  overflow: hidden;
+  display: flex;
+}
+
+.pages-thumb canvas { width: 100%; height: auto; display: block; }
+
+.pages-cell[data-current='true'] .pages-thumb { outline: 2px solid var(--accent); outline-offset: 0; }
+.pages-cell[data-current='true'] .pages-number { color: var(--accent); }
+
+.pages-number { font-size: 11px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }

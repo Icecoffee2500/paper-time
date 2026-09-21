@@ -138,7 +138,7 @@ struct PaperListView: View {
                         subtitleFields: SubtitleField.parse(app.settings.listSubtitleFields),
                         model: model,
                         onOpenShelf: model.scope == .open,
-                        isKeptOpen: model.isOpenPaper(paper.id)
+                        isKeptOpen: model.isPinned(paper.id)
                     )
                     .tag(paper.id)
                     #if os(iOS)
@@ -487,9 +487,13 @@ struct PaperRow: View, Equatable {
     /// wrong guesses before the right one, and no way to see what the options
     /// were.
     @ViewBuilder
-    /// Kept open, or not: the pin at the head of the row. A pinned paper
-    /// stays on the Open Papers shelf; one merely looked at leaves it with
-    /// the next paper shown.
+    /// Pinned, or not: the pin at the head of the row.
+    ///
+    /// A pin is something you do. The app keeps a paper on the Open Papers
+    /// shelf when you use it — clicking into the page is enough — and for a
+    /// while that lit this pin too, so reading a paper appeared to pin it.
+    /// What the app does on its own is visible on the shelf; the pin says
+    /// only what you said.
     private func pinButton(_ paper: LoadedPaper) -> some View {
         Button {
             #if os(macOS)
@@ -497,10 +501,10 @@ struct PaperRow: View, Equatable {
                 app.undock(paper.id, model: model)
                 model.closeOpenPaper(paper.id)
             } else {
-                model.keepOpen(paper.id)
+                model.keepOpen(paper.id, byHand: true)
             }
             #else
-            if isKeptOpen { model.closeOpenPaper(paper.id) } else { model.keepOpen(paper.id) }
+            if isKeptOpen { model.closeOpenPaper(paper.id) } else { model.keepOpen(paper.id, byHand: true) }
             #endif
         } label: {
             Image(systemName: isKeptOpen ? "pin.fill" : "pin")
@@ -509,13 +513,21 @@ struct PaperRow: View, Equatable {
                 .frame(width: 16)
         }
         .buttonStyle(.plain)
-        .help(isKeptOpen ? L("열어 둔 논문 — 누르면 닫아요", "Kept open — click to close") : L("열어 두기", "Keep Open"))
+        .help(isKeptOpen ? L("고정한 논문 — 누르면 닫아요", "Pinned — click to close") : L("고정하기", "Pin"))
         .accessibilityLabel(isKeptOpen ? L("열어 둔 논문", "Kept open") : L("열어 두지 않음", "Not kept open"))
     }
 
     private func statusButton(_ paper: LoadedPaper) -> some View {
         Menu {
-            Picker(L("읽기 상태", "Reading Status"), selection: statusBinding(paper)) {
+            // The same answer the inspector asks for, where a handful of rows can
+        // be corrected one after another without going to the inspector for
+        // each — which is what a wrongly answered import feels like.
+        Picker(L("종류", "Kind"), selection: kindBinding(paper)) {
+            Label(L("논문", "Paper"), systemImage: "text.document").tag(DocumentKind.paper)
+            Label(L("일반 문서", "Document"), systemImage: "doc").tag(DocumentKind.document)
+        }
+
+        Picker(L("읽기 상태", "Reading Status"), selection: statusBinding(paper)) {
                 ForEach(PaperState.ReadingStatus.allCases, id: \.self) { status in
                     Label(label(for: status), systemImage: status.symbolName)
                         .tag(status)
@@ -532,6 +544,13 @@ struct PaperRow: View, Equatable {
         .fixedSize()
         .help(L("읽기 상태: \(label(for: paper.state.readingStatus))", "Reading status: \(label(for: paper.state.readingStatus))"))
         .accessibilityLabel(L("읽기 상태: \(label(for: paper.state.readingStatus))", "Reading status: \(label(for: paper.state.readingStatus))"))
+    }
+
+    private func kindBinding(_ paper: LoadedPaper) -> Binding<DocumentKind> {
+        Binding(
+            get: { paper.meta.effectiveKind },
+            set: { kind in Task { await model.setKind(kind, for: paper.id) } }
+        )
     }
 
     private func statusBinding(_ paper: LoadedPaper) -> Binding<PaperState.ReadingStatus> {
@@ -559,11 +578,24 @@ struct PaperRow: View, Equatable {
     }
 
     private func subtitle(_ paper: LoadedPaper) -> String {
-        subtitleFields.compactMap { $0.value(for: paper) }.joined(separator: " · ")
+        let line = subtitleFields.compactMap { $0.value(for: paper) }.joined(separator: " · ")
+        guard line.isEmpty else { return line }
+        // The fields under a title are a bibliography's — authors, year,
+        // venue — and a manual has none of them, so the row came out bare.
+        // What a document does have is a file and a length.
+        guard paper.meta.effectiveKind == .document else { return line }
+        let pages = paper.meta.file.pageCount
+        return [
+            paper.meta.csl.publisher,
+            pages > 0 ? L("\(pages)쪽", "\(pages) pages") : nil,
+        ].compactMap { $0 }.joined(separator: " · ")
     }
 
+    /// A document has no registrar to disagree with, so it is never a thing
+    /// to review — only a paper whose lookup came back unsure is.
     private func needsReview(_ paper: LoadedPaper) -> Bool {
-        paper.meta.confidence == .needsReview || paper.meta.confidence == .unparsed
+        paper.meta.effectiveKind == .paper
+            && (paper.meta.confidence == .needsReview || paper.meta.confidence == .unparsed)
     }
 
     private func label(for status: PaperState.ReadingStatus) -> String {
@@ -629,7 +661,7 @@ private struct PaperMenu: View {
             }
         } else {
             Button {
-                model.keepOpen(paper.id)
+                model.keepOpen(paper.id, byHand: true)
             } label: {
                 Label(L("열어 두기", "Keep Open"), systemImage: "pin")
             }

@@ -1,3 +1,4 @@
+import PaperCore
 import InkEngine
 import LibraryStore
 import SwiftUI
@@ -127,6 +128,12 @@ struct LibraryWindow: View {
             // hand on the machine.
             .preferredColorScheme(Boot.isSet("PAPERTIME_DARK") ? .dark : nil)
             .task {
+                // `--papertime-contents=1` opens the contents over the page,
+                // which is where the page grid lives.
+                if Boot.isSet("PAPERTIME_CONTENTS") {
+                    try? await Task.sleep(for: .seconds(3))
+                    app.toggleFloatingList()
+                }
                 if Boot.isSet("PAPERTIME_OPEN_PAPERS") {
                     try? await Task.sleep(for: .seconds(2))
                     if let first = model.visiblePapers.first { model.keepOpen(first.id) }
@@ -709,6 +716,15 @@ struct LibraryWindow: View {
                             Text(tint.label).tag(tint)
                         }
                     }
+                    // Asked once when a paper arrives, and changed here on
+                    // the day the wrong button was pressed.
+                    if let paper = model.selectedPaper {
+                        Divider()
+                        Picker(L("종류", "Kind"), selection: kindBinding(for: paper)) {
+                            Label(L("논문", "Paper"), systemImage: "text.document").tag(DocumentKind.paper)
+                            Label(L("일반 문서", "Document"), systemImage: "doc").tag(DocumentKind.document)
+                        }
+                    }
                     Divider()
                     shareMenu
                 } label: {
@@ -1006,9 +1022,18 @@ struct LibraryWindow: View {
         #endif
     }
 
+    private func kindBinding(for paper: LoadedPaper) -> Binding<DocumentKind> {
+        Binding(
+            get: { paper.meta.effectiveKind },
+            set: { kind in Task { await model.setKind(kind, for: paper.id) } }
+        )
+    }
+
     private var scopeTitle: String {
         switch model.scope {
-        case .all: L("모든 논문", "All Papers")
+        case .all: L("모두", "All")
+        case .papers: L("논문", "Papers")
+        case .documents: L("문서", "Documents")
         case .open: L("열린 논문", "Open Papers")
         case .notes: L("노트", "Notes")
         case .graph: L("그래프", "Graph")
