@@ -19,16 +19,17 @@ struct RootView: View {
             case .launching:
                 ProgressView(L("라이브러리를 여는 중", "Opening your library"))
                     .controlSize(.large)
+                    .plainScreen()
             case .needsLibraryFolder:
-                LibrarySetupView()
+                LibrarySetupView().plainScreen()
             case .ready:
                 if let library = app.library {
                     LibraryWindow(model: library)
                 } else {
-                    LibrarySetupView()
+                    LibrarySetupView().plainScreen()
                 }
             case let .failed(message):
-                LibraryUnavailableView(message: message)
+                LibraryUnavailableView(message: message).plainScreen()
             }
         }
         // Changing the interface's language changes every string below this
@@ -53,6 +54,7 @@ struct RootView: View {
             app.showReleaseNotesIfNew()
             #if os(macOS)
             FeedbackProbe.runIfAsked(app: app)
+            WindowProbe.runIfAsked(app: app)
             #endif
         }
         .sheet(isPresented: Bindable(app).showsFeedback) {
@@ -1469,7 +1471,7 @@ struct LibraryUnavailableView: View {
             .buttonBorderShape(.capsule)
 
             Button(L("다른 폴더 고르기…", "Choose a Different Folder…")) {
-                app.isChoosingLibraryFolder = true
+                app.chooseLibraryFolder()
             }
         }
     }
@@ -1595,6 +1597,18 @@ enum Column {
 
 extension View {
     /// Draws the view as one of the window's floating panels.
+    /// A screen that is not the reader.
+    ///
+    /// The library window is deliberately translucent — its panels float on a
+    /// blurred desktop and there is no background of the app's own between
+    /// them. Every other screen has no panels at all, so on the same window it
+    /// was a page of text on nothing: the first-run screen could not be seen.
+    /// These get the background a normal Mac window has.
+    func plainScreen() -> some View {
+        frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(.windowBackground)
+    }
+
     func columnPanel() -> some View {
         clipShape(Column.shape)
             .liquidGlass(.pane, in: Column.shape)

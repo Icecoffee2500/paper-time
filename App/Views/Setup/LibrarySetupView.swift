@@ -81,7 +81,7 @@ struct LibrarySetupView: View {
                         .frame(maxWidth: 460, alignment: .leading)
                     }
 
-                    Button(L("폴더 고르기…", "Choose Folder…")) { isChoosingFolder = true }
+                    Button(L("폴더 고르기…", "Choose Folder…")) { app.chooseLibraryFolder() }
                         .buttonStyle(.borderedProminent)
                         .buttonBorderShape(.capsule)
                         .controlSize(.large)
@@ -105,6 +105,7 @@ struct LibrarySetupView: View {
                 .frame(maxWidth: .infinity, minHeight: proxy.size.height)
             }
         }
+        #if !os(macOS)
         .fileImporter(
             isPresented: $isChoosingFolder,
             allowedContentTypes: [.folder],
@@ -113,6 +114,7 @@ struct LibrarySetupView: View {
             guard case let .success(urls) = result, let url = urls.first else { return }
             Task { await app.adopt(folderAt: url) }
         }
+        #endif
         .task { suggestions = Self.findSuggestions() }
     }
 

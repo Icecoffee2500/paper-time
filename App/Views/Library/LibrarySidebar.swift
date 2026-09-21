@@ -184,7 +184,7 @@ struct LibrarySidebar: View {
                     // is a label.
                     // Pressed, the chip is the way to another folder.
                     Button {
-                        app.isChoosingLibraryFolder = true
+                        app.chooseLibraryFolder()
                     } label: {
                         Text(model.displayName)
                             .foregroundStyle(.tint)
