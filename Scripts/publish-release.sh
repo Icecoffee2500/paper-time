@@ -242,6 +242,11 @@ prune() {
 prune Installers
 prune Portable/dist
 
+# And the app bundles left in the build folders: a Debug copy nobody should
+# be opening, and the Release copy the disk image was made from. The indexes
+# and object files stay — they are what makes the next build quick.
+find build -name "Paper Time.app" -maxdepth 6 -prune -exec rm -rf {} + 2>/dev/null || true
+
 echo "published $TAG to $REPO"
 echo "the page: https://$(echo "$REPO" | cut -d/ -f1 | tr "A-Z" "a-z").github.io/$(echo "$REPO" | cut -d/ -f2)/"
 echo "commit Website/releases.json here too, so the source keeps the list"
