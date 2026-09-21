@@ -961,134 +961,306 @@ function papersSideBySide() {
     caption);
 }
 
-/* ═══════════════════════════ the carousel ═══════════════════════════ */
+/* ═══════════════════ 11 · A paper, or a document ═══════════════════
+   The app began as a reader for papers and now holds everything else
+   somebody reads. Rather than guess silently, it asks once — and the form
+   underneath is the answer's, not a compromise between two. */
+function paperOrDocument() {
+  const PAPER = [
+    [L("학술지·학회", "Venue"), "Neural Information Processing Systems"],
+    [L("권·호", "Volume, issue"), "37 · 2"],
+    ["DOI", "10.5555/3600270.3601883"],
+    [L("인용 키", "Citation key"), "almudevar2026representation"],
+  ];
+  const DOC = [
+    [L("펴낸 곳", "From"), L("고려대학교 산학협력단", "Korea University")],
+    [L("해", "Year"), "2026"],
+    [L("종류", "Kind"), L("보고서", "Report")],
+    [L("파일", "File"), "2026-2 계약서.pdf"],
+  ];
 
-/// Three goes at it, the same three the app's own About window uses: what no
-/// other reader does at all, what makes the window a place to read in, and
-/// what becomes of the reading afterwards. Nine things in a row is a list;
-/// four, then four, then two is an argument.
-/* The four demonstrations that used to open this list now stand at the top of
-   the page, above any claim about them. What is left here is the rest of the
-   app — the tour you take after you have already seen the trick. */
-const TIERS = [
-  { n: 1, name: L("다른 데 없는 것", "Nowhere else") },
-  { n: 2, name: L("읽는 자리", "Where you read") },
-  { n: 3, name: L("읽고 난 뒤", "After reading") },
-];
+  const fields = el("div", { style: "display:flex;flex-direction:column;gap:7px" });
+  const hint = el("p", { class: "hint", style: "margin:0" });
+  const buttons = {};
 
-const SLIDES = [
-  { t: 1, n: "Search Everything", h: L("논문 안의 한 줄까지 찾아요", "Finds a single line inside a paper"),
-    p: L("논문·노트·지도·초안·태그·동작이 한 칸에 있어요. 제목에 없는 낱말은 본문에서 찾아요 — 고르면 그 논문의 그 줄로 가요. 빈칸일 때는 이어 읽을 것과 다시 볼 것을 이유와 함께 먼저 보여줘요.",
-         "Papers, notes, maps, drafts, tags and actions share one field. A word that appears in no title turns up in the text — pick it and you land on that line of that paper. With the field empty, it offers what to read next and what to look at again, each with its reason."),
-    make: searchEverything },
-  { t: 1, n: L("어디서나", "Anywhere"), h: L("맥에서 긋고 윈도우에서 읽어요", "Mark on a Mac, read on Windows"),
-    p: L("표시는 PDF 파일 안에 쓰고, 라이브러리는 그냥 폴더예요. 그래서 같은 폴더가 맥에서도, 윈도우에서도, 리눅스에서도 열려요 — 하이라이트도 손글씨도 굽은 화살표도 그대로요. 계정도 서버도 내보내기도 없어요.",
-         "Marks go into the PDF file, and a library is one folder. The same folder opens on a Mac, on Windows and on Linux — highlights, handwriting and bent arrows intact. No account, no server, no export."),
-    make: everyDesktop },
-  { t: 1, n: L("그리기", "Drawing"), h: L("논문 위에서 Figma처럼 그려요", "Draw on a paper the way you design"),
-    p: L("네모·화살표·글 카드를 프레임에 담고, 묶고, 오토 레이아웃으로 줄 세워요. 카드 안의 $…$는 수식으로 조판돼요. 그러고도 그린 것은 PDF 주석으로 파일에 들어가서, Preview에서도 지도교수의 아이패드에서도 보여요.",
-         "Put rectangles, arrows and text cards into a frame, group them, line them up with auto layout. A $…$ inside a card is set as mathematics. And all of it still goes into the file as ordinary PDF annotations — it opens in Preview, and on your advisor's iPad."),
-    make: figmaDrawing },
+  const row = ([label, value]) => el("div", {
+    style: "display:flex;flex-direction:column;gap:2px;padding:7px 9px;border-radius:8px;background:var(--panel-2)",
+  },
+    el("div", { style: "font-size:10px;font-weight:700;letter-spacing:.02em;color:var(--ink-3)" }, label),
+    el("div", { style: "font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" }, value));
 
-  { t: 2, n: "Book mode", h: L("책처럼 펴고, 목차로 건너뛰어요", "Spread like a book, jump by the contents"),
-    p: L("두 쪽이 마주 보고, 여백은 잘려서 본문만 남아요. 목차는 단축키 하나예요 — 절 이름을 누르면 그 절로 바로 가요.",
-         "Two pages face each other, the margins are trimmed and only the text remains. The contents are one shortcut away — click a section's name and you are there."),
-    make: bookMode },
-  { t: 2, n: "Marks", h: L("표시 목록은 문이에요", "The list of marks is a set of doors"),
-    p: L("인스펙터의 하이라이트·밑줄·메모를 누르면 논문이 그 자리로 가요. 무엇을 표시했는지가 아니라 어디에 표시했는지가 남아요.",
-         "Click a highlight, underline or note in the inspector and the paper goes to that spot. What stays is not what you marked but where."),
-    make: marksJump },
-  { t: 2, n: L("창", "Panes"), h: L("필요한 창만 켜요", "Turn on only the panes you need"),
-    p: L("서가·목록·논문·인스펙터를 하나씩 껐다 켜요. 읽을 때는 논문만, 정리할 때는 넷 다요. 열 너비는 창이 허락하는 데까지 늘어나요.",
-         "Shelf, list, paper and inspector switch off and on one at a time. Reading, the paper alone; sorting, all four. A column grows as wide as the window allows."),
-    make: panes },
-  { t: 2, n: L("나란히", "Side by side"), h: L("논문 넷을 한 창에서 견줘요", "Four papers in one window"),
-    p: L("논문을 끌어다 화면 반쪽이나 사분면에 놓으면 그 자리에 열려요. ⇧⌘O가 열린 논문을 펼쳐 주고, 거기서 한 줄을 창 밖으로 끌면 그 논문만 담은 창이 돼요. ⌘W는 지금 보고 있는 칸만 닫아요.",
-         "Drag a paper onto a half or a quadrant of the window and it opens there. ⇧⌘O lists what is open; drag a row out and that paper gets its own window. ⌘W closes the pane you are in, not the window."),
-    make: papersSideBySide },
-  { t: 2, n: L("세 기기", "Three devices"), h: L("긋자마자 건너가요", "Crosses the moment you draw it"),
-    p: L("맥·아이패드·아이폰 사이에서는 표시가 몇 KB짜리 저널로 먼저 건너가고, 20 MB PDF는 뒤따라와요. 파일 동기화를 기다릴 일이 없어요.",
-         "Between Mac, iPad and iPhone a mark crosses first as a journal of a few KB, and the 20 MB PDF follows. Nobody waits for the file to sync."),
-    make: threeDevices },
-
-  { t: 3, n: L("초안 → 원고", "Draft → manuscript"), h: L("노트는 글이 되어야 해요", "Notes have to become writing"),
-    p: L("초안도 노트 하나예요. 구절은 ❝로, 노트는 [[링크]]로 넣고 ⇧⌘E를 누르면 구절이 \\cite{키}가 되고, 인용한 논문만 담은 .bib이 같이 나와요.",
-         "A draft is another note. Put passages in as ❝ and notes as [[links]]; press ⇧⌘E and each passage becomes \\cite{key}, with a .bib holding only the papers you cited."),
-    make: draftToManuscript },
-];
-
-function mountCarousel() {
-  const track = document.getElementById("track");
-  const rail = document.getElementById("rail");
-  let index = 0;
-  const nodes = [];
-
-  const chips = [];
-
-  SLIDES.forEach((s, i) => {
-    const demo = s.make();
-    const tier = TIERS.find((t) => t.n === s.t);
-    const slide = el("section", { class: "slide", "aria-hidden": "true" },
-      el("div", { class: "said" },
-        el("span", { class: "tag" }, tier.name),
-        el("h2", {}, s.h),
-        el("p", { class: "pitch" }, s.p)),
-      el("div", { class: "demo" }, demo));
-    slide.demo = demo;
-    track.append(slide);
-    nodes.push(slide);
-  });
-
-  // The rail is grouped the way the app's source list is: a small caption
-  // over the rows that belong under it.
-  for (const tier of TIERS) {
-    const row = el("div", { class: "tier-row" });
-    SLIDES.forEach((s, i) => {
-      if (s.t !== tier.n) return;
-      const chip = el("button", { class: "chip", onclick: () => go(i) },
-        el("span", { class: "n" }, String(i + 1).padStart(2, "0")), s.n);
-      chips[i] = chip;
-      row.append(chip);
-    });
-    if (!row.children.length) continue;
-    rail.append(el("div", { class: "tier" },
-      el("div", { class: "tier-name" }, tier.name), row));
-  }
-
-  const go = (next, dir) => {
-    const count = SLIDES.length;
-    const target = ((next % count) + count) % count;
-    const way = dir ?? (target > index || (index === count - 1 && target === 0) ? 1 : -1);
-    nodes.forEach((node, i) => {
-      node.style.setProperty("--from", (i === target ? way * 40 : -way * 40) + "px");
-      node.classList.toggle("is-current", i === target);
-      node.setAttribute("aria-hidden", i === target ? "false" : "true");
-    });
-    chips.forEach((c, i) => c.classList.toggle("is-current", i === target));
-    chips[target]?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
-    index = target;
-    nodes[target].demo.activate?.();
+  const answer = (kind) => {
+    for (const [k, b] of Object.entries(buttons)) b.classList.toggle("on", k === kind);
+    fields.replaceChildren(...(kind === "paper" ? PAPER : DOC).map(row));
+    hint.textContent = kind === "paper"
+      ? L("등록기관에 물어 서지를 채우고, 비슷한 후보를 보여줘요.",
+          "Paper Time looks the record up and offers the near matches.")
+      : L("학술지·DOI·인용 키 칸이 사라져요. 등록기관에 묻지도 않아요 — 계약서 제목이 밖으로 나갈 일이 없어요.",
+          "Journal, DOI and citation key go away. Nothing is looked up online, so a contract's title never leaves the machine.");
   };
 
-  document.getElementById("prev").addEventListener("click", () => go(index - 1, -1));
-  document.getElementById("next").addEventListener("click", () => go(index + 1, 1));
-  addEventListener("keydown", (e) => {
-    if (e.target.closest("input, [contenteditable], dialog")) return;
-    if (e.key === "ArrowLeft") go(index - 1, -1);
-    if (e.key === "ArrowRight") go(index + 1, 1);
+  const seg = el("div", { class: "seg" },
+    ...[["paper", L("논문", "A paper")], ["document", L("일반 문서", "A document")]].map(([k, name]) => {
+      const b = el("button", { type: "button", onclick: () => answer(k) }, name);
+      buttons[k] = b;
+      return b;
+    }));
+
+  answer("paper");
+
+  return el("div", { class: "demo-shell", style: "flex-direction:column;gap:12px" },
+    el("div", { class: "pane", style: "flex:1;display:flex;flex-direction:column;gap:11px" },
+      el("div", { style: "font-size:13px;font-weight:700" },
+        L("이 PDF는 무엇인가요?", "What is this PDF?")),
+      seg,
+      el("div", { style: "height:1px;background:var(--rule)" }),
+      fields),
+    hint);
+}
+
+/* ═════════════════════ 12 · Every page, small ═════════════════════
+   A scanned contract has no headings to make a table of contents out of.
+   It has pages, and you know the one you want when you see it. */
+function pageGrid() {
+  const PAGES = 12;
+  let current = 4;
+  const grid = el("div", {
+    style: "display:grid;grid-template-columns:repeat(4,1fr);gap:8px;flex:1;min-height:0",
   });
 
-  // A swipe on the stage turns it, the way the app's own book does.
-  let x0 = null;
-  track.addEventListener("touchstart", (e) => { x0 = e.touches[0].clientX; }, { passive: true });
-  track.addEventListener("touchend", (e) => {
-    if (x0 == null) return;
-    const dx = e.changedTouches[0].clientX - x0;
-    if (Math.abs(dx) > 48) go(index + (dx < 0 ? 1 : -1), dx < 0 ? 1 : -1);
-    x0 = null;
-  }, { passive: true });
+  const paint = () => grid.replaceChildren(...Array.from({ length: PAGES }, (_, i) => {
+    const on = i === current;
+    const page = el("div", {
+      style: "aspect-ratio:3/4;border-radius:5px;background:var(--panel);cursor:pointer;" +
+             "display:flex;flex-direction:column;gap:3px;padding:7px 6px;overflow:hidden;transition:box-shadow .2s;" +
+             "box-shadow:" + (on ? "0 0 0 2px var(--accent)" : "inset 0 0 0 1px var(--rule)"),
+      onclick: () => { current = i; paint(); },
+    },
+      ...Array.from({ length: 6 }, (_, line) => el("div", {
+        style: "height:2px;border-radius:1px;background:var(--rule);width:" +
+               (line === 0 ? "62%" : line === 5 ? "44%" : "100%"),
+      })),
+      el("div", { style: "margin-top:auto;font-size:9px;color:var(--ink-3);text-align:center" }, String(i + 1)));
+    return page;
+  }));
+  paint();
 
-  go(0, 1);
+  return el("div", { class: "demo-shell", style: "flex-direction:column;gap:12px" },
+    el("div", { style: "display:flex;gap:8px;align-items:center" },
+      el("span", { class: "key" }, "⇧⌘L"),
+      el("div", { class: "seg" },
+        el("button", { type: "button" }, L("차례", "Contents")),
+        el("button", { type: "button", class: "on" }, L("쪽", "Pages")))),
+    el("div", { class: "pane", style: "flex:1;min-height:200px;display:flex" }, grid),
+    el("p", { class: "hint", style: "margin:0" },
+      L("제목을 하나도 못 찾은 PDF는 이 칸으로 바로 열려요 — 스캔한 계약서, «1장»만 반복되는 안내서.",
+        "A PDF whose headings could not be read opens straight to this tab — a scanned contract, a handbook whose every heading is “Chapter 7”.")));
+}
+
+/* ═══════════════════ 13 · A library is many folders ═══════════════════ */
+function manyLibraries() {
+  const FOLDERS = [
+    { name: "PaperLibrary", where: "cloud", count: 62, papers: ["Attention Is All You Need", "Diffusion Policy", "OpenVLA"] },
+    { name: "test", where: "cloud", count: 11, papers: ["Scaling Laws", "Chinchilla"] },
+    { name: L("강화학습", "RL seminar"), where: "disk", count: 6, papers: ["PPO", "SAC", "Dreamer V3"] },
+  ];
+  let current = -1;
+
+  const cloud = `<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3"
+    stroke-linecap="round" stroke-linejoin="round"><path d="M4.6 12.4h6.2a3 3 0 0 0 .3-6 4.1 4.1 0 0 0-7.7-.6A2.9 2.9 0 0 0 4.6 12.4Z"/></svg>`;
+  const disk = `<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3"
+    stroke-linecap="round" stroke-linejoin="round"><rect x="1.9" y="4.2" width="12.2" height="7.6" rx="1.8"/><circle cx="11.4" cy="8" r="1.2"/><path d="M4.2 8h3.6"/></svg>`;
+
+  const list = el("div", { style: "flex:1;min-width:0;display:flex;flex-direction:column;gap:5px" });
+  const rows = el("div", { style: "display:flex;flex-direction:column;gap:2px" });
+
+  const paint = () => {
+    rows.replaceChildren(...FOLDERS.map((folder, i) => {
+      const on = i === current;
+      return el("button", {
+        type: "button",
+        style: "display:flex;align-items:center;gap:8px;padding:5px 7px;border:none;cursor:pointer;text-align:left;" +
+               "border-radius:8px;background:" + (on ? "var(--accent-soft)" : "transparent"),
+        onclick: () => { current = on ? -1 : i; paint(); },
+      },
+        el("span", { style: "color:var(--ink-3);display:flex", html: folder.where === "cloud" ? cloud : disk }),
+        el("span", {
+          style: "font-size:12px;font-weight:500;color:var(--accent);background:var(--accent-soft);" +
+                 "border:.5px solid var(--accent-line);border-radius:6px;padding:1px 6px;margin-right:auto",
+        }, folder.name),
+        el("span", { style: "font-size:11.5px;color:var(--ink-3)" }, String(folder.count)));
+    }));
+
+    const shown = current < 0 ? FOLDERS.flatMap((x) => x.papers) : FOLDERS[current].papers;
+    list.replaceChildren(
+      el("div", { style: "font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)" },
+        current < 0 ? L("모두", "All") : FOLDERS[current].name),
+      ...shown.map((p) => el("div", {
+        style: "font-size:11.5px;padding:6px 8px;border-radius:7px;background:var(--panel-2);" +
+               "white-space:nowrap;overflow:hidden;text-overflow:ellipsis",
+      }, p)));
+  };
+  paint();
+
+  return el("div", { class: "demo-shell", style: "flex-direction:column;gap:12px" },
+    // Wraps rather than squeezing: on a phone the two parts stack, and the
+    // list of papers keeps enough width to be a list of titles.
+    el("div", { style: "flex:1;min-height:180px;display:flex;gap:12px;flex-wrap:wrap" },
+      el("div", { class: "pane", style: "flex:1 1 180px;padding:11px 9px;display:flex;flex-direction:column;gap:6px" },
+        el("div", { style: "font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);padding:0 7px" },
+          L("라이브러리", "Libraries")),
+        rows),
+      el("div", { class: "pane", style: "flex:2 1 210px;min-width:0;padding:11px 12px" }, list)),
+    el("p", { class: "hint", style: "margin:0" },
+      L("폴더 이름을 누르면 그 폴더만 봐요. 연결을 해제해도 파일도 기록도 그대로예요 — 노트와 태그까지 그 폴더 안에 있으니까요.",
+        "Click a folder's name to see only that folder. Disconnect one and its files and records stay exactly as they were — its notes and tags live inside it too.")));
+}
+
+/* ═══════════════════ 14 · The name on the file ═══════════════════ */
+function fileName() {
+  const field = el("input", {
+    type: "text", value: "2403.18293v1.pdf", spellcheck: "false",
+    style: "width:100%;font:inherit;font-size:13px;padding:6px 9px;border-radius:8px;" +
+           "border:1px solid var(--rule);background:var(--panel-2);color:var(--ink)",
+  });
+  const finder = el("div", { style: "font-size:12.5px" }, "2403.18293v1.pdf");
+  const sync = () => { finder.textContent = field.value.trim() || "…"; };
+  field.addEventListener("input", sync);
+
+  return el("div", { class: "demo-shell", style: "flex-direction:column;gap:12px" },
+    el("div", { class: "pane", style: "display:flex;flex-direction:column;gap:6px" },
+      el("div", { style: "font-size:10px;font-weight:700;letter-spacing:.02em;color:var(--ink-3)" },
+        L("파일 · 이름", "File · Name")),
+      field),
+    el("div", {
+      style: "display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:10px;" +
+             "background:var(--panel-2);border:1px solid var(--rule)",
+    },
+      el("span", { style: "font-size:15px" }, "📄"),
+      finder,
+      el("span", { class: "hint", style: "margin:0 0 0 auto" }, L("Finder에서도", "In Finder too"))),
+    el("p", { class: "hint", style: "margin:0" },
+      L("표시도 필기도 노트도 논문의 번호를 따라다녀서, 이름만 바뀌고 나머지는 하나도 안 움직여요.",
+        "Marks, handwriting and notes follow the paper's identifier, so the name changes and nothing else moves.")));
+}
+
+/* ═══════════════════ 15 · A PDF somebody locked ═══════════════════
+   Three kinds of locked, and the app can open exactly one of them. Saying
+   which is the whole feature: a blank page with no message is the bug. */
+function lockedPDF() {
+  const CASES = [
+    { key: "password", name: L("암호", "A password"),
+      can: true,
+      line: L("암호를 넣으면 열려요. 암호는 어디에도 안 남아요.",
+              "Type the password and it opens. Nothing keeps it."),
+      body: L("표준 암호화(/Standard)예요. 이건 열쇠를 사용자가 들고 있어요.",
+              "Standard encryption. This is the one whose key you hold.") },
+    { key: "irm", name: L("회사 권한", "Company rights"),
+      can: false,
+      line: L("이건 못 열어요. 열쇠를 회사의 서버가 들고 있어요.",
+              "This one cannot be opened here. The key is on your company's server."),
+      body: L("Microsoft Purview 같은 권한 관리예요. Acrobat이 여는 건 등록된 앱이라서예요 — 그렇다고 말해 주는 게 빈 화면보다 나아요.",
+              "Rights management, like Microsoft Purview. Acrobat opens it because Acrobat is a registered app. Saying so beats a blank page.") },
+    { key: "cert", name: L("인증서", "A certificate"),
+      can: false,
+      line: L("이것도 못 열어요. 열쇠가 인증서 안에 있어요.",
+              "Nor this one. The key lives inside a certificate."),
+      body: L("Adobe.PubSec이에요. 앱이 열 길이 없다는 걸 파일을 열어 보기 전에 알려줘요.",
+              "Adobe.PubSec. The app says it cannot before you have waited for it.") },
+  ];
+  let current = 0;
+
+  const face = el("div", { class: "pane", style: "flex:1;display:flex;flex-direction:column;justify-content:center;gap:9px;text-align:center;min-height:168px" });
+  const buttons = [];
+
+  const paint = () => {
+    const c = CASES[current];
+    buttons.forEach((b, i) => b.classList.toggle("on", i === current));
+    face.replaceChildren(
+      el("div", { style: "font-size:26px" }, c.can ? "🔑" : "🔒"),
+      el("div", { style: "font-size:14px;font-weight:700;color:" + (c.can ? "var(--green)" : "var(--ink)") }, c.line),
+      el("p", { class: "hint", style: "margin:0 auto;max-width:36ch" }, c.body));
+  };
+
+  const seg = el("div", { class: "seg" }, ...CASES.map((c, i) => {
+    const b = el("button", { type: "button", onclick: () => { current = i; paint(); } }, c.name);
+    buttons.push(b);
+    return b;
+  }));
+  paint();
+
+  return el("div", { class: "demo-shell", style: "flex-direction:column;gap:12px" }, seg, face,
+    el("p", { class: "hint", style: "margin:0" },
+      L("잠긴 파일에서는 서지도 안 읽어요 — 암호문이 제목이 되니까요.",
+        "Nothing is parsed out of a locked file either: the ciphertext would become the title.")));
+}
+
+/* ═════════════════════════ the bands ═════════════════════════
+   The page is a stack of full-bleed bands, one idea to a band, the way a
+   product page is built — not a carousel, where nine tenths of what there is
+   to show is behind an arrow nobody presses. Each band names a slot; this
+   fills it, and wakes the demonstration when it comes into view rather than
+   when the page loads, so seventeen of them do not all animate at once into
+   an empty screen. */
+const BANDS = [
+  ["demo-kind", paperOrDocument],
+  ["demo-pages", pageGrid],
+  ["demo-book", bookMode],
+  ["demo-fitted", fittedHighlight],
+  ["demo-marks", marksJump],
+  ["demo-draw", figmaDrawing],
+  ["demo-split", papersSideBySide],
+  ["demo-panes", panes],
+  ["demo-quote", passageToNote],
+  ["demo-links", noteLinks],
+  ["demo-draft", draftToManuscript],
+  ["demo-search", searchEverything],
+  ["demo-libraries", manyLibraries],
+  ["demo-name", fileName],
+  ["demo-desktops", everyDesktop],
+  ["demo-devices", threeDevices],
+  ["demo-locked", lockedPDF],
+];
+
+function mountBands() {
+  const woken = new WeakSet();
+  const wake = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      const demo = entry.target.firstElementChild;
+      if (demo && !woken.has(demo)) {
+        woken.add(demo);
+        demo.activate?.();
+      }
+    }
+  }, { rootMargin: "-10% 0px -10% 0px" });
+
+  for (const [id, make] of BANDS) {
+    const slot = document.getElementById(id);
+    if (!slot) continue;
+    const demo = make();
+    slot.replaceChildren(demo);
+    demo.activate = demo.activate || null;
+    wake.observe(slot);
+  }
+}
+
+/* What arrives as you reach it. Apple's pages do this and it is the only
+   reason a page this long does not read as a list. */
+function mountReveals() {
+  const rises = document.querySelectorAll(".rise");
+  if (!("IntersectionObserver" in window)) {
+    rises.forEach((node) => node.classList.add("in"));
+    return;
+  }
+  const seen = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      entry.target.classList.add("in");
+      seen.unobserve(entry.target);
+    }
+  }, { rootMargin: "0px 0px -12% 0px" });
+  rises.forEach((node) => seen.observe(node));
 }
 
 /* ════════════════════════ downloads and dialogs ════════════════════════ */
@@ -1319,14 +1491,6 @@ function mountHowPicker() {
 function mountHero() {
   const node = document.getElementById("hero-demo");
   if (node) node.replaceChildren(ultracopy());
-  for (const [id, make] of [
-    ["pillar-ink", fittedHighlight],
-    ["pillar-quote", passageToNote],
-    ["pillar-links", noteLinks],
-  ]) {
-    const slot = document.getElementById(id);
-    if (slot) slot.replaceChildren(make());
-  }
 }
 
 /* ══════════════════════════ built together ═══════════════════════════════
@@ -1444,7 +1608,8 @@ function mountDialogs() {
 mountLanguage();
 mountMetadata();
 mountHero();
-mountCarousel();
+mountBands();
+mountReveals();
 mountDownloads();
 mountDialogs();
 mountHowPicker();
