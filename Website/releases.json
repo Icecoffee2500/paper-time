@@ -2,11 +2,100 @@
   "repo": "Icecoffee2500/paper-time",
   "releases": [
     {
+      "version": "0.7.1",
+      "date": "2026-09-21T01:41:59Z",
+      "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.7.1/Paper.Time.0.7.1.dmg",
+      "size": 5549070,
+      "downloads": 0,
+      "builds": {
+        "mac": [
+          {
+            "label": "디스크 이미지",
+            "label_en": "Disk image",
+            "arch": "Apple Silicon",
+            "arch_en": "Apple Silicon",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.7.1/Paper.Time.0.7.1.dmg",
+            "size": 5549070,
+            "downloads": 0
+          }
+        ],
+        "windows": [
+          {
+            "label": "설치본",
+            "label_en": "Installer",
+            "arch": "64비트 · ARM",
+            "arch_en": "64-bit and ARM",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.7.1/Paper.Time.Setup.0.7.1.exe",
+            "size": 175925679,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "64비트",
+            "arch_en": "64-bit",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.7.1/Paper.Time-0.7.1-win.zip",
+            "size": 115507391,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.7.1/Paper.Time-0.7.1-arm64-win.zip",
+            "size": 120455064,
+            "downloads": 0
+          }
+        ],
+        "linux": [
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.7.1/Paper.Time-0.7.1-x86_64.AppImage",
+            "size": 112455318,
+            "downloads": 0
+          },
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.7.1/Paper.Time-0.7.1-arm64.AppImage",
+            "size": 112837811,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.7.1/paper-time-0.7.1.tar.gz",
+            "size": 106723377,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.7.1/paper-time-0.7.1-arm64.tar.gz",
+            "size": 111219596,
+            "downloads": 0
+          }
+        ]
+      },
+      "note": "보내주신 네 가지를 고쳤어요. 글 쓸 때 창이 까매지던 것, 첫 화면이 안 보이던 것, 폴더 고르기가 안 열리던 것, 그리고 그린 것을 다른 쪽으로 옮길 수 없던 것.",
+      "note_en": "Four things you told us about: the window going black as you typed, a first screen you could barely see, Choose Folder opening nothing, and no way to take a drawing to another page."
+    },
+    {
       "version": "0.7.0",
       "date": "2026-09-20T13:19:42Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.7.0/Paper.Time.0.7.0.dmg",
       "size": 5512968,
-      "downloads": 0,
+      "downloads": 1,
       "builds": {
         "mac": [
           {
@@ -27,7 +116,7 @@
             "arch_en": "64-bit and ARM",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.7.0/Paper.Time.Setup.0.7.0.exe",
             "size": 175925854,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
