@@ -2,6 +2,95 @@
   "repo": "Icecoffee2500/paper-time",
   "releases": [
     {
+      "version": "0.7.2",
+      "date": "2026-09-21T02:30:34Z",
+      "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.7.2/Paper.Time.0.7.2.dmg",
+      "size": 5549416,
+      "downloads": 0,
+      "builds": {
+        "mac": [
+          {
+            "label": "디스크 이미지",
+            "label_en": "Disk image",
+            "arch": "Apple Silicon",
+            "arch_en": "Apple Silicon",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.7.2/Paper.Time.0.7.2.dmg",
+            "size": 5549416,
+            "downloads": 0
+          }
+        ],
+        "windows": [
+          {
+            "label": "설치본",
+            "label_en": "Installer",
+            "arch": "64비트 · ARM",
+            "arch_en": "64-bit and ARM",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.7.2/Paper.Time.Setup.0.7.2.exe",
+            "size": 175925542,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "64비트",
+            "arch_en": "64-bit",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.7.2/Paper.Time-0.7.2-win.zip",
+            "size": 115507388,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.7.2/Paper.Time-0.7.2-arm64-win.zip",
+            "size": 120455069,
+            "downloads": 0
+          }
+        ],
+        "linux": [
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.7.2/Paper.Time-0.7.2-x86_64.AppImage",
+            "size": 112455317,
+            "downloads": 0
+          },
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.7.2/Paper.Time-0.7.2-arm64.AppImage",
+            "size": 112837810,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.7.2/paper-time-0.7.2.tar.gz",
+            "size": 106723698,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.7.2/paper-time-0.7.2-arm64.tar.gz",
+            "size": 111219651,
+            "downloads": 0
+          }
+        ]
+      },
+      "note": "0.7.1에서 창이 텅 비어 열리던 것을 고쳤어요.",
+      "note_en": "Fixes the empty window in 0.7.1."
+    },
+    {
       "version": "0.7.1",
       "date": "2026-09-21T01:41:59Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.7.1/Paper.Time.0.7.1.dmg",
