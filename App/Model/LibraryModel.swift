@@ -133,11 +133,7 @@ public final class LibraryModel {
     }
 
     private var openPaperID: UUID? {
-        didSet {
-            // Whichever way a paper came to be showing — the list, a menu,
-            // the search palette — it is now open.
-            if let id = openPaperID, !openPaperIDs.contains(id) { openPaperIDs.append(id) }
-        }
+        didSet { if scope == .open, openPaperID != oldValue { invalidateVisibleCache() } }
     }
 
     /// The paper the reader is showing. Setting it is how everything outside
@@ -153,21 +149,44 @@ public final class LibraryModel {
         }
     }
 
-    /// Every paper opened in this session and not closed since, in the order
-    /// they were opened. A paper stays here while you read another, which is
-    /// what lets several be looked at side by side.
+    /// The papers kept open in this session, in the order they were kept.
+    ///
+    /// Not every paper looked at: walking down the list shows each paper in
+    /// turn, and a shelf that kept all of them would be the list again. A
+    /// paper is kept when it is *used* — clicked into, drawn on, put beside
+    /// another — the way an editor's preview tab becomes a real tab once you
+    /// start typing in it. The one merely showing is on the shelf too, as a
+    /// preview, and leaves when the next one is shown.
     public private(set) var openPaperIDs: [UUID] = [] {
         didSet { if scope == .open { invalidateVisibleCache() } }
     }
 
-    /// Takes a paper off the open shelf. If it was the one showing, the one
-    /// opened before it comes back.
+    public func isOpenPaper(_ id: UUID) -> Bool { openPaperIDs.contains(id) }
+
+    /// Keeps a paper on the open shelf.
+    public func keepOpen(_ id: UUID) {
+        guard paper(id) != nil, !openPaperIDs.contains(id) else { return }
+        openPaperIDs.append(id)
+    }
+
+    /// Takes a paper off the open shelf. If it was the one showing, its
+    /// neighbour on the shelf comes forward; with the shelf empty, nothing
+    /// is showing.
     public func closeOpenPaper(_ id: UUID) {
-        guard let at = openPaperIDs.firstIndex(of: id) else { return }
-        openPaperIDs.remove(at: at)
-        if selectedPaperID == id {
-            selectedPaperID = openPaperIDs.indices.contains(at - 1) ? openPaperIDs[at - 1] : openPaperIDs.last
+        let at = openPaperIDs.firstIndex(of: id)
+        if let at { openPaperIDs.remove(at: at) }
+        guard selectedPaperID == id else { return }
+        let next: UUID? = if let at, openPaperIDs.indices.contains(at) {
+            openPaperIDs[at]
+        } else {
+            openPaperIDs.last
         }
+        selectedPaperID = next
+    }
+
+    public func closeOtherOpenPapers(keeping id: UUID) {
+        openPaperIDs = openPaperIDs.filter { $0 == id }
+        if selectedPaperID != id { selectedPaperID = id }
     }
 
     // MARK: - Where you have been
@@ -459,10 +478,10 @@ public final class LibraryModel {
     private func computeVisiblePapers() -> [LoadedPaper] {
         var result = papers.filter { $0.meta.parentID == nil && matchesScope($0) }
         if scope == .open {
-            // In the order they were opened, not the list's sort: this shelf
-            // is a row of tabs.
+            // In the order they were kept, not the list's sort: this shelf
+            // is a row of tabs. The preview — showing, not kept — is last.
             let order = Dictionary(uniqueKeysWithValues: openPaperIDs.enumerated().map { ($1, $0) })
-            return result.sorted { (order[$0.id] ?? 0) < (order[$1.id] ?? 0) }
+            return result.sorted { (order[$0.id] ?? Int.max) < (order[$1.id] ?? Int.max) }
         }
         let query = scope == .searchResults
             ? searchQuery
@@ -671,7 +690,7 @@ public final class LibraryModel {
     private func matchesScope(_ paper: LoadedPaper) -> Bool {
         switch scope {
         case .all, .searchResults: true
-        case .open: openPaperIDs.contains(paper.id)
+        case .open: openPaperIDs.contains(paper.id) || openPaperID == paper.id
         // These two are places of their own, not filters over papers.
         case .notes, .graph: false
         case .unread: paper.state.readingStatus == .unread

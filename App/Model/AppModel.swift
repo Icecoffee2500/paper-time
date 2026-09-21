@@ -71,13 +71,17 @@ public final class AppModel {
 
     /// Puts a paper into a zone of the page area. With nothing side by side
     /// yet, the paper already showing takes the other half.
-    func dock(_ id: UUID, at zone: DockZone, showing current: UUID?) {
+    func dock(_ id: UUID, at zone: DockZone, in model: LibraryModel) {
+        let current = model.selectedPaperID
         var arrangement = split ?? current.map { SplitArrangement(left: .init(top: $0)) }
             ?? SplitArrangement(left: .init(top: id))
         arrangement.dock(id, at: zone)
+        // Put beside another, a paper is in use: it stays on the open shelf.
+        for paper in arrangement.papers { model.keepOpen(paper) }
         withAnimation(AppModel.paneMotion) {
             split = arrangement.papers.count > 1 ? arrangement : nil
             showsReader = true
+            if current == nil { model.selectedPaperID = id }
         }
     }
 

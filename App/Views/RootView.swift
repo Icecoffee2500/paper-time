@@ -132,7 +132,7 @@ struct LibraryWindow: View {
                 let papers = model.visiblePapers
                 guard papers.count >= 2 else { return }
                 model.selectedPaperID = papers[0].id
-                app.dock(papers[1].id, at: .right, showing: papers[0].id)
+                app.dock(papers[1].id, at: .right, in: model)
             }
     }
 
@@ -1282,8 +1282,28 @@ struct PaperDetailColumn: View {
             .onDrop(of: [.paperTimePaper], delegate: DockDropDelegate(
                 size: { pageSize },
                 zone: $dockZone,
-                drop: { id, zone in app.dock(id, at: zone, showing: model.selectedPaperID) }
+                drop: { id, zone in app.dock(id, at: zone, in: model) }
             ))
+            // The zone stays lit only while a drag is really going on. A
+            // drag let go outside the window, or cancelled with Escape, never
+            // sends `dropExited`, and the half of the page stayed blue.
+            .onChange(of: dockZone) { _, zone in
+                guard zone != nil else { return }
+                Task { @MainActor in
+                    while dockZone != nil {
+                        try? await Task.sleep(for: .milliseconds(250))
+                        if NSEvent.pressedMouseButtons == 0 { dockZone = nil }
+                    }
+                }
+            }
+            .onChange(of: app.split) { _, _ in dockZone = nil }
+            // Clicking into the paper is using it: it stays on the open shelf.
+            .onAppear { armKeepOpen() }
+            .onChange(of: app.split) { _, split in if split == nil { armKeepOpen() } }
+    }
+
+    private func armKeepOpen() {
+        link.activated = { if let id = model.selectedPaperID { model.keepOpen(id) } }
     }
 
     private var pageBody: some View {

@@ -136,7 +136,9 @@ struct PaperListView: View {
                         attachmentCount: model.attachmentCount(of: paper.id),
                         isResolving: model.resolving.contains(paper.id),
                         subtitleFields: SubtitleField.parse(app.settings.listSubtitleFields),
-                        model: model
+                        model: model,
+                        onOpenShelf: model.scope == .open,
+                        isKeptOpen: model.isOpenPaper(paper.id)
                     )
                     .tag(paper.id)
                     #if os(iOS)
@@ -336,6 +338,11 @@ struct PaperRow: View, Equatable {
     let subtitleFields: [SubtitleField]
     /// Actions only; never read for display.
     let model: LibraryModel
+    /// On the Open Papers shelf: the row can close the paper, and says when
+    /// it is only a preview.
+    var onOpenShelf = false
+    var isKeptOpen = false
+    @Environment(AppModel.self) private var app
 
     nonisolated static func == (lhs: PaperRow, rhs: PaperRow) -> Bool {
         lhs.paper == rhs.paper
@@ -343,6 +350,8 @@ struct PaperRow: View, Equatable {
             && lhs.attachmentCount == rhs.attachmentCount
             && lhs.isResolving == rhs.isResolving
             && lhs.subtitleFields == rhs.subtitleFields
+            && lhs.onOpenShelf == rhs.onOpenShelf
+            && lhs.isKeptOpen == rhs.isKeptOpen
     }
 
     /// Whether the supplement popover is open for this row.
@@ -387,6 +396,31 @@ struct PaperRow: View, Equatable {
             attachmentsButton(paper)
 
             favoriteButton(paper)
+
+            #if os(macOS)
+            if onOpenShelf {
+                if model.isOpenPaper(paper.id) {
+                    // Kept open: closed here, the way a tab is.
+                    Button {
+                        app.undock(paper.id, model: model)
+                        model.closeOpenPaper(paper.id)
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 9, weight: .semibold))
+                            .frame(width: 18, height: 18)
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.secondary)
+                    .help(L("닫기", "Close"))
+                } else {
+                    // Only showing, not kept: it leaves the shelf with the
+                    // next paper shown, unless it is used first.
+                    Text(L("미리보기", "Preview"))
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            #endif
 
             if isResolving {
                 ProgressView()
@@ -558,12 +592,26 @@ private struct PaperMenu: View {
         } label: {
             Label(L("나란히 열기", "Open Side by Side"), systemImage: "rectangle.split.2x1")
         }
-        if model.openPaperIDs.contains(paper.id) {
+        if model.isOpenPaper(paper.id) {
             Button {
                 app.undock(paper.id, model: model)
                 model.closeOpenPaper(paper.id)
             } label: {
                 Label(L("닫기", "Close"), systemImage: "xmark.circle")
+            }
+            if model.openPaperIDs.count > 1 {
+                Button {
+                    for other in model.openPaperIDs where other != paper.id { app.undock(other, model: model) }
+                    model.closeOtherOpenPapers(keeping: paper.id)
+                } label: {
+                    Label(L("다른 논문 모두 닫기", "Close Other Papers"), systemImage: "xmark.circle.fill")
+                }
+            }
+        } else {
+            Button {
+                model.keepOpen(paper.id)
+            } label: {
+                Label(L("열어 두기", "Keep Open"), systemImage: "pin")
             }
         }
         #endif
@@ -646,8 +694,7 @@ private struct PaperMenu: View {
     #if os(macOS)
     private func dockButton(_ zone: DockZone, _ title: String, _ symbol: String) -> some View {
         Button {
-            app.dock(paper.id, at: zone, showing: model.selectedPaperID)
-            if model.selectedPaperID == nil { model.selectedPaperID = paper.id }
+            app.dock(paper.id, at: zone, in: model)
         } label: {
             Label(title, systemImage: symbol)
         }

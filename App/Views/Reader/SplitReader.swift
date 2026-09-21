@@ -49,13 +49,14 @@ struct SplitReaderView: View {
                     Spacer(minLength: 0)
                     Button {
                         app.undock(id, model: model)
+                        model.closeOpenPaper(id)
                     } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 9, weight: .semibold))
                             .frame(width: 18, height: 18)
                     }
                     .buttonStyle(.borderless)
-                    .help(L("이 칸 닫기", "Close This Pane"))
+                    .help(L("닫기", "Close"))
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
@@ -67,10 +68,10 @@ struct SplitReaderView: View {
 
                 ReaderScreen(library: model, paper: paper, configuration: configuration, link: handle)
                     .onAppear {
-                        handle.activated = { model.selectedPaperID = id }
+                        handle.activated = { model.selectedPaperID = id; model.keepOpen(id) }
                     }
                     .onChange(of: ObjectIdentifier(handle)) { _, _ in
-                        handle.activated = { model.selectedPaperID = id }
+                        handle.activated = { model.selectedPaperID = id; model.keepOpen(id) }
                     }
             }
             .clipShape(RoundedRectangle(cornerRadius: Corner.popover, style: .continuous))
