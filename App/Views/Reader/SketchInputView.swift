@@ -1059,6 +1059,109 @@ final class SketchInputView: NSView, SketchEditing {
         }
     }
 
+
+    // MARK: - Carrying a drawing to another page
+
+    /// What the pasteboard carries: the elements as the JSON they already are
+    /// in the file, and any handwriting as PencilKit's own data.
+    ///
+    /// A private type rather than an image, because a drawing pasted onto
+    /// another page has to arrive as a drawing — movable, restylable, and
+    /// written into that page's sidecar. The plain text of any card goes on
+    /// the pasteboard too, so the same copy can be pasted into a note.
+    static let sketchPasteboardType = NSPasteboard.PasteboardType("com.imtaeheon.PaperTime.sketch")
+
+    private struct Clipping: Codable {
+        var elements: [SketchElement]
+        /// PencilKit's own encoding, base64'd so the whole clipping is one JSON.
+        var ink: String?
+        /// Which page it came from, so pasting back onto it can offset rather
+        /// than land exactly on top of the original.
+        var fromPage: Int
+    }
+
+    @discardableResult
+    func copySelection() -> Bool {
+        guard let index = selection.pageIndex, !selection.isEmpty else { return false }
+        let picked = elements(on: index).filter { selection.elements.contains($0.id) }
+        var ink: String?
+        let strokes = session.drawing(forPage: index).strokes
+        let taken = selection.strokes.sorted().compactMap { $0 < strokes.count ? strokes[$0] : nil }
+        if !taken.isEmpty {
+            ink = PKDrawing(strokes: taken).dataRepresentation().base64EncodedString()
+        }
+        guard !picked.isEmpty || ink != nil else { return false }
+
+        let clipping = Clipping(elements: picked, ink: ink, fromPage: index)
+        guard let data = try? JSONEncoder().encode(clipping) else { return false }
+        let board = NSPasteboard.general
+        board.clearContents()
+        board.setData(data, forType: Self.sketchPasteboardType)
+        // So the same copy can land in a note, or anywhere else.
+        let words = picked.map(\.text).filter { !$0.isEmpty }.joined(separator: "\n")
+        if !words.isEmpty { board.setString(words, forType: .string) }
+        return true
+    }
+
+    func cutSelection() {
+        guard copySelection() else { return }
+        deleteSelection()
+    }
+
+    /// Pastes onto whichever page is in view.
+    ///
+    /// Onto a different page the drawing keeps its coordinates, which is what
+    /// "the same place on the next page" means. Back onto the page it came
+    /// from it is nudged, so the copy does not hide the original — the same
+    /// nudge duplicating uses.
+    func pasteSketch() {
+        guard let data = NSPasteboard.general.data(forType: Self.sketchPasteboardType),
+              let clipping = try? JSONDecoder().decode(Clipping.self, from: data),
+              let pdfView, let page = pdfView.currentPage
+        else { return }
+        let index = session.document.index(for: page)
+        let shift = clipping.fromPage == index ? CGPoint(x: 12, y: -12) : .zero
+
+        var landed: Set<UUID> = []
+        if !clipping.elements.isEmpty {
+            let before = elements(on: index)
+            var after = before
+            for element in clipping.elements {
+                var copy = shift == .zero ? element : element.translated(by: shift)
+                copy.id = UUID()
+                copy.createdAt = .now
+                after.append(copy)
+                landed.insert(copy.id)
+            }
+            commit(after, on: index, before: before, name: L("붙여넣기", "Paste"))
+        }
+
+        var strokeRange: Set<Int> = []
+        if let ink = clipping.ink,
+           let inkData = Data(base64Encoded: ink),
+           let pasted = try? PKDrawing(data: inkData) {
+            let before = session.drawing(forPage: index)
+            let moved = shift == .zero
+                ? pasted
+                : pasted.transformed(using: CGAffineTransform(translationX: shift.x, y: shift.y))
+            let after = PKDrawing(strokes: before.strokes + moved.strokes)
+            session.setDrawing(after, forPage: index)
+            registerUndo(name: L("붙여넣기", "Paste"), on: index, elements: nil, drawing: (before, after))
+            strokeRange = Set(before.strokes.count..<after.strokes.count)
+            refreshPage?(index)
+        }
+
+        guard !landed.isEmpty || !strokeRange.isEmpty else { return }
+        selection = Selection(pageIndex: index, elements: landed, strokes: strokeRange)
+    }
+
+    // The Edit menu and ⌘X/⌘C/⌘V both arrive here: this view is the first
+    // responder while the pen is out, and it is the only thing in the window
+    // that has a drawing to give.
+    @objc func copy(_ sender: Any?) { copySelection() }
+    @objc func cut(_ sender: Any?) { cutSelection() }
+    @objc func paste(_ sender: Any?) { pasteSketch() }
+
     private func commit(_ elements: [SketchElement], on index: Int, before: [SketchElement], name: String) {
         guard elements != before else { return }
         session.setSketch(elements, forPage: index)
@@ -1162,6 +1265,19 @@ final class SketchInputView: NSView, SketchEditing {
         case "redo":
             undoManager?.redo()
             return "probe: redo"
+        case "copy":
+            return "probe: copied \(copySelection())"
+        case "paste":
+            pasteSketch()
+            return "probe: pasted; selection now \(selection.elements.count) elements + \(selection.strokes.count) strokes"
+        case "page":
+            // Walking between pages without a scroll wheel, so "is what I drew
+            // still there when I come back" can be asked in a script.
+            guard let wanted = Int(args.first ?? ""),
+                  let target = session.document.page(at: wanted)
+            else { return "probe: no page \(args)" }
+            pdfView.go(to: target)
+            return "probe: went to page \(wanted)"
         case "report":
             var lines = ["probe: page \(index): \(elements(on: index).count) elements, \(session.drawing(forPage: index).strokes.count) strokes, selection \(selection.elements.count) elements + \(selection.strokes.count) strokes, tool \(state.tool.rawValue), editing \(textEditor != nil)"]
             for element in elements(on: index) {
@@ -1504,3 +1620,19 @@ enum SketchUndo {
     }
 }
 #endif
+
+
+/// So the Edit menu greys out Copy when nothing is selected, and Paste when
+/// the pasteboard has no drawing on it.
+extension SketchInputView: NSUserInterfaceValidations {
+    func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
+        switch item.action {
+        case #selector(copy(_:)), #selector(cut(_:)):
+            return !selection.isEmpty
+        case #selector(paste(_:)):
+            return NSPasteboard.general.data(forType: SketchInputView.sketchPasteboardType) != nil
+        default:
+            return true
+        }
+    }
+}

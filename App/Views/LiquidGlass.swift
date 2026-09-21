@@ -224,7 +224,37 @@ private struct TranslucentWindow: NSViewRepresentable {
             // whatever it is sitting on, and a translucent window with no
             // shadow is a smudge.
             window.hasShadow = true
+            installBackdrop(in: window)
+        }
+
+        /// A real view behind everything, rather than an empty window.
+        ///
+        /// Clearing the window alone worked only for as long as nothing in it
+        /// was layer-backed. An `NSTextView` sets `wantsLayer`, which promotes
+        /// every ancestor with it, and a layer-backed view over a window with
+        /// no backdrop draws its empty background as **black** — so starting to
+        /// type turned the window behind the words black. The first-run screen
+        /// had the same hole for a simpler reason: it has no panels of its own,
+        /// so there was nothing in the window at all to see.
+        ///
+        /// `underWindowBackground` is the material a translucent Mac window is
+        /// supposed to sit on: it still shows the desktop through, blurred, and
+        /// it is something rather than nothing.
+        private func installBackdrop(in window: NSWindow) {
+            guard let content = window.contentView else { return }
+            let existing = content.subviews.first { $0 is Backdrop }
+            if let existing { existing.removeFromSuperview() }
+            let backdrop = Backdrop()
+            backdrop.material = .underWindowBackground
+            backdrop.blendingMode = .behindWindow
+            backdrop.state = .followsWindowActiveState
+            backdrop.autoresizingMask = [.width, .height]
+            backdrop.frame = content.bounds
+            content.addSubview(backdrop, positioned: .below, relativeTo: nil)
         }
     }
+
+    /// Named so it can be found again and not installed twice.
+    final class Backdrop: NSVisualEffectView {}
 }
 #endif

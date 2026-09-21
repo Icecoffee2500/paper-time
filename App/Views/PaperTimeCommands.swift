@@ -54,7 +54,7 @@ struct PaperTimeCommands: Commands {
             Divider()
 
             Button(L("라이브러리 폴더 바꾸기…", "Change Library Folder…")) {
-                model.isChoosingLibraryFolder = true
+                model.chooseLibraryFolder()
             }
         }
 

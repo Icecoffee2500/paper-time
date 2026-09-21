@@ -406,7 +406,7 @@ struct SettingsView: View {
                 }
             }
             Button(L("라이브러리 폴더 바꾸기…", "Change Library Folder…")) {
-                app.isChoosingLibraryFolder = true
+                app.chooseLibraryFolder()
             }
         } header: {
             pageHeader(L("라이브러리", "Library"))
