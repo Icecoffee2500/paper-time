@@ -87,8 +87,10 @@ button { font: inherit; color: inherit; }
 
 /* ─────────────────────────── the first screen ─────────────────────────── */
 
+/* The first screen is as tall as what is in it. It used to be held at a
+   full viewport, which left a band of empty ground under the buttons on a
+   tall window — the page looked like it had stopped rather than continued. */
 .screen {
-  min-height: 100svh;
   display: flex;
   flex-direction: column;
   padding: 0 22px;
@@ -454,6 +456,8 @@ dialog::backdrop { background: rgba(12, 16, 24, .4); backdrop-filter: blur(4px);
 }
 .vrow:first-of-type { border-top: none; }
 .vrow .v { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 54px; }
+.vrow .when { color: var(--ink-3); font-size: 12.5px; font-variant-numeric: tabular-nums;
+              white-space: nowrap; min-width: 86px; }
 .vrow .n { color: var(--ink-3); font-size: 13.5px; flex: 1 1 120px; }
 .vrow .s { color: var(--ink-3); font-size: 13px; }
 .vrow .d { color: var(--ink-2); font-size: 13px; font-variant-numeric: tabular-nums; margin-left: auto; }

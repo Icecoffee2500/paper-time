@@ -195,14 +195,18 @@ releases.sort(key=key, reverse=True)
 # A note written for one version stays with it across later runs.
 page = pathlib.Path("Website/releases.json")
 if page.exists():
-    kept = {r["version"]: (r.get("note"), r.get("note_en"))
-            for r in json.loads(page.read_text()).get("releases", [])}
+    old = {r["version"]: r for r in json.loads(page.read_text()).get("releases", [])}
     for entry in releases:
-        was = kept.get(entry["version"], (None, None))
+        was = old.get(entry["version"], {})
         if not entry["note"]:
-            entry["note"] = was[0]
+            entry["note"] = was.get("note")
         if not entry["note_en"]:
-            entry["note_en"] = was[1]
+            entry["note_en"] = was.get("note_en")
+        # How many of this version's downloads were ours, counted while
+        # checking the build. The page takes them off the tally, so it says
+        # how many other people took it.
+        if was.get("ours"):
+            entry["ours"] = was["ours"]
 
 page.write_text(json.dumps({"repo": repo, "releases": releases},
                            indent=2, ensure_ascii=False) + "\n")
