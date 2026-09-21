@@ -15,21 +15,21 @@ import Observation
 /// folder of the paper it is about, because everything a folder's papers
 /// carry belongs in that folder. Carry the folder to another machine and the
 /// notes come with it; disconnect it here and they go quietly with it, which
-/// is what disconnecting a folder means. The boxes are read together, so the
-/// box the reader sees is still one box.
+/// is what disconnecting a folder means. A note about no paper — a loose
+/// thought, a map, a draft — has no folder to belong to, so it lives in the
+/// app's own box instead of in whichever folder happened to be first. The
+/// boxes are read together, so the box the reader sees is still one box.
 @MainActor
 @Observable
 public final class NotesModel {
-    /// The first folder: where a note about no paper in particular goes.
-    private let store: LibraryStore
-    /// Every folder's box, read together.
-    @ObservationIgnored private var folders: [LibraryStore] = []
-    /// Which folder each note came from, so it goes back to the same one.
-    @ObservationIgnored private var folderByNote: [String: URL] = [:]
+    /// The app's own box: where a note about no paper goes.
+    private let loose: LooseNotes
+    /// Every box, read together — the app's and one per folder.
+    @ObservationIgnored private var boxes: [any SlipBox] = []
+    /// Which box each note came from, so it goes back to the same one.
+    @ObservationIgnored private var boxByNote: [String: URL] = [:]
     /// The folder a paper is in, asked of the library.
     @ObservationIgnored private var folderOfPaper: (UUID) -> LibraryStore? = { _ in nil }
-    /// And the folder being looked at, for a note about no paper.
-    @ObservationIgnored private var folderInView: () -> LibraryStore? = { nil }
 
     public private(set) var notes: [Zettel] = []
     public private(set) var byID: [String: Zettel] = [:]
@@ -56,32 +56,31 @@ public final class NotesModel {
     /// Bumped whenever the notes change, so a view reading along can ask again.
     public private(set) var revision = 0
 
-    public init(store: LibraryStore) {
-        self.store = store
-        self.folders = [store]
+    public init(loose: LooseNotes = .inApplicationSupport()) {
+        self.loose = loose
+        self.boxes = [loose]
     }
 
     /// Told by the library which folders are open, and how to find the one a
-    /// paper is in. Weak closures rather than a back-reference: the library
+    /// paper is in. A weak closure rather than a back-reference: the library
     /// owns this.
     func read(
         folders: [LibraryStore],
-        of folderOfPaper: @escaping (UUID) -> LibraryStore?,
-        orElse folderInView: @escaping () -> LibraryStore?
+        of folderOfPaper: @escaping (UUID) -> LibraryStore?
     ) {
-        self.folders = folders
+        // The app's box first, so a note it already holds stays its own.
+        boxes = [loose] + folders
         self.folderOfPaper = folderOfPaper
-        self.folderInView = folderInView
     }
 
-    /// Where a note is written: the folder it was read from, else the folder
-    /// of the paper it is about, else the one being looked at.
-    private func folder(for note: Zettel) -> LibraryStore {
-        if let root = folderByNote[note.id], let found = folders.first(where: { $0.root == root }) {
+    /// Where a note is written: the box it was read from, else the folder of
+    /// the paper it is about, else the app's own box.
+    private func box(for note: Zettel) -> any SlipBox {
+        if let id = boxByNote[note.id], let found = boxes.first(where: { $0.boxID == id }) {
             return found
         }
         if let paperID = note.paperID, let found = folderOfPaper(paperID) { return found }
-        return folderInView() ?? store
+        return loose
     }
 
     // MARK: - Reading
@@ -89,38 +88,53 @@ public final class NotesModel {
     public func load() async {
         var loaded: [Zettel] = []
         var homes: [String: URL] = [:]
-        for folder in folders {
-            for note in await folder.loadNotes() {
-                // Two folders cannot both own a note. The first one keeps it
+        for box in boxes {
+            for note in await box.loadNotes() {
+                // Two boxes cannot both own a note. The first one keeps it
                 // and the second copy is left alone rather than deleted —
                 // nobody's writing is thrown away to tidy an index.
                 guard homes[note.id] == nil else { continue }
-                homes[note.id] = folder.root
+                homes[note.id] = box.boxID
                 loaded.append(note)
             }
         }
-        folderByNote = homes
+        boxByNote = homes
         apply(loaded)
         await settle()
     }
 
-    /// Moves each note to the folder of the paper it is about.
+    /// Puts each note in the box it belongs to: the folder of the paper it is
+    /// about, or the app's own box when it is about no paper.
     ///
-    /// A library that was one folder kept every note in that folder. The move
-    /// happens once, and only while both folders are open: a note moved into
-    /// a folder that is away is a note nobody can see.
+    /// A library that was one folder kept every note in that folder. A note
+    /// with a paper moves only while both folders are open — a note moved
+    /// into a folder that is away is a note nobody can see. A note with no
+    /// paper has nowhere to be away, so it moves whenever it is found.
     private func settle() async {
-        guard folders.count > 1 else { return }
         for note in notes {
-            guard let paperID = note.paperID,
-                  let target = folderOfPaper(paperID),
-                  let root = folderByNote[note.id], root != target.root,
-                  let source = folders.first(where: { $0.root == root })
+            guard let id = boxByNote[note.id],
+                  let source = boxes.first(where: { $0.boxID == id })
             else { continue }
+            let target: any SlipBox
+            if let paperID = note.paperID {
+                guard let folder = folderOfPaper(paperID) else { continue }
+                target = folder
+            } else {
+                target = loose
+            }
+            guard target.boxID != source.boxID else { continue }
             guard (try? await target.saveNote(note)) != nil else { continue }
             try? await source.deleteNote(note.id)
-            folderByNote[note.id] = target.root
+            boxByNote[note.id] = target.boxID
         }
+    }
+
+    /// Where the app keeps the notes about no paper, and which they are.
+    /// For `--papertime-folders=1`, and for anyone who wants to open them.
+    public var looseBox: URL { loose.directory }
+
+    public func looseNoteIDs() async -> [String] {
+        await loose.loadNotes().map(\.id)
     }
 
     public func note(_ id: String) -> Zettel? { byID[id] }
@@ -245,7 +259,7 @@ public final class NotesModel {
 
     public func create(paperID: UUID?, kind: Zettel.Kind = .note) -> Zettel {
         let note = Zettel(id: Zettel.makeID(avoiding: Set(byID.keys)), kind: kind, paperID: paperID)
-        folderByNote[note.id] = folder(for: note).root
+        boxByNote[note.id] = box(for: note).boxID
         var updated = notes
         updated.insert(note, at: 0)
         apply(updated)
@@ -282,7 +296,7 @@ public final class NotesModel {
         }
 
         saveTasks[note.id]?.cancel()
-        let home = folder(for: edited)
+        let home = box(for: edited)
         saveTasks[note.id] = Task {
             try? await Task.sleep(for: .milliseconds(600))
             guard !Task.isCancelled else { return }
@@ -294,15 +308,15 @@ public final class NotesModel {
     public func flush(_ note: Zettel) async {
         saveTasks[note.id]?.cancel()
         saveTasks[note.id] = nil
-        try? await folder(for: note).saveNote(note)
+        try? await box(for: note).saveNote(note)
     }
 
     public func delete(_ id: String) {
         saveTasks[id]?.cancel()
         saveTasks[id] = nil
-        let home = byID[id].map(folder(for:)) ?? store
+        let home = byID[id].map(box(for:)) ?? loose
         apply(notes.filter { $0.id != id })
-        folderByNote[id] = nil
+        boxByNote[id] = nil
         if openNoteID == id { openNoteID = nil }
         Task { try? await home.deleteNote(id) }
     }

@@ -284,8 +284,8 @@ enum ReleaseNotes {
                 Entry(
                     Text2("노트·태그·컬렉션도 그 폴더 안에", "Notes, tags and collections live in their folder"),
                     Text2(
-                        "논문에 대해 쓴 노트는 그 논문이 있는 폴더에 써요. 태그와 컬렉션도 그 이름을 입은 논문이 있는 폴더마다 적어 두고요. 그래서 폴더 하나를 다른 컴퓨터로 가져가면 표시도 필기도 노트도 태그도 그대로 딸려 가고, 여기서 연결을 해제하면 그 폴더의 것만 목록에서 빠져요. 같은 이름을 두 폴더가 쓰면 목록에는 한 줄로 보여요. 예전에 첫 폴더에 모여 있던 노트는 열 때 제 논문이 있는 폴더로 옮겨 가요.",
-                        "A note about a paper is written in the folder that paper is in. A tag or a collection is written in every folder whose papers wear it. So a folder carried to another machine arrives whole — marks, handwriting, notes, tags — and disconnecting one here takes only its own. A name two folders use shows once. Notes that used to sit in the first folder move to the folder of their paper the next time the library opens."
+                        "논문에 대해 쓴 노트는 그 논문이 있는 폴더에 써요. 태그와 컬렉션도 그 이름을 입은 논문이 있는 폴더마다 적어 두고요. 그래서 폴더 하나를 다른 컴퓨터로 가져가면 표시도 필기도 노트도 태그도 그대로 딸려 가고, 여기서 연결을 해제하면 그 폴더의 것만 목록에서 빠져요. 같은 이름을 두 폴더가 쓰면 목록에는 한 줄로 보여요. 논문 없이 쓴 노트 — 그냥 떠오른 생각, 지도, 초안 — 는 갈 폴더가 없으니 앱이 제 폴더에 따로 둬요. 예전에 첫 폴더에 모여 있던 노트는 열 때 제자리로 옮겨 가요.",
+                        "A note about a paper is written in the folder that paper is in. A tag or a collection is written in every folder whose papers wear it. So a folder carried to another machine arrives whole — marks, handwriting, notes, tags — and disconnecting one here takes only its own. A name two folders use shows once. A note about no paper — a loose thought, a map, a draft — has no folder to belong to, so the app keeps it in a folder of its own. Notes that used to sit in the first folder move where they belong the next time the library opens."
                     )
                 ),
                 Entry(
@@ -293,6 +293,13 @@ enum ReleaseNotes {
                     Text2(
                         "인스펙터의 «파일» 칸에 이름을 적고 Return을 누르면 디스크의 PDF 이름이 바뀌어요. 라이브러리는 사람이 이름 붙인 PDF들의 폴더니까, 앱에서 보는 이름과 Finder에서 보는 이름은 같은 이름이어야 하니까요. «.pdf»는 안 적어도 붙여 줘요. 표시·필기·노트는 논문의 번호를 따라다녀서 하나도 안 움직여요.",
                         "Type a name in the File field of the inspector and press Return: the PDF is renamed on disk. The library is a folder of PDFs under the names you gave them, so the name in the app and the name in Finder should be the same name. Leave the .pdf off and it is kept for you. Marks, handwriting and notes follow the paper's identifier, so none of them move."
+                    )
+                ),
+                Entry(
+                    Text2("선반은 세 묶음으로", "The shelves in three groups"),
+                    Text2(
+                        "사이드바의 선반이 세 가지를 물어요 — 무엇인지(모두·논문·문서), 얼마나 읽었는지(안 읽음·읽는 중·읽음), 내가 뭘 했는지(즐겨찾기·살펴볼 것·열린 논문). 이제 그 셋 사이에 여백이 있어요. 아홉 줄이 한 줄로 이어져 있으면 찾는 하나를 고르려고 아홉 줄을 다 읽게 되니까요.",
+                        "The shelves answer three questions — what a thing is, how far through it you are, and what you did about it — and there is now air between the three. Nine rows in one run meant reading all nine to find the one you wanted."
                     )
                 ),
                 Entry(
@@ -1224,14 +1231,18 @@ enum ReleaseNotes {
                         논문에 대해 쓴 노트는 그 논문이 있는 폴더에 쓴다. 태그와 컬렉션도 그 이름을 입은 \
                         논문이 있는 폴더마다 적어 둔다. 그래서 폴더 하나를 다른 컴퓨터로 가져가면 표시도 \
                         필기도 노트도 태그도 그대로 딸려 가고, 연결을 해제하면 그 폴더의 것만 목록에서 \
-                        빠진다. 같은 이름을 두 폴더가 쓰면 목록에는 한 줄로 보인다.
+                        빠진다. 같은 이름을 두 폴더가 쓰면 목록에는 한 줄로 보인다. 논문 없이 쓴 노트와 \
+                        지도·초안은 갈 폴더가 없으니 앱이 제 폴더(Application Support 안 Notes)에 둔다 — \
+                        폴더를 뽑아도 안 사라지는 대신, 기기 사이를 따라다니지는 않는다.
                         """,
                         """
                         A note about a paper is written in the folder that paper is in, and a tag or \
                         a collection is written in every folder whose papers wear it. So a folder \
                         carried to another machine arrives whole — marks, handwriting, notes, tags — \
                         and disconnecting one here takes only its own. A name two folders use shows \
-                        once.
+                        once. A note about no paper, and every map and draft, goes in a folder of the \
+                        app's own (Notes, in Application Support): nothing you disconnect can take \
+                        it, and in exchange it does not follow you between machines.
                         """)),
             Feature(Text2("폴더 연결 해제", "Disconnect a folder"),
                     Text2("폴더 이름을 오른쪽 클릭해 «연결 해제». 목록에서 빠질 뿐 파일도 기록도 그대로고, 같은 폴더를 다시 더하면 표시와 필기와 노트까지 그대로 돌아온다.",

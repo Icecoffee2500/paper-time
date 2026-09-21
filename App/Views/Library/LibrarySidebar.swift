@@ -198,6 +198,12 @@ struct LibrarySidebar: View {
                     .padding(.bottom, 13)
             }
 
+            // Three groups with air between them, because the shelves
+            // answer three different questions: what a thing is, how far
+            // through it you are, and what you did about it. Nine rows in one
+            // run made you read all nine to find the one you wanted. No
+            // headings — a name over three rows is a label for something that
+            // does not need naming.
             Section {
                 Label(L("모두", "All"), systemImage: "tray.full")
                     .count(model.counts.all, current: model.scope == .all)
@@ -213,11 +219,17 @@ struct LibrarySidebar: View {
                         .count(model.counts.documents, current: model.scope == .documents)
                         .scopeRow(.documents, in: model)
                 }
-                // What is open right now — a row of tabs, as a shelf. From
-                // here a paper is closed, or put beside another.
-                Label(L("열린 논문", "Open Papers"), systemImage: "rectangle.on.rectangle")
-                    .count(model.openPaperIDs.count, current: model.scope == .open)
-                    .scopeRow(.open, in: model)
+            } header: {
+                // No name: these are not a category, they are the list. The
+                // header is here only for the air a section gets from having
+                // one — without it the shelves sit flush against the
+                // libraries above them.
+                Color.clear.frame(height: 8)
+            }
+
+            // How far through. One paper is on exactly one of these, and
+            // dropping it on another is how it moves.
+            Section {
                 Label(L("안 읽음", "Unread"), systemImage: "circle")
                     .count(model.counts.unread, current: model.scope == .unread)
                     .scopeRow(.unread, in: model)
@@ -230,6 +242,14 @@ struct LibrarySidebar: View {
                     .count(model.counts.read, current: model.scope == .read)
                     .scopeRow(.read, in: model)
                     .dropTarget(in: model) { await model.setReadingStatus(.read, for: $0) }
+            } header: {
+                Color.clear.frame(height: 8)
+            }
+
+            // What you did about it, and what is open right now — a row of
+            // tabs, as a shelf. From here a paper is closed, or put beside
+            // another.
+            Section {
                 Label(L("즐겨찾기", "Favorites"), systemImage: "star")
                     .count(model.counts.favorites, current: model.scope == .favorites)
                     .scopeRow(.favorites, in: model)
@@ -237,11 +257,10 @@ struct LibrarySidebar: View {
                 Label(L("살펴볼 것", "Needs Review"), systemImage: "exclamationmark.triangle")
                     .count(model.counts.needsReview, current: model.scope == .needsReview)
                     .scopeRow(.needsReview, in: model)
+                Label(L("열린 논문", "Open Papers"), systemImage: "rectangle.on.rectangle")
+                    .count(model.openPaperIDs.count, current: model.scope == .open)
+                    .scopeRow(.open, in: model)
             } header: {
-                // No name: these are not a category, they are the list. The
-                // header is here only for the air a section gets from having
-                // one — without it the shelves sit flush against the
-                // libraries above them.
                 Color.clear.frame(height: 8)
             }
 

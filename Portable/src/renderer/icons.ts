@@ -68,6 +68,15 @@ const SHAPES: Record<string, string> = {
     <path d="M6.85 2.9 1.9 11.4a1.3 1.3 0 0 0 1.13 1.96h9.94a1.3 1.3 0 0 0 1.13-1.96L9.15 2.9a1.3 1.3 0 0 0-2.3 0Z"/>
     <path d="M8 6.2v2.7"/>
     <circle cx="8" cy="11" r="0.72" fill="currentColor" stroke="none"/>`,
+  // The two kinds a library holds. A paper has writing on it and a title
+  // above the writing; a document is a page and nothing more — the same pair
+  // the Mac draws with text.document and doc.
+  'text.document': `
+    <path d="M3.6 2.4h8.8a1.2 1.2 0 0 1 1.2 1.2v8.8a1.2 1.2 0 0 1-1.2 1.2H3.6a1.2 1.2 0 0 1-1.2-1.2V3.6a1.2 1.2 0 0 1 1.2-1.2Z"/>
+    <path d="M5 5.4h6M5 8h6M5 10.6h3.6"/>`,
+  doc: `
+    <path d="M4 1.9h4.8l3.4 3.4v8.8a1.2 1.2 0 0 1-1.2 1.2H4a1.2 1.2 0 0 1-1.2-1.2V3.1A1.2 1.2 0 0 1 4 1.9Z"/>
+    <path d="M8.6 1.9v2.6a1.1 1.1 0 0 0 1.1 1.1h2.5"/>`,
   // A slip of paper with a folded corner: the slip-box.
   note: `
     <path d="M2.6 3.4a1.4 1.4 0 0 1 1.4-1.4h8a1.4 1.4 0 0 1 1.4 1.4v6.1l-3.9 3.9H4a1.4 1.4 0 0 1-1.4-1.4Z"/>

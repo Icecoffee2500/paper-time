@@ -362,7 +362,7 @@ public final class LibraryModel {
         self.store = store
         self.location = location
         self.manifest = manifest
-        self.notes = NotesModel(store: store)
+        self.notes = NotesModel()
         let contact = UserDefaults.standard.string(forKey: "metadataContactEmail")
         let network = NetworkService(contactEmail: contact?.isEmpty == false ? contact : nil)
         // The on-device model is tried first where it exists and simply reports
@@ -401,8 +401,7 @@ public final class LibraryModel {
         await loadVocabulary()
         rebuildDerivedIndexes()
         looseDocuments = loose
-        notes.read(folders: allStores, of: { [weak self] id in self?.folder(ofPaper: id) },
-                   orElse: { [weak self] in self?.importDestination })
+        notes.read(folders: allStores, of: { [weak self] id in self?.folder(ofPaper: id) })
         await notes.load()
         await settleVocabulary()
         startWatchingFolder()
@@ -1211,6 +1210,8 @@ public final class LibraryModel {
             report += " collections=[\((set?.collections ?? []).map(\.name).joined(separator: ","))]"
             report += " notes=[\(box.map(\.id).joined(separator: ","))]\n"
         }
+        report += "app box \(notes.looseBox.lastPathComponent):"
+        report += " notes=[\(await notes.looseNoteIDs().joined(separator: ","))]\n"
         report += "shown: tags=[\(manifest.tags.map(\.name).joined(separator: ","))]"
         report += " collections=[\(collections.collections.map(\.name).joined(separator: ","))]"
         report += " notes=\(notes.notes.count)\n"

@@ -109,3 +109,58 @@ struct RenameTests {
         #expect(FileManager.default.fileExists(atPath: renamed.documentURL.path(percentEncoded: false)))
     }
 }
+
+/// A note about no paper has no folder to belong to, so the app keeps it.
+@Suite("The app's own box")
+struct LooseNotesTests {
+    static func makeDirectory() throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appending(path: "papertime-loose-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    @Test("A note written here comes back the same")
+    func keepsANote() async throws {
+        let directory = try Self.makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let box = LooseNotes(directory: directory)
+
+        var note = Zettel(id: "260922_0001", kind: .map, title: "A map")
+        note.body = "- [[260922_0002]]"
+        try await box.saveNote(note)
+
+        let read = await box.loadNotes()
+        #expect(read.count == 1)
+        #expect(read.first?.id == "260922_0001")
+        #expect(read.first?.kind == .map)
+        #expect(read.first?.title == "A map")
+        // Plain Markdown in a plain folder: the same file a library folder
+        // holds, so one can be moved into the other and nothing is lost.
+        let names = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+        #expect(names == ["260922_0001.md"])
+    }
+
+    @Test("Deleting takes the file with it")
+    func deletesANote() async throws {
+        let directory = try Self.makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let box = LooseNotes(directory: directory)
+
+        try await box.saveNote(Zettel(id: "260922_0003", title: "Gone soon"))
+        try await box.deleteNote("260922_0003")
+        #expect(await box.loadNotes().isEmpty)
+        // And deleting one that is not there is not an error.
+        try await box.deleteNote("260922_0003")
+    }
+
+    @Test("An empty note is not kept at all")
+    func dropsAnEmptyNote() async throws {
+        let directory = try Self.makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let box = LooseNotes(directory: directory)
+
+        try await box.saveNote(Zettel(id: "260922_0004"))
+        #expect(await box.loadNotes().isEmpty)
+    }
+}

@@ -54,6 +54,11 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
     return el('div', { class: 'sidebar-section', text: label })
   }
 
+  /** Air between two groups of rows: a section with nothing to say. */
+  function gap() {
+    return section('')
+  }
+
   function update() {
     clear(body)
     const papers = store.papers.filter((entry) => !entry.meta.parentID)
@@ -90,13 +95,15 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
       el('span', { class: 'row-label', text: L('라이브러리 더하기…', 'Add Library…') }),
     ])
     on(addFolder, 'click', actions.addFolder)
-    body.append(addFolder, el('div', { class: 'sidebar-section', text: '' }))
+    body.append(addFolder, gap())
 
+    // Three groups with air between them, because the shelves answer three
+    // different questions: what a thing is, how far through it you are, and
+    // what you did about it. Nine rows in one run made you read all nine to
+    // find the one you wanted. No headings — a name over three rows is a
+    // label for something that does not need naming.
     body.append(
       row({ kind: 'all' }, 'tray.full', L('모두', 'All'), papers.length),
-      // What is open right now — a row of tabs, as a shelf. From here a
-      // paper is closed, or put beside another.
-      row({ kind: 'open' }, 'rectangle.on.rectangle', L('열린 논문', 'Open Papers'), store.openPaperIDs.length),
       // Shown only once the library holds both. A shelf that has never seen
       // anything but papers looks exactly as it did.
       ...(count((e) => e.meta.effectiveKind === 'document') > 0
@@ -104,17 +111,23 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
         ? [
             row({ kind: 'kind', of: 'paper' }, 'text.document', L('논문', 'Papers'),
               count((e) => e.meta.effectiveKind === 'paper')),
-            row({ kind: 'kind', of: 'document' }, 'note', L('문서', 'Documents'),
+            row({ kind: 'kind', of: 'document' }, 'doc', L('문서', 'Documents'),
               count((e) => e.meta.effectiveKind === 'document')),
           ]
         : []),
+      gap(),
+      // How far through. One paper is on exactly one of these.
       row({ kind: 'status', status: 'unread' }, 'circle', L('안 읽음', 'Unread'), count((e) => e.state.readingStatus === 'unread')),
       row({ kind: 'status', status: 'reading' }, 'circle.lefthalf.filled', L('읽는 중', 'Reading'), count((e) => e.state.readingStatus === 'reading')),
       row({ kind: 'status', status: 'read' }, 'checkmark.circle', L('읽음', 'Read'), count((e) => e.state.readingStatus === 'read')),
+      gap(),
+      // What you did about it, and what is open right now — a row of tabs,
+      // as a shelf. From here a paper is closed, or put beside another.
       row({ kind: 'favorites' }, 'star', L('즐겨찾기', 'Favorites'), count((e) => e.state.isFavorite)),
       row({ kind: 'review' }, 'exclamationmark.triangle', L('살펴볼 것', 'Needs Review'),
         count((e) => e.meta.effectiveKind === 'paper'
           && (e.meta.confidence === 'needsReview' || e.meta.confidence === 'unparsed'))),
+      row({ kind: 'open' }, 'rectangle.on.rectangle', L('열린 논문', 'Open Papers'), store.openPaperIDs.length),
     )
 
     body.append(section(L('슬립박스', 'Slip-Box')))
@@ -154,7 +167,7 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
       el('span', { class: 'row-label', text: L('그래프', 'Graph') }),
     ])
     on(graph, 'click', actions.openGraph)
-    body.append(el('div', { class: 'sidebar-section', text: '' }), graph)
+    body.append(gap(), graph)
   }
 
   update()
