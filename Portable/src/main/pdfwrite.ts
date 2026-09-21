@@ -37,6 +37,7 @@ import {
 } from 'pdf-lib'
 import { SketchColor, SketchElement, type Point, type Rect } from '../shared/sketch.js'
 import { InkStroke, INK_OWNER } from '../shared/ink.js'
+import { rightsHandler, type PDFLock } from '../shared/pdfLock.js'
 
 export const SKETCH_OWNER = 'Paper Time Sketch'
 const KEY_SKETCH_ID = 'PTSketchID'
@@ -844,6 +845,30 @@ function inkFrom(dict: PDFDict): InkStroke | null {
  * Everything else in the file — highlights, notes, a colleague's comments —
  * stays exactly where it was.
  */
+/**
+ * Whether a file is locked by something other than a password.
+ *
+ * Both halves have to be true: the document says it is encrypted, *and* one
+ * of the rights handlers is named in the bytes. The name alone means nothing
+ * — a paper about rights management has these words in its prose, and
+ * refusing to open it would be a joke at this app's own expense.
+ */
+export async function rightsLock(bytes: Uint8Array): Promise<PDFLock | null> {
+  let encrypted = false
+  try {
+    const document = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false })
+    encrypted = document.isEncrypted
+  } catch {
+    // Unparseable here is not unparseable everywhere: pdf.js reads more than
+    // pdf-lib does, so the reader gets its turn. If it is a rights-locked
+    // file, pdf.js says so in its own words and the reader names the handler.
+    return null
+  }
+  if (!encrypted) return null
+  const handler = rightsHandler(bytes)
+  return handler ? { kind: 'rights', handler } : null
+}
+
 export async function stripOwnedForDisplay(bytes: Uint8Array): Promise<Uint8Array> {
   const document = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false })
   const context = document.context

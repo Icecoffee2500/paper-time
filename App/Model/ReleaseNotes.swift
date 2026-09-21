@@ -257,6 +257,39 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.8.2",
+            date: Text2("2026년 9월", "September 2026"),
+            note: Text2(
+                "잠긴 PDF가 빈 화면으로 남지 않아요. 암호가 걸렸으면 물어보고, 회사가 보호한 파일이면 그렇다고 말해요.",
+                "A locked PDF no longer sits on a blank page. If it wants a password, Paper Time asks; if a company locked it, Paper Time says so."
+            ),
+            added: [
+                Entry(
+                    Text2("암호가 걸린 PDF를 열어요", "Open a PDF that wants a password"),
+                    Text2(
+                        "암호를 묻는 칸이 쪽 자리에 떠요. 넣으면 열리고, 틀리면 다시 물어요. 암호는 어디에도 저장하지 않아요 — 파일을 여는 데 한 번 쓰고 잊어요.",
+                        "A field appears where the page would be. Type the password and it opens; get it wrong and it asks again. The password is stored nowhere — it opens the file once and is forgotten."
+                    )
+                ),
+            ],
+            fixed: [
+                Entry(
+                    Text2("잠긴 PDF가 아무 말 없이 빈 화면이었어요", "A locked PDF was a blank page with no message"),
+                    Text2(
+                        "암호가 걸린 파일을 누르면 쪽이 영원히 비어 있었어요. 오류도, 안내도 없이요 — 안에서는 암호를 기다리고 있었는데 물어보는 창이 없었거든요. 회사 권한 서비스(Microsoft Purview 같은)가 잠근 파일은 더 나빴어요: 윈도우·리눅스에서는 요청이 조용히 실패했고, 맥은 열린 척하며 암호문을 그렸어요. 이제 셋 다 무엇이 막고 있는지 이름을 대고 말해요.",
+                        "Clicking a password-protected file left the page empty for good — no error, no notice. Inside, it was waiting for a password nobody was asking for. A file locked by a rights service such as Microsoft Purview was worse: on Windows and Linux the request failed silently, and on the Mac it pretended to open and drew the cipher. All three now name what is in the way and say it."
+                    )
+                ),
+                Entry(
+                    Text2("잠긴 PDF의 제목이 깨진 글자였어요", "A locked PDF was listed under broken letters"),
+                    Text2(
+                        "잠긴 파일에서 제목을 읽으면 암호문이 나와요. 목록에 \"OìáCµC˘-Ü˘°\" 같은 줄이 생겼어요. 이제 잠긴 파일은 파일 이름 그대로 목록에 들어가요.",
+                        "Reading a title out of a locked file gives cipher, and the library got a row called \"OìáCµC˘-Ü˘°\". A locked file now keeps the name of the file it came from."
+                    )
+                ),
+            ]
+        ),
+        Release(
             version: "0.8.1",
             date: Text2("2026년 9월", "September 2026"),
             note: Text2(

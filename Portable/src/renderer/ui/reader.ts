@@ -15,6 +15,15 @@ import { clear, el, on } from '../dom.js'
 import { freshReaderState, store, type ReaderState } from '../state.js'
 import { PAPER_DRAG_TYPE } from '../../shared/split.js'
 import { loadDocument, TextLayer, type PDFDocumentProxy, type PDFPageProxy } from '../pdf.js'
+import { rightsHandler, type PDFLock } from '../../shared/pdfLock.js'
+
+/** The handler as it is written in the file, said the way a person would. */
+const SERVICE_NAMES: Record<string, string> = {
+  MicrosoftIRMServices: L('Microsoft Purview(회사 IRM)', 'Microsoft Purview'),
+  FoxitIRM: 'Foxit IRM',
+  'Adobe.PubSec': L('인증서 보안', 'Certificate security'),
+  EBX_HANDLER: 'Adobe DRM',
+}
 import { SketchElement } from '../../shared/sketch.js'
 import { InkStroke } from '../../shared/ink.js'
 import { drawElements, drawInk, drawMarks } from '../../shared/sketchRender.js'
@@ -338,7 +347,8 @@ export class Reader {
     this.close()
     this.paperID = id
     try {
-      const document = await loadDocument(bytes)
+      const document = await loadDocument(bytes, (wrong) => this.askPassword(generation, wrong))
+      if (!document) return
       if (generation !== this.generation) {
         document.destroy()
         return
@@ -357,8 +367,92 @@ export class Reader {
       this.watchVisibility()
       this.update()
     } catch (error) {
-      this.actions.toast(L(`이 PDF를 열 수 없어요. 파일이 깨졌을 수 있어요 — ${String(error)}`, `Paper Time can't open this PDF. It may be damaged — ${String(error)}`))
+      if (generation !== this.generation) return
+      const message = String(error)
+      // pdf.js implements the standard handler and no other. A file locked by
+      // a certificate or a company's rights server arrives here.
+      if (/unknown encryption method|Unknown crypto/i.test(message)) {
+        this.showLocked({ kind: 'rights', handler: rightsHandler(bytes) ?? '' })
+        return
+      }
+      if (/giving up on the password|PasswordException/i.test(message)) return
+      this.notice(
+        L('이 PDF를 열 수 없어요', "Paper Time can't open this PDF"),
+        L('파일이 깨졌을 수 있어요. 다른 뷰어에서도 안 열리면 파일 쪽 문제예요.',
+          'The file may be damaged. If another reader cannot open it either, the file is the problem.'),
+        message,
+      )
     }
+  }
+
+  /**
+   * What the page area says instead of staying blank.
+   *
+   * A reader that shows nothing teaches somebody that the app is broken. It
+   * takes one sentence to say which of the three things happened, and the
+   * sentence is worth more than the blank page was.
+   */
+  private notice(title: string, body: string, detail?: string, extra?: HTMLElement) {
+    clear(this.pagesBox)
+    this.pagesBox.append(el('div', { class: 'empty' }, [
+      el('h2', { text: title }),
+      el('p', { text: body }),
+      ...(detail ? [el('p', { class: 'fine', text: detail })] : []),
+      ...(extra ? [extra] : []),
+    ]))
+  }
+
+  /** A file whose key is held by a rights service, not by the reader. */
+  showLocked(lock: PDFLock) {
+    if (lock.kind !== 'rights') return
+    const name = SERVICE_NAMES[lock.handler] ?? L('회사 권한 서비스', 'a rights service')
+    this.notice(
+      L('회사가 보호한 논문이에요', 'This paper is protected'),
+      L(`${name}가 잠근 파일이라 Paper Time은 못 열어요. 파일이 깨진 건 아니에요 — 여는 열쇠를 `
+        + '회사 권한 서버가 들고 있고, 그 서버에 물어볼 수 있는 앱은 Acrobat처럼 회사가 허락한 것뿐이에요.',
+        `${name} locked this file, so Paper Time can't open it. The file is not damaged — the key `
+        + "lives on your company's rights server, and only a reader your company allows, such as "
+        + 'Acrobat, can ask for it.'),
+    )
+  }
+
+  /**
+   * The password, asked for in the page area itself.
+   *
+   * pdf.js keeps its promise pending until somebody answers, so with no one
+   * asking, a locked paper sat on a blank page forever — no page, no error,
+   * nothing to click. The answer goes straight back to pdf.js and is kept
+   * nowhere.
+   */
+  private askPassword(generation: number, wrong: boolean): Promise<string | null> {
+    return new Promise((resolve) => {
+      if (generation !== this.generation) return resolve(null)
+      const field = el('input', {
+        class: 'fb-input',
+        type: 'password',
+        placeholder: L('암호', 'Password'),
+      }) as HTMLInputElement
+      const open = el('button', { class: 'filled-button', text: L('열기', 'Open') })
+      const send = () => {
+        if (!field.value) return
+        this.notice(L('여는 중이에요', 'Opening'), L('암호를 확인하고 있어요.', 'Checking the password.'))
+        resolve(field.value)
+      }
+      on(open, 'click', send)
+      on(field, 'keydown', (event) => {
+        if ((event as KeyboardEvent).key === 'Enter') send()
+      })
+      this.notice(
+        L('암호가 걸린 논문이에요', 'This paper is locked'),
+        wrong
+          ? L('암호가 맞지 않아요. 다시 넣어주세요.', "That password didn't work. Try again.")
+          : L('암호를 넣으면 열어요. 어디에도 저장하지 않아요.',
+              'Type the password and it opens. It is not stored anywhere.'),
+        undefined,
+        el('div', { class: 'fb-row' }, [field, open]),
+      )
+      field.focus()
+    })
   }
 
   close() {

@@ -22,6 +22,7 @@ import {
   isOurMark,
   readDrawings,
   readMarks,
+  rightsLock,
   stripOwnedForDisplay,
   writeDrawings,
   type MarkupRecord,
@@ -283,7 +284,21 @@ const handlers: Record<string, Handler> = {
   'paper:bytes': (async ({ id }: { id: string }) => {
     const row = await library?.paper(id)
     if (!row?.file || !row.exists) return { error: 'The PDF for this paper is not in the folder.' }
-    return { data: await stripOwnedForDisplay(await fsp.readFile(row.file)) }
+    const bytes = await fsp.readFile(row.file)
+    // A file this cannot parse is not a reason to throw: a rejected request
+    // reaches the window as an unhandled rejection, which is a blank page and
+    // no sentence. The reader is told what is wrong and says it.
+    try {
+      const lock = await rightsLock(bytes)
+      if (lock) return { locked: lock }
+      return { data: await stripOwnedForDisplay(bytes) }
+    } catch (error) {
+      // Our own annotations could not be taken out, which is no reason to
+      // refuse the file — pdf.js parses more than pdf-lib does. It is handed
+      // the bytes as they are, ours included.
+      console.error('paper:bytes - reading the annotations failed, showing the file as it is:', error)
+      return { data: bytes }
+    }
   }) as Handler,
 
   'paper:state': (async ({ id, patch }: { id: string; patch: Record<string, unknown> }) => {

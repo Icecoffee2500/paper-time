@@ -1295,6 +1295,16 @@ body[data-platform='darwin'] .window-buttons {
   color: var(--text-secondary);
 }
 
+/* The reason under a notice: a parser's own words, for when somebody takes
+   this to a search engine. Smaller than the sentence above it, and never in
+   its place. */
+.empty .fine {
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  font-family: var(--mono, ui-monospace, monospace);
+  word-break: break-word;
+}
+
 .empty p {
   margin: 0;
   font-size: 12.5px;

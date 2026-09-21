@@ -69,6 +69,7 @@ import {
 } from '../shared/split.js'
 import { icon } from './icons.js'
 import { L } from '../shared/lang.js'
+import { type PDFLock } from '../shared/pdfLock.js'
 
 document.body.dataset.platform = platform
 /** This window shows one paper on its own: no library columns. */
@@ -276,9 +277,19 @@ function readerFor(id: string, pane: boolean): Reader {
 }
 
 async function loadInto(reader: Reader, id: string) {
-  const result = await call<{ data: Uint8Array } | { error: string }>('paper:bytes', { id })
+  // Nothing in here may throw past this function: a rejected request reaching
+  // the window as an unhandled rejection is a blank page with no sentence on
+  // it, which is what a locked PDF used to look like.
+  let result: { data?: Uint8Array; error?: string; locked?: PDFLock }
+  try {
+    result = await call('paper:bytes', { id })
+  } catch (error) {
+    console.error('paper:bytes failed', error)
+    result = { error: L('이 논문의 PDF를 읽지 못했어요.', "Paper Time couldn't read this paper's PDF.") }
+  }
   if (!readers.has(id) || readers.get(id) !== reader) return
-  if ('error' in result) return toast(result.error)
+  if (result.locked) return reader.showLocked(result.locked)
+  if (result.error || !result.data) return toast(result.error ?? 'unknown error')
   await reader.open(id, new Uint8Array(result.data))
   reader.setDrawing(reader.state.drawing)
   reader.update()

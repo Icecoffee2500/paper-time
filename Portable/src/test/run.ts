@@ -27,6 +27,7 @@ import {
   rectFrom,
 } from '../shared/sketch.js'
 import { InkStroke, resample } from '../shared/ink.js'
+import { KNOWN_HANDLERS, rightsHandler } from '../shared/pdfLock.js'
 import { SketchTree, adopted, guessedDirection, ordered, pruned, copied } from '../shared/sketchTree.js'
 import { PaperMeta, PaperState } from '../shared/model.js'
 import { entryFor, formatEntry, protectTitle } from '../shared/bibtex.js'
@@ -622,6 +623,23 @@ async function main() {
   await test('a zone is drawn inset eight points, as on the Mac', () => {
     const rect = zoneRect('right', { width: 1000, height: 900 })
     assert.deepEqual(rect, { x: 504, y: 8, width: 488, height: 884 })
+  })
+
+  await test('the rights handlers are the same list the Mac looks for', () => {
+    // Run from Portable/, as `npm test` does.
+    const swift = fs.readFileSync(
+      path.join(process.cwd(), '..', 'Packages/PaperTimeKit/Sources/PaperCore/PDFLock.swift'),
+      'utf8',
+    )
+    const block = /knownHandlers = \[([^\]]*)\]/.exec(swift)?.[1] ?? ''
+    const listed = [...block.matchAll(/"([^"]+)"/g)].map((m) => m[1])
+    assert.deepEqual(KNOWN_HANDLERS, listed)
+  })
+
+  await test('a rights handler is only found when it is in the file', () => {
+    const bytes = new TextEncoder().encode('%PDF-1.7 /Encrypt /Filter /MicrosoftIRMServices')
+    assert.equal(rightsHandler(bytes), 'MicrosoftIRMServices')
+    assert.equal(rightsHandler(new TextEncoder().encode('%PDF-1.7 ordinary paper')), null)
   })
 
   process.stdout.write(`\n${passed} passed, ${failed} failed\n`)

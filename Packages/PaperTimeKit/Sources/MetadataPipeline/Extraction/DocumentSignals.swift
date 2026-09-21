@@ -60,6 +60,13 @@ public struct DocumentSignals: Hashable, Sendable {
 public enum DocumentSignalsExtractor {
     public static func extract(from document: PDFDocument) -> DocumentSignals {
         var signals = DocumentSignals(pageCount: document.pageCount)
+        // Everything behind a lock is cipher, including the title. Taking it
+        // gives a row named "OìáCµC˘-Ü˘°"; taking nothing gives a row named
+        // after the file, which is what the person dropped in. A file with
+        // only an owner password is not locked and reads normally — that is
+        // most of the publishers — so this asks `PDFLock`, which knows the
+        // difference.
+        guard PDFLock.of(document: document, fileAt: document.documentURL) == nil else { return signals }
 
         let attributes = document.documentAttributes ?? [:]
         signals.embeddedTitle = cleanEmbeddedTitle(

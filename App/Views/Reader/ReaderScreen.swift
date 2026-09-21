@@ -1,3 +1,4 @@
+import PaperCore
 import InkEngine
 import LibraryStore
 import PDFKit
@@ -23,6 +24,11 @@ struct ReaderScreen: View {
     @State private var selection: PDFSelection?
     @State private var currentPageIndex = 0
     @State private var loadError: String?
+    /// The door, when the file is fine and shut: a password to type, or a
+    /// rights service that will not hand this app the key.
+    @State private var lock: PDFLock?
+    @State private var password = ""
+    @State private var passwordFailed = false
     /// A selection the user is writing a note about, and what they have typed.
     @State private var noteSelection: PDFSelection?
     @State private var noteDraft = ""
@@ -37,6 +43,8 @@ struct ReaderScreen: View {
         Group {
             if let session {
                 reader(session)
+            } else if let lock {
+                locked(lock)
             } else if let loadError {
                 ContentUnavailableView {
                     Label(L("이 논문을 열지 못했어요", "Can't Open This Paper"), systemImage: "doc.questionmark")
@@ -385,8 +393,9 @@ struct ReaderScreen: View {
         #endif
     }
 
-    private func load() async {
+    private func load(password: String? = nil) async {
         loadError = nil
+        if password == nil { lock = nil }
         // A different paper: forget what belonged to the last one, but keep its
         // session in place until the new document is ready. Dropping it would
         // take the PDF view out of the view tree, and building another one is
@@ -410,7 +419,7 @@ struct ReaderScreen: View {
         do {
             Trace.mark("opening \(paper.meta.displayTitle.prefix(30))")
             let opened = try await Trace.time("open the paper") {
-                try await DocumentSession.open(paper: paper, store: library.store)
+                try await DocumentSession.open(paper: paper, store: library.store, password: password)
             }
             Trace.mark("opened \(paper.meta.displayTitle.prefix(30))")
             session = opened
@@ -425,8 +434,74 @@ struct ReaderScreen: View {
             // reload of the whole list, and the reader has no reason to wait
             // for either before showing the page.
             Task { await library.update(state: state, for: paper.id) }
+        } catch let shut as Locked {
+            // A wrong password is not a failure to report; it is the same
+            // door, and the field stays where the hand already is.
+            passwordFailed = password != nil && shut.lock == .password
+            lock = shut.lock
         } catch {
             loadError = error.localizedDescription
+        }
+    }
+
+    /// What a locked paper shows instead of a blank page.
+    ///
+    /// Two different sentences, because they ask for two different things. A
+    /// password is something the reader has; a rights service is something
+    /// only their company's own reader can satisfy, and saying so saves them
+    /// looking for a setting that does not exist.
+    @ViewBuilder
+    private func locked(_ lock: PDFLock) -> some View {
+        switch lock {
+        case .password:
+            ContentUnavailableView {
+                Label(L("암호가 걸린 논문이에요", "This Paper Is Locked"), systemImage: "lock.doc")
+            } description: {
+                VStack(spacing: 10) {
+                    Text(passwordFailed
+                        ? L("암호가 맞지 않아요. 다시 넣어주세요.", "That password didn't work. Try again.")
+                        : L("암호를 넣으면 열어요. 어디에도 저장하지 않아요.",
+                            "Type the password and it opens. It is not stored anywhere."))
+                    SecureField(L("암호", "Password"), text: $password)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: 240)
+                        .onSubmit { Task { await load(password: password) } }
+                }
+            } actions: {
+                Button(L("열기", "Open")) { Task { await load(password: password) } }
+                    .disabled(password.isEmpty)
+            }
+        case let .rights(handler):
+            ContentUnavailableView {
+                Label(L("회사가 보호한 논문이에요", "This Paper Is Protected"), systemImage: "lock.shield")
+            } description: {
+                Text(L("""
+                    \(Self.serviceName(handler))가 잠근 파일이라 Paper Time은 못 열어요. \
+                    파일이 깨진 건 아니에요 — 여는 열쇠를 회사 권한 서버가 들고 있고, \
+                    그 서버에 물어볼 수 있는 앱은 Acrobat처럼 회사가 허락한 것뿐이에요.
+                    """, """
+                    \(Self.serviceName(handler)) locked this file, so Paper Time can't open it. \
+                    The file is not damaged — the key lives on your company's rights server, \
+                    and only a reader your company allows, such as Acrobat, can ask for it.
+                    """))
+            } actions: {
+                Button(L("Finder에서 보기", "Show in Finder")) {
+                    #if os(macOS)
+                    NSWorkspace.shared.activateFileViewerSelecting([paper.documentURL])
+                    #endif
+                }
+            }
+        }
+    }
+
+    /// The handler as it is written in the file, said the way a person would.
+    private static func serviceName(_ handler: String) -> String {
+        switch handler {
+        case "MicrosoftIRMServices": L("Microsoft Purview(회사 IRM)", "Microsoft Purview")
+        case "FoxitIRM": "Foxit IRM"
+        case "Adobe.PubSec": L("인증서 보안", "Certificate security")
+        case "EBX_HANDLER": "Adobe DRM"
+        default: handler
         }
     }
 

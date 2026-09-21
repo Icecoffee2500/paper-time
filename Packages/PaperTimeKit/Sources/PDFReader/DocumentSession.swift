@@ -152,12 +152,24 @@ public final class DocumentSession {
     /// A paper is tens of megabytes and PDFKit parses eagerly; doing this
     /// where the interface lives is the difference between a reader that opens
     /// and a window that freezes.
-    public static func open(paper: LoadedPaper, store: LibraryStore) async throws -> DocumentSession {
+    /// A PDF that asks for a password is opened by passing one in; the
+    /// caller asks for it and tries again. Nothing keeps the password: it
+    /// goes into PDFKit and out of memory with the string it came in.
+    public static func open(
+        paper: LoadedPaper, store: LibraryStore, password: String? = nil
+    ) async throws -> DocumentSession {
         let url = paper.documentURL
         let prepared = try await Task.detached(priority: .userInitiated) {
             FileOperations.requestDownload(of: url)
             let data = try FileOperations.read(contentsOf: url)
-            guard let document = PDFDocument(data: data) else {
+            let made = PDFDocument(data: data)
+            if let locked = made, locked.isLocked, let password {
+                _ = locked.unlock(withPassword: password)
+            }
+            if let lock = PDFLock.of(document: made, data: data) {
+                throw Locked(url: url, lock: lock)
+            }
+            guard let document = made else {
                 throw FileOperations.Failure.documentMissing(url)
             }
             // Reading back the marks means a text extraction per annotation,
