@@ -43,6 +43,8 @@ public final class LibraryModel {
         /// exactly as it did.
         case papers
         case documents
+        /// One of the folders the library is reading.
+        case folder(URL)
         case unread
         case reading
         case read
@@ -59,6 +61,80 @@ public final class LibraryModel {
 
     public let store: LibraryStore
     public let location: LibraryLocation
+    /// The folders opened beside the first one.
+    ///
+    /// Every folder is a library in its own right — its own `.papertime`, its
+    /// own records beside its own PDFs — and they are read together into one
+    /// list. The first one is where the slip-box, the tags and the
+    /// collections live, because those are about the whole library rather
+    /// than about a folder, and a note that moved house when you disconnected
+    /// a drive would be a note you lost.
+    public private(set) var extraSources: [LibraryLocation] = []
+    private var extraStores: [LibraryStore] = []
+
+    /// Every folder the library is reading, the first one first.
+    public var sources: [LibraryLocation] { [location] + extraSources }
+    private var allStores: [LibraryStore] { [store] + extraStores }
+
+    /// Which folder a paper came from, and so which store writes it.
+    public func rootURL(of paper: LoadedPaper) -> URL {
+        let path = paper.folder.url.path(percentEncoded: false)
+        // The longest root that is a prefix: folders do not normally nest,
+        // and when they do the inner one owns the paper.
+        return sources
+            .map(\.url)
+            .filter { path.hasPrefix($0.path(percentEncoded: false)) }
+            .max { $0.path.count < $1.path.count }
+            ?? location.url
+    }
+
+    func store(for paper: LoadedPaper) -> LibraryStore {
+        let root = rootURL(of: paper)
+        return allStores.first { $0.root == root } ?? store
+    }
+
+    /// The folder a file on disk belongs to — where a PDF dropped in is
+    /// taken in, and where one added by hand is recorded.
+    func source(containing url: URL) -> LibraryStore {
+        let path = url.path(percentEncoded: false)
+        return allStores
+            .filter { path.hasPrefix($0.root.path(percentEncoded: false)) }
+            .max { $0.root.path.count < $1.root.path.count }
+            ?? store
+    }
+
+    /// Where a paper added from outside every folder goes: the folder being
+    /// looked at, or the first one.
+    var importDestination: LibraryStore {
+        if case let .folder(root) = scope, let found = allStores.first(where: { $0.root == root }) {
+            return found
+        }
+        return store
+    }
+
+    /// Opens another folder beside the ones already open.
+    ///
+    /// Nothing is copied or moved. The folder keeps its own `.papertime`, so
+    /// disconnecting it later leaves it exactly as it was — which is the
+    /// whole promise of a library that is a folder.
+    public func addSource(_ location: LibraryLocation, store: LibraryStore) async {
+        let root = location.url
+        guard !sources.contains(where: { $0.url == root }) else { return }
+        extraSources.append(location)
+        extraStores.append(store)
+        stopWatchingFolder()
+        await refresh()
+    }
+
+    /// Stops reading a folder. Its files and its records stay where they are.
+    public func removeSource(_ root: URL) async {
+        guard let index = extraSources.firstIndex(where: { $0.url == root }) else { return }
+        extraSources.remove(at: index)
+        extraStores.removeAll { $0.root == root }
+        if case let .folder(current) = scope, current == root { scope = .all }
+        stopWatchingFolder()
+        await refresh()
+    }
     /// Every note in the library, and what points at what.
     public let notes: NotesModel
     /// What is connected to what.
@@ -98,6 +174,8 @@ public final class LibraryModel {
         public var all = 0
         public var papers = 0
         public var documents = 0
+        /// How many papers each folder holds, by its root.
+        public var folders: [URL: Int] = [:]
         public var unread = 0
         public var reading = 0
         public var read = 0
@@ -264,7 +342,7 @@ public final class LibraryModel {
     private let onDeviceExtractor = OnDeviceHeaderExtractor()
     /// Watches the library folder so a PDF put there from outside the app
     /// shows up without the user having to ask for it.
-    private var watcher: FolderWatcher?
+    private var watchers: [FolderWatcher] = []
     private var folderCheck: Task<Void, Never>?
     private var pendingPositions: [UUID: Int] = [:]
     private var positionFlush: Task<Void, Never>?
@@ -301,15 +379,23 @@ public final class LibraryModel {
         isScanning = true
         defer { isScanning = false }
 
-        let result = try? await store.loadAll()
-        papers = result?.papers ?? []
-        loadFailures = (result?.failures ?? []).map {
-            "\($0.0.lastPathComponent): \($0.1.localizedDescription)"
+        var loaded: [LoadedPaper] = []
+        var failures: [String] = []
+        var loose: [URL] = []
+        for source in allStores {
+            let result = try? await source.loadAll()
+            loaded += result?.papers ?? []
+            failures += (result?.failures ?? []).map {
+                "\($0.0.lastPathComponent): \($0.1.localizedDescription)"
+            }
+            loose += await source.looseDocumentURLs()
         }
+        papers = loaded
+        loadFailures = failures
         collections = (try? await store.loadCollections()) ?? CollectionSet()
         rebuildDerivedIndexes()
         manifest = (try? await store.loadManifest()) ?? manifest
-        looseDocuments = await store.looseDocumentURLs()
+        looseDocuments = loose
         await notes.load()
         startWatchingFolder()
     }
@@ -334,17 +420,20 @@ public final class LibraryModel {
 
     /// Starts reacting to changes made to the library folder from outside.
     public func startWatchingFolder() {
-        guard watcher == nil else { return }
-        let watcher = FolderWatcher(url: location.url) { [weak self] in
-            Task { @MainActor [weak self] in await self?.folderDidChange() }
+        guard watchers.isEmpty else { return }
+        // One watcher per folder: each is a library of its own, and a PDF
+        // dropped into any of them is a paper in this one.
+        watchers = sources.map { source in
+            FolderWatcher(url: source.url) { [weak self] in
+                Task { @MainActor [weak self] in await self?.folderDidChange() }
+            }
         }
-        self.watcher = watcher
-        watcher.start()
+        for watcher in watchers { watcher.start() }
     }
 
     public func stopWatchingFolder() {
-        watcher?.stop()
-        watcher = nil
+        for watcher in watchers { watcher.stop() }
+        watchers = []
         folderCheck?.cancel()
         folderCheck = nil
     }
@@ -364,7 +453,10 @@ public final class LibraryModel {
         folderCheck = Task { [weak self] in
             guard let self else { return }
             let claimed = Set(papers.map(\.meta.file.relativePath))
-            let unclaimed = await store.unclaimedDocumentURLs(claiming: claimed)
+            var unclaimed: [URL] = []
+            for source in allStores {
+                unclaimed += await source.unclaimedDocumentURLs(claiming: claimed)
+            }
             guard !Task.isCancelled else { return }
 
             if await store.documentsAreMissing(among: claimed) {
@@ -403,7 +495,10 @@ public final class LibraryModel {
 
         var added: [LoadedPaper] = []
         for url in urls {
-            guard let outcome = try? await store.importDocument(
+            // Into the folder the file is already in: adopting a PDF must
+            // never move it to another folder.
+            let into = self.source(containing: url)
+            guard let outcome = try? await into.importDocument(
                 at: url,
                 knownDigests: digests
             ) else { continue }
@@ -440,6 +535,7 @@ public final class LibraryModel {
             case .paper: counts.papers += 1
             case .document: counts.documents += 1
             }
+            counts.folders[rootURL(of: paper), default: 0] += 1
             switch paper.state.readingStatus {
             case .unread: counts.unread += 1
             case .reading: counts.reading += 1
@@ -633,7 +729,7 @@ public final class LibraryModel {
 
         var meta = child.meta
         meta.parentID = parentID
-        if let saved = try? await store.save(meta: meta, in: child.folder, baseline: child.meta) {
+        if let saved = try? await store(for: child).save(meta: meta, in: child.folder, baseline: child.meta) {
             applyLocally(meta: saved, to: childID)
         }
         if selectedPaperID == childID { selectedPaperID = parentID }
@@ -645,7 +741,7 @@ public final class LibraryModel {
         else { return }
         var meta = child.meta
         meta.parentID = nil
-        if let saved = try? await store.save(meta: meta, in: child.folder, baseline: child.meta) {
+        if let saved = try? await store(for: child).save(meta: meta, in: child.folder, baseline: child.meta) {
             applyLocally(meta: saved, to: childID)
         }
     }
@@ -729,6 +825,7 @@ public final class LibraryModel {
         case .notes, .graph: false
         case .papers: paper.meta.effectiveKind == .paper
         case .documents: paper.meta.effectiveKind == .document
+        case let .folder(root): rootURL(of: paper) == root
         case .unread: paper.state.readingStatus == .unread
         case .reading: paper.state.readingStatus == .reading
         case .read: paper.state.readingStatus == .read
@@ -789,7 +886,7 @@ public final class LibraryModel {
         for url in urls {
             let scoped = url.startAccessingSecurityScopedResource()
             defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-            guard let outcome = try? await store.importDocument(at: url, knownDigests: digests) else {
+            guard let outcome = try? await importDestination.importDocument(at: url, knownDigests: digests) else {
                 continue
             }
             switch outcome {
@@ -856,7 +953,7 @@ public final class LibraryModel {
         var meta = paper.meta
         if meta.guessedKind == nil { meta.guessedKind = guess.kind }
         if meta.effectiveKind == .document {
-            if let saved = try? await store.save(meta: meta, in: paper.folder, baseline: paper.meta) {
+            if let saved = try? await store(for: paper).save(meta: meta, in: paper.folder, baseline: paper.meta) {
                 applyLocally(meta: saved, to: paperID)
             }
             return
@@ -875,7 +972,7 @@ public final class LibraryModel {
         meta.bibKey = CitationKey.make(for: result.csl, fallback: meta.file.originalName)
         meta.csl.id = meta.bibKey
 
-        if let saved = try? await store.save(
+        if let saved = try? await store(for: paper).save(
             meta: meta,
             in: paper.folder,
             baseline: paper.meta
@@ -898,7 +995,7 @@ public final class LibraryModel {
             meta.candidates = []
             if meta.confidence == .needsReview { meta.confidence = .unparsed }
         }
-        if let saved = try? await store.save(meta: meta, in: paper.folder, baseline: paper.meta) {
+        if let saved = try? await store(for: paper).save(meta: meta, in: paper.folder, baseline: paper.meta) {
             applyLocally(meta: saved, to: paperID)
         }
         if kind == .paper, wasUnlookedUp { await resolveMetadata(for: paperID) }
@@ -929,7 +1026,7 @@ public final class LibraryModel {
         meta.candidates = []
         meta.bibKey = CitationKey.make(for: candidate.csl, fallback: meta.file.originalName)
         meta.csl.id = meta.bibKey
-        if let saved = try? await store.save(meta: meta, in: paper.folder, baseline: paper.meta) {
+        if let saved = try? await store(for: paper).save(meta: meta, in: paper.folder, baseline: paper.meta) {
             applyLocally(meta: saved, to: paperID)
         }
     }
@@ -939,7 +1036,7 @@ public final class LibraryModel {
         var edited = meta
         edited.confidence = .manual
         edited.candidates = []
-        if let saved = try? await store.save(meta: edited, in: paper.folder, baseline: paper.meta) {
+        if let saved = try? await store(for: paper).save(meta: edited, in: paper.folder, baseline: paper.meta) {
             applyLocally(meta: saved, to: paperID)
         }
     }
@@ -999,7 +1096,7 @@ public final class LibraryModel {
         // file I/O and the interface should not wait on it.
         papers[index].state = updated
 
-        if let saved = try? await store.save(
+        if let saved = try? await store(for: paper).save(
             state: updated,
             in: paper.folder,
             baseline: paper.state
@@ -1044,7 +1141,7 @@ public final class LibraryModel {
         let paper = papers[index]
         guard state != paper.state else { return }
         papers[index].state = state
-        if let saved = try? await store.save(
+        if let saved = try? await store(for: paper).save(
             state: state,
             in: paper.folder,
             baseline: paper.state
@@ -1055,7 +1152,7 @@ public final class LibraryModel {
 
     public func moveToTrash(_ paperID: UUID) async {
         guard let paper = papers.first(where: { $0.id == paperID }) else { return }
-        _ = try? await store.moveToTrash(paper)
+        _ = try? await store(for: paper).moveToTrash(paper)
         papers.removeAll { $0.id == paperID }
         if selectedPaperID == paperID { selectedPaperID = nil }
     }
@@ -1078,7 +1175,7 @@ public final class LibraryModel {
         guard let paper = papers.first(where: { $0.id == paperID }) else { return }
         var meta = paper.meta
         meta.tagIDs = ids
-        if let saved = try? await store.save(
+        if let saved = try? await store(for: paper).save(
             meta: meta,
             in: paper.folder,
             baseline: paper.meta
@@ -1103,7 +1200,7 @@ public final class LibraryModel {
         guard !paper.meta.collectionIDs.contains(collectionID) else { return }
         var meta = paper.meta
         meta.collectionIDs.append(collectionID)
-        if let saved = try? await store.save(
+        if let saved = try? await store(for: paper).save(
             meta: meta,
             in: paper.folder,
             baseline: paper.meta
@@ -1117,7 +1214,7 @@ public final class LibraryModel {
         guard !paper.meta.tagIDs.contains(tagID) else { return }
         var meta = paper.meta
         meta.tagIDs.append(tagID)
-        if let saved = try? await store.save(
+        if let saved = try? await store(for: paper).save(
             meta: meta,
             in: paper.folder,
             baseline: paper.meta
@@ -1130,7 +1227,7 @@ public final class LibraryModel {
         guard let paper = papers.first(where: { $0.id == paperID }) else { return }
         var meta = paper.meta
         meta.collectionIDs = ids
-        if let saved = try? await store.save(
+        if let saved = try? await store(for: paper).save(
             meta: meta,
             in: paper.folder,
             baseline: paper.meta

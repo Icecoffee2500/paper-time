@@ -12,6 +12,7 @@ import { icon } from '../icons.js'
 import { clear, el, on } from '../dom.js'
 import { isOpenPaper, isPinned, shelfPapers, store, type Paper } from '../state.js'
 import { showMenu } from './toolbar.js'
+import { basename } from './sidebar.js'
 import { L } from '../../shared/lang.js'
 import { PAPER_DRAG_TYPE } from '../../shared/split.js'
 
@@ -175,6 +176,8 @@ function shelfTitle(): string {
     case 'all': return L('모두', 'All')
     case 'kind':
       return (store.shelf as { of: string }).of === 'paper' ? L('논문', 'Papers') : L('문서', 'Documents')
+    case 'folder':
+      return basename((store.shelf as { root: string }).root)
     case 'open': return L('열린 논문', 'Open Papers')
     case 'status': return statusName(store.shelf.status)
     case 'favorites': return L('즐겨찾기', 'Favorites')

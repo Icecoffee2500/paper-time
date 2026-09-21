@@ -7,6 +7,7 @@
  * library already contains.
  */
 import { icon } from '../icons.js'
+import { showMenu } from './toolbar.js'
 import { clear, el, on } from '../dom.js'
 import { authorCounts, store, type Shelf } from '../state.js'
 import { L } from '../../shared/lang.js'
@@ -16,6 +17,10 @@ export interface SidebarActions {
   newCollection: () => void
   openGraph: () => void
   chooseLibrary: () => void
+  /** Another folder, read beside the ones already open. */
+  addFolder: () => void
+  /** Stops reading a folder. Its files stay where they are. */
+  removeFolder: (root: string) => void
 }
 
 export function buildSidebar(actions: SidebarActions): { node: HTMLElement; update: () => void } {
@@ -90,6 +95,35 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
     body.append(section(L('슬립박스', 'Slip-Box')))
     body.append(row({ kind: 'notes' }, 'note', L('노트', 'Notes'), count((e) => e.state.summaryNote.trim().length > 0)))
 
+    // Every folder the library is reading. A library used to be one folder;
+    // now it is as many as you point it at, each keeping its own records
+    // beside its own PDFs, so disconnecting one leaves it as it was.
+    body.append(section(L('폴더', 'Folders')))
+    for (const root of store.roots) {
+      const folderRow = row(
+        { kind: 'folder', root },
+        'externaldrive',
+        basename(root),
+        count((e) => e.root === root),
+      )
+      folderRow.title = root
+      if (root !== store.root) {
+        on(folderRow, 'contextmenu', (event: MouseEvent) => {
+          event.preventDefault()
+          showMenu(folderRow, [
+            { label: L('연결 해제', 'Disconnect'), icon: 'eject', action: () => actions.removeFolder(root) },
+          ])
+        })
+      }
+      body.append(folderRow)
+    }
+    const addFolder = el('button', { class: 'row' }, [
+      el('span', { class: 'row-icon', html: icon('plus.circle') }),
+      el('span', { class: 'row-label', text: L('폴더 더하기…', 'Add Folder…') }),
+    ])
+    on(addFolder, 'click', actions.addFolder)
+    body.append(addFolder)
+
     body.append(section(L('컬렉션', 'Collections')))
     for (const collection of store.collections) {
       body.append(row(
@@ -131,7 +165,7 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
   return { node, update }
 }
 
-function basename(p: string): string {
+export function basename(p: string): string {
   const parts = p.split(/[\\/]/).filter(Boolean)
   return parts[parts.length - 1] ?? p
 }

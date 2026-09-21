@@ -28,6 +28,7 @@ import {
 } from '../shared/sketch.js'
 import { InkStroke, resample } from '../shared/ink.js'
 import { KNOWN_HANDLERS, rightsHandler } from '../shared/pdfLock.js'
+import { shelfPapers, store, type Paper } from '../renderer/state.js'
 import { guessKind, hasAbstract, hasIdentifier, hasReferences } from '../shared/documentKind.js'
 import { SketchTree, adopted, guessedDirection, ordered, pruned, copied } from '../shared/sketchTree.js'
 import { PaperMeta, PaperState } from '../shared/model.js'
@@ -666,6 +667,26 @@ async function main() {
     // The answer wins over the guess, always.
     assert.equal(meta.effectiveKind, 'paper')
     assert.match(encode(meta.encode()), /"kind" : "paper"/)
+  })
+
+  await test('a folder shelf shows that folder and nothing else', () => {
+    const make = (id: string, root: string): Paper => ({
+      id,
+      meta: new PaperMeta({ id, file: { relativePath: `${id}.pdf` } }),
+      state: new PaperState({}),
+      exists: true,
+      root,
+    })
+    const before = { papers: store.papers, shelf: store.shelf, roots: store.roots }
+    store.papers = [make('a', '/one'), make('b', '/two'), make('c', '/two')]
+    store.roots = ['/one', '/two']
+    store.shelf = { kind: 'folder', root: '/two' }
+    assert.deepEqual(shelfPapers().map((p) => p.id), ['b', 'c'])
+    store.shelf = { kind: 'all' }
+    assert.equal(shelfPapers().length, 3)
+    store.papers = before.papers
+    store.shelf = before.shelf
+    store.roots = before.roots
   })
 
   await test('the rights handlers are the same list the Mac looks for', () => {

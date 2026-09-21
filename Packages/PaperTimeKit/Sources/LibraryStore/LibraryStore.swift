@@ -27,8 +27,11 @@ public struct LoadedPaper: Hashable, Sendable, Identifiable {
 /// current version, merge, write atomically) that must not interleave with
 /// another one for the same paper.
 public actor LibraryStore {
-    public let root: URL
-    public let provider: CloudProvider
+    /// Where this library is. Immutable and safe to read from anywhere —
+    /// the library model holds several stores and has to ask which folder a
+    /// paper belongs to without awaiting each of them.
+    public nonisolated let root: URL
+    public nonisolated let provider: CloudProvider
 
     public init(root: URL) {
         self.root = root

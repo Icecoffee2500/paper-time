@@ -51,6 +51,33 @@ const wantsSplit = probeArgument('split') === '1'
 
 let window: BrowserWindow | null = null
 let library: Library | null = null
+/**
+ * The folders opened beside the first one.
+ *
+ * Every folder is a library in its own right — its own `.papertime` beside
+ * its own PDFs — and they are read together into one list. The first one
+ * holds the slip-box, the tags and the collections, because those are about
+ * the whole library rather than about a folder.
+ */
+let extraLibraries: Library[] = []
+
+const allLibraries = (): Library[] => (library ? [library, ...extraLibraries] : [])
+
+/** Which folder holds a paper, filled in as the list is read. */
+const ownerByID = new Map<string, Library>()
+
+/** The folder that holds a paper, and so the one that writes it. */
+async function ownerOf(id: string): Promise<Library | null> {
+  const known = ownerByID.get(id)
+  if (known) return known
+  for (const one of allLibraries()) {
+    if (await one.paper(id)) {
+      ownerByID.set(id, one)
+      return one
+    }
+  }
+  return library
+}
 let stopWatching: (() => void) | null = null
 
 /** What every window should hear: the library changed, the theme changed. */
@@ -198,18 +225,31 @@ function allBounds() {
 async function snapshot(): Promise<LibrarySnapshot | { error: string }> {
   if (!library) return { error: 'No library is open.' }
   try {
-    const papers = await library.papers()
+    const rows: LibrarySnapshot['papers'] = []
+    let loose = 0
+    ownerByID.clear()
+    for (const one of allLibraries()) {
+      for (const row of await one.papers()) {
+        ownerByID.set(row.id, one)
+        rows.push({
+          id: row.id,
+          meta: row.meta,
+          state: row.state,
+          exists: row.exists,
+          // Which folder it came from: the sidebar groups by this, and
+          // nothing else needs to know.
+          root: one.root,
+        })
+      }
+      loose += (await one.looseFiles()).length
+    }
     return {
       root: library.root,
+      roots: allLibraries().map((one) => one.root),
       manifest: await library.manifest(),
       collections: await library.collections(),
-      papers: papers.map((row) => ({
-        id: row.id,
-        meta: row.meta,
-        state: row.state,
-        exists: row.exists,
-      })),
-      looseCount: (await library.looseFiles()).length,
+      papers: rows,
+      looseCount: loose,
     }
   } catch (error) {
     return { error: String((error as Error).message ?? error) }
@@ -220,8 +260,29 @@ async function openLibrary(root: string) {
   stopWatching?.()
   library = await Library.open(root)
   rememberLibrary(root)
-  stopWatching = watchLibrary(root, () => send('library:changed'))
+  extraLibraries = []
+  for (const extra of settings().extraRoots ?? []) {
+    if (extra === root) continue
+    // A folder on a disk that is not plugged in is not an error worth
+    // stopping the library for; it comes back when the disk does.
+    try { extraLibraries.push(await Library.open(extra)) } catch { /* left out */ }
+  }
+  startWatchingFolders()
   return snapshot()
+}
+
+let extraWatchers: (() => void)[] = []
+
+/** One watcher per folder: a PDF dropped into any of them is a paper here. */
+function startWatchingFolders() {
+  stopWatching?.()
+  for (const stop of extraWatchers) stop()
+  extraWatchers = []
+  const roots = allLibraries().map((one) => one.root)
+  stopWatching = roots[0] ? watchLibrary(roots[0], () => send('library:changed')) : null
+  for (const root of roots.slice(1)) {
+    extraWatchers.push(watchLibrary(root, () => send('library:changed')))
+  }
 }
 
 // MARK: - Requests
@@ -270,19 +331,54 @@ const handlers: Record<string, Handler> = {
 
   'library:adoptLoose': async () => {
     if (!library) return { error: 'No library is open.' }
-    for (const file of await library.looseFiles()) {
-      await library.importPDF(file, await pageCount(file))
+    // Each folder takes in its own: adopting a PDF must never move it to
+    // another folder.
+    for (const one of allLibraries()) {
+      for (const file of await one.looseFiles()) {
+        await one.importPDF(file, await pageCount(file))
+      }
     }
     return snapshot()
   },
 
+  // Another folder, read beside the ones already open. Nothing is copied or
+  // moved: it keeps its own `.papertime`, so disconnecting leaves it exactly
+  // as it was.
+  'library:addFolder': (async ({ root }: { root?: string }, sender: BrowserWindow | null) => {
+    let chosen = root
+    if (!chosen) {
+      const result = await dialog.showOpenDialog(sender ?? window!, {
+        title: 'Add a folder',
+        message: 'Choose another folder to read beside this one. Its papers join the same list, and nothing is moved.',
+        properties: ['openDirectory', 'createDirectory'],
+        buttonLabel: 'Open This Folder Too',
+      })
+      if (result.canceled || result.filePaths.length === 0) return snapshot()
+      chosen = result.filePaths[0]
+    }
+    if (!library || chosen === library.root) return snapshot()
+    if (extraLibraries.some((one) => one.root === chosen)) return snapshot()
+    extraLibraries.push(await Library.open(chosen))
+    update({ extraRoots: extraLibraries.map((one) => one.root) })
+    startWatchingFolders()
+    return snapshot()
+  }) as Handler,
+
+  /** Stops reading a folder. Its files and its records stay where they are. */
+  'library:removeFolder': (async ({ root }: { root: string }) => {
+    extraLibraries = extraLibraries.filter((one) => one.root !== root)
+    update({ extraRoots: extraLibraries.map((one) => one.root) })
+    startWatchingFolders()
+    return snapshot()
+  }) as Handler,
+
   'library:trash': (async ({ id }: { id: string }) => {
-    await library?.trashPaper(id)
+    await (await ownerOf(id))?.trashPaper(id)
     return snapshot()
   }) as Handler,
 
   'paper:bytes': (async ({ id }: { id: string }) => {
-    const row = await library?.paper(id)
+    const row = await (await ownerOf(id))?.paper(id)
     if (!row?.file || !row.exists) return { error: 'The PDF for this paper is not in the folder.' }
     const bytes = await fsp.readFile(row.file)
     // A file this cannot parse is not a reason to throw: a rejected request
@@ -302,42 +398,44 @@ const handlers: Record<string, Handler> = {
   }) as Handler,
 
   'paper:state': (async ({ id, patch }: { id: string; patch: Record<string, unknown> }) => {
-    if (!library) return null
-    const row = await library.paper(id)
+    const owner = await ownerOf(id)
+    if (!owner) return null
+    const row = await owner.paper(id)
     const state = new PaperState(row?.state ?? {})
     // A patch crosses the bridge as JSON, so its dates arrive as strings.
     Object.assign(state, patch, {
       lastOpenedAt: patch.lastOpenedAt ? new Date(String(patch.lastOpenedAt)) : state.lastOpenedAt,
     })
-    const saved = await library.saveState(id, state)
+    const saved = await owner.saveState(id, state)
     return saved.encode()
   }) as Handler,
 
   'paper:meta': (async ({ id, patch }: { id: string; patch: Record<string, unknown> }) => {
-    if (!library) return null
-    const row = await library.paper(id)
+    const owner = await ownerOf(id)
+    if (!owner) return null
+    const row = await owner.paper(id)
     if (!row) return null
     const meta = new PaperMeta(row.meta)
     Object.assign(meta, patch)
-    await library.saveMeta(meta)
+    await owner.saveMeta(meta)
     return meta.encode()
   }) as Handler,
 
   'paper:reveal': (async ({ id }: { id: string }) => {
-    const row = await library?.paper(id)
+    const row = await (await ownerOf(id))?.paper(id)
     if (row?.file) shell.showItemInFolder(row.file)
   }) as Handler,
 
   'sketch:load': (async ({ id, pageIndex }: { id: string; pageIndex: number }) =>
-    library?.loadSketch(id, pageIndex) ?? null) as Handler,
+    (await ownerOf(id))?.loadSketch(id, pageIndex) ?? null) as Handler,
 
   'sketch:save': (async ({ id, pageIndex, elements }: { id: string; pageIndex: number; elements: unknown[] }) => {
-    await library?.saveSketch(id, pageIndex, elements)
+    await (await ownerOf(id))?.saveSketch(id, pageIndex, elements)
     schedulePDFWrite(id)
   }) as Handler,
 
   'ink:load': (async ({ id, pageIndex }: { id: string; pageIndex: number }) =>
-    library?.loadInk(id, pageIndex) ?? null) as Handler,
+    (await ownerOf(id))?.loadInk(id, pageIndex) ?? null) as Handler,
 
   'ink:save': (async ({ id, pageIndex, strokes }: { id: string; pageIndex: number; strokes: unknown[] }) => {
     if (!library) return
@@ -347,7 +445,7 @@ const handlers: Record<string, Handler> = {
   }) as Handler,
 
   'marks:load': (async ({ id }: { id: string }) => {
-    const row = await library?.paper(id)
+    const row = await (await ownerOf(id))?.paper(id)
     if (!row?.file || !row.exists) return {}
     const found = await readMarks(await fsp.readFile(row.file))
     const out: Record<number, MarkupRecord[]> = {}
@@ -367,7 +465,7 @@ const handlers: Record<string, Handler> = {
   }) as Handler,
 
   'drawing:pages': (async ({ id }: { id: string }) =>
-    library?.annotatedPages(id) ?? { sketch: [], ink: [], appleInk: [] }) as Handler,
+    (await ownerOf(id))?.annotatedPages(id) ?? { sketch: [], ink: [], appleInk: [] }) as Handler,
 
   'drawing:adoptFromFile': (async ({ id }: { id: string }) => adoptFromFile(id)) as Handler,
 

@@ -93,6 +93,11 @@ public struct LibraryLocationPreference: @unchecked Sendable {
     private let defaults: UserDefaults
     private let bookmarkKey = "com.imtaeheon.PaperTime.libraryBookmark"
     private let pathKey = "com.imtaeheon.PaperTime.libraryPathHint"
+    /// The folders added beside the first one, in the order they were added.
+    ///
+    /// Kept in their own key so a library opened by an older build still
+    /// finds the folder it knows about, and a newer one finds the rest.
+    private let extrasKey = "com.imtaeheon.PaperTime.libraryExtraBookmarks"
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -125,5 +130,34 @@ public struct LibraryLocationPreference: @unchecked Sendable {
     public func clear() {
         defaults.removeObject(forKey: bookmarkKey)
         defaults.removeObject(forKey: pathKey)
+        defaults.removeObject(forKey: extrasKey)
+    }
+
+    // MARK: - The folders beside the first
+
+    public var extraBookmarks: [Data] {
+        (defaults.array(forKey: extrasKey) as? [Data]) ?? []
+    }
+
+    public func storeExtras(_ locations: [LibraryLocation]) {
+        let data = locations.compactMap { try? $0.bookmarkData() }
+        if data.isEmpty {
+            defaults.removeObject(forKey: extrasKey)
+        } else {
+            defaults.set(data, forKey: extrasKey)
+        }
+    }
+
+    /// Reopens the extra folders, dropping any that no longer resolve — a
+    /// folder on a disk that is not plugged in is not an error worth stopping
+    /// the library for; it comes back when the disk does.
+    public func loadExtras() -> [LibraryLocation] {
+        extraBookmarks.compactMap { data in
+            switch LibraryLocation.resolving(bookmark: data) {
+            case let .resolved(location): location
+            case let .resolvedStale(location, _): location
+            case .unavailable: nil
+            }
+        }
     }
 }

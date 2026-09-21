@@ -92,6 +92,28 @@ const sidebar = buildSidebar({
     store.shelf = shelf
     changed('shelf')
   },
+  addFolder: () => {
+    void (async () => {
+      const snapshot = await call<LibrarySnapshot>('library:addFolder', {})
+      if ('error' in snapshot) return
+      adopt(snapshot)
+      changed('papers', 'shelf', 'sidebar')
+    })()
+  },
+  removeFolder: (root: string) => {
+    void (async () => {
+      const snapshot = await call<LibrarySnapshot>('library:removeFolder', { root })
+      if ('error' in snapshot) return
+      // Papers from that folder are gone: whatever was showing goes with them.
+      if (store.shelf.kind === 'folder' && store.shelf.root === root) store.shelf = { kind: 'all' }
+      adopt(snapshot)
+      store.openPaperIDs = store.openPaperIDs.filter((id) => findPaper(id))
+      for (const id of panePapers()) if (!findPaper(id)) undock(id)
+      if (store.selectedID && !findPaper(store.selectedID)) store.selectedID = null
+      reconcileReaders()
+      changed('papers', 'shelf', 'sidebar')
+    })()
+  },
   newCollection: async () => {
     const name = await prompt(L('새 컬렉션', 'New collection'))
     if (!name) return

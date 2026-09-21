@@ -14,6 +14,8 @@ import path from 'node:path'
 
 export interface Settings {
   libraryRoot: string | null
+  /** Folders opened beside the first one, in the order they were added. */
+  extraRoots: string[]
   recentLibraries: string[]
   window: { width: number; height: number; x?: number; y?: number; maximized?: boolean }
   panes: { sidebar: boolean; paperList: boolean; reader: boolean; inspector: boolean }
@@ -32,6 +34,7 @@ export interface Settings {
 
 const DEFAULTS: Settings = {
   libraryRoot: null,
+  extraRoots: [],
   recentLibraries: [],
   window: { width: 1440, height: 900 },
   panes: { sidebar: true, paperList: true, reader: true, inspector: true },

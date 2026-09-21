@@ -488,6 +488,45 @@ public final class AppModel {
         #endif
     }
 
+    /// Opens another folder beside the ones already open, and remembers it.
+    public func addLibraryFolder() {
+        #if os(macOS)
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+        panel.prompt = L("이 폴더도 열기", "Open This Folder Too")
+        panel.message = L(
+            "옆에 둘 폴더를 골라주세요. 그 폴더의 논문이 같은 목록에 함께 보여요. 파일은 그대로 있어요.",
+            "Choose another folder to read beside this one. Its papers join the same list, and nothing is moved."
+        )
+        panel.begin { [weak self] response in
+            guard response == .OK, let url = panel.url else { return }
+            Task { @MainActor in await self?.adoptExtraFolder(at: url) }
+        }
+        #endif
+    }
+
+    @MainActor
+    public func adoptExtraFolder(at url: URL) async {
+        guard let model = library else { return }
+        guard !model.sources.contains(where: { $0.url == url }) else { return }
+        let location = LibraryLocation.adopting(url)
+        let store = LibraryStore(location: location)
+        _ = try? await store.bootstrap()
+        await model.addSource(location, store: store)
+        preference.storeExtras(model.extraSources)
+    }
+
+    /// Stops reading a folder. Its files and its records stay where they are.
+    @MainActor
+    public func disconnectFolder(at url: URL) async {
+        guard let model = library else { return }
+        await model.removeSource(url)
+        preference.storeExtras(model.extraSources)
+    }
+
     public func forgetLibrary() {
         preference.clear()
         library = nil
@@ -499,6 +538,15 @@ public final class AppModel {
         do {
             let manifest = try await store.bootstrap()
             let model = LibraryModel(store: store, location: location, manifest: manifest)
+            // The folders opened beside the first one, reopened from their own
+            // bookmarks. One that will not resolve — an unplugged disk — is
+            // left out rather than stopping the library; it comes back when
+            // the disk does.
+            for extra in preference.loadExtras() where extra.url != location.url {
+                let extraStore = LibraryStore(location: extra)
+                _ = try? await extraStore.bootstrap()
+                await model.addSource(extra, store: extraStore)
+            }
             library = model
             phase = .ready
             await model.refresh()
@@ -507,6 +555,28 @@ public final class AppModel {
             if Boot.isSet("PAPERTIME_ADOPT_LOOSE") {
                 _ = await model.adoptLooseDocuments()
                 await model.refresh()
+            }
+            // `--papertime-add-folder=<path>` opens another folder beside the
+            // first, the way the panel does — for checking a library of
+            // several folders without a hand on the machine.
+            if let extra = Boot.setting("PAPERTIME_ADD_FOLDER") {
+                let base = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+                    ?? URL(fileURLWithPath: "/")
+                let url = extra.hasPrefix("/")
+                    ? URL(fileURLWithPath: extra, isDirectory: true)
+                    : base.appendingPathComponent(extra, isDirectory: true)
+                await adoptExtraFolder(at: url)
+            }
+            // …and `--papertime-remove-folder=<path>` disconnects one, which
+            // is the other half of the pair and the half that has to leave
+            // the folder untouched.
+            if let gone = Boot.setting("PAPERTIME_REMOVE_FOLDER") {
+                let base = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+                    ?? URL(fileURLWithPath: "/")
+                let url = gone.hasPrefix("/")
+                    ? URL(fileURLWithPath: gone, isDirectory: true)
+                    : base.appendingPathComponent(gone, isDirectory: true)
+                await disconnectFolder(at: url)
             }
             if Boot.isSet("PAPERTIME_OPEN_FIRST"), let first = model.visiblePapers.first {
                 model.selection = [first.id]

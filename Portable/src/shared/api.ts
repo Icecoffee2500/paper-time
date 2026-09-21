@@ -70,10 +70,14 @@ export interface PaperRowDTO {
   meta: Record<string, unknown>
   state: Record<string, unknown>
   exists: boolean
+  /** The folder it came from. */
+  root?: string
 }
 
 export interface LibrarySnapshot {
   root: string
+  /** Every folder being read, the first one first. */
+  roots: string[]
   manifest: Record<string, unknown>
   collections: Record<string, unknown>
   papers: PaperRowDTO[]

@@ -1034,6 +1034,7 @@ struct LibraryWindow: View {
         case .all: L("모두", "All")
         case .papers: L("논문", "Papers")
         case .documents: L("문서", "Documents")
+        case let .folder(root): root.lastPathComponent
         case .open: L("열린 논문", "Open Papers")
         case .notes: L("노트", "Notes")
         case .graph: L("그래프", "Graph")

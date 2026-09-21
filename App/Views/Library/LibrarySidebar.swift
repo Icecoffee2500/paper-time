@@ -229,6 +229,44 @@ struct LibrarySidebar: View {
                     .scopeRow(.notes, in: model)
             }
 
+            // Every folder the library is reading. A library used to be one
+            // folder; now it is as many as you point it at, each keeping its
+            // own records beside its own PDFs, so disconnecting one leaves it
+            // exactly as it was.
+            Section(L("폴더", "Folders")) {
+                ForEach(model.sources, id: \.url) { source in
+                    Label(source.url.lastPathComponent, systemImage: source.provider.symbolName)
+                        .count(model.counts.folders[source.url] ?? 0, current: model.scope == .folder(source.url))
+                        .scopeRow(.folder(source.url), in: model)
+                        .contextMenu {
+                            Button {
+                                #if os(macOS)
+                                NSWorkspace.shared.activateFileViewerSelecting([source.url])
+                                #endif
+                            } label: {
+                                Label(L("Finder에서 보기", "Show in Finder"), systemImage: "folder")
+                            }
+                            if source.url != model.location.url {
+                                Divider()
+                                Button(role: .destructive) {
+                                    Task { await app.disconnectFolder(at: source.url) }
+                                } label: {
+                                    Label(L("연결 해제", "Disconnect"), systemImage: "eject")
+                                }
+                            }
+                        }
+                        .help(source.url.path(percentEncoded: false))
+                }
+                Button {
+                    app.addLibraryFolder()
+                } label: {
+                    Label(L("폴더 더하기…", "Add Folder…"), systemImage: "plus.circle")
+                        .foregroundStyle(.secondary)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+            }
+
             Section(L("컬렉션", "Collections")) {
                 ForEach(model.collections.collections) { collection in
                     Label(collection.name, systemImage: symbolName(for: collection))

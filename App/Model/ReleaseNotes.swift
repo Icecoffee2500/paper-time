@@ -267,6 +267,31 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.9.1",
+            date: Text2("2026년 9월", "September 2026"),
+            note: Text2(
+                "폴더를 여러 개 열어 둘 수 있어요. 사이드바의 «폴더»에서 폴더별로 들어가 보고, 더 이상 안 볼 폴더는 연결을 해제하면 돼요.",
+                "The library can read several folders at once. The Folders section in the sidebar goes into one at a time, and a folder you are done with is disconnected."
+            ),
+            added: [
+                Entry(
+                    Text2("폴더를 여러 개", "Several folders at once"),
+                    Text2(
+                        "사이드바의 «폴더»에서 «폴더 더하기…»로 폴더를 하나 더 열어요. 그 폴더의 PDF가 같은 목록에 함께 보이고, 폴더 이름을 누르면 그 폴더만 봐요. 파일은 아무것도 옮기지 않아요 — 폴더마다 제 .papertime을 그대로 갖고 있어서, 연결을 해제하면 그 폴더는 있던 그대로 남아요. 논문을 더하면 지금 보고 있는 폴더로 들어가요. 노트·태그·컬렉션은 첫 폴더에 모여 있어요 — 폴더 하나를 빼면 사라지는 노트는 잃어버린 노트니까요.",
+                        "Add one under Folders in the sidebar. Its PDFs join the same list, and clicking a folder's name shows only that folder. Nothing is moved: each folder keeps its own .papertime beside its own files, so disconnecting one leaves it exactly as it was. A paper added while a folder is showing goes into that folder. Notes, tags and collections live in the first folder — a note that disappeared when you unplugged a drive would be a note you lost."
+                    )
+                ),
+                Entry(
+                    Text2("연결 해제", "Disconnect a folder"),
+                    Text2(
+                        "폴더 이름을 오른쪽 클릭해서 «연결 해제»예요. 목록에서 그 폴더의 논문이 빠질 뿐, 파일도 기록도 그대로예요. 다시 열고 싶으면 «폴더 더하기…»로 같은 폴더를 다시 고르면 표시와 필기까지 그대로 돌아와요.",
+                        "Right-click a folder's name and choose Disconnect. Its papers leave the list; the files and their records stay where they are. Add the same folder again and everything — marks, handwriting, notes about it — is back."
+                    )
+                ),
+            ],
+            fixed: []
+        ),
+        Release(
             version: "0.9.0",
             date: Text2("2026년 9월", "September 2026"),
             note: Text2(
@@ -1165,6 +1190,23 @@ enum ReleaseNotes {
                     Text2("</> 버튼이 노트를 Markdown 그대로 보여준다. 링크나 수식을 손으로 고칠 때 쓴다.", "The </> button shows the note as Markdown, for fixing a link or a formula by hand.")),
         ]),
         Group(Text2("라이브러리", "The library"), symbol: "books.vertical", features: [
+            Feature(Text2("폴더를 여러 개 열어 두기", "Several folders at once"),
+                    Text2("""
+                        사이드바의 «폴더»에서 «폴더 더하기…»로 폴더를 더 연다. 열어 둔 폴더의 PDF가 \
+                        한 목록에 함께 보이고, 폴더 이름을 누르면 그 폴더만 본다. 파일은 옮기지 않는다 — \
+                        폴더마다 제 .papertime을 갖고 있어서 연결을 해제해도 그 폴더는 있던 그대로다. \
+                        논문을 더하면 지금 보고 있는 폴더로 들어간다. 노트·태그·컬렉션은 첫 폴더에 모인다.
+                        """,
+                        """
+                        Add one under Folders in the sidebar. Every folder's PDFs appear in one list, \
+                        and clicking a folder shows only that folder. Nothing is moved: each folder \
+                        keeps its own .papertime, so disconnecting leaves it exactly as it was. \
+                        A paper added while a folder is showing goes into that folder. Notes, tags \
+                        and collections live in the first folder.
+                        """)),
+            Feature(Text2("폴더 연결 해제", "Disconnect a folder"),
+                    Text2("폴더 이름을 오른쪽 클릭해 «연결 해제». 목록에서 빠질 뿐 파일도 기록도 그대로고, 같은 폴더를 다시 더하면 표시와 필기까지 그대로 돌아온다.",
+                            "Right-click a folder and choose Disconnect. Its papers leave the list; the files and their records stay. Add it again and the marks and handwriting come back with it.")),
             Feature(Text2("논문 추가", "Add papers"),
                     Text2("PDF를 끌어다 놓거나, 이 키로.", "Drag PDFs in, or use this."), action: .addPapers),
             Feature(Text2("논문인지 일반 문서인지", "A paper, or a document"),

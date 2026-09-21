@@ -23,6 +23,7 @@ export type Shelf =
   | { kind: 'all' }
   /** The two kinds, which only appear as rows once a library holds both. */
   | { kind: 'kind'; of: DocumentKind }
+  | { kind: 'folder'; root: string }
   | { kind: 'open' }
   | { kind: 'status'; status: 'unread' | 'reading' | 'read' }
   | { kind: 'favorites' }
@@ -37,6 +38,8 @@ export interface Paper {
   meta: PaperMeta
   state: PaperState
   exists: boolean
+  /** The folder it came from, when the library reads more than one. */
+  root?: string
 }
 
 export interface Settings {
@@ -66,6 +69,8 @@ export interface Store {
   ready: boolean
   error: string | null
   root: string | null
+  /** Every folder being read, the first one first. */
+  roots: string[]
   papers: Paper[]
   collections: Collection[]
   tags: Tag[]
@@ -130,6 +135,7 @@ export const store: Store = {
   ready: false,
   error: null,
   root: null,
+  roots: [],
   papers: [],
   collections: [],
   tags: [],
@@ -180,6 +186,7 @@ export function changed(...keys: string[]) {
 
 export function adopt(snapshot: LibrarySnapshot) {
   store.root = snapshot.root
+  store.roots = snapshot.roots ?? (snapshot.root ? [snapshot.root] : [])
   store.papers = snapshot.papers.map(toPaper)
   store.collections = ((snapshot.collections?.collections as Collection[]) ?? []).slice()
   store.tags = ((snapshot.manifest?.tags as Tag[]) ?? []).slice()
@@ -194,6 +201,7 @@ function toPaper(row: PaperRowDTO): Paper {
     meta: new PaperMeta(row.meta),
     state: new PaperState(row.state),
     exists: row.exists,
+    root: row.root,
   }
 }
 
@@ -328,6 +336,11 @@ export function shelfPapers(): Paper[] {
     case 'kind': {
       const of = (store.shelf as { kind: 'kind'; of: DocumentKind }).of
       filtered = all.filter((entry) => entry.meta.effectiveKind === of)
+      break
+    }
+    case 'folder': {
+      const root = (store.shelf as { kind: 'folder'; root: string }).root
+      filtered = all.filter((entry) => entry.root === root)
       break
     }
     case 'open': {
