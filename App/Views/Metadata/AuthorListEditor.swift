@@ -14,6 +14,9 @@ import UIKit
 /// whole list from whatever the source (an abstract page, a BibTeX entry) had.
 struct AuthorListEditor: View {
     @Binding var authors: [CSLName]
+    /// "저자" for a paper; a document is written by somebody rather than
+    /// authored by them.
+    var title: String = L("저자", "Authors")
 
     /// Collapsed until asked for.
     ///
@@ -23,7 +26,7 @@ struct AuthorListEditor: View {
     @State private var isEditing = false
 
     var body: some View {
-        Section(L("저자", "Authors")) {
+        Section(title) {
             DisclosureGroup(isExpanded: $isEditing) {
                 ForEach(authors.indices, id: \.self) { index in
                     HStack {

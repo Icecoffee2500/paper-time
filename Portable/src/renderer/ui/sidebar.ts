@@ -63,16 +63,28 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
     body.append(crumb)
 
     body.append(
-      row({ kind: 'all' }, 'tray.full', L('모든 논문', 'All Papers'), papers.length),
+      row({ kind: 'all' }, 'tray.full', L('모두', 'All'), papers.length),
       // What is open right now — a row of tabs, as a shelf. From here a
       // paper is closed, or put beside another.
       row({ kind: 'open' }, 'rectangle.on.rectangle', L('열린 논문', 'Open Papers'), store.openPaperIDs.length),
+      // Shown only once the library holds both. A shelf that has never seen
+      // anything but papers looks exactly as it did.
+      ...(count((e) => e.meta.effectiveKind === 'document') > 0
+        && count((e) => e.meta.effectiveKind === 'paper') > 0
+        ? [
+            row({ kind: 'kind', of: 'paper' }, 'text.document', L('논문', 'Papers'),
+              count((e) => e.meta.effectiveKind === 'paper')),
+            row({ kind: 'kind', of: 'document' }, 'note', L('문서', 'Documents'),
+              count((e) => e.meta.effectiveKind === 'document')),
+          ]
+        : []),
       row({ kind: 'status', status: 'unread' }, 'circle', L('안 읽음', 'Unread'), count((e) => e.state.readingStatus === 'unread')),
       row({ kind: 'status', status: 'reading' }, 'circle.lefthalf.filled', L('읽는 중', 'Reading'), count((e) => e.state.readingStatus === 'reading')),
       row({ kind: 'status', status: 'read' }, 'checkmark.circle', L('읽음', 'Read'), count((e) => e.state.readingStatus === 'read')),
       row({ kind: 'favorites' }, 'star', L('즐겨찾기', 'Favorites'), count((e) => e.state.isFavorite)),
       row({ kind: 'review' }, 'exclamationmark.triangle', L('살펴볼 것', 'Needs Review'),
-        count((e) => e.meta.confidence === 'needsReview' || e.meta.confidence === 'unparsed')),
+        count((e) => e.meta.effectiveKind === 'paper'
+          && (e.meta.confidence === 'needsReview' || e.meta.confidence === 'unparsed'))),
     )
 
     body.append(section(L('슬립박스', 'Slip-Box')))

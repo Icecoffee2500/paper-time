@@ -7,6 +7,7 @@
  * from differing by way of somebody's runtime.
  */
 import type { LibrarySnapshot, PaperRowDTO } from '../shared/api.js'
+import { type DocumentKind } from '../shared/documentKind.js'
 import { PaperMeta, PaperState, type Collection, type Tag } from '../shared/model.js'
 import { SketchColor, SketchStyle } from '../shared/sketch.js'
 import { splitContains, splitDock, splitPapers, splitRemove, type DockZone, type SplitArrangement } from '../shared/split.js'
@@ -20,6 +21,8 @@ export type SketchTool =
 /** Which shelf of the library is showing. */
 export type Shelf =
   | { kind: 'all' }
+  /** The two kinds, which only appear as rows once a library holds both. */
+  | { kind: 'kind'; of: DocumentKind }
   | { kind: 'open' }
   | { kind: 'status'; status: 'unread' | 'reading' | 'read' }
   | { kind: 'favorites' }
@@ -304,6 +307,11 @@ export function shelfPapers(): Paper[] {
   let filtered = all
   switch (store.shelf.kind) {
     case 'all': break
+    case 'kind': {
+      const of = (store.shelf as { kind: 'kind'; of: DocumentKind }).of
+      filtered = all.filter((entry) => entry.meta.effectiveKind === of)
+      break
+    }
     case 'open': {
       // In the order they were kept, not the list's sort: this shelf is a
       // row of tabs. The preview — showing, not kept — is last.
@@ -318,7 +326,10 @@ export function shelfPapers(): Paper[] {
       filtered = all.filter((entry) => entry.state.isFavorite)
       break
     case 'review':
-      filtered = all.filter((entry) => entry.meta.confidence === 'needsReview' || entry.meta.confidence === 'unparsed')
+      // A document has no registrar to disagree with, so it is never a thing
+      // to review.
+      filtered = all.filter((entry) => entry.meta.effectiveKind === 'paper'
+        && (entry.meta.confidence === 'needsReview' || entry.meta.confidence === 'unparsed'))
       break
     case 'notes':
       filtered = all.filter((entry) => entry.state.summaryNote.trim().length > 0)

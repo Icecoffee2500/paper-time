@@ -150,9 +150,20 @@ struct LibrarySidebar: View {
             }
 
             Section {
-                Label(L("모든 논문", "All Papers"), systemImage: "tray.full")
+                Label(L("모두", "All"), systemImage: "tray.full")
                     .count(model.counts.all, current: model.scope == .all)
                     .scopeRow(.all, in: model)
+                // The two kinds appear only once the library holds both. A
+                // shelf that has never seen anything but papers looks exactly
+                // as it did, which is most libraries here.
+                if model.counts.documents > 0, model.counts.papers > 0 {
+                    Label(L("논문", "Papers"), systemImage: "text.document")
+                        .count(model.counts.papers, current: model.scope == .papers)
+                        .scopeRow(.papers, in: model)
+                    Label(L("문서", "Documents"), systemImage: "doc")
+                        .count(model.counts.documents, current: model.scope == .documents)
+                        .scopeRow(.documents, in: model)
+                }
                 // What is open right now — a row of tabs, as a shelf. From
                 // here a paper is closed, or put beside another.
                 Label(L("열린 논문", "Open Papers"), systemImage: "rectangle.on.rectangle")

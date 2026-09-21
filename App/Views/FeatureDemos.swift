@@ -1,3 +1,4 @@
+import PaperCore
 import SwiftUI
 
 /// How much room a demonstration has.
@@ -51,6 +52,7 @@ struct FeatureDemoView: View {
             case .penTools: PenToolsDemo(scale: scale)
             case .sketch: SketchDemo(scale: scale)
             case .frames: FramesDemo(scale: scale)
+            case .kindQuestion: KindQuestionDemo(scale: scale)
             case .crossPlatform: CrossPlatformDemo(scale: scale)
             case .feedback: FeedbackDemo(scale: scale)
             case .together: TogetherDemo(scale: scale)
@@ -101,6 +103,93 @@ private struct Rule: View {
         Capsule()
             .fill(.quaternary)
             .frame(width: width, height: 3)
+    }
+}
+
+// MARK: - Paper or document
+
+/// The question every PDF is asked, and the two forms it decides between.
+///
+/// Side by side, because the point is not the question but what follows it:
+/// the same file, one answer away from a bibliography's fields or from a
+/// document's. A manual asked for its journal is the thing this removes.
+private struct KindQuestionDemo: View {
+    let scale: DemoScale
+    @State private var answer: DocumentKind?
+
+    var body: some View {
+        let full = scale.isFull
+        return VStack(alignment: .leading, spacing: scale.gap) {
+            Paper(scale: scale) {
+                VStack(alignment: .leading, spacing: full ? 8 : 6) {
+                    Text(ReleaseNotes.string("이 PDF는 무엇인가요?", "What is this PDF?"))
+                        .font(scale.body.weight(.semibold))
+                    Text(answer == nil
+                         ? ReleaseNotes.string("논문은 아닌 것 같아요.", "It doesn't look like a paper.")
+                         : ReleaseNotes.string("고마워요. 칸을 그에 맞게 바꿨어요.", "Thanks — the fields follow."))
+                        .font(scale.small)
+                        .foregroundStyle(.secondary)
+                    HStack(spacing: 6) {
+                        choice(.paper, ReleaseNotes.string("논문", "A paper"))
+                        choice(.document, ReleaseNotes.string("일반 문서", "A document"))
+                    }
+                }
+            }
+
+            HStack(alignment: .top, spacing: scale.gap) {
+                fields(
+                    title: ReleaseNotes.string("논문이면", "As a paper"),
+                    rows: [
+                        ReleaseNotes.string("학술지·학회", "Venue"),
+                        ReleaseNotes.string("권 · 호 · 쪽", "Volume · Issue · Pages"),
+                        "DOI",
+                        ReleaseNotes.string("인용 키", "Citation key"),
+                    ],
+                    lit: answer == .paper
+                )
+                fields(
+                    title: ReleaseNotes.string("일반 문서면", "As a document"),
+                    rows: [
+                        ReleaseNotes.string("펴낸 곳", "From"),
+                        ReleaseNotes.string("해", "Year"),
+                        ReleaseNotes.string("종류", "Kind"),
+                        ReleaseNotes.string("파일 · 쪽", "File · Pages"),
+                    ],
+                    lit: answer == .document
+                )
+            }
+        }
+    }
+
+    private func choice(_ kind: DocumentKind, _ title: String) -> some View {
+        Button { answer = kind } label: {
+            Text(title)
+                .font(scale.small)
+                .padding(.horizontal, scale.isFull ? 12 : 8)
+                .padding(.vertical, scale.isFull ? 5 : 3)
+                .background(
+                    Capsule().fill(answer == kind ? Color.accentColor.opacity(0.9) : Color.secondary.opacity(0.15))
+                )
+                .foregroundStyle(answer == kind ? Color.white : Color.primary)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func fields(title: String, rows: [String], lit: Bool) -> some View {
+        Paper(scale: scale) {
+            VStack(alignment: .leading, spacing: scale.isFull ? 6 : 4) {
+                Text(title)
+                    .font(scale.small.weight(.semibold))
+                    .foregroundStyle(lit ? Color.accentColor : .secondary)
+                ForEach(rows, id: \.self) { row in
+                    Text(row)
+                        .font(scale.small)
+                        .foregroundStyle(lit ? .primary : .tertiary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .opacity(lit || answer == nil ? 1 : 0.45)
     }
 }
 

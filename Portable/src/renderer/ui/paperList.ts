@@ -171,7 +171,9 @@ function paperRow(entry: Paper, actions: PaperListActions): HTMLElement {
 
 function shelfTitle(): string {
   switch (store.shelf.kind) {
-    case 'all': return L('모든 논문', 'All Papers')
+    case 'all': return L('모두', 'All')
+    case 'kind':
+      return (store.shelf as { of: string }).of === 'paper' ? L('논문', 'Papers') : L('문서', 'Documents')
     case 'open': return L('열린 논문', 'Open Papers')
     case 'status': return statusName(store.shelf.status)
     case 'favorites': return L('즐겨찾기', 'Favorites')

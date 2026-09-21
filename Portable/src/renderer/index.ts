@@ -55,6 +55,7 @@ import {
   refreshOpenPapers,
   toggleOpenPapers,
 } from './ui/openPapers.js'
+import { closePages, isPagesShowing, togglePages } from './ui/pages.js'
 import type { LibrarySnapshot, WindowBounds } from '../shared/api.js'
 import { expandedIDs } from '../shared/sketch.js'
 import {
@@ -221,6 +222,14 @@ const inspector = buildInspector({
   },
   reveal: (id) => void call('paper:reveal', { id }),
   copyKey,
+  setKind: async (id, kind) => {
+    // A document has no registrar to disagree with, so it leaves the shelf of
+    // things to look at.
+    const patch: Record<string, unknown> = { kind }
+    if (kind === 'document') patch.confidence = 'unparsed'
+    await call('paper:meta', { id, patch })
+    await reload()
+  },
   openAuthor: (name) => {
     store.shelf = { kind: 'author', name }
     changed('shelf')
@@ -270,6 +279,15 @@ function readerFor(id: string, pane: boolean): Reader {
       }
     },
     close: () => closePaper(id),
+    guessed: (kind) => {
+      // Only ever a guess, and only when nobody has one: the answer belongs
+      // to the reader and is given in the inspector.
+      const paper = store.papers.find((p) => p.id === id)
+      if (!paper || paper.meta.guessedKind || paper.meta.kind) return
+      paper.meta.guessedKind = kind
+      void call('paper:meta', { id, patch: { guessedKind: kind } })
+      changed('papers', 'inspector')
+    },
   }, { pane })
   readers.set(id, reader)
   void loadInto(reader, id)
@@ -415,6 +433,19 @@ function openInWindow(id: string, at?: { x: number; y: number }) {
 async function insideOurWindows(x: number, y: number): Promise<boolean> {
   const bounds = await call<WindowBounds[]>('window:bounds')
   return bounds.some((b) => x >= b.x && x <= b.x + b.width && y >= b.y && y <= b.y + b.height)
+}
+
+/** Every page of what is showing, small — the way into a document that has
+ *  no headings to list. */
+function showPagesPopup() {
+  const reader = focused()
+  if (!reader) return
+  togglePages(pageArea, {
+    pageCount: () => reader.pages_count,
+    currentPage: () => Math.max(0, reader.state.currentPage - 1),
+    draw: (index, width) => reader.thumbnail(index, width),
+    go: (index) => reader.scrollToPage(index),
+  })
 }
 
 function showOpenPapersPopup() {
@@ -1177,6 +1208,7 @@ function runMenuCommand(command: string) {
     case 'layoutContinuous': setLayout('continuous'); break
     case 'layoutSinglePage': setLayout('single'); break
     case 'openPapers': if (!solo) showOpenPapersPopup(); break
+    case 'pages': showPagesPopup(); break
     case 'openInNewWindow': if (store.selectedID) openInWindow(store.selectedID); break
     case 'closeWindow': closeWindowOrPane(); break
     default:

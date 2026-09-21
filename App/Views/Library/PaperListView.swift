@@ -559,11 +559,24 @@ struct PaperRow: View, Equatable {
     }
 
     private func subtitle(_ paper: LoadedPaper) -> String {
-        subtitleFields.compactMap { $0.value(for: paper) }.joined(separator: " · ")
+        let line = subtitleFields.compactMap { $0.value(for: paper) }.joined(separator: " · ")
+        guard line.isEmpty else { return line }
+        // The fields under a title are a bibliography's — authors, year,
+        // venue — and a manual has none of them, so the row came out bare.
+        // What a document does have is a file and a length.
+        guard paper.meta.effectiveKind == .document else { return line }
+        let pages = paper.meta.file.pageCount
+        return [
+            paper.meta.csl.publisher,
+            pages > 0 ? L("\(pages)쪽", "\(pages) pages") : nil,
+        ].compactMap { $0 }.joined(separator: " · ")
     }
 
+    /// A document has no registrar to disagree with, so it is never a thing
+    /// to review — only a paper whose lookup came back unsure is.
     private func needsReview(_ paper: LoadedPaper) -> Bool {
-        paper.meta.confidence == .needsReview || paper.meta.confidence == .unparsed
+        paper.meta.effectiveKind == .paper
+            && (paper.meta.confidence == .needsReview || paper.meta.confidence == .unparsed)
     }
 
     private func label(for status: PaperState.ReadingStatus) -> String {

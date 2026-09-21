@@ -1,5 +1,12 @@
 import PDFKit
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+private typealias PlatformImage = UIImage
+#else
+import AppKit
+private typealias PlatformImage = NSImage
+#endif
 
 /// The paper's own table of contents, summoned over the page.
 ///
@@ -22,6 +29,25 @@ struct ContentsPopup: View {
     var placement: Placement = .gutter
     let dismiss: () -> Void
 
+    /// Headings, or the pages themselves.
+    ///
+    /// A paper is read by its sections and a manual often has none: a scanned
+    /// lease has no headings at all, and a two-hundred-page handbook's are
+    /// "Chapter 7". What those have instead is pages you recognise by sight,
+    /// which is why every reader that opens more than papers has a page grid
+    /// — and why this one now does.
+    enum Mode: String, CaseIterable, Identifiable {
+        case headings, pages
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .headings: L("차례", "Contents")
+            case .pages: L("쪽", "Pages")
+            }
+        }
+    }
+
+    @State private var mode: Mode = .headings
     @State private var items: [PaperContents.Item] = []
     /// Whether the pages are still being read for their headings.
     @State private var reading = true
@@ -72,9 +98,56 @@ struct ContentsPopup: View {
                     guard link.session.map({ ObjectIdentifier($0.document) }) == identity else { return }
                     items = found
                     reading = false
+                    // Nothing to list: this document is read by sight.
+                    if found.isEmpty { mode = .pages }
                 }
             }
         }
+    }
+
+    /// Every page, small, in the order they are read.
+    ///
+    /// Drawn as they come into view and remembered after, so a two-hundred
+    /// page handbook costs what the few rows on screen cost. The page being
+    /// read is ringed, which is also how the grid opens where you are.
+    @ViewBuilder
+    private var pageGrid: some View {
+        if let document = link.session?.document, document.pageCount > 0 {
+            ScrollViewReader { scroller in
+                ScrollView {
+                    LazyVStack(spacing: 8) {
+                        ForEach(0..<document.pageCount, id: \.self) { index in
+                            Button { goToPage(index) } label: {
+                                PageThumbnail(
+                                    document: document,
+                                    index: index,
+                                    isCurrent: index == link.currentPageIndex
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .id(index)
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 10)
+                }
+                .scrollIndicators(.never)
+                .frame(height: placement == .footer ? 260 : nil)
+                .onAppear { scroller.scrollTo(link.currentPageIndex, anchor: .center) }
+            }
+        } else {
+            Text(L("쪽이 없어요.", "No pages."))
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 14)
+                .padding(.bottom, 14)
+        }
+    }
+
+    private func goToPage(_ index: Int) {
+        guard let document = link.session?.document, let page = document.page(at: index) else { return }
+        let top = CGPoint(x: kPDFDestinationUnspecifiedValue, y: page.bounds(for: .cropBox).maxY)
+        link.destinationRequest = PDFDestination(page: page, at: top)
     }
 
     private func go(to item: PaperContents.Item) {
@@ -99,14 +172,18 @@ struct ContentsPopup: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(L("차례", "Contents"))
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 14)
-                .padding(.top, 12)
-                .padding(.bottom, 6)
+            Picker("", selection: $mode) {
+                ForEach(Mode.allCases) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.horizontal, 10)
+            .padding(.top, 10)
+            .padding(.bottom, 8)
 
-            if items.isEmpty {
+            if mode == .pages {
+                pageGrid
+            } else if items.isEmpty {
                 Text(reading ? L("논문에서 제목을 읽고 있어요…", "Reading the paper for its headings…") : L("이 PDF에서 제목을 찾지 못했어요.", "No headings found in this PDF."))
                     .font(.callout)
                     .foregroundStyle(.secondary)
@@ -237,3 +314,69 @@ private struct ClickOutside: View {
 }
 #endif
 
+
+/// One page, drawn small.
+///
+/// PDFKit renders the thumbnail, which for a two-hundred-page handbook is
+/// two hundred renderings if they are all made at once — so each is made when
+/// its row first appears and kept by page for as long as the paper is open.
+/// The image is drawn off the main actor; until it arrives the row is an
+/// empty page of the right shape, so the grid does not jump as it fills.
+private struct PageThumbnail: View {
+    let document: PDFDocument
+    let index: Int
+    let isCurrent: Bool
+
+    @State private var image: PlatformImage?
+
+    /// Kept for the life of the app, by file and page: reopening a paper you
+    /// were just reading should not redraw what it drew a minute ago.
+    @MainActor private static var cache: [String: PlatformImage] = [:]
+
+    private static let width: CGFloat = 132
+
+    var body: some View {
+        let bounds = document.page(at: index)?.bounds(for: .cropBox) ?? CGRect(x: 0, y: 0, width: 8.5, height: 11)
+        let ratio = bounds.height > 0 ? bounds.width / bounds.height : 0.77
+        return VStack(spacing: 3) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(Color.white)
+                if let image {
+                    #if os(macOS)
+                    Image(nsImage: image).resizable().scaledToFit()
+                    #else
+                    Image(uiImage: image).resizable().scaledToFit()
+                    #endif
+                }
+            }
+            .frame(width: Self.width, height: Self.width / max(0.2, ratio))
+            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .strokeBorder(isCurrent ? Color.accentColor : Color.primary.opacity(0.12),
+                                  lineWidth: isCurrent ? 2 : 0.5)
+            )
+            Text("\(index + 1)")
+                .font(.caption2)
+                .monospacedDigit()
+                .foregroundStyle(isCurrent ? Color.accentColor : .secondary)
+        }
+        .task { await draw() }
+    }
+
+    private func draw() async {
+        let key = "\(document.documentURL?.path ?? ObjectIdentifier(document).debugDescription)#\(index)"
+        if let kept = Self.cache[key] { image = kept; return }
+        // PDFKit's document is not to be read from two threads at once, and
+        // the reader is using this one, so the thumbnail is drawn here and
+        // the yield before it keeps a screenful of rows from drawing in the
+        // same turn of the run loop.
+        await Task.yield()
+        guard let page = document.page(at: index) else { return }
+        let size = CGSize(width: Self.width * 2, height: Self.width * 2 / 0.77)
+        let made = page.thumbnail(of: size, for: .cropBox)
+        Self.cache[key] = made
+        image = made
+    }
+}

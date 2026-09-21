@@ -12,6 +12,7 @@
  * beside them; `--papertime-shot=<file.png>` captures the window and quits.
  */
 import { BrowserWindow, app } from 'electron'
+import { CHANNEL } from '../shared/api.js'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 
@@ -20,6 +21,9 @@ export interface ProbeStep {
   wait?: number
   /** Evaluate this in the page and record what it returns. */
   eval?: string
+  /** Send a menu command, the way a menu item or its key would. The window
+   *  cannot be sent real menu keys, so this is how a command is exercised. */
+  menu?: string
   /** Capture the window to this path. */
   shot?: string
   /** Which window to capture: 0 is the window the probe runs in; a paper
@@ -124,6 +128,9 @@ export async function runProbe(window: BrowserWindow, file: string) {
       } else if (step.key) {
         results.push(await window.webContents.executeJavaScript(
           `window.__probe.key(${JSON.stringify(step.key.key)}, ${Boolean(step.key.shift)}, ${Boolean(step.key.meta)})`))
+      } else if (step.menu) {
+        window.webContents.send(CHANNEL.event, 'menu', step.menu)
+        results.push(`menu: ${step.menu}`)
       } else if (step.shot) {
         const target = step.window ? BrowserWindow.getAllWindows().filter((w) => w !== window)[step.window - 1] ?? window : window
         const image = await target.webContents.capturePage(step.rect)

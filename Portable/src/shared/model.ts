@@ -100,12 +100,19 @@ export interface FileInfo {
   originalName: string
 }
 
+/** What a PDF in the library is — the port of `DocumentKind.swift`. */
+export type DocumentKind = 'paper' | 'document'
+
 export class PaperMeta {
   raw: RawRecord
   id: string
   csl: CSLItem
   bibKey: string
   confidence: Confidence
+  /** The answer to "what is this?", absent until somebody gives one. */
+  kind?: DocumentKind
+  /** What the app thought when the file arrived. */
+  guessedKind?: DocumentKind
   file: FileInfo
   tagIDs: string[]
   collectionIDs: string[]
@@ -120,6 +127,8 @@ export class PaperMeta {
     this.csl = (raw.csl as CSLItem) ?? {}
     this.bibKey = String(raw.bibKey ?? '')
     this.confidence = (raw.confidence as Confidence) ?? 'unparsed'
+    this.kind = raw.kind ? (String(raw.kind) as DocumentKind) : undefined
+    this.guessedKind = raw.guessedKind ? (String(raw.guessedKind) as DocumentKind) : undefined
     const file = (raw.file as RawRecord) ?? {}
     this.file = {
       // A library written before the flat layout stored the file name under
@@ -170,6 +179,10 @@ export class PaperMeta {
       csl: this.csl,
       bibKey: this.bibKey,
       confidence: this.confidence,
+      // Written only when there is one: a record this build merely read is
+      // written back byte for byte.
+      kind: this.kind,
+      guessedKind: this.guessedKind,
       file: { ...(this.raw.file as RawRecord), ...this.file, name: undefined },
       tagIDs: this.tagIDs,
       collectionIDs: this.collectionIDs,
@@ -178,6 +191,15 @@ export class PaperMeta {
       updatedAt: isoTimestamp(this.updatedAt),
       updatedBy: this.updatedBy,
     }
+  }
+
+  /** What the app treats this as: the answer, then the guess, then a paper. */
+  get effectiveKind(): DocumentKind {
+    return this.kind ?? this.guessedKind ?? 'paper'
+  }
+
+  get kindIsUnanswered(): boolean {
+    return this.kind === undefined
   }
 
   get displayTitle(): string {

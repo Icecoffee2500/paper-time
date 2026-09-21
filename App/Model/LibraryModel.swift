@@ -38,6 +38,11 @@ public final class LibraryModel {
         /// row so a search is somewhere you can be rather than a filter you
         /// have to remember you left on.
         case searchResults
+        /// The two kinds, which only appear as rows once a library holds
+        /// both: a shelf of papers that has never seen a manual should look
+        /// exactly as it did.
+        case papers
+        case documents
         case unread
         case reading
         case read
@@ -91,6 +96,8 @@ public final class LibraryModel {
     /// their parent, so counting them would promise rows that never appear.
     public struct ScopeCounts: Equatable, Sendable {
         public var all = 0
+        public var papers = 0
+        public var documents = 0
         public var unread = 0
         public var reading = 0
         public var read = 0
@@ -407,13 +414,18 @@ public final class LibraryModel {
                 continue
             }
             counts.all += 1
+            switch paper.meta.effectiveKind {
+            case .paper: counts.papers += 1
+            case .document: counts.documents += 1
+            }
             switch paper.state.readingStatus {
             case .unread: counts.unread += 1
             case .reading: counts.reading += 1
             case .read: counts.read += 1
             }
             if paper.state.isFavorite { counts.favorites += 1 }
-            if paper.meta.confidence == .needsReview || paper.meta.confidence == .unparsed {
+            if paper.meta.effectiveKind == .paper,
+               paper.meta.confidence == .needsReview || paper.meta.confidence == .unparsed {
                 counts.needsReview += 1
             }
             for id in paper.meta.tagIDs { counts.tags[id, default: 0] += 1 }
@@ -693,12 +705,15 @@ public final class LibraryModel {
         case .open: openPaperIDs.contains(paper.id) || openPaperID == paper.id
         // These two are places of their own, not filters over papers.
         case .notes, .graph: false
+        case .papers: paper.meta.effectiveKind == .paper
+        case .documents: paper.meta.effectiveKind == .document
         case .unread: paper.state.readingStatus == .unread
         case .reading: paper.state.readingStatus == .reading
         case .read: paper.state.readingStatus == .read
         case .favorites: paper.state.isFavorite
         case .needsReview:
-            paper.meta.confidence == .needsReview || paper.meta.confidence == .unparsed
+            paper.meta.effectiveKind == .paper
+                && (paper.meta.confidence == .needsReview || paper.meta.confidence == .unparsed)
         case let .collection(id): matchesCollection(id, paper: paper)
         case let .tag(id): paper.meta.tagIDs.contains(id)
         case let .author(key): Self.authorKeys(of: paper).contains(key)
@@ -807,12 +822,29 @@ public final class LibraryModel {
             DocumentSignalsExtractor.extract(fromFileAt: url)
         }
         guard let signals = await extraction.value else { return }
+
+        // What this looks like, before anything is asked of a registrar.
+        //
+        // A document that shows no sign of being a paper is not looked up at
+        // all: Crossref has nothing to say about a lease agreement, and
+        // sending its title out to ask is both useless and somebody's
+        // business but ours. The inspector asks what the file is, with this
+        // as the offered answer.
+        let guess = signals.guess
+        var meta = paper.meta
+        if meta.guessedKind == nil { meta.guessedKind = guess.kind }
+        if meta.effectiveKind == .document {
+            if let saved = try? await store.save(meta: meta, in: paper.folder, baseline: paper.meta) {
+                applyLocally(meta: saved, to: paperID)
+            }
+            return
+        }
+
         let result = await resolver.resolve(
             signals: signals,
             originalFileName: paper.meta.file.originalName
         )
 
-        var meta = paper.meta
         meta.csl = result.csl
         meta.identifiers = result.identifiers
         meta.confidence = result.confidence
@@ -830,9 +862,30 @@ public final class LibraryModel {
         }
     }
 
+    /// Records the answer to "what is this?" — and looks the paper up when
+    /// the answer turns a document into one.
+    public func setKind(_ kind: DocumentKind, for paperID: UUID) async {
+        guard let paper = papers.first(where: { $0.id == paperID }) else { return }
+        var meta = paper.meta
+        guard meta.kind != kind else { return }
+        let wasUnlookedUp = meta.effectiveKind == .document && meta.confidence == .unparsed
+        meta.kind = kind
+        if kind == .document {
+            // Nothing to review about a document: it has no registrar to
+            // disagree with, so the "needs review" shelf lets it go.
+            meta.candidates = []
+            if meta.confidence == .needsReview { meta.confidence = .unparsed }
+        }
+        if let saved = try? await store.save(meta: meta, in: paper.folder, baseline: paper.meta) {
+            applyLocally(meta: saved, to: paperID)
+        }
+        if kind == .paper, wasUnlookedUp { await resolveMetadata(for: paperID) }
+    }
+
     /// Re-runs resolution for everything that is not yet confirmed.
     public func resolveAllPending() async {
         let pending = papers
+            .filter { $0.meta.effectiveKind == .paper }
             .filter { $0.meta.confidence == .unparsed || $0.meta.confidence == .needsReview }
             .map(\.id)
         for id in pending {

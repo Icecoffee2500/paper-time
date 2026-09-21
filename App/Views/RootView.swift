@@ -127,6 +127,12 @@ struct LibraryWindow: View {
             // hand on the machine.
             .preferredColorScheme(Boot.isSet("PAPERTIME_DARK") ? .dark : nil)
             .task {
+                // `--papertime-contents=1` opens the contents over the page,
+                // which is where the page grid lives.
+                if Boot.isSet("PAPERTIME_CONTENTS") {
+                    try? await Task.sleep(for: .seconds(3))
+                    app.toggleFloatingList()
+                }
                 if Boot.isSet("PAPERTIME_OPEN_PAPERS") {
                     try? await Task.sleep(for: .seconds(2))
                     if let first = model.visiblePapers.first { model.keepOpen(first.id) }
@@ -1008,7 +1014,9 @@ struct LibraryWindow: View {
 
     private var scopeTitle: String {
         switch model.scope {
-        case .all: L("모든 논문", "All Papers")
+        case .all: L("모두", "All")
+        case .papers: L("논문", "Papers")
+        case .documents: L("문서", "Documents")
         case .open: L("열린 논문", "Open Papers")
         case .notes: L("노트", "Notes")
         case .graph: L("그래프", "Graph")

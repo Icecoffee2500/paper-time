@@ -16,6 +16,9 @@ import { freshReaderState, store, type ReaderState } from '../state.js'
 import { PAPER_DRAG_TYPE } from '../../shared/split.js'
 import { loadDocument, TextLayer, type PDFDocumentProxy, type PDFPageProxy } from '../pdf.js'
 import { rightsHandler, type PDFLock } from '../../shared/pdfLock.js'
+import {
+  guessKind, hasAbstract, hasIdentifier, hasReferences, type DocumentKind,
+} from '../../shared/documentKind.js'
 
 /** The handler as it is written in the file, said the way a person would. */
 const SERVICE_NAMES: Record<string, string> = {
@@ -66,6 +69,10 @@ export interface ReaderActions {
   activated?: () => void
   /** The × in a pane's title strip: take the pane out and close the paper. */
   close?: () => void
+  /** What this document looks like, once its text can be read. Only asked
+   *  when nobody has guessed yet; the answer to "paper or document?" is the
+   *  reader's and is never set from here. */
+  guessed?: (kind: DocumentKind) => void
 }
 
 export interface ReaderOptions {
@@ -365,6 +372,7 @@ export class Reader {
       this.relayout()
       await this.loadDrawings(id)
       this.watchVisibility()
+      void this.guessKindIfAsked(generation, document)
       this.update()
     } catch (error) {
       if (generation !== this.generation) return
@@ -382,6 +390,55 @@ export class Reader {
           'The file may be damaged. If another reader cannot open it either, the file is the problem.'),
         message,
       )
+    }
+  }
+
+  /**
+   * Whether this reads as a paper, worked out from the pages themselves.
+   *
+   * The Mac guesses when the file is imported, because it has PDFKit there.
+   * Here the text arrives with pdf.js, which lives in the window, so the
+   * guess is made the first time the document is opened — which is also when
+   * somebody is looking at the question. It runs once per paper and never
+   * overrules an answer.
+   */
+  private async guessKindIfAsked(generation: number, document: PDFDocumentProxy) {
+    if (!this.actions.guessed) return
+    try {
+      const textOf = async (index: number) => {
+        const page = await document.getPage(index)
+        const content = await page.getTextContent()
+        return content.items.map((item) => ('str' in item ? item.str : '')).join(' ')
+      }
+      const first = await textOf(1)
+      if (generation !== this.generation) return
+      // The end, and then through the second half: a paper with appendices
+      // puts its bibliography in the middle, and looking only at the last
+      // pages called such a paper a manual. At most a dozen pages are read.
+      const count = document.numPages
+      const wanted = new Set<number>()
+      if (count <= 40) {
+        // A paper is short enough to read all of, and its bibliography can be
+        // anywhere: one of the papers this was tried on has it on page 9 of
+        // 23, with appendices after it.
+        for (let index = 1; index <= count; index += 1) wanted.add(index)
+      } else {
+        for (let index = count; index > count - 8; index -= 1) wanted.add(index)
+        const step = Math.max(1, Math.floor(count / 12))
+        for (let index = 1; index <= count && wanted.size < 20; index += step) wanted.add(index)
+      }
+      let end = ''
+      for (const index of [...wanted].sort((a, b) => b - a)) end += await textOf(index)
+      if (generation !== this.generation) return
+      const guess = guessKind({
+        identifier: hasIdentifier(first),
+        abstract: hasAbstract(first),
+        references: hasReferences(end),
+      })
+      this.actions.guessed(guess.kind)
+    } catch {
+      // A document whose text cannot be read is not a paper we can recognise,
+      // and guessing wrong here is worse than not guessing.
     }
   }
 
@@ -819,6 +876,36 @@ export class Reader {
       this.state.currentPage = current
       this.updateFooter()
     }
+  }
+
+  /**
+   * One page, drawn small, for the page grid.
+   *
+   * Its own canvas and its own render: the reader's page canvases are sized
+   * for reading and scaling those down gives a blurry thumbnail.
+   */
+  async thumbnail(index: number, width: number): Promise<HTMLCanvasElement | null> {
+    const proxy = this.pages[index]?.proxy ?? null
+    if (!proxy) return null
+    const base = proxy.getViewport({ scale: 1 })
+    const scale = width / base.width
+    const dpr = Math.min(window.devicePixelRatio || 1, 2)
+    const viewport = proxy.getViewport({ scale: scale * dpr })
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.floor(viewport.width)
+    canvas.height = Math.floor(viewport.height)
+    canvas.style.width = `${Math.floor(viewport.width / dpr)}px`
+    canvas.style.height = `${Math.floor(viewport.height / dpr)}px`
+    const context = canvas.getContext('2d', { alpha: false })
+    if (!context) return null
+    context.fillStyle = '#ffffff'
+    context.fillRect(0, 0, canvas.width, canvas.height)
+    await proxy.render({ canvasContext: context, viewport }).promise
+    return canvas
+  }
+
+  get pages_count(): number {
+    return this.pages.length
   }
 
   scrollToPage(index: number) {
