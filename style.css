@@ -87,7 +87,7 @@ button { font: inherit; color: inherit; }
 
 /* ─────────────────────────── the first screen ─────────────────────────── */
 
-/* The first screen is as tall as what is in it. It used to be held at a
+/* A screen is as tall as what is in it. The first one used to be held at a
    full viewport, which left a band of empty ground under the buttons on a
    tall window — the page looked like it had stopped rather than continued. */
 .screen {
@@ -95,6 +95,11 @@ button { font: inherit; color: inherit; }
   flex-direction: column;
   padding: 0 22px;
 }
+
+/* The carousel is the exception: the stage divides a height among its slide
+   and its rail, so it has to be given one. Without it every slide collapses
+   to nothing and the demonstration lands on top of the heading. */
+.screen-stage { min-height: 100svh; }
 
 .hero {
   max-width: 1240px;

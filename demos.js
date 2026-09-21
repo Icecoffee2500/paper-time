@@ -798,6 +798,169 @@ function draftToManuscript() {
     el("div", { style: "display:flex;gap:10px;align-items:center;flex-wrap:wrap" }, go, hint));
 }
 
+/* ════════════════ the drawing layer, and papers side by side ════════════
+   The two things 0.8.0 added, each shown rather than claimed. */
+
+/* Frames, groups and auto layout — on the page of a paper.
+   The claim is not "it has shapes". Every PDF app has shapes. It is that the
+   shapes behave the way a design tool's do, and still land in the file as
+   ordinary annotations. */
+function figmaDrawing() {
+  const TOOLS = [
+    ["V", L("고르기", "Move")],
+    ["F", L("프레임", "Frame")],
+    ["R", L("네모", "Rectangle")],
+    ["P", L("펜", "Pen")],
+    ["T", L("글", "Text")],
+  ];
+  let chosen = 1;
+  const rack = el("div", {
+    style: "display:inline-flex;gap:2px;padding:4px;border-radius:12px;background:var(--panel-2);" +
+           "border:1px solid var(--rule)",
+  });
+  const buttons = TOOLS.map(([key, name], i) => {
+    const b = el("button", {
+      class: "pick",
+      title: `${name} (${key})`,
+      style: "width:30px;height:30px;border-radius:8px;font-weight:600",
+      onclick: () => { chosen = i; paint(); },
+    }, key);
+    rack.append(b);
+    return b;
+  });
+  const paint = () => buttons.forEach((b, i) => b.setAttribute("aria-pressed", String(i === chosen)));
+  paint();
+
+  /* Three cards on the page, dropped where a hand drops them. */
+  const card = (title, body, x, y) => {
+    const node = el("div", {
+      style: "position:absolute;width:132px;background:var(--card);border:1px solid var(--rule);" +
+             "border-radius:10px;padding:8px 9px;box-shadow:var(--shadow-1);transition:all .5s cubic-bezier(.2,.7,.2,1)",
+    },
+      el("div", { style: "font-size:11px;font-weight:700;margin-bottom:3px" }, title),
+      el("div", { style: "font-size:11px;color:var(--ink-3);line-height:1.5", html: body }));
+    node.style.left = x + "px";
+    node.style.top = y + "px";
+    return node;
+  };
+
+  const LOOSE = [[92, 50], [186, 108], [104, 174]];
+  const cards = [
+    card(L("가정", "Assumption"), L("과제는 순서대로 와요.", "Tasks arrive in order."), ...LOOSE[0]),
+    card(L("정의", "Definition"),
+      `${f("F")} = ${f("E")}[&nabla;<sub style="font-size:.72em">&theta;</sub>${f("L")}]`, ...LOOSE[1]),
+    card(L("결론", "So"), L("곡률이 큰 쪽을 붙잡아요.", "Hold the steep directions."), ...LOOSE[2]),
+  ];
+
+  const name = el("div", {
+    style: "position:absolute;left:0;top:-17px;font-size:10.5px;color:var(--accent);font-weight:600",
+  }, L("프레임 · 3장", "Frame · 3 cards"));
+
+  const frame = el("div", {
+    style: "position:absolute;left:74px;top:30px;width:272px;height:214px;border:1.5px solid var(--accent);" +
+           "border-radius:12px;background:color-mix(in srgb, var(--accent) 5%, transparent);" +
+           "transition:all .5s cubic-bezier(.2,.7,.2,1)",
+  }, name);
+
+  const page = el("div", {
+    style: "position:relative;width:min(100%,420px);height:268px;margin:0 auto;background:var(--card);" +
+           "border:1px solid var(--rule);border-radius:12px;overflow:hidden",
+  },
+    el("div", { style: "position:absolute;left:18px;top:8px;right:18px;height:7px;border-radius:3px;background:var(--rule)" }),
+    frame, ...cards);
+
+  const caption = el("p", { class: "hint" },
+    L("프레임 안에 놓으면 프레임의 것이 돼요. 묶기는 ⌘G, 오토 레이아웃은 ⇧A예요.",
+      "Drop something inside a frame and it belongs to the frame. ⌘G groups, ⇧A turns on auto layout."));
+
+  let tidy = false;
+  const arrange = () => {
+    tidy = !tidy;
+    if (tidy) {
+      cards.forEach((c, i) => {
+        c.style.left = "96px";
+        c.style.top = (48 + i * 62) + "px";
+        c.style.width = "228px";
+      });
+      frame.style.height = "196px";
+      name.textContent = L("프레임 · 세로 · 간격 12", "Frame · Vertical · gap 12");
+      caption.innerHTML = L(
+        "프레임이 자식을 줄로 세우고 <b>제 크기를 자식에 맞춰요.</b> 카드 하나를 지우면 나머지가 따라 올라와요.",
+        "The frame lines its children up and <b>takes its size from them.</b> Delete one card and the rest move up.");
+    } else {
+      cards.forEach((c, i) => {
+        c.style.left = LOOSE[i][0] + "px";
+        c.style.top = LOOSE[i][1] + "px";
+        c.style.width = "132px";
+      });
+      frame.style.height = "214px";
+      name.textContent = L("프레임 · 3장", "Frame · 3 cards");
+      caption.innerHTML = L(
+        "그린 것은 사이드카가 아니라 <b>PDF 주석으로도 써져요</b> — Preview에서도 보여요.",
+        "What you draw is <b>written into the PDF as annotations</b> too — it opens in Preview.");
+    }
+  };
+
+  return el("div", { class: "demo-shell", style: "flex-direction:column;gap:12px" },
+    el("div", { style: "display:flex;gap:10px;flex-wrap:wrap;align-items:center" },
+      rack,
+      el("button", { class: "btn btn-primary", onclick: arrange }, L("오토 레이아웃", "Auto layout")),
+      el("span", { class: "hint", style: "margin:0" }, L("0.8.0부터", "New in 0.8.0"))),
+    page,
+    caption);
+}
+
+/* Four papers at once — and one of them in a window of its own. */
+function papersSideBySide() {
+  const pane = (title) => el("div", {
+    style: "flex:1;min-width:0;background:var(--card);border:1px solid var(--rule);border-radius:10px;" +
+           "padding:9px 10px;display:flex;flex-direction:column;gap:5px;overflow:hidden;transition:all .45s",
+  },
+    el("div", { style: "font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" }, title),
+    el("div", { style: "height:6px;border-radius:3px;background:var(--rule);width:92%" }),
+    el("div", { style: "height:6px;border-radius:3px;background:var(--mark);width:64%" }),
+    el("div", { style: "height:6px;border-radius:3px;background:var(--rule);width:80%" }),
+    el("div", { style: "height:6px;border-radius:3px;background:var(--rule);width:52%" }));
+
+  const TITLES = ["EWC", "Progressive Nets", "PackNet", "GEM"];
+  const area = el("div", {
+    style: "flex:1;min-height:188px;display:flex;flex-wrap:wrap;gap:8px;align-content:stretch",
+  });
+
+  const shelf = el("div", { style: "display:flex;flex-direction:column;gap:4px;width:132px;flex:0 0 auto" },
+    el("div", { style: "font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);margin-bottom:2px" },
+      L("열린 논문", "Open papers")),
+    ...TITLES.map((t) => el("div", {
+      style: "font-size:11.5px;padding:5px 7px;border-radius:7px;background:var(--panel-2);" +
+             "white-space:nowrap;overflow:hidden;text-overflow:ellipsis",
+    }, t)));
+
+  const caption = el("p", { class: "hint" },
+    L("⇧⌘O로 열린 논문을 펼쳐요. 한 줄을 창 밖으로 끌면 그 논문만 담은 창이 열려요.",
+      "⇧⌘O lists what is open. Drag a row out of the window and that paper gets a window of its own."));
+
+  let many = 1;
+  const show = (n) => {
+    many = n;
+    area.replaceChildren(...TITLES.slice(0, n).map((t) => {
+      const p = pane(t);
+      p.style.flex = n === 1 ? "1 1 100%" : "1 1 calc(50% - 4px)";
+      p.style.minHeight = n > 2 ? "86px" : "auto";
+      return p;
+    }));
+  };
+  show(1);
+
+  return el("div", { class: "demo-shell", style: "flex-direction:column;gap:12px" },
+    el("div", { style: "display:flex;gap:8px;flex-wrap:wrap;align-items:center" },
+      el("button", { class: "btn btn-primary", onclick: () => show(many >= 4 ? 1 : many + 1) },
+        L("한 편 더 나란히", "Add one beside it")),
+      el("span", { class: "hint", style: "margin:0" }, L("최대 넷까지", "Up to four")),
+    ),
+    el("div", { style: "flex:1;min-height:0;display:flex;gap:10px" }, shelf, area),
+    caption);
+}
+
 /* ═══════════════════════════ the carousel ═══════════════════════════ */
 
 /// Three goes at it, the same three the app's own About window uses: what no
@@ -822,6 +985,10 @@ const SLIDES = [
     p: L("표시는 PDF 파일 안에 쓰고, 라이브러리는 그냥 폴더예요. 그래서 같은 폴더가 맥에서도, 윈도우에서도, 리눅스에서도 열려요 — 하이라이트도 손글씨도 굽은 화살표도 그대로요. 계정도 서버도 내보내기도 없어요.",
          "Marks go into the PDF file, and a library is one folder. The same folder opens on a Mac, on Windows and on Linux — highlights, handwriting and bent arrows intact. No account, no server, no export."),
     make: everyDesktop },
+  { t: 1, n: L("그리기", "Drawing"), h: L("논문 위에서 Figma처럼 그려요", "Draw on a paper the way you design"),
+    p: L("네모·화살표·글 카드를 프레임에 담고, 묶고, 오토 레이아웃으로 줄 세워요. 카드 안의 $…$는 수식으로 조판돼요. 그러고도 그린 것은 PDF 주석으로 파일에 들어가서, Preview에서도 지도교수의 아이패드에서도 보여요.",
+         "Put rectangles, arrows and text cards into a frame, group them, line them up with auto layout. A $…$ inside a card is set as mathematics. And all of it still goes into the file as ordinary PDF annotations — it opens in Preview, and on your advisor's iPad."),
+    make: figmaDrawing },
 
   { t: 2, n: "Book mode", h: L("책처럼 펴고, 목차로 건너뛰어요", "Spread like a book, jump by the contents"),
     p: L("두 쪽이 마주 보고, 여백은 잘려서 본문만 남아요. 목차는 단축키 하나예요 — 절 이름을 누르면 그 절로 바로 가요.",
@@ -835,6 +1002,10 @@ const SLIDES = [
     p: L("서가·목록·논문·인스펙터를 하나씩 껐다 켜요. 읽을 때는 논문만, 정리할 때는 넷 다요. 열 너비는 창이 허락하는 데까지 늘어나요.",
          "Shelf, list, paper and inspector switch off and on one at a time. Reading, the paper alone; sorting, all four. A column grows as wide as the window allows."),
     make: panes },
+  { t: 2, n: L("나란히", "Side by side"), h: L("논문 넷을 한 창에서 견줘요", "Four papers in one window"),
+    p: L("논문을 끌어다 화면 반쪽이나 사분면에 놓으면 그 자리에 열려요. ⇧⌘O가 열린 논문을 펼쳐 주고, 거기서 한 줄을 창 밖으로 끌면 그 논문만 담은 창이 돼요. ⌘W는 지금 보고 있는 칸만 닫아요.",
+         "Drag a paper onto a half or a quadrant of the window and it opens there. ⇧⌘O lists what is open; drag a row out and that paper gets its own window. ⌘W closes the pane you are in, not the window."),
+    make: papersSideBySide },
   { t: 2, n: L("세 기기", "Three devices"), h: L("긋자마자 건너가요", "Crosses the moment you draw it"),
     p: L("맥·아이패드·아이폰 사이에서는 표시가 몇 KB짜리 저널로 먼저 건너가고, 20 MB PDF는 뒤따라와요. 파일 동기화를 기다릴 일이 없어요.",
          "Between Mac, iPad and iPhone a mark crosses first as a journal of a few KB, and the 20 MB PDF follows. Nobody waits for the file to sync."),
