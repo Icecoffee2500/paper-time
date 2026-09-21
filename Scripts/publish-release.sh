@@ -226,26 +226,29 @@ Scripts/publish-page.sh "Paper Time $TAG on the page" >/dev/null
 # the copies that matter — these are for installing and checking before that,
 # and a year of them is gigabytes of packages nobody will open again. Run
 # after the upload, so nothing is thrown away until GitHub has it.
+# This file is /bin/sh: a plain glob, not process substitution.
 prune() {
-  local dir="$1" kept=0 gone=0
+  dir="$1"; kept=0; gone=0
   [ -d "$dir" ] || return 0
-  while IFS= read -r -d "" file; do
+  for file in "$dir"/*; do
+    [ -e "$file" ] || continue
     case "$(basename "$file")" in
       *"$TAG"*) kept=$((kept + 1)) ;;
       README.md|*.yml) ;;
       *) rm -rf "$file"; gone=$((gone + 1)) ;;
     esac
-  done < <(find "$dir" -mindepth 1 -maxdepth 1 -print0)
+  done
   [ "$gone" -gt 0 ] && echo "$dir - kept $kept file(s) of $TAG, removed $gone older one(s)"
   return 0
 }
 prune Installers
 prune Portable/dist
+prune dist   # where make-dmg leaves the disk image
 
 # And the app bundles left in the build folders: a Debug copy nobody should
 # be opening, and the Release copy the disk image was made from. The indexes
 # and object files stay — they are what makes the next build quick.
-find build -name "Paper Time.app" -maxdepth 6 -prune -exec rm -rf {} + 2>/dev/null || true
+find build -maxdepth 6 -name "Paper Time.app" -prune -exec rm -rf {} + 2>/dev/null || true
 
 echo "published $TAG to $REPO"
 echo "the page: https://$(echo "$REPO" | cut -d/ -f1 | tr "A-Z" "a-z").github.io/$(echo "$REPO" | cut -d/ -f2)/"
