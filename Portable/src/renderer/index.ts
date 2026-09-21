@@ -26,6 +26,7 @@ import {
   closeOtherOpenPapers,
   dock,
   isOpenPaper,
+  isPinned,
   keepOpen,
   panePapers,
   paper as findPaper,
@@ -142,8 +143,8 @@ const paperList = buildPaperList({
     await reload()
   },
   togglePin: (id) => {
-    if (isOpenPaper(id)) closePaper(id)
-    else keepPaper(id)
+    if (isPinned(id)) closePaper(id)
+    else keepPaper(id, true)
   },
   close: (id) => closePaper(id),
   contextMenu: (id, anchor) => {
@@ -168,7 +169,7 @@ const paperList = buildPaperList({
               ? [{ label: L('다른 논문 모두 닫기', 'Close Other Papers'), icon: 'xmark.circle.fill', action: () => closeOthers(id) }]
               : []),
           ]
-        : [{ label: L('열어 두기', 'Keep Open'), icon: 'pin', action: () => keepPaper(id) }]),
+        : [{ label: L('열어 두기', 'Keep Open'), icon: 'pin', action: () => keepPaper(id, true) }]),
       { label: L('새 창으로 열기', 'Open in New Window'), icon: 'macwindow.badge.plus', action: () => openInWindow(id) },
       { separator: true },
       // The same answer the inspector asks for, where a handful of rows can
@@ -405,8 +406,8 @@ function focusChanged() {
 // ---------------------------------------------------------- open papers
 
 /** Keeps a paper on the open shelf without changing what is showing. */
-function keepPaper(id: string) {
-  keepOpen(id)
+function keepPaper(id: string, byHand = false) {
+  keepOpen(id, byHand)
   changed('papers')
 }
 

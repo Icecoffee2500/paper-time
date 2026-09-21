@@ -138,7 +138,7 @@ struct PaperListView: View {
                         subtitleFields: SubtitleField.parse(app.settings.listSubtitleFields),
                         model: model,
                         onOpenShelf: model.scope == .open,
-                        isKeptOpen: model.isOpenPaper(paper.id)
+                        isKeptOpen: model.isPinned(paper.id)
                     )
                     .tag(paper.id)
                     #if os(iOS)
@@ -487,9 +487,13 @@ struct PaperRow: View, Equatable {
     /// wrong guesses before the right one, and no way to see what the options
     /// were.
     @ViewBuilder
-    /// Kept open, or not: the pin at the head of the row. A pinned paper
-    /// stays on the Open Papers shelf; one merely looked at leaves it with
-    /// the next paper shown.
+    /// Pinned, or not: the pin at the head of the row.
+    ///
+    /// A pin is something you do. The app keeps a paper on the Open Papers
+    /// shelf when you use it — clicking into the page is enough — and for a
+    /// while that lit this pin too, so reading a paper appeared to pin it.
+    /// What the app does on its own is visible on the shelf; the pin says
+    /// only what you said.
     private func pinButton(_ paper: LoadedPaper) -> some View {
         Button {
             #if os(macOS)
@@ -497,10 +501,10 @@ struct PaperRow: View, Equatable {
                 app.undock(paper.id, model: model)
                 model.closeOpenPaper(paper.id)
             } else {
-                model.keepOpen(paper.id)
+                model.keepOpen(paper.id, byHand: true)
             }
             #else
-            if isKeptOpen { model.closeOpenPaper(paper.id) } else { model.keepOpen(paper.id) }
+            if isKeptOpen { model.closeOpenPaper(paper.id) } else { model.keepOpen(paper.id, byHand: true) }
             #endif
         } label: {
             Image(systemName: isKeptOpen ? "pin.fill" : "pin")
@@ -509,7 +513,7 @@ struct PaperRow: View, Equatable {
                 .frame(width: 16)
         }
         .buttonStyle(.plain)
-        .help(isKeptOpen ? L("열어 둔 논문 — 누르면 닫아요", "Kept open — click to close") : L("열어 두기", "Keep Open"))
+        .help(isKeptOpen ? L("고정한 논문 — 누르면 닫아요", "Pinned — click to close") : L("고정하기", "Pin"))
         .accessibilityLabel(isKeptOpen ? L("열어 둔 논문", "Kept open") : L("열어 두지 않음", "Not kept open"))
     }
 
@@ -657,7 +661,7 @@ private struct PaperMenu: View {
             }
         } else {
             Button {
-                model.keepOpen(paper.id)
+                model.keepOpen(paper.id, byHand: true)
             } label: {
                 Label(L("열어 두기", "Keep Open"), systemImage: "pin")
             }

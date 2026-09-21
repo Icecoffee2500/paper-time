@@ -61,10 +61,12 @@ private struct PaperInspectorForm: View {
 
                 // Before anything else: what is this? A form that asks a car
                 // manual for its journal is a form that makes the reader
-                // wrong, so the question comes before the fields it decides —
-                // and stays afterwards, because the wrong button is pressed
-                // sometimes and an answer with no way back is a trap.
-                kindQuestion(for: paper)
+                // wrong, so the question comes before the fields it decides.
+                // Once answered it goes away — it is asked once in the life
+                // of a paper, and a form is no place for a switch that is
+                // never touched again. Changing it later is in the ⋯ menu and
+                // in the row's own menu.
+                if paper.meta.kindIsUnanswered { kindQuestion(for: paper) }
 
                 let kind = paper.meta.effectiveKind
                 if kind == .paper, paper.meta.confidence == .needsReview, !paper.meta.candidates.isEmpty {
@@ -148,24 +150,19 @@ private struct PaperInspectorForm: View {
     /// quietly acted on.
     @ViewBuilder
     private func kindQuestion(for paper: LoadedPaper) -> some View {
-        let answered = !paper.meta.kindIsUnanswered
         Section {
             VStack(alignment: .leading, spacing: 8) {
-                Text(answered
-                     ? L("이 PDF는", "This PDF is")
-                     : L("이 PDF는 무엇인가요?", "What is this PDF?"))
-                    .font(answered ? .subheadline.weight(.medium) : .headline)
+                Text(L("이 PDF는 무엇인가요?", "What is this PDF?"))
+                    .font(.headline)
                 Picker("", selection: kindBinding(for: paper)) {
                     Text(L("논문", "A paper")).tag(DocumentKind.paper)
                     Text(L("일반 문서", "A document")).tag(DocumentKind.document)
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
-                if !answered {
-                    Text(hint(for: paper.meta.guessedKind))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                Text(hint(for: paper.meta.guessedKind))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             .padding(.vertical, 4)
         }

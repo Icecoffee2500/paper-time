@@ -120,7 +120,6 @@ const CONFIDENCE_LABEL = (): Record<string, string> => ({
  * rather than inferred and quietly acted on.
  */
 function kindQuestion(body: HTMLElement, paper: Paper, actions: InspectorActions) {
-  const answered = !paper.meta.kindIsUnanswered
   const guess = paper.meta.guessedKind
   const hint = guess === 'paper'
     ? L('논문 같아요 — 안에 DOI나 참고문헌이 보여요. 맞으면 그대로 눌러주세요.',
@@ -146,11 +145,8 @@ function kindQuestion(body: HTMLElement, paper: Paper, actions: InspectorActions
   }
 
   body.append(el('div', { class: 'field' }, [
-    el('div', {
-      class: 'field-label',
-      text: answered ? L('이 PDF는', 'This PDF is') : L('이 PDF는 무엇인가요?', 'What is this PDF?'),
-    }),
-    ...(answered ? [] : [el('p', { class: 'hint', text: hint })]),
+    el('div', { class: 'field-label', text: L('이 PDF는 무엇인가요?', 'What is this PDF?') }),
+    el('p', { class: 'hint', text: hint }),
     choices,
   ]))
 }
@@ -159,7 +155,10 @@ function details(body: HTMLElement, paper: Paper, actions: InspectorActions) {
   const meta = paper.meta
   const isPaper = meta.effectiveKind === 'paper'
 
-  kindQuestion(body, paper, actions)
+  // Asked once, when nobody has answered. Changing it afterwards is in the
+  // row's own menu: a form is no place for a switch that is never touched
+  // again.
+  if (meta.kindIsUnanswered) kindQuestion(body, paper, actions)
 
   body.append(editable(L('제목', 'Title'), meta.csl.title ?? '', (next) => {
     actions.editMeta(paper.id, { csl: { ...meta.csl, title: next }, confidence: 'manual' })

@@ -84,6 +84,8 @@ export interface Store {
    * Per session, as on the Mac: never written to the settings file.
    */
   openPaperIDs: string[]
+  /** The ones somebody pinned, as against the ones the app kept. */
+  pinnedPaperIDs: string[]
   /** Papers side by side, when they are. Null is the one reader as always. */
   split: SplitArrangement | null
   settings: Settings
@@ -135,6 +137,7 @@ export const store: Store = {
   shelf: { kind: 'all' },
   selectedID: null,
   openPaperIDs: [],
+  pinnedPaperIDs: [],
   split: null,
   settings: {
     libraryRoot: null,
@@ -205,10 +208,24 @@ export function isOpenPaper(id: string): boolean {
   return store.openPaperIDs.includes(id)
 }
 
-/** Keeps a paper on the open shelf. */
-export function keepOpen(id: string) {
-  if (!paper(id) || store.openPaperIDs.includes(id)) return
+/**
+ * Keeps a paper on the open shelf.
+ *
+ * `byHand` is somebody asking — the pin, the row's menu, a paper put beside
+ * another. Clicking into a paper is not that: for a while both lit the pin
+ * at the head of the row, so reading a paper appeared to pin it, and a pin
+ * is something you do. What the app does on its own is visible on the shelf
+ * and nowhere else.
+ */
+export function keepOpen(id: string, byHand = false) {
+  if (!paper(id)) return
+  if (byHand) store.pinnedPaperIDs = [...new Set([...store.pinnedPaperIDs, id])]
+  if (store.openPaperIDs.includes(id)) return
   store.openPaperIDs = [...store.openPaperIDs, id]
+}
+
+export function isPinned(id: string): boolean {
+  return store.pinnedPaperIDs.includes(id)
 }
 
 /**
@@ -216,6 +233,7 @@ export function keepOpen(id: string) {
  * on the shelf comes forward; with the shelf empty, nothing is showing.
  */
 export function closeOpenPaper(id: string) {
+  store.pinnedPaperIDs = store.pinnedPaperIDs.filter((entry) => entry !== id)
   const at = store.openPaperIDs.indexOf(id)
   if (at >= 0) store.openPaperIDs = store.openPaperIDs.filter((entry) => entry !== id)
   if (store.selectedID !== id) return

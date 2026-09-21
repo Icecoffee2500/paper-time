@@ -1,3 +1,4 @@
+import PaperCore
 import InkEngine
 import LibraryStore
 import SwiftUI
@@ -715,6 +716,15 @@ struct LibraryWindow: View {
                             Text(tint.label).tag(tint)
                         }
                     }
+                    // Asked once when a paper arrives, and changed here on
+                    // the day the wrong button was pressed.
+                    if let paper = model.selectedPaper {
+                        Divider()
+                        Picker(L("종류", "Kind"), selection: kindBinding(for: paper)) {
+                            Label(L("논문", "Paper"), systemImage: "text.document").tag(DocumentKind.paper)
+                            Label(L("일반 문서", "Document"), systemImage: "doc").tag(DocumentKind.document)
+                        }
+                    }
                     Divider()
                     shareMenu
                 } label: {
@@ -1010,6 +1020,13 @@ struct LibraryWindow: View {
         #else
         UIPasteboard.general.string = key
         #endif
+    }
+
+    private func kindBinding(for paper: LoadedPaper) -> Binding<DocumentKind> {
+        Binding(
+            get: { paper.meta.effectiveKind },
+            set: { kind in Task { await model.setKind(kind, for: paper.id) } }
+        )
     }
 
     private var scopeTitle: String {

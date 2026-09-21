@@ -76,8 +76,9 @@ public final class AppModel {
         var arrangement = split ?? current.map { SplitArrangement(left: .init(top: $0)) }
             ?? SplitArrangement(left: .init(top: id))
         arrangement.dock(id, at: zone)
-        // Put beside another, a paper is in use: it stays on the open shelf.
-        for paper in arrangement.papers { model.keepOpen(paper) }
+        // Put beside another by hand: that is a pin, and it stays until it
+        // is closed.
+        for paper in arrangement.papers { model.keepOpen(paper, byHand: true) }
         withAnimation(AppModel.paneMotion) {
             split = arrangement.papers.count > 1 ? arrangement : nil
             showsReader = true

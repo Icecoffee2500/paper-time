@@ -170,16 +170,37 @@ public final class LibraryModel {
 
     public func isOpenPaper(_ id: UUID) -> Bool { openPaperIDs.contains(id) }
 
+    /// The ones somebody pinned, as against the ones the app kept because
+    /// they were used.
+    ///
+    /// Both sit on the open shelf, and for a while both lit the pin at the
+    /// head of the row — so reading a paper pinned it, which is not what a
+    /// pin is. A pin is something you do. What the app does on its own
+    /// belongs on the shelf, where it is visible as what it is, and nowhere
+    /// else.
+    public private(set) var pinnedPaperIDs: Set<UUID> = []
+
+    public func isPinned(_ id: UUID) -> Bool { pinnedPaperIDs.contains(id) }
+
     /// Keeps a paper on the open shelf.
-    public func keepOpen(_ id: UUID) {
-        guard paper(id) != nil, !openPaperIDs.contains(id) else { return }
+    ///
+    /// - Parameter byHand: somebody asked for this — the pin, the row's menu,
+    ///   a paper put beside another. Clicking into a paper is not that.
+    public func keepOpen(_ id: UUID, byHand: Bool = false) {
+        guard paper(id) != nil else { return }
+        if byHand { pinnedPaperIDs.insert(id) }
+        guard !openPaperIDs.contains(id) else { return }
         openPaperIDs.append(id)
     }
+
+    /// Takes the pin out, leaving the paper where it is.
+    public func unpin(_ id: UUID) { pinnedPaperIDs.remove(id) }
 
     /// Takes a paper off the open shelf. If it was the one showing, its
     /// neighbour on the shelf comes forward; with the shelf empty, nothing
     /// is showing.
     public func closeOpenPaper(_ id: UUID) {
+        pinnedPaperIDs.remove(id)
         let at = openPaperIDs.firstIndex(of: id)
         if let at { openPaperIDs.remove(at: at) }
         guard selectedPaperID == id else { return }
@@ -192,6 +213,7 @@ public final class LibraryModel {
     }
 
     public func closeOtherOpenPapers(keeping id: UUID) {
+        pinnedPaperIDs = pinnedPaperIDs.filter { $0 == id }
         openPaperIDs = openPaperIDs.filter { $0 == id }
         if selectedPaperID != id { selectedPaperID = id }
     }

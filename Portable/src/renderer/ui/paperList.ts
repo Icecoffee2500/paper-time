@@ -10,7 +10,7 @@
  */
 import { icon } from '../icons.js'
 import { clear, el, on } from '../dom.js'
-import { isOpenPaper, shelfPapers, store, type Paper } from '../state.js'
+import { isOpenPaper, isPinned, shelfPapers, store, type Paper } from '../state.js'
 import { showMenu } from './toolbar.js'
 import { L } from '../../shared/lang.js'
 import { PAPER_DRAG_TYPE } from '../../shared/split.js'
@@ -79,16 +79,17 @@ export function buildPaperList(actions: PaperListActions): { node: HTMLElement; 
 
 function paperRow(entry: Paper, actions: PaperListActions): HTMLElement {
   const selected = store.selectedID === entry.id
-  const kept = isOpenPaper(entry.id)
+  const kept = isPinned(entry.id)
   const row = el('div', { class: 'paper-row', role: 'option', 'aria-selected': String(selected), draggable: 'true' })
 
-  // Kept open, or not: a pinned paper stays on the Open Papers shelf; one
-  // merely looked at leaves it with the next paper shown.
+  // Pinned, or not. A pin is something you do: the app keeps a paper on the
+  // Open Papers shelf when you use it, and that belongs on the shelf, not
+  // here — reading a paper should not appear to pin it.
   const pin = el('button', {
     class: 'paper-pin',
     'data-on': String(kept),
-    title: kept ? L('열어 둔 논문 — 누르면 닫아요', 'Kept open — click to close') : L('열어 두기', 'Keep Open'),
-    'aria-label': kept ? L('열어 둔 논문', 'Kept open') : L('열어 두지 않음', 'Not kept open'),
+    title: kept ? L('고정한 논문 — 누르면 닫아요', 'Pinned — click to close') : L('고정하기', 'Pin'),
+    'aria-label': kept ? L('고정함', 'Pinned') : L('고정하지 않음', 'Not pinned'),
     html: icon(kept ? 'pin.fill' : 'pin'),
   })
   on(pin, 'click', (event: MouseEvent) => {
