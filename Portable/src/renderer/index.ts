@@ -71,6 +71,7 @@ import {
 import { icon } from './icons.js'
 import { L } from '../shared/lang.js'
 import { type PDFLock } from '../shared/pdfLock.js'
+import { type DocumentKind } from '../shared/documentKind.js'
 
 document.body.dataset.platform = platform
 /** This window shows one paper on its own: no library columns. */
@@ -170,8 +171,17 @@ const paperList = buildPaperList({
         : [{ label: L('열어 두기', 'Keep Open'), icon: 'pin', action: () => keepPaper(id) }]),
       { label: L('새 창으로 열기', 'Open in New Window'), icon: 'macwindow.badge.plus', action: () => openInWindow(id) },
       { separator: true },
+      // The same answer the inspector asks for, where a handful of rows can
+      // be corrected one after another — which is what a wrongly answered
+      // import feels like.
+      entry.meta.effectiveKind === 'paper'
+        ? { label: L('일반 문서로 바꾸기', 'Make It a Document'), icon: 'note', action: () => void setKind(id, 'document') }
+        : { label: L('논문으로 바꾸기', 'Make It a Paper'), icon: 'text.document', action: () => void setKind(id, 'paper') },
+      { separator: true },
       { label: L('폴더에서 보기', 'Show in Folder'), icon: 'folder', action: () => void call('paper:reveal', { id }) },
-      { label: L('인용 키 복사', 'Copy Citation Key'), icon: 'doc.on.doc', action: () => copyKey(id) },
+      ...(entry.meta.effectiveKind === 'paper'
+        ? [{ label: L('인용 키 복사', 'Copy Citation Key'), icon: 'doc.on.doc', action: () => copyKey(id) }]
+        : []),
       { separator: true },
       {
         label: entry.state.isFavorite
@@ -211,6 +221,16 @@ const paperList = buildPaperList({
   },
 })
 
+/** The answer to "paper or document?", from the inspector or the row's menu. */
+async function setKind(id: string, kind: DocumentKind) {
+  // A document has no registrar to disagree with, so it leaves the shelf of
+  // things to look at.
+  const patch: Record<string, unknown> = { kind }
+  if (kind === 'document') patch.confidence = 'unparsed'
+  await call('paper:meta', { id, patch })
+  await reload()
+}
+
 const inspector = buildInspector({
   editMeta: async (id, patch) => {
     await call('paper:meta', { id, patch })
@@ -222,14 +242,7 @@ const inspector = buildInspector({
   },
   reveal: (id) => void call('paper:reveal', { id }),
   copyKey,
-  setKind: async (id, kind) => {
-    // A document has no registrar to disagree with, so it leaves the shelf of
-    // things to look at.
-    const patch: Record<string, unknown> = { kind }
-    if (kind === 'document') patch.confidence = 'unparsed'
-    await call('paper:meta', { id, patch })
-    await reload()
-  },
+  setKind,
   openAuthor: (name) => {
     store.shelf = { kind: 'author', name }
     changed('shelf')

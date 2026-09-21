@@ -120,13 +120,14 @@ const CONFIDENCE_LABEL = (): Record<string, string> => ({
  * rather than inferred and quietly acted on.
  */
 function kindQuestion(body: HTMLElement, paper: Paper, actions: InspectorActions) {
+  const answered = !paper.meta.kindIsUnanswered
   const guess = paper.meta.guessedKind
   const hint = guess === 'paper'
-    ? L('논문 같아요 — 안에 DOI나 참고문헌이 보여요.',
-        'It looks like a paper — there is a DOI or a reference list in it.')
+    ? L('논문 같아요 — 안에 DOI나 참고문헌이 보여요. 맞으면 그대로 눌러주세요.',
+        'It looks like a paper — there is a DOI or a reference list in it. Press it again to agree.')
     : guess === 'document'
       ? L('논문은 아닌 것 같아요. 일반 문서면 학술지 같은 칸은 숨길게요.',
-          "It doesn't look like a paper. Say it's a document and the journal fields go away.")
+          "It doesn't look like a paper. As a document, the journal fields go away.")
       : L('고르면 아래 칸들이 그에 맞게 바뀌어요.', 'The fields below follow your answer.')
 
   const choices = el('div', { class: 'choices' })
@@ -134,14 +135,22 @@ function kindQuestion(body: HTMLElement, paper: Paper, actions: InspectorActions
     ['paper', L('논문', 'A paper')],
     ['document', L('일반 문서', 'A document')],
   ] as const) {
-    const button = el('button', { text: label, 'aria-pressed': String(guess === value) })
+    // The chosen one is marked, and the other one is the way back: an answer
+    // with no way back is a trap, and the wrong button gets pressed.
+    const button = el('button', {
+      text: label,
+      'aria-pressed': String(paper.meta.effectiveKind === value),
+    })
     on(button, 'click', () => actions.setKind(paper.id, value))
     choices.append(button)
   }
 
   body.append(el('div', { class: 'field' }, [
-    el('div', { class: 'field-label', text: L('이 PDF는 무엇인가요?', 'What is this PDF?') }),
-    el('p', { class: 'hint', text: hint }),
+    el('div', {
+      class: 'field-label',
+      text: answered ? L('이 PDF는', 'This PDF is') : L('이 PDF는 무엇인가요?', 'What is this PDF?'),
+    }),
+    ...(answered ? [] : [el('p', { class: 'hint', text: hint })]),
     choices,
   ]))
 }
@@ -150,7 +159,7 @@ function details(body: HTMLElement, paper: Paper, actions: InspectorActions) {
   const meta = paper.meta
   const isPaper = meta.effectiveKind === 'paper'
 
-  if (meta.kindIsUnanswered) kindQuestion(body, paper, actions)
+  kindQuestion(body, paper, actions)
 
   body.append(editable(L('제목', 'Title'), meta.csl.title ?? '', (next) => {
     actions.editMeta(paper.id, { csl: { ...meta.csl, title: next }, confidence: 'manual' })

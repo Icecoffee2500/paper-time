@@ -132,7 +132,6 @@ struct ContentsPopup: View {
                     .padding(.bottom, 10)
                 }
                 .scrollIndicators(.never)
-                .frame(height: placement == .footer ? 260 : nil)
                 .onAppear { scroller.scrollTo(link.currentPageIndex, anchor: .center) }
             }
         } else {
@@ -243,11 +242,18 @@ struct ContentsPopup: View {
         // between the pages, and it should sit there with room to spare.
         // Along the foot of the page it takes the width instead, which is
         // what lets a heading be read without wrapping.
-        .frame(width: placement == .gutter
-            ? (link.bookGutter > 0 ? max(180, min(300, link.bookGutter - 40)) : 220)
-            : nil)
-        .frame(maxWidth: placement == .gutter ? nil : .infinity)
-        .frame(maxHeight: placement == .gutter ? 520 : nil)
+        // Pages are a column, whatever the headings are: laid along the foot
+        // of the page they were a wide strip with one narrow row of pictures
+        // down the middle of it, which is the worst of both — small pictures
+        // and empty ground either side. Tall and narrow, a page is big enough
+        // to recognise.
+        .frame(width: mode == .pages
+            ? 212
+            : (placement == .gutter
+               ? (link.bookGutter > 0 ? max(180, min(300, link.bookGutter - 40)) : 220)
+               : nil))
+        .frame(maxWidth: mode == .pages || placement == .gutter ? nil : .infinity)
+        .frame(maxHeight: mode == .pages ? 640 : (placement == .gutter ? 520 : nil))
         .fixedSize(horizontal: false, vertical: true)
         .onAppear(perform: load)
         .liquidGlass(.floating, in: RoundedRectangle(cornerRadius: Corner.panel, style: .continuous))
@@ -333,7 +339,7 @@ private struct PageThumbnail: View {
     /// were just reading should not redraw what it drew a minute ago.
     @MainActor private static var cache: [String: PlatformImage] = [:]
 
-    private static let width: CGFloat = 132
+    private static let width: CGFloat = 168
 
     var body: some View {
         let bounds = document.page(at: index)?.bounds(for: .cropBox) ?? CGRect(x: 0, y: 0, width: 8.5, height: 11)

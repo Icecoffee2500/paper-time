@@ -61,10 +61,10 @@ private struct PaperInspectorForm: View {
 
                 // Before anything else: what is this? A form that asks a car
                 // manual for its journal is a form that makes the reader
-                // wrong, so the question comes before the fields it decides.
-                if paper.meta.kindIsUnanswered {
-                    kindQuestion(for: paper)
-                }
+                // wrong, so the question comes before the fields it decides —
+                // and stays afterwards, because the wrong button is pressed
+                // sometimes and an answer with no way back is a trap.
+                kindQuestion(for: paper)
 
                 let kind = paper.meta.effectiveKind
                 if kind == .paper, paper.meta.confidence == .needsReview, !paper.meta.candidates.isEmpty {
@@ -148,45 +148,49 @@ private struct PaperInspectorForm: View {
     /// quietly acted on.
     @ViewBuilder
     private func kindQuestion(for paper: LoadedPaper) -> some View {
+        let answered = !paper.meta.kindIsUnanswered
         Section {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(L("이 PDF는 무엇인가요?", "What is this PDF?"))
-                    .font(.headline)
-                Text(hint(for: paper.meta.guessedKind))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                HStack(spacing: 8) {
-                    kindButton(.paper, L("논문", "A paper"), "text.document", paper: paper)
-                    kindButton(.document, L("일반 문서", "A document"), "doc", paper: paper)
+            VStack(alignment: .leading, spacing: 8) {
+                Text(answered
+                     ? L("이 PDF는", "This PDF is")
+                     : L("이 PDF는 무엇인가요?", "What is this PDF?"))
+                    .font(answered ? .subheadline.weight(.medium) : .headline)
+                Picker("", selection: kindBinding(for: paper)) {
+                    Text(L("논문", "A paper")).tag(DocumentKind.paper)
+                    Text(L("일반 문서", "A document")).tag(DocumentKind.document)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                if !answered {
+                    Text(hint(for: paper.meta.guessedKind))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
             .padding(.vertical, 4)
         }
     }
 
-    private func kindButton(
-        _ kind: DocumentKind, _ title: String, _ symbol: String, paper: LoadedPaper
-    ) -> some View {
-        Button {
-            Task { await model.setKind(kind, for: paper.id) }
-        } label: {
-            Label(title, systemImage: symbol)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 3)
-        }
-        .buttonStyle(.bordered)
-        .buttonBorderShape(.capsule)
-        .tint(paper.meta.guessedKind == kind ? Color.accentColor : nil)
+    /// The answer, and the way back from it.
+    ///
+    /// Before there is an answer the control still shows the app's guess, so
+    /// pressing the one already marked is an answer too — "yes, that one" —
+    /// rather than a press that appears to do nothing.
+    private func kindBinding(for paper: LoadedPaper) -> Binding<DocumentKind> {
+        Binding(
+            get: { paper.meta.effectiveKind },
+            set: { kind in Task { await model.setKind(kind, for: paper.id) } }
+        )
     }
 
     private func hint(for guess: DocumentKind?) -> String {
         switch guess {
         case .paper:
-            L("논문 같아요 — 안에 DOI나 참고문헌이 보여요. 논문이면 서지를 채워 드려요.",
-              "It looks like a paper — there is a DOI or a reference list in it. Say so and the details get filled in.")
+            L("논문 같아요 — 안에 DOI나 참고문헌이 보여요. 맞으면 그대로 눌러주세요.",
+              "It looks like a paper — there is a DOI or a reference list in it. Press it again to agree.")
         case .document:
             L("논문은 아닌 것 같아요. 일반 문서면 학술지 같은 칸은 숨길게요.",
-              "It doesn't look like a paper. Say it's a document and the journal fields go away.")
+              "It doesn't look like a paper. As a document, the journal fields go away.")
         case nil:
             L("고르면 이 칸들이 그에 맞게 바뀌어요.", "The fields below follow your answer.")
         }

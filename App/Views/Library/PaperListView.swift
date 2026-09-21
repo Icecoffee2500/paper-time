@@ -515,7 +515,15 @@ struct PaperRow: View, Equatable {
 
     private func statusButton(_ paper: LoadedPaper) -> some View {
         Menu {
-            Picker(L("읽기 상태", "Reading Status"), selection: statusBinding(paper)) {
+            // The same answer the inspector asks for, where a handful of rows can
+        // be corrected one after another without going to the inspector for
+        // each — which is what a wrongly answered import feels like.
+        Picker(L("종류", "Kind"), selection: kindBinding(paper)) {
+            Label(L("논문", "Paper"), systemImage: "text.document").tag(DocumentKind.paper)
+            Label(L("일반 문서", "Document"), systemImage: "doc").tag(DocumentKind.document)
+        }
+
+        Picker(L("읽기 상태", "Reading Status"), selection: statusBinding(paper)) {
                 ForEach(PaperState.ReadingStatus.allCases, id: \.self) { status in
                     Label(label(for: status), systemImage: status.symbolName)
                         .tag(status)
@@ -532,6 +540,13 @@ struct PaperRow: View, Equatable {
         .fixedSize()
         .help(L("읽기 상태: \(label(for: paper.state.readingStatus))", "Reading status: \(label(for: paper.state.readingStatus))"))
         .accessibilityLabel(L("읽기 상태: \(label(for: paper.state.readingStatus))", "Reading status: \(label(for: paper.state.readingStatus))"))
+    }
+
+    private func kindBinding(_ paper: LoadedPaper) -> Binding<DocumentKind> {
+        Binding(
+            get: { paper.meta.effectiveKind },
+            set: { kind in Task { await model.setKind(kind, for: paper.id) } }
+        )
     }
 
     private func statusBinding(_ paper: LoadedPaper) -> Binding<PaperState.ReadingStatus> {
