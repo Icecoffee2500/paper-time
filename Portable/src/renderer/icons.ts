@@ -386,6 +386,29 @@ export function icon(name: IconName, extra = ''): string {
     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${shape}</svg>`
 }
 
+/**
+ * The same icon as an element, drawn once and copied after that.
+ *
+ * Setting `innerHTML` runs the HTML parser, and a list of sixty papers with
+ * four icons on every row ran it two hundred and forty times — for markup
+ * that never changes. The first ask parses; every ask after that clones a
+ * node, which the browser does without parsing anything.
+ */
+const drawn = new Map<string, SVGElement>()
+
+export function iconNode(name: IconName): SVGElement | null {
+  const known = drawn.get(name)
+  if (known) return known.cloneNode(true) as SVGElement
+  const markup = icon(name)
+  if (!markup) return null
+  const holder = document.createElement('div')
+  holder.innerHTML = markup
+  const node = holder.firstElementChild as SVGElement | null
+  if (!node) return null
+  drawn.set(name, node)
+  return node.cloneNode(true) as SVGElement
+}
+
 export function hasIcon(name: string): boolean {
   return name in SHAPES
 }

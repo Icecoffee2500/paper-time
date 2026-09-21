@@ -140,7 +140,7 @@ struct DockZoneOverlay: View {
                     )
                     .frame(width: rect.width, height: rect.height)
                     .position(x: rect.midX, y: rect.midY)
-                    .animation(.snappy(duration: 0.15), value: zone)
+                    .animation(Motion.tap, value: zone)
             }
         }
         .allowsHitTesting(false)

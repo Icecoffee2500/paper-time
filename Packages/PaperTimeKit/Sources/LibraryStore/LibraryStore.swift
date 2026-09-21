@@ -322,8 +322,41 @@ public actor LibraryStore {
     }
 
     /// Moves the notes of the one-note-per-paper days into the box.
+    /// Whether the notes have already been moved in, this run.
+    private var notesAreMoved = false
+
+    /// And the same answer across runs: a mark left in the folder's own
+    /// support directory once the move is done.
+    ///
+    /// It is the folder that is migrated, not the machine, so the mark
+    /// belongs beside the folder and travels with it — and deleting it costs
+    /// nothing but one more pass that finds nothing.
+    private var notesMovedMark: URL {
+        LibraryLayout.supportDirectoryURL(inLibrary: root).appending(path: "notes-moved")
+    }
+
+    /// Moves notes written before the slip-box existed — one file per paper —
+    /// into it, keeping the paper each was written against.
+    ///
+    /// Once. This used to run on every read of the notes, and a read of the
+    /// notes happens on every refresh: for each of the library's papers it
+    /// asked whether a file was there, listed a directory that was not, and
+    /// tried to remove it. Eighty papers in a cloud folder made that some two
+    /// hundred and forty round trips to answer "nothing to do" — four hundred
+    /// milliseconds of every launch, and the same again whenever the folder
+    /// changed.
     private func migrateNotesIntoSlipBox() {
+        if notesAreMoved { return }
         let manager = FileManager.default
+        if manager.fileExists(atPath: notesMovedMark.path(percentEncoded: false)) {
+            notesAreMoved = true
+            return
+        }
+        defer {
+            notesAreMoved = true
+            try? FileOperations.ensureDirectory(at: LibraryLayout.supportDirectoryURL(inLibrary: root))
+            try? Data().write(to: notesMovedMark)
+        }
         let recordsDirectory = LibraryLayout.recordsDirectoryURL(inLibrary: root)
         guard let records = try? FileOperations.visibleContents(of: recordsDirectory) else { return }
 

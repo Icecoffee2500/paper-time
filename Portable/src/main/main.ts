@@ -12,7 +12,7 @@ import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 import { CHANNEL, type LibrarySnapshot } from '../shared/api.js'
-import { Library, deviceIdentity, readJSON, writeJSON } from './library.js'
+import { Library, claimedBy, deviceIdentity, readJSON, writeJSON } from './library.js'
 import * as L from './layout.js'
 import { PaperMeta, PaperState, type Collection, type Tag } from '../shared/model.js'
 import { DEFAULT_EXPORT, formatBibliography } from '../shared/bibtex.js'
@@ -237,9 +237,18 @@ async function snapshot(): Promise<LibrarySnapshot | { error: string }> {
     const rows: LibrarySnapshot['papers'] = []
     let loose = 0
     ownerByID.clear()
-    for (const one of allLibraries()) {
-      for (const row of await one.papers()) {
-        ownerByID.set(row.id, one)
+    // Every folder at once, and each folder's loose PDFs worked out from the
+    // records just read rather than by reading them all again. One of the
+    // folders is often on a cloud drive that has to wake up, and it used to
+    // hold up the ones on this machine.
+    const folders = allLibraries()
+    const read = await Promise.all(folders.map(async (one) => {
+      const papers = await one.papers()
+      return { one, papers, loose: (await one.unclaimedFiles(claimedBy(papers))).length }
+    }))
+    for (const folder of read) {
+      for (const row of folder.papers) {
+        ownerByID.set(row.id, folder.one)
         rows.push({
           id: row.id,
           meta: row.meta,
@@ -247,10 +256,10 @@ async function snapshot(): Promise<LibrarySnapshot | { error: string }> {
           exists: row.exists,
           // Which folder it came from: the sidebar groups by this, and
           // nothing else needs to know.
-          root: one.root,
+          root: folder.one.root,
         })
       }
-      loose += (await one.looseFiles()).length
+      loose += folder.loose
     }
     await settleVocabulary(rows)
     const { tags, collections } = await vocabulary()
@@ -341,13 +350,16 @@ async function openLibrary(root: string) {
   stopWatching?.()
   library = await Library.open(root)
   if (!isProbeLibrary()) rememberLibrary(root)
-  extraLibraries = []
-  for (const extra of settings().extraRoots ?? []) {
-    if (extra === root) continue
+  // All of them at once, and in the order they were remembered whatever
+  // order they answer in: that order is the sidebar's list of libraries, and
+  // a folder on a cloud drive that has to wake up should not hold up a folder
+  // on this machine.
+  const extras = (settings().extraRoots ?? []).filter((extra) => extra !== root)
+  extraLibraries = (await Promise.all(extras.map(async (extra) => {
     // A folder on a disk that is not plugged in is not an error worth
     // stopping the library for; it comes back when the disk does.
-    try { extraLibraries.push(await Library.open(extra)) } catch { /* left out */ }
-  }
+    try { return await Library.open(extra) } catch { return null }
+  }))).filter((one): one is Library => one !== null)
   startWatchingFolders()
   return snapshot()
 }

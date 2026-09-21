@@ -292,7 +292,7 @@ export class Reader {
       // Ctrl or ⌘ with the wheel is zoom everywhere else; it should be here.
       if (!(event.ctrlKey || event.metaKey)) return
       event.preventDefault()
-      this.zoomBy(event.deltaY < 0 ? 1.1 : 1 / 1.1)
+      this.zoomBy(event.deltaY < 0 ? 1.1 : 1 / 1.1, { soon: true })
     })
     // A click on something drawn — a shape, a card, a stroke — takes the
     // pencil out by itself and goes straight to selecting it, so what was
@@ -589,9 +589,10 @@ export class Reader {
     this.updateFooter()
   }
 
-  zoomBy(factor: number) {
+  zoomBy(factor: number, options: { soon?: boolean } = {}) {
     this.state.zoom = Math.max(0.35, Math.min(this.state.zoom * factor, 6))
-    this.relayout()
+    if (options.soon) this.relayoutSoon()
+    else this.relayout()
     this.update()
   }
 
@@ -599,6 +600,24 @@ export class Reader {
     this.state.zoom = zoom
     this.relayout()
     this.update()
+  }
+
+  /**
+   * Lays the pages out at the next frame rather than at once.
+   *
+   * A pinch on a trackpad arrives as a stream of wheel events — a hundred a
+   * second — and each one was resizing every page in the paper and then
+   * measuring them all. The pages can only be drawn once a frame anyway, so
+   * the ones in between were work nobody ever saw.
+   */
+  private relayoutFrame = 0
+
+  relayoutSoon() {
+    if (this.relayoutFrame) return
+    this.relayoutFrame = requestAnimationFrame(() => {
+      this.relayoutFrame = 0
+      this.relayout()
+    })
   }
 
   private watchVisibility() {

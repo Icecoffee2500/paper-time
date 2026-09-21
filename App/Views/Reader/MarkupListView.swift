@@ -124,7 +124,7 @@ struct MarkupListView: View {
         let isOn = filter == option
         let total = count(of: option)
         return Button {
-            withAnimation(.snappy(duration: 0.15)) { filter = option }
+            withAnimation(Motion.tap) { filter = option }
         } label: {
             HStack(spacing: 5) {
                 Text(option.label)
@@ -166,7 +166,7 @@ struct MarkupListView: View {
         Task {
             try? await Task.sleep(for: .milliseconds(1400))
             guard flashID == id else { return }
-            withAnimation(.easeOut(duration: 0.4)) { flashID = nil }
+            withAnimation(Motion.fade) { flashID = nil }
         }
     }
 
@@ -263,8 +263,8 @@ struct MarkupListView: View {
             }
             .tint(.accentColor)
         }
-        .animation(.snappy(duration: 0.18), value: editingID)
-        .animation(.easeOut(duration: 0.2), value: flashID)
+        .animation(Motion.tap, value: editingID)
+        .animation(Motion.move, value: flashID)
     }
 
     /// What a row reads as: what the reader wrote about the mark, or failing

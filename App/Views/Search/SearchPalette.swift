@@ -276,7 +276,7 @@ struct SearchPalette: View {
             .onChange(of: highlightedIndex) { _, newValue in
                 guard results.indices.contains(newValue) else { return }
                 let target = results[newValue].kind
-                withAnimation(.easeOut(duration: 0.12)) {
+                withAnimation(Motion.tap) {
                     scrollProxy.scrollTo(target, anchor: .center)
                 }
             }

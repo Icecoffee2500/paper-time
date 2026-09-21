@@ -21,7 +21,7 @@ private struct SearchPaletteModifier: ViewModifier {
                         .zIndex(1)
                 }
             }
-            .animation(.snappy(duration: 0.18), value: isPresented)
+            .animation(Motion.tap, value: isPresented)
     }
 }
 

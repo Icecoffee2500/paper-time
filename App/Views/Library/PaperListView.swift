@@ -129,15 +129,21 @@ struct PaperListView: View {
                     }
                 }
                 Section {
+                // Once for the list, not once for every row in it: the
+                // setting is a string that has to be taken apart, and taking
+                // it apart sixty times to draw sixty rows is sixty times the
+                // work for one answer.
+                let fields = SubtitleField.parse(app.settings.listSubtitleFields)
+                let onOpenShelf = model.scope == .open
                 ForEach(model.visiblePapers) { paper in
                     PaperRow(
                         paper: paper,
                         tags: paper.meta.tagIDs.compactMap { model.tag(for: $0) },
                         attachmentCount: model.attachmentCount(of: paper.id),
                         isResolving: model.resolving.contains(paper.id),
-                        subtitleFields: SubtitleField.parse(app.settings.listSubtitleFields),
+                        subtitleFields: fields,
                         model: model,
-                        onOpenShelf: model.scope == .open,
+                        onOpenShelf: onOpenShelf,
                         isKeptOpen: model.isPinned(paper.id)
                     )
                     .tag(paper.id)
@@ -300,7 +306,7 @@ struct PaperListView: View {
         // Carried down by the pull rather than pinned to the edge, so it
         // reads as something the gesture is uncovering.
         .offset(y: max(0, pull * 0.34) + 4)
-        .animation(.snappy(duration: 0.14), value: armed)
+        .animation(Motion.tap, value: armed)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }

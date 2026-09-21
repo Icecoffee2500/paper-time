@@ -88,8 +88,23 @@ public final class NotesModel {
     public func load() async {
         var loaded: [Zettel] = []
         var homes: [String: URL] = [:]
-        for box in boxes {
-            for note in await box.loadNotes() {
+        // Every box at once. Most of them are folders in a cloud drive, and
+        // asking one after another meant waiting for each in turn to answer
+        // what is usually "nothing new".
+        let read = await Trace.time("notes: read \(boxes.count) box(es)") {
+            await withTaskGroup(of: (Int, [Zettel]).self) { group in
+                for (position, box) in boxes.enumerated() {
+                    group.addTask { (position, await box.loadNotes()) }
+                }
+                var found = [[Zettel]](repeating: [], count: boxes.count)
+                for await (position, notes) in group { found[position] = notes }
+                return found
+            }
+        }
+        // In the order the boxes are kept, so which box owns a note that is
+        // in two of them does not depend on which answered first.
+        for (box, notes) in zip(boxes, read) {
+            for note in notes {
                 // Two boxes cannot both own a note. The first one keeps it
                 // and the second copy is left alone rather than deleted —
                 // nobody's writing is thrown away to tidy an index.
@@ -99,8 +114,8 @@ public final class NotesModel {
             }
         }
         boxByNote = homes
-        apply(loaded)
-        await settle()
+        Trace.time("notes: index \(loaded.count)") { apply(loaded) }
+        await Trace.time("notes: settle") { await settle() }
     }
 
     /// Puts each note in the box it belongs to: the folder of the paper it is

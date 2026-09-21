@@ -46,6 +46,24 @@
   /* The rack: its buttons sit this far inside its edge. */
   --rack-inset: 5px;
 
+  /*
+   * One set of speeds for the whole window — the Mac's `Motion` ladder, and
+   * the same four rungs. Movement reads as one app's movement only when the
+   * same size of change takes the same time everywhere, so the rung is chosen
+   * by how much of the window moves: a control answering the pointer, then
+   * something inside a panel, then a whole surface arriving. The last is for
+   * something going out on its own, unwatched.
+   *
+   * One curve for the first three, because a curve is a voice: the spring
+   * SwiftUI calls `snappy`, written out as a bezier — it arrives fast and
+   * settles without wobbling.
+   */
+  --motion-tap: 140ms;
+  --motion-move: 220ms;
+  --motion-surface: 320ms;
+  --motion-fade: 400ms;
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+
   --font: 'Pretendard Variable', Pretendard, -apple-system, 'Segoe UI', system-ui, sans-serif;
   --mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'DejaVu Sans Mono', monospace;
 
@@ -216,7 +234,9 @@ body[data-platform='darwin'] .toolbar {
   justify-content: center;
   color: var(--text-secondary);
   -webkit-app-region: no-drag;
-  transition: background-color 90ms ease, color 90ms ease;
+  transition:
+    background-color var(--motion-tap) var(--ease),
+    color var(--motion-tap) var(--ease);
 }
 
 .icon-button:hover {
@@ -336,6 +356,19 @@ body[data-platform='darwin'] .window-buttons {
   min-height: 0;
 }
 
+/* A pane opened with its key comes in rather than being there suddenly. Only
+   the new one: the others were already on screen and must not move. */
+.panel.pane-arriving {
+  animation: pane-in var(--motion-surface) var(--ease);
+}
+
+@keyframes pane-in {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
+
 .panel-header {
   flex: 0 0 auto;
   height: 38px;
@@ -372,7 +405,7 @@ body[data-platform='darwin'] .window-buttons {
   inset: 40% 4px;
   border-radius: 1px;
   background: transparent;
-  transition: background-color 120ms ease;
+  transition: background-color var(--motion-tap) var(--ease);
 }
 
 .divider:hover::after,
@@ -381,6 +414,23 @@ body[data-platform='darwin'] .window-buttons {
 }
 
 /* ------------------------------------------------------------------ sidebar */
+
+/* Asked for less movement, the window still changes — nothing should appear
+   out of nowhere — but nothing travels, and what is left is short. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-tap: 90ms;
+    --motion-move: 110ms;
+    --motion-surface: 140ms;
+    --motion-fade: 200ms;
+    --ease: ease-out;
+  }
+
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
 
 .sidebar-section {
   padding: 6px 8px 2px;
@@ -400,6 +450,9 @@ body[data-platform='darwin'] .window-buttons {
   font-size: 13px;
   color: var(--text);
   line-height: 1.25;
+  transition:
+    background-color var(--motion-tap) var(--ease),
+    color var(--motion-tap) var(--ease);
 }
 
 .row:hover {
@@ -424,6 +477,7 @@ body[data-platform='darwin'] .window-buttons {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  transition: color var(--motion-tap) var(--ease);
 }
 
 .row-icon svg {
@@ -459,6 +513,7 @@ body[data-platform='darwin'] .window-buttons {
   border-radius: calc(var(--radius-row) - 3px);
   padding: 1px 6px;
   font-weight: 500;
+  transition: background-color var(--motion-tap) var(--ease);
 }
 
 /* On the row you are on, the row is already wearing the pale accent; the
@@ -476,6 +531,9 @@ body[data-platform='darwin'] .window-buttons {
   margin: 2px 8px;
   padding: 9px 10px;
   border-radius: var(--radius-row);
+  transition:
+    background-color var(--motion-tap) var(--ease),
+    box-shadow var(--motion-tap) var(--ease);
 }
 
 .paper-row:hover {
@@ -491,6 +549,11 @@ body[data-platform='darwin'] .window-buttons {
   flex: 0 0 auto;
   margin-top: 1px;
   color: var(--text-tertiary);
+  transition: color var(--motion-tap) var(--ease), transform var(--motion-tap) var(--ease);
+}
+
+.paper-status:active {
+  transform: scale(0.86);
 }
 
 .paper-status svg {
@@ -528,6 +591,15 @@ body[data-platform='darwin'] .window-buttons {
   flex: 0 0 auto;
   color: var(--text-tertiary);
   padding: 1px;
+  transition: color var(--motion-tap) var(--ease), transform var(--motion-tap) var(--ease);
+}
+
+/* A star or a pin answers the press itself: it lifts a little as it fills.
+   Without it the mark changed between two frames and the hand had nothing
+   telling it the press had landed. */
+.paper-star:active,
+.paper-pin:active {
+  transform: scale(0.86);
 }
 
 .paper-star svg {
@@ -783,7 +855,7 @@ body[data-platform='darwin'] .window-buttons {
   background: color-mix(in srgb, var(--panel) 94%, transparent);
   backdrop-filter: blur(20px) saturate(1.5);
   box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.08), 0 4px 16px rgba(0, 0, 0, 0.14);
-  transition: opacity 140ms ease;
+  transition: opacity var(--motion-tap) var(--ease);
 }
 
 .sketch-tool {
@@ -1335,6 +1407,12 @@ body[data-platform='darwin'] .window-buttons {
   color: #fff;
   font-size: 13px;
   font-weight: 500;
+  transition: filter var(--motion-tap) var(--ease), transform var(--motion-tap) var(--ease);
+}
+
+.filled-button:active,
+.plain-button:active {
+  transform: scale(0.97);
 }
 
 .filled-button:hover {
@@ -1346,6 +1424,7 @@ body[data-platform='darwin'] .window-buttons {
   border-radius: var(--radius-control);
   background: var(--hover);
   font-size: 12.5px;
+  transition: background-color var(--motion-tap) var(--ease), transform var(--motion-tap) var(--ease);
 }
 
 .plain-button:hover {
@@ -1361,6 +1440,18 @@ body[data-platform='darwin'] .window-buttons {
   border-radius: var(--radius-popover);
   background: var(--panel);
   box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.1), 0 8px 28px rgba(0, 0, 0, 0.2);
+  /* It arrives from the control it hangs off rather than appearing over it,
+     so the eye knows where it came from. A surface, so it takes a surface's
+     time. */
+  transform-origin: top left;
+  animation: menu-in var(--motion-surface) var(--ease);
+}
+
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
 }
 
 .menu button {
@@ -1372,6 +1463,7 @@ body[data-platform='darwin'] .window-buttons {
   padding: 5px 9px;
   border-radius: calc(var(--radius-popover) - 5px);
   font-size: 13px;
+  transition: background-color var(--motion-tap) var(--ease);
 }
 
 .menu button:hover {
@@ -1529,7 +1621,9 @@ body[data-platform='darwin'] .window-buttons {
 .fb-kinds button {
   border: 0; background: transparent; cursor: pointer; font: inherit; font-size: 13.5px;
   padding: 6px 10px; border-radius: calc(var(--radius-control) - 3px); color: var(--text-secondary);
-  transition: background 0.14s, color 0.14s;
+  transition:
+    background-color var(--motion-tap) var(--ease),
+    color var(--motion-tap) var(--ease);
 }
 .fb-kinds button.on { background: var(--accent); color: #fff; }
 .fb-scroll {
@@ -1589,7 +1683,9 @@ body[data-platform='darwin'] .window-buttons {
   background: var(--panel); color: var(--text);
   font: inherit; font-size: 13.5px; font-weight: 500;
   padding: 6px 15px; border-radius: var(--radius-control); cursor: pointer;
-  transition: background 0.14s, filter 0.14s;
+  transition:
+    background-color var(--motion-tap) var(--ease),
+    filter var(--motion-tap) var(--ease);
 }
 .fb-foot .btn:hover { background: var(--panel-soft); }
 .fb-foot .btn-primary {
@@ -1846,7 +1942,11 @@ body[data-platform='darwin'] .window-buttons {
   border-radius: var(--radius-popover);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 80%, transparent);
-  transition: left 120ms ease, top 120ms ease, width 120ms ease, height 120ms ease;
+  transition:
+    left var(--motion-move) var(--ease),
+    top var(--motion-move) var(--ease),
+    width var(--motion-move) var(--ease),
+    height var(--motion-move) var(--ease);
 }
 
 .dock-zone[data-on='true'] {

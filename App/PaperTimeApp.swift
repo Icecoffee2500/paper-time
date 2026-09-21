@@ -40,6 +40,8 @@ struct PaperTimeApp: App {
                     #endif
                     Trace.mark("window on screen")
                     Hitches.watch()
+                    // Movement follows the system's own setting for it.
+                    Motion.watch()
                     // Set now, cleared on a clean quit. Finding it still set
                     // next launch is how the app knows it died.
                     model.noteLaunch()

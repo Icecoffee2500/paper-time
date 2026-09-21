@@ -205,15 +205,39 @@ function toPaper(row: PaperRowDTO): Paper {
   }
 }
 
+/**
+ * The papers by identifier, and the two shelves as sets.
+ *
+ * All three were being walked linearly from inside loops over the library —
+ * every row in the list asked whether it was pinned and whether it was open,
+ * and the reader asked for papers by identifier on every redraw. The arrays
+ * are never mutated in place, always replaced, so holding the array a set was
+ * made from is enough to know the set is still the answer.
+ */
+let papersByID: Map<string, Paper> | null = null
+let papersIndexed: Paper[] | null = null
+let openSet: Set<string> | null = null
+let openIndexed: string[] | null = null
+let pinnedSet: Set<string> | null = null
+let pinnedIndexed: string[] | null = null
+
 export function paper(id: string | null): Paper | null {
   if (!id) return null
-  return store.papers.find((entry) => entry.id === id) ?? null
+  if (papersIndexed !== store.papers || !papersByID) {
+    papersByID = new Map(store.papers.map((entry) => [entry.id, entry]))
+    papersIndexed = store.papers
+  }
+  return papersByID.get(id) ?? null
 }
 
 // MARK: - The open shelf
 
 export function isOpenPaper(id: string): boolean {
-  return store.openPaperIDs.includes(id)
+  if (openIndexed !== store.openPaperIDs || !openSet) {
+    openSet = new Set(store.openPaperIDs)
+    openIndexed = store.openPaperIDs
+  }
+  return openSet.has(id)
 }
 
 /**
@@ -233,7 +257,11 @@ export function keepOpen(id: string, byHand = false) {
 }
 
 export function isPinned(id: string): boolean {
-  return store.pinnedPaperIDs.includes(id)
+  if (pinnedIndexed !== store.pinnedPaperIDs || !pinnedSet) {
+    pinnedSet = new Set(store.pinnedPaperIDs)
+    pinnedIndexed = store.pinnedPaperIDs
+  }
+  return pinnedSet.has(id)
 }
 
 /**
@@ -402,25 +430,40 @@ function sorted(papers: Paper[]): Paper[] {
       case 'added': default: return entry.meta.addedAt.getTime()
     }
   }
-  return [...papers].sort((a, b) => {
-    const left = key(a)
-    const right = key(b)
-    if (left === right) return a.meta.displayTitle.localeCompare(b.meta.displayTitle)
-    return (left < right ? -1 : 1) * direction
+  // Each paper's key worked out once, not once per comparison. Sorting sixty
+  // papers makes some three hundred comparisons, and every one of them was
+  // lower-casing two titles to answer a question it had answered before.
+  const keyed = papers.map((entry) => ({ entry, key: key(entry), title: entry.meta.displayTitle }))
+  keyed.sort((a, b) => {
+    if (a.key === b.key) return a.title.localeCompare(b.title)
+    return (a.key < b.key ? -1 : 1) * direction
   })
+  return keyed.map((row) => row.entry)
 }
 
-/** Every author in the library, with how many papers each one has. */
+/**
+ * Every author in the library, with how many papers each one has.
+ *
+ * Worked out when the library changes, not when the list is drawn: this walks
+ * every author of every paper and then sorts a few hundred names, and the
+ * sidebar asks for it on every redraw.
+ */
+let authorsCounted: { name: string; count: number }[] | null = null
+let authorsFor: Paper[] | null = null
+
 export function authorCounts(): { name: string; count: number }[] {
+  if (authorsFor === store.papers && authorsCounted) return authorsCounted
   const counts = new Map<string, number>()
   for (const entry of store.papers) {
     for (const name of authorsOf(entry)) {
       counts.set(name, (counts.get(name) ?? 0) + 1)
     }
   }
-  return [...counts.entries()]
+  authorsCounted = [...counts.entries()]
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => a.name.localeCompare(b.name))
+  authorsFor = store.papers
+  return authorsCounted
 }
 
 export const STROKE_COLORS = SketchColor.strokes

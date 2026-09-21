@@ -166,7 +166,7 @@ struct PageTurnZone: View {
         .buttonStyle(.plain)
         .frame(width: 64)
         .onHover { isHovering = $0 }
-        .animation(.snappy(duration: 0.18), value: isHovering)
+        .animation(Motion.tap, value: isHovering)
         .accessibilityLabel(edge == .leading ? L("이전 쪽", "Previous Page") : L("다음 쪽", "Next Page"))
     }
 }

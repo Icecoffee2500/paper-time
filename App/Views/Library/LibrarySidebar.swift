@@ -106,8 +106,8 @@ struct LibrarySidebar: View {
         .padding(.top, 1)
         .padding(.trailing, 1)
         .opacity(dismissShown ? 1 : 0)
-        .animation(.easeOut(duration: 0.12), value: dismissShown)
-        .animation(.easeOut(duration: 0.1), value: hoveringDismiss)
+        .animation(Motion.tap, value: dismissShown)
+        .animation(Motion.tap, value: hoveringDismiss)
         .accessibilityLabel(L("찾기 끝내기", "Clear Search"))
         .help(L("찾기 끝내기", "Clear Search"))
     }
@@ -355,7 +355,7 @@ struct LibrarySidebar: View {
                 }
                 if ranking.count > 10 {
                     Button(showsAllAuthors ? L("줄이기", "Show Fewer") : L("\(ranking.count)명 모두 보기", "Show All \(ranking.count)")) {
-                        withAnimation(.snappy(duration: 0.2)) { showsAllAuthors.toggle() }
+                        withAnimation(Motion.move) { showsAllAuthors.toggle() }
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
@@ -546,7 +546,7 @@ private struct ScopeRow: ViewModifier {
             .onTapGesture {
                 // Animated, so the lit shape travels from the row you were on
                 // to this one rather than blinking out and in somewhere else.
-                withAnimation(.smooth(duration: 0.32)) { model.scope = scope }
+                withAnimation(Motion.surface) { model.scope = scope }
                 // On the iPad the list is the split view's first column and
                 // the shelves came from a panel, which has done its job —
                 // but not before the glass has been seen arriving. A panel

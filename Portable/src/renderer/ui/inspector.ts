@@ -37,6 +37,8 @@ export function buildInspector(actions: InspectorActions): { node: HTMLElement; 
   // Built once and kept: it redraws itself when the selection on the page
   // changes, and rebuilding it from here would lose a field being typed in.
   const tools = buildSketchInspector({ changed: actions.sketchChanged })
+  /** Whose record is on screen, so a redraw knows whether it is the same one. */
+  let shownPaperID: string | null = null
 
   function update() {
     if (store.settings.inspectorTab === 'tools') {
@@ -47,6 +49,17 @@ export function buildInspector(actions: InspectorActions): { node: HTMLElement; 
       tools.update()
       return
     }
+    // Not while somebody is typing in it. The record is rebuilt whenever
+    // anything about the library changes — a star pressed on another row is
+    // enough — and rebuilding it takes the field out of the window with the
+    // half-written title still in it.
+    const typing = document.activeElement
+    if (typing instanceof HTMLElement && body.contains(typing)
+      && (typing.tagName === 'INPUT' || typing.tagName === 'TEXTAREA' || typing.isContentEditable)
+      && shownPaperID === store.selectedID) {
+      return
+    }
+    shownPaperID = store.selectedID
     clear(body)
     const paper = store.papers.find((entry) => entry.id === store.selectedID)
     if (!paper) {

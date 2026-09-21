@@ -673,6 +673,9 @@ root.append(toolbar.node, panes)
 
 // ------------------------------------------------------- laying out the panes
 
+/** Which panes were on screen last time, so only a new one is seen arriving. */
+let panesShown = new Set<Pane>()
+
 function layoutPanes() {
   clear(panes)
   if (solo) {
@@ -690,6 +693,12 @@ function layoutPanes() {
     pieces.push({ pane: 'inspector', node: inspector.node, width: store.settings.columns.inspector, resizes: 'trailing' })
   }
 
+  // A pane that was not here a moment ago comes in; the ones that were stay
+  // put. Laying them out re-appends every pane, so without this the whole
+  // window flinched whenever one of them was opened.
+  const arriving = new Set(pieces.map((piece) => piece.pane).filter((pane) => !panesShown.has(pane)))
+  panesShown = new Set(pieces.map((piece) => piece.pane))
+
   pieces.forEach((piece, index) => {
     if (piece.width) {
       piece.node.style.flex = `0 0 ${piece.width}px`
@@ -698,6 +707,7 @@ function layoutPanes() {
       piece.node.style.flex = '1 1 auto'
       piece.node.style.width = ''
     }
+    piece.node.classList.toggle('pane-arriving', arriving.has(piece.pane))
     panes.append(piece.node)
     const next = pieces[index + 1]
     if (!next) return
@@ -724,14 +734,28 @@ function divider(pane: 'sidebar' | 'paperList' | 'inspector', inverted: boolean)
     node.classList.add('dragging')
     const startX = event.clientX
     const startWidth = store.settings.columns[pane]
+    // One column gets wider; nothing else about the window changes. Every
+    // move used to lay out all four panes again — which took the divider
+    // being dragged out of the window and put a new one in its place, and
+    // relaid out every page of the paper — sixty times a second.
+    let frame = 0
+    const settle = () => {
+      frame = 0
+      const column = paneNode(pane)
+      const width = store.settings.columns[pane]
+      column.style.flex = `0 0 ${width}px`
+      column.style.width = `${width}px`
+      relayoutReaders()
+    }
     const move = (moved: PointerEvent) => {
       const travel = inverted ? startX - moved.clientX : moved.clientX - startX
       const widest = Math.max(320, panes.clientWidth - 300)
       store.settings.columns[pane] = Math.min(Math.max(startWidth + travel, 180), widest)
-      layoutPanes()
-      relayoutReaders()
+      if (!frame) frame = requestAnimationFrame(settle)
     }
     const up = () => {
+      if (frame) cancelAnimationFrame(frame)
+      settle()
       node.classList.remove('dragging')
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
@@ -741,6 +765,13 @@ function divider(pane: 'sidebar' | 'paperList' | 'inspector', inverted: boolean)
     window.addEventListener('pointerup', up)
   })
   return node
+}
+
+/** The panel a column's name stands for. */
+function paneNode(pane: 'sidebar' | 'paperList' | 'inspector'): HTMLElement {
+  if (pane === 'sidebar') return sidebar.node
+  if (pane === 'paperList') return paperList.node
+  return inspector.node
 }
 
 function togglePane(pane: Pane) {

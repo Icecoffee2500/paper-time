@@ -83,15 +83,28 @@ public final class LibraryModel {
     private var allStores: [LibraryStore] { [store] + extraStores }
 
     /// Which folder a paper came from, and so which store writes it.
+    /// Every open folder as (its path, its url), longest path first, so the
+    /// first prefix that matches is the answer.
+    ///
+    /// Worked out when the folders change rather than per paper: this is
+    /// asked once for every paper in the library on every read, and it used
+    /// to build two arrays and re-encode every root's path each time.
+    @ObservationIgnored private var rootPathsCache: [(path: String, url: URL)]?
+
+    private var rootPaths: [(path: String, url: URL)] {
+        if let rootPathsCache { return rootPathsCache }
+        let made = sources
+            .map { (path: $0.url.path(percentEncoded: false), url: $0.url) }
+            .sorted { $0.path.count > $1.path.count }
+        rootPathsCache = made
+        return made
+    }
+
     public func rootURL(of paper: LoadedPaper) -> URL {
         let path = paper.folder.url.path(percentEncoded: false)
         // The longest root that is a prefix: folders do not normally nest,
         // and when they do the inner one owns the paper.
-        return sources
-            .map(\.url)
-            .filter { path.hasPrefix($0.path(percentEncoded: false)) }
-            .max { $0.path.count < $1.path.count }
-            ?? location.url
+        return rootPaths.first { path.hasPrefix($0.path) }?.url ?? location.url
     }
 
     func store(for paper: LoadedPaper) -> LibraryStore {
@@ -124,12 +137,26 @@ public final class LibraryModel {
     /// disconnecting it later leaves it exactly as it was — which is the
     /// whole promise of a library that is a folder.
     public func addSource(_ location: LibraryLocation, store: LibraryStore) async {
-        let root = location.url
-        guard !sources.contains(where: { $0.url == root }) else { return }
-        extraSources.append(location)
-        extraStores.append(store)
+        guard attachSource(location, store: store) else { return }
         stopWatchingFolder()
         await refresh()
+    }
+
+    /// Takes a folder in without reading anything.
+    ///
+    /// For assembling the library at launch, where one read at the end serves
+    /// every folder: adding them one at a time re-read the whole library after
+    /// each, so a library of three folders read itself three times before the
+    /// window had anything in it — and the reads it threw away were the ones
+    /// that had to wait for the cloud.
+    @discardableResult
+    func attachSource(_ location: LibraryLocation, store: LibraryStore) -> Bool {
+        let root = location.url
+        guard !sources.contains(where: { $0.url == root }) else { return false }
+        extraSources.append(location)
+        extraStores.append(store)
+        rootPathsCache = nil
+        return true
     }
 
     /// Stops reading a folder. Its files and its records stay where they are.
@@ -137,6 +164,7 @@ public final class LibraryModel {
         guard let index = extraSources.firstIndex(where: { $0.url == root }) else { return }
         extraSources.remove(at: index)
         extraStores.removeAll { $0.root == root }
+        rootPathsCache = nil
         if case let .folder(current) = scope, current == root { scope = .all }
         stopWatchingFolder()
         await refresh()
@@ -191,8 +219,37 @@ public final class LibraryModel {
         public var collections: [UUID: Int] = [:]
         public var tags: [UUID: Int] = [:]
     }
-    public private(set) var manifest: LibraryManifest
-    public private(set) var collections = CollectionSet()
+    public private(set) var manifest: LibraryManifest {
+        didSet { tagByIDCache = nil }
+    }
+    public private(set) var collections = CollectionSet() {
+        didSet { collectionByIDCache = nil }
+    }
+
+    /// The tags and the collections by identifier.
+    ///
+    /// Both lists are short and both were being scanned linearly from inside
+    /// loops over the library: every row in the list looked up each of its
+    /// tags, and counting the collections looked up the collection once per
+    /// paper per collection.
+    @ObservationIgnored private var tagByIDCache: [UUID: Tag]?
+    @ObservationIgnored private var collectionByIDCache: [UUID: Collection]?
+
+    private var tagByID: [UUID: Tag] {
+        if let tagByIDCache { return tagByIDCache }
+        let made = Dictionary(manifest.tags.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        tagByIDCache = made
+        return made
+    }
+
+    private var collectionByID: [UUID: Collection] {
+        if let collectionByIDCache { return collectionByIDCache }
+        let made = Dictionary(
+            collections.collections.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }
+        )
+        collectionByIDCache = made
+        return made
+    }
     public private(set) var loadFailures: [String] = []
     public private(set) var isScanning = false
     /// PDFs sitting in the library folder that are not part of a paper yet.
@@ -385,24 +442,52 @@ public final class LibraryModel {
         isScanning = true
         defer { isScanning = false }
 
-        var loaded: [LoadedPaper] = []
-        var failures: [String] = []
-        var loose: [URL] = []
-        for source in allStores {
-            let result = try? await source.loadAll()
-            loaded += result?.papers ?? []
-            failures += (result?.failures ?? []).map {
-                "\($0.0.lastPathComponent): \($0.1.localizedDescription)"
+        let stores = allStores
+        // All the folders at once. They are different disks as often as not —
+        // one on a cloud drive that has to wake up should not hold up the one
+        // on this machine, and read one after another the slowest folder set
+        // the time for all of them.
+        var gathered = [(papers: [LoadedPaper], failures: [String], loose: [URL])](
+            repeating: ([], [], []), count: stores.count
+        )
+        await Trace.time("library: read \(stores.count) folder(s)") {
+            await withTaskGroup(of: (Int, [LoadedPaper], [String], [URL]).self) { group in
+                for (position, source) in stores.enumerated() {
+                    group.addTask {
+                        let result = try? await source.loadAll()
+                        let papers = result?.papers ?? []
+                        let failures = (result?.failures ?? []).map {
+                            "\($0.0.lastPathComponent): \($0.1.localizedDescription)"
+                        }
+                        // The records have just been read, and each one says
+                        // which PDF it claims. Asking the folder for its loose
+                        // documents used to read every record again from disk
+                        // to work that out — the whole library decoded twice
+                        // for one refresh, on a folder that may be in the
+                        // cloud.
+                        let claimed = Set(papers.map(\.meta.file.relativePath))
+                        let loose = await source.unclaimedDocumentURLs(claiming: claimed)
+                        return (position, papers, failures, loose)
+                    }
+                }
+                // By position, so the first folder's papers stay first however
+                // the reads finish.
+                for await (position, papers, failures, loose) in group {
+                    gathered[position] = (papers, failures, loose)
+                }
             }
-            loose += await source.looseDocumentURLs()
         }
-        papers = loaded
-        loadFailures = failures
-        await loadVocabulary()
-        rebuildDerivedIndexes()
-        looseDocuments = loose
-        notes.read(folders: allStores, of: { [weak self] id in self?.folder(ofPaper: id) })
-        await notes.load()
+
+        loadFailures = gathered.flatMap(\.failures)
+        looseDocuments = gathered.flatMap(\.loose)
+        // The vocabulary before the papers: setting `papers` rebuilds the
+        // derived indexes, and the collection counts are counted against the
+        // collections. Loaded the other way round they were built once
+        // against the old vocabulary and once again against the new one.
+        await Trace.time("library: read the vocabulary") { await loadVocabulary() }
+        papers = gathered.flatMap(\.papers)
+        notes.read(folders: stores, of: { [weak self] id in self?.folder(ofPaper: id) })
+        await Trace.time("library: read the notes") { await notes.load() }
         await settleVocabulary()
         startWatchingFolder()
     }
@@ -525,6 +610,10 @@ public final class LibraryModel {
     // MARK: - Derived indexes
 
     private func rebuildDerivedIndexes() {
+        Trace.time("library: index \(papers.count) papers") { rebuildDerivedIndexesNow() }
+    }
+
+    private func rebuildDerivedIndexesNow() {
         visibleCache = nil
         var index: [UUID: Int] = [:]
         index.reserveCapacity(papers.count)
@@ -557,11 +646,14 @@ public final class LibraryModel {
         }
 
         // Smart collections are a rule over the whole library, so they are
-        // counted by asking the rule rather than by reading memberships.
+        // counted by asking the rule rather than by reading memberships. The
+        // collection itself, not its identifier: looking it up by identifier
+        // scanned the collections once per paper per collection, and building
+        // an array to take the count of it allocated one per collection.
         for collection in collections.collections {
-            counts.collections[collection.id] = papers.filter {
-                $0.meta.parentID == nil && matchesCollection(collection.id, paper: $0)
-            }.count
+            counts.collections[collection.id] = papers.count {
+                $0.meta.parentID == nil && matches(collection, paper: $0)
+            }
         }
 
         indexByID = index
@@ -675,14 +767,14 @@ public final class LibraryModel {
         guard !trimmed.isEmpty else { return }
         searchQuery = trimmed
         invalidateVisibleCache()
-        withAnimation(.snappy(duration: 0.2)) { scope = .searchResults }
+        withAnimation(Motion.move) { scope = .searchResults }
     }
 
     public func clearSearchResults() {
         searchQuery = ""
         invalidateVisibleCache()
         if scope == .searchResults {
-            withAnimation(.snappy(duration: 0.2)) { scope = .all }
+            withAnimation(Motion.move) { scope = .all }
         }
     }
 
@@ -820,9 +912,7 @@ public final class LibraryModel {
             }
     }
 
-    public func tag(for id: UUID) -> Tag? {
-        manifest.tags.first { $0.id == id }
-    }
+    public func tag(for id: UUID) -> Tag? { tagByID[id] }
 
     private func matchesScope(_ paper: LoadedPaper) -> Bool {
         switch scope {
@@ -847,10 +937,14 @@ public final class LibraryModel {
     }
 
     private func matchesCollection(_ id: UUID, paper: LoadedPaper) -> Bool {
-        guard let collection = collections.collections.first(where: { $0.id == id }) else {
-            return false
+        guard let collection = collectionByID[id] else { return false }
+        return matches(collection, paper: paper)
+    }
+
+    private func matches(_ collection: Collection, paper: LoadedPaper) -> Bool {
+        guard let rule = collection.rule else {
+            return paper.meta.collectionIDs.contains(collection.id)
         }
-        guard let rule = collection.rule else { return paper.meta.collectionIDs.contains(id) }
         return SmartRuleEvaluator.matches(rule, paper: paper, tags: manifest.tags)
     }
 
@@ -1238,9 +1332,20 @@ public final class LibraryModel {
     private func loadVocabulary() async {
         var readManifests: [URL: LibraryManifest] = [:]
         var readCollections: [URL: CollectionSet] = [:]
-        for source in allStores {
-            readManifests[source.root] = try? await source.loadManifest()
-            readCollections[source.root] = try? await source.loadCollections()
+        // Two small files per folder, and every folder at once, for the same
+        // reason the records are read that way.
+        await withTaskGroup(of: (URL, LibraryManifest?, CollectionSet?).self) { group in
+            for source in allStores {
+                group.addTask {
+                    async let manifest = try? await source.loadManifest()
+                    async let collections = try? await source.loadCollections()
+                    return await (source.root, manifest, collections)
+                }
+            }
+            for await (root, manifest, collections) in group {
+                readManifests[root] = manifest
+                readCollections[root] = collections
+            }
         }
         manifests = readManifests
         collectionSets = readCollections
@@ -1283,14 +1388,20 @@ public final class LibraryModel {
     /// paper was not. Both are mended by the same pass, which runs on every
     /// read and does nothing at all once every folder has what it needs.
     private func settleVocabulary() async {
+        // Sorted into folders in one pass. Asking each paper which folder it
+        // belongs to once per folder walked the whole library as many times
+        // as there are folders, and `rootURL(of:)` is not free — it compares
+        // the paper's path against every root.
+        var byRoot: [URL: (tags: [UUID], collections: [UUID])] = [:]
+        for paper in papers {
+            var mine = byRoot[rootURL(of: paper)] ?? ([], [])
+            mine.tags += paper.meta.tagIDs
+            mine.collections += paper.meta.collectionIDs
+            byRoot[rootURL(of: paper)] = mine
+        }
         for source in allStores {
-            let mine = papers.filter { rootURL(of: $0) == source.root }
-            guard !mine.isEmpty else { continue }
-            await define(
-                tags: mine.flatMap(\.meta.tagIDs),
-                collections: mine.flatMap(\.meta.collectionIDs),
-                in: source
-            )
+            guard let mine = byRoot[source.root] else { continue }
+            await define(tags: mine.tags, collections: mine.collections, in: source)
         }
     }
 
