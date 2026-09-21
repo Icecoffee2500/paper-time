@@ -25,8 +25,26 @@
   --margin: 8px;
   --gap: 10px;
   --toolbar-height: 48px;
-  --panel-radius: 12px;
-  --row-radius: 7px;
+
+  /*
+   * One corner curve for the whole window — the Mac's `Corner` ladder. A
+   * rounded corner reads as "the same roundness" only when its radius grows
+   * with the box it is on, so every corner here is a rung, not a number:
+   * a row in a list, a control, a bar of controls floating over the page, a
+   * small floating surface, a large one. A rounded shape nested inside
+   * another is concentric with it — inner radius = outer radius − the gap
+   * between their edges (`calc(var(--radius-bar) - var(--rack-inset))`) —
+   * because the same radius on both makes the inner one look sharper.
+   */
+  --radius-row: 8px;
+  --radius-control: 8px;
+  --radius-bar: 12px;
+  --radius-popover: 14px;
+  --radius-panel: 22px;
+  /* The window's four panes float on the ground at the bar's radius. */
+  --panel-radius: var(--radius-bar);
+  /* The rack: its buttons sit this far inside its edge. */
+  --rack-inset: 5px;
 
   --font: 'Pretendard Variable', Pretendard, -apple-system, 'Segoe UI', system-ui, sans-serif;
   --mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'DejaVu Sans Mono', monospace;
@@ -188,7 +206,7 @@ body[data-platform='darwin'] .toolbar {
 .icon-button {
   width: 28px;
   height: 26px;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -239,7 +257,7 @@ body[data-platform='darwin'] .toolbar {
   display: inline-flex;
   align-items: center;
   padding: 2px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: var(--hover);
   -webkit-app-region: no-drag;
   gap: 2px;
@@ -247,7 +265,7 @@ body[data-platform='darwin'] .toolbar {
 
 .segmented button {
   padding: 3px 11px;
-  border-radius: 6px;
+  border-radius: calc(var(--radius-control) - 2px);
   font-size: 12.5px;
   font-weight: 500;
   color: var(--text-secondary);
@@ -374,7 +392,7 @@ body[data-platform='darwin'] .window-buttons {
   gap: 9px;
   margin: 1px 8px;
   padding: 6px 8px;
-  border-radius: var(--row-radius);
+  border-radius: var(--radius-row);
   font-size: 13px;
   color: var(--text);
   line-height: 1.25;
@@ -435,7 +453,7 @@ body[data-platform='darwin'] .window-buttons {
 .library-crumb .name {
   color: var(--accent-text);
   background: var(--accent-soft);
-  border-radius: 5px;
+  border-radius: calc(var(--radius-row) - 3px);
   padding: 1px 6px;
   font-weight: 500;
   overflow: hidden;
@@ -451,7 +469,7 @@ body[data-platform='darwin'] .window-buttons {
   gap: 10px;
   margin: 2px 8px;
   padding: 9px 10px;
-  border-radius: 9px;
+  border-radius: var(--radius-row);
 }
 
 .paper-row:hover {
@@ -694,7 +712,7 @@ body[data-platform='darwin'] .window-buttons {
   width: 100%;
   background: var(--panel-soft);
   border: 1px solid var(--separator);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   padding: 5px 7px;
   font-size: 13px;
   outline: none;
@@ -727,7 +745,10 @@ body[data-platform='darwin'] .window-buttons {
 /*
  * The tool rack floats over the page rather than sitting in the toolbar: the
  * tools belong to the page you are drawing on, and reaching to the top of the
- * window for a pen breaks the line you were about to draw.
+ * window for a pen breaks the line you were about to draw. Five buttons, a
+ * chevron beside the two that are groups, a divider, undo and redo — Figma's
+ * rack, and the Mac's. The chosen tool is a filled square with a white icon,
+ * its corner concentric with the rack's.
  */
 .sketch-rack {
   position: absolute;
@@ -738,108 +759,473 @@ body[data-platform='darwin'] .window-buttons {
   display: flex;
   align-items: center;
   gap: 2px;
-  padding: 4px;
-  border-radius: 11px;
+  padding: var(--rack-inset);
+  border-radius: var(--radius-bar);
   background: color-mix(in srgb, var(--panel) 94%, transparent);
   backdrop-filter: blur(20px) saturate(1.5);
   box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.08), 0 4px 16px rgba(0, 0, 0, 0.14);
+  transition: opacity 140ms ease;
 }
 
-.sketch-rack button {
-  width: 30px;
-  height: 28px;
-  border-radius: 7px;
+.sketch-tool {
+  width: 32px;
+  height: 32px;
+  border-radius: calc(var(--radius-bar) - var(--rack-inset));
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-secondary);
-  position: relative;
+  color: var(--text);
 }
 
-.sketch-rack button:hover {
+.sketch-tool:hover {
   background: var(--hover);
 }
 
-.sketch-rack button[aria-pressed='true'] {
+.sketch-tool[aria-pressed='true'] {
   background: var(--accent);
   color: #fff;
 }
 
-.sketch-rack button svg {
-  width: 17px;
-  height: 17px;
+.sketch-tool svg {
+  width: 20px;
+  height: 20px;
+  display: block;
 }
 
-.sketch-rack .key {
-  position: absolute;
-  right: 2px;
-  bottom: 1px;
-  font-size: 8px;
-  font-weight: 700;
-  opacity: 0.5;
-  letter-spacing: 0;
+.sketch-tool-group {
+  display: inline-flex;
+  align-items: center;
 }
 
-.sketch-panel {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 30;
-  width: 168px;
-  max-height: calc(100% - 20px);
-  overflow-y: auto;
-  padding: 9px;
-  border-radius: 11px;
-  background: color-mix(in srgb, var(--panel) 94%, transparent);
-  backdrop-filter: blur(20px) saturate(1.5);
-  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.08), 0 4px 16px rgba(0, 0, 0, 0.14);
+.sketch-tool-chevron {
+  width: 14px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  border-radius: calc(var(--radius-bar) - var(--rack-inset));
 }
 
-.sketch-rack,
-.sketch-panel {
-  transition: opacity 140ms ease;
+.sketch-tool-chevron:hover {
+  background: var(--hover);
 }
 
-/* Out of the way while a gesture is in progress, so the panel never hides the
-   thing being drawn. */
-.reader-overlay[data-busy='true'] .sketch-panel {
-  opacity: 0.25;
+.sketch-tool-chevron svg {
+  width: 10px;
+  height: 10px;
+  stroke-width: 2;
 }
 
-.sketch-panel h4 {
-  margin: 7px 0 4px;
-  font-size: 10.5px;
-  font-weight: 700;
+.sketch-rack-divider {
+  width: 1px;
+  height: 18px;
+  margin: 0 5px;
+  background: var(--separator-strong);
+}
+
+/* The group's members, each with its key. */
+.sketch-tool-menu {
+  min-width: 168px;
+}
+
+.sketch-tool-menu button {
+  gap: 9px;
+}
+
+.sketch-tool-menu .menu-icon {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+}
+
+.sketch-tool-menu .menu-icon svg {
+  width: 18px;
+  height: 18px;
+  opacity: 1;
+}
+
+.sketch-tool-menu .menu-label {
+  flex: 1 1 auto;
+}
+
+.sketch-tool-menu .menu-key {
+  font-size: 11.5px;
   color: var(--text-tertiary);
-  letter-spacing: 0.02em;
+  font-weight: 500;
 }
 
-.sketch-panel h4:first-child {
-  margin-top: 0;
+.sketch-tool-menu button:hover .menu-key {
+  color: rgba(255, 255, 255, 0.75);
 }
 
-.swatches {
+.sketch-tool-menu button[aria-checked='true'] .menu-label {
+  font-weight: 600;
+}
+
+/*
+ * The Tools tab: Figma's design panel for what a reader draws, docked in the
+ * inspector column. Sections, each a caption and a few rows of numbers and
+ * small options; the option buttons and the fields are nested inside the
+ * panel's rounded surface, so their corners are the control's, less the gap.
+ */
+.sketch-inspector {
   display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  font-size: 12px;
+}
+
+.sk-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  min-height: 38px;
+}
+
+.sk-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.sk-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  padding: 2px 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.sk-name::placeholder {
+  color: var(--text-tertiary);
+  font-weight: 600;
+}
+
+.sk-body {
+  flex: 1 1 auto;
+}
+
+.sk-divider {
+  height: 1px;
+  margin: 0 12px;
+  background: var(--separator);
+}
+
+.sk-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.sk-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 16px;
+}
+
+.sk-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.sk-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sk-row.sk-tight {
+  gap: 4px;
+}
+
+.sk-row.sk-swatches,
+.sk-row.sk-aligns {
+  gap: 2px;
+}
+
+.sk-caption {
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.sk-spacer {
+  flex: 1 1 auto;
+}
+
+/* A number with its label in front, as a design tool's panel has them. */
+.sk-field {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: calc(var(--radius-control) - 3px);
+  background: var(--hover);
+}
+
+.sk-field.disabled {
+  opacity: 0.45;
+}
+
+.sk-field-label {
+  flex: 0 0 auto;
+  min-width: 12px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.sk-field.wide .sk-field-label {
+  min-width: 0;
+}
+
+.sk-field-unit {
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.sk-field input {
+  flex: 1 1 0;
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: none;
+  padding: 0;
+  text-align: right;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sk-field.mono input {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.sk-field:focus-within {
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+/* The colour well: the picker's own control, held to one width. */
+.sk-well {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: calc(var(--radius-control) - 3px);
+  background: none;
+  overflow: hidden;
+}
+
+.sk-well::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.sk-well::-webkit-color-swatch {
+  border: 0;
+  border-radius: calc(var(--radius-control) - 3px);
+  box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.15);
+}
+
+/* One of a few choices: a small square, filled and outlined when chosen. */
+.sk-option {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 22px;
+  border-radius: calc(var(--radius-control) - 2px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
+  box-shadow: 0 0 0 1px transparent;
+}
+
+.sk-option:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.sk-option[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 80%, transparent);
+}
+
+.sk-option:disabled {
+  opacity: 0.4;
+}
+
+.sk-option svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+.sk-option .sk-a {
+  font-weight: 500;
+  line-height: 1;
+}
+
+.sk-pen-dot {
+  display: block;
+  border-radius: 50%;
+  background: var(--text);
+}
+
+.sk-marker-bar {
+  display: block;
+  width: 16px;
+  border-radius: 99px;
+  background: var(--text);
+}
+
+/* A colour to pick: a dot, ringed in the accent when it is the one. */
+.sk-dot {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  padding: 3px;
+  border-radius: 50%;
+  display: inline-flex;
+}
+
+.sk-dot[aria-pressed='true'] {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.sk-dot-fill {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.15);
+}
+
+.sk-check {
+  display: inline-flex;
+  align-items: center;
   gap: 5px;
-  flex-wrap: wrap;
+  font-size: 11px;
+  white-space: nowrap;
 }
 
-.swatch {
-  width: 19px;
-  height: 19px;
-  border-radius: 6px;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
-  position: relative;
+.sk-check input {
+  margin: 0;
+  width: 13px;
+  height: 13px;
+  accent-color: var(--accent);
 }
 
-.swatch[aria-pressed='true']::after {
-  content: '';
-  position: absolute;
-  inset: -3px;
-  border-radius: 8px;
-  box-shadow: 0 0 0 2px var(--accent);
+.sk-small {
+  width: 18px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  border-radius: calc(var(--radius-control) - 4px);
 }
 
+.sk-small:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.sk-small svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 1.8;
+}
+
+.sk-link {
+  align-self: flex-start;
+  font-size: 10.5px;
+  color: var(--accent-text);
+}
+
+.sk-link:hover {
+  text-decoration: underline;
+}
+
+.sk-select {
+  width: 100%;
+  height: 22px;
+  padding: 0 6px;
+  border: 0;
+  outline: 0;
+  border-radius: calc(var(--radius-control) - 3px);
+  background: var(--hover);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+}
+
+.sk-select:focus {
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.sk-note {
+  margin: 0;
+  padding: 2px 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.sk-body > .sk-note {
+  padding: 12px;
+}
+
+.sk-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
+}
+
+.sk-action {
+  width: 24px;
+  height: 22px;
+  border-radius: calc(var(--radius-control) - 2px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+}
+
+.sk-action:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.sk-action:disabled {
+  opacity: 0.35;
+}
+
+.sk-action:disabled:hover {
+  background: none;
+}
+
+.sk-action svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* The reading-status choices in the Info tab. */
 .choices {
   display: flex;
   gap: 4px;
@@ -849,7 +1235,7 @@ body[data-platform='darwin'] .window-buttons {
   flex: 1 1 0;
   height: 24px;
   min-width: 0;
-  border-radius: 6px;
+  border-radius: calc(var(--radius-control) - 2px);
   background: var(--hover);
   color: var(--text-secondary);
   font-size: 11.5px;
@@ -874,7 +1260,7 @@ body[data-platform='darwin'] .window-buttons {
   border: 0;
   outline: 2px solid var(--accent);
   outline-offset: 1px;
-  border-radius: 3px;
+  border-radius: calc(var(--radius-control) - 5px);
   background: rgba(255, 255, 255, 0.96);
   padding: 0;
   margin: 0;
@@ -915,7 +1301,7 @@ body[data-platform='darwin'] .window-buttons {
 .filled-button {
   -webkit-app-region: no-drag;
   padding: 6px 14px;
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   background: var(--accent);
   color: #fff;
   font-size: 13px;
@@ -928,7 +1314,7 @@ body[data-platform='darwin'] .window-buttons {
 
 .plain-button {
   padding: 5px 12px;
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   background: var(--hover);
   font-size: 12.5px;
 }
@@ -943,7 +1329,7 @@ body[data-platform='darwin'] .window-buttons {
   z-index: 100;
   min-width: 200px;
   padding: 5px;
-  border-radius: 10px;
+  border-radius: var(--radius-popover);
   background: var(--panel);
   box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.1), 0 8px 28px rgba(0, 0, 0, 0.2);
 }
@@ -955,7 +1341,7 @@ body[data-platform='darwin'] .window-buttons {
   width: 100%;
   text-align: left;
   padding: 5px 9px;
-  border-radius: 6px;
+  border-radius: calc(var(--radius-popover) - 5px);
   font-size: 13px;
 }
 
@@ -997,7 +1383,7 @@ body[data-platform='darwin'] .window-buttons {
   transform: translateX(-50%);
   width: min(620px, 82vw);
   z-index: 110;
-  border-radius: 13px;
+  border-radius: var(--radius-panel);
   background: var(--panel);
   box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.1), 0 20px 60px rgba(0, 0, 0, 0.3);
   overflow: hidden;
@@ -1029,7 +1415,7 @@ body[data-platform='darwin'] .window-buttons {
   transform: translateX(-50%);
   z-index: 120;
   padding: 8px 15px;
-  border-radius: 9px;
+  border-radius: 99px;
   background: rgba(28, 28, 30, 0.94);
   color: #fff;
   font-size: 12.5px;
@@ -1044,8 +1430,8 @@ body[data-platform='darwin'] .window-buttons {
   display: none;
   align-items: center;
   gap: 4px;
-  padding: 5px 6px;
-  border-radius: 10px;
+  padding: 5px;
+  border-radius: var(--radius-bar);
   background: color-mix(in srgb, var(--panel) 96%, transparent);
   backdrop-filter: blur(20px) saturate(1.5);
   box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.1), 0 5px 18px rgba(0, 0, 0, 0.2);
@@ -1054,7 +1440,7 @@ body[data-platform='darwin'] .window-buttons {
 .mark-swatch {
   width: 19px;
   height: 19px;
-  border-radius: 6px;
+  border-radius: calc(var(--radius-bar) - 5px);
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
 }
 
@@ -1065,7 +1451,7 @@ body[data-platform='darwin'] .window-buttons {
 .mark-action {
   width: 24px;
   height: 21px;
-  border-radius: 6px;
+  border-radius: calc(var(--radius-bar) - 5px);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1100,7 +1486,7 @@ body[data-platform='darwin'] .window-buttons {
   max-height: calc(100vh - 48px);
   display: flex; flex-direction: column;
   background: var(--panel); color: var(--text);
-  border-radius: 14px; box-shadow: 0 18px 60px rgba(0, 0, 0, 0.32);
+  border-radius: var(--radius-popover); box-shadow: 0 18px 60px rgba(0, 0, 0, 0.32);
   overflow: hidden;
 }
 .fb-title {
@@ -1109,11 +1495,11 @@ body[data-platform='darwin'] .window-buttons {
 }
 .fb-kinds {
   display: grid; grid-template-columns: 1fr 1fr; gap: 3px;
-  margin: 0 20px 14px; padding: 3px; border-radius: 9px; background: var(--panel-soft);
+  margin: 0 20px 14px; padding: 3px; border-radius: var(--radius-control); background: var(--panel-soft);
 }
 .fb-kinds button {
   border: 0; background: transparent; cursor: pointer; font: inherit; font-size: 13.5px;
-  padding: 6px 10px; border-radius: 6px; color: var(--text-secondary);
+  padding: 6px 10px; border-radius: calc(var(--radius-control) - 3px); color: var(--text-secondary);
   transition: background 0.14s, color 0.14s;
 }
 .fb-kinds button.on { background: var(--accent); color: #fff; }
@@ -1128,12 +1514,12 @@ body[data-platform='darwin'] .window-buttons {
 .fb-tools { display: inline-flex; gap: 2px; }
 .fb-tools button, .fb-drop {
   border: 0; background: transparent; cursor: pointer; font: inherit; font-size: 13px;
-  width: 26px; height: 22px; border-radius: 5px; color: var(--text-tertiary);
+  width: 26px; height: 22px; border-radius: calc(var(--radius-control) - 2px); color: var(--text-tertiary);
 }
 .fb-tools button.on { background: var(--accent-soft); color: var(--accent-text); }
 .fb-tools button:disabled { opacity: 0.35; cursor: default; }
 .fb-shot {
-  height: 168px; border-radius: 10px; overflow: hidden;
+  height: 168px; border-radius: var(--radius-control); overflow: hidden;
   background: var(--panel-soft); border: 1px solid var(--separator-strong);
 }
 .fb-canvas { width: 100%; height: 100%; display: block; cursor: crosshair; touch-action: none; }
@@ -1141,7 +1527,7 @@ body[data-platform='darwin'] .window-buttons {
   width: 100%; height: 82px; resize: none; padding: 9px 11px;
   font: inherit; font-size: 14px; line-height: 1.6;
   color: var(--text); background: var(--panel-soft);
-  border: 1px solid var(--separator-strong); border-radius: 8px;
+  border: 1px solid var(--separator-strong); border-radius: var(--radius-control);
 }
 .fb-body:focus, .fb-input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 .fb-who { display: flex; align-items: center; gap: 8px; }
@@ -1149,12 +1535,12 @@ body[data-platform='darwin'] .window-buttons {
   flex: 1 1 auto; min-width: 0; padding: 6px 9px;
   font: inherit; font-size: 13.5px; color: var(--text);
   background: var(--panel-soft);
-  border: 1px solid var(--separator-strong); border-radius: 7px;
+  border: 1px solid var(--separator-strong); border-radius: var(--radius-control);
 }
 .fb-who .fb-input:first-of-type { max-width: 150px; }
 .fb-preview {
   display: flex; align-items: baseline; gap: 10px;
-  padding: 10px 12px; border-radius: 8px; background: var(--panel-soft);
+  padding: 10px 12px; border-radius: var(--radius-control); background: var(--panel-soft);
   font-size: 13.5px;
 }
 .fb-pv-mark { color: var(--text-tertiary); }
@@ -1173,7 +1559,7 @@ body[data-platform='darwin'] .window-buttons {
   border: 1px solid var(--separator-strong);
   background: var(--panel); color: var(--text);
   font: inherit; font-size: 13.5px; font-weight: 500;
-  padding: 6px 15px; border-radius: 7px; cursor: pointer;
+  padding: 6px 15px; border-radius: var(--radius-control); cursor: pointer;
   transition: background 0.14s, filter 0.14s;
 }
 .fb-foot .btn:hover { background: var(--panel-soft); }

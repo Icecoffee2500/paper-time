@@ -2,7 +2,7 @@
   "name": "paper-time",
   "productName": "Paper Time",
   "version": "0.8.0",
-  "description": "A reader, a pen and a bibliography for papers \u2014 the same on every desktop.",
+  "description": "A reader, a pen and a bibliography for papers — the same on every desktop.",
   "author": "Taeheon Im <icecoffee2500@korea.ac.kr>",
   "license": "MIT",
   "private": true,
@@ -30,6 +30,7 @@
     "typescript": "^5.7.2"
   },
   "dependencies": {
+    "mathjax-full": "^3.2.2",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^4.10.38"
   },

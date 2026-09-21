@@ -1,16 +1,19 @@
 /**
  * What is known about the paper in front of you.
  *
- * Three tabs, the same three as the Mac: the record, the marks made on it,
- * and the note written about it. The record is editable in place — the whole
- * reason the confidence field exists is that a parsed title is a guess, and a
- * guess you cannot correct is worse than no guess.
+ * Four tabs, the same four as the Mac: the record, the marks made on it, the
+ * note written about it, and — while the pencil is out — the tools. The
+ * record is editable in place — the whole reason the confidence field exists
+ * is that a parsed title is a guess, and a guess you cannot correct is worse
+ * than no guess. The tools tab is `sketchInspector.ts`, docked here rather
+ * than floating over the page, and it comes forward when drawing begins.
  */
 import { icon } from '../icons.js'
 import { clear, el, on } from '../dom.js'
 import { store, type Paper } from '../state.js'
 import { fullName, type CSLName } from '../../shared/model.js'
 import { L } from '../../shared/lang.js'
+import { buildSketchInspector } from './sketchInspector.js'
 
 export interface InspectorActions {
   editMeta: (id: string, patch: Record<string, unknown>) => void
@@ -18,14 +21,27 @@ export interface InspectorActions {
   reveal: (id: string) => void
   copyKey: (id: string) => void
   openAuthor: (name: string) => void
+  /** The default drawing style changed; the rack and the page should follow. */
+  sketchChanged: () => void
 }
 
 export function buildInspector(actions: InspectorActions): { node: HTMLElement; update: () => void } {
   const node = el('div', { class: 'panel' })
   const body = el('div', { class: 'panel-body' })
   node.append(body)
+  // Built once and kept: it redraws itself when the selection on the page
+  // changes, and rebuilding it from here would lose a field being typed in.
+  const tools = buildSketchInspector({ changed: actions.sketchChanged })
 
   function update() {
+    if (store.settings.inspectorTab === 'tools') {
+      if (tools.node.parentElement !== body) {
+        clear(body)
+        body.append(tools.node)
+      }
+      tools.update()
+      return
+    }
     clear(body)
     const paper = store.papers.find((entry) => entry.id === store.selectedID)
     if (!paper) {

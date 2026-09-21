@@ -27,6 +27,7 @@ import {
   rectFrom,
 } from '../shared/sketch.js'
 import { InkStroke, resample } from '../shared/ink.js'
+import { SketchTree, adopted, guessedDirection, ordered, pruned, copied } from '../shared/sketchTree.js'
 import { PaperMeta, PaperState } from '../shared/model.js'
 import { entryFor, formatEntry, protectTitle } from '../shared/bibtex.js'
 import { escapeLaTeX } from '../shared/latexTable.js'
@@ -215,6 +216,162 @@ async function main() {
 
   await test('rectFrom normalises whichever way the drag went', () => {
     assert.deepEqual(rectFrom({ x: 10, y: 10 }, { x: 0, y: 0 }), { x: 0, y: 0, width: 10, height: 10 })
+  })
+
+  // ---------------------------------------------------------------- the tree
+  suite('The drawing\'s tree — frames, groups and layout, as the Mac keeps them')
+
+  const box = (id: string, x: number, y: number, w: number, h: number, kind: 'rectangle' | 'frame' | 'group' | 'text' = 'rectangle') => {
+    const element = new SketchElement({ id, kind, points: [{ x, y }, { x: x + w, y: y + h }] })
+    return element
+  }
+
+  await test('normalized puts every child after its parent, in its parent\'s order', () => {
+    const child = box('C', 0, 0, 10, 10)
+    child.parent = 'F'
+    const frame = box('F', 0, 0, 100, 100, 'frame')
+    const out = SketchTree.normalized([child, frame])
+    assert.deepEqual(out.map((e) => e.id), ['F', 'C'])
+  })
+
+  await test('a parent that is not on the page is dropped from the child', () => {
+    const child = box('C', 0, 0, 10, 10)
+    child.parent = 'GONE'
+    const out = SketchTree.normalized([child])
+    assert.equal(out[0].parent, null)
+  })
+
+  await test('a vertical layout stacks children from the frame\'s top-left, and the frame hugs them', () => {
+    const frame = box('F', 100, 500, 300, 40, 'frame')
+    frame.layout = { direction: 'vertical', gap: 8, padding: 8, align: 'start', hugs: true }
+    const a = box('A', 0, 0, 50, 20)
+    a.parent = 'F'
+    const b = box('B', 0, 0, 80, 30)
+    b.parent = 'F'
+    const out = SketchTree.normalized([frame, a, b])
+    const byID = new Map(out.map((e) => [e.id, e]))
+    // Top-left stays at (100, 540); content 80 × (20 + 8 + 30) = 80 × 58; plus 16 of padding.
+    assert.deepEqual(byID.get('F')!.rect, { x: 100, y: 540 - 74, width: 96, height: 74 })
+    assert.deepEqual(byID.get('A')!.rect, { x: 108, y: 540 - 8 - 20, width: 50, height: 20 })
+    assert.deepEqual(byID.get('B')!.rect, { x: 108, y: 540 - 8 - 20 - 8 - 30, width: 80, height: 30 })
+  })
+
+  await test('a horizontal layout lines children up in a row, aligned to the end when asked', () => {
+    const frame = box('F', 0, 0, 500, 100, 'frame')
+    frame.layout = { direction: 'horizontal', gap: 10, padding: 5, align: 'end', hugs: false }
+    const a = box('A', 200, 200, 50, 20)
+    a.parent = 'F'
+    const b = box('B', 300, 300, 30, 60)
+    b.parent = 'F'
+    const out = SketchTree.normalized([frame, a, b])
+    const byID = new Map(out.map((e) => [e.id, e]))
+    // Not hugging: the frame keeps its box; children pack from its top-left.
+    assert.deepEqual(byID.get('F')!.rect, { x: 0, y: 0, width: 500, height: 100 })
+    assert.deepEqual(byID.get('A')!.rect, { x: 5, y: 5, width: 50, height: 20 })
+    assert.deepEqual(byID.get('B')!.rect, { x: 65, y: 5, width: 30, height: 60 })
+  })
+
+  await test('an inner frame is laid out before the outer one measures it', () => {
+    const outer = box('O', 0, 1000, 10, 10, 'frame')
+    outer.layout = { direction: 'vertical', gap: 0, padding: 10, align: 'start', hugs: true }
+    const inner = box('I', 0, 0, 10, 10, 'frame')
+    inner.layout = { direction: 'vertical', gap: 0, padding: 0, align: 'start', hugs: true }
+    inner.parent = 'O'
+    const leaf = box('L', 0, 0, 40, 40)
+    leaf.parent = 'I'
+    const out = SketchTree.normalized([outer, inner, leaf])
+    const byID = new Map(out.map((e) => [e.id, e]))
+    assert.deepEqual(byID.get('I')!.rect, { x: 10, y: 1010 - 10 - 40, width: 40, height: 40 })
+    assert.deepEqual(byID.get('O')!.rect, { x: 0, y: 1010 - 60, width: 60, height: 60 })
+  })
+
+  await test('a group\'s own box is the box round its children', () => {
+    const group = box('G', 0, 0, 1, 1, 'group')
+    const a = box('A', 10, 10, 10, 10)
+    a.parent = 'G'
+    const b = box('B', 50, 40, 10, 10)
+    b.parent = 'G'
+    const out = SketchTree.normalized([group, a, b])
+    assert.deepEqual(out[0].rect, { x: 10, y: 10, width: 50, height: 40 })
+  })
+
+  await test('a click selects the outermost group, but a frame lets it through', () => {
+    const frame = box('F', 0, 0, 100, 100, 'frame')
+    const group = box('G', 0, 0, 1, 1, 'group')
+    group.parent = 'F'
+    const inner = box('H', 0, 0, 1, 1, 'group')
+    inner.parent = 'G'
+    const leaf = box('L', 10, 10, 10, 10)
+    leaf.parent = 'H'
+    const loose = box('X', 50, 50, 10, 10)
+    loose.parent = 'F'
+    const tree = new SketchTree([frame, group, inner, leaf, loose])
+    assert.equal(tree.selectable('L'), 'G')
+    assert.equal(tree.selectable('L', 'G'), 'H')
+    assert.equal(tree.selectable('X'), 'X')
+    assert.deepEqual([...tree.outermost(['G', 'L', 'X'])].sort(), ['G', 'X'])
+    assert.deepEqual([...tree.expanded(['G'])].sort(), ['G', 'H', 'L'])
+  })
+
+  await test('a shape whose middle is inside a frame is adopted by it; one dragged out is set loose', () => {
+    const frame = box('F', 0, 0, 100, 100, 'frame')
+    const inside = box('A', 40, 40, 20, 20)
+    const outside = box('B', 200, 200, 20, 20)
+    outside.parent = 'F'
+    const out = adopted(['A', 'B'], [frame, inside, outside])
+    assert.equal(out.find((e) => e.id === 'A')!.parent, 'F')
+    assert.equal(out.find((e) => e.id === 'B')!.parent, null)
+  })
+
+  await test('a thing in a group stays in its group when moved', () => {
+    const group = box('G', 0, 0, 1, 1, 'group')
+    const a = box('A', 500, 500, 10, 10)
+    a.parent = 'G'
+    const frame = box('F', 490, 490, 100, 100, 'frame')
+    const out = adopted(['A'], [frame, group, a])
+    assert.equal(out.find((e) => e.id === 'A')!.parent, 'G')
+  })
+
+  await test('an empty group is pruned; a frame stays', () => {
+    const out = pruned([box('G', 0, 0, 1, 1, 'group'), box('F', 0, 0, 1, 1, 'frame')])
+    assert.deepEqual(out.map((e) => e.id), ['F'])
+  })
+
+  await test('the direction of a layout is guessed from how the children spread', () => {
+    assert.equal(guessedDirection([{ x: 0, y: 0, width: 10, height: 10 }, { x: 100, y: 0, width: 10, height: 10 }]), 'horizontal')
+    assert.equal(guessedDirection([{ x: 0, y: 0, width: 10, height: 10 }, { x: 0, y: 100, width: 10, height: 10 }]), 'vertical')
+    assert.equal(guessedDirection([{ x: 0, y: 0, width: 10, height: 10 }]), 'vertical')
+  })
+
+  await test('children are reordered along the axis before a layout starts', () => {
+    const frame = box('F', 0, 0, 100, 100, 'frame')
+    const low = box('A', 0, 0, 10, 10)
+    low.parent = 'F'
+    const high = box('B', 0, 50, 10, 10)
+    high.parent = 'F'
+    const tree = new SketchTree([frame, low, high])
+    const out = ordered(['A', 'B'], 'vertical', [frame, low, high], tree)
+    assert.deepEqual(out.map((e) => e.id), ['F', 'B', 'A'])
+  })
+
+  await test('copies carry their parent links across and the outermost stay loose', () => {
+    const frame = box('F', 0, 0, 100, 100, 'frame')
+    const group = box('G', 0, 0, 1, 1, 'group')
+    group.parent = 'F'
+    const leaf = box('L', 10, 10, 10, 10)
+    leaf.parent = 'G'
+    let n = 0
+    const { copies, roots } = copied(['G'], [frame, group, leaf], { x: 12, y: -12 }, () => `N${++n}`)
+    assert.equal(copies.length, 2)
+    assert.deepEqual([...roots], ['N1'])
+    assert.equal(copies[0].parent, 'F')
+    assert.equal(copies[1].parent, 'N1')
+    assert.deepEqual(copies[1].rect, { x: 22, y: -2, width: 10, height: 10 })
+  })
+
+  await test('a layout the Mac wrote comes back byte for byte', () => {
+    const element = SketchElement.from(JSON.parse(MAC_FRAME))
+    assert.equal(encodeSwiftJSON(element.encode()), MAC_FRAME)
   })
 
   // --------------------------------------------------------------------- ink
@@ -454,6 +611,49 @@ function findSamplePDF(): string | null {
 }
 
 /** Exactly the bytes the Mac build wrote for a page of shapes. */
+/** A frame with a layout, as the Mac's encoder writes one. */
+const MAC_FRAME = `{
+  "clips" : true,
+  "createdAt" : 811492215.409792,
+  "id" : "0D6D2C54-7B12-4E3C-9C10-2C3B1B2E7A11",
+  "kind" : "frame",
+  "layout" : {
+    "align" : "start",
+    "direction" : "vertical",
+    "gap" : 8,
+    "hugs" : true,
+    "padding" : 8
+  },
+  "name" : "프레임 1",
+  "points" : [
+    [
+      100,
+      500
+    ],
+    [
+      200,
+      600
+    ]
+  ],
+  "style" : {
+    "border" : false,
+    "corners" : "round",
+    "dash" : "solid",
+    "endHead" : "none",
+    "opacity" : 1,
+    "startHead" : "none",
+    "stroke" : {
+      "alpha" : 1,
+      "blue" : 0.12,
+      "green" : 0.1,
+      "red" : 0.1
+    },
+    "textSize" : "medium",
+    "width" : 2
+  },
+  "text" : ""
+}`
+
 const MAC_SKETCH = `[
   {
     "createdAt" : 811492215.409792,

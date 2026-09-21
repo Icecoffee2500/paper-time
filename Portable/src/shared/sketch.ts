@@ -40,6 +40,12 @@ export function rectContains(r: Rect, p: Point): boolean {
   return p.x >= r.x && p.x <= r.x + r.width && p.y >= r.y && p.y <= r.y + r.height
 }
 
+/** Whether `inner` lies wholly inside `outer`. */
+export function rectContainsRect(outer: Rect, inner: Rect): boolean {
+  return inner.x >= outer.x && inner.y >= outer.y
+    && rectMaxX(inner) <= rectMaxX(outer) && rectMaxY(inner) <= rectMaxY(outer)
+}
+
 export function rectUnion(a: Rect, b: Rect): Rect {
   const minX = Math.min(a.x, b.x)
   const minY = Math.min(a.y, b.y)
@@ -371,6 +377,11 @@ export class SketchElement {
 
   copy(): SketchElement {
     return SketchElement.from(JSON.parse(JSON.stringify(this.encode())))
+  }
+
+  /** For a copy made now: the file's own timestamp is not this element's. */
+  resetCreatedAt() {
+    this.createdAtRaw = null
   }
 
   get isBox(): boolean {

@@ -27,7 +27,17 @@ import {
 } from '../../shared/marks.js'
 import { makeUUID } from '../../shared/coding.js'
 import { call } from '../bridge.js'
-import { attachSketchInput, type SketchInput } from './sketchInput.js'
+import {
+  attachSketchInput,
+  hitsDrawing,
+  resetSketchInput,
+  sketchEditingFor,
+  type SketchInput,
+  type SketchInputHost,
+} from './sketchInput.js'
+import { sketchEditor } from './sketchEditing.js'
+import { pagesOf, type Snapshot } from './sketchUndo.js'
+import { installMathProvider } from '../sketchMath.js'
 import { icon } from '../icons.js'
 import { L } from '../../shared/lang.js'
 
@@ -56,6 +66,11 @@ export class PageView {
   marks: Mark[] = []
   /** Mid-gesture elements the input surface is drawing itself. */
   hidden = new Set<string>()
+  /** Pen strokes being moved, likewise left to the surface. */
+  hiddenStrokes = new Set<number>()
+  /** Another page's surface drawing over this one — a selection being
+   *  carried here from the page it started on. */
+  guest: ((context: CanvasRenderingContext2D) => void) | null = null
   viewport: { width: number; height: number; transform: number[]; scale: number; rotation: number } | null = null
   rendered = false
   private renderTask: { cancel: () => void } | null = null
@@ -107,6 +122,17 @@ export class PageView {
     const viewport = this.proxy.getViewport({ scale: this.viewport?.scale ?? 1 })
     const [vx, vy] = viewport.convertToViewportPoint(x, y)
     return { x: vx, y: vy }
+  }
+
+  /** Page coordinates from a point in the window, kept on the page. */
+  toPageFromClient(clientX: number, clientY: number): { x: number; y: number } {
+    const box = this.root.getBoundingClientRect()
+    const p = this.toPage(clientX - box.left, clientY - box.top)
+    const view = this.proxy.getViewport({ scale: 1 }).viewBox as number[]
+    return {
+      x: Math.min(Math.max(p.x, view[0]), view[2]),
+      y: Math.min(Math.max(p.y, view[1]), view[3]),
+    }
   }
 
   async render() {
@@ -176,9 +202,10 @@ export class PageView {
     context.setTransform(dpr * a, dpr * b, dpr * c, dpr * d, dpr * e, dpr * f)
     // Marks first: they belong to the words, and the pen goes over them.
     drawMarks(this.marks, context)
-    drawInk(this.strokes, context)
-    drawElements(this.elements.filter((element) => !this.hidden.has(element.id)), context)
+    drawInk(this.hiddenStrokes.size === 0 ? this.strokes : this.strokes.filter((_, index) => !this.hiddenStrokes.has(index)), context)
+    drawElements(this.hidden.size === 0 ? this.elements : this.elements.filter((element) => !this.hidden.has(element.id)), context)
     this.input?.drawOverlay(context)
+    this.guest?.(context)
   }
 
   applyTint() {
@@ -228,6 +255,45 @@ export class Reader {
       event.preventDefault()
       this.zoomBy(event.deltaY < 0 ? 1.1 : 1 / 1.1)
     })
+    // A click on something drawn — a shape, a card, a stroke — takes the
+    // pencil out by itself and goes straight to selecting it, so what was
+    // drawn is never a picture you have to unlock first. The same press then
+    // goes to the page's surface, which was not there to receive it.
+    on(this.pagesBox, 'pointerdown', (event: PointerEvent) => {
+      if (store.reader.drawing || event.button !== 0) return
+      const page = this.pageContaining(event.target as Node)
+      if (!page || !hitsDrawing(page, page.toPageFromClient(event.clientX, event.clientY))) return
+      this.setDrawing(true)
+      this.update()
+      this.actions.changed()
+      page.input?.press(event)
+    })
+    // A formula's picture arrives after the card was drawn; the page is
+    // drawn again when it does.
+    installMathProvider(() => this.redrawAll())
+  }
+
+  /** The page under a point in the window, if any is. */
+  pageAtClient(clientX: number, clientY: number): PageView | null {
+    for (const page of this.pages) {
+      if (page.root.style.display === 'none') continue
+      const box = page.root.getBoundingClientRect()
+      if (clientX >= box.left && clientX <= box.right && clientY >= box.top && clientY <= box.bottom) return page
+    }
+    return null
+  }
+
+  /** Puts a page — or the several pages of one step — back the way an undo
+   *  snapshot has them, and writes them. */
+  restore(snapshot: Snapshot) {
+    for (const part of pagesOf(snapshot)) {
+      const page = this.pages[part.pageIndex]
+      if (!page) continue
+      page.elements = part.elements.map((element) => element.copy())
+      page.strokes = part.strokes.map((stroke) => stroke.translated({ x: 0, y: 0 }))
+      page.redraw()
+      void this.save(page)
+    }
   }
 
   get overlayContainer(): HTMLElement {
@@ -509,24 +575,32 @@ export class Reader {
     return this.pages[Number(root.dataset.page)] ?? null
   }
 
+  private readonly sketchHost: SketchInputHost = {
+    changed: () => this.actions.changed(),
+    save: (target) => void this.save(target),
+  }
+
   setDrawing(drawing: boolean) {
     store.reader.drawing = drawing
     for (const page of this.pages) {
       page.setDrawing(drawing)
-      if (drawing && !page.input) {
-        page.input = attachSketchInput(page, this, {
-          changed: () => this.actions.changed(),
-          save: (target) => void this.save(target),
-        })
-      }
+      if (drawing && !page.input) page.input = attachSketchInput(page, this, this.sketchHost)
     }
-    if (!drawing) {
+    if (drawing) {
+      // The panel talks to this reader's editor while the pen is out.
+      sketchEditor.current = sketchEditingFor(this, this.sketchHost)
+    } else {
+      resetSketchInput()
       for (const page of this.pages) {
         page.input?.detach()
         page.input = null
+        page.hidden = new Set()
+        page.hiddenStrokes = new Set()
+        page.guest = null
         page.redraw()
       }
       store.sketch.selection = null
+      if (sketchEditor.current === sketchEditingFor(this, this.sketchHost)) sketchEditor.current = null
     }
   }
 

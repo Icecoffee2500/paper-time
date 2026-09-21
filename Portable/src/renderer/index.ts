@@ -20,6 +20,7 @@ import {
   remember,
   shelfPapers,
   store,
+  setSketchTool,
   subscribe,
   travel,
   type InspectorTab,
@@ -32,14 +33,18 @@ import { buildSidebar } from './ui/sidebar.js'
 import { buildPaperList } from './ui/paperList.js'
 import { buildInspector } from './ui/inspector.js'
 import { Reader } from './ui/reader.js'
-import { buildSketchRack, buildStylePanel, TOOLS } from './ui/sketchToolbar.js'
-import { undoStack } from './ui/sketchInput.js'
+import { buildSketchRack, TOOLS } from './ui/sketchToolbar.js'
+import { undoStack, type SketchInputEditing } from './ui/sketchInput.js'
+import { sketchEditor, sketchSelectionChanged } from './ui/sketchEditing.js'
 import type { LibrarySnapshot } from '../shared/api.js'
-import { SketchElement, expandedIDs, rectInset } from '../shared/sketch.js'
+import { expandedIDs } from '../shared/sketch.js'
 import { icon } from './icons.js'
 import { L } from '../shared/lang.js'
 
 document.body.dataset.platform = platform
+// For the in-page probe (`--papertime-probe`): the drawing contract, so a
+// test can stand in for the page's editor and look at the Tools tab.
+;(window as unknown as { __papertimeSketch: unknown }).__papertimeSketch = { sketchEditor, sketchSelectionChanged, store }
 
 const root = document.getElementById('root')!
 const panes = el('div', { class: 'panes' })
@@ -146,65 +151,25 @@ const inspector = buildInspector({
     store.shelf = { kind: 'author', name }
     changed('shelf')
   },
+  sketchChanged: () => changed('sketch'),
 })
 
 // -------------------------------------------------------- the drawing layer
 
+/**
+ * The rack picks the tool and works the undo stack; everything that acts on
+ * the selection goes through `sketchEditor.current`, the view over the page
+ * that holds it (`sketchInput.ts`), so the rack, the Tools tab and the keys
+ * below are three ways of saying the same thing to one place.
+ */
 const rack = buildSketchRack({
-  setTool: (tool: SketchTool) => {
-    store.sketch.tool = tool
-    changed('sketch')
-  },
-  restyle: (change) => {
-    change(store.sketch.style)
-    // A change made with something selected applies to it; with nothing
-    // selected it sets what the next thing drawn will look like.
-    const selection = store.sketch.selection
-    if (selection) {
-      const page = reader.pages[selection.pageIndex]
-      if (page) {
-        for (const element of page.elements) {
-          if (selection.ids.includes(element.id)) change(element.style)
-        }
-        page.redraw()
-        void reader.save(page)
-      }
-    }
-    changed('sketch')
-  },
-  frameSelection: () => frameSelection(),
-  bringToFront: () => reorder('front'),
-  sendToBack: () => reorder('back'),
-  deleteSelection: () => deleteSelection(),
-  duplicateSelection: () => duplicateSelection(),
+  setTool: (tool: SketchTool) => pickTool(tool),
+  undo: () => applyUndo(false),
+  redo: () => applyUndo(true),
 })
 
-const stylePanel = buildStylePanel({
-  setTool: (tool) => {
-    store.sketch.tool = tool
-    changed('sketch')
-  },
-  restyle: rackRestyle,
-  frameSelection: () => frameSelection(),
-  bringToFront: () => reorder('front'),
-  sendToBack: () => reorder('back'),
-  deleteSelection: () => deleteSelection(),
-  duplicateSelection: () => duplicateSelection(),
-})
-
-function rackRestyle(change: (style: import('../shared/sketch.js').SketchStyle) => void) {
-  change(store.sketch.style)
-  const selection = store.sketch.selection
-  if (selection) {
-    const page = reader.pages[selection.pageIndex]
-    if (page) {
-      for (const element of page.elements) {
-        if (selection.ids.includes(element.id)) change(element.style)
-      }
-      page.redraw()
-      void reader.save(page)
-    }
-  }
+function pickTool(tool: SketchTool) {
+  setSketchTool(tool)
   changed('sketch')
 }
 
@@ -212,90 +177,6 @@ function selectedPage() {
   const selection = store.sketch.selection
   if (!selection) return null
   return reader.pages[selection.pageIndex] ?? null
-}
-
-function selectedElements(): SketchElement[] {
-  const page = selectedPage()
-  const selection = store.sketch.selection
-  if (!page || !selection) return []
-  return page.elements.filter((element) => selection.ids.includes(element.id))
-}
-
-function deleteSelection() {
-  const page = selectedPage()
-  const selection = store.sketch.selection
-  if (!page || !selection) return
-  const gone = expandedIDs(page.elements, selection.ids)
-  page.elements = page.elements.filter((element) => !gone.has(element.id))
-  store.sketch.selection = null
-  page.redraw()
-  void reader.save(page)
-  changed('sketch')
-}
-
-function duplicateSelection() {
-  const page = selectedPage()
-  const chosen = selectedElements()
-  if (!page || chosen.length === 0) return
-  // With everything inside them, the parent links carried across.
-  const taking = expandedIDs(page.elements, chosen.map((element) => element.id))
-  const newID = new Map<string, string>()
-  for (const id of taking) newID.set(id, crypto.randomUUID().toUpperCase())
-  const copies = page.elements.filter((element) => taking.has(element.id)).map((element) => {
-    const copy = element.translated({ x: 12, y: -12 })
-    copy.id = newID.get(element.id)!
-    copy.parent = element.parent && newID.has(element.parent) ? newID.get(element.parent)! : element.parent
-    return copy
-  })
-  page.elements.push(...copies)
-  const roots = chosen.map((element) => newID.get(element.id)!)
-  store.sketch.selection = { pageIndex: page.index, ids: roots, strokeIDs: [] }
-  page.redraw()
-  void reader.save(page)
-  changed('sketch')
-}
-
-function reorder(where: 'front' | 'back') {
-  const page = selectedPage()
-  const selection = store.sketch.selection
-  if (!page || !selection) return
-  const chosen = page.elements.filter((element) => selection.ids.includes(element.id))
-  const rest = page.elements.filter((element) => !selection.ids.includes(element.id))
-  page.elements = where === 'front' ? [...rest, ...chosen] : [...chosen, ...rest]
-  page.redraw()
-  void reader.save(page)
-}
-
-/**
- * Draws a frame round what is selected — the XMind habit of boxing a thought
- * once it has become one. Handwriting included: the frame takes in the strokes
- * the selection sits over as well as the shapes.
- */
-function frameSelection() {
-  const page = selectedPage()
-  const chosen = selectedElements()
-  if (!page || chosen.length === 0) return
-  const boxes = chosen.map((element) => element.bounds)
-  const box = boxes.reduce((a, b) => {
-    const minX = Math.min(a.x, b.x)
-    const minY = Math.min(a.y, b.y)
-    const maxX = Math.max(a.x + a.width, b.x + b.width)
-    const maxY = Math.max(a.y + a.height, b.y + b.height)
-    return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
-  })
-  const padded = rectInset(box, -8, -8)
-  const frame = new SketchElement({
-    kind: 'rectangle',
-    points: [{ x: padded.x, y: padded.y }, { x: padded.x + padded.width, y: padded.y + padded.height }],
-    style: store.sketch.style.copy(),
-  })
-  frame.style.fill = null
-  // Behind what it frames, so the words stay on top.
-  page.elements.unshift(frame)
-  store.sketch.selection = { pageIndex: page.index, ids: [frame.id], strokeIDs: [] }
-  page.redraw()
-  void reader.save(page)
-  changed('sketch')
 }
 
 // -------------------------------------------------------------- the toolbar
@@ -370,7 +251,7 @@ const toolbar = buildToolbar({
 })
 
 root.append(toolbar.node, panes)
-reader.overlayContainer.append(rack.node, stylePanel.node)
+reader.overlayContainer.append(rack.node)
 
 // ------------------------------------------------------- laying out the panes
 
@@ -615,6 +496,17 @@ on(window, 'keydown', (event: KeyboardEvent) => {
   const target = event.target as HTMLElement | null
   const typing = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')
 
+  // While the pen is out the page's own editor has the Mac's whole key map
+  // — Escape's three steps, the arrows, ⌘C/⌘X/⌘V, Enter into a group — and
+  // it goes first. What it does not take falls through to the keys below.
+  if (store.reader.drawing && !palette) {
+    const current = sketchEditor.current as SketchInputEditing | null
+    if (current && typeof current.handleKey === 'function' && !(typing && event.key !== 'Escape') && current.handleKey(event)) {
+      event.preventDefault()
+      return
+    }
+  }
+
   if (event.key === 'Escape') {
     // Three steps back, in the order a hand expects: finish the words, then
     // drop the selection, then put the tool away.
@@ -625,7 +517,7 @@ on(window, 'keydown', (event: KeyboardEvent) => {
       return changed('sketch')
     }
     if (store.sketch.tool !== 'select') {
-      store.sketch.tool = 'select'
+      setSketchTool('select')
       return changed('sketch')
     }
     if (store.reader.drawing) {
@@ -638,20 +530,41 @@ on(window, 'keydown', (event: KeyboardEvent) => {
 
   if (typing) return
 
+  const editor = sketchEditor.current
+
   if (isCommand(event)) {
     if (event.key === 'z') {
       event.preventDefault()
       applyUndo(event.shiftKey)
       return
     }
-    if (event.key === 'd') {
+    if (!store.reader.drawing) return
+    // Figma's keys for the tree, on the selection the page holds.
+    if (event.key.toLowerCase() === 'g') {
       event.preventDefault()
-      duplicateSelection()
+      if (event.altKey) editor?.frameSelection()
+      else if (event.shiftKey) editor?.ungroupSelection()
+      else editor?.groupSelection()
       return
     }
-    if (event.key === 'a' && store.reader.drawing) {
+    if (event.key.toLowerCase() === 'd') {
       event.preventDefault()
-      selectAllOnPage()
+      editor?.duplicateSelection()
+      return
+    }
+    if (event.key === 'a' || event.key === 'A') {
+      event.preventDefault()
+      editor?.selectAllOnPage()
+      return
+    }
+    if (event.shiftKey && (event.code === 'BracketRight' || event.key === ']' || event.key === '}')) {
+      event.preventDefault()
+      editor?.bringSelectionToFront()
+      return
+    }
+    if (event.shiftKey && (event.code === 'BracketLeft' || event.key === '[' || event.key === '{')) {
+      event.preventDefault()
+      editor?.sendSelectionToBack()
       return
     }
     return
@@ -660,7 +573,7 @@ on(window, 'keydown', (event: KeyboardEvent) => {
   if (event.key === 'Delete' || event.key === 'Backspace') {
     if (store.sketch.selection) {
       event.preventDefault()
-      deleteSelection()
+      editor?.deleteSelection()
     }
     return
   }
@@ -677,15 +590,28 @@ on(window, 'keydown', (event: KeyboardEvent) => {
   }
 
   if (store.reader.drawing) {
+    if (event.altKey) return
+    // ⇧A is auto layout before A is the arrow tool.
+    if (event.shiftKey && event.key === 'A') {
+      event.preventDefault()
+      editor?.toggleAutoLayout()
+      return
+    }
+    if (event.shiftKey) return
     const tool = TOOLS.find((entry) => entry.key.toLowerCase() === event.key.toLowerCase())
     if (tool) {
       event.preventDefault()
-      store.sketch.tool = tool.tool
-      return changed('sketch')
+      return pickTool(tool.tool)
     }
     if (event.key.toLowerCase() === 'b') {
       event.preventDefault()
-      return frameSelection()
+      editor?.frameSelection()
+      return
+    }
+    if (event.key === 'Enter' && store.sketch.selection) {
+      event.preventDefault()
+      editor?.editSelectedText()
+      return
     }
     if (event.key.startsWith('Arrow') && store.sketch.selection) {
       event.preventDefault()
@@ -714,28 +640,12 @@ function nudge(key: string, distance: number) {
   void reader.save(page)
 }
 
-function selectAllOnPage() {
-  const page = reader.pages[store.reader.currentPage]
-  if (!page || page.elements.length === 0) return
-  store.sketch.selection = {
-    pageIndex: page.index,
-    ids: page.elements.map((element) => element.id),
-    strokeIDs: [],
-  }
-  page.redraw()
-  changed('sketch')
-}
-
 function applyUndo(redo: boolean) {
   const snapshot = redo ? undoStack.redo() : undoStack.undo()
   if (!snapshot) return
-  const page = reader.pages[snapshot.pageIndex]
-  if (!page) return
-  page.elements = snapshot.elements.map((element) => element.copy())
-  page.strokes = snapshot.strokes.map((stroke) => stroke.translated({ x: 0, y: 0 }))
+  // A step may cover two pages — a selection carried from one to the other.
+  reader.restore(snapshot)
   store.sketch.selection = null
-  page.redraw()
-  void reader.save(page)
   changed('sketch')
 }
 
@@ -760,6 +670,8 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () 
 
 // ------------------------------------------------------------- redrawing
 
+let wasDrawing = false
+
 subscribe((keys) => {
   if (keys.has('papers') || keys.has('shelf') || keys.has('selection')) {
     sidebar.update()
@@ -768,8 +680,15 @@ subscribe((keys) => {
   }
   if (keys.has('inspector')) inspector.update()
   if (keys.has('sketch')) {
+    // Picking up the pen brings the Tools tab forward, as it does on the Mac;
+    // putting it down leaves the tab where it is.
+    if (store.reader.drawing && !wasDrawing && store.settings.inspectorTab !== 'tools') {
+      store.settings.inspectorTab = 'tools'
+      void call('settings:set', { inspectorTab: 'tools' })
+    }
+    wasDrawing = store.reader.drawing
     rack.update()
-    stylePanel.update()
+    if (store.settings.inspectorTab === 'tools') inspector.update()
     reader.redrawAll()
     reader.update()
   }

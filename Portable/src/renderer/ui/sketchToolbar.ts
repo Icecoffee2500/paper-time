@@ -1,239 +1,138 @@
 /**
- * The tool rack and the style panel.
+ * The tool rack while the pencil is out, laid out the way Figma's is and the
+ * Mac's `SketchToolbar` is: one button for each kind of tool — select, frame,
+ * a shape, the pen, text — and the kinds that come in several (the shapes;
+ * the pen, the highlighter and the eraser) behind a chevron beside their
+ * button. The button shows the member last used, so the rack stays five
+ * buttons wide however many tools it holds. Then a divider, undo and redo.
  *
- * Both float over the page rather than living in the window's toolbar: the
+ * It floats over the page rather than living in the window's toolbar: the
  * tools belong to the page you are drawing on, and reaching to the top of the
- * window for a pen breaks the line you were about to draw. The rack carries
- * its keys on the buttons, because the keys are how anyone who draws for more
- * than a minute actually picks a tool.
+ * window for a pen breaks the line you were about to draw.
  *
- * The panel offers what Excalidraw puts in its side panel and nothing it does
- * not — a reader should never be choosing between twelve line widths.
+ * There is no Done button. The pencil goes away with Escape, or with the pen
+ * on the paper's title row. The chosen tool is a filled square with its icon
+ * in white; the icons are drawn in Figma's own line weight (`figmaIcon`).
+ * Every tool keeps its one-letter key, listed beside its name in the menu.
  */
-import { icon } from '../icons.js'
-import { clear, el, on } from '../dom.js'
-import { store, type SketchTool } from '../state.js'
-import { SketchColor, STYLE_WIDTHS, type Dash, type Head, type TextSize } from '../../shared/sketch.js'
+import { figmaIcon, icon } from '../icons.js'
+import { clear, el, on, place } from '../dom.js'
+import { INK_TOOLS, SHAPE_TOOLS, store, type SketchTool } from '../state.js'
 import { L } from '../../shared/lang.js'
 
 // The labels are getters so they are read when a button is built, not when
 // the module loads — the language is settled before anything draws, and this
 // keeps that true whatever order the modules happen to load in.
-export const TOOLS: { tool: SketchTool; key: string; icon: string; label: string }[] = [
-  { tool: 'select', key: 'V', icon: 'cursorarrow', get label() { return L('선택', 'Select') } },
-  { tool: 'pen', key: 'P', icon: 'pen', get label() { return L('펜', 'Pen') } },
-  { tool: 'highlighter', key: 'H', icon: 'highlighter', get label() { return L('형광펜', 'Highlighter') } },
-  { tool: 'eraser', key: 'E', icon: 'eraser', get label() { return L('지우개', 'Eraser') } },
-  { tool: 'rectangle', key: 'R', icon: 'rectangle', get label() { return L('네모', 'Rectangle') } },
-  { tool: 'ellipse', key: 'O', icon: 'ellipse', get label() { return L('동그라미', 'Ellipse') } },
-  { tool: 'arrow', key: 'A', icon: 'arrow', get label() { return L('화살표', 'Arrow') } },
-  { tool: 'line', key: 'L', icon: 'line', get label() { return L('선', 'Line') } },
-  { tool: 'text', key: 'T', icon: 'textbox', get label() { return L('글', 'Text') } },
+export const TOOLS: { tool: SketchTool; key: string; label: string }[] = [
+  { tool: 'select', key: 'V', get label() { return L('선택', 'Select') } },
+  { tool: 'frame', key: 'F', get label() { return L('프레임', 'Frame') } },
+  { tool: 'rectangle', key: 'R', get label() { return L('네모', 'Rectangle') } },
+  { tool: 'ellipse', key: 'O', get label() { return L('동그라미', 'Ellipse') } },
+  { tool: 'line', key: 'L', get label() { return L('선', 'Line') } },
+  { tool: 'arrow', key: 'A', get label() { return L('화살표', 'Arrow') } },
+  { tool: 'pen', key: 'P', get label() { return L('펜', 'Pen') } },
+  { tool: 'highlighter', key: 'H', get label() { return L('형광펜', 'Highlighter') } },
+  { tool: 'eraser', key: 'E', get label() { return L('지우개', 'Eraser') } },
+  { tool: 'text', key: 'T', get label() { return L('글', 'Text') } },
 ]
 
-export interface SketchToolbarActions {
-  setTool: (tool: SketchTool) => void
-  restyle: (change: (style: import('../../shared/sketch.js').SketchStyle) => void) => void
-  frameSelection: () => void
-  bringToFront: () => void
-  sendToBack: () => void
-  deleteSelection: () => void
-  duplicateSelection: () => void
+export function toolEntry(tool: SketchTool) {
+  return TOOLS.find((entry) => entry.tool === tool)!
 }
 
-export function buildSketchRack(actions: SketchToolbarActions): { node: HTMLElement; update: () => void } {
-  const node = el('div', { class: 'sketch-rack' })
-  const buttons = new Map<SketchTool, HTMLElement>()
-  for (const entry of TOOLS) {
+/** What a tool is called, in the language the window is in. */
+export function toolLabel(tool: SketchTool): string {
+  return toolEntry(tool).label
+}
+
+export interface SketchRackActions {
+  setTool: (tool: SketchTool) => void
+  undo: () => void
+  redo: () => void
+}
+
+export function buildSketchRack(actions: SketchRackActions): { node: HTMLElement; update: () => void } {
+  const node = el('div', { class: 'sketch-rack', role: 'toolbar' })
+
+  function toolButton(tool: SketchTool): HTMLElement {
+    const entry = toolEntry(tool)
     const button = el('button', {
+      class: 'sketch-tool',
       title: `${entry.label} (${entry.key})`,
       'aria-label': entry.label,
-      html: `${icon(entry.icon)}<span class="key">${entry.key}</span>`,
+      'data-tool': tool,
+      html: figmaIcon(tool),
     })
-    on(button, 'click', () => actions.setTool(entry.tool))
-    buttons.set(entry.tool, button)
-    node.append(button)
+    on(button, 'click', () => actions.setTool(tool))
+    return button
   }
 
-  function update() {
-    for (const [tool, button] of buttons) {
-      button.setAttribute('aria-pressed', String(store.sketch.tool === tool))
-    }
-    node.style.display = store.reader.drawing ? '' : 'none'
+  /** A button for the member last used, and beside it a chevron that lists the group. */
+  function grouped(tools: SketchTool[], shown: SketchTool): HTMLElement {
+    const group = el('div', { class: 'sketch-tool-group' })
+    const chevron = el('button', {
+      class: 'sketch-tool-chevron',
+      title: L('다른 도구', 'More tools'),
+      'aria-haspopup': 'menu',
+      html: icon('chevron.down'),
+    })
+    on(chevron, 'click', () => openMenu(chevron, tools))
+    group.append(toolButton(shown), chevron)
+    return group
   }
 
-  update()
-  return { node, update }
-}
-
-export function buildStylePanel(actions: SketchToolbarActions): { node: HTMLElement; update: () => void } {
-  const node = el('div', { class: 'sketch-panel' })
-
-  function heading(text: string) {
-    return el('h4', { text })
-  }
-
-  function swatches(
-    colours: SketchColor[],
-    current: () => SketchColor | null,
-    pick: (colour: SketchColor | null) => void,
-    allowNone: boolean,
-  ) {
-    const row = el('div', { class: 'swatches' })
-    if (allowNone) {
-      const none = el('button', {
-        class: 'swatch',
-        title: L('채우기 없음', 'No fill'),
-        style: 'background: transparent',
-        'aria-pressed': String(current() === null),
+  function openMenu(anchor: HTMLElement, tools: SketchTool[]) {
+    const scrim = el('div', { class: 'scrim' })
+    const menu = el('div', { class: 'menu sketch-tool-menu', role: 'menu' })
+    for (const tool of tools) {
+      const entry = toolEntry(tool)
+      const item = el('button', { role: 'menuitem', 'aria-checked': String(store.sketch.tool === tool) }, [
+        el('span', { class: 'menu-icon', html: figmaIcon(tool) }),
+        el('span', { class: 'menu-label', text: entry.label }),
+        el('span', { class: 'menu-key', text: entry.key }),
+      ])
+      on(item, 'click', () => {
+        close()
+        actions.setTool(tool)
       })
-      none.innerHTML =
-        '<svg viewBox="0 0 16 16" style="width:100%;height:100%"><path d="M3 13 13 3" stroke="var(--text-tertiary)" stroke-width="1.4"/></svg>'
-      on(none, 'click', () => pick(null))
-      row.append(none)
+      menu.append(item)
     }
-    for (const colour of colours) {
-      const chosen = current()
-      const button = el('button', {
-        class: 'swatch',
-        style: `background: ${colour.css}`,
-        'aria-pressed': String(Boolean(chosen && chosen.matches(colour))),
-      })
-      on(button, 'click', () => pick(colour))
-      row.append(button)
+    const close = () => {
+      scrim.remove()
+      menu.remove()
     }
-    return row
-  }
-
-  function choices<T>(
-    options: { value: T; icon?: string; label?: string; title: string }[],
-    current: () => T,
-    pick: (value: T) => void,
-  ) {
-    const row = el('div', { class: 'choices' })
-    for (const option of options) {
-      const button = el('button', {
-        title: option.title,
-        'aria-pressed': String(current() === option.value),
-        html: option.icon ? icon(option.icon) : undefined,
-        text: option.icon ? undefined : option.label,
-      })
-      on(button, 'click', () => pick(option.value))
-      row.append(button)
-    }
-    return row
-  }
-
-  /**
-   * The panel is only up when it has something to say.
-   *
-   * With the select tool and nothing selected there is nothing to style, and
-   * a panel covering a third of the page to offer choices about nothing is
-   * the sort of clutter this app is supposed to be the alternative to. Pick a
-   * tool or pick a shape and it comes back.
-   */
-  function shouldShow(): boolean {
-    if (!store.reader.drawing) return false
-    if (store.sketch.selection) return true
-    return store.sketch.tool !== 'select' && store.sketch.tool !== 'eraser'
+    on(scrim, 'pointerdown', close)
+    document.body.append(scrim)
+    place(menu, anchor)
   }
 
   function update() {
     clear(node)
-    node.style.display = shouldShow() ? '' : 'none'
-    if (!shouldShow()) return
-    const style = store.sketch.style
-
-    node.append(heading(L('선', 'Stroke')))
-    node.append(swatches(SketchColor.strokes, () => style.stroke, (colour) => {
-      if (colour) actions.restyle((s) => { s.stroke = colour })
-    }, false))
-
-    node.append(heading(L('채우기', 'Fill')))
-    node.append(swatches(SketchColor.fills, () => style.fill, (colour) => {
-      actions.restyle((s) => { s.fill = colour })
-    }, true))
-
-    node.append(heading(L('굵기', 'Width')))
-    node.append(choices<number>(
-      STYLE_WIDTHS.map((width, index) => ({
-        value: width,
-        label: [L('가늘게', 'Thin'), L('보통', 'Regular'), L('굵게', 'Bold')][index],
-        title: L(`${['가는', '보통', '굵은'][index]} 선`, `${['Thin', 'Regular', 'Bold'][index]} line`),
-      })),
-      () => style.width,
-      (width) => actions.restyle((s) => { s.width = width }),
-    ))
-
-    node.append(heading(L('선 모양', 'Line')))
-    node.append(choices<Dash>(
-      [
-        { value: 'solid', icon: 'line.solid', title: L('실선', 'Solid') },
-        { value: 'dashed', icon: 'line.dashed', title: L('파선', 'Dashed') },
-        { value: 'dotted', icon: 'line.dotted', title: L('점선', 'Dotted') },
-      ],
-      () => style.dash,
-      (dash) => actions.restyle((s) => { s.dash = dash }),
-    ))
-
-    node.append(heading(L('모서리', 'Corners')))
-    node.append(choices<'sharp' | 'round'>(
-      [
-        { value: 'sharp', icon: 'corner.sharp', title: L('각진 모서리', 'Sharp corners') },
-        { value: 'round', icon: 'corner.round', title: L('둥근 모서리', 'Rounded corners') },
-      ],
-      () => style.corners,
-      (corners) => actions.restyle((s) => { s.corners = corners }),
-    ))
-
-    node.append(heading(L('화살표 끝', 'Ends')))
-    node.append(choices<Head>(
-      [
-        { value: 'none', icon: 'head.none', title: L('없음', 'No head') },
-        { value: 'arrow', icon: 'head.arrow', title: L('화살촉', 'Arrowhead') },
-        { value: 'triangle', icon: 'head.triangle', title: L('채운 화살촉', 'Solid head') },
-        { value: 'bar', icon: 'head.bar', title: L('막대', 'Bar') },
-        { value: 'dot', icon: 'head.dot', title: L('점', 'Dot') },
-      ],
-      () => style.endHead,
-      (head) => actions.restyle((s) => { s.endHead = head }),
-    ))
-
-    node.append(heading(L('글자 크기', 'Text')))
-    node.append(choices<TextSize>(
-      [
-        { value: 'small', icon: 'text.small', title: L('작게', 'Small') },
-        { value: 'medium', icon: 'text.medium', title: L('보통', 'Medium') },
-        { value: 'large', icon: 'text.large', title: L('크게', 'Large') },
-      ],
-      () => style.textSize,
-      (size) => actions.restyle((s) => { s.textSize = size }),
-    ))
-
-    node.append(heading(L('투명도', 'Opacity')))
-    const slider = el('input', {
-      type: 'range', min: '20', max: '100', step: '5',
-      value: String(Math.round(style.opacity * 100)),
-      style: 'width: 100%',
-    }) as HTMLInputElement
-    on(slider, 'input', () => actions.restyle((s) => { s.opacity = Number(slider.value) / 100 }))
-    node.append(slider)
-
-    node.append(heading(L('선택한 것', 'Selection')))
-    const row = el('div', { class: 'choices' })
-    const action = (name: string, title: string, run: () => void) => {
-      const button = el('button', { title, html: icon(name) })
-      on(button, 'click', run)
-      return button
-    }
-    row.append(
-      action('border', L('선택한 것에 테두리 두르기 (B)', 'Draw a frame round the selection (B)'), actions.frameSelection),
-      action('front', L('맨 앞으로', 'Bring to front'), actions.bringToFront),
-      action('back', L('맨 뒤로', 'Send to back'), actions.sendToBack),
-      action('doc.on.doc', L('복제', 'Duplicate'), actions.duplicateSelection),
-      action('trash', L('지우기', 'Delete'), actions.deleteSelection),
+    node.style.display = store.reader.drawing ? '' : 'none'
+    if (!store.reader.drawing) return
+    const chosen = store.sketch.tool
+    node.append(
+      toolButton('select'),
+      toolButton('frame'),
+      grouped(SHAPE_TOOLS, store.sketch.lastShape),
+      grouped(INK_TOOLS, store.sketch.lastInk),
+      toolButton('text'),
+      el('div', { class: 'sketch-rack-divider' }),
     )
-    node.append(row)
+    const undo = el('button', { class: 'sketch-tool', title: L('되돌리기 (⌘Z)', 'Undo (⌘Z)'), html: icon('arrow.uturn.backward') })
+    const redo = el('button', { class: 'sketch-tool', title: L('다시 하기 (⇧⌘Z)', 'Redo (⇧⌘Z)'), html: icon('arrow.uturn.forward') })
+    on(undo, 'click', actions.undo)
+    on(redo, 'click', actions.redo)
+    node.append(undo, redo)
+
+    // The pressed square: the button of the tool, or of the group holding it.
+    for (const button of node.querySelectorAll<HTMLElement>('button.sketch-tool[data-tool]')) {
+      const tool = button.dataset.tool as SketchTool
+      const pressed = tool === chosen
+        || (SHAPE_TOOLS.includes(tool) && SHAPE_TOOLS.includes(chosen))
+        || (INK_TOOLS.includes(tool) && INK_TOOLS.includes(chosen))
+      button.setAttribute('aria-pressed', String(pressed))
+    }
   }
 
   update()

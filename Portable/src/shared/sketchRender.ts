@@ -53,9 +53,45 @@ export interface LaidLine {
   width: number
 }
 
+/** A formula set as a picture, placed in the block — top-left origin, y
+ *  down, like the lines. `image` is null while it is still being drawn. */
+export interface PlacedImage {
+  image: CanvasImageSource | null
+  frame: Rect
+}
+
 export interface Layout {
   lines: LaidLine[]
+  images: PlacedImage[]
   size: { width: number; height: number }
+}
+
+/**
+ * A piece of mathematics, set: the picture, how wide it is in points, and how
+ * far it rises above and hangs below the baseline — `SketchTypesetter.MathPiece`.
+ * The picture may still be loading; the measurements never are.
+ */
+export interface MathPiece {
+  image: CanvasImageSource | null
+  width: number
+  ascent: number
+  descent: number
+}
+
+/**
+ * Whoever can set LaTeX — the renderer installs MathJax here, and a text card
+ * with `$…$` in it is set as mathematics wherever this is not null. Where it
+ * is null (the tests, a build without it) the dollars stay as typed.
+ */
+let mathProvider: ((latex: string, points: number, color: string) => MathPiece | null) | null = null
+
+export function setMathProvider(provider: typeof mathProvider) {
+  mathProvider = provider
+}
+
+/** Whether the text has a formula in it: a pair of dollars with something between them. */
+export function hasMath(text: string): boolean {
+  return /\$[^$\n]+\$/.test(text)
 }
 
 /** A canvas kept aside purely to measure text without disturbing a drawing. */
@@ -87,6 +123,12 @@ function metrics(ctx: Ctx, points: number, family: string | null = null): Metric
   return { ascent, descent, lineHeight: ascent + descent }
 }
 
+/** The height of one line of the face, so an editor over the card sets its
+ *  lines where the canvas will. */
+export function textLineHeight(points: number, family: string | null = null): number {
+  return metrics(measuringContext(), points, family).lineHeight
+}
+
 /**
  * Lays text out, wrapped to a width when one is given and as one long line
  * otherwise, and says how big the block came out — `SketchTypesetter.layout`.
@@ -107,10 +149,14 @@ export function layoutTextAt(
   width: number | null = null,
   align: TextAlign = 'left',
   family: string | null = null,
+  color: SketchColor | null = null,
 ): Layout {
   const ctx = measuringContext()
   const { ascent, descent, lineHeight } = metrics(ctx, points, family)
   ctx.font = fontSpec(points, family)
+  if (mathProvider && hasMath(text)) {
+    return mathLayout(ctx, text, points, width, align, family, color ?? SketchColor.ink, { ascent, descent }, mathProvider)
+  }
 
   const source = text.length === 0 ? ' ' : text
   const column = width === null ? Infinity : Math.max(width, 4)
@@ -139,7 +185,77 @@ export function layoutTextAt(
       ? laid.map((line) => ({ ...line, x: blockWidth - line.width }))
       : laid
   const bottom = laid.length === 0 ? 0 : laid[laid.length - 1].baseline + descent
-  return { lines: positioned, size: { width: blockWidth, height: bottom } }
+  return { lines: positioned, images: [], size: { width: blockWidth, height: bottom } }
+}
+
+/**
+ * A card with mathematics in it — `SketchTypesetter.mathLayout`: words and
+ * formulas laid along one baseline. Each paragraph is one line (a formula is
+ * not broken across lines) and the block is as wide as its widest.
+ */
+function mathLayout(
+  ctx: Ctx,
+  text: string,
+  points: number,
+  width: number | null,
+  align: TextAlign,
+  family: string | null,
+  color: SketchColor,
+  font: { ascent: number; descent: number },
+  provider: NonNullable<typeof mathProvider>,
+): Layout {
+  interface Piece { text: string | null; math: MathPiece | null; width: number; ascent: number; descent: number }
+  const leading = points * 0.15
+  const rows: { pieces: Piece[]; width: number; ascent: number; descent: number }[] = []
+  let widest = 0
+  const pattern = /\$([^$\n]+)\$/g
+  for (const paragraph of text.split('\n')) {
+    const pieces: Piece[] = []
+    const addText = (run: string) => {
+      if (run.length === 0) return
+      pieces.push({ text: run, math: null, width: ctx.measureText(run).width, ascent: font.ascent, descent: font.descent })
+    }
+    let cursor = 0
+    for (const match of paragraph.matchAll(pattern)) {
+      const start = match.index ?? 0
+      addText(paragraph.slice(cursor, start))
+      const piece = provider(match[1], points, color.css)
+      if (piece) pieces.push({ text: null, math: piece, width: piece.width, ascent: piece.ascent, descent: piece.descent })
+      else addText(match[0])
+      cursor = start + match[0].length
+    }
+    addText(paragraph.slice(cursor))
+    if (pieces.length === 0) pieces.push({ text: null, math: null, width: 0, ascent: font.ascent, descent: font.descent })
+    const rowWidth = pieces.reduce((sum, piece) => sum + piece.width, 0)
+    rows.push({
+      pieces,
+      width: rowWidth,
+      ascent: Math.max(...pieces.map((piece) => piece.ascent)),
+      descent: Math.max(...pieces.map((piece) => piece.descent)),
+    })
+    widest = Math.max(widest, rowWidth)
+  }
+  const blockWidth = width ?? widest
+  const lines: LaidLine[] = []
+  const images: PlacedImage[] = []
+  let top = 0
+  rows.forEach((row, index) => {
+    const baseline = top + row.ascent
+    let x = align === 'center' ? (blockWidth - row.width) / 2 : align === 'right' ? blockWidth - row.width : 0
+    for (const piece of row.pieces) {
+      if (piece.text !== null) {
+        lines.push({ text: piece.text, x, baseline, width: piece.width })
+      } else if (piece.math) {
+        images.push({
+          image: piece.math.image,
+          frame: { x, y: baseline - piece.math.ascent, width: piece.math.width, height: piece.math.ascent + piece.math.descent },
+        })
+      }
+      x += piece.width
+    }
+    top = baseline + row.descent + (index === rows.length - 1 ? 0 : leading)
+  })
+  return { lines, images, size: { width: blockWidth, height: top } }
 }
 
 /**
@@ -424,7 +540,7 @@ function drawTextCard(element: SketchElement, ctx: Ctx, options: RenderOptions) 
   // A card sized to its width is set one line per paragraph; one sized to
   // its height wraps at its edge.
   const wrapAt = element.sizing === 'autoWidth' ? null : inner.width
-  const layout = layoutTextAt(element.text, element.style.points, wrapAt, element.style.textAlign, element.style.fontName)
+  const layout = layoutTextAt(element.text, element.style.points, wrapAt, element.style.textAlign, element.style.fontName, element.style.stroke)
   let x = inner.x
   if (wrapAt === null && layout.size.width < inner.width) {
     if (element.style.textAlign === 'center') x = rectMidX(inner) - layout.size.width / 2
@@ -437,7 +553,7 @@ function drawTextCard(element: SketchElement, ctx: Ctx, options: RenderOptions) 
 function drawLabel(element: SketchElement, ctx: Ctx) {
   const inner = rectInset(element.rect, TEXT_PADDING, TEXT_PADDING)
   if (inner.width <= 4) return
-  const layout = layoutTextAt(element.text, element.style.points, inner.width, 'center', element.style.fontName)
+  const layout = layoutTextAt(element.text, element.style.points, inner.width, 'center', element.style.fontName, element.style.stroke)
   const top = rectMidY(inner) + layout.size.height / 2
   ctx.save()
   ctx.beginPath()
@@ -476,6 +592,21 @@ function drawLines(
     ctx.translate(x, y)
     ctx.scale(1, -1)
     ctx.fillText(line.text, 0, 0)
+    ctx.restore()
+  }
+  // A formula's picture, turned the right way up like the letters. One
+  // still being drawn leaves its place empty; the page is redrawn when it
+  // arrives.
+  for (const placed of layout.images) {
+    if (!placed.image) continue
+    ctx.save()
+    ctx.translate(origin.x + placed.frame.x, origin.y - placed.frame.y)
+    ctx.scale(1, -1)
+    try {
+      ctx.drawImage(placed.image, 0, 0, placed.frame.width, placed.frame.height)
+    } catch {
+      // An image that failed to decode draws nothing.
+    }
     ctx.restore()
   }
   ctx.restore()

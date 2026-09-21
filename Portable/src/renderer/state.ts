@@ -74,10 +74,29 @@ export interface Store {
   }
   sketch: {
     tool: SketchTool
+    /** The shape tool last used — the one the rack's shapes button shows. */
+    lastShape: SketchTool
+    /** The pen-group tool last used — pen, highlighter or eraser. */
+    lastInk: SketchTool
     style: SketchStyle
     /** Which page's elements are selected, and which of them. */
     selection: { pageIndex: number; ids: string[]; strokeIDs: number[] } | null
   }
+}
+
+/** The rack's groups, as Figma has them: one button each, the members behind a chevron. */
+export const SHAPE_TOOLS: SketchTool[] = ['rectangle', 'ellipse', 'line', 'arrow']
+export const INK_TOOLS: SketchTool[] = ['pen', 'highlighter', 'eraser']
+
+/**
+ * Picks a tool and remembers which member of its group it was, so the group's
+ * button keeps showing the tool you reached for last. Every path that changes
+ * the tool goes through here; the store's field alone forgets.
+ */
+export function setSketchTool(tool: SketchTool) {
+  store.sketch.tool = tool
+  if (SHAPE_TOOLS.includes(tool)) store.sketch.lastShape = tool
+  if (INK_TOOLS.includes(tool)) store.sketch.lastInk = tool
 }
 
 export const store: Store = {
@@ -108,7 +127,7 @@ export const store: Store = {
   search: { open: false, query: '' },
   toast: null,
   reader: { pageCount: 0, currentPage: 0, zoom: 1, drawing: false },
-  sketch: { tool: 'select', style: new SketchStyle(), selection: null },
+  sketch: { tool: 'select', lastShape: 'rectangle', lastInk: 'pen', style: new SketchStyle(), selection: null },
 }
 
 type Listener = (changed: Set<string>) => void

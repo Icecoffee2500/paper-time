@@ -74,10 +74,13 @@ export function buildToolbar(actions: ToolbarActions): { node: HTMLElement; upda
 
   const tabs = el('div', { class: 'segmented', role: 'tablist' })
   const tabButtons: Record<string, HTMLElement> = {}
+  // The four names are English whatever language the window is in, as they
+  // are on the Mac: they are the panel's proper names, not sentences.
   for (const [tab, label] of [
-    ['details', L('정보', 'Details')],
-    ['marks', L('표시', 'Marks')],
-    ['note', L('노트', 'Note')],
+    ['details', 'Info'],
+    ['marks', 'Marks'],
+    ['note', 'Notes'],
+    ['tools', 'Tools'],
   ] as const) {
     const b = el('button', { role: 'tab', text: label })
     on(b, 'click', () => actions.setInspectorTab(tab))
