@@ -36,3 +36,6 @@ Portable/dist/
 # file tree. A folder nobody can find is a folder nobody installs from.
 Installers/*
 !Installers/README.md
+
+# wrangler keeps a local cache of which Cloudflare account is logged in.
+.wrangler/

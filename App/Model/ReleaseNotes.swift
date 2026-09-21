@@ -257,6 +257,24 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.8.1",
+            date: Text2("2026년 9월", "September 2026"),
+            note: Text2(
+                "다크 모드에서 패널이 창 바닥보다 밝아서 흰 글자가 잘 안 보였어요. 이제 읽는 자리가 창에서 가장 어두워요.",
+                "In dark mode the panels came out paler than the ground behind them, and white text sat on light grey. The surface you read on is now the darkest thing in the window."
+            ),
+            added: [],
+            fixed: [
+                Entry(
+                    Text2("다크 모드에서 패널이 너무 밝았어요", "Panels were too light in dark mode"),
+                    Text2(
+                        "유리의 몸통이 밝든 어둡든 흰색이라, 어두울 때 목록·논문·인스펙터가 뒤의 바닥보다 밝게 나왔어요. 다크 모드는 라이트 모드를 낮춘 것이 아니에요. 이제 패널이 창에서 가장 어둡고, 바닥이 그보다 밝아요. 작은 컨트롤만 흰 몸통을 그대로 써요 — 패널 위에 얹힌 것이라 떠 보여야 하거든요. 윈도우·리눅스도 같아요.",
+                        "The glass body was white however the window was dressed, so in the dark the list, the paper and the inspector came out paler than the ground behind them. Dark mode is not light mode turned down. The panels are now the darkest thing in the window and the ground is what is lighter. Only a small control keeps a white body, because it lies on a pane and has to read as raised from it. Windows and Linux match."
+                    )
+                ),
+            ]
+        ),
+        Release(
             version: "0.8.0",
             date: Text2("2026년 9월", "September 2026"),
             note: Text2(

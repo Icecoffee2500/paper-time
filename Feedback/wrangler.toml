@@ -5,4 +5,4 @@ compatibility_date = "2026-09-01"
 # Reply-to addresses and the per-address rate counter. Nothing else is stored.
 [[kv_namespaces]]
 binding = "REPLIES"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+id = "7b19d7028b7f415ab56eff88580044b6"
