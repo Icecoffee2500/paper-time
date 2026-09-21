@@ -43,8 +43,11 @@ printf '%s\n' "$DMG" > "$ASSETS"
 for pattern in \
   "Portable/dist/Paper Time Setup $TAG.exe" \
   "Portable/dist/Paper Time-$TAG-win.zip" \
+  "Portable/dist/Paper Time-$TAG-arm64-win.zip" \
   "Portable/dist/Paper Time-$TAG-x86_64.AppImage" \
-  "Portable/dist/Paper Time-$TAG-arm64.AppImage"
+  "Portable/dist/Paper Time-$TAG-arm64.AppImage" \
+  "Portable/dist/paper-time-$TAG.tar.gz" \
+  "Portable/dist/paper-time-$TAG-arm64.tar.gz"
 do
   [ -f "$pattern" ] && printf '%s\n' "$pattern" >> "$ASSETS"
 done

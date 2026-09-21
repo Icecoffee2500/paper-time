@@ -341,6 +341,13 @@ public final class AppModel {
             await adopt(folderAt: url)
             return
         }
+        // `--papertime-force-setup=1` shows the first-run screen without
+        // forgetting the library, so that screen can be looked at on a machine
+        // that already has one. It stores nothing and clears nothing.
+        guard !Boot.isSet("PAPERTIME_FORCE_SETUP") else {
+            phase = .needsLibraryFolder
+            return
+        }
         guard let result = preference.load() else {
             phase = .needsLibraryFolder
             return
@@ -374,7 +381,37 @@ public final class AppModel {
     }
 
     /// Shows the folder picker; the library stays until a folder is chosen.
+    /// Only the phone and the iPad still use it — see `chooseLibraryFolder`.
     public var isChoosingLibraryFolder = false
+
+    /// Asks for the library folder.
+    ///
+    /// AppKit's own open panel on the Mac. SwiftUI's `fileImporter` is what
+    /// this used to be, and it did not open at all from the first-run screen —
+    /// the same failure the toolbar's ＋ had in 0.4.x, where an importer
+    /// presented from a view that is itself being replaced never appears. A
+    /// button that does nothing is the worst thing on a first-run screen,
+    /// because there is nothing else on it to try.
+    public func chooseLibraryFolder() {
+        #if os(macOS)
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+        panel.prompt = L("이 폴더 쓰기", "Use This Folder")
+        panel.message = L(
+            "논문을 둘 폴더를 골라주세요. iCloud Drive나 Google Drive 폴더도 괜찮아요.",
+            "Choose the folder your papers live in. A folder in iCloud Drive or Google Drive is fine."
+        )
+        panel.begin { [weak self] response in
+            guard response == .OK, let url = panel.url else { return }
+            Task { @MainActor in await self?.adopt(folderAt: url) }
+        }
+        #else
+        isChoosingLibraryFolder = true
+        #endif
+    }
 
     public func forgetLibrary() {
         preference.clear()

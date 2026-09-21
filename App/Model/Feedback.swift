@@ -421,3 +421,135 @@ public enum FeedbackProbe {
     }
 }
 #endif
+
+#if os(macOS)
+/// Photographs the window without a hand on it, for looking at a screen that
+/// only appears in a state the app is not usually in — the first-run setup,
+/// an error page, a field being edited.
+///
+/// `--papertime-window-shot=<path in the container>`, with
+/// `--papertime-window-shot-after=<seconds>` (2 by default) and
+/// `--papertime-window-shot-quit=1`. Read-only: it posts nothing and touches
+/// no file of the reader's.
+@MainActor
+public enum WindowProbe {
+    public static func runIfAsked(app: AppModel) {
+        guard let path = Boot.setting("PAPERTIME_WINDOW_SHOT") else { return }
+        let after = Double(Boot.setting("PAPERTIME_WINDOW_SHOT_AFTER") ?? "") ?? 2
+        Task { @MainActor in
+            func say(_ text: String) { FileHandle.standardError.write(Data((text + "\n").utf8)) }
+            try? await Task.sleep(for: .seconds(after))
+            // Whichever text field was asked for, made first responder first,
+            // so a shot of "while editing" is a shot of editing.
+            if let marker = Boot.setting("PAPERTIME_WINDOW_SHOT_EDIT"),
+               let window = NSApp.keyWindow ?? NSApp.windows.first(where: \.isVisible) {
+                if let field = firstTextField(in: window.contentView, marker: marker) {
+                    window.makeFirstResponder(field)
+                    say("window probe: editing \(type(of: field))")
+                    try? await Task.sleep(for: .seconds(1.2))
+                } else {
+                    say("window probe: no text field matching \(marker)")
+                }
+            }
+            // Does the folder chooser actually come up? It is the one thing
+            // on the first-run screen, and a SwiftUI `fileImporter` there
+            // opened nothing at all.
+            if Boot.isSet("PAPERTIME_CHOOSE_FOLDER") {
+                let before = NSApp.windows.count
+                app.chooseLibraryFolder()
+                try? await Task.sleep(for: .seconds(1.5))
+                let panels = NSApp.windows.filter { $0 is NSOpenPanel }
+                say("window probe: windows \(before) → \(NSApp.windows.count); open panels: \(panels.count)")
+                for panel in panels.compactMap({ $0 as? NSOpenPanel }) {
+                    say("window probe: panel prompt \"\(panel.prompt ?? "")\" directories=\(panel.canChooseDirectories) files=\(panel.canChooseFiles)")
+                    panel.cancel(nil)
+                }
+            }
+            guard let window = NSApp.keyWindow ?? NSApp.windows.first(where: \.isVisible),
+                  let content = window.contentView
+            else { return say("window probe: no window") }
+            if Boot.isSet("PAPERTIME_WINDOW_DUMP") {
+                var lines: [String] = []
+                dump(window, depth: 0, into: &lines)
+                say("window probe: what the window says it shows —")
+                for line in lines where !line.trimmingCharacters(in: .whitespaces).isEmpty {
+                    say(line)
+                }
+            }
+            if let png = pixels(of: content) {
+                try? png.write(to: URL(fileURLWithPath: path))
+                say("window probe: wrote \(path); opaque=\(window.isOpaque) background=\(window.backgroundColor)")
+                // What is actually in the window, for the times a picture of
+                // it cannot be trusted: `cacheDisplay` misses a ScrollView's
+                // contents, so an empty-looking shot proves nothing and this
+                // does.
+                if Boot.isSet("PAPERTIME_WINDOW_DUMP") {
+                    var tree: [String] = []
+                    func walk(_ view: NSView, _ depth: Int) {
+                        guard depth < 7 else { return }
+                        tree.append(String(repeating: "  ", count: depth)
+                            + "\(type(of: view))(\(Int(view.frame.width))×\(Int(view.frame.height)))")
+                        for child in view.subviews { walk(child, depth + 1) }
+                    }
+                    if let content = window.contentView { walk(content, 0) }
+                    say("window probe: view tree —")
+                    for line in tree.prefix(40) { say(line) }
+                }
+            }
+            if Boot.isSet("PAPERTIME_WINDOW_SHOT_QUIT") { NSApp.terminate(nil) }
+        }
+    }
+
+    /// What the window says it contains.
+    ///
+    /// Neither `cacheDisplay` nor `layer.render(in:)` catches a SwiftUI tree
+    /// reliably, so "is the first-run screen actually there" cannot be settled
+    /// with a picture taken from inside the process. The accessibility tree
+    /// can settle it: it is what VoiceOver reads, which is a fair definition
+    /// of what is on screen.
+    private static func dump(_ element: Any?, depth: Int, into lines: inout [String]) {
+        guard depth < 12, let element = element as? NSObject else { return }
+        let role = (element.value(forKey: "accessibilityRole") as? String) ?? ""
+        let label = (element.value(forKey: "accessibilityLabel") as? String) ?? ""
+        let value = (element.value(forKey: "accessibilityValue") as? String) ?? ""
+        let title = (element.value(forKey: "accessibilityTitle") as? String) ?? ""
+        let said = [title, label, value].filter { !$0.isEmpty }.joined(separator: " / ")
+        if !said.isEmpty || !role.isEmpty {
+            lines.append(String(repeating: "  ", count: depth) + "\(role) \(said)")
+        }
+        let children = (element.value(forKey: "accessibilityChildren") as? [Any]) ?? []
+        for child in children { dump(child, depth: depth + 1, into: &lines) }
+    }
+
+    /// The window as it is actually drawn.
+    ///
+    /// `cacheDisplay` walks `draw(_:)` and therefore misses everything that
+    /// renders through Core Animation — which in a SwiftUI window is most of
+    /// it. It is why an inspector full of text came out as a black rectangle
+    /// and a first-run screen came out empty: not bugs in the app, bugs in the
+    /// camera. Rendering the layer tree instead catches what the screen shows,
+    /// and needs no screen-recording permission.
+    private static func pixels(of view: NSView) -> Data? {
+        // `cacheDisplay` on the content view itself, which is what the report
+        // sheet's own screenshot uses and what actually comes out right. The
+        // theme frame (`contentView.superview`) does not: asking it for a
+        // bitmap skips the layer-backed subviews and hands back black where
+        // the panels are.
+        guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return nil }
+        view.cacheDisplay(in: view.bounds, to: rep)
+        return rep.representation(using: .png, properties: [:])
+    }
+
+    private static func firstTextField(in view: NSView?, marker: String) -> NSView? {
+        guard let view else { return nil }
+        if view is NSTextField || view is NSTextView {
+            if marker == "any" { return view }
+            if let field = view as? NSTextField, field.stringValue.contains(marker) { return view }
+        }
+        for child in view.subviews {
+            if let found = firstTextField(in: child, marker: marker) { return found }
+        }
+        return nil
+    }
+}
+#endif

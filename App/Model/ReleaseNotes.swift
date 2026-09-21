@@ -257,6 +257,48 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.7.1",
+            date: Text2("2026년 9월", "September 2026"),
+            note: Text2("보내주신 네 가지를 고쳤어요.", "Four things you told us about."),
+            added: [
+                Entry(
+                    Text2("그린 것을 다른 쪽으로 옮겨요", "Move a drawing to another page"),
+                    Text2(
+                        "고른 도형이나 손글씨를 ⌘C로 복사하고, 다른 쪽으로 가서 ⌘V로 붙이면 돼요. 같은 자리에 그대로 내려앉고, 같은 쪽에 붙이면 원래 것을 가리지 않게 조금 비켜서 놓여요. ⌘X로 잘라내기도 되고, 다른 논문에 붙여도 돼요.",
+                        "Copy a selected shape or stroke with ⌘C, go to another page, and paste it with ⌘V. It lands at the same place; pasted back onto the page it came from it steps aside so it doesn't hide the original. ⌘X cuts, and it pastes into another paper too."
+                    ),
+                    devices: [.mac]
+                ),
+            ],
+            fixed: [
+                Entry(
+                    Text2("글을 쓰기 시작하면 창이 까매졌어요", "The window went black when you started typing"),
+                    Text2(
+                        "창을 일부러 투명하게 두고 칸들만 그 위에 띄워 왔는데, 뒤에 아무것도 없는 창이었어요. 글상자가 뜨는 순간 그 주변이 전부 레이어로 바뀌면서, 아무것도 없던 자리가 까맣게 칠해졌어요. 이제 창에 진짜 바탕이 깔려 있어요 — 보이는 건 전과 같은데, 칠할 것이 생겼어요.",
+                        "The window was deliberately left transparent, with the panels floating on it and nothing behind them. The moment a text box appears everything around it becomes layer-backed, and a layer-backed view with nothing behind it paints black. The window has a real backdrop now — it looks the same, and there is something there to draw."
+                    ),
+                    devices: [.mac]
+                ),
+                Entry(
+                    Text2("첫 화면이 거의 보이지 않았어요", "The first screen was barely there"),
+                    Text2(
+                        "폴더를 고르는 첫 화면에는 칸이 하나도 없어서, 투명한 창 위에 글자만 떠 있었어요. 바탕화면이 그대로 비쳐서 읽기 어려웠고요. 읽는 창이 아닌 화면들은 이제 여느 맥 창처럼 제 바탕을 가져요.",
+                        "The first screen has no panels of its own, so it was words on a transparent window with the desktop showing through. Every screen that is not the reader now has the background an ordinary Mac window has."
+                    ),
+                    devices: [.mac]
+                ),
+                Entry(
+                    Text2("폴더 고르기를 눌러도 창이 안 떴어요", "Choose Folder opened nothing"),
+                    Text2(
+                        "첫 화면에서 폴더 고르기를 눌러도 아무 일도 없었어요. SwiftUI의 파일 고르기를 그 화면에서 띄운 탓인데, 0.4.x에서 도구 막대의 ＋가 한 번만 열리던 것과 같은 자리예요. 이제 맥의 열기 창을 직접 띄워요 — 설정에서도, 메뉴에서도, 옆 목록에서도 같은 문이에요.",
+                        "Nothing happened when you pressed Choose Folder on the first screen — a SwiftUI file importer presented from a view that is itself being replaced never appears, the same failure the toolbar's ＋ had in 0.4.x. It opens AppKit's own panel now, from Settings and the menu and the sidebar alike."
+                    ),
+                    action: .addPapers,
+                    devices: [.mac]
+                ),
+            ]
+        ),
+        Release(
             version: "0.7.0",
             date: Text2("2026년 9월", "September 2026"),
             note: Text2("이제 같이 만들어요.", "Now we build it together."),
