@@ -2,6 +2,95 @@
   "repo": "Icecoffee2500/paper-time",
   "releases": [
     {
+      "version": "0.8.1",
+      "date": "2026-09-21T09:47:14Z",
+      "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.8.1/Paper.Time.0.8.1.dmg",
+      "size": 6055755,
+      "downloads": 0,
+      "builds": {
+        "mac": [
+          {
+            "label": "디스크 이미지",
+            "label_en": "Disk image",
+            "arch": "Apple Silicon",
+            "arch_en": "Apple Silicon",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.8.1/Paper.Time.0.8.1.dmg",
+            "size": 6055755,
+            "downloads": 0
+          }
+        ],
+        "windows": [
+          {
+            "label": "설치본",
+            "label_en": "Installer",
+            "arch": "64비트 · ARM",
+            "arch_en": "64-bit and ARM",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.8.1/Paper.Time.Setup.0.8.1.exe",
+            "size": 176984438,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "64비트",
+            "arch_en": "64-bit",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.8.1/Paper.Time-0.8.1-win.zip",
+            "size": 116167024,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.8.1/Paper.Time-0.8.1-arm64-win.zip",
+            "size": 121114700,
+            "downloads": 0
+          }
+        ],
+        "linux": [
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.8.1/Paper.Time-0.8.1-x86_64.AppImage",
+            "size": 113185170,
+            "downloads": 0
+          },
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.8.1/Paper.Time-0.8.1-arm64.AppImage",
+            "size": 113567638,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.8.1/paper-time-0.8.1.tar.gz",
+            "size": 107382918,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.8.1/paper-time-0.8.1-arm64.tar.gz",
+            "size": 111877458,
+            "downloads": 0
+          }
+        ]
+      },
+      "note": "다크 모드에서 패널이 바닥보다 밝아 흰 글자가 잘 안 보이던 것을 고쳤어요.",
+      "note_en": "Fixes panels coming out paler than the ground in dark mode, which put white text on light grey."
+    },
+    {
       "version": "0.8.0",
       "date": "2026-09-21T08:47:53Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.8.0/Paper.Time.0.8.0.dmg",
