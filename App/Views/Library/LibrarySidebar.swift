@@ -149,6 +149,55 @@ struct LibrarySidebar: View {
                 }
             }
 
+            // The libraries, at the top, where the one library's name used to
+            // sit. A library used to be a folder; now it is as many folders as
+            // you point it at, each keeping its own records — and its own
+            // notes, tags and collections — beside its own PDFs, so
+            // disconnecting one leaves it exactly as it was.
+            Section {
+                ForEach(model.sources, id: \.url) { source in
+                    Label {
+                        FolderName(name: source.url.lastPathComponent)
+                    } icon: {
+                        Image(systemName: source.provider.symbolName)
+                    }
+                    .count(model.counts.folders[source.url] ?? 0, current: model.scope == .folder(source.url))
+                    .scopeRow(.folder(source.url), in: model)
+                    .contextMenu {
+                        Button {
+                            #if os(macOS)
+                            NSWorkspace.shared.activateFileViewerSelecting([source.url])
+                            #endif
+                        } label: {
+                            Label(L("Finder에서 보기", "Show in Finder"), systemImage: "folder")
+                        }
+                        if source.url != model.location.url {
+                            Divider()
+                            Button(role: .destructive) {
+                                Task { await app.disconnectFolder(at: source.url) }
+                            } label: {
+                                Label(L("연결 해제", "Disconnect"), systemImage: "eject")
+                            }
+                        }
+                    }
+                    .help(source.url.path(percentEncoded: false))
+                }
+                Button {
+                    app.addLibraryFolder()
+                } label: {
+                    Label(L("라이브러리 더하기…", "Add Library…"), systemImage: "plus.circle")
+                        .foregroundStyle(.secondary)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+            } header: {
+                Text(L("라이브러리", "Libraries"))
+                    // Lines the first row up with the first paper across the
+                    // way: the list column's header is taller than this one,
+                    // and the two rows underneath should sit level.
+                    .padding(.bottom, 13)
+            }
+
             Section {
                 Label(L("모두", "All"), systemImage: "tray.full")
                     .count(model.counts.all, current: model.scope == .all)
@@ -188,83 +237,12 @@ struct LibrarySidebar: View {
                 Label(L("살펴볼 것", "Needs Review"), systemImage: "exclamationmark.triangle")
                     .count(model.counts.needsReview, current: model.scope == .needsReview)
                     .scopeRow(.needsReview, in: model)
-            } header: {
-                // The folder's name, small, where a headline used to sit
-                // over the whole list saying the same thing louder.
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(L("라이브러리", "Library"))
-                    // The folder as a chip — the same shape a passage from a
-                    // paper takes in a note, and for the same reason: it
-                    // names where something came from. Plain accent type
-                    // beside a grey header shouted; on its own pale tint it
-                    // is a label.
-                    // Pressed, the chip is the way to another folder.
-                    Button {
-                        app.chooseLibraryFolder()
-                    } label: {
-                        Text(model.displayName)
-                            .foregroundStyle(.tint)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1.5)
-                            .background(
-                                RoundedRectangle(cornerRadius: Corner.control - 2.5, style: .continuous)
-                                    .fill(Color.accentColor.opacity(0.12))
-                            )
-                            .contentShape(.rect)
-                    }
-                    .buttonStyle(.plain)
-                    .help(L("라이브러리 폴더 바꾸기", "Change the library folder"))
-                }
-                // Lines the first row up with the first paper across the way:
-                // the list column's header is taller than this one, and the
-                // two rows underneath should sit level.
-                .padding(.bottom, 13)
             }
 
             Section(L("슬립박스", "Slip-Box")) {
                 Label(L("노트", "Notes"), systemImage: "tray.full")
                     .count(model.notes.notes.count, current: model.scope == .notes)
                     .scopeRow(.notes, in: model)
-            }
-
-            // Every folder the library is reading. A library used to be one
-            // folder; now it is as many as you point it at, each keeping its
-            // own records beside its own PDFs, so disconnecting one leaves it
-            // exactly as it was.
-            Section(L("폴더", "Folders")) {
-                ForEach(model.sources, id: \.url) { source in
-                    Label(source.url.lastPathComponent, systemImage: source.provider.symbolName)
-                        .count(model.counts.folders[source.url] ?? 0, current: model.scope == .folder(source.url))
-                        .scopeRow(.folder(source.url), in: model)
-                        .contextMenu {
-                            Button {
-                                #if os(macOS)
-                                NSWorkspace.shared.activateFileViewerSelecting([source.url])
-                                #endif
-                            } label: {
-                                Label(L("Finder에서 보기", "Show in Finder"), systemImage: "folder")
-                            }
-                            if source.url != model.location.url {
-                                Divider()
-                                Button(role: .destructive) {
-                                    Task { await app.disconnectFolder(at: source.url) }
-                                } label: {
-                                    Label(L("연결 해제", "Disconnect"), systemImage: "eject")
-                                }
-                            }
-                        }
-                        .help(source.url.path(percentEncoded: false))
-                }
-                Button {
-                    app.addLibraryFolder()
-                } label: {
-                    Label(L("폴더 더하기…", "Add Folder…"), systemImage: "plus.circle")
-                        .foregroundStyle(.secondary)
-                        .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
             }
 
             Section(L("컬렉션", "Collections")) {
@@ -627,6 +605,35 @@ private struct GraphSymbol: View {
         }
         .frame(width: 17, height: 16)
         .accessibilityHidden(true)
+    }
+}
+
+/// A folder's name, as a chip.
+///
+/// The shape the library's name had in the header that used to stand over
+/// this list, and the shape a passage from a paper takes in a note, for the
+/// same reason in all three places: it names where something came from.
+/// There is more than one library now, so the name belongs on the row of the
+/// library it names rather than once at the top.
+private struct FolderName: View {
+    let name: String
+
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: Corner.control - 2.5, style: .continuous)
+    }
+
+    var body: some View {
+        Text(name)
+            .foregroundStyle(.tint)
+            .lineLimit(1)
+            .truncationMode(.middle)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1.5)
+            .background {
+                shape
+                    .fill(Color.accentColor.opacity(0.12))
+                    .overlay(shape.strokeBorder(Color.accentColor.opacity(0.22), lineWidth: 0.5))
+            }
     }
 }
 

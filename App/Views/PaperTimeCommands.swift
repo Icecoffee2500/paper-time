@@ -53,6 +53,11 @@ struct PaperTimeCommands: Commands {
 
             Divider()
 
+            // Both halves of it: another folder to read beside this one, and
+            // a different folder to start from.
+            Button(L("라이브러리 더하기…", "Add Library…")) {
+                model.addLibraryFolder()
+            }
             Button(L("라이브러리 폴더 바꾸기…", "Change Library Folder…")) {
                 model.chooseLibraryFolder()
             }

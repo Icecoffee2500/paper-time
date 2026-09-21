@@ -106,6 +106,44 @@ public final class DocumentSession {
         self.markups = fileMarks
         self.hasForeignInk = hasForeignInk ?? Self.scanForForeignInk(in: document)
         sortMarkups()
+        Self.live.append(Weak(self))
+    }
+
+    // MARK: - Who has this paper open
+
+    /// Every session alive in this process, weakly.
+    ///
+    /// A session writes its marks back to the path it opened, so a file
+    /// renamed from the library has to find whoever is holding it — in this
+    /// window, in a pane beside it, or in a paper's own window — and say
+    /// where the file went. One that was never told would save the paper back
+    /// under its old name, and the rename would come undone the next time
+    /// somebody highlighted a line.
+    private final class Weak {
+        weak var session: DocumentSession?
+        init(_ session: DocumentSession) { self.session = session }
+    }
+
+    private static var live: [Weak] = []
+
+    public static func open(forPaper id: UUID) -> [DocumentSession] {
+        live.removeAll { $0.session == nil }
+        return live.compactMap(\.session).filter { $0.paper.id == id }
+    }
+
+    /// The file this session is reading has been given another name.
+    ///
+    /// Everything else about the paper is unchanged — same record, same
+    /// identifier, same marks — so nothing is reloaded. Only the path the
+    /// next save writes to, and the watcher listening at the old one.
+    public func documentMoved(to url: URL, meta: PaperMeta) {
+        paper.documentURL = url
+        paper.meta = meta
+        fileFingerprint = FileFingerprint(url: url)
+        watcher = nil
+        pollTask?.cancel()
+        pollTask = nil
+        startWatching()
     }
 
     /// Fills in the marks already in the file, just after opening.

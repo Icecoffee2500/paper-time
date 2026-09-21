@@ -3,6 +3,7 @@ import Foundation
 import LibraryStore
 import MetadataPipeline
 import Observation
+import PDFReader
 import PaperCore
 import SwiftUI
 
@@ -65,12 +66,17 @@ public final class LibraryModel {
     ///
     /// Every folder is a library in its own right — its own `.papertime`, its
     /// own records beside its own PDFs — and they are read together into one
-    /// list. The first one is where the slip-box, the tags and the
-    /// collections live, because those are about the whole library rather
-    /// than about a folder, and a note that moved house when you disconnected
-    /// a drive would be a note you lost.
+    /// list. Everything a folder's papers carry is kept in that folder: their
+    /// records, their notes, and the tags and collections they wear. So a
+    /// folder opened on another machine arrives whole, and disconnecting one
+    /// here takes exactly that folder and leaves the rest alone.
     public private(set) var extraSources: [LibraryLocation] = []
     private var extraStores: [LibraryStore] = []
+
+    /// Each folder's own vocabulary, as it is on disk. The lists the app
+    /// shows — `manifest.tags`, `collections` — are these merged.
+    private var manifests: [URL: LibraryManifest] = [:]
+    private var collectionSets: [URL: CollectionSet] = [:]
 
     /// Every folder the library is reading, the first one first.
     public var sources: [LibraryLocation] { [location] + extraSources }
@@ -392,11 +398,13 @@ public final class LibraryModel {
         }
         papers = loaded
         loadFailures = failures
-        collections = (try? await store.loadCollections()) ?? CollectionSet()
+        await loadVocabulary()
         rebuildDerivedIndexes()
-        manifest = (try? await store.loadManifest()) ?? manifest
         looseDocuments = loose
+        notes.read(folders: allStores, of: { [weak self] id in self?.folder(ofPaper: id) },
+                   orElse: { [weak self] in self?.importDestination })
         await notes.load()
+        await settleVocabulary()
         startWatchingFolder()
     }
 
@@ -1162,12 +1170,187 @@ public final class LibraryModel {
         papers[index].meta = meta
     }
 
+    // MARK: - The file's name
+
+    /// Renames the PDF on disk.
+    ///
+    /// The name in the app and the name in Finder are meant to be the same
+    /// name, so this moves the file. Whoever has the paper open is written
+    /// out first and then told where it went: a session saves its marks back
+    /// to the path it opened from, and one that was never told would put the
+    /// paper back under its old name a highlight later.
+    public func rename(paperID: UUID, to name: String) async throws {
+        guard let paper = papers.first(where: { $0.id == paperID }) else { return }
+        for session in DocumentSession.open(forPaper: paperID) { await session.flush() }
+        let renamed = try await store(for: paper).rename(paper, to: name)
+        if let index = papers.firstIndex(where: { $0.id == paperID }) {
+            papers[index].meta = renamed.meta
+            papers[index].documentURL = renamed.documentURL
+        }
+        for session in DocumentSession.open(forPaper: paperID) {
+            session.documentMoved(to: renamed.documentURL, meta: renamed.meta)
+        }
+    }
+
+    /// What each folder actually holds, written to stderr.
+    ///
+    /// `--papertime-folders=1`. Everything a folder's papers carry is kept in
+    /// that folder now — their records, their notes, and the tags and
+    /// collections they wear — and the only way to see that without a hand on
+    /// the machine is to ask each folder what is written in it.
+    public func reportFolders() async {
+        var report = ""
+        for source in allStores {
+            let mine = papers.filter { rootURL(of: $0) == source.root }
+            let folderManifest = try? await source.loadManifest()
+            let set = try? await source.loadCollections()
+            let box = await source.loadNotes()
+            report += "folder \(source.root.lastPathComponent):"
+            report += " papers=\(mine.count)"
+            report += " tags=[\((folderManifest?.tags ?? []).map(\.name).joined(separator: ","))]"
+            report += " collections=[\((set?.collections ?? []).map(\.name).joined(separator: ","))]"
+            report += " notes=[\(box.map(\.id).joined(separator: ","))]\n"
+        }
+        report += "shown: tags=[\(manifest.tags.map(\.name).joined(separator: ","))]"
+        report += " collections=[\(collections.collections.map(\.name).joined(separator: ","))]"
+        report += " notes=\(notes.notes.count)\n"
+        FileHandle.standardError.write(Data(report.utf8))
+    }
+
+    // MARK: - The vocabulary, folder by folder
+
+    /// The folder a paper is in, as a store — nil when no folder claims it.
+    func folder(ofPaper id: UUID) -> LibraryStore? {
+        guard let paper = papers.first(where: { $0.id == id }) else { return nil }
+        let root = rootURL(of: paper)
+        return allStores.first { $0.root == root }
+    }
+
+    /// Reads every folder's tags and collections.
+    ///
+    /// A tag and a collection are names the reader gave a shelf, and they are
+    /// kept in the folder whose papers wear them rather than in one folder
+    /// for all of them. A folder is then whole on its own: carry it to
+    /// another machine and its papers arrive still tagged and still filed.
+    /// A name two folders use is written in both under the same identifier,
+    /// and shows once here.
+    private func loadVocabulary() async {
+        var readManifests: [URL: LibraryManifest] = [:]
+        var readCollections: [URL: CollectionSet] = [:]
+        for source in allStores {
+            readManifests[source.root] = try? await source.loadManifest()
+            readCollections[source.root] = try? await source.loadCollections()
+        }
+        manifests = readManifests
+        collectionSets = readCollections
+        mergeVocabulary()
+    }
+
+    /// One list of tags and one of collections, out of all the folders'.
+    private func mergeVocabulary() {
+        var tags: [Tag] = []
+        var seenTags: Set<UUID> = []
+        var found: [Collection] = []
+        var seenCollections: Set<UUID> = []
+        for source in sources {
+            for tag in manifests[source.url]?.tags ?? [] where seenTags.insert(tag.id).inserted {
+                tags.append(tag)
+            }
+            for collection in collectionSets[source.url]?.collections ?? []
+            where seenCollections.insert(collection.id).inserted {
+                found.append(collection)
+            }
+        }
+        var home = manifests[location.url] ?? manifest
+        home.tags = tags
+        manifest = home
+        var set = collectionSets[location.url] ?? collections
+        set.collections = found.sorted { $0.sortIndex < $1.sortIndex }
+        collections = set
+    }
+
+    /// Writes each folder's vocabulary into it.
+    ///
+    /// A library that was one folder kept all of it in that folder, and a tag
+    /// put on a paper while its folder was unplugged was written where the
+    /// paper was not. Both are mended by the same pass, which runs on every
+    /// read and does nothing at all once every folder has what it needs.
+    private func settleVocabulary() async {
+        for source in allStores {
+            let mine = papers.filter { rootURL(of: $0) == source.root }
+            guard !mine.isEmpty else { continue }
+            await define(
+                tags: mine.flatMap(\.meta.tagIDs),
+                collections: mine.flatMap(\.meta.collectionIDs),
+                in: source
+            )
+        }
+    }
+
+    /// Puts the definitions a paper's folder is missing into it.
+    private func settleVocabulary(forPaper id: UUID) async {
+        guard let paper = papers.first(where: { $0.id == id }) else { return }
+        let root = rootURL(of: paper)
+        guard let target = allStores.first(where: { $0.root == root }) else { return }
+        await define(tags: paper.meta.tagIDs, collections: paper.meta.collectionIDs, in: target)
+    }
+
+    /// A folder's manifest as last read, read now if this is the first time.
+    private func manifest(of target: LibraryStore) async -> LibraryManifest {
+        if let known = manifests[target.root] { return known }
+        let read = (try? await target.loadManifest())
+            ?? LibraryManifest(displayName: target.root.lastPathComponent)
+        manifests[target.root] = read
+        return read
+    }
+
+    private func collectionSet(of target: LibraryStore) async -> CollectionSet {
+        if let known = collectionSets[target.root] { return known }
+        let read = (try? await target.loadCollections()) ?? CollectionSet()
+        collectionSets[target.root] = read
+        return read
+    }
+
+    private func define(tags: [UUID], collections ids: [UUID], in target: LibraryStore) async {
+        let root = target.root
+        var folderManifest = await manifest(of: target)
+        var manifestChanged = false
+        for id in tags where !folderManifest.tags.contains(where: { $0.id == id }) {
+            guard let tag = manifest.tags.first(where: { $0.id == id }) else { continue }
+            folderManifest.tags.append(tag)
+            manifestChanged = true
+        }
+        if manifestChanged {
+            manifests[root] = folderManifest
+            try? await target.saveManifest(folderManifest)
+        }
+
+        var set = await collectionSet(of: target)
+        var setChanged = false
+        for id in ids where !set.collections.contains(where: { $0.id == id }) {
+            guard let collection = collections.collections.first(where: { $0.id == id }) else { continue }
+            set.collections.append(collection)
+            setChanged = true
+        }
+        if setChanged {
+            collectionSets[root] = set
+            try? await target.saveCollections(set)
+        }
+        if manifestChanged || setChanged { mergeVocabulary() }
+    }
+
     // MARK: - Tags and collections
 
+    /// A new tag goes into the folder being looked at — the one a paper added
+    /// now would go into — and travels to the others as papers there wear it.
     public func addTag(named name: String, color: Tag.Color) async -> Tag {
         let tag = Tag(name: name, color: color)
-        manifest.tags.append(tag)
-        try? await store.saveManifest(manifest)
+        let target = importDestination
+        var folderManifest = await manifest(of: target)
+        folderManifest.tags.append(tag)
+        manifests[target.root] = folderManifest
+        try? await target.saveManifest(folderManifest)
+        mergeVocabulary()
         return tag
     }
 
@@ -1181,17 +1364,22 @@ public final class LibraryModel {
             baseline: paper.meta
         ) {
             applyLocally(meta: saved, to: paperID)
+            // The folder holding the paper holds the names it wears, so a
+            // tag put on here is written there too, once.
+            await settleVocabulary(forPaper: paperID)
         }
     }
 
     public func addCollection(named name: String, rule: Collection.SmartRule? = nil) async {
-        var set = collections
+        let target = importDestination
+        var set = await collectionSet(of: target)
         set.collections.append(
-            Collection(name: name, rule: rule, sortIndex: set.collections.count)
+            Collection(name: name, rule: rule, sortIndex: collections.collections.count)
         )
-        collections = set
+        collectionSets[target.root] = set
+        try? await target.saveCollections(set)
+        mergeVocabulary()
         rebuildDerivedIndexes()
-        try? await store.saveCollections(set)
     }
 
     /// Adds one paper to one collection, leaving its other memberships alone.
@@ -1206,6 +1394,9 @@ public final class LibraryModel {
             baseline: paper.meta
         ) {
             applyLocally(meta: saved, to: paperID)
+            // The folder holding the paper holds the names it wears, so a
+            // tag put on here is written there too, once.
+            await settleVocabulary(forPaper: paperID)
         }
     }
 
@@ -1220,6 +1411,9 @@ public final class LibraryModel {
             baseline: paper.meta
         ) {
             applyLocally(meta: saved, to: paperID)
+            // The folder holding the paper holds the names it wears, so a
+            // tag put on here is written there too, once.
+            await settleVocabulary(forPaper: paperID)
         }
     }
 
@@ -1233,6 +1427,9 @@ public final class LibraryModel {
             baseline: paper.meta
         ) {
             applyLocally(meta: saved, to: paperID)
+            // The folder holding the paper holds the names it wears, so a
+            // tag put on here is written there too, once.
+            await settleVocabulary(forPaper: paperID)
         }
     }
 }

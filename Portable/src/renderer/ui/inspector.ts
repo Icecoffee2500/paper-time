@@ -20,6 +20,8 @@ export interface InspectorActions {
   editMeta: (id: string, patch: Record<string, unknown>) => void
   editState: (id: string, patch: Record<string, unknown>) => void
   reveal: (id: string) => void
+  /** Renames the file on disk. Answers with what went wrong, or nothing. */
+  rename: (id: string, name: string) => Promise<string | null>
   copyKey: (id: string) => void
   openAuthor: (name: string) => void
   /** The answer to "paper or document?", which decides the rest of this form. */
@@ -99,6 +101,47 @@ function editable(
   return el('div', { class: 'field' }, [
     el('div', { class: 'field-label', text: label }),
     input,
+  ])
+}
+
+/**
+ * The name of the file, as a field.
+ *
+ * Typing here renames it on disk. The library is a folder of PDFs under the
+ * names a person gave them, so a name you can read but have to leave the app
+ * to fix is a name in the wrong place. Only the file moves: the record is
+ * named after the paper's identifier, so marks, ink and notes stay put.
+ */
+function fileName(paper: Paper, actions: InspectorActions): HTMLElement {
+  const shown = () => paper.meta.file.originalName
+    || paper.meta.file.relativePath.split(/[\\/]/).pop()
+    || paper.meta.file.relativePath
+  const input = el('input', { type: 'text' }) as HTMLInputElement
+  input.value = shown()
+  const trouble = el('div', { class: 'field-error' })
+  let last = input.value
+  const send = async () => {
+    if (input.value === last) return
+    last = input.value
+    const message = await actions.rename(paper.id, input.value)
+    trouble.textContent = message ?? ''
+    if (message) {
+      input.value = shown()
+      last = input.value
+    }
+  }
+  on(input, 'blur', () => void send())
+  on(input, 'keydown', (event: KeyboardEvent) => {
+    event.stopPropagation()
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      input.blur()
+    }
+  })
+  return el('div', { class: 'field' }, [
+    el('div', { class: 'field-label', text: L('파일', 'File') }),
+    input,
+    trouble,
   ])
 }
 
@@ -227,7 +270,7 @@ function details(body: HTMLElement, paper: Paper, actions: InspectorActions) {
   } else {
     body.append(field(L('종류', 'Kind'), L('일반 문서', 'Document')))
   }
-  body.append(field(L('파일', 'File'), meta.file.originalName || meta.file.relativePath))
+  body.append(fileName(paper, actions))
   body.append(field(L('쪽', 'Pages'), String(meta.file.pageCount)))
   body.append(field(L('더한 날', 'Added'), meta.addedAt.toLocaleDateString()))
 

@@ -14,7 +14,7 @@ import path from 'node:path'
 import { CHANNEL, type LibrarySnapshot } from '../shared/api.js'
 import { Library, deviceIdentity, readJSON, writeJSON } from './library.js'
 import * as L from './layout.js'
-import { PaperMeta, PaperState } from '../shared/model.js'
+import { PaperMeta, PaperState, type Collection, type Tag } from '../shared/model.js'
 import { DEFAULT_EXPORT, formatBibliography } from '../shared/bibtex.js'
 import { SketchElement } from '../shared/sketch.js'
 import { InkStroke } from '../shared/ink.js'
@@ -62,6 +62,15 @@ let library: Library | null = null
 let extraLibraries: Library[] = []
 
 const allLibraries = (): Library[] => (library ? [library, ...extraLibraries] : [])
+
+/** True when this run was told which folder to open, so it is a probe. */
+const isProbeLibrary = () => probeArgument('library') != null
+
+/** Which folders were open beside the first — unless this run is a probe. */
+function rememberExtras() {
+  if (isProbeLibrary()) return
+  update({ extraRoots: extraLibraries.map((one) => one.root) })
+}
 
 /** Which folder holds a paper, filled in as the list is read. */
 const ownerByID = new Map<string, Library>()
@@ -243,11 +252,13 @@ async function snapshot(): Promise<LibrarySnapshot | { error: string }> {
       }
       loose += (await one.looseFiles()).length
     }
+    await settleVocabulary(rows)
+    const { tags, collections } = await vocabulary()
     return {
       root: library.root,
       roots: allLibraries().map((one) => one.root),
-      manifest: await library.manifest(),
-      collections: await library.collections(),
+      manifest: { ...(await library.manifest()), tags },
+      collections: { ...(await library.collections()), collections },
       papers: rows,
       looseCount: loose,
     }
@@ -256,10 +267,77 @@ async function snapshot(): Promise<LibrarySnapshot | { error: string }> {
   }
 }
 
+/**
+ * Every folder's tags and collections, merged into the one list the window
+ * shows.
+ *
+ * A tag and a collection are names the reader gave a shelf, and they are kept
+ * in the folder whose papers wear them rather than in one folder for all of
+ * them — so a folder carried to another machine arrives with its papers still
+ * tagged and still filed. A name two folders use is written in both under the
+ * same identifier and shows once here.
+ */
+async function vocabulary(): Promise<{ tags: Tag[]; collections: Collection[] }> {
+  const tags: Tag[] = []
+  const seenTags = new Set<string>()
+  const collections: Collection[] = []
+  const seenCollections = new Set<string>()
+  for (const one of allLibraries()) {
+    for (const tag of (await one.manifest()).tags ?? []) {
+      if (seenTags.has(tag.id)) continue
+      seenTags.add(tag.id)
+      tags.push(tag)
+    }
+    for (const collection of (await one.collections()).collections ?? []) {
+      if (seenCollections.has(collection.id)) continue
+      seenCollections.add(collection.id)
+      collections.push(collection)
+    }
+  }
+  collections.sort((a, b) => (a.sortIndex ?? 0) - (b.sortIndex ?? 0))
+  return { tags, collections }
+}
+
+/**
+ * Writes into each folder the tags and collections its own papers wear.
+ *
+ * A library that was one folder kept all of it in that folder, and a tag put
+ * on a paper while its folder was away was written where the paper was not.
+ * Both are mended by the same pass, which runs on every read and writes
+ * nothing at all once every folder has what it needs.
+ */
+async function settleVocabulary(rows: LibrarySnapshot['papers']): Promise<void> {
+  const libraries = allLibraries()
+  if (libraries.length < 2) return
+  const { tags, collections } = await vocabulary()
+  for (const one of libraries) {
+    const mine = rows.filter((row) => row.root === one.root)
+    if (mine.length === 0) continue
+    const wanted = (key: 'tagIDs' | 'collectionIDs') =>
+      new Set(mine.flatMap((row) => (row.meta[key] as string[] | undefined) ?? []))
+
+    const manifest = await one.manifest()
+    const has = new Set((manifest.tags ?? []).map((tag) => tag.id))
+    const missingTags = tags.filter((tag) => wanted('tagIDs').has(tag.id) && !has.has(tag.id))
+    if (missingTags.length > 0) {
+      await one.saveManifest({ ...manifest, tags: [...(manifest.tags ?? []), ...missingTags] })
+    }
+
+    const set = await one.collections()
+    const holds = new Set((set.collections ?? []).map((entry) => entry.id))
+    const missing = collections.filter(
+      (entry) => wanted('collectionIDs').has(entry.id) && !holds.has(entry.id),
+    )
+    if (missing.length > 0) {
+      await one.saveCollections([...(set.collections ?? []), ...missing])
+    }
+  }
+}
+
 async function openLibrary(root: string) {
   stopWatching?.()
   library = await Library.open(root)
-  rememberLibrary(root)
+  if (!isProbeLibrary()) rememberLibrary(root)
   extraLibraries = []
   for (const extra of settings().extraRoots ?? []) {
     if (extra === root) continue
@@ -359,7 +437,7 @@ const handlers: Record<string, Handler> = {
     if (!library || chosen === library.root) return snapshot()
     if (extraLibraries.some((one) => one.root === chosen)) return snapshot()
     extraLibraries.push(await Library.open(chosen))
-    update({ extraRoots: extraLibraries.map((one) => one.root) })
+    rememberExtras()
     startWatchingFolders()
     return snapshot()
   }) as Handler,
@@ -367,7 +445,7 @@ const handlers: Record<string, Handler> = {
   /** Stops reading a folder. Its files and its records stay where they are. */
   'library:removeFolder': (async ({ root }: { root: string }) => {
     extraLibraries = extraLibraries.filter((one) => one.root !== root)
-    update({ extraRoots: extraLibraries.map((one) => one.root) })
+    rememberExtras()
     startWatchingFolders()
     return snapshot()
   }) as Handler,
@@ -419,6 +497,17 @@ const handlers: Record<string, Handler> = {
     Object.assign(meta, patch)
     await owner.saveMeta(meta)
     return meta.encode()
+  }) as Handler,
+
+  // Renaming the file, from the inspector. The reader may have it open: the
+  // window is told, and re-reads the paper from its new name.
+  'paper:rename': (async ({ id, name }: { id: string; name: string }) => {
+    const owner = await ownerOf(id)
+    if (!owner) return { error: 'missing' }
+    const result = await owner.rename(id, name)
+    if ('error' in result) return result
+    send('library:changed')
+    return { name: result.file ? path.basename(result.file) : name }
   }) as Handler,
 
   'paper:reveal': (async ({ id }: { id: string }) => {
@@ -487,8 +576,27 @@ const handlers: Record<string, Handler> = {
     return { written: chosen.length, path: result.filePath }
   }) as Handler,
 
-  'collections:save': (async ({ collections }: { collections: unknown[] }) =>
-    library?.saveCollections(collections as never) ?? null) as Handler,
+  // The window sends the whole list; it is put back folder by folder. Each
+  // folder keeps the collections it already had, and a new one goes into the
+  // first — the folder a paper added now would go into.
+  'collections:save': (async ({ collections }: { collections: unknown[] }) => {
+    const all = collections as Collection[]
+    const libraries = allLibraries()
+    if (libraries.length === 0) return null
+    const known = new Set<string>()
+    const held: { one: (typeof libraries)[number]; ids: Set<string> }[] = []
+    for (const one of libraries) {
+      const ids = new Set(((await one.collections()).collections ?? []).map((entry) => entry.id))
+      for (const id of ids) known.add(id)
+      held.push({ one, ids })
+    }
+    for (const [index, { one, ids }] of held.entries()) {
+      const mine = all.filter((entry) => ids.has(entry.id) || (index === 0 && !known.has(entry.id)))
+      if (mine.length === 0 && ids.size === 0) continue
+      await one.saveCollections(mine)
+    }
+    return null
+  }) as Handler,
 
   'window:minimize': (_args: never, sender: BrowserWindow | null) => (sender ?? window)?.minimize(),
   'window:toggleMaximize': (_args: never, sender: BrowserWindow | null) => {
@@ -765,9 +873,19 @@ app.whenReady().then(async () => {
   // test never touches a real library.
   const root = probeArgument('library') ?? settings().libraryRoot
   if (root && fs.existsSync(root)) {
-    library = await Library.open(root)
-    if (!probeArgument('library')) rememberLibrary(root)
-    stopWatching = watchLibrary(root, () => send('library:changed'))
+    if (isProbeLibrary()) {
+      // A probe opens its own folder and remembers nothing — not the folder,
+      // and not the ones beside it, which belong to whoever uses this copy.
+      library = await Library.open(root)
+      extraLibraries = []
+      startWatchingFolders()
+    } else {
+      // Through the same door a chosen folder goes through, so the folders
+      // opened beside it come back too. They did not, for a while: the
+      // library was opened here and the extras only in `openLibrary`, so
+      // every launch forgot them.
+      await openLibrary(root)
+    }
     send('library:opened', await snapshot())
   }
   nativeTheme.on('updated', () => send('theme:changed', nativeTheme.shouldUseDarkColors))

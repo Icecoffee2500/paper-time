@@ -35,6 +35,8 @@ import { PaperMeta, PaperState } from '../shared/model.js'
 import { entryFor, formatEntry, protectTitle } from '../shared/bibtex.js'
 import { escapeLaTeX } from '../shared/latexTable.js'
 import { readDrawings, writeDrawings, stripOwnedForDisplay } from '../main/pdfwrite.js'
+import { Library } from '../main/library.js'
+import { providerIcon, providerOf } from '../shared/cloudProvider.js'
 import { encodeSwiftJSON as encode } from '../shared/coding.js'
 import { splitDock, splitPapers, splitRemove, zoneAt, zoneRect } from '../shared/split.js'
 
@@ -687,6 +689,53 @@ async function main() {
     store.papers = before.papers
     store.shelf = before.shelf
     store.roots = before.roots
+  })
+
+  await test('a folder says which cloud it is in, on every desktop', () => {
+    // The Mac's own paths, so the two builds agree about the same folder.
+    assert.equal(providerOf('/Users/me/Library/Mobile Documents/com~apple~CloudDocs/Papers'), 'iCloudDrive')
+    assert.equal(providerOf('/Users/me/Library/CloudStorage/GoogleDrive-me@x.com/My Drive/Papers'), 'googleDrive')
+    // And the ones the other two desktops use.
+    assert.equal(providerOf('G:\\My Drive\\Papers'), 'googleDrive')
+    assert.equal(providerOf('C:\\Users\\me\\OneDrive - Acme\\Papers'), 'oneDrive')
+    assert.equal(providerOf('C:\\Users\\me\\iCloudDrive\\Papers'), 'iCloudDrive')
+    assert.equal(providerOf('/home/me/Dropbox/Papers'), 'dropbox')
+    assert.equal(providerOf('/home/me/Papers'), 'local')
+    assert.equal(providerIcon(providerOf('/home/me/Papers')), 'internaldrive')
+    assert.equal(providerIcon(providerOf('/home/me/Dropbox/Papers')), 'cloud')
+  })
+
+  await test('renaming a paper moves the file and leaves the record alone', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'papertime-rename-'))
+    try {
+      const library = await Library.open(root)
+      fs.writeFileSync(path.join(root, '2403.18293v1.pdf'), '%PDF-1.7\n')
+      const imported = await library.importPDF(path.join(root, '2403.18293v1.pdf'), 12)
+      assert.ok(imported)
+      const record = path.join(root, '.papertime', 'papers', imported.id)
+
+      const renamed = await library.rename(imported.id, 'Diffusion Policy')
+      assert.ok(!('error' in renamed), 'the rename should have gone through')
+      // The extension is kept whatever is typed: a PDF that stops being
+      // called .pdf is one the desktop stops opening.
+      assert.ok(fs.existsSync(path.join(root, 'Diffusion Policy.pdf')))
+      assert.ok(!fs.existsSync(path.join(root, '2403.18293v1.pdf')))
+      // Same record, same identifier — marks, ink and notes do not move.
+      assert.ok(fs.existsSync(record))
+      const meta = new PaperMeta(JSON.parse(fs.readFileSync(path.join(record, 'meta.json'), 'utf8')))
+      assert.equal(meta.file.relativePath, 'Diffusion Policy.pdf')
+      assert.equal(meta.file.originalName, 'Diffusion Policy.pdf')
+
+      // A name already on another file, and a name that is a path, are both
+      // refused — and nothing moves.
+      fs.writeFileSync(path.join(root, 'taken.pdf'), '%PDF-1.7\n')
+      assert.deepEqual(await library.rename(imported.id, 'taken.pdf'), { error: 'taken' })
+      assert.deepEqual(await library.rename(imported.id, '../elsewhere.pdf'), { error: 'notAName' })
+      assert.deepEqual(await library.rename(imported.id, '   '), { error: 'empty' })
+      assert.ok(fs.existsSync(path.join(root, 'Diffusion Policy.pdf')))
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+    }
   })
 
   await test('the rights handlers are the same list the Mac looks for', () => {

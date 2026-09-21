@@ -174,6 +174,18 @@ const SHAPES: Record<string, string> = {
     <circle cx="11.6" cy="11.6" r="1.5"/>
     <path d="M11.6 8.9v.8M11.6 13.5v.8M13.9 10.2l-.7.4M10 12.6l-.7.4M13.9 13l-.7-.4M10 10.6l-.7-.4"/>`,
 
+  // Where a library folder lives: a cloud, Apple's cloud, or this machine.
+  // Drawn rather than borrowed — SF Symbols are for Apple's platforms.
+  'cloud': `
+    <path d="M4.6 12.4h6.2a3 3 0 0 0 .3-6 4.1 4.1 0 0 0-7.7-.6A2.9 2.9 0 0 0 4.6 12.4Z"/>`,
+  'icloud': `
+    <path d="M4.6 12.4h6.2a3 3 0 0 0 .3-6 4.1 4.1 0 0 0-7.7-.6A2.9 2.9 0 0 0 4.6 12.4Z"/>
+    <path d="M6.4 9.6 8 8l1.6 1.6"/>`,
+  'internaldrive': `
+    <rect x="1.9" y="4.2" width="12.2" height="7.6" rx="1.8"/>
+    <circle cx="11.4" cy="8" r="1.2"/>
+    <path d="M4.2 8h3.6"/>`,
+
   // ------------------------------------------------------- the window's own
   'window.minimize': `<path d="M3 8h10"/>`,
   'window.maximize': `<rect x="3.2" y="3.2" width="9.6" height="9.6" rx="1.2"/>`,

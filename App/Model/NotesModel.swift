@@ -5,15 +5,31 @@ import Observation
 
 /// The slip-box: every note in the library, and what points at what.
 ///
-/// Notes are kept together rather than under the paper they came from, which
-/// is the whole idea of a Zettelkasten — a note earns its place by what it
-/// links to, not by which folder it sits in. The paper a note was written
-/// against is remembered on the note itself, so the reader can still ask "what
-/// did I write about this one".
+/// Inside one folder the notes are kept together rather than under the paper
+/// they came from, which is the whole idea of a Zettelkasten — a note earns
+/// its place by what it links to, not by which folder it sits in. The paper a
+/// note was written against is remembered on the note itself, so the reader
+/// can still ask "what did I write about this one".
+///
+/// Across folders it is the other way round: a note is written into the
+/// folder of the paper it is about, because everything a folder's papers
+/// carry belongs in that folder. Carry the folder to another machine and the
+/// notes come with it; disconnect it here and they go quietly with it, which
+/// is what disconnecting a folder means. The boxes are read together, so the
+/// box the reader sees is still one box.
 @MainActor
 @Observable
 public final class NotesModel {
+    /// The first folder: where a note about no paper in particular goes.
     private let store: LibraryStore
+    /// Every folder's box, read together.
+    @ObservationIgnored private var folders: [LibraryStore] = []
+    /// Which folder each note came from, so it goes back to the same one.
+    @ObservationIgnored private var folderByNote: [String: URL] = [:]
+    /// The folder a paper is in, asked of the library.
+    @ObservationIgnored private var folderOfPaper: (UUID) -> LibraryStore? = { _ in nil }
+    /// And the folder being looked at, for a note about no paper.
+    @ObservationIgnored private var folderInView: () -> LibraryStore? = { nil }
 
     public private(set) var notes: [Zettel] = []
     public private(set) var byID: [String: Zettel] = [:]
@@ -42,13 +58,69 @@ public final class NotesModel {
 
     public init(store: LibraryStore) {
         self.store = store
+        self.folders = [store]
+    }
+
+    /// Told by the library which folders are open, and how to find the one a
+    /// paper is in. Weak closures rather than a back-reference: the library
+    /// owns this.
+    func read(
+        folders: [LibraryStore],
+        of folderOfPaper: @escaping (UUID) -> LibraryStore?,
+        orElse folderInView: @escaping () -> LibraryStore?
+    ) {
+        self.folders = folders
+        self.folderOfPaper = folderOfPaper
+        self.folderInView = folderInView
+    }
+
+    /// Where a note is written: the folder it was read from, else the folder
+    /// of the paper it is about, else the one being looked at.
+    private func folder(for note: Zettel) -> LibraryStore {
+        if let root = folderByNote[note.id], let found = folders.first(where: { $0.root == root }) {
+            return found
+        }
+        if let paperID = note.paperID, let found = folderOfPaper(paperID) { return found }
+        return folderInView() ?? store
     }
 
     // MARK: - Reading
 
     public func load() async {
-        let loaded = await store.loadNotes()
+        var loaded: [Zettel] = []
+        var homes: [String: URL] = [:]
+        for folder in folders {
+            for note in await folder.loadNotes() {
+                // Two folders cannot both own a note. The first one keeps it
+                // and the second copy is left alone rather than deleted —
+                // nobody's writing is thrown away to tidy an index.
+                guard homes[note.id] == nil else { continue }
+                homes[note.id] = folder.root
+                loaded.append(note)
+            }
+        }
+        folderByNote = homes
         apply(loaded)
+        await settle()
+    }
+
+    /// Moves each note to the folder of the paper it is about.
+    ///
+    /// A library that was one folder kept every note in that folder. The move
+    /// happens once, and only while both folders are open: a note moved into
+    /// a folder that is away is a note nobody can see.
+    private func settle() async {
+        guard folders.count > 1 else { return }
+        for note in notes {
+            guard let paperID = note.paperID,
+                  let target = folderOfPaper(paperID),
+                  let root = folderByNote[note.id], root != target.root,
+                  let source = folders.first(where: { $0.root == root })
+            else { continue }
+            guard (try? await target.saveNote(note)) != nil else { continue }
+            try? await source.deleteNote(note.id)
+            folderByNote[note.id] = target.root
+        }
     }
 
     public func note(_ id: String) -> Zettel? { byID[id] }
@@ -173,6 +245,7 @@ public final class NotesModel {
 
     public func create(paperID: UUID?, kind: Zettel.Kind = .note) -> Zettel {
         let note = Zettel(id: Zettel.makeID(avoiding: Set(byID.keys)), kind: kind, paperID: paperID)
+        folderByNote[note.id] = folder(for: note).root
         var updated = notes
         updated.insert(note, at: 0)
         apply(updated)
@@ -209,10 +282,11 @@ public final class NotesModel {
         }
 
         saveTasks[note.id]?.cancel()
-        saveTasks[note.id] = Task { [store] in
+        let home = folder(for: edited)
+        saveTasks[note.id] = Task {
             try? await Task.sleep(for: .milliseconds(600))
             guard !Task.isCancelled else { return }
-            try? await store.saveNote(edited)
+            try? await home.saveNote(edited)
         }
     }
 
@@ -220,15 +294,17 @@ public final class NotesModel {
     public func flush(_ note: Zettel) async {
         saveTasks[note.id]?.cancel()
         saveTasks[note.id] = nil
-        try? await store.saveNote(note)
+        try? await folder(for: note).saveNote(note)
     }
 
     public func delete(_ id: String) {
         saveTasks[id]?.cancel()
         saveTasks[id] = nil
+        let home = byID[id].map(folder(for:)) ?? store
         apply(notes.filter { $0.id != id })
+        folderByNote[id] = nil
         if openNoteID == id { openNoteID = nil }
-        Task { [store] in try? await store.deleteNote(id) }
+        Task { try? await home.deleteNote(id) }
     }
 
     // MARK: - Indexes

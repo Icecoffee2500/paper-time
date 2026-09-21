@@ -36,6 +36,12 @@ private struct PaperInspectorForm: View {
 
     @State private var draft: CSLItem
     @State private var noteDraft: String
+    /// The name of the file, as it is being typed. Committed on Return or on
+    /// leaving the field, because a rename should not happen a letter at a
+    /// time.
+    @State private var nameDraft: String
+    @State private var renameError: String?
+    @FocusState private var nameIsFocused: Bool
 
     init(model: LibraryModel, paperID: UUID) {
         self.model = model
@@ -43,6 +49,7 @@ private struct PaperInspectorForm: View {
         let paper = model.papers.first { $0.id == paperID }
         _draft = State(initialValue: paper?.meta.csl ?? CSLItem())
         _noteDraft = State(initialValue: paper?.state.summaryNote ?? "")
+        _nameDraft = State(initialValue: paper?.documentURL.lastPathComponent ?? "")
     }
 
     private var paper: LoadedPaper? {
@@ -85,9 +92,11 @@ private struct PaperInspectorForm: View {
                 readingStateSection
                 if kind == .paper {
                     identifiersSection(for: paper)
-                } else {
-                    fileSection(for: paper)
                 }
+                // For both kinds: every paper here is a file with a name, and
+                // the name is the one thing about it the app used to show and
+                // refuse to change.
+                fileSection(for: paper)
                 provenanceFooter(for: paper)
             }
         }
@@ -101,6 +110,14 @@ private struct PaperInspectorForm: View {
         // to update after it appeared.
         .hiddenScrollers()
         .onDisappear { saveNoteIfNeeded() }
+        .alert(
+            L("이름을 바꾸지 못했어요", "The File Kept Its Name"),
+            isPresented: Binding(get: { renameError != nil }, set: { if !$0 { renameError = nil } })
+        ) {
+            Button(L("확인", "OK"), role: .cancel) { renameError = nil }
+        } message: {
+            Text(renameError ?? "")
+        }
     }
 
     // MARK: - Header
@@ -348,17 +365,68 @@ private struct PaperInspectorForm: View {
         .report, .book, .chapter, .manuscript, .webpage, .speech, .dataset, .software, .patent, .other,
     ]
 
-    /// What a document has instead of identifiers: the file it came from.
+    /// The file this paper is: its name, its length, and the way to it.
+    ///
+    /// The name is a field, and typing in it renames the file on disk. The
+    /// library is a folder of PDFs under the names a person gave them, so a
+    /// name you can read here but have to leave for Finder to fix is a name
+    /// in the wrong place. Nothing else moves: the record is named after the
+    /// paper's identifier, so marks, ink and notes stay where they are.
     @ViewBuilder
     private func fileSection(for paper: LoadedPaper) -> some View {
         Section(L("파일", "File")) {
-            LabeledContent(L("이름", "Name"), value: paper.meta.file.originalName)
+            TextField(L("이름", "Name"), text: $nameDraft)
+                .focused($nameIsFocused)
+                .onSubmit { commitName() }
+                .onChange(of: nameIsFocused) { _, focused in
+                    if !focused { commitName() }
+                }
             LabeledContent(L("쪽", "Pages"), value: "\(paper.meta.file.pageCount)")
             Button(L("폴더에서 보기", "Show in Finder")) {
                 #if os(macOS)
                 NSWorkspace.shared.activateFileViewerSelecting([paper.documentURL])
                 #endif
             }
+        }
+        // The file can be renamed from somewhere else — Finder, another
+        // device — and then the field is showing a name nobody uses.
+        .onChange(of: paper.documentURL) { _, url in nameDraft = url.lastPathComponent }
+    }
+
+    /// Asks for the rename, and puts the name back if the disk says no.
+    private func commitName() {
+        guard let paper else { return }
+        let current = paper.documentURL.lastPathComponent
+        let wanted = nameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard wanted != current else {
+            nameDraft = current
+            return
+        }
+        Task {
+            do {
+                try await model.rename(paperID: paperID, to: wanted)
+            } catch {
+                renameError = Self.message(for: error)
+                nameDraft = current
+            }
+        }
+    }
+
+    /// What went wrong, in the reader's own language. The store says which
+    /// of the four it was; the words belong here, where the app knows which
+    /// language it is being read in.
+    private static func message(for error: Error) -> String {
+        switch error as? LibraryStore.RenameFailure {
+        case .empty:
+            L("이름을 적어주세요.", "Type a name.")
+        case .notAName:
+            L("이름에 «/»나 «:»는 쓸 수 없어요.", "A name cannot contain a slash or a colon.")
+        case .taken:
+            L("같은 이름의 파일이 이미 있어요.", "A file with that name is already there.")
+        case .missing:
+            L("파일이 있던 자리에 없어요.", "Paper Time cannot find the file.")
+        case nil:
+            error.localizedDescription
         }
     }
 

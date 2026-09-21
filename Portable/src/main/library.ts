@@ -40,6 +40,9 @@ export const deviceIdentity = (() => {
   return `${platform}-${hash}`
 })()
 
+/** Why a name was refused. The window says it in the reader's language. */
+export type RenameFailure = 'empty' | 'notAName' | 'taken' | 'missing'
+
 export interface PaperRow {
   id: string
   meta: RawRecord
@@ -150,6 +153,53 @@ export class Library {
     const relative = String((meta.file as RawRecord | undefined)?.relativePath ?? '')
     const file = relative ? path.join(this.root, relative) : null
     return { id, meta, state, file, exists: file ? fs.existsSync(file) : false }
+  }
+
+  /**
+   * Gives the PDF a new name on disk.
+   *
+   * The library is a folder of PDFs under the names a person gave them, so
+   * the name in the app and the name in the file manager have to be the same
+   * name: renaming here renames the file. Only the file moves — the record
+   * folder is named after the paper's identifier, so marks, ink, notes and
+   * reading state follow the paper without being touched.
+   *
+   * Refusals come back as a word, not a sentence: the window says it in
+   * whichever language it is being read in.
+   */
+  async rename(id: string, proposed: string): Promise<PaperRow | { error: RenameFailure }> {
+    const row = await this.paper(id)
+    if (!row || !row.file) return { error: 'missing' }
+
+    let name = proposed.trim().replace(/^\.+/, '').trim()
+    if (!name) return { error: 'empty' }
+    if (/[/\\:*?"<>|]/.test(name)) return { error: 'notAName' }
+
+    const current = row.file
+    const extension = path.extname(current)
+    if (extension && path.extname(name).toLowerCase() !== extension.toLowerCase()) {
+      name += extension
+    }
+    if (name === path.basename(current)) return row
+    if (!fs.existsSync(current)) return { error: 'missing' }
+
+    const destination = path.join(path.dirname(current), name)
+    // On a disk that does not mind case — every Windows one, most Macs — the
+    // destination of a rename that only changes a letter's case is this same
+    // file, and the move is how the case is changed.
+    const caseOnly = destination.toLowerCase() === current.toLowerCase()
+    if (!caseOnly && fs.existsSync(destination)) return { error: 'taken' }
+
+    await fsp.rename(current, destination)
+
+    const meta = new PaperMeta(row.meta)
+    meta.file = {
+      ...meta.file,
+      relativePath: path.relative(this.root, destination),
+      originalName: name,
+    }
+    await this.saveMeta(meta)
+    return (await this.paper(id)) ?? row
   }
 
   async saveMeta(meta: PaperMeta): Promise<void> {

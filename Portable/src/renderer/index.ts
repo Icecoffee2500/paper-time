@@ -127,7 +127,6 @@ const sidebar = buildSidebar({
     await reload()
   },
   openGraph: () => toast(L('인용 그래프는 아직 이 빌드에 없어요.', 'The citation graph is not in this build yet.')),
-  chooseLibrary: () => void chooseLibrary(),
 })
 
 const ZONE_LABELS = (): Record<DockZone, string> => ({
@@ -254,6 +253,15 @@ async function setKind(id: string, kind: DocumentKind) {
   await reload()
 }
 
+/** Why a name was refused, in the reader's own language. */
+const RENAME_TROUBLE = (): Record<string, string> => ({
+  empty: L('이름을 적어주세요.', 'Type a name.'),
+  notAName: L('이름에 «/»나 «:» 같은 글자는 쓸 수 없어요.',
+    'A name cannot contain / \\ : * ? " < > or |.'),
+  taken: L('같은 이름의 파일이 이미 있어요.', 'A file with that name is already there.'),
+  missing: L('파일이 있던 자리에 없어요.', 'Paper Time cannot find the file.'),
+})
+
 const inspector = buildInspector({
   editMeta: async (id, patch) => {
     await call('paper:meta', { id, patch })
@@ -264,6 +272,12 @@ const inspector = buildInspector({
     await reload()
   },
   reveal: (id) => void call('paper:reveal', { id }),
+  rename: async (id, name) => {
+    const result = await call('paper:rename', { id, name }) as { error?: string } | null
+    if (result?.error) return RENAME_TROUBLE()[result.error] ?? null
+    await reload()
+    return null
+  },
   copyKey,
   setKind,
   openAuthor: (name) => {

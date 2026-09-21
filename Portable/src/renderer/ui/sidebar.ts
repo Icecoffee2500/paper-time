@@ -11,12 +11,12 @@ import { showMenu } from './toolbar.js'
 import { clear, el, on } from '../dom.js'
 import { authorCounts, store, type Shelf } from '../state.js'
 import { L } from '../../shared/lang.js'
+import { providerIcon, providerOf } from '../../shared/cloudProvider.js'
 
 export interface SidebarActions {
   select: (shelf: Shelf) => void
   newCollection: () => void
   openGraph: () => void
-  chooseLibrary: () => void
   /** Another folder, read beside the ones already open. */
   addFolder: () => void
   /** Stops reading a folder. Its files stay where they are. */
@@ -37,11 +37,13 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
     return true
   }
 
-  function row(shelf: Shelf, name: string, label: string, count?: number) {
+  function row(shelf: Shelf, name: string, label: string, count?: number, chip = false) {
     const selected = same(store.shelf, shelf)
     const node = el('button', { class: 'row', role: 'option', 'aria-selected': String(selected) }, [
       el('span', { class: 'row-icon', html: icon(name) }),
-      el('span', { class: 'row-label', text: label }),
+      // A library's name wears the chip the crumb over this list used to
+      // wear: it names where something came from.
+      el('span', { class: chip ? 'row-label folder-name' : 'row-label', text: label }),
     ])
     if (count !== undefined) node.append(el('span', { class: 'row-count', text: String(count) }))
     on(node, 'click', () => actions.select(shelf))
@@ -58,14 +60,37 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
     const count = (predicate: (entry: (typeof papers)[number]) => boolean) =>
       papers.filter(predicate).length
 
-    const crumb = el('div', { class: 'library-crumb' }, [
-      el('span', { text: L('라이브러리', 'Library') }),
-      el('span', { class: 'name', text: store.root ? basename(store.root) : L('없음', 'None') }),
+    // The libraries, at the top, where the one library's name used to sit. A
+    // library used to be a folder; now it is as many folders as you point it
+    // at, each keeping its own records — and its own notes, tags and
+    // collections — beside its own PDFs, so disconnecting one leaves it
+    // exactly as it was.
+    body.append(section(L('라이브러리', 'Libraries')))
+    for (const root of store.roots) {
+      const folderRow = row(
+        { kind: 'folder', root },
+        providerIcon(providerOf(root)),
+        basename(root),
+        count((e) => e.root === root),
+        true,
+      )
+      folderRow.title = root
+      if (root !== store.root) {
+        on(folderRow, 'contextmenu', (event: MouseEvent) => {
+          event.preventDefault()
+          showMenu(folderRow, [
+            { label: L('연결 해제', 'Disconnect'), icon: 'eject', action: () => actions.removeFolder(root) },
+          ])
+        })
+      }
+      body.append(folderRow)
+    }
+    const addFolder = el('button', { class: 'row' }, [
+      el('span', { class: 'row-icon', html: icon('plus.circle') }),
+      el('span', { class: 'row-label', text: L('라이브러리 더하기…', 'Add Library…') }),
     ])
-    on(crumb, 'click', actions.chooseLibrary)
-    crumb.style.cursor = 'default'
-    crumb.title = store.root ?? L('라이브러리 폴더 고르기', 'Choose a library folder')
-    body.append(crumb)
+    on(addFolder, 'click', actions.addFolder)
+    body.append(addFolder, el('div', { class: 'sidebar-section', text: '' }))
 
     body.append(
       row({ kind: 'all' }, 'tray.full', L('모두', 'All'), papers.length),
@@ -94,35 +119,6 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
 
     body.append(section(L('슬립박스', 'Slip-Box')))
     body.append(row({ kind: 'notes' }, 'note', L('노트', 'Notes'), count((e) => e.state.summaryNote.trim().length > 0)))
-
-    // Every folder the library is reading. A library used to be one folder;
-    // now it is as many as you point it at, each keeping its own records
-    // beside its own PDFs, so disconnecting one leaves it as it was.
-    body.append(section(L('폴더', 'Folders')))
-    for (const root of store.roots) {
-      const folderRow = row(
-        { kind: 'folder', root },
-        'externaldrive',
-        basename(root),
-        count((e) => e.root === root),
-      )
-      folderRow.title = root
-      if (root !== store.root) {
-        on(folderRow, 'contextmenu', (event: MouseEvent) => {
-          event.preventDefault()
-          showMenu(folderRow, [
-            { label: L('연결 해제', 'Disconnect'), icon: 'eject', action: () => actions.removeFolder(root) },
-          ])
-        })
-      }
-      body.append(folderRow)
-    }
-    const addFolder = el('button', { class: 'row' }, [
-      el('span', { class: 'row-icon', html: icon('plus.circle') }),
-      el('span', { class: 'row-label', text: L('폴더 더하기…', 'Add Folder…') }),
-    ])
-    on(addFolder, 'click', actions.addFolder)
-    body.append(addFolder)
 
     body.append(section(L('컬렉션', 'Collections')))
     for (const collection of store.collections) {

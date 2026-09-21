@@ -1,6 +1,7 @@
 import Foundation
 import LibraryStore
 import PaperCore
+import PDFReader
 import SwiftUI
 #if os(macOS)
 import AppKit
@@ -413,7 +414,12 @@ public final class AppModel {
             // simulator moves with every install.
             let base = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: "/")
             let url = path.hasPrefix("/") ? URL(fileURLWithPath: path, isDirectory: true) : base.appendingPathComponent(path, isDirectory: true)
-            await adopt(folderAt: url)
+            // Opened, not adopted: a run driven by a probe must leave no trace
+            // on the Mac it ran on. The app is sandboxed per bundle
+            // identifier, so a probe and the copy somebody actually reads with
+            // share one preferences domain — and a probe that stored its test
+            // folder replaced a real library with it. Twice.
+            await open(LibraryLocation.adopting(url))
             return
         }
         // `--papertime-force-setup=1` shows the first-run screen without
@@ -516,7 +522,7 @@ public final class AppModel {
         let store = LibraryStore(location: location)
         _ = try? await store.bootstrap()
         await model.addSource(location, store: store)
-        preference.storeExtras(model.extraSources)
+        rememberExtras(of: model)
     }
 
     /// Stops reading a folder. Its files and its records stay where they are.
@@ -524,6 +530,16 @@ public final class AppModel {
     public func disconnectFolder(at url: URL) async {
         guard let model = library else { return }
         await model.removeSource(url)
+        rememberExtras(of: model)
+    }
+
+    /// Which folder was the library on this Mac, and which were beside it —
+    /// unless this run was told which folder to open, in which case it is a
+    /// probe and remembers nothing.
+    private var isProbeLibrary: Bool { Boot.setting("PAPERTIME_LIBRARY") != nil }
+
+    private func rememberExtras(of model: LibraryModel) {
+        guard !isProbeLibrary else { return }
         preference.storeExtras(model.extraSources)
     }
 
@@ -542,7 +558,7 @@ public final class AppModel {
             // bookmarks. One that will not resolve — an unplugged disk — is
             // left out rather than stopping the library; it comes back when
             // the disk does.
-            for extra in preference.loadExtras() where extra.url != location.url {
+            for extra in isProbeLibrary ? [] : preference.loadExtras() where extra.url != location.url {
                 let extraStore = LibraryStore(location: extra)
                 _ = try? await extraStore.bootstrap()
                 await model.addSource(extra, store: extraStore)
@@ -578,6 +594,9 @@ public final class AppModel {
                     : base.appendingPathComponent(gone, isDirectory: true)
                 await disconnectFolder(at: url)
             }
+            // `--papertime-folders=1` says what each folder holds, which is
+            // how a library of several folders is checked from here.
+            if Boot.isSet("PAPERTIME_FOLDERS") { await model.reportFolders() }
             if Boot.isSet("PAPERTIME_OPEN_FIRST"), let first = model.visiblePapers.first {
                 model.selection = [first.id]
             }
@@ -588,6 +607,27 @@ public final class AppModel {
                    $0.meta.displayTitle.localizedCaseInsensitiveContains(wanted)
                }) {
                 model.selection = [paper.id]
+            }
+            // `--papertime-rename=<name>` renames the chosen paper's file,
+            // which is worth doing from here because the risky case is a
+            // rename while the reader has the file open.
+            if let name = Boot.setting("PAPERTIME_RENAME"),
+               let paper = model.selectedPaper ?? model.visiblePapers.first {
+                // A moment first, so the reader has the file open: that is
+                // the case worth checking, and the session is made by the
+                // view rather than here.
+                try? await Task.sleep(for: .seconds(2))
+                do {
+                    try await model.rename(paperID: paper.id, to: name)
+                    let now = model.paper(paper.id)?.documentURL.lastPathComponent ?? "?"
+                    let told = DocumentSession.open(forPaper: paper.id)
+                    let says = told.map { $0.paper.documentURL.lastPathComponent }.joined(separator: ",")
+                    FileHandle.standardError.write(
+                        Data("rename: \(now) — sessions told: \(told.count) [\(says)]\n".utf8)
+                    )
+                } catch {
+                    FileHandle.standardError.write(Data("rename refused: \(error)\n".utf8))
+                }
             }
             if Boot.setting("PAPERTIME_SCOPE") == "notes" { model.scope = .notes }
             // The results of a search, without anybody having to type one.

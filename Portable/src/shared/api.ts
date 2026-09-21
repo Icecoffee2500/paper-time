@@ -31,6 +31,10 @@ export interface Requests {
   'paper:bytes': { args: { id: string }; result: { data: Uint8Array } | { error: string } }
   'paper:state': { args: { id: string; patch: Record<string, unknown> }; result: unknown }
   'paper:meta': { args: { id: string; patch: Record<string, unknown> }; result: unknown }
+  'paper:rename': {
+    args: { id: string; name: string }
+    result: { name: string } | { error: 'empty' | 'notAName' | 'taken' | 'missing' }
+  }
   'paper:reveal': { args: { id: string }; result: void }
   'sketch:load': { args: { id: string; pageIndex: number }; result: unknown[] | null }
   'sketch:save': { args: { id: string; pageIndex: number; elements: unknown[] }; result: void }

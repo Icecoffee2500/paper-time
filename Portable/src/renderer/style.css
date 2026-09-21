@@ -445,24 +445,26 @@ body[data-platform='darwin'] .window-buttons {
   font-variant-numeric: tabular-nums;
 }
 
-.library-crumb {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px 2px;
-  font-size: 11.5px;
-  color: var(--text-tertiary);
-}
-
-.library-crumb .name {
+/* A library's name, as a chip.
+   The shape the crumb over this list used to give the one library's name,
+   now on the row of the library it names — there is more than one. It hugs
+   its own text and lets the count keep the right-hand edge: a name on a chip
+   that runs the width of the row is a bar, not a name. */
+.folder-name {
+  flex: 0 1 auto;
+  margin-right: auto;
   color: var(--accent-text);
   background: var(--accent-soft);
+  border: 0.5px solid color-mix(in srgb, var(--accent) 30%, transparent);
   border-radius: calc(var(--radius-row) - 3px);
   padding: 1px 6px;
   font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+/* On the row you are on, the row is already wearing the pale accent; the
+   chip steps up so it is still a chip. */
+.row[aria-selected='true'] .folder-name {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 /* --------------------------------------------------------------- paper list */
@@ -721,6 +723,19 @@ body[data-platform='darwin'] .window-buttons {
   font-size: 13px;
   outline: none;
   resize: vertical;
+}
+
+/* Why a field would not take what was typed — under the field it belongs to,
+   and gone the moment it has nothing to say. */
+.field-error {
+  margin-top: 4px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--danger);
+}
+
+.field-error:empty {
+  display: none;
 }
 
 .field input:focus,

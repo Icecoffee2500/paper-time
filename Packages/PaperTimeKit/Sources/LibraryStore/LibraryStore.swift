@@ -602,6 +602,72 @@ public actor LibraryStore {
         return destination
     }
 
+    // MARK: - Renaming the file
+
+    /// Why a name was refused. Said in the app's two languages there, not
+    /// here: this package has no idea which one is being read.
+    public enum RenameFailure: Error, Sendable, Equatable {
+        case empty
+        /// A name with a separator in it is a path, and a path would take the
+        /// file somewhere else.
+        case notAName
+        case taken(String)
+        case missing
+    }
+
+    /// Gives the PDF a new name on disk.
+    ///
+    /// The library is a folder of PDFs under the names a person gave them, so
+    /// the name in the app and the name in Finder have to be the same name:
+    /// renaming here renames the file. Only the file moves. The record folder
+    /// is named after the paper's identifier, so marks, ink, notes and reading
+    /// state follow the paper without being touched, and another device sees a
+    /// file that moved rather than a paper that went away.
+    ///
+    /// The extension is kept whatever is typed — a PDF that stops being
+    /// called `.pdf` is a PDF the desktop stops opening.
+    public func rename(_ paper: LoadedPaper, to proposed: String) throws -> LoadedPaper {
+        let manager = FileManager.default
+        var name = proposed.trimmingCharacters(in: .whitespacesAndNewlines)
+        // A leading dot hides the file from the app that is showing it.
+        while name.hasPrefix(".") { name.removeFirst() }
+        name = name.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { throw RenameFailure.empty }
+        guard !name.contains("/"), !name.contains(":") else { throw RenameFailure.notAName }
+
+        let current = paper.documentURL
+        let currentExtension = current.pathExtension
+        if !currentExtension.isEmpty,
+           (name as NSString).pathExtension.lowercased() != currentExtension.lowercased() {
+            name += ".\(currentExtension)"
+        }
+        if name == current.lastPathComponent { return paper }
+
+        guard manager.fileExists(atPath: current.path(percentEncoded: false)) else {
+            throw RenameFailure.missing
+        }
+        let destination = current.deletingLastPathComponent().appending(path: name)
+        // On a case-insensitive disk the destination of a rename that only
+        // changes a letter's case already "exists" — it is this same file,
+        // and the move is how the case is changed.
+        let caseOnly = Self.normalizedPath(destination).lowercased()
+            == Self.normalizedPath(current).lowercased()
+        if !caseOnly, manager.fileExists(atPath: destination.path(percentEncoded: false)) {
+            throw RenameFailure.taken(name)
+        }
+
+        try manager.moveItem(at: current, to: destination)
+
+        var meta = paper.meta
+        meta.file.relativePath = relativePath(of: destination)
+        meta.file.originalName = name
+        let saved = (try? save(meta: meta, in: paper.folder, baseline: paper.meta)) ?? meta
+        var renamed = paper
+        renamed.meta = saved
+        renamed.documentURL = destination
+        return renamed
+    }
+
     // MARK: - Ink sidecars
 
     public func loadInk(pageIndex: Int, in folder: PaperFolder) throws -> Data? {
