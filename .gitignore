@@ -30,6 +30,9 @@ Portable/node_modules/
 Portable/out/
 Portable/dist/
 
-# What gets installed by hand before anything is published. Hundreds of
-# megabytes of built binaries; the release on GitHub is the copy that keeps.
-Installers/
+# What gets installed by hand before anything is published. The binaries are
+# hundreds of megabytes and the release on GitHub is the copy that keeps — but
+# the folder itself stays tracked, through its README, so it is visible in a
+# file tree. A folder nobody can find is a folder nobody installs from.
+Installers/*
+!Installers/README.md

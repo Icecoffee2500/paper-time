@@ -48,6 +48,9 @@ if [ "$WHAT" = "all" ] || [ "$WHAT" = "mac" ]; then
   hdiutil create -volname "Paper Time $VERSION" -srcfolder "$STAGE" -ov -format UDZO \
     "$OUT/Paper Time $VERSION.dmg" >/dev/null
   rm -rf "$STAGE"
+  # Nothing left behind to be opened by mistake: the disk image is the only
+  # copy this script leaves, and it is the one to install from.
+  rm -rf "$DD"
   echo "  $OUT/Paper Time $VERSION.dmg"
 fi
 
