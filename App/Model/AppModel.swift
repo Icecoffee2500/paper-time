@@ -184,17 +184,28 @@ public final class AppModel {
     public var showsReleaseNotes = false
     /// The one sheet anybody can reach from anywhere, with ⌥⌘/.
     public var showsFeedback = false
-    /// Held here rather than inside the sheet: closing the sheet by accident
-    /// should not throw away what somebody had already written.
+    /// Held here rather than inside the sheet, so the screenshot can be taken
+    /// before the sheet exists. It lasts as long as the sheet does: opening
+    /// the report again starts a blank one.
     public var feedbackDraft = FeedbackDraft()
     /// Whether the last run ended badly. Read once at launch; the moment
     /// somebody is most willing to say what happened is the moment after it
     /// happened to them.
     public private(set) var cameBackFromCrash = false
 
-    /// Opens the report sheet. The screenshot is taken inside the sheet's own
-    /// `task`, one runloop later, so the sheet is not in its own picture.
+    /// Opens the report sheet, blank. The screenshot is taken inside the
+    /// sheet's own `task`, one runloop later, so the sheet is not in its own
+    /// picture.
+    ///
+    /// A new draft every time. The old one used to be kept in case the sheet
+    /// was dismissed by accident, and what that actually did was open the
+    /// next report on top of the last one — yesterday's sentence and
+    /// yesterday's screenshot, with its pen marks still on it. A report is
+    /// about the moment it is written in. The name and the reply address are
+    /// the exception: they live in defaults and the new draft reads them
+    /// back.
     public func askForFeedback() {
+        feedbackDraft = FeedbackDraft()
         showsFeedback = true
     }
 

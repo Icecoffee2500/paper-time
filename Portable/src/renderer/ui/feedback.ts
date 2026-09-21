@@ -34,17 +34,29 @@ interface Draft {
   shotURL: string | null
 }
 
-/** Kept between openings: closing the sheet must not throw away the words. */
-const draft: Draft = {
-  kind: 'bug',
-  message: '',
-  name: localStorage.getItem('feedback.name') ?? '',
-  reply: localStorage.getItem('feedback.reply') ?? '',
-  includesShot: true,
-  marks: [],
-  shot: null,
-  shotURL: null,
+/**
+ * A blank report, which is what every opening gets.
+ *
+ * It used to be kept between openings in case the sheet was dismissed by
+ * accident, and what that did was open the next report on top of the last
+ * one — yesterday's sentence, and yesterday's screenshot with its pen marks
+ * still on it. A report is about the moment it is written in. The name and
+ * the reply address are the exception; they live in localStorage.
+ */
+function blank(): Draft {
+  return {
+    kind: 'bug',
+    message: '',
+    name: localStorage.getItem('feedback.name') ?? '',
+    reply: localStorage.getItem('feedback.reply') ?? '',
+    includesShot: true,
+    marks: [],
+    shot: null,
+    shotURL: null,
+  }
 }
+
+let draft: Draft = blank()
 
 let open = false
 
@@ -82,6 +94,7 @@ function element(tool: Tool, from: { x: number; y: number }, to: { x: number; y:
 export async function showFeedback() {
   if (open) return
   open = true
+  draft = blank()
 
   // Taken before the sheet is built, so the sheet is not in its own picture.
   if (!draft.shotURL) {
