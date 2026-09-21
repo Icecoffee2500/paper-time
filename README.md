@@ -72,7 +72,15 @@ npm run dist:win   # 또는 dist:linux
 
 ## 배포
 
-닫힌 버전마다 세 플랫폼의 파일을 만들어 릴리스에 올리고, 배포 페이지의 목록을 다시 써요.
+**바로 올리지 않아요.** 먼저 지금 작업 중인 코드 그대로 구워서 `Installers/`에 두고,
+직접 설치해서 확인한 다음에 올려요.
+
+```bash
+Scripts/build-installers.sh           # 셋 다 → Installers/
+Scripts/build-installers.sh mac       # 디스크 이미지만
+```
+
+확인이 끝나면, 닫힌 버전마다 세 플랫폼의 파일을 만들어 릴리스에 올리고 배포 페이지의 목록을 다시 써요.
 
 ```bash
 Scripts/publish-release.sh 0.7.0 "한 줄 설명"
