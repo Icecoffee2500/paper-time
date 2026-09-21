@@ -2,6 +2,95 @@
   "repo": "Icecoffee2500/paper-time",
   "releases": [
     {
+      "version": "0.9.1",
+      "date": "2026-09-21T16:22:23Z",
+      "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.1/Paper.Time.0.9.1.dmg",
+      "size": 6286163,
+      "downloads": 0,
+      "builds": {
+        "mac": [
+          {
+            "label": "디스크 이미지",
+            "label_en": "Disk image",
+            "arch": "Apple Silicon",
+            "arch_en": "Apple Silicon",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.1/Paper.Time.0.9.1.dmg",
+            "size": 6286163,
+            "downloads": 0
+          }
+        ],
+        "windows": [
+          {
+            "label": "설치본",
+            "label_en": "Installer",
+            "arch": "64비트 · ARM",
+            "arch_en": "64-bit and ARM",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.1/Paper.Time.Setup.0.9.1.exe",
+            "size": 176999611,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "64비트",
+            "arch_en": "64-bit",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.1/Paper.Time-0.9.1-win.zip",
+            "size": 116177133,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.1/Paper.Time-0.9.1-arm64-win.zip",
+            "size": 121124806,
+            "downloads": 0
+          }
+        ],
+        "linux": [
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.1/Paper.Time-0.9.1-x86_64.AppImage",
+            "size": 113189193,
+            "downloads": 0
+          },
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.1/Paper.Time-0.9.1-arm64.AppImage",
+            "size": 113575756,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.1/paper-time-0.9.1.tar.gz",
+            "size": 107390922,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.1/paper-time-0.9.1-arm64.tar.gz",
+            "size": 111887279,
+            "downloads": 0
+          }
+        ]
+      },
+      "note": "라이브러리를 여러 개 열어 두고, 폴더마다 제 노트와 태그를 갖게 했어요.",
+      "note_en": "Open several libraries at once; each folder keeps its own notes and tags."
+    },
+    {
       "version": "0.9.0",
       "date": "2026-09-21T14:11:33Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.0/Paper.Time.0.9.0.dmg",
