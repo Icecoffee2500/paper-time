@@ -35,6 +35,20 @@ enum Corner {
     /// Where a box is big enough that a true capsule would look like a pill
     /// rather than a panel, the radius stops growing here.
     static func surface(height: CGFloat) -> CGFloat { min(height / 2, panel) }
+
+    /// A bar of controls floating over the page: the pencil's tool rack.
+    static let bar: CGFloat = 12
+    /// A control sitting inside a rounded surface — a chip in a bar, the
+    /// selected tool in the rack.
+    static let control: CGFloat = 8
+
+    /// The radius of a shape nested inside another rounded shape, so the two
+    /// curves are concentric: the same radius on both makes the inner one
+    /// look sharper than the outer, because a curve that starts closer to
+    /// the corner reads as a tighter corner. The rule is the one every
+    /// design tool's "nested corners" follows — outer radius less the gap
+    /// between the edges, and never below a hairline's worth.
+    static func inner(_ outer: CGFloat, inset: CGFloat) -> CGFloat { max(outer - inset, 2) }
 }
 
 extension View {

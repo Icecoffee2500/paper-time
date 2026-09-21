@@ -14,6 +14,9 @@ import SwiftUI
 /// sets the default alone.
 struct SketchInspector: View {
     @Bindable var configuration: ReaderConfiguration
+    /// In the window's inspector column rather than floating over the page:
+    /// no glass of its own, and as wide as the column.
+    var docked = false
 
     private var state: SketchState { configuration.sketch }
 
@@ -67,9 +70,16 @@ struct SketchInspector: View {
                 actions.padding(.horizontal, 8).padding(.vertical, 6)
             }
         }
-        .frame(width: 236)
-        .liquidGlass(.floating, in: RoundedRectangle(cornerRadius: Corner.popover, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: Corner.popover, style: .continuous).strokeBorder(.primary.opacity(0.08), lineWidth: 0.5))
+        .frame(width: docked ? nil : 236)
+        .frame(maxWidth: docked ? .infinity : nil, maxHeight: docked ? .infinity : nil, alignment: .top)
+        .background {
+            if !docked {
+                RoundedRectangle(cornerRadius: Corner.popover, style: .continuous)
+                    .fill(.clear)
+                    .liquidGlass(.floating, in: RoundedRectangle(cornerRadius: Corner.popover, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: Corner.popover, style: .continuous).strokeBorder(.primary.opacity(0.08), lineWidth: 0.5))
+            }
+        }
     }
 
     // MARK: - What it is about
@@ -131,7 +141,7 @@ struct SketchInspector: View {
                     }
                     .buttonStyle(.plain)
                     .help(alignment.label)
-                    .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(Color.primary.opacity(0.05)))
+                    .background(RoundedRectangle(cornerRadius: Corner.control - 3, style: .continuous).fill(Color.primary.opacity(0.05)))
                 }
             }
             .disabled(state.selectedElements.isEmpty)
@@ -380,6 +390,7 @@ struct SketchInspector: View {
         let style = state.shownStyle
         let one = state.selectedOne
         return section(L("글", "Text")) {
+            fontMenu(style.fontName)
             HStack(spacing: 8) {
                 NumberField(label: L("크기", "Size"), value: style.points, wide: true) { value in
                     state.change { $0.fontSize = min(max(value, 4), 96) }
@@ -422,6 +433,46 @@ struct SketchInspector: View {
             }
         }
     }
+
+    /// The families this Mac has, with the system's own face first. A menu
+    /// rather than the font panel: the panel is a window, and this is a row.
+    private func fontMenu(_ chosen: String?) -> some View {
+        Menu {
+            Button {
+                state.change { $0.fontName = nil }
+            } label: {
+                Label(L("시스템 글꼴", "System Font"), systemImage: chosen == nil ? "checkmark" : "")
+            }
+            Divider()
+            ForEach(Self.fontFamilies, id: \.self) { family in
+                Button {
+                    state.change { $0.fontName = family }
+                } label: {
+                    Label(family, systemImage: chosen == family ? "checkmark" : "")
+                }
+            }
+        } label: {
+            HStack {
+                Text(chosen ?? L("시스템 글꼴", "System Font"))
+                    .font(.caption)
+                    .lineLimit(1)
+                Spacer()
+                Image(systemName: "chevron.up.chevron.down").font(.system(size: 8, weight: .semibold)).foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 6)
+            .frame(height: 22)
+            .frame(maxWidth: .infinity)
+            .background(RoundedRectangle(cornerRadius: Corner.control - 3, style: .continuous).fill(Color.primary.opacity(0.05)))
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+    }
+
+    private static let fontFamilies: [String] = {
+        NSFontManager.shared.availableFontFamilies
+            .filter { !$0.hasPrefix(".") }
+            .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }()
 
     // MARK: - The pen's
 
@@ -538,7 +589,10 @@ struct SketchInspector: View {
     /// A swatch that opens the colour panel, the hex beside it, and — for a
     /// fill — how much of it shows.
     private func colorRow(_ color: SketchColor, alpha: Bool, set: @escaping (SketchColor) -> Void) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 8) {
+            // The swatch is the colour panel's well, held to one width so the
+            // hex beside it always starts in the same place — it was drawn
+            // over the first two digits.
             ColorPicker("", selection: Binding(
                 get: { Color(cgColor: color.withAlpha(1).cgColor) },
                 set: { picked in
@@ -547,7 +601,8 @@ struct SketchInspector: View {
                 }
             ), supportsOpacity: false)
             .labelsHidden()
-            .frame(width: 22)
+            .frame(width: 30, height: 22)
+            .clipped()
             HexField(hex: color.hex) { text in
                 if let next = SketchColor(hex: text, alpha: color.alpha) { set(next) }
             }
@@ -583,11 +638,11 @@ struct SketchInspector: View {
             label()
                 .frame(width: 24, height: 22)
                 .background(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    RoundedRectangle(cornerRadius: Corner.control - 2, style: .continuous)
                         .fill(Color.accentColor.opacity(chosen ? 0.18 : 0.04))
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    RoundedRectangle(cornerRadius: Corner.control - 2, style: .continuous)
                         .strokeBorder(Color.accentColor.opacity(chosen ? 0.8 : 0), lineWidth: 1)
                 )
         }
@@ -660,7 +715,7 @@ private struct NumberField: View {
         .padding(.horizontal, 6)
         .frame(height: 22)
         .frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(Color.primary.opacity(0.05)))
+        .background(RoundedRectangle(cornerRadius: Corner.control - 3, style: .continuous).fill(Color.primary.opacity(0.05)))
         .onAppear { text = shown(value) }
         .onChange(of: value) { _, now in if !focused { text = shown(now) } }
     }
@@ -696,7 +751,7 @@ private struct HexField: View {
             .padding(.horizontal, 6)
             .frame(height: 22)
             .frame(maxWidth: .infinity)
-            .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(Color.primary.opacity(0.05)))
+            .background(RoundedRectangle(cornerRadius: Corner.control - 3, style: .continuous).fill(Color.primary.opacity(0.05)))
             .onAppear { text = hex }
             .onChange(of: hex) { _, now in if !focused { text = now } }
     }

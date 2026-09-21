@@ -67,8 +67,10 @@ function measuringContext(): Ctx {
   return scratch
 }
 
-export function fontSpec(points: number): string {
-  return `${points}px ${SKETCH_FONT_STACK}`
+export function fontSpec(points: number, family: string | null = null): string {
+  // A family chosen by name goes first, quoted; the bundled face stands
+  // behind it for the characters it lacks.
+  return family ? `${points}px "${family.replace(/"/g, '')}", ${SKETCH_FONT_STACK}` : `${points}px ${SKETCH_FONT_STACK}`
 }
 
 interface Metrics {
@@ -77,8 +79,8 @@ interface Metrics {
   lineHeight: number
 }
 
-function metrics(ctx: Ctx, points: number): Metrics {
-  ctx.font = fontSpec(points)
+function metrics(ctx: Ctx, points: number, family: string | null = null): Metrics {
+  ctx.font = fontSpec(points, family)
   const m = ctx.measureText('Hg가')
   const ascent = m.fontBoundingBoxAscent || points * 0.95
   const descent = m.fontBoundingBoxDescent || points * 0.25
@@ -104,10 +106,11 @@ export function layoutTextAt(
   points: number,
   width: number | null = null,
   align: TextAlign = 'left',
+  family: string | null = null,
 ): Layout {
   const ctx = measuringContext()
-  const { ascent, descent, lineHeight } = metrics(ctx, points)
-  ctx.font = fontSpec(points)
+  const { ascent, descent, lineHeight } = metrics(ctx, points, family)
+  ctx.font = fontSpec(points, family)
 
   const source = text.length === 0 ? ' ' : text
   const column = width === null ? Infinity : Math.max(width, 4)
@@ -187,9 +190,9 @@ export function cardSize(
   return cardSizeAt(text, TEXT_POINTS[size], width)
 }
 
-export function cardSizeAt(text: string, points: number, width: number | null = null): { width: number; height: number } {
+export function cardSizeAt(text: string, points: number, width: number | null = null, family: string | null = null): { width: number; height: number } {
   const inner = width === null ? null : width - TEXT_PADDING * 2
-  const block = layoutTextAt(text, points, inner).size
+  const block = layoutTextAt(text, points, inner, 'left', family).size
   return { width: block.width + TEXT_PADDING * 2, height: block.height + TEXT_PADDING * 2 }
 }
 
@@ -202,11 +205,11 @@ export function fittedRect(element: SketchElement): Rect {
   const r = element.rect
   let size: { width: number; height: number }
   if (element.sizing === 'autoWidth') {
-    const natural = cardSizeAt(element.text, element.style.points)
+    const natural = cardSizeAt(element.text, element.style.points, null, element.style.fontName)
     size = { width: Math.max(natural.width, 24), height: natural.height }
   } else {
     const width = Math.max(r.width, 24)
-    size = { width, height: cardSizeAt(element.text, element.style.points, width).height }
+    size = { width, height: cardSizeAt(element.text, element.style.points, width, element.style.fontName).height }
   }
   return { x: r.x, y: rectMaxY(r) - size.height, width: size.width, height: size.height }
 }
@@ -421,26 +424,26 @@ function drawTextCard(element: SketchElement, ctx: Ctx, options: RenderOptions) 
   // A card sized to its width is set one line per paragraph; one sized to
   // its height wraps at its edge.
   const wrapAt = element.sizing === 'autoWidth' ? null : inner.width
-  const layout = layoutTextAt(element.text, element.style.points, wrapAt, element.style.textAlign)
+  const layout = layoutTextAt(element.text, element.style.points, wrapAt, element.style.textAlign, element.style.fontName)
   let x = inner.x
   if (wrapAt === null && layout.size.width < inner.width) {
     if (element.style.textAlign === 'center') x = rectMidX(inner) - layout.size.width / 2
     if (element.style.textAlign === 'right') x = inner.x + inner.width - layout.size.width
   }
-  drawLines(layout, { x, y: rectMaxY(inner) }, element.style.stroke, element.style.points, ctx)
+  drawLines(layout, { x, y: rectMaxY(inner) }, element.style.stroke, element.style.points, ctx, element.style.fontName)
 }
 
 /** The words inside a box, centred on it. */
 function drawLabel(element: SketchElement, ctx: Ctx) {
   const inner = rectInset(element.rect, TEXT_PADDING, TEXT_PADDING)
   if (inner.width <= 4) return
-  const layout = layoutTextAt(element.text, element.style.points, inner.width, 'center')
+  const layout = layoutTextAt(element.text, element.style.points, inner.width, 'center', element.style.fontName)
   const top = rectMidY(inner) + layout.size.height / 2
   ctx.save()
   ctx.beginPath()
   ctx.rect(inner.x, inner.y, inner.width, inner.height)
   ctx.clip()
-  drawLines(layout, { x: inner.x, y: top }, element.style.stroke, element.style.points, ctx)
+  drawLines(layout, { x: inner.x, y: top }, element.style.stroke, element.style.points, ctx, element.style.fontName)
   ctx.restore()
 }
 
@@ -458,11 +461,12 @@ function drawLines(
   color: SketchColor,
   points: number,
   ctx: Ctx,
+  family: string | null = null,
 ) {
   ctx.save()
   ctx.setLineDash([])
   ctx.fillStyle = color.css
-  ctx.font = fontSpec(points)
+  ctx.font = fontSpec(points, family)
   ctx.textBaseline = 'alphabetic'
   ctx.textAlign = 'left'
   for (const line of layout.lines) {

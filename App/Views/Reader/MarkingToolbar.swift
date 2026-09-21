@@ -53,7 +53,7 @@ struct MarkingToolbar: View {
                     }
                     .tint(configuration.tool == tool ? Color.accentColor : .primary)
                     .background(
-                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        RoundedRectangle(cornerRadius: Corner.control, style: .continuous)
                             .fill(Color.accentColor.opacity(configuration.tool == tool ? 0.14 : 0))
                     )
                     .help(tool.label)

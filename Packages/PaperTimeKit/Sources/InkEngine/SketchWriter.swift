@@ -132,6 +132,12 @@ public enum SketchWriter {
         return border
     }
 
+    /// The chosen family at the chosen size, or the system's face.
+    static func font(for style: SketchStyle) -> PlatformFont {
+        if let name = style.fontName, let font = PlatformFont(name: name, size: style.points) { return font }
+        return PlatformFont.systemFont(ofSize: style.points)
+    }
+
     static func color(_ color: SketchColor) -> PlatformColor {
         PlatformColor(red: color.red, green: color.green, blue: color.blue, alpha: color.alpha)
     }
@@ -201,7 +207,7 @@ public enum SketchWriter {
     private static func freeText(_ element: SketchElement) -> PDFAnnotation {
         let annotation = PDFAnnotation(bounds: element.rect, forType: .freeText, withProperties: nil)
         annotation.contents = element.text
-        annotation.font = PlatformFont.systemFont(ofSize: element.style.points)
+        annotation.font = font(for: element.style)
         annotation.fontColor = color(element.style.stroke)
         // The card behind the words, or nothing. PDFKit fills a free text's
         // box in its colour; clear is written as no colour at all.
@@ -220,7 +226,7 @@ public enum SketchWriter {
         let inner = element.rect.insetBy(dx: SketchTypesetter.padding, dy: SketchTypesetter.padding)
         let annotation = PDFAnnotation(bounds: inner, forType: .freeText, withProperties: nil)
         annotation.contents = element.text
-        annotation.font = PlatformFont.systemFont(ofSize: element.style.points)
+        annotation.font = font(for: element.style)
         annotation.fontColor = color(element.style.stroke)
         annotation.color = PlatformColor.clear
         annotation.alignment = .center

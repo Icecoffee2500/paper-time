@@ -87,7 +87,7 @@ struct FeedbackView: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+        .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: Corner.popover - 4))
     }
 
     // MARK: - The picture, already taken
@@ -116,8 +116,8 @@ struct FeedbackView: View {
             if let shot = draft.shot, draft.includesShot {
                 ShotCanvas(image: shot, marks: Bindable(draft).marks, tool: tool)
                     .frame(height: 168)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.separator))
+                    .clipShape(RoundedRectangle(cornerRadius: Corner.popover - 4))
+                    .overlay(RoundedRectangle(cornerRadius: Corner.popover - 4).strokeBorder(.separator))
                 Text(L(
                     "위에 바로 그려도 돼요. 남에게 보이면 안 되는 곳은 가려주세요.",
                     "Draw on it. Use Hide to cover anything that shouldn't leave your machine."
@@ -146,7 +146,7 @@ struct FeedbackView: View {
                         .frame(width: 24, height: 20)
                         .background(
                             tool == option ? Color.accentColor.opacity(0.16) : .clear,
-                            in: RoundedRectangle(cornerRadius: 5)
+                            in: RoundedRectangle(cornerRadius: Corner.control - 3)
                         )
                 }
                 .buttonStyle(.plain)
@@ -173,7 +173,7 @@ struct FeedbackView: View {
                 .scrollContentBackground(.hidden)
                 .padding(8)
                 .frame(height: 82)
-                .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+                .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: Corner.row))
                 .overlay(alignment: .topLeading) {
                     if draft.message.isEmpty {
                         Text(draft.kind == .bug
@@ -261,7 +261,7 @@ struct FeedbackView: View {
             }
             .font(.callout)
             .padding(11)
-            .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+            .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: Corner.row))
         }
     }
 

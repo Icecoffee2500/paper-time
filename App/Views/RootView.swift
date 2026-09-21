@@ -121,6 +121,19 @@ struct LibraryWindow: View {
 
     var body: some View {
         decorated
+            // `--papertime-dark=1` looks at the window in the dark appearance
+            // without changing the Mac's; `--papertime-split=1` puts the
+            // first two papers side by side — both for checking without a
+            // hand on the machine.
+            .preferredColorScheme(Boot.isSet("PAPERTIME_DARK") ? .dark : nil)
+            .task {
+                guard Boot.isSet("PAPERTIME_SPLIT") else { return }
+                try? await Task.sleep(for: .seconds(2))
+                let papers = model.visiblePapers
+                guard papers.count >= 2 else { return }
+                model.selectedPaperID = papers[0].id
+                app.dock(papers[1].id, at: .right, showing: papers[0].id)
+            }
     }
 
     /// The Mac hangs the toolbar off the split view itself, which is what makes
@@ -991,6 +1004,7 @@ struct LibraryWindow: View {
     private var scopeTitle: String {
         switch model.scope {
         case .all: L("모든 논문", "All Papers")
+        case .open: L("열린 논문", "Open Papers")
         case .notes: L("노트", "Notes")
         case .graph: L("그래프", "Graph")
         case .searchResults: L("찾은 것", "Search Results")
@@ -1012,13 +1026,17 @@ struct LibraryWindow: View {
 /// What the inspector is showing. "Notes" used to mean the list of marks,
 /// which is not what a note is; the two are separate now and say so.
 enum InspectorTab: String, CaseIterable, Identifiable {
-    case details, marks, note
+    case details, marks, note, tool
     var id: String { rawValue }
+    /// In English whatever the system speaks: these four are the column's
+    /// headings, short and set apart, and the owner wanted them read as
+    /// labels rather than sentences.
     var label: String {
         switch self {
-        case .details: L("정보", "Details")
-        case .marks: L("표시", "Marks")
-        case .note: L("노트", "Note")
+        case .details: "Info"
+        case .marks: "Marks"
+        case .note: "Note"
+        case .tool: "Tool"
         }
     }
 }
@@ -1034,6 +1052,13 @@ struct PaperDetailColumn: View {
     @Binding var inspectorTab: InspectorTab
     /// The room the page and the inspector share.
     @State private var columnWidth: CGFloat = 800
+    /// Where a paper being dragged over the page would land, while it is.
+    @State private var dockZone: DockZone?
+    @State private var pageSize: CGSize = .zero
+
+    /// The handle the inspector reads: the window's own, which the pane in
+    /// focus holds when papers are side by side.
+    private var activeLink: ReaderLink { link }
     /// How wide the inspector was when a drag on its grip began.
     @State private var gripStart: CGFloat?
 
@@ -1056,6 +1081,13 @@ struct PaperDetailColumn: View {
             guard id != nil else { return }
             app.showsInspector = true
             inspectorTab = .marks
+        }
+        // Taking the pencil out brings the tool inspector forward, the way
+        // Figma's panel is about whatever is being drawn.
+        .onChange(of: configuration.mode) { _, mode in
+            guard mode == .draw else { return }
+            app.showsInspector = true
+            inspectorTab = .tool
         }
         // Command-L: the passage goes to the note, and the note comes forward.
         .onReceive(NotificationCenter.default.publisher(for: .paperTimeLinkToNote)) { _ in
@@ -1198,8 +1230,8 @@ struct PaperDetailColumn: View {
                 }
                     .frame(width: horizontalSizeClass == .regular ? app.inspectorWidth : 360)
                     .frame(maxHeight: .infinity)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.primary.opacity(0.08), lineWidth: 0.5))
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Corner.panel - 4, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: Corner.panel - 4, style: .continuous).strokeBorder(.primary.opacity(0.08), lineWidth: 0.5))
                     .shadow(color: .black.opacity(0.18), radius: 24, y: 8)
                     .padding(10)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
@@ -1241,8 +1273,24 @@ struct PaperDetailColumn: View {
     #endif
 
     private var page: some View {
+        pageBody
+            // A paper dragged here from the list, or from another pane's title,
+            // is put where it was dropped: a half of the page area, or a
+            // quarter of it — the way a window tiles when dragged to an edge.
+            .overlay { DockZoneOverlay(zone: dockZone, size: pageSize) }
+            .onGeometryChange(for: CGSize.self) { $0.size } action: { pageSize = $0 }
+            .onDrop(of: [.paperTimePaper], delegate: DockDropDelegate(
+                size: { pageSize },
+                zone: $dockZone,
+                drop: { id, zone in app.dock(id, at: zone, showing: model.selectedPaperID) }
+            ))
+    }
+
+    private var pageBody: some View {
         Group {
-            if let paper = model.selectedPaper {
+            if let split = app.split {
+                SplitReaderView(model: model, configuration: configuration, link: link, arrangement: split)
+            } else if let paper = model.selectedPaper {
                 // Deliberately not `.id(paper.id)`: giving each paper its own
                 // identity threw away the PDF view and built another one for
                 // every selection, and creating a `PDFView` is most of what
@@ -1444,6 +1492,16 @@ struct PaperDetailColumn: View {
                         PaperNotesView(model: model, paperID: paper.id, link: link)
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     }
+                case .tool:
+                    #if os(macOS)
+                    // What is drawn on the page, as numbers — Figma's design
+                    // panel, in the window's own inspector.
+                    SketchInspector(configuration: configuration, docked: true)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    #else
+                    ContentUnavailableView(L("맥에서 그릴 때 써요", "For drawing on the Mac"), systemImage: "pencil.tip")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    #endif
                 }
             } else {
                 ContentUnavailableView(L("고른 것이 없어요", "Nothing Selected"), systemImage: "sidebar.right")
@@ -1525,7 +1583,7 @@ private struct ToolbarHover: ViewModifier {
     func body(content: Content) -> some View {
         content
             .background(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                RoundedRectangle(cornerRadius: Corner.control - 2, style: .continuous)
                     .fill(Color.primary.opacity(isHovering ? 0.09 : 0))
                     .padding(-3)
             )

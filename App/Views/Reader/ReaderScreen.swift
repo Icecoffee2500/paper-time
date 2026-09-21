@@ -31,6 +31,7 @@ struct ReaderScreen: View {
     @State private var toast: String?
     @State private var toastTask: Task<Void, Never>?
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Group {
@@ -50,6 +51,11 @@ struct ReaderScreen: View {
             }
         }
         .task(id: paper.id) { await load() }
+        // Side by side, the handle a pane holds changes as focus moves; the
+        // open session goes with it, so the inspector reads this paper.
+        .onChange(of: ObjectIdentifier(link)) { _, _ in
+            if let session, link.session(for: paper.id) == nil { link.adopt(session, for: paper.id) }
+        }
         .onDisappear {
             // Only write; the session itself stays with the link until another
             // paper takes its place. A reader that is rebuilt — which SwiftUI
@@ -101,12 +107,16 @@ struct ReaderScreen: View {
         // paper under Sepia, a dark ground under Dimmed. Glass and Paper
         // White have the panel.
         .background {
-            switch configuration.tint {
+            switch configuration.effectiveTint {
             case .sepia: Color(red: 0.96, green: 0.93, blue: 0.86)
             case .dim: Color(white: 0.13)
             default: Color.clear
             }
         }
+        // The tint's behaviour depends on the appearance; the reader is
+        // where the appearance is known.
+        .onAppear { configuration.isDarkAppearance = colorScheme == .dark }
+        .onChange(of: colorScheme) { _, scheme in configuration.isDarkAppearance = scheme == .dark }
         // Under the status bar in the scrolling layouts, where the page
         // flowing on beneath the glass is the point; not in a book, where
         // the bar was sitting on the last lines of both pages.
@@ -119,26 +129,13 @@ struct ReaderScreen: View {
         .animation(.snappy(duration: 0.16), value: selectionFrame)
         #if os(macOS)
         // The pencil's tools, floating over the top of the page while it
-        // is out, and the inspector down the right — where Figma keeps
-        // them, and for the same reason: they are about the page, so they
-        // sit on it.
+        // is out. The inspector for what is drawn is the window's own
+        // inspector column, under its Tool tab.
         .overlay(alignment: .top) {
             if configuration.mode == .draw {
                 SketchToolbar(configuration: configuration)
                     .padding(.top, 10)
                     .transition(.move(edge: .top).combined(with: .opacity))
-            }
-        }
-        .overlay(alignment: .topTrailing) {
-            if configuration.mode == .draw {
-                // The inspector, down the right — where Figma keeps the
-                // numbers about what is selected. It scrolls inside itself
-                // when the window is shorter than it is.
-                SketchInspector(configuration: configuration)
-                    .padding(.trailing, 12)
-                    .padding(.top, 60)
-                    .padding(.bottom, Self.statusBarClearance + 12)
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
         .animation(.snappy(duration: 0.22), value: configuration.mode)

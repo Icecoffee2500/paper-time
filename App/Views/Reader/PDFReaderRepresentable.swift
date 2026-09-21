@@ -67,6 +67,7 @@ struct PDFReaderRepresentable: PlatformViewRepresentable {
     #else
     func makeNSView(context: Context) -> PDFView { context.coordinator.makePDFView() }
     func updateNSView(_ view: PDFView, context: Context) {
+        context.coordinator.link = link
         context.coordinator.adopt(
             session: session,
             onSelectionChange: onSelectionChange,
@@ -87,7 +88,9 @@ final class ReaderCoordinator: NSObject {
     /// write another.
     private var session: DocumentSession
     private let configuration: ReaderConfiguration
-    private let link: ReaderLink
+    /// Swappable: with papers side by side the pane in focus borrows the
+    /// window's own handle, and gives it back when focus moves on.
+    var link: ReaderLink
     private let onPageChange: (Int) -> Void
     private var onSelectionChange: (PDFSelection?, CGRect) -> Void
     private let onNoteRequested: () -> Void
@@ -516,6 +519,7 @@ final class ReaderCoordinator: NSObject {
     }
 
     private func updateNow(_ view: PDFView, revision: Int) {
+        if let input = sketchInput { input.session = session }
         if view.document !== session.document {
             // The overlays belong to the pages of the paper being left, and
             // they are kept by page *number*. Handed on to the next paper,
@@ -561,8 +565,8 @@ final class ReaderCoordinator: NSObject {
             appliedLayout = configuration.layout
             apply(layout: configuration.layout, to: view)
         }
-        if appliedTint != configuration.tint {
-            appliedTint = configuration.tint
+        if appliedTint != configuration.effectiveTint {
+            appliedTint = configuration.effectiveTint
             applyTint(to: view)
         }
         if appliedMode != configuration.mode || appliedFingerDrawing != configuration.fingerDrawing {
@@ -861,7 +865,7 @@ final class ReaderCoordinator: NSObject {
 
     private func applyTint(to view: PDFView) {
         #if canImport(UIKit)
-        switch configuration.tint {
+        switch configuration.effectiveTint {
         case .none:
             view.backgroundColor = .systemGroupedBackground
             view.pageShadowsEnabled = true
@@ -888,7 +892,8 @@ final class ReaderCoordinator: NSObject {
         // ground is nothing — so it is an inversion with the hue turned
         // back round, the way every reader's night mode is made: white paper
         // becomes dark, black ink becomes light, and a colour keeps its hue.
-        switch configuration.tint {
+        let tint = configuration.effectiveTint
+        switch tint {
         case .none:
             // In a spread the ground is the paper's own white and there is
             // no shadow under the pages: two white cards on a grey ground
@@ -904,9 +909,9 @@ final class ReaderCoordinator: NSObject {
             view.backgroundColor = .clear
             view.pageShadowsEnabled = false
         }
-        setGlassCompositing(on: view, configuration.tint == .glass || configuration.tint == .sepia)
-        setNightFilter(on: view, configuration.tint == .dim)
-        NightMode.isOn = configuration.tint == .dim
+        setGlassCompositing(on: view, tint == .glass || tint == .sepia)
+        setNightFilter(on: view, tint == .dim)
+        NightMode.isOn = tint == .dim
         // The figures overlay draws only under the dimmed tint; ask every
         // page to draw again so they appear or go.
         for page in view.visiblePages { MarkOverlayView.refresh(page) }
@@ -1481,9 +1486,21 @@ final class ReaderCoordinator: NSObject {
             }
 
             let inView = view.convert(event.locationInWindow, from: nil)
-            guard view.bounds.contains(inView),
-                  let page = view.page(for: inView, nearest: false)
-            else { return event }
+            guard view.bounds.contains(inView) else { return event }
+            // This pane is the one being read now.
+            link.activated?()
+            guard let page = view.page(for: inView, nearest: false) else { return event }
+
+            // A click on something drawn — a shape, a card, a stroke — takes
+            // the pencil out by itself and goes straight to selecting it, so
+            // what was drawn is never a picture you have to unlock first.
+            if configuration.mode != .draw, sketchInput?.superview == nil, hitsDrawing(at: inView, on: page, in: view) {
+                configuration.mode = .draw
+                // Installed now rather than on the next SwiftUI pass, so
+                // this very click lands on the overlay.
+                updateCanvasInteraction()
+                return event
+            }
 
             // PDFKit's own hit test knows a text markup is a set of
             // quadrilaterals rather than the box that encloses them; the
@@ -1502,6 +1519,28 @@ final class ReaderCoordinator: NSObject {
             showMarkEditor(for: hit, in: view)
             if let id = Self.markID(of: hit) { link.revealedMarkID = id }
             return nil
+        }
+    }
+
+    /// Whether a point on a page is on something the pencil drew: a sketch
+    /// element or a pen stroke.
+    private func hitsDrawing(at inView: CGPoint, on page: PDFPage, in view: PDFView) -> Bool {
+        let index = session.document.index(for: page)
+        guard index != NSNotFound else { return false }
+        let onPage = view.convert(inView, to: page)
+        let tolerance = 6 / max(view.scaleFactor, 0.01)
+        if session.sketch(forPage: index).contains(where: { $0.hits(onPage, tolerance: tolerance) }) { return true }
+        let strokes = session.drawing(forPage: index).strokes
+        guard !strokes.isEmpty else { return false }
+        let geometry = PageGeometry(page: page)
+        let canvas = geometry.canvasPoint(fromPDF: onPage)
+        let reach = tolerance + 2
+        return strokes.contains { stroke in
+            guard stroke.renderBounds.insetBy(dx: -reach, dy: -reach).contains(canvas) else { return false }
+            return stroke.path.interpolatedPoints(by: .distance(2)).contains { sample in
+                let location = sample.location.applying(stroke.transform)
+                return hypot(location.x - canvas.x, location.y - canvas.y) <= reach + sample.size.width / 2
+            }
         }
     }
 
@@ -1813,6 +1852,7 @@ extension ReaderCoordinator: @preconcurrency PDFPageOverlayViewProvider {
 
     /// The view that takes the mouse while the pencil is out.
     private func makeSketchInput(for view: PDFView) -> SketchInputView {
+        MathBridge.install()
         let input = SketchInputView(pdfView: view, configuration: configuration, session: session)
         input.refreshPage = { [weak self] index in
             guard let self, let page = session.document.page(at: index) else { return }

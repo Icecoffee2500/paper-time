@@ -128,7 +128,7 @@ struct SlipBoxList: View {
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background(
-                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    RoundedRectangle(cornerRadius: Corner.control - 2, style: .continuous)
                                         .fill(Color.accentColor.opacity(group.id == "-" ? 0 : 0.12))
                                 )
                                 .padding(.bottom, 2)

@@ -1,6 +1,7 @@
 #if os(macOS)
 import AppKit
 import CoreText
+import InkEngine
 
 /// Sets a piece of LaTeX the way a paper sets it.
 ///
@@ -648,6 +649,34 @@ enum MathTypesetter {
                 }
                 box.draw(at: CGPoint(x: origin.x + (offset == 0 ? 0 : indent), y: y), in: context)
             }
+        }
+    }
+}
+
+/// Hands the drawing layer the typesetter, so a card with `$…$` in it is
+/// set as mathematics on the page — the same setting a note gets. Installed
+/// once; the pictures are kept so redrawing a page does not set its formulas
+/// again.
+enum MathBridge {
+    nonisolated(unsafe) private static var installed = false
+    nonisolated(unsafe) private static var cache: [String: SketchTypesetter.MathPiece] = [:]
+
+    static func install() {
+        guard !installed else { return }
+        installed = true
+        SketchTypesetter.mathProvider = { latex, points, color in
+            let key = "\(latex)|\(points)|\(color.components ?? [])"
+            if let hit = cache[key] { return hit }
+            guard let made = MathTypesetter.image(latex: latex, display: false, pointSize: points, color: NSColor(cgColor: color) ?? .black),
+                  let cg = made.image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+            else { return nil }
+            let piece = SketchTypesetter.MathPiece(
+                image: cg, width: made.image.size.width,
+                ascent: made.image.size.height - made.descent, descent: made.descent
+            )
+            if cache.count > 500 { cache.removeAll() }
+            cache[key] = piece
+            return piece
         }
     }
 }

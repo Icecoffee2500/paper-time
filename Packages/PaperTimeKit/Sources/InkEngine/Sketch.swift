@@ -156,12 +156,14 @@ public struct SketchStyle: Codable, Hashable, Sendable {
     /// Lettering in exact points, when set by hand; nil is `textSize`.
     public var fontSize: CGFloat?
     public var textAlign: TextAlign
+    /// A font family chosen for the words; nil is the system's own face.
+    public var fontName: String?
 
     public static let widths: [CGFloat] = [1, 2, 3.5]
 
     enum CodingKeys: String, CodingKey {
         case stroke, fill, width, dash, corners, startHead, endHead, opacity, textSize, border
-        case strokeHidden, cornerRadius, fontSize, textAlign
+        case strokeHidden, cornerRadius, fontSize, textAlign, fontName
     }
 
     /// The size the words are set in.
@@ -191,7 +193,8 @@ public struct SketchStyle: Codable, Hashable, Sendable {
         strokeHidden: Bool = false,
         cornerRadius: CGFloat? = nil,
         fontSize: CGFloat? = nil,
-        textAlign: TextAlign = .left
+        textAlign: TextAlign = .left,
+        fontName: String? = nil
     ) {
         self.stroke = stroke
         self.fill = fill
@@ -207,6 +210,7 @@ public struct SketchStyle: Codable, Hashable, Sendable {
         self.cornerRadius = cornerRadius
         self.fontSize = fontSize
         self.textAlign = textAlign
+        self.fontName = fontName
     }
 
     // Every field has a default, so a file written by a later version with a
@@ -229,6 +233,7 @@ public struct SketchStyle: Codable, Hashable, Sendable {
         cornerRadius = try c.decodeIfPresent(CGFloat.self, forKey: .cornerRadius)
         fontSize = try c.decodeIfPresent(CGFloat.self, forKey: .fontSize)
         textAlign = try c.decodeIfPresent(TextAlign.self, forKey: .textAlign) ?? .left
+        fontName = try c.decodeIfPresent(String.self, forKey: .fontName)
     }
 
     // Absent rather than false, so a file this version merely opened is
@@ -250,6 +255,7 @@ public struct SketchStyle: Codable, Hashable, Sendable {
         try c.encodeIfPresent(cornerRadius, forKey: .cornerRadius)
         try c.encodeIfPresent(fontSize, forKey: .fontSize)
         if textAlign != .left { try c.encode(textAlign, forKey: .textAlign) }
+        try c.encodeIfPresent(fontName, forKey: .fontName)
     }
 
     /// The dash pattern for a line of this width, in page points. Dashes

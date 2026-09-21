@@ -260,8 +260,8 @@ enum ReleaseNotes {
             version: "0.8.0",
             date: Text2("2026년 9월", "September 2026"),
             note: Text2(
-                "그리기가 Figma처럼 됐어요. 프레임·묶음·오토 레이아웃, 숫자로 고치는 인스펙터, 종이 위에 바로 쓰는 글. 고른 것을 다음 쪽으로 끌어 옮길 수 있고, 펜을 든 채로도 핀치 줌이 돼요.",
-                "Drawing works the way Figma does: frames, groups and auto layout, an inspector with the numbers in it, and text typed straight onto the page. A selection drags onto the next page, and pinch to zoom works with the pen out."
+                "그리기가 Figma처럼 됐어요. 프레임·묶음·오토 레이아웃, 사이드바의 Tool 탭, 종이 위에 바로 쓰는 글, 카드 안의 수식. 논문을 나란히 넷까지 열고, 다크 모드에서도 논문이 잘 보여요.",
+                "Drawing works the way Figma does: frames, groups and auto layout, a Tool tab in the inspector, text typed straight onto the page, formulas in a card. Up to four papers open side by side, and a paper reads well in dark mode."
             ),
             added: [
                 Entry(
@@ -273,10 +273,26 @@ enum ReleaseNotes {
                     action: .draw, demo: .frames, featured: true
                 ),
                 Entry(
-                    Text2("인스펙터", "The inspector"),
+                    Text2("Tool 탭", "The Tool tab"),
                     Text2(
-                        "왼쪽에 있던 스타일 패널이 오른쪽 인스펙터가 됐어요. 위치(정렬 여섯 가지, X와 Y), 레이아웃(W와 H, 흐름, 간격, 여백), 외형(투명도, 모서리 반경), 채우기와 외곽선(색상 패널, hex, %), 글(크기, 정렬, 자동 너비와 자동 높이). 여러 개를 고르면 서로 맞추고, 하나면 프레임이나 쪽에 맞춰요.",
-                        "The style panel on the left is now the inspector on the right. Position, with six alignments and X and Y. Layout, with W and H, flow, gap and padding. Appearance, with opacity and corner radius. Fill and Stroke, with the colour panel, a hex and a percentage. Text, with size, alignment, auto width and auto height. Several things align to each other; one thing aligns to its frame, or to the page."
+                        "그린 것의 인스펙터가 오른쪽 사이드바의 네 번째 탭이 됐어요. Info, Marks, Note, Tool. 펜을 들면 Tool 탭이 앞으로 와요. 위치(정렬 여섯 가지, X와 Y), 레이아웃(W와 H, 흐름, 간격, 여백), 외형(투명도, 모서리 반경), 채우기와 외곽선(색상 패널, hex, %), 글(글꼴, 크기, 정렬, 자동 너비와 자동 높이). 여러 개를 고르면 서로 맞추고, 하나면 프레임이나 쪽에 맞춰요. 탭 이름 넷은 어느 언어에서도 영어예요.",
+                        "The inspector for what you draw is the fourth tab of the window's inspector: Info, Marks, Note, Tool. Taking the pencil out brings Tool forward. Position, with six alignments and X and Y. Layout, with W and H, flow, gap and padding. Appearance, with opacity and corner radius. Fill and Stroke, with the colour panel, a hex and a percentage. Text, with font, size, alignment, auto width and auto height. Several things align to each other; one thing aligns to its frame, or to the page."
+                    ),
+                    action: .draw
+                ),
+                Entry(
+                    Text2("그린 것을 누르면 펜이 나와요", "Click a drawing and the pencil comes out"),
+                    Text2(
+                        "읽는 중에 도형이나 카드나 손글씨를 누르면 그 자리에서 펜이 켜지고 그것이 골라져요. 끝 단추는 없어요. esc나 제목 줄의 펜으로 내려놓아요.",
+                        "Reading, click a shape, a card or a stroke and the pencil is out with that thing selected. There is no Done button; Escape or the pencil on the title row puts it away."
+                    ),
+                    action: .draw
+                ),
+                Entry(
+                    Text2("카드 안의 수식과 글꼴", "Formulas and fonts in a card"),
+                    Text2(
+                        "카드에 $E = mc^2$처럼 쓰면 노트와 같은 조판으로 수식이 그려져요. 글꼴은 Tool 탭에서 이 맥에 있는 것 중에 골라요. 수식은 맥에서 그려지고, 윈도우와 리눅스에서는 쓴 대로 보여요.",
+                        "Write $E = mc^2$ in a card and it is set as mathematics, the same setting a note gets. The font is chosen in the Tool tab from what this Mac has. Formulas are drawn on the Mac; Windows and Linux show them as typed."
                     ),
                     action: .draw
                 ),
@@ -299,13 +315,27 @@ enum ReleaseNotes {
                 Entry(
                     Text2("도구 줄", "The tool rack"),
                     Text2(
-                        "Figma의 도구 줄처럼 다섯 단추예요. 선택, 프레임, 도형, 펜, 글. 도형과 펜은 옆 화살표에서 종류를 골라요. 한 글자 키는 그대로예요.",
-                        "Five buttons, as in Figma: Select, Frame, a shape, the pen, Text. The shapes and the pen tools open from the chevron beside them. Every one-letter key still works."
+                        "Figma의 도구 줄처럼 다섯 단추예요. 선택, 프레임, 도형, 펜, 글. 아이콘도 Figma의 선 굵기로 그렸고, 고른 도구는 파란 칸에 흰 아이콘이에요. 도형과 펜은 옆 화살표에서 종류를 골라요. 한 글자 키는 그대로예요. 프레임에 무엇을 끌어 넣으면 그 프레임의 테두리가 켜지고, 프레임 안의 것을 고르면 그 프레임 이름이 파랗게 보여요.",
+                        "Five buttons, as in Figma: Select, Frame, a shape, the pen, Text. The icons are drawn in Figma's line weight, and the chosen tool is a blue square with a white icon. The shapes and the pen tools open from the chevron beside them. Every one-letter key still works. Drag something over a frame and the frame's edge lights up; select something inside a frame and the frame's name turns blue."
                     ),
                     action: .draw
                 ),
+                Entry(
+                    Text2("논문을 나란히", "Papers side by side"),
+                    Text2(
+                        "사이드바에 '열린 논문'이 생겼어요. 이 세션에서 연 논문들이 순서대로 있어요. 논문을 목록에서 끌어 쪽의 왼쪽이나 오른쪽에 놓으면 반씩, 네 귀에 놓으면 넷까지 나란히 열려요. 맥이 창을 화면 가장자리에 붙이는 것과 같아요. 우클릭 메뉴의 '나란히 열기'로도 돼요. 누른 칸이 지금 읽는 논문이고, Info·Marks·Note는 그 논문 것이에요.",
+                        "The sidebar has Open Papers: the papers opened this session, in order. Drag one onto the left or right of the page for halves, or into a corner for up to four at once — the way a Mac tiles a window dragged to the edge of the screen. Open Side by Side in the context menu does the same. The pane you click is the paper you are reading; Info, Marks and Note are about it."
+                    )
+                ),
             ],
             fixed: [
+                Entry(
+                    Text2("다크 모드에서 논문이 잘 안 보였어요", "Papers were hard to read in dark mode"),
+                    Text2(
+                        "Glass 색은 종이의 흰색을 뒤의 패널에 곱해서 지우는데, 어두운 패널 위에서는 글자까지 함께 사라져요. 다크 모드에서는 Glass가 흰 종이로 보여요. 유리는 창의 나머지에 남아요.",
+                        "The Glass tint multiplies the paper's white into the panel behind it, and over a dark panel that took the letters with it. In dark mode Glass shows a white page; the glass stays on the rest of the window."
+                    )
+                ),
                 Entry(
                     Text2("펜을 든 채로 핀치 줌이 안 됐어요", "Pinch to zoom did nothing with the pen out"),
                     Text2(

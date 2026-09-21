@@ -15,17 +15,67 @@ public enum SketchTypesetter {
         public let width: CGFloat
     }
 
+    /// A formula set as a picture, placed in the block — top-left origin,
+    /// y down, like the lines.
+    public struct Placed {
+        public let image: CGImage
+        public let frame: CGRect
+    }
+
     public struct Layout {
         public var lines: [Line]
+        public var images: [Placed] = []
         public var size: CGSize
     }
+
+    /// A piece of mathematics, set: the picture, how wide it is in points,
+    /// and how far it rises above and hangs below the baseline.
+    public struct MathPiece {
+        public let image: CGImage
+        public let width: CGFloat
+        public let ascent: CGFloat
+        public let descent: CGFloat
+
+        public init(image: CGImage, width: CGFloat, ascent: CGFloat, descent: CGFloat) {
+            self.image = image
+            self.width = width
+            self.ascent = ascent
+            self.descent = descent
+        }
+    }
+
+    /// Whoever can set LaTeX — the app installs its typesetter here, and a
+    /// text card with `$…$` in it is set as mathematics wherever this is
+    /// not nil. Nowhere it is nil (another platform, the PDF's copy) the
+    /// dollars stay as typed, which is honest about what that reader can do.
+    nonisolated(unsafe) public static var mathProvider: ((_ latex: String, _ points: CGFloat, _ color: CGColor) -> MathPiece?)?
 
     /// The system's own face, which every device has and which sets Korean
     /// beside Latin without being asked.
     public static func font(_ size: SketchStyle.TextSize) -> CTFont { font(points: size.points) }
 
-    public static func font(points: CGFloat) -> CTFont {
-        CTFontCreateUIFontForLanguage(.system, points, nil)
+    public static func font(points: CGFloat) -> CTFont { font(points: points, name: nil) }
+
+    /// The face the words are set in: a family chosen by name, or the
+    /// system's own — which every device has and which sets Korean beside
+    /// Latin without being asked.
+    public static func font(points: CGFloat, name: String?) -> CTFont {
+        if let name, !name.isEmpty {
+            let descriptor = CTFontDescriptorCreateWithAttributes([
+                kCTFontFamilyNameAttribute: name,
+            ] as CFDictionary)
+            let font = CTFontCreateWithFontDescriptor(descriptor, points, nil)
+            // A family this device does not have comes back as something
+            // else; only take the font when it is the one asked for.
+            if let family = CTFontCopyFamilyName(font) as String?, family.caseInsensitiveCompare(name) == .orderedSame {
+                return font
+            }
+            let named = CTFontCreateWithName(name as CFString, points, nil)
+            if let post = CTFontCopyPostScriptName(named) as String?, post.lowercased().contains(name.lowercased().replacingOccurrences(of: " ", with: "")) {
+                return named
+            }
+        }
+        return CTFontCreateUIFontForLanguage(.system, points, nil)
             ?? CTFontCreateWithName("Helvetica" as CFString, points, nil)
     }
 
@@ -43,9 +93,12 @@ public enum SketchTypesetter {
 
     public static func layout(
         _ text: String, points: CGFloat, color: CGColor, width: CGFloat? = nil,
-        align: SketchStyle.TextAlign = .left
+        align: SketchStyle.TextAlign = .left, fontName: String? = nil
     ) -> Layout {
-        let font = font(points: points)
+        if let provider = mathProvider, hasMath(text) {
+            return mathLayout(text, points: points, color: color, width: width, align: align, fontName: fontName, provider: provider)
+        }
+        let font = font(points: points, name: fontName)
         let attributed = NSAttributedString(
             string: text.isEmpty ? " " : text,
             attributes: [
@@ -92,10 +145,95 @@ public enum SketchTypesetter {
         cardSize(for: text, points: size.points, width: width)
     }
 
-    public static func cardSize(for text: String, points: CGFloat, width: CGFloat? = nil) -> CGSize {
+    public static func cardSize(for text: String, points: CGFloat, width: CGFloat? = nil, fontName: String? = nil) -> CGSize {
         let inner = width.map { $0 - padding * 2 }
-        let block = layout(text, points: points, color: CGColor(gray: 0, alpha: 1), width: inner).size
+        let block = layout(text, points: points, color: CGColor(gray: 0, alpha: 1), width: inner, fontName: fontName).size
         return CGSize(width: block.width + padding * 2, height: block.height + padding * 2)
+    }
+
+    // MARK: - Mathematics in a card
+
+    /// Whether the text has a formula in it: a pair of dollars with
+    /// something between them.
+    public static func hasMath(_ text: String) -> Bool {
+        guard let range = text.range(of: #"\$[^$\n]+\$"#, options: .regularExpression) else { return false }
+        return !range.isEmpty
+    }
+
+    /// A line of a card with mathematics in it: words and formulas, laid
+    /// along one baseline. Each paragraph is one line — a formula is not
+    /// broken across lines — and the block is as wide as its widest.
+    private static func mathLayout(
+        _ text: String, points: CGFloat, color: CGColor, width: CGFloat?,
+        align: SketchStyle.TextAlign, fontName: String?, provider: (String, CGFloat, CGColor) -> MathPiece?
+    ) -> Layout {
+        let font = font(points: points, name: fontName)
+        let textAscent = CTFontGetAscent(font), textDescent = CTFontGetDescent(font)
+        let leading = max(CTFontGetLeading(font), points * 0.15)
+        var lines: [Line] = []
+        var images: [Placed] = []
+        var top: CGFloat = 0
+        var widest: CGFloat = 0
+        let pattern = try! NSRegularExpression(pattern: #"\$([^$\n]+)\$"#)
+
+        struct Piece { var line: CTLine?; var math: MathPiece?; var width: CGFloat; var ascent: CGFloat; var descent: CGFloat }
+        var rows: [(pieces: [Piece], width: CGFloat, ascent: CGFloat, descent: CGFloat)] = []
+
+        for paragraph in text.components(separatedBy: "\n") {
+            var pieces: [Piece] = []
+            let ns = paragraph as NSString
+            var cursor = 0
+            func addText(_ range: NSRange) {
+                guard range.length > 0 else { return }
+                let attributed = NSAttributedString(string: ns.substring(with: range), attributes: [
+                    kCTFontAttributeName as NSAttributedString.Key: font,
+                    kCTForegroundColorAttributeName as NSAttributedString.Key: color,
+                ])
+                let line = CTLineCreateWithAttributedString(attributed)
+                let advance = CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
+                pieces.append(Piece(line: line, math: nil, width: advance, ascent: textAscent, descent: textDescent))
+            }
+            for match in pattern.matches(in: paragraph, range: NSRange(location: 0, length: ns.length)) {
+                addText(NSRange(location: cursor, length: match.range.location - cursor))
+                let latex = ns.substring(with: match.range(at: 1))
+                if let piece = provider(latex, points, color) {
+                    pieces.append(Piece(line: nil, math: piece, width: piece.width, ascent: piece.ascent, descent: piece.descent))
+                } else {
+                    addText(match.range)
+                }
+                cursor = match.range.location + match.range.length
+            }
+            addText(NSRange(location: cursor, length: ns.length - cursor))
+            if pieces.isEmpty { pieces.append(Piece(line: nil, math: nil, width: 0, ascent: textAscent, descent: textDescent)) }
+            let rowWidth = pieces.map(\.width).reduce(0, +)
+            let ascent = pieces.map(\.ascent).max() ?? textAscent
+            let descent = pieces.map(\.descent).max() ?? textDescent
+            rows.append((pieces, rowWidth, ascent, descent))
+            widest = max(widest, rowWidth)
+        }
+
+        let blockWidth = width ?? widest
+        for (index, row) in rows.enumerated() {
+            let baseline = top + row.ascent
+            var x: CGFloat
+            switch align {
+            case .left: x = 0
+            case .center: x = (blockWidth - row.width) / 2
+            case .right: x = blockWidth - row.width
+            }
+            for piece in row.pieces {
+                if let line = piece.line {
+                    lines.append(Line(line: line, x: x, baseline: baseline, width: piece.width))
+                } else if let math = piece.math {
+                    images.append(Placed(image: math.image, frame: CGRect(
+                        x: x, y: baseline - math.ascent, width: math.width, height: math.ascent + math.descent
+                    )))
+                }
+                x += piece.width
+            }
+            top = baseline + row.descent + (index == rows.count - 1 ? 0 : leading)
+        }
+        return Layout(lines: lines, images: images, size: CGSize(width: blockWidth, height: top))
     }
 
     /// The box a text card takes for its words: as wide as its longest line
@@ -107,11 +245,11 @@ public enum SketchTypesetter {
         let size: CGSize
         switch element.sizing {
         case .autoWidth:
-            let natural = cardSize(for: element.text, points: element.style.points)
+            let natural = cardSize(for: element.text, points: element.style.points, fontName: element.style.fontName)
             size = CGSize(width: max(natural.width, 24), height: natural.height)
         case .autoHeight:
             let width = max(r.width, 24)
-            size = CGSize(width: width, height: cardSize(for: element.text, points: element.style.points, width: width).height)
+            size = CGSize(width: width, height: cardSize(for: element.text, points: element.style.points, width: width, fontName: element.style.fontName).height)
         }
         return CGRect(x: r.minX, y: r.maxY - size.height, width: size.width, height: size.height)
     }
@@ -312,7 +450,8 @@ public enum SketchRenderer {
         // sized to its height wraps at its edge.
         let layout = SketchTypesetter.layout(
             element.text, points: element.style.points, color: element.style.stroke.cgColor,
-            width: element.sizing == .autoWidth ? nil : inner.width, align: element.style.textAlign
+            width: element.sizing == .autoWidth ? nil : inner.width, align: element.style.textAlign,
+            fontName: element.style.fontName
         )
         // With no wrapping the block can be narrower than the card (the
         // card was made wider by hand); the alignment says where it sits.
@@ -333,7 +472,7 @@ public enum SketchRenderer {
         guard inner.width > 4 else { return }
         let layout = SketchTypesetter.layout(
             element.text, points: element.style.points, color: element.style.stroke.cgColor,
-            width: inner.width, align: .center
+            width: inner.width, align: .center, fontName: element.style.fontName
         )
         let top = inner.midY + layout.size.height / 2
         context.saveGState()
@@ -354,6 +493,23 @@ public enum SketchRenderer {
         for line in layout.lines {
             context.textPosition = CGPoint(x: origin.x + line.x, y: origin.y - line.baseline)
             CTLineDraw(line.line, context)
+        }
+        // The formulas: pictures, upright in a y-up context and turned back
+        // the right way up where the view has flipped it.
+        for placed in layout.images {
+            let rect = CGRect(
+                x: origin.x + placed.frame.minX, y: origin.y - placed.frame.maxY,
+                width: placed.frame.width, height: placed.frame.height
+            )
+            if options.flipsText {
+                context.saveGState()
+                context.translateBy(x: rect.midX, y: rect.midY)
+                context.scaleBy(x: 1, y: -1)
+                context.draw(placed.image, in: CGRect(x: -rect.width / 2, y: -rect.height / 2, width: rect.width, height: rect.height))
+                context.restoreGState()
+            } else {
+                context.draw(placed.image, in: rect)
+            }
         }
         context.restoreGState()
     }

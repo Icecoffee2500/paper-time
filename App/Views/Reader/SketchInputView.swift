@@ -308,6 +308,9 @@ final class SketchInputView: NSView, SketchEditing {
         if textEditor != nil { endEditing(commit: true) }
         guard let spot = spot(for: event) else { return }
         window?.makeFirstResponder(self)
+        // With several papers open side by side, the inspector follows the
+        // pane last clicked in.
+        state.editor = self
         let additive = event.modifierFlags.contains(.shift)
         dragPage = (spot.page, spot.index)
         moveTarget = nil
@@ -1026,7 +1029,29 @@ final class SketchInputView: NSView, SketchEditing {
     }
 
     private func editorFont(for element: SketchElement, on page: PDFPage) -> NSFont {
-        NSFont.systemFont(ofSize: element.style.points * scale(for: page))
+        let size = element.style.points * scale(for: page)
+        if let family = element.style.fontName,
+           let font = NSFontManager.shared.font(withFamily: family, traits: [], weight: 5, size: size) {
+            return font
+        }
+        return NSFont.systemFont(ofSize: size)
+    }
+
+    /// The frame the moving selection would land in, if it were let go now
+    /// — lit up while it is over it, so going into a frame is seen to
+    /// happen rather than found out afterwards.
+    private var landingFrame: UUID? {
+        guard case .move = drag, let target = moveTarget, !working.isEmpty else { return nil }
+        let all = elements(on: target.index)
+        let moving = Set(working.map(\.id))
+        let tree = SketchTree(all)
+        let box = SketchTree(working).bounds(of: moving)
+        guard !box.isNull else { return nil }
+        let centre = CGPoint(x: box.midX, y: box.midY)
+        return all.last { candidate in
+            candidate.kind == .frame && !moving.contains(candidate.id) && candidate.rect.contains(centre)
+                && !moving.contains(where: { tree.isDescendant(candidate.id, of: $0) })
+        }?.id
     }
 
     private func beginEditing(_ element: SketchElement, on page: PDFPage, index: Int, isNew: Bool, before: [SketchElement]? = nil) {
@@ -1971,6 +1996,16 @@ final class SketchInputView: NSView, SketchEditing {
     /// name and not an anonymous box.
     private func drawFrameNames(in context: CGContext) {
         guard let pdfView else { return }
+        let landing = landingFrame
+        // The frame the selection lives in, so it is seen to be inside
+        // something — the way Figma lights the parent's name.
+        var parents: Set<UUID> = []
+        if let index = selection.pageIndex, drag == nil || isMoving {
+            let tree = tree(on: index)
+            for id in selection.elements {
+                if let parent = tree[id]?.parent, tree[parent]?.kind == .frame { parents.insert(parent) }
+            }
+        }
         for page in pdfView.visiblePages {
             let index = session.document.index(for: page)
             guard index != NSNotFound else { continue }
@@ -1979,9 +2014,25 @@ final class SketchInputView: NSView, SketchEditing {
                 let title = frame.name ?? L("프레임", "Frame")
                 let corner = viewPoint(CGPoint(x: frame.rect.minX, y: frame.rect.maxY), on: page)
                 let chosen = selection.pageIndex == index && selection.elements.contains(frame.id)
+                let isLanding = landing == frame.id && moveTarget?.index == index
+                let isParent = parents.contains(frame.id) && selection.pageIndex == index
+                if isLanding || isParent {
+                    // The frame's edge, in the accent: strong while something
+                    // is being dropped into it, faint while something inside
+                    // it is merely selected.
+                    let box = viewRect(frame.rect, on: page)
+                    context.setStrokeColor(NSColor.controlAccentColor.withAlphaComponent(isLanding ? 0.95 : 0.4).cgColor)
+                    context.setLineWidth(isLanding ? 2 : 1)
+                    context.setLineDash(phase: 0, lengths: [])
+                    context.stroke(box.insetBy(dx: isLanding ? 1 : 0.5, dy: isLanding ? 1 : 0.5))
+                    if isLanding {
+                        context.setFillColor(NSColor.controlAccentColor.withAlphaComponent(0.05).cgColor)
+                        context.fill(box)
+                    }
+                }
                 let attributes: [NSAttributedString.Key: Any] = [
                     .font: NSFont.systemFont(ofSize: 10, weight: .medium),
-                    .foregroundColor: chosen ? NSColor.controlAccentColor : NSColor.secondaryLabelColor,
+                    .foregroundColor: chosen || isLanding || isParent ? NSColor.controlAccentColor : NSColor.secondaryLabelColor,
                 ]
                 NSAttributedString(string: title, attributes: attributes)
                     .draw(at: CGPoint(x: corner.x, y: corner.y + 3))

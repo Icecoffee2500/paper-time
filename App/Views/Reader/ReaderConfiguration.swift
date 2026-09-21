@@ -149,6 +149,22 @@ public final class ReaderConfiguration {
     }
 
     public var mode: Mode = .read
+    /// Whether the window is in the dark appearance. Set by the reader from
+    /// the environment; what the tint does depends on it.
+    public var isDarkAppearance = false
+
+    /// The tint as it is actually drawn.
+    ///
+    /// Glass multiplies the page against the panel behind it, which is what
+    /// takes the paper's white away and leaves the ink. Over a dark panel
+    /// that leaves nothing: black ink multiplied into a dark ground is a dark
+    /// slab with darker letters on it. So in the dark appearance Glass is
+    /// paper white — a white page on the window's ground, as Preview shows
+    /// one — and the glass stays on the chrome, where it can be seen through.
+    public var effectiveTint: PageTint {
+        if tint == .glass, isDarkAppearance { return .none }
+        return tint
+    }
     /// Both start from the setting, so what Settings says is what the reader
     /// does — the picker there used to write a preference nothing read.
     public var layout: PageLayout = PageLayout(

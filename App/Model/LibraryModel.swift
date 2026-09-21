@@ -28,6 +28,9 @@ public final class LibraryModel {
 
     public enum Scope: Hashable, Sendable {
         case all
+        /// The papers open in this session, in the order they were opened —
+        /// what a browser's tab strip is, as a shelf.
+        case open
         /// The slip-box, which is not a filter over papers but a place of its
         /// own: all the notes, whichever paper they came from.
         case notes
@@ -129,7 +132,13 @@ public final class LibraryModel {
         }
     }
 
-    private var openPaperID: UUID?
+    private var openPaperID: UUID? {
+        didSet {
+            // Whichever way a paper came to be showing — the list, a menu,
+            // the search palette — it is now open.
+            if let id = openPaperID, !openPaperIDs.contains(id) { openPaperIDs.append(id) }
+        }
+    }
 
     /// The paper the reader is showing. Setting it is how everything outside
     /// the list — the search palette, a supplement, a menu — opens a paper.
@@ -141,6 +150,23 @@ public final class LibraryModel {
             if selection != wanted { selection = wanted }
             openPaperID = newValue
             if !isTravellingHistory { remember(newValue) }
+        }
+    }
+
+    /// Every paper opened in this session and not closed since, in the order
+    /// they were opened. A paper stays here while you read another, which is
+    /// what lets several be looked at side by side.
+    public private(set) var openPaperIDs: [UUID] = [] {
+        didSet { if scope == .open { invalidateVisibleCache() } }
+    }
+
+    /// Takes a paper off the open shelf. If it was the one showing, the one
+    /// opened before it comes back.
+    public func closeOpenPaper(_ id: UUID) {
+        guard let at = openPaperIDs.firstIndex(of: id) else { return }
+        openPaperIDs.remove(at: at)
+        if selectedPaperID == id {
+            selectedPaperID = openPaperIDs.indices.contains(at - 1) ? openPaperIDs[at - 1] : openPaperIDs.last
         }
     }
 
@@ -432,6 +458,12 @@ public final class LibraryModel {
 
     private func computeVisiblePapers() -> [LoadedPaper] {
         var result = papers.filter { $0.meta.parentID == nil && matchesScope($0) }
+        if scope == .open {
+            // In the order they were opened, not the list's sort: this shelf
+            // is a row of tabs.
+            let order = Dictionary(uniqueKeysWithValues: openPaperIDs.enumerated().map { ($1, $0) })
+            return result.sorted { (order[$0.id] ?? 0) < (order[$1.id] ?? 0) }
+        }
         let query = scope == .searchResults
             ? searchQuery
             : searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -639,6 +671,7 @@ public final class LibraryModel {
     private func matchesScope(_ paper: LoadedPaper) -> Bool {
         switch scope {
         case .all, .searchResults: true
+        case .open: openPaperIDs.contains(paper.id)
         // These two are places of their own, not filters over papers.
         case .notes, .graph: false
         case .unread: paper.state.readingStatus == .unread

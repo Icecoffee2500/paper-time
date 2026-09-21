@@ -153,6 +153,11 @@ struct LibrarySidebar: View {
                 Label(L("모든 논문", "All Papers"), systemImage: "tray.full")
                     .count(model.counts.all, current: model.scope == .all)
                     .scopeRow(.all, in: model)
+                // What is open right now — a row of tabs, as a shelf. From
+                // here a paper is closed, or put beside another.
+                Label(L("열린 논문", "Open Papers"), systemImage: "rectangle.on.rectangle")
+                    .count(model.openPaperIDs.count, current: model.scope == .open)
+                    .scopeRow(.open, in: model)
                 Label(L("안 읽음", "Unread"), systemImage: "circle")
                     .count(model.counts.unread, current: model.scope == .unread)
                     .scopeRow(.unread, in: model)
@@ -193,7 +198,7 @@ struct LibrarySidebar: View {
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1.5)
                             .background(
-                                RoundedRectangle(cornerRadius: 5.5, style: .continuous)
+                                RoundedRectangle(cornerRadius: Corner.control - 2.5, style: .continuous)
                                     .fill(Color.accentColor.opacity(0.12))
                             )
                             .contentShape(.rect)

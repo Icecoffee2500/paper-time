@@ -52,6 +52,53 @@ public final class AppModel {
     /// rather than reading from it.
     public var showsReader = true
 
+    /// Papers shown side by side, when they are: up to four, in the two
+    /// halves and the four quarters of the page area — the way a Mac tiles
+    /// windows when one is dragged to an edge of the screen.
+    public var split: SplitArrangement?
+
+    /// A reader handle for each pane. The pane showing the current paper
+    /// borrows the window's own, so the toolbar and the inspector act on it;
+    /// the others each keep one of these.
+    private var paneLinks: [UUID: ReaderLink] = [:]
+
+    func paneLink(for paperID: UUID) -> ReaderLink {
+        if let link = paneLinks[paperID] { return link }
+        let link = ReaderLink()
+        paneLinks[paperID] = link
+        return link
+    }
+
+    /// Puts a paper into a zone of the page area. With nothing side by side
+    /// yet, the paper already showing takes the other half.
+    func dock(_ id: UUID, at zone: DockZone, showing current: UUID?) {
+        var arrangement = split ?? current.map { SplitArrangement(left: .init(top: $0)) }
+            ?? SplitArrangement(left: .init(top: id))
+        arrangement.dock(id, at: zone)
+        withAnimation(AppModel.paneMotion) {
+            split = arrangement.papers.count > 1 ? arrangement : nil
+            showsReader = true
+        }
+    }
+
+    /// Takes a paper out of the side-by-side arrangement. One pane left is
+    /// no arrangement at all; that paper is simply the one showing.
+    func undock(_ id: UUID, model: LibraryModel) {
+        guard var arrangement = split else { return }
+        arrangement.remove(id)
+        withAnimation(AppModel.paneMotion) {
+            if arrangement.papers.count <= 1 {
+                split = nil
+                if let last = arrangement.papers.first, model.selectedPaperID == id || model.selectedPaperID == nil {
+                    model.selectedPaperID = last
+                }
+            } else {
+                split = arrangement
+                if model.selectedPaperID == id, let first = arrangement.papers.first { model.selectedPaperID = first }
+            }
+        }
+    }
+
     /// How wide the two columns are.
     ///
     /// Observed properties rather than `@AppStorage`: an `@ObservationIgnored`
@@ -489,4 +536,94 @@ public final class AppSettings {
     /// back the column you had rather than a default.
 
     public init() {}
+}
+
+
+/// Where a paper is put when it is dragged to the page area's edge: a half,
+/// or a quarter.
+public enum DockZone: Equatable, Sendable {
+    case left, right, topLeft, topRight, bottomLeft, bottomRight
+}
+
+/// Up to four papers in the page area: a left column and, when there is
+/// one, a right column, each of one or two panes.
+public struct SplitArrangement: Equatable, Sendable {
+    public struct Column: Equatable, Sendable {
+        public var top: UUID
+        public var bottom: UUID?
+        public init(top: UUID, bottom: UUID? = nil) {
+            self.top = top
+            self.bottom = bottom
+        }
+        var papers: [UUID] { [top] + (bottom.map { [$0] } ?? []) }
+    }
+
+    public var left: Column
+    public var right: Column?
+
+    public init(left: Column, right: Column? = nil) {
+        self.left = left
+        self.right = right
+    }
+
+    /// Every paper in the arrangement, left column first, top before bottom.
+    public var papers: [UUID] { left.papers + (right?.papers ?? []) }
+
+    public func contains(_ id: UUID) -> Bool { papers.contains(id) }
+
+    /// Takes a paper out, closing up the space it leaves.
+    public mutating func remove(_ id: UUID) {
+        var columns = [left, right].compactMap { $0 }.compactMap { column -> Column? in
+            let kept = column.papers.filter { $0 != id }
+            guard let first = kept.first else { return nil }
+            return Column(top: first, bottom: kept.count > 1 ? kept[1] : nil)
+        }
+        if columns.isEmpty { return }
+        left = columns.removeFirst()
+        right = columns.first
+    }
+
+    /// Puts a paper into a zone. What was there slides to the other half of
+    /// its column; what there is no room for leaves the arrangement (and
+    /// stays open in the list).
+    public mutating func dock(_ id: UUID, at zone: DockZone) {
+        let leftIDs = left.papers.filter { $0 != id }
+        let rightIDs = right?.papers.filter { $0 != id } ?? []
+        let others = leftIDs + rightIDs
+        func column(_ ids: [UUID]) -> Column? {
+            guard let first = ids.first else { return nil }
+            return Column(top: first, bottom: ids.count > 1 ? ids[1] : nil)
+        }
+        switch zone {
+        case .left:
+            left = Column(top: id)
+            right = column(Array(others.prefix(2)))
+        case .right:
+            if let rest = column(Array(others.prefix(2))) {
+                left = rest
+                right = Column(top: id)
+            } else {
+                left = Column(top: id)
+                right = nil
+            }
+        case .topLeft, .bottomLeft:
+            let top = zone == .topLeft
+            let kept = Array(leftIDs.prefix(1))
+            let spill = Array(leftIDs.dropFirst(1))
+            left = column(top ? [id] + kept : kept + [id])!
+            right = column(Array((rightIDs + spill).prefix(2)))
+        case .topRight, .bottomRight:
+            let top = zone == .topRight
+            let kept = Array(rightIDs.prefix(1))
+            let spill = Array(rightIDs.dropFirst(1))
+            let placed = column(top ? [id] + kept : kept + [id])!
+            if let rest = column(Array((leftIDs + spill).prefix(2))) {
+                left = rest
+                right = placed
+            } else {
+                left = placed
+                right = nil
+            }
+        }
+    }
 }

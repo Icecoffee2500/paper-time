@@ -167,6 +167,8 @@ export class SketchStyle {
   /** Lettering in exact points, when set by hand; null is `textSize`. */
   fontSize: number | null = null
   textAlign: TextAlign = 'left'
+  /** A font family chosen by name; null is the bundled face. */
+  fontName: string | null = null
 
   /** Every field defaults, so a file written by a version that knows more
    *  fields still reads, and one written by a version that knew fewer does
@@ -188,6 +190,7 @@ export class SketchStyle {
     if (typeof r.cornerRadius === 'number') style.cornerRadius = r.cornerRadius
     if (typeof r.fontSize === 'number') style.fontSize = r.fontSize
     if (typeof r.textAlign === 'string') style.textAlign = r.textAlign as TextAlign
+    if (typeof r.fontName === 'string') style.fontName = r.fontName
     return style
   }
 
@@ -209,6 +212,7 @@ export class SketchStyle {
       cornerRadius: this.cornerRadius ?? undefined,
       fontSize: this.fontSize ?? undefined,
       textAlign: this.textAlign !== 'left' ? this.textAlign : undefined,
+      fontName: this.fontName ?? undefined,
     }
   }
 

@@ -537,6 +537,7 @@ struct PaperRow: View, Equatable {
 private struct PaperMenu: View {
     let paper: LoadedPaper
     let model: LibraryModel
+    @Environment(AppModel.self) private var app
 
     var body: some View {
         Button {
@@ -544,6 +545,28 @@ private struct PaperMenu: View {
         } label: {
             Label(L("열기", "Open"), systemImage: "book")
         }
+        #if os(macOS)
+        // Beside the paper already open: a half, or a quarter, of the page.
+        Menu {
+            dockButton(.left, L("왼쪽에", "Left Half"), "rectangle.lefthalf.inset.filled")
+            dockButton(.right, L("오른쪽에", "Right Half"), "rectangle.righthalf.inset.filled")
+            Divider()
+            dockButton(.topLeft, L("왼쪽 위에", "Top Left"), "rectangle.inset.topleft.filled")
+            dockButton(.topRight, L("오른쪽 위에", "Top Right"), "rectangle.inset.topright.filled")
+            dockButton(.bottomLeft, L("왼쪽 아래에", "Bottom Left"), "rectangle.inset.bottomleft.filled")
+            dockButton(.bottomRight, L("오른쪽 아래에", "Bottom Right"), "rectangle.inset.bottomright.filled")
+        } label: {
+            Label(L("나란히 열기", "Open Side by Side"), systemImage: "rectangle.split.2x1")
+        }
+        if model.openPaperIDs.contains(paper.id) {
+            Button {
+                app.undock(paper.id, model: model)
+                model.closeOpenPaper(paper.id)
+            } label: {
+                Label(L("닫기", "Close"), systemImage: "xmark.circle")
+            }
+        }
+        #endif
 
         Picker(L("읽기 상태", "Reading Status"), selection: statusBinding(paper)) {
             ForEach(PaperState.ReadingStatus.allCases, id: \.self) { status in
@@ -619,6 +642,17 @@ private struct PaperMenu: View {
     private var candidates: [LoadedPaper] {
         model.attachmentCandidates(for: paper.id)
     }
+
+    #if os(macOS)
+    private func dockButton(_ zone: DockZone, _ title: String, _ symbol: String) -> some View {
+        Button {
+            app.dock(paper.id, at: zone, showing: model.selectedPaperID)
+            if model.selectedPaperID == nil { model.selectedPaperID = paper.id }
+        } label: {
+            Label(title, systemImage: symbol)
+        }
+    }
+    #endif
 
     private func statusBinding(_ paper: LoadedPaper) -> Binding<PaperState.ReadingStatus> {
         Binding(

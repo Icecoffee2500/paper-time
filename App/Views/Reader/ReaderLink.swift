@@ -60,6 +60,10 @@ final class ReaderLink {
     var revealedMarkID: UUID?
     /// A passage waiting to be dropped into the note at the cursor.
     var pendingNoteAnchor: NoteAnchor?
+    /// Called when the reader this handle belongs to is clicked in — so,
+    /// with several papers side by side, the one under the hand becomes the
+    /// one the inspector is about.
+    @ObservationIgnored var activated: (() -> Void)?
 
     /// Somewhere on a page, in page coordinates — of this paper, or of the
     /// one named.
