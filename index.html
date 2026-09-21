@@ -33,212 +33,437 @@
   document.documentElement.lang = lang;
 })();
 </script>
-<link rel="stylesheet" href="style.css?v=0.8.0">
+<link rel="stylesheet" href="style.css?v=0.9.1">
 </head>
 <body>
 
-<!-- ─────────────────────────── the first screen ─────────────────────────── -->
-<div class="screen">
+<!-- ───────────────────────────── the top bar ───────────────────────────── -->
+<div class="topbar">
+  <a class="name" href="#top">Paper Time</a>
+  <nav>
+    <a href="#read"><span data-l="ko">읽기</span><span data-l="en">Reading</span></a>
+    <a href="#mark"><span data-l="ko">표시</span><span data-l="en">Marking</span></a>
+    <a href="#notes"><span data-l="ko">노트</span><span data-l="en">Notes</span></a>
+    <a href="#library"><span data-l="ko">라이브러리</span><span data-l="en">Library</span></a>
+    <a href="#everywhere"><span data-l="ko">어디서나</span><span data-l="en">Everywhere</span></a>
+    <a href="#together"><span data-l="ko">함께</span><span data-l="en">Together</span></a>
+  </nav>
+  <span class="spacer"></span>
+  <div class="lang" id="lang" role="group" aria-label="Language"></div>
+  <a class="pill" href="#top"><span data-l="ko">받기</span><span data-l="en">Download</span></a>
+</div>
 
-  <header class="hero">
-    <div class="hero-head">
-      <h1 class="wordmark">Paper <span class="t">Time</span></h1>
-      <!-- Written out rather than an icon: a globe means "settings I have to
-           go find", and this is one tap. -->
-      <div class="lang" id="lang" role="group" aria-label="Language"></div>
-    </div>
-
-    <!-- The demonstration, before any claim about it. Somebody who has ever
-         copied a formula out of a PDF understands this in five seconds, and
-         no sentence does that. -->
-    <div class="hero-demo" id="hero-demo"></div>
-
-    <p class="lede" data-l="ko">수식이 든 문단을, <b class="mark">수식인 채로</b>.</p>
+<!-- ─────────────────────────────── the hero ────────────────────────────── -->
+<header class="hero" id="top">
+  <div class="hero-top">
+    <h1 class="wordmark">Paper <span class="t">Time</span></h1>
+    <p class="lede" data-l="ko">수식이 든 문단을, <b class="mark">수식인 채로</b> 가져와요.</p>
     <p class="lede" data-l="en">Copy a paragraph with mathematics in it. <b class="mark">The mathematics survives.</b></p>
+  </div>
 
-    <div class="actions">
-      <a class="btn btn-primary" id="get" href="https://github.com/Icecoffee2500/paper-time/releases">
-        <span>
-          <span class="label" data-l="ko">받기</span><span class="label" data-l="en">Download</span><br>
-          <span class="sub">macOS</span>
-        </span>
-      </a>
-      <a class="btn btn-ghost" id="watch" href="film.html"><span data-l="ko">영상 보기</span><span data-l="en">Watch</span></a>
-      <button class="btn btn-ghost" id="how"><span data-l="ko">설치하는 법</span><span data-l="en">How to install</span></button>
-      <button class="btn btn-ghost" id="older"><span data-l="ko">이전 버전</span><span data-l="en">Older versions</span></button>
-      <!-- Which desktop the button points at. Set from the visitor's own to
-           begin with, because almost nobody is downloading for a machine they
-           are not sitting at — but switchable, because somebody is. -->
-      <div class="picker" id="picker" role="group" aria-label="OS"></div>
-      <p class="hint variants" id="variants"></p>
-      <p class="hint tally" id="tally"></p>
+  <!-- The demonstration, before any claim about it. Somebody who has ever
+       copied a formula out of a PDF understands this in five seconds, and no
+       sentence does that. -->
+  <div class="hero-demo" id="hero-demo"></div>
+
+  <div class="actions">
+    <a class="btn btn-primary" id="get" href="https://github.com/Icecoffee2500/paper-time/releases">
+      <span>
+        <span class="label" data-l="ko">받기</span><span class="label" data-l="en">Download</span><br>
+        <span class="sub">macOS</span>
+      </span>
+    </a>
+    <a class="btn btn-ghost" id="watch" href="film.html"><span data-l="ko">영상 보기</span><span data-l="en">Watch the film</span></a>
+    <button class="btn btn-ghost" id="how"><span data-l="ko">설치하는 법</span><span data-l="en">How to install</span></button>
+    <button class="btn btn-ghost" id="older"><span data-l="ko">이전 버전</span><span data-l="en">Older versions</span></button>
+    <!-- Which desktop the button points at. Set from the visitor's own to
+         begin with, because almost nobody is downloading for a machine they
+         are not sitting at — but switchable, because somebody is. -->
+    <div class="picker" id="picker" role="group" aria-label="OS"></div>
+    <p class="hint variants" id="variants"></p>
+    <p class="hint tally" id="tally"></p>
+  </div>
+</header>
+
+<!-- ───────────────────── 0.9.0 · not only papers ───────────────────────── -->
+<section class="band tone-grey">
+  <div class="band-inner rise">
+    <div class="band-head">
+      <p class="eyebrow" data-l="ko">새로워진 것</p>
+      <p class="eyebrow" data-l="en">New</p>
+      <h2 class="display" data-l="ko">논문만이 아니라,<br>모든 PDF.</h2>
+      <h2 class="display" data-l="en">Not only papers.<br>Every PDF.</h2>
+      <p class="say" data-l="ko">계약서도, 매뉴얼도, 스캔한 책도 같은 라이브러리에 들어와요.
+        새 PDF에는 <b>먼저 물어봐요</b> — 논문인가요, 일반 문서인가요. 답에 따라 칸이 바뀌고,
+        문서는 등록기관에 묻지도 않아요.</p>
+      <p class="say" data-l="en">Contracts, manuals, scanned books — they all live in the same library.
+        A new PDF is <b>asked what it is</b>: a paper, or a document. The fields follow the answer,
+        and a document is never looked up online.</p>
     </div>
-  </header>
-</div>
-
-<!-- ─────────── what it does, shown one at a time, right after the proof ───
-     The tour used to sit two thirds of the way down the page, under three
-     cards that said the same things in prose. The demonstrations are the
-     argument; the prose is the caption. -->
-<div class="screen screen-stage">
-  <main class="stage">
-    <div class="viewport">
-      <button class="arrow prev" id="prev" aria-label="Previous">‹</button>
-      <div class="track" id="track"></div>
-      <button class="arrow next" id="next" aria-label="Next">›</button>
+    <div class="duo">
+      <article class="cell">
+        <h3 data-l="ko">한 번만 물어봐요</h3>
+        <h3 data-l="en">Asked once, and only once</h3>
+        <p data-l="ko">앱이 먼저 짐작해 두니 대개 그대로 누르면 돼요. 답하면 질문은 사라지고,
+          바꾸고 싶으면 ⋯ 메뉴에 있어요.</p>
+        <p data-l="en">The app has already guessed, so usually you just agree. Answered, the question
+          goes away; changing it later is in the ⋯ menu.</p>
+        <div class="demo-slot" id="demo-kind"></div>
+      </article>
+      <article class="cell">
+        <h3 data-l="ko">제목이 없으면, 쪽으로</h3>
+        <h3 data-l="en">No headings? Then pages</h3>
+        <p data-l="ko">스캔한 계약서에는 목차가 없어요. 대신 모든 쪽이 작게 늘어서고,
+          찾던 쪽은 보면 알아요.</p>
+        <p data-l="en">A scanned contract has no table of contents. It has pages, and you know
+          the one you want when you see it.</p>
+        <div class="demo-slot" id="demo-pages"></div>
+      </article>
     </div>
-    <nav class="rail" id="rail" aria-label="Features"></nav>
-  </main>
-</div>
-
-
-<!-- ─────────────────────── the loop, named at last ──────────────────────── -->
-<section class="loop">
-  <p class="loop-line" data-l="ko">논문을 읽는 곳과 글을 쓰는 곳 사이에,<br><b class="mark">아무것도 없다.</b></p>
-  <p class="loop-line" data-l="en">Between where you read a paper and where you write,<br><b class="mark">nothing at all.</b></p>
-
-  <ol class="loop-steps">
-    <li><span class="loop-n">1</span><b data-l="ko">읽기</b><b data-l="en">Read</b>
-      <span data-l="ko">여백을 자르고, 책처럼 펴고, 본문 한 줄까지 찾아요.</span>
-      <span data-l="en">Margins trimmed, pages spread like a book, every line searchable.</span></li>
-    <li><span class="loop-n">2</span><b data-l="ko">표시하기</b><b data-l="en">Mark</b>
-      <span data-l="ko">그은 것이 앱이 아니라 파일에 남아요.</span>
-      <span data-l="en">What you draw lands in the file, not in an app's database.</span></li>
-    <li><span class="loop-n">3</span><b data-l="ko">옮겨 적기</b><b data-l="en">Carry over</b>
-      <span data-l="ko">구절은 쪽수째로, 수식은 LaTeX으로.</span>
-      <span data-l="en">Passages with their page numbers, formulas as LaTeX.</span></li>
-    <li><span class="loop-n">4</span><b data-l="ko">잇기</b><b data-l="en">Connect</b>
-      <span data-l="ko">노트가 노트를 부르고, 그게 글이 돼요.</span>
-      <span data-l="en">Notes link to notes, and the links become writing.</span></li>
-  </ol>
-
-  <p class="loop-claim" data-l="ko">다른 도구들도 이 고리의 한 칸씩은 아주 잘해요.
-    그런데 칸과 칸 사이마다 내보내기와 붙여넣기가 있어요.</p>
-  <p class="loop-claim" data-l="en">Other tools do one link of this chain very well.
-    Between every two links sits an export and a paste.</p>
+  </div>
 </section>
 
-<!-- ───────────────────────── you can keep Zotero ────────────────────────── -->
-<section class="coexist">
-  <h2 data-l="ko">Zotero를 버리지 않아도 된다</h2>
-  <h2 data-l="en">You don't have to leave Zotero</h2>
-  <p data-l="ko">라이브러리가 그냥 폴더라서, Zotero의 <code>storage</code> 폴더 <b>옆에</b> 앉아도 돼요.
-    모으고 인용 관리하는 자리는 계속 Zotero, <b class="mark">읽고 쓰는 자리만</b> Paper Time이면 돼요.
-    옮길 것도, 버릴 것도 없어요.</p>
-  <p data-l="en">A library is one folder, so it can sit <b>beside</b> Zotero's <code>storage</code> folder.
-    Collect and manage citations in Zotero; let Paper Time be <b class="mark">the place you read and write</b>, and nothing else.
-    Nothing to migrate, nothing to abandon.</p>
+<!-- ──────────────────────────── reading ────────────────────────────────── -->
+<section class="band" id="read">
+  <div class="band-inner rise">
+    <div class="band-head">
+      <p class="eyebrow" data-l="ko">읽는 자리</p>
+      <p class="eyebrow" data-l="en">Where you read</p>
+      <h2 class="display" data-l="ko">종이처럼 펴고,<br>종이보다 빠르게.</h2>
+      <h2 class="display" data-l="en">Spread like paper.<br>Turned faster than paper.</h2>
+      <p class="say" data-l="ko">두 쪽이 마주 보고, 여백은 잘려 본문만 남아요.
+        목차는 단축키 하나, 본문의 한 줄은 검색 한 번이에요.</p>
+      <p class="say" data-l="en">Two pages face each other and the margins are trimmed away.
+        The contents are one shortcut; a single line of the text is one search.</p>
+    </div>
+    <div class="duo one-up">
+      <article class="cell">
+        <h3 data-l="ko">책처럼 펴고, 목차로 건너뛰어요</h3>
+        <h3 data-l="en">Spread like a book, jump by the contents</h3>
+        <p data-l="ko">여백을 자르면 15인치 화면이 두 쪽을 온전히 담아요. 절 이름을 누르면 그 절이에요.</p>
+        <p data-l="en">Trim the margins and a 15-inch screen holds two whole pages. Click a section's name and you are there.</p>
+        <div class="demo-slot" id="demo-book"></div>
+      </article>
+    </div>
+  </div>
 </section>
 
-<!-- ───────────────── the other three quarters of the loop ──────────────── -->
-<section class="pillars">
-  <article class="pillar">
-    <div class="pillar-demo" id="pillar-ink"></div>
-    <h3 data-l="ko">손 가는 대로 그어도, 자국은 파일에 남아요</h3>
-    <h3 data-l="en">Draw anything. The marks stay in the file</h3>
-    <p data-l="ko">하이라이트도 밑줄도 손글씨도 굽은 화살표도 평범한 PDF 주석으로 들어가요.
-      Preview에서도, Zotero에서도, 지도교수의 아이패드에서도 보여요.
-      앱을 지워도 자국은 남아 있어요.</p>
-    <p data-l="en">Highlights, underlines, handwriting, bent arrows — all of it goes into the PDF
-      as ordinary annotations. They show up in Preview, in Zotero, on your advisor's iPad.
-      Delete the app; the marks stay.</p>
-  </article>
-
-  <article class="pillar">
-    <div class="pillar-demo" id="pillar-quote"></div>
-    <h3 data-l="ko">구절이 주소를 들고 노트로 가요</h3>
-    <h3 data-l="en">A passage arrives with its address</h3>
-    <p data-l="ko">고른 문장을 노트로 보내면 세로줄이 선 인용이 되고, 끝에 쪽수가 붙어요.
-      그 쪽수를 누르면 논문의 그 줄로 돌아가요. 수식이 든 문장은 수식째로 가요.</p>
-    <p data-l="en">Send a sentence to a note. It lands as a quotation, ruled down the side,
-      page number at the end. Click the number and the paper opens at that line.
-      Formulas travel as formulas.</p>
-  </article>
-
-  <article class="pillar">
-    <div class="pillar-demo" id="pillar-links"></div>
-    <h3 data-l="ko">노트끼리 부르다 보면, 어느 날 초고가 돼요</h3>
-    <h3 data-l="en">Notes call each other. One day they are a draft</h3>
-    <p data-l="ko">노트 안에서 다른 노트를 이름으로 불러요. 읽은 것을 쌓아 두지 않고 엮어요.
-      초안도 노트 하나예요. ⇧⌘E를 누르면 인용이 <code>\cite{키}</code>가 되고,
-      인용한 논문만 담은 <code>.bib</code>이 같이 나와요.</p>
-    <p data-l="en">Call another note by name from inside a note. What you read gets woven, not
-      stacked. A draft is another note: press ⇧⌘E and its quotations become <code>\cite{key}</code>,
-      beside a <code>.bib</code> holding only the papers you cited.</p>
-  </article>
+<!-- ──────────────────────────── marking ────────────────────────────────── -->
+<section class="band tone-dark" id="mark">
+  <div class="band-inner rise">
+    <div class="band-head">
+      <p class="eyebrow" data-l="ko">표시</p>
+      <p class="eyebrow" data-l="en">Marking</p>
+      <h2 class="display" data-l="ko">그은 자국은<br>앱이 아니라 파일에 남아요.</h2>
+      <h2 class="display" data-l="en">What you draw lands<br>in the file, not in an app.</h2>
+      <p class="say" data-l="ko">하이라이트도 밑줄도 손글씨도 굽은 화살표도 평범한 PDF 주석이에요.
+        Preview에서도, Zotero에서도, 지도교수의 아이패드에서도 보여요. <b>앱을 지워도 자국은 남아요.</b></p>
+      <p class="say" data-l="en">Highlights, underlines, handwriting and bent arrows are all ordinary PDF annotations.
+        They open in Preview, in Zotero, on your advisor's iPad. <b>Delete the app; the marks stay.</b></p>
+    </div>
+    <div class="duo">
+      <article class="cell">
+        <h3 data-l="ko">글자에 맞춰 칠해요</h3>
+        <h3 data-l="en">Fitted to the letters</h3>
+        <p data-l="ko">형광펜은 줄이 아니라 글자를 따라가요. 위로 그으면 하이라이트, 아래로 그으면 밑줄이에요.</p>
+        <p data-l="en">The highlighter follows the letters, not the line. Draw above for a highlight, below for an underline.</p>
+        <div class="demo-slot" id="demo-fitted"></div>
+      </article>
+      <article class="cell">
+        <h3 data-l="ko">표시 목록은 문이에요</h3>
+        <h3 data-l="en">The list of marks is a set of doors</h3>
+        <p data-l="ko">인스펙터의 표시를 누르면 논문이 그 자리로 가요. 무엇을 표시했는지가 아니라 어디에 표시했는지가 남아요.</p>
+        <p data-l="en">Click a mark in the inspector and the paper goes to that spot. What stays is not what you marked but where.</p>
+        <div class="demo-slot" id="demo-marks"></div>
+      </article>
+    </div>
+  </div>
 </section>
 
-<!-- ───────────────────────────── why it exists ──────────────────────────── -->
-<section class="why">
-  <p class="big" data-l="ko">논문을 읽는 시간의 절반은<br>논문을 읽는 데 가지 않는다.</p>
-  <p class="big" data-l="en">Half of reading a paper<br>is not reading the paper.</p>
-
-  <p data-l="ko">파일 이름을 고치고, 어느 폴더에 넣었는지 떠올리고, 표시해 둔 문장을 다시 찾고,
-    인용 키를 손으로 옮기고, 수식을 복사했다가 깨진 걸 다시 쳐요.
-    <b>그 모든 일이 이해와는 아무 상관이 없어요.</b></p>
-  <p data-l="en">Renaming a file. Remembering which folder a paper went into. Finding that marked sentence
-    all over again. Carrying a citation key over by hand. Retyping a formula that broke on the way out.
-    <b>None of it has anything to do with understanding.</b></p>
-
-  <p data-l="ko">Paper Time은 그 일들을 대신하려고 만들었어요. 남은 시간에 할 일은 하나예요 —
-    <b class="mark">읽고, 이해하고, 그 이해를 남기는 것.</b> 표시는 문장 위에 남고,
-    문장은 주소를 들고 노트로 가고, 노트끼리 부르다 보면 어느 날 초고가 돼요.</p>
-  <p data-l="en">Paper Time does that work instead. What is left of the hour goes to one thing —
-    <b class="mark">read, understand, keep the understanding.</b> The marks stay on the sentence,
-    the sentence goes to a note with its address, and the notes call each other until one day they are a draft.</p>
-
-  <div class="facts">
-    <div class="fact">
-      <h3 data-l="ko">파일이 진실</h3>
-      <h3 data-l="en">The files are the truth</h3>
-      <p data-l="ko">라이브러리는 폴더 하나예요. 논문은 평범한 PDF, 노트는 Markdown이에요.
-        앱을 지워도 읽던 것은 그대로 있어요.</p>
-      <p data-l="en">A library is one folder. Papers are ordinary PDFs, notes are Markdown.
-        Delete the app; what you were reading is still there.</p>
+<!-- ──────────────────────────── drawing ────────────────────────────────── -->
+<section class="band tone-dark">
+  <div class="band-inner rise">
+    <div class="band-head">
+      <p class="eyebrow" data-l="ko">그리기</p>
+      <p class="eyebrow" data-l="en">Drawing</p>
+      <h2 class="display" data-l="ko">논문 위에서,<br>Figma처럼.</h2>
+      <h2 class="display" data-l="en">On the page,<br>the way you design.</h2>
+      <p class="say" data-l="ko">네모·화살표·글 카드를 프레임에 담고, 묶고, 오토 레이아웃으로 줄 세워요.
+        카드 안의 <code>$…$</code>는 수식으로 조판돼요. 그러고도 전부 PDF 주석으로 파일에 들어가요.</p>
+      <p class="say" data-l="en">Put rectangles, arrows and text cards in a frame, group them, line them up with auto layout.
+        A <code>$…$</code> inside a card is set as mathematics. And all of it still goes into the file as ordinary annotations.</p>
     </div>
-    <div class="fact">
-      <h3 data-l="ko">표시는 PDF 안에</h3>
-      <h3 data-l="en">Marks live in the PDF</h3>
-      <p data-l="ko">하이라이트·밑줄·연필 자국이 PDF 주석으로 들어가요.
-        Preview에서도, Zotero에서도, 지도교수의 아이패드에서도 보여요.</p>
-      <p data-l="en">Highlights, underlines and pencil strokes go in as PDF annotations.
-        They show up in Preview, in Zotero, on your advisor's iPad.</p>
+    <div class="band-demo" id="demo-draw"></div>
+  </div>
+</section>
+
+<!-- ───────────────────────────── windows ───────────────────────────────── -->
+<section class="band tone-grey">
+  <div class="band-inner rise">
+    <div class="band-head">
+      <p class="eyebrow" data-l="ko">창</p>
+      <p class="eyebrow" data-l="en">The window</p>
+      <h2 class="display" data-l="ko">논문 넷을<br>한 창에서 견줘요.</h2>
+      <h2 class="display" data-l="en">Four papers.<br>One window.</h2>
+      <p class="say" data-l="ko">논문을 끌어다 화면의 반쪽이나 사분면에 놓으면 그 자리에 열려요.
+        필요 없는 칸은 하나씩 끄면 되고요.</p>
+      <p class="say" data-l="en">Drag a paper onto a half or a quarter of the window and it opens there.
+        Switch off the panes you are not using, one at a time.</p>
     </div>
-    <div class="fact">
-      <h3 data-l="ko">어느 데스크톱이든, 폴더 하나</h3>
-      <h3 data-l="en">One folder. Every desktop</h3>
-      <p data-l="ko">맥도 윈도우도 리눅스도 같은 폴더를 봐요. 아이패드와 아이폰도요.
-        클라우드 폴더 하나면 되고, 계정도 서버도 없어요.</p>
-      <p data-l="en">Mac, Windows and Linux look at the same folder. So do iPad and iPhone.
-        A cloud folder is enough; there is no account and no server.</p>
+    <div class="duo">
+      <article class="cell">
+        <h3 data-l="ko">나란히</h3>
+        <h3 data-l="en">Side by side</h3>
+        <p data-l="ko">⇧⌘O가 열린 논문을 펼쳐 줘요. 한 줄을 창 밖으로 끌면 그 논문만 담은 창이 돼요.</p>
+        <p data-l="en">⇧⌘O lists what is open. Drag a row out and that paper gets a window of its own.</p>
+        <div class="demo-slot" id="demo-split"></div>
+      </article>
+      <article class="cell">
+        <h3 data-l="ko">필요한 칸만</h3>
+        <h3 data-l="en">Only the panes you need</h3>
+        <p data-l="ko">서가·목록·논문·인스펙터를 하나씩 껐다 켜요. 읽을 때는 논문만, 정리할 때는 넷 다요.</p>
+        <p data-l="en">Shelf, list, paper and inspector switch off and on. Reading, the paper alone; sorting, all four.</p>
+        <div class="demo-slot" id="demo-panes"></div>
+      </article>
     </div>
-    <div class="fact">
-      <h3 data-l="ko">클라우드 LLM 없음</h3>
-      <h3 data-l="en">No cloud LLM</h3>
-      <p data-l="ko">온디바이스 모델만 써요. 읽고 있는 논문은 어디로도 올라가지 않아요.</p>
-      <p data-l="en">On-device models only. Nothing you read is uploaded anywhere.</p>
+  </div>
+</section>
+
+<!-- ───────────────────────────── the notes ─────────────────────────────── -->
+<section class="band" id="notes">
+  <div class="band-inner rise">
+    <div class="band-head">
+      <p class="eyebrow" data-l="ko">노트</p>
+      <p class="eyebrow" data-l="en">Notes</p>
+      <h2 class="display" data-l="ko">구절이 주소를 들고<br>노트로 걸어가요.</h2>
+      <h2 class="display" data-l="en">A passage walks into a note<br>carrying its address.</h2>
+      <p class="say" data-l="ko">고른 문장을 노트로 보내면 세로줄이 선 인용이 되고, 끝에 쪽수가 붙어요.
+        그 쪽수를 누르면 논문의 그 줄로 돌아가요.</p>
+      <p class="say" data-l="en">Send a sentence to a note and it lands as a quotation, ruled down the side,
+        page number at the end. Click the number and the paper opens at that line.</p>
+    </div>
+    <div class="duo">
+      <article class="cell">
+        <h3 data-l="ko">구절 → 노트</h3>
+        <h3 data-l="en">Passage → note</h3>
+        <p data-l="ko">수식이 든 문장은 수식째로 가요. 인용은 손으로 옮겨 적는 것이 아니에요.</p>
+        <p data-l="en">A sentence with mathematics in it travels as mathematics. A quotation is not something you retype.</p>
+        <div class="demo-slot" id="demo-quote"></div>
+      </article>
+      <article class="cell">
+        <h3 data-l="ko">노트가 노트를 불러요</h3>
+        <h3 data-l="en">Notes call each other</h3>
+        <p data-l="ko">노트 안에서 다른 노트를 이름으로 불러요. 읽은 것을 쌓아 두지 않고 엮어요.</p>
+        <p data-l="en">Call another note by name from inside a note. What you read gets woven, not stacked.</p>
+        <div class="demo-slot" id="demo-links"></div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ──────────────────────────── the draft ──────────────────────────────── -->
+<section class="band tone-dark">
+  <div class="band-inner rise">
+    <div class="band-head">
+      <p class="eyebrow" data-l="ko">쓰기</p>
+      <p class="eyebrow" data-l="en">Writing</p>
+      <h2 class="display" data-l="ko">노트는<br>글이 되어야 해요.</h2>
+      <h2 class="display" data-l="en">Notes have to<br>become writing.</h2>
+      <p class="say" data-l="ko">초안도 노트 하나예요. 구절은 ❝로, 노트는 [[링크]]로 넣고 ⇧⌘E를 누르면
+        구절이 <code>\cite{키}</code>가 되고, 인용한 논문만 담은 <code>.bib</code>이 같이 나와요.</p>
+      <p class="say" data-l="en">A draft is another note. Put passages in as ❝ and notes as [[links]]; press ⇧⌘E
+        and each passage becomes <code>\cite{key}</code>, beside a <code>.bib</code> holding only the papers you cited.</p>
+    </div>
+    <div class="band-demo" id="demo-draft"></div>
+  </div>
+</section>
+
+<!-- ──────────────────────────── searching ──────────────────────────────── -->
+<section class="band">
+  <div class="band-inner rise">
+    <div class="band-head">
+      <p class="eyebrow" data-l="ko">찾기</p>
+      <p class="eyebrow" data-l="en">Finding</p>
+      <h2 class="display" data-l="ko">논문 안의<br>한 줄까지.</h2>
+      <h2 class="display" data-l="en">Down to a single line<br>inside a paper.</h2>
+      <p class="say" data-l="ko">논문·노트·지도·초안·태그·동작이 한 칸에 있어요. 제목에 없는 낱말은 본문에서 찾아요.
+        빈칸일 때는 이어 읽을 것과 다시 볼 것을 <b>이유와 함께</b> 먼저 보여줘요.</p>
+      <p class="say" data-l="en">Papers, notes, maps, drafts, tags and actions share one field. A word that appears in no title
+        turns up in the text. With the field empty, it offers what to read next and what to look at again, <b>each with its reason</b>.</p>
+    </div>
+    <div class="band-demo" id="demo-search"></div>
+  </div>
+</section>
+
+<!-- ─────────────────────── 0.9.1 · the library ─────────────────────────── -->
+<section class="band tone-grey" id="library">
+  <div class="band-inner rise">
+    <div class="band-head">
+      <p class="eyebrow" data-l="ko">새로워진 것</p>
+      <p class="eyebrow" data-l="en">New</p>
+      <h2 class="display" data-l="ko">라이브러리는<br>폴더 여럿이에요.</h2>
+      <h2 class="display" data-l="en">A library is as many folders<br>as you point it at.</h2>
+      <p class="say" data-l="ko">iCloud의 논문 폴더와 회사 드라이브의 자료 폴더를 같이 열어 두고, 하나씩 들어가 봐요.
+        <b>폴더의 것은 전부 그 폴더 안에 있어요</b> — 표시도, 노트도, 태그도. 연결을 해제하면 그 폴더만 빠져요.</p>
+      <p class="say" data-l="en">Keep a papers folder in iCloud open beside a work folder on a shared drive, and step into either.
+        <b>Everything a folder holds lives inside it</b> — marks, notes, tags. Disconnect one and only that folder leaves.</p>
+    </div>
+    <div class="duo">
+      <article class="cell">
+        <h3 data-l="ko">폴더별로 들어가 봐요</h3>
+        <h3 data-l="en">Step into one at a time</h3>
+        <p data-l="ko">이름 옆 아이콘이 그 폴더가 클라우드에 있는지 이 기계에 있는지 말해 줘요.</p>
+        <p data-l="en">The icon beside a name says whether the folder is in a cloud or on this machine.</p>
+        <div class="demo-slot" id="demo-libraries"></div>
+      </article>
+      <article class="cell">
+        <h3 data-l="ko">이름은 여기서 고쳐요</h3>
+        <h3 data-l="en">Rename it right here</h3>
+        <p data-l="ko"><code>2403.18293v1.pdf</code>로 살 이유는 없어요. 적으면 디스크의 이름도 같이 바뀌어요.</p>
+        <p data-l="en">Nothing has to stay called <code>2403.18293v1.pdf</code>. Type a name and the file on disk takes it.</p>
+        <div class="demo-slot" id="demo-name"></div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────── everywhere ──────────────────────────────── -->
+<section class="band tone-dark" id="everywhere">
+  <div class="band-inner rise">
+    <div class="band-head">
+      <p class="eyebrow" data-l="ko">어디서나</p>
+      <p class="eyebrow" data-l="en">Everywhere</p>
+      <h2 class="display" data-l="ko">맥에서 긋고,<br>윈도우에서 읽어요.</h2>
+      <h2 class="display" data-l="en">Mark it on a Mac.<br>Read it on Windows.</h2>
+      <p class="say" data-l="ko">표시는 PDF 파일 안에 쓰고, 라이브러리는 그냥 폴더예요. 그래서 같은 폴더가
+        맥에서도 윈도우에서도 리눅스에서도 열려요. <b>계정도, 서버도, 내보내기도 없어요.</b></p>
+      <p class="say" data-l="en">Marks go into the PDF and a library is one folder. So the same folder opens on a Mac,
+        on Windows and on Linux. <b>No account, no server, no export.</b></p>
+    </div>
+    <div class="duo">
+      <article class="cell">
+        <h3 data-l="ko">세 데스크톱, 폴더 하나</h3>
+        <h3 data-l="en">Three desktops, one folder</h3>
+        <p data-l="ko">일부러 다르게 둔 것은 창 단추 하나뿐이에요 — 그건 데스크톱의 것이지 앱의 것이 아니니까요.</p>
+        <p data-l="en">One thing is deliberately different: the window buttons. Those belong to the desktop, not to the app.</p>
+        <div class="demo-slot" id="demo-desktops"></div>
+      </article>
+      <article class="cell">
+        <h3 data-l="ko">긋자마자 건너가요</h3>
+        <h3 data-l="en">It crosses the moment you draw it</h3>
+        <p data-l="ko">맥·아이패드·아이폰 사이에서는 표시가 몇 KB짜리 저널로 먼저 건너가고, 20 MB PDF는 뒤따라와요.</p>
+        <p data-l="en">Between Mac, iPad and iPhone a mark crosses first as a journal of a few KB; the 20 MB PDF follows.</p>
+        <div class="demo-slot" id="demo-devices"></div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────── what it will not pretend ──────────────────────── -->
+<section class="band">
+  <div class="band-inner rise">
+    <div class="band-head">
+      <p class="eyebrow" data-l="ko">정직하게</p>
+      <p class="eyebrow" data-l="en">Plainly</p>
+      <h2 class="display" data-l="ko">못 여는 PDF는<br>못 연다고 말해요.</h2>
+      <h2 class="display" data-l="en">When a PDF cannot be opened,<br>it says so.</h2>
+      <p class="say" data-l="ko">암호가 걸린 것은 암호를 넣으면 열려요. 회사의 권한 관리로 감싼 것은 열쇠를 남이 들고 있어서
+        이 앱이 열 길이 없어요 — 빈 화면 대신 그렇다고 말하는 것이 이 앱의 일이에요.</p>
+      <p class="say" data-l="en">A password-protected file opens when you type the password. A file wrapped in a company's rights
+        management cannot be opened here at all, because somebody else holds the key. Saying so beats a blank page.</p>
+    </div>
+    <div class="duo tops">
+      <article class="cell">
+        <h3 data-l="ko">세 가지 자물쇠</h3>
+        <h3 data-l="en">Three kinds of lock</h3>
+        <p data-l="ko">셋 중 하나만 이 앱이 열 수 있어요. 어느 쪽인지 파일을 기다려 보기 전에 말해 줘요.</p>
+        <p data-l="en">Exactly one of the three can be opened here, and the app says which before you have waited for it.</p>
+        <div class="demo-slot" id="demo-locked"></div>
+      </article>
+      <article class="cell">
+        <h3 data-l="ko">Zotero를 버리지 않아도 돼요</h3>
+        <h3 data-l="en">You don't have to leave Zotero</h3>
+        <p data-l="ko">라이브러리가 그냥 폴더라서 Zotero의 <code>storage</code> 폴더 <b>옆에</b> 앉아도 돼요.
+          모으고 인용 관리하는 자리는 계속 Zotero, <b class="mark">읽고 쓰는 자리만</b> Paper Time이면 돼요.
+          옮길 것도, 버릴 것도 없어요.</p>
+        <p data-l="en">A library is one folder, so it can sit <b>beside</b> Zotero's <code>storage</code> folder.
+          Collect and manage citations in Zotero; let Paper Time be <b class="mark">the place you read and write</b>.
+          Nothing to migrate, nothing to abandon.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────────── why it exists ─────────────────────────── -->
+<section class="band tone-grey">
+  <div class="band-inner rise">
+    <div class="band-head">
+      <h2 class="display" data-l="ko">논문을 읽는 시간의 절반은<br>논문을 읽는 데 가지 않아요.</h2>
+      <h2 class="display" data-l="en">Half of reading a paper<br>is not reading the paper.</h2>
+      <p class="say" data-l="ko">파일 이름을 고치고, 어느 폴더에 넣었는지 떠올리고, 표시해 둔 문장을 다시 찾고,
+        인용 키를 손으로 옮기고, 복사했다가 깨진 수식을 다시 쳐요.
+        <b>그 어느 것도 이해와는 상관이 없어요.</b></p>
+      <p class="say" data-l="en">Renaming a file. Remembering which folder a paper went into. Finding that marked sentence again.
+        Carrying a citation key over by hand. Retyping a formula that broke on the way out.
+        <b>None of it has anything to do with understanding.</b></p>
+    </div>
+    <div class="tiles">
+      <div class="tile">
+        <h3 data-l="ko">파일이 진실이에요</h3>
+        <h3 data-l="en">The files are the truth</h3>
+        <p data-l="ko">라이브러리는 폴더예요. 논문은 평범한 PDF, 노트는 Markdown이고요.
+          앱을 지워도 읽던 것은 그대로 있어요.</p>
+        <p data-l="en">A library is a folder. Papers are ordinary PDFs, notes are Markdown.
+          Delete the app; what you were reading is still there.</p>
+      </div>
+      <div class="tile">
+        <h3 data-l="ko">표시는 PDF 안에</h3>
+        <h3 data-l="en">Marks live in the PDF</h3>
+        <p data-l="ko">하이라이트·밑줄·연필 자국이 PDF 주석으로 들어가요.
+          Preview에서도, Zotero에서도, 지도교수의 아이패드에서도 보여요.</p>
+        <p data-l="en">Highlights, underlines and pencil strokes go in as PDF annotations.
+          They show up in Preview, in Zotero, on your advisor's iPad.</p>
+      </div>
+      <div class="tile">
+        <h3 data-l="ko">어느 데스크톱이든</h3>
+        <h3 data-l="en">Every desktop</h3>
+        <p data-l="ko">맥도 윈도우도 리눅스도 같은 폴더를 봐요. 아이패드와 아이폰도요.
+          클라우드 폴더 하나면 되고, 계정도 서버도 없어요.</p>
+        <p data-l="en">Mac, Windows and Linux look at the same folder. So do iPad and iPhone.
+          A cloud folder is enough; there is no account and no server.</p>
+      </div>
+      <div class="tile">
+        <h3 data-l="ko">클라우드 LLM 없음</h3>
+        <h3 data-l="en">No cloud LLM</h3>
+        <p data-l="ko">온디바이스 모델만 써요. 읽고 있는 논문은 어디로도 올라가지 않아요.</p>
+        <p data-l="en">On-device models only. Nothing you read is uploaded anywhere.</p>
+      </div>
     </div>
   </div>
 </section>
 
 <!-- ────────────────────── what readers asked for ───────────────────────── -->
-<section class="together" id="together">
-  <h2 data-l="ko">함께 만드는 중</h2>
-  <h2 data-l="en">Built together</h2>
-  <p class="sub" data-l="ko">이 목록은 쓰는 사람들이 보내온 거예요. 고치면 체크가 붙고,
-    누르면 GitHub의 그 자리로 가요. 지어낸 표가 아니라는 뜻이에요.</p>
-  <p class="sub" data-l="en">Readers sent in this list. A fix gets a check —
-    click it and GitHub opens at that spot. None of this is decoration.</p>
+<section class="band" id="together">
+  <div class="band-inner rise">
+    <div class="band-head">
+      <h2 class="display" data-l="ko">함께 만드는 중</h2>
+      <h2 class="display" data-l="en">Built together</h2>
+      <p class="say" data-l="ko">이 목록은 쓰는 사람들이 보내온 거예요. 고치면 체크가 붙고,
+        누르면 GitHub의 그 자리로 가요. 지어낸 표가 아니라는 뜻이에요.</p>
+      <p class="say" data-l="en">Readers sent in this list. A fix gets a check —
+        click it and GitHub opens at that spot. None of this is decoration.</p>
+    </div>
 
-  <div class="tally-row" id="together-tally"></div>
-  <div class="board" id="together-board"><p class="hint" data-l="ko">불러오는 중…</p><p class="hint" data-l="en">Loading…</p></div>
+    <div class="tally-row" id="together-tally"></div>
+    <div class="board" id="together-board"><p class="hint" data-l="ko">불러오는 중…</p><p class="hint" data-l="en">Loading…</p></div>
 
-  <div class="credits" id="credits"></div>
+    <div class="credits" id="credits"></div>
 
-  <p class="ask" data-l="ko">앱에서 <b class="key">⌥⌘/</b>를 눌러보세요. 화면은 이미 찍어뒀어요.
-    위에 바로 그려도 돼요. 이름을 적으면 이 목록에 그 이름으로 올라가요.</p>
-  <p class="ask" data-l="en">Press <b class="key">⌥⌘/</b> in the app. The screenshot is already here.
-    Draw on it. Leave a name and it appears on this list.</p>
+    <p class="ask" data-l="ko">앱에서 <b class="key">⌥⌘/</b>를 눌러보세요. 화면은 이미 찍어뒀어요.
+      위에 바로 그려도 돼요. 이름을 적으면 이 목록에 그 이름으로 올라가요.</p>
+    <p class="ask" data-l="en">Press <b class="key">⌥⌘/</b> in the app. The screenshot is already here.
+      Draw on it. Leave a name and it appears on this list.</p>
+  </div>
 </section>
 
 <footer>
@@ -417,6 +642,6 @@
   </div>
 </dialog>
 
-<script src="demos.js?v=0.7.0"></script>
+<script src="demos.js?v=0.9.1"></script>
 </body>
 </html>
