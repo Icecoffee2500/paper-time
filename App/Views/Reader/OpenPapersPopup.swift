@@ -60,9 +60,7 @@ struct OpenPapersPopup: View {
         .clipShape(RoundedRectangle(cornerRadius: Corner.panel, style: .continuous))
         .shadow(color: .black.opacity(0.18), radius: 18, y: 6)
         .background {
-            Button("", action: dismiss)
-                .keyboardShortcut(.cancelAction)
-                .opacity(0)
+            keys
             ClickOutsideWatcher(onClick: dismiss)
         }
     }
@@ -70,26 +68,46 @@ struct OpenPapersPopup: View {
     private func row(_ paper: LoadedPaper) -> some View {
         let showing = model.selectedPaperID == paper.id
         let kept = model.isOpenPaper(paper.id)
-        return HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: showing ? "circle.fill" : "circle")
-                .font(.system(size: 6))
-                .foregroundStyle(showing ? Color.accentColor : Color.secondary.opacity(0.4))
-                .frame(width: 10)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(paper.meta.displayTitle)
-                    .font(.callout.weight(showing ? .semibold : .regular))
-                    .lineLimit(2)
-                HStack(spacing: 6) {
-                    Text([paper.meta.displayAuthors, paper.meta.csl.year.map(String.init) ?? ""].filter { !$0.isEmpty }.joined(separator: " · "))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                    if !kept {
-                        Text(L("미리보기", "Preview")).font(.caption2).foregroundStyle(.tertiary)
+        return HStack(alignment: .center, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: showing ? "circle.fill" : "circle")
+                    .font(.system(size: 6))
+                    .foregroundStyle(showing ? Color.accentColor : Color.secondary.opacity(0.4))
+                    .frame(width: 10)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(paper.meta.displayTitle)
+                        .font(.callout.weight(showing ? .semibold : .regular))
+                        .lineLimit(2)
+                    HStack(spacing: 6) {
+                        Text([paper.meta.displayAuthors, paper.meta.csl.year.map(String.init) ?? ""].filter { !$0.isEmpty }.joined(separator: " · "))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        if !kept {
+                            Text(L("미리보기", "Preview")).font(.caption2).foregroundStyle(.tertiary)
+                        }
                     }
                 }
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 6)
+            .contentShape(.rect)
+            // On top of the words, not behind them: a click on a row has to
+            // land every time, and the AppKit view that turns a pull into a
+            // drag is the surest thing to put it on. The buttons sit beside
+            // it, outside its reach.
+            .overlay(
+                DragOutHandle(
+                    transfer: PaperTransfer(id: paper.id, title: paper.meta.displayTitle),
+                    onClick: { command in
+                        if command {
+                            open(paper.id, at: nil)
+                        } else {
+                            show(paper.id)
+                        }
+                    },
+                    onDragOutside: { point in open(paper.id, at: point) }
+                )
+            )
             Button {
                 open(paper.id, at: nil)
             } label: {
@@ -97,16 +115,15 @@ struct OpenPapersPopup: View {
             }
             .buttonStyle(.borderless)
             .foregroundStyle(.secondary)
-            .help(L("새 창으로 열기 (⌘클릭)", "Open in New Window (⌘-click)"))
+            .help(L("새 창으로 열기 (⌘클릭, ⌘↩)", "Open in New Window (⌘-click, ⌘↩)"))
             Button {
-                app.undock(paper.id, model: model)
-                model.closeOpenPaper(paper.id)
+                close(paper.id)
             } label: {
                 Image(systemName: "xmark").font(.system(size: 9, weight: .semibold))
             }
             .buttonStyle(.borderless)
             .foregroundStyle(.secondary)
-            .help(L("닫기", "Close"))
+            .help(L("닫기 (⌫)", "Close (⌫)"))
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
@@ -115,21 +132,51 @@ struct OpenPapersPopup: View {
             RoundedRectangle(cornerRadius: Corner.row, style: .continuous)
                 .fill(Color.accentColor.opacity(showing ? 0.1 : 0))
         )
-        // Behind the words: takes the click, and the drag.
-        .background(
-            DragOutHandle(
-                transfer: PaperTransfer(id: paper.id, title: paper.meta.displayTitle),
-                onClick: { command in
-                    if command {
-                        open(paper.id, at: nil)
-                    } else {
-                        model.selectedPaperID = paper.id
-                        model.keepOpen(paper.id)
-                    }
-                },
-                onDragOutside: { point in open(paper.id, at: point) }
-            )
-        )
+    }
+
+    /// Shows a paper and keeps it: chosen from this list, it is in use.
+    private func show(_ id: UUID) {
+        model.selectedPaperID = id
+        model.keepOpen(id)
+    }
+
+    private func close(_ id: UUID) {
+        app.undock(id, model: model)
+        model.closeOpenPaper(id)
+    }
+
+    /// ↑ and ↓ move along the list, showing each paper as they pass — the
+    /// keys the list column answers to, so the popup answers to them too.
+    private func step(_ offset: Int) {
+        let all = papers
+        guard !all.isEmpty else { return }
+        guard let current = model.selectedPaperID, let index = all.firstIndex(where: { $0.id == current }) else {
+            show(all[0].id)
+            return
+        }
+        let next = min(max(index + offset, 0), all.count - 1)
+        guard next != index else { return }
+        show(all[next].id)
+    }
+
+    /// The keys, as buttons nobody sees: the way Escape is taken.
+    private var keys: some View {
+        Group {
+            Button("", action: dismiss).keyboardShortcut(.cancelAction)
+            Button("") { step(1) }.keyboardShortcut(.downArrow, modifiers: [])
+            Button("") { step(-1) }.keyboardShortcut(.upArrow, modifiers: [])
+            Button("") {
+                if let id = model.selectedPaperID { show(id) }
+                dismiss()
+            }
+            .keyboardShortcut(.return, modifiers: [])
+            Button("") { if let id = model.selectedPaperID { open(id, at: nil) } }
+                .keyboardShortcut(.return, modifiers: .command)
+            Button("") { if let id = model.selectedPaperID { close(id) } }
+                .keyboardShortcut(.delete, modifiers: [])
+        }
+        .opacity(0)
+        .frame(width: 0, height: 0)
     }
 
     /// A window of its own for the paper, put where the drag ended when
@@ -169,6 +216,7 @@ private struct DragOutHandle: NSViewRepresentable {
     }
 
     final class Handle: NSView, NSDraggingSource {
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
         var transfer: PaperTransfer?
         var onClick: ((Bool) -> Void)?
         var onDragOutside: ((NSPoint) -> Void)?
