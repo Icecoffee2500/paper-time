@@ -114,83 +114,147 @@ struct AboutView: View {
 /// they can find it again, in the same form.
 struct FeatureShowcase<Header: View>: View {
     @ViewBuilder var header: Header
+    /// Which one is showing. One at a time, because a page of twenty things
+    /// is a page nobody reads: the reader is being shown, not indexed.
+    @State private var page = 0
+
+    private var features: [ReleaseNotes.Highlight] { ReleaseNotes.highlights }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 30) {
+        VStack(alignment: .leading, spacing: 16) {
             header
-            ForEach(ReleaseNotes.Tier.allCases) { tier in
-                let features = ReleaseNotes.highlights.filter { $0.tier == tier }
-                if !features.isEmpty {
-                    tierHeading(tier)
-                    ForEach(features) { highlight in
-                        section(highlight)
+            HStack(spacing: 6) {
+                turner(back: true)
+                card
+                turner(back: false)
+            }
+            dots
+        }
+        // The arrow keys turn the page, because they are what a hand reaches
+        // for once it has seen that there is a next one.
+        .focusable()
+        .onMoveCommand { direction in
+            switch direction {
+            case .left: turn(-1)
+            case .right: turn(1)
+            default: break
+            }
+        }
+    }
+
+    private var current: ReleaseNotes.Highlight? {
+        features.indices.contains(page) ? features[page] : features.first
+    }
+
+    /// One feature, the way the system shows one: the thing itself, large,
+    /// with its name and a sentence underneath — not a row with a picture
+    /// beside it.
+    private var card: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let highlight = current {
+                ZStack {
+                    // The stage keeps its height across pages, so turning one
+                    // does not move the words underneath.
+                    Color.clear
+                    if let demo = highlight.demo {
+                        FeatureDemoView(demo: demo, scale: .full)
+                    } else {
+                        Image(systemName: highlight.symbol)
+                            .font(.system(size: 64, weight: .light))
+                            .foregroundStyle(.tint)
                     }
                 }
-            }
-        }
-    }
+                // One height for every page, the tallest demonstration's, so
+                // that turning a page does not move the words underneath it.
+                .frame(height: 330)
+                .frame(maxWidth: .infinity)
 
-    /// The rule between one go and the next.
-    ///
-    /// Not a title bar: a thin line with a few words on it, the way a
-    /// well-set book divides a chapter. What it is really doing is telling
-    /// the reader they may stop here — the first three demonstrations are
-    /// the app, and everything after them is the app being thorough.
-    private func tierHeading(_ tier: ReleaseNotes.Tier) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Divider()
-                .padding(.bottom, 6)
-            HStack(spacing: 8) {
-                Image(systemName: tier.symbol)
-                    .font(.caption)
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(spacing: 7) {
+                        Image(systemName: highlight.tier.symbol)
+                            .font(.caption2)
+                        Text(highlight.tier.name.value.uppercased())
+                            .font(.caption2.weight(.semibold))
+                            .tracking(0.7)
+                    }
                     .foregroundStyle(.tint)
-                Text(tier.name.value.uppercased())
-                    .font(.caption.weight(.semibold))
-                    .tracking(0.8)
-                    .foregroundStyle(.tint)
-            }
-            Text(tier.promise.value)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.top, 6)
-    }
 
-    private func section(_ highlight: ReleaseNotes.Highlight) -> some View {
-        VStack(alignment: .leading, spacing: 9) {
-            // No badge on the first tier's rows any more: the heading over
-            // them has just said what they are, and saying it again on every
-            // one of five turns an argument into a row of stickers.
-            HStack(spacing: 9) {
-                Image(systemName: highlight.symbol)
-                    .font(.system(size: 15))
-                    .foregroundStyle(.tint)
-                    .frame(width: 20)
-                Text(highlight.title.value)
-                    .font(.title3.weight(highlight.featured ? .bold : .semibold))
-                    .foregroundStyle(highlight.featured ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
-                if let action = highlight.action {
-                    KeyCap(action: action)
+                    HStack(spacing: 9) {
+                        Text(highlight.title.value)
+                            .font(.system(size: 17, weight: .bold))
+                            .fixedSize(horizontal: false, vertical: true)
+                        if let action = highlight.action {
+                            KeyCap(action: action)
+                        }
+                    }
+
+                    Text(highlight.detail.value)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-            }
-
-            Text(highlight.detail.value)
-                .font(.callout)
-                .foregroundStyle(highlight.featured ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.leading, 29)
-
-            if let demo = highlight.demo {
-                FeatureDemoView(demo: demo, scale: .full)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: Corner.panel, style: .continuous)
-                            .stroke(Color.accentColor.opacity(highlight.featured ? 0.4 : 0), lineWidth: 1.5)
-                    )
-                    .padding(.leading, 29)
-                    .padding(.top, 3)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 20)
+                // Room for the longest sentence, so the card is one size.
+                .frame(minHeight: 116, alignment: .top)
+                // The page is replaced rather than redrawn: a new thing
+                // arriving from the side it came from.
+                .id(highlight.id)
+                .transition(.opacity)
             }
         }
+        .padding(26)
+        .frame(maxWidth: .infinity)
+        .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: Corner.panel, style: .continuous))
+        .animation(Motion.surface, value: page)
+    }
+
+    /// The way to the next one, and the one before.
+    ///
+    /// Outside the card rather than on it: the card is the thing being shown,
+    /// and a control drawn on top of it would be part of what is shown.
+    private func turner(back: Bool) -> some View {
+        Button {
+            turn(back ? -1 : 1)
+        } label: {
+            Image(systemName: back ? "chevron.left" : "chevron.right")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 22, height: 44)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .disabled(back ? page == 0 : page >= features.count - 1)
+        .opacity(back ? (page == 0 ? 0.25 : 1) : (page >= features.count - 1 ? 0.25 : 1))
+        .accessibilityLabel(back
+            ? ReleaseNotes.string("이전", "Previous")
+            : ReleaseNotes.string("다음", "Next"))
+    }
+
+    /// Where you are in the set, and a way to jump.
+    private var dots: some View {
+        HStack(spacing: 7) {
+            ForEach(features.indices, id: \.self) { index in
+                Button {
+                    withAnimation(Motion.surface) { page = index }
+                } label: {
+                    Circle()
+                        .fill(index == page ? AnyShapeStyle(.primary) : AnyShapeStyle(.quaternary))
+                        .frame(width: 7, height: 7)
+                        .contentShape(.rect.inset(by: -4))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(ReleaseNotes.string("\(index + 1)번째", "Item \(index + 1)"))
+            }
+        }
+        .animation(Motion.tap, value: page)
+        .frame(maxWidth: .infinity)
+    }
+
+    private func turn(_ by: Int) {
+        let next = page + by
+        guard features.indices.contains(next) else { return }
+        withAnimation(Motion.surface) { page = next }
     }
 }
 
