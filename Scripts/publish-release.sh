@@ -33,6 +33,15 @@ DMG="dist/Paper Time $TAG.dmg"
 [ -f "$DMG" ] || Scripts/make-dmg.sh "$TAG" >/dev/null
 [ -f "$DMG" ] || { echo "the disk image was not built"; exit 1; }
 
+# Never upload out from under a build. A package that is still being written
+# has a size that changes between the header and the body, and GitHub rejects
+# it with "request body larger than specified content length" — after it has
+# already taken the other seven files.
+if pgrep -f "electron-builder" >/dev/null 2>&1; then
+  echo "electron-builder is still running — wait for it before publishing" >&2
+  exit 1
+fi
+
 # Everything to upload: the Mac's image, plus whichever cross-platform
 # packages have been built. Named one per line so a file name with a space in
 # it — which all of these have — survives.
