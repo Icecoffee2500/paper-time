@@ -260,7 +260,7 @@ enum ReleaseNotes {
             version: "0.8.0",
             date: Text2("2026년 9월", "September 2026"),
             note: Text2(
-                "그리기가 Figma처럼 됐어요. 프레임·묶음·오토 레이아웃, 사이드바의 Tool 탭, 종이 위에 바로 쓰는 글, 카드 안의 수식. 논문을 나란히 넷까지 열고, 다크 모드에서도 논문이 잘 보여요.",
+                "그리기가 Figma처럼 됐어요. 프레임·묶음·오토 레이아웃, 사이드바의 Tools 탭, 종이 위에 바로 쓰는 글, 카드 안의 수식. 논문을 나란히 넷까지 열고, 다크 모드에서도 논문이 잘 보여요.",
                 "Drawing works the way Figma does: frames, groups and auto layout, a Tool tab in the inspector, text typed straight onto the page, formulas in a card. Up to four papers open side by side, and a paper reads well in dark mode."
             ),
             added: [
@@ -273,10 +273,10 @@ enum ReleaseNotes {
                     action: .draw, demo: .frames, featured: true
                 ),
                 Entry(
-                    Text2("Tool 탭", "The Tool tab"),
+                    Text2("Tools 탭", "The Tools tab"),
                     Text2(
-                        "그린 것의 인스펙터가 오른쪽 사이드바의 네 번째 탭이 됐어요. Info, Marks, Note, Tool. 펜을 들면 Tool 탭이 앞으로 와요. 위치(정렬 여섯 가지, X와 Y), 레이아웃(W와 H, 흐름, 간격, 여백), 외형(투명도, 모서리 반경), 채우기와 외곽선(색상 패널, hex, %), 글(글꼴, 크기, 정렬, 자동 너비와 자동 높이). 여러 개를 고르면 서로 맞추고, 하나면 프레임이나 쪽에 맞춰요. 탭 이름 넷은 어느 언어에서도 영어예요.",
-                        "The inspector for what you draw is the fourth tab of the window's inspector: Info, Marks, Note, Tool. Taking the pencil out brings Tool forward. Position, with six alignments and X and Y. Layout, with W and H, flow, gap and padding. Appearance, with opacity and corner radius. Fill and Stroke, with the colour panel, a hex and a percentage. Text, with font, size, alignment, auto width and auto height. Several things align to each other; one thing aligns to its frame, or to the page."
+                        "그린 것의 인스펙터가 오른쪽 사이드바의 네 번째 탭이 됐어요. Info, Marks, Notes, Tools. 펜을 들면 Tools 탭이 앞으로 와요. 위치(정렬 여섯 가지, X와 Y), 레이아웃(W와 H, 흐름, 간격, 여백), 외형(투명도, 모서리 반경), 채우기와 외곽선(색상 패널, hex, %), 글(글꼴, 크기, 정렬, 자동 너비와 자동 높이). 여러 개를 고르면 서로 맞추고, 하나면 프레임이나 쪽에 맞춰요. 탭 이름 넷은 어느 언어에서도 영어예요.",
+                        "The inspector for what you draw is the fourth tab of the window's inspector: Info, Marks, Notes, Tools. Taking the pencil out brings Tools forward. Position, with six alignments and X and Y. Layout, with W and H, flow, gap and padding. Appearance, with opacity and corner radius. Fill and Stroke, with the colour panel, a hex and a percentage. Text, with font, size, alignment, auto width and auto height. Several things align to each other; one thing aligns to its frame, or to the page."
                     ),
                     action: .draw
                 ),
@@ -291,7 +291,7 @@ enum ReleaseNotes {
                 Entry(
                     Text2("카드 안의 수식과 글꼴", "Formulas and fonts in a card"),
                     Text2(
-                        "카드에 $E = mc^2$처럼 쓰면 노트와 같은 조판으로 수식이 그려져요. 글꼴은 Tool 탭에서 이 맥에 있는 것 중에 골라요. 수식은 맥에서 그려지고, 윈도우와 리눅스에서는 쓴 대로 보여요.",
+                        "카드에 $E = mc^2$처럼 쓰면 노트와 같은 조판으로 수식이 그려져요. 글꼴은 Tools 탭에서 이 맥에 있는 것 중에 골라요. 수식은 맥에서 그려지고, 윈도우와 리눅스에서는 쓴 대로 보여요.",
                         "Write $E = mc^2$ in a card and it is set as mathematics, the same setting a note gets. The font is chosen in the Tool tab from what this Mac has. Formulas are drawn on the Mac; Windows and Linux show them as typed."
                     ),
                     action: .draw
@@ -323,8 +323,8 @@ enum ReleaseNotes {
                 Entry(
                     Text2("논문을 나란히", "Papers side by side"),
                     Text2(
-                        "사이드바에 '열린 논문'이 생겼어요. 이 세션에서 연 논문들이 순서대로 있어요. 논문을 목록에서 끌어 쪽의 왼쪽이나 오른쪽에 놓으면 반씩, 네 귀에 놓으면 넷까지 나란히 열려요. 맥이 창을 화면 가장자리에 붙이는 것과 같아요. 우클릭 메뉴의 '나란히 열기'로도 돼요. 누른 칸이 지금 읽는 논문이고, Info·Marks·Note는 그 논문 것이에요. 칸이 여럿이면 ⌘W가 그 칸만 닫아요. 목록 줄 앞의 핀을 누르면 열어 둔 논문이 되고, 읽기 상태는 별 옆으로 옮겼어요.",
-                        "The sidebar has Open Papers: the papers opened this session, in order. Drag one onto the left or right of the page for halves, or into a corner for up to four at once — the way a Mac tiles a window dragged to the edge of the screen. Open Side by Side in the context menu does the same. The pane you click is the paper you are reading; Info, Marks and Note are about it. ⌘W closes that pane while there are several. In the list, the pin at the head of a row keeps the paper open; the reading status moved beside the star."
+                        "사이드바에 '열린 논문'이 생겼어요. 이 세션에서 연 논문들이 순서대로 있어요. 논문을 목록에서 끌어 쪽의 왼쪽이나 오른쪽에 놓으면 반씩, 네 귀에 놓으면 넷까지 나란히 열려요. 맥이 창을 화면 가장자리에 붙이는 것과 같아요. 우클릭 메뉴의 '나란히 열기'로도 돼요. 누른 칸이 지금 읽는 논문이고, Info·Marks·Notes는 그 논문 것이에요. 칸이 여럿이면 ⌘W가 그 칸만 닫아요. 목록 줄 앞의 핀을 누르면 열어 둔 논문이 되고, 읽기 상태는 별 옆으로 옮겼어요.",
+                        "The sidebar has Open Papers: the papers opened this session, in order. Drag one onto the left or right of the page for halves, or into a corner for up to four at once — the way a Mac tiles a window dragged to the edge of the screen. Open Side by Side in the context menu does the same. The pane you click is the paper you are reading; Info, Marks and Notes are about it. ⌘W closes that pane while there are several. In the list, the pin at the head of a row keeps the paper open; the reading status moved beside the star."
                     )
                 ),
                 Entry(

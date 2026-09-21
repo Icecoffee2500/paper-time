@@ -1040,8 +1040,8 @@ enum InspectorTab: String, CaseIterable, Identifiable {
         switch self {
         case .details: "Info"
         case .marks: "Marks"
-        case .note: "Note"
-        case .tool: "Tool"
+        case .note: "Notes"
+        case .tool: "Tools"
         }
     }
 }
