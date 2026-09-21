@@ -2,6 +2,95 @@
   "repo": "Icecoffee2500/paper-time",
   "releases": [
     {
+      "version": "0.8.2",
+      "date": "2026-09-21T11:46:40Z",
+      "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.8.2/Paper.Time.0.8.2.dmg",
+      "size": 6079185,
+      "downloads": 0,
+      "builds": {
+        "mac": [
+          {
+            "label": "디스크 이미지",
+            "label_en": "Disk image",
+            "arch": "Apple Silicon",
+            "arch_en": "Apple Silicon",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.8.2/Paper.Time.0.8.2.dmg",
+            "size": 6079185,
+            "downloads": 0
+          }
+        ],
+        "windows": [
+          {
+            "label": "설치본",
+            "label_en": "Installer",
+            "arch": "64비트 · ARM",
+            "arch_en": "64-bit and ARM",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.8.2/Paper.Time.Setup.0.8.2.exe",
+            "size": 176987692,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "64비트",
+            "arch_en": "64-bit",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.8.2/Paper.Time-0.8.2-win.zip",
+            "size": 116169219,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.8.2/Paper.Time-0.8.2-arm64-win.zip",
+            "size": 121116893,
+            "downloads": 0
+          }
+        ],
+        "linux": [
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.8.2/Paper.Time-0.8.2-x86_64.AppImage",
+            "size": 113185225,
+            "downloads": 0
+          },
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.8.2/Paper.Time-0.8.2-arm64.AppImage",
+            "size": 113567692,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.8.2/paper-time-0.8.2.tar.gz",
+            "size": 107384398,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.8.2/paper-time-0.8.2-arm64.tar.gz",
+            "size": 111880842,
+            "downloads": 0
+          }
+        ]
+      },
+      "note": "잠긴 PDF가 빈 화면으로 남지 않아요. 암호가 걸렸으면 물어보고, 회사가 보호한 파일이면 그렇다고 말해요.",
+      "note_en": "A locked PDF no longer sits on a blank page: Paper Time asks for the password, or says which protection is holding the door."
+    },
+    {
       "version": "0.8.1",
       "date": "2026-09-21T09:47:14Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.8.1/Paper.Time.0.8.1.dmg",
