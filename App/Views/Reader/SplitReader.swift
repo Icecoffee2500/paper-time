@@ -84,6 +84,44 @@ struct SplitReaderView: View {
     }
 }
 
+/// ⌘W, while papers are side by side: closes the pane in focus and leaves
+/// the window standing. With one pane left the key goes on to the window,
+/// which closes as it always did. A local monitor rather than a menu
+/// command, so the File menu's own Close keeps its place and its key.
+struct ClosePaneShortcut: NSViewRepresentable {
+    /// Closes the focused pane; true when there was one to close.
+    let close: () -> Bool
+
+    func makeNSView(context: Context) -> Catcher {
+        let catcher = Catcher()
+        catcher.close = close
+        return catcher
+    }
+
+    func updateNSView(_ view: Catcher, context: Context) { view.close = close }
+
+    final class Catcher: NSView {
+        var close: (() -> Bool)?
+        nonisolated(unsafe) private var monitor: Any?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if let monitor { NSEvent.removeMonitor(monitor); self.monitor = nil }
+            guard window != nil else { return }
+            monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
+                guard let self, let window = self.window, event.window === window,
+                      event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
+                      event.charactersIgnoringModifiers?.lowercased() == "w"
+                else { return event }
+                return (self.close?() ?? false) ? nil : event
+            }
+        }
+
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+        deinit { if let monitor { NSEvent.removeMonitor(monitor) } }
+    }
+}
+
 /// Where the dragged paper would go, drawn over the page area while it is
 /// being dragged: the half or the quarter lights up.
 struct DockZoneOverlay: View {

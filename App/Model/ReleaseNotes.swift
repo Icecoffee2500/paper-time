@@ -323,8 +323,8 @@ enum ReleaseNotes {
                 Entry(
                     Text2("논문을 나란히", "Papers side by side"),
                     Text2(
-                        "사이드바에 '열린 논문'이 생겼어요. 이 세션에서 연 논문들이 순서대로 있어요. 논문을 목록에서 끌어 쪽의 왼쪽이나 오른쪽에 놓으면 반씩, 네 귀에 놓으면 넷까지 나란히 열려요. 맥이 창을 화면 가장자리에 붙이는 것과 같아요. 우클릭 메뉴의 '나란히 열기'로도 돼요. 누른 칸이 지금 읽는 논문이고, Info·Marks·Note는 그 논문 것이에요.",
-                        "The sidebar has Open Papers: the papers opened this session, in order. Drag one onto the left or right of the page for halves, or into a corner for up to four at once — the way a Mac tiles a window dragged to the edge of the screen. Open Side by Side in the context menu does the same. The pane you click is the paper you are reading; Info, Marks and Note are about it."
+                        "사이드바에 '열린 논문'이 생겼어요. 이 세션에서 연 논문들이 순서대로 있어요. 논문을 목록에서 끌어 쪽의 왼쪽이나 오른쪽에 놓으면 반씩, 네 귀에 놓으면 넷까지 나란히 열려요. 맥이 창을 화면 가장자리에 붙이는 것과 같아요. 우클릭 메뉴의 '나란히 열기'로도 돼요. 누른 칸이 지금 읽는 논문이고, Info·Marks·Note는 그 논문 것이에요. 칸이 여럿이면 ⌘W가 그 칸만 닫아요. 목록 줄 앞의 핀을 누르면 열어 둔 논문이 되고, 읽기 상태는 별 옆으로 옮겼어요.",
+                        "The sidebar has Open Papers: the papers opened this session, in order. Drag one onto the left or right of the page for halves, or into a corner for up to four at once — the way a Mac tiles a window dragged to the edge of the screen. Open Side by Side in the context menu does the same. The pane you click is the paper you are reading; Info, Marks and Note are about it. ⌘W closes that pane while there are several. In the list, the pin at the head of a row keeps the paper open; the reading status moved beside the star."
                     )
                 ),
                 Entry(

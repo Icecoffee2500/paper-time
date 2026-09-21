@@ -1293,6 +1293,15 @@ struct PaperDetailColumn: View {
                         .transition(.scale(scale: 0.96).combined(with: .opacity))
                 }
             }
+            // ⌘W closes the pane in focus while there are several; the last
+            // one left hands the key back to the window.
+            .background(ClosePaneShortcut {
+                guard let split = app.split, split.papers.count > 1,
+                      let id = model.selectedPaperID, split.contains(id) else { return false }
+                app.undock(id, model: model)
+                model.closeOpenPaper(id)
+                return true
+            }.frame(width: 0, height: 0))
             .onDrop(of: [.paperTimePaper], delegate: DockDropDelegate(
                 size: { pageSize },
                 zone: $dockZone,

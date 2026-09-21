@@ -364,7 +364,7 @@ struct PaperRow: View, Equatable {
     @ViewBuilder
     private func row(_ paper: LoadedPaper) -> some View {
         HStack(alignment: .top, spacing: 8) {
-            statusButton(paper)
+            pinButton(paper)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(paper.meta.displayTitle)
@@ -397,28 +397,22 @@ struct PaperRow: View, Equatable {
 
             favoriteButton(paper)
 
+            statusButton(paper)
+
             #if os(macOS)
-            if onOpenShelf {
-                if model.isOpenPaper(paper.id) {
-                    // Kept open: closed here, the way a tab is.
-                    Button {
-                        app.undock(paper.id, model: model)
-                        model.closeOpenPaper(paper.id)
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 9, weight: .semibold))
-                            .frame(width: 18, height: 18)
-                    }
-                    .buttonStyle(.borderless)
-                    .foregroundStyle(.secondary)
-                    .help(L("닫기", "Close"))
-                } else {
-                    // Only showing, not kept: it leaves the shelf with the
-                    // next paper shown, unless it is used first.
-                    Text(L("미리보기", "Preview"))
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
+            if onOpenShelf, model.isOpenPaper(paper.id) {
+                // Kept open: closed here, the way a tab is.
+                Button {
+                    app.undock(paper.id, model: model)
+                    model.closeOpenPaper(paper.id)
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 9, weight: .semibold))
+                        .frame(width: 18, height: 18)
                 }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+                .help(L("닫기", "Close"))
             }
             #endif
 
@@ -493,6 +487,32 @@ struct PaperRow: View, Equatable {
     /// wrong guesses before the right one, and no way to see what the options
     /// were.
     @ViewBuilder
+    /// Kept open, or not: the pin at the head of the row. A pinned paper
+    /// stays on the Open Papers shelf; one merely looked at leaves it with
+    /// the next paper shown.
+    private func pinButton(_ paper: LoadedPaper) -> some View {
+        Button {
+            #if os(macOS)
+            if isKeptOpen {
+                app.undock(paper.id, model: model)
+                model.closeOpenPaper(paper.id)
+            } else {
+                model.keepOpen(paper.id)
+            }
+            #else
+            if isKeptOpen { model.closeOpenPaper(paper.id) } else { model.keepOpen(paper.id) }
+            #endif
+        } label: {
+            Image(systemName: isKeptOpen ? "pin.fill" : "pin")
+                .foregroundStyle(isKeptOpen ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.tertiary))
+                .contentTransition(.symbolEffect(.replace))
+                .frame(width: 16)
+        }
+        .buttonStyle(.plain)
+        .help(isKeptOpen ? L("열어 둔 논문 — 누르면 닫아요", "Kept open — click to close") : L("열어 두기", "Keep Open"))
+        .accessibilityLabel(isKeptOpen ? L("열어 둔 논문", "Kept open") : L("열어 두지 않음", "Not kept open"))
+    }
+
     private func statusButton(_ paper: LoadedPaper) -> some View {
         Menu {
             Picker(L("읽기 상태", "Reading Status"), selection: statusBinding(paper)) {
