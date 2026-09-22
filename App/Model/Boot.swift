@@ -27,3 +27,11 @@ enum Boot {
 
     static func isSet(_ name: String) -> Bool { setting(name) != nil }
 }
+
+extension String {
+    /// The rest of the string after a prefix, or nil when it does not start
+    /// with one. For settings that carry a kind and a value in one word.
+    func stripPrefix(_ prefix: String) -> String? {
+        hasPrefix(prefix) ? String(dropFirst(prefix.count)) : nil
+    }
+}

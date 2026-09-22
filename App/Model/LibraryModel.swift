@@ -102,6 +102,87 @@ public final class LibraryModel {
         return made
     }
 
+    /// A folder inside the library, the way the sidebar shows one.
+    public struct FolderNode: Identifiable, Hashable, Sendable {
+        public let url: URL
+        /// Papers at or under it.
+        public let count: Int
+        public var name: String { url.lastPathComponent }
+        public var id: URL { url }
+    }
+
+    /// The folder whose inside is being shown, if the shelf is a folder.
+    public var openFolder: URL? {
+        if case let .folder(url) = scope { return url }
+        return nil
+    }
+
+    /// Whether this paper sits at or under a folder.
+    ///
+    /// At **or under**: a folder shows everything beneath it, so pressing a
+    /// term shows the term and pressing a week narrows to the week. The old
+    /// test asked only which library root a paper belonged to, which is the
+    /// same answer for a root and no answer at all for anything inside one.
+    func isUnder(_ paper: LoadedPaper, _ folder: URL) -> Bool {
+        let base = folder.path(percentEncoded: false)
+        let path = paper.documentURL.path(percentEncoded: false)
+        return path.hasPrefix(base.hasSuffix("/") ? base : base + "/")
+    }
+
+    /// The folders directly inside this one that hold papers, and how many
+    /// each holds counting everything beneath it.
+    ///
+    /// Read off the papers rather than off the disk. The tree is then always
+    /// exactly what the list can show — a folder with nothing in it is not a
+    /// place you can go and find nothing — and it costs no round trip on a
+    /// cloud folder, which is the whole reason this app stopped walking them.
+    public func subfolders(of folder: URL) -> [FolderNode] {
+        let base = folder.path(percentEncoded: false)
+        let prefix = base.hasSuffix("/") ? base : base + "/"
+        var counts: [String: Int] = [:]
+        for paper in papers where paper.meta.parentID == nil {
+            let path = paper.documentURL.deletingLastPathComponent().path(percentEncoded: false)
+            guard path.hasPrefix(prefix) else { continue }
+            let rest = path.dropFirst(prefix.count)
+            guard let head = rest.split(separator: "/").first.map(String.init), !head.isEmpty else { continue }
+            counts[head, default: 0] += 1
+        }
+        return counts
+            .map { FolderNode(url: folder.appending(path: $0.key, directoryHint: .isDirectory), count: $0.value) }
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    /// The way from the library root down to this folder, root first.
+    public func folderTrail(to folder: URL) -> [URL] {
+        guard let root = sources.map(\.url).first(where: {
+            let base = $0.path(percentEncoded: false)
+            let path = folder.path(percentEncoded: false)
+            return path == base || path.hasPrefix(base.hasSuffix("/") ? base : base + "/")
+        }) else { return [folder] }
+
+        var trail: [URL] = []
+        var here = folder
+        while here.path(percentEncoded: false) != root.path(percentEncoded: false) {
+            trail.append(here)
+            let up = here.deletingLastPathComponent()
+            // A path that will not shorten is a path that would loop.
+            guard up.path(percentEncoded: false).count < here.path(percentEncoded: false).count else { break }
+            here = up
+        }
+        trail.append(root)
+        return trail.reversed()
+    }
+
+    /// Where pressing an open folder again goes: out one level, and out of
+    /// the folders altogether when it is a library root.
+    public func folderAbove(_ folder: URL) -> URL? {
+        if sources.contains(where: { $0.url.path(percentEncoded: false) == folder.path(percentEncoded: false) }) {
+            return nil
+        }
+        let up = folder.deletingLastPathComponent()
+        return up.path(percentEncoded: false).count < folder.path(percentEncoded: false).count ? up : nil
+    }
+
     public func rootURL(of paper: LoadedPaper) -> URL {
         let path = paper.folder.url.path(percentEncoded: false)
         // The longest root that is a prefix: folders do not normally nest,
@@ -932,7 +1013,7 @@ public final class LibraryModel {
         case .books: paper.meta.effectiveKind == .book
         case .lectures: paper.meta.effectiveKind == .lecture
         case .documents: paper.meta.effectiveKind == .document
-        case let .folder(root): rootURL(of: paper) == root
+        case let .folder(root): isUnder(paper, root)
         case .unread: paper.state.readingStatus == .unread
         case .reading: paper.state.readingStatus == .reading
         case .read: paper.state.readingStatus == .read

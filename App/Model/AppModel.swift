@@ -672,6 +672,14 @@ public final class AppModel {
                 """.utf8))
             }
             if Boot.setting("PAPERTIME_SCOPE") == "notes" { model.scope = .notes }
+            // A folder inside the library, by its path under the root:
+            // `--papertime-scope=folder:2026-2학기/week 1`. The tree only
+            // exists once you are inside one, and a synthetic click cannot
+            // get you there — SwiftUI's rows are not reachable that way, and
+            // keys sent at the window land in whatever is in front.
+            if let inside = Boot.setting("PAPERTIME_SCOPE")?.stripPrefix("folder:") {
+                model.scope = .folder(model.location.url.appending(path: inside, directoryHint: .isDirectory))
+            }
             // The results of a search, without anybody having to type one.
             if let query = Boot.setting("PAPERTIME_SEARCH_RESULTS") {
                 model.showSearchResults(for: query)
