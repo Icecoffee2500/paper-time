@@ -496,6 +496,33 @@ public enum WindowProbe {
             // scroll view is moved from inside the process and the window is
             // told to draw, and the drawing is what is timed. A row that is
             // expensive to build shows up here as milliseconds per step.
+            // `--papertime-click-row=<n>`이 목록의 n번째 줄을 누른다.
+            //
+            // 이벤트는 **창 안에서 만들어 그 창에만** 보낸다(`sendEvent`) —
+            // 시스템 큐로 나가지 않으므로 앞에 있는 다른 앱에는 갈 수가 없다.
+            // 포터블이 `--papertime-probe`에서 페이지 안에 이벤트를 만드는 것과
+            // 같은 이유다. 줄이 SwiftUI 뷰라서 클릭이 표까지 안 내려가는 일이
+            // 있었고, 그건 손 없이는 이 길로만 보인다.
+            if let script = Boot.setting("PAPERTIME_CLICK_ROW"),
+               let table = tallestTable(in: content) {
+                // `3` · `3;6,shift;4,command` — one click, or several in order,
+                // which is the only way to see what ⇧ and ⌘ do to a selection.
+                for step in script.split(separator: ";") {
+                    let parts = step.split(separator: ",").map(String.init)
+                    // `down` · `up` — the arrow keys, which is how a Mac list
+                    // is walked without the mouse. They go to whatever is first
+                    // responder, so a click has to come first.
+                    if parts.first == "down" || parts.first == "up" {
+                        await pressArrow(down: parts.first == "down", window: window, app: app, table: table, say: say)
+                        continue
+                    }
+                    guard let wanted = Int(parts.first ?? "") else { continue }
+                    var modifiers: NSEvent.ModifierFlags = []
+                    if parts.dropFirst().contains("shift") { modifiers.insert(.shift) }
+                    if parts.dropFirst().contains("command") { modifiers.insert(.command) }
+                    await clickRow(wanted, modifiers: modifiers, in: table, window: window, app: app, say: say)
+                }
+            }
             if let steps = Int(Boot.setting("PAPERTIME_SCROLL_TEST") ?? "") {
                 scrollTest(in: content, steps: steps, say: say)
                 try? await Task.sleep(for: .milliseconds(400))
@@ -603,6 +630,97 @@ public enum WindowProbe {
     /// moves it by one screen's worth and then forces the draw, so what is
     /// measured is the work of bringing new rows into being rather than the
     /// time until some later frame happens to land.
+    /// Presses a row, from inside the application.
+    ///
+    /// The event is made here and put in **this app's own queue**; it cannot
+    /// reach another application, which is the whole reason the rule against
+    /// synthetic events exists. It is the Mac's counterpart to the Portable
+    /// build's `--papertime-probe`, which makes its events inside the page.
+    ///
+    /// A hidden application's windows are not visible windows, and AppKit does
+    /// not hand mouse events to a window that is not visible — so the app is
+    /// unhidden **without being activated** first. Its window is already
+    /// outside every display, so nothing appears in front of anybody.
+    private static func clickRow(
+        _ wanted: Int,
+        modifiers: NSEvent.ModifierFlags,
+        in table: NSTableView,
+        window: NSWindow,
+        app: AppModel,
+        say: (String) -> Void
+    ) async {
+        guard wanted >= 0, wanted < table.numberOfRows else {
+            return say("click: no row \(wanted) — the table has \(table.numberOfRows)")
+        }
+        if NSApp.isHidden {
+            NSApp.unhideWithoutActivation()
+            try? await Task.sleep(for: .milliseconds(300))
+            _ = offscreen(say: { _ in })
+        }
+        table.scrollRowToVisible(wanted)
+        window.displayIfNeeded()
+
+        let rect = table.rect(ofRow: wanted)
+        let inWindow = table.convert(NSPoint(x: rect.midX, y: rect.midY), to: nil)
+        for (kind, pressure) in [(NSEvent.EventType.leftMouseDown, Float(1)), (.leftMouseUp, 0)] {
+            guard let event = NSEvent.mouseEvent(
+                with: kind, location: inWindow, modifierFlags: modifiers,
+                timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber, context: nil,
+                eventNumber: 0, clickCount: 1, pressure: pressure
+            ) else { continue }
+            window.sendEvent(event)
+        }
+        try? await Task.sleep(for: .milliseconds(500))
+
+        let picked = app.library?.selection ?? []
+        let named = modifiers.isEmpty ? "" : (modifiers.contains(.shift) ? " with shift" : " with command")
+        say("click: row \(wanted)\(named) → \(picked.count) selected"
+            + ", showing \(app.library?.selectedPaper?.meta.displayTitle ?? "—")"
+            + ", the table says \(table.selectedRowIndexes.count)")
+    }
+
+    /// An arrow key, made and delivered inside the application as a click is.
+    private static func pressArrow(
+        down: Bool,
+        window: NSWindow,
+        app: AppModel,
+        table: NSTableView,
+        say: (String) -> Void
+    ) async {
+        let code: UInt16 = down ? 125 : 126
+        let character = String(UnicodeScalar(down ? NSDownArrowFunctionKey : NSUpArrowFunctionKey)!)
+        for kind in [NSEvent.EventType.keyDown, .keyUp] {
+            guard let event = NSEvent.keyEvent(
+                with: kind, location: .zero, modifierFlags: .function,
+                timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber, context: nil,
+                characters: character, charactersIgnoringModifiers: character,
+                isARepeat: false, keyCode: code
+            ) else { continue }
+            window.sendEvent(event)
+        }
+        try? await Task.sleep(for: .milliseconds(400))
+        say("click: arrow \(down ? "down" : "up") → \(app.library?.selection.count ?? 0) selected"
+            + ", showing \(app.library?.selectedPaper?.meta.displayTitle ?? "—")"
+            + ", the table says row \(table.selectedRow)")
+    }
+
+    /// The table the list is drawn on, found the same way the scroll test finds
+    /// its scroll view: the tallest one in the window.
+    private static func tallestTable(in content: NSView) -> NSTableView? {
+        var tallest: NSTableView?
+        func walk(_ view: NSView) {
+            if let table = view as? NSTableView,
+               table.frame.height > (tallest?.frame.height ?? 0) {
+                tallest = table
+            }
+            for child in view.subviews { walk(child) }
+        }
+        walk(content)
+        return tallest
+    }
+
     private static func scrollTest(in content: NSView, steps: Int, say: (String) -> Void) {
         var tallest: NSScrollView?
         func walk(_ view: NSView) {

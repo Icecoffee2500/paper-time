@@ -86,6 +86,19 @@ enum Trace {
         lock.unlock()
     }
 
+    /// Every counter whose name carries this, as one line. For a probe that
+    /// wants to know which of several things happened without knowing their
+    /// names in advance.
+    static func tickSummary(matching fragment: String) -> String {
+        guard isOn else { return "(tracing is off)" }
+        lock.lock()
+        defer { lock.unlock() }
+        let found = counts.filter { $0.key.contains(fragment) }
+            .sorted { $0.value > $1.value }
+            .map { "\($0.key)=\($0.value)" }
+        return found.isEmpty ? "(none)" : found.joined(separator: " · ")
+    }
+
     static func ticks(_ label: String) -> Int {
         guard isOn else { return 0 }
         lock.lock()

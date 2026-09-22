@@ -268,6 +268,24 @@ struct PaperTable: NSViewRepresentable {
                 )
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
+                // The row picks itself. A row is a SwiftUI view inside a
+                // hosting view, and a hosting view answers the click before the
+                // table under it ever sees one — which is why right-click
+                // worked (the row's own `.contextMenu` took it) and a plain
+                // click did nothing at all: there was nobody to take it, and
+                // the table never learned a row had been pressed.
+                // Three taps, told apart by SwiftUI from the event itself
+                // rather than by asking what keys are down at the moment the
+                // closure runs. Ambient state is the wrong question: by the
+                // time a gesture's closure runs, the event that carried the
+                // modifier is over.
+                .highPriorityGesture(
+                    TapGesture().modifiers(.shift).onEnded { [weak self] in self?.clicked(id, .shift) }
+                )
+                .highPriorityGesture(
+                    TapGesture().modifiers(.command).onEnded { [weak self] in self?.clicked(id, .command) }
+                )
+                .onTapGesture { [weak self] in self?.clicked(id, []) }
                 .environment(owner.app)
             )
         }
@@ -281,6 +299,40 @@ struct PaperTable: NSViewRepresentable {
         private func fill(_ host: RowHost, row: Int) {
             guard row < owner.entries.count else { return }
             host.show(body(for: owner.entries[row]))
+        }
+
+        /// A row was pressed. Shift takes the run between here and the last
+        /// one, command adds or drops this one, and a plain click is just this
+        /// one — the three things a Mac list does, done here because this is
+        /// where the click arrives.
+        private var anchor: UUID?
+
+        func clicked(_ id: UUID, _ modifiers: EventModifiers) {
+            Trace.tick("row click")
+            var picked = owner.selection
+            if modifiers.contains(.shift), let anchor,
+               let from = index(of: anchor), let to = index(of: id) {
+                for step in min(from, to)...max(from, to) {
+                    if case let .paper(other) = owner.entries[step] { picked.insert(other) }
+                }
+            } else if modifiers.contains(.command) {
+                if picked.contains(id) { picked.remove(id) } else { picked.insert(id) }
+                anchor = id
+            } else {
+                picked = [id]
+                anchor = id
+            }
+            owner.selection = picked
+            // …and the keyboard follows the hand. Without this the arrow keys
+            // had nothing to move: the table was never made first responder,
+            // because the click never reached it.
+            if let table, table.window?.firstResponder !== table {
+                table.window?.makeFirstResponder(table)
+            }
+        }
+
+        private func index(of id: UUID) -> Int? {
+            owner.entries.firstIndex(of: .paper(id))
         }
 
         func tableViewSelectionDidChange(_ notification: Notification) {
