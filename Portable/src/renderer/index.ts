@@ -17,6 +17,7 @@ import { clear, el, on } from './dom.js'
 // Imported for its side effect: the sheet registers its own ⌥⌘/ so nothing
 // in the shell has to know it exists.
 import { showFeedback } from './ui/feedback.js'
+import { showSettings } from './ui/settings.js'
 import {
   adopt,
   canGoBack,
@@ -25,6 +26,7 @@ import {
   closeOpenPaper,
   closeOtherOpenPapers,
   dock,
+  failed,
   isOpenPaper,
   isPinned,
   keepOpen,
@@ -252,6 +254,7 @@ const paperList = buildPaperList({
     adopt(snapshot)
     changed('papers')
   },
+  refresh: () => void reload(),
 })
 
 /** The answer to "a paper, a book, course material, or a document?", from the
@@ -714,6 +717,7 @@ const toolbar = buildToolbar({
       })),
     ], 'right')
   },
+  settings: () => openSettings(),
   minimize: () => void call('window:minimize'),
   toggleMaximize: () => void call('window:toggleMaximize'),
   close: () => void call('window:close'),
@@ -853,7 +857,14 @@ async function addPapers() {
 
 async function reload() {
   const snapshot = await call<LibrarySnapshot>('library:reload')
-  if ('error' in snapshot) return
+  // A folder that would not answer used to end here without a word. The rows
+  // already on screen stay where they are; the list says what happened and
+  // offers to read again.
+  if ('error' in snapshot) {
+    failed(String(snapshot.error))
+    changed('papers')
+    return
+  }
   const selected = store.selectedID
   adopt(snapshot)
   store.selectedID = selected
@@ -1273,10 +1284,16 @@ onEvent((event, payload) => {
     case 'library:changed':
       void reload()
       break
-    case 'library:opened':
-      adopt(payload as LibrarySnapshot)
+    case 'library:opened': {
+      // The main process sends whatever `snapshot()` came back with, and that
+      // can be `{ error }`, which has no `papers` to map over. Unguarded, the
+      // throw landed inside this listener and the window simply stopped.
+      const opened = payload as LibrarySnapshot | { error: string }
+      if ('error' in opened) failed(String(opened.error))
+      else adopt(opened)
       changed('papers', 'shelf')
       break
+    }
     case 'window:state':
       store.windowState = payload as typeof store.windowState
       toolbar.update()
@@ -1295,9 +1312,33 @@ onEvent((event, payload) => {
   }
 })
 
+/**
+ * The settings sheet — from the ⚙ in the bar, from the menu, and from
+ * `Ctrl+,`, which until now went nowhere at all.
+ */
+function openSettings() {
+  openSettingsSheet = showSettings({
+    set: (patch: Record<string, unknown>) => {
+      Object.assign(store.settings, patch)
+      void call('settings:set', patch)
+      // The window has to follow what was just chosen, or the sheet is a form
+      // that saves and shows nothing.
+      if ('appearance' in patch) applyTheme()
+      if ('pageTint' in patch) for (const reader of readers.values()) reader.applyTint()
+      if ('pageLayout' in patch) setLayout(store.settings.pageLayout)
+      changed('settings', 'toolbar')
+      openSettingsSheet?.redraw()
+    },
+    chooseLibrary: () => void call('library:choose').then(() => void reload()),
+  })
+}
+
+let openSettingsSheet: { redraw: () => void; close: () => void } | undefined
+
 function runMenuCommand(command: string) {
   const reader = focused()
   switch (command) {
+    case 'settings': openSettings(); break
     case 'addPapers': void addPapers(); break
     case 'refreshFolder': void reload(); break
     case 'addFolder': addLibraryFolder(); break
@@ -1389,7 +1430,15 @@ async function start() {
 
   if (saved.libraryRoot) {
     const snapshot = await call<LibrarySnapshot>('library:reload')
-    if (!('error' in snapshot)) {
+    if ('error' in snapshot) {
+      // There is a folder in the settings and it would not be read. Saying so
+      // is the whole of it: this used to fall through to a window whose list
+      // offered to choose a library folder, as though the one already chosen
+      // had never existed.
+      store.root = saved.libraryRoot
+      failed(String(snapshot.error))
+      changed('papers', 'shelf')
+    } else {
       adopt(snapshot)
       changed('papers', 'shelf')
       if (solo) {

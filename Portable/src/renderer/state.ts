@@ -49,6 +49,8 @@ export interface Settings {
   inspectorTab: InspectorTab
   sort: { field: 'title' | 'author' | 'year' | 'added' | 'opened'; ascending: boolean }
   appearance: 'system' | 'light' | 'dark'
+  /** The words, when the desktop's own language is not what somebody wants. */
+  language: 'system' | 'ko' | 'en'
   pageTint: 'none' | 'sepia' | 'grey' | 'night'
   pageLayout: 'single' | 'continuous'
   selectedPaperID: string | null
@@ -68,6 +70,8 @@ export const freshReaderState = (): ReaderState => ({ pageCount: 0, currentPage:
 export interface Store {
   ready: boolean
   error: string | null
+  /** Records in the folders this read could not get at, one sentence each. */
+  unreadable: string[]
   root: string | null
   /** Every folder being read, the first one first. */
   roots: string[]
@@ -134,6 +138,7 @@ export function setSketchTool(tool: SketchTool) {
 export const store: Store = {
   ready: false,
   error: null,
+  unreadable: [],
   root: null,
   roots: [],
   papers: [],
@@ -152,6 +157,7 @@ export const store: Store = {
     inspectorTab: 'details',
     sort: { field: 'added', ascending: false },
     appearance: 'system',
+    language: 'system',
     pageTint: 'none',
     pageLayout: 'continuous',
     selectedPaperID: null,
@@ -283,7 +289,22 @@ export function changed(...keys: string[]) {
   for (const listener of listeners) listener(set)
 }
 
+/**
+ * The library would not be read.
+ *
+ * Kept, not shrugged off. Whatever is on screen stays there — a folder that
+ * failed to answer once usually answers a moment later — but the window stops
+ * behaving as though nothing had happened. Every caller of this used to be a
+ * bare `return`, and one of them fell through to a window offering to choose a
+ * library folder over a folder that was already chosen.
+ */
+export function failed(message: string) {
+  store.error = message
+  store.ready = true
+}
+
 export function adopt(snapshot: LibrarySnapshot) {
+  store.unreadable = snapshot.unreadable ?? []
   store.root = snapshot.root
   store.roots = snapshot.roots ?? (snapshot.root ? [snapshot.root] : [])
   store.papers = snapshot.papers.map(toPaper)

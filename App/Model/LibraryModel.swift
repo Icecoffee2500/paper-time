@@ -365,6 +365,14 @@ public final class LibraryModel {
         collectionByIDCache = made
         return made
     }
+    /// Records the folders hold and the last read could not get at.
+    ///
+    /// `loadAll()` has always skipped a record it could not read and handed
+    /// back what failed, which is why one half-arrived `meta.json` never took
+    /// a Mac library down. What was missing was anybody saying so: this was
+    /// collected and read by nothing, so a library quietly short by a paper
+    /// looked exactly like a library that was not. The list says it now, and
+    /// while it has anything in it the folder's loose PDFs are not offered.
     public private(set) var loadFailures: [String] = []
     public private(set) var isScanning = false
     /// PDFs sitting in the library folder that are not part of a paper yet.
@@ -581,7 +589,17 @@ public final class LibraryModel {
                         // for one refresh, on a folder that may be in the
                         // cloud.
                         let claimed = Set(papers.map(\.meta.file.relativePath))
-                        let loose = await source.unclaimedDocumentURLs(claiming: claimed)
+                        // Nothing, when a record in this folder would not be
+                        // read. A record that failed is a paper whose PDF is
+                        // still spoken for, so `claimed` is short by exactly
+                        // that paper and its file looks free — and offering it
+                        // takes the same paper in a second time, under a second
+                        // identifier, with none of its marks. Not knowing which
+                        // PDFs are claimed is not the same as knowing one is
+                        // free, and this is the answer nobody can take back.
+                        let loose = failures.isEmpty
+                            ? await source.unclaimedDocumentURLs(claiming: claimed)
+                            : []
                         return (position, papers, failures, loose)
                     }
                 }
@@ -659,6 +677,12 @@ public final class LibraryModel {
         folderCheck?.cancel()
         folderCheck = Task { [weak self] in
             guard let self else { return }
+            // As in `refresh`: taking a PDF in on the app's own account is
+            // only safe when every record answered, because the check for a
+            // paper already here is a check against the records. Nothing is
+            // lost by waiting — this runs again on the next change to the
+            // folder, and on every reload.
+            guard loadFailures.isEmpty else { return }
             let claimed = Set(papers.map(\.meta.file.relativePath))
             var unclaimed: [URL] = []
             for source in allStores {

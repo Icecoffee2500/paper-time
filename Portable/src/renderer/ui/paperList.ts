@@ -28,6 +28,8 @@ export interface PaperListActions {
   contextMenu: (id: string, anchor: Element) => void
   addPapers: () => void
   adoptLoose: () => void
+  /** Read the folders again, after one of them would not answer. */
+  refresh: () => void
 }
 
 const STATUS_ICON = {
@@ -56,12 +58,29 @@ export function buildPaperList(actions: PaperListActions): { node: HTMLElement; 
 
     // The header only when it has changed: clearing and refilling it on every
     // redraw threw away a button somebody might have been about to press.
-    const headerKey = `${shelfTitle()}|${store.looseCount}`
+    const headerKey = `${shelfTitle()}|${store.looseCount}|${store.unreadable.length}|${store.error ?? ''}`
     if (headerKey !== shownHeader) {
       shownHeader = headerKey
       clear(header)
       header.append(el('span', { text: shelfTitle() }))
       header.append(el('span', { class: 'toolbar-spacer' }))
+      // The folder answered in part, or would not answer at all. Either way
+      // the list is short by papers that are still in the folder, and a short
+      // list that says nothing is the whole of what went wrong here. It comes
+      // before the loose-PDF button because that button is the one thing a
+      // half-read folder is not allowed to offer.
+      const short = missingNote()
+      if (short) {
+        const note = el('span', { class: 'panel-note', text: short })
+        note.title = [
+          L('클라우드 폴더라면 파일이 아직 내려오는 중일 수 있어요. 논문은 폴더에 그대로 있어요.',
+            'On a cloud drive, a record may still be on its way down. Your papers are still in the folder.'),
+          ...store.unreadable,
+        ].join('\n')
+        const again = el('button', { class: 'plain-button', text: L('다시 읽기', 'Try Again') })
+        on(again, 'click', actions.refresh)
+        header.append(note, again)
+      }
       if (store.looseCount > 0) {
         const adopt = el('button', {
           class: 'plain-button',
@@ -275,8 +294,50 @@ function shelfTitle(): string {
   }
 }
 
+/**
+ * What the list is short by, when it is short by something.
+ *
+ * Two different shortfalls and one sentence each. The folder gave nothing:
+ * whatever is on screen is from before. The folder gave some of its records
+ * and not the rest: the list is short by exactly that many papers, all of
+ * which are still in the folder.
+ *
+ * Not "못 읽었어요" for the second one — read and unread are what this app
+ * calls a paper you have or have not got to, and a record the folder has not
+ * handed over yet is neither.
+ */
+function missingNote(): string | null {
+  if (store.error) return L('라이브러리를 읽지 못했어요', "Couldn't read the library")
+  const count = store.unreadable.length
+  if (count === 0) return null
+  return L(
+    `기록 ${count}개가 아직 안 왔어요`,
+    `${count} record${count === 1 ? '' : 's'} ${count === 1 ? "hasn't" : "haven't"} arrived`,
+  )
+}
+
 function emptyState(actions: PaperListActions): HTMLElement {
   const wrap = el('div', { class: 'empty' })
+  // A folder that would not be read comes first, because every sentence under
+  // it would be untrue: the library is not empty and no folder needs choosing.
+  // It used to say nothing at all — one record arriving half written took
+  // every paper down with it and left a window with no explanation in it.
+  if (store.error) {
+    const again = el('button', { class: 'filled-button', text: L('다시 읽기', 'Try Again') })
+    on(again, 'click', actions.refresh)
+    wrap.append(
+      el('h2', { text: L('라이브러리를 읽지 못했어요', "Couldn't read the library") }),
+      el('p', {
+        text: L(
+          '논문은 폴더에 그대로 있어요. 클라우드 폴더라면 파일이 아직 내려오는 중일 수 있어요.',
+          'Your papers are still in the folder. On a cloud drive, a file may still be on its way down.',
+        ),
+      }),
+      el('p', { class: 'fine words', text: store.error }),
+      again,
+    )
+    return wrap
+  }
   if (!store.root) {
     const choose = el('button', { class: 'filled-button', text: L('라이브러리 폴더 고르기…', 'Choose Library Folder…') })
     on(choose, 'click', actions.chooseLibrary)
