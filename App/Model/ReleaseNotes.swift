@@ -296,8 +296,8 @@ enum ReleaseNotes {
                 Entry(
                     Text2("논문이 많아도 목록이 느려지지 않아요", "A long list scrolls like a short one"),
                     Text2(
-                        "목록 맨 위의 «아래로 당겨서 찾기»가 손가락이 움직일 때마다 라이브러리 전체를 다시 짓고 있었어요. 화면에 글자 한 줄을 보여주려고 초당 예순 번, 논문 한 편도 빠짐없이요. 이제 그 글자만 다시 그려요. 실측으로 600편에서 한 걸음이 76.3ms에서 59.4ms로, 150편에서 25.9ms에서 17.6ms로 줄었어요.",
-                        "The pull-to-search hint at the top of the list rebuilt the entire library on every tick of every scroll — sixty times a second, every paper, to draw one line of text. Only that line is redrawn now. Measured on a settled library, a scroll step went from 76.3ms to 59.4ms at six hundred papers and from 25.9ms to 17.6ms at a hundred and fifty."
+                        "라이브러리가 커질수록 목록이 무거워졌어요. 세 군데였는데, 마지막 하나가 컸어요 — 목록이 **보이지도 않는 줄의 높이까지 매번 다시 재고 있었거든요.** 줄 하나를 재는 데 그 줄을 통째로 한 번 그려보는 셈이라, 600편이면 한 걸음에 86ms였어요(프레임 다섯 개). 스크롤을 오래 해도 안 나아졌고요. 이제 목록은 **보이는 줄만** 만들고 높이는 한 번 재서 기억해요. 같은 자로 600편 23ms, 270편 14ms예요. 나머지 둘은 «아래로 당겨서 찾기»가 손가락이 움직일 때마다 라이브러리 전체를 다시 짓던 것과, 목록이 논문 기록을 통째로 훑던 것이에요.",
+                        "The list got heavier as the library grew. Three reasons, and the last was the big one: it was measuring the height of every row, including the ones you cannot see, on every layout pass — and measuring a row means drawing it once. At six hundred papers that was 86ms a scroll step, five frames, and scrolling for a while never made it better. The list now builds only the rows on screen and measures a height once. By the same ruler: 23ms at six hundred papers, 14ms at two hundred and seventy. The other two were the pull-to-search hint rebuilding the whole library on every tick of every scroll, and the list carrying each paper's whole record where an identifier would do."
                     )
                 ),
                 Entry(
