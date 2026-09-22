@@ -57,7 +57,10 @@ enum Motion {
     static func watch() {
         reduced = systemReducesMotion()
         #if os(macOS)
-        NotificationCenter.default.addObserver(
+        // The workspace's own centre, not the default one: this notification
+        // is never posted to `NotificationCenter.default`, so an observer
+        // added there is an observer that never hears anything.
+        NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
             object: nil, queue: .main
         ) { _ in
