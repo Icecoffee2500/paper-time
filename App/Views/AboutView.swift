@@ -278,45 +278,41 @@ struct FeatureShowcase<Header: View>: View {
 /// Two plain grey arrows either side of a card say nothing about being
 /// pressable — the first reading is that they are decoration, or a hint that
 /// there is more, which is exactly what somebody said when they first saw
-/// this sheet. So the pointer gets an answer: a soft round ground under the
-/// chevron and the chevron itself in full strength, the moment the cursor is
-/// over it. Nothing moves; only the thing under the hand lights up.
+/// this sheet. So the pointer gets an answer, and it is the app's own answer:
+/// `pressable` is what every row that goes somewhere already uses, which
+/// means the same faint lift (`Color.primary` at 0.055) and the same hand for
+/// a cursor. A ground of its own was tried here first and came out as a grey
+/// block behind the arrow — a control drawn beside a card must not be heavier
+/// than the card.
 private struct PageTurner: View {
     let back: Bool
     let disabled: Bool
     let turn: () -> Void
-    @State private var hovering = false
 
+    private var name: String {
+        back ? ReleaseNotes.string("이전", "Previous") : ReleaseNotes.string("다음", "Next")
+    }
+
+    @ViewBuilder
     var body: some View {
-        Button(action: turn) {
+        let chevron = Button(action: turn) {
             Image(systemName: back ? "chevron.left" : "chevron.right")
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(hovering && !disabled ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+                .foregroundStyle(.secondary)
                 .frame(width: 30, height: 46)
-                .background {
-                    RoundedRectangle(cornerRadius: Corner.control, style: .continuous)
-                        .fill(.quaternary)
-                        .opacity(hovering && !disabled ? 1 : 0)
-                }
                 .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .disabled(disabled)
-        .opacity(disabled ? 0.25 : 1)
-        // The cursor becomes a hand, the way it does over anything on a page
-        // that takes you somewhere else.
-        .onHover { inside in
-            withAnimation(Motion.tap) { hovering = inside }
-            #if os(macOS)
-            if inside, !disabled { NSCursor.pointingHand.push() } else { NSCursor.pop() }
-            #endif
+        .help(name)
+        .accessibilityLabel(name)
+
+        // The last page's arrow is not pressable, so it does not answer the
+        // pointer and does not put a hand under it either.
+        if disabled {
+            chevron.disabled(true).opacity(0.25)
+        } else {
+            chevron.pressable(cornerRadius: Corner.control)
         }
-        .help(back
-            ? ReleaseNotes.string("이전", "Previous")
-            : ReleaseNotes.string("다음", "Next"))
-        .accessibilityLabel(back
-            ? ReleaseNotes.string("이전", "Previous")
-            : ReleaseNotes.string("다음", "Next"))
     }
 }
 
