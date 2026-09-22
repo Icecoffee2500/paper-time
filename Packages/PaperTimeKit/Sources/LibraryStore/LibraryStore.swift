@@ -352,13 +352,17 @@ public actor LibraryStore {
             notesAreMoved = true
             return
         }
+        let recordsDirectory = LibraryLayout.recordsDirectoryURL(inLibrary: root)
+        // Not marked done: the folder could not be read at all — an unplugged
+        // disk, a cloud folder that has not arrived. Marking it here would
+        // skip the move for ever, and the notes it had not reached yet would
+        // stay where nothing looks for them.
+        guard let records = try? FileOperations.visibleContents(of: recordsDirectory) else { return }
         defer {
             notesAreMoved = true
             try? FileOperations.ensureDirectory(at: LibraryLayout.supportDirectoryURL(inLibrary: root))
             try? Data().write(to: notesMovedMark)
         }
-        let recordsDirectory = LibraryLayout.recordsDirectoryURL(inLibrary: root)
-        guard let records = try? FileOperations.visibleContents(of: recordsDirectory) else { return }
 
         var taken = Set(
             ((try? FileOperations.visibleContents(of: LibraryLayout.slipBoxURL(inLibrary: root))) ?? [])
