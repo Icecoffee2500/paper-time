@@ -42,7 +42,7 @@
   document.documentElement.lang = lang;
 })();
 </script>
-<link rel="stylesheet" href="style.css?v=0.9.2-2">
+<link rel="stylesheet" href="style.css?v=0.9.3">
 </head>
 <body data-page="docs">
 
@@ -134,8 +134,8 @@
   </article>
 
   <article class="task">
-    <h3 data-l="ko">논문인가요, 책인가요, 문서인가요</h3>
-    <h3 data-l="en">A paper, a book, or a document</h3>
+    <h3 data-l="ko">논문인가요, 책인가요, 강의자료인가요, 문서인가요</h3>
+    <h3 data-l="en">A paper, a book, course material, or a document</h3>
     <p data-l="ko">라이브러리에는 논문만 들어가는 게 아니에요. 교과서도, 계약서도, 매뉴얼도 같이 살아요. 그래서 새 PDF에는 <b>먼저 한 번만</b> 물어봐요.</p>
     <p data-l="en">A library holds more than papers: textbooks, contracts, manuals. So a new PDF is asked what it is — <b>once</b>.</p>
     <p data-l="ko">앱이 이미 짐작해 뒀으니 대개 그대로 누르면 돼요. 답하면 질문은 사라지고, 칸이 달라져요. 나중에 바꾸려면 도구 막대의 ⋯ 메뉴나 목록의 우클릭 메뉴에 있어요.</p>
@@ -512,9 +512,20 @@
   </article>
 
   <article class="task">
+    <h3 data-l="ko">폴더 안의 폴더</h3>
+    <h3 data-l="en">Folders inside folders</h3>
+    <p data-l="ko">라이브러리를 누르면 <b>그 안이 열려요</b>. 나머지 라이브러리는 물러나고, 그 폴더의 하위 폴더들이 들여쓰여 서요. 하나를 누르면 또 그 안이 열리고, 논문 목록에는 그 아래에 있는 논문이 전부 나와요 — 한 학기를 누르면 그 학기 전부, 한 주차를 누르면 그 주차만이에요.</p>
+    <p data-l="en">Press a library and <b>it opens</b>. The other libraries step aside and that folder's own folders appear, indented. Press one and it opens in turn, with every paper beneath it in the list — press a term and you get the term, press a week and you get the week.</p>
+    <p data-l="ko"><b>나가는 길은 지금 눌린 그 줄이에요.</b> 한 번 더 누르면 한 단계 위로 가고, 맨 위 폴더에서 누르면 «모두»로 돌아와요.</p>
+    <p data-l="en"><b>The way out is the row you are on.</b> Press it again to go up a level, and once more at the top to come back to All.</p>
+    <p class="note" data-l="ko">폴더 트리는 논문이 있는 폴더만 보여줘요. 아무것도 없는 폴더는 가 봐야 빈 목록이라서요.</p>
+    <p class="note" data-l="en">The tree shows only folders that hold papers. A folder with nothing in it is not a place worth going.</p>
+  </article>
+
+  <article class="task">
     <h3 data-l="ko">선반</h3>
     <h3 data-l="en">The shelves</h3>
-    <p data-l="ko">사이드바의 선반은 세 가지를 물어요. 무엇인지(모두·논문·책·문서), 얼마나 읽었는지(안 읽음·읽는 중·읽음), 내가 뭘 했는지(즐겨찾기·살펴볼 것·열린 논문). 그래서 세 묶음으로 떨어져 있어요.</p>
+    <p data-l="ko">사이드바의 선반은 세 가지를 물어요. 무엇인지(모두·논문·책·강의자료·문서), 얼마나 읽었는지(안 읽음·읽는 중·읽음), 내가 뭘 했는지(즐겨찾기·살펴볼 것·열린 논문). 그래서 세 묶음으로 떨어져 있어요.</p>
     <p data-l="en">The shelves ask three different questions — what a thing is, how far through it you are, and what you did about it — so they sit in three groups.</p>
     <p data-l="ko">논문을 선반 위로 <b>끌어다 놓으면</b> 그렇게 돼요. 읽기 상태도, 즐겨찾기도, 컬렉션도, 태그도요.</p>
     <p data-l="en"><b>Drag a paper onto a shelf</b> and it becomes that: a reading status, a favourite, a collection, a tag.</p>
@@ -726,7 +737,7 @@
   </div>
 </footer>
 
-<script src="demos.js?v=0.9.2-2"></script>
-<script src="docs.js?v=0.9.2-2"></script>
+<script src="demos.js?v=0.9.3"></script>
+<script src="docs.js?v=0.9.3"></script>
 </body>
 </html>

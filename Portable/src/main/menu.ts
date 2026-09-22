@@ -126,7 +126,7 @@ export function buildMenu({ send, chooseLibrary }: MenuActions) {
         { role: 'zoom', label: L('확대/축소', 'Zoom') },
         { type: 'separator' },
         // The open papers, over the page — the same key as the Mac's.
-        { label: L('열린 논문', 'Open Papers'), accelerator: 'CmdOrCtrl+Shift+O', click: command('openPapers') },
+        { label: L('열린 문서', 'Open Documents'), accelerator: 'CmdOrCtrl+Shift+O', click: command('openPapers') },
         // Every page, small — the way into a document with no headings.
         { label: L('쪽 보기', 'Pages'), accelerator: 'CmdOrCtrl+Shift+L', click: command('pages') },
         { label: L('새 창으로 열기', 'Open in New Window'), click: command('openInNewWindow') },

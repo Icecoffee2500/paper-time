@@ -28,7 +28,7 @@ import {
   type MarkupRecord,
   type PageDrawing,
 } from './pdfwrite.js'
-import { diagnose, looksWhole, type ByteTrouble } from '../shared/pdfLock.js'
+import { diagnose, headBytes, looksWhole, type ByteTrouble } from '../shared/pdfLock.js'
 import { rememberLibrary, settings, update } from './settings.js'
 import { resolveKorean, setKorean } from '../shared/lang.js'
 import { buildMenu } from './menu.js'
@@ -373,10 +373,71 @@ function startWatchingFolders() {
   for (const stop of extraWatchers) stop()
   extraWatchers = []
   const roots = allLibraries().map((one) => one.root)
-  stopWatching = roots[0] ? watchLibrary(roots[0], () => send('library:changed')) : null
+  stopWatching = roots[0] ? watchLibrary(roots[0], () => void folderDidChange()) : null
   for (const root of roots.slice(1)) {
-    extraWatchers.push(watchLibrary(root, () => send('library:changed')))
+    extraWatchers.push(watchLibrary(root, () => void folderDidChange()))
   }
+}
+
+/**
+ * One settling at a time, and every fire gets its own.
+ *
+ * The watcher fires in bursts and adopting writes records, which fires it
+ * again: two passes running together would write two records for one file,
+ * and a pass that simply dropped the fires arriving while it ran would miss
+ * the paper that landed a moment after it looked. So they queue.
+ */
+let settling: Promise<void> | null = null
+
+/**
+ * Brings the library back in line with the folder.
+ *
+ * A PDF that appears in a library folder is a paper in that library — that
+ * is what choosing a folder means — so it is taken in rather than left
+ * behind a button. The Mac has done this since it had folders
+ * (`LibraryModel.folderDidChange`), and this side did not: a paper
+ * downloaded into the folder on Windows became `+1` on the count of a button
+ * beside a list of a hundred and sixty rows, which is the same as not
+ * appearing at all. Two builds reading one folder have to agree about what
+ * arriving in it means.
+ *
+ * Nothing is moved, renamed or rewritten: the file stays where it landed and
+ * only the record beside it is new. Each folder takes in its own.
+ *
+ * Papers that were sitting in the folder when it was first opened are a
+ * different matter and still wait to be offered, because the user has not yet
+ * said that folder full of PDFs is their library — so nothing is taken in
+ * while the library is empty.
+ */
+function folderDidChange(): Promise<void> {
+  settling = (settling ?? Promise.resolve()).then(settleFolder)
+  return settling
+}
+
+async function settleFolder(): Promise<void> {
+  try {
+    const read = await Promise.all(allLibraries().map(async (one) => {
+      const papers = await one.papers()
+      return { one, papers, unclaimed: await one.unclaimedFiles(claimedBy(papers)) }
+    }))
+    const empty = read.every((folder) => folder.papers.length === 0)
+    if (!empty) {
+      for (const folder of read) {
+        for (const file of folder.unclaimed) {
+          // A file still coming down the cloud drive is not a paper yet.
+          // Reading it is what makes Windows fetch a placeholder, so this
+          // both waits for it and pulls it; what is still short after that
+          // is left for the next time the folder settles.
+          if (!looksWhole(await readWhole(file))) continue
+          await folder.one.importPDF(file, await pageCount(file))
+        }
+      }
+    }
+  } catch {
+    // A folder that cannot be read right now — a disk unplugged, a cloud
+    // drive asleep — is not a reason to stop telling the window.
+  }
+  send('library:changed')
 }
 
 // MARK: - Requests
@@ -511,23 +572,24 @@ const handlers: Record<string, Handler> = {
       const trouble = diagnose(bytes)
       const lock = await rightsLock(bytes)
       if (lock) return { locked: lock }
-      // A container with no handler named in it is still not a PDF, and the
-      // reader has the right sentence for it.
-      if (trouble === 'wrapped') return { locked: { kind: 'rights', handler: '' } }
-      // These can never be parsed, and handing them over only produces
-      // pdf.js's six words about a structure it could not find.
-      if (trouble === 'empty' || trouble === 'placeholder' || trouble === 'webpage') {
-        return { trouble, size: bytes.length }
-      }
+      // The diagnosis is never a door. pdf.js reads more than anything here
+      // does — it opens a paper with four kilobytes of a filter's banner glued
+      // to the front, and one whose last kilobytes are gone — so the bytes
+      // always go to it, and what was found only chooses the sentence if it
+      // fails. Refusing them was a regression the moment it was written:
+      // papers that opened before it stopped opening.
+      const about = { trouble, size: bytes.length, head: headBytes(bytes) }
       try {
-        return { data: await stripOwnedForDisplay(bytes), trouble, size: bytes.length }
+        return { data: await stripOwnedForDisplay(bytes), ...about }
       } catch (error) {
         // Our own annotations could not be taken out, which is no reason to
         // refuse the file — pdf.js parses more than pdf-lib does. It is handed
-        // the bytes as they are, ours included. But the reader is told that
-        // this happened, because it is the first sign the bytes are wrong.
+        // the bytes as they are, ours included. The trouble goes through
+        // exactly as diagnosed: a whole file that pdf-lib choked on is not a
+        // file that is still arriving, and calling it one told somebody that
+        // 1.6 MB of a 1.6 MB file had turned up.
         console.error('paper:bytes - reading the annotations failed, showing the file as it is:', error)
-        return { data: bytes, trouble: trouble ?? 'cut', size: bytes.length }
+        return { data: bytes, ...about }
       }
     } catch (error) {
       console.error('paper:bytes -', error)

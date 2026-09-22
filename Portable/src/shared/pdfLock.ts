@@ -34,11 +34,35 @@ export const KNOWN_HANDLERS = ['MicrosoftIRMServices', 'FoxitIRM', 'Adobe.PubSec
  *   whoever wrapped it, and guessing at brand names we have never seen in a
  *   real file would be inventing evidence.
  * - `cut` — a PDF that stops before it ends. Usually still arriving.
+ * - `opaque` — bytes that are none of the above: not a PDF, not a page, not
+ *   empty, not a container we know. On one machine and not another, with the
+ *   same file opening in Acrobat, this is what an endpoint agent looks like
+ *   from outside — it hands the real file to the readers the company
+ *   registered and something else to everybody else.
  */
-export type ByteTrouble = 'empty' | 'placeholder' | 'webpage' | 'wrapped' | 'cut'
+export type ByteTrouble = 'empty' | 'placeholder' | 'webpage' | 'wrapped' | 'cut' | 'opaque'
 
-/** Only the ends are read: a paper is twenty megabytes and this runs on open. */
-const HEAD = 1024
+/**
+ * The first bytes, as hex, for the reader to show and a person to send on.
+ *
+ * Eight bytes name the format of almost anything — `25504446` is a PDF,
+ * `D0CF11E0` an OLE container, `504B0304` a zip, `3C21444F` an HTML page,
+ * zeros a file that was never fetched. It costs a person nothing to send and
+ * it turns a screenshot into a diagnosis, which is the whole point: the last
+ * time a file would not open, telling which of these it was took a day.
+ */
+export function headBytes(bytes: Uint8Array, count = 8): string {
+  return [...bytes.subarray(0, count)].map((b) => b.toString(16).padStart(2, '0').toUpperCase()).join(' ')
+}
+
+/** Only the ends are read: a paper is twenty megabytes and this runs on open.
+ *
+ * The head is eight kilobytes rather than one because pdf.js will open a file
+ * with rather a lot of rubbish glued to its front — a filter's banner, a mail
+ * preamble — and a window that said "not a PDF" at a kilobyte and one byte
+ * would be refusing papers the reader can read. Measured: pdf.js opens a
+ * paper with four kilobytes of preamble. */
+const HEAD = 8192
 const TAIL = 2048
 
 function latin1(bytes: Uint8Array, from: number, to: number): string {
@@ -104,7 +128,7 @@ export function diagnose(bytes: Uint8Array): ByteTrouble | null {
   if (/^\s*(<!doctype html|<html|<\?xml|\{)/i.test(head)) return 'webpage'
   // A cloud placeholder reserves the length and leaves the content behind.
   if (bytes.subarray(0, Math.min(bytes.length, HEAD)).every((byte) => byte === 0)) return 'placeholder'
-  return 'webpage'
+  return 'opaque'
 }
 
 /**

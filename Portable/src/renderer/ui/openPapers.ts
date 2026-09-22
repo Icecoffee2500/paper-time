@@ -55,11 +55,11 @@ export function toggleOpenPapers(host: HTMLElement, actions: OpenPapersActions) 
 
 export function showOpenPapers(host: HTMLElement, actions: OpenPapersActions) {
   closeOpenPapers()
-  const node = el('div', { class: 'open-papers', role: 'dialog', 'aria-label': L('열린 논문', 'Open Papers') })
+  const node = el('div', { class: 'open-papers', role: 'dialog', 'aria-label': L('열린 문서', 'Open Documents') })
   const list = el('div', { class: 'open-papers-list' })
   node.append(
     el('div', { class: 'open-papers-head' }, [
-      el('span', { text: L('열린 논문', 'Open Papers') }),
+      el('span', { text: L('열린 문서', 'Open Documents') }),
       el('span', { class: 'toolbar-spacer' }),
       el('span', { class: 'open-papers-hint', text: L('끌어서 옆에, 창 밖으로 끌면 새 창', 'Drag beside · drag out for a window') }),
     ]),
@@ -70,7 +70,7 @@ export function showOpenPapers(host: HTMLElement, actions: OpenPapersActions) {
     clear(list)
     const papers = popupPapers()
     if (papers.length === 0) {
-      list.append(el('div', { class: 'open-papers-empty', text: L('열린 논문이 없어요.', 'Nothing is open.') }))
+      list.append(el('div', { class: 'open-papers-empty', text: L('열린 문서가 없어요.', 'Nothing is open.') }))
       return
     }
     for (const entry of papers) list.append(row(entry))

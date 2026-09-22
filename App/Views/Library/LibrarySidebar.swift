@@ -1,3 +1,4 @@
+import LibraryStore
 import PaperCore
 import SwiftUI
 
@@ -13,7 +14,14 @@ import SwiftUI
 struct LibrarySidebar: View {
     @Environment(AppModel.self) private var app
     @State private var showsAllAuthors = false
-    @State private var authorsAreShown = true
+    /// Folded to begin with, and remembered after that.
+    ///
+    /// The names are the longest run in the list and the least often wanted —
+    /// a library of eighty papers has fifty of them, and they pushed the
+    /// graph off the bottom of the source list. Somebody who opens the fold
+    /// wants it open tomorrow too, so this is kept rather than reset with the
+    /// view.
+    @AppStorage("sidebarShowsAuthors") private var authorsAreShown = false
     @Bindable var model: LibraryModel
 
     /// Where the shelf you are on sits, in the list's own space — one shape
@@ -155,14 +163,22 @@ struct LibrarySidebar: View {
             // notes, tags and collections — beside its own PDFs, so
             // disconnecting one leaves it exactly as it was.
             Section {
-                ForEach(model.sources, id: \.url) { source in
+                // Inside a folder, the other libraries step out of the way and
+                // this one's own folders take their place. A term of lectures
+                // is twenty folders, and a list that showed every library's
+                // every folder at once would be the thing this was meant to
+                // prevent — so the list shows one path at a time: the way down
+                // to where you are, and what is one step further.
+                ForEach(shownFolders, id: \.url) { source in
                     Label {
                         FolderName(name: source.url.lastPathComponent)
                     } icon: {
                         Image(systemName: source.provider.symbolName)
                     }
                     .count(model.counts.folders[source.url] ?? 0, current: model.scope == .folder(source.url))
-                    .scopeRow(.folder(source.url), in: model)
+                    .scopeRow(.folder(source.url), in: model, whenCurrent: {
+                        withAnimation(Motion.surface) { model.scope = .all }
+                    })
                     .contextMenu {
                         Button {
                             #if os(macOS)
@@ -182,14 +198,17 @@ struct LibrarySidebar: View {
                     }
                     .help(source.url.path(percentEncoded: false))
                 }
-                Button {
-                    app.addLibraryFolder()
-                } label: {
-                    Label(L("라이브러리 더하기…", "Add Library…"), systemImage: "plus.circle")
-                        .foregroundStyle(.secondary)
-                        .contentShape(.rect)
+                folderTree
+                if model.openFolder == nil {
+                    Button {
+                        app.addLibraryFolder()
+                    } label: {
+                        Label(L("라이브러리 더하기…", "Add Library…"), systemImage: "plus.circle")
+                            .foregroundStyle(.secondary)
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             } header: {
                 Text(L("라이브러리", "Libraries"))
                     // Lines the first row up with the first paper across the
@@ -224,6 +243,9 @@ struct LibrarySidebar: View {
                     Label(L("책", "Books"), systemImage: "book")
                         .count(model.counts.books, current: model.scope == .books)
                         .scopeRow(.books, in: model)
+                    Label(L("강의자료", "Course"), systemImage: "person.crop.rectangle")
+                        .count(model.counts.lectures, current: model.scope == .lectures)
+                        .scopeRow(.lectures, in: model)
                     Label(L("문서", "Documents"), systemImage: "doc")
                         .count(model.counts.documents, current: model.scope == .documents)
                         .scopeRow(.documents, in: model)
@@ -266,7 +288,7 @@ struct LibrarySidebar: View {
                 Label(L("살펴볼 것", "Needs Review"), systemImage: "exclamationmark.triangle")
                     .count(model.counts.needsReview, current: model.scope == .needsReview)
                     .scopeRow(.needsReview, in: model)
-                Label(L("열린 논문", "Open Papers"), systemImage: "rectangle.on.rectangle")
+                Label(L("열린 문서", "Open Documents"), systemImage: "rectangle.on.rectangle")
                     .count(model.openPaperIDs.count, current: model.scope == .open)
                     .scopeRow(.open, in: model)
             } header: {
@@ -374,12 +396,59 @@ struct LibrarySidebar: View {
         }
     }
 
+    /// Which libraries the top of the list shows.
+    ///
+    /// All of them, until one is opened — then only the one you are inside,
+    /// because the others are not where you are and their folders are not
+    /// what you asked for.
+    private var shownFolders: [LibraryLocation] {
+        guard let open = model.openFolder else { return model.sources }
+        let trail = model.folderTrail(to: open)
+        guard let root = trail.first else { return model.sources }
+        return model.sources.filter { $0.url.path(percentEncoded: false) == root.path(percentEncoded: false) }
+    }
+
+    /// The way down to where you are, and what is one step further.
+    ///
+    /// The rows under the root are the trail — press one and you are there —
+    /// and under the last of them, its own folders. Pressing the one you are
+    /// already on goes back out, and pressing a library root when you are on
+    /// it goes back to «모두»: a list you can get into and not out of is a
+    /// list with a trapdoor, and the way out has to be the row you are
+    /// looking at.
+    @ViewBuilder
+    private var folderTree: some View {
+        if let open = model.openFolder {
+            let trail = model.folderTrail(to: open)
+            ForEach(Array(trail.dropFirst().enumerated()), id: \.element) { step, url in
+                folderRow(url, depth: step + 1, isOpen: url == open)
+            }
+            ForEach(model.subfolders(of: open)) { node in
+                folderRow(node.url, depth: trail.count, isOpen: false, count: node.count)
+            }
+        }
+    }
+
+    private func folderRow(_ url: URL, depth: Int, isOpen: Bool, count: Int? = nil) -> some View {
+        Label(url.lastPathComponent, systemImage: isOpen ? "folder.fill" : "folder")
+            .count(count ?? model.papers.count { model.isUnder($0, url) },
+                   current: model.scope == .folder(url))
+            .padding(.leading, CGFloat(depth) * 11)
+            .scopeRow(.folder(url), in: model, whenCurrent: {
+                // Already here: the press means "out", and out of a library
+                // root means out of the folders.
+                withAnimation(Motion.surface) {
+                    model.scope = model.folderAbove(url).map(LibraryModel.Scope.folder) ?? .all
+                }
+            })
+    }
+
     /// Whether the kinds are worth listing: only when the library holds more
     /// than one of them. One kind on its own is the library, and a row saying
     /// so is a row that filters nothing. Past that line all three are listed,
     /// including the empty ones — see the strip itself.
     private var showsKinds: Bool {
-        [model.counts.papers, model.counts.books, model.counts.documents]
+        [model.counts.papers, model.counts.books, model.counts.lectures, model.counts.documents]
             .count { $0 > 0 } > 1
     }
 
@@ -505,6 +574,10 @@ private struct ScopeRow: ViewModifier {
     @Environment(AppModel.self) private var app
     let scope: LibraryModel.Scope
     let model: LibraryModel
+    /// What pressing the row you are already on means. Nothing, for most
+    /// rows — pressing «모두» twice should not take you somewhere. For a
+    /// folder it means "out one level", which is the only way back out.
+    var whenCurrent: (() -> Void)?
 
     private var isCurrent: Bool { model.scope == scope }
 
@@ -562,6 +635,12 @@ private struct ScopeRow: ViewModifier {
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(.rect)
             .onTapGesture {
+                if isCurrent, let whenCurrent {
+                    whenCurrent()
+                    app.compactColumn = .sidebar
+                    dismissPanel()
+                    return
+                }
                 // Animated, so the lit shape travels from the row you were on
                 // to this one rather than blinking out and in somewhere else.
                 withAnimation(Motion.surface) { model.scope = scope }
@@ -695,8 +774,12 @@ private struct SidebarLabelStyle: LabelStyle {
 }
 
 private extension View {
-    func scopeRow(_ scope: LibraryModel.Scope, in model: LibraryModel) -> some View {
-        modifier(ScopeRow(scope: scope, model: model))
+    func scopeRow(
+        _ scope: LibraryModel.Scope,
+        in model: LibraryModel,
+        whenCurrent: (() -> Void)? = nil
+    ) -> some View {
+        modifier(ScopeRow(scope: scope, model: model, whenCurrent: whenCurrent))
     }
 
     /// A count beside a source-list row, shown even when it is zero.

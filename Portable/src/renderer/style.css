@@ -539,6 +539,46 @@ body[data-platform='darwin'] .window-buttons {
 
 /* --------------------------------------------------------------- paper list */
 
+/*
+ * A folder's name over the papers that came out of it.
+ *
+ * Only on a shelf that gathers from everywhere — a kind — where otherwise
+ * sixty rows arrive in one run with nothing to say which term each came from.
+ * Set like the sidebar's own section names, because it is the same kind of
+ * thing: a word over a group, not a row you can press.
+ */
+/* A section name that folds. The chevron turns rather than swapping, so the
+   press reads as one thing opening and not two icons trading places. */
+.sidebar-fold {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  background: none;
+  border: 0;
+  text-align: left;
+  font: inherit;
+  cursor: default;
+}
+.sidebar-fold .fold-chevron {
+  display: inline-flex;
+  width: 11px;
+  height: 11px;
+  transition: transform var(--motion-tap) var(--ease);
+}
+.sidebar-fold .fold-chevron svg { width: 11px; height: 11px; }
+.sidebar-fold.open .fold-chevron { transform: rotate(90deg); }
+
+.list-group {
+  padding: 14px 12px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  color: var(--text-tertiary);
+  user-select: none;
+}
+.list-group:first-child { padding-top: 4px; }
+
 .paper-row {
   display: flex;
   align-items: flex-start;

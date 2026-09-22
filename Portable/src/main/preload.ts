@@ -6,7 +6,7 @@
  * `require` would be handing it the user's home directory. Everything it needs
  * goes through one named channel with a fixed list of requests.
  */
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { CHANNEL } from '../shared/api.js'
 
 /**
@@ -50,4 +50,18 @@ contextBridge.exposeInMainWorld('papertime', {
   },
   platform: override ?? process.platform,
   korean: language === 'ko',
+  /**
+   * Where a dropped file is on disk.
+   *
+   * Electron used to hang a `path` on every `File` a drop handed the page,
+   * and that property was removed in Electron 32 — it read as a silent
+   * change, because the code that used it kept compiling and kept running
+   * and simply found `undefined` in every file. Dragging a paper onto the
+   * window did nothing at all, and said nothing either. `webUtils` answers
+   * the same question from the preload, where the page cannot reach the
+   * filesystem itself; a file that has no path on disk answers with ''.
+   */
+  pathForFile: (file: File) => {
+    try { return webUtils.getPathForFile(file) } catch { return '' }
+  },
 })

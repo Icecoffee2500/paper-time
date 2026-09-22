@@ -28,6 +28,7 @@ import {
 } from '../shared/sketch.js'
 import { InkStroke, resample } from '../shared/ink.js'
 import { KNOWN_HANDLERS, containerKind, diagnose, looksWhole, rightsHandler } from '../shared/pdfLock.js'
+import { fileForRecordPath, recordPath } from '../main/layout.js'
 import { shelfPapers, store, type Paper } from '../renderer/state.js'
 import { guessKind, hasAbstract, hasIdentifier, hasReferences } from '../shared/documentKind.js'
 import { SketchTree, adopted, guessedDirection, ordered, pruned, copied } from '../shared/sketchTree.js'
@@ -807,6 +808,54 @@ async function main() {
     const ole = new Uint8Array(512)
     ole.set([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1])
     assert.equal(containerKind(ole), 'ole')
+  })
+
+  await test('a paper in a subfolder is a paper, the way it is on the Mac', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'papertime-deep-'))
+    try {
+      const pdf = '%PDF-1.7\ntrailer<<>>\nstartxref\n9\n%%EOF\n'
+      fs.writeFileSync(path.join(root, 'Top.pdf'), pdf)
+      fs.mkdirSync(path.join(root, '2026-2학기', 'week 1'), { recursive: true })
+      fs.writeFileSync(path.join(root, '2026-2학기', 'lecture06.pdf'), pdf)
+      fs.writeFileSync(path.join(root, '2026-2학기', 'week 1', 'Ch1. Introduction.pdf'), pdf)
+      // Neither of these is a paper, and the walk must not take them.
+      fs.mkdirSync(path.join(root, '.papertime'), { recursive: true })
+      fs.writeFileSync(path.join(root, '.papertime', 'hidden.pdf'), pdf)
+      fs.mkdirSync(path.join(root, 'Trash'), { recursive: true })
+      fs.writeFileSync(path.join(root, 'Trash', 'thrown.pdf'), pdf)
+
+      const library = new Library(root)
+      const found = await library.unclaimedFiles(new Set())
+      assert.deepEqual(
+        found.map((file) => recordPath(root, file)).sort(),
+        ['2026-2학기/lecture06.pdf', '2026-2학기/week 1/Ch1. Introduction.pdf', 'Top.pdf'],
+      )
+
+      // And the record says it with `/`, because the Mac reads the same
+      // record and a backslash names no file there.
+      const record = recordPath(root, path.join(root, '2026-2학기', 'week 1', 'Ch1. Introduction.pdf'))
+      assert.ok(!record.includes('\\'), record)
+      assert.equal(fileForRecordPath(root, record), path.join(root, '2026-2학기', 'week 1', 'Ch1. Introduction.pdf'))
+
+      // A record that holds a paper keeps it out of the loose list, wherever
+      // it sits — the two are compared in the record's own spelling.
+      const rest = await library.unclaimedFiles(new Set([record]))
+      assert.equal(rest.length, 2)
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  await test('the Mac walks down too, and this is the line that says so', () => {
+    const swift = fs.readFileSync(
+      path.join(process.cwd(), '..', 'Packages/PaperTimeKit/Sources/LibraryStore/LibraryStore.swift'),
+      'utf8',
+    )
+    // If the Mac ever stops recursing, this port must stop too — and the two
+    // drifting apart in silence is exactly how a paper came to exist on one
+    // desktop and not the other.
+    assert.ok(/Every PDF in the library, wherever it sits under the root/.test(swift))
+    assert.ok(!/skipsSubdirectoryDescendants/.test(swift), 'the Mac stopped recursing')
   })
 
   process.stdout.write(`\n${passed} passed, ${failed} failed\n`)

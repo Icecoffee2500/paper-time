@@ -47,6 +47,31 @@ export const sketchDir = (root: string, id: string) => path.join(paperDir(root, 
 export const marksDir = (root: string, id: string) => path.join(paperDir(root, id), MARKS_DIR)
 export const notesDir = (root: string, id: string) => path.join(paperDir(root, id), NOTES_DIR)
 
+/**
+ * Where a PDF sits inside the library, the way a record has to write it.
+ *
+ * The two builds read one another's records byte for byte, and the Mac writes
+ * this separated by `/` — so a paper filed in `2026/` has to say
+ * `2026/paper.pdf` on every desktop. Windows' own separator never goes in: a
+ * record saying `2026\paper.pdf` names no file at all on the Mac, and the
+ * name is the only way back to the file.
+ */
+export function recordPath(root: string, file: string): string {
+  return path.relative(root, file).split(path.sep).join('/')
+}
+
+/**
+ * The file a record path names, on this desktop.
+ *
+ * Windows is the one place both separators are read, and the one place `\`
+ * is forbidden in a name — so accepting both is safe there and nowhere else,
+ * where a backslash is a character somebody put in a file name.
+ */
+export function fileForRecordPath(root: string, relative: string): string {
+  const parts = relative.split(process.platform === 'win32' ? /[\\/]/ : '/')
+  return path.join(root, ...parts)
+}
+
 const pageStem = (pageIndex: number) => `p${String(pageIndex).padStart(4, '0')}`
 
 /** This port's ink sidecar. The Mac's loader only looks for `.drawing`, so

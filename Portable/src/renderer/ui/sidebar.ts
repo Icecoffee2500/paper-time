@@ -9,7 +9,10 @@
 import { iconNode } from '../icons.js'
 import { showMenu } from './toolbar.js'
 import { clear, el, on } from '../dom.js'
-import { authorCounts, store, type Paper, type Shelf } from '../state.js'
+import {
+  authorCounts, folderAbove, folderTrail, isUnderFolder, store, subfolders,
+  type Paper, type Shelf,
+} from '../state.js'
 import { isLookedUp } from '../../shared/documentKind.js'
 import { L } from '../../shared/lang.js'
 import { providerIcon, providerOf } from '../../shared/cloudProvider.js'
@@ -37,6 +40,10 @@ interface RowSpec {
   /** For the rows that are not shelves: add a folder, a collection, the graph. */
   press?: () => void
   title?: string
+  /** How far in, for a folder inside a folder. */
+  indent?: number
+  /** A section that folds. The chevron turns and the rows under it go. */
+  fold?: { open: boolean; press: () => void }
   /** Right-click, where a row has one. */
   menu?: () => void
 }
@@ -54,6 +61,7 @@ interface ShelfCounts {
   all: number
   papers: number
   books: number
+  lectures: number
   documents: number
   folders: Map<string, number>
   unread: number
@@ -71,6 +79,7 @@ function shelfCounts(papers: Paper[]): ShelfCounts {
     all: papers.length,
     papers: 0,
     books: 0,
+    lectures: 0,
     documents: 0,
     folders: new Map(),
     unread: 0,
@@ -86,6 +95,7 @@ function shelfCounts(papers: Paper[]): ShelfCounts {
   for (const entry of papers) {
     if (entry.meta.effectiveKind === 'paper') counts.papers += 1
     else if (entry.meta.effectiveKind === 'book') counts.books += 1
+    else if (entry.meta.effectiveKind === 'lecture') counts.lectures += 1
     else counts.documents += 1
     if (entry.root) bump(counts.folders, entry.root)
     if (entry.state.readingStatus === 'unread') counts.unread += 1
@@ -119,6 +129,14 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
   }
 
   /** What the list should say, as a list of rows. */
+  let authorsAreShown = (() => {
+    try {
+      return localStorage.getItem('sidebar.authors') === '1'
+    } catch {
+      return false
+    }
+  })()
+
   function specs(): RowSpec[] {
     const papers = store.papers.filter((entry) => !entry.meta.parentID)
     const counts = shelfCounts(papers)
@@ -130,7 +148,15 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
     // collections — beside its own PDFs, so disconnecting one leaves it
     // exactly as it was.
     rows.push({ key: 'sec:libraries', kind: 'section', label: L('라이브러리', 'Libraries') })
-    for (const root of store.roots) {
+    // Inside a folder the other libraries step out of the way and this one's
+    // own folders take their place. A term of lectures is twenty folders, and
+    // a list showing every library's every folder at once would become the
+    // thing the sidebar was meant to replace — so it shows one path at a
+    // time: the way down to where you are, and what is one step further.
+    const open = store.shelf.kind === 'folder' ? (store.shelf as { root: string }).root : null
+    const trail = open ? folderTrail(open) : []
+    const shownRoots = open ? store.roots.filter((root) => trail[0] === root.replace(/\\/g, '/').replace(/\/+$/, '')) : store.roots
+    for (const root of shownRoots) {
       rows.push({
         key: `folder:${root}`,
         kind: 'row',
@@ -143,10 +169,37 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
         menu: root === store.root ? undefined : () => actions.removeFolder(root),
       })
     }
-    rows.push({
-      key: 'add:folder', kind: 'button', icon: 'plus.circle',
-      label: L('라이브러리 더하기…', 'Add Library…'), press: actions.addFolder,
-    })
+    if (open) {
+      for (const [step, path] of trail.slice(1).entries()) {
+        rows.push({
+          key: `folder:${path}`,
+          kind: 'row',
+          shelf: { kind: 'folder', root: path },
+          icon: path === open ? 'folder.fill' : 'folder',
+          label: basename(path),
+          count: store.papers.filter((entry) => !entry.meta.parentID && isUnderFolder(entry, path)).length,
+          indent: step + 1,
+          title: path,
+        })
+      }
+      for (const node of subfolders(open)) {
+        rows.push({
+          key: `folder:${node.path}`,
+          kind: 'row',
+          shelf: { kind: 'folder', root: node.path },
+          icon: 'folder',
+          label: node.name,
+          count: node.count,
+          indent: trail.length,
+          title: node.path,
+        })
+      }
+    } else {
+      rows.push({
+        key: 'add:folder', kind: 'button', icon: 'plus.circle',
+        label: L('라이브러리 더하기…', 'Add Library…'), press: actions.addFolder,
+      })
+    }
     rows.push({ key: 'gap:1', kind: 'section', label: '' })
 
     // Three groups with air between them, because the shelves answer three
@@ -158,12 +211,13 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
     // Shown only once the library holds more than one of them. A shelf that
     // has never seen anything but papers looks exactly as it did.
     //
-    // Once they appear, all three do, empty ones included. The kinds are not
-    // a list that grows — they are the three answers to one question, and a
-    // run that shows two of them says the app knows two.
+    // Once they appear, all of them do, empty ones included. The kinds are
+    // not a list that grows — they are the answers to one question, and a run
+    // that shows two of four says the app knows two.
     const kinds = ([
       ['paper', 'text.document', L('논문', 'Papers'), counts.papers],
       ['book', 'book', L('책', 'Books'), counts.books],
+      ['lecture', 'lecture', L('강의자료', 'Course'), counts.lectures],
       ['document', 'doc', L('문서', 'Documents'), counts.documents],
     ] as const)
     if (kinds.filter(([, , , count]) => count > 0).length > 1) {
@@ -186,7 +240,7 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
     // shelf. From here a paper is closed, or put beside another.
     rows.push({ key: 'favorites', kind: 'row', shelf: { kind: 'favorites' }, icon: 'star', label: L('즐겨찾기', 'Favorites'), count: counts.favorites })
     rows.push({ key: 'review', kind: 'row', shelf: { kind: 'review' }, icon: 'exclamationmark.triangle', label: L('살펴볼 것', 'Needs Review'), count: counts.review })
-    rows.push({ key: 'open', kind: 'row', shelf: { kind: 'open' }, icon: 'rectangle.on.rectangle', label: L('열린 논문', 'Open Papers'), count: store.openPaperIDs.length })
+    rows.push({ key: 'open', kind: 'row', shelf: { kind: 'open' }, icon: 'rectangle.on.rectangle', label: L('열린 문서', 'Open Documents'), count: store.openPaperIDs.length })
 
     rows.push({ key: 'sec:slipbox', kind: 'section', label: L('슬립박스', 'Slip-Box') })
     rows.push({ key: 'notes', kind: 'row', shelf: { kind: 'notes' }, icon: 'note', label: L('노트', 'Notes'), count: counts.notes })
@@ -221,8 +275,27 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
 
     const authors = authorCounts()
     if (authors.length > 0) {
-      rows.push({ key: 'sec:authors', kind: 'section', label: L('저자', 'Authors') })
-      for (const author of authors.slice(0, 200)) {
+      // Folded to begin with, and remembered after that. Fifty names is the
+      // longest run in this list and the least often wanted, and they pushed
+      // the graph off the bottom of it.
+      rows.push({
+        key: 'sec:authors',
+        kind: 'section',
+        label: L('저자', 'Authors'),
+        fold: {
+          open: authorsAreShown,
+          press: () => {
+            authorsAreShown = !authorsAreShown
+            try {
+              localStorage.setItem('sidebar.authors', authorsAreShown ? '1' : '0')
+            } catch {
+              // A window with no storage still folds; it just forgets.
+            }
+            update()
+          },
+        },
+      })
+      for (const author of authorsAreShown ? authors.slice(0, 200) : []) {
         rows.push({
           key: `author:${author.name}`,
           kind: 'row',
@@ -240,7 +313,19 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
   }
 
   function build(spec: RowSpec): HTMLElement {
-    if (spec.kind === 'section') return el('div', { class: 'sidebar-section', text: spec.label })
+    if (spec.kind === 'section') {
+      if (!spec.fold) return el('div', { class: 'sidebar-section', text: spec.label })
+      const fold = spec.fold
+      const head = el('button', {
+        class: `sidebar-section sidebar-fold${fold.open ? ' open' : ''}`,
+        'aria-expanded': String(fold.open),
+      })
+      const chevron = iconNode('chevron.right')
+      if (chevron) head.append(el('span', { class: 'fold-chevron' }, [chevron]))
+      head.append(el('span', { text: spec.label }))
+      on(head, 'click', fold.press)
+      return head
+    }
     const selected = spec.shelf ? same(store.shelf, spec.shelf) : false
     const row = el('button', {
       class: 'row',
@@ -258,8 +343,20 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
     )
     if (spec.count !== undefined) row.append(el('span', { class: 'row-count', text: String(spec.count) }))
     if (spec.title) row.title = spec.title
+    if (spec.indent) row.style.paddingLeft = `${8 + spec.indent * 11}px`
     const shelf = spec.shelf
-    on(row, 'click', shelf ? () => actions.select(shelf) : (spec.press ?? (() => {})))
+    on(row, 'click', shelf ? () => {
+      // Pressing the folder you are already inside goes back out, and out of
+      // a library root is out of the folders altogether. A list you can get
+      // into and not out of is a list with a trapdoor, and the way out has to
+      // be the row your hand is already on.
+      if (shelf.kind === 'folder' && same(store.shelf, shelf)) {
+        const up = folderAbove(shelf.root)
+        actions.select(up ? { kind: 'folder', root: up } : { kind: 'all' })
+        return
+      }
+      actions.select(shelf)
+    } : (spec.press ?? (() => {})))
     if (spec.menu) {
       const open = spec.menu
       on(row, 'contextmenu', (event: MouseEvent) => {
@@ -272,7 +369,7 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
 
   /** What has to be redrawn rather than merely re-labelled. */
   function shape(spec: RowSpec): string {
-    return `${spec.kind}|${spec.key}|${spec.icon ?? ''}|${spec.label}|${spec.chip ? 1 : 0}|${spec.menu ? 1 : 0}`
+    return `${spec.kind}|${spec.key}|${spec.icon ?? ''}|${spec.label}|${spec.chip ? 1 : 0}|${spec.menu ? 1 : 0}|${spec.indent ?? 0}|${spec.fold ? (spec.fold.open ? 'v' : '>') : ''}`
   }
 
   let drawnSpecs: RowSpec[] = []
