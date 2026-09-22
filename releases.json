@@ -2,11 +2,100 @@
   "repo": "Icecoffee2500/paper-time",
   "releases": [
     {
+      "version": "0.9.7",
+      "date": "2026-09-22T14:22:17Z",
+      "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.7/Paper.Time.0.9.7.dmg",
+      "size": 6450605,
+      "downloads": 0,
+      "builds": {
+        "mac": [
+          {
+            "label": "디스크 이미지",
+            "label_en": "Disk image",
+            "arch": "Apple Silicon",
+            "arch_en": "Apple Silicon",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.7/Paper.Time.0.9.7.dmg",
+            "size": 6450605,
+            "downloads": 0
+          }
+        ],
+        "windows": [
+          {
+            "label": "설치본",
+            "label_en": "Installer",
+            "arch": "64비트 · ARM",
+            "arch_en": "64-bit and ARM",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.7/Paper.Time.Setup.0.9.7.exe",
+            "size": 177032530,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "64비트",
+            "arch_en": "64-bit",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.7/Paper.Time-0.9.7-win.zip",
+            "size": 116194384,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.7/Paper.Time-0.9.7-arm64-win.zip",
+            "size": 121142057,
+            "downloads": 0
+          }
+        ],
+        "linux": [
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.7/Paper.Time-0.9.7-x86_64.AppImage",
+            "size": 113221942,
+            "downloads": 0
+          },
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.7/Paper.Time-0.9.7-arm64.AppImage",
+            "size": 113604390,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.7/paper-time-0.9.7.tar.gz",
+            "size": 107407972,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.7/paper-time-0.9.7-arm64.tar.gz",
+            "size": 111904767,
+            "downloads": 0
+          }
+        ]
+      },
+      "note": "못 여는 파일이 왜 못 열리는지, 그 파일에 적힌 글자를 그대로 보여줘요.",
+      "note_en": "When a file will not open, the reader shows the file's own first line — and offers to take you to the file."
+    },
+    {
       "version": "0.9.6",
       "date": "2026-09-22T12:39:31Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.6/Paper.Time.0.9.6.dmg",
       "size": 6450087,
-      "downloads": 0,
+      "downloads": 8,
       "builds": {
         "mac": [
           {
@@ -16,7 +105,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.6/Paper.Time.0.9.6.dmg",
             "size": 6450087,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "windows": [
@@ -27,7 +116,7 @@
             "arch_en": "64-bit and ARM",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.6/Paper.Time.Setup.0.9.6.exe",
             "size": 177028555,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -36,7 +125,7 @@
             "arch_en": "64-bit",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.6/Paper.Time-0.9.6-win.zip",
             "size": 116193085,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -45,7 +134,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.6/Paper.Time-0.9.6-arm64-win.zip",
             "size": 121140767,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "linux": [
@@ -56,7 +145,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.6/Paper.Time-0.9.6-x86_64.AppImage",
             "size": 113217820,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "AppImage",
@@ -65,7 +154,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.6/Paper.Time-0.9.6-arm64.AppImage",
             "size": 113604380,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -74,7 +163,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.6/paper-time-0.9.6.tar.gz",
             "size": 107407898,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -83,7 +172,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.6/paper-time-0.9.6-arm64.tar.gz",
             "size": 111904694,
-            "downloads": 0
+            "downloads": 1
           }
         ]
       },
