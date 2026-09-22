@@ -58,6 +58,40 @@
   --measure: 720px;
 }
 
+/* ─────────────────────────  where a line may end  ────────────────────── */
+
+/* Korean has no rule against ending a line inside a word, so a browser ends
+   one wherever it runs out of room: «라이브러리» comes apart as «라이브 /
+   러리» and the reader has to put the word back together before they can
+   read the sentence. It cannot be fixed a sentence at a time, because it is
+   not a property of any sentence — so it is set once, here, for everything
+   on the page including the demonstrations.
+
+   `keep-all` moves the break to the space, which is where Korean is read as
+   breaking. `break-word` is the release valve under it: a token wider than
+   its own column — a path, an address, a long compound — has to break
+   somewhere, and without this it would simply run out of the box. English is
+   untouched; it already breaks only at spaces. */
+html {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+/* And how many lines, and how full. A heading is balanced so its last line is
+   never one word alone, and prose is set `pretty` so a paragraph does not end
+   on a stray syllable. Both are ignored by browsers that do not have them,
+   which costs nothing — the text is already readable without. */
+h1, h2, h3, h4 { text-wrap: balance; }
+p, li, dd, figcaption, blockquote { text-wrap: pretty; }
+
+/* Not inside a demonstration. A demo is a picture of the app, and the app
+   does not balance its own labels — balanced text in a mock-up of a window
+   is a mock-up of a window that does not exist. */
+.demo-slot :is(h1, h2, h3, h4, p, li, dd, figcaption, blockquote),
+.doc-demo :is(h1, h2, h3, h4, p, li, dd, figcaption, blockquote) {
+  text-wrap: wrap;
+}
+
 /* A band that is grey, and a band that is black. Tokens only: the demos
    inside them do not know which band they are in. */
 .tone-grey { --page: #f5f5f7; --panel: #ffffff; --panel-2: #eaeaec; --card: #ffffff;
@@ -307,6 +341,24 @@ button { font: inherit; color: inherit; }
   letter-spacing: -.035em;
 }
 .wordmark .t { color: var(--accent); }
+/* The stage the app is at, worn by the name rather than announced under it.
+   Raised to the top of the line box so it sits against the cap height like a
+   superscript, and small enough that it reads as a label on the name and not
+   as a third word in it. */
+.wordmark .beta {
+  display: inline-block;
+  vertical-align: top;
+  margin: .12em 0 0 .18em;
+  padding: .34em .66em;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  color: var(--accent);
+  font-size: max(12px, .19em);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0;
+}
 .hero .lede {
   margin: 18px auto 0;
   max-width: 680px;
