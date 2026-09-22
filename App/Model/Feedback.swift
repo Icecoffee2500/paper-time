@@ -476,7 +476,9 @@ public enum WindowProbe {
             // A sheet is a window of its own, hung off the one it covers, and
             // photographing the parent gets the page behind it. Whatever is in
             // front is what was asked for.
-            guard let base = NSApp.keyWindow ?? NSApp.windows.first(where: \.isVisible)
+            guard let base = NSApp.keyWindow
+                ?? NSApp.windows.first(where: \.isVisible)
+                ?? offscreen(say: say)
             else { return say("window probe: no window") }
             let window = base.attachedSheet ?? base
             guard let content = window.contentView
@@ -519,6 +521,29 @@ public enum WindowProbe {
             }
             if Boot.isSet("PAPERTIME_WINDOW_SHOT_QUIT") { NSApp.terminate(nil) }
         }
+    }
+
+    /// A window put where no display reaches, for a run started hidden.
+    ///
+    /// Probes are launched with `open -g -j` so that nothing of theirs ever
+    /// appears in front of the person using the machine — see `Scripts/probe.sh`.
+    /// A hidden app has no visible window, and `cacheDisplay` on a window that
+    /// was never ordered on gives back nothing, so the shot came out empty.
+    ///
+    /// This moves the window far outside every screen **before** ordering it
+    /// on. It then has a backing store and draws, so it photographs exactly as
+    /// a window on screen does, and it is on no display: the origin is checked
+    /// against the union of every screen's frame rather than assumed, because
+    /// a second monitor to the left puts real pixels at negative coordinates.
+    private static func offscreen(say: (String) -> Void) -> NSWindow? {
+        guard let window = NSApp.windows.first(where: { $0.contentView != nil }) else { return nil }
+        let displays = NSScreen.screens.map(\.frame).reduce(CGRect.null) { $0.union($1) }
+        let origin = NSPoint(x: displays.minX - 60_000, y: displays.minY - 60_000)
+        window.setFrameOrigin(origin)
+        window.orderFront(nil)
+        window.displayIfNeeded()
+        say("window probe: drawing off every screen at \(Int(origin.x)),\(Int(origin.y))")
+        return window
     }
 
     /// What the window says it contains.
