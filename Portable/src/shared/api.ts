@@ -86,4 +86,15 @@ export interface LibrarySnapshot {
   collections: Record<string, unknown>
   papers: PaperRowDTO[]
   looseCount: number
+  /**
+   * Records the folders hold and this read could not get at — a file still
+   * coming down a streamed drive, or one that arrived half written. One
+   * sentence each, naming the record.
+   *
+   * A list and not a silence: before this, one such file took every paper with
+   * it and the window showed an empty library with nothing to say. The names
+   * matter as much as the count, because a record that is late comes good on
+   * its own and a record that is broken has to be found.
+   */
+  unreadable?: string[]
 }

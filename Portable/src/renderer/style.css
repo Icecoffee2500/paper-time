@@ -396,6 +396,15 @@ body[data-platform='darwin'] .window-buttons {
   color: var(--text);
 }
 
+/* Why the list is short, beside the shelf's name. Lighter than the name and
+   lighter than the button next to it: it is the reason for the button, not a
+   second heading, and the header's own weight would make it one. */
+.panel-note {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
 .panel-body {
   flex: 1 1 auto;
   overflow-y: auto;
@@ -1446,6 +1455,16 @@ body[data-platform='darwin'] .window-buttons {
   /* A parser's own words: one long token with nothing to break at, so this
      one is allowed inside itself where the base rule would not. */
   word-break: break-all;
+}
+
+/* The same line when it is a sentence and not a token — a path and then words
+   about it. There are spaces to break at, so it breaks at them, and only goes
+   inside a word for a path too long to fit on a line of its own. Without this
+   it read "half-writte / n", which is the one thing the line-breaking rule in
+   CLAUDE.md is there to stop. */
+.empty .fine.words {
+  word-break: normal;
+  overflow-wrap: anywhere;
 }
 
 .empty p {

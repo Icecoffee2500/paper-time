@@ -77,7 +77,21 @@ struct PaperListView: View {
     @ViewBuilder
     private var content: some View {
         if model.papers.isEmpty {
-            if model.looseDocuments.isEmpty {
+            if !model.loadFailures.isEmpty {
+                // Before anything else, because every other sentence here
+                // would be untrue: the library is not empty and no folder
+                // needs choosing. The papers are in the folder; their records
+                // are what has not arrived.
+                ContentUnavailableView {
+                    Label(L("기록이 아직 안 왔어요", "Some Records Didn't Arrive"), systemImage: "icloud.slash")
+                } description: {
+                    Text(unreadableDescription)
+                } actions: {
+                    Button(L("다시 읽기", "Try Again")) { Task { await model.pullFromCloud() } }
+                        .buttonStyle(.borderedProminent)
+                        .buttonBorderShape(.capsule)
+                }
+            } else if model.looseDocuments.isEmpty {
                 ContentUnavailableView(
                     L("아직 논문이 없어요", "No Papers Yet"),
                     systemImage: "doc.badge.plus",
@@ -115,6 +129,26 @@ struct PaperListView: View {
             }
         } else {
             List(selection: $model.selection) {
+                if !model.loadFailures.isEmpty {
+                    // The list is short by exactly this many papers, all of
+                    // which are still in the folder. A short list that says
+                    // nothing is the whole of what goes wrong here — and while
+                    // this row is showing there is no loose-PDF row below it,
+                    // because a folder read in part cannot say what is loose.
+                    Section {
+                        Button {
+                            Task { await model.pullFromCloud() }
+                        } label: {
+                            Label(
+                                L("기록 \(model.loadFailures.count)개가 아직 안 왔어요",
+                                  "\(model.loadFailures.count) record\(model.loadFailures.count == 1 ? "" : "s") "
+                                    + "\(model.loadFailures.count == 1 ? "hasn't" : "haven't") arrived"),
+                                systemImage: "icloud.slash"
+                            )
+                        }
+                        .help(unreadableDescription)
+                    }
+                }
                 if !model.looseDocuments.isEmpty {
                     Section {
                         Button {
@@ -332,6 +366,25 @@ struct PaperListView: View {
         .animation(Motion.tap, value: armed)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+
+    /// Why the list is short, in the two places that say so.
+    ///
+    /// Not "못 읽었어요": read and unread are what this app calls a paper you
+    /// have or have not got to, and a record the folder has not handed over is
+    /// neither of those.
+    private var unreadableDescription: String {
+        L(
+            """
+            논문 \(model.loadFailures.count)편의 기록이 아직 안 왔어요. 논문은 폴더에 \
+            그대로 있어요. 클라우드 폴더라면 파일이 아직 내려오는 중일 수 있어요.
+            """,
+            """
+            \(model.loadFailures.count) of this library's records haven't arrived. \
+            Your papers are still in the folder. On a cloud drive, a record may \
+            still be on its way down.
+            """
+        )
     }
 
     private var looseDescription: String {

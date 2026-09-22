@@ -36,7 +36,7 @@ import { PaperMeta, PaperState } from '../shared/model.js'
 import { entryFor, formatEntry, protectTitle } from '../shared/bibtex.js'
 import { escapeLaTeX } from '../shared/latexTable.js'
 import { readDrawings, writeDrawings, stripOwnedForDisplay } from '../main/pdfwrite.js'
-import { Library } from '../main/library.js'
+import { Library, RecordUnreadable, readJSON } from '../main/library.js'
 import { providerIcon, providerOf } from '../shared/cloudProvider.js'
 import { encodeSwiftJSON as encode } from '../shared/coding.js'
 import { splitDock, splitPapers, splitRemove, zoneAt, zoneRect } from '../shared/split.js'
@@ -744,6 +744,128 @@ async function main() {
       assert.deepEqual(await library.rename(imported.id, '../elsewhere.pdf'), { error: 'notAName' })
       assert.deepEqual(await library.rename(imported.id, '   '), { error: 'empty' })
       assert.ok(fs.existsSync(path.join(root, 'Diffusion Policy.pdf')))
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  await test('one record that will not be read costs one row, not the library', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'papertime-short-'))
+    try {
+      const library = await Library.open(root)
+      const ids: string[] = []
+      for (const name of ['one.pdf', 'two.pdf', 'three.pdf']) {
+        fs.writeFileSync(path.join(root, name), `%PDF-1.7\n% ${name}\n`)
+        const row = await library.importPDF(path.join(root, name), 2)
+        assert.ok(row)
+        ids.push(row.id)
+      }
+      const meta = path.join(root, '.papertime', 'papers', ids[1], 'meta.json')
+      const whole = fs.readFileSync(meta, 'utf8')
+
+      // What a streamed drive hands back for a file that is still on its way:
+      // `readFile` resolves with a short buffer and throws nothing, so the
+      // damage shows up as a `SyntaxError`, which carries no `code` and walked
+      // straight past a test for `ENOENT`. Under one `Promise.all` that
+      // rejection took all three papers with it, `snapshot()` turned it into
+      // `{ error }`, and a library of eighty read as empty.
+      fs.writeFileSync(meta, whole.slice(0, 40))
+      const short = await library.read()
+      assert.equal(short.papers.length, 2, 'the other two papers should still be here')
+      assert.equal(short.trouble.length, 1)
+      assert.match(short.trouble[0], /^[0-9A-F-]+\/meta\.json: half-written$/)
+
+      // And its PDF is not loose. A record that is only late still holds its
+      // file, so offering it would take the same paper in a second time —
+      // another identifier, none of its marks, and both rows on the shelf.
+      assert.deepEqual(await library.looseFiles(), [])
+
+      // What the reader asks for by hand still happens. One record nobody can
+      // read must not mean a folder that accepts no papers at all: the digest
+      // check is short by that record, which is a duplicate you can see, and
+      // the alternative is a library that is shut for as long as the file is.
+      fs.writeFileSync(path.join(root, 'four.pdf'), '%PDF-1.7\n% four\n')
+      const added = await library.importPDF(path.join(root, 'four.pdf'), 2)
+      assert.ok(added, 'a paper named by hand goes in although a record is late')
+      assert.equal((await library.read()).papers.length, 3)
+
+      // An error that is not ENOENT is the same kind of accident: a drive that
+      // would not fetch the file this minute, not a paper that is gone.
+      fs.rmSync(meta)
+      fs.mkdirSync(meta)
+      const io = await library.read()
+      assert.equal(io.papers.length, 3)
+      assert.equal(io.trouble.length, 1)
+      assert.match(io.trouble[0], /EISDIR/)
+      fs.rmdirSync(meta)
+
+      // Reading state is a page number and a shelf. Losing it is not losing
+      // the paper, so the row comes without it rather than not at all.
+      fs.writeFileSync(meta, whole)
+      fs.writeFileSync(path.join(root, '.papertime', 'papers', ids[2], 'state.json'), '{"schema":1,"id":"00')
+      const all = await library.read()
+      assert.equal(all.papers.length, 4)
+      assert.equal(all.trouble.length, 0)
+      assert.deepEqual(all.papers.find((row) => row.id === ids[2])?.state, {})
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  await test('a record that is only late is never answered by writing over it', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'papertime-nowrite-'))
+    try {
+      const library = await Library.open(root)
+      fs.writeFileSync(path.join(root, 'paper.pdf'), '%PDF-1.7\n% body\n')
+      const imported = await library.importPDF(path.join(root, 'paper.pdf'), 5)
+      assert.ok(imported)
+
+      // Absent and half-written are different answers, and only the first one
+      // is safe to paper over with a default. Every reader here either has a
+      // default for a file that is not there or reads before it writes, so a
+      // half-written record has to throw — and now it throws something a
+      // caller can recognise and a person can read.
+      const state = path.join(root, '.papertime', 'papers', imported.id, 'state.json')
+      assert.equal(await readJSON(path.join(root, '.papertime', 'papers', imported.id, 'nothing.json')), null)
+      fs.writeFileSync(state, '{"schema":1,"curr')
+      await assert.rejects(() => readJSON(state), (error: Error) => {
+        assert.ok(error instanceof RecordUnreadable)
+        assert.equal(path.basename(error.file), 'state.json')
+        assert.match(error.message, /half-written/)
+        return true
+      })
+
+      // So a page turned while that file is late does not save over it: the
+      // merge cannot happen, and the record on disk is left exactly as found.
+      const before = fs.readFileSync(state, 'utf8')
+      await assert.rejects(() => library.saveState(imported.id, new PaperState({ currentPage: 7 })))
+      assert.equal(fs.readFileSync(state, 'utf8'), before)
+
+      // Repairing records is writing to the folder too, so it waits for a
+      // folder that answers in full. The file moved out from under this record
+      // and the digest can find it again — but not while a sibling is late,
+      // because the set of PDFs no record claims is short by whatever that
+      // sibling holds.
+      fs.writeFileSync(path.join(root, 'other.pdf'), '%PDF-1.7\n% other\n')
+      const other = await library.importPDF(path.join(root, 'other.pdf'), 2)
+      assert.ok(other)
+      fs.writeFileSync(state, '{}')
+      fs.renameSync(path.join(root, 'paper.pdf'), path.join(root, 'paper (1).pdf'))
+      const otherMeta = path.join(root, '.papertime', 'papers', other.id, 'meta.json')
+      const otherWhole = fs.readFileSync(otherMeta, 'utf8')
+      fs.writeFileSync(otherMeta, otherWhole.slice(0, 30))
+
+      const half = await library.read()
+      assert.equal(half.trouble.length, 1)
+      assert.equal(half.papers.find((row) => row.id === imported.id)?.exists, false)
+
+      // And it happens the moment the folder answers in full again.
+      fs.writeFileSync(otherMeta, otherWhole)
+      const whole = await library.read()
+      assert.deepEqual(whole.trouble, [])
+      const healed = whole.papers.find((row) => row.id === imported.id)
+      assert.equal(healed?.exists, true)
+      assert.equal(path.basename(healed?.file ?? ''), 'paper (1).pdf')
     } finally {
       fs.rmSync(root, { recursive: true, force: true })
     }
