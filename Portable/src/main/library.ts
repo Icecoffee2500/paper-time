@@ -259,7 +259,16 @@ export class Library {
       relative = path.relative(this.root, source)
     } else {
       const name = L.availableFileName(path.basename(source), this.root)
-      await fsp.copyFile(source, path.join(this.root, name))
+      // Copied beside its own name and then renamed into place, because a
+      // rename inside one folder is the one filesystem move that cannot be
+      // caught half-done. A plain copyFile leaves a growing file where the
+      // paper should be, and opening it during those seconds hands pdf.js
+      // half a PDF — measured: 253,952 bytes of a 52,944,683-byte paper, and
+      // the same "Invalid PDF structure." this was all about. The library
+      // only ever lists `.pdf`, so a `.part` left by a crash stays invisible.
+      const landing = path.join(this.root, name)
+      await fsp.copyFile(source, landing + '.part')
+      await fsp.rename(landing + '.part', landing)
       relative = name
     }
     const stat = await fsp.stat(path.join(this.root, relative))

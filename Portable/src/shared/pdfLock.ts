@@ -8,11 +8,104 @@
  * file. Those are not damaged files and not our failure — Acrobat opens them
  * because Acrobat carries the plug-in that asks the rights service, and no
  * amount of work here substitutes for that.
+ *
+ * And a fourth thing, which is not a lock at all: the bytes we were handed
+ * are not the file. A cloud folder answers for a paper that has not finished
+ * coming down, a company's filter hands back a sign-in page wearing the
+ * paper's name, a rights agent leaves a container where the PDF was. pdf.js
+ * says the same six words to all of them — "Invalid PDF structure." — so the
+ * telling apart has to happen here, before it is asked.
  */
 export type PDFLock = { kind: 'password' } | { kind: 'rights'; handler: string }
 
 /** The handlers worth naming, in the order they are looked for. */
 export const KNOWN_HANDLERS = ['MicrosoftIRMServices', 'FoxitIRM', 'Adobe.PubSec', 'EBX_HANDLER']
+
+/**
+ * What is wrong with the bytes themselves.
+ *
+ * - `empty` — nothing there at all.
+ * - `placeholder` — the right length and no content: a cloud file that has
+ *   not been fetched.
+ * - `webpage` — HTML wearing a `.pdf` name, which is what a sign-in wall or
+ *   a blocked-by-policy notice hands back.
+ * - `wrapped` — an OLE or zip container, which is the shape a rights agent
+ *   leaves behind. Vendor-independent on purpose: the container is the same
+ *   whoever wrapped it, and guessing at brand names we have never seen in a
+ *   real file would be inventing evidence.
+ * - `cut` — a PDF that stops before it ends. Usually still arriving.
+ */
+export type ByteTrouble = 'empty' | 'placeholder' | 'webpage' | 'wrapped' | 'cut'
+
+/** Only the ends are read: a paper is twenty megabytes and this runs on open. */
+const HEAD = 1024
+const TAIL = 2048
+
+function latin1(bytes: Uint8Array, from: number, to: number): string {
+  return new TextDecoder('latin1').decode(bytes.subarray(Math.max(0, from), Math.max(0, to)))
+}
+
+/**
+ * Whether this is a PDF at all.
+ *
+ * The header is looked for in the first kilobyte rather than at byte zero:
+ * a file with a byte-order mark, or a filter's banner glued to the front,
+ * still opens perfectly well in pdf.js, and refusing it here would break
+ * papers that work today.
+ */
+export function looksLikePDF(bytes: Uint8Array): boolean {
+  return latin1(bytes, 0, HEAD).includes('%PDF-')
+}
+
+/**
+ * Whether the whole of it arrived.
+ *
+ * A PDF ends in `%%EOF`, and everything that puts one together writes it
+ * last — so its absence from the end means the end is missing. Measured
+ * against every PDF on this machine: the marker sits within the last two
+ * kilobytes of all of them, and no whole file was ever called cut.
+ *
+ * This is a question, never a door. pdf.js rebuilds a file whose last
+ * kilobytes are gone and opens it, and a reader that refused what pdf.js can
+ * read would be worse than the bug this was written for.
+ */
+export function looksWhole(bytes: Uint8Array): boolean {
+  if (!looksLikePDF(bytes)) return false
+  return latin1(bytes, bytes.length - TAIL, bytes.length).includes('%%EOF')
+}
+
+/**
+ * The container a rights agent leaves in place of the file, if that is what
+ * this is: an OLE compound file, or a zip. Only counts when there is no PDF
+ * header anywhere near the front — a PDF is allowed to have anything inside
+ * it, including zipped streams.
+ */
+export function containerKind(bytes: Uint8Array): 'ole' | 'zip' | null {
+  if (bytes.length < 8 || looksLikePDF(bytes)) return null
+  const OLE = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]
+  if (OLE.every((byte, index) => bytes[index] === byte)) return 'ole'
+  if (bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04) return 'zip'
+  return null
+}
+
+/**
+ * What is wrong with these bytes, or nothing.
+ *
+ * Ordered by how sure each answer is: a container and a web page are what
+ * they are, a run of zeros is a file that was never fetched, and `cut` is
+ * the guess of last resort — which is why a cut file is still handed to
+ * pdf.js afterwards rather than refused.
+ */
+export function diagnose(bytes: Uint8Array): ByteTrouble | null {
+  if (bytes.length === 0) return 'empty'
+  if (containerKind(bytes)) return 'wrapped'
+  if (looksLikePDF(bytes)) return looksWhole(bytes) ? null : 'cut'
+  const head = latin1(bytes, 0, HEAD)
+  if (/^\s*(<!doctype html|<html|<\?xml|\{)/i.test(head)) return 'webpage'
+  // A cloud placeholder reserves the length and leaves the content behind.
+  if (bytes.subarray(0, Math.min(bytes.length, HEAD)).every((byte) => byte === 0)) return 'placeholder'
+  return 'webpage'
+}
 
 /**
  * The `/Encrypt` dictionary's handler, read from the bytes.
