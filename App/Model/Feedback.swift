@@ -580,11 +580,19 @@ public enum WindowProbe {
         let visible = scroll.contentView.bounds.height
         let travel = max(document.frame.height - visible, 0)
         guard travel > 0 else { return say("scroll test: nothing to scroll") }
-        say(String(format: "scroll test: %.0f points of list, %.0f visible, %d steps",
-                   document.frame.height, visible, steps))
+        // How many row views actually exist. A list that draws what you can
+        // see keeps a dozen; one that draws the library keeps the library,
+        // and that is the difference between a scroll that costs the same
+        // however much you have and one that does not.
+        func descendants(of view: NSView) -> Int {
+            view.subviews.reduce(view.subviews.count) { $0 + descendants(of: $1) }
+        }
+        say(String(format: "scroll test: %.0f points of list, %.0f visible, %d steps · %d views under the list",
+                   document.frame.height, visible, steps, descendants(of: document)))
 
         var times: [Double] = []
         let rowsBefore = Trace.ticks("row body")
+        let initsBefore = Trace.ticks("row init")
         for step in 0..<steps {
             let fraction = Double(step % 40) / 39
             let y = travel * fraction
@@ -598,7 +606,9 @@ public enum WindowProbe {
         let sorted = times.sorted()
         let sum = times.reduce(0, +)
         let rows = Trace.ticks("row body") - rowsBefore
-        say(String(format: "scroll test: %d row bodies built · %.1f per step", rows, Double(rows) / Double(max(steps, 1))))
+        let inits = Trace.ticks("row init") - initsBefore
+        say(String(format: "scroll test: %d row bodies · %d row structs · %.1f and %.1f per step",
+                   rows, inits, Double(rows) / Double(max(steps, 1)), Double(inits) / Double(max(steps, 1))))
         say(String(format: "scroll test: %d steps · median %.1fms · p95 %.1fms · worst %.1fms · %.2fs total",
                    times.count, sorted[sorted.count / 2], sorted[Int(Double(sorted.count) * 0.95)],
                    sorted.last ?? 0, sum / 1000))

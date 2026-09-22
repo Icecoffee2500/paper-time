@@ -17,9 +17,17 @@ struct PaperListView: View {
     @Environment(AppModel.self) private var app
     /// How far past its top the list has been pulled.
     ///
-    /// How far, not merely whether: the words have to come in with the pull,
-    /// or they are one more thing that appears without being asked for.
-    @State private var pull: CGFloat = 0
+    /// Kept in an object of its own rather than in this view's own state. The
+    /// scroll reports its position continuously, so writing it here rebuilt
+    /// this whole view on every tick of every scroll — and rebuilding this
+    /// view means building a `PaperRow` for every paper in the library, tags
+    /// and all, whether or not any of them is on screen. That is the whole of
+    /// why the list got slower as the library grew: measured on a Release
+    /// build, a scroll step cost 26ms at 150 papers and 76ms at 600, while
+    /// the number of row views on screen never changed from 345. An
+    /// `@Observable` object writes only to whoever reads it, and only
+    /// `PullHint` reads this.
+    @State private var pull = PullProgress()
     /// What the same query turned up inside the papers, when the list is
     /// showing the results of a search.
     @State private var passages: [PaperTextIndex.Hit] = []
@@ -229,9 +237,9 @@ struct PaperListView: View {
             // palette was suddenly there, and nothing had said it would be.
             // Now the pull uncovers the words for it, and going past them is
             // what opens it — so the gesture is something you can stop doing.
-            .overlay(alignment: .top) { pullHint }
+            .overlay(alignment: .top) { PullHint(pull: pull, threshold: Self.pullThreshold) }
             .onPull { distance in
-                pull = distance
+                pull.distance = distance
                 guard distance > Self.pullThreshold, !app.showsSearchPalette else { return }
                 app.showsSearchPalette = true
             }
@@ -248,7 +256,8 @@ struct PaperListView: View {
     /// One row of the list, wherever it is drawn from.
     @ViewBuilder
     private func row(for paper: LoadedPaper, fields: [SubtitleField], onOpenShelf: Bool) -> some View {
-        PaperRow(
+        Trace.tick("row init")
+        return PaperRow(
             paper: paper,
             tags: paper.meta.tagIDs.compactMap { model.tag(for: $0) },
             attachmentCount: model.attachmentCount(of: paper.id),
@@ -344,30 +353,6 @@ struct PaperListView: View {
     /// How far the list must be pulled before the search opens.
     private static let pullThreshold: CGFloat = 72
 
-    /// What the pull uncovers, and what crossing it will do.
-    ///
-    /// It fades in over the first two thirds of the pull and firms up at the
-    /// end, so the last stretch of the gesture is the part that says "now".
-    /// It never takes a touch: the pull belongs to the list.
-    private var pullHint: some View {
-        let progress = min(max(pull / (Self.pullThreshold * 0.66), 0), 1)
-        let armed = pull > Self.pullThreshold * 0.9
-        return HStack(spacing: 6) {
-            Image(systemName: "rectangle.and.text.magnifyingglass")
-            Text(L("전부 찾기", "Search Everything"))
-        }
-        .font(.footnote.weight(.medium))
-        .foregroundStyle(armed ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
-        .opacity(progress)
-        .scaleEffect(0.92 + progress * 0.08)
-        // Carried down by the pull rather than pinned to the edge, so it
-        // reads as something the gesture is uncovering.
-        .offset(y: max(0, pull * 0.34) + 4)
-        .animation(Motion.tap, value: armed)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
-
     /// Why the list is short, in the two places that say so.
     ///
     /// Not "못 읽었어요": read and unread are what this app calls a paper you
@@ -404,6 +389,45 @@ struct PaperListView: View {
         )
     }
 
+}
+
+/// How far the list has been pulled past its top.
+///
+/// An object, so that a value which changes on every scroll tick invalidates
+/// the one small view that draws it rather than the list beside it.
+@Observable
+final class PullProgress {
+    var distance: CGFloat = 0
+}
+
+/// What the pull uncovers, and what crossing it will do.
+///
+/// It fades in over the first two thirds of the pull and firms up at the end,
+/// so the last stretch of the gesture is the part that says "now". It never
+/// takes a touch: the pull belongs to the list.
+private struct PullHint: View {
+    let pull: PullProgress
+    let threshold: CGFloat
+
+    var body: some View {
+        let distance = pull.distance
+        let progress = min(max(distance / (threshold * 0.66), 0), 1)
+        let armed = distance > threshold * 0.9
+        HStack(spacing: 6) {
+            Image(systemName: "rectangle.and.text.magnifyingglass")
+            Text(L("전부 찾기", "Search Everything"))
+        }
+        .font(.footnote.weight(.medium))
+        .foregroundStyle(armed ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+        .opacity(progress)
+        .scaleEffect(0.92 + progress * 0.08)
+        // Carried down by the pull rather than pinned to the edge, so it
+        // reads as something the gesture is uncovering.
+        .offset(y: max(0, distance * 0.34) + 4)
+        .animation(Motion.tap, value: armed)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
 }
 
 /// One row in the paper list.
