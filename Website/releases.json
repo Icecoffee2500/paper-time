@@ -2,6 +2,95 @@
   "repo": "Icecoffee2500/paper-time",
   "releases": [
     {
+      "version": "0.9.5",
+      "date": "2026-09-22T08:06:44Z",
+      "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.5/Paper.Time.0.9.5.dmg",
+      "size": 6446731,
+      "downloads": 0,
+      "builds": {
+        "mac": [
+          {
+            "label": "디스크 이미지",
+            "label_en": "Disk image",
+            "arch": "Apple Silicon",
+            "arch_en": "Apple Silicon",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.5/Paper.Time.0.9.5.dmg",
+            "size": 6446731,
+            "downloads": 0
+          }
+        ],
+        "windows": [
+          {
+            "label": "설치본",
+            "label_en": "Installer",
+            "arch": "64비트 · ARM",
+            "arch_en": "64-bit and ARM",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.5/Paper.Time.Setup.0.9.5.exe",
+            "size": 177027743,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "64비트",
+            "arch_en": "64-bit",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.5/Paper.Time-0.9.5-win.zip",
+            "size": 116191861,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.5/Paper.Time-0.9.5-arm64-win.zip",
+            "size": 121139535,
+            "downloads": 0
+          }
+        ],
+        "linux": [
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.5/Paper.Time-0.9.5-x86_64.AppImage",
+            "size": 113217974,
+            "downloads": 0
+          },
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.5/Paper.Time-0.9.5-arm64.AppImage",
+            "size": 113604527,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.5/paper-time-0.9.5.tar.gz",
+            "size": 107406385,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.5/paper-time-0.9.5-arm64.tar.gz",
+            "size": 111902378,
+            "downloads": 0
+          }
+        ]
+      },
+      "note": "윈도우·리눅스에 설정 화면이 생겼어요. 도구 막대의 ⚙, 메뉴, Ctrl+, 세 갈래로 열리고, 말도 여기서 바꿔요. 늦게 도착한 기록 하나가 라이브러리를 비우던 것도 고쳤어요.",
+      "note_en": "The Windows and Linux build has settings at last — from the gear in the bar, the menu, or Ctrl+, — and the language is one of them. A record arriving late no longer empties the library."
+    },
+    {
       "version": "0.9.3",
       "date": "2026-09-22T07:24:05Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.3/Paper.Time.0.9.3.dmg",
