@@ -15,10 +15,13 @@ import { clear, el, on } from '../dom.js'
 import { freshReaderState, store, type ReaderState } from '../state.js'
 import { PAPER_DRAG_TYPE } from '../../shared/split.js'
 import { loadDocument, TextLayer, type PDFDocumentProxy, type PDFPageProxy } from '../pdf.js'
-import { rightsHandler, type PDFLock } from '../../shared/pdfLock.js'
+import { rightsHandler, type ByteTrouble, type PDFLock } from '../../shared/pdfLock.js'
 import {
   guessKind, hasAbstract, hasIdentifier, hasReferences, type DocumentKind,
 } from '../../shared/documentKind.js'
+
+/** What the main process already worked out about these bytes, if anything. */
+export type Reason = { trouble?: ByteTrouble; size?: number; again?: () => void }
 
 /** The handler as it is written in the file, said the way a person would. */
 const SERVICE_NAMES: Record<string, string> = {
@@ -349,7 +352,7 @@ export class Reader {
     return this.overlayHost
   }
 
-  async open(id: string, bytes: Uint8Array) {
+  async open(id: string, bytes: Uint8Array, why?: Reason) {
     const generation = ++this.generation
     this.close()
     this.paperID = id
@@ -379,18 +382,68 @@ export class Reader {
       const message = String(error)
       // pdf.js implements the standard handler and no other. A file locked by
       // a certificate or a company's rights server arrives here.
-      if (/unknown encryption method|Unknown crypto/i.test(message)) {
+      if (/unknown encryption method|Unknown crypto|unsupported encryption algorithm/i.test(message)) {
         this.showLocked({ kind: 'rights', handler: rightsHandler(bytes) ?? '' })
         return
       }
       if (/giving up on the password|PasswordException/i.test(message)) return
+      // pdf.js says "Invalid PDF structure." to everything it cannot find a
+      // catalogue in — a file still arriving, a placeholder, a container,
+      // random bytes. Saying "the file may be damaged" to all of them is what
+      // sent this bug hunting for corruption in a file Acrobat opens fine.
+      if (why?.trouble) {
+        this.showTrouble(why.trouble, why.size ?? bytes.length, why.again, message)
+        return
+      }
       this.notice(
         L('이 PDF를 열 수 없어요', "Paper Time can't open this PDF"),
         L('파일이 깨졌을 수 있어요. 다른 뷰어에서도 안 열리면 파일 쪽 문제예요.',
           'The file may be damaged. If another reader cannot open it either, the file is the problem.'),
         message,
+        why?.again ? this.againButton(why.again) : undefined,
       )
     }
+  }
+
+  /**
+   * What is wrong with the bytes, said in the words that fit it.
+   *
+   * These all arrive at pdf.js as the same six words, so the telling apart
+   * happens before it is asked and the answer is handed here. The parser's
+   * own sentence is kept in the fine line: it is the string that made this
+   * diagnosable, and a report with nothing to grep for is a report nobody
+   * can act on.
+   */
+  showTrouble(trouble: ByteTrouble, size: number, again?: () => void, detail?: string) {
+    const megabytes = (size / 1_000_000).toFixed(1)
+    const [title, body] = trouble === 'webpage'
+      ? [
+        L('이 파일은 PDF가 아니에요', 'This file is not a PDF'),
+        L('PDF 자리에 웹 페이지가 들어 있어요. 회사 보안 프로그램이 원본 대신 안내문을 놓았을 수 있어요.',
+          'There is a web page where the PDF should be. A security tool may have put a notice in its place.'),
+      ]
+      : trouble === 'empty'
+        ? [
+          L('이 논문은 아직 비어 있어요', 'This paper is still empty'),
+          L('폴더에 이름만 있고 내용이 없어요. 클라우드에서 내려온 뒤에 다시 열어 주세요.',
+            'The folder has the name but not the contents yet. Open it again once your cloud app has fetched it.'),
+        ]
+        : [
+          L('이 논문을 아직 다 못 받았어요', 'This paper is still arriving'),
+          trouble === 'placeholder'
+            ? L('클라우드에서 아직 안 내려왔어요. 잠시 뒤에 다시 열어 주세요.',
+                "It hasn't come down from the cloud yet. Open it again in a moment.")
+            : L(`${megabytes} MB까지만 와 있어요. 잠시 뒤에 다시 열어 주세요.`,
+                `Only ${megabytes} MB of it is here. Open it again in a moment.`),
+        ]
+    this.notice(title, body, detail, again ? this.againButton(again) : undefined)
+  }
+
+  /** One press to ask for the file again, rather than a paper to click away from. */
+  private againButton(again: () => void): HTMLElement {
+    const button = el('button', { class: 'filled-button', text: L('다시 열기', 'Try Again') })
+    on(button, 'click', again)
+    return el('div', { class: 'fb-row' }, [button])
   }
 
   /**
@@ -463,6 +516,8 @@ export class Reader {
   /** A file whose key is held by a rights service, not by the reader. */
   showLocked(lock: PDFLock) {
     if (lock.kind !== 'rights') return
+    // A container that named nobody is still a container: the sentence works
+    // without the brand, and inventing one would be worse than leaving it out.
     const name = SERVICE_NAMES[lock.handler] ?? L('회사 권한 서비스', 'a rights service')
     this.notice(
       L('회사가 보호한 논문이에요', 'This paper is protected'),

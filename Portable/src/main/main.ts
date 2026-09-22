@@ -28,6 +28,7 @@ import {
   type MarkupRecord,
   type PageDrawing,
 } from './pdfwrite.js'
+import { diagnose, looksWhole, type ByteTrouble } from '../shared/pdfLock.js'
 import { rememberLibrary, settings, update } from './settings.js'
 import { resolveKorean, setKorean } from '../shared/lang.js'
 import { buildMenu } from './menu.js'
@@ -383,6 +384,35 @@ function startWatchingFolders() {
 /** A request, with the window that made it — dialogs hang off that one. */
 type Handler = (args: never, sender: BrowserWindow | null) => unknown | Promise<unknown>
 
+/**
+ * The file, read until all of it is there.
+ *
+ * `fs.promises.readFile` resolves with a short buffer and throws nothing —
+ * measured, 32 MB back from a 96 MB file with no error — and on a cloud
+ * folder that is the ordinary way to meet a paper that is still coming down.
+ * The Mac has `FileOperations.ensureDownloaded` for this. Node has no
+ * cloud-filter API at all, and what makes Windows and Google Drive fetch a
+ * placeholder is reading it, so reading again is the whole of the remedy.
+ *
+ * Bounded, and only for the troubles that reading again can cure. A file
+ * somebody is still writing would otherwise hold this open for ever, and a
+ * container or a sign-in page will read the same however many times it is
+ * asked. A whole file costs one read and no wait.
+ */
+const READ_AGAIN: ReadonlySet<ByteTrouble> = new Set(['cut', 'placeholder', 'empty'] as ByteTrouble[])
+
+async function readWhole(file: string): Promise<Uint8Array> {
+  let bytes = await fsp.readFile(file)
+  for (let attempt = 1; attempt < 6; attempt += 1) {
+    if (looksWhole(bytes)) break
+    const trouble = diagnose(bytes)
+    if (!trouble || !READ_AGAIN.has(trouble)) break
+    await new Promise((resolve) => setTimeout(resolve, 250))
+    bytes = await fsp.readFile(file)
+  }
+  return bytes
+}
+
 const handlers: Record<string, Handler> = {
   // The effective root, not the remembered one: a probe run opens a folder
   // of its own and the window must be told about that one.
@@ -471,22 +501,37 @@ const handlers: Record<string, Handler> = {
   }) as Handler,
 
   'paper:bytes': (async ({ id }: { id: string }) => {
-    const row = await (await ownerOf(id))?.paper(id)
-    if (!row?.file || !row.exists) return { error: 'The PDF for this paper is not in the folder.' }
-    const bytes = await fsp.readFile(row.file)
-    // A file this cannot parse is not a reason to throw: a rejected request
-    // reaches the window as an unhandled rejection, which is a blank page and
-    // no sentence. The reader is told what is wrong and says it.
+    // Nothing in here throws. A rejected request reaches the window as an
+    // unhandled rejection, which is a blank page with nothing said on it —
+    // which is where the whole of this began.
     try {
+      const row = await (await ownerOf(id))?.paper(id)
+      if (!row?.file || !row.exists) return { error: 'The PDF for this paper is not in the folder.' }
+      const bytes = await readWhole(row.file)
+      const trouble = diagnose(bytes)
       const lock = await rightsLock(bytes)
       if (lock) return { locked: lock }
-      return { data: await stripOwnedForDisplay(bytes) }
+      // A container with no handler named in it is still not a PDF, and the
+      // reader has the right sentence for it.
+      if (trouble === 'wrapped') return { locked: { kind: 'rights', handler: '' } }
+      // These can never be parsed, and handing them over only produces
+      // pdf.js's six words about a structure it could not find.
+      if (trouble === 'empty' || trouble === 'placeholder' || trouble === 'webpage') {
+        return { trouble, size: bytes.length }
+      }
+      try {
+        return { data: await stripOwnedForDisplay(bytes), trouble, size: bytes.length }
+      } catch (error) {
+        // Our own annotations could not be taken out, which is no reason to
+        // refuse the file — pdf.js parses more than pdf-lib does. It is handed
+        // the bytes as they are, ours included. But the reader is told that
+        // this happened, because it is the first sign the bytes are wrong.
+        console.error('paper:bytes - reading the annotations failed, showing the file as it is:', error)
+        return { data: bytes, trouble: trouble ?? 'cut', size: bytes.length }
+      }
     } catch (error) {
-      // Our own annotations could not be taken out, which is no reason to
-      // refuse the file — pdf.js parses more than pdf-lib does. It is handed
-      // the bytes as they are, ours included.
-      console.error('paper:bytes - reading the annotations failed, showing the file as it is:', error)
-      return { data: bytes }
+      console.error('paper:bytes -', error)
+      return { error: 'The PDF for this paper could not be read.' }
     }
   }) as Handler,
 

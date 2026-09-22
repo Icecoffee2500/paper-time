@@ -71,7 +71,7 @@ import {
 } from '../shared/split.js'
 import { icon } from './icons.js'
 import { L } from '../shared/lang.js'
-import { type PDFLock } from '../shared/pdfLock.js'
+import { type ByteTrouble, type PDFLock } from '../shared/pdfLock.js'
 import { isCitable, isLookedUp, type DocumentKind } from '../shared/documentKind.js'
 
 document.body.dataset.platform = platform
@@ -372,7 +372,13 @@ async function loadInto(reader: Reader, id: string) {
   // Nothing in here may throw past this function: a rejected request reaching
   // the window as an unhandled rejection is a blank page with no sentence on
   // it, which is what a locked PDF used to look like.
-  let result: { data?: Uint8Array; error?: string; locked?: PDFLock }
+  let result: {
+    data?: Uint8Array
+    error?: string
+    locked?: PDFLock
+    trouble?: ByteTrouble
+    size?: number
+  }
   try {
     result = await call('paper:bytes', { id })
   } catch (error) {
@@ -381,8 +387,17 @@ async function loadInto(reader: Reader, id: string) {
   }
   if (!readers.has(id) || readers.get(id) !== reader) return
   if (result.locked) return reader.showLocked(result.locked)
+  // Bytes that are not a PDF at all never reach pdf.js: it would answer with
+  // the same six words for every one of them, and the reader can say which.
+  if (!result.data && result.trouble) {
+    return reader.showTrouble(result.trouble, result.size ?? 0, () => void loadInto(reader, id))
+  }
   if (result.error || !result.data) return toast(result.error ?? 'unknown error')
-  await reader.open(id, new Uint8Array(result.data))
+  await reader.open(id, new Uint8Array(result.data), {
+    trouble: result.trouble,
+    size: result.size,
+    again: () => void loadInto(reader, id),
+  })
   reader.setDrawing(reader.state.drawing)
   reader.update()
   if (focused() === reader) focusChanged()
