@@ -152,7 +152,9 @@ export class Library {
         const file = relative ? path.join(this.root, relative) : null
         return { id, meta, state: state ?? {}, file, exists: file ? fs.existsSync(file) : false }
       })
-    return (await Promise.all(read)).filter((row): row is PaperRow => row !== null)
+    const rows = (await Promise.all(read)).filter((row): row is PaperRow => row !== null)
+    await this.heal(rows)
+    return rows
   }
 
   async paper(id: string): Promise<PaperRow | null> {
@@ -161,7 +163,74 @@ export class Library {
     const state = (await readJSON(L.statePath(this.root, id))) ?? {}
     const relative = String((meta.file as RawRecord | undefined)?.relativePath ?? '')
     const file = relative ? path.join(this.root, relative) : null
-    return { id, meta, state, file, exists: file ? fs.existsSync(file) : false }
+    const row = { id, meta, state, file, exists: file ? fs.existsSync(file) : false }
+    // A record that has lost its file is found again among the whole folder's
+    // — which PDFs are free to be claimed is a question about all the records,
+    // so this reads them. Only a paper that is already broken pays for it.
+    if (!row.exists) return (await this.papers()).find((one) => one.id === id) ?? row
+    return row
+  }
+
+  /**
+   * Gives back the PDFs the records have lost.
+   *
+   * A record points at a name, and the name is the one part of a paper that
+   * other software changes underneath it: a rename in the file manager, a
+   * cloud client spelling a name in the characters its filesystem allows, two
+   * desktops that write the same Korean syllable differently. The bytes do not
+   * change, and the record kept their digest from the day the paper arrived,
+   * so the file is still identifiable. The Mac has always found it this way —
+   * `LibraryStore.load` calls `findDocument(matching:)` on every load — and
+   * this build had nothing of the kind.
+   *
+   * That absence is why this class of trouble was permanent on Windows and
+   * invisible on a Mac: the Mac repairs the record the moment it reads it, so
+   * the library looks healthy there forever, while the same record on Windows
+   * is a row that says the PDF is missing, a page that stays blank, and a
+   * re-import that finds the digest, hands back the same broken record and
+   * appears to do nothing at all.
+   */
+  private async heal(rows: PaperRow[]): Promise<void> {
+    const lost = rows.filter(
+      (row) => !row.exists && String((row.meta.file as RawRecord)?.importDigest ?? ''),
+    )
+    if (!lost.length) return
+    const free = await this.unclaimedFiles(claimedBy(rows))
+    if (!free.length) return
+    for (const row of lost) {
+      const info = row.meta.file as RawRecord
+      const wanted = String(info.importDigest)
+      const size = Number(info.byteSize ?? 0)
+      for (let at = 0; at < free.length; at += 1) {
+        const file = free[at]
+        // The record carries the byte size, and comparing two numbers rules
+        // out every other paper in the folder without reading one of them.
+        const stat = await fsp.stat(file).catch(() => null)
+        if (!stat) continue
+        if (size > 0 && stat.size !== size) continue
+        if ((await digestOfFile(file)) !== wanted) continue
+        free.splice(at, 1)
+        await this.claim(row, file)
+        break
+      }
+    }
+  }
+
+  /** Points a record at the file its digest found, in hand and on disk. */
+  private async claim(row: PaperRow, file: string): Promise<void> {
+    const was = String((row.meta.file as RawRecord).relativePath ?? '')
+    const relative = path.relative(this.root, file)
+    row.meta = {
+      ...row.meta,
+      file: { ...(row.meta.file as RawRecord), relativePath: relative },
+    }
+    row.file = file
+    row.exists = true
+    if (!nameIsPossibleHere(was)) return
+    const meta = new PaperMeta(row.meta)
+    // Written, not saved: a repair is not an edit, and stamping it would make
+    // this machine the last to have changed a paper it only opened.
+    await writeJSON(L.metaPath(this.root, meta.id), meta.encode())
   }
 
   /**
@@ -251,7 +320,30 @@ export class Library {
     const already = existing.find(
       (row) => String((row.meta.file as RawRecord)?.importDigest ?? '') === digest,
     )
-    if (already) return already
+    if (already?.exists) return already
+    if (already) {
+      // The same bytes, and the record that holds them has lost its file. The
+      // reader adding it again is answering the question the row is asking, so
+      // the record takes this file rather than a second record being made for
+      // a paper the library already has — and rather than the guard handing
+      // back the broken row, which is what made re-adding the PDF look like it
+      // did nothing. A file from outside is copied in first, as any import is.
+      const inside = path.resolve(source).startsWith(path.resolve(this.root) + path.sep)
+      let found = source
+      if (!inside) {
+        const name = L.availableFileName(path.basename(source), this.root)
+        const landing = path.join(this.root, name)
+        await fsp.copyFile(source, landing + '.part')
+        await fsp.rename(landing + '.part', landing)
+        found = landing
+      }
+      await this.claim(already, found)
+      // Named by hand, so the name is this folder's name and travels: the
+      // reserve `claim` keeps for a spelling only this desktop can hold does
+      // not apply.
+      await this.saveMeta(new PaperMeta(already.meta))
+      return (await this.paper(already.id)) ?? already
+    }
 
     const inside = path.resolve(source).startsWith(path.resolve(this.root) + path.sep)
     let relative: string
@@ -403,6 +495,51 @@ export async function sha256(file: string): Promise<string> {
     stream.on('error', reject)
   })
   return hash.digest('hex')
+}
+
+/**
+ * A file's digest, remembered for as long as the file has not changed.
+ *
+ * Finding a paper by its bytes means hashing the PDFs it might be, and a
+ * library folder is usually a cloud folder where reading a file is a
+ * download. Size and modification time decide whether the last answer still
+ * stands, so a folder holding one PDF that matches nothing costs one `stat`
+ * per refresh rather than one hash.
+ */
+const rememberedDigests = new Map<string, { at: string; digest: string }>()
+
+async function digestOfFile(file: string): Promise<string | null> {
+  try {
+    const stat = await fsp.stat(file)
+    const at = `${stat.size}:${stat.mtimeMs}`
+    const known = rememberedDigests.get(file)
+    if (known?.at === at) return known.digest
+    const digest = await sha256(file)
+    rememberedDigests.set(file, { at, digest })
+    return digest
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Whether a name could be the name of a file on this desktop.
+ *
+ * Windows will not hold `?`, `:` or `|` in a file name, so a cloud client
+ * hands it the same paper under a name it can hold: `Localized?.pdf` arrives
+ * as `Localized_.pdf`. The folder's name is still the one with the `?` in it
+ * — this machine is reading a local spelling of it — so writing the local
+ * spelling into the shared record would break the Mac the way the Mac's name
+ * broke this one, and leave the two rewriting one record forever.
+ *
+ * On macOS and Linux every Windows name is also a name here, so this answers
+ * yes, the repair is written, and the record travels: which is what the Mac
+ * has always done.
+ */
+function nameIsPossibleHere(relative: string): boolean {
+  if (process.platform !== 'win32') return true
+  // eslint-disable-next-line no-control-regex
+  return !/[<>:"|?* -]/.test(relative)
 }
 
 /** Which PDFs a set of records speaks for, by the name each one points at. */

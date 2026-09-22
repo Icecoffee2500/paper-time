@@ -12,7 +12,7 @@
  * for one paper (`--papertime-paper=<id>`) is this same page showing only
  * that reader.
  */
-import { call, flags, isCommand, onEvent, platform, soloPaperID } from './bridge.js'
+import { call, droppedPaths, flags, isCommand, onEvent, platform, soloPaperID } from './bridge.js'
 import { clear, el, on } from './dom.js'
 // Imported for its side effect: the sheet registers its own ⌥⌘/ so nothing
 // in the shell has to know it exists.
@@ -388,6 +388,7 @@ async function loadInto(reader: Reader, id: string) {
     locked?: PDFLock
     trouble?: ByteTrouble
     size?: number
+    head?: string
   }
   try {
     result = await call('paper:bytes', { id })
@@ -400,7 +401,9 @@ async function loadInto(reader: Reader, id: string) {
   // Bytes that are not a PDF at all never reach pdf.js: it would answer with
   // the same six words for every one of them, and the reader can say which.
   if (!result.data && result.trouble) {
-    return reader.showTrouble(result.trouble, result.size ?? 0, () => void loadInto(reader, id))
+    return reader.showTrouble(
+      result.trouble, result.size ?? 0, () => void loadInto(reader, id), undefined, result.head,
+    )
   }
   if (result.error || !result.data) return toast(result.error ?? 'unknown error')
   await reader.open(id, new Uint8Array(result.data), {
@@ -1356,10 +1359,15 @@ on(window, 'dragover', (event: DragEvent) => {
 
 on(window, 'drop', async (event: DragEvent) => {
   event.preventDefault()
-  const files = [...(event.dataTransfer?.files ?? [])]
-    .map((file) => (file as File & { path?: string }).path)
-    .filter((path): path is string => Boolean(path) && path.toLowerCase().endsWith('.pdf'))
-  if (files.length === 0) return
+  const dropped = droppedPaths(event.dataTransfer?.files)
+  const files = dropped.filter((path) => path.toLowerCase().endsWith('.pdf'))
+  if (files.length === 0) {
+    // Something was dropped and none of it was a paper: say so rather than
+    // let the window look broken. A drop that carried nothing at all — a
+    // paper being dragged between panes — is not worth a word.
+    if (dropped.length > 0) toast(L('PDF만 더할 수 있어요.', 'Only PDFs can be added to the library.'))
+    return
+  }
   const snapshot = await call<LibrarySnapshot>('library:import', { paths: files })
   if ('error' in snapshot) return toast(String(snapshot.error))
   adopt(snapshot)
