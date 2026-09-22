@@ -17,7 +17,7 @@ public struct Contributor: Sendable, Hashable, Identifiable {
 
 public enum Contributors {
     public static let all: [Contributor] = [
-        Contributor(name: "익명", reports: 1),
+        // Nobody yet. The first person to press ⌥⌘/ lands here.
     ]
 
     public static var total: Int { all.reduce(0) { $0 + $1.reports } }
