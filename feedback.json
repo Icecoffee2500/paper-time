@@ -1,4 +1,19 @@
 {
-  "issues": [],
-  "contributors": []
+  "issues": [
+    {
+      "number": 5,
+      "title": "여기가 이상하다.",
+      "state": "open",
+      "html_url": "https://github.com/Icecoffee2500/paper-time/issues/5",
+      "updated_at": "2026-09-22T07:28:28Z",
+      "milestone": null,
+      "body": "<!-- credit: 익명 -->"
+    }
+  ],
+  "contributors": [
+    {
+      "name": "익명",
+      "count": 1
+    }
+  ]
 }
