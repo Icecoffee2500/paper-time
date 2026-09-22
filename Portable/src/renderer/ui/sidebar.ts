@@ -54,6 +54,7 @@ interface ShelfCounts {
   all: number
   papers: number
   books: number
+  lectures: number
   documents: number
   folders: Map<string, number>
   unread: number
@@ -71,6 +72,7 @@ function shelfCounts(papers: Paper[]): ShelfCounts {
     all: papers.length,
     papers: 0,
     books: 0,
+    lectures: 0,
     documents: 0,
     folders: new Map(),
     unread: 0,
@@ -86,6 +88,7 @@ function shelfCounts(papers: Paper[]): ShelfCounts {
   for (const entry of papers) {
     if (entry.meta.effectiveKind === 'paper') counts.papers += 1
     else if (entry.meta.effectiveKind === 'book') counts.books += 1
+    else if (entry.meta.effectiveKind === 'lecture') counts.lectures += 1
     else counts.documents += 1
     if (entry.root) bump(counts.folders, entry.root)
     if (entry.state.readingStatus === 'unread') counts.unread += 1
@@ -158,12 +161,13 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
     // Shown only once the library holds more than one of them. A shelf that
     // has never seen anything but papers looks exactly as it did.
     //
-    // Once they appear, all three do, empty ones included. The kinds are not
-    // a list that grows — they are the three answers to one question, and a
-    // run that shows two of them says the app knows two.
+    // Once they appear, all of them do, empty ones included. The kinds are
+    // not a list that grows — they are the answers to one question, and a run
+    // that shows two of four says the app knows two.
     const kinds = ([
       ['paper', 'text.document', L('논문', 'Papers'), counts.papers],
       ['book', 'book', L('책', 'Books'), counts.books],
+      ['lecture', 'lecture', L('강의자료', 'Course'), counts.lectures],
       ['document', 'doc', L('문서', 'Documents'), counts.documents],
     ] as const)
     if (kinds.filter(([, , , count]) => count > 0).length > 1) {
@@ -186,7 +190,7 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
     // shelf. From here a paper is closed, or put beside another.
     rows.push({ key: 'favorites', kind: 'row', shelf: { kind: 'favorites' }, icon: 'star', label: L('즐겨찾기', 'Favorites'), count: counts.favorites })
     rows.push({ key: 'review', kind: 'row', shelf: { kind: 'review' }, icon: 'exclamationmark.triangle', label: L('살펴볼 것', 'Needs Review'), count: counts.review })
-    rows.push({ key: 'open', kind: 'row', shelf: { kind: 'open' }, icon: 'rectangle.on.rectangle', label: L('열린 논문', 'Open Papers'), count: store.openPaperIDs.length })
+    rows.push({ key: 'open', kind: 'row', shelf: { kind: 'open' }, icon: 'rectangle.on.rectangle', label: L('열린 문서', 'Open Documents'), count: store.openPaperIDs.length })
 
     rows.push({ key: 'sec:slipbox', kind: 'section', label: L('슬립박스', 'Slip-Box') })
     rows.push({ key: 'notes', kind: 'row', shelf: { kind: 'notes' }, icon: 'note', label: L('노트', 'Notes'), count: counts.notes })

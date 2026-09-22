@@ -203,6 +203,7 @@ const paperList = buildPaperList({
       ...([
         ['paper', L('논문으로 바꾸기', 'Make It a Paper'), 'text.document'],
         ['book', L('책으로 바꾸기', 'Make It a Book'), 'book'],
+        ['lecture', L('강의자료로 바꾸기', 'Make It Course Material'), 'lecture'],
         ['document', L('일반 문서로 바꾸기', 'Make It a Document'), 'note'],
       ] as const)
         .filter(([value]) => value !== entry.meta.effectiveKind)
@@ -253,13 +254,17 @@ const paperList = buildPaperList({
   },
 })
 
-/** The answer to "a paper, a book, or a document?", from the inspector or the
- *  row's menu. */
+/** The answer to "a paper, a book, course material, or a document?", from the
+ *  inspector or the row's menu. */
 async function setKind(id: string, kind: DocumentKind) {
-  // Neither a book nor a document has a registrar to disagree with, so
-  // neither stays on the shelf of things to look at.
+  // Nothing but a paper has a registrar to disagree with, so nothing else
+  // stays on the shelf of things to look at.
   const patch: Record<string, unknown> = { kind }
   if (!isLookedUp(kind)) patch.confidence = 'unparsed'
+  // Nothing is cleared for course material or a document. A book clears the
+  // journal's fields below because a book is exported and would print a
+  // volume it never had; these two are not exported at all, so throwing away
+  // what somebody typed would cost them something and buy nothing.
   if (kind === 'book') {
     // Called a book, it is written down as one — so the export says `@book`
     // and the citation prints a publisher rather than a journal. The
@@ -353,6 +358,11 @@ function readerFor(id: string, pane: boolean): Reader {
       }
     },
     close: () => closePaper(id),
+    fileName: () => {
+      const paper = store.papers.find((p) => p.id === id)
+      const relative = String((paper?.meta.file as Record<string, unknown> | undefined)?.relativePath ?? '')
+      return relative.split(/[\\/]/).pop() ?? ''
+    },
     guessed: (kind) => {
       // Only ever a guess, and only when nobody has one: the answer belongs
       // to the reader and is given in the inspector.

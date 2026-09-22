@@ -44,6 +44,7 @@ public final class LibraryModel {
         /// manual should look exactly as it did.
         case papers
         case books
+        case lectures
         case documents
         /// One of the folders the library is reading.
         case folder(URL)
@@ -209,6 +210,7 @@ public final class LibraryModel {
         public var all = 0
         public var papers = 0
         public var books = 0
+        public var lectures = 0
         public var documents = 0
         /// How many papers each folder holds, by its root.
         public var folders: [URL: Int] = [:]
@@ -632,6 +634,7 @@ public final class LibraryModel {
             switch paper.meta.effectiveKind {
             case .paper: counts.papers += 1
             case .book: counts.books += 1
+            case .lecture: counts.lectures += 1
             case .document: counts.documents += 1
             }
             counts.folders[rootURL(of: paper), default: 0] += 1
@@ -927,6 +930,7 @@ public final class LibraryModel {
         case .notes, .graph: false
         case .papers: paper.meta.effectiveKind == .paper
         case .books: paper.meta.effectiveKind == .book
+        case .lectures: paper.meta.effectiveKind == .lecture
         case .documents: paper.meta.effectiveKind == .document
         case let .folder(root): rootURL(of: paper) == root
         case .unread: paper.state.readingStatus == .unread

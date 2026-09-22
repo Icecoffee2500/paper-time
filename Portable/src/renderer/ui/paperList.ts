@@ -240,10 +240,15 @@ function shelfTitle(): string {
   switch (store.shelf.kind) {
     case 'all': return L('모두', 'All')
     case 'kind':
-      return (store.shelf as { of: string }).of === 'paper' ? L('논문', 'Papers') : L('문서', 'Documents')
+      return ({
+        paper: L('논문', 'Papers'),
+        book: L('책', 'Books'),
+        lecture: L('강의자료', 'Course Material'),
+        document: L('문서', 'Documents'),
+      } as Record<string, string>)[(store.shelf as { of: string }).of] ?? L('모두', 'All')
     case 'folder':
       return basename((store.shelf as { root: string }).root)
-    case 'open': return L('열린 논문', 'Open Papers')
+    case 'open': return L('열린 문서', 'Open Documents')
     case 'status': return statusName(store.shelf.status)
     case 'favorites': return L('즐겨찾기', 'Favorites')
     case 'review': return L('살펴볼 것', 'Needs Review')
@@ -291,7 +296,7 @@ function emptyState(actions: PaperListActions): HTMLElement {
   }
   if (store.shelf.kind === 'open') {
     wrap.append(
-      el('h2', { text: L('열린 논문이 없어요', 'Nothing is open') }),
+      el('h2', { text: L('열린 문서가 없어요', 'Nothing is open') }),
       el('p', {
         text: L(
           '논문을 클릭해 들어가거나 핀을 누르면 여기에 남아요.',

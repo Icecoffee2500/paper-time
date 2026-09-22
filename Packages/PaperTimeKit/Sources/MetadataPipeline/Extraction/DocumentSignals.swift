@@ -31,6 +31,12 @@ public struct DocumentSignals: Hashable, Sendable {
     public var hasAbstract: Bool
     /// A references or bibliography heading near the end.
     public var hasReferences: Bool
+    /// The pages are wider than they are tall.
+    ///
+    /// Nothing written to be read on paper is, and everything written to be
+    /// projected is — which makes it the one signal for a deck of slides that
+    /// does not depend on reading a word of it.
+    public var isLandscape: Bool
 
     public init(
         pageCount: Int = 0,
@@ -43,7 +49,8 @@ public struct DocumentSignals: Hashable, Sendable {
         largestFontText: String? = nil,
         hasTextLayer: Bool = false,
         hasAbstract: Bool = false,
-        hasReferences: Bool = false
+        hasReferences: Bool = false,
+        isLandscape: Bool = false
     ) {
         self.pageCount = pageCount
         self.embeddedTitle = embeddedTitle
@@ -56,6 +63,7 @@ public struct DocumentSignals: Hashable, Sendable {
         self.hasTextLayer = hasTextLayer
         self.hasAbstract = hasAbstract
         self.hasReferences = hasReferences
+        self.isLandscape = isLandscape
     }
 
     /// Whether this reads as a paper, a book, or something else somebody reads.
@@ -65,12 +73,22 @@ public struct DocumentSignals: Hashable, Sendable {
     /// paper look like a paper — and a reference list on its own, in a file
     /// hundreds of pages long, is a book. Everything else is a document, and
     /// being wrong costs one tap in the inspector.
-    public var guess: DocumentGuess {
-        DocumentGuess.of(
+    public var guess: DocumentGuess { guess(fileName: nil) }
+
+    /// The same, with the file's name to read as well.
+    ///
+    /// A course names itself twice, and the name on disk is the more reliable
+    /// of the two: `lecture06.pdf`, `STA512-syllabus.pdf`. The first page of a
+    /// deck often says only the week's title.
+    public func guess(fileName: String?) -> DocumentGuess {
+        let named = [fileName ?? "", String(openingText.prefix(1200))].joined(separator: " ")
+        return DocumentGuess.of(
             hasIdentifier: !IdentifierScanner.scan(openingText).isEmpty,
             hasAbstract: hasAbstract,
             hasReferences: hasReferences,
-            pageCount: pageCount
+            pageCount: pageCount,
+            isLandscape: isLandscape,
+            hasCourseWords: DocumentGuess.namesACourse(named)
         )
     }
 }
@@ -121,6 +139,11 @@ public enum DocumentSignalsExtractor {
         signals.largestFontText = largestFontText(on: firstPage)
         signals.hasAbstract = looksLikeAbstract(firstPageText)
         signals.hasReferences = hasReferenceSection(in: document)
+        // The shape of the page, taken from the first one that has a size.
+        // `.mediaBox` is the paper; `.cropBox` is what is shown, and a paper
+        // cropped for the screen can be landscape without being slides.
+        let box = firstPage.bounds(for: .mediaBox)
+        signals.isLandscape = box.width > box.height * 1.15
 
         return signals
     }

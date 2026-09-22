@@ -531,6 +531,7 @@ struct PaperRow: View, Equatable {
         Picker(L("종류", "Kind"), selection: kindBinding(paper)) {
             Label(L("논문", "Paper"), systemImage: "text.document").tag(DocumentKind.paper)
             Label(L("책", "Book"), systemImage: "book").tag(DocumentKind.book)
+            Label(L("강의자료", "Course Material"), systemImage: "person.crop.rectangle").tag(DocumentKind.lecture)
             Label(L("일반 문서", "Document"), systemImage: "doc").tag(DocumentKind.document)
         }
 

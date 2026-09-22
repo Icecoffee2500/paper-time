@@ -13,7 +13,14 @@ import SwiftUI
 struct LibrarySidebar: View {
     @Environment(AppModel.self) private var app
     @State private var showsAllAuthors = false
-    @State private var authorsAreShown = true
+    /// Folded to begin with, and remembered after that.
+    ///
+    /// The names are the longest run in the list and the least often wanted —
+    /// a library of eighty papers has fifty of them, and they pushed the
+    /// graph off the bottom of the source list. Somebody who opens the fold
+    /// wants it open tomorrow too, so this is kept rather than reset with the
+    /// view.
+    @AppStorage("sidebarShowsAuthors") private var authorsAreShown = false
     @Bindable var model: LibraryModel
 
     /// Where the shelf you are on sits, in the list's own space — one shape
@@ -224,6 +231,9 @@ struct LibrarySidebar: View {
                     Label(L("책", "Books"), systemImage: "book")
                         .count(model.counts.books, current: model.scope == .books)
                         .scopeRow(.books, in: model)
+                    Label(L("강의자료", "Course"), systemImage: "person.crop.rectangle")
+                        .count(model.counts.lectures, current: model.scope == .lectures)
+                        .scopeRow(.lectures, in: model)
                     Label(L("문서", "Documents"), systemImage: "doc")
                         .count(model.counts.documents, current: model.scope == .documents)
                         .scopeRow(.documents, in: model)
@@ -266,7 +276,7 @@ struct LibrarySidebar: View {
                 Label(L("살펴볼 것", "Needs Review"), systemImage: "exclamationmark.triangle")
                     .count(model.counts.needsReview, current: model.scope == .needsReview)
                     .scopeRow(.needsReview, in: model)
-                Label(L("열린 논문", "Open Papers"), systemImage: "rectangle.on.rectangle")
+                Label(L("열린 문서", "Open Documents"), systemImage: "rectangle.on.rectangle")
                     .count(model.openPaperIDs.count, current: model.scope == .open)
                     .scopeRow(.open, in: model)
             } header: {
@@ -379,7 +389,7 @@ struct LibrarySidebar: View {
     /// so is a row that filters nothing. Past that line all three are listed,
     /// including the empty ones — see the strip itself.
     private var showsKinds: Bool {
-        [model.counts.papers, model.counts.books, model.counts.documents]
+        [model.counts.papers, model.counts.books, model.counts.lectures, model.counts.documents]
             .count { $0 > 0 } > 1
     }
 

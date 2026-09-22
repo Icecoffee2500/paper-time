@@ -104,7 +104,7 @@ export interface FileInfo {
  *  Declared here as well as in `documentKind.ts` because the record type came
  *  first; the two are one type, and `documentKind.ts` re-exports this one so
  *  they cannot drift apart. */
-export type DocumentKind = 'paper' | 'book' | 'document'
+export type DocumentKind = 'paper' | 'book' | 'lecture' | 'document'
 
 export class PaperMeta {
   raw: RawRecord

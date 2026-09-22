@@ -17,7 +17,7 @@ import { PAPER_DRAG_TYPE } from '../../shared/split.js'
 import { loadDocument, TextLayer, type PDFDocumentProxy, type PDFPageProxy } from '../pdf.js'
 import { rightsHandler, type ByteTrouble, type PDFLock } from '../../shared/pdfLock.js'
 import {
-  guessKind, hasAbstract, hasIdentifier, hasReferences, type DocumentKind,
+  guessKind, hasAbstract, hasIdentifier, hasReferences, namesACourse, type DocumentKind,
 } from '../../shared/documentKind.js'
 
 /** What the main process already worked out about these bytes, if anything. */
@@ -76,6 +76,10 @@ export interface ReaderActions {
    *  when nobody has guessed yet; the answer to "paper or document?" is the
    *  reader's and is never set from here. */
   guessed?: (kind: DocumentKind) => void
+  /** The paper's own file name, which is half of what says it belongs to a
+   *  course: a deck's first page often says only the week's title, while the
+   *  file on disk says lecture06.pdf. */
+  fileName?: () => string
 }
 
 export interface ReaderOptions {
@@ -483,11 +487,19 @@ export class Reader {
       let end = ''
       for (const index of [...wanted].sort((a, b) => b - a)) end += await textOf(index)
       if (generation !== this.generation) return
+      // The shape of the page, which nothing written to be read on paper has
+      // and everything written to be projected does. Taken at scale 1 so it
+      // is the page's own size and not the view's.
+      const size = (await document.getPage(1)).getViewport({ scale: 1 })
       const guess = guessKind({
         identifier: hasIdentifier(first),
         abstract: hasAbstract(first),
         references: hasReferences(end),
         pageCount: count,
+        landscape: size.width > size.height * 1.15,
+        // The name on disk is the more reliable half: a deck's first page
+        // often says only the week's title, while the file is lecture06.pdf.
+        courseWords: namesACourse(`${this.actions.fileName?.() ?? ''} ${first.slice(0, 1200)}`),
       })
       this.actions.guessed(guess.kind)
     } catch {

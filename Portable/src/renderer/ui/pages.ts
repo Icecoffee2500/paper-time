@@ -57,7 +57,7 @@ export function showPages(host: HTMLElement, actions: PagesActions) {
   )
 
   if (count === 0) {
-    grid.append(el('div', { class: 'open-papers-empty', text: L('열린 논문이 없어요.', 'Nothing is open.') }))
+    grid.append(el('div', { class: 'open-papers-empty', text: L('열린 문서가 없어요.', 'Nothing is open.') }))
   }
 
   const cells: { cell: HTMLElement; index: number; drawn: boolean }[] = []
