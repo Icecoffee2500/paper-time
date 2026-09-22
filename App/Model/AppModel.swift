@@ -335,8 +335,9 @@ public final class AppModel {
     /// One curve, in one place. There were three — 0.22 declared on the
     /// columns, 0.25 here, 0.28 for focus mode — and they were all animating
     /// the same widths, so a toggle was interpolated two ways at once and the
-    /// motion came out stepped.
-    public static let paneMotion: Animation = .snappy(duration: 0.25)
+    /// motion came out stepped. A pane is a surface, so it moves at a
+    /// surface's speed (`Motion`).
+    public static var paneMotion: Animation { Motion.surface }
 
     /// Hides the scope sidebar only. The paper list stays put: collapsing both
     /// columns at once is a different, rarer intent than "give me more room".
@@ -550,22 +551,49 @@ public final class AppModel {
     }
 
     private func open(_ location: LibraryLocation) async {
+        Trace.mark("opening the library")
         let store = LibraryStore(location: location)
         do {
-            let manifest = try await store.bootstrap()
+            let manifest = try await Trace.time("library: bootstrap") { try await store.bootstrap() }
             let model = LibraryModel(store: store, location: location, manifest: manifest)
             // The folders opened beside the first one, reopened from their own
             // bookmarks. One that will not resolve — an unplugged disk — is
             // left out rather than stopping the library; it comes back when
             // the disk does.
-            for extra in isProbeLibrary ? [] : preference.loadExtras() where extra.url != location.url {
-                let extraStore = LibraryStore(location: extra)
-                _ = try? await extraStore.bootstrap()
-                await model.addSource(extra, store: extraStore)
+            //
+            // All of them at once, and not one of them read yet: opening a
+            // folder waits for the cloud to hand over its manifest, and three
+            // folders waited one after another for that. Then each was added
+            // with `addSource`, which reads the whole library — so a library
+            // of three folders read itself three times before the window had
+            // anything in it. It is taken in here and read once, below.
+            let extras = isProbeLibrary ? [] : preference.loadExtras().filter { $0.url != location.url }
+            if !extras.isEmpty {
+                let opened = await Trace.time("library: open \(extras.count) more folder(s)") {
+                    await withTaskGroup(of: (Int, LibraryStore).self) { group in
+                        for (position, extra) in extras.enumerated() {
+                            group.addTask {
+                                let extraStore = LibraryStore(location: extra)
+                                _ = try? await extraStore.bootstrap()
+                                return (position, extraStore)
+                            }
+                        }
+                        var stores = [LibraryStore?](repeating: nil, count: extras.count)
+                        for await (position, extraStore) in group { stores[position] = extraStore }
+                        return stores
+                    }
+                }
+                // In the order they were remembered, whatever order they woke
+                // up in: this is the order of the sidebar's library list.
+                for (extra, extraStore) in zip(extras, opened) {
+                    guard let extraStore else { continue }
+                    model.attachSource(extra, store: extraStore)
+                }
             }
             library = model
             phase = .ready
             await model.refresh()
+            Trace.mark("library ready — \(model.papers.count) papers")
             // Driving a simulator: take in the folder's loose PDFs and open
             // the first paper, since nothing there can be tapped from here.
             if Boot.isSet("PAPERTIME_ADOPT_LOOSE") {
@@ -628,6 +656,20 @@ public final class AppModel {
                 } catch {
                     FileHandle.standardError.write(Data("rename refused: \(error)\n".utf8))
                 }
+            }
+            // `--papertime-kind=<paper|book|document>` answers "what is this?"
+            // for the chosen paper and says what the shelves now hold — the
+            // one way to see a kind change without a hand on the machine.
+            if let raw = Boot.setting("PAPERTIME_KIND"),
+               let kind = DocumentKind(rawValue: raw),
+               let paper = model.selectedPaper ?? model.visiblePapers.first {
+                await model.setKind(kind, for: paper.id)
+                let now = model.paper(paper.id)?.meta
+                let counts = model.counts
+                FileHandle.standardError.write(Data("""
+                kind: \(now?.effectiveKind.rawValue ?? "?")                 csl=\(now?.csl.type.rawValue ?? "?")                 venue=\(now?.csl.containerTitle ?? "—")                 volume=\(now?.csl.volume ?? "—")                 shelves: papers=\(counts.papers) books=\(counts.books) documents=\(counts.documents)                 review=\(counts.needsReview)
+
+                """.utf8))
             }
             if Boot.setting("PAPERTIME_SCOPE") == "notes" { model.scope = .notes }
             // The results of a search, without anybody having to type one.

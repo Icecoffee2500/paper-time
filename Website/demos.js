@@ -972,6 +972,12 @@ function paperOrDocument() {
     ["DOI", "10.5555/3600270.3601883"],
     [L("인용 키", "Citation key"), "almudevar2026representation"],
   ];
+  const BOOK = [
+    [L("출판사", "Publisher"), "The MIT Press"],
+    [L("펴낸 곳", "Place"), L("케임브리지, 매사추세츠", "Cambridge, Massachusetts")],
+    [L("판", "Edition"), L("2판", "Second edition")],
+    ["ISBN", "978-0-262-03924-6"],
+  ];
   const DOC = [
     [L("펴낸 곳", "From"), L("고려대학교 산학협력단", "Korea University")],
     [L("해", "Year"), "2026"],
@@ -989,18 +995,25 @@ function paperOrDocument() {
     el("div", { style: "font-size:10px;font-weight:700;letter-spacing:.02em;color:var(--ink-3)" }, label),
     el("div", { style: "font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" }, value));
 
+  const SETS = { paper: PAPER, book: BOOK, document: DOC };
+  const HINTS = () => ({
+    paper: L("등록기관에 물어 서지를 채우고, 비슷한 후보를 보여줘요.",
+             "Paper Time looks the record up and offers the near matches."),
+    book: L("책도 인용하니까 인용 키는 그대로 있어요. 학술지·권·호는 사라지고요 — 교과서가 «권 9, 호 5, 1054쪽»이 되던 자리예요.",
+            "A book is cited too, so it keeps its key — but the journal, the volume and the issue go. "
+            + "That is where a textbook used to come back as volume 9, issue 5, page 1054."),
+    document: L("학술지·DOI·인용 키 칸이 사라져요. 등록기관에 묻지도 않아요 — 계약서 제목이 밖으로 나갈 일이 없어요.",
+                "Journal, DOI and citation key go away. Nothing is looked up online, so a contract's title never leaves the machine."),
+  });
+
   const answer = (kind) => {
     for (const [k, b] of Object.entries(buttons)) b.classList.toggle("on", k === kind);
-    fields.replaceChildren(...(kind === "paper" ? PAPER : DOC).map(row));
-    hint.textContent = kind === "paper"
-      ? L("등록기관에 물어 서지를 채우고, 비슷한 후보를 보여줘요.",
-          "Paper Time looks the record up and offers the near matches.")
-      : L("학술지·DOI·인용 키 칸이 사라져요. 등록기관에 묻지도 않아요 — 계약서 제목이 밖으로 나갈 일이 없어요.",
-          "Journal, DOI and citation key go away. Nothing is looked up online, so a contract's title never leaves the machine.");
+    fields.replaceChildren(...SETS[kind].map(row));
+    hint.textContent = HINTS()[kind];
   };
 
   const seg = el("div", { class: "seg" },
-    ...[["paper", L("논문", "A paper")], ["document", L("일반 문서", "A document")]].map(([k, name]) => {
+    ...[["paper", L("논문", "A paper")], ["book", L("책", "A book")], ["document", L("일반 문서", "A document")]].map(([k, name]) => {
       const b = el("button", { type: "button", onclick: () => answer(k) }, name);
       buttons[k] = b;
       return b;
@@ -1605,12 +1618,31 @@ function mountDialogs() {
   }
 }
 
-mountLanguage();
-mountMetadata();
-mountHero();
-mountBands();
-mountReveals();
-mountDownloads();
-mountDialogs();
-mountHowPicker();
-void mountTogether();
+/* ═══════════════════════════ what this file is ═════════════════════════
+   Two pages read this one file. A demonstration written twice is a
+   demonstration that goes stale once: the manual shows the same working
+   pieces the landing page shows, out of the same source. */
+window.PaperTime = {
+  el, L, KO,
+  demos: {
+    ultracopy, searchEverything, bookMode, fittedHighlight, marksJump,
+    passageToNote, noteLinks, panes, everyDesktop, threeDevices,
+    draftToManuscript, figmaDrawing, papersSideBySide, paperOrDocument,
+    pageGrid, manyLibraries, fileName, lockedPDF,
+  },
+  mountLanguage, mountReveals, mountDownloads, mountDialogs, mountHowPicker,
+};
+
+/* The landing page boots itself; the manual is another page and takes what
+   it wants from the object above. */
+if (document.body.dataset.page !== "docs") {
+  mountLanguage();
+  mountMetadata();
+  mountHero();
+  mountBands();
+  mountReveals();
+  mountDownloads();
+  mountDialogs();
+  mountHowPicker();
+  void mountTogether();
+}

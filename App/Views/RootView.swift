@@ -64,7 +64,10 @@ struct RootView: View {
             FeedbackView()
         }
         .sheet(isPresented: Bindable(app).showsReleaseNotes) {
-            WhatsNewView()
+            // A probe that opens this sheet to look at it must not put the
+            // version down as seen — the person using this Mac has not seen
+            // it yet, and would never be shown it.
+            WhatsNewView(marksAsSeen: !Boot.isSet("PAPERTIME_WHATS_NEW"))
         }
         // Changing the folder is choosing a folder — the picker, not the
         // first-run screen. Nothing is forgotten until something is chosen.
@@ -224,7 +227,7 @@ struct LibraryWindow: View {
                 switch model.scope {
                 case .notes:
                     SlipBoxDetail(model: model, link: link) { paperID in
-                        withAnimation(.snappy(duration: 0.25)) { slipBoxPaperID = paperID }
+                        withAnimation(Motion.move) { slipBoxPaperID = paperID }
                     }
                 case .graph:
                     PaperGraphView(model: model, graph: model.graph)
@@ -370,7 +373,7 @@ struct LibraryWindow: View {
                 switch model.scope {
                 case .notes:
                     SlipBoxDetail(model: model, link: link) { paperID in
-                        withAnimation(.snappy(duration: 0.25)) { slipBoxPaperID = paperID }
+                        withAnimation(Motion.move) { slipBoxPaperID = paperID }
                     }
                     .columnPanel()
                 case .graph:
@@ -433,7 +436,7 @@ struct LibraryWindow: View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
                 Button {
-                    withAnimation(.snappy(duration: 0.25)) { slipBoxPaperID = nil }
+                    withAnimation(Motion.move) { slipBoxPaperID = nil }
                 } label: {
                     Label(L("노트", "Notes"), systemImage: "chevron.left")
                         .font(.subheadline)
@@ -722,6 +725,7 @@ struct LibraryWindow: View {
                         Divider()
                         Picker(L("종류", "Kind"), selection: kindBinding(for: paper)) {
                             Label(L("논문", "Paper"), systemImage: "text.document").tag(DocumentKind.paper)
+                            Label(L("책", "Book"), systemImage: "book").tag(DocumentKind.book)
                             Label(L("일반 문서", "Document"), systemImage: "doc").tag(DocumentKind.document)
                         }
                     }
@@ -1033,6 +1037,7 @@ struct LibraryWindow: View {
         switch model.scope {
         case .all: L("모두", "All")
         case .papers: L("논문", "Papers")
+        case .books: L("책", "Books")
         case .documents: L("문서", "Documents")
         case let .folder(root): root.lastPathComponent
         case .open: L("열린 논문", "Open Papers")
@@ -1100,7 +1105,7 @@ struct PaperDetailColumn: View {
         // two pages where there are no words to cover.
         .overlay { contents }
 
-        .animation(.snappy(duration: 0.22), value: app.showsFloatingList)
+        .animation(Motion.move, value: app.showsFloatingList)
         // A passage of another paper, followed from a note here: that paper
         // opens, and its reader takes the request from there.
         .onChange(of: link.anchorRequest) { _, request in
@@ -1418,7 +1423,7 @@ struct PaperDetailColumn: View {
                             .transition(.move(edge: .top).combined(with: .opacity))
                     }
                 }
-                .animation(.snappy(duration: 0.22), value: configuration.mode)
+                .animation(Motion.move, value: configuration.mode)
                 .toolbar {
                     // The pencil, first in the reader's own bar: the paper is
                     // written on, and the tool that does it should not be two
@@ -1656,7 +1661,7 @@ private struct ToolbarHover: ViewModifier {
                     .fill(Color.primary.opacity(isHovering ? 0.09 : 0))
                     .padding(-3)
             )
-            .animation(.easeOut(duration: 0.12), value: isHovering)
+            .animation(Motion.tap, value: isHovering)
             .onHover { isHovering = $0 }
     }
 }

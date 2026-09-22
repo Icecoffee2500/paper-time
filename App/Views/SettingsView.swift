@@ -839,7 +839,7 @@ struct SettingsView: View {
                     // is a formality; with ten it is the only way the page
                     // stays a page.
                     Button {
-                        withAnimation(.snappy(duration: 0.22)) {
+                        withAnimation(Motion.move) {
                             if isOpen { openReleases.remove(release.version) }
                             else { openReleases.insert(release.version) }
                         }
@@ -920,7 +920,7 @@ struct SettingsView: View {
         let isOpen = openEntries.contains(item.id)
         return VStack(alignment: .leading, spacing: 5) {
             Button {
-                withAnimation(.snappy(duration: 0.2)) {
+                withAnimation(Motion.move) {
                     if isOpen { openEntries.remove(item.id) } else { openEntries.insert(item.id) }
                 }
             } label: {

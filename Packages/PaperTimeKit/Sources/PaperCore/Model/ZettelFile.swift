@@ -6,6 +6,7 @@ import Foundation
 /// `---` block Obsidian, Zettlr and every static site generator understand —
 /// so a slip-box written here can be opened, searched and kept anywhere.
 public enum ZettelFile {
+
     public static func text(of note: Zettel) -> String {
         var header = "---\n"
         header += "id: \(note.id)\n"
@@ -14,7 +15,7 @@ public enum ZettelFile {
         if let paperID = note.paperID { header += "paper: \(paperID.uuidString)\n" }
         let tags = note.tags
         if !tags.isEmpty { header += "tags: \(tags.joined(separator: ", "))\n" }
-        header += "created: \(ISO8601DateFormatter().string(from: note.created))\n"
+        header += "created: \(note.created.formatted(.iso8601))\n"
         header += "---\n\n"
         return header + note.body
     }
@@ -43,7 +44,7 @@ public enum ZettelFile {
             body: body,
             paperID: fields["paper"].flatMap(UUID.init(uuidString:)),
             created: fields["created"].flatMap {
-                ISO8601DateFormatter().date(from: $0)
+                try? Date($0, strategy: .iso8601)
             } ?? modified,
             modified: modified
         )

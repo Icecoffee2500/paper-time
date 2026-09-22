@@ -1,0 +1,732 @@
+<!doctype html>
+<!--
+  Paper Time — the manual.
+
+  The page a reader comes to with a question, as against the front page, which
+  is read by somebody deciding. Same tokens, same radii, same accent, so it is
+  another page of one document rather than documentation bolted on.
+
+  Every explanation that can be shown is shown: the working demonstrations are
+  the front page's own, out of `demos.js`, because a demonstration written
+  twice is a demonstration that goes stale once. `docs.js` only says which one
+  goes in which slot.
+
+  Both languages sit next to each other in the markup, as on the front page,
+  so neither can quietly rot — Korean in 해요체, English in Apple's voice.
+-->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Paper Time — 설명서</title>
+<meta name="description" content="Paper Time을 쓰는 법. 폴더를 고르는 것부터 표시, 그리기, 노트, 서지, 단축키까지 — 설명마다 눌러볼 수 있는 실물이 붙어 있어요.">
+<meta property="og:title" content="Paper Time — 설명서">
+<meta property="og:description" content="Paper Time을 쓰는 법. 설명마다 눌러볼 수 있는 실물이 붙어 있어요.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://icecoffee2500.github.io/paper-time/docs.html">
+<meta property="og:site_name" content="Paper Time">
+<meta property="og:image" content="https://icecoffee2500.github.io/paper-time/img/preview.jpg">
+<meta property="og:image:width" content="2400">
+<meta property="og:image:height" content="1260">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://icecoffee2500.github.io/paper-time/img/preview.jpg">
+<link rel="icon" type="image/png" sizes="32x32" href="img/icon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="img/icon-180.png">
+<!-- The language, decided before anything paints, exactly as on the front
+     page: both versions are in the markup and one of them is shown. -->
+<script>
+(function () {
+  var stored = null;
+  try { stored = localStorage.getItem("papertime.lang"); } catch (e) {}
+  var lang = stored || ((navigator.language || "en").toLowerCase().indexOf("ko") === 0 ? "ko" : "en");
+  document.documentElement.lang = lang;
+})();
+</script>
+<link rel="stylesheet" href="style.css?v=0.9.2">
+</head>
+<body data-page="docs">
+
+<div class="topbar">
+  <a class="name" href="index.html">Paper Time</a>
+  <nav>
+    <a href="#start"><span data-l="ko">시작하기</span><span data-l="en">Start</span></a>
+    <a href="#read"><span data-l="ko">읽기</span><span data-l="en">Reading</span></a>
+    <a href="#mark"><span data-l="ko">표시</span><span data-l="en">Marking</span></a>
+    <a href="#notes"><span data-l="ko">노트</span><span data-l="en">Notes</span></a>
+    <a href="#keys"><span data-l="ko">단축키</span><span data-l="en">Keys</span></a>
+  </nav>
+  <span class="spacer"></span>
+  <div class="lang" id="lang" role="group" aria-label="Language"></div>
+  <a class="pill" href="index.html#top"><span data-l="ko">받기</span><span data-l="en">Download</span></a>
+</div>
+
+<header class="docs-hero">
+  <div class="inner">
+    <p class="eyebrow" data-l="ko">설명서</p>
+    <p class="eyebrow" data-l="en">The manual</p>
+    <h1 class="display" data-l="ko">쓰는 법.<br>읽지 말고 눌러보세요.</h1>
+    <h1 class="display" data-l="en">How it works.<br>Try it as you read.</h1>
+    <p class="say" data-l="ko">아래의 것들은 그림이 아니라 실제로 도는 것들이에요. 논문만 없을 뿐, 손에 닿는 건 앱의 것 그대로예요.</p>
+    <p class="say" data-l="en">Everything below works. Only the paper is missing — the rest is the app.</p>
+  </div>
+</header>
+
+<div class="docs">
+  <nav class="rail" id="rail" aria-label="Contents">
+  <h2 data-l="ko">차례</h2>
+  <h2 data-l="en">Contents</h2>
+  <a href="#start"><span data-l="ko">시작하기</span><span data-l="en">Getting started</span></a>
+  <a href="#read"><span data-l="ko">읽기</span><span data-l="en">Reading</span></a>
+  <a href="#mark"><span data-l="ko">표시</span><span data-l="en">Marking</span></a>
+  <a href="#draw"><span data-l="ko">그리기</span><span data-l="en">Drawing</span></a>
+  <a href="#copy"><span data-l="ko">베껴오기</span><span data-l="en">Copying out</span></a>
+  <a href="#notes"><span data-l="ko">노트</span><span data-l="en">Notes</span></a>
+  <a href="#find"><span data-l="ko">찾기</span><span data-l="en">Finding</span></a>
+  <a href="#biblio"><span data-l="ko">서지와 BibTeX</span><span data-l="en">Records and BibTeX</span></a>
+  <a href="#library"><span data-l="ko">라이브러리</span><span data-l="en">The library</span></a>
+  <a href="#everywhere"><span data-l="ko">어디서나</span><span data-l="en">Everywhere</span></a>
+  <a href="#locked"><span data-l="ko">안 열리는 PDF</span><span data-l="en">PDFs that will not open</span></a>
+  <a href="#keys"><span data-l="ko">단축키</span><span data-l="en">Keys</span></a>
+  <a href="#help"><span data-l="ko">막히면</span><span data-l="en">If something is wrong</span></a>
+  </nav>
+  <main>
+
+<section class="doc" id="start">
+  <h2 data-l="ko">시작하기</h2>
+  <h2 data-l="en">Getting started</h2>
+  <p class="lede" data-l="ko">라이브러리는 <b>내가 고른 폴더</b>예요. 앱 안에 무언가를 넣는 게 아니라, 이미 PDF가 있는 폴더를 가리키는 거예요. 앱을 지워도 논문과 노트는 그 자리에 그대로 있어요.</p>
+  <p class="lede" data-l="en">The library is <b>a folder you choose</b>. Nothing is imported into the app — you point it at the folder your PDFs already live in. Delete the app and your papers and notes are still there.</p>
+
+  <article class="task">
+    <h3 data-l="ko">폴더 고르기</h3>
+    <h3 data-l="en">Choose the folder</h3>
+    <p data-l="ko">처음 열면 폴더를 물어봐요. 클라우드 폴더를 고르면 라이브러리가 기기를 따라다녀요 — 맥에서 그은 표시가 PC에서도 그대로 보여요.</p>
+    <p data-l="en">The first run asks for a folder. Pick one inside a cloud drive and the library travels with you: what you mark on a Mac is there on a PC.</p>
+    <ol class="steps" data-l="ko">
+      <li><b>라이브러리 폴더 고르기</b>를 눌러요.</li>
+      <li>iCloud Drive, Google Drive, Dropbox, OneDrive — 어느 클라우드 폴더든 돼요. 이 기계 안의 폴더도 되고요.</li>
+      <li>맥에서는 Finder의 폴더를 앱 아이콘 위로 끌어다 놓아도 돼요. 열기 창을 지나지 않는 유일한 길이에요.</li>
+    </ol>
+    <ol class="steps" data-l="en">
+      <li>Press <b>Choose Library Folder</b>.</li>
+      <li>iCloud Drive, Google Drive, Dropbox, OneDrive — any of them. A folder on this machine works too.</li>
+      <li>On a Mac you can also drop a folder onto the app's icon. That is the one way in that skips the open panel.</li>
+    </ol>
+    <p class="note" data-l="ko">폴더 안에 <code>.papertime</code>이라는 숨은 폴더가 하나 생겨요. 기록·표시·노트가 전부 거기 있어요. 그 폴더째로 다른 기계에 옮기면 라이브러리가 통째로 따라가요.</p>
+    <p class="note" data-l="en">A hidden <code>.papertime</code> folder appears inside it. Records, marks and notes all live there. Move the folder to another machine and the whole library goes with it.</p>
+  </article>
+
+  <article class="task">
+    <h3 data-l="ko">PDF 더하기</h3>
+    <h3 data-l="en">Add PDFs</h3>
+    <ol class="steps" data-l="ko">
+      <li>창에 <b>끌어다 놓아요</b>. 또는 <span class="key">⌘O</span>.</li>
+      <li>폴더에 이미 PDF가 있으면 «이 폴더에서 찾은 논문»이 뜨고, 한 번에 들여올 수 있어요.</li>
+      <li>들여오면 서지를 알아서 찾아요. DOI나 arXiv 번호가 보이면 등록기관에 물어보고, 확신이 없으면 <b>살펴볼 것</b>에 담아둬요.</li>
+    </ol>
+    <ol class="steps" data-l="en">
+      <li><b>Drop them on the window</b>, or press <span class="key">⌘O</span>.</li>
+      <li>If the folder already holds PDFs, the list offers to take them all in at once.</li>
+      <li>Each one is looked up. If a DOI or arXiv id is in the file, the registrar answers; where the answer is uncertain the paper waits under <b>Needs Review</b>.</li>
+    </ol>
+    <p class="note" data-l="ko">PDF는 <b>있던 자리에 그대로</b> 있어요. 옮기지도, 이름을 바꾸지도, 복사하지도 않아요.</p>
+    <p class="note" data-l="en">Paper Time never moves, renames or copies a file. The PDF stays exactly where it was.</p>
+  </article>
+
+  <article class="task">
+    <h3 data-l="ko">논문인가요, 책인가요, 문서인가요</h3>
+    <h3 data-l="en">A paper, a book, or a document</h3>
+    <p data-l="ko">라이브러리에는 논문만 들어가는 게 아니에요. 교과서도, 계약서도, 매뉴얼도 같이 살아요. 그래서 새 PDF에는 <b>먼저 한 번만</b> 물어봐요.</p>
+    <p data-l="en">A library holds more than papers: textbooks, contracts, manuals. So a new PDF is asked what it is — <b>once</b>.</p>
+    <p data-l="ko">앱이 이미 짐작해 뒀으니 대개 그대로 누르면 돼요. 답하면 질문은 사라지고, 칸이 달라져요. 나중에 바꾸려면 도구 막대의 ⋯ 메뉴나 목록의 우클릭 메뉴에 있어요.</p>
+    <p data-l="en">The app has already guessed, so usually you just agree. Answer and the question goes away and the fields follow. To change it later, use the ⋯ menu or right-click the row.</p>
+    <ul class="points" data-l="ko">
+      <li><b>논문</b> — 학술지·권·호·쪽·DOI·인용 키. 등록기관에 물어서 채워요.</li>
+      <li><b>책</b> — 출판사·펴낸 곳·판·해·ISBN·인용 키. 물어볼 등록기관이 없으니 직접 적어요. BibTeX에는 <code>@book</code>으로 나가요.</li>
+      <li><b>일반 문서</b> — 펴낸 곳·해·종류. 인용하지 않는 것들이에요.</li>
+    </ul>
+    <ul class="points" data-l="en">
+      <li><b>A paper</b> — journal, volume, issue, pages, DOI, citation key. Looked up with a registrar.</li>
+      <li><b>A book</b> — publisher, place, edition, year, ISBN, citation key. No registrar to ask, so you type it. It exports as <code>@book</code>.</li>
+      <li><b>A document</b> — where it came from, its year, its kind. The things you do not cite.</li>
+    </ul>
+    <p class="note" data-l="ko">책이 따로 있는 이유는 <b>책도 인용하기 때문</b>이에요. 논문 칸에 넣으면 같은 제목의 학술지 논문으로 잘못 붙어서 «권 9, 호 5, 1054–1054쪽» 같은 게 되고, 문서 칸에 넣으면 아예 인용이 안 돼요.</p>
+    <p class="note" data-l="en">A book is its own kind because <b>a book is cited</b>. Put through the paper's form it gets matched to a journal article of the same name — volume 9, issue 5, pages 1054–1054 — and put through the document's form it cannot be cited at all.</p>
+    <div class="doc-demo" id="d-kind"></div>
+    <p class="caption" data-l="ko">눌러보세요 — 아래 칸이 통째로 바뀌어요.</p>
+    <p class="caption" data-l="en">Press one. The fields underneath change.</p>
+    <p class="note" data-l="ko">문서로 답하면 <b>등록기관에 묻지 않아요</b>. 계약서 제목을 밖으로 보내지 않는다는 뜻이에요.</p>
+    <p class="note" data-l="en">Answer “document” and nothing is looked up online. The title of your contract never leaves the machine.</p>
+  </article>
+
+</section>
+
+<section class="doc" id="read">
+  <h2 data-l="ko">읽기</h2>
+  <h2 data-l="en">Reading</h2>
+  <p class="lede" data-l="ko">읽는 자리가 이 앱의 전부예요. 창은 내가 접는 대로 있고, 쪽은 종이처럼 펼쳐져요.</p>
+  <p class="lede" data-l="en">Reading is what the app is for. The window folds to what you are doing, and the pages spread like paper.</p>
+
+  <article class="task">
+    <h3 data-l="ko">쪽 넘기기와 확대</h3>
+    <h3 data-l="en">Turning pages, and zoom</h3>
+    <ul class="points" data-l="ko">
+      <li><span class="key">⌘↓</span> 다음 쪽, <span class="key">⌘↑</span> 이전 쪽.</li>
+      <li><span class="key">⌘+</span> 크게, <span class="key">⌘−</span> 작게, <span class="key">⌘0</span> 실제 크기. 트랙패드는 두 손가락으로 오므리면 돼요.</li>
+      <li><span class="key">⌘1</span> 이어서 보기, <span class="key">⌘2</span> 한 쪽씩, <span class="key">⌘3</span> 책처럼.</li>
+      <li><span class="key">⌥⌘↓</span> 다음 논문, <span class="key">⌥⌘↑</span> 이전 논문. <span class="key">⌥⌘[</span>와 <span class="key">⌥⌘]</span>는 지나온 길을 되짚어요.</li>
+    </ul>
+    <ul class="points" data-l="en">
+      <li><span class="key">⌘↓</span> next page, <span class="key">⌘↑</span> previous page.</li>
+      <li><span class="key">⌘+</span> in, <span class="key">⌘−</span> out, <span class="key">⌘0</span> actual size. On a trackpad, pinch.</li>
+      <li><span class="key">⌘1</span> continuous, <span class="key">⌘2</span> one page, <span class="key">⌘3</span> book.</li>
+      <li><span class="key">⌥⌘↓</span> next paper, <span class="key">⌥⌘↑</span> previous. <span class="key">⌥⌘[</span> and <span class="key">⌥⌘]</span> walk back and forward through what you opened.</li>
+    </ul>
+  </article>
+
+  <article class="task">
+    <h3 data-l="ko">책처럼 펴서 읽기</h3>
+    <h3 data-l="en">Read it like a book</h3>
+    <p data-l="ko"><span class="key">⌘3</span>을 누르면 두 쪽이 마주 봐요. 그냥 나란히 놓는 게 아니라 <b>여백을 잘라내요</b> — 논문 PDF의 흰 테두리는 인쇄용이지 화면용이 아니니까요. 15인치 화면이 두 쪽을 온전히 담게 돼요.</p>
+    <p data-l="en">Press <span class="key">⌘3</span> and two pages face each other. Not merely side by side: the <b>margins are trimmed away</b>, because the white border on a paper's PDF is there for print, not for you. A 15-inch screen then holds two whole pages.</p>
+    <div class="doc-demo" id="d-book"></div>
+    <p class="caption" data-l="ko">«자르기» 토글을 눌러 전후를 비교해보세요. 절 이름을 누르면 그 절로 가요.</p>
+    <p class="caption" data-l="en">Toggle the trim to see it both ways. Click a section's name and you are there.</p>
+  </article>
+
+  <article class="task">
+    <h3 data-l="ko">차례와 쪽 그림</h3>
+    <h3 data-l="en">Contents, and the page grid</h3>
+    <p data-l="ko"><span class="key">⇧⌘L</span>이 차례를 쪽 위에 띄워요. 칸이 둘이에요 — <b>차례</b>는 논문이 스스로 밝힌 절이고, <b>쪽</b>은 모든 쪽을 작게 늘어놓은 거예요. 스캔한 계약서처럼 제목을 하나도 못 찾으면 <b>쪽</b>으로 열려요.</p>
+    <p data-l="en"><span class="key">⇧⌘L</span> brings the contents over the page. Two tabs: <b>Contents</b> is what the paper says its sections are, and <b>Pages</b> lays every page out small. When nothing in the file names a heading — a scanned contract — it opens on <b>Pages</b>.</p>
+    <div class="doc-demo" id="d-pages"></div>
+    <p class="caption" data-l="ko">쪽을 눌러 옮겨다녀 보세요.</p>
+    <p class="caption" data-l="en">Click a page to go to it.</p>
+  </article>
+
+  <article class="task">
+    <h3 data-l="ko">창 접기</h3>
+    <h3 data-l="en">Fold the window</h3>
+    <p data-l="ko">네 칸이에요 — 선반, 논문 목록, 읽는 자리, 정보 패널. 필요 없는 칸은 접어요.</p>
+    <p data-l="en">Four panes: the shelves, the list, the page, the inspector. Fold away the ones you are not using.</p>
+    <ul class="points" data-l="ko">
+      <li><span class="key">⌘[</span> 옆 목록, <span class="key">⌘P</span> 논문 목록, <span class="key">⌘\</span> 논문, <span class="key">⌘]</span> 정보 패널.</li>
+      <li><span class="key">⇧⌘F</span> 한 번이면 <b>논문만</b> 남아요. 다시 누르면 돌아와요.</li>
+    </ul>
+    <ul class="points" data-l="en">
+      <li><span class="key">⌘[</span> sidebar, <span class="key">⌘P</span> list, <span class="key">⌘\</span> paper, <span class="key">⌘]</span> inspector.</li>
+      <li><span class="key">⇧⌘F</span> leaves <b>only the paper</b>. Press it again to come back.</li>
+    </ul>
+    <div class="doc-demo" id="d-panes"></div>
+    <p class="caption" data-l="ko">키를 눌러보세요 — 칸이 실제로 접혀요.</p>
+    <p class="caption" data-l="en">Press a key. The panes actually fold.</p>
+  </article>
+
+  <article class="task">
+    <h3 data-l="ko">논문 두 편을 나란히</h3>
+    <h3 data-l="en">Two papers, side by side</h3>
+    <p data-l="ko">목록에서 논문을 <b>쪽 영역의 가장자리로 끌어다 놓으면</b> 그 자리에 놓여요. 왼쪽 절반, 오른쪽 절반, 네 귀퉁이 — 최대 넷까지요. 우클릭 메뉴의 «나란히 열기»도 같은 일을 해요.</p>
+    <p data-l="en">Drag a paper from the list <b>to the edge of the page area</b> and it lands there: left half, right half, or a quarter — up to four. “Open Side by Side” in the row's menu does the same.</p>
+    <p data-l="ko"><span class="key">⇧⌘O</span>는 지금 열려 있는 논문들을 쪽 위에 띄워요. 거기서 줄을 창 밖으로 끌면 <b>논문이 제 창</b>을 갖게 돼요.</p>
+    <p data-l="en"><span class="key">⇧⌘O</span> shows what is open, over the page. Drag a row out of the window and that paper <b>gets a window of its own</b>.</p>
+    <div class="doc-demo" id="d-split"></div>
+    <p class="caption" data-l="ko">끌어다 놓아보세요.</p>
+    <p class="caption" data-l="en">Drag one across.</p>
+    <p class="note" data-l="ko">칸을 클릭하면 그 칸이 «지금 보는 논문»이 돼요. 도구 막대도, 정보 패널도, 노트도 그 논문 것이 되고요.</p>
+    <p class="note" data-l="en">Click a pane and it becomes the one in focus — the toolbar, the inspector and the notes all follow it.</p>
+  </article>
+
+</section>
+
+<section class="doc" id="mark">
+  <h2 data-l="ko">표시</h2>
+  <h2 data-l="en">Marking</h2>
+  <p class="lede" data-l="ko">형광펜과 밑줄은 <b>PDF 파일 안에</b> 들어가요. 이 앱만 읽을 수 있는 기록이 아니라 표준 주석이에요 — Acrobat에서도, 아이패드에서도, 10년 뒤에도 보여요.</p>
+  <p class="lede" data-l="en">Highlights and underlines go <b>into the PDF file</b> as standard annotations — not into a database only this app can read. Acrobat sees them. An iPad sees them. So will whatever you use in ten years.</p>
+
+  <article class="task">
+    <h3 data-l="ko">긋기</h3>
+    <h3 data-l="en">Draw one</h3>
+    <ol class="steps" data-l="ko">
+      <li>글자를 드래그해서 고르고, 뜨는 작은 막대에서 색을 눌러요.</li>
+      <li>키로 하려면 <span class="key">⇧⌘H</span> 형광펜, <span class="key">⇧⌘U</span> 밑줄이에요.</li>
+      <li>표시를 다시 클릭하면 색을 바꾸거나 지울 수 있어요.</li>
+    </ol>
+    <ol class="steps" data-l="en">
+      <li>Select the text. A small bar appears; press a colour.</li>
+      <li>Or use the keys: <span class="key">⇧⌘H</span> to highlight, <span class="key">⇧⌘U</span> to underline.</li>
+      <li>Click a mark again to change its colour or take it away.</li>
+    </ol>
+  </article>
+
+  <article class="task">
+    <h3 data-l="ko">글자에 맞춰 그어져요</h3>
+    <h3 data-l="en">Fitted to the letters</h3>
+    <p data-l="ko">손으로 그은 사각형이 아니라 <b>글자의 모양</b>을 따라가요. 줄 끝에서 끊기고, 다음 줄에서 이어지고, 둥근 끝으로 그려져요. 그어놓고 나서 삐뚤어 보이는 일이 없어요.</p>
+    <p data-l="en">A mark follows <b>the shape of the text</b>, not the rectangle your hand drew: it stops at the end of a line, picks up on the next, and is drawn with rounded ends. It never looks crooked afterwards.</p>
+    <div class="doc-demo" id="d-fitted"></div>
+    <p class="caption" data-l="ko">«그은 대로»와 «글자에 맞춰»를 눌러 비교해보세요.</p>
+    <p class="caption" data-l="en">Compare “as drawn” with “fitted to the text”.</p>
+  </article>
+
+  <article class="task">
+    <h3 data-l="ko">표시한 곳으로 건너뛰기</h3>
+    <h3 data-l="en">Jump to what you marked</h3>
+    <p data-l="ko">정보 패널의 <b>Marks</b> 탭에 이 논문에 그은 것이 전부 모여요. 한 줄을 누르면 그 자리로 가요. 색으로 거를 수도 있고요.</p>
+    <p data-l="en">The <b>Marks</b> tab of the inspector holds everything you drew on this paper. Press a line and the page goes there. Filter by colour if you like.</p>
+    <div class="doc-demo" id="d-marks"></div>
+    <p class="caption" data-l="ko">줄을 눌러보세요.</p>
+    <p class="caption" data-l="en">Press a line.</p>
+  </article>
+
+  <article class="task">
+    <h3 data-l="ko">다른 기기에서 그은 표시</h3>
+    <h3 data-l="en">Marks made elsewhere</h3>
+    <p data-l="ko">클라우드 폴더를 쓰면 맥에서 그은 표시가 몇 초 뒤 아이패드에 나타나요. 기기마다 제 기록을 따로 쓰고, 1.5초 뒤에 PDF에 다시 써 넣어요 — 그래서 두 기기가 동시에 그어도 서로 지우지 않아요.</p>
+    <p data-l="en">With a cloud folder, a mark made on the Mac shows up on the iPad seconds later. Each device writes its own journal first and the PDF a second and a half after that, so two devices marking at once do not erase each other.</p>
+    <p class="note" data-l="ko">기다리기 싫으면 <span class="key">⌘R</span>가 «지금 맞추기»예요. 클라우드가 아직 안 가져온 것을 달라고 해요.</p>
+    <p class="note" data-l="en">Impatient? <span class="key">⌘R</span> is Sync Now — it asks the cloud for whatever it has not brought yet.</p>
+  </article>
+
+</section>
+
+<section class="doc" id="draw">
+  <h2 data-l="ko">그리기</h2>
+  <h2 data-l="en">Drawing</h2>
+  <p class="lede" data-l="ko"><span class="key">⇧⌘D</span>로 펜을 들면 쪽이 <b>캔버스</b>가 돼요. 손글씨만이 아니라 도형·화살표·글 카드·프레임까지 — Figma의 도구 줄을 논문 위에 올려놓은 셈이에요.</p>
+  <p class="lede" data-l="en"><span class="key">⇧⌘D</span> takes out the pen and the page becomes <b>a canvas</b>: handwriting, yes, but also shapes, arrows, text cards and frames — Figma's tool rack, laid over a paper.</p>
+
+  <article class="task">
+    <h3 data-l="ko">도구</h3>
+    <h3 data-l="en">The tools</h3>
+    <ul class="points" data-l="ko">
+      <li><b>V</b> 고르기 · <b>F</b> 프레임 · <b>T</b> 글</li>
+      <li><b>R</b> 네모 · <b>O</b> 동그라미 · <b>L</b> 선 · <b>A</b> 화살표</li>
+      <li><b>P</b> 펜 · <b>H</b> 형광펜 · <b>E</b> 지우개</li>
+    </ul>
+    <ul class="points" data-l="en">
+      <li><b>V</b> select · <b>F</b> frame · <b>T</b> text</li>
+      <li><b>R</b> rectangle · <b>O</b> ellipse · <b>L</b> line · <b>A</b> arrow</li>
+      <li><b>P</b> pen · <b>H</b> highlighter · <b>E</b> eraser</li>
+    </ul>
+    <p data-l="ko">«끝» 단추는 없어요. 그린 것을 클릭하면 펜이 저절로 들리고, 그 클릭이 바로 선택이 돼요 — 그린 그림이 먼저 잠금을 풀어야 하는 것이 되지 않도록요.</p>
+    <p data-l="en">There is no Done button. Click something you drew and the pen comes out by itself, with that same click selecting it — so what you drew is never a picture you have to unlock first.</p>
+  </article>
+
+  <article class="task">
+    <h3 data-l="ko">프레임과 묶음, 그리고 오토 레이아웃</h3>
+    <h3 data-l="en">Frames, groups and auto layout</h3>
+    <p data-l="ko"><b>F</b>로 프레임을 그리고 안에 무언가를 놓으면 프레임이 그걸 담아요. 프레임에 <b>레이아웃</b>을 주면 자식들이 줄이나 열로 정렬되고, 간격과 여백을 숫자로 줄 수 있어요. 여러 개를 골라 <span class="key">⌘G</span>로 묶으면 하나처럼 움직여요.</p>
+    <p data-l="en">Draw a frame with <b>F</b> and whatever you put inside belongs to it. Give the frame a <b>layout</b> and its children arrange into a row or a column, with the spacing and padding as numbers. Select several, press <span class="key">⌘G</span>, and they move as one.</p>
+    <p data-l="ko">오른쪽 <b>Tools</b> 탭이 고른 것의 인스펙터예요 — 위치, 크기, 정렬, 흐름, 간격, 여백, 투명도, 모서리, 채우기, 외곽선, 글꼴, 크기.</p>
+    <p data-l="en">The <b>Tools</b> tab on the right is the inspector for what you selected: position, size, alignment, flow, spacing, padding, opacity, corners, fill, stroke, typeface, size.</p>
+    <div class="doc-demo" id="d-draw"></div>
+    <p class="caption" data-l="ko">도구를 고르고 그려보세요.</p>
+    <p class="caption" data-l="en">Pick a tool and draw.</p>
+  </article>
+
+  <article class="task">
+    <h3 data-l="ko">그린 것은 어디에 남나요</h3>
+    <h3 data-l="en">Where the drawing goes</h3>
+    <p data-l="ko">잉크와 도형은 논문 옆의 사이드카 파일에 남고, <b>저장할 때 PDF에도 표준 주석으로</b> 써 넣어요. 그래서 사이드카가 없는 기기도 파일만으로 같은 그림을 되살려요.</p>
+    <p data-l="en">Ink and shapes live in a sidecar beside the paper, and are <b>written into the PDF as standard annotations</b> when you save. A machine with no sidecar rebuilds the same drawing from the file alone.</p>
+    <p class="note" data-l="ko">글 카드 안에 <code>$…$</code>를 쓰면 수식으로 조판돼요.</p>
+    <p class="note" data-l="en">Write <code>$…$</code> inside a text card and it is set as mathematics.</p>
+  </article>
+
+</section>
+
+<section class="doc" id="copy">
+  <h2 data-l="ko">베껴오기</h2>
+  <h2 data-l="en">Copying out</h2>
+  <p class="lede" data-l="ko">PDF에서 글을 복사하면 대개 줄바꿈이 부서지고 수식은 사라져요. 여기서는 안 그래요.</p>
+  <p class="lede" data-l="en">Copying out of a PDF usually breaks the line endings and loses the mathematics. Not here.</p>
+
+  <article class="task">
+    <h3 data-l="ko">Ultracopy</h3>
+    <h3 data-l="en">Ultracopy</h3>
+    <p data-l="ko">글을 고르고 <span class="key">⇧⌘C</span>. <b>글은 글로, 수식은 LaTeX으로</b> 나와요. 붙여 넣으면 바로 쓸 수 있는 마크다운이에요.</p>
+    <p data-l="en">Select and press <span class="key">⇧⌘C</span>. <b>The words come out as words and the mathematics as LaTeX</b> — Markdown you can paste and use.</p>
+    <p data-l="ko">제목은 제목으로, 문단은 한 문단으로 이어져요. 줄 끝에서 끊긴 단어는 붙고요.</p>
+    <p data-l="en">Headings stay headings, a paragraph comes out as one paragraph, and a word broken across a line is put back together.</p>
+    <div class="doc-demo" id="d-ultracopy"></div>
+    <p class="caption" data-l="ko">«복사»를 눌러 무엇이 나오는지 보세요.</p>
+    <p class="caption" data-l="en">Press copy and see what comes out.</p>
+  </article>
+
+  <article class="task">
+    <h3 data-l="ko">구절에 주소가 붙어요</h3>
+    <h3 data-l="en">A passage keeps its address</h3>
+    <p data-l="ko">고른 곳에서 <span class="key">⌘L</span>을 누르면 그 구절이 노트로 들어가요 — <b>몇 쪽 어디였는지까지</b> 함께요. 노트에서 그 인용을 클릭하면 논문의 그 줄로 돌아가요.</p>
+    <p data-l="en">Press <span class="key">⌘L</span> on a selection and the passage goes into a note — <b>with where it came from</b>. Click the quotation later and the paper opens at that line.</p>
+    <div class="doc-demo" id="d-quote"></div>
+    <p class="caption" data-l="ko">구절을 골라 노트로 보내보세요.</p>
+    <p class="caption" data-l="en">Send a passage to a note.</p>
+  </article>
+
+</section>
+
+<section class="doc" id="notes">
+  <h2 data-l="ko">노트</h2>
+  <h2 data-l="en">Notes</h2>
+  <p class="lede" data-l="ko">노트는 논문에 딸린 메모가 아니라 <b>슬립박스</b>예요. 평범한 Markdown 파일이라 다른 앱으로도 열려요.</p>
+  <p class="lede" data-l="en">Notes are not a memo field on a paper — they are <b>a slip-box</b>. Ordinary Markdown files, so any other app can open them.</p>
+
+  <article class="task">
+    <h3 data-l="ko">노트 쓰기</h3>
+    <h3 data-l="en">Write one</h3>
+    <ul class="points" data-l="ko">
+      <li><span class="key">⌘N</span>이 새 노트예요.</li>
+      <li>논문을 읽는 중이면 <span class="key">⌘L</span>로 고른 구절을 바로 노트에 넣을 수 있어요.</li>
+      <li><code>#태그</code>를 쓰면 태그가 되고, <code>$…$</code>는 수식으로 조판돼요.</li>
+    </ul>
+    <ul class="points" data-l="en">
+      <li><span class="key">⌘N</span> makes a new one.</li>
+      <li>While reading, <span class="key">⌘L</span> drops the selected passage straight into a note.</li>
+      <li><code>#tag</code> makes a tag; <code>$…$</code> is set as mathematics.</li>
+    </ul>
+  </article>
+
+  <article class="task">
+    <h3 data-l="ko">노트끼리 잇기</h3>
+    <h3 data-l="en">Join them</h3>
+    <p data-l="ko"><code>[[</code>를 치면 다른 노트를 찾는 창이 떠요. 이으면 양쪽에서 보여요 — 가리킨 쪽에도, <b>가리켜진 쪽에도</b>.</p>
+    <p data-l="en">Type <code>[[</code> and a finder for other notes appears. A link shows on both ends: on the note that made it, and <b>on the note it points at</b>.</p>
+    <div class="doc-demo" id="d-links"></div>
+    <p class="caption" data-l="ko"><code>[[</code>를 쳐보세요.</p>
+    <p class="caption" data-l="en">Type <code>[[</code> and see.</p>
+  </article>
+
+  <article class="task">
+    <h3 data-l="ko">읽는 동안 슬립박스가 말을 걸어요</h3>
+    <h3 data-l="en">While you read, the slip-box speaks first</h3>
+    <p data-l="ko">쪽을 읽고 있으면 그 쪽과 말이 겹치는 옛 노트를 옆에 띄워요. 무엇이 겹쳤는지도 같이요 — 「이 단어들 때문에」. 찾으러 가지 않아도 되는 게 요점이에요.</p>
+    <p data-l="en">As you read a page, notes you wrote before that share its words come up beside it — with the words they share, so you can see why. The point is that you did not have to go looking.</p>
+  </article>
+
+  <article class="task">
+    <h3 data-l="ko">지도와 초안</h3>
+    <h3 data-l="en">Maps and drafts</h3>
+    <p data-l="ko">노트가 쌓이면 <b>지도</b>가 필요해져요. 지도는 다른 노트를 늘어놓는 노트예요 — 순서를 정하고, 묶고, 빈 곳을 보여줘요.</p>
+    <p data-l="en">Once there are enough notes you want <b>a map</b>: a note that arranges other notes — an order, a grouping, and the gaps.</p>
+    <p data-l="ko">지도가 서면 그걸 <b>초안</b>으로 밀어낼 수 있어요. 노트가 문단이 되고, 인용은 주소를 달고 따라와요. 노트는 결국 글이 되어야 하니까요.</p>
+    <p data-l="en">When a map stands up, push it into <b>a draft</b>: the notes become paragraphs and the quotations come along with their addresses. Notes are meant to become writing.</p>
+    <div class="doc-demo" id="d-draft"></div>
+    <p class="caption" data-l="ko">밀어보세요.</p>
+    <p class="caption" data-l="en">Push it through.</p>
+  </article>
+
+  <article class="task">
+    <h3 data-l="ko">논문 없는 노트는 어디에 사나요</h3>
+    <h3 data-l="en">Where a note with no paper lives</h3>
+    <p data-l="ko">논문에 딸린 노트는 <b>그 논문이 있는 폴더 안에</b> 살아요. 폴더를 다른 기계에 가져가면 노트도 따라가고, 여기서 연결을 해제하면 조용히 같이 빠져요.</p>
+    <p data-l="en">A note about a paper lives <b>in the folder that paper is in</b>. Carry the folder to another machine and the note goes with it; disconnect the folder here and it goes quietly too.</p>
+    <p data-l="ko">그냥 떠오른 생각, 지도, 초안처럼 <b>논문이 없는 노트</b>는 갈 폴더가 없어요. 그래서 앱이 제 폴더를 하나 두고 거기에 담아요. 대가는 그 노트들이 기기를 따라다니지 않는다는 것이고, 얻는 건 어느 폴더를 뽑아도 사라지지 않는다는 거예요.</p>
+    <p data-l="en">A loose thought, a map, a draft — <b>a note about no paper</b> has no folder to belong to, so the app keeps its own box for those. The cost is that they do not travel between machines; what you get is that pulling out any folder never takes them with it.</p>
+  </article>
+
+</section>
+
+<section class="doc" id="find">
+  <h2 data-l="ko">찾기</h2>
+  <h2 data-l="en">Finding</h2>
+  <p class="lede" data-l="ko">칸이 하나예요. 제목이든 저자든 본문 속 한 줄이든 같은 곳에 쳐요.</p>
+  <p class="lede" data-l="en">One field. A title, an author, or a single line inside a paper — all of it goes in the same place.</p>
+
+  <article class="task">
+    <h3 data-l="ko">전부 찾기</h3>
+    <h3 data-l="en">Search everything</h3>
+    <p data-l="ko"><span class="key">⌘K</span>. 치는 대로 제목·저자·태그·컬렉션·노트가 걸리고, <b>논문 본문</b>도 같이 걸려요. 본문 결과를 누르면 그 논문의 그 줄로 가요.</p>
+    <p data-l="en"><span class="key">⌘K</span>. As you type it finds titles, authors, tags, collections and notes — and <b>the text inside the papers</b>. Press a text result and you land on that line.</p>
+    <p data-l="ko">지금 보고 있는 논문 안에서만 찾으려면 <span class="key">⌘F</span>예요.</p>
+    <p data-l="en">To search only the paper you are reading, <span class="key">⌘F</span>.</p>
+    <div class="doc-demo" id="d-search"></div>
+    <p class="caption" data-l="ko">쳐보세요.</p>
+    <p class="caption" data-l="en">Type in it.</p>
+    <p class="note" data-l="ko">논문 목록을 위로 잡아당겨도 찾기가 열려요. 당기는 동안 무엇이 열릴지 미리 보여주니까, 원하지 않으면 손을 놓으면 돼요.</p>
+    <p class="note" data-l="en">Pulling the paper list down past its top opens it too — and shows you what it is about to open, so you can stop.</p>
+  </article>
+
+</section>
+
+<section class="doc" id="biblio">
+  <h2 data-l="ko">서지와 BibTeX</h2>
+  <h2 data-l="en">Records and BibTeX</h2>
+  <p class="lede" data-l="ko">틀린 값을 조용히 저장하지 않아요. 확신이 없으면 <b>살펴볼 것</b>에 담아두고 물어봐요.</p>
+  <p class="lede" data-l="en">A value the app is not sure of is never written down as though it were. It waits under <b>Needs Review</b> instead.</p>
+
+  <article class="task">
+    <h3 data-l="ko">서지 채우기</h3>
+    <h3 data-l="en">Fill in a record</h3>
+    <ul class="points" data-l="ko">
+      <li>들여올 때 DOI나 arXiv 번호가 보이면 등록기관에 물어봐요.</li>
+      <li>없으면 첫 쪽을 읽어 제목과 저자를 짐작해요. 맥에서는 기기 안의 모델을 써요 — 밖으로 나가는 것은 없어요.</li>
+      <li>빠진 것만 다시 채우려면 <span class="key">⇧⌘R</span>.</li>
+      <li>정보 패널에서 직접 고쳐도 돼요. 후보가 여럿이면 목록에서 고를 수 있고요.</li>
+    </ul>
+    <ul class="points" data-l="en">
+      <li>On import, a DOI or arXiv id in the file is looked up with the registrar.</li>
+      <li>Without one, the first page is read for a title and authors. On a Mac that uses the on-device model; nothing leaves the machine.</li>
+      <li><span class="key">⇧⌘R</span> fills in what is still missing.</li>
+      <li>Or type it yourself in the inspector. Where there were several candidates, they are listed.</li>
+    </ul>
+  </article>
+
+  <article class="task">
+    <h3 data-l="ko">내보내기</h3>
+    <h3 data-l="en">Export</h3>
+    <ul class="points" data-l="ko">
+      <li><span class="key">⇧⌘E</span>가 BibTeX으로 내보내요. 고른 논문만, 컬렉션만, 라이브러리 전체 — 무엇을 보고 있든 그게 나가요.</li>
+      <li><span class="key">⇧⌘K</span>는 인용 키 하나를 복사해요. 원고에 쓰다가 키 하나만 필요할 때요.</li>
+      <li>인용 키는 라이브러리 안에서 겹치지 않게 붙어요. 같은 저자의 같은 해 논문 둘이면 <code>a</code>, <code>b</code>가 붙고요.</li>
+    </ul>
+    <ul class="points" data-l="en">
+      <li><span class="key">⇧⌘E</span> writes BibTeX. Whatever you are looking at is what goes out: a selection, a collection, or the whole library.</li>
+      <li><span class="key">⇧⌘K</span> copies one citation key — for when you are writing and need exactly that.</li>
+      <li>Keys are made unique across the library; two papers by the same author in the same year get an <code>a</code> and a <code>b</code>.</li>
+    </ul>
+    <p class="note" data-l="ko">Overleaf 연동은 없어요. <code>.bib</code> 파일의 품질에 집중하는 쪽을 골랐어요 — 이름의 특수문자 하나까지 맞게요.</p>
+    <p class="note" data-l="en">There is no Overleaf integration. The effort went into the <code>.bib</code> file instead, down to the accents in a name.</p>
+  </article>
+
+</section>
+
+<section class="doc" id="library">
+  <h2 data-l="ko">라이브러리</h2>
+  <h2 data-l="en">The library</h2>
+  <p class="lede" data-l="ko">폴더 하나로 시작하지만, 하나일 필요는 없어요.</p>
+  <p class="lede" data-l="en">It starts as one folder. It does not have to stay one.</p>
+
+  <article class="task">
+    <h3 data-l="ko">폴더 여러 개</h3>
+    <h3 data-l="en">More than one folder</h3>
+    <p data-l="ko">사이드바 맨 위 <b>라이브러리</b>에 열어둔 폴더가 줄마다 서요. «라이브러리 더하기…»로 폴더를 더하면 그 폴더의 논문이 같이 보여요. 줄을 누르면 그 폴더만 보고요.</p>
+    <p data-l="en">The <b>Libraries</b> section at the top of the sidebar lists the folders you have open. Add Library… opens another beside it, and its papers join the list. Press a row to see only that folder.</p>
+    <p data-l="ko"><b>폴더의 것은 전부 그 폴더 안에 있어요</b> — 기록도, 노트도, 그 논문들이 입은 태그와 컬렉션도. 그래서 폴더 하나를 다른 기계로 가져가면 온전하고, 여기서 연결을 해제하면 딱 그 폴더만 빠져요.</p>
+    <p data-l="en"><b>Everything a folder's papers carry lives in that folder</b>: the records, the notes, and the tags and collections they wear. Carry one folder to another machine and it is whole; disconnect it here and only it goes.</p>
+    <div class="doc-demo" id="d-libraries"></div>
+    <p class="caption" data-l="ko">폴더를 눌러 걸러보세요.</p>
+    <p class="caption" data-l="en">Press a folder to narrow the list.</p>
+    <p class="note" data-l="ko">«연결 해제»는 <b>목록에서만 빼요</b>. 파일도 기록도 그대로 둬요 — 이게 이 앱의 약속이에요.</p>
+    <p class="note" data-l="en">Disconnect <b>only removes it from the list</b>. The files and the records stay exactly as they were. That is the promise.</p>
+  </article>
+
+  <article class="task">
+    <h3 data-l="ko">선반</h3>
+    <h3 data-l="en">The shelves</h3>
+    <p data-l="ko">사이드바의 선반은 세 가지를 물어요 — 무엇인지(모두·논문·문서), 얼마나 읽었는지(안 읽음·읽는 중·읽음), 내가 뭘 했는지(즐겨찾기·살펴볼 것·열린 논문). 그래서 세 묶음으로 떨어져 있어요.</p>
+    <p data-l="en">The shelves ask three different questions — what a thing is, how far through it you are, and what you did about it — so they sit in three groups.</p>
+    <p data-l="ko">논문을 선반 위로 <b>끌어다 놓으면</b> 그렇게 돼요. 읽기 상태도, 즐겨찾기도, 컬렉션도, 태그도요.</p>
+    <p data-l="en"><b>Drag a paper onto a shelf</b> and it becomes that: a reading status, a favourite, a collection, a tag.</p>
+  </article>
+
+  <article class="task">
+    <h3 data-l="ko">파일 이름 고치기</h3>
+    <h3 data-l="en">Rename the file</h3>
+    <p data-l="ko">정보 패널의 <b>파일</b> 칸에서 이름을 고치면 <b>Finder의 파일 이름도 같이</b> 바뀌어요. 라이브러리는 사람이 이름 붙인 PDF들의 폴더니까, 앱에서 보는 이름과 폴더에서 보는 이름은 같은 이름이어야 하니까요.</p>
+    <p data-l="en">Edit the name in the <b>File</b> field of the inspector and <b>the file on disk is renamed too</b>. A library is a folder of PDFs under the names a person gave them; the name in the app and the name in the folder should be the same name.</p>
+    <p data-l="ko">확장자는 안 적어도 붙고, 구분자가 든 이름이나 이미 있는 이름은 거절해요. 표시·필기·노트·읽기 상태는 움직이지 않아요 — 기록은 논문의 번호로 묶여 있거든요.</p>
+    <p data-l="en">You need not type the extension. Names with a separator in them, and names already taken, are refused. Your marks, ink, notes and reading state do not move: the record is keyed by the paper, not by the file name.</p>
+    <div class="doc-demo" id="d-name"></div>
+    <p class="caption" data-l="ko">이름을 고쳐보세요 — 아래 Finder 줄이 따라와요.</p>
+    <p class="caption" data-l="en">Type a new name. The line underneath follows.</p>
+  </article>
+
+</section>
+
+<section class="doc" id="everywhere">
+  <h2 data-l="ko">어디서나</h2>
+  <h2 data-l="en">Everywhere</h2>
+  <p class="lede" data-l="ko">맥, 윈도우, 리눅스, 아이패드, 아이폰. 서버도, 계정도, 구독도 없어요 — <b>같은 폴더를 열 뿐</b>이에요.</p>
+  <p class="lede" data-l="en">macOS, Windows, Linux, iPad, iPhone. No server, no account, no subscription — <b>they open the same folder</b>.</p>
+
+  <article class="task">
+    <h3 data-l="ko">세 데스크톱</h3>
+    <h3 data-l="en">Three desktops</h3>
+    <p data-l="ko">맥은 네이티브 앱이고, 윈도우와 리눅스는 같은 파일 형식에 합의한 두 번째 구현이에요. 라이브러리는 PDF 옆의 작은 JSON이고 표시와 필기는 PDF 안에 있으니, 두 구현은 그 자체로 호환돼요.</p>
+    <p data-l="en">The Mac app is native; the Windows and Linux build is a second implementation that agreed on the same files. The library is small JSON beside the PDFs and the marks are inside them, so the two are compatible by construction.</p>
+    <div class="doc-demo" id="d-desktops"></div>
+    <p class="caption" data-l="ko">데스크톱을 바꿔보세요.</p>
+    <p class="caption" data-l="en">Switch desktops.</p>
+    <p class="note" data-l="ko">일부러 다르게 둔 건 창 단추 하나뿐이에요 — 맥은 왼쪽 신호등, 윈도우·리눅스는 오른쪽. 그 단추는 데스크톱의 것이지 이 앱의 것이 아니니까요.</p>
+    <p class="note" data-l="en">Exactly one thing is deliberately different: the window buttons. Those belong to the desktop, not to this app.</p>
+  </article>
+
+  <article class="task">
+    <h3 data-l="ko">손에 드는 기기</h3>
+    <h3 data-l="en">In your hands</h3>
+    <p data-l="ko">아이패드에서는 Apple Pencil로 그대로 써요. 맥에서 그은 표시가 몇 초 뒤 아이패드에 있고, 아이패드에서 쓴 글씨가 맥에 있어요.</p>
+    <p data-l="en">On an iPad you write with Apple Pencil. A mark made on the Mac is on the iPad seconds later, and what you wrote on the iPad is on the Mac.</p>
+    <div class="doc-demo" id="d-devices"></div>
+    <p class="caption" data-l="ko">기기를 눌러보세요.</p>
+    <p class="caption" data-l="en">Press a device.</p>
+  </article>
+
+</section>
+
+<section class="doc" id="locked">
+  <h2 data-l="ko">안 열리는 PDF</h2>
+  <h2 data-l="en">PDFs that will not open</h2>
+  <p class="lede" data-l="ko">PDF 암호화에는 종류가 셋 있고, 그중 하나만 암호로 열려요. 이 앱은 <b>어느 쪽인지 정확히 말해줘요</b> — 「열 수 없음」이 아니라.</p>
+  <p class="lede" data-l="en">There are three kinds of locked PDF and only one of them opens with a password. The app <b>says which one you have</b>, rather than “cannot open”.</p>
+
+  <article class="task">
+    <h3 data-l="ko">셋 중 어느 자물쇠인가요</h3>
+    <h3 data-l="en">Which lock is it</h3>
+    <ul class="points" data-l="ko">
+      <li><b>암호</b> — 암호를 물어보고, 맞으면 열려요.</li>
+      <li><b>회사 권한 서비스</b> — 열쇠를 회사의 서버가 들고 있어요. 등록된 앱만 열 수 있어요.</li>
+      <li><b>인증서</b> — 열쇠가 특정 인증서에 묶여 있어요.</li>
+    </ul>
+    <ul class="points" data-l="en">
+      <li><b>A password</b> — you are asked for it, and it opens.</li>
+      <li><b>A company's rights service</b> — the key is held by their server, and only a registered app can ask for it.</li>
+      <li><b>A certificate</b> — the key is tied to one.</li>
+    </ul>
+    <div class="doc-demo" id="d-locked"></div>
+    <p class="caption" data-l="ko">어느 쪽인지 눌러보세요.</p>
+    <p class="caption" data-l="en">Press each one.</p>
+    <p class="note warn" data-l="ko">뒤의 둘은 이 앱이 열 길이 없어요. 그래서 빈 화면 대신 <b>왜 못 여는지</b>를 말해요.</p>
+    <p class="note warn" data-l="en">The last two are not something this app can open. So it tells you why, instead of showing you a blank page.</p>
+  </article>
+
+</section>
+
+<section class="doc" id="keys">
+  <h2 data-l="ko">단축키</h2>
+  <h2 data-l="en">Keys</h2>
+  <p class="lede" data-l="ko">전부 바꿀 수 있어요 — 설정의 <b>Keys</b>에서요. 아래는 기본값이에요.</p>
+  <p class="lede" data-l="en">Every one of these can be changed, under <b>Keys</b> in Settings. These are the defaults.</p>
+
+  <table class="keys" data-l="ko"><caption>라이브러리</caption><tbody>
+      <tr><td class="k"><span class="key">⌘O</span></td><td>논문 더하기</td></tr>
+      <tr><td class="k"><span class="key">⌘R</span></td><td>지금 맞추기</td></tr>
+      <tr><td class="k"><span class="key">⇧⌘R</span></td><td>빠진 서지 채우기</td></tr>
+      <tr><td class="k"><span class="key">⇧⌘E</span></td><td>BibTeX 내보내기</td></tr>
+      <tr><td class="k"><span class="key">⇧⌘K</span></td><td>인용 키 복사</td></tr>
+  </tbody></table>
+  <table class="keys" data-l="en"><caption>Library</caption><tbody>
+      <tr><td class="k"><span class="key">⌘O</span></td><td>Add Papers</td></tr>
+      <tr><td class="k"><span class="key">⌘R</span></td><td>Sync Now</td></tr>
+      <tr><td class="k"><span class="key">⇧⌘R</span></td><td>Resolve Missing Metadata</td></tr>
+      <tr><td class="k"><span class="key">⇧⌘E</span></td><td>Export BibTeX</td></tr>
+      <tr><td class="k"><span class="key">⇧⌘K</span></td><td>Copy Citation Key</td></tr>
+  </tbody></table>
+  <table class="keys" data-l="ko"><caption>읽기</caption><tbody>
+      <tr><td class="k"><span class="key">⌘K</span></td><td>전부 찾기</td></tr>
+      <tr><td class="k"><span class="key">⌘F</span></td><td>이 논문에서 찾기</td></tr>
+      <tr><td class="k"><span class="key">⇧⌘C</span></td><td>Ultracopy</td></tr>
+      <tr><td class="k"><span class="key">⌘L</span></td><td>고른 곳을 노트로</td></tr>
+      <tr><td class="k"><span class="key">⌘1</span></td><td>이어서 보기</td></tr>
+      <tr><td class="k"><span class="key">⌘2</span></td><td>한 쪽씩 보기</td></tr>
+      <tr><td class="k"><span class="key">⌘3</span></td><td>책처럼 보기</td></tr>
+  </tbody></table>
+  <table class="keys" data-l="en"><caption>Reading</caption><tbody>
+      <tr><td class="k"><span class="key">⌘K</span></td><td>Search Everything</td></tr>
+      <tr><td class="k"><span class="key">⌘F</span></td><td>Find in Document</td></tr>
+      <tr><td class="k"><span class="key">⇧⌘C</span></td><td>Ultracopy</td></tr>
+      <tr><td class="k"><span class="key">⌘L</span></td><td>Link Selection to Note</td></tr>
+      <tr><td class="k"><span class="key">⌘1</span></td><td>Continuous Layout</td></tr>
+      <tr><td class="k"><span class="key">⌘2</span></td><td>Single Page Layout</td></tr>
+      <tr><td class="k"><span class="key">⌘3</span></td><td>Book Layout</td></tr>
+  </tbody></table>
+  <table class="keys" data-l="ko"><caption>표시</caption><tbody>
+      <tr><td class="k"><span class="key">⇧⌘H</span></td><td>고른 곳에 형광펜</td></tr>
+      <tr><td class="k"><span class="key">⇧⌘U</span></td><td>고른 곳에 밑줄</td></tr>
+      <tr><td class="k"><span class="key">⌘N</span></td><td>새 노트</td></tr>
+      <tr><td class="k"><span class="key">⇧⌘D</span></td><td>쪽에 그리기</td></tr>
+  </tbody></table>
+  <table class="keys" data-l="en"><caption>Marking</caption><tbody>
+      <tr><td class="k"><span class="key">⇧⌘H</span></td><td>Highlight Selection</td></tr>
+      <tr><td class="k"><span class="key">⇧⌘U</span></td><td>Underline Selection</td></tr>
+      <tr><td class="k"><span class="key">⌘N</span></td><td>New Note</td></tr>
+      <tr><td class="k"><span class="key">⇧⌘D</span></td><td>Draw on the Page</td></tr>
+  </tbody></table>
+  <table class="keys" data-l="ko"><caption>창</caption><tbody>
+      <tr><td class="k"><span class="key">⌘[</span></td><td>옆 목록</td></tr>
+      <tr><td class="k"><span class="key">⌘P</span></td><td>논문 목록</td></tr>
+      <tr><td class="k"><span class="key">⌘\</span></td><td>논문</td></tr>
+      <tr><td class="k"><span class="key">⌘]</span></td><td>정보 패널</td></tr>
+      <tr><td class="k"><span class="key">⇧⌘F</span></td><td>논문에 집중</td></tr>
+      <tr><td class="k"><span class="key">⇧⌘L</span></td><td>차례</td></tr>
+      <tr><td class="k"><span class="key">⇧⌘O</span></td><td>열린 논문</td></tr>
+  </tbody></table>
+  <table class="keys" data-l="en"><caption>Window</caption><tbody>
+      <tr><td class="k"><span class="key">⌘[</span></td><td>Sidebar</td></tr>
+      <tr><td class="k"><span class="key">⌘P</span></td><td>Paper List</td></tr>
+      <tr><td class="k"><span class="key">⌘\</span></td><td>Paper</td></tr>
+      <tr><td class="k"><span class="key">⌘]</span></td><td>Inspector</td></tr>
+      <tr><td class="k"><span class="key">⇧⌘F</span></td><td>Focus on the Paper</td></tr>
+      <tr><td class="k"><span class="key">⇧⌘L</span></td><td>Table of Contents</td></tr>
+      <tr><td class="k"><span class="key">⇧⌘O</span></td><td>Open Papers</td></tr>
+  </tbody></table>
+  <table class="keys" data-l="ko"><caption>오가기</caption><tbody>
+      <tr><td class="k"><span class="key">⌘+</span></td><td>크게</td></tr>
+      <tr><td class="k"><span class="key">⌘−</span></td><td>작게</td></tr>
+      <tr><td class="k"><span class="key">⌘0</span></td><td>실제 크기</td></tr>
+      <tr><td class="k"><span class="key">⌘↓</span></td><td>다음 쪽</td></tr>
+      <tr><td class="k"><span class="key">⌘↑</span></td><td>이전 쪽</td></tr>
+      <tr><td class="k"><span class="key">⌥⌘↓</span></td><td>다음 논문</td></tr>
+      <tr><td class="k"><span class="key">⌥⌘↑</span></td><td>이전 논문</td></tr>
+      <tr><td class="k"><span class="key">⌥⌘[</span></td><td>뒤로</td></tr>
+      <tr><td class="k"><span class="key">⌥⌘]</span></td><td>앞으로</td></tr>
+  </tbody></table>
+  <table class="keys" data-l="en"><caption>Navigation</caption><tbody>
+      <tr><td class="k"><span class="key">⌘+</span></td><td>Zoom In</td></tr>
+      <tr><td class="k"><span class="key">⌘−</span></td><td>Zoom Out</td></tr>
+      <tr><td class="k"><span class="key">⌘0</span></td><td>Actual Size</td></tr>
+      <tr><td class="k"><span class="key">⌘↓</span></td><td>Next Page</td></tr>
+      <tr><td class="k"><span class="key">⌘↑</span></td><td>Previous Page</td></tr>
+      <tr><td class="k"><span class="key">⌥⌘↓</span></td><td>Next Paper</td></tr>
+      <tr><td class="k"><span class="key">⌥⌘↑</span></td><td>Previous Paper</td></tr>
+      <tr><td class="k"><span class="key">⌥⌘[</span></td><td>Back</td></tr>
+      <tr><td class="k"><span class="key">⌥⌘]</span></td><td>Forward</td></tr>
+  </tbody></table>
+  <table class="keys" data-l="ko"><caption>앱</caption><tbody>
+      <tr><td class="k"><span class="key">⌘,</span></td><td>설정</td></tr>
+      <tr><td class="k"><span class="key">⌥⌘/</span></td><td>한마디 보내기</td></tr>
+  </tbody></table>
+  <table class="keys" data-l="en"><caption>Application</caption><tbody>
+      <tr><td class="k"><span class="key">⌘,</span></td><td>Settings</td></tr>
+      <tr><td class="k"><span class="key">⌥⌘/</span></td><td>Send Feedback</td></tr>
+  </tbody></table>
+</section>
+
+<section class="doc" id="help">
+  <h2 data-l="ko">막히면</h2>
+  <h2 data-l="en">If something is wrong</h2>
+  <p class="lede" data-l="ko">베타 버전이에요. 매일 쓰면서 자주 바꾸고 있어요.</p>
+  <p class="lede" data-l="en">This is a beta. It is used daily and changed often.</p>
+
+  <article class="task">
+    <h3 data-l="ko">한마디 보내기</h3>
+    <h3 data-l="en">Send a word</h3>
+    <p data-l="ko"><span class="key">⌥⌘/</span>를 누르면 화면이 이미 찍힌 채로 창이 열려요. 무엇이 이상했는지 한 줄 쓰고 보내면 돼요. 보낸 사람 이름은 앱의 About에 남아요.</p>
+    <p data-l="en">Press <span class="key">⌥⌘/</span> and a window opens with the screen already captured. Write a line about what was wrong and send it. Your name goes into the app's About page.</p>
+  </article>
+
+  <article class="task">
+    <h3 data-l="ko">잃을 게 없어요</h3>
+    <h3 data-l="en">Nothing to lose</h3>
+    <p data-l="ko">논문은 앱 안이 아니라 <b>내가 고른 폴더</b>에 평범한 파일로 있어요. 노트도 Markdown 파일이고요. 앱을 지워도 읽던 것은 그 자리에 남아요.</p>
+    <p data-l="en">Your papers are ordinary files in <b>the folder you chose</b>, not inside the app; your notes are Markdown. Delete the app and what you were reading is still there.</p>
+  </article>
+
+</section>
+
+  </main>
+</div>
+
+<footer class="docs-foot">
+  <div class="inner">
+    <p data-l="ko">못 찾은 게 있으면 앱에서 <span class="key">⌥⌘/</span>를 눌러 한마디 보내주세요. 이 설명서도 그렇게 고쳐져요.</p>
+    <p data-l="en">If something here is missing, press <span class="key">⌥⌘/</span> in the app and say so. This page gets fixed the same way.</p>
+    <span class="spacer"></span>
+    <a class="btn btn-primary" href="index.html#top"><span><span class="label" data-l="ko">받기</span><span class="label" data-l="en">Download</span></span></a>
+  </div>
+</footer>
+
+<script src="demos.js?v=0.9.2"></script>
+<script src="docs.js?v=0.9.2"></script>
+</body>
+</html>

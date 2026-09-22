@@ -58,17 +58,19 @@ public struct DocumentSignals: Hashable, Sendable {
         self.hasReferences = hasReferences
     }
 
-    /// Whether this reads as a paper or as something else somebody reads.
+    /// Whether this reads as a paper, a book, or something else somebody reads.
     ///
     /// The identifier is near proof: nobody prints a DOI on a car manual.
     /// Without one, an abstract and a reference list together are what make a
-    /// paper look like a paper. Everything else is a document, and being
-    /// wrong costs one tap in the inspector.
+    /// paper look like a paper — and a reference list on its own, in a file
+    /// hundreds of pages long, is a book. Everything else is a document, and
+    /// being wrong costs one tap in the inspector.
     public var guess: DocumentGuess {
         DocumentGuess.of(
             hasIdentifier: !IdentifierScanner.scan(openingText).isEmpty,
             hasAbstract: hasAbstract,
-            hasReferences: hasReferences
+            hasReferences: hasReferences,
+            pageCount: pageCount
         )
     }
 }

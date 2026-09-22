@@ -129,15 +129,21 @@ struct PaperListView: View {
                     }
                 }
                 Section {
+                // Once for the list, not once for every row in it: the
+                // setting is a string that has to be taken apart, and taking
+                // it apart sixty times to draw sixty rows is sixty times the
+                // work for one answer.
+                let fields = SubtitleField.parse(app.settings.listSubtitleFields)
+                let onOpenShelf = model.scope == .open
                 ForEach(model.visiblePapers) { paper in
                     PaperRow(
                         paper: paper,
                         tags: paper.meta.tagIDs.compactMap { model.tag(for: $0) },
                         attachmentCount: model.attachmentCount(of: paper.id),
                         isResolving: model.resolving.contains(paper.id),
-                        subtitleFields: SubtitleField.parse(app.settings.listSubtitleFields),
+                        subtitleFields: fields,
                         model: model,
-                        onOpenShelf: model.scope == .open,
+                        onOpenShelf: onOpenShelf,
                         isKeptOpen: model.isPinned(paper.id)
                     )
                     .tag(paper.id)
@@ -300,7 +306,7 @@ struct PaperListView: View {
         // Carried down by the pull rather than pinned to the edge, so it
         // reads as something the gesture is uncovering.
         .offset(y: max(0, pull * 0.34) + 4)
-        .animation(.snappy(duration: 0.14), value: armed)
+        .animation(Motion.tap, value: armed)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
@@ -524,6 +530,7 @@ struct PaperRow: View, Equatable {
         // each — which is what a wrongly answered import feels like.
         Picker(L("종류", "Kind"), selection: kindBinding(paper)) {
             Label(L("논문", "Paper"), systemImage: "text.document").tag(DocumentKind.paper)
+            Label(L("책", "Book"), systemImage: "book").tag(DocumentKind.book)
             Label(L("일반 문서", "Document"), systemImage: "doc").tag(DocumentKind.document)
         }
 
@@ -582,19 +589,22 @@ struct PaperRow: View, Equatable {
         guard line.isEmpty else { return line }
         // The fields under a title are a bibliography's — authors, year,
         // venue — and a manual has none of them, so the row came out bare.
-        // What a document does have is a file and a length.
-        guard paper.meta.effectiveKind == .document else { return line }
+        // What a document does have is a file and a length; a book has a
+        // publisher, which is the one thing worth reading off a shelf of them.
+        guard paper.meta.effectiveKind != .paper else { return line }
         let pages = paper.meta.file.pageCount
         return [
             paper.meta.csl.publisher,
+            paper.meta.csl.year.map(String.init),
             pages > 0 ? L("\(pages)쪽", "\(pages) pages") : nil,
         ].compactMap { $0 }.joined(separator: " · ")
     }
 
-    /// A document has no registrar to disagree with, so it is never a thing
-    /// to review — only a paper whose lookup came back unsure is.
+    /// Neither a document nor a book has a registrar to disagree with, so
+    /// neither is ever a thing to review — only a paper whose lookup came back
+    /// unsure is.
     private func needsReview(_ paper: LoadedPaper) -> Bool {
-        paper.meta.effectiveKind == .paper
+        paper.meta.effectiveKind.isLookedUp
             && (paper.meta.confidence == .needsReview || paper.meta.confidence == .unparsed)
     }
 

@@ -17,7 +17,7 @@ struct CapsulePicker<Value: Hashable>: View {
             ForEach(options, id: \.value) { option in
                 let isOn = option.value == selection
                 Button {
-                    withAnimation(.snappy(duration: 0.15)) { selection = option.value }
+                    withAnimation(Motion.tap) { selection = option.value }
                 } label: {
                     Text(option.label)
                         .font(.subheadline)

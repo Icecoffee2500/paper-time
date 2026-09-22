@@ -106,8 +106,8 @@ struct LibrarySidebar: View {
         .padding(.top, 1)
         .padding(.trailing, 1)
         .opacity(dismissShown ? 1 : 0)
-        .animation(.easeOut(duration: 0.12), value: dismissShown)
-        .animation(.easeOut(duration: 0.1), value: hoveringDismiss)
+        .animation(Motion.tap, value: dismissShown)
+        .animation(Motion.tap, value: hoveringDismiss)
         .accessibilityLabel(L("찾기 끝내기", "Clear Search"))
         .help(L("찾기 끝내기", "Clear Search"))
     }
@@ -208,16 +208,26 @@ struct LibrarySidebar: View {
                 Label(L("모두", "All"), systemImage: "tray.full")
                     .count(model.counts.all, current: model.scope == .all)
                     .scopeRow(.all, in: model)
-                // The two kinds appear only once the library holds both. A
-                // shelf that has never seen anything but papers looks exactly
-                // as it did, which is most libraries here.
-                if model.counts.documents > 0, model.counts.papers > 0 {
-                    Label(L("논문", "Papers"), systemImage: "text.document")
-                        .count(model.counts.papers, current: model.scope == .papers)
-                        .scopeRow(.papers, in: model)
-                    Label(L("문서", "Documents"), systemImage: "doc")
-                        .count(model.counts.documents, current: model.scope == .documents)
-                        .scopeRow(.documents, in: model)
+                // The kinds appear only once the library holds more than one
+                // of them, and only the ones it holds. A shelf that has never
+                // seen anything but papers looks exactly as it did, which is
+                // most libraries here.
+                if showsKinds {
+                    if model.counts.papers > 0 {
+                        Label(L("논문", "Papers"), systemImage: "text.document")
+                            .count(model.counts.papers, current: model.scope == .papers)
+                            .scopeRow(.papers, in: model)
+                    }
+                    if model.counts.books > 0 {
+                        Label(L("책", "Books"), systemImage: "book")
+                            .count(model.counts.books, current: model.scope == .books)
+                            .scopeRow(.books, in: model)
+                    }
+                    if model.counts.documents > 0 {
+                        Label(L("문서", "Documents"), systemImage: "doc")
+                            .count(model.counts.documents, current: model.scope == .documents)
+                            .scopeRow(.documents, in: model)
+                    }
                 }
             } header: {
                 // No name: these are not a category, they are the list. The
@@ -355,7 +365,7 @@ struct LibrarySidebar: View {
                 }
                 if ranking.count > 10 {
                     Button(showsAllAuthors ? L("줄이기", "Show Fewer") : L("\(ranking.count)명 모두 보기", "Show All \(ranking.count)")) {
-                        withAnimation(.snappy(duration: 0.2)) { showsAllAuthors.toggle() }
+                        withAnimation(Motion.move) { showsAllAuthors.toggle() }
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
@@ -363,6 +373,14 @@ struct LibrarySidebar: View {
                 }
             }
         }
+    }
+
+    /// Whether the kinds are worth listing: only when the library holds more
+    /// than one of them. One kind on its own is the library, and a row saying
+    /// so is a row that filters nothing.
+    private var showsKinds: Bool {
+        [model.counts.papers, model.counts.books, model.counts.documents]
+            .count { $0 > 0 } > 1
     }
 
     private func symbolName(for collection: Collection) -> String {
@@ -546,7 +564,7 @@ private struct ScopeRow: ViewModifier {
             .onTapGesture {
                 // Animated, so the lit shape travels from the row you were on
                 // to this one rather than blinking out and in somewhere else.
-                withAnimation(.smooth(duration: 0.32)) { model.scope = scope }
+                withAnimation(Motion.surface) { model.scope = scope }
                 // On the iPad the list is the split view's first column and
                 // the shelves came from a panel, which has done its job —
                 // but not before the glass has been seen arriving. A panel
