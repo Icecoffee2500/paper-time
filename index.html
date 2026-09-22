@@ -33,7 +33,7 @@
   document.documentElement.lang = lang;
 })();
 </script>
-<link rel="stylesheet" href="style.css?v=0.9.1">
+<link rel="stylesheet" href="style.css?v=0.9.2">
 </head>
 <body>
 
@@ -47,6 +47,7 @@
     <a href="#library"><span data-l="ko">라이브러리</span><span data-l="en">Library</span></a>
     <a href="#everywhere"><span data-l="ko">어디서나</span><span data-l="en">Everywhere</span></a>
     <a href="#together"><span data-l="ko">함께</span><span data-l="en">Together</span></a>
+    <a href="docs.html"><span data-l="ko">설명서</span><span data-l="en">Manual</span></a>
   </nav>
   <span class="spacer"></span>
   <div class="lang" id="lang" role="group" aria-label="Language"></div>
@@ -73,7 +74,6 @@
         <span class="sub">macOS</span>
       </span>
     </a>
-    <a class="btn btn-ghost" id="watch" href="film.html"><span data-l="ko">영상 보기</span><span data-l="en">Watch the film</span></a>
     <button class="btn btn-ghost" id="how"><span data-l="ko">설치하는 법</span><span data-l="en">How to install</span></button>
     <button class="btn btn-ghost" id="older"><span data-l="ko">이전 버전</span><span data-l="en">Older versions</span></button>
     <!-- Which desktop the button points at. Set from the visitor's own to
@@ -93,12 +93,12 @@
       <p class="eyebrow" data-l="en">New</p>
       <h2 class="display" data-l="ko">논문만이 아니라,<br>모든 PDF.</h2>
       <h2 class="display" data-l="en">Not only papers.<br>Every PDF.</h2>
-      <p class="say" data-l="ko">계약서도, 매뉴얼도, 스캔한 책도 같은 라이브러리에 들어와요.
-        새 PDF에는 <b>먼저 물어봐요</b> — 논문인가요, 일반 문서인가요. 답에 따라 칸이 바뀌고,
-        문서는 등록기관에 묻지도 않아요.</p>
-      <p class="say" data-l="en">Contracts, manuals, scanned books — they all live in the same library.
-        A new PDF is <b>asked what it is</b>: a paper, or a document. The fields follow the answer,
-        and a document is never looked up online.</p>
+      <p class="say" data-l="ko">교과서도, 계약서도, 매뉴얼도 같은 라이브러리에 들어와요.
+        새 PDF에는 <b>먼저 물어봐요</b> — 논문인가요, 책인가요, 일반 문서인가요. 답에 따라 칸이 바뀌고,
+        책은 <b>출판사와 ISBN</b>을, 문서는 아무것도 등록기관에 묻지 않아요.</p>
+      <p class="say" data-l="en">Textbooks, contracts, manuals — they all live in the same library.
+        A new PDF is <b>asked what it is</b>: a paper, a book, or a document. The fields follow the answer —
+        a book gets <b>a publisher and an ISBN</b> — and a document is never looked up online.</p>
     </div>
     <div class="duo">
       <article class="cell">
@@ -642,6 +642,6 @@
   </div>
 </dialog>
 
-<script src="demos.js?v=0.9.1"></script>
+<script src="demos.js?v=0.9.2"></script>
 </body>
 </html>

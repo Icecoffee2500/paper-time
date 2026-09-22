@@ -2,11 +2,100 @@
   "repo": "Icecoffee2500/paper-time",
   "releases": [
     {
+      "version": "0.9.2",
+      "date": "2026-09-22T01:17:56Z",
+      "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.2/Paper.Time.0.9.2.dmg",
+      "size": 6355499,
+      "downloads": 0,
+      "builds": {
+        "mac": [
+          {
+            "label": "디스크 이미지",
+            "label_en": "Disk image",
+            "arch": "Apple Silicon",
+            "arch_en": "Apple Silicon",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.2/Paper.Time.0.9.2.dmg",
+            "size": 6355499,
+            "downloads": 0
+          }
+        ],
+        "windows": [
+          {
+            "label": "설치본",
+            "label_en": "Installer",
+            "arch": "64비트 · ARM",
+            "arch_en": "64-bit and ARM",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.2/Paper.Time.Setup.0.9.2.exe",
+            "size": 177008088,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "64비트",
+            "arch_en": "64-bit",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.2/Paper.Time-0.9.2-win.zip",
+            "size": 116181344,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.2/Paper.Time-0.9.2-arm64-win.zip",
+            "size": 121129025,
+            "downloads": 0
+          }
+        ],
+        "linux": [
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.2/Paper.Time-0.9.2-x86_64.AppImage",
+            "size": 113197415,
+            "downloads": 0
+          },
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.2/Paper.Time-0.9.2-arm64.AppImage",
+            "size": 113579894,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.2/paper-time-0.9.2.tar.gz",
+            "size": 107394991,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.2/paper-time-0.9.2-arm64.tar.gz",
+            "size": 111891557,
+            "downloads": 0
+          }
+        ]
+      },
+      "note": "여는 데 걸리던 시간이 대부분 사라졌어요. 책이 제 종류가 됐고, 앱의 움직임도 한 벌로 맞췄어요.",
+      "note_en": "Most of the wait at launch is gone, a book is its own kind at last, and the app moves as one thing."
+    },
+    {
       "version": "0.9.1",
       "date": "2026-09-21T16:22:23Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.1/Paper.Time.0.9.1.dmg",
       "size": 6286163,
-      "downloads": 0,
+      "downloads": 1,
       "builds": {
         "mac": [
           {
@@ -16,7 +105,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.1/Paper.Time.0.9.1.dmg",
             "size": 6286163,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "windows": [
