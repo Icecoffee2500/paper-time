@@ -33,6 +33,7 @@ const SERVICE_NAMES: Record<string, string> = {
 import { SketchElement } from '../../shared/sketch.js'
 import { InkStroke } from '../../shared/ink.js'
 import { drawElements, drawInk, drawMarks } from '../../shared/sketchRender.js'
+import { linesFromRuns, type RunBox } from '../../shared/textLines.js'
 import {
   MARK_COLORS,
   MARK_COLOR_NAMES,
@@ -82,6 +83,12 @@ export interface ReaderActions {
   fileName?: () => string
 }
 
+/** A place in a paper: how far down, and down how much. */
+export interface ReaderPlace {
+  top: number
+  of: number
+}
+
 export interface ReaderOptions {
   /** One of several side by side: the title strip is a handle and has an ×. */
   pane?: boolean
@@ -89,9 +96,39 @@ export interface ReaderOptions {
   state?: ReaderState
 }
 
+/**
+ * The words inside the box the text layer gives a run.
+ *
+ * That rectangle is the font's em box, and the words sit in the top half of
+ * it: measured over 958 lines of four papers, the ink runs from 0.07 of the
+ * box down to 0.42 of it (0.65 at the ninety-fifth percentile, which is a
+ * descender), and the rest of the box is empty. A mark drawn on the whole box
+ * is therefore half again as tall as the line it marks — which is why
+ * highlights on neighbouring lines ran into each other as one solid block,
+ * and why a mark made here did not sit on the words when the Mac drew it,
+ * where the quads come from PDFKit and fit the line.
+ */
+const TEXT_BAND = 0.62
+
+function textBox(rect: DOMRect): RunBox {
+  // Only a run lying across the page has its words in the top of its box. One
+  // set sideways — the arXiv stamp down the margin of a preprint, a table
+  // turned on its side — has a box taller than it is wide, and trimming that
+  // from the top would cut the words in half.
+  const acrossThePage = rect.width >= rect.height
+  return {
+    left: rect.left,
+    right: rect.right,
+    top: rect.top,
+    bottom: rect.top + rect.height * (acrossThePage ? TEXT_BAND : 1),
+  }
+}
+
 export class PageView {
   root: HTMLElement
   canvas: HTMLCanvasElement
+  /** Highlights and underlines, on a surface of their own. See `redraw`. */
+  markCanvas: HTMLCanvasElement
   drawCanvas: HTMLCanvasElement
   textLayer: HTMLElement
   inputSurface: HTMLElement
@@ -118,12 +155,14 @@ export class PageView {
     private readonly owner: Reader,
   ) {
     this.canvas = el('canvas', { class: 'page-canvas' })
+    this.markCanvas = el('canvas', { class: 'mark-canvas' })
     this.drawCanvas = el('canvas', { class: 'draw-canvas' })
     this.textLayer = el('div', { class: 'text-layer' })
     this.inputSurface = el('div', { class: 'sketch-input' })
     this.tint = el('div', { class: 'page-tint' })
     this.root = el('div', { class: 'page', 'data-page': String(index) }, [
       this.canvas,
+      this.markCanvas,
       this.tint,
       this.drawCanvas,
       this.textLayer,
@@ -219,11 +258,10 @@ export class PageView {
     }
   }
 
-  /** The drawing, redrawn from the sidecars into page coordinates. */
-  redraw() {
-    if (!this.viewport) return
+  /** A canvas the size of the page, cleared, in page coordinates. */
+  private surface(canvas: HTMLCanvasElement): CanvasRenderingContext2D | null {
+    if (!this.viewport) return null
     const dpr = Math.min(window.devicePixelRatio || 1, 2)
-    const canvas = this.drawCanvas
     const width = Math.floor(this.viewport.width * dpr)
     const height = Math.floor(this.viewport.height * dpr)
     if (canvas.width !== width || canvas.height !== height) {
@@ -235,8 +273,34 @@ export class PageView {
     context.clearRect(0, 0, canvas.width, canvas.height)
     const [a, b, c, d, e, f] = this.viewport.transform
     context.setTransform(dpr * a, dpr * b, dpr * c, dpr * d, dpr * e, dpr * f)
-    // Marks first: they belong to the words, and the pen goes over them.
-    drawMarks(this.marks, context)
+    return context
+  }
+
+  /**
+   * The marks and the drawing, redrawn from the sidecars into page
+   * coordinates.
+   *
+   * Marks go on a surface of their own, under the pen's, and that surface is
+   * multiplied onto the page by the browser. The Mac learned this the hard
+   * way and says so in `MarkOverlayView`: a blend mode set while drawing only
+   * blends against the surface's own contents, which are empty, so a
+   * highlight came out as solid paint over the words. It has to be the
+   * finished layer that blends with the page under it. The pen's surface
+   * blends with nothing — ink is paint, and a white shape has to stay white.
+   */
+  redraw() {
+    // A page with no marks on it costs no surface: sizing a canvas to the page
+    // reserves the pixels whether or not anything is drawn, and most pages of
+    // most papers are never marked.
+    if (this.marks.length > 0) {
+      const marks = this.surface(this.markCanvas)
+      if (marks) drawMarks(this.marks, marks)
+    } else if (this.markCanvas.width !== 0) {
+      this.markCanvas.width = 0
+      this.markCanvas.height = 0
+    }
+    const context = this.surface(this.drawCanvas)
+    if (!context) return
     drawInk(this.hiddenStrokes.size === 0 ? this.strokes : this.strokes.filter((_, index) => !this.hiddenStrokes.has(index)), context)
     drawElements(this.hidden.size === 0 ? this.elements : this.elements.filter((element) => !this.hidden.has(element.id)), context)
     this.input?.drawOverlay(context)
@@ -805,25 +869,29 @@ export class Reader {
     const selection = window.getSelection()
     if (!selection || selection.isCollapsed || selection.rangeCount === 0) return false
     const text = selection.toString()
-    const byPage = new Map<PageView, DOMRect[]>()
+    const byPage = new Map<PageView, RunBox[]>()
     for (let index = 0; index < selection.rangeCount; index += 1) {
       const range = selection.getRangeAt(index)
       const page = this.pageContaining(range.commonAncestorContainer)
       if (!page) continue
-      const rects = [...range.getClientRects()].filter((rect) => rect.width > 0.5 && rect.height > 0.5)
+      const rects = [...range.getClientRects()]
+        .filter((rect) => rect.width > 0.5 && rect.height > 0.5)
+        .map(textBox)
       byPage.set(page, [...(byPage.get(page) ?? []), ...rects])
     }
     if (byPage.size === 0) return false
 
     const color = (MARK_COLORS[colorName] ?? MARK_COLORS.yellow) as [number, number, number]
     for (const [page, rects] of byPage) {
-      const box = page.root.getBoundingClientRect()
-      const lines = mergeIntoLines(rects)
+      const lines = linesFromRuns(rects)
       const quads = lines.map((line) => {
         // Two opposite corners through the page's own transform, which keeps
-        // a rotated page honest.
-        const topLeft = page.toPage(line.left - box.left, line.top - box.top)
-        const bottomRight = page.toPage(line.right - box.left, line.bottom - box.top)
+        // a rotated page honest, and kept on the page: the text layer's boxes
+        // are the font's em boxes and some of them stand well outside the
+        // paper — measured, one ran 244 points past the right edge of a
+        // 612-point page, and the mark written from it was off the sheet.
+        const topLeft = page.toPageFromClient(line.left, line.top)
+        const bottomRight = page.toPageFromClient(line.right, line.bottom)
         return rectToQuad({
           x: Math.min(topLeft.x, bottomRight.x),
           y: Math.min(topLeft.y, bottomRight.y),
@@ -1017,6 +1085,31 @@ export class Reader {
     return this.pages.length
   }
 
+  /**
+   * Where the paper is being read, so a rebuild of the window's boxes can put
+   * it back. A scroll view taken out of the document comes back at the top,
+   * and a reader at the top is a reader on page one.
+   */
+  place(): ReaderPlace {
+    return { top: this.scroll.scrollTop, of: this.scroll.scrollHeight }
+  }
+
+  /**
+   * Puts the paper back where it was.
+   *
+   * By the fraction of the way down rather than by the pixel: putting a paper
+   * beside another halves its column, and a page laid out half as wide is laid
+   * out half as tall, so the pixel it was at is a different place in the
+   * paper. When nothing resized — which is most of the time — the two are the
+   * same number.
+   */
+  returnTo(place: ReaderPlace) {
+    if (place.top <= 0) return
+    const height = this.scroll.scrollHeight
+    const moved = place.of > 0 && Math.abs(height - place.of) > 1
+    this.scroll.scrollTop = moved ? Math.round(place.top * (height / place.of)) : place.top
+  }
+
   scrollToPage(index: number) {
     const page = this.pages[index]
     if (!page) return
@@ -1111,43 +1204,4 @@ export class Reader {
   applyTint() {
     for (const page of this.pages) page.applyTint()
   }
-}
-
-/**
- * Groups a selection's client rectangles into one per line.
- *
- * `getClientRects` hands back a rectangle per text run, and a line of a
- * two-column paper is a dozen of them. A highlight drawn from those has a gap
- * at every word the typesetter kerned separately, so runs that sit on the same
- * baseline are merged into the line they belong to.
- */
-interface Line {
-  left: number
-  right: number
-  top: number
-  bottom: number
-}
-
-const lineHeight = (line: Line) => line.bottom - line.top
-
-function mergeIntoLines(rects: DOMRect[]): Line[] {
-  const sorted = [...rects].sort((a, b) => a.top - b.top || a.left - b.left)
-  const lines: Line[] = []
-  for (const rect of sorted) {
-    const middle = rect.top + rect.height / 2
-    const line = lines.find(
-      (candidate) =>
-        middle > candidate.top - lineHeight(candidate) * 0.4 &&
-        middle < candidate.bottom + lineHeight(candidate) * 0.4,
-    )
-    if (line) {
-      line.left = Math.min(line.left, rect.left)
-      line.right = Math.max(line.right, rect.right)
-      line.top = Math.min(line.top, rect.top)
-      line.bottom = Math.max(line.bottom, rect.bottom)
-    } else {
-      lines.push({ left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom })
-    }
-  }
-  return lines
 }
