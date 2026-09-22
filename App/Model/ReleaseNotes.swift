@@ -277,6 +277,24 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.9.7",
+            date: Text2("2026년 9월", "September 2026"),
+            note: Text2(
+                "못 여는 파일이 왜 못 열리는지, 그 파일에 적힌 글자를 그대로 보여줘요. 그 화면에서 바로 폴더로 갈 수도 있고요.",
+                "When a file will not open, the reader now shows the file's own first line — and offers to take you to the file."
+            ),
+            added: [],
+            fixed: [
+                Entry(
+                    Text2("못 여는 파일이 제 이름을 말해요", "A file that will not open says what it is"),
+                    Text2(
+                        "논문이 안 열릴 때 파일의 첫 여덟 바이트를 16진수로 보여주고 있었어요. 스크린샷을 못 찍는 회사 컴퓨터에서 «3C 23 23 20 4E 41 53 32»를 전화로 불러 주셨는데, 그게 «<## NAS2»라는 건 손으로 풀어 본 뒤에야 알았어요. 이제 파일이 읽을 수 있는 글자로 시작하면 **그 첫 줄을 그대로** 보여줘요 — 한국어 안내문도요. 크기도 1 KB 미만이면 바이트로 적어요. 249바이트짜리 쪽지를 «0 KB»라고 하면 반올림처럼 읽히는데, 사실 그게 문제의 핵심이거든요. 그리고 그 화면에 «폴더에서 보기»가 생겼어요. 이 앱이 못 여는 파일은 회사가 등록해 둔 앱으로 열어보는 게 다음 수순이고, 거기는 폴더에서 가니까요.",
+                        "When a paper would not open, the reader showed the file's first eight bytes as hex. Somebody on a company machine, where screenshots are not allowed, read them down a phone — 3C 23 23 20 4E 41 53 32 — and nobody could see that they spell «<## NAS2» until they were decoded by hand. If the file begins with readable characters, the reader now shows that first line as it stands, in whatever language it is written. The size is given in bytes below a kilobyte, too: a 249-byte note reported as 0 KB reads as a rounding error rather than as the thing that is wrong with it. And the screen now offers Show in Folder — when this app cannot open a file, the next thing to try is the reader your company registered, and that is reached from the folder."
+                    )
+                ),
+            ]
+        ),
+        Release(
             version: "0.9.6",
             date: Text2("2026년 9월", "September 2026"),
             note: Text2(
