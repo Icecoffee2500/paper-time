@@ -28,7 +28,7 @@ import {
   type MarkupRecord,
   type PageDrawing,
 } from './pdfwrite.js'
-import { diagnose, headBytes, looksWhole, type ByteTrouble } from '../shared/pdfLock.js'
+import { diagnose, headBytes, headLine, looksWhole, type ByteTrouble } from '../shared/pdfLock.js'
 import { rememberLibrary, settings, update } from './settings.js'
 // `L` is the layout module in this file, so the two-language helper comes
 // in under a name of its own.
@@ -597,7 +597,7 @@ const handlers: Record<string, Handler> = {
       // always go to it, and what was found only chooses the sentence if it
       // fails. Refusing them was a regression the moment it was written:
       // papers that opened before it stopped opening.
-      const about = { trouble, size: bytes.length, head: headBytes(bytes) }
+      const about = { trouble, size: bytes.length, head: headBytes(bytes), line: headLine(bytes) }
       try {
         return { data: await stripOwnedForDisplay(bytes), ...about }
       } catch (error) {

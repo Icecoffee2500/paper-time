@@ -15,7 +15,7 @@ import { clear, el, on } from '../dom.js'
 import { freshReaderState, store, type ReaderState } from '../state.js'
 import { PAPER_DRAG_TYPE } from '../../shared/split.js'
 import { loadDocument, TextLayer, type PDFDocumentProxy, type PDFPageProxy } from '../pdf.js'
-import { headBytes, rightsHandler, type ByteTrouble, type PDFLock } from '../../shared/pdfLock.js'
+import { headBytes, headLine, rightsHandler, type ByteTrouble, type PDFLock } from '../../shared/pdfLock.js'
 import {
   guessKind, hasAbstract, hasIdentifier, hasReferences, namesACourse, type DocumentKind,
 } from '../../shared/documentKind.js'
@@ -81,6 +81,10 @@ export interface ReaderActions {
    *  course: a deck's first page often says only the week's title, while the
    *  file on disk says lecture06.pdf. */
   fileName?: () => string
+  /** Show the file in the desktop's own file manager. Offered when the app
+   *  cannot open it: the next thing to try is the app the company registered,
+   *  and that is reached from the folder. */
+  reveal?: () => void
 }
 
 /** A place in a paper: how far down, and down how much. */
@@ -448,7 +452,7 @@ export class Reader {
         return
       }
       if (why?.trouble) {
-        this.showTrouble(why.trouble, why.size ?? bytes.length, why.again, message, headBytes(bytes))
+        this.showTrouble(why.trouble, why.size ?? bytes.length, why.again, message, headBytes(bytes), headLine(bytes))
         return
       }
       this.notice(
@@ -470,9 +474,25 @@ export class Reader {
    * diagnosable, and a report with nothing to grep for is a report nobody
    * can act on.
    */
-  showTrouble(trouble: ByteTrouble, size: number, again?: () => void, detail?: string, head?: string) {
+  showTrouble(
+    trouble: ByteTrouble, size: number, again?: () => void,
+    detail?: string, head?: string, line?: string | null,
+  ) {
     const megabytes = (size / 1_000_000).toFixed(1)
-    const [title, body] = trouble === 'opaque'
+    const [title, body] = trouble === 'opaque' && line
+      ? [
+        L('PDF 자리에 글자가 들어 있어요', 'There is text where the PDF should be'),
+        L('이 파일에는 PDF 대신 짧은 글자만 있어요. 원본이 다른 곳에 있다는 쪽지이거나, 회사 보안 '
+          + '프로그램이 등록된 앱에만 원본을 주고 있는 거예요. 아래 첫 줄이 어느 쪽인지 말해 주니, '
+          + '회사 IT에 그대로 보여주세요. 파일 탐색기에서 한 번 열어 본 뒤 «다시 열기»를 누르면 '
+          + '원본이 따라오는 경우도 있어요.',
+          'This file holds a short piece of text instead of a PDF. Either it is a note saying the '
+          + 'real file lives somewhere else, or a security agent is giving the real file only to the '
+          + 'readers your company registered. The first line below says which — show it to your IT '
+          + 'desk as it stands. Opening the file once from your file manager and then pressing Try '
+          + 'Again sometimes brings the real one across.'),
+      ]
+      : trouble === 'opaque'
       ? [
         L('이 파일을 이 앱에는 다르게 보여주고 있어요', 'Something is handing this app a different file'),
         L('파일 자리에 PDF가 아닌 것이 있어요. 같은 파일이 Acrobat에서는 열리고 여기서는 안 열린다면, '
@@ -504,16 +524,36 @@ export class Reader {
     // The first bytes go in the fine line beside the parser's own words. They
     // cost nothing to send and they say which of these it is — which is the
     // difference between a day's hunting and a glance at a screenshot.
-    const fine = [head ? `${head} · ${Math.round(size / 1024)} KB` : null, detail]
+    // Bytes while it is bytes: a 249-byte stub reported as "0 KB" reads as a
+    // rounding error rather than as the thing that is wrong with it.
+    const measure = size < 1024
+      ? `${size} B`
+      : size < 1_000_000 ? `${Math.round(size / 1024)} KB` : `${megabytes} MB`
+    const fine = [line ? `“${line}”` : null, head ? `${head} · ${measure}` : null, detail]
       .filter(Boolean).join('  ')
-    this.notice(title, body, fine || undefined, again ? this.againButton(again) : undefined)
+    this.notice(title, body, fine || undefined, this.troubleButtons(again))
   }
 
-  /** One press to ask for the file again, rather than a paper to click away from. */
+  /** One press to ask for the file again, rather than a paper to click away
+   *  from — and one to go to the file itself, which is where the reader the
+   *  company registered is reached from. */
+  private troubleButtons(again?: () => void): HTMLElement | undefined {
+    const buttons: HTMLElement[] = []
+    if (this.actions.reveal) {
+      const show = el('button', { class: 'plain-button', text: L('폴더에서 보기', 'Show in Folder') })
+      on(show, 'click', () => this.actions.reveal?.())
+      buttons.push(show)
+    }
+    if (again) {
+      const button = el('button', { class: 'filled-button', text: L('다시 열기', 'Try Again') })
+      on(button, 'click', again)
+      buttons.push(button)
+    }
+    return buttons.length > 0 ? el('div', { class: 'fb-row' }, buttons) : undefined
+  }
+
   private againButton(again: () => void): HTMLElement {
-    const button = el('button', { class: 'filled-button', text: L('다시 열기', 'Try Again') })
-    on(button, 'click', again)
-    return el('div', { class: 'fb-row' }, [button])
+    return this.troubleButtons(again) ?? el('div')
   }
 
   /**

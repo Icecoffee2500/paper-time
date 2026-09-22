@@ -55,6 +55,33 @@ export function headBytes(bytes: Uint8Array, count = 8): string {
   return [...bytes.subarray(0, count)].map((b) => b.toString(16).padStart(2, '0').toUpperCase()).join(' ')
 }
 
+/**
+ * The file's first line, when the file begins with readable characters.
+ *
+ * Eight bytes of hex say *which kind* of thing this is; a line of text says
+ * *what it is*. A company machine handed this app a file whose first bytes
+ * were `3C 23 23 20 4E 41 53 32`, which is a person reading eight numbers
+ * down a phone before anybody could see that they spell `<## NAS2`. Whatever
+ * stands in for a paper — a note saying the real file lives on some server, a
+ * policy notice, a stub — says so in words, and the words are the diagnosis.
+ *
+ * Only a first line, only when every character of it is printable, and never
+ * more than 120 of them: this goes on screen for somebody to read out, not to
+ * be parsed.
+ */
+export function headLine(bytes: Uint8Array, limit = 120): string | null {
+  const head = bytes.subarray(0, Math.min(bytes.length, limit))
+  const breaks = head.findIndex((byte) => byte === 0x0a || byte === 0x0d || byte === 0)
+  const line = head.subarray(0, breaks === -1 ? head.length : breaks)
+  if (line.length < 4) return null
+  // Decoded as UTF-8 so that a notice written in Korean is readable too; a
+  // replacement character means these were never characters.
+  const text = new TextDecoder('utf-8').decode(line)
+  if (text.includes('\uFFFD')) return null
+  if (/[\u0000-\u0008\u000b-\u001f\u007f]/.test(text)) return null
+  return text.trim() || null
+}
+
 /** Only the ends are read: a paper is twenty megabytes and this runs on open.
  *
  * The head is eight kilobytes rather than one because pdf.js will open a file

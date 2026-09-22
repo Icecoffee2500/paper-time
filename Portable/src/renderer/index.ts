@@ -361,6 +361,7 @@ function readerFor(id: string, pane: boolean): Reader {
       }
     },
     close: () => closePaper(id),
+    reveal: () => void call('paper:reveal', { id }),
     fileName: () => {
       const paper = store.papers.find((p) => p.id === id)
       const relative = String((paper?.meta.file as Record<string, unknown> | undefined)?.relativePath ?? '')
@@ -392,6 +393,7 @@ async function loadInto(reader: Reader, id: string) {
     trouble?: ByteTrouble
     size?: number
     head?: string
+    line?: string | null
   }
   try {
     result = await call('paper:bytes', { id })
@@ -406,7 +408,8 @@ async function loadInto(reader: Reader, id: string) {
   // the sentence for a failure that has actually happened.
   if (!result.data && result.trouble) {
     return reader.showTrouble(
-      result.trouble, result.size ?? 0, () => void loadInto(reader, id), undefined, result.head,
+      result.trouble, result.size ?? 0, () => void loadInto(reader, id),
+      undefined, result.head, result.line,
     )
   }
   if (result.error || !result.data) return toast(result.error ?? 'unknown error')

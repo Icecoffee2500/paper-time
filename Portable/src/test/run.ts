@@ -27,7 +27,7 @@ import {
   rectFrom,
 } from '../shared/sketch.js'
 import { InkStroke, resample } from '../shared/ink.js'
-import { KNOWN_HANDLERS, containerKind, diagnose, looksWhole, rightsHandler } from '../shared/pdfLock.js'
+import { KNOWN_HANDLERS, containerKind, diagnose, headLine, looksWhole, rightsHandler } from '../shared/pdfLock.js'
 import { fileForRecordPath, recordPath } from '../main/layout.js'
 import { shelfPapers, store, type Paper } from '../renderer/state.js'
 import { guessKind, hasAbstract, hasIdentifier, hasReferences } from '../shared/documentKind.js'
@@ -979,6 +979,38 @@ async function main() {
     // desktop and not the other.
     assert.ok(/Every PDF in the library, wherever it sits under the root/.test(swift))
     assert.ok(!/skipsSubdirectoryDescendants/.test(swift), 'the Mac stopped recursing')
+  })
+
+  // ------------------------------------------- what stands in for the paper
+  suite('A file that is not the paper says so in its own words')
+
+  const bytesOf = (text: string) => new TextEncoder().encode(text)
+
+  await test('the eight bytes a company machine sent back spell a line', () => {
+    // Reported down a phone from a machine where screenshots are not allowed:
+    // 3C 23 23 20 4E 41 53 32. Eight numbers to read out, and nobody could see
+    // that they say `<## NAS2` until they were decoded by hand.
+    const stub = bytesOf('<## NAS2\\vol1\\papers\\2007\\anna-karenina.pdf ##>\r\n')
+    assert.equal(headLine(stub), '<## NAS2\\vol1\\papers\\2007\\anna-karenina.pdf ##>')
+    assert.equal(diagnose(stub), 'opaque')
+  })
+
+  await test('a notice written in Korean is readable too', () => {
+    assert.equal(
+      headLine(bytesOf('이 문서는 보안 정책에 따라 열 수 없습니다.\n자세한 내용은 IT에 문의하세요.')),
+      '이 문서는 보안 정책에 따라 열 수 없습니다.',
+    )
+  })
+
+  await test('bytes that are not characters have no line', () => {
+    assert.equal(headLine(new Uint8Array([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1])), null)
+    assert.equal(headLine(new Uint8Array(64)), null)
+    assert.equal(headLine(bytesOf('ab')), null, 'two characters are not a line')
+    assert.equal(headLine(bytesOf('a bellrings')), null, 'a control character is not text')
+  })
+
+  await test('a line is a line, not a file', () => {
+    assert.equal(headLine(bytesOf('x'.repeat(400)))?.length, 120)
   })
 
   // ------------------------------------------------ a highlight's line breaks
