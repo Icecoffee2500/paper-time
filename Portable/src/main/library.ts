@@ -52,12 +52,89 @@ export interface PaperRow {
   exists: boolean
 }
 
+/** What one pass over a folder's records found, and what it could not. */
+export interface LibraryRead {
+  papers: PaperRow[]
+  /** One sentence per record that is there and would not be read. */
+  trouble: string[]
+}
+
+/**
+ * A record that is there and will not be read this minute.
+ *
+ * Three accidents arrive at the same place and none of them means the paper
+ * is gone: a file still coming down a streamed drive, a drive that will not
+ * fetch it this second, and a file that got here whole and is not JSON yet.
+ * The first is the common one and the least like a failure — `readFile`
+ * resolves with a short buffer and throws nothing, measured at 32 MB back
+ * from a 96 MB file — so a record that is merely late first shows up as a
+ * `SyntaxError` out of `JSON.parse`, which carries no `code` and walked
+ * straight past a test that asked only whether the code was `ENOENT`.
+ *
+ * Naming it changes nothing about which reads fail: `JSON.parse` has always
+ * sat inside the same `try`, so a half-written record has always thrown.
+ * What it changes is that a caller can tell this failure from every other
+ * one, and that the sentence names the record instead of saying
+ * "Unterminated string in JSON at position 40".
+ */
+export class RecordUnreadable extends Error {
+  constructor(public readonly file: string, public readonly reason: unknown) {
+    super(`${path.basename(path.dirname(file))}/${path.basename(file)}: ${unreadableReason(reason)}`)
+    this.name = 'RecordUnreadable'
+  }
+}
+
+function unreadableReason(error: unknown): string {
+  const code = (error as NodeJS.ErrnoException)?.code
+  if (code) return code
+  if (error instanceof SyntaxError) return 'half-written'
+  return String((error as Error)?.message ?? error)
+}
+
+/**
+ * A record, or null when there is no such file.
+ *
+ * Null means the one thing: nothing is there. Everything else throws, and
+ * throwing is the point. Every caller here either has a safe default for a
+ * file that does not exist — `manifest()`, `collections()` — or reads before
+ * it writes, as `saveState` and the marks journal do, and handing those a
+ * default for a file that is only late is how a half-read folder gets
+ * answered by overwriting it. A list is the one place that wants to carry on
+ * regardless, and it says so: `readIfPossible`.
+ */
 export async function readJSON(file: string): Promise<RawRecord | null> {
+  let text: string
   try {
-    const text = await fsp.readFile(file, 'utf8')
-    return JSON.parse(text) as RawRecord
+    text = await fsp.readFile(file, 'utf8')
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw new RecordUnreadable(file, error)
+  }
+  try {
+    return JSON.parse(text) as RawRecord
+  } catch (error) {
+    throw new RecordUnreadable(file, error)
+  }
+}
+
+/**
+ * The same read, for a list: one record that will not be read costs one row.
+ *
+ * `read()` takes two files per paper under one `Promise.all`, and one
+ * rejection rejects every one of them. So a single `meta.json` that was still
+ * on its way took all the other papers with it, `snapshot()` turned that into
+ * `{ error }`, and the window — which had no sentence for an error — showed
+ * an empty library and offered to choose a library folder. Eighty papers for
+ * one late file, on the kind of drive where a file is likeliest to be late.
+ *
+ * The Mac has never done this: `LibraryStore.loadAll()` hands back
+ * `(papers, failures)` and skips what it could not read.
+ */
+async function readIfPossible(file: string): Promise<{ value: RawRecord | null; why?: string }> {
+  try {
+    return { value: await readJSON(file) }
+  } catch (error) {
+    if (error instanceof RecordUnreadable) return { value: null, why: error.message }
     throw error
   }
 }
@@ -126,43 +203,81 @@ export class Library {
   }
 
   /**
-   * Every record in the folder, with the PDF each one points at.
+   * Every record in the folder, with the PDF each one points at, and the
+   * records this pass could not get at.
    *
    * All of them at once. Read one after another it was two file reads per
    * paper in a queue of one, and a folder in the cloud answers each of them
    * with a round trip — sixty papers meant a hundred and twenty waits that
    * had no reason to be in a line.
+   *
+   * Two answers rather than one, the shape the Mac's `loadAll()` has always
+   * had: what was read, and what would not be. A caller that only wants the
+   * rows takes `papers()`; a caller about to act on the folder has to know
+   * whether it is looking at all of it.
    */
-  async papers(): Promise<PaperRow[]> {
+  async read(): Promise<LibraryRead> {
     let entries: string[]
     try {
       entries = await fsp.readdir(L.papersDir(this.root))
     } catch {
-      return []
+      return { papers: [], trouble: [] }
     }
-    const read = entries
+    const trouble: string[] = []
+    const found = entries
       .filter((id) => !id.startsWith('.'))
       .map(async (id): Promise<PaperRow | null> => {
         const [meta, state] = await Promise.all([
-          readJSON(L.metaPath(this.root, id)),
-          readJSON(L.statePath(this.root, id)),
+          readIfPossible(L.metaPath(this.root, id)),
+          readIfPossible(L.statePath(this.root, id)),
         ])
-        if (!meta) return null
-        const relative = String((meta.file as RawRecord | undefined)?.relativePath ?? '')
+        if (meta.why) {
+          trouble.push(meta.why)
+          return null
+        }
+        if (!meta.value) return null
+        // Reading state is a page number and a shelf. Being without it for a
+        // minute is not losing the paper, so the row comes without it rather
+        // than not at all, and nothing is written back from this — `saveState`
+        // reads again before it writes and will not save over a record it
+        // could not read. The Mac says the same thing in one line:
+        // `(try? loadState(folder)) ?? PaperState()`.
+        const relative = String((meta.value.file as RawRecord | undefined)?.relativePath ?? '')
         const file = relative ? L.fileForRecordPath(this.root, relative) : null
-        return { id, meta, state: state ?? {}, file, exists: file ? fs.existsSync(file) : false }
+        return {
+          id,
+          meta: meta.value,
+          state: state.value ?? {},
+          file,
+          exists: file ? fs.existsSync(file) : false,
+        }
       })
-    const rows = (await Promise.all(read)).filter((row): row is PaperRow => row !== null)
-    await this.heal(rows)
-    return rows
+    const papers = (await Promise.all(found)).filter((row): row is PaperRow => row !== null)
+    // Repairing a record writes to the folder, and a pass that came back short
+    // has not seen all of it: the set of PDFs no record claims is missing
+    // whatever the unread records hold. A repair can wait — it runs again on
+    // the next read and on the next change — and acting on a folder read in
+    // part is the thing that turns one late file into two.
+    if (trouble.length === 0) await this.heal(papers)
+    // In whatever order the reads finished, otherwise. Sorted, the window says
+    // the same thing twice running and a test can say what it expects.
+    return { papers, trouble: trouble.sort() }
+  }
+
+  async papers(): Promise<PaperRow[]> {
+    return (await this.read()).papers
   }
 
   async paper(id: string): Promise<PaperRow | null> {
+    // Asked for by name, so a record that will not be read throws rather than
+    // coming back null: null here means there is no such paper, and a paper
+    // whose record is late is not a paper that is gone.
     const meta = await readJSON(L.metaPath(this.root, id))
     if (!meta) return null
-    const state = (await readJSON(L.statePath(this.root, id))) ?? {}
+    // As in the list, reading state that is late does not hold up the paper.
+    const state = (await readIfPossible(L.statePath(this.root, id))).value ?? {}
     const relative = String((meta.file as RawRecord | undefined)?.relativePath ?? '')
-    const file = relative ? path.join(this.root, relative) : null
+    const file = relative ? L.fileForRecordPath(this.root, relative) : null
     const row = { id, meta, state, file, exists: file ? fs.existsSync(file) : false }
     // A record that has lost its file is found again among the whole folder's
     // — which PDFs are free to be claimed is a question about all the records,
@@ -316,7 +431,19 @@ export class Library {
    */
   async importPDF(source: string, pageCount: number): Promise<PaperRow | null> {
     const digest = await sha256(source)
-    const existing = await this.papers()
+    // The records this pass could read. When the folder did not answer in
+    // full, the check below for "this paper is already here" is short by
+    // however many records were late, so a paper whose own record is late can
+    // be taken in a second time.
+    //
+    // It is taken in anyway, because somebody named this file. The two paths
+    // are not asking the same question: `looseFiles` is the app saying "these
+    // PDFs belong to nobody", which it cannot say about a folder it has read
+    // half of, while this is a reader pointing at a PDF and asking for it.
+    // Refusing here would mean one record nobody can read stops a folder
+    // accepting any paper at all, for as long as it stays unreadable — and a
+    // duplicate row is something you can see and throw away.
+    const existing = (await this.read()).papers
     const already = existing.find(
       (row) => String((row.meta.file as RawRecord)?.importDigest ?? '') === digest,
     )
@@ -381,9 +508,24 @@ export class Library {
     return this.paper(id)
   }
 
-  /** PDFs sitting in the folder that no record points at. */
+  /**
+   * PDFs sitting in the folder that no record points at.
+   *
+   * None of them, when the folder did not answer in full. A record that would
+   * not be read still holds its PDF — it is a paper that is late, not a paper
+   * that is absent — and a PDF offered as loose is a PDF taken in a second
+   * time: a second identifier, none of its marks, and two rows for one file.
+   * Not knowing which PDFs are spoken for is not the same as knowing one is
+   * free, and this is the answer that cannot be taken back afterwards.
+   *
+   * What waits is the app's own offer, not the reader: a PDF named in the file
+   * picker, dropped on the window or handed over by the file manager is still
+   * taken in. `importPDF` says why.
+   */
   async looseFiles(): Promise<string[]> {
-    return this.unclaimedFiles(claimedBy(await this.papers()))
+    const { papers, trouble } = await this.read()
+    if (trouble.length > 0) return []
+    return this.unclaimedFiles(claimedBy(papers))
   }
 
   /**

@@ -25,6 +25,7 @@ import {
   closeOpenPaper,
   closeOtherOpenPapers,
   dock,
+  failed,
   isOpenPaper,
   isPinned,
   keepOpen,
@@ -252,6 +253,7 @@ const paperList = buildPaperList({
     adopt(snapshot)
     changed('papers')
   },
+  refresh: () => void reload(),
 })
 
 /** The answer to "a paper, a book, course material, or a document?", from the
@@ -853,7 +855,14 @@ async function addPapers() {
 
 async function reload() {
   const snapshot = await call<LibrarySnapshot>('library:reload')
-  if ('error' in snapshot) return
+  // A folder that would not answer used to end here without a word. The rows
+  // already on screen stay where they are; the list says what happened and
+  // offers to read again.
+  if ('error' in snapshot) {
+    failed(String(snapshot.error))
+    changed('papers')
+    return
+  }
   const selected = store.selectedID
   adopt(snapshot)
   store.selectedID = selected
@@ -1273,10 +1282,16 @@ onEvent((event, payload) => {
     case 'library:changed':
       void reload()
       break
-    case 'library:opened':
-      adopt(payload as LibrarySnapshot)
+    case 'library:opened': {
+      // The main process sends whatever `snapshot()` came back with, and that
+      // can be `{ error }`, which has no `papers` to map over. Unguarded, the
+      // throw landed inside this listener and the window simply stopped.
+      const opened = payload as LibrarySnapshot | { error: string }
+      if ('error' in opened) failed(String(opened.error))
+      else adopt(opened)
       changed('papers', 'shelf')
       break
+    }
     case 'window:state':
       store.windowState = payload as typeof store.windowState
       toolbar.update()
@@ -1389,7 +1404,15 @@ async function start() {
 
   if (saved.libraryRoot) {
     const snapshot = await call<LibrarySnapshot>('library:reload')
-    if (!('error' in snapshot)) {
+    if ('error' in snapshot) {
+      // There is a folder in the settings and it would not be read. Saying so
+      // is the whole of it: this used to fall through to a window whose list
+      // offered to choose a library folder, as though the one already chosen
+      // had never existed.
+      store.root = saved.libraryRoot
+      failed(String(snapshot.error))
+      changed('papers', 'shelf')
+    } else {
       adopt(snapshot)
       changed('papers', 'shelf')
       if (solo) {

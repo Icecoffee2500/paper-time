@@ -30,7 +30,9 @@ import {
 } from './pdfwrite.js'
 import { diagnose, headBytes, looksWhole, type ByteTrouble } from '../shared/pdfLock.js'
 import { rememberLibrary, settings, update } from './settings.js'
-import { resolveKorean, setKorean } from '../shared/lang.js'
+// `L` is the layout module in this file, so the two-language helper comes
+// in under a name of its own.
+import { L as say, resolveKorean, setKorean } from '../shared/lang.js'
 import { buildMenu } from './menu.js'
 import { watchLibrary } from './watcher.js'
 import { captureAndQuit, probeArgument, runProbe } from './probe.js'
@@ -237,6 +239,7 @@ async function snapshot(): Promise<LibrarySnapshot | { error: string }> {
   try {
     const rows: LibrarySnapshot['papers'] = []
     let loose = 0
+    const unreadableRecords: string[] = []
     ownerByID.clear()
     // Every folder at once, and each folder's loose PDFs worked out from the
     // records just read rather than by reading them all again. One of the
@@ -244,10 +247,17 @@ async function snapshot(): Promise<LibrarySnapshot | { error: string }> {
     // hold up the ones on this machine.
     const folders = allLibraries()
     const read = await Promise.all(folders.map(async (one) => {
-      const papers = await one.papers()
-      return { one, papers, loose: (await one.unclaimedFiles(claimedBy(papers))).length }
+      const { papers, trouble } = await one.read()
+      // A PDF whose record would not be read is not a loose PDF. It is a paper
+      // whose record is late, and offering it takes the same paper in a second
+      // time: another identifier, none of its marks, both rows on the shelf.
+      // The count waits for a folder that answers in full, and the window says
+      // how many records it is waiting on.
+      const free = trouble.length > 0 ? [] : await one.unclaimedFiles(claimedBy(papers))
+      return { one, papers, loose: free.length, trouble }
     }))
     for (const folder of read) {
+      unreadableRecords.push(...folder.trouble)
       for (const row of folder.papers) {
         ownerByID.set(row.id, folder.one)
         rows.push({
@@ -271,6 +281,10 @@ async function snapshot(): Promise<LibrarySnapshot | { error: string }> {
       collections: { ...(await library.collections()), collections },
       papers: rows,
       looseCount: loose,
+      // Records the folders hold and this pass could not read. A count and the
+      // names, rather than a silence: one record arriving half written used to
+      // take every paper with it and leave a window with nothing to say.
+      unreadable: unreadableRecords,
     }
   } catch (error) {
     return { error: String((error as Error).message ?? error) }
@@ -417,8 +431,13 @@ function folderDidChange(): Promise<void> {
 async function settleFolder(): Promise<void> {
   try {
     const read = await Promise.all(allLibraries().map(async (one) => {
-      const papers = await one.papers()
-      return { one, papers, unclaimed: await one.unclaimedFiles(claimedBy(papers)) }
+      const { papers, trouble } = await one.read()
+      // Taking a PDF in on the app's own account is only safe when every
+      // record answered, because the check for one already here is a check
+      // against the records. Nothing is lost by waiting: this runs again on
+      // the next change to the folder, and on every reload.
+      const unclaimed = trouble.length > 0 ? [] : await one.unclaimedFiles(claimedBy(papers))
+      return { one, papers, unclaimed }
     }))
     const empty = read.every((folder) => folder.papers.length === 0)
     if (!empty) {
@@ -684,9 +703,24 @@ const handlers: Record<string, Handler> = {
 
   'bibtex:export': (async ({ ids }: { ids?: string[] }, sender: BrowserWindow | null) => {
     if (!library) return { error: 'No library is open.' }
-    const rows = await library.papers()
+    const { papers: rows, trouble } = await library.read()
     const chosen = ids && ids.length > 0 ? rows.filter((row) => ids.includes(row.id)) : rows
     if (chosen.length === 0) return { error: 'There is nothing to export.' }
+    // A list that is short by a paper is a list; a bibliography that is short
+    // by a paper is a file that looks complete with a citation missing from
+    // it, found by LaTeX weeks later. So the one place that will not carry on
+    // with a folder read in part is this one — unless every paper that was
+    // asked for is in hand, which is the ordinary case of exporting a
+    // selection out of a library whose late record is somewhere else.
+    if (trouble.length > 0 && chosen.length !== (ids?.length ?? -1)) {
+      return {
+        error: say(
+          `기록 ${trouble.length}개가 아직 안 와서 지금 내보내면 빠지는 논문이 있어요.`,
+          `${trouble.length} record${trouble.length === 1 ? '' : 's'} `
+            + `${trouble.length === 1 ? "hasn't" : "haven't"} arrived, so this export would be short.`,
+        ),
+      }
+    }
     const text = formatBibliography(chosen.map((row) => new PaperMeta(row.meta)), DEFAULT_EXPORT)
     const result = await dialog.showSaveDialog(sender ?? window!, {
       title: 'Export BibTeX',
