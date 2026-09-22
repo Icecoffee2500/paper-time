@@ -277,6 +277,53 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.9.8",
+            date: Text2("2026년 9월", "September 2026"),
+            note: Text2(
+                "논문이 많아져도 목록이 느려지지 않아요. 논문을 들여오는 동안 앱이 멈추던 것도 고쳤고요. 그리고 보충 자료를 붙일 논문을 이제 찾아서 골라요.",
+                "A long list scrolls like a short one, importing no longer stops the app, and the paper you attach something to is one you can search for."
+            ),
+            added: [
+                Entry(
+                    Text2("붙일 논문을 찾아서 골라요", "Search for the paper to attach to"),
+                    Text2(
+                        "«다른 논문에 붙이기»가 제목 순으로 서른 편만 보여주는 메뉴였어요. 그런데 찾는 건 보충 자료의 부모 논문이고, 그건 A에 있을 확률과 Z에 있을 확률이 같아요 — 이백 편짜리 라이브러리에서는 대개 그 서른 안에 없었고, 메뉴는 없다는 말조차 못 했어요. 이제 찾기 칸이 있는 창이 열리고, **제목과 파일 이름** 양쪽으로 찾아요. 받은 파일이 «Karmanov_Efficient_Test-Time_Adaptation_CVPR_2024.pdf»면 어느 제목에도 없는 «karmanov»를 치게 되니까요. 낱말 앞머리만 쳐도 되고(«adapt»가 «adaptation»을, «강화학습»이 «강화학습의»를 찾아요) 오타도 건져요. 치는 동안 맨 위 것이 골라져 있어서 Return만 누르면 붙어요.",
+                        "Attach To was a menu of the first thirty papers in title order. What it is for is a supplement's parent, and that is as likely to be at Z as at A — on a shelf of two hundred the paper was usually not among the thirty, and a menu that stops at thirty cannot say that it stopped. It is a picker now, with a field, and it searches titles and file names both: nothing in «Efficient Test-Time Adaptation of Vision-Language Models» says Karmanov, and Karmanov is what you downloaded and what you will type. Word beginnings are enough — adapt finds adaptation — and a typo still finds the paper. The top match is selected as you type, so Return attaches it."
+                    )
+                ),
+            ],
+            fixed: [
+                Entry(
+                    Text2("논문이 많아도 목록이 느려지지 않아요", "A long list scrolls like a short one"),
+                    Text2(
+                        "목록 맨 위의 «아래로 당겨서 찾기»가 손가락이 움직일 때마다 라이브러리 전체를 다시 짓고 있었어요. 화면에 글자 한 줄을 보여주려고 초당 예순 번, 논문 한 편도 빠짐없이요. 이제 그 글자만 다시 그려요. 실측으로 600편에서 한 걸음이 76.3ms에서 59.4ms로, 150편에서 25.9ms에서 17.6ms로 줄었어요.",
+                        "The pull-to-search hint at the top of the list rebuilt the entire library on every tick of every scroll — sixty times a second, every paper, to draw one line of text. Only that line is redrawn now. Measured on a settled library, a scroll step went from 76.3ms to 59.4ms at six hundred papers and from 25.9ms to 17.6ms at a hundred and fifty."
+                    )
+                ),
+                Entry(
+                    Text2("논문을 들여오는 동안 앱이 멈추지 않아요", "Importing no longer stops the app"),
+                    Text2(
+                        "폴더의 PDF를 들여올 때 한 편마다 라이브러리의 모든 색인을 다시 지었고, 서지를 찾아올 때마다 또 한 번 지었어요. 육백 편짜리 폴더면 그걸 수백 번 한 거예요 — 실측으로 들여오는 중에 목록을 굴리면 한 걸음이 **60초**까지 멈췄어요. 이제 스물다섯 편씩 묶어서 들이고 서지 결과도 모아서 한 번에 반영해요. 같은 측정에서 최악의 한 걸음이 0.146초예요.",
+                        "Taking a folder's PDFs in rebuilt every index in the library once per file, and again for every record a registrar answered — several hundred times for a folder of six hundred. Measured, a scroll step during an import stalled for as long as sixty seconds. Papers now go in by the handful and looked-up records are settled in batches. On the same measurement the worst step is 0.146 seconds."
+                    )
+                ),
+                Entry(
+                    Text2("«남은 PDF 더하기»가 끝나요", "Add the remaining PDFs now finishes"),
+                    Text2(
+                        "줄에 적힌 수가 눌러도 눌러도 그대로였어요. 이유가 둘이었는데, 하나는 못 들여온 파일까지 목록에서 지우고 있던 거예요 — 사라졌다가 폴더를 다시 읽으면 돌아왔죠. 다른 하나는 이미 있는 논문과 바이트가 같은 파일에 기록을 안 만들던 거예요. 그건 밖에서 끌어다 놓은 파일에 대한 답인데, 폴더 안에 이미 있는 파일에는 맞지 않아요. 그 파일은 누군가 거기 둔 거고, 기록을 안 주면 목록에 영영 안 나오니까요. 이제 폴더에 사본이 둘이면 목록에도 둘이고, 못 읽은 파일은 «PDF n개는 더하지 못했어요»라고 말해요 — 클라우드 파일이 아직 안 내려온 것이 가장 흔한 이유라서요.",
+                        "The number on that row stayed where it was however often it was pressed. Two reasons. Files that could not be taken in were struck off the list anyway, so they vanished and came back on the next read of the folder. And a PDF whose bytes matched a paper already here was refused a record — a true answer about a file dragged in from outside, and the wrong one about a file already sitting in the folder, which somebody put there and which the list will never show without one. Two copies in the folder are two papers in the list now, and a file that could not be read says so: on a cloud drive it is usually still on its way down."
+                    )
+                ),
+                Entry(
+                    Text2("보충 자료가 제 논문을 찾아요", "A supplement finds its paper"),
+                    Text2(
+                        "파일 이름에서 «supplementary» 같은 말을 떼어낼 때 «supplement»만 떼고 «ary»를 남기고 있었어요. 그 부스러기를 라이브러리의 모든 제목과 비교하니 점수가 떨어져서, 영어로 대놓고 supplementary라고 적힌 파일이 부모 논문을 못 찾았어요.",
+                        "Stripping supplementary wording from a file name took «supplement» out of «supplementary» and left «ary» behind. That fragment was then compared against every title in the library, which pushed the score below the threshold — so a supplement that says so in plain English was offered no parent at all."
+                    )
+                ),
+            ]
+        ),
+        Release(
             version: "0.9.7",
             date: Text2("2026년 9월", "September 2026"),
             note: Text2(
