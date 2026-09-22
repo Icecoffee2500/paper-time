@@ -578,8 +578,15 @@ public final class LibraryModel {
     private var positionFlush: Task<Void, Never>?
 
     /// Whether metadata is looked up automatically for papers as they arrive.
+    ///
+    /// `--papertime-no-lookup=1` turns it off **for one run** rather than in
+    /// the settings: a probe that filled a test folder would otherwise spend
+    /// minutes on the registrars, and a probe must not remember anything —
+    /// the app is sandboxed per bundle id, so writing the setting would write
+    /// it for the copy the reader uses.
     private var resolvesOnImport: Bool {
-        UserDefaults.standard.object(forKey: "resolveMetadataOnImport") as? Bool ?? true
+        if Boot.isSet("PAPERTIME_NO_LOOKUP") { return false }
+        return UserDefaults.standard.object(forKey: "resolveMetadataOnImport") as? Bool ?? true
     }
 
     public init(store: LibraryStore, location: LibraryLocation, manifest: LibraryManifest) {

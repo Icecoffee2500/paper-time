@@ -14,28 +14,6 @@ public final class AttachRequest {
     public init() {}
 }
 
-/// Where the attach sheet is presented from.
-///
-/// A view of nothing, put behind the list. The sheet has to hang off a view
-/// that stays on screen while the context menu goes away, and the list is the
-/// only such view — but the list rebuilds every row it holds when anything it
-/// reads changes, and which paper is being attached is something it would
-/// otherwise have to read.
-struct AttachHost: View {
-    let attaching: AttachRequest
-    let model: LibraryModel
-
-    var body: some View {
-        Color.clear
-            .frame(width: 0, height: 0)
-            .sheet(
-                item: Binding(get: { attaching.child }, set: { attaching.child = $0 })
-            ) { child in
-                AttachSheet(child: child, model: model)
-            }
-    }
-}
-
 /// Picking the paper a document belongs to.
 ///
 /// This was a submenu of the first thirty titles in alphabetical order, and a
@@ -47,7 +25,14 @@ struct AttachHost: View {
 struct AttachSheet: View {
     let child: LoadedPaper
     let model: LibraryModel
-    @Environment(\.dismiss) private var dismiss
+    /// Closing is done by putting the request back, not by `dismiss()`.
+    ///
+    /// `dismiss()` reaches the presentation SwiftUI thinks it is in, and this
+    /// sheet was presented from a `Color.clear` of no size tucked into the
+    /// list's `.background` — so nothing it said arrived, and the sheet could
+    /// not be closed at all: not by Cancel, not by Escape, not by finishing.
+    /// The state that opened it is what closes it.
+    let close: () -> Void
 
     @State private var query = ""
     @State private var chosen: UUID?
@@ -71,6 +56,11 @@ struct AttachSheet: View {
         }
         #if os(macOS)
         .frame(width: 520, height: 560)
+        // Its own background. Without one it takes the window's, and the
+        // window carries the reader's paper tint — a sheet the colour of
+        // somebody's sepia setting, with a white list sitting in the middle of
+        // it, because `List` paints its own.
+        .background(Color(nsColor: .windowBackgroundColor))
         #endif
         .onAppear(perform: load)
         // The top hit, as it is typed. A picker with a field is a picker you
@@ -80,7 +70,7 @@ struct AttachSheet: View {
             chosen = query.isEmpty ? suggested : ranked.first?.id
         }
         #if os(macOS)
-        .onExitCommand { dismiss() }
+        .onExitCommand(perform: close)
         #endif
     }
 
@@ -167,7 +157,7 @@ struct AttachSheet: View {
     private var footer: some View {
         HStack {
             Spacer()
-            Button(L("취소", "Cancel")) { dismiss() }
+            Button(L("취소", "Cancel"), action: close)
                 .keyboardShortcut(.cancelAction)
             Button(L("붙이기", "Attach"), action: attach)
                 .keyboardShortcut(.defaultAction)
@@ -227,6 +217,6 @@ struct AttachSheet: View {
         guard let chosen else { return }
         let childID = child.id
         Task { await model.attach(childID, to: chosen) }
-        dismiss()
+        close()
     }
 }

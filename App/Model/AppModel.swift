@@ -748,6 +748,23 @@ public final class AppModel {
                 }
                 FileHandle.standardError.write(Data(said.utf8))
                 attaching.child = child
+                // `--papertime-attach-close=<초>`가 그 뒤에 시트를 닫는다. 취소와
+                // Escape와 «붙이기»가 전부 같은 곳을 부르므로, 이 하나가 셋을 다
+                // 확인한다 — 한때 그 셋이 모두 아무 일도 하지 않았고, 사용자는
+                // 닫을 수 없는 창을 받았다.
+                if let after = Double(Boot.setting("PAPERTIME_ATTACH_CLOSE") ?? "") {
+                    Task { @MainActor [weak self] in
+                        try? await Task.sleep(for: .seconds(after))
+                        guard let self else { return }
+                        let sheets = NSApp.windows.compactMap(\.attachedSheet).count
+                        attaching.child = nil
+                        try? await Task.sleep(for: .seconds(1.5))
+                        let left = NSApp.windows.compactMap(\.attachedSheet).count
+                        FileHandle.standardError.write(
+                            Data("attach: sheets \(sheets) → \(left) after closing\n".utf8)
+                        )
+                    }
+                }
             }
             if let noteID = Boot.setting("PAPERTIME_OPEN_NOTE") { model.notes.openNoteID = noteID }
             if Boot.isSet("PAPERTIME_SHOW_SEARCH") {

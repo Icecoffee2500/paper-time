@@ -35,10 +35,22 @@ struct PaperListView: View {
 
     var body: some View {
         content
-            // Behind the list, not on it: presenting the sheet means reading
-            // which paper is being attached, and reading it here would rebuild
-            // every row in the library each time that changed.
-            .background { AttachHost(attaching: app.attaching, model: model) }
+            // On the list itself. It was presented from a `Color.clear` of no
+            // size in the background, to save this view from being rebuilt
+            // when the request changed — and a sheet presented from a view of
+            // no size is a sheet that cannot be closed: `dismiss()` went
+            // nowhere, so Cancel and Escape both did nothing. The saving was
+            // imaginary anyway; this changes when a sheet opens and when it
+            // closes, not sixty times a second like the pull it was modelled
+            // on.
+            .sheet(
+                item: Binding(
+                    get: { app.attaching.child },
+                    set: { app.attaching.child = $0 }
+                )
+            ) { child in
+                AttachSheet(child: child, model: model) { app.attaching.child = nil }
+            }
             // Here rather than on the list: with nothing matching by title
             // the list is not on screen at all, and that is exactly the
             // search whose answer is inside the papers.

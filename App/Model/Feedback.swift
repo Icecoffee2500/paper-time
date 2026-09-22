@@ -439,6 +439,14 @@ public enum WindowProbe {
         let after = Double(Boot.setting("PAPERTIME_WINDOW_SHOT_AFTER") ?? "") ?? 2
         Task { @MainActor in
             func say(_ text: String) { FileHandle.standardError.write(Data((text + "\n").utf8)) }
+            // Before anything waits on the window: a run started hidden has no
+            // visible window at all, and a sheet has nothing to attach itself
+            // to — the probe watched for one and counted none, which reads as
+            // "it never opened" when the truth is "there was no window". Put it
+            // outside every display first and the run behaves like any other.
+            if NSApp.keyWindow == nil, !NSApp.windows.contains(where: \.isVisible) {
+                _ = offscreen(say: say)
+            }
             try? await Task.sleep(for: .seconds(after))
             // Whichever text field was asked for, made first responder first,
             // so a shot of "while editing" is a shot of editing.
