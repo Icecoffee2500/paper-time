@@ -498,6 +498,8 @@ public enum WindowProbe {
             // expensive to build shows up here as milliseconds per step.
             if let steps = Int(Boot.setting("PAPERTIME_SCROLL_TEST") ?? "") {
                 scrollTest(in: content, steps: steps, say: say)
+                try? await Task.sleep(for: .milliseconds(400))
+                say("scroll test: pulled past the top — search palette \(app.showsSearchPalette ? "opened" : "did NOT open")")
             }
             if Boot.isSet("PAPERTIME_WINDOW_DUMP") {
                 var lines: [String] = []
@@ -641,6 +643,15 @@ public enum WindowProbe {
             CATransaction.flush()
             times.append(Double(DispatchTime.now().uptimeNanoseconds - started) / 1e6)
         }
+        // And a pull past the top, which is how the search palette opens. The
+        // list reported that through `onScrollGeometryChange`; the table has to
+        // report it from its own scroll view, and a gesture nobody can send
+        // from here would otherwise go unchecked until somebody noticed it had
+        // stopped working.
+        scroll.contentView.scroll(to: NSPoint(x: 0, y: -120))
+        scroll.reflectScrolledClipView(scroll.contentView)
+        content.window?.displayIfNeeded()
+
         // Pass by pass. The list sweeps its whole length every forty steps, so
         // if the cost were NSTableView measuring rows it had not measured yet,
         // the second sweep over the same forty positions would be cheap. If it

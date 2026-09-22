@@ -58,14 +58,29 @@ was_front() { lsappinfo info -only name "$(lsappinfo front)" 2>/dev/null | sed '
 BEFORE="$(was_front)"
 
 open -g -j -n -a "$PWD/$APP" --stderr "$LOG" --stdout "$LOG" --args "$@"
-sleep "$SECONDS_TO_WAIT"
+
+# Watched the whole way, not only at the ends. Comparing before with after says
+# nothing about the middle, and "did my window ever come forward" is the one
+# question this script exists to answer.
+SEEN=""
+ELAPSED=0
+while [ "$ELAPSED" -lt "$SECONDS_TO_WAIT" ]; do
+  NOW="$(was_front)"
+  case "$NOW" in "Paper Time") SEEN="yes" ;; esac
+  sleep 1
+  ELAPSED=$((ELAPSED + 1))
+done
 pkill -f -- "--papertime-library=$LIBRARY" 2>/dev/null || true
 sleep 1
 
 AFTER="$(was_front)"
-if [ "$BEFORE" != "$AFTER" ]; then
-  echo "!! the front application changed: $BEFORE -> $AFTER" >&2
-  echo "!! something took the screen — stop and find out what before running this again" >&2
+if [ -n "$SEEN" ]; then
+  echo "!! the probe came to the front — it must never do that" >&2
+  echo "!! stop and find out why before running this again" >&2
+elif [ "$BEFORE" != "$AFTER" ]; then
+  # Not necessarily us: the person at the keyboard changes applications too.
+  # Said quietly, because the line above is the one that matters.
+  echo "-- the front application changed while this ran: $BEFORE -> $AFTER (not the probe)" >&2
 fi
 
 cat "$LOG"

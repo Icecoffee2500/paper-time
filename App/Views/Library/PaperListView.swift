@@ -152,6 +152,29 @@ struct PaperListView: View {
                 }
             }
         } else {
+            // The Mac's middle column is a table of our own; see `PaperTable`
+            // for why, and for the numbers. iPad and iPhone keep the list —
+            // they show a few dozen papers at a time, `UITableView` under
+            // SwiftUI does not measure rows the same way, and a second list to
+            // maintain buys nothing there.
+            #if os(macOS)
+            PaperTable(
+                    entries: tableEntries,
+                    model: model,
+                    app: app,
+                    fields: SubtitleField.parse(app.settings.listSubtitleFields),
+                    onOpenShelf: model.scope == .open,
+                    selection: $model.selection,
+                    note: { AnyView(self.noteRow($0)) },
+                    onPull: { distance in
+                        pull.distance = distance
+                        guard distance > Self.pullThreshold, !app.showsSearchPalette else { return }
+                        app.showsSearchPalette = true
+                    }
+                )
+                .overlay(alignment: .top) { PullHint(pull: pull, threshold: Self.pullThreshold) }
+                .hiddenScrollers()
+            #else
             List(selection: $model.selection) {
                 if !model.loadFailures.isEmpty {
                     // The list is short by exactly this many papers, all of
@@ -287,6 +310,116 @@ struct PaperListView: View {
                 guard distance > Self.pullThreshold, !app.showsSearchPalette else { return }
                 app.showsSearchPalette = true
             }
+            #endif
+        }
+    }
+
+    /// Every row the table holds, in the order it holds them.
+    ///
+    /// What the list kept in sections is one flat run here, because one scroll
+    /// view carries the lot and a table's rows are a list of rows. The kinds
+    /// are told apart by the entry, not by where they sit.
+    private var tableEntries: [PaperTable.Entry] {
+        var entries: [PaperTable.Entry] = []
+        if !model.loadFailures.isEmpty { entries.append(.note("failures")) }
+        if model.isAdopting {
+            entries.append(.note("adopting"))
+        } else if !model.looseDocuments.isEmpty {
+            entries.append(.note("loose"))
+        }
+        if !model.adoptFailures.isEmpty { entries.append(.note("refused")) }
+
+        if let groups = model.visibleIDsByFolder {
+            for group in groups {
+                entries.append(.heading(model.folderLabel(for: group.folder)))
+                entries.append(contentsOf: group.ids.map { PaperTable.Entry.paper($0) })
+            }
+        } else {
+            if hasPassages, !model.visiblePapers.isEmpty {
+                entries.append(.heading(L("제목에서", "In the Titles")))
+            }
+            entries.append(contentsOf: model.visiblePaperIDs.map { PaperTable.Entry.paper($0) })
+        }
+
+        if hasPassages {
+            entries.append(.heading(L("논문 안에서", "In the Papers")))
+            entries.append(contentsOf: passages.map { PaperTable.Entry.passage(Self.key(of: $0.passage)) })
+            if scanning { entries.append(.note("scanning")) }
+        }
+        return entries
+    }
+
+    /// A passage, as a name a table row can be told apart by.
+    static func key(of passage: PaperTextIndex.Passage) -> String {
+        "\(passage.paperID.uuidString)#\(passage.pageIndex)@\(passage.location)+\(passage.length)"
+    }
+
+    /// The rows that speak for the folder rather than for a paper.
+    @ViewBuilder
+    private func noteRow(_ entry: PaperTable.Entry) -> some View {
+        switch entry {
+        case let .heading(title):
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.top, 8)
+                .padding(.bottom, 2)
+        case .note("failures"):
+            Button {
+                Task { await model.pullFromCloud() }
+            } label: {
+                Label(
+                    L("기록 \(model.loadFailures.count)개가 아직 안 왔어요",
+                      "\(model.loadFailures.count) record\(model.loadFailures.count == 1 ? "" : "s") "
+                        + "\(model.loadFailures.count == 1 ? "hasn't" : "haven't") arrived"),
+                    systemImage: "icloud.slash"
+                )
+            }
+            .buttonStyle(.plain)
+            .padding(.vertical, 4)
+            .help(unreadableDescription)
+        case .note("adopting"):
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text(L("PDF \(model.adoptingCount)개 더하는 중…", "Adding \(model.adoptingCount) PDFs…"))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 4)
+        case .note("loose"):
+            Button {
+                Task { await model.adoptLooseDocuments() }
+            } label: {
+                Label(
+                    L("이 폴더에 남은 PDF \(model.looseDocuments.count)개 더하기",
+                      "Add \(model.looseDocuments.count) more PDFs from this folder"),
+                    systemImage: "tray.and.arrow.down"
+                )
+            }
+            .buttonStyle(.plain)
+            .padding(.vertical, 4)
+        case .note("refused"):
+            Label(
+                L("PDF \(model.adoptFailures.count)개는 더하지 못했어요",
+                  "\(model.adoptFailures.count) PDF\(model.adoptFailures.count == 1 ? "" : "s") couldn't be added"),
+                systemImage: "exclamationmark.triangle"
+            )
+            .foregroundStyle(.secondary)
+            .padding(.vertical, 4)
+            .help(refusedDescription)
+        case .note("scanning"):
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text(L("논문 본문을 읽는 중…", "Reading the papers…"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 4)
+        case let .passage(key):
+            if let hit = passages.first(where: { Self.key(of: $0.passage) == key }) {
+                passageRow(hit)
+            }
+        default:
+            EmptyView()
         }
     }
 
@@ -753,7 +886,14 @@ struct PaperRow: View, Equatable {
     }
 
     private func subtitle(_ paper: LoadedPaper) -> String {
-        let line = subtitleFields.compactMap { $0.value(for: paper) }.joined(separator: " · ")
+        Self.subtitle(paper, fields: subtitleFields)
+    }
+
+    /// The line under the title. Static because the table works out how tall a
+    /// row will be before there is a row, and whether this line is there at all
+    /// is what decides it.
+    static func subtitle(_ paper: LoadedPaper, fields: [SubtitleField]) -> String {
+        let line = fields.compactMap { $0.value(for: paper) }.joined(separator: " · ")
         guard line.isEmpty else { return line }
         // The fields under a title are a bibliography's — authors, year,
         // venue — and a manual has none of them, so the row came out bare.
