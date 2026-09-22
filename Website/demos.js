@@ -1605,12 +1605,31 @@ function mountDialogs() {
   }
 }
 
-mountLanguage();
-mountMetadata();
-mountHero();
-mountBands();
-mountReveals();
-mountDownloads();
-mountDialogs();
-mountHowPicker();
-void mountTogether();
+/* ═══════════════════════════ what this file is ═════════════════════════
+   Two pages read this one file. A demonstration written twice is a
+   demonstration that goes stale once: the manual shows the same working
+   pieces the landing page shows, out of the same source. */
+window.PaperTime = {
+  el, L, KO,
+  demos: {
+    ultracopy, searchEverything, bookMode, fittedHighlight, marksJump,
+    passageToNote, noteLinks, panes, everyDesktop, threeDevices,
+    draftToManuscript, figmaDrawing, papersSideBySide, paperOrDocument,
+    pageGrid, manyLibraries, fileName, lockedPDF,
+  },
+  mountLanguage, mountReveals, mountDownloads, mountDialogs, mountHowPicker,
+};
+
+/* The landing page boots itself; the manual is another page and takes what
+   it wants from the object above. */
+if (document.body.dataset.page !== "docs") {
+  mountLanguage();
+  mountMetadata();
+  mountHero();
+  mountBands();
+  mountReveals();
+  mountDownloads();
+  mountDialogs();
+  mountHowPicker();
+  void mountTogether();
+}
