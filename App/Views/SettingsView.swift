@@ -193,7 +193,16 @@ struct SettingsView: View {
             // of the window, the way Aside's page sits.
             .ignoresSafeArea(edges: .top)
         }
-        .frame(width: 760, height: 540)
+        // The panes are not the same size. Everything but 정보 is a form, and
+        // 760×540 is generous for a form; 정보 is a demonstration at full size
+        // with its words underneath, and 540 cut the top off it — the card
+        // began above the window. macOS's own Settings takes the size of the
+        // pane it is showing, and so does this one.
+        .frame(
+            width: pane == .about ? 900 : 760,
+            height: pane == .about ? 780 : 540
+        )
+        .animation(Motion.surface, value: pane == .about)
         .background { Column.ground }
         .sheet(isPresented: $showsReleaseNotes) {
             WhatsNewView(marksAsSeen: false)
