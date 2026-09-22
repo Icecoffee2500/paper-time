@@ -48,7 +48,7 @@ import { buildToolbar, showMenu, toast } from './ui/toolbar.js'
 import { buildSidebar } from './ui/sidebar.js'
 import { buildPaperList } from './ui/paperList.js'
 import { buildInspector } from './ui/inspector.js'
-import { Reader } from './ui/reader.js'
+import { Reader, type ReaderPlace } from './ui/reader.js'
 import { buildSketchRack, TOOLS } from './ui/sketchToolbar.js'
 import { undoStack, type SketchInputEditing } from './ui/sketchInput.js'
 import { sketchEditor, sketchSelectionChanged } from './ui/sketchEditing.js'
@@ -417,6 +417,14 @@ async function loadInto(reader: Reader, id: string) {
   })
   reader.setDrawing(reader.state.drawing)
   reader.update()
+  // Now that there are pages to scroll: a paper whose reader was rebuilt
+  // around it — closing the pane beside it, putting it beside another — goes
+  // back to where it was being read rather than to page one.
+  const place = inheritedPlaces.get(id)
+  if (place) {
+    inheritedPlaces.delete(id)
+    reader.returnTo(place)
+  }
   if (focused() === reader) focusChanged()
 }
 
@@ -429,15 +437,24 @@ function reconcileReaders() {
   const wanted = panePapers()
   const split = store.split
   const previous = focused()
+  const shape = [split ? JSON.stringify(split) : 'one', ...wanted].join(' ')
   // A reader keeps its pen state across a change of arrangement — but one
   // built for a pane and one built for the whole area differ in chrome, so
   // the readers are rebuilt when the arrangement appears or goes.
   for (const [id, reader] of [...readers]) {
     if (!wanted.includes(id) || reader.isPane !== Boolean(split)) {
       const drawing = reader.state.drawing
+      const place = reader.place()
       reader.dispose()
       readers.delete(id)
-      if (wanted.includes(id)) inheritedDrawing.set(id, drawing)
+      if (wanted.includes(id)) {
+        inheritedDrawing.set(id, drawing)
+        // A reader built for a pane and one built for the whole area are
+        // different objects, so this paper's place cannot simply be restored
+        // at the end — it is handed to the reader that replaces this one, and
+        // taken up once that one has the pages to scroll.
+        if (place.top > 0) inheritedPlaces.set(id, place)
+      }
     }
   }
   for (const id of wanted) {
@@ -449,23 +466,69 @@ function reconcileReaders() {
     }
   }
 
-  clear(pageArea)
-  if (split) {
-    const column = (ids: string[]) => el('div', { class: 'split-column' }, ids.map((id) => readerFor(id, true).node))
-    const grid = el('div', { class: 'split' }, [column(columnIDs(split, 'left'))])
-    if (split.right) grid.append(column(columnIDs(split, 'right')))
-    pageArea.append(grid)
-  } else if (wanted[0]) {
-    pageArea.append(readerFor(wanted[0], false).node)
-  } else {
-    pageArea.append(emptyReader)
+  // Nothing to rebuild if the page area is already showing this. Taking a
+  // reader out of the document empties the scroll view inside it, and a
+  // reader at the top is a reader on page one — so a rebuild for nothing is
+  // a paper that jumps. The library is re-read every time the folder changes
+  // and the folder changes every time a mark is saved, which made this the
+  // path a highlight took back to the first page. Measured before this:
+  // scrolled to 1856, and 0 again two seconds later.
+  const standing = wanted.length > 0
+    ? wanted.every((id) => pageArea.contains(readers.get(id)?.node ?? null))
+    : pageArea.contains(emptyReader)
+  if (shape === showing && standing && pageArea.contains(dockZone)) {
+    focusChanged()
+    return
   }
-  pageArea.append(dockZone)
-  focusChanged()
-  for (const reader of readers.values()) reader.relayout()
+  showing = shape
+  // Where each reader was, to put it back: an arrangement that genuinely
+  // changed still rebuilds, and the pane that was only standing beside the
+  // one that changed should not lose its place either.
+  keepingPlaces(() => {
+    clear(pageArea)
+    if (split) {
+      const column = (ids: string[]) => el('div', { class: 'split-column' }, ids.map((id) => readerFor(id, true).node))
+      const grid = el('div', { class: 'split' }, [column(columnIDs(split, 'left'))])
+      if (split.right) grid.append(column(columnIDs(split, 'right')))
+      pageArea.append(grid)
+    } else if (wanted[0]) {
+      pageArea.append(readerFor(wanted[0], false).node)
+    } else {
+      pageArea.append(emptyReader)
+    }
+    pageArea.append(dockZone)
+    focusChanged()
+    for (const reader of readers.values()) reader.relayout()
+  })
+}
+
+/** What the page area is showing, so that it is only rebuilt when that
+ *  changes. See the note in `reconcileReaders`. */
+let showing = ''
+
+/**
+ * Runs something that re-appends a panel, and puts the papers back afterwards.
+ *
+ * A scroll view taken out of the document comes back at the top, and a reader
+ * at the top is a reader on page one. Every piece of code that re-appends a
+ * panel goes through here — measured, toggling the sidebar sent a paper from
+ * 1600 to 0, and so did saving a highlight, by way of the library being
+ * re-read. The papers go back after the panels have been laid out again, so
+ * that a column which has just changed width is measured at its new size.
+ */
+function keepingPlaces(rebuild: () => void) {
+  const places = new Map([...readers].map(([id, reader]) => [id, reader.place()]))
+  rebuild()
+  for (const [id, reader] of readers) {
+    const place = places.get(id)
+    if (place) reader.returnTo(place)
+  }
 }
 
 const inheritedDrawing = new Map<string, boolean>()
+
+/** Where a paper was being read, across a rebuild of its reader. */
+const inheritedPlaces = new Map<string, ReaderPlace>()
 
 function columnIDs(split: SplitArrangement, side: 'left' | 'right'): string[] {
   const column = side === 'left' ? split.left : split.right
@@ -832,9 +895,11 @@ function togglePane(pane: Pane) {
   if (solo) return
   store.settings.panes[pane] = !store.settings.panes[pane]
   void call('settings:set', { panes: store.settings.panes })
-  layoutPanes()
-  toolbar.update()
-  relayoutReaders()
+  keepingPlaces(() => {
+    layoutPanes()
+    toolbar.update()
+    relayoutReaders()
+  })
 }
 
 // ------------------------------------------------------------------ actions
@@ -951,9 +1016,11 @@ function toggleFocus() {
     store.settings.panes = { sidebar: false, paperList: false, reader: true, inspector: false }
   }
   void call('settings:set', { panes: store.settings.panes })
-  layoutPanes()
-  toolbar.update()
-  relayoutReaders()
+  keepingPlaces(() => {
+    layoutPanes()
+    toolbar.update()
+    relayoutReaders()
+  })
 }
 
 function setLayout(layout: 'single' | 'continuous') {
