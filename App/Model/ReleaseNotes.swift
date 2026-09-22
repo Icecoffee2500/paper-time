@@ -267,6 +267,64 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.9.2",
+            date: Text2("2026년 9월", "September 2026"),
+            note: Text2(
+                "여는 데 걸리던 시간이 대부분 없어졌어요. 그리고 앱의 움직임이 한 벌로 맞춰졌어요 — 같은 크기의 변화는 어디서나 같은 속도예요.",
+                "Most of the wait at launch is gone. And the app moves as one thing now: the same size of change takes the same time everywhere."
+            ),
+            added: [
+                Entry(
+                    Text2("빨리 열려요", "It opens"),
+                    Text2(
+                        "라이브러리를 여는 데 2초가 걸리고 있었어요. 폴더가 클라우드에 있으면 앱이 그 안을 통째로 걸어 다니면서 파일마다 «다 왔나요»를 물었는데, 정작 기다리던 파일은 이미 와 있었어요. 폴더를 여러 개 열어 뒀으면 시작할 때 라이브러리를 폴더 수만큼 읽기도 했고요 — 셋이면 세 번, 그중 둘은 버리면서요. 노트를 읽을 때마다 옛날 노트 이사 작업이 처음부터 다시 돌기도 했어요. 전부 한 번씩만 하도록 고쳤어요.",
+                        "Opening a library took two seconds. With the folder in a cloud drive the app walked all of it, asking every file whether it had arrived — to hurry along one file that was already there. With several folders open it then read the whole library once per folder, throwing away all but the last. And every read of the notes started the old note migration again from nothing. Each of those now happens once."
+                    ),
+                    devices: [.mac, .ipad, .iphone]
+                ),
+                Entry(
+                    Text2("목록이 손에 붙어요", "The lists answer the hand"),
+                    Text2(
+                        "논문을 하나 고르면 창의 목록들을 통째로 다시 그리고 있었어요 — 선반 이백 줄과 논문 예순 줄을, 아이콘까지 새로 그려서요. 이제 바뀐 줄만 고쳐요. 선반의 숫자도 줄마다 라이브러리를 한 바퀴 도는 대신 한 번에 다 세고요. 칸 사이 구분선을 끌 때 창 전체를 다시 배치하던 것도 고쳤어요.",
+                        "Choosing a paper redrew every list in the window — two hundred shelf rows and sixty paper rows, icons and all. Now only the rows that changed are touched, the shelves count themselves in one pass instead of one walk of the library per row, and dragging a divider moves the one column rather than laying out the whole window sixty times a second."
+                    ),
+                    devices: [.mac]
+                ),
+                Entry(
+                    Text2("움직임이 한 벌이에요", "One set of speeds"),
+                    Text2(
+                        "여기저기 손으로 적은 속도가 열일곱 가지 있었어요. 그래서 포인터 밑에서 칩이 켜지는 것과 칸 하나가 통째로 들어오는 것이 같은 속도로 움직였어요. 이제 사다리가 하나예요 — 창의 얼마가 움직이는지로 고르고, 곡선은 하나예요. 시스템 설정에서 «동작 줄이기»를 켜두면 따라요: 변화는 그대로 일어나되 아무것도 미끄러지거나 튕기지 않아요.",
+                        "There were seventeen hand-written durations, so a chip lighting under the pointer moved at the same speed as a whole column arriving. Now there is one ladder — chosen by how much of the window moves — and one curve. If you have asked the system for less motion, it listens: things still change, but nothing travels or overshoots."
+                    ),
+                    devices: [.mac, .ipad, .iphone]
+                ),
+                Entry(
+                    Text2("환영 화면은 한 번에 하나씩", "One feature at a time"),
+                    Text2(
+                        "이 화면이 스무 가지를 한 줄로 세워 놓은 목록이었어요. 목록은 아무도 안 읽어요. 이제 한 번에 하나씩 보여줘요 — 큰 카드 안에 실물이 있고, 그 아래 이름과 한 문장이 있고, 좌우 화살표나 ← → 키로 넘겨요.",
+                        "This screen was twenty things in a column, which is a list, and nobody reads a list of twenty. It shows one at a time now: the thing itself in a card, its name and a sentence under it, and an arrow on each side — or the arrow keys."
+                    )
+                ),
+                Entry(
+                    Text2("설명서가 생겼어요", "There is a manual"),
+                    Text2(
+                        "배포 페이지에 설명서를 뒀어요. 폴더를 고르는 것부터 표시, 그리기, 노트, 서지, 단축키까지 — 설명마다 눌러볼 수 있는 실물이 붙어 있어요. 글로만 읽는 설명서가 아니에요.",
+                        "The download page now has one: choosing the folder, marking, drawing, notes, records, the keys. Every explanation that can be shown is shown — the same working pieces, in the paragraph that is talking about them."
+                    ),
+                    devices: [.mac, .ipad, .iphone]
+                ),
+            ],
+            fixed: [
+                Entry(
+                    Text2("쓰던 글자가 사라지지 않아요", "What you were typing stays"),
+                    Text2(
+                        "인스펙터에서 제목을 고치는 중에 라이브러리에 아무 변화나 생기면 — 다른 줄의 별을 눌러도 — 칸이 통째로 다시 그려지면서 쓰던 글자가 사라졌어요. 윈도우·리눅스 빌드의 일이에요.",
+                        "Typing in a field of the inspector, anything at all happening in the library — a star pressed on another row was enough — rebuilt the field and took the half-written title with it. This was the Windows and Linux build."
+                    )
+                ),
+            ]
+        ),
+        Release(
             version: "0.9.1",
             date: Text2("2026년 9월", "September 2026"),
             note: Text2(

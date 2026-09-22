@@ -94,7 +94,7 @@ struct AboutView: View {
             }
 
             Text(ReleaseNotes.string(
-                "논문은 이 앱 안이 아니라 내가 고른 폴더에 평범한 파일로 있다. 노트도 Markdown 파일이다. 앱을 지워도 읽던 것은 남는다.",
+                "논문은 이 앱 안이 아니라 직접 고른 폴더에 평범한 파일로 있어요. 노트도 Markdown 파일이고요. 앱을 지워도 읽던 것은 그대로 남아요.",
                 "Papers are ordinary files in the folder you chose, not inside this app; notes are Markdown. Delete the app and what you were reading is still there."
             ))
             .font(.footnote)
@@ -279,7 +279,7 @@ private struct AboutHeader: View {
             }
 
             Text(ReleaseNotes.string(
-                "논문을 읽고, 표시하고, 그 표시를 생각으로 바꾸기 위한 앱. 아래의 것들은 설명이 아니라 실제로 눌러볼 수 있는 것들이다 — 논문만 없을 뿐, 동작은 앱의 것 그대로다.",
+                "논문을 읽고, 표시하고, 그 표시를 생각으로 바꾸기 위한 앱이에요. 아래의 것들은 설명이 아니라 눌러볼 수 있는 것들이에요 — 논문만 없을 뿐, 손에 닿는 건 앱의 것 그대로예요.",
                 "An app for reading papers, marking them, and turning those marks into thinking. What follows is not a description: each one works. Only the paper is missing."
             ))
             .font(.callout)
