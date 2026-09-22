@@ -2243,7 +2243,19 @@ final class SketchTextEditor: NSTextView {
             textContainerInset = .zero
             alignment = .center
         }
-        typingAttributes = [.font: font, .foregroundColor: textColor ?? .textColor]
+        // The words break where the card's own renderer breaks them: at the
+        // space, not inside the word. Without it the card said one thing
+        // while you typed and another the moment you clicked away.
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = alignment
+        paragraph.lineBreakStrategy = .standard
+        defaultParagraphStyle = paragraph
+        typingAttributes = [
+            .font: font, .foregroundColor: textColor ?? .textColor, .paragraphStyle: paragraph,
+        ]
+        if let storage = textStorage, storage.length > 0 {
+            storage.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: storage.length))
+        }
         // Existing words are selected, so typing replaces them; a new card
         // has nothing to select and the caret simply waits.
         selectAll(nil)

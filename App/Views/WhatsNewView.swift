@@ -28,13 +28,22 @@ struct WhatsNewView: View {
             .padding(.horizontal, horizontalSizeClass == .compact ? 18 : 30)
             .padding(.top, 26)
             .padding(.bottom, 20)
+            #if os(macOS)
+            .frame(maxWidth: .infinity, alignment: .top)
+            #else
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            #endif
             footer
         }
-        // A window's worth on the Mac; on iOS the sheet is the screen, and
-        // the showcase takes the width it is given.
+        // A width on the Mac, and whatever height the pages need. The height
+        // used to be fixed at 700, which was right for the sentences that
+        // existed when it was written and clipped the longer ones that came
+        // later — the last lines ran off under the dots. The showcase now
+        // reserves the tallest page's words on every page, so the sheet is
+        // one size whichever page is showing, and that size is the content's.
+        // On iOS the sheet is the screen and takes the width it is given.
         #if os(macOS)
-        .frame(width: 680, height: 700)
+        .frame(width: 680)
         #endif
         .onAppear { if marksAsSeen { app.markReleaseNotesSeen() } }
     }

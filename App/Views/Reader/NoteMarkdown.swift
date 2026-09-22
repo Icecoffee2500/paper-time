@@ -735,6 +735,13 @@ enum NoteMarkdown {
             let key = "\(kind)|\(indent)"
             if let known = NoteMarkdown.styles[key] { return known }
             let style = NSMutableParagraphStyle()
+            // Where a line may end. Without this, TextKit ends one wherever it
+            // runs out of room, and Korean has no rule against that being the
+            // middle of a word: 라이브러리를 comes apart as 라이브 / 러리를 and
+            // the reader puts the word back together before they read the
+            // sentence. Asked, TextKit breaks at the space instead, and still
+            // goes inside a word when the word is wider than the column.
+            style.lineBreakStrategy = .standard
             // Air. A note is read in a narrow column beside a paper, and the
             // old setting — two points of leading, three between paragraphs —
             // was a page of type with nowhere to rest. This is roughly the

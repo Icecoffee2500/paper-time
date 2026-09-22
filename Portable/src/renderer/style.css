@@ -140,6 +140,21 @@ body {
   cursor: default;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /*
+   * Where a line may end. Korean has no rule against ending one inside a
+   * word, so Chromium ends one wherever it runs out of room: «라이브러리»
+   * comes apart as «라이브 / 러리» and the reader has to put the word back
+   * together before they can read the row. The Mac never did this — SwiftUI's
+   * own text layout breaks Korean at the space and only goes inside a word
+   * when the word is wider than the box — so this is the line that makes the
+   * two windows read alike, not a preference.
+   *
+   * `break-word` under it is that same release valve: a token wider than its
+   * column (a path, a DOI, a long compound) has to break somewhere. English
+   * is untouched; it already breaks only at spaces.
+   */
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 #root {
@@ -782,7 +797,6 @@ body[data-platform='darwin'] .window-buttons {
   font-size: 13px;
   line-height: 1.4;
   user-select: text;
-  word-break: break-word;
 }
 
 .field input,
@@ -1389,7 +1403,9 @@ body[data-platform='darwin'] .window-buttons {
   font-size: 11.5px;
   color: var(--text-tertiary);
   font-family: var(--mono, ui-monospace, monospace);
-  word-break: break-word;
+  /* A parser's own words: one long token with nothing to break at, so this
+     one is allowed inside itself where the base rule would not. */
+  word-break: break-all;
 }
 
 .empty p {
