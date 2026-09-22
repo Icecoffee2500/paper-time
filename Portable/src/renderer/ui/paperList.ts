@@ -10,7 +10,7 @@
  */
 import { iconNode } from '../icons.js'
 import { clear, el, on } from '../dom.js'
-import { isPinned, shelfPapers, store, type Paper } from '../state.js'
+import { isPinned, papersByFolder, shelfPapers, store, type Paper } from '../state.js'
 import { showMenu } from './toolbar.js'
 import { basename } from './sidebar.js'
 import { L } from '../../shared/lang.js'
@@ -47,7 +47,8 @@ export function buildPaperList(actions: PaperListActions): { node: HTMLElement; 
   node.append(header, body)
 
   /** The rows on screen, by paper, so a redraw can keep the ones it has. */
-  let shown: { id: string; shape: string; row: BuiltRow }[] = []
+  // A row, or a folder's name over the rows that came out of it.
+  let shown: { id: string; shape: string; row: BuiltRow | null }[] = []
   let shownHeader = ''
 
   function update() {
@@ -85,21 +86,34 @@ export function buildPaperList(actions: PaperListActions): { node: HTMLElement; 
     // away every row in the list and build them again, icons and all. A row
     // is rebuilt only when its shape changes — when it gains the × of a kept
     // paper, say — and otherwise it is told what to say.
-    const wanted = papers.map((entry) => ({ entry, shape: rowShape(entry) }))
+    // On a kind's shelf the rows come from every folder at once, so each
+    // folder's name goes over its own papers. Everywhere else the list is one
+    // list and a heading would be a label on a thing with no counterpart.
+    const groups = papersByFolder(papers)
+    const wanted = groups
+      ? groups.flatMap((group) => [
+        { head: group.label, entry: null, shape: `head|${group.label}`, id: `head|${group.label}` },
+        ...group.papers.map((entry) => ({ head: null, entry, shape: rowShape(entry), id: entry.id })),
+      ])
+      : papers.map((entry) => ({ head: null, entry, shape: rowShape(entry), id: entry.id }))
     const sameShape = wanted.length === shown.length
-      && wanted.every(({ entry, shape }, at) => shown[at].id === entry.id && shown[at].shape === shape)
+      && wanted.every(({ id, shape }, at) => shown[at].id === id && shown[at].shape === shape)
     if (!sameShape) {
       const kept = new Map(shown.map((row) => [`${row.id}|${row.shape}`, row.row]))
       clear(body)
-      shown = wanted.map(({ entry, shape }) => {
-        const row = kept.get(`${entry.id}|${shape}`) ?? paperRow(entry, actions)
+      shown = wanted.map(({ head, entry, shape, id }) => {
+        if (head !== null || entry === null) {
+          body.append(el('div', { class: 'list-group', text: head ?? '' }))
+          return { id, shape, row: null }
+        }
+        const row = kept.get(`${id}|${shape}`) ?? paperRow(entry, actions)
         row.apply(entry)
         body.append(row.node)
-        return { id: entry.id, shape, row }
+        return { id, shape, row }
       })
       return
     }
-    for (const [at, { entry }] of wanted.entries()) shown[at].row.apply(entry)
+    for (const [at, { entry }] of wanted.entries()) if (entry) shown[at].row?.apply(entry)
   }
 
   update()

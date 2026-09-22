@@ -671,7 +671,14 @@ public final class AppModel {
 
                 """.utf8))
             }
-            if Boot.setting("PAPERTIME_SCOPE") == "notes" { model.scope = .notes }
+            switch Boot.setting("PAPERTIME_SCOPE") {
+            case "notes": model.scope = .notes
+            case "papers": model.scope = .papers
+            case "books": model.scope = .books
+            case "lectures": model.scope = .lectures
+            case "documents": model.scope = .documents
+            default: break
+            }
             // A folder inside the library, by its path under the root:
             // `--papertime-scope=folder:2026-2학기/week 1`. The tree only
             // exists once you are inside one, and a synthetic click cannot

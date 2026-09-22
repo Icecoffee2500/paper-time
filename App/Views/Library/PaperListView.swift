@@ -128,6 +128,21 @@ struct PaperListView: View {
                         }
                     }
                 }
+                // A kind's shelf gathers papers out of every folder at once,
+                // and until now they arrived in one undivided run — sixty rows
+                // with nothing to say which term or which library each came
+                // from. Where they come from more than one folder, each folder
+                // gets its name over its own papers.
+                if let groups = model.visibleByFolder {
+                    let fields = SubtitleField.parse(app.settings.listSubtitleFields)
+                    ForEach(groups, id: \.folder) { group in
+                        Section(model.folderLabel(for: group.folder)) {
+                            ForEach(group.papers) { paper in
+                                row(for: paper, fields: fields, onOpenShelf: false)
+                            }
+                        }
+                    }
+                } else {
                 Section {
                 // Once for the list, not once for every row in it: the
                 // setting is a string that has to be taken apart, and taking
@@ -136,26 +151,7 @@ struct PaperListView: View {
                 let fields = SubtitleField.parse(app.settings.listSubtitleFields)
                 let onOpenShelf = model.scope == .open
                 ForEach(model.visiblePapers) { paper in
-                    PaperRow(
-                        paper: paper,
-                        tags: paper.meta.tagIDs.compactMap { model.tag(for: $0) },
-                        attachmentCount: model.attachmentCount(of: paper.id),
-                        isResolving: model.resolving.contains(paper.id),
-                        subtitleFields: fields,
-                        model: model,
-                        onOpenShelf: onOpenShelf,
-                        isKeptOpen: model.isPinned(paper.id)
-                    )
-                    .tag(paper.id)
-                    #if os(iOS)
-                    // A `Set` selection only takes taps in edit mode on
-                    // iOS, so the row opens the paper itself.
-                    .contentShape(.rect)
-                    .onTapGesture {
-                        model.selection = [paper.id]
-                        app.compactColumn = .detail
-                    }
-                    #endif
+                    row(for: paper, fields: fields, onOpenShelf: onOpenShelf)
                 }
                 } header: {
                     // Only while a search is being shown. Everywhere else the
@@ -164,6 +160,7 @@ struct PaperListView: View {
                     if hasPassages, !model.visiblePapers.isEmpty {
                         Text(L("제목에서", "In the Titles"))
                     }
+                }
                 }
 
                 if hasPassages {
@@ -213,6 +210,32 @@ struct PaperListView: View {
 
     private var isSearch: Bool { model.scope == .searchResults }
     /// Whether the text of the papers has something to say about this search.
+
+    /// One row of the list, wherever it is drawn from.
+    @ViewBuilder
+    private func row(for paper: LoadedPaper, fields: [SubtitleField], onOpenShelf: Bool) -> some View {
+        PaperRow(
+            paper: paper,
+            tags: paper.meta.tagIDs.compactMap { model.tag(for: $0) },
+            attachmentCount: model.attachmentCount(of: paper.id),
+            isResolving: model.resolving.contains(paper.id),
+            subtitleFields: fields,
+            model: model,
+            onOpenShelf: onOpenShelf,
+            isKeptOpen: model.isPinned(paper.id)
+        )
+        .tag(paper.id)
+        #if os(iOS)
+        // A `Set` selection only takes taps in edit mode on iOS, so the row
+        // opens the paper itself.
+        .contentShape(.rect)
+        .onTapGesture {
+            model.selection = [paper.id]
+            app.compactColumn = .detail
+        }
+        #endif
+    }
+
     private var hasPassages: Bool { isSearch && (scanning || !passages.isEmpty) }
 
     /// One paper whose *text* holds the query: the sentence it is in, and

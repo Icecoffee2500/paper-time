@@ -42,6 +42,8 @@ interface RowSpec {
   title?: string
   /** How far in, for a folder inside a folder. */
   indent?: number
+  /** A section that folds. The chevron turns and the rows under it go. */
+  fold?: { open: boolean; press: () => void }
   /** Right-click, where a row has one. */
   menu?: () => void
 }
@@ -127,6 +129,14 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
   }
 
   /** What the list should say, as a list of rows. */
+  let authorsAreShown = (() => {
+    try {
+      return localStorage.getItem('sidebar.authors') === '1'
+    } catch {
+      return false
+    }
+  })()
+
   function specs(): RowSpec[] {
     const papers = store.papers.filter((entry) => !entry.meta.parentID)
     const counts = shelfCounts(papers)
@@ -265,8 +275,27 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
 
     const authors = authorCounts()
     if (authors.length > 0) {
-      rows.push({ key: 'sec:authors', kind: 'section', label: L('저자', 'Authors') })
-      for (const author of authors.slice(0, 200)) {
+      // Folded to begin with, and remembered after that. Fifty names is the
+      // longest run in this list and the least often wanted, and they pushed
+      // the graph off the bottom of it.
+      rows.push({
+        key: 'sec:authors',
+        kind: 'section',
+        label: L('저자', 'Authors'),
+        fold: {
+          open: authorsAreShown,
+          press: () => {
+            authorsAreShown = !authorsAreShown
+            try {
+              localStorage.setItem('sidebar.authors', authorsAreShown ? '1' : '0')
+            } catch {
+              // A window with no storage still folds; it just forgets.
+            }
+            update()
+          },
+        },
+      })
+      for (const author of authorsAreShown ? authors.slice(0, 200) : []) {
         rows.push({
           key: `author:${author.name}`,
           kind: 'row',
@@ -284,7 +313,19 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
   }
 
   function build(spec: RowSpec): HTMLElement {
-    if (spec.kind === 'section') return el('div', { class: 'sidebar-section', text: spec.label })
+    if (spec.kind === 'section') {
+      if (!spec.fold) return el('div', { class: 'sidebar-section', text: spec.label })
+      const fold = spec.fold
+      const head = el('button', {
+        class: `sidebar-section sidebar-fold${fold.open ? ' open' : ''}`,
+        'aria-expanded': String(fold.open),
+      })
+      const chevron = iconNode('chevron.right')
+      if (chevron) head.append(el('span', { class: 'fold-chevron' }, [chevron]))
+      head.append(el('span', { text: spec.label }))
+      on(head, 'click', fold.press)
+      return head
+    }
     const selected = spec.shelf ? same(store.shelf, spec.shelf) : false
     const row = el('button', {
       class: 'row',
@@ -328,7 +369,7 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
 
   /** What has to be redrawn rather than merely re-labelled. */
   function shape(spec: RowSpec): string {
-    return `${spec.kind}|${spec.key}|${spec.icon ?? ''}|${spec.label}|${spec.chip ? 1 : 0}|${spec.menu ? 1 : 0}|${spec.indent ?? 0}`
+    return `${spec.kind}|${spec.key}|${spec.icon ?? ''}|${spec.label}|${spec.chip ? 1 : 0}|${spec.menu ? 1 : 0}|${spec.indent ?? 0}|${spec.fold ? (spec.fold.open ? 'v' : '>') : ''}`
   }
 
   let drawnSpecs: RowSpec[] = []

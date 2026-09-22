@@ -152,6 +152,36 @@ public final class LibraryModel {
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
+    /// The visible papers gathered by the folder they sit in, when that is
+    /// worth showing.
+    ///
+    /// A kind's shelf takes papers from every folder at once — the whole point
+    /// of it — and sixty rows from four folders in one run is sixty rows you
+    /// cannot place. Nil everywhere else: a folder's own shelf is already one
+    /// folder, and a heading over one group is a label on a thing with no
+    /// counterpart.
+    public var visibleByFolder: [(folder: URL, papers: [LoadedPaper])]? {
+        switch scope {
+        case .papers, .books, .lectures, .documents: break
+        default: return nil
+        }
+        var groups: [URL: [LoadedPaper]] = [:]
+        for paper in visiblePapers {
+            groups[paper.documentURL.deletingLastPathComponent(), default: []].append(paper)
+        }
+        guard groups.count > 1 else { return nil }
+        return groups
+            .map { (folder: $0.key, papers: $0.value) }
+            .sorted { folderLabel(for: $0.folder).localizedStandardCompare(folderLabel(for: $1.folder)) == .orderedAscending }
+    }
+
+    /// A folder said the way somebody would read it aloud: the library's name,
+    /// then the way down. The whole path would be a line of machinery.
+    public func folderLabel(for folder: URL) -> String {
+        let trail = folderTrail(to: folder)
+        return trail.map(\.lastPathComponent).joined(separator: " › ")
+    }
+
     /// The way from the library root down to this folder, root first.
     public func folderTrail(to folder: URL) -> [URL] {
         guard let root = sources.map(\.url).first(where: {

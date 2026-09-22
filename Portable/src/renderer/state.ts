@@ -227,6 +227,36 @@ export function subfolders(folder: string): { path: string; name: string; count:
     .sort((a, b) => a.name.localeCompare(b.name))
 }
 
+/**
+ * The shelf's papers gathered by the folder they sit in, or null.
+ *
+ * A kind's shelf takes papers out of every folder at once — the whole point
+ * of it — and sixty rows from four folders in one run is sixty rows you
+ * cannot place. Null everywhere else: a folder's own shelf is already one
+ * folder, and a heading over one group is a label on a thing with no
+ * counterpart. The Mac does the same (`LibraryModel.visibleByFolder`).
+ */
+export function papersByFolder(papers: Paper[]): { label: string; papers: Paper[] }[] | null {
+  if (store.shelf.kind !== 'kind') return null
+  const groups = new Map<string, Paper[]>()
+  for (const entry of papers) {
+    const here = folderOf(entry) ?? slashed(entry.root ?? '')
+    const found = groups.get(here)
+    if (found) found.push(entry)
+    else groups.set(here, [entry])
+  }
+  if (groups.size < 2) return null
+  return [...groups]
+    .map(([folder, found]) => ({ label: folderLabel(folder), papers: found }))
+    .sort((a, b) => a.label.localeCompare(b.label))
+}
+
+/** A folder said the way somebody reads it aloud: the library's name, then
+ *  the way down. The whole path would be a line of machinery. */
+export function folderLabel(folder: string): string {
+  return folderTrail(folder).map((one) => one.split('/').filter(Boolean).pop() ?? one).join(' › ')
+}
+
 /** The way down to this folder from its library root, root first. */
 export function folderTrail(folder: string): string[] {
   const base = slashed(folder)
