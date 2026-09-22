@@ -9,7 +9,10 @@
 import { iconNode } from '../icons.js'
 import { showMenu } from './toolbar.js'
 import { clear, el, on } from '../dom.js'
-import { authorCounts, store, type Paper, type Shelf } from '../state.js'
+import {
+  authorCounts, folderAbove, folderTrail, isUnderFolder, store, subfolders,
+  type Paper, type Shelf,
+} from '../state.js'
 import { isLookedUp } from '../../shared/documentKind.js'
 import { L } from '../../shared/lang.js'
 import { providerIcon, providerOf } from '../../shared/cloudProvider.js'
@@ -37,6 +40,8 @@ interface RowSpec {
   /** For the rows that are not shelves: add a folder, a collection, the graph. */
   press?: () => void
   title?: string
+  /** How far in, for a folder inside a folder. */
+  indent?: number
   /** Right-click, where a row has one. */
   menu?: () => void
 }
@@ -133,7 +138,15 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
     // collections — beside its own PDFs, so disconnecting one leaves it
     // exactly as it was.
     rows.push({ key: 'sec:libraries', kind: 'section', label: L('라이브러리', 'Libraries') })
-    for (const root of store.roots) {
+    // Inside a folder the other libraries step out of the way and this one's
+    // own folders take their place. A term of lectures is twenty folders, and
+    // a list showing every library's every folder at once would become the
+    // thing the sidebar was meant to replace — so it shows one path at a
+    // time: the way down to where you are, and what is one step further.
+    const open = store.shelf.kind === 'folder' ? (store.shelf as { root: string }).root : null
+    const trail = open ? folderTrail(open) : []
+    const shownRoots = open ? store.roots.filter((root) => trail[0] === root.replace(/\\/g, '/').replace(/\/+$/, '')) : store.roots
+    for (const root of shownRoots) {
       rows.push({
         key: `folder:${root}`,
         kind: 'row',
@@ -146,10 +159,37 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
         menu: root === store.root ? undefined : () => actions.removeFolder(root),
       })
     }
-    rows.push({
-      key: 'add:folder', kind: 'button', icon: 'plus.circle',
-      label: L('라이브러리 더하기…', 'Add Library…'), press: actions.addFolder,
-    })
+    if (open) {
+      for (const [step, path] of trail.slice(1).entries()) {
+        rows.push({
+          key: `folder:${path}`,
+          kind: 'row',
+          shelf: { kind: 'folder', root: path },
+          icon: path === open ? 'folder.fill' : 'folder',
+          label: basename(path),
+          count: store.papers.filter((entry) => !entry.meta.parentID && isUnderFolder(entry, path)).length,
+          indent: step + 1,
+          title: path,
+        })
+      }
+      for (const node of subfolders(open)) {
+        rows.push({
+          key: `folder:${node.path}`,
+          kind: 'row',
+          shelf: { kind: 'folder', root: node.path },
+          icon: 'folder',
+          label: node.name,
+          count: node.count,
+          indent: trail.length,
+          title: node.path,
+        })
+      }
+    } else {
+      rows.push({
+        key: 'add:folder', kind: 'button', icon: 'plus.circle',
+        label: L('라이브러리 더하기…', 'Add Library…'), press: actions.addFolder,
+      })
+    }
     rows.push({ key: 'gap:1', kind: 'section', label: '' })
 
     // Three groups with air between them, because the shelves answer three
@@ -262,8 +302,20 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
     )
     if (spec.count !== undefined) row.append(el('span', { class: 'row-count', text: String(spec.count) }))
     if (spec.title) row.title = spec.title
+    if (spec.indent) row.style.paddingLeft = `${8 + spec.indent * 11}px`
     const shelf = spec.shelf
-    on(row, 'click', shelf ? () => actions.select(shelf) : (spec.press ?? (() => {})))
+    on(row, 'click', shelf ? () => {
+      // Pressing the folder you are already inside goes back out, and out of
+      // a library root is out of the folders altogether. A list you can get
+      // into and not out of is a list with a trapdoor, and the way out has to
+      // be the row your hand is already on.
+      if (shelf.kind === 'folder' && same(store.shelf, shelf)) {
+        const up = folderAbove(shelf.root)
+        actions.select(up ? { kind: 'folder', root: up } : { kind: 'all' })
+        return
+      }
+      actions.select(shelf)
+    } : (spec.press ?? (() => {})))
     if (spec.menu) {
       const open = spec.menu
       on(row, 'contextmenu', (event: MouseEvent) => {
@@ -276,7 +328,7 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
 
   /** What has to be redrawn rather than merely re-labelled. */
   function shape(spec: RowSpec): string {
-    return `${spec.kind}|${spec.key}|${spec.icon ?? ''}|${spec.label}|${spec.chip ? 1 : 0}|${spec.menu ? 1 : 0}`
+    return `${spec.kind}|${spec.key}|${spec.icon ?? ''}|${spec.label}|${spec.chip ? 1 : 0}|${spec.menu ? 1 : 0}|${spec.indent ?? 0}`
   }
 
   let drawnSpecs: RowSpec[] = []

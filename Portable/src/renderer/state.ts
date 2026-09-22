@@ -179,6 +179,75 @@ export function subscribe(listener: Listener): () => void {
  * the reader because a sidebar row was hovered would throw away a page of
  * canvases for nothing.
  */
+/**
+ * The folders inside folders, which is what a term of lectures looks like.
+ *
+ * All of this is read off the papers rather than off the disk: the tree is
+ * then exactly what the list can show, and it costs no round trip on a cloud
+ * folder. The same is true on the Mac (`LibraryModel.subfolders(of:)`), and
+ * the two have to agree because they are looking at the same folder.
+ *
+ * Every comparison is done with `/`, because a record says `/` on every
+ * desktop while a root on Windows says `\`.
+ */
+const slashed = (path: string) => path.replace(/\\/g, '/').replace(/\/+$/, '')
+
+/** The folder a paper's PDF sits in, or null when the record says nothing. */
+export function folderOf(entry: Paper): string | null {
+  const relative = String(entry.meta.file?.relativePath ?? '')
+  if (!relative || !entry.root) return null
+  const parts = slashed(relative).split('/')
+  parts.pop()
+  return [slashed(entry.root), ...parts].join('/')
+}
+
+/** Whether a paper sits at or under a folder — a term shows the term. */
+export function isUnderFolder(entry: Paper, folder: string): boolean {
+  const here = folderOf(entry)
+  if (here === null) return slashed(entry.root ?? '') === slashed(folder)
+  const base = slashed(folder)
+  return here === base || here.startsWith(base + '/')
+}
+
+/** The folders one step inside this one that hold papers, and how many each
+ *  holds counting everything beneath it. */
+export function subfolders(folder: string): { path: string; name: string; count: number }[] {
+  const base = slashed(folder)
+  const counts = new Map<string, number>()
+  for (const entry of store.papers) {
+    if (entry.meta.parentID) continue
+    const here = folderOf(entry)
+    if (here === null || !here.startsWith(base + '/')) continue
+    const name = here.slice(base.length + 1).split('/')[0]
+    if (!name) continue
+    counts.set(name, (counts.get(name) ?? 0) + 1)
+  }
+  return [...counts]
+    .map(([name, count]) => ({ path: `${base}/${name}`, name, count }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/** The way down to this folder from its library root, root first. */
+export function folderTrail(folder: string): string[] {
+  const base = slashed(folder)
+  const root = store.roots
+    .map(slashed)
+    .find((one) => base === one || base.startsWith(one + '/'))
+  if (!root) return [folder]
+  const rest = base.slice(root.length).split('/').filter(Boolean)
+  const trail = [root]
+  for (const part of rest) trail.push(`${trail[trail.length - 1]}/${part}`)
+  return trail
+}
+
+/** Where pressing an open folder again goes, or null at a library root. */
+export function folderAbove(folder: string): string | null {
+  const base = slashed(folder)
+  if (store.roots.map(slashed).includes(base)) return null
+  const cut = base.lastIndexOf('/')
+  return cut > 0 ? base.slice(0, cut) : null
+}
+
 export function changed(...keys: string[]) {
   const set = new Set(keys)
   for (const listener of listeners) listener(set)
@@ -368,7 +437,7 @@ export function shelfPapers(): Paper[] {
     }
     case 'folder': {
       const root = (store.shelf as { kind: 'folder'; root: string }).root
-      filtered = all.filter((entry) => entry.root === root)
+      filtered = all.filter((entry) => isUnderFolder(entry, root))
       break
     }
     case 'open': {
