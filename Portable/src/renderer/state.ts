@@ -49,6 +49,8 @@ export interface Settings {
   inspectorTab: InspectorTab
   sort: { field: 'title' | 'author' | 'year' | 'added' | 'opened'; ascending: boolean }
   appearance: 'system' | 'light' | 'dark'
+  /** The words, when the desktop's own language is not what somebody wants. */
+  language: 'system' | 'ko' | 'en'
   pageTint: 'none' | 'sepia' | 'grey' | 'night'
   pageLayout: 'single' | 'continuous'
   selectedPaperID: string | null
@@ -155,6 +157,7 @@ export const store: Store = {
     inspectorTab: 'details',
     sort: { field: 'added', ascending: false },
     appearance: 'system',
+    language: 'system',
     pageTint: 'none',
     pageLayout: 'continuous',
     selectedPaperID: null,

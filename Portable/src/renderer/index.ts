@@ -17,6 +17,7 @@ import { clear, el, on } from './dom.js'
 // Imported for its side effect: the sheet registers its own ⌥⌘/ so nothing
 // in the shell has to know it exists.
 import { showFeedback } from './ui/feedback.js'
+import { showSettings } from './ui/settings.js'
 import {
   adopt,
   canGoBack,
@@ -716,6 +717,7 @@ const toolbar = buildToolbar({
       })),
     ], 'right')
   },
+  settings: () => openSettings(),
   minimize: () => void call('window:minimize'),
   toggleMaximize: () => void call('window:toggleMaximize'),
   close: () => void call('window:close'),
@@ -1310,9 +1312,33 @@ onEvent((event, payload) => {
   }
 })
 
+/**
+ * The settings sheet — from the ⚙ in the bar, from the menu, and from
+ * `Ctrl+,`, which until now went nowhere at all.
+ */
+function openSettings() {
+  openSettingsSheet = showSettings({
+    set: (patch: Record<string, unknown>) => {
+      Object.assign(store.settings, patch)
+      void call('settings:set', patch)
+      // The window has to follow what was just chosen, or the sheet is a form
+      // that saves and shows nothing.
+      if ('appearance' in patch) applyTheme()
+      if ('pageTint' in patch) for (const reader of readers.values()) reader.applyTint()
+      if ('pageLayout' in patch) setLayout(store.settings.pageLayout)
+      changed('settings', 'toolbar')
+      openSettingsSheet?.redraw()
+    },
+    chooseLibrary: () => void call('library:choose').then(() => void reload()),
+  })
+}
+
+let openSettingsSheet: { redraw: () => void; close: () => void } | undefined
+
 function runMenuCommand(command: string) {
   const reader = focused()
   switch (command) {
+    case 'settings': openSettings(); break
     case 'addPapers': void addPapers(); break
     case 'refreshFolder': void reload(); break
     case 'addFolder': addLibraryFolder(); break
