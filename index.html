@@ -33,7 +33,7 @@
   document.documentElement.lang = lang;
 })();
 </script>
-<link rel="stylesheet" href="style.css?v=0.9.2">
+<link rel="stylesheet" href="style.css?v=0.9.2-2">
 </head>
 <body>
 
@@ -61,7 +61,7 @@
 <!-- ─────────────────────────────── the hero ────────────────────────────── -->
 <header class="hero" id="top">
   <div class="hero-top">
-    <h1 class="wordmark">Paper <span class="t">Time</span></h1>
+    <h1 class="wordmark">Paper <span class="t">Time</span><span class="beta">beta</span></h1>
     <p class="lede" data-l="ko">수식이 든 문단을, <b class="mark">수식인 채로</b> 가져와요.</p>
     <p class="lede" data-l="en">Copy a paragraph with mathematics in it. <b class="mark">The mathematics survives.</b></p>
   </div>
@@ -531,12 +531,16 @@
     </div>
 
     <p class="hint" style="margin-top:16px" data-l="ko">
-      macOS 14 Sonoma 이상 · Apple Silicon. 온디바이스 모델로 제목과 저자를 읽는 것만 macOS 26이 필요하고, 그 아래에서는 조판 규칙으로 읽어요. 14에 맞춰 짓고 확인했지만, 진짜 Sonoma 맥에서 켜 본 적은 아직 없어요 — 그런 맥이 있으면 어땠는지 알려주면 고마워요. 아이패드·아이폰 앱은 아직 App Store에 없어요.
-      소스를 받아 Xcode에서 자기 기기로 직접 빌드하면 무료 계정으로도 쓸 수 있어요.
+      <b>macOS 14 Sonoma 이상 · Apple Silicon.</b>
+      기기 안의 모델로 제목과 저자를 읽는 것만 macOS 26이 필요해요. 그 아래에서는 조판 규칙으로 읽고요.
+      14에 맞춰 짓고 확인했어요. 다만 진짜 Sonoma 맥에서 켜 본 적은 아직 없어요 — 그런 맥이 있으면 어땠는지 알려주세요.
+      아이패드·아이폰 앱은 아직 App Store에 없어요. 소스를 받아 Xcode에서 자기 기기로 빌드하면 무료 계정으로도 쓸 수 있어요.
     </p>
     <p class="hint" style="margin-top:16px" data-l="en">
-      macOS 14 Sonoma or later · Apple Silicon. Only the on-device model that reads titles and authors needs macOS 26; below that, typesetting rules do the reading. Paper Time is built and checked for 14, though no one has launched it on a real Sonoma Mac yet — if you have one, say how it went. The iPad and iPhone apps are not on the App Store yet.
-      Download the source and build onto your own device from Xcode; a free account covers that.
+      <b>macOS 14 Sonoma or later · Apple Silicon.</b>
+      Only the on-device model that reads titles and authors needs macOS 26. Below that, typesetting rules do the reading.
+      Paper Time is built and checked for 14. No one has launched it on a real Sonoma Mac yet — if you have one, say how it went.
+      The iPad and iPhone apps are not on the App Store yet. Download the source, build onto your own device from Xcode, and a free account covers it.
     </p>
     </div><!-- /mac -->
 
@@ -573,14 +577,16 @@
     </div>
 
     <p class="hint" style="margin-top:16px" data-l="ko">
-      Windows 10 이상 · 64비트와 ARM 둘 다 돼요. 설정은 <code>%APPDATA%\Paper Time\</code>에, 앱은 <code>%LOCALAPPDATA%\Programs\paper-time\</code>에 들어가요.
-      <b>라이브러리 폴더는 고른 자리 그대로예요</b> — 앱을 지워도 논문은 건드리지 않아요.
-      Surface 펜이나 태블릿의 필압은 선 굵기로 들어가고, 마우스는 압력이 없어서 고른 선이 나와요.
+      <b>Windows 10 이상 · 64비트와 ARM 둘 다 돼요.</b>
+      설정은 <code>%APPDATA%\Paper Time\</code>에, 앱은 <code>%LOCALAPPDATA%\Programs\paper-time\</code>에 들어가요.
+      라이브러리 폴더는 고른 자리 그대로예요. 앱을 지워도 논문은 건드리지 않아요.
+      Surface 펜이나 태블릿의 필압은 선 굵기로 들어가요. 마우스는 압력이 없어서 고른 선이 나오고요.
     </p>
     <p class="hint" style="margin-top:16px" data-l="en">
-      Windows 10 or later · both 64-bit and ARM. Settings go in <code>%APPDATA%\Paper Time\</code>, the app in <code>%LOCALAPPDATA%\Programs\paper-time\</code>.
-      <b>The library folder stays exactly where you put it</b> — uninstalling does not touch your papers.
-      Pressure from a Surface pen or a tablet goes into the stroke width; a mouse has no pressure, so its lines come out even.
+      <b>Windows 10 or later · both 64-bit and ARM.</b>
+      Settings go in <code>%APPDATA%\Paper Time\</code>, the app in <code>%LOCALAPPDATA%\Programs\paper-time\</code>.
+      The library folder stays exactly where you put it. Uninstalling does not touch your papers.
+      Pressure from a Surface pen or a tablet goes into the stroke width. A mouse has no pressure, so its lines come out even.
     </p>
     </div><!-- /windows -->
 
@@ -619,15 +625,17 @@
     </div>
 
     <p class="hint" style="margin-top:16px" data-l="ko">
-      x86_64와 ARM64 둘 다 돼요. 설정은 <code>~/.config/Paper Time/</code>에 들어가고,
-      <b>라이브러리 폴더는 고른 자리 그대로예요</b>. 글꼴은 앱이 들고 다녀서 배포판이 무엇을 깔았든 같아 보이고,
-      논문의 한글·일본어는 pdf.js가 들고 있는 문자 지도로 아무것도 안 깔고 나와요.
+      <b>x86_64와 ARM64 둘 다 돼요.</b>
+      설정은 <code>~/.config/Paper Time/</code>에 들어가고, 라이브러리 폴더는 고른 자리 그대로예요.
+      글꼴은 앱이 들고 다녀요. 그래서 배포판이 무엇을 깔았든 같아 보여요.
+      논문의 한글·일본어는 pdf.js가 들고 있는 문자 지도로 나와요. 따로 깔 것은 없어요.
       Wacom 같은 태블릿의 필압은 libinput을 거쳐 선 굵기로 들어가요.
     </p>
     <p class="hint" style="margin-top:16px" data-l="en">
-      Both x86_64 and ARM64. Settings go in <code>~/.config/Paper Time/</code>, and
-      <b>the library folder stays exactly where you put it</b>. The app carries its own fonts, so it looks the same whatever your distribution installed,
-      and Korean and Japanese in papers render from the character maps pdf.js ships with — nothing to install.
+      <b>Both x86_64 and ARM64.</b>
+      Settings go in <code>~/.config/Paper Time/</code>, and the library folder stays exactly where you put it.
+      The app carries its own fonts, so it looks the same whatever your distribution installed.
+      Korean and Japanese in papers render from the character maps pdf.js ships with. There is nothing to install.
       Pressure from a Wacom or similar tablet reaches the stroke width through libinput.
     </p>
     </div><!-- /linux -->
@@ -646,6 +654,6 @@
   </div>
 </dialog>
 
-<script src="demos.js?v=0.9.2"></script>
+<script src="demos.js?v=0.9.2-2"></script>
 </body>
 </html>
