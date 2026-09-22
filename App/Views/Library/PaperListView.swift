@@ -35,6 +35,10 @@ struct PaperListView: View {
 
     var body: some View {
         content
+            // Behind the list, not on it: presenting the sheet means reading
+            // which paper is being attached, and reading it here would rebuild
+            // every row in the library each time that changed.
+            .background { AttachHost(attaching: app.attaching, model: model) }
             // Here rather than on the list: with nothing matching by title
             // the list is not on screen at all, and that is exactly the
             // search whose answer is inside the papers.
@@ -795,18 +799,20 @@ private struct PaperMenu: View {
             )
         }
 
-        let candidates = self.candidates
-        Menu(L("다른 논문에 붙이기", "Attach To")) {
-            ForEach(candidates.prefix(30)) { candidate in
-                Button(candidate.meta.displayTitle) {
-                    Task { await model.attach(paper.id, to: candidate.id) }
-                }
-            }
+        // A picker, not a submenu. The submenu listed the first thirty papers
+        // in title order, and the one being looked for is a supplement's
+        // parent — as likely to be at Z as at A. On a shelf of two hundred it
+        // was usually not there, and a menu that stops at thirty cannot say
+        // so.
+        Button {
+            app.attaching.child = paper
+        } label: {
+            Label(L("다른 논문에 붙이기…", "Attach To…"), systemImage: "paperclip")
         }
         .disabled(
             paper.meta.parentID != nil
                 || !model.attachments(of: paper.id).isEmpty
-                || candidates.isEmpty
+                || !model.hasAttachmentCandidates(for: paper.id)
         )
 
         if paper.meta.parentID != nil {
@@ -846,13 +852,6 @@ private struct PaperMenu: View {
         } label: {
             Label(L("휴지통에 넣기", "Move to Trash"), systemImage: "trash")
         }
-    }
-
-    /// The papers this one could be attached to, asked for once rather than
-    /// twice: the submenu wants them and so did the test for whether there
-    /// are any, and each ask was a pass over the library and a sort.
-    private var candidates: [LoadedPaper] {
-        model.attachmentCandidates(for: paper.id)
     }
 
     #if os(macOS)

@@ -1004,6 +1004,13 @@ public final class LibraryModel {
         attachable.filter { $0.id != paperID }
     }
 
+    /// Whether there is anything to attach this to — asked by the menu item,
+    /// which only needs to know if the list would be empty and should not
+    /// build and filter that list to find out.
+    public func hasAttachmentCandidates(for paperID: UUID) -> Bool {
+        attachable.contains { $0.id != paperID }
+    }
+
     public func attach(_ childID: UUID, to parentID: UUID) async {
         guard childID != parentID else { return }
         guard let child = papers.first(where: { $0.id == childID }),

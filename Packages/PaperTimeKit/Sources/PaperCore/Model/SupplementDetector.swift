@@ -35,7 +35,12 @@ public enum SupplementDetector {
     ) -> UUID? {
         let stem = (fileName as NSString).deletingPathExtension
         var needle = TextNormalization.foldedTitle([stem, title ?? ""].joined(separator: " "))
-        for marker in markers {
+        // Longest first. In the order they are written, "supplement" is taken
+        // out of "supplementary" and leaves "ary" behind, and that stray
+        // syllable is then compared against every title in the library — which
+        // is how a supplement that says so in plain English scored below the
+        // threshold and was offered no parent at all.
+        for marker in markers.sorted(by: { $0.count > $1.count }) {
             needle = needle.replacingOccurrences(of: TextNormalization.foldedTitle(marker), with: " ")
         }
         needle = needle.split(separator: " ").joined(separator: " ")

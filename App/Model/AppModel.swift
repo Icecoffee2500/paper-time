@@ -180,6 +180,16 @@ public final class AppModel {
     /// The Spotlight-style search overlay.
     public var showsSearchPalette = false
 
+    /// Which paper a row has asked to attach to another one.
+    ///
+    /// A `let` to an object of its own, not a property of this model: the
+    /// context menu that starts this is torn down the moment it is clicked, so
+    /// the sheet has to be presented by something that outlives it, and
+    /// everything in the window reads this model. Writing into the object
+    /// invalidates only whoever reads the object's own property — the same
+    /// reason `PullProgress` is an object.
+    public let attaching = AttachRequest()
+
     // MARK: - What's new
 
     /// Whether the introduction is on screen.
@@ -690,6 +700,40 @@ public final class AppModel {
             // The results of a search, without anybody having to type one.
             if let query = Boot.setting("PAPERTIME_SEARCH_RESULTS") {
                 model.showSearchResults(for: query)
+            }
+            // `--papertime-attach=<말>` opens the attach picker on the chosen
+            // paper and says what it would offer for that query. The list it
+            // shows cannot be reached by a synthetic click, and the answer —
+            // which papers, in which order — is the whole of what there is to
+            // check.
+            if let query = Boot.setting("PAPERTIME_ATTACH"),
+               let child = model.selectedPaper ?? model.visiblePapers.first {
+                let shelf = model.attachmentCandidates(for: child.id).map {
+                    AttachmentSearch.Candidate(
+                        id: $0.id,
+                        title: $0.meta.displayTitle,
+                        fileName: $0.meta.file.originalName
+                    )
+                }
+                let me = AttachmentSearch.Candidate(
+                    id: child.id,
+                    title: child.meta.csl.fullTitle ?? "",
+                    fileName: child.meta.file.originalName
+                )
+                let suggested = AttachmentSearch.suggestion(for: me, among: shelf)
+                let found = AttachmentSearch.ranked(shelf, matching: query)
+                var said = "attach: \(child.meta.displayTitle) — \(shelf.count) candidates"
+                said += ", query \"\(query)\" → \(found.count)\n"
+                if let suggested, let paper = model.paper(suggested) {
+                    said += "attach: suggested \(paper.meta.displayTitle)\n"
+                } else {
+                    said += "attach: nothing suggested\n"
+                }
+                for (rank, candidate) in found.prefix(10).enumerated() {
+                    said += "attach: \(rank + 1). \(candidate.title)  [\(candidate.fileName)]\n"
+                }
+                FileHandle.standardError.write(Data(said.utf8))
+                attaching.child = child
             }
             if let noteID = Boot.setting("PAPERTIME_OPEN_NOTE") { model.notes.openNoteID = noteID }
             if Boot.isSet("PAPERTIME_SHOW_SEARCH") {

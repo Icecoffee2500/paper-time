@@ -473,8 +473,13 @@ public enum WindowProbe {
                     panel.cancel(nil)
                 }
             }
-            guard let window = NSApp.keyWindow ?? NSApp.windows.first(where: \.isVisible),
-                  let content = window.contentView
+            // A sheet is a window of its own, hung off the one it covers, and
+            // photographing the parent gets the page behind it. Whatever is in
+            // front is what was asked for.
+            guard let base = NSApp.keyWindow ?? NSApp.windows.first(where: \.isVisible)
+            else { return say("window probe: no window") }
+            let window = base.attachedSheet ?? base
+            guard let content = window.contentView
             else { return say("window probe: no window") }
             // What a scroll actually costs, without a hand on the trackpad and
             // without sending the desktop a single event: the list's own
