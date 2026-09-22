@@ -641,6 +641,19 @@ public enum WindowProbe {
             CATransaction.flush()
             times.append(Double(DispatchTime.now().uptimeNanoseconds - started) / 1e6)
         }
+        // Pass by pass. The list sweeps its whole length every forty steps, so
+        // if the cost were NSTableView measuring rows it had not measured yet,
+        // the second sweep over the same forty positions would be cheap. If it
+        // is the same all the way down, the work is being done again every
+        // time and no amount of scrolling settles it.
+        var passes: [String] = []
+        for start in stride(from: 0, to: times.count, by: 40) {
+            let pass = Array(times[start..<min(start + 40, times.count)]).sorted()
+            guard !pass.isEmpty else { continue }
+            passes.append(String(format: "%.1f", pass[pass.count / 2]))
+        }
+        say("scroll test: median per sweep of the list — \(passes.joined(separator: ", "))ms")
+
         let sorted = times.sorted()
         let sum = times.reduce(0, +)
         let rows = Trace.ticks("row body") - rowsBefore

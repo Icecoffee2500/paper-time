@@ -218,12 +218,12 @@ struct PaperListView: View {
                 // with nothing to say which term or which library each came
                 // from. Where they come from more than one folder, each folder
                 // gets its name over its own papers.
-                if let groups = model.visibleByFolder {
+                if let groups = model.visibleIDsByFolder {
                     let fields = SubtitleField.parse(app.settings.listSubtitleFields)
                     ForEach(groups, id: \.folder) { group in
                         Section(model.folderLabel(for: group.folder)) {
-                            ForEach(group.papers) { paper in
-                                row(for: paper, fields: fields, onOpenShelf: false)
+                            ForEach(group.ids, id: \.self) { id in
+                                row(for: id, fields: fields, onOpenShelf: false)
                             }
                         }
                     }
@@ -235,8 +235,9 @@ struct PaperListView: View {
                 // work for one answer.
                 let fields = SubtitleField.parse(app.settings.listSubtitleFields)
                 let onOpenShelf = model.scope == .open
-                ForEach(model.visiblePapers) { paper in
-                    row(for: paper, fields: fields, onOpenShelf: onOpenShelf)
+                // By identifier, not by paper: see `visiblePaperIDs`.
+                ForEach(model.visiblePaperIDs, id: \.self) { id in
+                    row(for: id, fields: fields, onOpenShelf: onOpenShelf)
                 }
                 } header: {
                     // Only while a search is being shown. Everywhere else the
@@ -297,8 +298,20 @@ struct PaperListView: View {
     /// Whether the text of the papers has something to say about this search.
 
     /// One row of the list, wherever it is drawn from.
+    ///
+    /// Taken by identifier. The paper is fetched here, where the row is
+    /// actually being built, rather than carried through `ForEach` — which
+    /// walks its whole collection on every update whether or not a row of it
+    /// is on screen.
     @ViewBuilder
-    private func row(for paper: LoadedPaper, fields: [SubtitleField], onOpenShelf: Bool) -> some View {
+    private func row(for id: UUID, fields: [SubtitleField], onOpenShelf: Bool) -> some View {
+        if let paper = model.paper(id) {
+            builtRow(paper, fields: fields, onOpenShelf: onOpenShelf)
+        }
+    }
+
+    @ViewBuilder
+    private func builtRow(_ paper: LoadedPaper, fields: [SubtitleField], onOpenShelf: Bool) -> some View {
         Trace.tick("row init")
         return PaperRow(
             paper: paper,

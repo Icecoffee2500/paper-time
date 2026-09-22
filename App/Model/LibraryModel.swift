@@ -160,6 +160,15 @@ public final class LibraryModel {
     /// cannot place. Nil everywhere else: a folder's own shelf is already one
     /// folder, and a heading over one group is a label on a thing with no
     /// counterpart.
+    /// The folder grouping, as identifiers — see `visiblePaperIDs`.
+    @ObservationIgnored private var byFolderIDCache: [(folder: URL, ids: [UUID])]??
+    public var visibleIDsByFolder: [(folder: URL, ids: [UUID])]? {
+        if let byFolderIDCache { return byFolderIDCache }
+        let made = visibleByFolder?.map { (folder: $0.folder, ids: $0.papers.map(\.id)) }
+        byFolderIDCache = .some(made)
+        return made
+    }
+
     public var visibleByFolder: [(folder: URL, papers: [LoadedPaper])]? {
         switch scope {
         case .papers, .books, .lectures, .documents: break
@@ -969,6 +978,8 @@ public final class LibraryModel {
     /// papers that stand on their own.
     private func invalidateVisibleCache() {
         visibleCache = nil
+        visibleIDCache = nil
+        byFolderIDCache = nil
         attachableCache = nil
     }
 
@@ -977,6 +988,21 @@ public final class LibraryModel {
         let result = computeVisiblePapers()
         visibleCache = result
         return result
+    }
+
+    /// The same list, as identifiers.
+    ///
+    /// What the list iterates over. `ForEach` builds its view list from the
+    /// whole collection on every update, and a `LoadedPaper` is a struct full
+    /// of strings and arrays — so walking six hundred of them is six hundred
+    /// retain/release storms for a scroll that draws twelve rows. A `UUID` is
+    /// sixteen bytes and owns nothing.
+    @ObservationIgnored private var visibleIDCache: [UUID]?
+    public var visiblePaperIDs: [UUID] {
+        if let visibleIDCache { return visibleIDCache }
+        let made = visiblePapers.map(\.id)
+        visibleIDCache = made
+        return made
     }
 
     private func computeVisiblePapers() -> [LoadedPaper] {
