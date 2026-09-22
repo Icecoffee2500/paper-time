@@ -25,7 +25,10 @@ echo "Paper Time $VERSION → $OUT/"
 
 if [ "$WHAT" = "all" ] || [ "$WHAT" = "mac" ]; then
   echo "· the Mac app, Release — a Debug build is several seconds slower to open"
-  [ -d PaperTime.xcodeproj ] || xcodegen generate >/dev/null
+  # Always, not only when the project is missing. `project.yml` carries the
+  # version, and a project generated before the bump builds an app that says
+  # the old number — which is how a 0.9.5 disk image came to hold a 0.9.3 app.
+  xcodegen generate >/dev/null
   DD="build/installers"
   xcodebuild -project PaperTime.xcodeproj -scheme PaperTime -configuration Release \
     -destination 'platform=macOS' -derivedDataPath "$DD" \
