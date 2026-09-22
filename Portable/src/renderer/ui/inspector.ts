@@ -184,15 +184,20 @@ function kindQuestion(body: HTMLElement, paper: Paper, actions: InspectorActions
       ? L('책 같아요 — 쪽이 아주 많고 뒤에 참고문헌이 있어요. 책이면 출판사와 판, ISBN을 물어볼게요.',
           'It looks like a book — hundreds of pages, with a reference list at the back. '
           + 'As a book it is asked for a publisher, an edition and an ISBN.')
-      : guess === 'document'
-        ? L('논문은 아닌 것 같아요. 일반 문서면 학술지 같은 칸은 숨길게요.',
-            "It doesn't look like a paper. As a document, the journal fields go away.")
-        : L('고르면 아래 칸들이 그에 맞게 바뀌어요.', 'The fields below follow your answer.')
+      : guess === 'lecture'
+        ? L('강의자료 같아요 — 쪽이 가로로 넓거나, 이름이 강의를 가리켜요. 강의자료는 인용하지 않아요.',
+            'It looks like course material — the pages are landscape, or the name names a course. '
+            + 'Course material is read, not cited.')
+        : guess === 'document'
+          ? L('논문은 아닌 것 같아요. 일반 문서면 학술지 같은 칸은 숨길게요.',
+              "It doesn't look like a paper. As a document, the journal fields go away.")
+          : L('고르면 아래 칸들이 그에 맞게 바뀌어요.', 'The fields below follow your answer.')
 
   const choices = el('div', { class: 'choices' })
   for (const [value, label] of [
     ['paper', L('논문', 'A paper')],
     ['book', L('책', 'A book')],
+    ['lecture', L('강의자료', 'Course material')],
     ['document', L('일반 문서', 'A document')],
   ] as const) {
     // The chosen one is marked, and the other one is the way back: an answer

@@ -37,7 +37,7 @@ import {
 } from 'pdf-lib'
 import { SketchColor, SketchElement, type Point, type Rect } from '../shared/sketch.js'
 import { InkStroke, INK_OWNER } from '../shared/ink.js'
-import { rightsHandler, type PDFLock } from '../shared/pdfLock.js'
+import { containerKind, rightsHandler, type PDFLock } from '../shared/pdfLock.js'
 
 export const SKETCH_OWNER = 'Paper Time Sketch'
 const KEY_SKETCH_ID = 'PTSketchID'
@@ -854,15 +854,29 @@ function inkFrom(dict: PDFDict): InkStroke | null {
  * refusing to open it would be a joke at this app's own expense.
  */
 export async function rightsLock(bytes: Uint8Array): Promise<PDFLock | null> {
+  // A container is not a PDF that failed to parse, it is a different file
+  // wearing the paper's name — the shape a rights agent leaves behind when it
+  // takes the PDF away. Asked first, because pdf-lib will throw on it and the
+  // throw says nothing about why.
+  if (containerKind(bytes)) {
+    return { kind: 'rights', handler: rightsHandler(bytes) ?? '' }
+  }
   let encrypted = false
   try {
     const document = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false })
     encrypted = document.isEncrypted
   } catch {
     // Unparseable here is not unparseable everywhere: pdf.js reads more than
-    // pdf-lib does, so the reader gets its turn. If it is a rights-locked
-    // file, pdf.js says so in its own words and the reader names the handler.
-    return null
+    // pdf-lib does, so the reader gets its turn. But a file that names a
+    // rights handler and will not parse is not a file pdf.js is going to do
+    // better with, and letting it through cost an afternoon — it came out as
+    // "the file may be damaged" for a file Acrobat opens perfectly well.
+    //
+    // This is the line the port dropped. The Mac has always had it:
+    // `guard let document else { return rightsHandler(in: data).map(.rights) }`
+    // in `PDFLock.of(document:data:)`.
+    const handler = rightsHandler(bytes)
+    return handler ? { kind: 'rights', handler } : null
   }
   if (!encrypted) return null
   const handler = rightsHandler(bytes)

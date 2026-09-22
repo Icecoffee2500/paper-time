@@ -189,7 +189,7 @@ public enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
         case .inspector: L("정보 패널", "Inspector")
         case .focus: L("논문에 집중", "Focus on the Paper")
         case .floatingList: L("차례", "Table of Contents")
-        case .openPapers: L("열린 논문", "Open Papers")
+        case .openPapers: L("열린 문서", "Open Documents")
         case .zoomIn: L("크게", "Zoom In")
         case .zoomOut: L("작게", "Zoom Out")
         case .actualSize: L("실제 크기", "Actual Size")

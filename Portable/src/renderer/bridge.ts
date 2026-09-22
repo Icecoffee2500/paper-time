@@ -11,6 +11,8 @@ declare global {
       /** Set when this window shows one paper on its own. */
       paper: string | null
       flags: { split: boolean }
+      /** Where a dropped file is on disk, or '' when it has no path. */
+      pathForFile: (file: File) => string
     }
   }
 }
@@ -30,6 +32,13 @@ export function call<T = unknown>(name: string, args?: unknown): Promise<T> {
 
 export function onEvent(handler: (event: string, payload: unknown) => void) {
   return window.papertime.on(handler)
+}
+
+/** The paths behind dropped files, in the order they were dropped. */
+export function droppedPaths(list: FileList | null | undefined): string[] {
+  return [...(list ?? [])]
+    .map((file) => window.papertime.pathForFile?.(file) ?? '')
+    .filter((path) => path.length > 0)
 }
 
 /** The modifier this desktop uses, for anything drawn rather than in a menu. */

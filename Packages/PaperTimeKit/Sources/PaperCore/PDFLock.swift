@@ -53,6 +53,11 @@ public enum PDFLock: Equatable, Sendable {
     /// rights management has these words in its prose and pages full of text,
     /// so it is never mistaken for one of these.
     public static func of(document: PDFDocument?, data: Data) -> PDFLock? {
+        // A container is not a PDF that failed to open, it is a different
+        // file wearing the paper's name — what a rights agent leaves behind
+        // when it takes the PDF away. It names no handler of its own, and
+        // until this line both builds called it a damaged file.
+        if isContainer(data) { return .rights(rightsHandler(in: data) ?? "") }
         guard let document else { return rightsHandler(in: data).map(PDFLock.rights) }
         if document.isLocked {
             return rightsHandler(in: data).map(PDFLock.rights) ?? .password
@@ -70,6 +75,21 @@ public enum PDFLock: Equatable, Sendable {
     public static func of(document: PDFDocument?, fileAt url: URL?) -> PDFLock? {
         if let document, !document.isLocked, !isUnreadable(document) { return nil }
         return of(document: document, data: url.flatMap(ends(of:)) ?? Data())
+    }
+
+    /// Whether these bytes are a container rather than a PDF.
+    ///
+    /// An OLE compound file or a zip, with no `%PDF-` anywhere near the
+    /// front. Deliberately blind to which product wrapped it: the shape is
+    /// the same whoever did, and a list of brand names nobody here has seen
+    /// in a real file would be evidence we invented.
+    public static func isContainer(_ data: Data) -> Bool {
+        guard data.count >= 8 else { return false }
+        let head = data.prefix(1024)
+        if head.range(of: Data("%PDF-".utf8)) != nil { return false }
+        let ole: [UInt8] = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]
+        if head.prefix(8).elementsEqual(ole) { return true }
+        return head.prefix(4).elementsEqual([0x50, 0x4B, 0x03, 0x04] as [UInt8])
     }
 
     /// Whether the front of the document holds no text at all.

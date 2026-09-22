@@ -978,6 +978,12 @@ function paperOrDocument() {
     [L("판", "Edition"), L("2판", "Second edition")],
     ["ISBN", "978-0-262-03924-6"],
   ];
+  const LECTURE = [
+    [L("과목", "Course"), "STA 512"],
+    [L("만든 사람", "Made by"), L("서현교", "Hyeongyo Seo")],
+    [L("해", "Year"), "2026"],
+    [L("파일", "File"), "lecture06.pdf"],
+  ];
   const DOC = [
     [L("펴낸 곳", "From"), L("고려대학교 산학협력단", "Korea University")],
     [L("해", "Year"), "2026"],
@@ -995,13 +1001,16 @@ function paperOrDocument() {
     el("div", { style: "font-size:10px;font-weight:700;letter-spacing:.02em;color:var(--ink-3)" }, label),
     el("div", { style: "font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" }, value));
 
-  const SETS = { paper: PAPER, book: BOOK, document: DOC };
+  const SETS = { paper: PAPER, book: BOOK, lecture: LECTURE, document: DOC };
   const HINTS = () => ({
     paper: L("등록기관에 물어 서지를 채우고, 비슷한 후보를 보여줘요.",
              "Paper Time looks the record up and offers the near matches."),
     book: L("책도 인용하니까 인용 키는 그대로 있어요. 학술지·권·호는 사라지고요 — 교과서가 «권 9, 호 5, 1054쪽»이 되던 자리예요.",
             "A book is cited too, so it keeps its key — but the journal, the volume and the issue go. "
             + "That is where a textbook used to come back as volume 9, issue 5, page 1054."),
+    lecture: L("쪽이 가로로 넓거나 이름이 강의를 가리키면 앱이 먼저 짐작해요. 강의자료는 읽는 것이지 인용하는 것이 아니라서, 인용 키 칸도 없어요.",
+               "Pages wider than they are tall, or a name that names a course, and the app guesses it. "
+               + "Course material is read rather than cited, so there is no citation key."),
     document: L("학술지·DOI·인용 키 칸이 사라져요. 등록기관에 묻지도 않아요 — 계약서 제목이 밖으로 나갈 일이 없어요.",
                 "Journal, DOI and citation key go away. Nothing is looked up online, so a contract's title never leaves the machine."),
   });
@@ -1013,7 +1022,12 @@ function paperOrDocument() {
   };
 
   const seg = el("div", { class: "seg" },
-    ...[["paper", L("논문", "A paper")], ["book", L("책", "A book")], ["document", L("일반 문서", "A document")]].map(([k, name]) => {
+    ...[
+      ["paper", L("논문", "A paper")],
+      ["book", L("책", "A book")],
+      ["lecture", L("강의자료", "Course")],
+      ["document", L("일반 문서", "A document")],
+    ].map(([k, name]) => {
       const b = el("button", { type: "button", onclick: () => answer(k) }, name);
       buttons[k] = b;
       return b;

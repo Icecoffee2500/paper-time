@@ -88,6 +88,12 @@ private struct PaperInspectorForm: View {
                 case .book:
                     bookSection
                     AuthorListEditor(authors: $draft.author, title: L("지은이", "Written by"))
+                case .lecture:
+                    // The same fields a document gets: a deck has a course
+                    // and a year and nothing a journal would recognise, and
+                    // inventing a form for it would be inventing a citation.
+                    documentSection
+                    AuthorListEditor(authors: $draft.author, title: L("만든 사람", "Made by"))
                 case .document:
                     documentSection
                     AuthorListEditor(authors: $draft.author, title: L("쓴 사람", "Written by"))
@@ -178,6 +184,7 @@ private struct PaperInspectorForm: View {
                 Picker("", selection: kindBinding(for: paper)) {
                     Text(L("논문", "A paper")).tag(DocumentKind.paper)
                     Text(L("책", "A book")).tag(DocumentKind.book)
+                    Text(L("강의자료", "Course material")).tag(DocumentKind.lecture)
                     Text(L("일반 문서", "A document")).tag(DocumentKind.document)
                 }
                 .pickerStyle(.segmented)
@@ -210,6 +217,9 @@ private struct PaperInspectorForm: View {
         case .book:
             L("책 같아요 — 쪽이 아주 많고 뒤에 참고문헌이 있어요. 책이면 출판사와 판, ISBN을 물어볼게요.",
               "It looks like a book — hundreds of pages, with a reference list at the back. As a book it is asked for a publisher, an edition and an ISBN.")
+        case .lecture:
+            L("강의자료 같아요 — 쪽이 가로로 넓거나, 이름이 강의를 가리켜요. 강의자료는 인용하지 않아요.",
+              "It looks like course material — the pages are landscape, or the name names a course. Course material is read, not cited.")
         case .document:
             L("논문은 아닌 것 같아요. 일반 문서면 학술지 같은 칸은 숨길게요.",
               "It doesn't look like a paper. As a document, the journal fields go away.")

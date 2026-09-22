@@ -25,7 +25,7 @@ struct OpenPapersPopup: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text(L("열린 논문", "Open Papers"))
+                Text(L("열린 문서", "Open Documents"))
                 Spacer()
                 Text(L("끌어서 옆에, 창 밖으로 끌면 새 창", "Drag beside · drag out for a window"))
                     .foregroundStyle(.tertiary)
@@ -37,7 +37,7 @@ struct OpenPapersPopup: View {
             .padding(.bottom, 6)
 
             if papers.isEmpty {
-                Text(L("열린 논문이 없어요.", "Nothing is open."))
+                Text(L("열린 문서가 없어요.", "Nothing is open."))
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 14)

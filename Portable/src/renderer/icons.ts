@@ -83,6 +83,13 @@ const SHAPES: Record<string, string> = {
     <path d="M3 2.6h6.2a2.2 2.2 0 0 1 2.2 2.2v8.6H5.2A2.2 2.2 0 0 1 3 11.2Z"/>
     <path d="M11.4 4.8h1.1a0.5 0.5 0 0 1 0.5 0.5v8.4a0.5 0.5 0 0 1-0.5 0.5H5.2"/>
     <path d="M5.4 5.4h3.6"/>`,
+  // A board on legs: what a course is read off, and the one shape that is
+  // neither a page nor a book. Drawn rather than borrowed — SF Symbols is
+  // licensed for Apple's platforms only.
+  lecture: `
+    <rect x="2.6" y="2.6" width="10.8" height="7.6" rx="1"/>
+    <path d="M8 10.2v2.4"/>
+    <path d="M5.6 13.4 8 12.6l2.4 0.8"/>`,
   // A slip of paper with a folded corner: the slip-box.
   note: `
     <path d="M2.6 3.4a1.4 1.4 0 0 1 1.4-1.4h8a1.4 1.4 0 0 1 1.4 1.4v6.1l-3.9 3.9H4a1.4 1.4 0 0 1-1.4-1.4Z"/>

@@ -27,7 +27,8 @@ import {
   rectFrom,
 } from '../shared/sketch.js'
 import { InkStroke, resample } from '../shared/ink.js'
-import { KNOWN_HANDLERS, rightsHandler } from '../shared/pdfLock.js'
+import { KNOWN_HANDLERS, containerKind, diagnose, looksWhole, rightsHandler } from '../shared/pdfLock.js'
+import { fileForRecordPath, recordPath } from '../main/layout.js'
 import { shelfPapers, store, type Paper } from '../renderer/state.js'
 import { guessKind, hasAbstract, hasIdentifier, hasReferences } from '../shared/documentKind.js'
 import { SketchTree, adopted, guessedDirection, ordered, pruned, copied } from '../shared/sketchTree.js'
@@ -763,6 +764,98 @@ async function main() {
     const bytes = new TextEncoder().encode('%PDF-1.7 /Encrypt /Filter /MicrosoftIRMServices')
     assert.equal(rightsHandler(bytes), 'MicrosoftIRMServices')
     assert.equal(rightsHandler(new TextEncoder().encode('%PDF-1.7 ordinary paper')), null)
+  })
+
+  await test('what is wrong with the bytes, told apart before pdf.js is asked', () => {
+    const bytes = (text: string) => new TextEncoder().encode(text)
+    const whole = bytes('%PDF-1.7\n1 0 obj\n<<>>\nendobj\ntrailer<<>>\nstartxref\n9\n%%EOF\n')
+
+    assert.equal(diagnose(whole), null)
+    assert.ok(looksWhole(whole))
+
+    // A PDF that stops before it ends. pdf.js sometimes recovers these, so
+    // this is a sentence to say, never a door to shut — see the handler.
+    assert.equal(diagnose(whole.subarray(0, whole.length - 12)), 'cut')
+
+    // The three that can never be parsed, however many times they are read.
+    assert.equal(diagnose(new Uint8Array(0)), 'empty')
+    assert.equal(diagnose(new Uint8Array(4096)), 'placeholder')
+    assert.equal(diagnose(bytes('<!DOCTYPE html><html><body>Sign in</body></html>')), 'webpage')
+
+    const ole = new Uint8Array(512)
+    ole.set([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1])
+    assert.equal(containerKind(ole), 'ole')
+    assert.equal(diagnose(ole), 'wrapped')
+
+    // A banner glued in front of a real PDF still opens in pdf.js, so the
+    // header is looked for in the first kilobyte and not at byte zero.
+    assert.equal(diagnose(new Uint8Array([...bytes('   \n'), ...whole])), null)
+    // And a PDF is allowed zipped streams inside it without being a zip.
+    assert.equal(containerKind(whole), null)
+  })
+
+  await test('a container is a rights lock on both desktops', () => {
+    // The Mac learned this first and the port dropped it; the Swift side is
+    // read here so the two cannot drift apart again in silence.
+    const swift = fs.readFileSync(
+      path.join(process.cwd(), '..', 'Packages/PaperTimeKit/Sources/PaperCore/PDFLock.swift'),
+      'utf8',
+    )
+    assert.ok(/func isContainer\(/.test(swift), 'the Mac has no container check')
+    assert.ok(/if isContainer\(data\) \{ return \.rights/.test(swift), 'the Mac does not use it')
+    assert.ok(/0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1/.test(swift), 'the OLE magic differs')
+
+    const ole = new Uint8Array(512)
+    ole.set([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1])
+    assert.equal(containerKind(ole), 'ole')
+  })
+
+  await test('a paper in a subfolder is a paper, the way it is on the Mac', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'papertime-deep-'))
+    try {
+      const pdf = '%PDF-1.7\ntrailer<<>>\nstartxref\n9\n%%EOF\n'
+      fs.writeFileSync(path.join(root, 'Top.pdf'), pdf)
+      fs.mkdirSync(path.join(root, '2026-2학기', 'week 1'), { recursive: true })
+      fs.writeFileSync(path.join(root, '2026-2학기', 'lecture06.pdf'), pdf)
+      fs.writeFileSync(path.join(root, '2026-2학기', 'week 1', 'Ch1. Introduction.pdf'), pdf)
+      // Neither of these is a paper, and the walk must not take them.
+      fs.mkdirSync(path.join(root, '.papertime'), { recursive: true })
+      fs.writeFileSync(path.join(root, '.papertime', 'hidden.pdf'), pdf)
+      fs.mkdirSync(path.join(root, 'Trash'), { recursive: true })
+      fs.writeFileSync(path.join(root, 'Trash', 'thrown.pdf'), pdf)
+
+      const library = new Library(root)
+      const found = await library.unclaimedFiles(new Set())
+      assert.deepEqual(
+        found.map((file) => recordPath(root, file)).sort(),
+        ['2026-2학기/lecture06.pdf', '2026-2학기/week 1/Ch1. Introduction.pdf', 'Top.pdf'],
+      )
+
+      // And the record says it with `/`, because the Mac reads the same
+      // record and a backslash names no file there.
+      const record = recordPath(root, path.join(root, '2026-2학기', 'week 1', 'Ch1. Introduction.pdf'))
+      assert.ok(!record.includes('\\'), record)
+      assert.equal(fileForRecordPath(root, record), path.join(root, '2026-2학기', 'week 1', 'Ch1. Introduction.pdf'))
+
+      // A record that holds a paper keeps it out of the loose list, wherever
+      // it sits — the two are compared in the record's own spelling.
+      const rest = await library.unclaimedFiles(new Set([record]))
+      assert.equal(rest.length, 2)
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  await test('the Mac walks down too, and this is the line that says so', () => {
+    const swift = fs.readFileSync(
+      path.join(process.cwd(), '..', 'Packages/PaperTimeKit/Sources/LibraryStore/LibraryStore.swift'),
+      'utf8',
+    )
+    // If the Mac ever stops recursing, this port must stop too — and the two
+    // drifting apart in silence is exactly how a paper came to exist on one
+    // desktop and not the other.
+    assert.ok(/Every PDF in the library, wherever it sits under the root/.test(swift))
+    assert.ok(!/skipsSubdirectoryDescendants/.test(swift), 'the Mac stopped recursing')
   })
 
   process.stdout.write(`\n${passed} passed, ${failed} failed\n`)
