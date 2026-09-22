@@ -5,7 +5,7 @@
       "version": "0.9.2",
       "date": "2026-09-22T01:17:56Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.2/Paper.Time.0.9.2.dmg",
-      "size": 6355499,
+      "size": 6367238,
       "downloads": 0,
       "builds": {
         "mac": [
@@ -15,7 +15,7 @@
             "arch": "Apple Silicon",
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.2/Paper.Time.0.9.2.dmg",
-            "size": 6355499,
+            "size": 6367238,
             "downloads": 0
           }
         ],
@@ -26,7 +26,7 @@
             "arch": "64비트 · ARM",
             "arch_en": "64-bit and ARM",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.2/Paper.Time.Setup.0.9.2.exe",
-            "size": 177008088,
+            "size": 177008281,
             "downloads": 0
           },
           {
@@ -35,7 +35,7 @@
             "arch": "64비트",
             "arch_en": "64-bit",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.2/Paper.Time-0.9.2-win.zip",
-            "size": 116181344,
+            "size": 116181749,
             "downloads": 0
           },
           {
@@ -44,7 +44,7 @@
             "arch": "ARM64",
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.2/Paper.Time-0.9.2-arm64-win.zip",
-            "size": 121129025,
+            "size": 121129432,
             "downloads": 0
           }
         ],
@@ -55,7 +55,7 @@
             "arch": "x86_64",
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.2/Paper.Time-0.9.2-x86_64.AppImage",
-            "size": 113197415,
+            "size": 113197437,
             "downloads": 0
           },
           {
@@ -64,7 +64,7 @@
             "arch": "ARM64",
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.2/Paper.Time-0.9.2-arm64.AppImage",
-            "size": 113579894,
+            "size": 113579913,
             "downloads": 0
           },
           {
@@ -73,7 +73,7 @@
             "arch": "x86_64",
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.2/paper-time-0.9.2.tar.gz",
-            "size": 107394991,
+            "size": 107395519,
             "downloads": 0
           },
           {
@@ -82,13 +82,13 @@
             "arch": "ARM64",
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.2/paper-time-0.9.2-arm64.tar.gz",
-            "size": 111891557,
+            "size": 111891732,
             "downloads": 0
           }
         ]
       },
-      "note": "여는 데 걸리던 시간이 대부분 사라졌어요. 책이 제 종류가 됐고, 앱의 움직임도 한 벌로 맞췄어요.",
-      "note_en": "Most of the wait at launch is gone, a book is its own kind at last, and the app moves as one thing."
+      "note": "줄이 낱말 가운데서 끊기지 않아요. 선반에 «책» 자리가 늘 있고, 환영 화면과 정보 창이 보여줄 것을 다 보여줘요.",
+      "note_en": "A line no longer breaks in the middle of a word. Books always have a shelf, and the welcome sheet and About show all of what they are showing."
     },
     {
       "version": "0.9.1",
