@@ -21,6 +21,10 @@ export interface ToolbarActions {
   addPapers: () => void
   setInspectorTab: (tab: InspectorTab) => void
   moreMenu: (anchor: Element) => void
+  /** The settings sheet. A button of its own on Windows and Linux, where the
+   *  menu bar is behind a key nobody presses and «Ctrl+,» had nothing behind
+   *  it at all — and on the Mac too, because a second way in costs one icon. */
+  settings: () => void
   minimize: () => void
   toggleMaximize: () => void
   close: () => void
@@ -71,6 +75,7 @@ export function buildToolbar(actions: ToolbarActions): { node: HTMLElement; upda
   const inspectorButton = paneButton('inspector', 'sidebar.right', L('정보 패널', 'Inspector'))
   const moreButton = button('ellipsis', L('더 보기', 'More'), (event) =>
     actions.moreMenu(event.currentTarget as Element))
+  const settingsButton = button('gear', L('설정', 'Settings'), actions.settings)
 
   const tabs = el('div', { class: 'segmented', role: 'tablist' })
   const tabButtons: Record<string, HTMLElement> = {}
@@ -96,6 +101,7 @@ export function buildToolbar(actions: ToolbarActions): { node: HTMLElement; upda
       readerButton,
       inspectorButton,
       el('div', { class: 'toolbar-divider' }),
+      settingsButton,
       moreButton,
       tabs,
     ]),

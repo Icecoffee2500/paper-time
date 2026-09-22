@@ -277,6 +277,32 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.9.5",
+            date: Text2("2026년 9월", "September 2026"),
+            note: Text2(
+                "윈도우·리눅스에 설정 화면이 생겼어요. 메뉴에 «설정…»은 처음부터 있었는데 그 뒤에 아무것도 없었고, 그래서 말을 바꿀 길이 아예 없었어요. 그리고 기록 하나가 늦게 도착하면 라이브러리 전체가 비어 보이던 것을 고쳤어요.",
+                "The Windows and Linux build has settings. The menu has carried Settings… from the beginning with nothing behind it, which meant the language could not be changed at all. And one record arriving late no longer empties the whole library."
+            ),
+            added: [
+                Entry(
+                    Text2("설정 화면 (윈도우·리눅스)", "Settings, on Windows and Linux"),
+                    Text2(
+                        "메뉴의 «설정…»과 Ctrl+,는 처음부터 있었지만 눌러도 아무 일이 없었어요 — 창에 그 명령을 받는 자리가 없었고, 보여줄 화면도 없었거든요. 맥은 다른 앱이라 티가 안 났고요. 이제 도구 막대의 ⚙, 메뉴, Ctrl+, 세 갈래로 열려요. 라이브러리 폴더·쪽 배치·쪽 색조·화면 모드, 그리고 **말**이 있어요 — 말은 설정에 값은 있는데 바꿀 길이 없어서, 데스크톱이 영어면 한국어로 볼 방법이 없었어요.",
+                        "Settings… and Ctrl+, have been in the menu from the beginning and did nothing: the window had no case for the command and no surface to show. On the Mac that went unnoticed, since the Mac is a different app. It opens three ways now — the ⚙ in the bar, the menu, and Ctrl+, — with the library folder, page layout, page tint, theme, and **the language**, which had a setting but no way to reach it: an English desktop meant no Korean, ever."
+                    )
+                ),
+            ],
+            fixed: [
+                Entry(
+                    Text2("늦게 온 기록 하나가 라이브러리를 비우지 않아요", "A record that is late costs one row, not the library"),
+                    Text2(
+                        "한 사람의 윈도우 라이브러리가 비어 보였어요. 폴더가 안 열린 것도, 권한 문제도 아니고 — 기록 파일 하나가 아직 내려오는 중이었는데 그게 나머지 논문을 전부 데려갔어요. 기록을 한꺼번에 읽다가 하나가 실패하면 전부 실패하는 모양이었고, 창은 아무 말도 없이 «폴더를 고르세요» 화면으로 떨어졌고요. 이제 못 읽은 기록은 그 줄 하나만 잃고, 창이 몇 개가 아직 안 왔는지 말하고 «다시 읽기»를 줘요.",
+                        "Somebody's Windows library read as empty. Not a folder that would not open — one record file was still coming down, and it took every other paper with it. The records were read together, so one failure was all of them, and the window fell through to a first-run screen without a word. A record that will not read now costs its own row, and the window says how many have not arrived and offers to try again."
+                    )
+                ),
+            ]
+        ),
+        Release(
             version: "0.9.3",
             date: Text2("2026년 9월", "September 2026"),
             note: Text2(

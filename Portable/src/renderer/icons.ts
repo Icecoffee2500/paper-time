@@ -83,6 +83,11 @@ const SHAPES: Record<string, string> = {
     <path d="M3 2.6h6.2a2.2 2.2 0 0 1 2.2 2.2v8.6H5.2A2.2 2.2 0 0 1 3 11.2Z"/>
     <path d="M11.4 4.8h1.1a0.5 0.5 0 0 1 0.5 0.5v8.4a0.5 0.5 0 0 1-0.5 0.5H5.2"/>
     <path d="M5.4 5.4h3.6"/>`,
+  // A cog, drawn as eight teeth on a ring rather than the usual twelve —
+  // at sixteen pixels twelve teeth close into a blur.
+  gear: `
+    <circle cx="8" cy="8" r="2.4"/>
+    <path d="M8 1.6v1.7M8 12.7v1.7M14.4 8h-1.7M3.3 8H1.6M12.5 3.5l-1.2 1.2M4.7 11.3l-1.2 1.2M12.5 12.5l-1.2-1.2M4.7 4.7 3.5 3.5"/>`,
   // A board on legs: what a course is read off, and the one shape that is
   // neither a page nor a book. Drawn rather than borrowed — SF Symbols is
   // licensed for Apple's platforms only.
