@@ -440,7 +440,8 @@ struct PaperRow: View, Equatable {
     @State private var showsAttachments = false
 
     var body: some View {
-        row(paper)
+        Trace.tick("row body")
+        return row(paper)
     }
 
     @ViewBuilder

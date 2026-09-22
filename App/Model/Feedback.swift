@@ -4,6 +4,7 @@ import Observation
 import SwiftUI
 #if os(macOS)
 import AppKit
+import QuartzCore
 #endif
 
 /// What somebody wants to tell us, and everything the app can say about the
@@ -475,6 +476,14 @@ public enum WindowProbe {
             guard let window = NSApp.keyWindow ?? NSApp.windows.first(where: \.isVisible),
                   let content = window.contentView
             else { return say("window probe: no window") }
+            // What a scroll actually costs, without a hand on the trackpad and
+            // without sending the desktop a single event: the list's own
+            // scroll view is moved from inside the process and the window is
+            // told to draw, and the drawing is what is timed. A row that is
+            // expensive to build shows up here as milliseconds per step.
+            if let steps = Int(Boot.setting("PAPERTIME_SCROLL_TEST") ?? "") {
+                scrollTest(in: content, steps: steps, say: say)
+            }
             if Boot.isSet("PAPERTIME_WINDOW_DUMP") {
                 var lines: [String] = []
                 dump(window, depth: 0, into: &lines)
@@ -545,6 +554,54 @@ public enum WindowProbe {
         guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return nil }
         view.cacheDisplay(in: view.bounds, to: rep)
         return rep.representation(using: .png, properties: [:])
+    }
+
+    /// Scrolls the tallest scroll view in the window and times each step.
+    ///
+    /// The tallest one is the list: the source list and the inspector are a
+    /// screenful, and a library of hundreds is thousands of points. Each step
+    /// moves it by one screen's worth and then forces the draw, so what is
+    /// measured is the work of bringing new rows into being rather than the
+    /// time until some later frame happens to land.
+    private static func scrollTest(in content: NSView, steps: Int, say: (String) -> Void) {
+        var tallest: NSScrollView?
+        func walk(_ view: NSView) {
+            if let scroll = view as? NSScrollView,
+               let document = scroll.documentView,
+               document.frame.height > (tallest?.documentView?.frame.height ?? 0) {
+                tallest = scroll
+            }
+            for child in view.subviews { walk(child) }
+        }
+        walk(content)
+        guard let scroll = tallest, let document = scroll.documentView else {
+            return say("scroll test: no scroll view")
+        }
+        let visible = scroll.contentView.bounds.height
+        let travel = max(document.frame.height - visible, 0)
+        guard travel > 0 else { return say("scroll test: nothing to scroll") }
+        say(String(format: "scroll test: %.0f points of list, %.0f visible, %d steps",
+                   document.frame.height, visible, steps))
+
+        var times: [Double] = []
+        let rowsBefore = Trace.ticks("row body")
+        for step in 0..<steps {
+            let fraction = Double(step % 40) / 39
+            let y = travel * fraction
+            let started = DispatchTime.now().uptimeNanoseconds
+            scroll.contentView.scroll(to: NSPoint(x: 0, y: y))
+            scroll.reflectScrolledClipView(scroll.contentView)
+            content.window?.displayIfNeeded()
+            CATransaction.flush()
+            times.append(Double(DispatchTime.now().uptimeNanoseconds - started) / 1e6)
+        }
+        let sorted = times.sorted()
+        let sum = times.reduce(0, +)
+        let rows = Trace.ticks("row body") - rowsBefore
+        say(String(format: "scroll test: %d row bodies built · %.1f per step", rows, Double(rows) / Double(max(steps, 1))))
+        say(String(format: "scroll test: %d steps · median %.1fms · p95 %.1fms · worst %.1fms · %.2fs total",
+                   times.count, sorted[sorted.count / 2], sorted[Int(Double(sorted.count) * 0.95)],
+                   sorted.last ?? 0, sum / 1000))
     }
 
     private static func firstTextField(in view: NSView?, marker: String) -> NSView? {

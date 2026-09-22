@@ -73,6 +73,26 @@ enum Trace {
                      total.count, total.seconds * 1000), stderr)
     }
 
+    /// How many times something happened, for the questions that are about
+    /// counts rather than milliseconds — "how many rows did that scroll
+    /// build?" is the difference between a list that draws what you can see
+    /// and one that draws the whole library every time.
+    private nonisolated(unsafe) static var counts: [String: Int] = [:]
+
+    static func tick(_ label: String) {
+        guard isOn else { return }
+        lock.lock()
+        counts[label, default: 0] += 1
+        lock.unlock()
+    }
+
+    static func ticks(_ label: String) -> Int {
+        guard isOn else { return 0 }
+        lock.lock()
+        defer { lock.unlock() }
+        return counts[label] ?? 0
+    }
+
     /// Everything measured, heaviest first. Printed when the app goes away,
     /// and whenever anybody asks.
     static func summary() {
@@ -81,6 +101,8 @@ enum Trace {
         let all = totals.sorted { $0.value.seconds > $1.value.seconds }
         lock.unlock()
         fputs("\n— what the time went on\n", stderr)
+        let busy = MainActor.assumeIsolated { Hitches.summary }
+        if !busy.isEmpty { fputs("          \(busy)\n", stderr) }
         for (label, total) in all.prefix(24) {
             fputs(String(format: "%8.0fms  %5d×  %6.1fms each  %@\n",
                          total.seconds * 1000, total.count,
@@ -97,23 +119,58 @@ enum Trace {
 /// give themselves away.
 @MainActor
 enum Hitches {
-    private static var timer: Timer?
-    private static var last = DispatchTime.now().uptimeNanoseconds
+    private static var observers: [CFRunLoopObserver] = []
+    private static var awoke: UInt64?
+    /// How long the main thread has spent working, and how often it has been
+    /// asked to, since the app started.
+    private static var busySpells = 0
+    private static var busyTotal = 0.0
 
+    /// Watches how long the main thread works between going back to sleep.
+    ///
+    /// Not the gap between timer fires, which is what this used to measure and
+    /// which is not a stall at all: the system coalesces the timers of an app
+    /// that is doing nothing, so a 1/60 timer nobody keeps busy fires every
+    /// hundred milliseconds. Measured on an idle window with an empty list —
+    /// 130 "stalls" in twenty seconds, while `sample` showed the main thread
+    /// asleep in `mach_msg` for 98% of them. A ruler that reads a hundred
+    /// milliseconds on an app that is doing nothing sends whoever reads it
+    /// hunting a bottleneck that is not there.
+    ///
+    /// What a stall is: the run loop woke up, did some work, and took a long
+    /// time to get back to waiting. So the work is what is timed, from waking
+    /// to sleeping again — which is idle-proof, because an idle app does no
+    /// work between the two.
     static func watch() {
-        guard Trace.isOn, timer == nil else { return }
-        last = DispatchTime.now().uptimeNanoseconds
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60, repeats: true) { _ in
-            MainActor.assumeIsolated {
-                let now = DispatchTime.now().uptimeNanoseconds
-                let gap = Double(now - last) / 1e9
-                last = now
-                // Three frames. Below that nobody can tell.
-                if gap > 0.05 {
-                    fputs(String(format: "%7.0fms  ⟨main thread stalled⟩\n", gap * 1000), stderr)
-                }
+        guard Trace.isOn, observers.isEmpty else { return }
+        // Two observers rather than one: the first has to run before anything
+        // else on wake and the second after everything on the way to sleep,
+        // or the work in between is the work this misses.
+        let wake = CFRunLoopObserverCreateWithHandler(
+            nil, CFRunLoopActivity.afterWaiting.rawValue, true, CFIndex.min
+        ) { _, _ in awoke = DispatchTime.now().uptimeNanoseconds }
+        let sleep = CFRunLoopObserverCreateWithHandler(
+            nil, CFRunLoopActivity.beforeWaiting.rawValue, true, CFIndex.max
+        ) { _, _ in
+            guard let started = awoke else { return }
+            awoke = nil
+            let busy = Double(DispatchTime.now().uptimeNanoseconds - started) / 1e9
+            busySpells += 1
+            busyTotal += busy
+            // Three frames. Below that nobody can tell.
+            if busy > 0.05 {
+                fputs(String(format: "%7.0fms  ⟨main thread busy⟩\n", busy * 1000), stderr)
             }
         }
-        RunLoop.main.add(timer!, forMode: .common)
+        for observer in [wake, sleep].compactMap({ $0 }) {
+            CFRunLoopAddObserver(CFRunLoopGetMain(), observer, .commonModes)
+            observers.append(observer)
+        }
+    }
+
+    /// What the main thread did with its time, for the summary at the end.
+    static var summary: String {
+        guard busySpells > 0 else { return "" }
+        return String(format: "main thread busy %.2fs over %d turns", busyTotal, busySpells)
     }
 }
