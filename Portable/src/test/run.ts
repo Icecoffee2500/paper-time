@@ -750,6 +750,40 @@ async function main() {
     }
   })
 
+  await test('a second copy already in the folder gets its own record', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'papertime-copy-'))
+    try {
+      const library = await Library.open(root)
+      fs.writeFileSync(path.join(root, 'paper.pdf'), '%PDF-1.7\n% paper\n')
+      const first = await library.importPDF(path.join(root, 'paper.pdf'), 2)
+      assert.ok(first)
+
+      // The same bytes, under another name, sitting in the library folder.
+      fs.copyFileSync(path.join(root, 'paper.pdf'), path.join(root, 'paper copy.pdf'))
+      assert.deepEqual(
+        (await library.looseFiles()).map((file) => path.basename(file)),
+        ['paper copy.pdf'],
+      )
+
+      // Matching bytes answer "already brought in" for a file arriving from
+      // outside. For a file already in the folder that answer leaves a PDF the
+      // list will not show, and "add 1 loose PDF" that stays at 1 for ever.
+      const second = await library.importPDF(path.join(root, 'paper copy.pdf'), 2)
+      assert.ok(second)
+      assert.notEqual(second.id, first.id, 'the copy is a paper of its own')
+      assert.deepEqual(await library.looseFiles(), [], 'and nothing is left loose')
+
+      // Handed the very file a record already claims, it is still that paper —
+      // otherwise dragging a paper out of the window and back in would leave
+      // two records claiming one file.
+      const again = await library.importPDF(path.join(root, 'paper.pdf'), 2)
+      assert.equal(again?.id, first.id)
+      assert.equal((await library.read()).papers.length, 2)
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   await test('one record that will not be read costs one row, not the library', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'papertime-short-'))
     try {

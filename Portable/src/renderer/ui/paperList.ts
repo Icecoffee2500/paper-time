@@ -58,7 +58,8 @@ export function buildPaperList(actions: PaperListActions): { node: HTMLElement; 
 
     // The header only when it has changed: clearing and refilling it on every
     // redraw threw away a button somebody might have been about to press.
-    const headerKey = `${shelfTitle()}|${store.looseCount}|${store.unreadable.length}|${store.error ?? ''}`
+    const headerKey = `${shelfTitle()}|${store.looseCount}|${store.refused.length}`
+      + `|${store.unreadable.length}|${store.error ?? ''}`
     if (headerKey !== shownHeader) {
       shownHeader = headerKey
       clear(header)
@@ -91,6 +92,25 @@ export function buildPaperList(actions: PaperListActions): { node: HTMLElement; 
         })
         on(adopt, 'click', actions.adoptLoose)
         header.append(adopt)
+      }
+      // The half of the answer that was missing. These files were left without
+      // a record, so the count above did not move — and a button that answers
+      // with the same number and nothing else is a button people press again.
+      if (store.refused.length > 0) {
+        const count = store.refused.length
+        const note = el('span', {
+          class: 'panel-note',
+          text: L(
+            `PDF ${count}개는 더하지 못했어요`,
+            `${count} PDF${count === 1 ? '' : 's'} couldn't be added`,
+          ),
+        })
+        note.title = [
+          L('파일을 읽을 수 없었어요. 클라우드 폴더라면 아직 내려오는 중일 수 있어요.',
+            "These files couldn't be read. On a cloud drive, they may still be on their way down."),
+          ...store.refused.slice(0, 8),
+        ].join('\n')
+        header.append(note)
       }
     }
 

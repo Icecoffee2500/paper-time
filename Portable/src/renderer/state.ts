@@ -79,6 +79,8 @@ export interface Store {
   collections: Collection[]
   tags: Tag[]
   looseCount: number
+  /** What the last "add the loose PDFs" could not read, by name. */
+  refused: string[]
   shelf: Shelf
   /** The paper showing — with panes side by side, the one in focus. */
   selectedID: string | null
@@ -145,6 +147,7 @@ export const store: Store = {
   collections: [],
   tags: [],
   looseCount: 0,
+  refused: [],
   shelf: { kind: 'all' },
   selectedID: null,
   openPaperIDs: [],
@@ -311,6 +314,7 @@ export function adopt(snapshot: LibrarySnapshot) {
   store.collections = ((snapshot.collections?.collections as Collection[]) ?? []).slice()
   store.tags = ((snapshot.manifest?.tags as Tag[]) ?? []).slice()
   store.looseCount = snapshot.looseCount
+  store.refused = snapshot.refused ?? []
   store.ready = true
   store.error = null
 }

@@ -87,6 +87,15 @@ export interface LibrarySnapshot {
   papers: PaperRowDTO[]
   looseCount: number
   /**
+   * PDFs the last "add the loose PDFs" could not take in, by name.
+   *
+   * A press that leaves the count where it was has to say why. Reading a PDF
+   * can fail — a cloud file that has not come down, a file whose permissions
+   * changed — and a button that answers a failure with silence is a button
+   * people press again.
+   */
+  refused: string[]
+  /**
    * Records the folders hold and this read could not get at — a file still
    * coming down a streamed drive, or one that arrived half written. One
    * sentence each, naming the record.

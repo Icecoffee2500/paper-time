@@ -377,6 +377,15 @@ public final class LibraryModel {
     public private(set) var isScanning = false
     /// PDFs sitting in the library folder that are not part of a paper yet.
     public private(set) var looseDocuments: [URL] = []
+    /// Whether the folder's PDFs are being taken in right now.
+    public private(set) var isAdopting = false
+    /// The ones the last adoption could not take in.
+    ///
+    /// Reading a PDF can fail — a cloud file that has not come down, a file
+    /// whose permissions changed — and a failure that says nothing is a button
+    /// that does nothing. Cleared at the start of each adoption, so it always
+    /// describes the last press.
+    public private(set) var adoptFailures: [String] = []
 
     public var scope: Scope = .all { didSet { invalidateVisibleCache() } }
     public var searchText = "" { didSet { invalidateVisibleCache() } }
@@ -747,6 +756,14 @@ public final class LibraryModel {
 
     @discardableResult
     private func adopt(_ urls: [URL]) async -> Int {
+        // One at a time. The folder is watched, and taking papers in changes
+        // the folder, so a press of the row and the watcher's own answer to it
+        // can be in here together — both holding the same list of unclaimed
+        // files, both recording every one of them.
+        guard !isAdopting else { return 0 }
+        adoptFailures = []
+        isAdopting = true
+        defer { isAdopting = false }
         var digests: [String: PaperFolder] = [:]
         for paper in papers where !paper.meta.file.importDigest.isEmpty {
             digests[paper.meta.file.importDigest] = paper.folder
@@ -761,30 +778,52 @@ public final class LibraryModel {
         // in front of you and large enough that the rebuilds are a rounding
         // error.
         var waiting: [LoadedPaper] = []
+        var struck: Set<String> = []
         func putIn() {
             guard !waiting.isEmpty else { return }
             papers.append(contentsOf: waiting)
             waiting.removeAll(keepingCapacity: true)
+            // The count on the row comes down with each handful rather than
+            // all at once at the end: taking in two hundred files is a wait,
+            // and a number that does not move for the whole of it is a button
+            // that looks stuck.
+            looseDocuments.removeAll { struck.contains($0.path(percentEncoded: false)) }
+            struck.removeAll(keepingCapacity: true)
         }
+        // Only what was actually taken in comes off the list, and by its whole
+        // path. Both halves of that were wrong: every URL the loop was handed
+        // was struck off whether or not it got a record, so a PDF that could
+        // not be read vanished from the count and came back on the next read of
+        // the folder — pressed, it appeared to do something, and did nothing —
+        // and striking off by file name alone took `2026-2학기/slides.pdf` off
+        // the list because `2026-1학기/slides.pdf` had been taken in.
+        var refused: [String] = []
         for url in urls {
             // Into the folder the file is already in: adopting a PDF must
             // never move it to another folder.
             let into = self.source(containing: url)
-            guard let outcome = try? await into.importDocument(
-                at: url,
-                knownDigests: digests
-            ) else { continue }
-            if case let .imported(paper) = outcome {
-                waiting.append(paper)
-                added.append(paper)
-                digests[paper.meta.file.importDigest] = paper.folder
-                if waiting.count >= 25 { putIn() }
+            do {
+                if case let .imported(paper) = try await into.importDocument(
+                    at: url,
+                    knownDigests: digests
+                ) {
+                    waiting.append(paper)
+                    added.append(paper)
+                    digests[paper.meta.file.importDigest] = paper.folder
+                    struck.insert(url.path(percentEncoded: false))
+                    if waiting.count >= 25 { putIn() }
+                } else {
+                    refused.append(url.lastPathComponent)
+                }
+            } catch {
+                refused.append(url.lastPathComponent)
             }
         }
         putIn()
 
-        let adopted = Set(urls.map { $0.lastPathComponent })
-        looseDocuments.removeAll { adopted.contains($0.lastPathComponent) }
+        // What could not be taken in, so that the row says so rather than
+        // sitting there with the same number on it.
+        adoptFailures = refused
         resolveInBackground(added.map(\.id))
         return added.count
     }
@@ -1177,11 +1216,24 @@ public final class LibraryModel {
             digests[paper.meta.file.importDigest] = paper.folder
         }
 
+        // A file already in one of the folders is now given a record even when
+        // another paper has the same bytes — that is what lets a second copy
+        // sitting in the folder be taken in. Which means this path has to say
+        // for itself that a file *already recorded* is not taken in twice:
+        // dragging a paper out of the library window and back into it would
+        // otherwise leave two records claiming one file.
+        var claimed: Set<String> = []
+        for paper in papers { claimed.insert(paper.documentURL.path(percentEncoded: false)) }
+
         var added: [LoadedPaper] = []
         var duplicates = 0
         for url in urls {
             let scoped = url.startAccessingSecurityScopedResource()
             defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            guard !claimed.contains(url.path(percentEncoded: false)) else {
+                duplicates += 1
+                continue
+            }
             guard let outcome = try? await importDestination.importDocument(at: url, knownDigests: digests) else {
                 continue
             }
@@ -1190,6 +1242,7 @@ public final class LibraryModel {
                 papers.append(paper)
                 added.append(paper)
                 digests[paper.meta.file.importDigest] = paper.folder
+                claimed.insert(paper.documentURL.path(percentEncoded: false))
             case .duplicate:
                 duplicates += 1
             }
@@ -1560,6 +1613,13 @@ public final class LibraryModel {
         }
         report += "app box \(notes.looseBox.lastPathComponent):"
         report += " notes=[\(await notes.looseNoteIDs().joined(separator: ","))]\n"
+        // What the folder holds that the library has not taken in, and what
+        // the last press of the button could not take: the only way to see
+        // from here whether that row is telling the truth.
+        report += "loose: \(looseDocuments.count)"
+        report += " [\(looseDocuments.prefix(6).map(\.lastPathComponent).joined(separator: ","))]"
+        report += " refused=\(adoptFailures.count)"
+        report += " [\(adoptFailures.prefix(6).joined(separator: ","))]\n"
         report += "shown: tags=[\(manifest.tags.map(\.name).joined(separator: ","))]"
         report += " collections=[\(collections.collections.map(\.name).joined(separator: ","))]"
         report += " notes=\(notes.notes.count)\n"

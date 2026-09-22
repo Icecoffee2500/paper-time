@@ -444,18 +444,41 @@ export class Library {
     // accepting any paper at all, for as long as it stays unreadable — and a
     // duplicate row is something you can see and throw away.
     const existing = (await this.read()).papers
+    const inside = path.resolve(source).startsWith(path.resolve(this.root) + path.sep)
+
+    // A record already speaks for this very file: it is that paper, and asking
+    // again is not asking for a second one. By path, not by bytes — once a
+    // folder holds two copies of a paper there are two records with the same
+    // digest, and the first of them is not necessarily this one.
+    const here = inside ? L.recordPath(this.root, source) : null
+    const claiming = here === null ? undefined : existing.find(
+      (row) => String((row.meta.file as RawRecord)?.relativePath ?? '') === here,
+    )
+    if (claiming) return claiming
+
     const already = existing.find(
       (row) => String((row.meta.file as RawRecord)?.importDigest ?? '') === digest,
     )
-    if (already?.exists) return already
-    if (already) {
+    // Matching bytes mean "you have already brought this one in", and that is
+    // an answer about a file arriving from outside: it stops the same download
+    // being copied in twice under two names.
+    //
+    // It is not an answer about a file that is already in the folder and
+    // spoken for by nobody. That file is in the library because somebody put
+    // it there, it is a separate file on disk, and refusing it a record leaves
+    // a PDF the list will not show and cannot be made to show — "add 1 loose
+    // PDF" that stays at 1 however often it is pressed, because the one thing
+    // it does is the one thing that is refused. The folder holds two copies;
+    // the list shows two papers. The Mac has the same rule in
+    // `importDocument`.
+    if (already?.exists && !inside) return already
+    if (already && !already.exists) {
       // The same bytes, and the record that holds them has lost its file. The
       // reader adding it again is answering the question the row is asking, so
       // the record takes this file rather than a second record being made for
       // a paper the library already has — and rather than the guard handing
       // back the broken row, which is what made re-adding the PDF look like it
       // did nothing. A file from outside is copied in first, as any import is.
-      const inside = path.resolve(source).startsWith(path.resolve(this.root) + path.sep)
       let found = source
       if (!inside) {
         const name = L.availableFileName(path.basename(source), this.root)
@@ -472,7 +495,6 @@ export class Library {
       return (await this.paper(already.id)) ?? already
     }
 
-    const inside = path.resolve(source).startsWith(path.resolve(this.root) + path.sep)
     let relative: string
     if (inside) {
       relative = L.recordPath(this.root, source)
@@ -747,7 +769,7 @@ async function digestOfFile(file: string): Promise<string | null> {
 function nameIsPossibleHere(relative: string): boolean {
   if (process.platform !== 'win32') return true
   // eslint-disable-next-line no-control-regex
-  return !/[<>:"|?* -]/.test(relative)
+  return !/[<>:"|?*\u0000-\u001f]/.test(relative)
 }
 
 /** Which PDFs a set of records speaks for, by the name each one points at. */

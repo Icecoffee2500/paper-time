@@ -161,16 +161,43 @@ struct PaperListView: View {
                         .help(unreadableDescription)
                     }
                 }
-                if !model.looseDocuments.isEmpty {
+                if !model.looseDocuments.isEmpty || model.isAdopting || !model.adoptFailures.isEmpty {
                     Section {
-                        Button {
-                            Task { await model.adoptLooseDocuments() }
-                        } label: {
+                        if model.isAdopting {
+                            // Two hundred files is a wait, and a button that
+                            // looks the same all the way through it is a button
+                            // people press again.
+                            HStack(spacing: 8) {
+                                ProgressView().controlSize(.small)
+                                Text(L("PDF \(model.looseDocuments.count)개 더하는 중…",
+                                       "Adding \(model.looseDocuments.count) PDFs…"))
+                                    .foregroundStyle(.secondary)
+                            }
+                        } else if !model.looseDocuments.isEmpty {
+                            Button {
+                                Task { await model.adoptLooseDocuments() }
+                            } label: {
+                                Label(
+                                    L("이 폴더에 남은 PDF \(model.looseDocuments.count)개 더하기",
+                                      "Add \(model.looseDocuments.count) more PDFs from this folder"),
+                                    systemImage: "tray.and.arrow.down"
+                                )
+                            }
+                        }
+                        if !model.adoptFailures.isEmpty {
+                            // The half of the answer that was missing. These
+                            // files came off the row without getting a record
+                            // and came back on the next read of the folder, so
+                            // the button appeared to do nothing — twice over,
+                            // because it also said nothing.
                             Label(
-                                L("이 폴더에 남은 PDF \(model.looseDocuments.count)개 더하기",
-                                  "Add \(model.looseDocuments.count) more PDFs from this folder"),
-                                systemImage: "tray.and.arrow.down"
+                                L("PDF \(model.adoptFailures.count)개는 더하지 못했어요",
+                                  "\(model.adoptFailures.count) PDF\(model.adoptFailures.count == 1 ? "" : "s") "
+                                    + "couldn't be added"),
+                                systemImage: "exclamationmark.triangle"
                             )
+                            .foregroundStyle(.secondary)
+                            .help(refusedDescription)
                         }
                     }
                 }
@@ -374,6 +401,16 @@ struct PaperListView: View {
             still be on its way down.
             """
         )
+    }
+
+    /// Which files the last adoption could not take, by name.
+    private var refusedDescription: String {
+        let names = model.adoptFailures.prefix(8).joined(separator: "\n")
+        let rest = model.adoptFailures.count - min(8, model.adoptFailures.count)
+        let more = rest > 0 ? L("\n…그리고 \(rest)개 더", "\n…and \(rest) more") : ""
+        return L("파일을 읽을 수 없었어요. 클라우드 폴더라면 아직 내려오는 중일 수 있어요.\n\n",
+                 "These files couldn't be read. On a cloud drive, they may still be on their way down.\n\n")
+            + names + more
     }
 
     private var looseDescription: String {
@@ -740,7 +777,6 @@ private struct PaperMenu: View {
     let paper: LoadedPaper
     let model: LibraryModel
     @Environment(AppModel.self) private var app
-
     var body: some View {
         Button {
             model.selectedPaperID = paper.id

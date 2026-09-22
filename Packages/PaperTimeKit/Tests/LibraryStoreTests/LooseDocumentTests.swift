@@ -95,6 +95,78 @@ struct LooseDocumentTests {
         #expect(loose.isEmpty)
     }
 
+    @Test("A second copy already in the folder gets its own record")
+    func copyInsideTheFolderIsStillAPaper() async throws {
+        let root = try Self.makeTemporaryFolder()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try Self.writePDF(named: "paper.pdf", in: root)
+        let store = LibraryStore(root: root)
+        try await store.bootstrap()
+
+        guard case let .imported(first) = try await store.importDocument(
+            at: root.appending(path: "paper.pdf")
+        ) else {
+            Issue.record("expected the document to import")
+            return
+        }
+
+        // The same bytes, under another name, sitting in the library folder.
+        try FileManager.default.copyItem(
+            at: root.appending(path: "paper.pdf"),
+            to: root.appending(path: "paper copy.pdf")
+        )
+        let known = [first.meta.file.importDigest: first.folder]
+
+        // Matching bytes are an answer about a file arriving from outside. A
+        // file that is already in the folder is a file the reader put there,
+        // and refusing it a record leaves a PDF the library will not show and
+        // an "add the remaining PDF" row that can never be finished.
+        guard case let .imported(second) = try await store.importDocument(
+            at: root.appending(path: "paper copy.pdf"),
+            knownDigests: known
+        ) else {
+            Issue.record("expected the second copy to be taken in")
+            return
+        }
+        #expect(second.id != first.id)
+        #expect(second.documentURL == root.appending(path: "paper copy.pdf"))
+        #expect(await store.looseDocumentURLs().isEmpty)
+    }
+
+    @Test("The same file from outside is still a duplicate")
+    func duplicateFromOutsideIsRefused() async throws {
+        let root = try Self.makeTemporaryFolder()
+        let outside = try Self.makeTemporaryFolder()
+        defer {
+            try? FileManager.default.removeItem(at: root)
+            try? FileManager.default.removeItem(at: outside)
+        }
+
+        try Self.writePDF(named: "paper.pdf", in: outside)
+        let store = LibraryStore(root: root)
+        try await store.bootstrap()
+
+        guard case let .imported(first) = try await store.importDocument(
+            at: outside.appending(path: "paper.pdf")
+        ) else {
+            Issue.record("expected the document to import")
+            return
+        }
+
+        // Dragging the same download in a second time is the thing the digest
+        // check is for, and it still answers.
+        let outcome = try await store.importDocument(
+            at: outside.appending(path: "paper.pdf"),
+            knownDigests: [first.meta.file.importDigest: first.folder]
+        )
+        guard case let .duplicate(existing) = outcome else {
+            Issue.record("expected a duplicate")
+            return
+        }
+        #expect(existing.id == first.id)
+    }
+
     @Test("A copied import leaves the original where it was")
     func copyingKeepsTheOriginal() async throws {
         let root = try Self.makeTemporaryFolder()

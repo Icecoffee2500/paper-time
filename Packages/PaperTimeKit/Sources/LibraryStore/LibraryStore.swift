@@ -567,12 +567,25 @@ public actor LibraryStore {
         let data = try FileOperations.read(contentsOf: source)
         let digest = FileOperations.sha256(of: data)
 
-        if let existingFolder = knownDigests[digest], let existing = try? load(existingFolder) {
-            return .duplicate(existing: existing)
-        }
-
         let alreadyInside = Self.normalizedPath(source)
             .hasPrefix(Self.normalizedPath(root) + "/")
+
+        // Matching bytes mean "you have already brought this one in", and that
+        // is an answer about a file arriving from outside: it stops the same
+        // download being copied in twice under two names.
+        //
+        // It is not an answer about a file that is already in the folder. That
+        // file is in the library because the reader put it there, it is a
+        // separate file on disk, and refusing it a record leaves a PDF in the
+        // folder that the library will not show and cannot be made to show —
+        // "add the 1 remaining PDF" that stays at 1 however often it is
+        // pressed, because the one thing it does is the one thing that is
+        // refused. The folder holds two copies; the library says two papers.
+        if !alreadyInside,
+           let existingFolder = knownDigests[digest],
+           let existing = try? load(existingFolder) {
+            return .duplicate(existing: existing)
+        }
 
         let destination: URL
         if alreadyInside {
