@@ -351,14 +351,14 @@ private struct AnnotationDemo: View {
             )
             .onChange(of: selection) { _, now in
                 guard let now else { return }
-                withAnimation(.snappy(duration: 0.35)) { proxy.scrollTo("page-\(now)", anchor: .center) }
+                withAnimation(Motion.surface) { proxy.scrollTo("page-\(now)", anchor: .center) }
             }
         }
     }
 
     private func markOnPage(_ mark: Mark) -> some View {
         Button {
-            withAnimation(.snappy(duration: 0.3)) { selection = mark.id }
+            withAnimation(Motion.surface) { selection = mark.id }
         } label: {
             Text(mark.text)
                 .font(scale.body)
@@ -405,7 +405,7 @@ private struct AnnotationDemo: View {
                 .scrollIndicators(.never)
                 .onChange(of: selection) { _, now in
                     guard let now else { return }
-                    withAnimation(.snappy(duration: 0.35)) { proxy.scrollTo("row-\(now)", anchor: .center) }
+                    withAnimation(Motion.surface) { proxy.scrollTo("row-\(now)", anchor: .center) }
                 }
             }
         }
@@ -413,7 +413,7 @@ private struct AnnotationDemo: View {
 
     private func row(_ mark: Mark) -> some View {
         Button {
-            withAnimation(.snappy(duration: 0.3)) { selection = mark.id }
+            withAnimation(Motion.surface) { selection = mark.id }
         } label: {
             HStack(alignment: .top, spacing: 6) {
                 Image(systemName: mark.underlined ? "underline" : "highlighter")
@@ -482,7 +482,7 @@ private struct PaneDemo: View {
                 ForEach(panes, id: \.0) { pane, _ in
                     let isShown = shown.contains(pane)
                     Button {
-                        withAnimation(.snappy(duration: 0.28)) {
+                        withAnimation(Motion.move) {
                             if isShown { shown.remove(pane) } else { shown.insert(pane) }
                         }
                     } label: {
@@ -622,7 +622,7 @@ private struct PassageDemo: View {
             }
 
             Button {
-                withAnimation(.snappy(duration: 0.35)) { sent.toggle() }
+                withAnimation(Motion.surface) { sent.toggle() }
             } label: {
                 VStack(spacing: 3) {
                     Image(systemName: sent ? "arrow.uturn.backward" : "arrow.right")
@@ -804,7 +804,7 @@ private struct UltracopyDemo: View {
                         .transition(.opacity.combined(with: .move(edge: .top)))
                 } else {
                     Button {
-                        withAnimation(.snappy(duration: 0.3)) { reveal() }
+                        withAnimation(Motion.surface) { reveal() }
                     } label: {
                         HStack(spacing: 5) {
                             Image(systemName: "doc.on.clipboard")
@@ -852,7 +852,7 @@ private struct SlipBoxDemo: View {
                 HStack(spacing: 6) {
                     if open != 0 {
                         Button {
-                            withAnimation(.snappy(duration: 0.25)) { open = 0 }
+                            withAnimation(Motion.move) { open = 0 }
                         } label: {
                             Image(systemName: "chevron.left").font(scale.small)
                         }
@@ -879,7 +879,7 @@ private struct SlipBoxDemo: View {
             HStack(spacing: 0) {
                 Text(ReleaseNotes.string("초과 감쇠는 ", "The excess damping comes from the "))
                 Button {
-                    withAnimation(.snappy(duration: 0.25)) { open = 1 }
+                    withAnimation(Motion.move) { open = 1 }
                 } label: {
                     Text(titles[1])
                         .foregroundStyle(.tint)
@@ -917,7 +917,7 @@ private struct SlipBoxDemo: View {
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(.secondary)
             Button {
-                withAnimation(.snappy(duration: 0.25)) { open = 0 }
+                withAnimation(Motion.move) { open = 0 }
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "arrow.turn.up.left").font(.caption2)
@@ -1018,7 +1018,7 @@ private struct GraphDemo: View {
                                 )
                                 .position(point)
                                 .onTapGesture {
-                                    withAnimation(.snappy(duration: 0.25)) {
+                                    withAnimation(Motion.move) {
                                         focus = focus == index ? nil : index
                                     }
                                 }
@@ -1043,7 +1043,7 @@ private struct GraphDemo: View {
                 ForEach(Kind.allCases) { kind in
                     let on = !hidden.contains(kind)
                     Button {
-                        withAnimation(.snappy(duration: 0.2)) {
+                        withAnimation(Motion.move) {
                             if on { hidden.insert(kind) } else { hidden.remove(kind) }
                         }
                     } label: {
@@ -1331,7 +1331,7 @@ private struct BookDemo: View {
     private func key(_ action: ShortcutAction, _ name: String, _ target: Layout) -> some View {
         let isOn = layout == target
         return Button {
-            withAnimation(.snappy(duration: 0.3)) { layout = target }
+            withAnimation(Motion.surface) { layout = target }
         } label: {
             HStack(spacing: 4) {
                 Text(app.shortcut(for: action).display).monospaced()
@@ -1391,7 +1391,7 @@ private struct BookDemo: View {
 
     private func turn(_ symbol: String, by delta: Int, enabled: Bool) -> some View {
         Button {
-            withAnimation(.snappy(duration: 0.25)) { leftPage += delta }
+            withAnimation(Motion.move) { leftPage += delta }
         } label: {
             Image(systemName: symbol)
                 .font(scale.small.weight(.medium))
@@ -1453,7 +1453,7 @@ private struct FocusDemo: View {
 
             HStack(spacing: 8) {
                 Button {
-                    withAnimation(.snappy(duration: 0.32)) { isFocused.toggle() }
+                    withAnimation(Motion.surface) { isFocused.toggle() }
                 } label: {
                     HStack(spacing: 4) {
                         Text(app.shortcut(for: .focus).display).monospaced()
@@ -1568,7 +1568,7 @@ private struct Spread: View {
             sheet(leftPage + 1, leading: trimmed ? margin : inner, trailing: trimmed ? margin : outer)
         }
         .offset(x: trimmed ? 0 : -(scale.isFull ? 18 : 8))
-        .animation(.snappy(duration: 0.35), value: trimmed)
+        .animation(Motion.surface, value: trimmed)
     }
 
     static func gutter(_ scale: DemoScale) -> CGFloat { scale.isFull ? 124 : 66 }
@@ -1688,7 +1688,7 @@ private struct BookReadingDemo: View {
                 Spacer(minLength: 0)
                 let contentsShowing = showsContents && trimmed
                 Button {
-                    withAnimation(.snappy(duration: 0.25)) { showsContents.toggle() }
+                    withAnimation(Motion.move) { showsContents.toggle() }
                 } label: {
                     HStack(spacing: 4) {
                         Text(app.shortcut(for: .floatingList).display).monospaced()
@@ -1724,7 +1724,7 @@ private struct BookReadingDemo: View {
     private func mode(_ name: String, trimmed target: Bool) -> some View {
         let isOn = trimmed == target
         return Button {
-            withAnimation(.snappy(duration: 0.35)) { trimmed = target }
+            withAnimation(Motion.surface) { trimmed = target }
         } label: {
             Text(name)
                 .font(scale.small.weight(isOn ? .semibold : .regular))
@@ -1747,7 +1747,7 @@ private struct BookReadingDemo: View {
             ForEach(sections, id: \.1) { name, first in
                 let isHere = leftPage == first - (first - 1) % 2
                 Button {
-                    withAnimation(.snappy(duration: 0.25)) { leftPage = first - (first - 1) % 2 }
+                    withAnimation(Motion.move) { leftPage = first - (first - 1) % 2 }
                 } label: {
                     HStack {
                         Text(name).font(scale.small).lineLimit(1)
@@ -1778,7 +1778,7 @@ private struct BookReadingDemo: View {
 
     private func turn(_ symbol: String, by delta: Int, enabled: Bool) -> some View {
         Button {
-            withAnimation(.snappy(duration: 0.25)) { leftPage += delta }
+            withAnimation(Motion.move) { leftPage += delta }
         } label: {
             Image(systemName: symbol)
                 .font(scale.small.weight(.medium))
@@ -1882,7 +1882,7 @@ private struct ResonanceDemo: View {
             guidance
             if showsRule { rule.transition(.opacity.combined(with: .move(edge: .top))) }
         }
-        .animation(.snappy(duration: 0.3), value: showsRule)
+        .animation(Motion.surface, value: showsRule)
     }
 
     /// How the notes are chosen, in numbers — a reading friend who has your
@@ -2064,7 +2064,7 @@ private struct ResonanceDemo: View {
     private var sentence: some View {
         Button {
             guard step >= 1 else { return }
-            withAnimation(.snappy(duration: 0.25)) {
+            withAnimation(Motion.move) {
                 selected = true
                 if step == 1 { step = 2 }
             }
@@ -2098,8 +2098,8 @@ private struct ResonanceDemo: View {
         .padding(scale.isFull ? 10 : 7)
         .frame(maxHeight: .infinity, alignment: .top)
         .background(RoundedRectangle(cornerRadius: scale.corner, style: .continuous).fill(.background))
-        .animation(.snappy(duration: 0.3), value: step)
-        .animation(.snappy(duration: 0.3), value: openNote)
+        .animation(Motion.surface, value: step)
+        .animation(Motion.surface, value: openNote)
     }
 
     /// The Notes tab: the echoes when there are any, then this paper's own.
@@ -2131,7 +2131,7 @@ private struct ResonanceDemo: View {
     private func echoRow(_ index: Int, _ echo: Echo) -> some View {
         HStack(alignment: .top, spacing: 4) {
             Button {
-                withAnimation(.snappy(duration: 0.3)) { openNote = index }
+                withAnimation(Motion.surface) { openNote = index }
             } label: {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(echo.title)
@@ -2154,7 +2154,7 @@ private struct ResonanceDemo: View {
             // The ❝: only once there is a selection to drop, as in the app.
             if selected, !dropped {
                 Button {
-                    withAnimation(.snappy(duration: 0.3)) {
+                    withAnimation(Motion.surface) {
                         openNote = index
                         dropped = true
                         selected = false
@@ -2185,7 +2185,7 @@ private struct ResonanceDemo: View {
         let other = echoes[openNote == 0 ? 1 : 0]
         return VStack(alignment: .leading, spacing: scale.isFull ? 6 : 4) {
             Button {
-                withAnimation(.snappy(duration: 0.3)) { openNote = nil }
+                withAnimation(Motion.surface) { openNote = nil }
             } label: {
                 Label("Notes", systemImage: "chevron.left")
                     .font(.caption2)
@@ -2241,7 +2241,7 @@ private struct ResonanceDemo: View {
                     .padding(.vertical, 3)
                     .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(.quaternary.opacity(0.55)))
                     Button {
-                        withAnimation(.snappy(duration: 0.3)) {
+                        withAnimation(Motion.surface) {
                             linked = true
                             if step < 4 { step = 4 }
                         }
@@ -2275,7 +2275,7 @@ private struct ResonanceDemo: View {
                 }
                 if step == 0 {
                     Button {
-                        withAnimation(.snappy(duration: 0.3)) {
+                        withAnimation(Motion.surface) {
                             page = 1
                             step = 1
                         }
@@ -2290,7 +2290,7 @@ private struct ResonanceDemo: View {
                 }
                 Spacer(minLength: 0)
                 Button {
-                    withAnimation(.snappy(duration: 0.3)) { showsRule.toggle() }
+                    withAnimation(Motion.surface) { showsRule.toggle() }
                 } label: {
                     Label(ReleaseNotes.string("어떻게 고르나?", "How are they chosen?"), systemImage: "function")
                         .font(.caption2.weight(showsRule ? .semibold : .regular))
@@ -2299,7 +2299,7 @@ private struct ResonanceDemo: View {
                 .buttonStyle(.plain)
                 if step >= 1 {
                     Button {
-                        withAnimation(.snappy(duration: 0.3)) {
+                        withAnimation(Motion.surface) {
                             step = 0; page = 0; openNote = nil; selected = false; dropped = false; linked = false
                         }
                     } label: {
@@ -2317,7 +2317,7 @@ private struct ResonanceDemo: View {
                 .id(step)
                 .transition(.opacity)
         }
-        .animation(.snappy(duration: 0.3), value: step)
+        .animation(Motion.surface, value: step)
     }
 }
 
@@ -2368,7 +2368,7 @@ private struct AtlasDemo: View {
                 if step >= 2 { board } else { box }
             }
             .frame(height: scale.isFull ? 220 : 160)
-            .animation(.snappy(duration: 0.3), value: step)
+            .animation(Motion.surface, value: step)
 
             HStack(spacing: 6) {
                 ForEach(0..<3, id: \.self) { index in
@@ -2381,7 +2381,7 @@ private struct AtlasDemo: View {
                 }
                 if step == 0 {
                     Button {
-                        withAnimation(.snappy(duration: 0.3)) { step = 1 }
+                        withAnimation(Motion.surface) { step = 1 }
                     } label: {
                         Label(ReleaseNotes.string("노트 쓰기", "Write a note"), systemImage: "square.and.pencil")
                             .font(.caption2).foregroundStyle(.tint)
@@ -2393,7 +2393,7 @@ private struct AtlasDemo: View {
                 Spacer(minLength: 0)
                 if step >= 1 {
                     Button {
-                        withAnimation(.snappy(duration: 0.3)) { step = 0 }
+                        withAnimation(Motion.surface) { step = 0 }
                     } label: {
                         Label(ReleaseNotes.string("처음부터", "Start over"), systemImage: "arrow.counterclockwise")
                             .font(.caption2).foregroundStyle(.secondary)
@@ -2423,7 +2423,7 @@ private struct AtlasDemo: View {
                     }
                     Spacer(minLength: 0)
                     Button {
-                        withAnimation(.snappy(duration: 0.3)) { step = 2 }
+                        withAnimation(Motion.surface) { step = 2 }
                     } label: {
                         Text(ReleaseNotes.string("지도 만들기", "Make a Map"))
                             .font(.caption2.weight(.semibold)).foregroundStyle(.white)
@@ -2472,7 +2472,7 @@ private struct AtlasDemo: View {
                             }
                             Spacer(minLength: 0)
                             Button {
-                                withAnimation(.snappy(duration: 0.3)) { step = 3 }
+                                withAnimation(Motion.surface) { step = 3 }
                             } label: {
                                 Image(systemName: "plus.circle.fill").foregroundStyle(.tint)
                             }
@@ -2544,7 +2544,7 @@ private struct ExpressDemo: View {
                 }
             }
             .frame(height: scale.isFull ? 210 : 160)
-            .animation(.snappy(duration: 0.3), value: step)
+            .animation(Motion.surface, value: step)
 
             HStack(spacing: 6) {
                 ForEach(0..<4, id: \.self) { index in
@@ -2557,7 +2557,7 @@ private struct ExpressDemo: View {
                 }
                 if step == 2 {
                     Button {
-                        withAnimation(.snappy(duration: 0.3)) { step = 3 }
+                        withAnimation(Motion.surface) { step = 3 }
                     } label: {
                         Label("⇧⌘E " + ReleaseNotes.string("내보내기", "Export"), systemImage: "square.and.arrow.up")
                             .font(.caption2).foregroundStyle(.tint)
@@ -2569,7 +2569,7 @@ private struct ExpressDemo: View {
                 Spacer(minLength: 0)
                 if step >= 1 {
                     Button {
-                        withAnimation(.snappy(duration: 0.3)) { step = 0 }
+                        withAnimation(Motion.surface) { step = 0 }
                     } label: {
                         Label(ReleaseNotes.string("처음부터", "Start over"), systemImage: "arrow.counterclockwise")
                             .font(.caption2).foregroundStyle(.secondary)
@@ -2592,7 +2592,7 @@ private struct ExpressDemo: View {
                 Rule(width: scale.isFull ? 140 : 80)
                 Button {
                     guard step == 0 else { return }
-                    withAnimation(.snappy(duration: 0.25)) { step = 1 }
+                    withAnimation(Motion.move) { step = 1 }
                 } label: {
                     Text(sentence)
                         .font(.system(scale.isFull ? .callout : .caption2, design: .serif))
@@ -2620,7 +2620,7 @@ private struct ExpressDemo: View {
                     Label(ReleaseNotes.string("초안에 넣기", "Into a draft"), systemImage: "doc.text")
                         .font(scale.small.weight(.semibold)).foregroundStyle(.tint)
                     Button {
-                        withAnimation(.snappy(duration: 0.3)) { step = 2 }
+                        withAnimation(Motion.surface) { step = 2 }
                     } label: {
                         HStack {
                             Text(ReleaseNotes.string("관련연구 — 지속 학습", "Related work — continual learning")).font(scale.small).lineLimit(1)
@@ -2790,10 +2790,10 @@ private struct SyncDemo: View {
             }
             HStack {
                 Button {
-                    withAnimation(.snappy(duration: 0.3)) { step = 1 }
+                    withAnimation(Motion.surface) { step = 1 }
                     Task {
                         try? await Task.sleep(for: .seconds(1.6))
-                        withAnimation(.snappy(duration: 0.35)) { step = 2 }
+                        withAnimation(Motion.surface) { step = 2 }
                     }
                 } label: {
                     Label(ReleaseNotes.string("맥에서 하이라이트", "Highlight on the Mac"), systemImage: "highlighter")
@@ -2894,10 +2894,10 @@ private struct CrossPlatformDemo: View {
 
             HStack {
                 Button {
-                    withAnimation(.snappy(duration: 0.3)) { step = 1 }
+                    withAnimation(Motion.surface) { step = 1 }
                     Task {
                         try? await Task.sleep(for: .seconds(1.4))
-                        withAnimation(.snappy(duration: 0.35)) { step = 2 }
+                        withAnimation(Motion.surface) { step = 2 }
                     }
                 } label: {
                     Label(ReleaseNotes.string("맥에서 하이라이트", "Highlight on the Mac"), systemImage: "highlighter")
@@ -2985,10 +2985,10 @@ private struct PenToolsDemo: View {
             HStack {
                 // Two buttons rather than a switch: the switch is the setting's
                 // control, but the headless renderer cannot draw one.
-                Button(ReleaseNotes.string("그은 대로", "As drawn")) { withAnimation(.snappy(duration: 0.2)) { fits = false } }
+                Button(ReleaseNotes.string("그은 대로", "As drawn")) { withAnimation(Motion.move) { fits = false } }
                     .buttonStyle(.bordered)
                     .tint(fits ? nil : .accentColor)
-                Button(ReleaseNotes.string("글자에 맞춰", "Fit to the text")) { withAnimation(.snappy(duration: 0.2)) { fits = true } }
+                Button(ReleaseNotes.string("글자에 맞춰", "Fit to the text")) { withAnimation(Motion.move) { fits = true } }
                     .buttonStyle(.bordered)
                     .tint(fits ? .accentColor : nil)
                 Spacer()
@@ -3074,7 +3074,7 @@ private struct SketchDemo: View {
             }
             HStack(spacing: 4) {
                 ForEach([SketchTool.select, .pen, .highlighter, .rectangle, .ellipse, .arrow, .text], id: \.self) { item in
-                    Button { withAnimation(.snappy(duration: 0.15)) { tool = item } } label: {
+                    Button { withAnimation(Motion.tap) { tool = item } } label: {
                         VStack(spacing: 0) {
                             Image(systemName: item.symbolName)
                                 .font(.system(size: scale.isFull ? 12 : 10, weight: .medium))
@@ -3487,7 +3487,7 @@ private struct FramesDemo: View {
                     HStack(spacing: 4) {
                         Text(ReleaseNotes.string("간격", "Gap")).font(scale.small).foregroundStyle(.secondary)
                         ForEach([4, 8, 16] as [CGFloat], id: \.self) { value in
-                            Button { withAnimation(.snappy(duration: 0.2)) { gap = value } } label: {
+                            Button { withAnimation(Motion.move) { gap = value } } label: {
                                 Text("\(Int(value))")
                                     .font(scale.small.monospacedDigit())
                                     .frame(width: full ? 24 : 18, height: full ? 20 : 16)
@@ -3528,7 +3528,7 @@ private struct FramesDemo: View {
     }
 
     private func flow(_ value: Bool, symbol: String) -> some View {
-        Button { withAnimation(.snappy(duration: 0.25)) { horizontal = value } } label: {
+        Button { withAnimation(Motion.move) { horizontal = value } } label: {
             Image(systemName: symbol)
                 .font(.system(size: scale.isFull ? 10 : 8, weight: .medium))
                 .frame(width: scale.isFull ? 22 : 18, height: scale.isFull ? 20 : 16)

@@ -125,7 +125,14 @@ export class Library {
     return set
   }
 
-  /** Every record in the folder, with the PDF each one points at. */
+  /**
+   * Every record in the folder, with the PDF each one points at.
+   *
+   * All of them at once. Read one after another it was two file reads per
+   * paper in a queue of one, and a folder in the cloud answers each of them
+   * with a round trip — sixty papers meant a hundred and twenty waits that
+   * had no reason to be in a line.
+   */
   async papers(): Promise<PaperRow[]> {
     let entries: string[]
     try {
@@ -133,17 +140,19 @@ export class Library {
     } catch {
       return []
     }
-    const rows: PaperRow[] = []
-    for (const id of entries) {
-      if (id.startsWith('.')) continue
-      const meta = await readJSON(L.metaPath(this.root, id))
-      if (!meta) continue
-      const state = (await readJSON(L.statePath(this.root, id))) ?? {}
-      const relative = String((meta.file as RawRecord | undefined)?.relativePath ?? '')
-      const file = relative ? path.join(this.root, relative) : null
-      rows.push({ id, meta, state, file, exists: file ? fs.existsSync(file) : false })
-    }
-    return rows
+    const read = entries
+      .filter((id) => !id.startsWith('.'))
+      .map(async (id): Promise<PaperRow | null> => {
+        const [meta, state] = await Promise.all([
+          readJSON(L.metaPath(this.root, id)),
+          readJSON(L.statePath(this.root, id)),
+        ])
+        if (!meta) return null
+        const relative = String((meta.file as RawRecord | undefined)?.relativePath ?? '')
+        const file = relative ? path.join(this.root, relative) : null
+        return { id, meta, state: state ?? {}, file, exists: file ? fs.existsSync(file) : false }
+      })
+    return (await Promise.all(read)).filter((row): row is PaperRow => row !== null)
   }
 
   async paper(id: string): Promise<PaperRow | null> {
@@ -273,16 +282,23 @@ export class Library {
 
   /** PDFs sitting in the folder that no record points at. */
   async looseFiles(): Promise<string[]> {
-    const known = new Set(
-      (await this.papers())
-        .map((row) => String((row.meta.file as RawRecord)?.relativePath ?? ''))
-        .filter(Boolean),
-    )
+    return this.unclaimedFiles(claimedBy(await this.papers()))
+  }
+
+  /**
+   * The same answer, for a caller that has just read the records.
+   *
+   * The cheap counterpart to `looseFiles()`, and the Mac has the same pair
+   * (`unclaimedDocumentURLs(claiming:)`): working out which PDFs are spoken
+   * for used to read every record from disk a second time, so one refresh
+   * decoded the whole library twice.
+   */
+  async unclaimedFiles(claimed: Set<string>): Promise<string[]> {
     const found: string[] = []
     for (const entry of await fsp.readdir(this.root, { withFileTypes: true })) {
       if (!entry.isFile()) continue
       if (!entry.name.toLowerCase().endsWith('.pdf')) continue
-      if (known.has(entry.name)) continue
+      if (claimed.has(entry.name)) continue
       found.push(path.join(this.root, entry.name))
     }
     return found
@@ -378,4 +394,13 @@ export async function sha256(file: string): Promise<string> {
     stream.on('error', reject)
   })
   return hash.digest('hex')
+}
+
+/** Which PDFs a set of records speaks for, by the name each one points at. */
+export function claimedBy(rows: PaperRow[]): Set<string> {
+  return new Set(
+    rows
+      .map((row) => String((row.meta.file as RawRecord)?.relativePath ?? ''))
+      .filter(Boolean),
+  )
 }

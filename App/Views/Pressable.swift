@@ -30,7 +30,7 @@ private struct Pressable: ViewModifier {
                     .fill(Color.primary.opacity(isHovering ? 0.055 : 0))
                     .padding(-inset)
             )
-            .animation(.easeOut(duration: 0.12), value: isHovering)
+            .animation(Motion.tap, value: isHovering)
             .onHover { hovering in
                 isHovering = hovering
                 #if os(macOS)

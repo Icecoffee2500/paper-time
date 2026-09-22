@@ -18,46 +18,40 @@ struct WhatsNewView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView {
+            // No scroller. One thing is shown at a time now, so there is
+            // nothing below the fold to go and look for — which is the whole
+            // reason the system's own version of this sheet turns pages.
+            VStack(spacing: 0) {
                 FeatureShowcase { header }
-                    .padding(.horizontal, horizontalSizeClass == .compact ? 18 : 30)
-                    .padding(.top, 30)
-                    .padding(.bottom, 26)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                Spacer(minLength: 0)
             }
-            // Takes the room left over, explicitly. Without this the stack
-            // sized itself to the content, overran the sheet, and the footer
-            // ended up printed over the last thing in the list.
-            .frame(maxHeight: .infinity)
-            .scrollIndicators(.never)
+            .padding(.horizontal, horizontalSizeClass == .compact ? 18 : 30)
+            .padding(.top, 26)
+            .padding(.bottom, 20)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             footer
         }
         // A window's worth on the Mac; on iOS the sheet is the screen, and
         // the showcase takes the width it is given.
         #if os(macOS)
-        .frame(width: 660, height: 760)
+        .frame(width: 680, height: 700)
         #endif
         .onAppear { if marksAsSeen { app.markReleaseNotesSeen() } }
     }
 
+    /// The name of the thing, and nothing else.
+    ///
+    /// A page that shows one feature at a time does not need a paragraph
+    /// introducing the set: each page introduces itself, and the words that
+    /// used to be here were read once and then scrolled past for ever.
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        HStack(spacing: 11) {
             Image(systemName: "books.vertical.fill")
-                .font(.system(size: 38))
+                .font(.system(size: 24))
                 .foregroundStyle(.tint)
-            Text(ReleaseNotes.string("Paper Time에 오신 것을 환영합니다", "Welcome to Paper Time"))
+            Text("Paper Time \(ReleaseNotes.version)")
                 .font(.system(size: 26, weight: .bold))
-            Text(ReleaseNotes.string("버전 \(ReleaseNotes.version) · 알파", "Version \(ReleaseNotes.version) · Alpha"))
-                .font(.callout)
-                .foregroundStyle(.secondary)
-            Text(ReleaseNotes.string(
-                "아래의 것들은 설명이 아니라 실제로 눌러볼 수 있는 것들이다 — 논문만 없을 뿐, 동작은 앱의 것 그대로다. 나중에 설정 → About에서 다시 볼 수 있다.",
-                "What follows is not a description: each one works. Only the paper is missing. It is all here again later, in Settings → About."
-            ))
-            .font(.callout)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.top, 6)
+            Spacer(minLength: 0)
         }
     }
 
@@ -66,8 +60,8 @@ struct WhatsNewView: View {
             Divider().opacity(0.5)
             HStack(spacing: 14) {
                 Text(ReleaseNotes.string(
-                    "알파 버전이다 — 매일 쓰면서 자주 바꾸고 있다. 논문과 노트는 내가 고른 폴더 안의 평범한 파일로 남는다.",
-                    "An alpha — used daily, changed often. Your papers and notes stay ordinary files in the folder you chose."
+                    "베타 버전이에요 — 매일 쓰면서 자주 바꾸고 있어요. 논문과 노트는 직접 고른 폴더 안에 평범한 파일로 남아요.",
+                    "A beta — used daily, changed often. Your papers and notes stay ordinary files in the folder you chose."
                 ))
                 .font(.caption)
                 .foregroundStyle(.tertiary)

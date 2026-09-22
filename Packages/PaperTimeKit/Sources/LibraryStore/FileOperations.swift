@@ -134,6 +134,17 @@ public enum FileOperations {
         guard (try? directory.resourceValues(forKeys: [.isUbiquitousItemKey]).isUbiquitousItem) == true
             || hasPlaceholders(in: directory)
         else { return }
+        // The file this would wait for is already here and whole, so there is
+        // nothing to wait for. Asking anyway walked the whole folder first —
+        // every record and every PDF in the library, each one asked for its
+        // download status — to hurry along a file that had already arrived:
+        // close to two seconds of every launch, on the launches where nothing
+        // was missing. Whatever else is still out there is asked for without
+        // anybody waiting on it.
+        if manager.fileExists(atPath: file.path(percentEncoded: false)), isMaterialised(file) {
+            Task.detached(priority: .utility) { requestPendingDownloads(in: directory) }
+            return
+        }
         func request() {
             guard let items = manager.enumerator(at: directory, includingPropertiesForKeys: [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey], options: []) else { return }
             for case let url as URL in items {

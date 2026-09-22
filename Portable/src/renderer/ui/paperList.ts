@@ -8,9 +8,9 @@
  * tab does. Every row can be dragged — to the page's edge, to put the paper
  * beside the one showing.
  */
-import { icon } from '../icons.js'
+import { iconNode } from '../icons.js'
 import { clear, el, on } from '../dom.js'
-import { isOpenPaper, isPinned, shelfPapers, store, type Paper } from '../state.js'
+import { isPinned, shelfPapers, store, type Paper } from '../state.js'
 import { showMenu } from './toolbar.js'
 import { basename } from './sidebar.js'
 import { L } from '../../shared/lang.js'
@@ -46,78 +46,103 @@ export function buildPaperList(actions: PaperListActions): { node: HTMLElement; 
   const body = el('div', { class: 'panel-body' })
   node.append(header, body)
 
+  /** The rows on screen, by paper, so a redraw can keep the ones it has. */
+  let shown: { id: string; shape: string; row: BuiltRow }[] = []
+  let shownHeader = ''
+
   function update() {
-    clear(header)
-    clear(body)
     const papers = shelfPapers()
-    header.append(el('span', { text: shelfTitle() }))
-    header.append(el('span', { class: 'toolbar-spacer' }))
-    if (store.looseCount > 0) {
-      const adopt = el('button', {
-        class: 'plain-button',
-        text: L(
-          `PDF ${store.looseCount}개 더하기`,
-          `Add ${store.looseCount} loose PDF${store.looseCount === 1 ? '' : 's'}`,
-        ),
-      })
-      on(adopt, 'click', actions.adoptLoose)
-      header.append(adopt)
+
+    // The header only when it has changed: clearing and refilling it on every
+    // redraw threw away a button somebody might have been about to press.
+    const headerKey = `${shelfTitle()}|${store.looseCount}`
+    if (headerKey !== shownHeader) {
+      shownHeader = headerKey
+      clear(header)
+      header.append(el('span', { text: shelfTitle() }))
+      header.append(el('span', { class: 'toolbar-spacer' }))
+      if (store.looseCount > 0) {
+        const adopt = el('button', {
+          class: 'plain-button',
+          text: L(
+            `PDF ${store.looseCount}개 더하기`,
+            `Add ${store.looseCount} loose PDF${store.looseCount === 1 ? '' : 's'}`,
+          ),
+        })
+        on(adopt, 'click', actions.adoptLoose)
+        header.append(adopt)
+      }
     }
 
     if (papers.length === 0) {
+      shown = []
+      clear(body)
       body.append(emptyState(actions))
       return
     }
 
-    for (const entry of papers) {
-      body.append(paperRow(entry, actions))
+    // Choosing a paper changes one attribute on two rows; it used to throw
+    // away every row in the list and build them again, icons and all. A row
+    // is rebuilt only when its shape changes — when it gains the × of a kept
+    // paper, say — and otherwise it is told what to say.
+    const wanted = papers.map((entry) => ({ entry, shape: rowShape(entry) }))
+    const sameShape = wanted.length === shown.length
+      && wanted.every(({ entry, shape }, at) => shown[at].id === entry.id && shown[at].shape === shape)
+    if (!sameShape) {
+      const kept = new Map(shown.map((row) => [`${row.id}|${row.shape}`, row.row]))
+      clear(body)
+      shown = wanted.map(({ entry, shape }) => {
+        const row = kept.get(`${entry.id}|${shape}`) ?? paperRow(entry, actions)
+        row.apply(entry)
+        body.append(row.node)
+        return { id: entry.id, shape, row }
+      })
+      return
     }
+    for (const [at, { entry }] of wanted.entries()) shown[at].row.apply(entry)
   }
 
   update()
   return { node, update }
 }
 
-function paperRow(entry: Paper, actions: PaperListActions): HTMLElement {
-  const selected = store.selectedID === entry.id
-  const kept = isPinned(entry.id)
-  const row = el('div', { class: 'paper-row', role: 'option', 'aria-selected': String(selected), draggable: 'true' })
+/**
+ * What about a row cannot be changed in place — whether it has a × on it, or
+ * a note saying the file is gone. Everything else is text and an attribute.
+ */
+function rowShape(entry: Paper): string {
+  const onShelf = store.shelf.kind === 'open'
+  return `${entry.exists ? 1 : 0}|${onShelf ? (isPinned(entry.id) ? 'close' : 'preview') : ''}`
+}
+
+/** A row, and the way to tell it what it now says. */
+interface BuiltRow {
+  node: HTMLElement
+  apply: (entry: Paper) => void
+}
+
+function paperRow(entry: Paper, actions: PaperListActions): BuiltRow {
+  const id = entry.id
+  const row = el('div', { class: 'paper-row', role: 'option', draggable: 'true' })
 
   // Pinned, or not. A pin is something you do: the app keeps a paper on the
   // Open Papers shelf when you use it, and that belongs on the shelf, not
   // here — reading a paper should not appear to pin it.
-  const pin = el('button', {
-    class: 'paper-pin',
-    'data-on': String(kept),
-    title: kept ? L('고정한 논문 — 누르면 닫아요', 'Pinned — click to close') : L('고정하기', 'Pin'),
-    'aria-label': kept ? L('고정함', 'Pinned') : L('고정하지 않음', 'Not pinned'),
-    html: icon(kept ? 'pin.fill' : 'pin'),
-  })
+  const pin = el('button', { class: 'paper-pin' })
   on(pin, 'click', (event: MouseEvent) => {
     event.stopPropagation()
-    actions.togglePin(entry.id)
+    actions.togglePin(id)
   })
 
-  const status = el('button', {
-    class: 'paper-status',
-    title: L(`읽기 상태: ${statusName(entry.state.readingStatus)}`, `Reading status: ${entry.state.readingStatus}`),
-    html: icon(STATUS_ICON[entry.state.readingStatus]),
-  })
+  const status = el('button', { class: 'paper-status' })
   on(status, 'click', (event: MouseEvent) => {
     event.stopPropagation()
-    actions.cycleStatus(entry.id)
+    actions.cycleStatus(id)
   })
 
-  const subtitleParts = [
-    entry.meta.displayAuthors,
-    entry.meta.year ? String(entry.meta.year) : '',
-    entry.meta.venue ?? '',
-  ].filter(Boolean)
-
-  const main = el('div', { class: 'paper-main' }, [
-    el('div', { class: 'paper-title', text: entry.meta.displayTitle }),
-    el('div', { class: 'paper-subtitle', text: subtitleParts.join(' · ') }),
-  ])
+  const title = el('div', { class: 'paper-title' })
+  const subtitle = el('div', { class: 'paper-subtitle' })
+  const main = el('div', { class: 'paper-main' }, [title, subtitle])
   if (!entry.exists) {
     main.append(el('div', {
       class: 'paper-subtitle',
@@ -125,50 +150,90 @@ function paperRow(entry: Paper, actions: PaperListActions): HTMLElement {
       text: L('폴더에 PDF가 없어요', 'Missing from the folder'),
     }))
   }
-  if (store.shelf.kind === 'open' && !kept) {
+  if (store.shelf.kind === 'open' && !isPinned(id)) {
     main.append(el('div', { class: 'paper-subtitle paper-preview', text: L('미리보기', 'Preview') }))
   }
 
-  const star = el('button', {
-    class: 'paper-star',
-    'data-on': String(entry.state.isFavorite),
-    title: entry.state.isFavorite
-      ? L('즐겨찾기에서 빼기', 'Remove from favourites')
-      : L('즐겨찾기에 더하기', 'Add to favourites'),
-    html: icon(entry.state.isFavorite ? 'star.fill' : 'star'),
-  })
+  const star = el('button', { class: 'paper-star' })
   on(star, 'click', (event: MouseEvent) => {
     event.stopPropagation()
-    actions.toggleFavorite(entry.id)
+    actions.toggleFavorite(id)
   })
 
   row.append(pin, main, star, status)
-  if (store.shelf.kind === 'open' && kept) {
+  if (store.shelf.kind === 'open' && isPinned(id)) {
     // Kept open: closed here, the way a tab is.
     const close = el('button', {
       class: 'paper-close',
       title: L('닫기', 'Close'),
       'aria-label': L('닫기', 'Close'),
-      html: icon('xmark'),
     })
+    const cross = iconNode('xmark')
+    if (cross) close.append(cross)
     on(close, 'click', (event: MouseEvent) => {
       event.stopPropagation()
-      actions.close(entry.id)
+      actions.close(id)
     })
     row.append(close)
   }
-  on(row, 'click', () => actions.open(entry.id))
+  on(row, 'click', () => actions.open(id))
   on(row, 'contextmenu', (event: MouseEvent) => {
     event.preventDefault()
-    actions.contextMenu(entry.id, row)
+    actions.contextMenu(id, row)
   })
   on(row, 'dragstart', (event: DragEvent) => {
     if (!event.dataTransfer) return
-    event.dataTransfer.setData(PAPER_DRAG_TYPE, entry.id)
-    event.dataTransfer.setData('text/plain', entry.meta.displayTitle)
+    event.dataTransfer.setData(PAPER_DRAG_TYPE, id)
+    event.dataTransfer.setData('text/plain', title.textContent ?? '')
     event.dataTransfer.effectAllowed = 'copyMove'
   })
-  return row
+
+  /** The parts of a row that change without the row changing shape. */
+  let drawnPin: string | null = null
+  let drawnStar: string | null = null
+  let drawnStatus: string | null = null
+
+  function swap(holder: HTMLElement, name: string, drawn: string | null): string {
+    if (drawn === name) return name
+    holder.replaceChildren()
+    const glyph = iconNode(name as Parameters<typeof iconNode>[0])
+    if (glyph) holder.append(glyph)
+    return name
+  }
+
+  function apply(now: Paper) {
+    const selected = String(store.selectedID === now.id)
+    if (row.getAttribute('aria-selected') !== selected) row.setAttribute('aria-selected', selected)
+
+    const kept = isPinned(now.id)
+    drawnPin = swap(pin, kept ? 'pin.fill' : 'pin', drawnPin)
+    pin.dataset.on = String(kept)
+    pin.title = kept ? L('고정한 논문 — 누르면 닫아요', 'Pinned — click to close') : L('고정하기', 'Pin')
+    pin.setAttribute('aria-label', kept ? L('고정함', 'Pinned') : L('고정하지 않음', 'Not pinned'))
+
+    drawnStar = swap(star, now.state.isFavorite ? 'star.fill' : 'star', drawnStar)
+    star.dataset.on = String(now.state.isFavorite)
+    star.title = now.state.isFavorite
+      ? L('즐겨찾기에서 빼기', 'Remove from favourites')
+      : L('즐겨찾기에 더하기', 'Add to favourites')
+
+    drawnStatus = swap(status, STATUS_ICON[now.state.readingStatus], drawnStatus)
+    status.title = L(
+      `읽기 상태: ${statusName(now.state.readingStatus)}`,
+      `Reading status: ${now.state.readingStatus}`,
+    )
+
+    if (title.textContent !== now.meta.displayTitle) title.textContent = now.meta.displayTitle
+    const said = [
+      now.meta.displayAuthors,
+      now.meta.year ? String(now.meta.year) : '',
+      now.meta.venue ?? '',
+    ].filter(Boolean).join(' · ')
+    if (subtitle.textContent !== said) subtitle.textContent = said
+  }
+
+  apply(entry)
+  return { node: row, apply }
 }
 
 function shelfTitle(): string {

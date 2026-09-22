@@ -81,10 +81,14 @@ private struct PaperInspectorForm: View {
                 }
 
                 supplementsSection(for: paper)
-                if kind == .paper {
+                switch kind {
+                case .paper:
                     detailsSection
                     AuthorListEditor(authors: $draft.author)
-                } else {
+                case .book:
+                    bookSection
+                    AuthorListEditor(authors: $draft.author, title: L("지은이", "Written by"))
+                case .document:
                     documentSection
                     AuthorListEditor(authors: $draft.author, title: L("쓴 사람", "Written by"))
                 }
@@ -173,6 +177,7 @@ private struct PaperInspectorForm: View {
                     .font(.headline)
                 Picker("", selection: kindBinding(for: paper)) {
                     Text(L("논문", "A paper")).tag(DocumentKind.paper)
+                    Text(L("책", "A book")).tag(DocumentKind.book)
                     Text(L("일반 문서", "A document")).tag(DocumentKind.document)
                 }
                 .pickerStyle(.segmented)
@@ -202,6 +207,9 @@ private struct PaperInspectorForm: View {
         case .paper:
             L("논문 같아요 — 안에 DOI나 참고문헌이 보여요. 맞으면 그대로 눌러주세요.",
               "It looks like a paper — there is a DOI or a reference list in it. Press it again to agree.")
+        case .book:
+            L("책 같아요 — 쪽이 아주 많고 뒤에 참고문헌이 있어요. 책이면 출판사와 판, ISBN을 물어볼게요.",
+              "It looks like a book — hundreds of pages, with a reference list at the back. As a book it is asked for a publisher, an edition and an ISBN.")
         case .document:
             L("논문은 아닌 것 같아요. 일반 문서면 학술지 같은 칸은 숨길게요.",
               "It doesn't look like a paper. As a document, the journal fields go away.")
@@ -355,6 +363,39 @@ private struct PaperInspectorForm: View {
                 ForEach(Self.documentTypes, id: \.self) { type in
                     Text(displayName(for: type)).tag(type)
                 }
+            }
+        }
+    }
+
+    /// What a book has.
+    ///
+    /// A publisher, a place, an edition, a year, an ISBN — and none of the
+    /// journal's furniture. Put through the paper's form a book came back
+    /// wearing a volume and an issue, which is how a textbook ends up cited
+    /// as one page of a journal it was never in.
+    private var bookSection: some View {
+        Section(L("책 정보", "The book")) {
+            TextField(L("제목", "Title"), text: stringBinding(\.title))
+            TextField(L("부제", "Subtitle"), text: stringBinding(\.subtitle))
+            TextField(L("출판사", "Publisher"), text: stringBinding(\.publisher))
+            TextField(L("펴낸 곳", "Place"), text: stringBinding(\.publisherPlace))
+            TextField(L("판", "Edition"), text: stringBinding(\.edition))
+            TextField(L("해", "Year"), text: yearBinding)
+                #if os(iOS)
+                .keyboardType(.numberPad)
+                #endif
+            TextField("ISBN", text: stringBinding(\.isbn))
+            TextField("URL", text: stringBinding(\.url))
+            // A chapter read on its own is still a book to the library, and
+            // its record wants the book it came out of. The two are the only
+            // sensible answers here.
+            Picker(L("종류", "Kind"), selection: $draft.type) {
+                Text(L("책", "Book")).tag(CSLType.book)
+                Text(L("책 속의 장", "Chapter")).tag(CSLType.chapter)
+            }
+            if draft.type == .chapter {
+                TextField(L("실린 책", "In the book"), text: stringBinding(\.containerTitle))
+                TextField(L("쪽", "Pages"), text: stringBinding(\.page))
             }
         }
     }

@@ -451,6 +451,13 @@ public enum WindowProbe {
                     say("window probe: no text field matching \(marker)")
                 }
             }
+            // The welcome sheet, on demand: it shows itself once per version
+            // and then never again, so the only way to look at it on a machine
+            // that has already seen it is to ask. Nothing is marked as seen.
+            if Boot.isSet("PAPERTIME_WHATS_NEW") {
+                app.showsReleaseNotes = true
+                try? await Task.sleep(for: .seconds(1.2))
+            }
             // Does the folder chooser actually come up? It is the one thing
             // on the first-run screen, and a SwiftUI `fileImporter` there
             // opened nothing at all.

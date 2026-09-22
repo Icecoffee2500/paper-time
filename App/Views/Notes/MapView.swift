@@ -61,7 +61,7 @@ struct MapView: View {
     /// Map or text: the same note, two ways to hold it.
     private var modeToggle: some View {
         Button {
-            withAnimation(.snappy(duration: 0.2)) { editsText.toggle() }
+            withAnimation(Motion.move) { editsText.toggle() }
         } label: {
             Label(editsText ? L("지도로 보기", "Show as Map") : L("글로 편집하기", "Edit as Text"),
                   systemImage: editsText ? "map" : "chevron.left.forwardslash.chevron.right")

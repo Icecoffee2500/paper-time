@@ -134,7 +134,7 @@ struct ReaderScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .overlay(alignment: .topLeading) { touchSelectionControls(session) }
-        .animation(.snappy(duration: 0.16), value: selectionFrame)
+        .animation(Motion.tap, value: selectionFrame)
         #if os(macOS)
         // The pencil's tools, floating over the top of the page while it
         // is out. The inspector for what is drawn is the window's own
@@ -146,7 +146,7 @@ struct ReaderScreen: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .animation(.snappy(duration: 0.22), value: configuration.mode)
+        .animation(Motion.move, value: configuration.mode)
         .onChange(of: configuration.mode) { _, mode in
             // Whatever was selected as text has no place while drawing.
             if mode == .draw { dismissSelectionControls() }
@@ -166,7 +166,7 @@ struct ReaderScreen: View {
                     .allowsHitTesting(false)
             }
         }
-        .animation(.snappy(duration: 0.22), value: toast)
+        .animation(Motion.move, value: toast)
         .overlay { pageTurnZones }
         .overlay(alignment: .topTrailing) {
             if link.isFinding {
@@ -186,7 +186,7 @@ struct ReaderScreen: View {
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .animation(.snappy(duration: 0.2), value: link.isFinding)
+        .animation(Motion.move, value: link.isFinding)
         .safeAreaInset(edge: .bottom) { statusBar(session) }
         .onChange(of: currentPageIndex, initial: true) { _, index in
             library.recordReadingPosition(index, for: paper.id)

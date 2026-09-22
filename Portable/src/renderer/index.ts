@@ -72,7 +72,7 @@ import {
 import { icon } from './icons.js'
 import { L } from '../shared/lang.js'
 import { type PDFLock } from '../shared/pdfLock.js'
-import { type DocumentKind } from '../shared/documentKind.js'
+import { isCitable, isLookedUp, type DocumentKind } from '../shared/documentKind.js'
 
 document.body.dataset.platform = platform
 /** This window shows one paper on its own: no library columns. */
@@ -198,13 +198,20 @@ const paperList = buildPaperList({
       { separator: true },
       // The same answer the inspector asks for, where a handful of rows can
       // be corrected one after another — which is what a wrongly answered
-      // import feels like.
-      entry.meta.effectiveKind === 'paper'
-        ? { label: L('일반 문서로 바꾸기', 'Make It a Document'), icon: 'note', action: () => void setKind(id, 'document') }
-        : { label: L('논문으로 바꾸기', 'Make It a Paper'), icon: 'text.document', action: () => void setKind(id, 'paper') },
+      // import feels like. The one it already is is left out: a menu offering
+      // what has already happened is a menu item that does nothing.
+      ...([
+        ['paper', L('논문으로 바꾸기', 'Make It a Paper'), 'text.document'],
+        ['book', L('책으로 바꾸기', 'Make It a Book'), 'book'],
+        ['document', L('일반 문서로 바꾸기', 'Make It a Document'), 'note'],
+      ] as const)
+        .filter(([value]) => value !== entry.meta.effectiveKind)
+        .map(([value, label, glyph]) => ({
+          label, icon: glyph, action: () => void setKind(id, value),
+        })),
       { separator: true },
       { label: L('폴더에서 보기', 'Show in Folder'), icon: 'folder', action: () => void call('paper:reveal', { id }) },
-      ...(entry.meta.effectiveKind === 'paper'
+      ...(isCitable(entry.meta.effectiveKind)
         ? [{ label: L('인용 키 복사', 'Copy Citation Key'), icon: 'doc.on.doc', action: () => copyKey(id) }]
         : []),
       { separator: true },
@@ -246,12 +253,26 @@ const paperList = buildPaperList({
   },
 })
 
-/** The answer to "paper or document?", from the inspector or the row's menu. */
+/** The answer to "a paper, a book, or a document?", from the inspector or the
+ *  row's menu. */
 async function setKind(id: string, kind: DocumentKind) {
-  // A document has no registrar to disagree with, so it leaves the shelf of
-  // things to look at.
+  // Neither a book nor a document has a registrar to disagree with, so
+  // neither stays on the shelf of things to look at.
   const patch: Record<string, unknown> = { kind }
-  if (kind === 'document') patch.confidence = 'unparsed'
+  if (!isLookedUp(kind)) patch.confidence = 'unparsed'
+  if (kind === 'book') {
+    // Called a book, it is written down as one — so the export says `@book`
+    // and the citation prints a publisher rather than a journal. The
+    // journal's own fields go, or a textbook prints as a volume and an issue
+    // of a journal it was never in.
+    const entry = findPaper(id)
+    const csl = { ...(entry?.meta.csl ?? {}) } as Record<string, unknown>
+    if (csl.type !== 'book' && csl.type !== 'chapter') csl.type = 'book'
+    for (const key of ['container-title', 'container-title-short', 'volume', 'issue', 'page', 'ISSN']) {
+      delete csl[key]
+    }
+    patch.csl = csl
+  }
   await call('paper:meta', { id, patch })
   await reload()
 }
@@ -673,6 +694,9 @@ root.append(toolbar.node, panes)
 
 // ------------------------------------------------------- laying out the panes
 
+/** Which panes were on screen last time, so only a new one is seen arriving. */
+let panesShown = new Set<Pane>()
+
 function layoutPanes() {
   clear(panes)
   if (solo) {
@@ -690,6 +714,12 @@ function layoutPanes() {
     pieces.push({ pane: 'inspector', node: inspector.node, width: store.settings.columns.inspector, resizes: 'trailing' })
   }
 
+  // A pane that was not here a moment ago comes in; the ones that were stay
+  // put. Laying them out re-appends every pane, so without this the whole
+  // window flinched whenever one of them was opened.
+  const arriving = new Set(pieces.map((piece) => piece.pane).filter((pane) => !panesShown.has(pane)))
+  panesShown = new Set(pieces.map((piece) => piece.pane))
+
   pieces.forEach((piece, index) => {
     if (piece.width) {
       piece.node.style.flex = `0 0 ${piece.width}px`
@@ -698,6 +728,7 @@ function layoutPanes() {
       piece.node.style.flex = '1 1 auto'
       piece.node.style.width = ''
     }
+    piece.node.classList.toggle('pane-arriving', arriving.has(piece.pane))
     panes.append(piece.node)
     const next = pieces[index + 1]
     if (!next) return
@@ -724,14 +755,28 @@ function divider(pane: 'sidebar' | 'paperList' | 'inspector', inverted: boolean)
     node.classList.add('dragging')
     const startX = event.clientX
     const startWidth = store.settings.columns[pane]
+    // One column gets wider; nothing else about the window changes. Every
+    // move used to lay out all four panes again — which took the divider
+    // being dragged out of the window and put a new one in its place, and
+    // relaid out every page of the paper — sixty times a second.
+    let frame = 0
+    const settle = () => {
+      frame = 0
+      const column = paneNode(pane)
+      const width = store.settings.columns[pane]
+      column.style.flex = `0 0 ${width}px`
+      column.style.width = `${width}px`
+      relayoutReaders()
+    }
     const move = (moved: PointerEvent) => {
       const travel = inverted ? startX - moved.clientX : moved.clientX - startX
       const widest = Math.max(320, panes.clientWidth - 300)
       store.settings.columns[pane] = Math.min(Math.max(startWidth + travel, 180), widest)
-      layoutPanes()
-      relayoutReaders()
+      if (!frame) frame = requestAnimationFrame(settle)
     }
     const up = () => {
+      if (frame) cancelAnimationFrame(frame)
+      settle()
       node.classList.remove('dragging')
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
@@ -741,6 +786,13 @@ function divider(pane: 'sidebar' | 'paperList' | 'inspector', inverted: boolean)
     window.addEventListener('pointerup', up)
   })
   return node
+}
+
+/** The panel a column's name stands for. */
+function paneNode(pane: 'sidebar' | 'paperList' | 'inspector'): HTMLElement {
+  if (pane === 'sidebar') return sidebar.node
+  if (pane === 'paperList') return paperList.node
+  return inspector.node
 }
 
 function togglePane(pane: Pane) {

@@ -119,7 +119,7 @@ final class WikiLinkPopover {
                 .scrollIndicators(.never)
                 .onChange(of: selection) { _, index in
                     guard matches.indices.contains(index) else { return }
-                    withAnimation(.linear(duration: 0.08)) {
+                    withAnimation(Motion.tap) {
                         scroller.scrollTo(matches[index].id)
                     }
                 }

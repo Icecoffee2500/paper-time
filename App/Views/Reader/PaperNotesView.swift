@@ -153,7 +153,7 @@ extension PaperNotesView {
             .padding(.horizontal, 10)
         }
         .padding(.bottom, 8)
-        .animation(.snappy(duration: 0.25), value: echoes.map(\.note.id))
+        .animation(Motion.move, value: echoes.map(\.note.id))
     }
 
     private func echoRow(_ echo: (note: Zettel, shared: [String])) -> some View {

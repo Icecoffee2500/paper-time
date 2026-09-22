@@ -94,7 +94,13 @@ public struct Zettel: Identifiable, Hashable, Sendable {
 
     /// The keywords written in the note as `#tag`.
     public var tags: [String] {
-        Self.tagPattern
+        // Cheap first. Reading these runs a regular expression over the whole
+        // note, and a row in a list reads them every time it is drawn — for
+        // notes that, nearly always, carry neither a tag nor a link. Looking
+        // for the one character that could start one costs a scan instead of
+        // a match.
+        guard body.contains("#") else { return [] }
+        return Self.tagPattern
             .matches(in: body, range: NSRange(body.startIndex..., in: body))
             .compactMap { match in
                 Range(match.range(at: 1), in: body).map { String(body[$0]) }
@@ -104,7 +110,8 @@ public struct Zettel: Identifiable, Hashable, Sendable {
 
     /// The notes this one points at, by identifier.
     public var links: [String] {
-        Self.linkPattern
+        guard body.contains("[[") else { return [] }
+        return Self.linkPattern
             .matches(in: body, range: NSRange(body.startIndex..., in: body))
             .compactMap { match in
                 Range(match.range(at: 1), in: body).map { String(body[$0]) }
