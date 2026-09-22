@@ -49,6 +49,16 @@ enum ReleaseNotes {
     /// twenty is a list nobody reads.
     static let highlights: [Highlight] = [
         Highlight(
+            symbol: "folder",
+            title: Text2("라이브러리가 열려요", "The libraries open"),
+            detail: Text2(
+                "폴더를 여럿 열 수 있게 되자 사이드바가 길어지기만 했어요 — 한 학기를 폴더로 나눠 두면 논문보다 폴더가 먼저 스무 개가 되니까요. 이제 라이브러리를 누르면 나머지는 물러나고 그 안의 폴더들이 들여쓰여 서요. 폴더를 누르면 또 그 안이 열리고, 목록에는 그 아래의 논문이 전부 나와요. 나가는 길은 지금 눌린 그 줄이에요. 아래에서 눌러 보세요.",
+                "Opening several folders only made the sidebar longer — somebody filing a term has twenty folders before they have twenty papers. Press a library now and the others step aside while its own folders appear, indented. Press one of those and it opens in turn, with every paper beneath it in the list. The way back out is the row you are on. Press below and see."
+            ),
+            demo: .folderTree,
+            tier: .one
+        ),
+        Highlight(
             symbol: "doc.questionmark",
             title: Text2("논문만이 아니라, 모든 PDF", "Not only papers"),
             detail: Text2(
@@ -266,6 +276,69 @@ enum ReleaseNotes {
     /// thing they care about moved; making them read a paragraph to find out
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
+        Release(
+            version: "0.9.3",
+            date: Text2("2026년 9월", "September 2026"),
+            note: Text2(
+                "폴더가 많아지면 사이드바가 먼저 무너져요. 이제 라이브러리를 누르면 그 안이 열리고, 한 번에 한 갈래만 보여요. 강의자료도 제 종류가 됐고요. 그리고 윈도우·리눅스에서 하위 폴더의 논문이 아예 안 보이던 것을 고쳤어요.",
+                "A sidebar gives out before a library does. Press a library now and it opens, showing one path at a time. Course material is its own kind. And on Windows and Linux, a paper filed in a subfolder simply did not exist — that is fixed."
+            ),
+            added: [
+                Entry(
+                    Text2("라이브러리가 열려요", "The libraries open"),
+                    Text2(
+                        "폴더를 여럿 열 수 있게 되자 사이드바가 길어지기만 했어요. 한 학기를 폴더로 나눠 두면 논문보다 폴더가 먼저 스무 개가 되니까요. 이제 라이브러리를 누르면 나머지는 물러나고 그 안의 폴더들이 들여쓰여 서요. 폴더를 누르면 또 그 안이 열리고, 목록에는 그 아래의 논문이 전부 나와요. 나가는 길은 지금 눌린 그 줄이에요 — 한 번 더 누르면 한 단계 위로, 맨 위에서 누르면 «모두»로요.",
+                        "Opening several folders only made the sidebar longer, and somebody filing a term has twenty folders before they have twenty papers. Press a library now and the others step aside while its own folders appear, indented. Press one of those and it opens in turn, with every paper beneath it in the list. The way back out is the row you are on: press it again to go up a level, and once more at the top to reach All."
+                    ),
+                    demo: .folderTree
+                ),
+                Entry(
+                    Text2("강의자료", "Course material"),
+                    Text2(
+                        "한 학기는 슬라이드와 노트와 강의계획서 서른 개예요. 일반 문서에 넣어 두면 계약서와 매뉴얼 사이에 섞여요. 이제 네 번째 종류이고, 앱이 먼저 짐작해요 — 쪽이 가로로 넓으면(종이로 읽으라고 만든 건 가로가 아니에요) 또는 이름이 강의를 가리키면요. 인용은 하지 않아요.",
+                        "A term is thirty decks, notes and a syllabus. Left as documents they sit among the contracts. It is the fourth kind now, and the app guesses it: pages wider than they are tall — nothing meant to be read on paper is — or a name that names a course. It is read, not cited."
+                    ),
+                    demo: .kindQuestion
+                ),
+                Entry(
+                    Text2("어느 폴더에서 왔는지", "Which folder each came from"),
+                    Text2(
+                        "논문이나 강의자료를 누르면 모든 폴더의 것이 한 줄로 이어져 나왔어요. 예순 줄이 어느 학기 것인지 알 수가 없었고요. 이제 폴더마다 제 이름이 그 위에 서요.",
+                        "Pressing Papers or Course gathers from every folder at once, and the rows arrived in one undivided run. Each folder's name now sits over its own papers."
+                    )
+                ),
+            ],
+            fixed: [
+                Entry(
+                    Text2("하위 폴더의 논문이 보여요", "A paper in a subfolder is a paper"),
+                    Text2(
+                        "윈도우와 리눅스는 라이브러리 폴더를 한 층만 읽고 있었어요. 하위 폴더에 넣어 둔 논문은 맥에서는 논문이고 거기서는 존재하지 않았어요 — 게다가 아무 말도 없이요. 실제 폴더로 재보니 옛 코드가 0편, 지금이 390편이에요. 클라우드 파일이 아직 안 내려왔을 때 «파일 아님»으로 건너뛰던 것도 같이 고쳤어요.",
+                        "Windows and Linux read the library folder one level deep, so a paper filed in a subfolder was a paper on the Mac and did not exist there — silently. Measured on a real folder: 0 papers before, 390 now. A cloud file that has not been fetched is no longer skipped as though it were not a file."
+                    )
+                ),
+                Entry(
+                    Text2("안 열리는 PDF가 왜인지 말해요", "A PDF that will not open says why"),
+                    Text2(
+                        "«파일이 깨졌을 수 있어요» 한 마디로 네 가지를 덮고 있었어요. 아직 안 내려온 파일, 빈 자리표시자, PDF 이름을 단 웹 페이지, 회사가 감싼 파일이 전부 같은 말을 들었어요. 이제 갈라 말하고, 첫 여덟 바이트를 같이 보여줘요 — 스크린샷 한 장이 진단이 되게요.",
+                        "One sentence covered four different things: a file still arriving, an empty placeholder, a web page wearing a .pdf name, and a file a company wrapped. They are told apart now, and the first eight bytes are shown with the sentence — so a screenshot is a diagnosis."
+                    )
+                ),
+                Entry(
+                    Text2("열린 문서", "Open Documents"),
+                    Text2(
+                        "선반 이름이 «열린 논문»이었는데, 0.9.0부터 논문만 있는 게 아니었어요.",
+                        "The shelf was called Open Papers, and it has held more than papers since 0.9.0."
+                    )
+                ),
+                Entry(
+                    Text2("저자는 접혀서 시작해요", "The names start folded"),
+                    Text2(
+                        "이름 쉰 개가 사이드바에서 제일 긴 줄이었고 그래프를 아래로 밀어내고 있었어요. 펴 두면 그대로 기억해요.",
+                        "Fifty names was the longest run in the sidebar and it pushed the graph off the bottom. Opened, it stays open."
+                    )
+                ),
+            ]
+        ),
         Release(
             version: "0.9.2",
             date: Text2("2026년 9월", "September 2026"),
@@ -1511,6 +1584,9 @@ enum ReleaseNotes {
         /// The question every PDF is asked, and the two forms it decides
         /// between.
         case kindQuestion
+        /// The sidebar's folders: press one and it opens, press it again and
+        /// you come back out.
+        case folderTree
         /// One folder, three desktops: a mark made on any of them is in the
         /// PDF, so the other two have it the moment the folder catches up.
         case crossPlatform

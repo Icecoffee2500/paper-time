@@ -53,6 +53,7 @@ struct FeatureDemoView: View {
             case .sketch: SketchDemo(scale: scale)
             case .frames: FramesDemo(scale: scale)
             case .kindQuestion: KindQuestionDemo(scale: scale)
+            case .folderTree: FolderTreeDemo(scale: scale)
             case .crossPlatform: CrossPlatformDemo(scale: scale)
             case .feedback: FeedbackDemo(scale: scale)
             case .together: TogetherDemo(scale: scale)
@@ -103,6 +104,104 @@ private struct Rule: View {
         Capsule()
             .fill(.quaternary)
             .frame(width: width, height: 3)
+    }
+}
+
+// MARK: - The libraries open
+
+/// The sidebar's folders, and what pressing one does.
+///
+/// Working, not drawn: press a term and the other one steps out of the way
+/// while its own weeks appear, press a week and the list narrows to it, press
+/// the row you are on and you come back out. Which is the whole feature — a
+/// picture of it would show a tree and say nothing about how you move in one.
+private struct FolderTreeDemo: View {
+    let scale: DemoScale
+    @State private var open: [String] = []
+
+    /// One library, two terms, two weeks — the shape of a term of lectures.
+    private static let tree: [String: [String]] = [
+        "": ["2026-1학기", "2026-2학기"],
+        "2026-2학기": ["1주차", "2주차"],
+    ]
+    private static let papers: [String: [String]] = [
+        "2026-1학기": ["지난 학기 강의"],
+        "2026-2학기": ["lecture05", "lecture06"],
+        "2026-2학기/1주차": ["1장. 들어가며"],
+        "2026-2학기/2주차": ["퀴즈 1 복습"],
+    ]
+
+    private var here: String { open.joined(separator: "/") }
+
+    /// Every paper at or under where you are.
+    private var shown: [String] {
+        Self.papers
+            .filter { here.isEmpty || $0.key == here || $0.key.hasPrefix(here + "/") }
+            .sorted { $0.key < $1.key }
+            .flatMap(\.value)
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: scale.gap) {
+            Paper(scale: scale) {
+                VStack(alignment: .leading, spacing: scale.isFull ? 5 : 3) {
+                    row(ReleaseNotes.string("라이브러리", "Library"), depth: 0, path: "")
+                    ForEach(Array(open.enumerated()), id: \.offset) { step, name in
+                        row(name, depth: step + 1, path: open.prefix(step + 1).joined(separator: "/"))
+                    }
+                    ForEach(Self.tree[here] ?? [], id: \.self) { name in
+                        row(name, depth: open.count + 1, path: here.isEmpty ? name : here + "/" + name)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(width: scale.isFull ? 190 : 130)
+
+            Paper(scale: scale) {
+                VStack(alignment: .leading, spacing: scale.isFull ? 6 : 4) {
+                    Text(open.last ?? ReleaseNotes.string("모두", "All"))
+                        .font(scale.small.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    ForEach(shown, id: \.self) { title in
+                        Text(title).font(scale.body)
+                    }
+                    if shown.isEmpty {
+                        Text(ReleaseNotes.string("여기엔 없어요", "Nothing here"))
+                            .font(scale.small).foregroundStyle(.tertiary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    private func row(_ name: String, depth: Int, path: String) -> some View {
+        let isHere = path == here
+        return Button {
+            withAnimation(Motion.move) {
+                // The row you are on is the way back out — and out of the
+                // library is «모두».
+                if isHere { _ = open.popLast() }
+                else { open = path.isEmpty ? [] : path.split(separator: "/").map(String.init) }
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: isHere ? "folder.fill" : "folder")
+                    .font(scale.small)
+                    .foregroundStyle(isHere ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                Text(name).font(scale.small)
+                Spacer(minLength: 0)
+            }
+            .padding(.leading, CGFloat(depth) * (scale.isFull ? 12 : 8))
+            .padding(.vertical, 2)
+            .padding(.horizontal, 4)
+            .background(
+                RoundedRectangle(cornerRadius: Corner.row, style: .continuous)
+                    .fill(isHere ? Color.accentColor.opacity(0.16) : .clear)
+            )
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
     }
 }
 
