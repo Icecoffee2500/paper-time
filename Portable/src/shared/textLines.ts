@@ -31,6 +31,13 @@
  * - Unless it stands across none of them — a heading pulled into the drag —
  *   and then it is a line in its own right, at its own height.
  *
+ * What that costs, knowingly: a tall thing standing across several lines is
+ * covered by those lines and no further, so the top of a big summation sign in
+ * a displayed equation is left bare. The alternative is a line that grows to
+ * cover whatever leans into it, and a line that grows is the whole of the bug
+ * this replaced. A band that stops short is a smaller wrong than a band that
+ * swallows the column.
+ *
  * The geometry these rules are tuned against is the text layer's, where a
  * run's box is its em box: it hangs mostly above the baseline (the ascent)
  * and only a little below (the descent). That is why a tall run reaches up
