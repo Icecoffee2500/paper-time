@@ -295,8 +295,15 @@ enum ReleaseNotes {
                 Entry(
                     Text2("칠한 자리의 글자가 보여요", "The words show through"),
                     Text2(
-                        "형광펜이 글자를 덮어서 칠한 줄을 읽을 수 없었어요. 곱하기로 그리고 있었는데 아래에 아무것도 없는 면 위에서 곱하면 그냥 불투명한 노란색이거든요 — 맥이 같은 자리에서 겪고 고쳐 둔 것과 같은 일이에요. 이제 표시는 제 면에 그려지고, 그 면이 쪽 위에 곱해져요. 칠하는 높이도 글자 높이에 맞췄어요. 전에는 글꼴의 상자 전체를 칠해서 윗줄과 아랫줄이 서로 겹쳤어요.",
-                        "The highlighter covered the words it marked. The colour was drawn with multiply onto a surface with nothing beneath it, which is simply opaque paint — the same thing the Mac ran into and fixed years ago. Marks now have a surface of their own that is multiplied onto the page. The band is the height of the text, too: it used to be the font's whole em box, so the bands on neighbouring lines ran into each other."
+                        "형광펜이 글자를 덮어서 칠한 줄을 읽을 수 없었어요. 곱하기로 그리고 있었는데 아래에 아무것도 없는 면 위에서 곱하면 그냥 불투명한 노란색이거든요 — 맥이 같은 자리에서 겪고 고쳐 둔 것과 같은 일이에요. 이제 표시는 제 면에 그려지고, 그 면이 쪽 위에 곱해져요.",
+                        "The highlighter covered the words it marked. The colour was drawn with multiply onto a surface with nothing beneath it, which is simply opaque paint — the same thing the Mac ran into and fixed years ago. Marks now have a surface of their own that is multiplied onto the page."
+                    )
+                ),
+                Entry(
+                    Text2("글자를 고르는 자리가 글자와 맞아요", "Selecting text now matches the text"),
+                    Text2(
+                        "고르는 층의 글자 크기가 쪽의 배율을 못 받고 있었어요. 그래서 크기를 얼마로 요청하든 전부 같은 크기가 됐고 — 7pt도 14pt도 13px로요 — 글자는 제자리에 보이니까 아무도 몰랐지만, 고른 자리의 사각형은 전부 틀려 있었어요. 표시가 줄 간격보다 1.6배 높았던 것도, 쪽 밖으로 삐져나갔던 것도 여기서 나온 일이에요. 이제 줄마다 정확히 한 칸씩 칠해져요.",
+                        "The text you select was laid out without the page's scale, so every run came out the same size — a 7pt footnote and a 14pt heading both at 13px. The words still sat in the right places, so nothing looked wrong, but every rectangle the selection produced was wrong. That is why a mark stood half again as tall as its line and why one could run off the edge of the page. Marking a paragraph now gives exactly one band per line of it."
                     )
                 ),
                 Entry(

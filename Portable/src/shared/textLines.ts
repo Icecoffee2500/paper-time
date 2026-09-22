@@ -82,25 +82,22 @@ function overlapOf(a: RunBox, b: RunBox): number {
  * How much of the shorter box has to lie inside the taller one for the two to
  * be on the same line.
  *
- * Measured rather than picked, on the boxes this is actually given — the text
- * bands, trimmed by the caller. Across four papers: 6,081 pairs of runs the
+ * Measured rather than picked. Across three papers: 6,920 pairs of runs the
  * text layer itself says are on one line (the second starts where the first
- * ended) against 1,095 pairs it says are a line apart (the second starts back
- * at the left, lower down).
+ * ended) against 733 pairs it says are a line apart (the second starts back at
+ * the left, lower down), and separately the 748 same-line pairs where one run
+ * is a different size from the other — a superscript, a subscript, a small cap.
  *
- *     on one line          a line apart
- *      5%  0.24–0.81       90%  −0.15–0.20
- *     10%  0.64–0.92       99%  −0.05–0.48
- *     50%  1.00            max   0.21–0.86
+ *     on one line     one line, uneven     a line apart
+ *      5%  0.78–0.88   5%  0.63–0.74       90%  −0.20 to −0.10
+ *     10%  0.89–0.96  10%  0.69–0.74       99%  −0.19 to −0.11
+ *     50%  1.00       50%  0.74–0.88       max  −0.11, 0.13, 0.71
  *
- * Three fifths sits in the gap: it keeps nine in ten of the pairs that belong
- * together and holds the next line out in ninety-nine cases in a hundred.
- * Raising it starts splitting lines that belong together, which shows as a
- * seam through a highlight; lowering it gains nothing. And checked the other
- * way, against 3,204 pairs whose untrimmed boxes overlap by nine tenths and
- * so are certainly one line: it splits none of them — the small runs that a
- * trim could in principle strand are not there to strand, since the text
- * layer gives 6,465 runs in 6,471 the same box height.
+ * The lines below clear these boxes altogether, so three fifths sits in a wide
+ * gap: it keeps nineteen in twenty of the pairs that belong together, the
+ * superscripts among them, and holds the next line out. Raising it starts
+ * splitting superscripts off the line they mark, which shows as a blot above
+ * a highlight; lowering it gains nothing.
  *
  * What matters more than the number is that it is fixed. The rule this
  * replaced measured against a line's running total, so a band that had taken

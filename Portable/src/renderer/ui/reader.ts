@@ -33,7 +33,7 @@ const SERVICE_NAMES: Record<string, string> = {
 import { SketchElement } from '../../shared/sketch.js'
 import { InkStroke } from '../../shared/ink.js'
 import { drawElements, drawInk, drawMarks } from '../../shared/sketchRender.js'
-import { linesFromRuns, type RunBox } from '../../shared/textLines.js'
+import { linesFromRuns } from '../../shared/textLines.js'
 import {
   MARK_COLORS,
   MARK_COLOR_NAMES,
@@ -96,41 +96,6 @@ export interface ReaderOptions {
   state?: ReaderState
 }
 
-/**
- * The words inside the box the text layer gives a line.
- *
- * That rectangle is the font's em box, and the words sit in the top half of
- * it: measured over 958 lines of four papers, the ink runs from 0.07 of the
- * box down to 0.42 of it (0.65 at the ninety-fifth percentile, which is a
- * descender), and the rest of the box is empty. A mark drawn on the whole box
- * is therefore half again as tall as the line it marks — which is why
- * highlights on neighbouring lines ran into each other as one solid block,
- * and why a mark made here did not sit on the words when the Mac drew it,
- * where the quads come from PDFKit and fit the line.
- *
- * Applied on the way in, before the runs are grouped, because "are these two
- * on the same line?" is a question about the words and not about the empty
- * half of a font's em box. `SHARED` in `textLines.ts` is calibrated on these
- * trimmed boxes for that reason. Measured both ways over the same 26
- * paragraphs of three papers: trimmed first, 21 marks land exactly one quad
- * per line of text; grouped on the raw boxes and trimmed afterwards, 20.
- */
-const TEXT_BAND = 0.62
-
-function textBox(rect: DOMRect): RunBox {
-  // Only a run lying across the page has its words in the top of its box. One
-  // set sideways — the arXiv stamp down the margin of a preprint, a table
-  // turned on its side — has a box taller than it is wide, and trimming that
-  // from the top would cut the words in half.
-  const acrossThePage = rect.width >= rect.height
-  return {
-    left: rect.left,
-    right: rect.right,
-    top: rect.top,
-    bottom: rect.top + rect.height * (acrossThePage ? TEXT_BAND : 1),
-  }
-}
-
 export class PageView {
   root: HTMLElement
   canvas: HTMLCanvasElement
@@ -188,6 +153,14 @@ export class PageView {
     }
     this.root.style.width = `${Math.floor(viewport.width)}px`
     this.root.style.height = `${Math.floor(viewport.height)}px`
+    // What pdf.js sizes the text layer with. Every span it makes carries
+    // `font-size: calc(var(--scale-factor) * Npx)`, and with the variable
+    // unset that declaration is invalid and dropped — so every run in the
+    // paper inherited one size, whatever the text really was. Measured before
+    // this: spans asking for 6.97px, 9.96px and 14.35px all came out 13px,
+    // which is why a run's box bore no relation to its words and a highlight
+    // drawn on that box was half again as tall as the line.
+    this.root.style.setProperty('--scale-factor', String(scale))
     this.rendered = false
   }
 
@@ -876,14 +849,16 @@ export class Reader {
     const selection = window.getSelection()
     if (!selection || selection.isCollapsed || selection.rangeCount === 0) return false
     const text = selection.toString()
-    const byPage = new Map<PageView, RunBox[]>()
+    const byPage = new Map<PageView, DOMRect[]>()
     for (let index = 0; index < selection.rangeCount; index += 1) {
       const range = selection.getRangeAt(index)
       const page = this.pageContaining(range.commonAncestorContainer)
       if (!page) continue
-      const rects = [...range.getClientRects()]
-        .filter((rect) => rect.width > 0.5 && rect.height > 0.5)
-        .map(textBox)
+      // The boxes as the text layer gives them. With `--scale-factor` set, a
+      // run's box is its em box: measured, the words sit from a tenth of the
+      // way down it to seven tenths, and the line below clears it altogether
+      // — the pitch is 1.10 of the box. There is nothing to trim.
+      const rects = [...range.getClientRects()].filter((rect) => rect.width > 0.5 && rect.height > 0.5)
       byPage.set(page, [...(byPage.get(page) ?? []), ...rects])
     }
     if (byPage.size === 0) return false
