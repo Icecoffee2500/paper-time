@@ -277,6 +277,38 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.9.6",
+            date: Text2("2026년 9월", "September 2026"),
+            note: Text2(
+                "윈도우·리눅스에서 하이라이트가 글자를 따라가지 않던 것을 고쳤어요. 여러 줄을 칠하면 하나의 커다란 덩어리가 됐고, 칠한 자리의 글자가 아예 안 보였고, 칠하고 나면 논문이 1쪽으로 돌아갔어요. 세 가지 다 고쳤어요.",
+                "On Windows and Linux, a highlight now follows the lines of the text. Marking several lines drew one long lozenge instead, the words underneath disappeared, and the paper jumped back to page one afterwards. All three are fixed."
+            ),
+            added: [],
+            fixed: [
+                Entry(
+                    Text2("하이라이트가 줄을 따라가요", "A highlight follows the lines"),
+                    Text2(
+                        "여러 줄을 칠하면 줄마다 한 칸이 아니라 단 하나의 기다란 덩어리가 그려졌어요. 줄을 묶는 규칙이 이미 삼킨 것만큼 넓어져서, 글자보다 조금 큰 것 하나만 지나가면 — 수식이든, 제목이든, 스캔한 쪽의 글자든 — 거기서부터 끝까지 한 줄로 이어졌거든요. 실제로 재 봤더니 34줄이 5줄로, 참고문헌 8줄이 1줄로 묶였어요. 이제 줄은 처음 그 줄을 연 조각만 보고 묶여요.",
+                        "Marking several lines drew one long lozenge rather than a band per line. The rule that grouped runs into lines widened as it swallowed them, so a single run a little taller than the text — a formula, a heading, a word off a scanned page — joined everything below it into one. Measured: thirty-four lines came back as five, and eight lines of a reference list as one. A line is now matched against the run that opened it and nothing else."
+                    )
+                ),
+                Entry(
+                    Text2("칠한 자리의 글자가 보여요", "The words show through"),
+                    Text2(
+                        "형광펜이 글자를 덮어서 칠한 줄을 읽을 수 없었어요. 곱하기로 그리고 있었는데 아래에 아무것도 없는 면 위에서 곱하면 그냥 불투명한 노란색이거든요 — 맥이 같은 자리에서 겪고 고쳐 둔 것과 같은 일이에요. 이제 표시는 제 면에 그려지고, 그 면이 쪽 위에 곱해져요. 칠하는 높이도 글자 높이에 맞췄어요. 전에는 글꼴의 상자 전체를 칠해서 윗줄과 아랫줄이 서로 겹쳤어요.",
+                        "The highlighter covered the words it marked. The colour was drawn with multiply onto a surface with nothing beneath it, which is simply opaque paint — the same thing the Mac ran into and fixed years ago. Marks now have a surface of their own that is multiplied onto the page. The band is the height of the text, too: it used to be the font's whole em box, so the bands on neighbouring lines ran into each other."
+                    )
+                ),
+                Entry(
+                    Text2("칠하고 나서 1쪽으로 돌아가지 않아요", "Marking no longer sends you back to page one"),
+                    Text2(
+                        "표시를 저장하면 라이브러리 폴더의 파일이 바뀌고, 폴더가 바뀌면 창이 목록을 다시 읽어요. 그 다시 읽기가 논문이 놓인 자리를 통째로 새로 지었고, 스크롤 되는 칸은 문서에서 떼였다 붙으면 맨 위로 돌아가요. 그래서 9쪽에 표시를 하면 0.5초 뒤에 1쪽이었어요. 이제 배치가 실제로 바뀔 때만 다시 짓고, 다시 지을 때도 읽던 자리를 기억해요.",
+                        "Saving a mark writes to the library folder, and a folder that changes makes the window re-read it. That re-read rebuilt the whole page area, and a scroll view taken out of the document comes back at the top — so a mark made on page nine left you on page one half a second later. The page area is now rebuilt only when the arrangement actually changes, and it puts each paper back where it was."
+                    )
+                ),
+            ]
+        ),
+        Release(
             version: "0.9.5",
             date: Text2("2026년 9월", "September 2026"),
             note: Text2(

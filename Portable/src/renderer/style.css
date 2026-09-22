@@ -751,16 +751,27 @@ body[data-platform='darwin'] .window-buttons {
   z-index: 0;
 }
 
+/* Highlights and underlines belong to the words, so they are multiplied onto
+   the page rather than painted over it — the same thing the Mac's
+   `MarkOverlayView` does with a compositing filter, and for the same reason:
+   a blend mode inside the canvas has nothing to blend against. They sit under
+   the pen, which is paint and blends with nothing. */
+.page canvas.mark-canvas {
+  z-index: 1;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+}
+
 /* The drawing sits above the page and below the words you can select. */
 .page canvas.draw-canvas {
-  z-index: 2;
+  z-index: 3;
   pointer-events: none;
 }
 
 .page .text-layer {
   position: absolute;
   inset: 0;
-  z-index: 3;
+  z-index: 4;
   overflow: hidden;
   line-height: 1;
   opacity: 1;
@@ -790,7 +801,7 @@ body[data-platform='darwin'] .window-buttons {
 .page .sketch-input {
   position: absolute;
   inset: 0;
-  z-index: 4;
+  z-index: 5;
   display: none;
 }
 
@@ -801,7 +812,7 @@ body[data-platform='darwin'] .window-buttons {
 .page-tint {
   position: absolute;
   inset: 0;
-  z-index: 1;
+  z-index: 2;
   pointer-events: none;
   mix-blend-mode: multiply;
 }

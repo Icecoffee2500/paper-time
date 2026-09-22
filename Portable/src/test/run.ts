@@ -38,6 +38,7 @@ import { escapeLaTeX } from '../shared/latexTable.js'
 import { readDrawings, writeDrawings, stripOwnedForDisplay } from '../main/pdfwrite.js'
 import { Library, RecordUnreadable, readJSON } from '../main/library.js'
 import { providerIcon, providerOf } from '../shared/cloudProvider.js'
+import { linesFromRuns, type RunBox } from '../shared/textLines.js'
 import { encodeSwiftJSON as encode } from '../shared/coding.js'
 import { splitDock, splitPapers, splitRemove, zoneAt, zoneRect } from '../shared/split.js'
 
@@ -978,6 +979,123 @@ async function main() {
     // desktop and not the other.
     assert.ok(/Every PDF in the library, wherever it sits under the root/.test(swift))
     assert.ok(!/skipsSubdirectoryDescendants/.test(swift), 'the Mac stopped recursing')
+  })
+
+  // ------------------------------------------------ a highlight's line breaks
+  suite('A highlight follows the lines of the text')
+
+  /** A run's box, the way the text layer makes one: an em box hanging from
+   *  the baseline, mostly above it and only a little below. */
+  const run = (baseline: number, em: number, left: number, right: number): RunBox =>
+    ({ left, right, top: baseline - em * 0.8, bottom: baseline + em * 0.2 })
+
+  /** A paragraph: `lines` lines of body text, an em of 15 set every 18
+   *  points, which is what a real paper measured. */
+  const paragraph = (lines: number, em = 15, gap = 18) =>
+    Array.from({ length: lines }, (_, index) => run(100 + index * gap, em, 60, 320))
+
+  await test('five lines of body text stay five lines', () => {
+    assert.equal(linesFromRuns(paragraph(5)).length, 5)
+  })
+
+  await test('runs of unequal height on one line are one line', () => {
+    // Measured in the window: a roman and an italic on the same line came
+    // back 15.5 and 13 points tall, starting a point apart.
+    const line = [
+      { left: 60, right: 140, top: 283, bottom: 298.5 },
+      { left: 140, right: 190, top: 284, bottom: 297 },
+      { left: 190, right: 320, top: 283, bottom: 298.5 },
+    ]
+    assert.deepEqual(linesFromRuns(line), [{ left: 60, right: 320, top: 283, bottom: 298.5 }])
+  })
+
+  await test('a tall run does not drag in the line below it', () => {
+    // The bug a reader photographed. Under the old rule one run a quarter
+    // taller than the text was enough, and what it took in made the line
+    // taller still, so the rest of the selection arrived as one lozenge.
+    for (const em of [19, 24, 30, 45, 60, 120, 400]) {
+      const runs = [...paragraph(6), run(100, em, 150, 190)]
+      const lines = linesFromRuns(runs)
+      assert.equal(lines.length, 6, `a run of ${em} points left ${lines.length} lines`)
+      // A run within the allowance is text, and a line covers its text; past
+      // it the run is furniture and sets no line's height at all.
+      const most = em <= 15 * 1.6 ? em : 15
+      for (const line of lines) {
+        assert.ok(
+          line.bottom - line.top <= most + 0.001,
+          `a run of ${em} points made a line ${line.bottom - line.top} tall`,
+        )
+      }
+    }
+  })
+
+  await test('a formula on a line widens it without heightening it', () => {
+    const line = [...paragraph(1), run(100, 40, 150, 190)]
+    assert.deepEqual(linesFromRuns(line), [{ left: 60, right: 320, top: 88, bottom: 103 }])
+  })
+
+  await test('a drop cap widens the two lines it stands across', () => {
+    // It is not a line of its own: it is the first two lines reaching left.
+    const lines = linesFromRuns([...paragraph(3), run(118, 39, 30, 58)])
+    assert.equal(lines.length, 3)
+    assert.equal(lines[0].left, 30)
+    assert.equal(lines[1].left, 30)
+    assert.equal(lines[2].left, 60)
+    for (const line of lines) assert.ok(line.bottom - line.top <= 16)
+  })
+
+  await test('a heading the drag ran into is a line of its own', () => {
+    const lines = linesFromRuns([run(60, 30, 60, 240), ...paragraph(3)])
+    assert.equal(lines.length, 4)
+    assert.equal(Math.round(lines[0].bottom - lines[0].top), 30)
+  })
+
+  await test('a drag over nothing but a title is ordinary there', () => {
+    assert.equal(linesFromRuns([run(60, 30, 60, 240), run(96, 30, 60, 200)]).length, 2)
+  })
+
+  await test('a superscript stays on its line', () => {
+    // A citation marker: a smaller box, raised, still on the line it marks.
+    const line = [run(100, 15, 60, 140), run(95, 10, 140, 146), run(100, 15, 146, 320)]
+    assert.deepEqual(linesFromRuns(line), [{ left: 60, right: 320, top: 87, bottom: 103 }])
+  })
+
+  await test('two columns on one line are one line, as a drag across them is', () => {
+    const merged = linesFromRuns([run(100, 15, 60, 300), run(100, 15, 330, 560)])
+    assert.equal(merged.length, 1)
+    assert.equal(merged[0].left, 60)
+    assert.equal(merged[0].right, 560)
+  })
+
+  await test('tight leading is still line by line', () => {
+    // A 2007 journal sets 9 on 10, and one on nothing at all still breaks:
+    // the boxes hang from their baselines, so they barely meet.
+    for (const gap of [17, 15.5, 14, 13]) {
+      assert.equal(linesFromRuns(paragraph(6, 15, gap)).length, 6, `at a gap of ${gap}`)
+    }
+  })
+
+  await test('a line of one run is that run, and nothing selected is no lines', () => {
+    assert.deepEqual(
+      linesFromRuns([{ left: 10, right: 20, top: 30, bottom: 45 }]),
+      [{ left: 10, right: 20, top: 30, bottom: 45 }],
+    )
+    assert.deepEqual(linesFromRuns([]), [])
+  })
+
+  await test('a big selection does not overflow the stack', () => {
+    // A fold rather than a spread: 200,000 runs on one line is not a real
+    // drag, but a spread of them is a RangeError rather than a wrong answer.
+    const many = Array.from({ length: 200_000 }, (_, index) => run(100, 15, index, index + 1))
+    const merged = linesFromRuns(many)
+    assert.equal(merged.length, 1)
+    assert.equal(merged[0].right, 200_000)
+  })
+
+  await test('the lines come back in reading order', () => {
+    const shuffled = [paragraph(4)[2], paragraph(4)[0], paragraph(4)[3], paragraph(4)[1]]
+    const tops = linesFromRuns(shuffled).map((line) => line.top)
+    assert.deepEqual(tops, [...tops].sort((a, b) => a - b))
   })
 
   process.stdout.write(`\n${passed} passed, ${failed} failed\n`)
