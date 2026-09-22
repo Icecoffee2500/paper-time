@@ -471,11 +471,27 @@ public actor LibraryStore {
         }
     }
 
+    /// The file a record's bytes are now in, when there is no doubt which.
+    ///
+    /// Only when exactly one PDF in the folder carries them. This used to take
+    /// the first in name order, which was safe while the library could hold
+    /// one record per digest — and it no longer can: a PDF already sitting in
+    /// the folder is given a record even when another paper has the same
+    /// bytes, because refusing it leaves a file the library will not show.
+    /// With two copies in the folder, "the first that matches" relinks a
+    /// renamed paper onto the *other* copy, which another record already owns,
+    /// and that record's marks then belong to the wrong file. Two answers
+    /// means no answer: the paper is reported missing and its file is offered
+    /// as loose, which the reader can see and act on.
     private func findDocument(matching digest: String) -> URL? {
         guard !digest.isEmpty else { return nil }
-        return documentURLs().first { url in
-            (try? FileOperations.sha256(ofFileAt: url)) == digest
+        var found: URL?
+        for url in documentURLs()
+        where (try? FileOperations.sha256(ofFileAt: url)) == digest {
+            guard found == nil else { return nil }
+            found = url
         }
+        return found
     }
 
     private func relativePath(of url: URL) -> String {
@@ -491,7 +507,7 @@ public actor LibraryStore {
     /// slash, and comparing it against a file's path with a plain prefix test
     /// silently fails — which is how a PDF already inside the library came to
     /// be copied in again as "paper 2.pdf".
-    static func normalizedPath(_ url: URL) -> String {
+    public static func normalizedPath(_ url: URL) -> String {
         var path = url.resolvingSymlinksInPath().standardizedFileURL
             .path(percentEncoded: false)
         while path.count > 1, path.hasSuffix("/") { path.removeLast() }

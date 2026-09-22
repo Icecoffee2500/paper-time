@@ -234,10 +234,16 @@ function allBounds() {
 
 // MARK: - The library
 
-/** What the last "add the loose PDFs" could not read, by name. */
-let refusedLastAdoption: string[] = []
-
-async function snapshot(): Promise<LibrarySnapshot | { error: string }> {
+/**
+ * Reads the library and says what is in it.
+ *
+ * `refused` belongs to one press of "add the loose PDFs" and is given here by
+ * that handler alone. It was module state for a while, which meant every later
+ * snapshot carried it — the note stayed on screen after a reload, after the
+ * folder was disconnected, in a window that had nothing to do with it, and
+ * there was nothing that would clear it.
+ */
+async function snapshot(refused: string[] = []): Promise<LibrarySnapshot | { error: string }> {
   if (!library) return { error: 'No library is open.' }
   try {
     const rows: LibrarySnapshot['papers'] = []
@@ -288,8 +294,8 @@ async function snapshot(): Promise<LibrarySnapshot | { error: string }> {
       // names, rather than a silence: one record arriving half written used to
       // take every paper with it and leave a window with nothing to say.
       unreadable: unreadableRecords,
-      // …and the ones the last press of that button could not take in.
-      refused: refusedLastAdoption,
+      // …and the ones this press of that button could not take in.
+      refused,
     }
   } catch (error) {
     return { error: String((error as Error).message ?? error) }
@@ -546,17 +552,17 @@ const handlers: Record<string, Handler> = {
     // rest of the folder with it: this loop used to throw on the first
     // unreadable PDF, so two hundred good papers waited behind one bad one and
     // the window was told nothing at all.
-    refusedLastAdoption = []
+    const refused: string[] = []
     for (const one of allLibraries()) {
       for (const file of await one.looseFiles()) {
         try {
           await one.importPDF(file, await pageCount(file))
         } catch {
-          refusedLastAdoption.push(path.basename(file))
+          refused.push(path.basename(file))
         }
       }
     }
-    return snapshot()
+    return snapshot(refused)
   },
 
   // Another folder, read beside the ones already open. Nothing is copied or

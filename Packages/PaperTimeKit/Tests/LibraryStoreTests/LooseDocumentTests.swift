@@ -167,6 +167,69 @@ struct LooseDocumentTests {
         #expect(existing.id == first.id)
     }
 
+    @Test("A renamed paper is not relinked onto its twin")
+    func relinkOnlyWhenThereIsNoDoubt() async throws {
+        let root = try Self.makeTemporaryFolder()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try Self.writePDF(named: "a.pdf", in: root)
+        try FileManager.default.copyItem(
+            at: root.appending(path: "a.pdf"), to: root.appending(path: "b.pdf")
+        )
+        let store = LibraryStore(root: root)
+        try await store.bootstrap()
+
+        guard case let .imported(first) = try await store.importDocument(
+            at: root.appending(path: "a.pdf")
+        ) else { Issue.record("expected an import"); return }
+        guard case let .imported(second) = try await store.importDocument(
+            at: root.appending(path: "b.pdf"),
+            knownDigests: [first.meta.file.importDigest: first.folder]
+        ) else { Issue.record("expected the twin to be taken in"); return }
+
+        // Renamed outside the app. A record whose file is gone is recovered by
+        // its bytes — but both files carry these bytes, and the recovery used
+        // to take the first in name order, which is the file the *other*
+        // record owns. Two records on one file, and one paper's marks written
+        // into another paper's PDF.
+        try FileManager.default.moveItem(
+            at: root.appending(path: "a.pdf"), to: root.appending(path: "z.pdf")
+        )
+        let reloaded = try await store.loadAll()
+        let paths = Set(reloaded.papers.map(\.meta.file.relativePath))
+        #expect(paths.count == reloaded.papers.count, "no two records may name one file")
+        #expect(paths.contains("b.pdf"))
+
+        // The twin keeps its own file, and the renamed one is reported as the
+        // open question it is rather than quietly answered wrongly.
+        let stillB = reloaded.papers.first { $0.id == second.id }
+        #expect(stillB?.meta.file.relativePath == "b.pdf")
+        #expect(await store.looseDocumentURLs().map(\.lastPathComponent) == ["z.pdf"])
+    }
+
+    @Test("A record still speaks for its file when the file moves inside the folder")
+    func renameKeepsTheClaim() async throws {
+        let root = try Self.makeTemporaryFolder()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try Self.writePDF(named: "only.pdf", in: root)
+        let store = LibraryStore(root: root)
+        try await store.bootstrap()
+        guard case let .imported(paper) = try await store.importDocument(
+            at: root.appending(path: "only.pdf")
+        ) else { Issue.record("expected an import"); return }
+
+        // One file with these bytes, so the recovery is not a guess.
+        try FileManager.default.moveItem(
+            at: root.appending(path: "only.pdf"), to: root.appending(path: "renamed.pdf")
+        )
+        let reloaded = try await store.loadAll()
+        #expect(reloaded.papers.count == 1)
+        #expect(reloaded.papers.first?.id == paper.id)
+        #expect(reloaded.papers.first?.meta.file.relativePath == "renamed.pdf")
+        #expect(await store.looseDocumentURLs().isEmpty)
+    }
+
     @Test("A copied import leaves the original where it was")
     func copyingKeepsTheOriginal() async throws {
         let root = try Self.makeTemporaryFolder()

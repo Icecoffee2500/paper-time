@@ -604,6 +604,20 @@ public final class AppModel {
             phase = .ready
             await model.refresh()
             Trace.mark("library ready — \(model.papers.count) papers")
+            // `--papertime-import=<경로>`가 드롭·«PDF 더하기» 패널이 지나는 그
+            // 길로 파일을 하나 들여온다. 라이브러리 폴더 안에 이미 있는 파일을
+            // 이 길로 들이면 «남은 PDF» 목록이 낡은 채로 남고, 그 다음 줄을
+            // 누르면 같은 파일에 기록이 둘 생겼다 — 손 없이 그 순서를 밟는
+            // 유일한 길이다. `--papertime-adopt-loose`보다 먼저 온다.
+            if let wanted = Boot.setting("PAPERTIME_IMPORT") {
+                let url = wanted.hasPrefix("/")
+                    ? URL(fileURLWithPath: wanted)
+                    : model.location.url.appending(path: wanted)
+                let (added, duplicates) = await model.importDocuments(at: [url])
+                FileHandle.standardError.write(
+                    Data("import: added=\(added) duplicates=\(duplicates)\n".utf8)
+                )
+            }
             // Driving a simulator: take in the folder's loose PDFs and open
             // the first paper, since nothing there can be tapped from here.
             if Boot.isSet("PAPERTIME_ADOPT_LOOSE") {

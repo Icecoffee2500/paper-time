@@ -388,7 +388,13 @@ export class Library {
     const meta = new PaperMeta(row.meta)
     meta.file = {
       ...meta.file,
-      relativePath: path.relative(this.root, destination),
+      // Through `recordPath`, which puts the separator the records are
+      // written with. `path.relative` gives this machine's — a backslash on
+      // Windows — and every comparison against a stored `relativePath` uses
+      // forward slashes, so a renamed paper stopped matching its own file:
+      // `claimedBy` no longer counted it, so the folder offered it as a loose
+      // PDF and took it in again under a second identifier.
+      relativePath: L.recordPath(this.root, destination),
       originalName: name,
     }
     await this.saveMeta(meta)
@@ -451,9 +457,12 @@ export class Library {
     // folder holds two copies of a paper there are two records with the same
     // digest, and the first of them is not necessarily this one.
     const here = inside ? L.recordPath(this.root, source) : null
-    const claiming = here === null ? undefined : existing.find(
-      (row) => String((row.meta.file as RawRecord)?.relativePath ?? '') === here,
-    )
+    // Both sides through the same separator. Records written by a build that
+    // used this machine's separator are still on disk, and a record that does
+    // not match its own file is a second record for it.
+    const asRecorded = (row: PaperRow) =>
+      String((row.meta.file as RawRecord)?.relativePath ?? '').split('\\').join('/')
+    const claiming = here === null ? undefined : existing.find((row) => asRecorded(row) === here)
     if (claiming) return claiming
 
     const already = existing.find(

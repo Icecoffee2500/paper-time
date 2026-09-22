@@ -71,7 +71,13 @@ public enum AttachmentSearch {
         // typo and a missing subtitle.
         if scored.isEmpty {
             for candidate in candidates {
-                let similarity = StringSimilarity.jaroWinkler(needle, candidate.foldedTitle)
+                // Both names, as the ladder above uses both: a reader who
+                // mistypes the author in a file name gets the same help as one
+                // who mistypes a word of the title.
+                let similarity = max(
+                    StringSimilarity.jaroWinkler(needle, candidate.foldedTitle),
+                    StringSimilarity.jaroWinkler(needle, candidate.foldedFile)
+                )
                 if similarity >= 0.7 { scored.append((candidate, similarity - 1)) }
             }
         }

@@ -169,8 +169,8 @@ struct PaperListView: View {
                             // people press again.
                             HStack(spacing: 8) {
                                 ProgressView().controlSize(.small)
-                                Text(L("PDF \(model.looseDocuments.count)개 더하는 중…",
-                                       "Adding \(model.looseDocuments.count) PDFs…"))
+                                Text(L("PDF \(model.adoptingCount)개 더하는 중…",
+                                       "Adding \(model.adoptingCount) PDFs…"))
                                     .foregroundStyle(.secondary)
                             }
                         } else if !model.looseDocuments.isEmpty {

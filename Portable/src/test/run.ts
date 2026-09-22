@@ -784,6 +784,34 @@ async function main() {
     }
   })
 
+  await test('a renamed paper still speaks for its file', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'papertime-rename-claim-'))
+    try {
+      const library = await Library.open(root)
+      fs.writeFileSync(path.join(root, 'before.pdf'), '%PDF-1.7\n% before\n')
+      const paper = await library.importPDF(path.join(root, 'before.pdf'), 2)
+      assert.ok(paper)
+      await library.rename(paper.id, 'after')
+
+      // The record is written with forward slashes and every comparison
+      // against it uses them, but `rename` used this machine's separator — so
+      // on Windows a renamed paper stopped matching its own file, the folder
+      // called it loose, and taking the loose PDFs in made a second record.
+      const stored = String(
+        ((await library.paper(paper.id))?.meta.file as Record<string, unknown>)?.relativePath ?? '',
+      )
+      assert.equal(stored, 'after.pdf')
+      assert.ok(!stored.includes('\\'), 'a record never holds a backslash')
+      assert.deepEqual(await library.looseFiles(), [])
+
+      const again = await library.importPDF(path.join(root, 'after.pdf'), 2)
+      assert.equal(again?.id, paper.id, 'and it is still the same paper')
+      assert.equal((await library.read()).papers.length, 1)
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   await test('one record that will not be read costs one row, not the library', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'papertime-short-'))
     try {

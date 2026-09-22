@@ -58,7 +58,12 @@ export function buildPaperList(actions: PaperListActions): { node: HTMLElement; 
 
     // The header only when it has changed: clearing and refilling it on every
     // redraw threw away a button somebody might have been about to press.
-    const headerKey = `${shelfTitle()}|${store.looseCount}|${store.refused.length}`
+    // The refused files by name, not by count: after a press, the number left
+    // loose and the number refused are the same number, so two presses that
+    // failed on different files had the same key — and the note's tooltip,
+    // which is only written when the key changes, went on naming the files
+    // from the press before.
+    const headerKey = `${shelfTitle()}|${store.looseCount}|${store.refused.join('\u0000')}`
       + `|${store.unreadable.length}|${store.error ?? ''}`
     if (headerKey !== shownHeader) {
       shownHeader = headerKey
