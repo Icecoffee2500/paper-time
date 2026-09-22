@@ -270,8 +270,8 @@ enum ReleaseNotes {
             version: "0.9.2",
             date: Text2("2026년 9월", "September 2026"),
             note: Text2(
-                "여는 데 걸리던 시간이 대부분 없어졌어요. 앱의 움직임도 한 벌로 맞췄고요 — 같은 크기의 변화는 어디서나 같은 속도예요. 그리고 이제 베타예요.",
-                "Most of the wait at launch is gone, and the app moves as one thing now: the same size of change takes the same time everywhere. This is also the first beta."
+                "여는 데 걸리던 시간이 대부분 없어졌어요. 앱의 움직임도 한 벌로 맞췄고요 — 같은 크기의 변화는 어디서나 같은 속도예요. 그리고 책이 논문도 일반 문서도 아닌 제 종류가 됐어요. 이제 베타예요.",
+                "Most of the wait at launch is gone, and the app moves as one thing now: the same size of change takes the same time everywhere. A book is also its own kind at last, neither a paper nor a document. This is the first beta."
             ),
             added: [
                 Entry(
@@ -304,6 +304,14 @@ enum ReleaseNotes {
                         "이 화면이 스무 가지를 한 줄로 세워 놓은 목록이었어요. 목록은 아무도 안 읽어요. 이제 한 번에 하나씩 보여줘요 — 큰 카드 안에 실물이 있고, 그 아래 이름과 한 문장이 있고, 좌우 화살표나 ← → 키로 넘겨요.",
                         "This screen was twenty things in a column, which is a list, and nobody reads a list of twenty. It shows one at a time now: the thing itself in a card, its name and a sentence under it, and an arrow on each side — or the arrow keys."
                     )
+                ),
+                Entry(
+                    Text2("책은 이제 책이에요", "A book is a book now"),
+                    Text2(
+                        "PDF가 무엇인지 묻는 자리에 «책»이 생겼어요. 교과서를 논문이라고 하면 같은 제목의 학술지 논문에 잘못 붙어서 «권 9, 호 5, 1054–1054쪽» 같은 게 돼요. 그렇다고 일반 문서라고 하면 인용을 아예 못 하고요. 책이라고 하면 출판사·펴낸 곳·판·ISBN을 물어보고, 학술지 칸은 아예 없애요. BibTeX에는 @book으로 나가고, 인용 키도 그대로 있어요. 쪽이 아주 많고 뒤에 참고문헌이 있으면 앱이 먼저 책이라고 짐작해 둬요. 라이브러리에 책이 있으면 사이드바에 «책» 선반이 생기고요.",
+                        "The question about what a PDF is has a third answer. Call a textbook a paper and it gets matched to a journal article of the same name — volume 9, issue 5, pages 1054–1054 — and call it a document and you cannot cite it at all. Called a book it is asked for a publisher, a place, an edition and an ISBN, and the journal's fields go away entirely. It exports as @book and keeps its citation key. A file hundreds of pages long with a reference list at the back is guessed to be one. A library that holds books grows a Books shelf."
+                    ),
+                    devices: [.mac, .ipad, .iphone]
                 ),
                 Entry(
                     Text2("설명서가 생겼어요", "There is a manual"),

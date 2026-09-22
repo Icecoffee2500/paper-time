@@ -7,7 +7,7 @@
  * from differing by way of somebody's runtime.
  */
 import type { LibrarySnapshot, PaperRowDTO } from '../shared/api.js'
-import { type DocumentKind } from '../shared/documentKind.js'
+import { isLookedUp, type DocumentKind } from '../shared/documentKind.js'
 import { PaperMeta, PaperState, type Collection, type Tag } from '../shared/model.js'
 import { SketchColor, SketchStyle } from '../shared/sketch.js'
 import { splitContains, splitDock, splitPapers, splitRemove, type DockZone, type SplitArrangement } from '../shared/split.js'
@@ -385,9 +385,9 @@ export function shelfPapers(): Paper[] {
       filtered = all.filter((entry) => entry.state.isFavorite)
       break
     case 'review':
-      // A document has no registrar to disagree with, so it is never a thing
-      // to review.
-      filtered = all.filter((entry) => entry.meta.effectiveKind === 'paper'
+      // Neither a book nor a document has a registrar to disagree with, so
+      // neither is ever a thing to review.
+      filtered = all.filter((entry) => isLookedUp(entry.meta.effectiveKind)
         && (entry.meta.confidence === 'needsReview' || entry.meta.confidence === 'unparsed'))
       break
     case 'notes':

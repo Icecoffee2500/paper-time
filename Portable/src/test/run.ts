@@ -647,6 +647,16 @@ async function main() {
     // manual can cite a standard.
     assert.equal(guessKind({ identifier: false, abstract: true, references: false }).kind, 'document')
     assert.equal(guessKind({ identifier: false, abstract: false, references: false }).kind, 'document')
+    // Long, with a reference list at the back: a book, as on the Mac. The
+    // length alone is not enough, and the references alone are not either.
+    assert.equal(
+      guessKind({ identifier: false, abstract: false, references: true, pageCount: 548 }).kind, 'book')
+    assert.equal(
+      guessKind({ identifier: false, abstract: false, references: false, pageCount: 548 }).kind, 'document')
+    assert.equal(
+      guessKind({ identifier: false, abstract: false, references: true, pageCount: 12 }).kind, 'document')
+    assert.equal(
+      guessKind({ identifier: true, abstract: true, references: true, pageCount: 548 }).kind, 'paper')
 
     assert.ok(hasIdentifier('see https://doi.org/10.1145/3292500.3330701 for more'))
     assert.ok(hasIdentifier('arXiv:2403.01234v2 [cs.LG]'))

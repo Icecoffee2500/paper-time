@@ -72,7 +72,7 @@ import {
 import { icon } from './icons.js'
 import { L } from '../shared/lang.js'
 import { type PDFLock } from '../shared/pdfLock.js'
-import { type DocumentKind } from '../shared/documentKind.js'
+import { isCitable, isLookedUp, type DocumentKind } from '../shared/documentKind.js'
 
 document.body.dataset.platform = platform
 /** This window shows one paper on its own: no library columns. */
@@ -198,13 +198,20 @@ const paperList = buildPaperList({
       { separator: true },
       // The same answer the inspector asks for, where a handful of rows can
       // be corrected one after another — which is what a wrongly answered
-      // import feels like.
-      entry.meta.effectiveKind === 'paper'
-        ? { label: L('일반 문서로 바꾸기', 'Make It a Document'), icon: 'note', action: () => void setKind(id, 'document') }
-        : { label: L('논문으로 바꾸기', 'Make It a Paper'), icon: 'text.document', action: () => void setKind(id, 'paper') },
+      // import feels like. The one it already is is left out: a menu offering
+      // what has already happened is a menu item that does nothing.
+      ...([
+        ['paper', L('논문으로 바꾸기', 'Make It a Paper'), 'text.document'],
+        ['book', L('책으로 바꾸기', 'Make It a Book'), 'book'],
+        ['document', L('일반 문서로 바꾸기', 'Make It a Document'), 'note'],
+      ] as const)
+        .filter(([value]) => value !== entry.meta.effectiveKind)
+        .map(([value, label, glyph]) => ({
+          label, icon: glyph, action: () => void setKind(id, value),
+        })),
       { separator: true },
       { label: L('폴더에서 보기', 'Show in Folder'), icon: 'folder', action: () => void call('paper:reveal', { id }) },
-      ...(entry.meta.effectiveKind === 'paper'
+      ...(isCitable(entry.meta.effectiveKind)
         ? [{ label: L('인용 키 복사', 'Copy Citation Key'), icon: 'doc.on.doc', action: () => copyKey(id) }]
         : []),
       { separator: true },
@@ -246,12 +253,26 @@ const paperList = buildPaperList({
   },
 })
 
-/** The answer to "paper or document?", from the inspector or the row's menu. */
+/** The answer to "a paper, a book, or a document?", from the inspector or the
+ *  row's menu. */
 async function setKind(id: string, kind: DocumentKind) {
-  // A document has no registrar to disagree with, so it leaves the shelf of
-  // things to look at.
+  // Neither a book nor a document has a registrar to disagree with, so
+  // neither stays on the shelf of things to look at.
   const patch: Record<string, unknown> = { kind }
-  if (kind === 'document') patch.confidence = 'unparsed'
+  if (!isLookedUp(kind)) patch.confidence = 'unparsed'
+  if (kind === 'book') {
+    // Called a book, it is written down as one — so the export says `@book`
+    // and the citation prints a publisher rather than a journal. The
+    // journal's own fields go, or a textbook prints as a volume and an issue
+    // of a journal it was never in.
+    const entry = findPaper(id)
+    const csl = { ...(entry?.meta.csl ?? {}) } as Record<string, unknown>
+    if (csl.type !== 'book' && csl.type !== 'chapter') csl.type = 'book'
+    for (const key of ['container-title', 'container-title-short', 'volume', 'issue', 'page', 'ISSN']) {
+      delete csl[key]
+    }
+    patch.csl = csl
+  }
   await call('paper:meta', { id, patch })
   await reload()
 }

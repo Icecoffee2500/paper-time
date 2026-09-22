@@ -657,6 +657,20 @@ public final class AppModel {
                     FileHandle.standardError.write(Data("rename refused: \(error)\n".utf8))
                 }
             }
+            // `--papertime-kind=<paper|book|document>` answers "what is this?"
+            // for the chosen paper and says what the shelves now hold — the
+            // one way to see a kind change without a hand on the machine.
+            if let raw = Boot.setting("PAPERTIME_KIND"),
+               let kind = DocumentKind(rawValue: raw),
+               let paper = model.selectedPaper ?? model.visiblePapers.first {
+                await model.setKind(kind, for: paper.id)
+                let now = model.paper(paper.id)?.meta
+                let counts = model.counts
+                FileHandle.standardError.write(Data("""
+                kind: \(now?.effectiveKind.rawValue ?? "?")                 csl=\(now?.csl.type.rawValue ?? "?")                 venue=\(now?.csl.containerTitle ?? "—")                 volume=\(now?.csl.volume ?? "—")                 shelves: papers=\(counts.papers) books=\(counts.books) documents=\(counts.documents)                 review=\(counts.needsReview)
+
+                """.utf8))
+            }
             if Boot.setting("PAPERTIME_SCOPE") == "notes" { model.scope = .notes }
             // The results of a search, without anybody having to type one.
             if let query = Boot.setting("PAPERTIME_SEARCH_RESULTS") {

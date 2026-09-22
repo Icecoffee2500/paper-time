@@ -20,6 +20,38 @@ struct DocumentKindTests {
         #expect(DocumentGuess.of(hasIdentifier: false, hasAbstract: false, hasReferences: true).kind == .document)
     }
 
+    @Test("Long, with references at the back, is a book")
+    func book() {
+        let guess = DocumentGuess.of(
+            hasIdentifier: false, hasAbstract: false, hasReferences: true, pageCount: 548
+        )
+        #expect(guess.kind == .book)
+        #expect(guess.reason == .length)
+        // The length alone is not enough — a scanned manual is long too.
+        #expect(DocumentGuess.of(
+            hasIdentifier: false, hasAbstract: false, hasReferences: false, pageCount: 548
+        ).kind == .document)
+        // Nor are the references alone: a short paper without an abstract has
+        // them, and it is not a book.
+        #expect(DocumentGuess.of(
+            hasIdentifier: false, hasAbstract: false, hasReferences: true, pageCount: 12
+        ).kind == .document)
+        // A paper is still a paper however long it is, if it says so.
+        #expect(DocumentGuess.of(
+            hasIdentifier: true, hasAbstract: true, hasReferences: true, pageCount: 548
+        ).kind == .paper)
+    }
+
+    @Test("A book is cited; a document is not; only a paper is looked up")
+    func whatEachKindIsFor() {
+        #expect(DocumentKind.paper.isCitable)
+        #expect(DocumentKind.book.isCitable)
+        #expect(!DocumentKind.document.isCitable)
+        #expect(DocumentKind.paper.isLookedUp)
+        #expect(!DocumentKind.book.isLookedUp)
+        #expect(!DocumentKind.document.isLookedUp)
+    }
+
     @Test("Nothing found means a document")
     func nothing() {
         let guess = DocumentGuess.of(hasIdentifier: false, hasAbstract: false, hasReferences: false)

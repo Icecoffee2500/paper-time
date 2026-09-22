@@ -180,14 +180,19 @@ function kindQuestion(body: HTMLElement, paper: Paper, actions: InspectorActions
   const hint = guess === 'paper'
     ? L('논문 같아요 — 안에 DOI나 참고문헌이 보여요. 맞으면 그대로 눌러주세요.',
         'It looks like a paper — there is a DOI or a reference list in it. Press it again to agree.')
-    : guess === 'document'
-      ? L('논문은 아닌 것 같아요. 일반 문서면 학술지 같은 칸은 숨길게요.',
-          "It doesn't look like a paper. As a document, the journal fields go away.")
-      : L('고르면 아래 칸들이 그에 맞게 바뀌어요.', 'The fields below follow your answer.')
+    : guess === 'book'
+      ? L('책 같아요 — 쪽이 아주 많고 뒤에 참고문헌이 있어요. 책이면 출판사와 판, ISBN을 물어볼게요.',
+          'It looks like a book — hundreds of pages, with a reference list at the back. '
+          + 'As a book it is asked for a publisher, an edition and an ISBN.')
+      : guess === 'document'
+        ? L('논문은 아닌 것 같아요. 일반 문서면 학술지 같은 칸은 숨길게요.',
+            "It doesn't look like a paper. As a document, the journal fields go away.")
+        : L('고르면 아래 칸들이 그에 맞게 바뀌어요.', 'The fields below follow your answer.')
 
   const choices = el('div', { class: 'choices' })
   for (const [value, label] of [
     ['paper', L('논문', 'A paper')],
+    ['book', L('책', 'A book')],
     ['document', L('일반 문서', 'A document')],
   ] as const) {
     // The chosen one is marked, and the other one is the way back: an answer
@@ -209,7 +214,9 @@ function kindQuestion(body: HTMLElement, paper: Paper, actions: InspectorActions
 
 function details(body: HTMLElement, paper: Paper, actions: InspectorActions) {
   const meta = paper.meta
-  const isPaper = meta.effectiveKind === 'paper'
+  const kind = meta.effectiveKind
+  const isPaper = kind === 'paper'
+  const isBook = kind === 'book'
 
   // Asked once, when nobody has answered. Changing it afterwards is in the
   // row's own menu: a form is no place for a switch that is never touched
@@ -228,7 +235,7 @@ function details(body: HTMLElement, paper: Paper, actions: InspectorActions) {
   }
   if (authors.childElementCount > 0) {
     body.append(el('div', { class: 'field' }, [
-      el('div', { class: 'field-label', text: isPaper ? L('저자', 'Authors') : L('쓴 사람', 'Written by') }),
+      el('div', { class: 'field-label', text: isPaper ? L('저자', 'Authors') : isBook ? L('지은이', 'Written by') : L('쓴 사람', 'Written by') }),
       authors,
     ]))
   }
@@ -240,8 +247,23 @@ function details(body: HTMLElement, paper: Paper, actions: InspectorActions) {
       actions.editMeta(paper.id, { csl: { ...meta.csl, 'container-title': next }, confidence: 'manual' })
     }))
   } else {
-    body.append(editable(L('펴낸 곳', 'From'), meta.csl.publisher ?? '', (next) => {
+    body.append(editable(isBook ? L('출판사', 'Publisher') : L('펴낸 곳', 'From'), meta.csl.publisher ?? '', (next) => {
       actions.editMeta(paper.id, { csl: { ...meta.csl, publisher: next }, confidence: 'manual' })
+    }))
+  }
+
+  // What a book has and a journal article does not. Put through the paper's
+  // form a book came back wearing a volume and an issue, which is how a
+  // textbook ends up cited as one page of a journal it was never in.
+  if (isBook) {
+    body.append(editable(L('펴낸 곳', 'Place'), (meta.csl['publisher-place'] as string) ?? '', (next) => {
+      actions.editMeta(paper.id, { csl: { ...meta.csl, 'publisher-place': next }, confidence: 'manual' })
+    }))
+    body.append(editable(L('판', 'Edition'), (meta.csl.edition as string) ?? '', (next) => {
+      actions.editMeta(paper.id, { csl: { ...meta.csl, edition: next }, confidence: 'manual' })
+    }))
+    body.append(editable('ISBN', (meta.csl.ISBN as string) ?? '', (next) => {
+      actions.editMeta(paper.id, { csl: { ...meta.csl, ISBN: next }, confidence: 'manual' })
     }))
   }
 
@@ -251,8 +273,10 @@ function details(body: HTMLElement, paper: Paper, actions: InspectorActions) {
     actions.editMeta(paper.id, { csl: { ...meta.csl, issued }, confidence: 'manual' })
   }))
 
-  if (isPaper) {
-    if (meta.csl.DOI) body.append(field('DOI', meta.csl.DOI))
+  if (isPaper && meta.csl.DOI) body.append(field('DOI', meta.csl.DOI))
+  // A book is cited too — that is the whole reason it is not a document — so
+  // it keeps its key.
+  if (isPaper || isBook) {
     body.append(editable(L('인용 키', 'Citation key'), meta.bibKey, (next) => {
       actions.editMeta(paper.id, { bibKey: next })
     }))
@@ -281,7 +305,7 @@ function details(body: HTMLElement, paper: Paper, actions: InspectorActions) {
   if (isPaper) {
     body.append(field(L('확신', 'Confidence'), CONFIDENCE_LABEL()[meta.confidence] ?? meta.confidence))
   } else {
-    body.append(field(L('종류', 'Kind'), L('일반 문서', 'Document')))
+    body.append(field(L('종류', 'Kind'), isBook ? L('책', 'Book') : L('일반 문서', 'Document')))
   }
   body.append(fileName(paper, actions))
   body.append(field(L('쪽', 'Pages'), String(meta.file.pageCount)))
@@ -291,7 +315,7 @@ function details(body: HTMLElement, paper: Paper, actions: InspectorActions) {
   const reveal = el('button', { class: 'plain-button', text: L('폴더에서 보기', 'Show in Folder') })
   on(reveal, 'click', () => actions.reveal(paper.id))
   const chips = [reveal]
-  if (isPaper) {
+  if (isPaper || isBook) {
     const copy = el('button', { class: 'plain-button', text: L('인용 키 복사', 'Copy Citation Key') })
     on(copy, 'click', () => actions.copyKey(paper.id))
     chips.push(copy)

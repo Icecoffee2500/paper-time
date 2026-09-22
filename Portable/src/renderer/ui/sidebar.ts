@@ -10,6 +10,7 @@ import { iconNode } from '../icons.js'
 import { showMenu } from './toolbar.js'
 import { clear, el, on } from '../dom.js'
 import { authorCounts, store, type Paper, type Shelf } from '../state.js'
+import { isLookedUp } from '../../shared/documentKind.js'
 import { L } from '../../shared/lang.js'
 import { providerIcon, providerOf } from '../../shared/cloudProvider.js'
 
@@ -52,6 +53,7 @@ interface RowSpec {
 interface ShelfCounts {
   all: number
   papers: number
+  books: number
   documents: number
   folders: Map<string, number>
   unread: number
@@ -68,6 +70,7 @@ function shelfCounts(papers: Paper[]): ShelfCounts {
   const counts: ShelfCounts = {
     all: papers.length,
     papers: 0,
+    books: 0,
     documents: 0,
     folders: new Map(),
     unread: 0,
@@ -82,13 +85,14 @@ function shelfCounts(papers: Paper[]): ShelfCounts {
   const bump = (map: Map<string, number>, key: string) => map.set(key, (map.get(key) ?? 0) + 1)
   for (const entry of papers) {
     if (entry.meta.effectiveKind === 'paper') counts.papers += 1
+    else if (entry.meta.effectiveKind === 'book') counts.books += 1
     else counts.documents += 1
     if (entry.root) bump(counts.folders, entry.root)
     if (entry.state.readingStatus === 'unread') counts.unread += 1
     else if (entry.state.readingStatus === 'reading') counts.reading += 1
     else counts.read += 1
     if (entry.state.isFavorite) counts.favorites += 1
-    if (entry.meta.effectiveKind === 'paper'
+    if (isLookedUp(entry.meta.effectiveKind)
       && (entry.meta.confidence === 'needsReview' || entry.meta.confidence === 'unparsed')) {
       counts.review += 1
     }
@@ -151,11 +155,21 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
     // find the one you wanted. No headings — a name over three rows is a
     // label for something that does not need naming.
     rows.push({ key: 'all', kind: 'row', shelf: { kind: 'all' }, icon: 'tray.full', label: L('모두', 'All'), count: counts.all })
-    // Shown only once the library holds both. A shelf that has never seen
-    // anything but papers looks exactly as it did.
-    if (counts.documents > 0 && counts.papers > 0) {
-      rows.push({ key: 'kind:paper', kind: 'row', shelf: { kind: 'kind', of: 'paper' }, icon: 'text.document', label: L('논문', 'Papers'), count: counts.papers })
-      rows.push({ key: 'kind:document', kind: 'row', shelf: { kind: 'kind', of: 'document' }, icon: 'doc', label: L('문서', 'Documents'), count: counts.documents })
+    // Shown only once the library holds more than one of them, and only the
+    // ones it holds. A shelf that has never seen anything but papers looks
+    // exactly as it did.
+    const kinds = ([
+      ['paper', 'text.document', L('논문', 'Papers'), counts.papers],
+      ['book', 'book', L('책', 'Books'), counts.books],
+      ['document', 'doc', L('문서', 'Documents'), counts.documents],
+    ] as const).filter(([, , , count]) => count > 0)
+    if (kinds.length > 1) {
+      for (const [of, glyph, label, count] of kinds) {
+        rows.push({
+          key: `kind:${of}`, kind: 'row', shelf: { kind: 'kind', of },
+          icon: glyph, label, count,
+        })
+      }
     }
     rows.push({ key: 'gap:2', kind: 'section', label: '' })
 

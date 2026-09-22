@@ -530,6 +530,7 @@ struct PaperRow: View, Equatable {
         // each — which is what a wrongly answered import feels like.
         Picker(L("종류", "Kind"), selection: kindBinding(paper)) {
             Label(L("논문", "Paper"), systemImage: "text.document").tag(DocumentKind.paper)
+            Label(L("책", "Book"), systemImage: "book").tag(DocumentKind.book)
             Label(L("일반 문서", "Document"), systemImage: "doc").tag(DocumentKind.document)
         }
 
@@ -588,19 +589,22 @@ struct PaperRow: View, Equatable {
         guard line.isEmpty else { return line }
         // The fields under a title are a bibliography's — authors, year,
         // venue — and a manual has none of them, so the row came out bare.
-        // What a document does have is a file and a length.
-        guard paper.meta.effectiveKind == .document else { return line }
+        // What a document does have is a file and a length; a book has a
+        // publisher, which is the one thing worth reading off a shelf of them.
+        guard paper.meta.effectiveKind != .paper else { return line }
         let pages = paper.meta.file.pageCount
         return [
             paper.meta.csl.publisher,
+            paper.meta.csl.year.map(String.init),
             pages > 0 ? L("\(pages)쪽", "\(pages) pages") : nil,
         ].compactMap { $0 }.joined(separator: " · ")
     }
 
-    /// A document has no registrar to disagree with, so it is never a thing
-    /// to review — only a paper whose lookup came back unsure is.
+    /// Neither a document nor a book has a registrar to disagree with, so
+    /// neither is ever a thing to review — only a paper whose lookup came back
+    /// unsure is.
     private func needsReview(_ paper: LoadedPaper) -> Bool {
-        paper.meta.effectiveKind == .paper
+        paper.meta.effectiveKind.isLookedUp
             && (paper.meta.confidence == .needsReview || paper.meta.confidence == .unparsed)
     }
 

@@ -134,12 +134,24 @@
   </article>
 
   <article class="task">
-    <h3 data-l="ko">논문인가요, 문서인가요</h3>
-    <h3 data-l="en">A paper, or a document</h3>
-    <p data-l="ko">라이브러리에는 논문만 들어가는 게 아니에요. 계약서도, 매뉴얼도, 스캔한 책도 같이 살아요. 그래서 새 PDF에는 <b>먼저 한 번만</b> 물어봐요.</p>
-    <p data-l="en">A library holds more than papers: contracts, manuals, scanned books. So a new PDF is asked what it is — <b>once</b>.</p>
-    <p data-l="ko">앱이 이미 짐작해 뒀으니 대개 그대로 누르면 돼요. 답하면 질문은 사라지고, 칸이 달라져요 — 논문이면 학술지·권·호·DOI·인용 키, 문서면 펴낸 곳·해·종류. 나중에 바꾸려면 도구 막대의 ⋯ 메뉴나 목록의 우클릭 메뉴에 있어요.</p>
-    <p data-l="en">The app has already guessed, so usually you just agree. Answer and the question goes away; the fields follow — a journal, volume, issue, DOI and citation key for a paper, a publisher, year and kind for a document. To change it later, use the ⋯ menu or right-click the row.</p>
+    <h3 data-l="ko">논문인가요, 책인가요, 문서인가요</h3>
+    <h3 data-l="en">A paper, a book, or a document</h3>
+    <p data-l="ko">라이브러리에는 논문만 들어가는 게 아니에요. 교과서도, 계약서도, 매뉴얼도 같이 살아요. 그래서 새 PDF에는 <b>먼저 한 번만</b> 물어봐요.</p>
+    <p data-l="en">A library holds more than papers: textbooks, contracts, manuals. So a new PDF is asked what it is — <b>once</b>.</p>
+    <p data-l="ko">앱이 이미 짐작해 뒀으니 대개 그대로 누르면 돼요. 답하면 질문은 사라지고, 칸이 달라져요. 나중에 바꾸려면 도구 막대의 ⋯ 메뉴나 목록의 우클릭 메뉴에 있어요.</p>
+    <p data-l="en">The app has already guessed, so usually you just agree. Answer and the question goes away and the fields follow. To change it later, use the ⋯ menu or right-click the row.</p>
+    <ul class="points" data-l="ko">
+      <li><b>논문</b> — 학술지·권·호·쪽·DOI·인용 키. 등록기관에 물어서 채워요.</li>
+      <li><b>책</b> — 출판사·펴낸 곳·판·해·ISBN·인용 키. 물어볼 등록기관이 없으니 직접 적어요. BibTeX에는 <code>@book</code>으로 나가요.</li>
+      <li><b>일반 문서</b> — 펴낸 곳·해·종류. 인용하지 않는 것들이에요.</li>
+    </ul>
+    <ul class="points" data-l="en">
+      <li><b>A paper</b> — journal, volume, issue, pages, DOI, citation key. Looked up with a registrar.</li>
+      <li><b>A book</b> — publisher, place, edition, year, ISBN, citation key. No registrar to ask, so you type it. It exports as <code>@book</code>.</li>
+      <li><b>A document</b> — where it came from, its year, its kind. The things you do not cite.</li>
+    </ul>
+    <p class="note" data-l="ko">책이 따로 있는 이유는 <b>책도 인용하기 때문</b>이에요. 논문 칸에 넣으면 같은 제목의 학술지 논문으로 잘못 붙어서 «권 9, 호 5, 1054–1054쪽» 같은 게 되고, 문서 칸에 넣으면 아예 인용이 안 돼요.</p>
+    <p class="note" data-l="en">A book is its own kind because <b>a book is cited</b>. Put through the paper's form it gets matched to a journal article of the same name — volume 9, issue 5, pages 1054–1054 — and put through the document's form it cannot be cited at all.</p>
     <div class="doc-demo" id="d-kind"></div>
     <p class="caption" data-l="ko">눌러보세요 — 아래 칸이 통째로 바뀌어요.</p>
     <p class="caption" data-l="en">Press one. The fields underneath change.</p>

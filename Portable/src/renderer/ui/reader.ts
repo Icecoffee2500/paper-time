@@ -434,6 +434,7 @@ export class Reader {
         identifier: hasIdentifier(first),
         abstract: hasAbstract(first),
         references: hasReferences(end),
+        pageCount: count,
       })
       this.actions.guessed(guess.kind)
     } catch {
