@@ -520,8 +520,36 @@ public final class LibraryModel {
     }
 
     /// Papers currently being resolved, so rows can show a spinner.
+    ///
+    /// Brought up to date with the rest of a batch rather than on every
+    /// insert and removal: the list reads this set, so a library resolving
+    /// six hundred papers one after another asked the whole list to look at
+    /// itself twelve hundred times.
     public private(set) var resolving: Set<UUID> = []
+    /// The truth behind `resolving`, which is what the guard against running
+    /// a paper twice reads. Not observed: nobody draws from it.
+    @ObservationIgnored private var resolvingNow: Set<UUID> = []
     public private(set) var resolutionQueueDepth = 0
+
+    /// Metadata that has come back and is waiting to go into `papers`.
+    ///
+    /// Writing one paper's answer into the array rebuilds every derived index
+    /// and asks SwiftUI to consider the whole list again, and an import
+    /// resolves once per paper. Measured on a generated library of six
+    /// hundred: 284 index rebuilds during a single scroll, a scroll step of
+    /// five seconds at the ninety-fifth percentile and a worst step of sixty.
+    /// Nobody can tell whether a row settled now or a quarter of a second
+    /// ago, so the answers are gathered and put in together.
+    ///
+    /// Only the resolver's writes are gathered. What somebody did by hand —
+    /// naming a kind, renaming a file, attaching a supplement — goes in at
+    /// once, because a hand that acted is a hand waiting to see it.
+    @ObservationIgnored private var pendingResolved: [UUID: PaperMeta] = [:]
+    @ObservationIgnored private var resolvedFlush: Task<Void, Never>?
+    /// How long answers wait for company. Long enough to gather a batch out
+    /// of a fast registrar, short enough that a single paper resolved by hand
+    /// still feels immediate.
+    private static let resolvedFlushDelay = Duration.milliseconds(250)
     public private(set) var onDeviceModelMessage: String
 
     private let resolver: MetadataResolver
@@ -725,6 +753,19 @@ public final class LibraryModel {
         }
 
         var added: [LoadedPaper] = []
+        // Taken in a handful at a time rather than one at a time. Appending to
+        // `papers` rebuilds every derived index and asks SwiftUI to look at
+        // the whole list again, so a folder of six hundred did that six
+        // hundred times — measured, a scroll during an import had a worst step
+        // of sixty seconds. A chunk is small enough that the list still fills
+        // in front of you and large enough that the rebuilds are a rounding
+        // error.
+        var waiting: [LoadedPaper] = []
+        func putIn() {
+            guard !waiting.isEmpty else { return }
+            papers.append(contentsOf: waiting)
+            waiting.removeAll(keepingCapacity: true)
+        }
         for url in urls {
             // Into the folder the file is already in: adopting a PDF must
             // never move it to another folder.
@@ -734,11 +775,13 @@ public final class LibraryModel {
                 knownDigests: digests
             ) else { continue }
             if case let .imported(paper) = outcome {
-                papers.append(paper)
+                waiting.append(paper)
                 added.append(paper)
                 digests[paper.meta.file.importDigest] = paper.folder
+                if waiting.count >= 25 { putIn() }
             }
         }
+        putIn()
 
         let adopted = Set(urls.map { $0.lastPathComponent })
         looseDocuments.removeAll { adopted.contains($0.lastPathComponent) }
@@ -1162,6 +1205,9 @@ public final class LibraryModel {
                 guard let self else { return }
                 await resolveMetadata(for: id)
             }
+            // Whatever the last batch gathered goes in now rather than
+            // waiting out a delay nobody is filling any more.
+            self?.flushResolved()
         }
     }
 
@@ -1170,13 +1216,15 @@ public final class LibraryModel {
         guard let index = papers.firstIndex(where: { $0.id == paperID }) else { return }
         let paper = papers[index]
         guard paper.meta.confidence != .manual else { return }
-        guard !resolving.contains(paperID) else { return }
+        guard !resolvingNow.contains(paperID) else { return }
 
-        resolving.insert(paperID)
+        resolvingNow.insert(paperID)
         resolutionQueueDepth += 1
+        scheduleResolvedFlush()
         defer {
-            resolving.remove(paperID)
+            resolvingNow.remove(paperID)
             resolutionQueueDepth = max(0, resolutionQueueDepth - 1)
+            scheduleResolvedFlush()
         }
 
         let url = paper.documentURL
@@ -1200,7 +1248,7 @@ public final class LibraryModel {
         if meta.guessedKind == nil { meta.guessedKind = guess.kind }
         if !meta.effectiveKind.isLookedUp {
             if let saved = try? await store(for: paper).save(meta: meta, in: paper.folder, baseline: paper.meta) {
-                applyLocally(meta: saved, to: paperID)
+                stageResolved(meta: saved, to: paperID)
             }
             return
         }
@@ -1223,7 +1271,7 @@ public final class LibraryModel {
             in: paper.folder,
             baseline: paper.meta
         ) {
-            applyLocally(meta: saved, to: paperID)
+            stageResolved(meta: saved, to: paperID)
         }
     }
 
@@ -1424,6 +1472,42 @@ public final class LibraryModel {
     private func applyLocally(meta: PaperMeta, to paperID: UUID) {
         guard let index = papers.firstIndex(where: { $0.id == paperID }) else { return }
         papers[index].meta = meta
+    }
+
+    /// The same, for an answer the resolver found rather than a person: it
+    /// waits for the others. See `pendingResolved`.
+    private func stageResolved(meta: PaperMeta, to paperID: UUID) {
+        pendingResolved[paperID] = meta
+        scheduleResolvedFlush()
+    }
+
+    private func scheduleResolvedFlush() {
+        guard resolvedFlush == nil else { return }
+        resolvedFlush = Task { [weak self] in
+            try? await Task.sleep(for: Self.resolvedFlushDelay)
+            guard let self else { return }
+            resolvedFlush = nil
+            flushResolved()
+        }
+    }
+
+    /// Puts a batch of answers in with one write to `papers`, and brings the
+    /// spinners up to date in the same breath.
+    private func flushResolved() {
+        if !pendingResolved.isEmpty {
+            var updated = papers
+            var changed = false
+            for (id, meta) in pendingResolved {
+                guard let index = indexByID[id], updated[index].meta != meta else { continue }
+                updated[index].meta = meta
+                changed = true
+            }
+            pendingResolved.removeAll(keepingCapacity: true)
+            // One assignment, so the derived indexes are rebuilt once for the
+            // batch rather than once for every paper in it.
+            if changed { papers = updated }
+        }
+        if resolving != resolvingNow { resolving = resolvingNow }
     }
 
     // MARK: - The file's name
