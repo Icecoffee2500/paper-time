@@ -398,8 +398,9 @@ async function loadInto(reader: Reader, id: string) {
   }
   if (!readers.has(id) || readers.get(id) !== reader) return
   if (result.locked) return reader.showLocked(result.locked)
-  // Bytes that are not a PDF at all never reach pdf.js: it would answer with
-  // the same six words for every one of them, and the reader can say which.
+  // Only when there are no bytes at all to try. Everything else goes to pdf.js
+  // first: it reads more than this app does, and what was diagnosed only picks
+  // the sentence for a failure that has actually happened.
   if (!result.data && result.trouble) {
     return reader.showTrouble(
       result.trouble, result.size ?? 0, () => void loadInto(reader, id), undefined, result.head,

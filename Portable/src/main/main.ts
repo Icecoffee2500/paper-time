@@ -572,23 +572,24 @@ const handlers: Record<string, Handler> = {
       const trouble = diagnose(bytes)
       const lock = await rightsLock(bytes)
       if (lock) return { locked: lock }
-      // A container with no handler named in it is still not a PDF, and the
-      // reader has the right sentence for it.
-      if (trouble === 'wrapped') return { locked: { kind: 'rights', handler: '' } }
-      // These can never be parsed, and handing them over only produces
-      // pdf.js's six words about a structure it could not find.
-      if (trouble && trouble !== 'cut') {
-        return { trouble, size: bytes.length, head: headBytes(bytes) }
-      }
+      // The diagnosis is never a door. pdf.js reads more than anything here
+      // does — it opens a paper with four kilobytes of a filter's banner glued
+      // to the front, and one whose last kilobytes are gone — so the bytes
+      // always go to it, and what was found only chooses the sentence if it
+      // fails. Refusing them was a regression the moment it was written:
+      // papers that opened before it stopped opening.
+      const about = { trouble, size: bytes.length, head: headBytes(bytes) }
       try {
-        return { data: await stripOwnedForDisplay(bytes), trouble, size: bytes.length }
+        return { data: await stripOwnedForDisplay(bytes), ...about }
       } catch (error) {
         // Our own annotations could not be taken out, which is no reason to
         // refuse the file — pdf.js parses more than pdf-lib does. It is handed
-        // the bytes as they are, ours included. But the reader is told that
-        // this happened, because it is the first sign the bytes are wrong.
+        // the bytes as they are, ours included. The trouble goes through
+        // exactly as diagnosed: a whole file that pdf-lib choked on is not a
+        // file that is still arriving, and calling it one told somebody that
+        // 1.6 MB of a 1.6 MB file had turned up.
         console.error('paper:bytes - reading the annotations failed, showing the file as it is:', error)
-        return { data: bytes, trouble: trouble ?? 'cut', size: bytes.length }
+        return { data: bytes, ...about }
       }
     } catch (error) {
       console.error('paper:bytes -', error)

@@ -55,8 +55,14 @@ export function headBytes(bytes: Uint8Array, count = 8): string {
   return [...bytes.subarray(0, count)].map((b) => b.toString(16).padStart(2, '0').toUpperCase()).join(' ')
 }
 
-/** Only the ends are read: a paper is twenty megabytes and this runs on open. */
-const HEAD = 1024
+/** Only the ends are read: a paper is twenty megabytes and this runs on open.
+ *
+ * The head is eight kilobytes rather than one because pdf.js will open a file
+ * with rather a lot of rubbish glued to its front — a filter's banner, a mail
+ * preamble — and a window that said "not a PDF" at a kilobyte and one byte
+ * would be refusing papers the reader can read. Measured: pdf.js opens a
+ * paper with four kilobytes of preamble. */
+const HEAD = 8192
 const TAIL = 2048
 
 function latin1(bytes: Uint8Array, from: number, to: number): string {

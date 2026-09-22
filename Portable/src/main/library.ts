@@ -149,7 +149,7 @@ export class Library {
         ])
         if (!meta) return null
         const relative = String((meta.file as RawRecord | undefined)?.relativePath ?? '')
-        const file = relative ? path.join(this.root, relative) : null
+        const file = relative ? L.fileForRecordPath(this.root, relative) : null
         return { id, meta, state: state ?? {}, file, exists: file ? fs.existsSync(file) : false }
       })
     const rows = (await Promise.all(read)).filter((row): row is PaperRow => row !== null)
@@ -348,7 +348,7 @@ export class Library {
     const inside = path.resolve(source).startsWith(path.resolve(this.root) + path.sep)
     let relative: string
     if (inside) {
-      relative = path.relative(this.root, source)
+      relative = L.recordPath(this.root, source)
     } else {
       const name = L.availableFileName(path.basename(source), this.root)
       // Copied beside its own name and then renamed into place, because a
@@ -396,13 +396,79 @@ export class Library {
    */
   async unclaimedFiles(claimed: Set<string>): Promise<string[]> {
     const found: string[] = []
-    for (const entry of await fsp.readdir(this.root, { withFileTypes: true })) {
-      if (!entry.isFile()) continue
-      if (!entry.name.toLowerCase().endsWith('.pdf')) continue
-      if (claimed.has(entry.name)) continue
-      found.push(path.join(this.root, entry.name))
+    for (const file of await this.documentFiles()) {
+      if (claimed.has(L.recordPath(this.root, file))) continue
+      found.push(file)
     }
     return found
+  }
+
+  /**
+   * Every PDF under the library, wherever it sits.
+   *
+   * This read one level and asked each entry whether it was a plain file, and
+   * both halves of that were wrong.
+   *
+   * One level, because the folder was assumed flat. The Mac has never assumed
+   * it — `LibraryStore.documentURLs()` says "wherever it sits under the root"
+   * and walks down — so a paper filed in `2026/` was a paper on one desktop
+   * and did not exist on the other. Nothing was said about it either: an
+   * unseen file is not counted, so the «add the PDFs in this folder» button
+   * simply did not appear, and the library looked complete.
+   *
+   * And `isFile()`, because a dirent that says no is not a file that says no.
+   * libuv's `fs__scandir` tests the reparse bit before the file branch and
+   * never looks at the tag, so on Windows every OneDrive file that has not
+   * been fetched arrives here as a link — while `stat` calls it a file and
+   * `readFile` returns every byte. So anything the listing declines to type
+   * is asked again, one `stat` at a time, and only where it matters.
+   *
+   * Bounded, because this walks a cloud folder: the support folder and the
+   * Trash are stepped over whole, dot-folders are not entered, and eight
+   * levels is deeper than any library anybody files by hand.
+   */
+  private async documentFiles(): Promise<string[]> {
+    const found: string[] = []
+    const skip = new Set([L.SUPPORT_DIR, L.TRASH_DIR])
+
+    const walk = async (folder: string, depth: number): Promise<void> => {
+      let entries
+      try {
+        entries = await fsp.readdir(folder, { withFileTypes: true })
+      } catch {
+        return
+      }
+      const deeper: string[] = []
+      for (const entry of entries) {
+        if (entry.name.startsWith('.') || skip.has(entry.name)) continue
+        const full = path.join(folder, entry.name)
+        let isDirectory = entry.isDirectory()
+        let isFile = entry.isFile()
+        // Only the ones the listing declined to type, so a folder on a real
+        // disk costs no extra call at all.
+        if (!isDirectory && !isFile) {
+          try {
+            const about = await fsp.stat(full)
+            isDirectory = about.isDirectory()
+            isFile = about.isFile()
+          } catch {
+            continue
+          }
+        }
+        if (isDirectory) {
+          if (depth < 8) deeper.push(full)
+          continue
+        }
+        if (isFile && entry.name.toLowerCase().endsWith('.pdf')) found.push(full)
+      }
+      // One level at a time rather than all at once: on a streamed drive each
+      // listing is a round trip, and a hundred of them in flight is what the
+      // launch path was already taught not to do.
+      for (const one of deeper) await walk(one, depth + 1)
+    }
+
+    await walk(this.root, 0)
+    return found.sort((a, b) => path.basename(a).localeCompare(path.basename(b)))
   }
 
   /**

@@ -395,6 +395,14 @@ export class Reader {
       // catalogue in — a file still arriving, a placeholder, a container,
       // random bytes. Saying "the file may be damaged" to all of them is what
       // sent this bug hunting for corruption in a file Acrobat opens fine.
+      if (why?.trouble === 'wrapped') {
+        // A container that named nobody is still a container, and the locked
+        // sentence is the true one for it. Said only now, after pdf.js has
+        // actually failed — the shape alone was never proof enough to refuse
+        // a file with.
+        this.showLocked({ kind: 'rights', handler: rightsHandler(bytes) ?? '' })
+        return
+      }
       if (why?.trouble) {
         this.showTrouble(why.trouble, why.size ?? bytes.length, why.again, message, headBytes(bytes))
         return
