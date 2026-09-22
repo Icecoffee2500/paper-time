@@ -97,7 +97,7 @@ export interface ReaderOptions {
 }
 
 /**
- * The words inside the box the text layer gives a run.
+ * The words inside the box the text layer gives a line.
  *
  * That rectangle is the font's em box, and the words sit in the top half of
  * it: measured over 958 lines of four papers, the ink runs from 0.07 of the
@@ -107,6 +107,13 @@ export interface ReaderOptions {
  * highlights on neighbouring lines ran into each other as one solid block,
  * and why a mark made here did not sit on the words when the Mac drew it,
  * where the quads come from PDFKit and fit the line.
+ *
+ * Applied on the way in, before the runs are grouped, because "are these two
+ * on the same line?" is a question about the words and not about the empty
+ * half of a font's em box. `SHARED` in `textLines.ts` is calibrated on these
+ * trimmed boxes for that reason. Measured both ways over the same 26
+ * paragraphs of three papers: trimmed first, 21 marks land exactly one quad
+ * per line of text; grouped on the raw boxes and trimmed afterwards, 20.
  */
 const TEXT_BAND = 0.62
 

@@ -82,10 +82,11 @@ function overlapOf(a: RunBox, b: RunBox): number {
  * How much of the shorter box has to lie inside the taller one for the two to
  * be on the same line.
  *
- * Measured rather than picked. Across four papers: 6,081 pairs of runs that
- * the text layer itself says are on one line (the second starts where the
- * first ended) against 1,095 pairs it says are a line apart (the second
- * starts back at the left, lower down).
+ * Measured rather than picked, on the boxes this is actually given — the text
+ * bands, trimmed by the caller. Across four papers: 6,081 pairs of runs the
+ * text layer itself says are on one line (the second starts where the first
+ * ended) against 1,095 pairs it says are a line apart (the second starts back
+ * at the left, lower down).
  *
  *     on one line          a line apart
  *      5%  0.24–0.81       90%  −0.15–0.20
@@ -95,7 +96,11 @@ function overlapOf(a: RunBox, b: RunBox): number {
  * Three fifths sits in the gap: it keeps nine in ten of the pairs that belong
  * together and holds the next line out in ninety-nine cases in a hundred.
  * Raising it starts splitting lines that belong together, which shows as a
- * seam through a highlight; lowering it gains nothing.
+ * seam through a highlight; lowering it gains nothing. And checked the other
+ * way, against 3,204 pairs whose untrimmed boxes overlap by nine tenths and
+ * so are certainly one line: it splits none of them — the small runs that a
+ * trim could in principle strand are not there to strand, since the text
+ * layer gives 6,465 runs in 6,471 the same box height.
  *
  * What matters more than the number is that it is fixed. The rule this
  * replaced measured against a line's running total, so a band that had taken
@@ -130,12 +135,18 @@ function group(runs: RunBox[]): RunBox[][] {
 function boxAround(runs: RunBox[]): TextLine {
   // Folded rather than spread: a spread of a hundred thousand arguments is a
   // stack overflow, and a selection is not obliged to be small.
+  //
+  // The first box is copied field by field and never spread. What arrives here
+  // is a `DOMRect`, whose sides are getters on its prototype, so `{...rect}`
+  // is `{}` — and a fold that starts from `{}` makes every side `NaN`, which
+  // is then written into the reader's PDF as a quad no parser will read.
+  const first = runs[0]
   return runs.reduce<TextLine>((box, run) => ({
     left: Math.min(box.left, run.left),
     right: Math.max(box.right, run.right),
     top: Math.min(box.top, run.top),
     bottom: Math.max(box.bottom, run.bottom),
-  }), { ...runs[0] })
+  }), { left: first.left, right: first.right, top: first.top, bottom: first.bottom })
 }
 
 /** One rectangle per line of text, in reading order. */

@@ -1092,6 +1092,23 @@ async function main() {
     assert.equal(merged[0].right, 200_000)
   })
 
+  await test('boxes whose sides are getters come back as numbers', () => {
+    // The window hands over `DOMRect`s, whose sides live on the prototype.
+    // Spreading one gives an empty object, and a line built from that is four
+    // NaNs — which reached the PDF as a quad no reader could parse.
+    class Rect {
+      constructor(private readonly l: number, private readonly t: number) {}
+      get left() { return this.l }
+      get right() { return this.l + 100 }
+      get top() { return this.t }
+      get bottom() { return this.t + 15 }
+    }
+    const lines = linesFromRuns([new Rect(60, 100), new Rect(160, 100)])
+    assert.equal(lines.length, 1)
+    assert.deepEqual(lines[0], { left: 60, right: 260, top: 100, bottom: 115 })
+    for (const side of Object.values(lines[0])) assert.ok(Number.isFinite(side), 'a side came back NaN')
+  })
+
   await test('the lines come back in reading order', () => {
     const shuffled = [paragraph(4)[2], paragraph(4)[0], paragraph(4)[3], paragraph(4)[1]]
     const tops = linesFromRuns(shuffled).map((line) => line.top)
