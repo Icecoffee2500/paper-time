@@ -1,5 +1,9 @@
 import SwiftUI
 
+#if os(macOS)
+import AppKit
+#endif
+
 /// What this app is, shown rather than described.
 ///
 /// The log gives each feature a sentence and a demonstration the size of a
@@ -173,38 +177,26 @@ struct FeatureShowcase<Header: View>: View {
                 .frame(height: 330)
                 .frame(maxWidth: .infinity)
 
-                VStack(alignment: .leading, spacing: 7) {
-                    HStack(spacing: 7) {
-                        Image(systemName: highlight.tier.symbol)
-                            .font(.caption2)
-                        Text(highlight.tier.name.value.uppercased())
-                            .font(.caption2.weight(.semibold))
-                            .tracking(0.7)
+                // Every page's words are laid out here, all but one of them
+                // invisible, so the block is exactly as tall as the longest
+                // of them. A number in its place (it was 116) is a guess that
+                // goes stale the first time somebody writes a longer sentence
+                // — and what it did then was let the words run off the bottom
+                // of a sheet with a fixed height, under the dots.
+                ZStack(alignment: .topLeading) {
+                    ForEach(features) { other in
+                        words(for: other)
+                            .hidden()
+                            .accessibilityHidden(true)
                     }
-                    .foregroundStyle(.tint)
-
-                    HStack(spacing: 9) {
-                        Text(highlight.title.value)
-                            .font(.system(size: 17, weight: .bold))
-                            .fixedSize(horizontal: false, vertical: true)
-                        if let action = highlight.action {
-                            KeyCap(action: action)
-                        }
-                    }
-
-                    Text(highlight.detail.value)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    words(for: highlight)
+                        // The page is replaced rather than redrawn: a new
+                        // thing arriving from the side it came from.
+                        .id(highlight.id)
+                        .transition(.opacity)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
                 .padding(.top, 20)
-                // Room for the longest sentence, so the card is one size.
-                .frame(minHeight: 116, alignment: .top)
-                // The page is replaced rather than redrawn: a new thing
-                // arriving from the side it came from.
-                .id(highlight.id)
-                .transition(.opacity)
             }
         }
         .padding(26)
@@ -213,26 +205,45 @@ struct FeatureShowcase<Header: View>: View {
         .animation(Motion.surface, value: page)
     }
 
+    /// What one page says: the kind of change, its name, and the sentence.
+    private func words(for highlight: ReleaseNotes.Highlight) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 7) {
+                Image(systemName: highlight.tier.symbol)
+                    .font(.caption2)
+                Text(highlight.tier.name.value.uppercased())
+                    .font(.caption2.weight(.semibold))
+                    .tracking(0.7)
+            }
+            .foregroundStyle(.tint)
+
+            HStack(spacing: 9) {
+                Text(highlight.title.value)
+                    .font(.system(size: 17, weight: .bold))
+                    .fixedSize(horizontal: false, vertical: true)
+                if let action = highlight.action {
+                    KeyCap(action: action)
+                }
+            }
+
+            Text(highlight.detail.value)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     /// The way to the next one, and the one before.
     ///
     /// Outside the card rather than on it: the card is the thing being shown,
     /// and a control drawn on top of it would be part of what is shown.
     private func turner(back: Bool) -> some View {
-        Button {
-            turn(back ? -1 : 1)
-        } label: {
-            Image(systemName: back ? "chevron.left" : "chevron.right")
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(.secondary)
-                .frame(width: 22, height: 44)
-                .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .disabled(back ? page == 0 : page >= features.count - 1)
-        .opacity(back ? (page == 0 ? 0.25 : 1) : (page >= features.count - 1 ? 0.25 : 1))
-        .accessibilityLabel(back
-            ? ReleaseNotes.string("이전", "Previous")
-            : ReleaseNotes.string("다음", "Next"))
+        PageTurner(
+            back: back,
+            disabled: back ? page == 0 : page >= features.count - 1,
+            turn: { turn(back ? -1 : 1) }
+        )
     }
 
     /// Where you are in the set, and a way to jump.
@@ -259,6 +270,53 @@ struct FeatureShowcase<Header: View>: View {
         let next = page + by
         guard features.indices.contains(next) else { return }
         withAnimation(Motion.surface) { page = next }
+    }
+}
+
+/// A chevron that answers the pointer.
+///
+/// Two plain grey arrows either side of a card say nothing about being
+/// pressable — the first reading is that they are decoration, or a hint that
+/// there is more, which is exactly what somebody said when they first saw
+/// this sheet. So the pointer gets an answer: a soft round ground under the
+/// chevron and the chevron itself in full strength, the moment the cursor is
+/// over it. Nothing moves; only the thing under the hand lights up.
+private struct PageTurner: View {
+    let back: Bool
+    let disabled: Bool
+    let turn: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: turn) {
+            Image(systemName: back ? "chevron.left" : "chevron.right")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(hovering && !disabled ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+                .frame(width: 30, height: 46)
+                .background {
+                    RoundedRectangle(cornerRadius: Corner.control, style: .continuous)
+                        .fill(.quaternary)
+                        .opacity(hovering && !disabled ? 1 : 0)
+                }
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+        .opacity(disabled ? 0.25 : 1)
+        // The cursor becomes a hand, the way it does over anything on a page
+        // that takes you somewhere else.
+        .onHover { inside in
+            withAnimation(Motion.tap) { hovering = inside }
+            #if os(macOS)
+            if inside, !disabled { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+            #endif
+        }
+        .help(back
+            ? ReleaseNotes.string("이전", "Previous")
+            : ReleaseNotes.string("다음", "Next"))
+        .accessibilityLabel(back
+            ? ReleaseNotes.string("이전", "Previous")
+            : ReleaseNotes.string("다음", "Next"))
     }
 }
 

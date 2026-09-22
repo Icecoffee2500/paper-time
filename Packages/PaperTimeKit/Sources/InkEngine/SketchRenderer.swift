@@ -99,15 +99,22 @@ public enum SketchTypesetter {
             return mathLayout(text, points: points, color: color, width: width, align: align, fontName: fontName, provider: provider)
         }
         let font = font(points: points, name: fontName)
+        let column = width.map { max($0, 4) } ?? 100_000
+        // Core Text will end a line anywhere at all in Korean, because Korean
+        // has no rule against it: 라이브러리를 comes apart as 라이브 / 러리를 and
+        // the card has to be reassembled by the reader before it can be read.
+        // Every other surface in this app breaks at the space — SwiftUI's own
+        // layout does it unasked, the browser and TextKit do it once asked —
+        // so the breaks are moved back to the spaces before the words are set.
+        let broken = width == nil ? text : wordBroken(text, points: points, name: fontName, column: column)
         let attributed = NSAttributedString(
-            string: text.isEmpty ? " " : text,
+            string: broken.isEmpty ? " " : broken,
             attributes: [
                 kCTFontAttributeName as NSAttributedString.Key: font,
                 kCTForegroundColorAttributeName as NSAttributedString.Key: color,
             ]
         )
         let setter = CTFramesetterCreateWithAttributedString(attributed)
-        let column = width.map { max($0, 4) } ?? 100_000
         let tall: CGFloat = 100_000
         let path = CGPath(rect: CGRect(x: 0, y: 0, width: column, height: tall), transform: nil)
         let frame = CTFramesetterCreateFrame(setter, CFRange(location: 0, length: 0), path, nil)
@@ -138,6 +145,57 @@ public enum SketchTypesetter {
             result = result.map { Line(line: $0.line, x: blockWidth - $0.width, baseline: $0.baseline, width: $0.width) }
         }
         return Layout(lines: result, size: CGSize(width: blockWidth, height: bottom))
+    }
+
+    /// The same text with its line breaks already in it, chosen the way Korean
+    /// is read rather than the way Core Text lays type.
+    ///
+    /// Core Text's own break is taken first, because it knows every rule Latin
+    /// has — spaces, hyphens, the places a number may not come apart. Then, if
+    /// that break landed between two letters, it is walked back to the last
+    /// space on the line. A word with no space before it on the line is a word
+    /// wider than the card, and there Core Text's break stands: something that
+    /// fits nowhere has to break somewhere. It is the browser's `keep-all`
+    /// with `break-word` under it, which is what the other build does.
+    ///
+    /// The breaks go in as newlines and the setting is left to the framesetter
+    /// exactly as before — a hard break and a soft one measure the same, so a
+    /// card whose lines did not move keeps the height it had.
+    private static func wordBroken(
+        _ text: String, points: CGFloat, name: String?, column: CGFloat
+    ) -> String {
+        guard !text.isEmpty else { return text }
+        let measured = NSAttributedString(
+            string: text,
+            attributes: [kCTFontAttributeName as NSAttributedString.Key: font(points: points, name: name)]
+        )
+        let characters = text as NSString
+        let setter = CTTypesetterCreateWithAttributedString(measured)
+        func isSpace(_ index: Int) -> Bool {
+            guard index >= 0, index < characters.length else { return false }
+            guard let scalar = UnicodeScalar(characters.character(at: index)) else { return false }
+            return CharacterSet.whitespacesAndNewlines.contains(scalar)
+        }
+
+        var out = ""
+        var start = 0
+        while start < characters.length {
+            let suggested = CTTypesetterSuggestLineBreak(setter, start, Double(column))
+            guard suggested > 0 else { break }
+            var end = start + suggested
+            if end < characters.length, !isSpace(end - 1), !isSpace(end) {
+                var back = end - 1
+                while back > start, !isSpace(back - 1) { back -= 1 }
+                if back > start { end = back }
+            }
+            let piece = characters.substring(with: NSRange(location: start, length: end - start))
+            out += piece
+            start = end
+            // Not after a line that ended on its own break.
+            let ended = piece.unicodeScalars.last.map { CharacterSet.newlines.contains($0) } ?? false
+            if start < characters.length, !ended { out += "\n" }
+        }
+        return out
     }
 
     /// How big a block of text is, alone on the page, plus its padding.

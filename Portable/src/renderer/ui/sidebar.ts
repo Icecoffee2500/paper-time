@@ -155,15 +155,18 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
     // find the one you wanted. No headings — a name over three rows is a
     // label for something that does not need naming.
     rows.push({ key: 'all', kind: 'row', shelf: { kind: 'all' }, icon: 'tray.full', label: L('모두', 'All'), count: counts.all })
-    // Shown only once the library holds more than one of them, and only the
-    // ones it holds. A shelf that has never seen anything but papers looks
-    // exactly as it did.
+    // Shown only once the library holds more than one of them. A shelf that
+    // has never seen anything but papers looks exactly as it did.
+    //
+    // Once they appear, all three do, empty ones included. The kinds are not
+    // a list that grows — they are the three answers to one question, and a
+    // run that shows two of them says the app knows two.
     const kinds = ([
       ['paper', 'text.document', L('논문', 'Papers'), counts.papers],
       ['book', 'book', L('책', 'Books'), counts.books],
       ['document', 'doc', L('문서', 'Documents'), counts.documents],
-    ] as const).filter(([, , , count]) => count > 0)
-    if (kinds.length > 1) {
+    ] as const)
+    if (kinds.filter(([, , , count]) => count > 0).length > 1) {
       for (const [of, glyph, label, count] of kinds) {
         rows.push({
           key: `kind:${of}`, kind: 'row', shelf: { kind: 'kind', of },

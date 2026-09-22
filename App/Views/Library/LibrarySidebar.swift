@@ -209,25 +209,24 @@ struct LibrarySidebar: View {
                     .count(model.counts.all, current: model.scope == .all)
                     .scopeRow(.all, in: model)
                 // The kinds appear only once the library holds more than one
-                // of them, and only the ones it holds. A shelf that has never
-                // seen anything but papers looks exactly as it did, which is
-                // most libraries here.
+                // of them. A shelf that has never seen anything but papers
+                // looks exactly as it did, which is most libraries here.
+                //
+                // Once they appear, all three do, empty ones included. The
+                // kinds are not a list that grows — they are the three answers
+                // to one question, and a run that shows two of them says the
+                // app knows two. Books were missing from the strip in exactly
+                // the libraries that most needed to be told books exist.
                 if showsKinds {
-                    if model.counts.papers > 0 {
-                        Label(L("논문", "Papers"), systemImage: "text.document")
-                            .count(model.counts.papers, current: model.scope == .papers)
-                            .scopeRow(.papers, in: model)
-                    }
-                    if model.counts.books > 0 {
-                        Label(L("책", "Books"), systemImage: "book")
-                            .count(model.counts.books, current: model.scope == .books)
-                            .scopeRow(.books, in: model)
-                    }
-                    if model.counts.documents > 0 {
-                        Label(L("문서", "Documents"), systemImage: "doc")
-                            .count(model.counts.documents, current: model.scope == .documents)
-                            .scopeRow(.documents, in: model)
-                    }
+                    Label(L("논문", "Papers"), systemImage: "text.document")
+                        .count(model.counts.papers, current: model.scope == .papers)
+                        .scopeRow(.papers, in: model)
+                    Label(L("책", "Books"), systemImage: "book")
+                        .count(model.counts.books, current: model.scope == .books)
+                        .scopeRow(.books, in: model)
+                    Label(L("문서", "Documents"), systemImage: "doc")
+                        .count(model.counts.documents, current: model.scope == .documents)
+                        .scopeRow(.documents, in: model)
                 }
             } header: {
                 // No name: these are not a category, they are the list. The
@@ -377,7 +376,8 @@ struct LibrarySidebar: View {
 
     /// Whether the kinds are worth listing: only when the library holds more
     /// than one of them. One kind on its own is the library, and a row saying
-    /// so is a row that filters nothing.
+    /// so is a row that filters nothing. Past that line all three are listed,
+    /// including the empty ones — see the strip itself.
     private var showsKinds: Bool {
         [model.counts.papers, model.counts.books, model.counts.documents]
             .count { $0 > 0 } > 1
