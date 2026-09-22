@@ -60,8 +60,8 @@ struct WhatsNewView: View {
             Divider().opacity(0.5)
             HStack(spacing: 14) {
                 Text(ReleaseNotes.string(
-                    "알파 버전이에요 — 매일 쓰면서 자주 바꾸고 있어요. 논문과 노트는 직접 고른 폴더 안에 평범한 파일로 남아요.",
-                    "An alpha — used daily, changed often. Your papers and notes stay ordinary files in the folder you chose."
+                    "베타 버전이에요 — 매일 쓰면서 자주 바꾸고 있어요. 논문과 노트는 직접 고른 폴더 안에 평범한 파일로 남아요.",
+                    "A beta — used daily, changed often. Your papers and notes stay ordinary files in the folder you chose."
                 ))
                 .font(.caption)
                 .foregroundStyle(.tertiary)

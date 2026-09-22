@@ -131,8 +131,12 @@ struct FeatureShowcase<Header: View>: View {
             dots
         }
         // The arrow keys turn the page, because they are what a hand reaches
-        // for once it has seen that there is a next one.
+        // for once it has seen that there is a next one. Focusable so the keys
+        // arrive, but without the ring: a ring is drawn round the thing a key
+        // will type into, and there is nothing here to type into — it put a
+        // blue box round the whole sheet.
         .focusable()
+        .focusEffectDisabled()
         .onMoveCommand { direction in
             switch direction {
             case .left: turn(-1)
@@ -270,8 +274,8 @@ private struct AboutHeader: View {
                     Text("Paper Time")
                         .font(.system(size: 24, weight: .bold))
                     Text(ReleaseNotes.string(
-                        "버전 \(ReleaseNotes.version) · 알파",
-                        "Version \(ReleaseNotes.version) · Alpha"
+                        "버전 \(ReleaseNotes.version) · 베타",
+                        "Version \(ReleaseNotes.version) · Beta"
                     ))
                     .font(.callout)
                     .foregroundStyle(.secondary)

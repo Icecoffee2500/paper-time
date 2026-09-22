@@ -270,8 +270,8 @@ enum ReleaseNotes {
             version: "0.9.2",
             date: Text2("2026년 9월", "September 2026"),
             note: Text2(
-                "여는 데 걸리던 시간이 대부분 없어졌어요. 그리고 앱의 움직임이 한 벌로 맞춰졌어요 — 같은 크기의 변화는 어디서나 같은 속도예요.",
-                "Most of the wait at launch is gone. And the app moves as one thing now: the same size of change takes the same time everywhere."
+                "여는 데 걸리던 시간이 대부분 없어졌어요. 앱의 움직임도 한 벌로 맞췄고요 — 같은 크기의 변화는 어디서나 같은 속도예요. 그리고 이제 베타예요.",
+                "Most of the wait at launch is gone, and the app moves as one thing now: the same size of change takes the same time everywhere. This is also the first beta."
             ),
             added: [
                 Entry(
