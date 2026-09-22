@@ -20,16 +20,29 @@ public enum AttachmentSearch {
         public let title: String
         public let fileName: String
 
+        /// Folded when the candidate is made, not when it is compared.
+        ///
+        /// The picker re-ranks the whole library on every character typed into
+        /// it, and folding a title walks its every character. Measured on six
+        /// hundred papers, doing it inside the comparison cost 13ms a
+        /// keystroke — most of a frame, for an answer that is the same every
+        /// time. Now it is 600 foldings when the sheet opens and none after.
+        let foldedTitle: String
+        let foldedFile: String
+        /// Each word of the title, then each word of the file name: the ladder
+        /// below asks whether a word of the query begins one of these, and
+        /// splitting them here is the same saving again.
+        let titleWords: [Substring]
+        let fileWords: [Substring]
+
         public init(id: UUID, title: String, fileName: String) {
             self.id = id
             self.title = title
             self.fileName = fileName
-        }
-
-        /// Folded once per candidate rather than once per keystroke per
-        /// candidate: the picker re-ranks the whole library on every character.
-        var folded: (title: String, file: String) {
-            (TextNormalization.foldedTitle(title), TextNormalization.foldedTitle(fileName))
+            foldedTitle = TextNormalization.foldedTitle(title)
+            foldedFile = TextNormalization.foldedTitle(fileName)
+            titleWords = foldedTitle.split(separator: " ")
+            fileWords = foldedFile.split(separator: " ")
         }
     }
 
@@ -58,15 +71,21 @@ public enum AttachmentSearch {
         // typo and a missing subtitle.
         if scored.isEmpty {
             for candidate in candidates {
-                let similarity = StringSimilarity.jaroWinkler(needle, candidate.folded.title)
+                let similarity = StringSimilarity.jaroWinkler(needle, candidate.foldedTitle)
                 if similarity >= 0.7 { scored.append((candidate, similarity - 1)) }
             }
         }
 
+        // Ties broken on the folded title with a plain comparison, not a
+        // localized one. `localizedStandardCompare` asks ICU on every pair, and
+        // a one-letter query matches most of the library — measured on six
+        // hundred papers, that one keystroke spent 15ms almost entirely in
+        // here. The folded form is already lower-cased and stripped of
+        // punctuation, which is most of what the localized compare was for.
         return scored
             .sorted {
                 $0.score == $1.score
-                    ? $0.candidate.title.localizedStandardCompare($1.candidate.title) == .orderedAscending
+                    ? $0.candidate.foldedTitle < $1.candidate.foldedTitle
                     : $0.score > $1.score
             }
             .map(\.candidate)
@@ -79,7 +98,8 @@ public enum AttachmentSearch {
     /// is the paper being named, and the same phrase in a file name may be the
     /// conference that published it.
     static func score(_ candidate: Candidate, needle: String, words: [String]) -> Double? {
-        let (title, file) = candidate.folded
+        let title = candidate.foldedTitle
+        let file = candidate.foldedFile
 
         if title.hasPrefix(needle) { return 1 }
         if title.contains(needle) { return 0.9 }
@@ -89,8 +109,8 @@ public enum AttachmentSearch {
         // Word by word, and by prefix: "adapt" has to find "adaptation", and
         // Korean attaches its particles to the noun, so "강화학습" has to find
         // "강화학습의".
-        let titleWords = title.split(separator: " ").map(String.init)
-        let fileWords = file.split(separator: " ").map(String.init)
+        let titleWords = candidate.titleWords
+        let fileWords = candidate.fileWords
         var inTitle = 0
         var inFile = 0
         for word in words {
