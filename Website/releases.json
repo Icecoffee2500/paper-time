@@ -2,11 +2,100 @@
   "repo": "Icecoffee2500/paper-time",
   "releases": [
     {
+      "version": "0.9.8",
+      "date": "2026-09-22T20:01:02Z",
+      "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.8/Paper.Time.0.9.8.dmg",
+      "size": 6604798,
+      "downloads": 0,
+      "builds": {
+        "mac": [
+          {
+            "label": "디스크 이미지",
+            "label_en": "Disk image",
+            "arch": "Apple Silicon",
+            "arch_en": "Apple Silicon",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.8/Paper.Time.0.9.8.dmg",
+            "size": 6604798,
+            "downloads": 0
+          }
+        ],
+        "windows": [
+          {
+            "label": "설치본",
+            "label_en": "Installer",
+            "arch": "64비트 · ARM",
+            "arch_en": "64-bit and ARM",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.8/Paper.Time.Setup.0.9.8.exe",
+            "size": 177030588,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "64비트",
+            "arch_en": "64-bit",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.8/Paper.Time-0.9.8-win.zip",
+            "size": 116194313,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.8/Paper.Time-0.9.8-arm64-win.zip",
+            "size": 121141988,
+            "downloads": 0
+          }
+        ],
+        "linux": [
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.8/Paper.Time-0.9.8-x86_64.AppImage",
+            "size": 113222028,
+            "downloads": 0
+          },
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.8/Paper.Time-0.9.8-arm64.AppImage",
+            "size": 113604511,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.8/paper-time-0.9.8.tar.gz",
+            "size": 107409962,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.8/paper-time-0.9.8-arm64.tar.gz",
+            "size": 111905388,
+            "downloads": 0
+          }
+        ]
+      },
+      "note": "논문이 많아져도 목록이 느려지지 않아요. 들여오는 동안 앱이 멈추던 것도, «남은 PDF 더하기»가 눌러도 안 끝나던 것도 고쳤어요.",
+      "note_en": "A long list scrolls like a short one, importing no longer stops the app, and the paper you attach something to is one you can search for."
+    },
+    {
       "version": "0.9.7",
       "date": "2026-09-22T14:22:17Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.7/Paper.Time.0.9.7.dmg",
       "size": 6450605,
-      "downloads": 0,
+      "downloads": 8,
       "builds": {
         "mac": [
           {
@@ -16,7 +105,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.7/Paper.Time.0.9.7.dmg",
             "size": 6450605,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "windows": [
@@ -27,7 +116,7 @@
             "arch_en": "64-bit and ARM",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.7/Paper.Time.Setup.0.9.7.exe",
             "size": 177032530,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -36,7 +125,7 @@
             "arch_en": "64-bit",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.7/Paper.Time-0.9.7-win.zip",
             "size": 116194384,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -45,7 +134,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.7/Paper.Time-0.9.7-arm64-win.zip",
             "size": 121142057,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "linux": [
@@ -56,7 +145,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.7/Paper.Time-0.9.7-x86_64.AppImage",
             "size": 113221942,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "AppImage",
@@ -65,7 +154,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.7/Paper.Time-0.9.7-arm64.AppImage",
             "size": 113604390,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -74,7 +163,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.7/paper-time-0.9.7.tar.gz",
             "size": 107407972,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -83,7 +172,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.7/paper-time-0.9.7-arm64.tar.gz",
             "size": 111904767,
-            "downloads": 0
+            "downloads": 1
           }
         ]
       },
