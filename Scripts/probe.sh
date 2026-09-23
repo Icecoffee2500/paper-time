@@ -72,6 +72,11 @@ done
 # the build folder, and nothing else.
 was_front() { lsappinfo info -only bundlepath "$(lsappinfo front)" 2>/dev/null | sed 's/.*="\(.*\)"/\1/'; }
 MINE="$(cd "$(dirname "$APP")" && pwd)/$(basename "$APP")"
+# And the same bundle with every link followed: a worktree's Portable/node_modules
+# is a link to the main checkout's, and Launch Services may report the app by
+# either path. A check that only knows one of them never sees the other come
+# to the front.
+MINE_REAL="$(cd "$(dirname "$APP")" && pwd -P)/$(basename "$APP")"
 BEFORE="$(was_front)"
 
 if [ -n "$PORTABLE" ]; then
@@ -88,7 +93,7 @@ SEEN=""
 ELAPSED=0
 while [ "$ELAPSED" -lt "$SECONDS_TO_WAIT" ]; do
   NOW="$(was_front)"
-  case "$NOW" in "$MINE"|"$MINE"/) SEEN="yes" ;; esac
+  case "$NOW" in "$MINE"|"$MINE"/|"$MINE_REAL"|"$MINE_REAL"/) SEEN="yes" ;; esac
   sleep 1
   ELAPSED=$((ELAPSED + 1))
 done

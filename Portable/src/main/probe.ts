@@ -37,8 +37,24 @@ export interface ProbeStep {
    * own capture takes a rectangle, so the crop happens where the pixels are.
    */
   rect?: { x: number; y: number; width: number; height: number }
-  /** A pointer gesture over an element, in the element's own coordinates. */
-  drag?: { selector: string; from: [number, number]; to: [number, number]; steps?: number }
+  /**
+   * A pointer gesture over an element, in the element's own coordinates.
+   *
+   * `keys` are held on the moves (and the release), never on the press: that
+   * is how a key is held in life, and it matters — Shift at the press means
+   * "add this to the selection", so a drag that began that way would have let
+   * go of what it carries. `hold` leaves the button down, so the picture that
+   * follows has the drag still in hand: the only way to photograph what is
+   * drawn only while it is.
+   */
+  drag?: {
+    selector: string
+    from: [number, number]
+    to: [number, number]
+    steps?: number
+    keys?: { shift?: boolean; alt?: boolean; meta?: boolean; ctrl?: boolean }
+    hold?: boolean
+  }
   click?: { selector: string; at?: [number, number] }
   /** A key, delivered to the page rather than to the desktop. */
   key?: { key: string; shift?: boolean; meta?: boolean }
@@ -74,19 +90,23 @@ const GESTURE = `
         ...at, ...extra,
       }))
     },
-    drag(selector, from, to, steps = 12) {
+    drag(selector, from, to, steps = 12, keys = {}, hold = false) {
       const node = this.element(selector)
       // Capture is a no-op on a detached pointer id, and would otherwise
       // route the moves away from the element under test.
       node.setPointerCapture = () => {}
       node.releasePointerCapture = () => {}
+      const held = {
+        shiftKey: Boolean(keys.shift), altKey: Boolean(keys.alt),
+        metaKey: Boolean(keys.meta), ctrlKey: Boolean(keys.ctrl),
+      }
       this.send(node, 'pointerdown', from[0], from[1])
       for (let i = 1; i <= steps; i += 1) {
         const t = i / steps
-        this.send(node, 'pointermove', from[0] + (to[0] - from[0]) * t, from[1] + (to[1] - from[1]) * t)
+        this.send(node, 'pointermove', from[0] + (to[0] - from[0]) * t, from[1] + (to[1] - from[1]) * t, held)
       }
-      this.send(node, 'pointerup', to[0], to[1])
-      return true
+      if (!hold) this.send(node, 'pointerup', to[0], to[1], held)
+      return hold ? 'still down' : true
     },
     click(selector, at) {
       const node = this.element(selector)
@@ -124,7 +144,7 @@ export async function runProbe(window: BrowserWindow, file: string) {
           `window.__probe.click(${JSON.stringify(step.click.selector)}, ${JSON.stringify(step.click.at ?? null)})`))
       } else if (step.drag) {
         results.push(await window.webContents.executeJavaScript(
-          `window.__probe.drag(${JSON.stringify(step.drag.selector)}, ${JSON.stringify(step.drag.from)}, ${JSON.stringify(step.drag.to)}, ${step.drag.steps ?? 12})`))
+          `window.__probe.drag(${JSON.stringify(step.drag.selector)}, ${JSON.stringify(step.drag.from)}, ${JSON.stringify(step.drag.to)}, ${step.drag.steps ?? 12}, ${JSON.stringify(step.drag.keys ?? {})}, ${Boolean(step.drag.hold)})`))
       } else if (step.key) {
         results.push(await window.webContents.executeJavaScript(
           `window.__probe.key(${JSON.stringify(step.key.key)}, ${Boolean(step.key.shift)}, ${Boolean(step.key.meta)})`))
