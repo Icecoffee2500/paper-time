@@ -338,6 +338,15 @@ final class ReaderCoordinator: NSObject {
     }
 
     func makePDFView() -> PDFView {
+        #if os(macOS)
+        // Here, not when the pencil comes out. A card with `$…$` in it is
+        // typeset only where `SketchTypesetter.mathProvider` is installed, and
+        // this used to be installed by `makeSketchInput` — so a page opened
+        // and never drawn on showed the dollars and the backslashes as typed,
+        // and the same card became mathematics the moment the pen was picked
+        // up. It is idempotent; the other call stays where it was.
+        MathBridge.install()
+        #endif
         #if canImport(UIKit)
         let view = MarkupCapablePDFView()
         view.onMarkup = { [weak self] kind, color in
@@ -1291,8 +1300,17 @@ final class ReaderCoordinator: NSObject {
                     CGPoint(x: box.minX + 240, y: box.maxY - 240), CGPoint(x: box.minX + 380, y: box.maxY - 270),
                 ], style: SketchStyle(stroke: .ink, fill: .paleYellow), text: "user personas\nuser flow path")
                 card.style.border = true
-                session.setSketch([arrow, who, why, card], forPage: index)
-                say("sketch probe: 4 sample elements on page \(index)")
+                // One with mathematics in it. A formula is the only thing in a
+                // card that is rasterised rather than drawn, so it is the only
+                // thing whose resolution can be wrong — and it cannot be seen
+                // to be wrong without one on a page at a real zoom.
+                var sum = SketchElement(kind: .text, points: [
+                    CGPoint(x: box.minX + 60, y: box.maxY - 380), CGPoint(x: box.minX + 330, y: box.maxY - 420),
+                ], style: SketchStyle(stroke: .ink, fill: .paleBlue),
+                   text: "역상 $f^{-1}(x)$ 는 $\\frac{a}{b}$ 와 다름")
+                sum.style.border = true
+                session.setSketch([arrow, who, why, card, sum], forPage: index)
+                say("sketch probe: 5 sample elements on page \(index)")
             }
             // `--papertime-sketch-script="tool=rectangle;drag=100,600,300,500;report"`:
             // gestures in page coordinates, run one after another.

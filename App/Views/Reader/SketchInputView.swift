@@ -274,6 +274,12 @@ final class SketchInputView: NSView, SketchEditing {
         return max(hypot(x.x - o.x, x.y - o.y), 0.01)
     }
 
+    /// Pixels per page point on this screen — the zoom times the window's own
+    /// scale. What a formula in a card has to be rasterised at.
+    private func rasterScale(for page: PDFPage) -> CGFloat {
+        scale(for: page) * (window?.backingScaleFactor ?? 2)
+    }
+
     /// The reach of a click, in page points: the same six points on screen
     /// whatever the zoom.
     private func tolerance(on page: PDFPage) -> CGFloat { 6 / scale(for: page) }
@@ -1920,7 +1926,7 @@ final class SketchInputView: NSView, SketchEditing {
             box.text = ""
             context.saveGState()
             context.concatenate(transform(for: editing.page))
-            SketchRenderer.draw(box, in: context)
+            SketchRenderer.draw(box, in: context, options: .init(rasterScale: rasterScale(for: editing.page)))
             context.restoreGState()
             let outline = viewRect(element.rect, on: editing.page)
             context.setStrokeColor(NSColor.controlAccentColor.withAlphaComponent(0.9).cgColor)
@@ -1937,7 +1943,7 @@ final class SketchInputView: NSView, SketchEditing {
         case let .shape(element):
             context.saveGState()
             context.concatenate(toView)
-            SketchRenderer.draw(element, in: context, options: .init(fillAlphaScale: 0.7))
+            SketchRenderer.draw(element, in: context, options: .init(fillAlphaScale: 0.7, rasterScale: rasterScale(for: page)))
             context.restoreGState()
         case let .textBox(origin, current):
             let box = viewRect(CGRect(
@@ -1954,7 +1960,7 @@ final class SketchInputView: NSView, SketchEditing {
             let landing = moveTarget?.page ?? page
             context.saveGState()
             context.concatenate(transform(for: landing))
-            SketchRenderer.draw(working, in: context, options: .init(fillAlphaScale: 0.7))
+            SketchRenderer.draw(working, in: context, options: .init(fillAlphaScale: 0.7, rasterScale: rasterScale(for: page)))
             context.restoreGState()
             if let workingDrawing {
                 drawStrokes(workingDrawing, indices: selection.strokes, on: landing, in: context)

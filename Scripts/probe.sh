@@ -54,7 +54,12 @@ done
 [ -n "$LOG" ] || LOG="$(mktemp -t papertime-probe)"
 : > "$LOG"
 
-was_front() { lsappinfo info -only name "$(lsappinfo front)" 2>/dev/null | sed 's/.*="\(.*\)"/\1/'; }
+# By bundle path, not by name. The person may well have their own copy of
+# Paper Time open — it is their app — and a check that compares names calls
+# that "the probe came to the front" and cries wolf. The probe is the copy in
+# the build folder, and nothing else.
+was_front() { lsappinfo info -only bundlepath "$(lsappinfo front)" 2>/dev/null | sed 's/.*="\(.*\)"/\1/'; }
+MINE="$(cd "$(dirname "$APP")" && pwd)/$(basename "$APP")"
 BEFORE="$(was_front)"
 
 open -g -j -n -a "$PWD/$APP" --stderr "$LOG" --stdout "$LOG" --args "$@"
@@ -66,7 +71,7 @@ SEEN=""
 ELAPSED=0
 while [ "$ELAPSED" -lt "$SECONDS_TO_WAIT" ]; do
   NOW="$(was_front)"
-  case "$NOW" in "Paper Time") SEEN="yes" ;; esac
+  case "$NOW" in "$MINE"|"$MINE"/) SEEN="yes" ;; esac
   sleep 1
   ELAPSED=$((ELAPSED + 1))
 done
@@ -78,9 +83,10 @@ if [ -n "$SEEN" ]; then
   echo "!! the probe came to the front — it must never do that" >&2
   echo "!! stop and find out why before running this again" >&2
 elif [ "$BEFORE" != "$AFTER" ]; then
-  # Not necessarily us: the person at the keyboard changes applications too.
-  # Said quietly, because the line above is the one that matters.
-  echo "-- the front application changed while this ran: $BEFORE -> $AFTER (not the probe)" >&2
+  # Not us: the person at the keyboard changes applications too, and one of the
+  # applications they change to may well be their own copy of this one. Said
+  # quietly, because the line above is the one that matters.
+  echo "-- the front application changed while this ran: $(basename "$BEFORE") -> $(basename "$AFTER") (not the probe)" >&2
 fi
 
 cat "$LOG"

@@ -48,7 +48,11 @@ public enum SketchTypesetter {
     /// text card with `$…$` in it is set as mathematics wherever this is
     /// not nil. Nowhere it is nil (another platform, the PDF's copy) the
     /// dollars stay as typed, which is honest about what that reader can do.
-    nonisolated(unsafe) public static var mathProvider: ((_ latex: String, _ points: CGFloat, _ color: CGColor) -> MathPiece?)?
+    /// The scale is the one the picture will actually be shown at — the page's
+    /// zoom times the screen's backing scale — because a formula is the only
+    /// thing in a card that is a bitmap, and a bitmap made at the wrong
+    /// resolution is the only thing in a card that looks soft.
+    nonisolated(unsafe) public static var mathProvider: ((_ latex: String, _ points: CGFloat, _ color: CGColor, _ scale: CGFloat) -> MathPiece?)?
 
     /// The system's own face, which every device has and which sets Korean
     /// beside Latin without being asked.
@@ -93,10 +97,11 @@ public enum SketchTypesetter {
 
     public static func layout(
         _ text: String, points: CGFloat, color: CGColor, width: CGFloat? = nil,
-        align: SketchStyle.TextAlign = .left, fontName: String? = nil
+        align: SketchStyle.TextAlign = .left, fontName: String? = nil,
+        scale: CGFloat = 1
     ) -> Layout {
         if let provider = mathProvider, hasMath(text) {
-            return mathLayout(text, points: points, color: color, width: width, align: align, fontName: fontName, provider: provider)
+            return mathLayout(text, points: points, color: color, width: width, align: align, fontName: fontName, scale: scale, provider: provider)
         }
         let font = font(points: points, name: fontName)
         let column = width.map { max($0, 4) } ?? 100_000
@@ -223,7 +228,8 @@ public enum SketchTypesetter {
     /// broken across lines — and the block is as wide as its widest.
     private static func mathLayout(
         _ text: String, points: CGFloat, color: CGColor, width: CGFloat?,
-        align: SketchStyle.TextAlign, fontName: String?, provider: (String, CGFloat, CGColor) -> MathPiece?
+        align: SketchStyle.TextAlign, fontName: String?, scale: CGFloat,
+        provider: (String, CGFloat, CGColor, CGFloat) -> MathPiece?
     ) -> Layout {
         let font = font(points: points, name: fontName)
         let textAscent = CTFontGetAscent(font), textDescent = CTFontGetDescent(font)
@@ -254,7 +260,7 @@ public enum SketchTypesetter {
             for match in pattern.matches(in: paragraph, range: NSRange(location: 0, length: ns.length)) {
                 addText(NSRange(location: cursor, length: match.range.location - cursor))
                 let latex = ns.substring(with: match.range(at: 1))
-                if let piece = provider(latex, points, color) {
+                if let piece = provider(latex, points, color, scale) {
                     pieces.append(Piece(line: nil, math: piece, width: piece.width, ascent: piece.ascent, descent: piece.descent))
                 } else {
                     addText(match.range)
@@ -325,10 +331,16 @@ public enum SketchRenderer {
         /// a wash reads at full strength; laid over it by alpha it wants
         /// the alpha the colour carries.
         public var fillAlphaScale: CGFloat = 1
+        /// Pixels per page point where this is going — the page's zoom times
+        /// the screen's backing scale. Only the mathematics reads it: it is
+        /// the one part of a card that is rasterised rather than drawn, so it
+        /// is the one part that has to be told how fine to be.
+        public var rasterScale: CGFloat = 1
 
-        public init(flipsText: Bool = false, fillAlphaScale: CGFloat = 1) {
+        public init(flipsText: Bool = false, fillAlphaScale: CGFloat = 1, rasterScale: CGFloat = 1) {
             self.flipsText = flipsText
             self.fillAlphaScale = fillAlphaScale
+            self.rasterScale = rasterScale
         }
     }
 
@@ -509,7 +521,7 @@ public enum SketchRenderer {
         let layout = SketchTypesetter.layout(
             element.text, points: element.style.points, color: element.style.stroke.cgColor,
             width: element.sizing == .autoWidth ? nil : inner.width, align: element.style.textAlign,
-            fontName: element.style.fontName
+            fontName: element.style.fontName, scale: options.rasterScale
         )
         // With no wrapping the block can be narrower than the card (the
         // card was made wider by hand); the alignment says where it sits.
@@ -530,7 +542,8 @@ public enum SketchRenderer {
         guard inner.width > 4 else { return }
         let layout = SketchTypesetter.layout(
             element.text, points: element.style.points, color: element.style.stroke.cgColor,
-            width: inner.width, align: .center, fontName: element.style.fontName
+            width: inner.width, align: .center, fontName: element.style.fontName,
+            scale: options.rasterScale
         )
         let top = inner.midY + layout.size.height / 2
         context.saveGState()
@@ -554,6 +567,7 @@ public enum SketchRenderer {
         }
         // The formulas: pictures, upright in a y-up context and turned back
         // the right way up where the view has flipped it.
+        context.interpolationQuality = .high
         for placed in layout.images {
             let rect = CGRect(
                 x: origin.x + placed.frame.minX, y: origin.y - placed.frame.maxY,

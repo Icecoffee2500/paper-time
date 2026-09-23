@@ -307,7 +307,12 @@ final class SketchOverlayView: NSView {
         context.saveGState()
         context.scaleBy(x: bounds.width / box.width, y: bounds.height / box.height)
         context.translateBy(x: -box.minX, y: -box.minY)
-        SketchRenderer.draw(shown, in: context)
+        // Pixels per page point where this is going: the zoom this context was
+        // just given, times the screen's own. A formula is the only thing in a
+        // card that is a bitmap, and this is the number it has to be made at.
+        SketchRenderer.draw(shown, in: context, options: .init(
+            rasterScale: (bounds.width / box.width) * (window?.backingScaleFactor ?? 2)
+        ))
         context.restoreGState()
     }
 }

@@ -24,7 +24,8 @@ enum MathTypesetter {
         display: Bool,
         pointSize: CGFloat,
         color: NSColor,
-        maxWidth: CGFloat? = nil
+        maxWidth: CGFloat? = nil,
+        scale: CGFloat = NSScreen.main?.backingScaleFactor ?? 2
     ) -> (image: NSImage, descent: CGFloat)? {
         let source = latex.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !source.isEmpty else { return nil }
@@ -46,17 +47,38 @@ enum MathTypesetter {
         guard size.width > 0, size.height > 0 else { return nil }
         let descent = box.descent * squeeze + 1
 
-        let image = NSImage(size: size)
-        image.lockFocusFlipped(false)
-        if let context = NSGraphicsContext.current?.cgContext {
-            context.textMatrix = .identity
-            context.saveGState()
-            if squeeze < 1 { context.scaleBy(x: squeeze, y: squeeze) }
-            box.draw(at: CGPoint(x: 1 / squeeze, y: box.descent + 1 / squeeze), in: context)
-            context.restoreGState()
-        }
-        image.unlockFocus()
-        return (image, descent)
+        // Drawn at the resolution it will be shown at, not at the main
+        // screen's. `lockFocus` picks its backing store from whatever screen
+        // AppKit finds, which is right for a formula in a note (TextKit draws
+        // that one-to-one) and wrong for one in a card on a PDF page, where
+        // the whole overlay is scaled by the zoom afterwards — so the formula
+        // had `2 × points` pixels where it needed `zoom × 2 × points`, and was
+        // upscaled by exactly the zoom. That is the softness; the prose beside
+        // it is Core Text straight into the same context and stays sharp.
+        //
+        // The size stays in points. Only the pixel count follows the scale, so
+        // nothing a card measures moves.
+        let pixels = CGSize(
+            width: max(1, ceil(size.width * scale)),
+            height: max(1, ceil(size.height * scale))
+        )
+        guard let context = CGContext(
+            data: nil,
+            width: Int(pixels.width),
+            height: Int(pixels.height),
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        context.scaleBy(x: scale, y: scale)
+        context.textMatrix = .identity
+        context.saveGState()
+        if squeeze < 1 { context.scaleBy(x: squeeze, y: squeeze) }
+        box.draw(at: CGPoint(x: 1 / squeeze, y: box.descent + 1 / squeeze), in: context)
+        context.restoreGState()
+        guard let made = context.makeImage() else { return nil }
+        return (NSImage(cgImage: made, size: size), descent)
     }
 
     /// Lays the formula out so it fits: broken across lines first, then set
@@ -664,10 +686,18 @@ enum MathBridge {
     static func install() {
         guard !installed else { return }
         installed = true
-        SketchTypesetter.mathProvider = { latex, points, color in
-            let key = "\(latex)|\(points)|\(color.components ?? [])"
+        SketchTypesetter.mathProvider = { latex, points, color, scale in
+            // Rounded to the nearest half. A pinch changes the zoom on every
+            // frame, and a cache keyed on the exact number would typeset every
+            // formula on the page each time — while the eye cannot tell 2.0
+            // from 2.1. Four is as fine as it goes.
+            let asked = min(4, max(1, (scale * 2).rounded(.up) / 2))
+            let key = "\(latex)|\(points)|\(asked)|\(color.components ?? [])"
             if let hit = cache[key] { return hit }
-            guard let made = MathTypesetter.image(latex: latex, display: false, pointSize: points, color: NSColor(cgColor: color) ?? .black),
+            guard let made = MathTypesetter.image(
+                latex: latex, display: false, pointSize: points,
+                color: NSColor(cgColor: color) ?? .black, scale: asked
+            ),
                   let cg = made.image.cgImage(forProposedRect: nil, context: nil, hints: nil)
             else { return nil }
             let piece = SketchTypesetter.MathPiece(
