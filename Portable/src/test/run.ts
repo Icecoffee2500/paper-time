@@ -32,6 +32,7 @@ import { fileForRecordPath, recordPath } from '../main/layout.js'
 import { shelfPapers, store, type Paper } from '../renderer/state.js'
 import { guessKind, hasAbstract, hasIdentifier, hasReferences } from '../shared/documentKind.js'
 import { SketchTree, adopted, guessedDirection, ordered, pruned, copied } from '../shared/sketchTree.js'
+import { sketchSnapSuite } from './sketchSnap.js'
 import { PaperMeta, PaperState } from '../shared/model.js'
 import { entryFor, formatEntry, protectTitle } from '../shared/bibtex.js'
 import { escapeLaTeX } from '../shared/latexTable.js'
@@ -381,6 +382,8 @@ async function main() {
     const element = SketchElement.from(JSON.parse(MAC_FRAME))
     assert.equal(encodeSwiftJSON(element.encode()), MAC_FRAME)
   })
+
+  await sketchSnapSuite(test, suite)
 
   // --------------------------------------------------------------------- ink
   suite('Handwriting')

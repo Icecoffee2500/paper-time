@@ -59,6 +59,7 @@ import {
 } from '../../shared/sketchRender.js'
 import { L } from '../../shared/lang.js'
 import { makeUUID } from '../../shared/coding.js'
+import { SketchSnap, type SnapAxis, type SnapGuide } from '../../shared/sketchSnap.js'
 import type { PageView, Reader } from './reader.js'
 import { SketchUndo, snapshot, type Snapshot } from './sketchUndo.js'
 import {
@@ -131,6 +132,9 @@ const HANDLE_SIZE = 7
 /** How near the pointer has to be, on screen, to hit something. */
 const HIT_SLOP = 6
 const ACCENT = '47, 110, 240'
+/** The lines a drag lines up with: the Mac's `systemRed`, which is Figma's
+ *  colour for the same lines. */
+const GUIDE = 'rgb(255, 59, 48)'
 
 // MARK: - State shared by every page's surface
 
@@ -1045,6 +1049,15 @@ export function attachSketchInput(
    *  During a move they are in the target page's coordinates. */
   let working: SketchElement[] = []
   let workingStrokes: InkStroke[] | null = null
+  /** The copies a held Alt or Command (Control off the Mac) left behind,
+   *  standing where the selection was when the key came down. They are not in
+   *  the page while the drag lasts — this surface draws them, and
+   *  `finishMove` puts them down together with the move, so one undo takes
+   *  both back. */
+  let duplicates: SketchElement[] = []
+  /** The lines the drag is lining up with, on this page. Drawn while a move
+   *  is in hand and gone the moment it ends. */
+  let snapGuides: SnapGuide[] = []
   let lastPress: { at: number; point: Point } | null = null
 
   const scale = () => page.viewport?.scale ?? 1
@@ -1302,6 +1315,8 @@ export function attachSketchInput(
     const moving = tree().expanded(current.ids)
     working = page.elements.filter((element) => moving.has(element.id))
     workingStrokes = null
+    duplicates = []
+    snapGuides = []
     moveTarget = page
     hideWorking()
   }
@@ -1353,10 +1368,56 @@ export function attachSketchInput(
         const move = drag
         const target = reader.pageAtClient(event.clientX, event.clientY) ?? page
         const landing = target === page ? point : target.toPageFromClient(event.clientX, event.clientY)
-        const offset = { x: landing.x - move.origin.x, y: landing.y - move.origin.y }
+        let offset = { x: landing.x - move.origin.x, y: landing.y - move.origin.y }
         const current = ownSelection()
         const before = new SketchTree(move.elementsBefore)
         const moving = before.expanded(current?.ids ?? [])
+
+        // Held down, the drag leaves a copy behind — Figma's Alt, and the
+        // Command the reader asked for because that is the one their hand
+        // knows (Control off the Mac, as the keys are read everywhere else
+        // here). Done once, the first time the key is seen: the copies stand
+        // in the places the selection is leaving, and the selection carries
+        // on being dragged.
+        if ((event.altKey || event.metaKey || event.ctrlKey) && duplicates.length === 0 && current) {
+          duplicates = copied(current.ids, move.elementsBefore, { x: 0, y: 0 }, makeUUID).copies
+        }
+
+        // Shift holds the drag to one axis — Figma's constraint, and the
+        // reason Shift with Command is the gesture for "another one of these,
+        // straight below this one". Shift when the button went down still
+        // means "add this to the selection"; it is only read here, mid-drag.
+        let held: SnapAxis | null = null
+        if (shift) {
+          if (Math.abs(offset.x) >= Math.abs(offset.y)) {
+            offset.y = 0
+            held = 'horizontal'
+          } else {
+            offset.x = 0
+            held = 'vertical'
+          }
+        }
+
+        // Lined up with whatever else is on the page, and with the page
+        // itself. The copies left behind are not lined up with: they stand
+        // where the drag started, and a magnet back to the start is not help.
+        const box = before.boundsOf(moving)
+        if (target === page && box) {
+          const others = move.elementsBefore.filter((element) => !moving.has(element.id)).map((element) => element.rect)
+          const result = SketchSnap.adjust(box, offset, others, pageRectOf(page), tolerance())
+          // A held axis wins over a line found on it: the reader said this
+          // row, and a guide that cannot move anything is a lie.
+          const snapped = { ...result.offset }
+          if (held === 'horizontal') snapped.y = offset.y
+          if (held === 'vertical') snapped.x = offset.x
+          offset = snapped
+          snapGuides = result.guides.filter((guide) => guide.axis !== held)
+        } else {
+          snapGuides = []
+        }
+        // The strokes go by the same corrected offset as the shapes: a
+        // selection is one thing in the hand, and a stroke left behind by the
+        // few points a shape gave up would come apart from it.
         working = move.elementsBefore.filter((element) => moving.has(element.id)).map((element) => element.translated(offset))
         if (current && current.strokeIDs.length > 0) {
           workingStrokes = current.strokeIDs
@@ -1483,6 +1544,8 @@ export function attachSketchInput(
           target.redraw()
         }
         if (finished.moved) finishMove(finished.elementsBefore, finished.strokesBefore, target ?? page)
+        duplicates = []
+        snapGuides = []
         break
       case 'resize': {
         unhideWorking()
@@ -1526,15 +1589,19 @@ export function attachSketchInput(
       : strokesBefore
 
     if (target === page) {
-      let after = elementsBefore.map((element) => working.find((entry) => entry.id === element.id) ?? element)
+      // The copies a held key left behind go down with the move, so the page
+      // gains them and loses nothing in one undoable step.
+      let after = [...elementsBefore, ...duplicates].map((element) => working.find((entry) => entry.id === element.id) ?? element)
       after = adopted(before.outermost(current.ids), after)
       applyBoth(reader, host, page, after, workingStrokes ? strokesAfter : strokesBefore, elementsBefore, strokesBefore)
       return
     }
 
     // Across pages. The elements keep their ids — it is the same box, on the
-    // next page — and lose any parent left behind.
-    const sourceAfter = SketchTree.normalized(pruned(elementsBefore.filter((element) => !moving.has(element.id))))
+    // next page — and lose any parent left behind. The copies stay on the
+    // page they were left on, and keep a group they were left in from being
+    // taken for empty.
+    const sourceAfter = SketchTree.normalized(pruned([...elementsBefore.filter((element) => !moving.has(element.id)), ...duplicates]))
     const targetBefore = target.elements
     const landing = working.map((element) => {
       if (element.parent && !moving.has(element.parent)) {
@@ -1813,6 +1880,12 @@ export function attachSketchInput(
       case 'move':
       case 'resize':
       case 'bend':
+        if (drag.kind === 'move') {
+          // The copies standing where the drag began, drawn on the page they
+          // will be put down on rather than the one being dragged to.
+          if (duplicates.length > 0) drawElements(duplicates, context)
+          drawSnapGuides(context)
+        }
         if ((moveTarget ?? page) === page) drawWorking(context)
         break
       case 'marquee': {
@@ -1828,6 +1901,38 @@ export function attachSketchInput(
       default:
         break
     }
+    context.restore()
+  }
+
+  /** The lines a snapped drag lined up with: thin, red, and only while the
+   *  hand is down. Figma's colour, and the reason for it is that they must
+   *  not be read as part of the drawing — nothing else on a page is that red
+   *  and one pixel wide. */
+  function drawSnapGuides(context: CanvasRenderingContext2D) {
+    if (snapGuides.length === 0) return
+    // In the canvas's own pixels rather than the page's, rounded onto them,
+    // so a guide is one sharp pixel at any zoom — the Mac rounds to its
+    // grid for the same reason. One pixel on screen is as many canvas pixels
+    // as the page's surface was given: the display's ratio, at most two.
+    const toCanvas = context.getTransform()
+    const width = Math.max(1, Math.round(Math.min(window.devicePixelRatio || 1, 2)))
+    const onGrid = (value: number) => Math.round(value) + (width % 2 === 1 ? 0.5 : 0)
+    context.save()
+    context.setTransform(1, 0, 0, 1, 0, 0)
+    context.strokeStyle = GUIDE
+    context.lineWidth = width
+    context.setLineDash([])
+    context.beginPath()
+    for (const guide of snapGuides) {
+      const [a, b] = guide.axis === 'vertical'
+        ? [{ x: guide.position, y: guide.from }, { x: guide.position, y: guide.to }]
+        : [{ x: guide.from, y: guide.position }, { x: guide.to, y: guide.position }]
+      const from = toCanvas.transformPoint(a)
+      const to = toCanvas.transformPoint(b)
+      context.moveTo(onGrid(from.x), onGrid(from.y))
+      context.lineTo(onGrid(to.x), onGrid(to.y))
+    }
+    context.stroke()
     context.restore()
   }
 

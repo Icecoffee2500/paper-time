@@ -451,8 +451,14 @@ final class SketchInputView: NSView, SketchEditing {
             }
             working = carried.map { $0.translated(by: offset) }
             if !selection.strokes.isEmpty {
+                // The strokes go by the same corrected offset as the shapes,
+                // not by where the pointer is: a selection is one thing in the
+                // hand, and a stroke that ignored the held axis or the few
+                // points a shape gave up would come apart from it.
                 let from = PageGeometry(page: page).canvasPoint(fromPDF: origin)
-                let to = PageGeometry(page: target.page).canvasPoint(fromPDF: landing)
+                let to = PageGeometry(page: target.page).canvasPoint(
+                    fromPDF: CGPoint(x: origin.x + offset.x, y: origin.y + offset.y)
+                )
                 let shift = CGAffineTransform(translationX: to.x - from.x, y: to.y - from.y)
                 var strokes = drawingBefore.strokes
                 for i in selection.strokes where i < strokes.count {
@@ -1945,6 +1951,12 @@ final class SketchInputView: NSView, SketchEditing {
                 let name = element.name.map { " \"\($0)\"" } ?? ""
                 let sizing = element.kind == .text ? " \(element.sizing.rawValue)" : ""
                 lines.append("  \(String(element.id.uuidString.prefix(4))) \(element.kind.rawValue)\(name) \(box)\(bend)\(parent)\(layout)\(sizing) width \(element.style.width) dash \(element.style.dash.rawValue) fill \(element.style.fill == nil ? "none" : "yes") text \"\(element.text)\"")
+            }
+            // The handwriting too, in the canvas's own coordinates: a stroke
+            // carried with shapes has to have gone as far as they did.
+            for (i, stroke) in session.drawing(forPage: at).strokes.enumerated() {
+                let r = stroke.renderBounds
+                lines.append(String(format: "  stroke %d (%.2f, %.2f, %.2f, %.2f)", i, r.minX, r.minY, r.width, r.height))
             }
             return lines.joined(separator: "\n")
         default:
