@@ -29,16 +29,60 @@ public actor LooseNotes: SlipBox {
     public nonisolated let directory: URL
     public nonisolated var boxID: URL { directory }
 
+    /// The folder, when the reader chose one. Held so its security scope
+    /// outlives this call — a sandboxed app reaches a folder somebody picked
+    /// only while something is still holding the scope open.
+    private nonisolated let place: LibraryLocation?
+
     public init(directory: URL) {
         self.directory = directory
+        self.place = nil
     }
 
-    /// Where the app keeps them on this machine.
+    /// A folder the reader picked, so the loose notes can live where they
+    /// choose — in a cloud folder, say, where they follow them between
+    /// machines.
+    public init(at place: LibraryLocation) {
+        self.directory = place.url
+        self.place = place
+    }
+
+    /// Where the app keeps them on this machine, until told otherwise.
     public static func inApplicationSupport(named name: String = "Notes") -> LooseNotes {
         let base = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
         return LooseNotes(directory: base.appending(path: name, directoryHint: .isDirectory))
+    }
+
+    /// Takes the notes with it.
+    ///
+    /// Choosing a new folder for notes that are about no paper has to move
+    /// them, or they are simply gone from the reader's point of view — the box
+    /// is the notes. Every `.md` is copied across and then removed here; a name
+    /// already taken in the new folder is left alone and kept here, because the
+    /// one thing that must not happen is writing over a note.
+    public func move(into other: LooseNotes) -> (moved: Int, kept: Int) {
+        let manager = FileManager.default
+        try? FileOperations.ensureDirectory(at: other.directory)
+        var moved = 0
+        var kept = 0
+        let here = (try? FileOperations.visibleContents(of: directory, keys: [])) ?? []
+        for file in here where file.pathExtension == "md" {
+            let landing = other.directory.appending(path: file.lastPathComponent)
+            if manager.fileExists(atPath: landing.path(percentEncoded: false)) {
+                kept += 1
+                continue
+            }
+            do {
+                try manager.copyItem(at: file, to: landing)
+                try? manager.removeItem(at: file)
+                moved += 1
+            } catch {
+                kept += 1
+            }
+        }
+        return (moved, kept)
     }
 
     public func loadNotes() -> [Zettel] {

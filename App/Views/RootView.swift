@@ -1088,6 +1088,9 @@ struct PaperDetailColumn: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     @Binding var inspectorTab: InspectorTab
+    /// What the inspector was showing before the pen came out, so putting the
+    /// pen away can give it back.
+    @State private var tabBeforeDrawing: InspectorTab?
     /// The room the page and the inspector share.
     @State private var columnWidth: CGFloat = 800
     /// Where a paper being dragged over the page would land, while it is.
@@ -1122,11 +1125,21 @@ struct PaperDetailColumn: View {
             inspectorTab = .marks
         }
         // Taking the pencil out brings the tool inspector forward, the way
-        // Figma's panel is about whatever is being drawn.
+        // Figma's panel is about whatever is being drawn — and putting it away
+        // gives the panel back. It used to only go one way, so a lecture spent
+        // in the Notes tab ended on Tools the first time a pen was picked up,
+        // and stayed there.
         .onChange(of: configuration.mode) { _, mode in
-            guard mode == .draw else { return }
-            app.showsInspector = true
-            inspectorTab = .tool
+            if mode == .draw {
+                if inspectorTab != .tool { tabBeforeDrawing = inspectorTab }
+                app.showsInspector = true
+                inspectorTab = .tool
+            } else {
+                // Only if Tools is still what is showing. Somebody who chose
+                // another tab with the pen in hand meant it.
+                if inspectorTab == .tool, let back = tabBeforeDrawing { inspectorTab = back }
+                tabBeforeDrawing = nil
+            }
         }
         // Command-L: the passage goes to the note, and the note comes forward.
         .onReceive(NotificationCenter.default.publisher(for: .paperTimeLinkToNote)) { _ in

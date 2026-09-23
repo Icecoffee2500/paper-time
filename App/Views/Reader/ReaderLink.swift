@@ -60,6 +60,16 @@ final class ReaderLink {
     var revealedMarkID: UUID?
     /// A passage waiting to be dropped into the note at the cursor.
     var pendingNoteAnchor: NoteAnchor?
+    /// The note open in the Notes tab of the inspector.
+    ///
+    /// Here rather than inside `PaperNotesView`, because the inspector picks
+    /// its content with a `switch` and each tab is a branch of its own — so
+    /// leaving the Notes tab takes that view out of the tree and SwiftUI
+    /// throws its state away. Picking up the pen moves the tab to Tools on its
+    /// own, and a note being written during a lecture went back to the list
+    /// every time a line was highlighted. This outlives the tab, and there is
+    /// one per pane, which is what papers side by side need.
+    var openNoteID: String?
     /// Called when the reader this handle belongs to is clicked in — so,
     /// with several papers side by side, the one under the hand becomes the
     /// one the inspector is about.

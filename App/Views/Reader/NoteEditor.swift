@@ -9,6 +9,20 @@ import SwiftUI
 /// do four things `TextEditor` cannot: carry links you can click, set a formula
 /// as mathematics, continue a list when you press Return, and give back plain
 /// Markdown when you copy any of it.
+extension NoteEditor {
+    /// Where the words start. Written down because two surfaces have to agree
+    /// on it — the text view, and the placeholder drawn over it while the note
+    /// is empty. They drifted apart, and the caret sat in the middle of the
+    /// first line of the placeholder rather than at its beginning.
+    static let inset: CGFloat = 22
+    /// What TextKit leaves at the edge of a line fragment, on top of the
+    /// inset. Set rather than assumed: its default has changed between
+    /// TextKit 1 and 2.
+    static let gutter: CGFloat = 5
+    /// The first line's baseline box, for putting something over it.
+    static var textOrigin: CGSize { CGSize(width: inset + gutter, height: inset) }
+}
+
 struct NoteEditor: NSViewRepresentable {
     @Binding var markdown: String
     /// Set to drop a link at the cursor; cleared once it has been dropped.
@@ -46,7 +60,8 @@ struct NoteEditor: NSViewRepresentable {
         // Room to breathe. A note is prose in a narrow column, and prose
         // pressed against the edge of its column is the thing that made this
         // read like a text field rather than a page.
-        textView.textContainerInset = NSSize(width: 22, height: 22)
+        textView.textContainerInset = NSSize(width: Self.inset, height: Self.inset)
+        textView.textContainer?.lineFragmentPadding = Self.gutter
         // The chips are painted by the fragment this hands back.
         textView.textLayoutManager?.delegate = context.coordinator
         textView.isVerticallyResizable = true

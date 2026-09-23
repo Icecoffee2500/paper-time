@@ -12,7 +12,6 @@ struct PaperNotesView: View {
     let paperID: UUID
     let link: ReaderLink
 
-    @State private var openID: String?
     /// Notes from elsewhere that echo the pages being read, and the words
     /// they share with them.
     @State private var echoes: [(note: Zettel, shared: [String])] = []
@@ -31,18 +30,25 @@ struct PaperNotesView: View {
 
     var body: some View {
         Group {
-            if let openID, notes.note(openID) != nil {
+            if let openID = link.openNoteID, notes.note(openID) != nil {
                 ZettelEditorView(
                     notes: notes,
                     noteID: openID,
                     link: link,
-                    onClose: { self.openID = nil }
+                    onClose: { link.openNoteID = nil }
                 )
             } else {
                 list
             }
         }
-        .onChange(of: paperID) { _, _ in openID = nil }
+        .onChange(of: paperID) { _, _ in link.openNoteID = nil }
+        // `--papertime-new-note=1` opens an empty note here, which is the one
+        // state the placeholder and the caret can be looked at in.
+        .task {
+            guard Boot.isSet("PAPERTIME_NEW_NOTE"), link.openNoteID == nil else { return }
+            try? await Task.sleep(for: .milliseconds(400))
+            link.openNoteID = notes.create(paperID: paperID).id
+        }
         .task(id: link.session?.document.documentURL) { await readBackground() }
         .task(id: echoKey) {
             try? await Task.sleep(for: .milliseconds(250))
@@ -52,13 +58,13 @@ struct PaperNotesView: View {
         // Command-L with no note open carries on with the last one written
         // about this paper, or starts one.
         .onChange(of: link.pendingNoteAnchor) { _, anchor in
-            guard anchor != nil, openID == nil else { return }
-            openID = notes.notes(forPaper: paperID).first?.id ?? notes.create(paperID: paperID).id
+            guard anchor != nil, link.openNoteID == nil else { return }
+            link.openNoteID = notes.notes(forPaper: paperID).first?.id ?? notes.create(paperID: paperID).id
         }
         // Following a link from inside another note.
         .onChange(of: notes.requestedNoteID) { _, id in
             guard let id else { return }
-            openID = id
+            link.openNoteID = id
             notes.requestedNoteID = nil
         }
     }
@@ -80,7 +86,7 @@ struct PaperNotesView: View {
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 0)
                 Button {
-                    openID = notes.create(paperID: paperID).id
+                    link.openNoteID = notes.create(paperID: paperID).id
                 } label: {
                     Label(L("새 노트", "New Note"), systemImage: "square.and.pencil")
                 }
@@ -103,7 +109,7 @@ struct PaperNotesView: View {
                         NoteRow(note: note)
                             .contentShape(.rect)
                             .pressable(inset: 6)
-                            .onTapGesture { openID = note.id }
+                            .onTapGesture { link.openNoteID = note.id }
                             .contextMenu {
                                 Button(role: .destructive) { notes.delete(note.id) } label: {
                                     Label(L("지우기", "Delete"), systemImage: "trash")
@@ -158,7 +164,7 @@ extension PaperNotesView {
 
     private func echoRow(_ echo: (note: Zettel, shared: [String])) -> some View {
         Button {
-            openID = echo.note.id
+            link.openNoteID = echo.note.id
         } label: {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -171,7 +177,7 @@ extension PaperNotesView {
                         // made into a link, which is what a slip-box is for.
                         Button {
                             link.pendingNoteAnchor = link.selectionAnchor()
-                            openID = echo.note.id
+                            link.openNoteID = echo.note.id
                         } label: {
                             Image(systemName: "quote.opening")
                                 .font(.caption)
@@ -214,7 +220,7 @@ extension PaperNotesView {
             ForEach(notes.drafts) { draft in
                 Button {
                     link.pendingNoteAnchor = link.selectionAnchor()
-                    openID = draft.id
+                    link.openNoteID = draft.id
                 } label: {
                     HStack {
                         Text(draft.displayTitle).font(.callout).lineLimit(1)

@@ -133,6 +133,39 @@ public struct LibraryLocationPreference: @unchecked Sendable {
         defaults.removeObject(forKey: extrasKey)
     }
 
+    // MARK: - Where the loose notes live
+
+    /// The folder the reader chose for the notes that are about no paper.
+    ///
+    /// Its own key, and absent by default: with nothing stored the notes stay
+    /// in the app's own folder, which is where every library that came before
+    /// this has them.
+    private var notesKey: String { "com.imtaeheon.PaperTime.notesBookmark" }
+    private var notesPathKey: String { "com.imtaeheon.PaperTime.notesPathHint" }
+
+    public var notesPathHint: String? { defaults.string(forKey: notesPathKey) }
+
+    public func storeNotesFolder(_ location: LibraryLocation) throws {
+        defaults.set(try location.bookmarkData(), forKey: notesKey)
+        defaults.set(location.url.path(percentEncoded: false), forKey: notesPathKey)
+    }
+
+    public func loadNotesFolder() -> LibraryLocation? {
+        guard let bookmark = defaults.data(forKey: notesKey) else { return nil }
+        switch LibraryLocation.resolving(bookmark: bookmark) {
+        case let .resolved(location): return location
+        case let .resolvedStale(location, refreshed):
+            if let refreshed { defaults.set(refreshed, forKey: notesKey) }
+            return location
+        case .unavailable: return nil
+        }
+    }
+
+    public func clearNotesFolder() {
+        defaults.removeObject(forKey: notesKey)
+        defaults.removeObject(forKey: notesPathKey)
+    }
+
     // MARK: - The folders beside the first
 
     public var extraBookmarks: [Data] {

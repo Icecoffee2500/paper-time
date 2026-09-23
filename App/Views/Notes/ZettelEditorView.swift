@@ -147,28 +147,39 @@ struct ZettelEditorView: View {
                 }
             )
             if body_.isEmpty {
+                // Over the text view's own first line, in the text view's own
+                // type. It used to be a size smaller and a few points up and
+                // to the left of where the words actually begin, so the caret
+                // — which is always at the very start of an empty note — sat
+                // in the middle of the first line of this rather than in front
+                // of it.
+                //
+                // And the hints are one paragraph, not three lines. They were
+                // three because they were written as three, with the breaks
+                // typed into the string, so widening the pane left them ending
+                // raggedly halfway across it. A paragraph goes where the room
+                // goes.
                 Text(
                     L(
                         """
                         생각 하나를, 내 말로.
 
-                        [[ 로 다른 노트에 잇고, #태그 로 묶어요.
-                        Markdown과 LaTeX는 쓰는 대로 조판해서 보여줘요.
-                        ⌘L은 고른 구절로 가는 링크를 놓아요.
+                        [[ 로 다른 노트에 잇고, #태그 로 묶어요. Markdown과 LaTeX는 쓰는 대로 조판해서 보여줘요. ⌘L은 고른 구절로 가는 링크를 놓아요.
                         """,
                         """
                         One thought, in your own words.
 
-                        [[ links to another note. #tag files it.
-                        Markdown and LaTeX render as you write.
-                        ⌘L drops a link to the passage you selected.
+                        [[ links to another note. #tag files it. Markdown and LaTeX render as you write. ⌘L drops a link to the passage you selected.
                         """
                     )
                 )
-                .font(.callout)
+                .font(.system(size: NoteTypography.baseSize))
+                .lineSpacing(4.5)
                 .foregroundStyle(.tertiary)
-                .padding(.horizontal, 17)
-                .padding(.top, 18)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, NoteEditor.textOrigin.width)
+                .padding(.top, NoteEditor.textOrigin.height)
                 .allowsHitTesting(false)
             }
         }
