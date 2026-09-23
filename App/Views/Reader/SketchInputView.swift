@@ -194,6 +194,8 @@ final class SketchInputView: NSView, SketchEditing {
         moveTarget = nil
         working = []
         workingDrawing = nil
+        duplicates = []
+        snapGuides = (0, [])
         entered = nil
         selection = Selection()
         if state.editor === self { state.editor = nil }
@@ -279,6 +281,16 @@ final class SketchInputView: NSView, SketchEditing {
     private func rasterScale(for page: PDFPage) -> CGFloat {
         scale(for: page) * (window?.backingScaleFactor ?? 2)
     }
+
+    /// The lines the drag is currently lining up with, and the page they are
+    /// on. Drawn while a move is in hand and gone the moment it ends.
+    private var snapGuides: (index: Int, guides: [SketchSnap.Guide]) = (0, [])
+
+    /// The copies a held ⌥ or ⌘ left behind, standing where the selection was
+    /// when the key came down. They are not in the page's sidecar while the
+    /// drag lasts — this view draws them, and `finishMove` puts them down
+    /// together with the move, so one undo takes both back.
+    private var duplicates: [SketchElement] = []
 
     /// The reach of a click, in page points: the same six points on screen
     /// whatever the zoom.
@@ -392,10 +404,52 @@ final class SketchInputView: NSView, SketchEditing {
             // the offset from where the drag began keeps the grip.
             let target = spot(for: event) ?? Spot(page: page, index: index, point: p)
             let landing = target.point
-            let offset = CGPoint(x: landing.x - origin.x, y: landing.y - origin.y)
+            var offset = CGPoint(x: landing.x - origin.x, y: landing.y - origin.y)
             let before = SketchTree(elementsBefore)
             let moving = before.expanded(selection.elements)
-            working = elementsBefore.filter { moving.contains($0.id) }.map { $0.translated(by: offset) }
+
+            // Held down, the drag leaves a copy behind — Figma's ⌥, and the ⌘
+            // the reader asked for because that is the one their hand knows.
+            // Done once, the first time the key is seen: the copies stand in
+            // the places the selection is leaving, and the selection carries
+            // on being dragged.
+            if event.modifierFlags.contains(.option) || event.modifierFlags.contains(.command),
+               duplicates.isEmpty {
+                duplicates = copied(selection.elements, from: elementsBefore, shift: .zero).copies
+            }
+
+            // Shift holds the drag to one axis — Figma's constraint, and the
+            // reason ⇧⌘-drag is the gesture for "another one of these,
+            // straight below this one".
+            var held: SketchSnap.Guide.Axis?
+            if event.modifierFlags.contains(.shift) {
+                if abs(offset.x) >= abs(offset.y) { offset.y = 0; held = .horizontal }
+                else { offset.x = 0; held = .vertical }
+            }
+
+            // Lined up with whatever else is on the page, and with the page
+            // itself. The copies left behind are not lined up with: they stand
+            // where the drag started, and a magnet back to the start is not
+            // help.
+            let carried = elementsBefore.filter { moving.contains($0.id) }
+            let box = before.bounds(of: moving)
+            if target.index == index, !box.isNull {
+                let others = elementsBefore.filter { !moving.contains($0.id) }.map(\.rect)
+                let result = SketchSnap.adjust(
+                    box: box, by: offset, against: others,
+                    page: pageBox(page), tolerance: tolerance(on: page)
+                )
+                // A held axis wins over a line found on it: the reader said
+                // this row, and a guide that cannot move anything is a lie.
+                var snapped = result.offset
+                if held == .horizontal { snapped.y = offset.y }
+                if held == .vertical { snapped.x = offset.x }
+                offset = snapped
+                snapGuides = (index, result.guides.filter { $0.axis != held })
+            } else {
+                snapGuides = (index, [])
+            }
+            working = carried.map { $0.translated(by: offset) }
             if !selection.strokes.isEmpty {
                 let from = PageGeometry(page: page).canvasPoint(fromPDF: origin)
                 let to = PageGeometry(page: target.page).canvasPoint(fromPDF: landing)
@@ -438,6 +492,8 @@ final class SketchInputView: NSView, SketchEditing {
             moveTarget = nil
             working = []
             workingDrawing = nil
+            duplicates = []
+            snapGuides = (0, [])
             needsDisplay = true
         }
         guard let drag, let (page, index) = dragPage else { return }
@@ -515,7 +571,9 @@ final class SketchInputView: NSView, SketchEditing {
         let drawingAfter = workingDrawing ?? drawingBefore
 
         if target.index == source.index {
-            var after = elementsBefore
+            // The copies a held key left behind go down with the move, so the
+            // page gains them and loses nothing in one undoable step.
+            var after = elementsBefore + duplicates
             for changed in working {
                 if let i = after.firstIndex(where: { $0.id == changed.id }) { after[i] = changed }
             }
@@ -524,7 +582,7 @@ final class SketchInputView: NSView, SketchEditing {
             if normalized != elementsBefore { session.setSketch(normalized, forPage: source.index) }
             if drawingAfter != drawingBefore { session.setDrawing(drawingAfter, forPage: source.index) }
             registerUndo(
-                name: L("옮기기", "Move"), on: source.index,
+                name: duplicates.isEmpty ? L("옮기기", "Move") : L("복제", "Duplicate"), on: source.index,
                 elements: (elementsBefore, normalized), drawing: (drawingBefore, drawingAfter)
             )
             refreshPage?(source.index)
@@ -534,7 +592,7 @@ final class SketchInputView: NSView, SketchEditing {
 
         // Across pages. The elements keep their ids — it is the same box,
         // on the next page — and lose any parent left behind.
-        let sourceAfter = elementsBefore.filter { !moving.contains($0.id) }
+        let sourceAfter = elementsBefore.filter { !moving.contains($0.id) } + duplicates
         let targetBefore = elements(on: target.index)
         var landing = working
         for i in landing.indices where landing[i].parent.map({ !moving.contains($0) }) ?? false {
@@ -741,6 +799,8 @@ final class SketchInputView: NSView, SketchEditing {
         let moving = SketchTree(current).expanded(selection.elements)
         working = current.filter { moving.contains($0.id) }
         workingDrawing = nil
+        duplicates = []
+        snapGuides = (spot.index, [])
         moveTarget = (spot.page, spot.index)
     }
 
@@ -1754,19 +1814,32 @@ final class SketchInputView: NSView, SketchEditing {
             guard let tool = SketchTool(rawValue: args.first ?? "") else { return "probe: no tool \(args)" }
             state.tool = tool
             return "probe: tool \(tool.rawValue)"
-        case "drag", "shiftdrag":
+        case "drag", "shiftdrag", "cmddrag", "optdrag",
+             "draghold", "shiftdraghold", "cmddraghold", "optdraghold":
             let n = numbers()
             guard n.count >= 4 else { return "probe: drag needs x1,y1,x2,y2" }
-            let flags: NSEvent.ModifierFlags = name == "shiftdrag" ? .shift : []
+            // `…hold` leaves the button down, so the picture that follows has
+            // the drag still in hand — the only way to photograph what is only
+            // drawn while it is: the guides, and the copies left behind.
+            let holds = name.hasSuffix("hold")
+            let flags: NSEvent.ModifierFlags = switch name.replacingOccurrences(of: "hold", with: "") {
+            case "shiftdrag": .shift
+            case "cmddrag": .command
+            case "optdrag": .option
+            default: []
+            }
             let a = CGPoint(x: n[0], y: n[1]), b = CGPoint(x: n[2], y: n[3])
-            if let down = mouse(.leftMouseDown, a, flags: flags) { mouseDown(with: down) }
+            // The key goes down after the hand does, which is how it is held
+            // in life: ⇧ at mouse-down means "add this to the selection", so a
+            // drag that began that way would have deselected what it carries.
+            if let down = mouse(.leftMouseDown, a) { mouseDown(with: down) }
             for step in 1...8 {
                 let t = CGFloat(step) / 8
                 let p = CGPoint(x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t)
                 if let moved = mouse(.leftMouseDragged, p, flags: flags) { mouseDragged(with: moved) }
             }
-            if let up = mouse(.leftMouseUp, b, flags: flags) { mouseUp(with: up) }
-            return "probe: dragged \(a) → \(b)"
+            if !holds, let up = mouse(.leftMouseUp, b, flags: flags) { mouseUp(with: up) }
+            return "probe: dragged \(a) → \(b)\(holds ? " — still down" : "")"
         case "dragpage":
             // `dragpage=<page>,x1,y1,x2,y2`: down on this page, up on another
             // — what carrying a selection to the next page is.
@@ -1958,6 +2031,15 @@ final class SketchInputView: NSView, SketchEditing {
             drawLiveStroke(points, on: page, in: context)
         case .move, .resize, .bend:
             let landing = moveTarget?.page ?? page
+            // The copies standing where the drag began, drawn on the page
+            // they will be put down on rather than the one being dragged to.
+            if !duplicates.isEmpty {
+                context.saveGState()
+                context.concatenate(toView)
+                SketchRenderer.draw(duplicates, in: context, options: .init(rasterScale: rasterScale(for: page)))
+                context.restoreGState()
+            }
+            drawSnapGuides(on: page, index: index, in: context)
             context.saveGState()
             context.concatenate(transform(for: landing))
             SketchRenderer.draw(working, in: context, options: .init(fillAlphaScale: 0.7, rasterScale: rasterScale(for: page)))
@@ -2044,6 +2126,33 @@ final class SketchInputView: NSView, SketchEditing {
                     .draw(at: CGPoint(x: corner.x, y: corner.y + 3))
             }
         }
+    }
+
+    /// The lines a snapped drag lined up with: thin, red, and only while the
+    /// hand is down. Figma's colour, and the reason for it is that they must
+    /// not be read as part of the drawing — nothing else on a page is that red
+    /// and one point wide.
+    private func drawSnapGuides(on page: PDFPage, index: Int, in context: CGContext) {
+        guard snapGuides.index == index, !snapGuides.guides.isEmpty else { return }
+        context.saveGState()
+        context.setStrokeColor(NSColor.systemRed.cgColor)
+        context.setLineWidth(1)
+        for guide in snapGuides.guides {
+            let a: CGPoint, b: CGPoint
+            switch guide.axis {
+            case .vertical:
+                a = CGPoint(x: guide.position, y: guide.from)
+                b = CGPoint(x: guide.position, y: guide.to)
+            case .horizontal:
+                a = CGPoint(x: guide.from, y: guide.position)
+                b = CGPoint(x: guide.to, y: guide.position)
+            }
+            let from = viewPoint(a, on: page), to = viewPoint(b, on: page)
+            context.move(to: CGPoint(x: round(from.x) + 0.5, y: round(from.y) + 0.5))
+            context.addLine(to: CGPoint(x: round(to.x) + 0.5, y: round(to.y) + 0.5))
+        }
+        context.strokePath()
+        context.restoreGState()
     }
 
     private func drawBox(_ box: CGRect, dashed: Bool, in context: CGContext) {
