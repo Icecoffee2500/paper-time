@@ -1,7 +1,12 @@
 #!/bin/bash
 # Runs a probe build without putting anything on the screen.
 #
-#   Scripts/probe.sh [-s SECONDS] [-l LOGFILE] -- --papertime-library=<path> [more flags]
+#   Scripts/probe.sh [-p] [-s SECONDS] [-l LOGFILE] -- --papertime-library=<path> [more flags]
+#
+# `-p` runs the Portable (Electron) build instead of the Mac app, through the
+# same door and under the same rules: its window used to be `show()`n, and on a
+# Mac that activates the app exactly as `open -n -a` did. `npm run build` in
+# `Portable/` first; the probe runs `Portable/out`.
 #
 # This is the only sanctioned way to launch the app for a check, and it exists
 # because `open -n -a` — which is what every probe used to be run with —
@@ -30,8 +35,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 SECONDS_TO_WAIT=15
 LOG=""
+PORTABLE=""
 while [ $# -gt 0 ]; do
   case "$1" in
+    -p) PORTABLE="yes"; shift ;;
     -s) SECONDS_TO_WAIT="$2"; shift 2 ;;
     -l) LOG="$2"; shift 2 ;;
     --) shift; break ;;
@@ -39,7 +46,12 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-APP="${PAPERTIME_APP:-build/mac/Build/Products/Debug/Paper Time.app}"
+if [ -n "$PORTABLE" ]; then
+  APP="Portable/node_modules/electron/dist/Electron.app"
+  [ -f Portable/out/main/main.js ] || { echo "no Portable/out — run npm run build in Portable/ first" >&2; exit 1; }
+else
+  APP="${PAPERTIME_APP:-build/mac/Build/Products/Debug/Paper Time.app}"
+fi
 [ -d "$APP" ] || { echo "no app at $APP — build it first" >&2; exit 1; }
 
 LIBRARY=""
@@ -62,7 +74,12 @@ was_front() { lsappinfo info -only bundlepath "$(lsappinfo front)" 2>/dev/null |
 MINE="$(cd "$(dirname "$APP")" && pwd)/$(basename "$APP")"
 BEFORE="$(was_front)"
 
-open -g -j -n -a "$PWD/$APP" --stderr "$LOG" --stdout "$LOG" --args "$@"
+if [ -n "$PORTABLE" ]; then
+  # Electron takes the app's folder as its first argument.
+  open -g -j -n -a "$PWD/$APP" --stderr "$LOG" --stdout "$LOG" --args "$PWD/Portable" "$@"
+else
+  open -g -j -n -a "$PWD/$APP" --stderr "$LOG" --stdout "$LOG" --args "$@"
+fi
 
 # Watched the whole way, not only at the ends. Comparing before with after says
 # nothing about the middle, and "did my window ever come forward" is the one

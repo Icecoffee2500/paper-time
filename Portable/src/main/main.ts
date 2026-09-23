@@ -7,7 +7,7 @@
  * one Chromium, one stylesheet, one bundled typeface — which is the point of
  * porting this way rather than three times.
  */
-import { BrowserWindow, app, dialog, ipcMain, nativeTheme, shell } from 'electron'
+import { BrowserWindow, app, dialog, ipcMain, nativeTheme, screen, shell } from 'electron'
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
@@ -68,6 +68,31 @@ const allLibraries = (): Library[] => (library ? [library, ...extraLibraries] : 
 
 /** True when this run was told which folder to open, so it is a probe. */
 const isProbeLibrary = () => probeArgument('library') != null
+
+/**
+ * True for any run that is only being looked at: one given a folder, a list of
+ * steps, or a picture to take.
+ *
+ * Such a run must never come in front of what the person at this machine is
+ * doing. `BrowserWindow.show()` on a Mac **activates the app** — the window
+ * rises over their work and takes the keyboard — which is the thing the Mac
+ * build's `Scripts/probe.sh` exists to prevent, and this build had no guard
+ * against it at all.
+ */
+const isProbeRun = () => ['library', 'probe', 'shot'].some((name) => probeArgument(name) != null)
+
+/**
+ * A place no display covers: right of the rightmost one, level with the
+ * highest. The union of every display rather than the primary one, because a
+ * second monitor to the left or above has real pixels at negative coordinates.
+ * The window draws and can be captured there like anywhere else; nobody sees it.
+ */
+function offscreen(width: number): { x: number; y: number } {
+  const displays = screen.getAllDisplays().map((one) => one.bounds)
+  const right = Math.max(...displays.map((one) => one.x + one.width))
+  const top = Math.min(...displays.map((one) => one.y))
+  return { x: right + Math.max(width, 400), y: top }
+}
 
 /** Which folders were open beside the first — unless this run is a probe. */
 function rememberExtras() {
@@ -159,7 +184,13 @@ function makeWindow(shape: WindowShape, extraArguments: string[] = []): BrowserW
   })
 
   made.loadFile(path.join(__dirname, '../renderer/index.html'))
-  made.once('ready-to-show', () => made.show())
+  made.once('ready-to-show', () => {
+    if (!isProbeRun()) return made.show()
+    // Outside every display, shown without activating anything.
+    const { width, height } = made.getBounds()
+    made.setBounds({ ...offscreen(width), width, height })
+    made.showInactive()
+  })
   for (const event of ['maximize', 'unmaximize', 'enter-full-screen', 'leave-full-screen', 'focus', 'blur']) {
     made.on(event as 'maximize', () => sendTo(made, 'window:state', windowState(made)))
   }
@@ -179,10 +210,12 @@ function makeWindow(shape: WindowShape, extraArguments: string[] = []): BrowserW
 function createWindow() {
   const saved = settings().window
   window = makeWindow(saved, wantsSplit ? ['--papertime-split=1'] : [])
-  if (saved.maximized) window.maximize()
+  // A probe keeps its own window where nobody is, and so neither fills the
+  // screen nor writes that place into the settings of whoever uses this copy.
+  if (saved.maximized && !isProbeRun()) window.maximize()
 
   const remember = () => {
-    if (!window || window.isDestroyed()) return
+    if (!window || window.isDestroyed() || isProbeRun()) return
     const bounds = window.getBounds()
     update({ window: { ...bounds, maximized: window.isMaximized() } })
   }
@@ -1032,6 +1065,12 @@ if (process.platform === 'linux' && !app.commandLine.hasSwitch('ozone-platform-h
 }
 
 app.whenReady().then(async () => {
+  // No Dock icon and no menu bar for a probe: an accessory app does not become
+  // the active app by being launched, and its windows do not bounce the Dock.
+  if (isMac && isProbeRun()) {
+    app.setActivationPolicy('accessory')
+    app.dock?.hide()
+  }
   wantsKorean = resolveKorean(settings().language, app.getLocale())
   setKorean(wantsKorean)
   createWindow()
