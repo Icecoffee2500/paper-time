@@ -29,7 +29,7 @@ import {
   type PageDrawing,
 } from './pdfwrite.js'
 import { diagnose, headBytes, headLine, looksWhole, type ByteTrouble } from '../shared/pdfLock.js'
-import { rememberLibrary, settings, update } from './settings.js'
+import { holdInMemory, rememberLibrary, settings, update } from './settings.js'
 // `L` is the layout module in this file, so the two-language helper comes
 // in under a name of its own.
 import { L as say, resolveKorean, setKorean } from '../shared/lang.js'
@@ -80,6 +80,10 @@ const isProbeLibrary = () => probeArgument('library') != null
  * against it at all.
  */
 const isProbeRun = () => ['library', 'probe', 'shot'].some((name) => probeArgument(name) != null)
+
+// Nor write anything into their settings: a probe that opens a paper or picks
+// an inspector tab is not the person choosing one.
+if (isProbeRun()) holdInMemory()
 
 /**
  * A place no display covers: right of the rightmost one, level with the

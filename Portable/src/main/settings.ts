@@ -50,6 +50,18 @@ const DEFAULTS: Settings = {
 
 let cached: Settings | null = null
 
+/**
+ * Set for a probe run: what the page changes is kept for this run and never
+ * written. The file belongs to whoever uses this copy of the app — a probe
+ * that opens a paper would otherwise write that paper's id, and the tab it
+ * looked at, into their settings.
+ */
+let heldInMemory = false
+
+export function holdInMemory() {
+  heldInMemory = true
+}
+
 function file(): string {
   return path.join(app.getPath('userData'), 'settings.json')
 }
@@ -75,6 +87,7 @@ export function settings(): Settings {
 export function update(patch: Partial<Settings>): Settings {
   const next = { ...settings(), ...patch }
   cached = next
+  if (heldInMemory) return next
   try {
     fs.mkdirSync(path.dirname(file()), { recursive: true })
     fs.writeFileSync(file(), JSON.stringify(next, null, 2), 'utf8')
