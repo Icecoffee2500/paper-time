@@ -24,6 +24,20 @@ public final class AppModel {
 
     public private(set) var phase: Phase = .launching
     public private(set) var library: LibraryModel?
+
+    /// Whether a window has begun the launch. `phase` stays `.launching`
+    /// until the library is open, so two windows that appear together — a
+    /// launch that brings back two, or a probe's own window beside one
+    /// SwiftUI made late — both saw it and opened the library twice.
+    @ObservationIgnored public private(set) var launchBegan = false
+
+    /// True the first time it is asked, and never again.
+    public func beginLaunch() -> Bool {
+        guard !launchBegan else { return false }
+        launchBegan = true
+        return true
+    }
+
     public var settings = AppSettings()
 
     /// Panel visibility lives here so the View menu can toggle it. A window's
@@ -560,12 +574,254 @@ public final class AppModel {
         phase = .needsLibraryFolder
     }
 
+    // MARK: - Where the notes about no paper live
+
+    /// Where the notes that are about no paper are, as the settings say it.
+    public enum NotesFolder: Equatable {
+        /// In the app's own folder, and nothing else was chosen.
+        case app
+        /// In the folder the reader chose.
+        case chosen
+        /// A folder was chosen and cannot be reached — an unplugged disk, a
+        /// cloud drive signed out of, a folder in the Trash. The choice is
+        /// kept; the notes are in the app's own folder until it is back. The
+        /// path is the last place it was seen.
+        case away(String?)
+    }
+
+    public private(set) var notesFolder: NotesFolder = .app
+
+    /// What the last move of the notes did, for the line under the row.
+    public struct NotesMove: Equatable {
+        public enum Occasion: Equatable {
+            /// The reader chose a folder.
+            case chose
+            /// The chosen folder was back, and what was written while it was
+            /// away went across.
+            case cameBack
+            /// The reader went back to the app's own folder.
+            case wentBack
+        }
+        public var occasion: Occasion
+        public var moved: Int
+        public var kept: Int
+        /// Where the ones that did not move still are.
+        public var keptIn: URL
+    }
+
+    public private(set) var lastNotesMove: NotesMove?
+    /// One sentence that stands in for the rest of the row's footer: why a
+    /// folder was not taken, why nothing came back, that it still is not there.
+    public private(set) var notesNotice: String?
+
+    /// The app's own folder for the notes about no paper — unless this run
+    /// is a probe's, in which case it is a folder of the probe's own.
+    ///
+    /// A probe and the copy the reader uses are one sandbox, so the app's
+    /// folder of a probe run *is* the reader's notes: a probe that seeded or
+    /// moved notes there would be moving theirs. `--papertime-notes-box=<path>`
+    /// names the probe's box, and without it the box is a folder beside the
+    /// probe's library.
+    private func appNotesFolder() -> LooseNotes {
+        guard let library = Boot.setting("PAPERTIME_LIBRARY") else { return .inApplicationSupport() }
+        if let box = Boot.setting("PAPERTIME_NOTES_BOX") { return LooseNotes(directory: Self.probeURL(box)) }
+        let beside = Self.probeURL(library).standardizedFileURL
+        return LooseNotes(directory: beside.deletingLastPathComponent()
+            .appending(path: beside.lastPathComponent + "-loose-notes", directoryHint: .isDirectory))
+    }
+
+    /// A path given on the command line. A relative one is inside the app's
+    /// own Documents, as it is for `--papertime-library`.
+    private static func probeURL(_ path: String) -> URL {
+        let base = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: "/")
+        return path.hasPrefix("/")
+            ? URL(fileURLWithPath: path, isDirectory: true)
+            : base.appendingPathComponent(path, isDirectory: true)
+    }
+
+    /// Decides where the notes about no paper are, before any of them is read.
+    ///
+    /// The folder the reader chose, if there is one and it is there — and
+    /// then whatever is in the app's own folder goes across first: those are
+    /// the notes written while it was away. A chosen folder that is not there
+    /// is not forgotten; this run keeps its notes in the app's folder and
+    /// the settings say so.
+    ///
+    /// A probe reads no choice and stores none. `--papertime-notes-chosen=<path>`
+    /// stands in for the stored choice, so the way a launch finds the chosen
+    /// folder — and what it does when it is missing — can be run.
+    private func openNotes() async -> NotesModel {
+        // A library opened again in the same run starts its account afresh:
+        // what the last one moved is not what this one did.
+        lastNotesMove = nil
+        notesNotice = nil
+        let own = appNotesFolder()
+        let chosen: LibraryLocation?
+        let hint: String?
+        if isProbeLibrary {
+            guard let path = Boot.setting("PAPERTIME_NOTES_CHOSEN") else {
+                notesFolder = .app
+                return NotesModel(appFolder: own)
+            }
+            chosen = LibraryLocation.adopting(Self.probeURL(path))
+            hint = chosen?.url.path(percentEncoded: false)
+        } else {
+            guard preference.hasStoredNotesFolder else {
+                notesFolder = .app
+                return NotesModel(appFolder: own)
+            }
+            chosen = preference.loadNotesFolder()
+            hint = preference.notesPathHint
+        }
+        guard let chosen, LooseNotes(at: chosen).isReachable else {
+            notesFolder = .away(hint)
+            return NotesModel(appFolder: own)
+        }
+        let box = LooseNotes(at: chosen)
+        let model = NotesModel(appFolder: own, chosen: box)
+        notesFolder = .chosen
+        let caught = await Trace.time("notes: carry what was written while away") { await model.catchUp() }
+        if caught.moved + caught.kept > 0 {
+            lastNotesMove = NotesMove(occasion: .cameBack, moved: caught.moved, kept: caught.kept, keptIn: own.directory)
+        }
+        return model
+    }
+
+    /// Asks for a folder to keep the notes about no paper in, and moves them
+    /// there.
+    public func chooseNotesFolder() {
+        #if os(macOS)
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+        panel.prompt = L("여기에 두기", "Keep Notes Here")
+        panel.message = L(
+            "논문 없는 노트를 둘 폴더를 골라주세요. 지금 있는 노트도 그리로 옮겨요.",
+            "Choose a folder for notes that aren't about a paper. The ones you have move there too."
+        )
+        panel.begin { [weak self] response in
+            guard response == .OK, let url = panel.url else { return }
+            Task { @MainActor in await self?.moveNotes(toFolderAt: url) }
+        }
+        #endif
+    }
+
+    /// Makes a folder the home of the notes about no paper, and carries them
+    /// into it.
+    ///
+    /// The choice is remembered before anything moves. Stopped halfway — the
+    /// app quit, the machine slept for good — the next launch finds the new
+    /// folder and carries the rest of the app's folder into it, which is the
+    /// same move finished. The other way round, the moved half would sit in
+    /// a folder nobody remembers.
+    public func moveNotes(toFolderAt url: URL) async {
+        guard let model = library else { return }
+        notesNotice = nil
+        // A library's own records. Its slip-box is in there, and a second
+        // box over the same files moves every note about a paper out of it
+        // and deletes it on the way.
+        if url.pathComponents.contains(LibraryLayout.supportDirectoryName) {
+            notesNotice = L(
+                "이 폴더에는 라이브러리의 기록이 있어요. 다른 폴더를 골라주세요.",
+                "That folder holds a library's records. Choose another one."
+            )
+            return
+        }
+        if url.standardizedFileURL == model.notes.appFolderURL.standardizedFileURL {
+            await keepNotesInAppFolder()
+            return
+        }
+        let location = LibraryLocation.adopting(url)
+        // Gone between the panel and here — a disk ejected while it was
+        // open. Taken anyway, every note would count as one that could not
+        // move, and the settings would give the wrong reason for it.
+        guard LooseNotes(at: location).isReachable else {
+            notesNotice = L(
+                "이 폴더에 닿을 수 없어요. 다른 폴더를 골라주세요.",
+                "Paper Time can't reach that folder. Choose another one."
+            )
+            return
+        }
+        if !isProbeLibrary {
+            do {
+                try preference.storeNotesFolder(location)
+            } catch {
+                notesNotice = L(
+                    "이 폴더를 기억하지 못했어요. 다른 폴더를 골라주세요.",
+                    "Paper Time can't remember that folder. Choose another one."
+                )
+                return
+            }
+        }
+        let from = model.notes.looseBox
+        let result = await model.notes.relocate(to: LooseNotes(at: location))
+        notesFolder = .chosen
+        lastNotesMove = NotesMove(occasion: .chose, moved: result.moved, kept: result.kept, keptIn: from)
+    }
+
+    /// The way back: the notes about no paper return to the app's own folder
+    /// and the choice is forgotten.
+    ///
+    /// With the chosen folder away there is nothing to carry back, and its
+    /// notes stay in it — they are files in a folder the reader picked, and
+    /// choosing it again brings them back.
+    public func keepNotesInAppFolder() async {
+        guard let model = library else { return }
+        notesNotice = nil
+        if !isProbeLibrary { preference.clearNotesFolder() }
+        let from = model.notes.looseBox
+        let wasAway = notesFolder != .chosen || model.notes.chosenFolderWentAway
+        let result = await model.notes.returnToAppFolder()
+        notesFolder = .app
+        if wasAway, result == (0, 0) {
+            // Nothing could come back from a folder that is not there, and
+            // "no notes to move" would read as "there were none".
+            lastNotesMove = nil
+            notesNotice = L(
+                "이제 노트를 앱 폴더에 둬요. 고른 폴더에 있던 노트는 그 폴더에 그대로 있어요.",
+                "Notes stay on this Mac now. The ones in the folder you chose are still there."
+            )
+        } else {
+            lastNotesMove = NotesMove(occasion: .wentBack, moved: result.moved, kept: result.kept, keptIn: from)
+        }
+    }
+
+    /// Looks for the chosen folder again, for the moment the disk is plugged
+    /// back in, without quitting to find out.
+    public func reconnectNotesFolder() async {
+        guard let model = library else { return }
+        notesNotice = nil
+        if model.notes.chosenFolderWentAway {
+            if let result = await model.notes.comeBack() {
+                lastNotesMove = NotesMove(occasion: .cameBack, moved: result.moved, kept: result.kept, keptIn: model.notes.appFolderURL)
+            } else {
+                notesNotice = L("아직 폴더에 닿을 수 없어요.", "The folder still isn't there.")
+            }
+            return
+        }
+        guard case .away = notesFolder else { return }
+        let location = isProbeLibrary
+            ? Boot.setting("PAPERTIME_NOTES_CHOSEN").map { LibraryLocation.adopting(Self.probeURL($0)) }
+            : preference.loadNotesFolder()
+        guard let location, LooseNotes(at: location).isReachable else {
+            notesNotice = L("아직 폴더에 닿을 수 없어요.", "The folder still isn't there.")
+            return
+        }
+        let result = await model.notes.relocate(to: LooseNotes(at: location))
+        notesFolder = .chosen
+        lastNotesMove = NotesMove(occasion: .cameBack, moved: result.moved, kept: result.kept, keptIn: model.notes.appFolderURL)
+    }
+
     private func open(_ location: LibraryLocation) async {
         Trace.mark("opening the library")
         let store = LibraryStore(location: location)
         do {
             let manifest = try await Trace.time("library: bootstrap") { try await store.bootstrap() }
-            let model = LibraryModel(store: store, location: location, manifest: manifest)
+            let notes = await Trace.time("notes: find the loose box") { await openNotes() }
+            let model = LibraryModel(store: store, location: location, manifest: manifest, notes: notes)
             // The folders opened beside the first one, reopened from their own
             // bookmarks. One that will not resolve — an unplugged disk — is
             // left out rather than stopping the library; it comes back when
@@ -646,9 +902,111 @@ public final class AppModel {
                     : base.appendingPathComponent(gone, isDirectory: true)
                 await disconnectFolder(at: url)
             }
+            // `--papertime-notes-folder=<path>` chooses a folder for the notes
+            // about no paper and carries them there, as the panel would — in a
+            // probe only, and remembering nothing. The folder is made first,
+            // the way the panel's New Folder would have made it.
+            if isProbeLibrary, let wanted = Boot.setting("PAPERTIME_NOTES_FOLDER") {
+                let url = Self.probeURL(wanted)
+                try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+                // With `--papertime-open-note=<id>` that note is open in the
+                // slip-box while its file moves, and `--papertime-notes-edit=<id>`
+                // leaves an edit to a note waiting for the pause in typing —
+                // the two things a move must not lose track of.
+                if let id = Boot.setting("PAPERTIME_OPEN_NOTE") {
+                    model.scope = .notes
+                    model.notes.openNoteID = id
+                    try? await Task.sleep(for: .seconds(1))
+                }
+                if let id = Boot.setting("PAPERTIME_NOTES_EDIT"), var note = model.notes.note(id) {
+                    note.body += "\nEdited while waiting to be written."
+                    model.notes.update(note)
+                }
+                await moveNotes(toFolderAt: url)
+                let move = lastNotesMove
+                var said = "notes folder: \(model.notes.looseBox.path(percentEncoded: false))"
+                said += " moved=\(move?.moved ?? 0) kept=\(move?.kept ?? 0)"
+                if let notice = notesNotice { said += " refused: \(notice)" }
+                if let id = model.notes.openNoteID {
+                    let shown = model.notes.note(id)
+                    said += "\nnotes folder: open note \(id) still there=\(shown != nil) title=\(shown?.title ?? "—")"
+                }
+                FileHandle.standardError.write(Data((said + "\n").utf8))
+            }
+            // …and `--papertime-notes-back=1` is the way back.
+            if isProbeLibrary, Boot.isSet("PAPERTIME_NOTES_BACK") {
+                await keepNotesInAppFolder()
+                let move = lastNotesMove
+                FileHandle.standardError.write(Data((
+                    "notes folder: back to \(model.notes.looseBox.path(percentEncoded: false))"
+                        + " moved=\(move?.moved ?? 0) kept=\(move?.kept ?? 0)\n"
+                ).utf8))
+            }
+            // The chosen folder going away while the app is open, and coming
+            // back — the one way a note could have nowhere to go.
+            // `--papertime-notes-unplug=1` renames the probe's chosen folder
+            // out of the way, `--papertime-new-loose-note=<title>` writes a
+            // note about no paper as the slip-box's ＋ would, and
+            // `--papertime-notes-replug=1` puts the folder back and presses
+            // Reconnect. Probe folders only.
+            let unplugged = model.notes.looseBox.deletingLastPathComponent()
+                .appending(path: model.notes.looseBox.lastPathComponent + "-unplugged", directoryHint: .isDirectory)
+            let plugged = model.notes.looseBox
+            if isProbeLibrary, Boot.isSet("PAPERTIME_NOTES_UNPLUG"), model.notes.looseBoxIsChosen {
+                try? FileManager.default.moveItem(at: plugged, to: unplugged)
+                FileHandle.standardError.write(Data("notes folder: unplugged \(plugged.path(percentEncoded: false))\n".utf8))
+            }
+            if isProbeLibrary, let title = Boot.setting("PAPERTIME_NEW_LOOSE_NOTE") {
+                var note = model.notes.create(paperID: nil)
+                note.title = title
+                note.body = "Written by a probe."
+                model.notes.update(note)
+                await model.notes.flush(note)
+                let wentTo = model.notes.chosenFolderWentAway ? "the app folder (chosen one away)" : model.notes.looseBox.lastPathComponent
+                FileHandle.standardError.write(Data("new loose note: \(note.id) went to \(wentTo)\n".utf8))
+            }
+            // `--papertime-edit-loose-note=<id>` changes a note that is
+            // already in the chosen folder, as typing into it would — with
+            // the folder unplugged, the case where one note becomes two.
+            if isProbeLibrary, let id = Boot.setting("PAPERTIME_EDIT_LOOSE_NOTE"), var note = model.notes.note(id) {
+                note.body += "\nChanged by a probe."
+                model.notes.update(note)
+                await model.notes.flush(note)
+                let wentTo = model.notes.chosenFolderWentAway ? "the app folder (chosen one away)" : model.notes.looseBox.lastPathComponent
+                FileHandle.standardError.write(Data("edited loose note: \(id) went to \(wentTo)\n".utf8))
+            }
+            if isProbeLibrary, Boot.isSet("PAPERTIME_NOTES_REPLUG") {
+                if FileManager.default.fileExists(atPath: unplugged.path(percentEncoded: false)) {
+                    try? FileManager.default.moveItem(at: unplugged, to: plugged)
+                } else if case let .away(hint) = notesFolder, let hint {
+                    // Away since launch: the disk arriving is the folder
+                    // appearing where it was.
+                    try? FileManager.default.createDirectory(
+                        at: URL(fileURLWithPath: hint, isDirectory: true), withIntermediateDirectories: true
+                    )
+                }
+                await reconnectNotesFolder()
+                let move = lastNotesMove
+                var said = "notes folder: replugged, moved=\(move?.moved ?? 0) kept=\(move?.kept ?? 0)"
+                if let notice = notesNotice { said += " notice: \(notice)" }
+                FileHandle.standardError.write(Data((said + "\n").utf8))
+            }
             // `--papertime-folders=1` says what each folder holds, which is
             // how a library of several folders is checked from here.
-            if Boot.isSet("PAPERTIME_FOLDERS") { await model.reportFolders() }
+            if Boot.isSet("PAPERTIME_FOLDERS") {
+                let place: String = switch notesFolder {
+                case .app: "app folder"
+                case .chosen: "chosen"
+                case let .away(hint): "chosen one away (\(hint ?? "?")), using the app folder"
+                }
+                var said = "loose notes: \(place)"
+                if let move = lastNotesMove {
+                    said += " — last move \(move.occasion) moved=\(move.moved) kept=\(move.kept)"
+                        + " kept in \(move.keptIn.path(percentEncoded: false))"
+                }
+                FileHandle.standardError.write(Data((said + "\n").utf8))
+                await model.reportFolders()
+            }
             if Boot.isSet("PAPERTIME_OPEN_FIRST"), let first = model.visiblePapers.first {
                 model.selection = [first.id]
             }

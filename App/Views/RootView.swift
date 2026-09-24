@@ -50,7 +50,7 @@ struct RootView: View {
         .windowBackdrop()
         #endif
         .task {
-            guard app.phase == .launching else { return }
+            guard app.phase == .launching, app.beginLaunch() else { return }
             await app.restore()
             // After the library is up, not before: an introduction over an
             // empty window is an introduction to nothing.

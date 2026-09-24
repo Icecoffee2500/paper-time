@@ -145,6 +145,11 @@ public struct LibraryLocationPreference: @unchecked Sendable {
 
     public var notesPathHint: String? { defaults.string(forKey: notesPathKey) }
 
+    /// Whether a folder was chosen at all — which `loadNotesFolder()` alone
+    /// cannot say, since it answers nil both for "none" and for "one that is
+    /// not there right now", and only the second is worth telling anyone.
+    public var hasStoredNotesFolder: Bool { defaults.data(forKey: notesKey) != nil }
+
     public func storeNotesFolder(_ location: LibraryLocation) throws {
         defaults.set(try location.bookmarkData(), forKey: notesKey)
         defaults.set(location.url.path(percentEncoded: false), forKey: notesPathKey)
@@ -155,7 +160,10 @@ public struct LibraryLocationPreference: @unchecked Sendable {
         switch LibraryLocation.resolving(bookmark: bookmark) {
         case let .resolved(location): return location
         case let .resolvedStale(location, refreshed):
+            // Renamed or moved: the bookmark followed it, and the path the
+            // settings show should follow it too.
             if let refreshed { defaults.set(refreshed, forKey: notesKey) }
+            defaults.set(location.url.path(percentEncoded: false), forKey: notesPathKey)
             return location
         case .unavailable: return nil
         }
