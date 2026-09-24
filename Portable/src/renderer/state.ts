@@ -54,6 +54,8 @@ export interface Settings {
   pageTint: 'none' | 'sepia' | 'grey' | 'night'
   pageLayout: 'single' | 'continuous'
   selectedPaperID: string | null
+  /** Latex Suite in the note and on the cards: `@a` into `\alpha`, `//` into a fraction. */
+  latexShortcuts: boolean
 }
 
 /** What one reader — one pane — knows about the paper it shows. */
@@ -164,6 +166,7 @@ export const store: Store = {
     pageTint: 'none',
     pageLayout: 'continuous',
     selectedPaperID: null,
+    latexShortcuts: true,
   },
   windowState: { maximized: false, fullScreen: false, focused: true },
   trail: [],

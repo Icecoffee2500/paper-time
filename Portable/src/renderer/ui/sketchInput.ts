@@ -61,6 +61,7 @@ import { L } from '../../shared/lang.js'
 import { makeUUID } from '../../shared/coding.js'
 import type { PageView, Reader } from './reader.js'
 import { SketchUndo, snapshot, type Snapshot } from './sketchUndo.js'
+import { attachLatexSuite, type LatexSuiteField } from './latexSuiteInput.js'
 import {
   defaultLayout,
   sketchEditor,
@@ -151,6 +152,8 @@ let editing: {
   isNew: boolean
   host: SketchInputHost
 } | null = null
+/** Latex Suite in that card: `$…$` on a card is typed the way it is in a note. */
+let latexField: LatexSuiteField | null = null
 
 const editors = new WeakMap<Reader, SketchInputEditing>()
 let keysInstalled = false
@@ -947,6 +950,9 @@ function beginTextEditing(reader: Reader, host: SketchInputHost, page: PageView,
     // A blur while the words are still being placed is not the end.
     if (editing?.area === area) endTextEditing()
   })
+  // After the card's own listeners, so the card has moved to fit the words
+  // before the placeholders are drawn over them.
+  latexField = attachLatexSuite(area)
   sketchSelectionChanged()
 }
 
@@ -1012,6 +1018,8 @@ export function endTextEditing() {
       elements[i] = changed
     }
   }
+  latexField?.detach()
+  latexField = null
   area.remove()
   page.hidden.delete(id)
   const after = SketchTree.normalized(pruned(elements))

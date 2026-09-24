@@ -15,6 +15,7 @@ import { fullName, type CSLName } from '../../shared/model.js'
 import { L } from '../../shared/lang.js'
 import { type DocumentKind } from '../../shared/documentKind.js'
 import { buildSketchInspector } from './sketchInspector.js'
+import { attachLatexSuite } from './latexSuiteInput.js'
 
 export interface InspectorActions {
   editMeta: (id: string, patch: Record<string, unknown>) => void
@@ -365,4 +366,6 @@ function note(body: HTMLElement, paper: Paper, actions: InspectorActions) {
     timer = setTimeout(save, 900)
   })
   body.append(el('div', { class: 'field' }, [area]))
+  // Math in the note is typed with Latex Suite: `@a`, `//`, Tab out of the equation.
+  attachLatexSuite(area)
 }

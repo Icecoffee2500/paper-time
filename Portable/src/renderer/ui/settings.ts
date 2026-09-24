@@ -59,6 +59,23 @@ function choices<T extends string>(
   return row
 }
 
+/** One row with a box to tick on the right: a setting that is on or off. */
+function toggle(label: string, isOn: boolean, flip: (value: boolean) => void): HTMLElement {
+  const row = el('label', { class: 'set-row' })
+  const box = el('input', { type: 'checkbox', class: 'set-check' }) as HTMLInputElement
+  box.checked = isOn
+  on(box, 'change', () => flip(box.checked))
+  row.append(el('span', { class: 'set-label', text: label }), box)
+  return row
+}
+
+/** A note under a row, with its `…` spans set as code: what is typed, told apart from the words around it. */
+function note(text: string): HTMLElement {
+  const line = el('p', { class: 'set-note' })
+  text.split('`').forEach((part, k) => line.append(k % 2 === 1 ? el('code', { text: part }) : part))
+  return line
+}
+
 export function showSettings(actions: SettingsActions) {
   if (open) return
   open = true
@@ -121,6 +138,17 @@ export function showSettings(actions: SettingsActions) {
       store.settings.pageTint,
       (value) => actions.set({ pageTint: value }),
     ))
+
+    body.append(el('div', { class: 'set-section', text: L('쓰기', 'Writing') }))
+    body.append(toggle(
+      L('LaTeX 단축 입력', 'LaTeX Shortcuts'),
+      store.settings.latexShortcuts !== false,
+      (value) => actions.set({ latexShortcuts: value }),
+    ))
+    body.append(note(L(
+      '`//`를 치면 분수가 되는 것처럼, 짧게 친 말을 LaTeX로 바꿔요.',
+      'Expands short triggers into LaTeX as you type, like // into a fraction.',
+    )))
 
     body.append(el('div', { class: 'set-section', text: L('모양', 'Appearance') }))
     body.append(choices(
