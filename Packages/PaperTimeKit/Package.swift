@@ -25,7 +25,9 @@ let package = Package(
             dependencies: ["PaperCore", "MetadataPipeline", "Bibliography"],
             path: "Sources/Tools/papertime-eval"
         ),
-        .target(name: "PaperCore"),
+        // The Latex Suite snippet file is shared with the Portable build, which
+        // imports the same JSON; its licence travels with it.
+        .target(name: "PaperCore", resources: [.process("Resources")]),
         .target(name: "LibraryStore", dependencies: ["PaperCore"]),
         .target(name: "Bibliography", dependencies: ["PaperCore"]),
         .target(name: "MetadataPipeline", dependencies: ["PaperCore", "Bibliography"]),
@@ -33,7 +35,7 @@ let package = Package(
         .target(name: "PDFReader", dependencies: ["PaperCore", "InkEngine", "LibraryStore"]),
         .target(name: "Importers", dependencies: ["PaperCore", "Bibliography", "LibraryStore"]),
 
-        .testTarget(name: "PaperCoreTests", dependencies: ["PaperCore"]),
+        .testTarget(name: "PaperCoreTests", dependencies: ["PaperCore"], resources: [.copy("Fixtures")]),
         .testTarget(name: "LibraryStoreTests", dependencies: ["LibraryStore"]),
         .testTarget(name: "BibliographyTests", dependencies: ["Bibliography"]),
         .testTarget(

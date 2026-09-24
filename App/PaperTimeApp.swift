@@ -27,6 +27,10 @@ struct PaperTimeApp: App {
         if let markdown = Boot.setting("PAPERTIME_DUMP_NOTE") {
             NoteMarkdown.dump(markdown)
         }
+        // Types a few Latex Suite keystrokes in memory, prints them and quits.
+        if Boot.isSet("PAPERTIME_LATEX_SUITE") {
+            LatexSuiteProbe.run()
+        }
         #endif
     }
 
