@@ -481,10 +481,35 @@ public enum WindowProbe {
                     panel.cancel(nil)
                 }
             }
+            // `--papertime-settings=1` photographs Settings. Its own scene is
+            // opened by an action that brings the app forward, so the page is
+            // put in a window of the probe's own instead, outside every
+            // display like the main one, and that is the window photographed.
+            var settings: NSWindow?
+            if Boot.isSet("PAPERTIME_SETTINGS") {
+                settings = settingsWindow(app: app, say: say)
+                try? await Task.sleep(for: .seconds(1.5))
+                if let window = settings,
+                   NSScreen.screens.contains(where: { $0.frame.intersects(window.frame) }) {
+                    // It must never be where somebody can see it. Put away
+                    // rather than photographed.
+                    window.orderOut(nil)
+                    return say("settings probe: the window landed on a screen at \(window.frame) — put away")
+                }
+                if let notes = app.library?.notes {
+                    var said = "settings probe: notes row — \(notes.looseBox.path(percentEncoded: false))"
+                    said += " chosen=\(notes.looseBoxIsChosen) place=\(app.notesFolder)"
+                    if let move = app.lastNotesMove {
+                        said += " — \"\(SettingsView.describe(move, appFolder: notes.appFolderURL, box: notes.looseBox))\""
+                    }
+                    if let notice = app.notesNotice { said += " — notice \"\(notice)\"" }
+                    say(said)
+                }
+            }
             // A sheet is a window of its own, hung off the one it covers, and
             // photographing the parent gets the page behind it. Whatever is in
             // front is what was asked for.
-            guard let base = NSApp.keyWindow
+            guard let base = settings ?? NSApp.keyWindow
                 ?? NSApp.windows.first(where: \.isVisible)
                 ?? offscreen(say: say)
             else { return say("window probe: no window") }
@@ -580,6 +605,90 @@ public enum WindowProbe {
         window.orderFront(nil)
         window.displayIfNeeded()
         say("window probe: drawing off every screen at \(Int(origin.x)),\(Int(origin.y))")
+        return window
+    }
+
+    /// The app's model, for a probe run that has no window to hold it.
+    static weak var model: AppModel?
+    /// The window made for such a run. AppKit does not keep a window alive
+    /// for us.
+    private static var launchWindow: NSWindow?
+
+    /// A window for a probe whose launch opened none.
+    ///
+    /// A probe starts hidden (`open -g -j`, see `Scripts/probe.sh`), and a
+    /// hidden launch cannot be counted on to open a window. Probes used to
+    /// get one from AppKit bringing back the last session's — and the probe
+    /// and the copy somebody reads with are one sandbox, so that was
+    /// whatever their copy had left. Once it left none, no view existed,
+    /// `RootView`'s task never ran, nothing opened the library, and every
+    /// probe printed "app starting" and nothing after it. With nothing to
+    /// bring back, SwiftUI opened its own window in five runs of ten and none
+    /// in the other five. So a probe run that nothing has started a moment
+    /// in gets a window of its own: outside every display before it is
+    /// ordered on, in an app that is hidden, and never made key.
+    static func openIfNoneWasRestored() {
+        guard Boot.setting("PAPERTIME_LIBRARY") != nil else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1.5))
+            guard let model, !model.launchBegan, launchWindow == nil else { return }
+            let window = Unconstrained(
+                contentRect: NSRect(x: 0, y: 0, width: 1280, height: 820),
+                styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+                backing: .buffered,
+                defer: true
+            )
+            window.isReleasedWhenClosed = false
+            let displays = NSScreen.screens.map(\.frame).reduce(CGRect.null) { $0.union($1) }
+            window.setFrameOrigin(NSPoint(x: displays.minX - 60_000, y: displays.minY - 60_000))
+            func say(_ text: String) { FileHandle.standardError.write(Data((text + "\n").utf8)) }
+            // Checked before it is ordered on, not after: a window that
+            // landed on a screen has been seen by then.
+            guard !NSScreen.screens.contains(where: { $0.frame.intersects(window.frame) }) else {
+                return say("probe: the launch opened no window, and one made for it would have been on a screen at \(window.frame) — none made")
+            }
+            window.contentView = NSHostingView(rootView: RootView().environment(model))
+            window.orderFront(nil)
+            // And after, in case AppKit moved it anyway: put away at once.
+            if NSScreen.screens.contains(where: { $0.frame.intersects(window.frame) }) {
+                window.orderOut(nil)
+                return say("probe: the window made for a launch that opened none landed on a screen at \(window.frame) — put away")
+            }
+            launchWindow = window
+            say("probe: the launch opened no window — made one off every screen at \(window.frame)")
+        }
+    }
+
+    /// A titled window that stays where it is put. AppKit pulls a titled
+    /// window back onto a screen when it is ordered on — the first one made
+    /// for a probe was put 60 000 points away and came up at (218, 0).
+    private final class Unconstrained: NSWindow {
+        override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect { frameRect }
+    }
+
+    /// Settings, in a window that is on no display.
+    ///
+    /// Borderless, so AppKit has no title bar to keep on a screen and leaves
+    /// the frame where it is put; placed before it has any content, so
+    /// nothing is ever drawn anywhere else; ordered on without being made key,
+    /// so the app stays where it was — hidden, and behind everything.
+    private static var settingsWindows: [NSWindow] = []
+
+    private static func settingsWindow(app: AppModel, say: (String) -> Void) -> NSWindow {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 760, height: 540),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        window.isReleasedWhenClosed = false
+        let displays = NSScreen.screens.map(\.frame).reduce(CGRect.null) { $0.union($1) }
+        window.setFrameOrigin(NSPoint(x: displays.minX - 60_000, y: displays.minY - 60_000))
+        window.contentView = NSHostingView(rootView: SettingsView().environment(app))
+        window.orderFront(nil)
+        window.displayIfNeeded()
+        settingsWindows.append(window)
+        say("settings probe: drawing Settings off every screen at \(window.frame)")
         return window
     }
 

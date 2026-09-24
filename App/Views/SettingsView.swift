@@ -342,6 +342,8 @@ struct SettingsView: View {
             switch pane {
             case .library:
                 librarySection
+                // With no library open there are no notes to point anywhere.
+                if app.library != nil { looseNotesSection }
                 languageSection
             case .metadata: metadataSection(settings: settings)
             case .bibtex: bibTeXSection(settings: settings)
@@ -434,6 +436,224 @@ struct SettingsView: View {
             }
         }
     }
+
+    #if os(macOS)
+    // MARK: - Notes about no paper
+
+    /// Where the notes that belong to no paper are kept, and the way to move
+    /// them somewhere else.
+    ///
+    /// A section of its own under the library's rather than a row inside it:
+    /// the library's folder is where the papers are, and a note about a paper
+    /// lives beside it. This is the other folder — the one for the notes no
+    /// library folder can hold, because they belong to none of them. The Mac
+    /// only: this is where a folder can be handed to the app with a panel.
+    private var looseNotesSection: some View {
+        let notes = app.library?.notes
+        let place = app.notesFolder
+        let where_ = looseNotesLocation(notes: notes, place: place)
+        return Section {
+            LabeledContent(L("폴더", "Folder")) {
+                HStack(spacing: 6) {
+                    if isAway(place, notes) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.yellow)
+                    }
+                    Text(where_.name)
+                }
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            }
+            // The same pair the library's folder shows — which service carries
+            // it, if any — because that is the reason to choose a folder at
+            // all: so these notes go where the rest of your notes go.
+            if let provider = where_.provider {
+                LabeledContent(L("동기화", "Synced Via")) {
+                    HStack(spacing: 6) {
+                        Image(systemName: provider.symbolName)
+                        Text(provider.displayName)
+                    }
+                    .foregroundStyle(.secondary)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(L("\(provider.displayName)로 동기화", "Synced via \(provider.displayName)"))
+                }
+            }
+            HStack {
+                Button(L("폴더 고르기…", "Choose Folder…")) { app.chooseNotesFolder() }
+                if place != .app {
+                    Button(L("앱 폴더로 되돌리기", "Move Back to My Mac")) {
+                        Task { await app.keepNotesInAppFolder() }
+                    }
+                }
+                if isAway(place, notes) {
+                    Button(L("다시 연결", "Reconnect")) {
+                        Task { await app.reconnectNotesFolder() }
+                    }
+                }
+                Spacer()
+                if let url = where_.url {
+                    // With the chosen folder away the folder it opens is the
+                    // app's own, not the one the row names, and the button
+                    // says so.
+                    if isAway(place, notes) {
+                        Button(L("앱 폴더 보기", "Show Notes on My Mac")) { reveal(url) }
+                    } else {
+                        Button(L("Finder에서 보기", "Show in Finder")) { reveal(url) }
+                    }
+                }
+            }
+        } header: {
+            pageHeader(L("논문 없는 노트", "Notes Without a Paper"))
+        } footer: {
+            VStack(alignment: .leading, spacing: 10) {
+                // The path of the folder the row names — the chosen one even
+                // while it is away, since that is the one to go and look for.
+                if let path = where_.hint ?? where_.url?.path(percentEncoded: false) {
+                    Text(path)
+                        .font(.footnote.monospaced())
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let status = looseNotesStatus(notes: notes, place: place) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(status)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if let move = app.lastNotesMove, move.kept > 0 {
+                            Button(L("남은 노트 보기", "Show Notes Left Behind")) { reveal(move.keptIn) }
+                                .buttonStyle(.link)
+                        }
+                    }
+                }
+                Text(L(
+                    "논문에 대한 노트는 그 논문이 있는 폴더에 있어요. 여기에는 어느 논문에도 딸리지 않은 노트만 있어요. iCloud Drive 같은 클라우드 폴더를 고르면 다른 맥에서도 보여요.",
+                    "Notes about a paper stay in that paper's folder. This folder holds the rest. Choose one in iCloud Drive to see them on your other Macs."
+                ))
+            }
+        }
+    }
+
+    /// What the row names: the folder, the service that carries it, and
+    /// where it is.
+    private func looseNotesLocation(
+        notes: NotesModel?, place: AppModel.NotesFolder
+    ) -> (name: String, provider: CloudProvider?, url: URL?, hint: String?) {
+        switch place {
+        case .app:
+            // The app's own folder is on this Mac and goes nowhere, which is
+            // what the name says; a "This Device" row under it would say it
+            // twice.
+            return (L("앱 폴더", "On My Mac"), nil, notes?.looseBox, nil)
+        case .chosen:
+            guard let notes else { return ("", nil, nil, nil) }
+            let url = notes.looseBox
+            // Gone while the app was open: what is being written now goes to
+            // the app's own folder, and that is the one worth opening.
+            if notes.chosenFolderWentAway {
+                return (url.lastPathComponent, CloudProvider.detect(at: url), notes.appFolderURL, url.path(percentEncoded: false))
+            }
+            return (url.lastPathComponent, CloudProvider.detect(at: url), url, nil)
+        case let .away(hint):
+            let name = hint.map { URL(fileURLWithPath: $0).lastPathComponent } ?? L("고른 폴더", "Chosen Folder")
+            let provider = hint.map { CloudProvider.detect(at: URL(fileURLWithPath: $0)) }
+            // The folder that is actually taking the notes for now is the
+            // app's own, and that is the one worth opening.
+            return (name, provider, notes?.looseBox, hint)
+        }
+    }
+
+    private func isAway(_ place: AppModel.NotesFolder, _ notes: NotesModel?) -> Bool {
+        if case .away = place { return true }
+        return notes?.chosenFolderWentAway == true
+    }
+
+    /// One line under the row: why the notes are not where they were put, or
+    /// what the last move did. Nothing when there is nothing to say.
+    private func looseNotesStatus(notes: NotesModel?, place: AppModel.NotesFolder) -> String? {
+        if let refusal = app.notesNotice { return refusal }
+        var lines: [String] = []
+        if case .away = place {
+            lines.append(L(
+                "고른 폴더에 닿을 수 없어요. 그동안 쓰는 노트는 앱 폴더에 둬요. 폴더가 돌아오면 그리로 옮겨요.",
+                "Paper Time can't reach the folder you chose. New notes stay on this Mac until it's back, then move there."
+            ))
+        } else if notes?.chosenFolderWentAway == true {
+            lines.append(L(
+                "고른 폴더에 닿지 못해서 노트를 앱 폴더에 두고 있어요. 폴더가 돌아오면 그리로 옮겨요.",
+                "Paper Time can't reach the folder you chose anymore. Notes stay on this Mac until it's back, then move there."
+            ))
+        }
+        if let move = app.lastNotesMove {
+            lines.append(Self.describe(move, appFolder: notes?.appFolderURL, box: notes?.looseBox))
+        }
+        return lines.isEmpty ? nil : lines.joined(separator: " ")
+    }
+
+    /// What a move did, counted. `box` is where the notes about no paper are
+    /// now — the folder the move went into.
+    static func describe(_ move: AppModel.NotesMove, appFolder: URL?, box: URL?) -> String {
+        let n = move.moved
+        let k = move.kept
+        let notesEN = n == 1 ? "1 note" : "\(n) notes"
+        var sentences: [String] = []
+        switch move.occasion {
+        case .chose where n == 0 && k == 0:
+            sentences.append(L("옮길 노트가 없었어요. 새 노트부터 여기에 둬요.", "No notes to move. New ones go here."))
+        case .wentBack where n == 0 && k == 0:
+            sentences.append(L("옮길 노트가 없었어요.", "No notes to move."))
+        case .chose:
+            sentences.append(L("노트 \(n)개를 옮겼어요.", "Moved \(notesEN)."))
+        case .wentBack:
+            sentences.append(L("노트 \(n)개를 앱 폴더로 옮겼어요.", "Moved \(notesEN) back to this Mac."))
+        case .cameBack where n > 0:
+            sentences.append(L(
+                "폴더에 닿지 못하는 동안 쓴 노트 \(n)개를 옮겼어요.",
+                "Moved \(notesEN) written while the folder was away."
+            ))
+        case .cameBack:
+            // Nothing new came across; the only thing worth a line is what is
+            // still waiting, below. "Moved 0 notes" would be a line about
+            // nothing.
+            break
+        }
+        if k > 0 {
+            func isAppFolder(_ url: URL?) -> Bool {
+                guard let url, let appFolder else { return false }
+                return url.standardizedFileURL == appFolder.standardizedFileURL
+            }
+            // Both folders by name: "the new folder" and "there" leave the
+            // reader working out which of two folders is meant.
+            let stayedKO = isAppFolder(move.keptIn) ? "앱 폴더" : "«\(move.keptIn.lastPathComponent)»"
+            let stayedEN = isAppFolder(move.keptIn) ? "on this Mac" : "in \(move.keptIn.lastPathComponent)"
+            let intoKO = isAppFolder(box) ? "앱 폴더" : "«\(box?.lastPathComponent ?? "")»"
+            let intoEN = isAppFolder(box) ? "this Mac" : (box?.lastPathComponent ?? "")
+            // Standing alone it has to say what it is counting; after "moved
+            // 12 notes" the count is enough.
+            let alone = sentences.isEmpty
+            let whatKO = alone ? "노트 \(k)개는" : "\(k)개는"
+            let whatEN = alone ? (k == 1 ? "1 note" : "\(k) notes") : "\(k)"
+            sentences.append(L(
+                "\(whatKO) \(intoKO)에 같은 이름의 노트가 이미 있어서 \(stayedKO)에 그대로 뒀어요.",
+                k == 1
+                    ? "\(whatEN) stayed \(stayedEN) because \(intoEN) already has a note with that name."
+                    : "\(whatEN) stayed \(stayedEN) because \(intoEN) already has notes with those names."
+            ))
+        }
+        return sentences.joined(separator: " ")
+    }
+
+    private func reveal(_ url: URL) {
+        // The app's own folder is made the first time a note is written, and
+        // a Finder window on a folder that is not there shows nothing at all.
+        // Only that one: a chosen folder that is not there is away, and
+        // making it again is the one thing never done to it.
+        if let own = app.library?.notes.appFolderURL,
+           own.standardizedFileURL == url.standardizedFileURL {
+            try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+    #endif
 
     // MARK: - Language
 

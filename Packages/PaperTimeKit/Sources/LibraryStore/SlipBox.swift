@@ -47,6 +47,30 @@ public actor LooseNotes: SlipBox {
         self.place = place
     }
 
+    /// Whether this is a folder somebody chose, rather than the app's own.
+    public nonisolated var isChosen: Bool { place != nil }
+
+    /// Whether the folder is there to be written to.
+    ///
+    /// Only a chosen folder can be away — an unplugged disk, a cloud drive
+    /// that was signed out of — and one that has been moved to the Trash is
+    /// away as well: a bookmark follows its folder there, and notes written
+    /// into the Trash are notes on their way out.
+    public nonisolated var isReachable: Bool {
+        guard isChosen else { return true }
+        var isDirectory: ObjCBool = false
+        let path = directory.path(percentEncoded: false)
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory),
+              isDirectory.boolValue
+        else { return false }
+        return !directory.pathComponents.contains(".Trash")
+    }
+
+    /// Thrown instead of writing into a chosen folder that is not there.
+    public struct Unreachable: Error, Sendable {
+        public let folder: URL
+    }
+
     /// Where the app keeps them on this machine, until told otherwise.
     public static func inApplicationSupport(named name: String = "Notes") -> LooseNotes {
         let base = FileManager.default
@@ -62,16 +86,40 @@ public actor LooseNotes: SlipBox {
     /// is the notes. Every `.md` is copied across and then removed here; a name
     /// already taken in the new folder is left alone and kept here, because the
     /// one thing that must not happen is writing over a note.
+    ///
+    /// Unless what is there is this very file, byte for byte. That is the
+    /// reader who copied the folder into the cloud by hand before choosing
+    /// the copy, and a note that is already where it is going has moved: left
+    /// here as well, every one of them would have been reported as stuck and
+    /// kept in the app's folder for good.
     public func move(into other: LooseNotes) -> (moved: Int, kept: Int) {
         let manager = FileManager.default
+        guard directory.standardizedFileURL != other.directory.standardizedFileURL else { return (0, 0) }
+        let here = (try? FileOperations.visibleContents(of: directory, keys: [])) ?? []
+        let notes = here.filter { $0.pathExtension == "md" }
+        // Nothing to carry, nothing to ask of the other folder — which may be
+        // in a cloud drive, where even "is it there" is a round trip.
+        guard !notes.isEmpty else { return (0, 0) }
+        // A folder somebody chose is never made here. Made again where it
+        // used to be — a disk that is not plugged in, a drive signed out of —
+        // it is a second, empty folder of the same name, and the notes moved
+        // into it are notes the real one never sees.
+        guard other.isReachable else { return (0, notes.count) }
         try? FileOperations.ensureDirectory(at: other.directory)
         var moved = 0
         var kept = 0
-        let here = (try? FileOperations.visibleContents(of: directory, keys: [])) ?? []
-        for file in here where file.pathExtension == "md" {
+        for file in notes {
             let landing = other.directory.appending(path: file.lastPathComponent)
             if manager.fileExists(atPath: landing.path(percentEncoded: false)) {
-                kept += 1
+                if manager.contentsEqual(
+                    atPath: file.path(percentEncoded: false),
+                    andPath: landing.path(percentEncoded: false)
+                ) {
+                    try? manager.removeItem(at: file)
+                    moved += 1
+                } else {
+                    kept += 1
+                }
                 continue
             }
             do {
@@ -83,6 +131,14 @@ public actor LooseNotes: SlipBox {
             }
         }
         return (moved, kept)
+    }
+
+    /// The names of the notes here, without reading any of them.
+    public func noteIDs() -> [String] {
+        ((try? FileOperations.visibleContents(of: directory, keys: [])) ?? [])
+            .filter { $0.pathExtension == "md" }
+            .map { $0.deletingPathExtension().lastPathComponent }
+            .sorted()
     }
 
     public func loadNotes() -> [Zettel] {
@@ -105,6 +161,10 @@ public actor LooseNotes: SlipBox {
     }
 
     public func saveNote(_ note: Zettel) throws {
+        // Before anything else, the empty note included: writing makes the
+        // folders on the way, and a chosen folder made again is the second,
+        // empty folder `move(into:)` refuses to make.
+        guard isReachable else { throw Unreachable(folder: directory) }
         let url = noteURL(note.id)
         if note.isEmpty {
             try? FileManager.default.removeItem(at: url)

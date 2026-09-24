@@ -163,4 +163,58 @@ struct LooseNotesTests {
         try await box.saveNote(Zettel(id: "260922_0004"))
         #expect(await box.loadNotes().isEmpty)
     }
+
+    @Test("Moving carries every note and writes over none")
+    func movesWithoutWritingOver() async throws {
+        let from = try Self.makeDirectory()
+        let to = try Self.makeDirectory()
+        defer {
+            try? FileManager.default.removeItem(at: from)
+            try? FileManager.default.removeItem(at: to)
+        }
+        let here = LooseNotes(directory: from)
+        let there = LooseNotes(at: .adopting(to))
+        try await here.saveNote(Zettel(id: "202609241200", title: "Goes"))
+        try await here.saveNote(Zettel(id: "202609241201", title: "Also goes"))
+        try await here.saveNote(Zettel(id: "202609241202", title: "Mine"))
+        try await there.saveNote(Zettel(id: "202609241202", title: "Theirs"))
+        // The same file already there, byte for byte: somebody copied the
+        // folder across by hand before choosing the copy.
+        try await here.saveNote(Zettel(id: "202609241203", title: "Copied", created: .distantPast))
+        try await there.saveNote(Zettel(id: "202609241203", title: "Copied", created: .distantPast))
+
+        let result = await here.move(into: there)
+        #expect(result.moved == 3)
+        #expect(result.kept == 1)
+        #expect(await here.noteIDs() == ["202609241202"])
+        #expect(await there.noteIDs() == ["202609241200", "202609241201", "202609241202", "202609241203"])
+        // The note of the same name that was already there is still its own.
+        let theirs = await there.loadNotes().first { $0.id == "202609241202" }
+        #expect(theirs?.title == "Theirs")
+        let mine = await here.loadNotes().first
+        #expect(mine?.title == "Mine")
+        // Moving into itself is nothing at all.
+        #expect(await there.move(into: LooseNotes(directory: to)) == (0, 0))
+    }
+
+    @Test("A chosen folder that is not there is not made again")
+    func leavesAnAbsentFolderAbsent() async throws {
+        let from = try Self.makeDirectory()
+        let gone = FileManager.default.temporaryDirectory
+            .appending(path: "papertime-gone-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: from) }
+        let here = LooseNotes(directory: from)
+        let away = LooseNotes(at: .adopting(gone))
+        try await here.saveNote(Zettel(id: "202609241300", title: "Stays"))
+
+        #expect(!away.isReachable)
+        #expect(await here.move(into: away) == (0, 1))
+        #expect(await here.noteIDs() == ["202609241300"])
+        await #expect(throws: LooseNotes.Unreachable.self) {
+            try await away.saveNote(Zettel(id: "202609241301", title: "Nowhere to go"))
+        }
+        #expect(!FileManager.default.fileExists(atPath: gone.path(percentEncoded: false)))
+        // The app's own folder is always reachable: it is made when needed.
+        #expect(here.isReachable)
+    }
 }

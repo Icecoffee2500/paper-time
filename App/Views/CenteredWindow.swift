@@ -53,6 +53,10 @@ private struct CenteredWindow: NSViewRepresentable {
         deinit { NotificationCenter.default.removeObserver(self) }
 
         private func recentreIfDue() {
+            // A probe's picture of Settings is taken in a window the probe put
+            // outside every display, and centring it would bring it onto the
+            // screen of whoever is at the machine.
+            guard !Boot.isSet("PAPERTIME_SETTINGS") else { return }
             guard isDue, let window else { return }
             isDue = false
             // Next tick: SwiftUI is still sizing the window on the pass that

@@ -2,7 +2,7 @@ import SwiftUI
 
 @main
 struct PaperTimeApp: App {
-    @State private var model = AppModel()
+    @State private var model: AppModel
     #if os(macOS)
     /// Files and folders the desktop hands over — a folder dropped on the
     /// icon becomes the library, which is the one way into a Google Drive or
@@ -11,7 +11,12 @@ struct PaperTimeApp: App {
     #endif
 
     init() {
+        let model = AppModel()
+        _model = State(initialValue: model)
         #if os(macOS)
+        // Held for a probe whose launch restores no window: see
+        // `WindowProbe.openIfNoneWasRestored`.
+        WindowProbe.model = model
         // Draws every feature demo to a file and quits, for checking them
         // without a window: `PAPERTIME_RENDER_DEMOS=/some/dir`.
         if let directory = Boot.setting("PAPERTIME_RENDER_DEMOS") {

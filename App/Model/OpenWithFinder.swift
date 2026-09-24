@@ -24,6 +24,10 @@ final class OpenWithFinder: NSObject, NSApplicationDelegate {
     /// launched would be a strange thing to do.
     @MainActor private static var waiting: [URL] = []
 
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        MainActor.assumeIsolated { WindowProbe.openIfNoneWasRestored() }
+    }
+
     func application(_ application: NSApplication, open urls: [URL]) {
         MainActor.assumeIsolated {
             guard let model = Self.model else {

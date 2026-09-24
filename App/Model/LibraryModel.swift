@@ -598,11 +598,22 @@ public final class LibraryModel {
         return UserDefaults.standard.object(forKey: "resolveMetadataOnImport") as? Bool ?? true
     }
 
-    public init(store: LibraryStore, location: LibraryLocation, manifest: LibraryManifest) {
+    /// `notes` arrives already pointed at the right box for the notes about
+    /// no paper — the app decides that before anything is read, because a
+    /// first reading of the wrong box is a slip-box that briefly has the
+    /// wrong notes in it. No default, on purpose: a default would be the
+    /// app's own folder, which is the reader's real notes, and a probe that
+    /// forgot to say otherwise would read and write them.
+    public init(
+        store: LibraryStore,
+        location: LibraryLocation,
+        manifest: LibraryManifest,
+        notes: NotesModel
+    ) {
         self.store = store
         self.location = location
         self.manifest = manifest
-        self.notes = NotesModel()
+        self.notes = notes
         let contact = UserDefaults.standard.string(forKey: "metadataContactEmail")
         let network = NetworkService(contactEmail: contact?.isEmpty == false ? contact : nil)
         // The on-device model is tried first where it exists and simply reports
@@ -1699,8 +1710,24 @@ public final class LibraryModel {
             report += " collections=[\((set?.collections ?? []).map(\.name).joined(separator: ","))]"
             report += " notes=[\(box.map(\.id).joined(separator: ","))]\n"
         }
-        report += "app box \(notes.looseBox.lastPathComponent):"
+        // The whole path, and whose folder it is: with a folder chosen for
+        // them the notes about no paper can be anywhere, and a probe's own
+        // box has to be seen not to be the reader's.
+        let whose = notes.looseBoxIsChosen
+            ? "chosen"
+            : (notes.chosenFolderWentAway ? "app folder (chosen one away)" : "app folder")
+        report += "loose box \(notes.looseBox.path(percentEncoded: false)) [\(whose)]:"
         report += " notes=[\(await notes.looseNoteIDs().joined(separator: ","))]\n"
+        if notes.looseBoxIsChosen {
+            report += "app folder \(notes.appFolderURL.path(percentEncoded: false)):"
+            report += " notes=[\(await notes.appFolderNoteIDs().joined(separator: ","))]\n"
+        }
+        let twice = notes.notesInTwoBoxes
+        if !twice.isEmpty {
+            report += "same name in two boxes: ["
+            report += twice.map { "\($0.id) shown from \($0.shownFrom.lastPathComponent)" }.joined(separator: ", ")
+            report += "]\n"
+        }
         // What the folder holds that the library has not taken in, and what
         // the last press of the button could not take: the only way to see
         // from here whether that row is telling the truth.

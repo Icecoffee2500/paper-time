@@ -78,7 +78,15 @@ if [ -n "$PORTABLE" ]; then
   # Electron takes the app's folder as its first argument.
   open -g -j -n -a "$PWD/$APP" --stderr "$LOG" --stdout "$LOG" --args "$PWD/Portable" "$@"
 else
-  open -g -j -n -a "$PWD/$APP" --stderr "$LOG" --stdout "$LOG" --args "$@"
+  # `-ApplePersistenceIgnoreState YES` keeps the windows of the copy somebody
+  # reads with out of the probe, and the probe's windows out of theirs: the
+  # sandbox is one per bundle id, so both save their windows to the same
+  # place, and a probe brought back whatever that copy had left — or nothing
+  # at all, and a hidden launch does not reliably open a window of its own.
+  # With it AppKit restores nothing and writes what it saves into the
+  # container's tmp. It is an argument, so nothing of it is stored. When no
+  # window comes up, the app makes one itself (`WindowProbe.openIfNoneWasRestored`).
+  open -g -j -n -a "$PWD/$APP" --stderr "$LOG" --stdout "$LOG" --args "$@" -ApplePersistenceIgnoreState YES
 fi
 
 # Watched the whole way, not only at the ends. Comparing before with after says
