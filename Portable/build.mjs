@@ -78,6 +78,12 @@ async function copyStatic() {
   await cp(path.join(root, 'src/renderer/style.css'), path.join(out, 'renderer/style.css'))
   const fonts = path.join(root, 'assets/fonts')
   if (existsSync(fonts)) await cp(fonts, path.join(out, 'renderer/fonts'), { recursive: true })
+  // Latex Suite's snippets are inside the renderer bundle (esbuild's JSON
+  // loader reads the Mac's own file), and its MIT licence asks for the notice
+  // to travel with them — so the file beside them on the Mac goes beside them
+  // here too.
+  await cp(path.join(root, '../Packages/PaperTimeKit/Sources/PaperCore/Resources/LatexSuite-LICENSE.md'),
+    path.join(out, 'renderer/LatexSuite-LICENSE.md'))
   // pdf.js ships the character maps and standard fonts as data files; a PDF
   // with a CJK font or one that relies on the base-14 fonts needs them, and a
   // paper in Korean is exactly that case.

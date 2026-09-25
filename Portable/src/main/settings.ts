@@ -30,6 +30,8 @@ export interface Settings {
   pageTint: 'none' | 'sepia' | 'grey' | 'night'
   pageLayout: 'single' | 'continuous'
   selectedPaperID: string | null
+  /** Latex Suite's shortcuts in the note and on the cards. On unless turned off. */
+  latexShortcuts: boolean
 }
 
 const DEFAULTS: Settings = {
@@ -46,6 +48,7 @@ const DEFAULTS: Settings = {
   pageTint: 'none',
   pageLayout: 'continuous',
   selectedPaperID: null,
+  latexShortcuts: true,
 }
 
 let cached: Settings | null = null

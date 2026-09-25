@@ -42,6 +42,7 @@ import { providerIcon, providerOf } from '../shared/cloudProvider.js'
 import { linesFromRuns, type RunBox } from '../shared/textLines.js'
 import { encodeSwiftJSON as encode } from '../shared/coding.js'
 import { splitDock, splitPapers, splitRemove, zoneAt, zoneRect } from '../shared/split.js'
+import { latexSuiteTests } from './latexSuite.js'
 
 let passed = 0
 let failed = 0
@@ -1211,6 +1212,8 @@ async function main() {
     const tops = linesFromRuns(shuffled).map((line) => line.top)
     assert.deepEqual(tops, [...tops].sort((a, b) => a - b))
   })
+
+  await latexSuiteTests(test, suite)
 
   process.stdout.write(`\n${passed} passed, ${failed} failed\n`)
   if (failures.length > 0) {
