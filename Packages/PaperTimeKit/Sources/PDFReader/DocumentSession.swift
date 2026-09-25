@@ -540,6 +540,19 @@ public final class DocumentSession {
             if let page = document.page(at: mark.pageIndex) { TextMarkupWriter.remove(id: id, from: page) }
             changed = true
         }
+        // A mark that only a journal carries — another device's, arrived
+        // through the folder while the file it wrote is still on its way, or
+        // a device that never writes the file — is written into the PDF from
+        // here, on the usual delay. The file is meant to hold what every
+        // device has said; before this, it held that only once something
+        // was marked here as well. A file that refused before is not asked
+        // again until it changes (`flush` checks), so this cannot loop.
+        var held: [UUID: MarkupDescriptor] = [:]
+        for mark in fileMarks { held[mark.id] = mark }
+        if saveState == .idle, held != desired {
+            saveState = .pending
+            scheduleFlush()
+        }
         guard changed else { return }
         markups = Array(desired.values)
         sortMarkups()

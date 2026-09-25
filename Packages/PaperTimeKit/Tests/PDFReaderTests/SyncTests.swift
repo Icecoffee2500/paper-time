@@ -101,6 +101,31 @@ struct SyncTests {
         #expect(session.markups.isEmpty)
     }
 
+    @Test("A mark only another device's journal carries is written into the file from here")
+    func journalOnlyMarkReachesTheFile() async throws {
+        let (store, paper) = try Self.makeLibrary()
+        let session = try await DocumentSession.open(paper: paper, store: store)
+        try await Task.sleep(for: .milliseconds(300))
+        let before = try Data(contentsOf: paper.documentURL).count
+
+        var theirs = MarkJournal(device: "iPad-TEST", name: "iPad")
+        let mark = Self.mark(40, color: .blue)
+        theirs.record(mark)
+        try theirs.save(to: paper.folder)
+        await session.reloadFromDisk()
+        #expect(session.saveState == .pending)
+
+        await session.flush()
+        #expect(session.saveState == .idle)
+        let written = try #require(PDFDocument(url: paper.documentURL))
+        #expect(TextMarkupWriter.descriptors(in: written).map(\.id) == [mark.id])
+        #expect(try Data(contentsOf: paper.documentURL).count > before)
+
+        // Nothing more to say: a second look at the same journal writes nothing.
+        await session.reloadFromDisk()
+        #expect(session.saveState == .idle)
+    }
+
     @Test("Our removal outlives their addition when it is the newer word")
     func newestWordWins() {
         var a = MarkJournal(device: "A", name: "A")
