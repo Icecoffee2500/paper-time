@@ -1,4 +1,19 @@
 {
-  "issues": [],
-  "contributors": []
+  "issues": [
+    {
+      "number": 6,
+      "title": "Test",
+      "state": "open",
+      "html_url": "https://github.com/Icecoffee2500/paper-time/issues/6",
+      "updated_at": "2026-09-24T11:33:07Z",
+      "milestone": null,
+      "body": "<!-- credit: 익명 -->"
+    }
+  ],
+  "contributors": [
+    {
+      "name": "익명",
+      "count": 1
+    }
+  ]
 }
