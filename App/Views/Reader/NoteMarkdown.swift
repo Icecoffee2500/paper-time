@@ -62,6 +62,11 @@ enum NoteMarkdown {
     /// only formulas care about. Rendering happens on the main thread, one
     /// note at a time, which is what makes a single value enough.
     private nonisolated(unsafe) static var available: CGFloat?
+    /// The appearance the note is shown in, for the formulas: they are
+    /// bitmaps, and a dynamic colour drawn into a bitmap outside a drawing
+    /// pass resolves to the light appearance — dark notes got black
+    /// formulas. `nil` is the application's.
+    private nonisolated(unsafe) static var current: NoteAppearance?
 
     // MARK: - Reading the source back
 
@@ -415,17 +420,20 @@ enum NoteMarkdown {
     /// `width` is the room a line has, which formulas need: one that does not
     /// fit is broken across lines rather than run off the edge of the pane.
     static func render(
-        _ source: String, caret: Int? = nil, raw: Bool = false, width: CGFloat? = nil
+        _ source: String, caret: Int? = nil, raw: Bool = false, width: CGFloat? = nil,
+        appearance: NoteAppearance? = nil
     ) -> Rendered {
         Trace.time("note: render \(source.count) characters") {
-            renderNow(source, caret: caret, raw: raw, width: width)
+            renderNow(source, caret: caret, raw: raw, width: width, appearance: appearance)
         }
     }
 
     private static func renderNow(
-        _ source: String, caret: Int? = nil, raw: Bool = false, width: CGFloat? = nil
+        _ source: String, caret: Int? = nil, raw: Bool = false, width: CGFloat? = nil,
+        appearance: NoteAppearance? = nil
     ) -> Rendered {
         available = width
+        current = appearance
         let text = source as NSString
         if raw {
             let whole = NSMutableAttributedString(string: source, attributes: rawAttributes)
@@ -1006,15 +1014,20 @@ enum NoteMarkdown {
         // Rounded, so nudging the pane by a point does not redraw every
         // formula in the note.
         let room = width.map { max(80, ($0 / 8).rounded(.down) * 8) }
-        let key = "\(display ? "D" : "I")|\(size)|\(room ?? 0)|\(latex)"
+        let appearance = current ?? NSApp?.effectiveAppearance ?? NSAppearance.currentDrawing()
+        let key = "\(display ? "D" : "I")|\(size)|\(room ?? 0)|\(appearance.name.rawValue)|\(latex)"
         let drawn: (image: NSImage, descent: CGFloat)
         if let cached = mathCache[key] {
             drawn = cached
         } else {
+            var ink = NSColor.labelColor
+            appearance.performAsCurrentDrawingAppearance {
+                ink = NSColor(cgColor: NSColor.labelColor.cgColor) ?? .labelColor
+            }
             guard let made = MathTypesetter.image(
                 latex: latex, display: display,
                 pointSize: NoteTypography.mathSize(forBody: size) * (display ? 1.12 : 1),
-                color: .labelColor,
+                color: ink,
                 maxWidth: room
             ) else { return nil }
             if mathCache.count > 400 { mathCache.removeAll() }

@@ -37,6 +37,20 @@ final class MathPreviewCard {
     private(set) var face: Face?
     /// The LaTeX the card was last asked to show.
     private(set) var latex: String?
+    /// Where the glass got its ground: "window" (the window server),
+    /// "view" (the text view's own drawing) or "none".
+    private(set) var groundSource = "none"
+
+    /// A child window outlives its owner: the parent window keeps it. So
+    /// the card takes its panel down with it — which is how a card was
+    /// left standing over the notes list after the note was closed.
+    deinit {
+        guard let panel else { return }
+        MainActor.assumeIsolated {
+            panel.parent?.removeChildWindow(panel)
+            panel.orderOut(nil)
+        }
+    }
 
     var isShowing: Bool { panel?.isVisible == true }
     /// Where the card is, on screen, while it shows.
@@ -50,9 +64,16 @@ final class MathPreviewCard {
         latex = span.latex
         let room = min(480, max(120, bounds.width - 24))
         let size = NoteTypography.mathSize(forBody: NoteTypography.baseSize) * (span.display ? 1.12 : 1)
+        // The formula's ink, resolved under the note's own appearance: a
+        // dynamic colour drawn into a bitmap outside a drawing pass comes
+        // out as the light appearance's, and dark notes got black formulas.
+        var ink = NSColor.labelColor
+        view.effectiveAppearance.performAsCurrentDrawingAppearance {
+            ink = NSColor(cgColor: NSColor.labelColor.cgColor) ?? .labelColor
+        }
         if let made = MathTypesetter.image(
             latex: span.latex, display: span.display, pointSize: size,
-            color: .labelColor, maxWidth: room - 24
+            color: ink, maxWidth: room - 24
         ) {
             lastGood = made.image
             face = .set(made.image)
@@ -78,12 +99,20 @@ final class MathPreviewCard {
         origin.x = min(max(origin.x, bounds.minX), max(bounds.minX, bounds.maxX - cardSize.width))
         panel.setFrameOrigin(origin)
 
-        // What lies under the card, for the glass to show: a picture of
-        // the note there, diffused. Taken from the view, not the screen, so
-        // no permission is asked and a probe's photograph has it too.
+        // What lies under and around the card, for the glass to bend: a
+        // picture of the note there. Taken from the view, not the screen,
+        // so no permission is asked and a probe's photograph has it too.
         let screenRect = NSRect(origin: origin, size: cardSize)
         let local = view.convert(window.convertFromScreen(screenRect), from: nil)
-        hosting.rootView = ContentView(face: face, room: room, ground: Self.ground(under: local, of: view))
+        let dark = view.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        panel.appearance = view.effectiveAppearance
+        let ground = Self.ground(under: local, of: view)
+        groundSource = ground?.source ?? "none"
+        let slab = ground.flatMap {
+            GlassSlab.render(ground: $0.image, size: cardSize, cornerRadius: Corner.popover, dark: dark,
+                             scale: window.backingScaleFactor)
+        }
+        hosting.rootView = ContentView(face: face, room: room, ground: slab)
 
         if !panel.isVisible {
             panel.alphaValue = 0
@@ -114,7 +143,7 @@ final class MathPreviewCard {
         case .raw(let text): kind = "raw \(text.debugDescription)"
         }
         let frame = panel.frame
-        return "math preview: visible \(kind) at \(Int(frame.minX)),\(Int(frame.minY)) \(Int(frame.width))×\(Int(frame.height)) for \(latex?.debugDescription ?? "nil")"
+        return "math preview: visible \(kind) at \(Int(frame.minX)),\(Int(frame.minY)) \(Int(frame.width))×\(Int(frame.height)) ground \(groundSource) for \(latex?.debugDescription ?? "nil")"
     }
 
     /// The card's pixels, for a probe that photographs the editor: a child
@@ -126,6 +155,23 @@ final class MathPreviewCard {
         let image = NSImage(size: view.bounds.size)
         image.addRepresentation(bitmap)
         return image
+    }
+
+    /// A picture of `rect` (window coordinates) of `window`, as the window
+    /// server has it — or nil when the window is off screen.
+    private static func windowPixels(of window: NSWindow, at rect: NSRect) -> NSImage? {
+        let onScreen = window.convertToScreen(rect)
+        guard let screen = NSScreen.screens.first(where: { $0.frame.intersects(onScreen) }) else { return nil }
+        // Quartz counts from the top of the main display; AppKit from the bottom.
+        let mainHeight = NSScreen.screens.first.map(\.frame.maxY) ?? screen.frame.maxY
+        let quartz = CGRect(
+            x: onScreen.minX, y: mainHeight - onScreen.maxY,
+            width: onScreen.width, height: onScreen.height
+        )
+        guard let cg = CGWindowListCreateImage(
+            quartz, .optionIncludingWindow, CGWindowID(window.windowNumber), [.bestResolution, .boundsIgnoreFraming]
+        ), cg.width > 2, cg.height > 2 else { return nil }
+        return NSImage(cgImage: cg, size: rect.size)
     }
 
     private func makePanel() -> NSPanel {
@@ -159,9 +205,20 @@ final class MathPreviewCard {
 
     /// A picture of `rect` of `view` (the view's coordinates), diffused as
     /// the glass shows it. Nil when the card lies wholly outside the view.
-    private static func ground(under rect: NSRect, of view: NSView) -> NSImage? {
-        let inside = rect.intersection(view.bounds)
+    private static func ground(under card: NSRect, of view: NSView) -> (image: NSImage, source: String)? {
+        let inside = card.intersection(view.bounds)
         guard !inside.isNull, inside.width > 1, inside.height > 1 else { return nil }
+        // With the margin the lens reaches into.
+        let rect = card.insetBy(dx: -GlassSlab.margin, dy: -GlassSlab.margin)
+        // First choice: the window's own pixels, from the window server —
+        // the note's pane, the ground the pane lies on, and the words, as
+        // they are on screen. Only this window is asked for, which needs
+        // no permission: the screen-recording gate is on other apps'
+        // windows. A window off every display has no pixels there, so the
+        // probe's window falls through to the view's own drawing.
+        if let window = view.window, let taken = Self.windowPixels(of: window, at: view.convert(rect, to: nil)) {
+            return (taken, "window")
+        }
         guard let rep = view.bitmapImageRepForCachingDisplay(in: rect) else { return nil }
         view.cacheDisplay(in: rect, to: rep)
         let taken = NSImage(size: rect.size)
@@ -177,7 +234,7 @@ final class MathPreviewCard {
             taken.draw(in: bounds)
             return true
         }
-        return GlassSlab<RoundedRectangle>.diffuse(image)
+        return (image, "view")
     }
 
     struct ContentView: View {
@@ -205,7 +262,7 @@ final class MathPreviewCard {
             .frame(maxWidth: room)
             .fixedSize(horizontal: true, vertical: true)
             .background {
-                GlassSlab(ground: ground, shape: RoundedRectangle(cornerRadius: Corner.popover, style: .continuous))
+                GlassSlab(picture: ground, cornerRadius: Corner.popover)
             }
             .animation(Motion.tap, value: face)
         }

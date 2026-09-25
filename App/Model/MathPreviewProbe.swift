@@ -36,6 +36,16 @@ enum MathPreviewProbe {
         )
         window.isReleasedWhenClosed = false
         window.setFrameOrigin(NSPoint(x: displays.minX - 60_000, y: displays.minY - 60_000))
+        // `--papertime-math-preview-onscreen=1` puts the window in the
+        // bottom-right corner of the main display instead, without taking
+        // the keyboard — the only way to see the card over the window
+        // server's pixels. Asked for by a person, never by default.
+        if Boot.isSet("PAPERTIME_MATH_PREVIEW_ONSCREEN"), let main = NSScreen.main {
+            window.setFrameOrigin(NSPoint(x: main.visibleFrame.maxX - 580, y: main.visibleFrame.minY + 20))
+        }
+        // `--papertime-dark=1` darkens the app's own windows through
+        // SwiftUI; this window is the probe's, so it is told directly.
+        if Boot.isSet("PAPERTIME_DARK") { window.appearance = NSAppearance(named: .darkAqua) }
         let note = LatexSuiteTypingProbe.Note()
         let hosting = NSHostingView(rootView: LatexSuiteTypingProbe.NoteHost(note: note))
         hosting.frame = NSRect(x: 0, y: 0, width: 560, height: 360)
@@ -69,7 +79,40 @@ enum MathPreviewProbe {
         LatexSuiteTypingProbe.set([NSRange(location: 0, length: 0)], in: text)
         await settle()
         say("math preview: after leaving — \(coordinator.mathPreview.report)")
+        // The note's own formulas, now that the caret has left the block
+        // and the line is set: their ink should be the appearance's.
+        if let storage = text.textStorage {
+            var found: [String] = []
+            storage.enumerateAttribute(.attachment, in: NSRange(location: 0, length: storage.length)) { value, _, _ in
+                guard let image = (value as? NSTextAttachment)?.image, let luminance = inkLuminance(of: image) else { return }
+                found.append(String(format: "%.2f", luminance))
+            }
+            say("math preview: note formulas \(found.count), ink luminance \(found.joined(separator: " ")) (0 black, 1 white) in \(text.effectiveAppearance.name.rawValue)")
+        }
         NSApp.terminate(nil)
+    }
+
+    /// The mean luminance of the opaque pixels of a formula's picture.
+    private static func inkLuminance(of image: NSImage) -> Double? {
+        var rect = CGRect(origin: .zero, size: image.size)
+        guard let cg = image.cgImage(forProposedRect: &rect, context: nil, hints: nil) else { return nil }
+        let w = cg.width, h = cg.height
+        var buffer = [UInt8](repeating: 0, count: w * h * 4)
+        let drawn = buffer.withUnsafeMutableBytes { raw -> Bool in
+            guard let context = CGContext(
+                data: raw.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else { return false }
+            context.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+            return true
+        }
+        guard drawn else { return nil }
+        var sum = 0.0, count = 0.0
+        for i in stride(from: 0, to: buffer.count, by: 4) where buffer[i + 3] > 200 {
+            sum += (0.2126 * Double(buffer[i]) + 0.7152 * Double(buffer[i + 1]) + 0.0722 * Double(buffer[i + 2])) / Double(buffer[i + 3])
+            count += 1
+        }
+        return count > 0 ? sum / count : nil
     }
 
     private static func type(
@@ -104,6 +147,10 @@ enum MathPreviewProbe {
         let image = NSImage(size: text.bounds.size)
         image.addRepresentation(bitmap)
         let composed = NSImage(size: text.bounds.size, flipped: false) { rect in
+            // The text view leaves its background to the window; a dark
+            // window's white words on a white picture would be invisible.
+            (window.backgroundColor ?? .textBackgroundColor).setFill()
+            rect.fill()
             image.draw(in: rect)
             if let picture = card.picture(), let frame = card.frame {
                 // The card's screen frame, into the text view's own coordinates.

@@ -4,10 +4,12 @@ import SwiftUI
 import AppKit
 typealias NoteFont = NSFont
 typealias NoteColor = NSColor
+typealias NoteAppearance = NSAppearance
 #else
 import UIKit
 typealias NoteFont = UIFont
 typealias NoteColor = UIColor
+typealias NoteAppearance = UITraitCollection
 #endif
 
 /// What a note is set in.

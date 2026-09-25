@@ -97,7 +97,7 @@ struct NoteEditor: NSViewRepresentable {
             name: NSView.frameDidChangeNotification, object: textView
         )
         context.coordinator.setContents(
-            NoteMarkdown.render(markdown, raw: showsRawText).text, in: textView
+            NoteMarkdown.render(markdown, raw: showsRawText, appearance: textView.effectiveAppearance).text, in: textView
         )
         DispatchQueue.main.async {
             textView.window?.makeFirstResponder(textView)
@@ -261,7 +261,8 @@ struct NoteEditor: NSViewRepresentable {
 
             let rendered = Trace.time("note: set the whole note again") {
                 NoteMarkdown.render(
-                    source, caret: caretSource, raw: showsRawText, width: room(in: textView)
+                    source, caret: caretSource, raw: showsRawText, width: room(in: textView),
+                    appearance: textView.effectiveAppearance
                 )
             }
             lastKnownWidth = room(in: textView)
@@ -593,6 +594,18 @@ final class NoteTextView: LatexSuiteTextView {
         let resigned = super.resignFirstResponder()
         if resigned { coordinator?.mathPreview.hide() }
         return resigned
+    }
+
+    /// A note put away does not always resign: the view is simply taken
+    /// out of the window. The card must not stay behind.
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        super.viewWillMove(toWindow: newWindow)
+        if newWindow == nil { coordinator?.mathPreview.hide() }
+    }
+
+    override func viewDidHide() {
+        super.viewDidHide()
+        coordinator?.mathPreview.hide()
     }
 
     /// The whole chip under the pointer, in document offsets — and only when
