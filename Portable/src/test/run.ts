@@ -33,6 +33,7 @@ import { shelfPapers, store, type Paper } from '../renderer/state.js'
 import { guessKind, hasAbstract, hasIdentifier, hasReferences } from '../shared/documentKind.js'
 import { SketchTree, adopted, guessedDirection, ordered, pruned, copied } from '../shared/sketchTree.js'
 import { sketchSnapSuite } from './sketchSnap.js'
+import { annotationSuite } from './annotations.js'
 import { PaperMeta, PaperState } from '../shared/model.js'
 import { entryFor, formatEntry, protectTitle } from '../shared/bibtex.js'
 import { escapeLaTeX } from '../shared/latexTable.js'
@@ -384,6 +385,7 @@ async function main() {
   })
 
   await sketchSnapSuite(test, suite)
+  await annotationSuite(test, suite)
 
   // --------------------------------------------------------------------- ink
   suite('Handwriting')
@@ -1220,9 +1222,12 @@ async function main() {
 }
 
 async function countAnnotations(bytes: Uint8Array, pageIndex: number): Promise<number> {
-  const { PDFDocument, PDFName, PDFArray } = await import('pdf-lib')
+  const { PDFDocument, PDFName, PDFArray, PDFRef } = await import('pdf-lib')
   const document = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false })
-  const annots = document.getPage(pageIndex).node.get(PDFName.of('Annots'))
+  // A list that is an object of its own is counted too: reading only the
+  // inline kind is the bug `annotations.ts` is there to catch.
+  const raw = document.getPage(pageIndex).node.get(PDFName.of('Annots'))
+  const annots = raw instanceof PDFRef ? document.context.lookup(raw) : raw
   return annots instanceof PDFArray ? annots.size() : 0
 }
 

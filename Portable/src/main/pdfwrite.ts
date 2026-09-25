@@ -37,7 +37,9 @@ import {
 } from 'pdf-lib'
 import { SketchColor, SketchElement, type Point, type Rect } from '../shared/sketch.js'
 import { InkStroke, INK_OWNER } from '../shared/ink.js'
-import { containerKind, rightsHandler, type PDFLock } from '../shared/pdfLock.js'
+import { containerKind, namesEncryption, rightsHandler, type PDFLock } from '../shared/pdfLock.js'
+import type { Mark } from '../shared/marks.js'
+import { sameMark } from '../shared/markJournal.js'
 
 export const SKETCH_OWNER = 'Paper Time Sketch'
 const KEY_SKETCH_ID = 'PTSketchID'
@@ -45,6 +47,35 @@ const KEY_SKETCH = 'PTSketch'
 const KEY_SKETCH_PART = 'PTSketchPart'
 const KEY_INK = 'PTInk'
 const KEY_MARKUP_ID = 'PTMarkupID'
+/**
+ * The reader's comment on a mark, kept apart from `/Contents` — the Mac's
+ * `TextMarkupWriter.commentKey`. `/Contents` holds the comment too when there
+ * is one, because that is what every other reader shows, and the quoted text
+ * when there is not; this key is how the comment is told from a quotation.
+ */
+const KEY_COMMENT = 'PTComment'
+/**
+ * Where this build put the comment before 0.9.9 — a key the Mac has never
+ * read, so a comment written here was invisible there. Still read, so a file
+ * written then does not lose the comment the first time it comes back
+ * through; never written again.
+ */
+const KEY_COMMENT_BEFORE = 'PTMarkupIDComment'
+
+/**
+ * Why a file was left as it was.
+ *
+ * `encrypted`: pdf-lib can open an encrypted file but cannot encrypt what it
+ * adds, and a mark written in the clear into an encrypted file is garbage to
+ * every reader that decrypts it. The drawing stays in its sidecars and the
+ * marks in the journal, and the window says so.
+ */
+export class WriteRefused extends Error {
+  constructor(readonly reason: 'encrypted') {
+    super(`Not written: the PDF is ${reason}.`)
+    this.name = 'WriteRefused'
+  }
+}
 
 /**
  * A PDF text string.
@@ -445,19 +476,14 @@ function buildInk(stroke: InkStroke): Built {
 
 // MARK: - Marks
 
-export interface MarkupRecord {
-  id: string
-  kind: 'highlight' | 'underline' | 'strikethrough'
-  /**
-   * One quad per line of text, each as eight numbers: upper-left,
-   * upper-right, lower-left, lower-right — the order `/QuadPoints` specifies,
-   * which is not the order anyone would guess.
-   */
-  quads: number[][]
-  color: [number, number, number]
-  text: string
-  comment?: string
-}
+/**
+ * A highlight, underline or strikethrough, as the window and the file know it.
+ *
+ * `quads` is one quad per line of text, each as eight numbers: upper-left,
+ * upper-right, lower-left, lower-right — the order `/QuadPoints` specifies,
+ * which is not the order anyone would guess.
+ */
+export type MarkupRecord = Mark
 
 /** The five the Mac offers, in `MarkupColor`. */
 export const MARKUP_COLORS: Record<string, [number, number, number]> = {
@@ -512,14 +538,17 @@ function buildMarkup(mark: MarkupRecord): Built {
     }
   }
   content.restore()
+  // What `TextMarkupWriter.apply` writes: the comment is the `/Contents` every
+  // reader shows when there is one, the quotation when there is not, and the
+  // comment again under its own key so it can be told from a quotation.
   const entries: Record<string, unknown> = {
     Subtype: subtype,
     QuadPoints: mark.quads.flat(),
     C: mark.color,
-    Contents: text(mark.text),
+    Contents: text(mark.comment ? mark.comment : mark.text),
     [KEY_MARKUP_ID]: text(mark.id),
   }
-  if (mark.comment) entries[KEY_MARKUP_ID + 'Comment'] = text(mark.comment)
+  if (mark.comment) entries[KEY_COMMENT] = text(mark.comment)
   return {
     entries,
     rect,
@@ -536,6 +565,20 @@ export interface PageDrawing {
   strokes: InkStroke[]
   marks?: MarkupRecord[]
   /**
+   * Whether this call owns the page's shapes. True unless said otherwise:
+   * the shapes in the file are rebuilt from `elements`, so an empty list
+   * takes them all out.
+   */
+  managesSketch?: boolean
+  /**
+   * Whether this call owns the page's ink, likewise. False leaves every
+   * stroke in the file exactly as it is — which is what a page drawn on a
+   * Mac and never touched here needs: its strokes are in the file and in the
+   * Mac's `.drawing`, and in no sidecar of this build's, so "no strokes"
+   * would otherwise mean "rub them all out".
+   */
+  managesInk?: boolean
+  /**
    * Whether this call owns the page's marks.
    *
    * False leaves every highlight and underline exactly where it was, which is
@@ -548,41 +591,179 @@ export interface PageDrawing {
 /**
  * Puts the given pages' drawings into the file, replacing whatever this app
  * had written there before and leaving every other annotation untouched.
+ *
+ * Every other annotation means every one: the paper's own links, a
+ * colleague's comments, a note made on the Mac. The page's list of them is
+ * edited where it is — in place when the file keeps it as an object of its
+ * own, which is how PDFKit writes every page it saves — and nothing in it is
+ * dropped that this call did not put there. Hands back the bytes it was given
+ * when there was nothing to change.
+ *
+ * Throws `WriteRefused` for an encrypted file, before touching anything.
  */
 export async function writeDrawings(bytes: Uint8Array, pages: PageDrawing[]): Promise<Uint8Array> {
+  // Asked of the bytes before pdf-lib is: an encrypted file whose pages sit
+  // in object streams is one pdf-lib cannot even load, and "Expected instance
+  // of PDFDict" is not a sentence anybody should be shown for it.
+  if (namesEncryption(bytes)) throw new WriteRefused('encrypted')
   const document = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false })
+  if (document.isEncrypted) throw new WriteRefused('encrypted')
   const context = document.context
+  const holders = annotsHolders(document)
+  let changed = false
+  const count = document.getPageCount()
   for (const page of pages) {
+    // A mark another device journalled for a page this copy of the file does
+    // not have — `getPage` throws rather than answering, and one bad page
+    // would lose the save of every other.
+    if (!Number.isInteger(page.pageIndex) || page.pageIndex < 0 || page.pageIndex >= count) continue
     const leaf = document.getPage(page.pageIndex)
-    if (!leaf) continue
-    removeOwned(leaf, context, page.managesMarks ?? false)
-    const built: Built[] = [
-      ...page.elements.flatMap((element) => {
-        const parts = buildElement(element)
-        const payload = base64Payload(element)
-        return parts.map((part, index) => ({
-          ...part,
-          entries: {
-            ...part.entries,
-            T: text(SKETCH_OWNER),
-            [KEY_SKETCH_ID]: text(element.id),
-            // Only the primary annotation carries the source, so a box and
-            // its label do not each claim to be the element.
-            ...(index === 0 ? { [KEY_SKETCH]: text(payload) } : {}),
-          },
-        }))
-      }),
-      ...page.strokes.map(buildInk).map((part) => ({
-        ...part,
-        entries: { ...part.entries, T: text(INK_OWNER) },
-      })),
-      ...(page.managesMarks ? (page.marks ?? []).map(buildMarkup) : []),
-    ]
-    for (const item of built) {
-      attach(leaf, context, item)
+    const layers: Layers = {
+      sketch: page.managesSketch ?? true,
+      ink: page.managesInk ?? true,
+      marks: page.managesMarks ?? false,
+    }
+    const existing = annotsOf(leaf, context)
+    const { remove, add } = planPage(existing, context, layers, page)
+    if (remove.length === 0 && add.length === 0) continue
+    const annots = annotsForWriting(leaf, context, holders)
+    // The same entries in the same order when a shared list was copied, so
+    // the indices found above still point at them.
+    for (const index of [...remove].sort((a, b) => b - a)) annots.remove(index)
+    for (const item of add) annots.push(register(context, item))
+    changed = true
+  }
+  if (!changed) return bytes
+  return document.save({ useObjectStreams: false })
+}
+
+/**
+ * What one page's write takes out and puts in.
+ *
+ * A shape or a mark that is already in the file exactly as it should be is
+ * left alone — the same object, with whatever the writer that made it put in
+ * it: the Mac's appearance, its date, its three annotations for three lines.
+ * Rewriting it anyway was harmless to the eye and cost everything else: a
+ * page the Mac saved came back with its marks folded into this build's shape,
+ * which the Mac then took for changed and rewrote, and so on, every save on
+ * either side. Only what changed is replaced. The pen's strokes are replaced
+ * whole, as before — a page's ink is this build's only when it drew there.
+ */
+function planPage(
+  existing: PDFArray | null,
+  context: PDFContext,
+  layers: Layers,
+  page: PageDrawing,
+): { remove: number[]; add: Built[] } {
+  const remove: number[] = []
+  const add: Built[] = []
+  const sketches = new Map<string, { indices: number[]; payload: string | null }>()
+  const marks = new Map<string, { indices: number[]; mark: MarkupRecord }>()
+  for (let index = 0; index < (existing?.size() ?? 0); index += 1) {
+    const dict = entryDict(existing!.get(index), context)
+    if (!dict) continue
+    if (layers.sketch && isSketch(dict)) {
+      const id = textValue(dict, KEY_SKETCH_ID)
+      if (!id) {
+        remove.push(index)
+        continue
+      }
+      const group = sketches.get(id) ?? { indices: [], payload: null }
+      group.indices.push(index)
+      const payload = textValue(dict, KEY_SKETCH)
+      if (payload !== null) group.payload = payload
+      sketches.set(id, group)
+    } else if (layers.ink && isInk(dict)) {
+      remove.push(index)
+    } else if (layers.marks && isManagedMark(dict)) {
+      const id = textValue(dict, KEY_MARKUP_ID)!.toUpperCase()
+      const shape = markupShape(dict)!
+      const known = marks.get(id)
+      if (known) {
+        known.indices.push(index)
+        known.mark.quads.push(...shape.quads)
+        continue
+      }
+      marks.set(id, {
+        indices: [index],
+        mark: {
+          id,
+          kind: shape.kind,
+          quads: [...shape.quads],
+          color: colorOf(dict),
+          text: '',
+          comment: textValue(dict, KEY_COMMENT) || textValue(dict, KEY_COMMENT_BEFORE) || '',
+        },
+      })
     }
   }
-  return document.save({ useObjectStreams: false })
+
+  if (layers.sketch) {
+    for (const element of page.elements) {
+      const group = sketches.get(element.id)
+      sketches.delete(element.id)
+      if (group && samePayload(group.payload, element)) continue
+      if (group) remove.push(...group.indices)
+      const payload = base64Payload(element)
+      add.push(...buildElement(element).map((part, index) => ({
+        ...part,
+        entries: {
+          ...part.entries,
+          T: text(SKETCH_OWNER),
+          [KEY_SKETCH_ID]: text(element.id),
+          // Only the primary annotation carries the source, so a box and
+          // its label do not each claim to be the element.
+          ...(index === 0 ? { [KEY_SKETCH]: text(payload) } : {}),
+        },
+      })))
+    }
+    for (const group of sketches.values()) remove.push(...group.indices)
+  }
+
+  if (layers.ink) {
+    add.push(...page.strokes.map(buildInk).map((part) => ({
+      ...part,
+      entries: { ...part.entries, T: text(INK_OWNER) },
+    })))
+  }
+
+  if (layers.marks) {
+    for (const mark of page.marks ?? []) {
+      if (mark.quads.length === 0) continue
+      const id = mark.id.toUpperCase()
+      const group = marks.get(id)
+      marks.delete(id)
+      if (group && sameMark(group.mark, mark)) continue
+      if (group) remove.push(...group.indices)
+      add.push(buildMarkup(mark))
+    }
+    for (const group of marks.values()) remove.push(...group.indices)
+  }
+  return { remove, add }
+}
+
+/** Whether a `/PTSketch` already says what this element would say. */
+function samePayload(payload: string | null, element: SketchElement): boolean {
+  if (payload === null) return false
+  try {
+    const json = JSON.parse(Buffer.from(payload, 'base64').toString('utf8'))
+    // Compared as values, not bytes: the Mac's encoder and this one may
+    // spell the same number or the same slash differently.
+    return stableStringify(json) === stableStringify(JSON.parse(JSON.stringify(element.encode())))
+  } catch {
+    return false
+  }
+}
+
+function colorOf(dict: PDFDict): [number, number, number] {
+  const colorArray = dict.get(PDFName.of('C'))
+  if (!(colorArray instanceof PDFArray) || colorArray.size() < 3) return [1, 0.84, 0.25]
+  const parts: number[] = []
+  for (let k = 0; k < 3; k += 1) {
+    const value = colorArray.get(k)
+    parts.push(value instanceof PDFNumber ? value.asNumber() : 0)
+  }
+  return [parts[0], parts[1], parts[2]]
 }
 
 function base64Payload(element: SketchElement): string {
@@ -600,31 +781,163 @@ function stableStringify(value: unknown): string {
   return `{${keys.map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`).join(',')}}`
 }
 
-/** True when the annotation is one this app wrote and may replace. */
-function isOwned(dict: PDFDict, includeMarks: boolean): boolean {
-  const title = dict.get(PDFName.of('T'))
-  const name = title instanceof PDFString || title instanceof PDFHexString ? title.decodeText() : ''
-  if (name === SKETCH_OWNER || name === INK_OWNER) return true
-  if (dict.get(PDFName.of(KEY_SKETCH_ID))) return true
-  if (dict.get(PDFName.of(KEY_INK))) return true
-  if (includeMarks && dict.get(PDFName.of(KEY_MARKUP_ID))) return true
+// MARK: - A page's annotations
+
+/**
+ * A page's `/Annots`, whichever way the file spells it.
+ *
+ * Inline, `/Annots [12 0 R 13 0 R]`, the way pdfTeX writes it; or an object
+ * of its own, `/Annots 40 0 R`, the way PDFKit writes every page it saves and
+ * the way Quartz writes most. Reading only the first was the bug: on a page
+ * of the second kind this build saw no annotations at all, so it found none
+ * of ours to read back — and it wrote its first mark into a fresh list that
+ * took the old one's place, which deleted every link on the page and every
+ * mark anyone else had made there. Measured on a paper saved by the Mac: one
+ * highlight left page 1 with 1 annotation of 30.
+ */
+function annotsOf(page: PDFPage, context: PDFContext): PDFArray | null {
+  const raw = page.node.get(PDFName.of('Annots'))
+  const resolved = raw instanceof PDFRef ? context.lookup(raw) : raw
+  return resolved instanceof PDFArray ? resolved : null
+}
+
+/** One entry of a list: a reference, or — rarely — the dictionary itself. */
+function entryDict(entry: unknown, context: PDFContext): PDFDict | null {
+  const resolved = entry instanceof PDFRef ? context.lookup(entry) : entry
+  return resolved instanceof PDFDict ? resolved : null
+}
+
+/**
+ * How many pages hold each list that is an object of its own.
+ *
+ * Two pages may share one list. None in the corpus do, but nothing forbids
+ * it, and a list edited in place for one of them would be edited for both.
+ */
+function annotsHolders(document: PDFDocument): Map<string, number> {
+  const holders = new Map<string, number>()
+  for (const page of document.getPages()) {
+    const raw = page.node.get(PDFName.of('Annots'))
+    if (raw instanceof PDFRef) holders.set(raw.toString(), (holders.get(raw.toString()) ?? 0) + 1)
+  }
+  return holders
+}
+
+/**
+ * The list to write this page's annotations into.
+ *
+ * The page's own, edited where it is: an inline list inline, and a list kept
+ * as an object of its own as that same object, so the page dictionary itself
+ * does not change. A list another page shares is copied first, entry for
+ * entry, and only this page is pointed at the copy. A page with no list — or
+ * with something that is not one where the list should be — gets a new one.
+ */
+function annotsForWriting(page: PDFPage, context: PDFContext, holders: Map<string, number>): PDFArray {
+  const raw = page.node.get(PDFName.of('Annots'))
+  if (raw instanceof PDFArray) return raw
+  if (raw instanceof PDFRef) {
+    const resolved = context.lookup(raw)
+    if (resolved instanceof PDFArray) {
+      const key = raw.toString()
+      const sharing = holders.get(key) ?? 1
+      if (sharing <= 1) return resolved
+      const copy = context.obj([]) as PDFArray
+      for (let index = 0; index < resolved.size(); index += 1) copy.push(resolved.get(index))
+      page.node.set(PDFName.of('Annots'), context.register(copy))
+      holders.set(key, sharing - 1)
+      return copy
+    }
+  }
+  const fresh = context.obj([]) as PDFArray
+  page.node.set(PDFName.of('Annots'), fresh)
+  return fresh
+}
+
+/** Which of this app's layers a write replaces on a page. */
+interface Layers {
+  sketch: boolean
+  ink: boolean
+  marks: boolean
+}
+
+function textValue(dict: PDFDict, key: string): string | null {
+  const value = dict.get(PDFName.of(key))
+  return value instanceof PDFString || value instanceof PDFHexString ? value.decodeText() : null
+}
+
+/** A shape or a card from either build: `/PTSketchID`, or the sketch owner. */
+function isSketch(dict: PDFDict): boolean {
+  return dict.get(PDFName.of(KEY_SKETCH_ID)) !== undefined || textValue(dict, 'T') === SKETCH_OWNER
+}
+
+/**
+ * A pen stroke from either build — `InkConverter.isOwned`: `/PTInk`, or an
+ * ink annotation titled "Paper Time". A bent arrow is ink too, and it is the
+ * sketch's.
+ */
+function isInk(dict: PDFDict): boolean {
+  if (isSketch(dict)) return false
+  if (dict.get(PDFName.of(KEY_INK)) !== undefined) return true
+  return textValue(dict, 'T') === INK_OWNER
+}
+
+const MARKUP_KINDS: Record<string, MarkupRecord['kind']> = {
+  '/Highlight': 'highlight',
+  '/Underline': 'underline',
+  '/StrikeOut': 'strikethrough',
+}
+
+/**
+ * The line quads of a highlight, an underline or a strikethrough.
+ *
+ * Null for anything else — and for one without `/QuadPoints`, which this
+ * build cannot draw and so must never take out of a file it could not put
+ * back into.
+ */
+function markupShape(dict: PDFDict): { kind: MarkupRecord['kind']; quads: number[][] } | null {
+  const kind = MARKUP_KINDS[String(dict.get(PDFName.of('Subtype')) ?? '')]
+  if (!kind) return null
+  const quadPoints = dict.get(PDFName.of('QuadPoints'))
+  if (!(quadPoints instanceof PDFArray)) return null
+  const numbers: number[] = []
+  for (let k = 0; k < quadPoints.size(); k += 1) {
+    const value = quadPoints.get(k)
+    if (value instanceof PDFNumber) numbers.push(value.asNumber())
+  }
+  const quads: number[][] = []
+  for (let k = 0; k + 7 < numbers.length; k += 8) quads.push(numbers.slice(k, k + 8))
+  return quads.length > 0 ? { kind, quads } : null
+}
+
+/**
+ * A mark this build reads back as its own and writes out again.
+ *
+ * Exactly those — a markup with our identifier and lines to draw. A note the
+ * Mac pinned to the page carries the identifier too, but it is not a
+ * highlight, nothing here reads it back, and so nothing here may take it out:
+ * doing so deleted the note and left its popup behind.
+ */
+function isManagedMark(dict: PDFDict): boolean {
+  return textValue(dict, KEY_MARKUP_ID) !== null && markupShape(dict) !== null
+}
+
+function isReplaced(dict: PDFDict, layers: Layers): boolean {
+  if (layers.sketch && isSketch(dict)) return true
+  if (layers.ink && isInk(dict)) return true
+  if (layers.marks && isManagedMark(dict)) return true
   return false
 }
 
-function removeOwned(page: PDFPage, context: PDFContext, includeMarks: boolean) {
-  const annots = page.node.get(PDFName.of('Annots'))
-  if (!(annots instanceof PDFArray)) return
-  const keep: unknown[] = []
+function ownedIndices(annots: PDFArray, context: PDFContext, layers: Layers): number[] {
+  const out: number[] = []
   for (let index = 0; index < annots.size(); index += 1) {
-    const entry = annots.get(index)
-    const dict = entry instanceof PDFRef ? context.lookup(entry, PDFDict) : (entry as unknown as PDFDict)
-    if (dict instanceof PDFDict && isOwned(dict, includeMarks)) continue
-    keep.push(entry)
+    const dict = entryDict(annots.get(index), context)
+    if (dict && isReplaced(dict, layers)) out.push(index)
   }
-  page.node.set(PDFName.of('Annots'), context.obj(keep as never))
+  return out
 }
 
-function attach(page: PDFPage, context: PDFContext, item: Built) {
+/** The annotation as an object of its own, ready to go into a list. */
+function register(context: PDFContext, item: Built): PDFRef {
   const dict: Record<string, unknown> = {
     Type: 'Annot',
     Rect: bbox(item.rect),
@@ -637,13 +950,7 @@ function attach(page: PDFPage, context: PDFContext, item: Built) {
       N: appearanceStream(context, item),
     } as never))
   }
-  const ref = context.register(annotation)
-  const annots = page.node.get(PDFName.of('Annots'))
-  if (annots instanceof PDFArray) {
-    annots.push(ref)
-  } else {
-    page.node.set(PDFName.of('Annots'), context.obj([ref] as never))
-  }
+  return context.register(annotation)
 }
 
 function appearanceStream(context: PDFContext, item: Built): PDFRef {
@@ -678,27 +985,49 @@ function appearanceStream(context: PDFContext, item: Built): PDFRef {
 // MARK: - Reading back
 
 /**
+ * Whether this build can write into the file, asked without writing.
+ *
+ * The same test `writeDrawings` refuses by, for the process that has to tell
+ * the window why a save stayed in Paper Time — and for the readers below,
+ * which read nothing from an encrypted file: every string in one is
+ * ciphertext to pdf-lib, so an identifier read from it would be noise
+ * standing in for a mark.
+ */
+export async function isEncryptedPDF(bytes: Uint8Array): Promise<boolean> {
+  if (namesEncryption(bytes)) return true
+  try {
+    return (await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false })).isEncrypted
+  } catch {
+    return false
+  }
+}
+
+/**
  * The elements a page's own annotations describe — for a file that has a
  * drawing in it but no sidecar here yet, which is what a paper annotated on a
  * Mac and opened on Windows looks like.
+ *
+ * Nothing from an encrypted file: the payloads are ciphertext here. pdf.js,
+ * which decrypts, draws what the file carries.
  */
 export async function readDrawings(bytes: Uint8Array): Promise<Map<number, {
   elements: SketchElement[]
   strokes: InkStroke[]
 }>> {
-  const document = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false })
-  const context = document.context
   const out = new Map<number, { elements: SketchElement[]; strokes: InkStroke[] }>()
+  if (namesEncryption(bytes)) return out
+  const document = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false })
+  if (document.isEncrypted) return out
+  const context = document.context
   document.getPages().forEach((page, pageIndex) => {
-    const annots = page.node.get(PDFName.of('Annots'))
-    if (!(annots instanceof PDFArray)) return
+    const annots = annotsOf(page, context)
+    if (!annots) return
     const elements: SketchElement[] = []
     const strokes: InkStroke[] = []
     const seen = new Set<string>()
     for (let index = 0; index < annots.size(); index += 1) {
-      const entry = annots.get(index)
-      const dict = entry instanceof PDFRef ? context.lookup(entry, PDFDict) : (entry as unknown as PDFDict)
-      if (!(dict instanceof PDFDict)) continue
+      const dict = entryDict(annots.get(index), context)
+      if (!dict) continue
       const payload = dict.get(PDFName.of(KEY_SKETCH))
       if (payload instanceof PDFString || payload instanceof PDFHexString) {
         try {
@@ -731,55 +1060,53 @@ export async function readDrawings(bytes: Uint8Array): Promise<Map<number, {
  * a colour. That is all it is, in every reader, which is why a mark made here
  * shows up in Preview and in a colleague's Acrobat without either of them
  * knowing anything about this app.
+ *
+ * One mark per identifier, as `TextMarkupWriter.descriptors(in:)` reads them:
+ * the Mac writes a highlight across three lines as three annotations that
+ * share one `/PTMarkupID`, and read one by one they were three marks — the
+ * journal, which keeps one entry per identifier, then kept only the last line.
+ *
+ * Nothing from an encrypted file, for the reason `readDrawings` gives.
  */
 export async function readMarks(bytes: Uint8Array): Promise<Map<number, MarkupRecord[]>> {
-  const document = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false })
-  const context = document.context
   const out = new Map<number, MarkupRecord[]>()
+  if (namesEncryption(bytes)) return out
+  const document = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false })
+  if (document.isEncrypted) return out
+  const context = document.context
   document.getPages().forEach((page, pageIndex) => {
-    const annots = page.node.get(PDFName.of('Annots'))
-    if (!(annots instanceof PDFArray)) return
+    const annots = annotsOf(page, context)
+    if (!annots) return
     const marks: MarkupRecord[] = []
+    const byID = new Map<string, MarkupRecord>()
     for (let index = 0; index < annots.size(); index += 1) {
-      const entry = annots.get(index)
-      const dict = entry instanceof PDFRef ? context.lookup(entry, PDFDict) : (entry as unknown as PDFDict)
-      if (!(dict instanceof PDFDict)) continue
-      const subtype = String(dict.get(PDFName.of('Subtype')) ?? '')
-      const kind =
-        subtype === '/Highlight' ? 'highlight'
-        : subtype === '/Underline' ? 'underline'
-        : subtype === '/StrikeOut' ? 'strikethrough'
-        : null
-      if (!kind) continue
-      const quadPoints = dict.get(PDFName.of('QuadPoints'))
-      if (!(quadPoints instanceof PDFArray)) continue
-      const numbers: number[] = []
-      for (let k = 0; k < quadPoints.size(); k += 1) {
-        const value = quadPoints.get(k)
-        if (value instanceof PDFNumber) numbers.push(value.asNumber())
+      const dict = entryDict(annots.get(index), context)
+      if (!dict) continue
+      const shape = markupShape(dict)
+      if (!shape) continue
+      const color = colorOf(dict)
+      const own = textValue(dict, KEY_MARKUP_ID)
+      const id = own ? own.toUpperCase() : `foreign-${pageIndex}-${index}`
+      const known = byID.get(id)
+      if (known) {
+        known.quads.push(...shape.quads)
+        continue
       }
-      const quads: number[][] = []
-      for (let k = 0; k + 7 < numbers.length; k += 8) quads.push(numbers.slice(k, k + 8))
-      if (quads.length === 0) continue
-      const colorArray = dict.get(PDFName.of('C'))
-      let color: [number, number, number] = [1, 0.84, 0.25]
-      if (colorArray instanceof PDFArray && colorArray.size() >= 3) {
-        const parts: number[] = []
-        for (let k = 0; k < 3; k += 1) {
-          const value = colorArray.get(k)
-          parts.push(value instanceof PDFNumber ? value.asNumber() : 0)
-        }
-        color = [parts[0], parts[1], parts[2]]
-      }
-      const id = dict.get(PDFName.of(KEY_MARKUP_ID))
-      const contents = dict.get(PDFName.of('Contents'))
-      marks.push({
-        id: id instanceof PDFString || id instanceof PDFHexString ? id.decodeText() : `foreign-${pageIndex}-${index}`,
-        kind,
-        quads,
+      const contents = textValue(dict, 'Contents') ?? ''
+      const comment = own ? (textValue(dict, KEY_COMMENT) || textValue(dict, KEY_COMMENT_BEFORE) || '') : ''
+      const mark: MarkupRecord = {
+        id,
+        kind: shape.kind,
+        quads: shape.quads,
         color,
-        text: contents instanceof PDFString || contents instanceof PDFHexString ? contents.decodeText() : '',
-      })
+        // With a comment the Mac puts the comment in `/Contents`, not the
+        // quotation; this build used to keep the quotation there. Whichever
+        // it is, the comment is not the text that was marked.
+        text: comment && contents === comment ? '' : contents,
+      }
+      if (comment) mark.comment = comment
+      byID.set(id, mark)
+      marks.push(mark)
     }
     if (marks.length > 0) out.set(pageIndex, marks)
   })
@@ -834,18 +1161,6 @@ function inkFrom(dict: PDFDict): InkStroke | null {
 }
 
 /**
- * The file as the reader should show it.
- *
- * Our own ink and shapes are drawn from the sidecars, over the page. The
- * copies in the file would then be drawn twice — once by pdf.js and once by
- * us, a hair out of register — so they are taken out of the bytes handed to
- * the viewer. The file on disk is untouched; this is the same thing the Mac
- * does with `hideOwnedInk` when it lays its overlay over the PDF.
- *
- * Everything else in the file — highlights, notes, a colleague's comments —
- * stays exactly where it was.
- */
-/**
  * Whether a file is locked by something other than a password.
  *
  * Both halves have to be true: the document says it is encrypted, *and* one
@@ -883,26 +1198,37 @@ export async function rightsLock(bytes: Uint8Array): Promise<PDFLock | null> {
   return handler ? { kind: 'rights', handler } : null
 }
 
+/**
+ * The file as the reader should show it.
+ *
+ * Our own ink and shapes are drawn from the sidecars, over the page. The
+ * copies in the file would then be drawn twice — once by pdf.js and once by
+ * us, a hair out of register — so they are taken out of the bytes handed to
+ * the viewer. The file on disk is untouched; this is the same thing the Mac
+ * does with `hideOwnedInk` when it lays its overlay over the PDF.
+ *
+ * Only what the window draws itself is taken out: the pen's strokes, the
+ * shapes, and the marks `readMarks` hands it. Everything else in the file —
+ * a note pinned on the Mac, a colleague's comments, the links — stays
+ * exactly where it was. So does everything in an encrypted file, whose own
+ * annotations pdf.js draws and this build cannot read back.
+ */
 export async function stripOwnedForDisplay(bytes: Uint8Array): Promise<Uint8Array> {
+  if (namesEncryption(bytes)) return bytes
   const document = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false })
+  if (document.isEncrypted) return bytes
   const context = document.context
+  const holders = annotsHolders(document)
+  const everything: Layers = { sketch: true, ink: true, marks: true }
   let removed = 0
   for (const page of document.getPages()) {
-    const annots = page.node.get(PDFName.of('Annots'))
-    if (!(annots instanceof PDFArray)) continue
-    const keep: unknown[] = []
-    for (let index = 0; index < annots.size(); index += 1) {
-      const entry = annots.get(index)
-      const dict = entry instanceof PDFRef ? context.lookup(entry, PDFDict) : (entry as unknown as PDFDict)
-      if (dict instanceof PDFDict && isOwned(dict, true)) {
-        removed += 1
-        continue
-      }
-      keep.push(entry)
-    }
-    if (keep.length !== annots.size()) {
-      page.node.set(PDFName.of('Annots'), context.obj(keep as never))
-    }
+    const existing = annotsOf(page, context)
+    if (!existing) continue
+    const owned = ownedIndices(existing, context, everything)
+    if (owned.length === 0) continue
+    const annots = annotsForWriting(page, context, holders)
+    for (const index of owned.reverse()) annots.remove(index)
+    removed += owned.length
   }
   // Nothing of ours in it: hand back the original bytes rather than a
   // re-encoded copy, which is both faster and less to go wrong.

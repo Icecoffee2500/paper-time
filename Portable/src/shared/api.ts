@@ -42,7 +42,11 @@ export interface Requests {
   'ink:save': { args: { id: string; pageIndex: number; strokes: unknown[] }; result: void }
   'drawing:pages': { args: { id: string }; result: { sketch: number[]; ink: number[]; appleInk: number[] } }
   'drawing:adoptFromFile': { args: { id: string }; result: Record<number, { elements: unknown[]; strokes: unknown[] }> }
-  'drawing:flush': { args: { id: string }; result: { written: number } | { error: string } }
+  'drawing:flush': {
+    args: { id: string }
+    /** `kept`: nothing went into the file, and everything stays in Paper Time. */
+    result: { written: number } | { kept: 'encrypted' } | { error: string }
+  }
   'collections:save': { args: { collections: unknown[] }; result: unknown }
   'window:minimize': { args: void; result: void }
   'window:toggleMaximize': { args: void; result: void }

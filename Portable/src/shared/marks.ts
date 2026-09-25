@@ -34,6 +34,19 @@ export interface Mark {
   quads: number[][]
   color: [number, number, number]
   text: string
+  /**
+   * The reader's own words about the passage, when there are any — the Mac's
+   * `MarkupDescriptor.comment`. Nothing here writes one yet, but a mark made
+   * on the Mac arrives with it, and a mark that went through this build and
+   * came out without it would have lost what the person wrote.
+   */
+  comment?: string
+  /**
+   * When the mark was made, as the journal has it (`.iso8601`). Carried so
+   * that writing the journal again does not re-date a mark from another
+   * machine to the moment this one happened to touch it.
+   */
+  createdAt?: string
 }
 
 export function quadToRect(quad: number[]): Rect {

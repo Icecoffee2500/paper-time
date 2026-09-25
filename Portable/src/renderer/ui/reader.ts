@@ -324,6 +324,12 @@ export class Reader {
   readonly isPane: boolean
   private observer: IntersectionObserver | null = null
   private generation = 0
+  /**
+   * Why what was made here stays out of the file, when it does. Said in the
+   * footer, where the Mac says it, in the voice of a state and not of an
+   * error: nothing was lost, and nothing needs doing.
+   */
+  private kept: 'encrypted' | null = null
   private readonly onSelectionChange = () => this.updateMarkBar()
   private readonly onMathReady = () => this.redrawAll()
 
@@ -695,8 +701,20 @@ export class Reader {
     this.document?.destroy()
     this.document = null
     this.paperID = null
+    this.kept = null
     this.state.pageCount = 0
     this.state.currentPage = 0
+  }
+
+  /**
+   * What the process that writes the file said about this paper: why what
+   * was made here stays out of the file, or null once the file has it — or
+   * once there is nothing left that it could have.
+   */
+  noteKept(kept: 'encrypted' | null) {
+    if (kept === this.kept) return
+    this.kept = kept
+    this.updateFooter()
   }
 
   /**
@@ -1215,7 +1233,24 @@ export class Reader {
         turn('chevron.right', 1, this.state.currentPage >= this.state.pageCount - 1),
       ]))
     }
-    this.footer.append(el('span', { text: `${Math.round(this.state.zoom * 100)}%` }))
+    const zoom = el('span', { text: `${Math.round(this.state.zoom * 100)}%` })
+    if (!this.kept) {
+      this.footer.append(zoom)
+      return
+    }
+    // Beside the zoom rather than between the page and the turn buttons, so
+    // the footer keeps its shape. The why is one hover away; the what is
+    // on the line itself, because it is the thing a person needs to know
+    // before sending this file to someone.
+    const kept = el('span', {
+      class: 'reader-kept',
+      text: L('표시는 Paper Time에만 있어요', 'Marks stay in Paper Time'),
+      title: L(
+        '암호가 있는 PDF에는 쓰지 않아요. 다른 앱에서는 이 표시가 안 보여요.',
+        "Paper Time doesn't write into encrypted PDFs. Other apps won't show these marks.",
+      ),
+    })
+    this.footer.append(el('span', { class: 'reader-footer-end' }, [kept, zoom]))
   }
 
   /** Redraws every page that has a drawing on it. */
