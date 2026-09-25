@@ -15,6 +15,7 @@ import { showMenu } from './toolbar.js'
 import { basename } from './sidebar.js'
 import { L } from '../../shared/lang.js'
 import { PAPER_DRAG_TYPE } from '../../shared/split.js'
+import { passageKey, passageSubtitle, type TextHit } from '../textSearch.js'
 
 export interface PaperListActions {
   chooseLibrary: () => void
@@ -30,6 +31,8 @@ export interface PaperListActions {
   adoptLoose: () => void
   /** Read the folders again, after one of them would not answer. */
   refresh: () => void
+  /** A passage the search found inside a paper: that paper, at that line. */
+  openPassage: (hit: TextHit) => void
 }
 
 const STATUS_ICON = {
@@ -50,11 +53,15 @@ export function buildPaperList(actions: PaperListActions): { node: HTMLElement; 
 
   /** The rows on screen, by paper, so a redraw can keep the ones it has. */
   // A row, or a folder's name over the rows that came out of it.
-  let shown: { id: string; shape: string; row: BuiltRow | null }[] = []
+  let shown: { id: string; shape: string; row: BuiltRow | null; node?: HTMLElement }[] = []
   let shownHeader = ''
 
   function update() {
     const papers = shelfPapers()
+    const searching = store.shelf.kind === 'search'
+    // Whether the text of the papers has something to say about this search.
+    const passages = searching ? store.searchPassages : []
+    const hasPassages = searching && (store.searchScanning || passages.length > 0)
 
     // The header only when it has changed: clearing and refilling it on every
     // redraw threw away a button somebody might have been about to press.
@@ -119,7 +126,7 @@ export function buildPaperList(actions: PaperListActions): { node: HTMLElement; 
       }
     }
 
-    if (papers.length === 0) {
+    if (papers.length === 0 && !hasPassages) {
       shown = []
       clear(body)
       body.append(emptyState(actions))
@@ -133,19 +140,48 @@ export function buildPaperList(actions: PaperListActions): { node: HTMLElement; 
     // On a kind's shelf the rows come from every folder at once, so each
     // folder's name goes over its own papers. Everywhere else the list is one
     // list and a heading would be a label on a thing with no counterpart.
+    type Wanted = { head: string | null; entry: Paper | null; hit?: TextHit; note?: string; shape: string; id: string }
+    const heading = (label: string): Wanted => ({ head: label, entry: null, shape: `head|${label}`, id: `head|${label}` })
     const groups = papersByFolder(papers)
-    const wanted = groups
+    let wanted: Wanted[] = groups
       ? groups.flatMap((group) => [
-        { head: group.label, entry: null, shape: `head|${group.label}`, id: `head|${group.label}` },
+        heading(group.label),
         ...group.papers.map((entry) => ({ head: null, entry, shape: rowShape(entry), id: entry.id })),
       ])
       : papers.map((entry) => ({ head: null, entry, shape: rowShape(entry), id: entry.id }))
+    if (hasPassages) {
+      // The search found words inside the papers too: the titles first — a
+      // title match is the surer thing — then the papers that say it inside.
+      if (papers.length > 0) wanted = [heading(L('제목에서', 'In the Titles')), ...wanted]
+      wanted.push(heading(L('논문 안에서', 'In the Papers')))
+      for (const hit of passages) {
+        const key = passageKey(hit)
+        wanted.push({ head: null, entry: null, hit, shape: `passage|${key}`, id: `passage|${key}` })
+      }
+      if (store.searchScanning) wanted.push({ head: null, entry: null, note: 'scanning', shape: 'note|scanning', id: 'note|scanning' })
+    }
     const sameShape = wanted.length === shown.length
       && wanted.every(({ id, shape }, at) => shown[at].id === id && shown[at].shape === shape)
     if (!sameShape) {
       const kept = new Map(shown.map((row) => [`${row.id}|${row.shape}`, row.row]))
+      const keptNodes = new Map(shown.filter((row) => row.node).map((row) => [row.id, row.node!]))
       clear(body)
-      shown = wanted.map(({ head, entry, shape, id }) => {
+      shown = wanted.map(({ head, entry, hit, note, shape, id }) => {
+        if (hit) {
+          // Built once each: a passage says the same thing for as long as it
+          // is on the list, and the list is rebuilt as each batch arrives.
+          const node = keptNodes.get(id) ?? passageRow(hit, actions)
+          body.append(node)
+          return { id, shape, row: null, node }
+        }
+        if (note) {
+          const node = el('div', { class: 'list-note' }, [
+            el('span', { class: 'spinner' }),
+            el('span', { text: L('논문 본문을 읽는 중…', 'Reading the papers…') }),
+          ])
+          body.append(node)
+          return { id, shape, row: null }
+        }
         if (head !== null || entry === null) {
           body.append(el('div', { class: 'list-group', text: head ?? '' }))
           return { id, shape, row: null }
@@ -294,8 +330,27 @@ function paperRow(entry: Paper, actions: PaperListActions): BuiltRow {
   return { node: row, apply }
 }
 
+/**
+ * One paper whose *text* holds the query: the sentence it is in, and where.
+ * Pressing it opens the paper at that line rather than at the page it was
+ * left on.
+ */
+function passageRow(hit: TextHit, actions: PaperListActions): HTMLElement {
+  const icon = iconNode('text.magnifyingglass')
+  const row = el('div', { class: 'passage-row', role: 'option' }, [
+    el('span', { class: 'passage-icon' }, icon ? [icon] : []),
+    el('div', { class: 'paper-main' }, [
+      el('div', { class: 'passage-snippet', text: hit.snippet }),
+      el('div', { class: 'paper-subtitle', text: passageSubtitle(hit) }),
+    ]),
+  ])
+  on(row, 'click', () => actions.openPassage(hit))
+  return row
+}
+
 function shelfTitle(): string {
   switch (store.shelf.kind) {
+    case 'search': return L('찾은 것', 'Search Results')
     case 'all': return L('모두', 'All')
     case 'kind':
       return ({
@@ -403,6 +458,15 @@ function emptyState(actions: PaperListActions): HTMLElement {
           'Click into a paper, or pin it, and it stays here.',
         ),
       }),
+    )
+    return wrap
+  }
+  if (store.shelf.kind === 'search') {
+    // Not "this shelf is empty": a search that found nothing is a search,
+    // and what helps is a different word.
+    wrap.append(
+      el('h2', { text: L(`“${store.searchQuery}”에 맞는 논문이 없어요`, `No Results for “${store.searchQuery}”`) }),
+      el('p', { text: L('다른 말로 찾아보세요.', 'Check the spelling or try a new search.') }),
     )
     return wrap
   }

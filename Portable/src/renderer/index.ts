@@ -37,6 +37,7 @@ import {
   store,
   setSketchTool,
   subscribe,
+  textSources,
   travel,
   undock,
   type InspectorTab,
@@ -59,6 +60,10 @@ import {
   toggleOpenPapers,
 } from './ui/openPapers.js'
 import { closePages, isPagesShowing, togglePages } from './ui/pages.js'
+import { closePalette, isPaletteOpen, openPalette } from './ui/search.js'
+import { FindBar } from './ui/findBar.js'
+import { handleTextEvent, searchText, type TextHit } from './textSearch.js'
+import { graphemes } from '../shared/textFold.js'
 import type { LibrarySnapshot, WindowBounds } from '../shared/api.js'
 import { expandedIDs } from '../shared/sketch.js'
 import {
@@ -132,6 +137,7 @@ const sidebar = buildSidebar({
     await reload()
   },
   openGraph: () => toast(L('인용 그래프는 아직 이 빌드에 없어요.', 'The citation graph is not in this build yet.')),
+  clearSearch: () => clearSearchResults(),
 })
 
 const ZONE_LABELS = (): Record<DockZone, string> => ({
@@ -255,6 +261,7 @@ const paperList = buildPaperList({
     changed('papers')
   },
   refresh: () => void reload(),
+  openPassage: (hit) => void openPassage(hit, store.searchQuery),
 })
 
 /** The answer to "a paper, a book, course material, or a document?", from the
@@ -327,6 +334,23 @@ const inspector = buildInspector({
  * whose paper leaves the page area is taken down, canvases and all.
  */
 const readers = new Map<string, Reader>()
+/**
+ * Find in Document: one bar, over whichever reader is in focus. It goes when
+ * that reader stops being the one in focus — its matches belong to that
+ * paper.
+ */
+const findBar = new FindBar()
+;(window as unknown as { __papertimeFind: unknown }).__papertimeFind = findBar
+// For a probe: the reader in focus, and the two ways a search sends somebody
+// into a paper — so "does it land on the word" can be checked from inside
+// the page, with nothing sent to the desktop.
+;(window as unknown as { __papertimeReader: unknown }).__papertimeReader = {
+  focused: () => focused(),
+  show: (id: string) => showPaper(id),
+  openPassage: (hit: TextHit, query: string) => openPassage(hit, query),
+  openFind: () => openFind(),
+  showAll: (query: string) => showSearchResults(query),
+}
 const pageArea = el('div', { class: 'page-area' })
 const dockZone = el('div', { class: 'dock-zone', 'data-on': 'false' })
 /** What the page area shows when nothing is open. */
@@ -558,6 +582,8 @@ function focusChanged() {
     store.reader = { pageCount: 0, currentPage: 0, zoom: 1, drawing: false }
     sketchEditor.current = null
   }
+  // What was found belongs to the paper it was found in.
+  if (findBar.isOpen && !findBar.isFor(reader)) findBar.close()
   refreshOpenPapers()
 }
 
@@ -1059,63 +1085,127 @@ function closeWindowOrPane() {
 
 // ------------------------------------------------------------------- search
 
-let palette: HTMLElement | null = null
-
-function openSearch() {
-  if (palette) return closeSearch()
-  const input = el('input', { type: 'text', placeholder: L('논문 찾기…', 'Search papers…'), spellcheck: 'false' }) as HTMLInputElement
-  const results = el('div', { class: 'results' })
-  const box = el('div', { class: 'palette' }, [input, results])
-  const scrim = el('div', { class: 'scrim' })
-  on(scrim, 'mousedown', closeSearch)
-
-  const render = () => {
-    clear(results)
-    const query = input.value.trim().toLowerCase()
-    if (!query) return
-    const matches = store.papers
-      .filter((entry) =>
-        entry.meta.displayTitle.toLowerCase().includes(query) ||
-        entry.meta.displayAuthors.toLowerCase().includes(query) ||
-        (entry.meta.venue ?? '').toLowerCase().includes(query) ||
-        entry.meta.bibKey.toLowerCase().includes(query))
-      .slice(0, 40)
-    for (const entry of matches) {
-      const row = el('div', { class: 'paper-row' }, [
-        el('span', { class: 'paper-status', html: icon('text.page') }),
-        el('div', { class: 'paper-main' }, [
-          el('div', { class: 'paper-title', text: entry.meta.displayTitle }),
-          el('div', { class: 'paper-subtitle', text: [entry.meta.displayAuthors, entry.meta.year].filter(Boolean).join(' · ') }),
-        ]),
-      ])
-      on(row, 'click', () => {
-        closeSearch()
-        void showPaper(entry.id)
-      })
-      results.append(row)
-    }
-  }
-
-  on(input, 'input', render)
-  on(input, 'keydown', (event: KeyboardEvent) => {
-    event.stopPropagation()
-    if (event.key === 'Escape') closeSearch()
-    if (event.key === 'Enter') {
-      const first = results.querySelector('.paper-row') as HTMLElement | null
-      first?.click()
-    }
-  })
-  document.body.append(scrim, box)
-  palette = box
-  ;(box as unknown as { scrim: HTMLElement }).scrim = scrim
-  input.focus()
+/** Search Everything: the palette (`ui/search.ts`), and what its rows do. */
+function openSearch(initial = '') {
+  openPalette({
+    openPaper: (id) => void showPaper(id),
+    openPassage: (hit, query) => void openPassage(hit, query),
+    openNote: (paperID) => void openNote(paperID),
+    openCollection: (id) => selectShelf({ kind: 'collection', id }),
+    openTag: (id) => selectShelf({ kind: 'tag', id }),
+    showAll: (query) => showSearchResults(query),
+    perform: (action) => {
+      switch (action) {
+        case 'addPDFs': void addPapers(); break
+        case 'exportBibTeX': runMenuCommand('exportBibTeX'); break
+        case 'refresh': void reload(); break
+        case 'settings': openSettings(); break
+      }
+    },
+  }, initial)
 }
 
 function closeSearch() {
-  if (!palette) return
-  ;(palette as unknown as { scrim: HTMLElement }).scrim?.remove()
-  palette.remove()
-  palette = null
+  closePalette()
+}
+
+function selectShelf(shelf: Shelf) {
+  store.shelf = shelf
+  changed('shelf')
+}
+
+/**
+ * Opens the paper a word was found in and sends the reader to the line.
+ *
+ * The reader is asked only once the paper is in it: opening a paper is a
+ * round trip for its bytes and a parse, and the line has no place until then.
+ */
+async function openPassage(hit: TextHit, query: string) {
+  const id = hit.passage.paperID
+  if (!findPaper(id)) return
+  await showPaper(id)
+  const reader = readers.get(id)
+  if (!reader) return
+  if (findBar.isOpen) findBar.close()
+  await reader.revealPassage(hit.passage, query)
+}
+
+/** A summary note from the palette: its paper, with the note in front. */
+async function openNote(paperID: string) {
+  await showPaper(paperID)
+  store.settings.inspectorTab = 'note'
+  void call('settings:set', { inspectorTab: 'note' })
+  if (!store.settings.panes.inspector) togglePane('inspector')
+  changed('inspector')
+}
+
+/**
+ * «Show All Results»: the search becomes a shelf, with its own row at the top
+ * of the sidebar, and the list reads the papers' text for the same words.
+ */
+function showSearchResults(query: string) {
+  const trimmed = query.trim()
+  if (!trimmed) return
+  store.searchQuery = trimmed
+  store.shelf = { kind: 'search' }
+  changed('shelf', 'papers')
+}
+
+function clearSearchResults() {
+  store.searchQuery = ''
+  if (store.shelf.kind === 'search') store.shelf = { kind: 'all' }
+  changed('shelf', 'papers')
+}
+
+/**
+ * The list's half of a search: the papers that say the words inside them.
+ *
+ * The same work the palette does, kept when the palette is put away:
+ * pressing Return on a search should not throw away the half of the answer
+ * that was not in any title. Every paper is read, not four, and the hits go
+ * on the list a batch at a frame — the Mac appended them one at a time, and
+ * the list redrew itself once per paper.
+ */
+let listScan: { key: string; stop: (() => void) | null } = { key: '', stop: null }
+let listDraw = 0
+
+function scanListText() {
+  const key = store.shelf.kind === 'search' ? store.searchQuery : ''
+  if (key === listScan.key) return
+  listScan.stop?.()
+  listScan = { key, stop: null }
+  store.searchPassages = []
+  store.searchScanning = false
+  if (!key || graphemes(key).length <= 1) return
+  // The papers already on the list by their titles are the ones not to read
+  // for the same words again.
+  const named = new Set(shelfPapers().map((entry) => entry.id))
+  store.searchScanning = true
+  listScan.stop = searchText(key, textSources(named), {
+    hits: (hits) => {
+      store.searchPassages = [...store.searchPassages, ...hits]
+      if (!listDraw) {
+        listDraw = requestAnimationFrame(() => {
+          listDraw = 0
+          paperList.update()
+        })
+      }
+    },
+    done: () => {
+      store.searchScanning = false
+      listScan.stop = null
+      paperList.update()
+    },
+  })
+}
+
+function openFind() {
+  const reader = focused()
+  if (!reader || !reader.document) {
+    toast(L('먼저 논문을 열어주세요.', 'Open a paper first.'))
+    return
+  }
+  findBar.open(reader)
 }
 
 // ------------------------------------------------------------------- keys
@@ -1128,7 +1218,7 @@ on(window, 'keydown', (event: KeyboardEvent) => {
   // While the pen is out the page's own editor has the Mac's whole key map
   // — Escape's three steps, the arrows, ⌘C/⌘X/⌘V, Enter into a group — and
   // it goes first. What it does not take falls through to the keys below.
-  if (store.reader.drawing && !palette) {
+  if (store.reader.drawing && !isPaletteOpen()) {
     const current = sketchEditor.current as SketchInputEditing | null
     if (current && typeof current.handleKey === 'function' && !(typing && event.key !== 'Escape') && current.handleKey(event)) {
       event.preventDefault()
@@ -1139,7 +1229,8 @@ on(window, 'keydown', (event: KeyboardEvent) => {
   if (event.key === 'Escape') {
     // Three steps back, in the order a hand expects: finish the words, then
     // drop the selection, then put the tool away.
-    if (palette) return closeSearch()
+    if (isPaletteOpen()) return closeSearch()
+    if (findBar.isOpen) return findBar.close()
     if (isOpenPapersShowing()) return closeOpenPapers()
     if (store.sketch.selection) {
       store.sketch.selection = null
@@ -1319,6 +1410,7 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () 
 let wasDrawing = false
 
 subscribe((keys) => {
+  if (keys.has('shelf') || keys.has('papers')) scanListText()
   if (keys.has('papers') || keys.has('shelf') || keys.has('selection')) {
     sidebar.update()
     paperList.update()
@@ -1348,6 +1440,11 @@ subscribe((keys) => {
 
 onEvent((event, payload) => {
   switch (event) {
+    case 'text:hits':
+    case 'text:done':
+    case 'text:warmed':
+      handleTextEvent(event, payload)
+      break
     case 'menu:feedback':
       void showFeedback()
       break
@@ -1413,6 +1510,7 @@ function runMenuCommand(command: string) {
     case 'refreshFolder': void reload(); break
     case 'addFolder': addLibraryFolder(); break
     case 'searchEverything': openSearch(); break
+    case 'findInDocument': openFind(); break
     case 'sidebar': togglePane('sidebar'); break
     case 'paperList': togglePane('paperList'); break
     case 'reader': togglePane('reader'); break
