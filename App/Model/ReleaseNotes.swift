@@ -295,6 +295,34 @@ enum ReleaseNotes {
             ),
             added: [
                 Entry(
+                    Text2("저장해도 논문은 그대로", "Your paper's bytes stay as they were"),
+                    Text2(
+                        "표시를 저장할 때 논문 파일을 처음부터 다시 쓰지 않고, 표시만 뒤에 덧붙여요. 파일의 원래 바이트는 한 자도 바뀌지 않아요. 표시를 지우거나 같은 표시를 다시 저장해도 파일은 자라지 않고, 덧붙일 수 없는 파일이면 표시를 Paper Time 안에 두고 그렇다고 알려요.",
+                        "Saving marks appends them to the PDF instead of rewriting it. Not one byte of the original changes. Removing a mark, or saving the same marks again, does not grow the file, and a file that cannot take an appended revision keeps its marks in Paper Time and says so."
+                    )
+                ),
+                Entry(
+                    Text2("빠른 검색", "Faster search"),
+                    Text2(
+                        "모두 찾기가 논문의 글을 한 번 읽어 두고 키를 칠 때마다 바로 답해요. 630편에 노트 1,000개가 있어도 한 글자에 20 ms 안이에요. 파일에 표시를 덧붙여도 다시 읽지 않아요.",
+                        "Search Everything reads each paper's text once and answers on every keystroke. With 630 papers and 1,000 notes, a keystroke takes under 20 ms, and a paper you add marks to is not read again."
+                    )
+                ),
+                Entry(
+                    Text2("정렬선과 끌어서 복제", "Snapping and drag to duplicate"),
+                    Text2(
+                        "도형을 옮기면 다른 도형과 쪽의 변·가운데에 붙고, 붙은 동안 빨간 정렬선이 보여요. ⇧를 누르면 한 축으로만 움직이고, ⌥이나 ⌘를 누른 채 끌면 사본이 원래 자리에 남아요. 되돌리기 한 번이면 사본도 원래 자리도 돌아와요.",
+                        "Moving a shape snaps it to the edges and centers of other shapes and of the page, with a red guide while it holds. Shift keeps the move on one axis; drag with Option or Command and a copy stays where the original was. One Undo takes back both."
+                    )
+                ),
+                Entry(
+                    Text2("논문 없는 노트의 폴더", "A folder for notes without a paper"),
+                    Text2(
+                        "그냥 떠오른 생각을 적은 노트는 어느 논문 폴더에도 속하지 않아서 앱 안에 살았어요. 이제 설정에서 폴더를 고르면 그 노트들이 거기로 옮겨 가요. 클라우드 폴더를 고르면 다른 기기에서도 보여요. 폴더가 잠시 안 보여도 고른 것을 잊지 않아요.",
+                        "Notes that belong to no paper lived inside the app. Choose a folder in Settings and they move there; pick a cloud folder and they follow you to other devices. If the folder is away for a while, the choice is kept."
+                    )
+                ),
+                Entry(
                     Text2("LaTeX 단축 입력", "LaTeX Shortcuts"),
                     Text2(
                         "수식 안에서 x1을 치면 x_{1}, sr은 ^{2}, //는 분수가 되고, Tab을 누르면 다음 칸으로 가요. /는 앞에 친 것을 분자로 삼고, mk는 인라인 수식을, dm은 디스플레이 수식을 열어요. Obsidian의 Latex Suite를 기본값까지 그대로 따라서, 거기서 익힌 손이 여기서도 통해요. 노트에서도, 쪽 위의 글 카드에서도 돼요. 바뀐 게 마음에 안 들면 ⌘Z 한 번에 친 그대로 돌아오고, 한글을 조합하는 동안에는 아무것도 바꾸지 않아요. 설정의 «읽기»에서 끌 수 있어요.",
@@ -304,6 +332,34 @@ enum ReleaseNotes {
                 ),
             ],
             fixed: [
+                Entry(
+                    Text2("저장이 논문의 글자를 바꾸던 것", "Saving changed the text of TeX papers"),
+                    Text2(
+                        "PDF를 다시 쓸 때 글꼴이 다시 만들어져서, TeX로 만든 논문의 ff·fi 같은 합자가 «!»로 바뀌고 검색과 복사가 어긋났어요. 이제 파일을 다시 쓰지 않으니 생기지 않아요. 이미 바뀐 파일은 원본 파일이 있으면 되돌릴 수 있어요.",
+                        "Rewriting a PDF re-subset its fonts, so ligatures such as ff and fi in TeX papers turned into «!» and search and copy went wrong. The file is no longer rewritten, so this cannot happen again. A file that already changed can be restored from its original."
+                    )
+                ),
+                Entry(
+                    Text2("글 카드의 수식이 선명해요", "Math in a text card is sharp"),
+                    Text2(
+                        "펜 도구의 글 카드에서 조판된 수식이 흐릿하게 그려졌어요. 화면 배율에 맞춰 그려요.",
+                        "Typeset math in a text card drew blurry. It now renders at the screen's scale."
+                    )
+                ),
+                Entry(
+                    Text2("노트를 쓰는 동안 노트 칸이 바뀌지 않아요", "The Notes pane stays on the note you are writing"),
+                    Text2(
+                        "쪽을 넘기거나 표시를 누르면 쓰던 노트가 다른 노트로 바뀌었어요. 쓰는 동안은 그 노트에 머물러요. 펜을 내려놓으면 인스펙터가 펜을 들기 전 탭으로 돌아가고, 새 노트의 커서가 안내 문구와 같은 줄에 서요.",
+                        "Turning a page or clicking a mark switched the note you were writing. The pane now stays on it. Putting the pen down returns the inspector to the tab you had before, and the cursor in a new note lines up with the placeholder."
+                    )
+                ),
+                Entry(
+                    Text2("윈도우·리눅스에서 표시가 사라지던 것", "Marks vanished on Windows and Linux"),
+                    Text2(
+                        "맥이 저장한 파일을 윈도우·리눅스에서 열면 표시가 안 보이고, 거기서 표시를 하나 더하면 논문의 링크와 다른 앱의 표시가 지워졌어요. 암호가 걸린 파일에 쓴 표시는 읽을 수 없는 글자가 됐어요. 셋 다 고쳤어요.",
+                        "A file saved on the Mac showed no marks on Windows and Linux, and adding one there removed the paper's links and other apps' marks. Marks written into a password-protected file came back as garbage. All three are fixed."
+                    )
+                ),
                 Entry(
                     Text2("글 카드에서 ⌘Z가 친 글을 되돌려요", "⌘Z in a text card undoes the typing"),
                     Text2(
