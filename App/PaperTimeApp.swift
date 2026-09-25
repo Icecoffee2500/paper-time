@@ -29,6 +29,7 @@ struct PaperTimeApp: App {
         // The ruler, before anything else can be measured with it.
         Trace.begin()
         Trace.mark("app starting")
+        if Trace.isOn { PaperTextIndex.report = { Trace.mark($0) } }
         if let markdown = Boot.setting("PAPERTIME_DUMP_NOTE") {
             NoteMarkdown.dump(markdown)
         }

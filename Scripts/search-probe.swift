@@ -3,8 +3,14 @@ import Foundation
 /// Searches a folder of PDFs the way the palette does, and prints what it
 /// found — the index without the app around it.
 ///
-///     swiftc -O App/Model/PaperTextIndex.swift Scripts/search-probe.swift -o /tmp/probe
+///     swiftc -O -parse-as-library App/Model/PaperTextIndex.swift \
+///         Packages/PaperTimeKit/Sources/PaperCore/Search/PaperText.swift \
+///         Scripts/search-probe.swift -o /tmp/probe
 ///     /tmp/probe unlearning ~/Documents/Bookends/Attachments
+///
+/// `PaperText.swift` comes along because the index keeps its text in that
+/// shape; it needs nothing but Foundation, so the index still builds without
+/// the package around it.
 ///
 /// The note editor and the palette are both several panes deep and neither
 /// answers a synthetic click, so this is how "does it find the word, and does
@@ -39,6 +45,15 @@ struct SearchProbe {
                 ?? UUID()
             return source
         }
+
+        // The text is kept in a folder of the probe's own — `PAPERTIME_TEXT_CACHE`
+        // names another — never in the caches folder the app would use: run
+        // from a terminal, that is the terminal's, and a probe has no
+        // business leaving six hundred files in it.
+        PaperTextIndex.probeDirectory = ProcessInfo.processInfo.environment["PAPERTIME_TEXT_CACHE"]
+            .map { URL(fileURLWithPath: $0, isDirectory: true) }
+            ?? FileManager.default.temporaryDirectory
+                .appending(path: "papertime-search-probe", directoryHint: .isDirectory)
 
         print("— \(sources.count) papers, looking for “\(query)”")
         let started = Date.now

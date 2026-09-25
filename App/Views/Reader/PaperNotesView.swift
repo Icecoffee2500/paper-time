@@ -272,9 +272,38 @@ extension PaperNotesView {
         if let url, backgroundOf == url, !background.isEmpty { return }
         let count = document.pageCount
         let sample = min(count, 40)
+        let indices = (0..<sample).map { step in sample <= 1 ? 0 : step * (count - 1) / (sample - 1) }
+        // From the search index: the same `PDFPage.string` of the same file,
+        // read off the main thread, and usually already kept. Reading forty
+        // pages here took a median 159 ms of the main thread per paper
+        // opened. The document open in the reader is still the answer when
+        // the index has none — a locked file opens for the reader, who has
+        // its password, and not for the index — or when it disagrees about
+        // how many pages there are.
+        if let url, let paper = model.paper(paperID), paper.documentURL == url,
+           let pages = await PaperTextIndex.shared.sample(indices, of: PaperTextIndex.Source(
+               id: paperID, url: url, title: paper.meta.displayTitle
+           ), expecting: count) {
+            if Task.isCancelled { return }
+            let texts = pages.filter { !$0.isEmpty }
+            if !texts.isEmpty {
+                Trace.mark("echoes: \(texts.count) pages of background from the search index")
+                // `--papertime-echoes-check=1` reads the same pages from the
+                // reader's document too, as it used to, and says whether the
+                // two agree — the index is only a faster way to the same text.
+                if Boot.isSet("PAPERTIME_ECHOES_CHECK") {
+                    let theirs = indices.compactMap { document.page(at: $0)?.string }.filter { !$0.isEmpty }
+                    Trace.mark("echoes: the index and the open document "
+                               + (theirs == texts ? "agree on all \(texts.count) pages"
+                                                   : "DISAGREE (\(texts.count) against \(theirs.count) pages)"))
+                }
+                background = texts
+                backgroundOf = url
+                return
+            }
+        }
         var texts: [String] = []
-        for step in 0..<sample {
-            let index = sample <= 1 ? 0 : step * (count - 1) / (sample - 1)
+        for (step, index) in indices.enumerated() {
             let text = Trace.time("echoes: read one page") { document.page(at: index)?.string }
             if let text, !text.isEmpty { texts.append(text) }
             if step % 4 == 3 { await Task.yield() }

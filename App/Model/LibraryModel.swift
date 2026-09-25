@@ -297,8 +297,18 @@ public final class LibraryModel {
     public let graph = GraphModel()
 
     public private(set) var papers: [LoadedPaper] = [] {
-        didSet { rebuildDerivedIndexes() }
+        didSet {
+            rebuildDerivedIndexes()
+            searchRevision &+= 1
+        }
     }
+
+    /// Bumped whenever anything Search Everything ranks changes — a paper, a
+    /// tag, a collection — so what it folded when the palette opened can be
+    /// told from what is there now. A number and not the folding itself:
+    /// derived state kept in here would be written on every change to the
+    /// papers, and every write here is a write the views are watching.
+    @ObservationIgnored public private(set) var searchRevision = 0
 
     /// Row lookups by identifier, so a list of sixty papers does not do sixty
     /// linear scans every time one of them changes.
@@ -344,10 +354,16 @@ public final class LibraryModel {
         public var tags: [UUID: Int] = [:]
     }
     public private(set) var manifest: LibraryManifest {
-        didSet { tagByIDCache = nil }
+        didSet {
+            tagByIDCache = nil
+            searchRevision &+= 1
+        }
     }
     public private(set) var collections = CollectionSet() {
-        didSet { collectionByIDCache = nil }
+        didSet {
+            collectionByIDCache = nil
+            searchRevision &+= 1
+        }
     }
 
     /// The tags and the collections by identifier.
@@ -1626,6 +1642,9 @@ public final class LibraryModel {
         _ = try? await store(for: paper).moveToTrash(paper)
         papers.removeAll { $0.id == paperID }
         if selectedPaperID == paperID { selectedPaperID = nil }
+        // The words that were read out of it go with it: nothing will ask for
+        // them again, and a cache that only grows is a folder that only grows.
+        await PaperTextIndex.shared.forget(paperID)
     }
 
     private func applyLocally(meta: PaperMeta, to paperID: UUID) {

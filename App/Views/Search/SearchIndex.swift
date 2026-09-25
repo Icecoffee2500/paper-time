@@ -219,21 +219,31 @@ struct SearchSuggestions {
 /// Scoring is deliberately simple and title-first: Spotlight reads as
 /// predictable because a prefix match always beats a fuzzy one, not because
 /// the ranking is clever.
+///
+/// The library is folded once, into a `Prepared`, and each keystroke only
+/// compares against it. It used to fold everything — titles, authors, venues,
+/// the first two hundred characters of every note — on every keystroke: 6 ms
+/// at sixty papers, 63 ms at six hundred, 796 ms at six hundred and a thousand
+/// notes. The answers are the same answers: the same folded strings, compared
+/// the same way, in the same order.
 @MainActor
 enum SearchIndex {
-    private static let fuzzyThreshold = 0.82
-
     static func results(for query: String, in model: LibraryModel) -> [SearchResult] {
+        results(for: query, in: prepared(for: model))
+    }
+
+    static func results(for query: String, in prepared: Prepared) -> [SearchResult] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
-        let foldedQuery = TextNormalization.foldedTitle(trimmed)
+        let folded = SearchRanking.Folded(trimmed)
+        let foldedQuery = folded.text
         guard !foldedQuery.isEmpty else { return [] }
 
         var results: [SearchResult] = []
         var matchedPapers = 0
 
-        for paper in model.papers where paper.meta.parentID == nil {
-            if LibraryModel.matches(folded: foldedQuery, paper: paper) { matchedPapers += 1 }
+        for paper in prepared.papers where paper.isTopLevel {
+            if paper.everything.contains(foldedQuery) { matchedPapers += 1 }
         }
         if matchedPapers > 1 {
             // Searching for an author is searching for a body of work, not for
@@ -249,74 +259,31 @@ enum SearchIndex {
             )
         }
 
-        for paper in model.papers {
-            guard let score = paperScore(foldedQuery: foldedQuery, paper: paper) else { continue }
+        for paper in prepared.papers {
+            guard let score = paperScore(folded, paper: paper) else { continue }
             // The paper you had open this morning comes before the one you
             // read in March: the same title match, and recency decides.
-            let recency = paper.state.lastOpenedAt.map { max(0, 0.15 - Date.now.timeIntervalSince($0) / (30 * 86_400) * 0.15) } ?? 0
+            let recency = paper.lastOpenedAt.map { max(0, 0.15 - Date.now.timeIntervalSince($0) / (30 * 86_400) * 0.15) } ?? 0
             results.append(
                 SearchResult(
                     kind: .paper(paper.id),
-                    title: paper.meta.displayTitle,
-                    subtitle: paperSubtitle(paper),
+                    title: paper.title,
+                    subtitle: paper.subtitle,
                     symbolName: "doc.text",
                     score: score + recency
                 )
             )
         }
 
-        for note in model.notes.notes where !note.isEmpty {
-            let folded = TextNormalization.foldedTitle(note.displayTitle + " " + note.preview.prefix(200))
-            guard let score = matchScore(foldedQuery: foldedQuery, foldedText: folded) else { continue }
+        for entry in prepared.entries {
+            guard let score = SearchRanking.score(folded, against: entry.folded) else { continue }
             results.append(
                 SearchResult(
-                    kind: .note(note.id),
-                    title: note.displayTitle,
-                    subtitle: note.kind == .map ? L("지도", "Map") : note.kind == .draft ? L("초안", "Draft") : L("노트", "Note"),
-                    symbolName: note.kind == .map ? "map" : note.kind == .draft ? "doc.text" : "note.text",
-                    score: score - 0.05
-                )
-            )
-        }
-
-        for collection in model.collections.collections {
-            guard let score = matchScore(foldedQuery: foldedQuery, foldedText: TextNormalization.foldedTitle(collection.name))
-            else { continue }
-            results.append(
-                SearchResult(
-                    kind: .collection(collection.id),
-                    title: collection.name,
-                    subtitle: collection.isSmart ? L("스마트 컬렉션", "Smart Collection") : L("컬렉션", "Collection"),
-                    symbolName: collection.symbolName,
-                    score: score
-                )
-            )
-        }
-
-        for tag in model.manifest.tags {
-            guard let score = matchScore(foldedQuery: foldedQuery, foldedText: TextNormalization.foldedTitle(tag.name))
-            else { continue }
-            results.append(
-                SearchResult(
-                    kind: .tag(tag.id),
-                    title: tag.name,
-                    subtitle: L("태그", "Tag"),
-                    symbolName: "tag",
-                    score: score
-                )
-            )
-        }
-
-        for action in SearchResult.Action.allCases {
-            guard let score = matchScore(foldedQuery: foldedQuery, foldedText: TextNormalization.foldedTitle(action.title))
-            else { continue }
-            results.append(
-                SearchResult(
-                    kind: .action(action),
-                    title: action.title,
-                    subtitle: L("동작", "Action"),
-                    symbolName: action.symbolName,
-                    score: score
+                    kind: entry.kind,
+                    title: entry.title,
+                    subtitle: entry.subtitle,
+                    symbolName: entry.symbolName,
+                    score: score + entry.bonus
                 )
             )
         }
@@ -329,6 +296,158 @@ enum SearchIndex {
             }
             .prefix(20)
         )
+    }
+
+    /// Everything a keystroke is compared with, folded when the palette opens
+    /// and kept while nothing it was made from has changed.
+    struct Prepared {
+        struct Paper {
+            let id: UUID
+            /// Whether it stands on its own rather than hanging off another
+            /// paper as a supplement.
+            let isTopLevel: Bool
+            let title: String
+            let subtitle: String
+            let lastOpenedAt: Date?
+            let foldedTitle: SearchRanking.Folded
+            /// The authors, the venue, the year, the cite key and the file,
+            /// folded — what a paper also answers to when its title does not.
+            let fields: String
+            /// Everything `LibraryModel.matches` looks through, folded: what
+            /// decides how many papers "Show All" promises.
+            let everything: String
+        }
+
+        /// A note, a collection, a tag or an action: a name, and what to call
+        /// it in a row.
+        struct Entry {
+            let kind: SearchResult.Kind
+            let title: String
+            let subtitle: String
+            let symbolName: String
+            let folded: SearchRanking.Folded
+            /// Added to the score. A note sits a little below what it ties
+            /// with: a paper called what you typed is the surer answer.
+            let bonus: Double
+        }
+
+        let papers: [Paper]
+        /// Notes, then collections, then tags, then actions — the order they
+        /// were always ranked in, which is the order a tie keeps.
+        let entries: [Entry]
+
+        @MainActor init(model: LibraryModel) {
+            papers = model.papers.map { paper in
+                var everything = [
+                    paper.meta.displayTitle,
+                    paper.meta.csl.containerTitle ?? "",
+                    paper.meta.csl.year.map(String.init) ?? "",
+                    paper.meta.bibKey,
+                    paper.meta.file.originalName,
+                ]
+                for author in paper.meta.csl.author {
+                    everything.append(author.displayName)
+                    everything.append("\(author.family ?? "") \(author.given ?? "")")
+                }
+                let fields = [
+                    paper.meta.csl.author.map(\.displayName).joined(separator: " "),
+                    paper.meta.csl.containerTitle ?? "",
+                    paper.meta.csl.year.map(String.init) ?? "",
+                    paper.meta.bibKey,
+                    paper.meta.file.originalName,
+                ]
+                return Paper(
+                    id: paper.id,
+                    isTopLevel: paper.meta.parentID == nil,
+                    title: paper.meta.displayTitle,
+                    subtitle: SearchIndex.paperSubtitle(paper),
+                    lastOpenedAt: paper.state.lastOpenedAt,
+                    foldedTitle: SearchRanking.Folded(paper.meta.displayTitle),
+                    fields: TextNormalization.foldedTitle(fields.joined(separator: " ")),
+                    everything: TextNormalization.foldedTitle(everything.joined(separator: " "))
+                )
+            }
+
+            var entries: [Entry] = []
+            for note in model.notes.notes {
+                let searchable = model.notes.searchable(note)
+                guard !searchable.isEmpty else { continue }
+                entries.append(Entry(
+                    kind: .note(note.id),
+                    title: searchable.displayTitle,
+                    subtitle: note.kind == .map ? L("지도", "Map") : note.kind == .draft ? L("초안", "Draft") : L("노트", "Note"),
+                    symbolName: note.kind == .map ? "map" : note.kind == .draft ? "doc.text" : "note.text",
+                    folded: searchable.folded,
+                    bonus: -0.05
+                ))
+            }
+            for collection in model.collections.collections {
+                entries.append(Entry(
+                    kind: .collection(collection.id),
+                    title: collection.name,
+                    subtitle: collection.isSmart ? L("스마트 컬렉션", "Smart Collection") : L("컬렉션", "Collection"),
+                    symbolName: collection.symbolName,
+                    folded: SearchRanking.Folded(collection.name),
+                    bonus: 0
+                ))
+            }
+            for tag in model.manifest.tags {
+                entries.append(Entry(
+                    kind: .tag(tag.id),
+                    title: tag.name,
+                    subtitle: L("태그", "Tag"),
+                    symbolName: "tag",
+                    folded: SearchRanking.Folded(tag.name),
+                    bonus: 0
+                ))
+            }
+            for action in SearchResult.Action.allCases {
+                entries.append(Entry(
+                    kind: .action(action),
+                    title: action.title,
+                    subtitle: L("동작", "Action"),
+                    symbolName: action.symbolName,
+                    folded: SearchRanking.Folded(action.title),
+                    bonus: 0
+                ))
+            }
+            self.entries = entries
+        }
+    }
+
+    /// The library as it was last folded, and what it was folded from. Here
+    /// rather than in the model — see `LibraryModel.searchRevision`. The
+    /// model is held weakly and compared by identity: a library opened after
+    /// another starts its counts again, and must not find the last one's.
+    private final class Kept {
+        weak var model: LibraryModel?
+        let revision: Int
+        let notes: Int
+        let language: String
+        let prepared: Prepared
+
+        @MainActor init(model: LibraryModel, language: String, prepared: Prepared) {
+            self.model = model
+            revision = model.searchRevision
+            notes = model.notes.revision
+            self.language = language
+            self.prepared = prepared
+        }
+    }
+    private static var kept: Kept?
+
+    /// The library folded for ranking: the one made last time, while the
+    /// papers, the notes, the tags, the collections and the language are all
+    /// as they were then.
+    static func prepared(for model: LibraryModel) -> Prepared {
+        let language = L("ko", "en")
+        if let kept, kept.model === model, kept.revision == model.searchRevision,
+           kept.notes == model.notes.revision, kept.language == language {
+            return kept.prepared
+        }
+        let made = Trace.time("palette: fold the library") { Prepared(model: model) }
+        kept = Kept(model: model, language: language, prepared: made)
+        return made
     }
 
     private static func paperSubtitle(_ paper: LoadedPaper) -> String {
@@ -344,21 +463,9 @@ enum SearchIndex {
     /// person would actually type when they remember the paper but not its
     /// exact title (an author's name, the venue, the year, the cite key, or
     /// the file they dragged in).
-    private static func paperScore(foldedQuery: String, paper: LoadedPaper) -> Double? {
-        let titleScore = matchScore(
-            foldedQuery: foldedQuery,
-            foldedText: TextNormalization.foldedTitle(paper.meta.displayTitle)
-        )
-
-        let subtitleFields = [
-            paper.meta.csl.author.map(\.displayName).joined(separator: " "),
-            paper.meta.csl.containerTitle ?? "",
-            paper.meta.csl.year.map(String.init) ?? "",
-            paper.meta.bibKey,
-            paper.meta.file.originalName,
-        ]
-        let foldedSubtitle = TextNormalization.foldedTitle(subtitleFields.joined(separator: " "))
-        let subtitleScore = (!foldedSubtitle.isEmpty && foldedSubtitle.contains(foldedQuery)) ? 0.6 : nil
+    private static func paperScore(_ query: SearchRanking.Folded, paper: Prepared.Paper) -> Double? {
+        let titleScore = SearchRanking.score(query, against: paper.foldedTitle)
+        let subtitleScore = (!paper.fields.isEmpty && paper.fields.contains(query.text)) ? 0.6 : nil
 
         switch (titleScore, subtitleScore) {
         case let (.some(title), .some(subtitle)): return max(title, subtitle)
@@ -366,18 +473,5 @@ enum SearchIndex {
         case let (nil, .some(subtitle)): return subtitle
         case (nil, nil): return nil
         }
-    }
-
-    /// Prefix match on the whole string, then prefix match on any word, then
-    /// substring anywhere, then a fuzzy fallback for typos.
-    private static func matchScore(foldedQuery: String, foldedText: String) -> Double? {
-        guard !foldedText.isEmpty else { return nil }
-
-        if foldedText.hasPrefix(foldedQuery) { return 1.0 }
-        if foldedText.split(separator: " ").contains(where: { $0.hasPrefix(foldedQuery) }) { return 0.9 }
-        if foldedText.contains(foldedQuery) { return 0.75 }
-
-        let similarity = StringSimilarity.jaroWinkler(foldedQuery, foldedText)
-        return similarity > fuzzyThreshold ? similarity : nil
     }
 }

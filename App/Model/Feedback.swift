@@ -656,6 +656,11 @@ public enum WindowProbe {
             }
             launchWindow = window
             say("probe: the launch opened no window — made one off every screen at \(window.frame)")
+            // The watch on the main thread starts from the window group's
+            // own window, which this run never got: without this a probe
+            // that made its own window reported no stalls at all — not
+            // because there were none, but because nobody was counting.
+            Hitches.watch()
         }
     }
 

@@ -106,6 +106,52 @@ enum Trace {
         return counts[label] ?? 0
     }
 
+    /// How much memory the app holds, as one line: what is resident now and
+    /// at most, and the footprint the system charges it for (what Activity
+    /// Monitor calls Memory) now and at its peak. A search that keeps the
+    /// text of six hundred papers is a search that has to say what that
+    /// costs.
+    static func memory() -> String {
+        var basic = mach_task_basic_info()
+        var basicCount = mach_msg_type_number_t(
+            MemoryLayout<mach_task_basic_info>.size / MemoryLayout<natural_t>.size
+        )
+        let basicResult = withUnsafeMutablePointer(to: &basic) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(basicCount)) {
+                task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), $0, &basicCount)
+            }
+        }
+        var vm = task_vm_info_data_t()
+        var vmCount = mach_msg_type_number_t(
+            MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size
+        )
+        let vmResult = withUnsafeMutablePointer(to: &vm) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(vmCount)) {
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &vmCount)
+            }
+        }
+        // And how many pages had to be fetched back from the disk: a file
+        // read by mapping it is free until the system wants the memory back,
+        // and then every look at it is a read again.
+        var events = task_events_info()
+        var eventsCount = mach_msg_type_number_t(
+            MemoryLayout<task_events_info>.size / MemoryLayout<natural_t>.size
+        )
+        let eventsResult = withUnsafeMutablePointer(to: &events) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(eventsCount)) {
+                task_info(mach_task_self_, task_flavor_t(TASK_EVENTS_INFO), $0, &eventsCount)
+            }
+        }
+        let megabyte = 1_048_576.0
+        guard basicResult == KERN_SUCCESS, vmResult == KERN_SUCCESS else { return "memory: ?" }
+        return String(format: "rss %.0f MB (max %.0f) · footprint %.0f MB (peak %.0f) · page-ins %d",
+                      Double(basic.resident_size) / megabyte,
+                      Double(basic.resident_size_max) / megabyte,
+                      Double(vm.phys_footprint) / megabyte,
+                      Double(vm.ledger_phys_footprint_peak) / megabyte,
+                      eventsResult == KERN_SUCCESS ? Int(events.pageins) : -1)
+    }
+
     /// Everything measured, heaviest first. Printed when the app goes away,
     /// and whenever anybody asks.
     static func summary() {

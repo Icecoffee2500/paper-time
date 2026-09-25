@@ -439,6 +439,13 @@ public final class AppModel {
             // simulator moves with every install.
             let base = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: "/")
             let url = path.hasPrefix("/") ? URL(fileURLWithPath: path, isDirectory: true) : base.appendingPathComponent(path, isDirectory: true)
+            // The words of a probe's papers are kept beside its library, not
+            // in the caches folder the reader's copy keeps its own in —
+            // `--papertime-text-cache=<path>` names another place.
+            let beside = url.standardizedFileURL
+            PaperTextIndex.probeDirectory = Boot.setting("PAPERTIME_TEXT_CACHE").map(Self.probeURL)
+                ?? beside.deletingLastPathComponent()
+                    .appending(path: beside.lastPathComponent + "-text-cache", directoryHint: .isDirectory)
             // Opened, not adopted: a run driven by a probe must leave no trace
             // on the Mac it ran on. The app is sandboxed per bundle
             // identifier, so a probe and the copy somebody actually reads with
@@ -1125,6 +1132,25 @@ public final class AppModel {
                 }
             }
             if let noteID = Boot.setting("PAPERTIME_OPEN_NOTE") { model.notes.openNoteID = noteID }
+            // `--papertime-search-bench=1` times Search Everything and writes
+            // down every answer it gives, then quits — see `SearchBench`.
+            #if os(macOS)
+            if isProbeLibrary, let spec = Boot.setting("PAPERTIME_SEARCH_BENCH") {
+                await SearchBench.run(in: model, spec: spec)
+                Trace.summary()
+                NSApp.terminate(nil)
+            }
+            // `--papertime-quit-after=<초>` ends a probe's run on its own, the
+            // way a person quits, so the trace adds up what the time went on.
+            // Killed from outside, it never gets to say.
+            if isProbeLibrary, let after = Double(Boot.setting("PAPERTIME_QUIT_AFTER") ?? "") {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(after))
+                    Trace.summary()
+                    NSApp.terminate(nil)
+                }
+            }
+            #endif
             if Boot.isSet("PAPERTIME_SHOW_SEARCH") {
                 try? await Task.sleep(for: .seconds(2))
                 showsSearchPalette = true
