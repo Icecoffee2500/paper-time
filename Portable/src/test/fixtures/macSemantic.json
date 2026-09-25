@@ -1,0 +1,925 @@
+{
+ "chunks": [
+  {
+   "chunks": [
+    {
+     "key": "e49cb195b74ea5c92d1771e62c8254c4",
+     "length": 705,
+     "location": 0,
+     "text": "We propose Elastic Weight Consolidation, which slows down learning on weights important for previous tasks. Catastrophic forgetting occurs when a network trained on a new task loses performance on earlier tasks. Machine unlearning aims to remove the influence of specific training data from a trained model. The Fisher information matrix approximates how sensitive the loss is to each parameter. Joint-embedding predictive architectures learn by predicting representations of masked regions. Scene graph generation predicts objects and the relations between them in an image. Test-time adaptation updates a model on unlabeled test data without access to the source data. Vision-language models such"
+    },
+    {
+     "key": "3bc1e4878055c238c371185dc2c07cda",
+     "length": 721,
+     "location": 541,
+     "text": "the relations between them in an image. Test-time adaptation updates a model on unlabeled test data without access to the source data. Vision-language models such as CLIP align images and text in a shared embedding space. Reinforcement learning agents learn a policy by maximizing expected cumulative reward. The sufficiency principle states that a sufficient statistic contains all the information about the parameter. Federated learning trains a shared model across clients without centralizing their data. Gradient-based saliency identifies which weights matter most for forgetting a class. Isotropic Gaussian embeddings minimize downstream prediction risk under a broad family of tasks. Knowledge distillation"
+    },
+    {
+     "key": "1d4a752be04811a2c4d69cbb03301cc7",
+     "length": 339,
+     "location": 1071,
+     "text": "saliency identifies which weights matter most for forgetting a class. Isotropic Gaussian embeddings minimize downstream prediction risk under a broad family of tasks. Knowledge distillation transfers the behaviour of a large teacher model to a smaller student. Variational autoencoders maximize a lower bound on the data log-likelihood."
+    }
+   ],
+   "overlapWords": 25,
+   "pageIndex": 0,
+   "paperID": "3F2504E0-4F89-11D3-9A0C-0305E82C3301",
+   "text": "We propose Elastic Weight Consolidation, which slows down learning on weights important for previous tasks.\n\nCatastrophic forgetting occurs when a network trained on a new task loses performance on earlier tasks.\n\nMachine unlearning aims to remove the influence of specific training data from a trained model.\n\nThe Fisher information matrix approximates how sensitive the loss is to each parameter.\n\nJoint-embedding predictive architectures learn by predicting representations of masked regions.\n\nScene graph generation predicts objects and the relations between them in an image.\n\nTest-time adaptation updates a model on unlabeled test data without access to the source data.\n\nVision-language models such as CLIP align images and text in a shared embedding space.\n\nReinforcement learning agents learn a policy by maximizing expected cumulative reward.\n\nThe sufficiency principle states that a sufficient statistic contains all the information about the parameter.\n\nFederated learning trains a shared model across clients without centralizing their data.\n\nGradient-based saliency identifies which weights matter most for forgetting a class.\n\nIsotropic Gaussian embeddings minimize downstream prediction risk under a broad family of tasks.\n\nKnowledge distillation transfers the behaviour of a large teacher model to a smaller student.\n\nVariational autoencoders maximize a lower bound on the data log-likelihood.",
+   "windowWords": 100
+  },
+  {
+   "chunks": [
+    {
+     "key": "166dc01da4b04ef1b30e952f0505b671",
+     "length": 145,
+     "location": 0,
+     "text": "We propose Elastic Weight Consolidation, which slows down learning on weights important for previous tasks. Catastrophic forgetting occurs when a"
+    },
+    {
+     "key": "9e4dd6aa33ce85893cd5fe6ba7330542",
+     "length": 130,
+     "location": 108,
+     "text": "Catastrophic forgetting occurs when a network trained on a new task loses performance on earlier tasks. Machine unlearning aims to"
+    },
+    {
+     "key": "50052b535622d53096f87cd2be9a5656",
+     "length": 132,
+     "location": 205,
+     "text": "tasks. Machine unlearning aims to remove the influence of specific training data from a trained model. The Fisher information matrix"
+    },
+    {
+     "key": "dedd25c81eedd0bcba71741e2f89461e",
+     "length": 155,
+     "location": 301,
+     "text": "model. The Fisher information matrix approximates how sensitive the loss is to each parameter. Joint-embedding predictive architectures learn by predicting"
+    },
+    {
+     "key": "625e16d7defcb65f1b817fc8d1c9b052",
+     "length": 153,
+     "location": 412,
+     "text": "predictive architectures learn by predicting representations of masked regions. Scene graph generation predicts objects and the relations between them in"
+    },
+    {
+     "key": "6a0491731334d68fb32c4f44c4691935",
+     "length": 121,
+     "location": 536,
+     "text": "the relations between them in an image. Test-time adaptation updates a model on unlabeled test data without access to the"
+    },
+    {
+     "key": "4d1addbd02615d4605db571104c2e79e",
+     "length": 119,
+     "location": 631,
+     "text": "data without access to the source data. Vision-language models such as CLIP align images and text in a shared embedding"
+    },
+    {
+     "key": "69beaa73922c558f412d07986e0c52ff",
+     "length": 146,
+     "location": 724,
+     "text": "text in a shared embedding space. Reinforcement learning agents learn a policy by maximizing expected cumulative reward. The sufficiency principle"
+    },
+    {
+     "key": "0a007ba116fe318811839105d0cd40b4",
+     "length": 155,
+     "location": 826,
+     "text": "cumulative reward. The sufficiency principle states that a sufficient statistic contains all the information about the parameter. Federated learning trains"
+    },
+    {
+     "key": "a05578b88c6c36c116a2e9d04028d71d",
+     "length": 159,
+     "location": 941,
+     "text": "the parameter. Federated learning trains a shared model across clients without centralizing their data. Gradient-based saliency identifies which weights matter"
+    },
+    {
+     "key": "67f51cf2fa7474f167b7714416e83dfb",
+     "length": 149,
+     "location": 1060,
+     "text": "saliency identifies which weights matter most for forgetting a class. Isotropic Gaussian embeddings minimize downstream prediction risk under a broad"
+    },
+    {
+     "key": "d20fa2658093b42253113ddf5c5c125b",
+     "length": 123,
+     "location": 1180,
+     "text": "prediction risk under a broad family of tasks. Knowledge distillation transfers the behaviour of a large teacher model to a"
+    },
+    {
+     "key": "20563a80d28ce9658b1b3f12dd5828b6",
+     "length": 117,
+     "location": 1279,
+     "text": "large teacher model to a smaller student. Variational autoencoders maximize a lower bound on the data log-likelihood."
+    }
+   ],
+   "overlapWords": 5,
+   "pageIndex": 1,
+   "paperID": "3F2504E0-4F89-11D3-9A0C-0305E82C3301",
+   "text": "We propose Elastic Weight Consolidation, which slows down learning on weights important for previous tasks. Catastrophic forgetting occurs when a network trained on a new task loses performance on earlier tasks. Machine unlearning aims to remove the influence of specific training data from a trained model. The Fisher information matrix approximates how sensitive the loss is to each parameter. Joint-embedding predictive architectures learn by predicting representations of masked regions. Scene graph generation predicts objects and the relations between them in an image. Test-time adaptation updates a model on unlabeled test data without access to the source data. Vision-language models such as CLIP align images and text in a shared embedding space. Reinforcement learning agents learn a policy by maximizing expected cumulative reward. The sufficiency principle states that a sufficient statistic contains all the information about the parameter. Federated learning trains a shared model across clients without centralizing their data. Gradient-based saliency identifies which weights matter most for forgetting a class. Isotropic Gaussian embeddings minimize downstream prediction risk under a broad family of tasks. Knowledge distillation transfers the behaviour of a large teacher model to a smaller student. Variational autoencoders maximize a lower bound on the data log-likelihood.",
+   "windowWords": 20
+  },
+  {
+   "chunks": [
+    {
+     "key": "c796f05388ecfc194c0bbce98c2fa0f5",
+     "length": 107,
+     "location": 0,
+     "text": "We propose Elastic Weight Consolidation, which slows down learning on weights important for previous tasks."
+    }
+   ],
+   "overlapWords": 10,
+   "pageIndex": 2,
+   "paperID": "3F2504E0-4F89-11D3-9A0C-0305E82C3301",
+   "text": "We propose Elastic Weight Consolidation, which slows down learning on weights important for previous tasks.",
+   "windowWords": 30
+  },
+  {
+   "chunks": [
+    {
+     "key": "049e230ba4e0763515698444f4494aab",
+     "length": 103,
+     "location": 0,
+     "text": "Catastrophic forgetting occurs when a network trained on a new task loses performance on earlier tasks."
+    }
+   ],
+   "overlapWords": 10,
+   "pageIndex": 3,
+   "paperID": "3F2504E0-4F89-11D3-9A0C-0305E82C3301",
+   "text": "Catastrophic forgetting occurs when a network trained on a new task loses performance on earlier tasks.",
+   "windowWords": 30
+  },
+  {
+   "chunks": [
+    {
+     "key": "be6e924b21eaae0525cd686573f735aa",
+     "length": 95,
+     "location": 0,
+     "text": "Machine unlearning aims to remove the influence of specific training data from a trained model."
+    }
+   ],
+   "overlapWords": 10,
+   "pageIndex": 4,
+   "paperID": "3F2504E0-4F89-11D3-9A0C-0305E82C3301",
+   "text": "Machine unlearning aims to remove the influence of specific training data from a trained model.",
+   "windowWords": 30
+  },
+  {
+   "chunks": [
+    {
+     "key": "916eab9793d5bf8de1885d1c62229259",
+     "length": 87,
+     "location": 0,
+     "text": "The Fisher information matrix approximates how sensitive the loss is to each parameter."
+    }
+   ],
+   "overlapWords": 10,
+   "pageIndex": 5,
+   "paperID": "3F2504E0-4F89-11D3-9A0C-0305E82C3301",
+   "text": "The Fisher information matrix approximates how sensitive the loss is to each parameter.",
+   "windowWords": 30
+  },
+  {
+   "chunks": [
+    {
+     "key": "e710d367049a6f2d1cc22602a0bb7e18",
+     "length": 95,
+     "location": 0,
+     "text": "Joint-embedding predictive architectures learn by predicting representations of masked regions."
+    }
+   ],
+   "overlapWords": 10,
+   "pageIndex": 6,
+   "paperID": "3F2504E0-4F89-11D3-9A0C-0305E82C3301",
+   "text": "Joint-embedding predictive architectures learn by predicting representations of masked regions.",
+   "windowWords": 30
+  },
+  {
+   "chunks": [
+    {
+     "key": "6fdfa2f6b10e4bb463c7b347ee228fe5",
+     "length": 83,
+     "location": 0,
+     "text": "Scene graph generation predicts objects and the relations between them in an image."
+    }
+   ],
+   "overlapWords": 10,
+   "pageIndex": 7,
+   "paperID": "3F2504E0-4F89-11D3-9A0C-0305E82C3301",
+   "text": "Scene graph generation predicts objects and the relations between them in an image.",
+   "windowWords": 30
+  },
+  {
+   "chunks": [
+    {
+     "key": "e499b77da2db394e0ff0247998e830ea",
+     "length": 94,
+     "location": 0,
+     "text": "Test-time adaptation updates a model on unlabeled test data without access to the source data."
+    }
+   ],
+   "overlapWords": 10,
+   "pageIndex": 8,
+   "paperID": "3F2504E0-4F89-11D3-9A0C-0305E82C3301",
+   "text": "Test-time adaptation updates a model on unlabeled test data without access to the source data.",
+   "windowWords": 30
+  },
+  {
+   "chunks": [
+    {
+     "key": "a20885697b8352fc8d111c68efe4049d",
+     "length": 86,
+     "location": 0,
+     "text": "Vision-language models such as CLIP align images and text in a shared embedding space."
+    }
+   ],
+   "overlapWords": 10,
+   "pageIndex": 9,
+   "paperID": "3F2504E0-4F89-11D3-9A0C-0305E82C3301",
+   "text": "Vision-language models such as CLIP align images and text in a shared embedding space.",
+   "windowWords": 30
+  },
+  {
+   "chunks": [
+    {
+     "key": "edae1c329b8bac2650961b42debbdc41",
+     "length": 86,
+     "location": 0,
+     "text": "Reinforcement learning agents learn a policy by maximizing expected cumulative reward."
+    }
+   ],
+   "overlapWords": 10,
+   "pageIndex": 10,
+   "paperID": "3F2504E0-4F89-11D3-9A0C-0305E82C3301",
+   "text": "Reinforcement learning agents learn a policy by maximizing expected cumulative reward.",
+   "windowWords": 30
+  },
+  {
+   "chunks": [
+    {
+     "key": "efdef40c0de78027e05616c9094f226b",
+     "length": 110,
+     "location": 0,
+     "text": "The sufficiency principle states that a sufficient statistic contains all the information about the parameter."
+    }
+   ],
+   "overlapWords": 10,
+   "pageIndex": 11,
+   "paperID": "3F2504E0-4F89-11D3-9A0C-0305E82C3301",
+   "text": "The sufficiency principle states that a sufficient statistic contains all the information about the parameter.",
+   "windowWords": 30
+  },
+  {
+   "chunks": [
+    {
+     "key": "0e982b04555ae705d4f4511bc586dddb",
+     "length": 88,
+     "location": 0,
+     "text": "Federated learning trains a shared model across clients without centralizing their data."
+    }
+   ],
+   "overlapWords": 10,
+   "pageIndex": 12,
+   "paperID": "3F2504E0-4F89-11D3-9A0C-0305E82C3301",
+   "text": "Federated learning trains a shared model across clients without centralizing their data.",
+   "windowWords": 30
+  },
+  {
+   "chunks": [
+    {
+     "key": "7a91637cb87acdf5f73e0c0dd08ebeb3",
+     "length": 84,
+     "location": 0,
+     "text": "Gradient-based saliency identifies which weights matter most for forgetting a class."
+    }
+   ],
+   "overlapWords": 10,
+   "pageIndex": 13,
+   "paperID": "3F2504E0-4F89-11D3-9A0C-0305E82C3301",
+   "text": "Gradient-based saliency identifies which weights matter most for forgetting a class.",
+   "windowWords": 30
+  },
+  {
+   "chunks": [
+    {
+     "key": "722ce0e7c44c288af112f1767247d4ed",
+     "length": 96,
+     "location": 0,
+     "text": "Isotropic Gaussian embeddings minimize downstream prediction risk under a broad family of tasks."
+    }
+   ],
+   "overlapWords": 10,
+   "pageIndex": 14,
+   "paperID": "3F2504E0-4F89-11D3-9A0C-0305E82C3301",
+   "text": "Isotropic Gaussian embeddings minimize downstream prediction risk under a broad family of tasks.",
+   "windowWords": 30
+  },
+  {
+   "chunks": [
+    {
+     "key": "c0cb462ab27956369b27a1c6bf7f29eb",
+     "length": 93,
+     "location": 0,
+     "text": "Knowledge distillation transfers the behaviour of a large teacher model to a smaller student."
+    }
+   ],
+   "overlapWords": 10,
+   "pageIndex": 15,
+   "paperID": "3F2504E0-4F89-11D3-9A0C-0305E82C3301",
+   "text": "Knowledge distillation transfers the behaviour of a large teacher model to a smaller student.",
+   "windowWords": 30
+  },
+  {
+   "chunks": [
+    {
+     "key": "57068d8d29ae1f965973544977875bce",
+     "length": 75,
+     "location": 0,
+     "text": "Variational autoencoders maximize a lower bound on the data log-likelihood."
+    }
+   ],
+   "overlapWords": 10,
+   "pageIndex": 16,
+   "paperID": "3F2504E0-4F89-11D3-9A0C-0305E82C3301",
+   "text": "Variational autoencoders maximize a lower bound on the data log-likelihood.",
+   "windowWords": 30
+  },
+  {
+   "chunks": [
+    {
+     "key": "bb8c207bf5b76bcaa543086d7a29b9d5",
+     "length": 46,
+     "location": 3,
+     "text": "Elastic weight consolidation slows learning."
+    }
+   ],
+   "overlapWords": 25,
+   "pageIndex": 4,
+   "paperID": "3F2504E0-4F89-11D3-9A0C-0305E82C3301",
+   "text": "  \nElastic weight\tconsolidation   slows learning.\n",
+   "windowWords": 100
+  },
+  {
+   "chunks": [
+    {
+     "key": "38372d0249815e9479b2467d73ad5967",
+     "length": 389,
+     "location": 0,
+     "text": "w0 w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w23 w24 w25 w26 w27 w28 w29 w30 w31 w32 w33 w34 w35 w36 w37 w38 w39 w40 w41 w42 w43 w44 w45 w46 w47 w48 w49 w50 w51 w52 w53 w54 w55 w56 w57 w58 w59 w60 w61 w62 w63 w64 w65 w66 w67 w68 w69 w70 w71 w72 w73 w74 w75 w76 w77 w78 w79 w80 w81 w82 w83 w84 w85 w86 w87 w88 w89 w90 w91 w92 w93 w94 w95 w96 w97 w98 w99"
+    },
+    {
+     "key": "1bee902e7418d873cf6e15c7b97f4a17",
+     "length": 474,
+     "location": 290,
+     "text": "w75 w76 w77 w78 w79 w80 w81 w82 w83 w84 w85 w86 w87 w88 w89 w90 w91 w92 w93 w94 w95 w96 w97 w98 w99 w100 w101 w102 w103 w104 w105 w106 w107 w108 w109 w110 w111 w112 w113 w114 w115 w116 w117 w118 w119 w120 w121 w122 w123 w124 w125 w126 w127 w128 w129 w130 w131 w132 w133 w134 w135 w136 w137 w138 w139 w140 w141 w142 w143 w144 w145 w146 w147 w148 w149 w150 w151 w152 w153 w154 w155 w156 w157 w158 w159 w160 w161 w162 w163 w164 w165 w166 w167 w168 w169 w170 w171 w172 w173 w174"
+    },
+    {
+     "key": "04dba95edd5c874a5c6b576ff28f0ab1",
+     "length": 499,
+     "location": 640,
+     "text": "w150 w151 w152 w153 w154 w155 w156 w157 w158 w159 w160 w161 w162 w163 w164 w165 w166 w167 w168 w169 w170 w171 w172 w173 w174 w175 w176 w177 w178 w179 w180 w181 w182 w183 w184 w185 w186 w187 w188 w189 w190 w191 w192 w193 w194 w195 w196 w197 w198 w199 w200 w201 w202 w203 w204 w205 w206 w207 w208 w209 w210 w211 w212 w213 w214 w215 w216 w217 w218 w219 w220 w221 w222 w223 w224 w225 w226 w227 w228 w229 w230 w231 w232 w233 w234 w235 w236 w237 w238 w239 w240 w241 w242 w243 w244 w245 w246 w247 w248 w249"
+    }
+   ],
+   "overlapWords": 25,
+   "pageIndex": 0,
+   "paperID": "3F2504E0-4F89-11D3-9A0C-0305E82C3301",
+   "text": "w0 w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w23 w24 w25 w26 w27 w28 w29 w30 w31 w32 w33 w34 w35 w36 w37 w38 w39 w40 w41 w42 w43 w44 w45 w46 w47 w48 w49 w50 w51 w52 w53 w54 w55 w56 w57 w58 w59 w60 w61 w62 w63 w64 w65 w66 w67 w68 w69 w70 w71 w72 w73 w74 w75 w76 w77 w78 w79 w80 w81 w82 w83 w84 w85 w86 w87 w88 w89 w90 w91 w92 w93 w94 w95 w96 w97 w98 w99 w100 w101 w102 w103 w104 w105 w106 w107 w108 w109 w110 w111 w112 w113 w114 w115 w116 w117 w118 w119 w120 w121 w122 w123 w124 w125 w126 w127 w128 w129 w130 w131 w132 w133 w134 w135 w136 w137 w138 w139 w140 w141 w142 w143 w144 w145 w146 w147 w148 w149 w150 w151 w152 w153 w154 w155 w156 w157 w158 w159 w160 w161 w162 w163 w164 w165 w166 w167 w168 w169 w170 w171 w172 w173 w174 w175 w176 w177 w178 w179 w180 w181 w182 w183 w184 w185 w186 w187 w188 w189 w190 w191 w192 w193 w194 w195 w196 w197 w198 w199 w200 w201 w202 w203 w204 w205 w206 w207 w208 w209 w210 w211 w212 w213 w214 w215 w216 w217 w218 w219 w220 w221 w222 w223 w224 w225 w226 w227 w228 w229 w230 w231 w232 w233 w234 w235 w236 w237 w238 w239 w240 w241 w242 w243 w244 w245 w246 w247 w248 w249",
+   "windowWords": 100
+  },
+  {
+   "chunks": [
+    {
+     "key": "38372d0249815e9479b2467d73ad5967",
+     "length": 389,
+     "location": 0,
+     "text": "w0 w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w23 w24 w25 w26 w27 w28 w29 w30 w31 w32 w33 w34 w35 w36 w37 w38 w39 w40 w41 w42 w43 w44 w45 w46 w47 w48 w49 w50 w51 w52 w53 w54 w55 w56 w57 w58 w59 w60 w61 w62 w63 w64 w65 w66 w67 w68 w69 w70 w71 w72 w73 w74 w75 w76 w77 w78 w79 w80 w81 w82 w83 w84 w85 w86 w87 w88 w89 w90 w91 w92 w93 w94 w95 w96 w97 w98 w99"
+    },
+    {
+     "key": "1bee902e7418d873cf6e15c7b97f4a17",
+     "length": 474,
+     "location": 290,
+     "text": "w75 w76 w77 w78 w79 w80 w81 w82 w83 w84 w85 w86 w87 w88 w89 w90 w91 w92 w93 w94 w95 w96 w97 w98 w99 w100 w101 w102 w103 w104 w105 w106 w107 w108 w109 w110 w111 w112 w113 w114 w115 w116 w117 w118 w119 w120 w121 w122 w123 w124 w125 w126 w127 w128 w129 w130 w131 w132 w133 w134 w135 w136 w137 w138 w139 w140 w141 w142 w143 w144 w145 w146 w147 w148 w149 w150 w151 w152 w153 w154 w155 w156 w157 w158 w159 w160 w161 w162 w163 w164 w165 w166 w167 w168 w169 w170 w171 w172 w173 w174"
+    },
+    {
+     "key": "16c6e2f9cd186e66a8148281bca43043",
+     "length": 149,
+     "location": 640,
+     "text": "w150 w151 w152 w153 w154 w155 w156 w157 w158 w159 w160 w161 w162 w163 w164 w165 w166 w167 w168 w169 w170 w171 w172 w173 w174 w175 w176 w177 w178 w179"
+    }
+   ],
+   "overlapWords": 25,
+   "pageIndex": 0,
+   "paperID": "3F2504E0-4F89-11D3-9A0C-0305E82C3301",
+   "text": "w0 w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w23 w24 w25 w26 w27 w28 w29 w30 w31 w32 w33 w34 w35 w36 w37 w38 w39 w40 w41 w42 w43 w44 w45 w46 w47 w48 w49 w50 w51 w52 w53 w54 w55 w56 w57 w58 w59 w60 w61 w62 w63 w64 w65 w66 w67 w68 w69 w70 w71 w72 w73 w74 w75 w76 w77 w78 w79 w80 w81 w82 w83 w84 w85 w86 w87 w88 w89 w90 w91 w92 w93 w94 w95 w96 w97 w98 w99 w100 w101 w102 w103 w104 w105 w106 w107 w108 w109 w110 w111 w112 w113 w114 w115 w116 w117 w118 w119 w120 w121 w122 w123 w124 w125 w126 w127 w128 w129 w130 w131 w132 w133 w134 w135 w136 w137 w138 w139 w140 w141 w142 w143 w144 w145 w146 w147 w148 w149 w150 w151 w152 w153 w154 w155 w156 w157 w158 w159 w160 w161 w162 w163 w164 w165 w166 w167 w168 w169 w170 w171 w172 w173 w174 w175 w176 w177 w178 w179",
+   "windowWords": 100
+  },
+  {
+   "chunks": [
+    {
+     "key": "38372d0249815e9479b2467d73ad5967",
+     "length": 389,
+     "location": 0,
+     "text": "w0 w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w23 w24 w25 w26 w27 w28 w29 w30 w31 w32 w33 w34 w35 w36 w37 w38 w39 w40 w41 w42 w43 w44 w45 w46 w47 w48 w49 w50 w51 w52 w53 w54 w55 w56 w57 w58 w59 w60 w61 w62 w63 w64 w65 w66 w67 w68 w69 w70 w71 w72 w73 w74 w75 w76 w77 w78 w79 w80 w81 w82 w83 w84 w85 w86 w87 w88 w89 w90 w91 w92 w93 w94 w95 w96 w97 w98 w99"
+    },
+    {
+     "key": "b95eb4bc6791a7833ab2952f1741a97c",
+     "length": 104,
+     "location": 290,
+     "text": "w75 w76 w77 w78 w79 w80 w81 w82 w83 w84 w85 w86 w87 w88 w89 w90 w91 w92 w93 w94 w95 w96 w97 w98 w99 w100"
+    }
+   ],
+   "overlapWords": 25,
+   "pageIndex": 0,
+   "paperID": "3F2504E0-4F89-11D3-9A0C-0305E82C3301",
+   "text": "w0 w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w23 w24 w25 w26 w27 w28 w29 w30 w31 w32 w33 w34 w35 w36 w37 w38 w39 w40 w41 w42 w43 w44 w45 w46 w47 w48 w49 w50 w51 w52 w53 w54 w55 w56 w57 w58 w59 w60 w61 w62 w63 w64 w65 w66 w67 w68 w69 w70 w71 w72 w73 w74 w75 w76 w77 w78 w79 w80 w81 w82 w83 w84 w85 w86 w87 w88 w89 w90 w91 w92 w93 w94 w95 w96 w97 w98 w99 w100",
+   "windowWords": 100
+  },
+  {
+   "chunks": [
+    {
+     "key": "ad803100853422239c68dbbf178bdaee",
+     "length": 389,
+     "location": 0,
+     "text": "😀 강화학습의 기초 w0 w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w23 w24 w25 w26 w27 w28 w29 w30 w31 w32 w33 w34 w35 w36 w37 w38 w39 w40 w41 w42 w43 w44 w45 w46 w47 w48 w49 w50 w51 w52 w53 w54 w55 w56 w57 w58 w59 w60 w61 w62 w63 w64 w65 w66 w67 w68 w69 w70 w71 w72 w73 w74 w75 w76 w77 w78 w79 w80 w81 w82 w83 w84 w85 w86 w87 w88 w89 w90 w91 w92 w93 w94 w95 w96"
+    },
+    {
+     "key": "4fabaf38d7d9f7ada46c7408d6d80ca0",
+     "length": 211,
+     "location": 290,
+     "text": "w72 w73 w74 w75 w76 w77 w78 w79 w80 w81 w82 w83 w84 w85 w86 w87 w88 w89 w90 w91 w92 w93 w94 w95 w96 w97 w98 w99 w100 w101 w102 w103 w104 w105 w106 w107 w108 w109 w110 w111 w112 w113 w114 w115 w116 w117 w118 w119"
+    }
+   ],
+   "overlapWords": 25,
+   "pageIndex": 0,
+   "paperID": "3F2504E0-4F89-11D3-9A0C-0305E82C3301",
+   "text": "😀 강화학습의 기초 w0 w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w23 w24 w25 w26 w27 w28 w29 w30 w31 w32 w33 w34 w35 w36 w37 w38 w39 w40 w41 w42 w43 w44 w45 w46 w47 w48 w49 w50 w51 w52 w53 w54 w55 w56 w57 w58 w59 w60 w61 w62 w63 w64 w65 w66 w67 w68 w69 w70 w71 w72 w73 w74 w75 w76 w77 w78 w79 w80 w81 w82 w83 w84 w85 w86 w87 w88 w89 w90 w91 w92 w93 w94 w95 w96 w97 w98 w99 w100 w101 w102 w103 w104 w105 w106 w107 w108 w109 w110 w111 w112 w113 w114 w115 w116 w117 w118 w119",
+   "windowWords": 100
+  },
+  {
+   "chunks": [
+    {
+     "key": "9dcf2d0ae05dd1abea9460d3761e48fd",
+     "length": 32,
+     "location": 0,
+     "text": "machine unlearning removes data"
+    }
+   ],
+   "overlapWords": 25,
+   "pageIndex": 0,
+   "paperID": "3F2504E0-4F89-11D3-9A0C-0305E82C3301",
+   "text": "machine\nunlearning  removes data",
+   "windowWords": 100
+  },
+  {
+   "chunks": [
+    {
+     "key": "1a3e1e4b4e9295ae0cf2da88b83675d5",
+     "length": 9,
+     "location": 0,
+     "text": "a b c d﻿e"
+    }
+   ],
+   "overlapWords": 25,
+   "pageIndex": 0,
+   "paperID": "3F2504E0-4F89-11D3-9A0C-0305E82C3301",
+   "text": "a b c　d﻿e",
+   "windowWords": 100
+  }
+ ],
+ "store": {
+  "bytes": 39259,
+  "first": [
+   -0.06997534,
+   -0.031691484,
+   0.042411733,
+   -0.027832076,
+   0.021545239,
+   -0.021743117,
+   0.0006486427,
+   -0.002840498,
+   0.009695353,
+   0.036574274,
+   0.085154355,
+   0.068183705,
+   -0.044546116,
+   0.046410657,
+   0.073209964,
+   0.06410808,
+   -0.04574197,
+   0.04830828,
+   -0.010474702,
+   0.05224801,
+   -0.048734345,
+   -0.01074767,
+   0.0739758,
+   -0.002506562,
+   -0.055691756,
+   -0.0075335614,
+   -0.015158664,
+   -0.037016008,
+   0.043932874,
+   -0.007217864,
+   -0.042306677,
+   0.056870714,
+   0.025750397,
+   -0.03913999,
+   -0.041521564,
+   -0.03774448,
+   -0.087950855,
+   -0.0071587036,
+   -0.083638586,
+   0.029644618,
+   0.0025219782,
+   0.058680423,
+   0.007555696,
+   0.058973297,
+   0.03956089,
+   -0.015905704,
+   0.0862367,
+   0.03251419,
+   0.07700665,
+   0.061133254,
+   0.0502443,
+   0.068960175,
+   0.08643808,
+   -0.076515466,
+   0.0081523005,
+   -0.029361676,
+   -0.04405901,
+   -0.001941418,
+   -0.012326952,
+   -0.03580905,
+   0.059032653,
+   -0.0427704,
+   -0.086343095,
+   -0.022859607,
+   0.075228125,
+   0.063225284,
+   0.058274638,
+   0.05784538,
+   0.024952514,
+   -0.04520278,
+   -0.076049596,
+   -0.046573427,
+   0.030860104,
+   -0.055185277,
+   0.017611628,
+   0.042820882,
+   0.027114568,
+   -0.07472623,
+   -0.012771603,
+   -0.07620647,
+   0.031211326,
+   0.04519239,
+   -0.06257717,
+   -0.025831947,
+   -0.077620976,
+   -0.07602263,
+   -0.028660702,
+   -0.04411225,
+   -0.029584615,
+   0.057329852,
+   0.08724613,
+   0.06828764,
+   0.05686943,
+   -0.05876096,
+   0.046664286,
+   0.022154287,
+   -0.033554394,
+   -0.036669817,
+   -0.055631235,
+   -0.0055055907,
+   0.0067926925,
+   0.048106294,
+   -0.051723916,
+   0.030691842,
+   -0.038645875,
+   -0.08188383,
+   0.02367771,
+   0.02582563,
+   -0.021375513,
+   -0.0047935285,
+   -0.069841504,
+   -0.026097475,
+   -0.016369067,
+   0.022056902,
+   -0.03632871,
+   -0.018922469,
+   -0.084504254,
+   0.02674787,
+   0.041614212,
+   0.022936739,
+   0.0685749,
+   0.013252804,
+   -0.017314296,
+   -0.019348633,
+   -0.053131476,
+   0.066955395,
+   -0.030964378,
+   0.087960385,
+   0.01927236,
+   0.023712976,
+   -0.012143346,
+   -0.050748587,
+   0.04538433,
+   0.083829455,
+   -0.025607308,
+   0.027504887,
+   -0.049046297,
+   0.07959647,
+   -0.06836495,
+   0.03419569,
+   -0.081105374,
+   0.009821021,
+   0.006679015,
+   0.019401569,
+   -0.0023220435,
+   0.0748875,
+   0.082772955,
+   0.03404229,
+   0.06771182,
+   0.06435398,
+   0.053061936,
+   0.08927466,
+   -0.031254686,
+   0.035270333,
+   -0.013957249,
+   -0.0064915163,
+   -0.020854315,
+   -0.053927053,
+   -0.066814855,
+   0.028215844,
+   0.032866105,
+   -0.019366104,
+   -0.07969995,
+   -0.040017407,
+   0.07392118,
+   -0.04483439,
+   0.054217324,
+   -0.006322364,
+   -0.066845894,
+   -0.060011897,
+   -0.011242268,
+   -0.038939018,
+   0.072651416,
+   -0.020005172,
+   -0.046935376,
+   0.06678129,
+   -0.0074524484,
+   -0.0077321106,
+   -0.065099955,
+   0.030975956,
+   0.0066633574,
+   0.009632699,
+   -0.012978839,
+   -0.04983103,
+   0.029067622,
+   0.026393402,
+   -0.088215694,
+   -0.004397525,
+   -0.06954187,
+   0.0691355,
+   0.02815958,
+   0.024055112,
+   0.014980766,
+   0.07911826,
+   -0.06251499,
+   0.013670476,
+   -0.041747425,
+   0.022423955,
+   0.044291254,
+   -0.0707815,
+   -0.019314902,
+   0.0875771,
+   0.024695622,
+   -0.046435423,
+   0.054416772,
+   0.05548101,
+   0.03295496,
+   0.014013102,
+   0.0115524335,
+   0.055880513,
+   0.019431759,
+   0.044739395,
+   0.012518527,
+   -0.021117123,
+   0.06269147,
+   -0.016707996,
+   0.041026734,
+   -0.059710138,
+   -0.014311789,
+   -0.013434289,
+   0.05946088,
+   0.039023,
+   -0.085104376,
+   0.0888469,
+   0.06142634,
+   0.0386562,
+   -0.042918116,
+   -0.025681408,
+   -0.047930118,
+   -0.025323007,
+   -0.08156969,
+   0.078606814,
+   0.08375755,
+   -0.051330164,
+   -0.032292433,
+   -0.08589209,
+   -0.08415578,
+   0.03687204,
+   0.022367122,
+   0.048306216,
+   -0.04689105,
+   -0.086922534,
+   -0.09002613,
+   -0.075888835,
+   -0.056898586,
+   0.07945954,
+   -0.011656034,
+   0.014333616,
+   0.055316217,
+   -0.025866605,
+   -0.029713789,
+   -0.06712096,
+   -0.039418947,
+   0.008708421,
+   -0.004815584,
+   -0.040165633,
+   0.026447328,
+   0.08658606,
+   -0.060623184,
+   0.032177858,
+   -0.08869958,
+   0.032186847,
+   -0.06184425,
+   0.06509623,
+   0.043510824,
+   -0.08207789,
+   0.0025677357,
+   -0.074963234,
+   0.07777089,
+   0.0625634,
+   0.012814637,
+   0.082491,
+   -0.029063974,
+   -0.027837506,
+   0.006238832,
+   0.08190557,
+   -0.03909544,
+   -0.08338315,
+   0.033748485,
+   0.081514746,
+   0.019397559,
+   -0.08589738,
+   -0.03456605,
+   0.049021993,
+   0.008983494,
+   0.057052303,
+   -0.004120483,
+   0.0111806495,
+   0.015763374,
+   -0.025637051,
+   -0.018034756,
+   -0.09037946,
+   -0.036708087,
+   -0.055757906,
+   -0.036732998,
+   0.0737384,
+   -0.07887567,
+   0.08555172,
+   0.084405474,
+   -0.029703813,
+   -0.08574115,
+   -0.02943545,
+   0.08232264,
+   -0.033628263,
+   0.031561922,
+   -0.090079956,
+   -0.05086635,
+   -0.05189009,
+   -0.08067208,
+   -0.059382543,
+   -0.053348612,
+   0.08536037,
+   -0.04050813,
+   -0.04214795,
+   -0.032303415,
+   0.06753024,
+   -0.049629185,
+   -0.009598827,
+   0.07981286,
+   -0.028351443,
+   -0.018371811,
+   0.055794027,
+   0.060569555,
+   0.052648176,
+   0.055333644,
+   0.03694488,
+   0.011154812,
+   0.008829483,
+   0.07055673,
+   -0.01669429,
+   -0.01635215,
+   0.06548311,
+   -0.03913934,
+   -0.022929342,
+   0.005025148,
+   -0.0023767028,
+   -0.060769,
+   0.04118067,
+   -0.01652646,
+   -0.087205335,
+   -0.0037781266,
+   -0.022646679,
+   0.046303045,
+   -0.021327155,
+   0.08875493,
+   0.08631998,
+   0.046118286,
+   0.07727619,
+   -0.03129245,
+   0.065062,
+   0.022919511,
+   -0.020098165,
+   0.030077647,
+   0.048811384,
+   0.019745352,
+   0.02755227,
+   0.056574605,
+   0.020347977,
+   0.057150345,
+   -0.0549324,
+   -0.06924853,
+   0.06816532,
+   0.07842985,
+   -0.035500206,
+   -0.05393284,
+   -0.014570944,
+   0.06208327,
+   -0.027782807,
+   -0.08763131,
+   0.049855564,
+   0.038787205,
+   0.06256228,
+   -0.029075569,
+   -0.066344574,
+   0.06352628,
+   -0.031854253,
+   -0.024485547,
+   -0.040970843,
+   -0.08128185,
+   -0.04089184,
+   0.01419509,
+   0.07016608,
+   0.0867496,
+   0.00060979143
+  ],
+  "keys": [
+   "5fade554909b57eea179d73812aa4dee",
+   "c5e763fd7ad9c416019a5ff3113530d4",
+   "df71570f78e63e41b94ab9c97d9c943b",
+   "752885dbbf8c23906adc5bbdae86b018",
+   "f99839a4e4f3f3f6d9188869f741a43b",
+   "f21c59cd6794150af3b179dffc0f4eb2",
+   "28233f19461c49a083a2ad4113f41b8f",
+   "ee4e79cf15631dc56432b9fe79e99ab0",
+   "eaa6ca4371c5e8e3c7270e621992c9e0",
+   "9b6dc54c927b541f3de0de545710873b",
+   "b70af2ee749bd298a1c22ac0f4c70710",
+   "d6763d428f944fd7a0d18d94d162e322",
+   "1ee317cdfe947941e4da24042b3aaed6",
+   "39a162acb1731c349cfa02ff6d5bb472",
+   "0d8d015d1286bad7840b0ae8c6a8c9e5",
+   "91d06ed38ff52cbf622e58406bd078ed",
+   "6e2cd821773b23117cfec64652cc640b",
+   "2b1c31666e78aef467acd9152474d2ea",
+   "d40fa06728abca2524a83f71a3cf25ef",
+   "68ae2d7284820a81d30bee5a2ff56722",
+   "f1572729242bd8ac51e8d5d016922781",
+   "61702ce7db0f712d26700dff61efa1cb",
+   "99825ddd778da957c0528e92d01f9b1f",
+   "7e6a89cb6bb792dd685cbcddf18cecb3",
+   "c20d50768fcfaf6d3c59d0f55e17a201",
+   "da8d62d20e62a5b5662bf20ca5264bae",
+   "be66c7687e2a28e782839f0322f0f0a4",
+   "85c612e8b9e19bab9376216bcdf285e3",
+   "09b2483fc8ea9a347ced47b30016b81c",
+   "b61c8fc0aa0f18685fbff00e0a170367",
+   "0c6a78787ffa76e80f4f715f87706a02",
+   "91c26957846a11dfced099b015b76431",
+   "1d60a20d6959ce00f853fb6c4a67ec1a",
+   "d287a1cd40bcdbf80783aea62357575a",
+   "ca0df02d3eb26acacfe3cd7ba146105d",
+   "1e8ae35525220861e626a6aefb0d2458",
+   "ad30333d356f4ee7fb479f3485bf7d47",
+   "d813ddb70981e58a029da179de6f7fba",
+   "2b8e363f746aa65b7148a65cfa2f434a",
+   "f319b044980567f38dec3a4083931246",
+   "db6d98bcca6f724dcd396e7ff3e7bc9e",
+   "c5a7e0f0ab7c5d156da32d0c8db0cae3",
+   "4826c609ffa7ca760400dc1880999367",
+   "0ff436b67f1745ebfc4bb6fc3fb7e9f6",
+   "e0113f5bf7a1b28d30d560eea09959b4",
+   "450cbf2a36fae5d4d49311f32c80fc07",
+   "0417b877d2a6aa200758a1c4aa52762d",
+   "859e1d96ada096f8de2cdecbf4f0a532",
+   "032837a399d370197ede0836c566a8f7",
+   "77a359bcd22cb8143f9d0c9148b3856d"
+  ]
+ }
+}

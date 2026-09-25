@@ -31,6 +31,7 @@
   },
   "dependencies": {
     "mathjax-full": "^3.2.2",
+    "onnxruntime-web": "1.30.0",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^4.10.38"
   },
