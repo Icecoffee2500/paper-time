@@ -63,6 +63,19 @@ const targets = [
     external: ['electron'],
     ...nodeImportMeta,
   },
+  // Search by meaning, in a process of its own: the tokenizer, the vector
+  // cache and ONNX Runtime's Node flavour, whose WebAssembly and model sit
+  // beside it in `out/main/semantic/` (see `copyStatic`).
+  {
+    ...common,
+    entryPoints: [path.join(root, 'src/main/semanticWorker.ts')],
+    outfile: path.join(out, 'main/semantic.js'),
+    platform: 'node',
+    format: 'cjs',
+    target: 'node20',
+    external: ['electron'],
+    ...nodeImportMeta,
+  },
   {
     ...common,
     entryPoints: [path.join(root, 'src/main/preload.ts')],
@@ -119,6 +132,17 @@ async function copyStatic() {
   // pdf.js ships the character maps and standard fonts as data files; a PDF
   // with a CJK font or one that relies on the base-14 fonts needs them, and a
   // paper in Korean is exactly that case.
+  // The semantic worker's runtime and model: ONNX Runtime asks for its glue
+  // module by URL and its binary by bytes, both from disk, and the model and
+  // vocabulary come from `assets/semantic`. All of it goes beside the worker
+  // and comes out of the archive with it (`asarUnpack`).
+  const semantic = path.join(out, 'main/semantic')
+  await mkdir(semantic, { recursive: true })
+  const ort = path.join(root, 'node_modules/onnxruntime-web/dist')
+  for (const file of ['ort-wasm-simd-threaded.mjs', 'ort-wasm-simd-threaded.wasm']) {
+    await cp(path.join(ort, file), path.join(semantic, file))
+  }
+  await cp(path.join(root, 'assets/semantic'), semantic, { recursive: true })
   const pdfjs = path.join(root, 'node_modules/pdfjs-dist')
   for (const dir of ['cmaps', 'standard_fonts']) {
     const from = path.join(pdfjs, dir)

@@ -26,6 +26,8 @@ import { DROPPED, EXPANDED, ISOLATES, MAPPED, PADDED, PADDED_MAPPED, SPLITS } fr
 
 export const MAX_TOKENS = 256
 const MAX_WORD_CHARACTERS = 100
+/** Found in the raw text before any normalisation, in this order. */
+const SPECIALS = ['[PAD]', '[UNK]', '[CLS]', '[SEP]', '[MASK]']
 
 export class WordPiece {
   readonly vocab: Map<string, number>
@@ -47,6 +49,7 @@ export class WordPiece {
     this.cls = this.id('[CLS]')
     this.sep = this.id('[SEP]')
     this.unk = this.id('[UNK]')
+    for (const name of SPECIALS) this.id(name)
   }
 
   private id(piece: string): number {
@@ -55,18 +58,64 @@ export class WordPiece {
     return id
   }
 
-  /** The ids the model is fed: `[CLS]`, at most `maxTokens − 2` pieces, `[SEP]`. */
+  /**
+   * The ids the model is fed: `[CLS]`, at most `maxTokens − 2` pieces,
+   * `[SEP]` — cut by piece, not by word, as sentence-transformers cuts it.
+   *
+   * The five special tokens are found in the raw text first, before anything
+   * is lowercased, and become their own ids wherever they stand — even inside
+   * a word, even when the text is a paper about BERT that writes `[MASK]` in
+   * its prose. That is what the reference does, and a paper about BERT is not
+   * a rare paper.
+   */
   encode(text: string, maxTokens = MAX_TOKENS): number[] {
     const ids = [this.cls]
-    const room = maxTokens - 1
-    outer: for (const word of words(text)) {
+    this.piecesInto(text, Math.max(maxTokens - 2, 0), ids)
+    ids.push(this.sep)
+    return ids
+  }
+
+  /** The text's pieces without `[CLS]`/`[SEP]` and without a limit. */
+  piecesOf(text: string): number[] {
+    const ids: number[] = []
+    this.piecesInto(text, Infinity, ids)
+    return ids
+  }
+
+  private piecesInto(text: string, limit: number, ids: number[]) {
+    const start = ids.length
+    const full = () => ids.length - start >= limit
+    let from = 0
+    let index = 0
+    while (index < text.length && !full()) {
+      if (text.charCodeAt(index) === 0x5b /* [ */) {
+        const special = SPECIALS.find((name) => text.startsWith(name, index))
+        if (special !== undefined) {
+          this.wordsInto(text.slice(from, index), limit - (ids.length - start), ids)
+          if (full()) break
+          ids.push(this.vocab.get(special)!)
+          index += special.length
+          from = index
+          continue
+        }
+      }
+      index += 1
+    }
+    if (!full()) this.wordsInto(text.slice(from), limit - (ids.length - start), ids)
+    if (ids.length - start > limit) ids.length = start + limit
+  }
+
+  /** Steps 2–7 for a stretch of text with no special token in it. */
+  private wordsInto(segment: string, limit: number, ids: number[]) {
+    if (limit <= 0 || segment.length === 0) return
+    const before = ids.length
+    for (const word of words(segment)) {
+      if (ids.length - before >= limit) return
       for (const id of this.pieces(word)) {
-        if (ids.length >= room) break outer
+        if (ids.length - before >= limit) return
         ids.push(id)
       }
     }
-    ids.push(this.sep)
-    return ids
   }
 
   /** The pieces of one word: the longest prefix in the vocabulary, again and again. */

@@ -28,6 +28,10 @@ asar: true
 asarUnpack:
   - out/main/textService.js
   - out/main/textWorker.js
+  # Search by meaning: the runtime loads its WebAssembly and its glue module
+  # from files, and reads the model from one.
+  - out/main/semantic.js
+  - out/main/semantic/**
 
 # ---------------------------------------------------------------- Windows
 win:
