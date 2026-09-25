@@ -7,7 +7,10 @@
  * one Chromium, one stylesheet, one bundled typeface — which is the point of
  * porting this way rather than three times.
  */
-import { BrowserWindow, app, dialog, ipcMain, nativeTheme, screen, shell } from 'electron'
+import {
+  BrowserWindow, app, dialog, ipcMain, nativeTheme, screen, shell, utilityProcess,
+  type UtilityProcess, type WebContents,
+} from 'electron'
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
@@ -37,6 +40,8 @@ import { buildMenu } from './menu.js'
 import { watchLibrary } from './watcher.js'
 import { captureAndQuit, probeArgument, runProbe } from './probe.js'
 import { capture as captureWindow, send as sendFeedback } from './feedback.js'
+import type { ServiceReply, ServiceStats } from './textService.js'
+import type { TextSource } from './textIndex.js'
 
 const isMac = process.platform === 'darwin'
 /** See `--papertime-chrome` in `preload.ts`. */
@@ -177,6 +182,10 @@ function makeWindow(shape: WindowShape, extraArguments: string[] = []): BrowserW
       nodeIntegration: false,
       sandbox: false,
       spellcheck: true,
+      // A probe's window sits outside every display, where Chromium counts it
+      // as hidden and slows its timers and frames to a crawl — which would
+      // make every timing a probe takes a timing of the throttle. Only then.
+      backgroundThrottling: !isProbeRun(),
       // The renderer gets its own argv; the app's is not passed down, so the
       // one flag the window needs is handed over explicitly.
       additionalArguments: [
@@ -302,10 +311,16 @@ async function snapshot(refused: string[] = []): Promise<LibrarySnapshot | { err
       const free = trouble.length > 0 ? [] : await one.unclaimedFiles(claimedBy(papers))
       return { one, papers, loose: free.length, trouble }
     }))
+    const readable = new Map<string, TextSource>()
     for (const folder of read) {
       unreadableRecords.push(...folder.trouble)
       for (const row of folder.papers) {
         ownerByID.set(row.id, folder.one)
+        // What the text index reads, kept here so a search never has to ask
+        // the folders where a paper's file is.
+        if (row.file && row.exists) {
+          readable.set(row.id, { id: row.id, file: row.file, title: new PaperMeta(row.meta).displayTitle })
+        }
         rows.push({
           id: row.id,
           meta: row.meta,
@@ -318,6 +333,8 @@ async function snapshot(refused: string[] = []): Promise<LibrarySnapshot | { err
       }
       loose += folder.loose
     }
+    textSources = readable
+    textSourcesSent = false
     await settleVocabulary(rows)
     const { tags, collections } = await vocabulary()
     return {
@@ -505,6 +522,130 @@ async function settleFolder(): Promise<void> {
     // drive asleep — is not a reason to stop telling the window.
   }
   send('library:changed')
+}
+
+// MARK: - The words inside the papers
+
+/** Every paper with a file to read, from the last read of the folders. */
+let textSources = new Map<string, TextSource>()
+/** Whether the text service has been told about this list yet. */
+let textSourcesSent = false
+let textService: UtilityProcess | null = null
+/**
+ * Which window asked for which search, so its answers go back to it. Every
+ * window numbers its own searches from one, so the service is given numbers
+ * of this process's own and each is mapped back on the way out.
+ */
+const textSearches = new Map<number, { target: WebContents; token: number }>()
+const textTokens = new Map<string, number>()
+let textTokenCount = 0
+const textStatsWaiting: ((stats: ServiceStats | null) => void)[] = []
+
+/**
+ * Where the text is kept: the app's own folder, never the library's.
+ *
+ * A probe keeps a folder of its own. It reads a test library, and its
+ * clean-up — which takes out the text of papers that are gone — would
+ * otherwise judge the person's own cache by the probe's library and empty it.
+ */
+function textCacheDirectory(): string {
+  const chosen = probeArgument('text-cache')
+  if (chosen) return chosen
+  if (isProbeRun()) return path.join(app.getPath('temp'), 'Paper Time probe', 'Text')
+  return path.join(app.getPath('userData'), 'Text')
+}
+
+/** The files pdf.js may ask for, by name — nothing with a path in it. */
+const ASSET_NAME = /^[A-Za-z0-9][A-Za-z0-9_.+-]*$/
+
+async function textAsset(kind: 'cmap' | 'font', name: string): Promise<Uint8Array | null> {
+  // The name comes out of a PDF, which anybody can write. Only a bare file
+  // name, only from the two folders the window loads the same files from.
+  if (!ASSET_NAME.test(name) || name.includes('..')) return null
+  const file = kind === 'cmap'
+    ? path.join(__dirname, '../renderer/cmaps', `${name}.bcmap`)
+    : path.join(__dirname, '../renderer/standard_fonts', name)
+  try {
+    return new Uint8Array(await fsp.readFile(file))
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The text service, started the first time a search needs it.
+ *
+ * Never at launch: most sessions never search the text at all, and the ones
+ * that do start when the palette opens. It ends itself when nobody has asked
+ * for ten minutes, and starts again the next time.
+ */
+function texts(): UtilityProcess {
+  if (textService) return textService
+  // From the copy the packager leaves outside the archive (see `asarUnpack`
+  // in electron-builder.yml): the service starts threads from a file, and a
+  // file inside the archive is not one a thread can be started from.
+  const script = path.join(__dirname, 'textService.js')
+  const unpacked = script.replace(/app\.asar(?=[\\/])/, 'app.asar.unpacked')
+  const child = utilityProcess.fork(unpacked !== script && fs.existsSync(unpacked) ? unpacked : script, [], {
+    serviceName: 'Paper Time Text',
+  })
+  child.postMessage({ type: 'configure', directory: textCacheDirectory() })
+  textSourcesSent = false
+  child.on('message', (message: ServiceReply) => {
+    switch (message.type) {
+      case 'hits':
+      case 'done': {
+        const asked = textSearches.get(message.token)
+        if (!asked) break
+        if (message.type === 'done') {
+          textSearches.delete(message.token)
+          textTokens.delete(`${asked.target.id}:${asked.token}`)
+        }
+        if (!asked.target.isDestroyed()) {
+          asked.target.send(CHANNEL.event, `text:${message.type}`, { ...message, token: asked.token })
+        }
+        break
+      }
+      case 'warmed':
+        send('text:warmed', message)
+        break
+      case 'asset':
+        void textAsset(message.kind, message.name).then((data) => {
+          child.postMessage({ type: 'asset', request: message.request, data })
+        })
+        break
+      case 'stats':
+        for (const waiting of textStatsWaiting.splice(0)) waiting(message.stats)
+        break
+    }
+  })
+  child.on('exit', () => {
+    if (textService === child) textService = null
+    // Searches in flight end with the process, and the window is told so
+    // rather than left waiting for answers that will not come.
+    for (const { target, token } of textSearches.values()) {
+      if (!target.isDestroyed()) target.send(CHANNEL.event, 'text:done', { token, searched: 0, found: 0, ms: 0 })
+    }
+    textSearches.clear()
+    textTokens.clear()
+    for (const waiting of textStatsWaiting.splice(0)) waiting(null)
+  })
+  textService = child
+  return child
+}
+
+/** The service, with the latest list of papers it may be asked about. */
+function textsWithSources(): UtilityProcess {
+  const service = texts()
+  if (!textSourcesSent) {
+    service.postMessage({
+      type: 'sources',
+      sources: [...textSources.values()],
+      roots: allLibraries().map((one) => one.root),
+    })
+    textSourcesSent = true
+  }
+  return service
 }
 
 // MARK: - Requests
@@ -850,6 +991,31 @@ const handlers: Record<string, Handler> = {
   'shell:openExternal': (({ url }: { url: string }) => {
     if (/^https?:/.test(url)) shell.openExternal(url)
   }) as Handler,
+
+  // The words inside the papers. The window says which papers, in which
+  // order, and under which titles; this process knows where their files are.
+  'text:warm': (({ ids }: { ids: string[] }) => {
+    textsWithSources().postMessage({ type: 'warm', ids })
+  }) as Handler,
+  'text:search': (({ token, query, ids, titles, limit }: {
+    token: number; query: string; ids: string[]; titles: Record<string, string>; limit?: number
+  }, sender: BrowserWindow | null) => {
+    if (!sender) return
+    const global = (textTokenCount += 1)
+    textSearches.set(global, { target: sender.webContents, token })
+    textTokens.set(`${sender.webContents.id}:${token}`, global)
+    textsWithSources().postMessage({ type: 'search', token: global, query, ids, titles, limit })
+  }) as Handler,
+  'text:cancel': (({ token }: { token: number }, sender: BrowserWindow | null) => {
+    const global = sender ? textTokens.get(`${sender.webContents.id}:${token}`) : undefined
+    if (global !== undefined) textService?.postMessage({ type: 'cancel', token: global })
+  }) as Handler,
+  /** For a probe: what the service has read, and what it cost. */
+  'text:stats': () => new Promise<ServiceStats | null>((resolve) => {
+    if (!textService) return resolve(null)
+    textStatsWaiting.push(resolve)
+    textService.postMessage({ type: 'stats' })
+  }),
 }
 
 ipcMain.handle(CHANNEL.invoke, async (event, name: string, args: unknown) => {
@@ -1118,6 +1284,11 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', () => {
   if (!isMac) app.quit()
+})
+
+// The text service goes with the app, whatever it was in the middle of.
+app.on('will-quit', () => {
+  textService?.kill()
 })
 
 app.on('activate', () => {
