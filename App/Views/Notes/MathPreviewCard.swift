@@ -32,6 +32,7 @@ final class MathPreviewCard {
     }
 
     private var panel: NSPanel?
+    private var hosting: NSHostingView<ContentView>?
     private var lastGood: NSImage?
     private(set) var face: Face?
     /// The LaTeX the card was last asked to show.
@@ -63,11 +64,12 @@ final class MathPreviewCard {
 
         let panel = self.panel ?? makePanel()
         self.panel = panel
-        guard let hosting = panel.contentView as? NSHostingView<ContentView>, let face else { return }
-        hosting.rootView = ContentView(face: face, room: room)
+        guard let hosting, let face else { return }
+        hosting.rootView = ContentView(face: face, room: room, drawsOwnGlass: !Self.hasSystemGlass)
         let fitted = hosting.fittingSize
         let cardSize = NSSize(width: min(max(fitted.width, 44), room), height: max(fitted.height, 28))
         panel.setContentSize(cardSize)
+        hosting.frame = NSRect(origin: .zero, size: cardSize)
 
         var origin = NSPoint(x: startX, y: line.minY - cardSize.height - 4)
         if origin.y < bounds.minY {
@@ -133,13 +135,39 @@ final class MathPreviewCard {
         panel.hidesOnDeactivate = true
         // Never in the way: a click through it goes to the note.
         panel.ignoresMouseEvents = true
-        panel.contentView = NSHostingView(rootView: ContentView(face: .raw(""), room: 120))
+        let hosting = NSHostingView(rootView: ContentView(face: .raw(""), room: 120, drawsOwnGlass: !Self.hasSystemGlass))
+        hosting.autoresizingMask = [.width, .height]
+        self.hosting = hosting
+        // The glass is the system's where the system has it. Drawn by hand
+        // — a white body, a shadow, a hairline round the rim — it read as a
+        // bar of soap: opaque in the middle and doubled at the corners where
+        // the stroke, the shadow and the fill each rounded off on their own.
+        // `NSGlassEffectView` bends what is behind the card instead of
+        // painting over it, and draws the rim as light caught on a curve.
+        // Sonoma has no such view and keeps the hand-made surface.
+        if #available(macOS 26, *) {
+            let glass = NSGlassEffectView()
+            glass.style = .regular
+            glass.cornerRadius = Corner.popover
+            glass.contentView = hosting
+            panel.contentView = glass
+        } else {
+            panel.contentView = hosting
+        }
         return panel
+    }
+
+    /// Whether the system draws the glass (macOS 26), or the card does.
+    static var hasSystemGlass: Bool {
+        if #available(macOS 26, *) { return true } else { return false }
     }
 
     struct ContentView: View {
         var face: Face
         var room: CGFloat
+        /// Sonoma: the surface is assembled here. macOS 26: the panel's glass
+        /// view is the surface, and this is only what lies on it.
+        var drawsOwnGlass: Bool
 
         var body: some View {
             Group {
@@ -155,14 +183,19 @@ final class MathPreviewCard {
                         .lineLimit(3)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
             .frame(maxWidth: room)
             .fixedSize(horizontal: true, vertical: true)
-            .liquidGlass(.floating, in: RoundedRectangle(cornerRadius: Corner.popover, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: Corner.popover, style: .continuous)
-                    .strokeBorder(.separator, lineWidth: 0.5)
+            .background {
+                if drawsOwnGlass {
+                    Color.clear
+                        .liquidGlass(.floating, in: RoundedRectangle(cornerRadius: Corner.popover, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: Corner.popover, style: .continuous)
+                                .strokeBorder(.separator, lineWidth: 0.5)
+                        }
+                }
             }
             .animation(Motion.tap, value: face)
         }
