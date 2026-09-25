@@ -73,11 +73,13 @@ struct ReaderScreen: View {
             Task { await saveAndClose() }
         }
         .onChange(of: scenePhase) { _, phase in
-            // Backgrounding is the last reliable moment to write the file.
+            // Backgrounding is the last reliable moment to write the file —
+            // and, the file written, to fold a long history back into one
+            // update (`DocumentSession.close`).
             if phase != .active {
                 Task {
                     await library.flushReadingPositions()
-                    await session?.flush()
+                    await session?.close()
                 }
             }
         }
@@ -542,6 +544,6 @@ struct ReaderScreen: View {
 
     private func saveAndClose() async {
         await library.flushReadingPositions()
-        await session?.flush()
+        await session?.close()
     }
 }

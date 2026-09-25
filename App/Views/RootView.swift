@@ -541,6 +541,7 @@ struct LibraryWindow: View {
         #endif
         .sheet(isPresented: $showsExport) { BibTeXExportView() }
         .sheet(isPresented: $showsMigration) { MigrationView(model: model) }
+        .modifier(RestoreAlerts(model: model))
         .sheet(isPresented: $showsCitationStyles) {
             if let paper = model.selectedPaper {
                 NavigationStack {
@@ -728,6 +729,17 @@ struct LibraryWindow: View {
                             Label(L("책", "Book"), systemImage: "book").tag(DocumentKind.book)
                             Label(L("강의자료", "Course Material"), systemImage: "person.crop.rectangle").tag(DocumentKind.lecture)
                             Label(L("일반 문서", "Document"), systemImage: "doc").tag(DocumentKind.document)
+                        }
+                        // Only when another program has written the file
+                        // out again: the text under the marks may then not
+                        // be the author's, and the file that was imported is
+                        // the way back.
+                        if model.provenance(of: paper) == .rewritten {
+                            Button {
+                                model.chooseOriginal(for: paper.id)
+                            } label: {
+                                Label(L("원본 글자 되살리기…", "Restore Original Text…"), systemImage: "arrow.uturn.backward.circle")
+                            }
                         }
                     }
                     Divider()

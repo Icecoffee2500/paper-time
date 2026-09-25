@@ -696,6 +696,7 @@ public final class DocumentSession {
 
     public func removeMarkup(id: UUID) {
         guard let descriptor = markups.first(where: { $0.id == id }) else { return }
+        if !descriptor.comment.isEmpty { historyHoldsOldWords = true }
         if let page = document.page(at: descriptor.pageIndex) {
             TextMarkupWriter.remove(id: id, from: page)
         }
@@ -708,6 +709,7 @@ public final class DocumentSession {
 
     public func updateComment(_ comment: String, forMarkup id: UUID) {
         guard let index = markups.firstIndex(where: { $0.id == id }) else { return }
+        if !markups[index].comment.isEmpty, markups[index].comment != comment { historyHoldsOldWords = true }
         markups[index].comment = comment
         if let page = document.page(at: markups[index].pageIndex) {
             TextMarkupWriter.remove(id: id, from: page)
@@ -778,13 +780,15 @@ public final class DocumentSession {
         let inkToWrite = inks
         let sketchToWrite = sketchData
 
+        let folder = paper.folder
         let outcome = await Task.detached(priority: .utility) {
             Self.write(
                 to: url,
                 additions: toApply,
                 removals: toRemove,
                 ink: inkToWrite,
-                sketches: sketchToWrite
+                sketches: sketchToWrite,
+                recordingBaseIn: folder
             )
         }.value
 
@@ -824,6 +828,89 @@ public final class DocumentSession {
     /// nothing writes nothing.
     public private(set) var lastWrite: Result<WriteOutcome, any Error>?
 
+    // MARK: - Closing, and folding the history
+
+    /// A comment was changed or a mark with one removed since the last
+    /// compaction. Its old words stay readable in the file's history until
+    /// the history is folded, so the next close folds it whether or not the
+    /// file has grown.
+    private var historyHoldsOldWords = false
+    /// What the last compaction came to, for the probes.
+    public private(set) var lastCompaction: Compaction.Outcome?
+
+    /// The last thing done with a paper: the marks are written, and then, if
+    /// the file's history has grown long, folded back into one update.
+    /// Called when the reader closes and when the app goes to the background.
+    public func close() async {
+        await flush()
+        await compactIfDue()
+    }
+
+    /// Folds the appended revisions into one when they have grown past
+    /// `Compaction.Thresholds` — or `force`d, for the probes. Nothing is
+    /// touched while a save is pending or the file said no; the marks would
+    /// otherwise be rebuilt from a state the file does not yet hold.
+    public func compactIfDue(force: Bool = false) async {
+        guard saveState == .idle, pagesNeedingInkRewrite.isEmpty, pagesNeedingSketchRewrite.isEmpty else { return }
+        let url = paper.documentURL
+        let folder = paper.folder
+        let meta = paper.meta
+        // The whole state, not what changed: every mark the page shows —
+        // the file's, the journals', and the sidecars' — goes into the one
+        // update, because after it the history is gone.
+        var removals: [UUID] = []
+        for (id, entry) in MarkJournal.merged(journals) where entry.descriptor == nil { removals.append(id) }
+        var inks: [Int: Data] = [:]
+        for (index, drawing) in drawings where !drawing.strokes.isEmpty { inks[index] = drawing.dataRepresentation() }
+        var sketchData: [Int: Data] = [:]
+        for (index, elements) in sketches where !elements.isEmpty { sketchData[index] = Self.encodeSketch(elements) }
+        let state = Compaction.State(additions: markups, removals: removals, ink: inks, sketches: sketchData)
+        let must = force || historyHoldsOldWords
+        saveState = .saving
+        let outcome = await Task.detached(priority: .utility) {
+            Compaction.run(url: url, folder: folder, meta: meta, state: state, force: must)
+        }.value
+        saveState = .idle
+        lastCompaction = outcome
+        if case .compacted = outcome {
+            historyHoldsOldWords = false
+            fileFingerprint = FileFingerprint(url: url)
+        }
+        if changedWhileSaving {
+            changedWhileSaving = false
+            await fileMayHaveChanged()
+        }
+    }
+
+    /// The file under this session was replaced — its original text put
+    /// back under the marks. The document on screen is rebuilt from the new
+    /// bytes; the marks are read back from it and brought to what the
+    /// journals say, as at opening.
+    public func fileWasReplaced() async {
+        let url = paper.documentURL
+        let made = await Task.detached(priority: .userInitiated) { () -> Prepared? in
+            guard let data = try? FileOperations.read(contentsOf: url), let document = PDFDocument(data: data) else { return nil }
+            return Prepared(
+                document: document,
+                markups: TextMarkupWriter.descriptors(in: document),
+                hasForeignInk: Self.scanForForeignInk(in: document)
+            )
+        }.value
+        guard let made else { return }
+        document = made.document
+        fileFingerprint = FileFingerprint(url: url)
+        fileMarks = made.markups
+        markups = fileMarks
+        hasForeignInk = made.hasForeignInk
+        sortMarkups()
+        // The sidecars stay the truth for ink and shapes, and the overlays
+        // draw from them; the file's copies of both went in with the restore.
+        reconcile()
+        revision += 1
+        NotificationCenter.default.post(name: .paperTimeInkChanged, object: self, userInfo: ["pages": Array(drawings.keys)])
+        NotificationCenter.default.post(name: .paperTimeSketchChanged, object: self, userInfo: ["pages": Array(sketches.keys)])
+    }
+
     /// Saves again from the journals and sidecars even though nothing is
     /// pending. For probes and checks: on a file that already holds every
     /// mark it writes nothing, and `lastWrite` says so.
@@ -845,7 +932,8 @@ public final class DocumentSession {
         additions: [MarkupDescriptor],
         removals: [UUID],
         ink: [Int: Data],
-        sketches: [Int: Data] = [:]
+        sketches: [Int: Data] = [:],
+        recordingBaseIn folder: PaperFolder? = nil
     ) -> Result<WriteOutcome, any Error> {
         do {
             var result = WriteOutcome.unchanged
@@ -863,6 +951,11 @@ public final class DocumentSession {
                 case .unchanged:
                     return nil
                 case let .appended(out, stats):
+                    // The first append writes down what it appended after:
+                    // the base that a later compaction folds back to. Once
+                    // only, and before the append, so the base is the file
+                    // as it was before this app ever touched it.
+                    if let folder { PDFBase.recordIfAbsent(data, in: folder) }
                     result = .appended(bytes: stats.appended)
                     return out
                 }

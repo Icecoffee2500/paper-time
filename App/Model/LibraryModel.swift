@@ -303,6 +303,17 @@ public final class LibraryModel {
         }
     }
 
+    /// Where each paper's file stands against its import, once asked for
+    /// (`provenance(of:)`), kept by the file's size and date.
+    public internal(set) var provenances: [UUID: FileProvenance] = [:]
+    @ObservationIgnored var provenanceStamps: [UUID: FileStamp] = [:]
+    @ObservationIgnored var provenanceInProgress: Set<UUID> = []
+    /// A restore of a paper's original text, waiting for a yes.
+    public var restore: RestoreFlow?
+    /// What the last restore came to — done, or why not — for an alert.
+    public var restoreNotice: String?
+    @ObservationIgnored public internal(set) var lastRestore: PaperRestore.Report?
+
     /// Bumped whenever anything Search Everything ranks changes — a paper, a
     /// tag, a collection — so what it folded when the palette opened can be
     /// told from what is there now. A number and not the folding itself:

@@ -433,6 +433,29 @@ private struct PaperInspectorForm: View {
                     if !focused { commitName() }
                 }
             LabeledContent(L("쪽", "Pages"), value: "\(paper.meta.file.pageCount)")
+            // One quiet line on where the file stands against its import,
+            // and — only when another program wrote it out again — the way
+            // back. Said nowhere else: it is true of the file, not the paper.
+            switch model.provenance(of: paper) {
+            case .pristine?:
+                Text(L("원본 그대로예요.", "The file is as you imported it."))
+                    .font(.caption).foregroundStyle(.secondary)
+            case .appended?:
+                Text(L("원본은 그대로 두고 표시만 뒤에 덧붙였어요.", "The original is intact. Marks follow it."))
+                    .font(.caption).foregroundStyle(.secondary)
+            case .rewritten?:
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(L("다른 앱이 파일을 다시 썼어요. 글자가 원본과 다를 수 있어요.", "Another app rewrote this file. Its text may differ from the original."))
+                        .font(.caption).foregroundStyle(.secondary)
+                    #if os(macOS)
+                    Button(L("원본 글자 되살리기…", "Restore Original Text…")) {
+                        model.chooseOriginal(for: paper.id)
+                    }
+                    #endif
+                }
+            case .unknown?, nil:
+                EmptyView()
+            }
             Button(L("폴더에서 보기", "Show in Finder")) {
                 #if os(macOS)
                 NSWorkspace.shared.activateFileViewerSelecting([paper.documentURL])
