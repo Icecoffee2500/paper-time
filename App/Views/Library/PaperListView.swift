@@ -1057,6 +1057,16 @@ private struct PaperMenu: View {
         } label: {
             Label(L("Finder에서 보기", "Reveal in Finder"), systemImage: "folder")
         }
+        // Only for a file another program wrote out again: the one case
+        // where the text under the marks may not be the author's, and the
+        // one way back is the file that was imported.
+        if model.provenance(of: paper) == .rewritten {
+            Button {
+                model.chooseOriginal(for: paper.id)
+            } label: {
+                Label(L("원본 글자 되살리기…", "Restore Original Text…"), systemImage: "arrow.uturn.backward.circle")
+            }
+        }
         #endif
 
         Button {

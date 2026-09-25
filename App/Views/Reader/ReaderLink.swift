@@ -33,7 +33,7 @@ final class ReaderLink {
     /// Takes over as the open paper, writing out whatever was open before.
     func adopt(_ session: DocumentSession, for paperID: UUID) {
         if let previous = self.session, previous !== session {
-            Task { await previous.flush() }
+            Task { await previous.close() }
         }
         self.session = session
         self.sessionPaperID = paperID

@@ -1046,6 +1046,60 @@ public final class AppModel {
                     FileHandle.standardError.write(Data("rename refused: \(error)\n".utf8))
                 }
             }
+            // `--papertime-provenance=1` says where every paper's file
+            // stands against its import — the one way to see the digest
+            // check run over a whole folder without a hand on the machine.
+            if Boot.isSet("PAPERTIME_PROVENANCE") {
+                var said = ""
+                for paper in model.papers {
+                    let found = (try? FileProvenance.classify(fileAt: paper.documentURL, meta: paper.meta)) ?? .unknown
+                    said += "provenance: \(found.name) \(paper.documentURL.lastPathComponent)\n"
+                }
+                FileHandle.standardError.write(Data(said.utf8))
+            }
+            // `--papertime-restore-from=<path>` restores the chosen paper's
+            // original text from that file, as the menu would after the
+            // panel — the panel itself lives outside the process.
+            if let path = Boot.setting("PAPERTIME_RESTORE_FROM"),
+               let paper = model.selectedPaper ?? model.visiblePapers.first {
+                // The reader first, so the session it holds is the case
+                // being checked: told, it swaps its document for the new one.
+                try? await Task.sleep(for: .seconds(2))
+                let before = ((try? FileManager.default.attributesOfItem(atPath: paper.documentURL.path))?[.size] as? Int) ?? -1
+                let previewed = await model.previewRestore(of: paper.id, from: URL(fileURLWithPath: path))
+                if previewed, let flow = model.restore {
+                    let preview = flow.plan.preview
+                    FileHandle.standardError.write(Data("restore: preview pages=\(preview.pageCount) textDiffersOn=\(preview.textDiffersOn) marks=\(preview.marks) foreign=\(preview.foreign)\n".utf8))
+                    await model.confirmRestore()
+                }
+                let after = ((try? FileManager.default.attributesOfItem(atPath: paper.documentURL.path))?[.size] as? Int) ?? -1
+                let sessions = DocumentSession.open(forPaper: paper.id)
+                let now = (try? FileProvenance.classify(fileAt: paper.documentURL, meta: paper.meta)) ?? .unknown
+                var said = "restore: \(model.restoreNotice ?? "no notice") file \(before) → \(after) B, now \(now.name)"
+                if let report = model.lastRestore {
+                    said += ", trashed=\(report.trashed?.path(percentEncoded: false) ?? "nowhere")"
+                }
+                said += ", sessions=\(sessions.count) marks=[\(sessions.map { String($0.markups.count) }.joined(separator: ","))]\n"
+                FileHandle.standardError.write(Data(said.utf8))
+                model.restoreNotice = nil
+            }
+            // `--papertime-compact=1` folds the open paper's history as a
+            // close would, whether or not it is due, and says what came of
+            // it — the check that compaction runs on a real paper in the
+            // real app, where the session's state is what is folded.
+            if Boot.isSet("PAPERTIME_COMPACT"), let paper = model.selectedPaper ?? model.visiblePapers.first {
+                try? await Task.sleep(for: .seconds(3))
+                let sessions = DocumentSession.open(forPaper: paper.id)
+                for session in sessions {
+                    await session.flush()
+                    let before = ((try? FileManager.default.attributesOfItem(atPath: paper.documentURL.path))?[.size] as? Int) ?? -1
+                    await session.compactIfDue(force: true)
+                    let after = ((try? FileManager.default.attributesOfItem(atPath: paper.documentURL.path))?[.size] as? Int) ?? -1
+                    let now = (try? FileProvenance.classify(fileAt: paper.documentURL, meta: paper.meta)) ?? .unknown
+                    FileHandle.standardError.write(Data("compact: \(session.lastCompaction.map { "\($0)" } ?? "nothing") file \(before) → \(after) B, now \(now.name), marks=\(session.markups.count)\n".utf8))
+                }
+                if sessions.isEmpty { FileHandle.standardError.write(Data("compact: no open session\n".utf8)) }
+            }
             // `--papertime-kind=<paper|book|document>` answers "what is this?"
             // for the chosen paper and says what the shelves now hold — the
             // one way to see a kind change without a hand on the machine.
