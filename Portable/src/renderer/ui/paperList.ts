@@ -16,6 +16,7 @@ import { basename } from './sidebar.js'
 import { L } from '../../shared/lang.js'
 import { PAPER_DRAG_TYPE } from '../../shared/split.js'
 import { passageKey, passageSubtitle, type TextHit } from '../textSearch.js'
+import { placeKey } from '../../shared/semantic/results.js'
 
 export interface PaperListActions {
   chooseLibrary: () => void
@@ -32,7 +33,8 @@ export interface PaperListActions {
   /** Read the folders again, after one of them would not answer. */
   refresh: () => void
   /** A passage the search found inside a paper: that paper, at that line. */
-  openPassage: (hit: TextHit) => void
+  /** `byMeaning`: the reader goes to the passage itself, not to the words typed — which it need not say. */
+  openPassage: (hit: TextHit, byMeaning?: boolean) => void
 }
 
 const STATUS_ICON = {
@@ -62,6 +64,11 @@ export function buildPaperList(actions: PaperListActions): { node: HTMLElement; 
     // Whether the text of the papers has something to say about this search.
     const passages = searching ? store.searchPassages : []
     const hasPassages = searching && (store.searchScanning || passages.length > 0)
+    // A passage the words found is above already; the same place again by
+    // its meaning is not news twice (the palette's rule, `placeKey`).
+    const meanings = searching
+      ? store.searchMeanings.filter((hit) => !passages.some((seen) => placeKey(seen.passage) === placeKey(hit.passage)))
+      : []
 
     // The header only when it has changed: clearing and refilling it on every
     // redraw threw away a button somebody might have been about to press.
@@ -126,7 +133,7 @@ export function buildPaperList(actions: PaperListActions): { node: HTMLElement; 
       }
     }
 
-    if (papers.length === 0 && !hasPassages) {
+    if (papers.length === 0 && !hasPassages && meanings.length === 0) {
       shown = []
       clear(body)
       body.append(emptyState(actions))
@@ -160,6 +167,13 @@ export function buildPaperList(actions: PaperListActions): { node: HTMLElement; 
       }
       if (store.searchScanning) wanted.push({ head: null, entry: null, note: 'scanning', shape: 'note|scanning', id: 'note|scanning' })
     }
+    if (meanings.length > 0) {
+      wanted.push(heading(L('뜻이 비슷한 구절', 'Similar in Meaning')))
+      for (const hit of meanings) {
+        const key = passageKey(hit)
+        wanted.push({ head: null, entry: null, hit, shape: `meaning|${key}`, id: `meaning|${key}` })
+      }
+    }
     const sameShape = wanted.length === shown.length
       && wanted.every(({ id, shape }, at) => shown[at].id === id && shown[at].shape === shape)
     if (!sameShape) {
@@ -170,7 +184,7 @@ export function buildPaperList(actions: PaperListActions): { node: HTMLElement; 
         if (hit) {
           // Built once each: a passage says the same thing for as long as it
           // is on the list, and the list is rebuilt as each batch arrives.
-          const node = keptNodes.get(id) ?? passageRow(hit, actions)
+          const node = keptNodes.get(id) ?? passageRow(hit, actions, id.startsWith('meaning|'))
           body.append(node)
           return { id, shape, row: null, node }
         }
@@ -335,7 +349,7 @@ function paperRow(entry: Paper, actions: PaperListActions): BuiltRow {
  * Pressing it opens the paper at that line rather than at the page it was
  * left on.
  */
-function passageRow(hit: TextHit, actions: PaperListActions): HTMLElement {
+function passageRow(hit: TextHit, actions: PaperListActions, byMeaning = false): HTMLElement {
   const icon = iconNode('text.magnifyingglass')
   const row = el('div', { class: 'passage-row', role: 'option' }, [
     el('span', { class: 'passage-icon' }, icon ? [icon] : []),
@@ -344,7 +358,7 @@ function passageRow(hit: TextHit, actions: PaperListActions): HTMLElement {
       el('div', { class: 'paper-subtitle', text: passageSubtitle(hit) }),
     ]),
   ])
-  on(row, 'click', () => actions.openPassage(hit))
+  on(row, 'click', () => actions.openPassage(hit, byMeaning))
   return row
 }
 

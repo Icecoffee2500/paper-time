@@ -32,6 +32,12 @@ struct PaperListView: View {
     /// showing the results of a search.
     @State private var passages: [PaperTextIndex.Hit] = []
     @State private var scanning = false
+    #if os(macOS)
+    /// And what says the same thing in other words, once the library has
+    /// been embedded. Nothing while it has not been: the group is left out
+    /// rather than shown empty.
+    @State private var meanings: [SemanticIndex.Hit] = []
+    #endif
 
     var body: some View {
         content
@@ -55,6 +61,9 @@ struct PaperListView: View {
             // the list is not on screen at all, and that is exactly the
             // search whose answer is inside the papers.
             .task(id: searchKey) { await scanText() }
+            #if os(macOS)
+            .task(id: searchKey) { await mean() }
+            #endif
             .dropDestination(for: URL.self) { urls, _ in
                 let pdfURLs = urls.filter { $0.pathExtension.lowercased() == "pdf" }
                 guard !pdfURLs.isEmpty else { return false }
@@ -138,7 +147,7 @@ struct PaperListView: View {
                     .buttonBorderShape(.capsule)
                 }
             }
-        } else if model.visiblePapers.isEmpty, !hasPassages {
+        } else if model.visiblePapers.isEmpty, !hasPassages, !hasMeanings {
             // An empty shelf is not a failed search. "Check the spelling"
             // in front of Favorites, which nothing has been starred into
             // yet, reads as though the app has lost something.
@@ -346,6 +355,12 @@ struct PaperListView: View {
             entries.append(contentsOf: passages.map { PaperTable.Entry.passage(Self.key(of: $0.passage)) })
             if scanning { entries.append(.note("scanning")) }
         }
+        #if os(macOS)
+        if hasMeanings {
+            entries.append(.heading(L("뜻이 비슷한 구절", "Similar in Meaning")))
+            entries.append(contentsOf: shownMeanings.map { PaperTable.Entry.meaning(Self.key(of: $0.passage)) })
+        }
+        #endif
         return entries
     }
 
@@ -418,6 +433,12 @@ struct PaperListView: View {
             if let hit = passages.first(where: { Self.key(of: $0.passage) == key }) {
                 passageRow(hit)
             }
+        #if os(macOS)
+        case let .meaning(key):
+            if let hit = meanings.first(where: { Self.key(of: $0.passage) == key }) {
+                meaningRow(hit)
+            }
+        #endif
         default:
             EmptyView()
         }
@@ -470,44 +491,110 @@ struct PaperListView: View {
 
     private var hasPassages: Bool { isSearch && (scanning || !passages.isEmpty) }
 
+    #if os(macOS)
+    /// The passages by meaning that the words have not already named. A
+    /// passage found by its words is above already; the same one again by
+    /// its meaning is not news twice.
+    private var shownMeanings: [SemanticIndex.Hit] {
+        let named = Set(passages.map(\.passage))
+        return meanings.filter { !named.contains($0.passage) }
+    }
+
+    private var hasMeanings: Bool { isSearch && !shownMeanings.isEmpty }
+    #else
+    private var hasMeanings: Bool { false }
+    #endif
+
     /// One paper whose *text* holds the query: the sentence it is in, and
     /// where. Pressing it opens the paper at that line rather than at the
     /// page it was left on.
     private func passageRow(_ hit: PaperTextIndex.Hit) -> some View {
+        foundRow(hit.passage, snippet: hit.snippet, subtitle: passageSubtitle(hit),
+                 symbol: "text.magnifyingglass")
+    }
+
+    #if os(macOS)
+    /// A passage that says what was searched for in other words. The same
+    /// row as a passage, with the palette's symbol for the group.
+    private func meaningRow(_ hit: SemanticIndex.Hit) -> some View {
+        foundRow(hit.passage, snippet: hit.snippet,
+                 subtitle: "\(hit.title) · \(pageLabel(hit.passage))",
+                 symbol: "sparkle.magnifyingglass")
+    }
+    #endif
+
+    /// A passage in the list: the sentence, then which paper and where.
+    ///
+    /// Pinned to the leading edge — see `PaperTable.body(for:)` for the row
+    /// that was not, and for the same reason on iPad.
+    private func foundRow(_ passage: PaperTextIndex.Passage, snippet: String,
+                          subtitle: String, symbol: String) -> some View {
         Button {
-            openPassage(hit.passage, in: model, link: link)
+            openPassage(passage, in: model, link: link)
             #if os(iOS)
             app.compactColumn = .detail
             #endif
         } label: {
             HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "text.magnifyingglass")
+                Image(systemName: symbol)
                     .font(.caption)
                     .foregroundStyle(.tint)
                     .padding(.top, 2)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(hit.snippet)
+                    Text(snippet)
                         .font(.callout)
                         .lineLimit(2)
-                    Text(passageSubtitle(hit))
+                    Text(subtitle)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
             }
             .padding(.vertical, 2)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
     }
 
+    private func pageLabel(_ passage: PaperTextIndex.Passage) -> String {
+        ReleaseNotes.string("\(passage.pageIndex + 1)쪽", "p. \(passage.pageIndex + 1)")
+    }
+
     private func passageSubtitle(_ hit: PaperTextIndex.Hit) -> String {
-        let page = ReleaseNotes.string("\(hit.passage.pageIndex + 1)쪽",
-                                       "p. \(hit.passage.pageIndex + 1)")
         let more = hit.count > 1
             ? ReleaseNotes.string(" · \(hit.count)번", " · \(hit.count) matches") : ""
-        return "\(hit.title) · \(page)\(more)"
+        return "\(hit.title) · \(pageLabel(hit.passage))\(more)"
     }
+
+    #if os(macOS)
+    /// Asks the passages what says the same thing, the way the palette does,
+    /// and keeps the answer when the palette is put away. Off the main
+    /// thread; nothing while the person has the switch off — then there is
+    /// no group at all. A search shown while the library is still being
+    /// embedded waits for the index, a beat at a time: the list stays, so
+    /// the group can arrive when it is ready instead of never.
+    private func mean() async {
+        meanings = []
+        guard isSearch, SemanticIndex.isEnabled else { return }
+        let text = model.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.count > 2 else { return }
+        var waited = 0
+        while !SemanticIndex.shared.status.isReady {
+            guard waited < 240 else { return }
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled else { return }
+            waited += 1
+        }
+        guard await SemanticIndex.shared.isReady else { return }
+        let started = DispatchTime.now().uptimeNanoseconds
+        let hits = await SemanticIndex.shared.hits(for: text, k: 8)
+        guard !Task.isCancelled else { return }
+        meanings = hits
+        Trace.mark(String(format: "list: “%@” %d by meaning after %.1f ms", text, hits.count,
+                          Double(DispatchTime.now().uptimeNanoseconds - started) / 1e6))
+    }
+    #endif
 
     /// Reads the library for the words the search was made of.
     ///

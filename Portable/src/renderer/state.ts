@@ -127,6 +127,8 @@ export interface Store {
   searchPassages: TextHit[]
   /** Whether the list is still reading the papers for it. */
   searchScanning: boolean
+  /** And what says the same thing in other words — none until the index is built. */
+  searchMeanings: TextHit[]
   toast: string | null
   /** The reader in focus. Each pane has one of these; this is the focused pane's. */
   reader: ReaderState
@@ -195,6 +197,7 @@ export const store: Store = {
   searchQuery: '',
   searchPassages: [],
   searchScanning: false,
+  searchMeanings: [],
   toast: null,
   reader: freshReaderState(),
   sketch: { tool: 'select', lastShape: 'rectangle', lastInk: 'pen', style: new SketchStyle(), selection: null },
