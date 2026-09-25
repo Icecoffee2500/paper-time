@@ -2,11 +2,100 @@
   "repo": "Icecoffee2500/paper-time",
   "releases": [
     {
+      "version": "0.9.9",
+      "date": "2026-09-25T17:30:23Z",
+      "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.9/Paper.Time.0.9.9.dmg",
+      "size": 50761350,
+      "downloads": 0,
+      "builds": {
+        "mac": [
+          {
+            "label": "디스크 이미지",
+            "label_en": "Disk image",
+            "arch": "Apple Silicon",
+            "arch_en": "Apple Silicon",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.9/Paper.Time.0.9.9.dmg",
+            "size": 50761350,
+            "downloads": 0
+          }
+        ],
+        "windows": [
+          {
+            "label": "설치본",
+            "label_en": "Installer",
+            "arch": "64비트 · ARM",
+            "arch_en": "64-bit and ARM",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.9/Paper.Time.Setup.0.9.9.exe",
+            "size": 264641276,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "64비트",
+            "arch_en": "64-bit",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.9/Paper.Time-0.9.9-win.zip",
+            "size": 162346846,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.9/Paper.Time-0.9.9-arm64-win.zip",
+            "size": 167294519,
+            "downloads": 0
+          }
+        ],
+        "linux": [
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.9/Paper.Time-0.9.9-x86_64.AppImage",
+            "size": 159841091,
+            "downloads": 0
+          },
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.9/Paper.Time-0.9.9-arm64.AppImage",
+            "size": 160227599,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.9/paper-time-0.9.9.tar.gz",
+            "size": 153475720,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.9/paper-time-0.9.9-arm64.tar.gz",
+            "size": 157971894,
+            "downloads": 0
+          }
+        ]
+      },
+      "note": "저장해도 논문은 그대로예요. 찾기가 뜻으로도 찾고, 노트의 수식은 짧게 치고 바로 보여요.",
+      "note_en": "Your paper's bytes stay as they were. Search finds passages by meaning, and math goes into a note in shorthand with a live preview."
+    },
+    {
       "version": "0.9.8",
       "date": "2026-09-22T20:01:02Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.8/Paper.Time.0.9.8.dmg",
       "size": 6604798,
-      "downloads": 0,
+      "downloads": 1,
       "builds": {
         "mac": [
           {
@@ -27,7 +116,7 @@
             "arch_en": "64-bit and ARM",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.8/Paper.Time.Setup.0.9.8.exe",
             "size": 177030588,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
