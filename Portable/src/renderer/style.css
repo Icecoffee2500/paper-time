@@ -1599,37 +1599,343 @@ body[data-platform='darwin'] .window-buttons {
   z-index: 99;
 }
 
-/* The search palette. */
+/*
+ * Search Everything — the Mac's palette: 680 wide, a quarter of the way down,
+ * a big field, then the results in their groups with a caption over each.
+ * Rows are 44 high, the one under the keyboard in the accent's pale tint.
+ */
+.palette-scrim {
+  background: rgba(0, 0, 0, 0.18);
+}
+
 .palette {
   position: fixed;
-  top: 12vh;
+  top: 22vh;
   left: 50%;
   transform: translateX(-50%);
-  width: min(620px, 82vw);
+  width: min(680px, calc(100vw - 32px));
   z-index: 110;
   border-radius: var(--radius-panel);
   background: var(--panel);
-  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.1), 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.1), 0 12px 48px rgba(0, 0, 0, 0.25);
   overflow: hidden;
+  animation: palette-in var(--motion-surface) var(--ease);
 }
 
-.palette input {
-  width: 100%;
+/* The menus' arrival, with the palette's own centring kept in it. */
+@keyframes palette-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-6px) scale(0.98);
+  }
+}
+
+.palette-field {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  color: var(--text-secondary);
+}
+
+.palette-field svg {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+}
+
+.palette-field input {
+  flex: 1 1 auto;
+  min-width: 0;
   border: 0;
   outline: 0;
   background: none;
-  padding: 15px 17px;
-  font-size: 16px;
+  padding: 2px 0;
+  font-size: 22px;
+  color: var(--text);
 }
 
-.palette .results {
-  max-height: 46vh;
-  overflow-y: auto;
+.palette-results {
   border-top: 1px solid var(--separator);
+  max-height: min(520px, calc(78vh - 90px));
+  overflow-y: auto;
+  padding-bottom: 8px;
 }
 
-.palette .results:empty {
+.palette-results.empty {
   display: none;
+}
+
+.palette-group {
+  padding: 12px 20px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  user-select: none;
+}
+
+.palette-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 44px;
+  margin: 0 8px;
+  padding: 0 12px;
+  border-radius: var(--radius-row);
+  cursor: default;
+  transition: background-color var(--motion-tap) var(--ease);
+}
+
+.palette-row[aria-selected='true'] {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+.palette-icon {
+  flex: 0 0 auto;
+  width: 22px;
+  display: inline-flex;
+  justify-content: center;
+  color: var(--text-secondary);
+  transition: color var(--motion-tap) var(--ease);
+}
+
+.palette-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.palette-row[aria-selected='true'] .palette-icon {
+  color: var(--accent);
+}
+
+.palette-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.palette-title {
+  font-size: 13.5px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-subtitle {
+  margin-top: 1px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-scanning,
+.list-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px 2px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+
+.list-note {
+  padding: 8px 18px;
+}
+
+/* A small ring that turns — the palette reading the papers, the find bar
+   reading the pages. */
+.spinner {
+  flex: 0 0 auto;
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.6px solid color-mix(in srgb, var(--text-secondary) 30%, transparent);
+  border-top-color: var(--text-secondary);
+  animation: spin 800ms linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* A passage the list found inside a paper: the sentence, then which paper. */
+.passage-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 2px 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-row);
+  cursor: default;
+  transition: background-color var(--motion-tap) var(--ease);
+}
+
+.passage-row:hover {
+  background: var(--hover);
+}
+
+.passage-icon {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--accent);
+}
+
+.passage-icon svg {
+  width: 13px;
+  height: 13px;
+  display: block;
+}
+
+.passage-snippet {
+  font-size: 12.5px;
+  line-height: 1.36;
+  color: var(--text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* The search's own row at the top of the sidebar: two lines, and an × that
+   takes the count's place under the pointer. */
+.row-lines {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.row-detail {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row-dismiss {
+  flex: 0 0 auto;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: var(--pressed);
+  color: var(--text-secondary);
+}
+
+.row-dismiss svg {
+  width: 9px;
+  height: 9px;
+}
+
+.row-dismiss:hover {
+  color: var(--text);
+}
+
+.row.dismissable:hover .row-dismiss {
+  display: inline-flex;
+}
+
+.row.dismissable:hover .row-count {
+  display: none;
+}
+
+/* Find in Document: a bar floating at the top of the reader, over the page. */
+.find-bar {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px 5px 10px;
+  border-radius: var(--radius-bar);
+  background: var(--panel);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.1), 0 4px 16px rgba(0, 0, 0, 0.16);
+  animation: menu-in var(--motion-move) var(--ease);
+}
+
+.find-glass {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+}
+
+.find-glass svg {
+  width: 14px;
+  height: 14px;
+}
+
+.find-bar input {
+  width: 170px;
+  border: 0;
+  outline: 0;
+  background: none;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.find-summary {
+  flex: 0 0 auto;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.find-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--separator-strong);
+  margin: 0 2px;
+}
+
+.find-bar .icon-button {
+  width: 24px;
+  height: 22px;
+}
+
+.find-bar .icon-button svg {
+  width: 13px;
+  height: 13px;
+}
+
+.find-bar .find-close {
+  color: var(--text-tertiary);
+}
+
+/* What a search found, multiplied onto the page like a highlight — but a
+   yellow of its own, so a found word never reads as a saved mark. */
+.page .find-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+}
+
+.page .find-box {
+  position: absolute;
+  border-radius: 2px;
+  background: rgba(255, 204, 0, 0.32);
+}
+
+.page .find-box.current {
+  background: rgba(255, 196, 0, 0.9);
+  box-shadow: 0 0 0 1.5px rgba(255, 170, 0, 0.9);
 }
 
 .toast {

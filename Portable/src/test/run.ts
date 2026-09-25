@@ -34,6 +34,7 @@ import { guessKind, hasAbstract, hasIdentifier, hasReferences } from '../shared/
 import { SketchTree, adopted, guessedDirection, ordered, pruned, copied } from '../shared/sketchTree.js'
 import { sketchSnapSuite } from './sketchSnap.js'
 import { annotationSuite } from './annotations.js'
+import { searchSuite } from './search.js'
 import { PaperMeta, PaperState } from '../shared/model.js'
 import { entryFor, formatEntry, protectTitle } from '../shared/bibtex.js'
 import { escapeLaTeX } from '../shared/latexTable.js'
@@ -387,6 +388,7 @@ async function main() {
 
   await sketchSnapSuite(test, suite)
   await annotationSuite(test, suite)
+  await searchSuite(test, suite)
 
   // --------------------------------------------------------------------- ink
   suite('Handwriting')

@@ -43,6 +43,16 @@ const SHAPES: Record<string, string> = {
   magnifyingglass: `
     <circle cx="7.2" cy="7.2" r="4.4"/>
     <path d="M10.5 10.5 14 14"/>`,
+  // Lines of text with the glass over their end — a word found inside a
+  // paper, as against a paper found by its title.
+  'text.magnifyingglass': `
+    <path d="M2.2 3.4h10M2.2 6.2h5.6M2.2 9h3.4M2.2 11.8h2.4"/>
+    <circle cx="10.4" cy="9.8" r="2.7"/>
+    <path d="M12.4 11.8 14.3 13.7"/>`,
+  // A circle with three lines narrowing downward: everything that matches.
+  'line.3.horizontal.decrease.circle': `
+    <circle cx="8" cy="8" r="6.2"/>
+    <path d="M4.8 6h6.4M5.9 8.2h4.2M7 10.4h2"/>`,
   plus: `<path d="M8 3.2v9.6M3.2 8h9.6"/>`,
   ellipsis: `
     <circle cx="3.4" cy="8" r="1.05" fill="currentColor" stroke="none"/>

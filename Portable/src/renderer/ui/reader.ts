@@ -34,6 +34,7 @@ import { SketchElement } from '../../shared/sketch.js'
 import { InkStroke } from '../../shared/ink.js'
 import { drawElements, drawInk, drawMarks } from '../../shared/sketchRender.js'
 import { linesFromRuns } from '../../shared/textLines.js'
+import { foldText, foldWithMap, type Folded } from '../../shared/textFold.js'
 import {
   MARK_COLORS,
   MARK_COLOR_NAMES,
@@ -100,11 +101,31 @@ export interface ReaderOptions {
   state?: ReaderState
 }
 
+/** A stretch of a page's text: where it starts and ends in the page's text. */
+export interface TextRange {
+  start: number
+  end: number
+}
+
+/** A place found on a page, and whether it is the one being shown. */
+interface FindMark extends TextRange {
+  current: boolean
+}
+
 export class PageView {
   root: HTMLElement
   canvas: HTMLCanvasElement
   /** Highlights and underlines, on a surface of their own. See `redraw`. */
   markCanvas: HTMLCanvasElement
+  /** What a search found on this page — boxes over the words, multiplied
+   *  onto the page like a highlight, but never written anywhere. */
+  findLayer: HTMLElement
+  findMarks: FindMark[] = []
+  /** The runs the text layer was built from, and a span for each, in order.
+   *  A range of the page's text is found on screen through these. */
+  private textItems: { str: string; hasEOL: boolean }[] = []
+  private textDivs: HTMLElement[] = []
+  private textStarts: number[] = []
   drawCanvas: HTMLCanvasElement
   textLayer: HTMLElement
   inputSurface: HTMLElement
@@ -121,6 +142,9 @@ export class PageView {
   guest: ((context: CanvasRenderingContext2D) => void) | null = null
   viewport: { width: number; height: number; transform: number[]; scale: number; rotation: number } | null = null
   rendered = false
+  /** The render in progress or done, so a caller can wait for the words. */
+  private drawing: Promise<void> | null = null
+  private generation = 0
   private renderTask: { cancel: () => void } | null = null
   private textTask: { cancel: () => void } | null = null
   input: SketchInput | null = null
@@ -132,6 +156,7 @@ export class PageView {
   ) {
     this.canvas = el('canvas', { class: 'page-canvas' })
     this.markCanvas = el('canvas', { class: 'mark-canvas' })
+    this.findLayer = el('div', { class: 'find-layer' })
     this.drawCanvas = el('canvas', { class: 'draw-canvas' })
     this.textLayer = el('div', { class: 'text-layer' })
     this.inputSurface = el('div', { class: 'sketch-input' })
@@ -139,6 +164,7 @@ export class PageView {
     this.root = el('div', { class: 'page', 'data-page': String(index) }, [
       this.canvas,
       this.markCanvas,
+      this.findLayer,
       this.tint,
       this.drawCanvas,
       this.textLayer,
@@ -166,6 +192,7 @@ export class PageView {
     // drawn on that box was half again as tall as the line.
     this.root.style.setProperty('--scale-factor', String(scale))
     this.rendered = false
+    this.drawing = null
   }
 
   /** Page coordinates from a point in the page element's own box. */
@@ -193,9 +220,22 @@ export class PageView {
     }
   }
 
-  async render() {
-    if (this.rendered || !this.viewport) return
+  /**
+   * Draws the page and builds its text layer, once per layout. Asked again
+   * while it is under way, it hands back the same promise — which is how a
+   * search waits for the words of a page it has just scrolled to.
+   */
+  render(): Promise<void> {
+    if (!this.viewport) return Promise.resolve()
+    if (this.rendered && this.drawing) return this.drawing
     this.rendered = true
+    const generation = (this.generation += 1)
+    this.drawing = this.draw(generation)
+    return this.drawing
+  }
+
+  private async draw(generation: number) {
+    if (!this.viewport) return
     const dpr = Math.min(window.devicePixelRatio || 1, 2)
     const viewport = this.proxy.getViewport({ scale: this.viewport.scale })
     this.canvas.width = Math.floor(viewport.width * dpr)
@@ -215,11 +255,16 @@ export class PageView {
     try {
       await task.promise
     } catch {
-      this.rendered = false
+      // Cancelled by a newer render, which owns the page now.
+      if (generation === this.generation) {
+        this.rendered = false
+        this.drawing = null
+      }
       return
     }
     await this.renderText(viewport)
     this.redraw()
+    this.drawFind()
   }
 
   private async renderText(viewport: unknown) {
@@ -230,6 +275,7 @@ export class PageView {
       const layer = new (TextLayer as unknown as new (options: unknown) => {
         render: () => Promise<void>
         cancel: () => void
+        textDivs: HTMLElement[]
       })({
         textContentSource: source,
         container: this.textLayer,
@@ -237,9 +283,97 @@ export class PageView {
       })
       this.textTask = layer
       await layer.render()
+      // The layer makes one span for every run that has a string, in order
+      // — the same runs the page's text is made of.
+      const items = (source.items as { str?: string; hasEOL?: boolean }[])
+        .filter((item) => item.str !== undefined)
+        .map((item) => ({ str: item.str!, hasEOL: Boolean(item.hasEOL) }))
+      this.textItems = items
+      this.textDivs = layer.textDivs
+      this.textStarts = []
+      let at = 0
+      for (const item of items) {
+        this.textStarts.push(at)
+        at += item.str.length + (item.hasEOL ? 1 : 0)
+      }
     } catch {
       // A page with no text — a scan, a figure — simply has nothing to select.
+      this.textItems = []
+      this.textDivs = []
+      this.textStarts = []
     }
+  }
+
+  /** The page's text as the text layer holds it: every run, and a line break
+   *  after each that ends a line. The index reads the page the same way. */
+  layerText(): string | null {
+    if (this.textDivs.length === 0) return null
+    return this.textItems.map((item) => item.str + (item.hasEOL ? '\n' : '')).join('')
+  }
+
+  /**
+   * Where a stretch of the page's text is on screen, as the lines it runs
+   * along — in the page's own box, as fractions of it, so a box stays over
+   * its words when the page is laid out at another size.
+   */
+  rangeBoxes(range: TextRange): { x: number; y: number; width: number; height: number }[] {
+    if (this.textDivs.length === 0) return []
+    const rects: DOMRect[] = []
+    const dom = document.createRange()
+    for (let index = 0; index < this.textItems.length; index += 1) {
+      const start = this.textStarts[index]
+      const item = this.textItems[index]
+      const end = start + item.str.length
+      if (end <= range.start) continue
+      if (start >= range.end) break
+      const node = this.textDivs[index]?.firstChild
+      if (!node || !this.textDivs[index].isConnected) continue
+      const from = Math.max(range.start - start, 0)
+      const to = Math.min(range.end - start, item.str.length)
+      if (from >= to) continue
+      dom.setStart(node, from)
+      dom.setEnd(node, to)
+      for (const rect of dom.getClientRects()) if (rect.width > 0.5 && rect.height > 0.5) rects.push(rect)
+    }
+    const box = this.root.getBoundingClientRect()
+    if (box.width === 0 || box.height === 0) return []
+    return linesFromRuns(rects).map((line) => ({
+      x: (line.left - box.left) / box.width,
+      y: (line.top - box.top) / box.height,
+      width: (line.right - line.left) / box.width,
+      height: (line.bottom - line.top) / box.height,
+    }))
+  }
+
+  /** Puts the found places' boxes on the page, or takes them away. */
+  drawFind() {
+    clear(this.findLayer)
+    if (this.findMarks.length === 0 || this.textDivs.length === 0) return
+    for (const mark of this.findMarks) {
+      for (const box of this.rangeBoxes(mark)) {
+        const node = el('div', { class: mark.current ? 'find-box current' : 'find-box' })
+        node.style.left = `${box.x * 100}%`
+        node.style.top = `${box.y * 100}%`
+        node.style.width = `${box.width * 100}%`
+        node.style.height = `${box.height * 100}%`
+        this.findLayer.append(node)
+      }
+    }
+  }
+
+  /** The first box of the current find mark, in the page's own pixels. */
+  currentBox(): { x: number; y: number; width: number; height: number } | null {
+    const current = this.findMarks.find((mark) => mark.current)
+    if (!current) return null
+    const boxes = this.rangeBoxes(current)
+    if (boxes.length === 0) return null
+    const width = this.root.clientWidth
+    const height = this.root.clientHeight
+    const top = Math.min(...boxes.map((one) => one.y))
+    const bottom = Math.max(...boxes.map((one) => one.y + one.height))
+    const left = Math.min(...boxes.map((one) => one.x))
+    const right = Math.max(...boxes.map((one) => one.x + one.width))
+    return { x: left * width, y: top * height, width: (right - left) * width, height: (bottom - top) * height }
   }
 
   /** A canvas the size of the page, cleared, in page coordinates. */
@@ -468,7 +602,22 @@ export class Reader {
         message,
         why?.again ? this.againButton(why.again) : undefined,
       )
+    } finally {
+      // Whoever was waiting for this paper — a search sending the reader to a
+      // line in it — is told it is in, or that it never will be.
+      if (generation === this.generation) {
+        for (const waiting of this.waiting.splice(0)) waiting(this.document !== null && this.pages.length > 0)
+      }
     }
+  }
+
+  private waiting: ((opened: boolean) => void)[] = []
+
+  /** Resolves once the paper is open — at once if it already is — with
+   *  whether it opened at all. */
+  whenOpen(): Promise<boolean> {
+    if (this.document && this.pages.length > 0) return Promise.resolve(true)
+    return new Promise((resolve) => this.waiting.push(resolve))
   }
 
   /**
@@ -704,6 +853,196 @@ export class Reader {
     this.kept = null
     this.state.pageCount = 0
     this.state.currentPage = 0
+    this.texts = null
+    this.folds.clear()
+    this.pageTextCache.clear()
+    this.showingPassage = false
+  }
+
+  // MARK: - Finding words
+
+  /** Every page's text, read once per document for finding in it. */
+  private texts: Promise<string[]> | null = null
+  /** Each page's text folded, with the way back, made the first time a
+   *  search looks at that page. */
+  private readonly folds = new Map<number, Folded>()
+
+  /**
+   * The text of every page, the way the text layer holds it.
+   *
+   * Asked of pdf.js in its worker, page by page, so the window's thread only
+   * joins the runs up; the page's own text layer is made from the same call,
+   * which is why a place found here is a place the layer can show.
+   */
+  pageTexts(): Promise<string[]> {
+    if (this.texts) return this.texts
+    const generation = this.generation
+    this.texts = (async () => {
+      const out: string[] = []
+      for (let index = 0; index < this.pages.length; index += 1) {
+        if (generation !== this.generation) return []
+        out.push(await this.pageText(index))
+      }
+      return out
+    })()
+    return this.texts
+  }
+
+  private readonly pageTextCache = new Map<number, Promise<string>>()
+
+  /** One page's text, the same way — for a passage, which needs one page. */
+  pageText(index: number): Promise<string> {
+    const known = this.pageTextCache.get(index)
+    if (known) return known
+    const page = this.pages[index]
+    if (!page) return Promise.resolve('')
+    const made = (async () => {
+      try {
+        const content = await page.proxy.getTextContent()
+        let text = ''
+        for (const item of content.items as { str?: string; hasEOL?: boolean }[]) {
+          if (item.str === undefined) continue
+          text += item.str
+          if (item.hasEOL) text += '\n'
+        }
+        return text
+      } catch {
+        return ''
+      }
+    })()
+    this.pageTextCache.set(index, made)
+    return made
+  }
+
+  private folded(pageIndex: number, text: string): Folded {
+    let folded = this.folds.get(pageIndex)
+    if (!folded) {
+      folded = foldWithMap(text)
+      this.folds.set(pageIndex, folded)
+    }
+    return folded
+  }
+
+  /**
+   * Every place in the paper that says the query, folded the way the index
+   * folds it — so the count here and the count the palette gave are counts
+   * of the same thing, a word broken at the end of a line included.
+   */
+  async findAll(query: string): Promise<{ pageIndex: number; start: number; end: number }[]> {
+    const needle = foldText(query.trim())
+    if (!needle) return []
+    const texts = await this.pageTexts()
+    const found: { pageIndex: number; start: number; end: number }[] = []
+    for (let pageIndex = 0; pageIndex < texts.length; pageIndex += 1) {
+      const text = texts[pageIndex]
+      if (!text) continue
+      const folded = this.folded(pageIndex, text)
+      for (let from = 0; ;) {
+        const at = folded.text.indexOf(needle, from)
+        if (at < 0) break
+        const start = folded.map[at]
+        const after = at + needle.length
+        const end = after < folded.map.length ? folded.map[after] : text.length
+        found.push({ pageIndex, start, end: Math.max(end, start + 1) })
+        from = at + Math.max(needle.length, 1)
+      }
+    }
+    return found
+  }
+
+  /** Whether what is marked is a passage the palette sent the reader to,
+   *  which the next press in the page puts away. */
+  private showingPassage = false
+
+  /** Puts found places on their pages, one of them the current one. */
+  showFound(found: { pageIndex: number; start: number; end: number }[], current: number) {
+    this.showingPassage = false
+    for (const page of this.pages) {
+      const had = page.findMarks.length > 0
+      page.findMarks = []
+      if (had) page.drawFind()
+    }
+    for (const [index, place] of found.entries()) {
+      this.pages[place.pageIndex]?.findMarks.push({ start: place.start, end: place.end, current: index === current })
+    }
+    for (const page of this.pages) if (page.findMarks.length > 0) page.drawFind()
+  }
+
+  clearFound() {
+    this.showFound([], -1)
+  }
+
+  /**
+   * Scrolls so the current found place is in the middle of the view.
+   *
+   * The page has to be drawn before its words have a place, so it is drawn
+   * first — scrolled to, in a paper read continuously, which is what makes
+   * the reader draw it.
+   */
+  async scrollToFound(pageIndex: number) {
+    const page = this.pages[pageIndex]
+    if (!page) return
+    if (store.settings.pageLayout === 'single') {
+      if (this.state.currentPage !== pageIndex) {
+        this.state.currentPage = pageIndex
+        this.applyLayout()
+        this.updateFooter()
+      }
+    } else {
+      const top = page.root.offsetTop
+      const bottom = top + page.root.offsetHeight
+      const shown = this.scroll.scrollTop
+      if (bottom < shown || top > shown + this.scroll.clientHeight) this.scroll.scrollTop = top - 14
+    }
+    await page.render()
+    page.drawFind()
+    const box = page.currentBox()
+    if (!box) return
+    this.scroll.scrollTop = Math.max(0, page.root.offsetTop + box.y + box.height / 2 - this.scroll.clientHeight / 2)
+    const wide = page.root.offsetLeft + box.x + box.width / 2 - this.scroll.clientWidth / 2
+    if (this.scroll.scrollWidth > this.scroll.clientWidth) this.scroll.scrollLeft = Math.max(0, wide)
+  }
+
+  /**
+   * Sends the reader to a passage the index found, and marks it.
+   *
+   * The index read this paper in a process of its own, with the same pdf.js
+   * asked the same way, so the place it names is the place the text layer
+   * has. Should the two ever read a page differently, the query is found on
+   * the page afresh and the occurrence nearest the named place is the one
+   * shown — a reader sent to the right page and the wrong line would not
+   * know which of the two had been wrong.
+   */
+  async revealPassage(passage: { pageIndex: number; location: number; length: number }, query: string): Promise<boolean> {
+    if (!(await this.whenOpen())) return false
+    const page = this.pages[passage.pageIndex]
+    if (!page) return false
+    const text = await this.pageText(passage.pageIndex)
+    const needle = foldText(query.trim())
+    let range = { start: passage.location, end: passage.location + passage.length }
+    if (needle && !foldText(text.slice(range.start, range.end)).includes(needle)) {
+      const folded = this.folded(passage.pageIndex, text)
+      let best: { start: number; end: number } | null = null
+      for (let from = 0; ;) {
+        const at = folded.text.indexOf(needle, from)
+        if (at < 0) break
+        const start = folded.map[at]
+        const after = at + needle.length
+        const end = after < folded.map.length ? folded.map[after] : text.length
+        if (!best || Math.abs(start - passage.location) < Math.abs(best.start - passage.location)) best = { start, end }
+        from = at + Math.max(needle.length, 1)
+      }
+      if (best) range = best
+    }
+    this.showFound([{ pageIndex: passage.pageIndex, ...range }], 0)
+    this.showingPassage = true
+    await this.scrollToFound(passage.pageIndex)
+    // Marked until the reader does something else with the page, the way a
+    // selection would be — unless a find has taken the marks over since.
+    this.pagesBox.addEventListener('pointerdown', () => {
+      if (this.showingPassage) this.clearFound()
+    }, { once: true })
+    return true
   }
 
   /**

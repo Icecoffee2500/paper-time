@@ -21,6 +21,16 @@ const common = {
   define: { 'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV ?? 'development') },
 }
 
+/**
+ * pdf.js's legacy build asks `import.meta.url` where it is in Node, and a
+ * CommonJS bundle has no `import.meta` — esbuild would hand it an empty
+ * object. The file's own URL is what it means.
+ */
+const nodeImportMeta = {
+  define: { ...common.define, 'import.meta.url': '__importMetaUrl' },
+  banner: { js: "const __importMetaUrl = require('url').pathToFileURL(__filename).href;" },
+}
+
 /** @type {esbuild.BuildOptions[]} */
 const targets = [
   {
@@ -31,6 +41,27 @@ const targets = [
     format: 'cjs',
     target: 'node20',
     external: ['electron'],
+  },
+  // The text index, in a process of its own, and the threads it reads with.
+  // pdf.js comes in whole — the legacy build, which runs outside a window.
+  {
+    ...common,
+    entryPoints: [path.join(root, 'src/main/textService.ts')],
+    outfile: path.join(out, 'main/textService.js'),
+    platform: 'node',
+    format: 'cjs',
+    target: 'node20',
+    external: ['electron'],
+  },
+  {
+    ...common,
+    entryPoints: [path.join(root, 'src/main/textWorker.ts')],
+    outfile: path.join(out, 'main/textWorker.js'),
+    platform: 'node',
+    format: 'cjs',
+    target: 'node20',
+    external: ['electron'],
+    ...nodeImportMeta,
   },
   {
     ...common,
@@ -69,6 +100,7 @@ if (withTests) {
     format: 'cjs',
     target: 'node20',
     external: ['electron'],
+    ...nodeImportMeta,
   })
 }
 

@@ -7,7 +7,10 @@
  * from differing by way of somebody's runtime.
  */
 import type { LibrarySnapshot, PaperRowDTO } from '../shared/api.js'
+import type { TextHit } from '../main/textIndex.js'
 import { isLookedUp, type DocumentKind } from '../shared/documentKind.js'
+import { foldTitle } from '../shared/textFold.js'
+import { paperHaystack, type SearchablePaper } from '../shared/searchRank.js'
 import { PaperMeta, PaperState, type Collection, type Tag } from '../shared/model.js'
 import { SketchColor, SketchStyle } from '../shared/sketch.js'
 import { splitContains, splitDock, splitPapers, splitRemove, type DockZone, type SplitArrangement } from '../shared/split.js'
@@ -32,6 +35,8 @@ export type Shelf =
   | { kind: 'collection'; id: string }
   | { kind: 'author'; name: string }
   | { kind: 'tag'; id: string }
+  /** What the palette's «Show All Results» found: `store.searchQuery`. */
+  | { kind: 'search' }
 
 export interface Paper {
   id: string
@@ -109,6 +114,17 @@ export interface Store {
   /** Set while travelling, so the trail does not record its own footsteps. */
   travelling: boolean
   search: { open: boolean; query: string }
+  /**
+   * The query behind the search shelf, kept apart from the shelf itself — as
+   * the Mac keeps `searchQuery` apart from its scope. A search is somewhere
+   * you can be, and somewhere you can go back to after looking at another
+   * shelf: its row stays at the top of the sidebar until it is put away.
+   */
+  searchQuery: string
+  /** What the same query found inside the papers, for the list. */
+  searchPassages: TextHit[]
+  /** Whether the list is still reading the papers for it. */
+  searchScanning: boolean
   toast: string | null
   /** The reader in focus. Each pane has one of these; this is the focused pane's. */
   reader: ReaderState
@@ -173,6 +189,9 @@ export const store: Store = {
   trailIndex: -1,
   travelling: false,
   search: { open: false, query: '' },
+  searchQuery: '',
+  searchPassages: [],
+  searchScanning: false,
   toast: null,
   reader: freshReaderState(),
   sketch: { tool: 'select', lastShape: 'rectangle', lastInk: 'pen', style: new SketchStyle(), selection: null },
@@ -535,8 +554,76 @@ export function shelfPapers(): Paper[] {
       filtered = all.filter((entry) => authorsOf(entry).includes(name))
       break
     }
+    case 'search':
+      filtered = all.filter((entry) => matchesSearch(entry, store.searchQuery))
+      break
   }
   return sorted(filtered)
+}
+
+// MARK: - Searching
+
+/** A paper as search reads it. */
+export function searchable(entry: Paper): SearchablePaper {
+  return {
+    id: entry.id,
+    title: entry.meta.displayTitle,
+    authors: entry.meta.csl.author ?? [],
+    displayAuthors: entry.meta.displayAuthors,
+    venue: entry.meta.venue,
+    year: entry.meta.year,
+    bibKey: entry.meta.bibKey,
+    originalName: entry.meta.file.originalName,
+    parentID: entry.meta.parentID,
+    lastOpenedAt: entry.state.lastOpenedAt,
+  }
+}
+
+/**
+ * Each paper's folded fields, worked out once per read of the library rather
+ * than once per paper per keystroke — the list and the sidebar's count both
+ * ask on every redraw.
+ */
+let haystacks: Map<string, string> | null = null
+let haystacksFor: Paper[] | null = null
+
+function haystackOf(entry: Paper): string {
+  if (haystacksFor !== store.papers || !haystacks) {
+    haystacks = new Map()
+    haystacksFor = store.papers
+  }
+  let known = haystacks.get(entry.id)
+  if (known === undefined) {
+    known = paperHaystack(searchable(entry))
+    haystacks.set(entry.id, known)
+  }
+  return known
+}
+
+/** Whether a paper is one the search shelf shows — `LibraryModel.matches`. */
+export function matchesSearch(entry: Paper, query: string): boolean {
+  const folded = foldTitle(query.trim())
+  if (!folded) return false
+  return haystackOf(entry).includes(folded)
+}
+
+/** How many papers the search shelf holds, for the sidebar's count. */
+export function searchCount(): number {
+  if (!store.searchQuery) return 0
+  return store.papers.filter((entry) => !entry.meta.parentID && matchesSearch(entry, store.searchQuery)).length
+}
+
+/**
+ * The papers whose text is searched, the one opened most recently first —
+ * which is nearly always the one the answer is in — leaving out the ones
+ * already named: a paper about unlearning says so on its first page, and
+ * listing it again under its own title quoted back says nothing new.
+ */
+export function textSources(excluding: Set<string> = new Set()): { id: string; title: string }[] {
+  return store.papers
+    .filter((entry) => !entry.meta.parentID && entry.exists && !excluding.has(entry.id))
+    .sort((a, b) => (b.state.lastOpenedAt?.getTime() ?? 0) - (a.state.lastOpenedAt?.getTime() ?? 0))
+    .map((entry) => ({ id: entry.id, title: entry.meta.displayTitle }))
 }
 
 export function authorsOf(entry: Paper): string[] {

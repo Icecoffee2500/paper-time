@@ -10,7 +10,7 @@ import { iconNode } from '../icons.js'
 import { showMenu } from './toolbar.js'
 import { clear, el, on } from '../dom.js'
 import {
-  authorCounts, folderAbove, folderTrail, isUnderFolder, store, subfolders,
+  authorCounts, folderAbove, folderTrail, isUnderFolder, searchCount, store, subfolders,
   type Paper, type Shelf,
 } from '../state.js'
 import { isLookedUp } from '../../shared/documentKind.js'
@@ -25,6 +25,8 @@ export interface SidebarActions {
   addFolder: () => void
   /** Stops reading a folder. Its files stay where they are. */
   removeFolder: (root: string) => void
+  /** Puts the search away: its row goes, and its shelf with it. */
+  clearSearch: () => void
 }
 
 /** One row of the list, as data — what it says and what it stands for. */
@@ -45,7 +47,11 @@ interface RowSpec {
   /** A section that folds. The chevron turns and the rows under it go. */
   fold?: { open: boolean; press: () => void }
   /** Right-click, where a row has one. */
-  menu?: () => void
+  menu?: { label: string; icon?: string; action: () => void }[]
+  /** A second, smaller line under the label — the query under «Search Results». */
+  detail?: string
+  /** An × in the row's corner that puts the row away. */
+  dismiss?: { label: string; press: () => void }
 }
 
 /**
@@ -142,6 +148,24 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
     const counts = shelfCounts(papers)
     const rows: RowSpec[] = []
 
+    // A search is somewhere you can be, not a filter left switched on
+    // somewhere off-screen — so it gets a row of its own, at the top, and it
+    // can be put away from there, as on the Mac.
+    if (store.searchQuery) {
+      rows.push({
+        key: 'search',
+        kind: 'row',
+        shelf: { kind: 'search' },
+        icon: 'magnifyingglass',
+        label: L('찾은 것', 'Search Results'),
+        detail: store.searchQuery,
+        count: searchCount(),
+        dismiss: { label: L('찾기 끝내기', 'Clear Search'), press: actions.clearSearch },
+        menu: [{ label: L('찾기 끝내기', 'Clear Search'), icon: 'xmark', action: actions.clearSearch }],
+      })
+      rows.push({ key: 'gap:0', kind: 'section', label: '' })
+    }
+
     // The libraries, at the top, where the one library's name used to sit. A
     // library used to be a folder; now it is as many folders as you point it
     // at, each keeping its own records — and its own notes, tags and
@@ -166,7 +190,9 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
         count: counts.folders.get(root) ?? 0,
         chip: true,
         title: root,
-        menu: root === store.root ? undefined : () => actions.removeFolder(root),
+        menu: root === store.root
+          ? undefined
+          : [{ label: L('연결 해제', 'Disconnect'), icon: 'eject', action: () => actions.removeFolder(root) }],
       })
     }
     if (open) {
@@ -335,13 +361,36 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
     const glyph = el('span', { class: 'row-icon' })
     const drawn = spec.icon ? iconNode(spec.icon) : null
     if (drawn) glyph.append(drawn)
+    // A library's name wears the chip the crumb over this list used to wear:
+    // it names where something came from.
+    const label = el('span', { class: spec.chip ? 'row-label folder-name' : 'row-label', text: spec.label })
     row.append(
       glyph,
-      // A library's name wears the chip the crumb over this list used to
-      // wear: it names where something came from.
-      el('span', { class: spec.chip ? 'row-label folder-name' : 'row-label', text: spec.label }),
+      spec.detail
+        ? el('span', { class: 'row-lines' }, [label, el('span', { class: 'row-detail', text: spec.detail })])
+        : label,
     )
     if (spec.count !== undefined) row.append(el('span', { class: 'row-count', text: String(spec.count) }))
+    if (spec.dismiss) {
+      // The count steps aside for the × rather than sharing the corner with
+      // it: a number with a cross on top of it is two things in one place,
+      // and the one you can press has to win.
+      const dismiss = spec.dismiss
+      const cross = el('span', {
+        class: 'row-dismiss',
+        role: 'button',
+        title: dismiss.label,
+        'aria-label': dismiss.label,
+      })
+      const glyphX = iconNode('xmark')
+      if (glyphX) cross.append(glyphX)
+      on(cross, 'click', (event: MouseEvent) => {
+        event.stopPropagation()
+        dismiss.press()
+      })
+      row.append(cross)
+      row.classList.add('dismissable')
+    }
     if (spec.title) row.title = spec.title
     if (spec.indent) row.style.paddingLeft = `${8 + spec.indent * 11}px`
     const shelf = spec.shelf
@@ -358,10 +407,10 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
       actions.select(shelf)
     } : (spec.press ?? (() => {})))
     if (spec.menu) {
-      const open = spec.menu
+      const items = spec.menu
       on(row, 'contextmenu', (event: MouseEvent) => {
         event.preventDefault()
-        showMenu(row, [{ label: L('연결 해제', 'Disconnect'), icon: 'eject', action: open }])
+        showMenu(row, items)
       })
     }
     return row
@@ -369,7 +418,7 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
 
   /** What has to be redrawn rather than merely re-labelled. */
   function shape(spec: RowSpec): string {
-    return `${spec.kind}|${spec.key}|${spec.icon ?? ''}|${spec.label}|${spec.chip ? 1 : 0}|${spec.menu ? 1 : 0}|${spec.indent ?? 0}|${spec.fold ? (spec.fold.open ? 'v' : '>') : ''}`
+    return `${spec.kind}|${spec.key}|${spec.icon ?? ''}|${spec.label}|${spec.detail ?? ''}|${spec.chip ? 1 : 0}|${spec.menu ? 1 : 0}|${spec.indent ?? 0}|${spec.fold ? (spec.fold.open ? 'v' : '>') : ''}`
   }
 
   let drawnSpecs: RowSpec[] = []

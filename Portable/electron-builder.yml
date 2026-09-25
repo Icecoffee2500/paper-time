@@ -21,6 +21,14 @@ files:
 # node_modules needs to travel with the app.
 asar: true
 
+# The text index runs in a process of its own and reads papers on threads of
+# its own, and a thread is started from a file on disk: Node's worker loader
+# does not look inside an archive. Both scripts are self-contained bundles, so
+# they are all that has to come out.
+asarUnpack:
+  - out/main/textService.js
+  - out/main/textWorker.js
+
 # ---------------------------------------------------------------- Windows
 win:
   icon: assets/icons/icon.ico
