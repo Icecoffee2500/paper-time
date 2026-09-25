@@ -1,0 +1,103 @@
+[
+  {
+    "shortDescription" : "all-MiniLM-L6-v2 sentence embeddings: token ids and mask in, a mean-pooled, L2-normalised 384-dimensional vector out.",
+    "metadataOutputVersion" : "3.0",
+    "outputSchema" : [
+      {
+        "hasShapeFlexibility" : "0",
+        "isOptional" : "0",
+        "dataType" : "Float16",
+        "formattedType" : "MultiArray (Float16)",
+        "shortDescription" : "",
+        "shape" : "[]",
+        "name" : "embedding",
+        "type" : "MultiArray"
+      }
+    ],
+    "version" : "1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
+    "modelParameters" : [
+
+    ],
+    "author" : "sentence-transformers (Apache-2.0); converted for Paper Time",
+    "specificationVersion" : 8,
+    "storagePrecision" : "Float16",
+    "license" : "Apache-2.0",
+    "mlProgramOperationTypeHistogram" : {
+      "Ios16.reduceL2Norm" : 1,
+      "Ios17.equal" : 2,
+      "Ios17.reshape" : 24,
+      "Ios16.softmax" : 6,
+      "Ios17.matmul" : 12,
+      "Ios17.transpose" : 24,
+      "Ios17.maximum" : 1,
+      "Select" : 2,
+      "Ios17.expandDims" : 3,
+      "Ios17.add" : 20,
+      "Tile" : 2,
+      "Ios17.sliceByIndex" : 2,
+      "Ios16.reduceSum" : 2,
+      "Shape" : 16,
+      "Ios17.gather" : 23,
+      "Ios17.layerNorm" : 13,
+      "Ios16.gelu" : 6,
+      "Ios17.sub" : 1,
+      "Ios17.cast" : 39,
+      "Ios17.clip" : 1,
+      "Ios17.realDiv" : 4,
+      "Ios17.linear" : 36,
+      "Ios17.concat" : 14,
+      "Ios17.mul" : 8
+    },
+    "computePrecision" : "Mixed (Float16, Int16, Int32, UInt16)",
+    "stateSchema" : [
+
+    ],
+    "isUpdatable" : "0",
+    "availability" : {
+      "macOS" : "14.0",
+      "tvOS" : "17.0",
+      "visionOS" : "1.0",
+      "watchOS" : "10.0",
+      "iOS" : "17.0",
+      "macCatalyst" : "17.0"
+    },
+    "modelType" : {
+      "name" : "MLModelType_mlProgram"
+    },
+    "inputSchema" : [
+      {
+        "dataType" : "Int32",
+        "hasShapeFlexibility" : "1",
+        "isOptional" : "0",
+        "shapeFlexibility" : "1...64 × 1...256",
+        "shapeRange" : "[[1, 64], [1, 256]]",
+        "formattedType" : "MultiArray (Int32 1 × 128)",
+        "type" : "MultiArray",
+        "shape" : "[1, 128]",
+        "name" : "ids",
+        "shortDescription" : ""
+      },
+      {
+        "dataType" : "Int32",
+        "hasShapeFlexibility" : "1",
+        "isOptional" : "0",
+        "shapeFlexibility" : "1...64 × 1...256",
+        "shapeRange" : "[[1, 64], [1, 256]]",
+        "formattedType" : "MultiArray (Int32 1 × 128)",
+        "type" : "MultiArray",
+        "shape" : "[1, 128]",
+        "name" : "mask",
+        "shortDescription" : ""
+      }
+    ],
+    "userDefinedMetadata" : {
+      "com.github.apple.coremltools.conversion_date" : "2026-09-25",
+      "source" : "sentence-transformers\/all-MiniLM-L6-v2@1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
+      "com.github.apple.coremltools.source" : "torch==2.14.0",
+      "com.github.apple.coremltools.version" : "9.0",
+      "com.github.apple.coremltools.source_dialect" : "TorchScript"
+    },
+    "generatedClassName" : "MiniLM_L6_v2",
+    "method" : "predict"
+  }
+]
