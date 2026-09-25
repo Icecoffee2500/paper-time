@@ -507,6 +507,81 @@ public final class NotesModel {
             .map(\.self)
     }
 
+    // MARK: - Search
+
+    /// A note as Search Everything matches it: its title as a row shows it,
+    /// and that title with the first of the note after it, folded.
+    public struct Searchable: Sendable {
+        public let isEmpty: Bool
+        public let displayTitle: String
+        public let folded: SearchRanking.Folded
+
+        init(_ note: Zettel) {
+            let shown = note.displayTitle
+            isEmpty = note.isEmpty
+            displayTitle = shown
+            folded = SearchRanking.Folded(shown + " " + note.preview.prefix(200))
+        }
+    }
+
+    /// Worked out once per version of each note, not once per keystroke.
+    ///
+    /// A note's title, when it has none of its own, is the first words of its
+    /// preview, and the preview is eleven regular expressions over the whole
+    /// note. The palette asked for both for every note on every character
+    /// typed — at a thousand notes, most of 800 ms. A note that has not
+    /// changed has the same answer, and the note's own words are what say
+    /// whether it has: the same strings, compared, are usually the same
+    /// storage and cost a pointer.
+    @ObservationIgnored private var searchables: [String: (title: String, body: String, value: Searchable)] = [:]
+
+    public func searchable(_ note: Zettel) -> Searchable {
+        if let kept = searchables[note.id], kept.title == note.title, kept.body == note.body {
+            return kept.value
+        }
+        let value = Searchable(note)
+        searchables[note.id] = (note.title, note.body, value)
+        return value
+    }
+
+    /// Works out what search needs of every note it has not seen, off the
+    /// main thread, so the first keystroke after the palette opens finds it
+    /// done, and returns when it is. Asked when the palette opens — never at
+    /// launch, when nobody is searching yet.
+    public func prepareSearch() async {
+        if let searchPreparing { return await searchPreparing.value }
+        let waiting = notes.filter { note in
+            guard let kept = searchables[note.id] else { return true }
+            return kept.title != note.title || kept.body != note.body
+        }
+        guard !waiting.isEmpty else { return }
+        let preparing = Task { [weak self] in
+            let made = await Trace.time("notes: fold \(waiting.count) for search") {
+                await Task.detached(priority: .userInitiated) {
+                    let lock = NSLock()
+                    nonisolated(unsafe) var made = [Searchable?](repeating: nil, count: waiting.count)
+                    DispatchQueue.concurrentPerform(iterations: waiting.count) { index in
+                        let value = Searchable(waiting[index])
+                        lock.lock()
+                        made[index] = value
+                        lock.unlock()
+                    }
+                    return made
+                }.value
+            }
+            guard let self else { return }
+            for (note, value) in zip(waiting, made) {
+                guard let value, let current = byID[note.id],
+                      current.title == note.title, current.body == note.body else { continue }
+                searchables[note.id] = (note.title, note.body, value)
+            }
+            searchPreparing = nil
+        }
+        searchPreparing = preparing
+        await preparing.value
+    }
+    @ObservationIgnored private var searchPreparing: Task<Void, Never>?
+
     // MARK: - Resonance
 
     /// The notes that echo a text — a page being read, or another note —
@@ -673,6 +748,7 @@ public final class NotesModel {
         // ever where it had been.
         notes = loaded.sorted { $0.created == $1.created ? $0.id < $1.id : $0.created < $1.created }
         byID = Dictionary(notes.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        if searchables.count > byID.count { searchables = searchables.filter { byID[$0.key] != nil } }
 
         rebuildConnections()
     }

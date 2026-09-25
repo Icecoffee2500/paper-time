@@ -24,6 +24,8 @@ struct SearchPalette: View {
     /// What the words themselves turned up, as the papers are read.
     @State private var passages: [SearchResult] = []
     @State private var isScanning = false
+    /// The query the words inside the papers were last read to the end for.
+    @State private var settled: String?
     @State private var warming: Task<Void, Never>?
     /// What the library offers when nothing has been typed, and what the
     /// typing matches. Worked out once each, not once per pass over the body.
@@ -174,22 +176,50 @@ struct SearchPalette: View {
             try? await Task.sleep(for: .milliseconds(700))
             guard !Task.isCancelled else { return }
             warming = PaperTextIndex.shared.warm(sources(excluding: []))
+            // And what is kept of papers the library no longer has goes,
+            // once a session. Every paper counts here, supplements too: the
+            // echoes read those.
+            await PaperTextIndex.shared.sweep(keeping: Set(model.papers.map(\.id)))
         }
         .onDisappear { warming?.cancel() }
+        // What the ranking compares with, folded while the reader is still
+        // deciding what to type: the notes off the main thread first, then
+        // the library once they are done. Made at the first keystroke
+        // instead, it was that keystroke — 50 ms of it at six hundred papers
+        // and a thousand notes — and made before the notes were ready, it
+        // would fold all thousand of them here, on the main thread.
+        .task {
+            await model.notes.prepareSearch()
+            guard !Task.isCancelled else { return }
+            _ = SearchIndex.prepared(for: model)
+        }
         .task(id: query) { await scan() }
+        // `--papertime-search-script=<q1|q2|…>` types each query into the
+        // field a letter at a time, the way a hand would, and says what came
+        // back and when. A key posted from outside goes to whatever is in
+        // front; this goes nowhere but the field.
+        .task {
+            guard let script = Boot.setting("PAPERTIME_SEARCH_SCRIPT") else { return }
+            await type(script.split(separator: "|").map(String.init))
+        }
     }
 
     /// The offers, once. They are about the library rather than the query,
     /// so they do not change while the palette is open.
     private func gather() {
-        offered = SearchSuggestions.groups(in: model)
-        match()
+        Trace.mark("palette: open")
+        Trace.time("palette: get ready") {
+            offered = SearchSuggestions.groups(in: model)
+            match()
+        }
     }
 
     /// What the typing matches, once per change of it.
     private func match() {
         let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        typed = text.isEmpty ? [] : SearchIndex.results(for: text, in: model)
+        typed = text.isEmpty ? [] : Trace.time("palette: rank one keystroke") {
+            SearchIndex.results(for: text, in: model)
+        }
     }
 
     private var paletteCard: some View {
@@ -423,6 +453,7 @@ struct SearchPalette: View {
         let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard text.count > 1 else {
             isScanning = false
+            settled = text
             return
         }
         // Not on every keystroke: "un", "unl", "unle" are three searches of
@@ -430,6 +461,8 @@ struct SearchPalette: View {
         try? await Task.sleep(for: .milliseconds(220))
         guard !Task.isCancelled else { return }
         isScanning = true
+        let started = DispatchTime.now().uptimeNanoseconds
+        func since() -> Double { Double(DispatchTime.now().uptimeNanoseconds - started) / 1e6 }
         // The papers already named by title are the ones just matched; there
         // is no reason to match them a second time.
         let named = Set(typed.compactMap { result in
@@ -437,6 +470,9 @@ struct SearchPalette: View {
         })
         for await hit in PaperTextIndex.shared.hits(for: text, in: sources(excluding: named)) {
             passages.append(SearchResult(hit: hit))
+            if passages.count == 1 {
+                Trace.mark(String(format: "palette: “%@” first passage after %.1f ms", text, since()))
+            }
             // Pressing the first row from a script, so that "does it land on
             // the word?" can be seen in a screenshot without a click being
             // posted to whatever happens to be frontmost.
@@ -447,7 +483,40 @@ struct SearchPalette: View {
             }
             if passages.count >= 4 { break }
         }
+        Trace.mark(String(format: "palette: “%@” read to the end after %.1f ms — %d passages",
+                          text, since(), passages.count))
         isScanning = false
+        if !Task.isCancelled { settled = text }
+    }
+
+    /// Types each query in, a letter every ninety milliseconds, waits for
+    /// the words inside the papers to come back, and writes down what the
+    /// palette is showing. Then quits, so the trace can add it up.
+    private func type(_ queries: [String]) async {
+        try? await Task.sleep(for: .seconds(1))
+        Trace.mark("palette: script begins · \(Trace.memory())")
+        for wanted in queries {
+            let letters = Array(wanted)
+            for count in 1...max(letters.count, 1) {
+                query = String(letters.prefix(count))
+                try? await Task.sleep(for: .milliseconds(90))
+            }
+            let deadline = Date.now.addingTimeInterval(20)
+            while settled != wanted, Date.now < deadline {
+                try? await Task.sleep(for: .milliseconds(20))
+            }
+            var said = "palette: “\(wanted)” shows \(typed.count) typed · \(passages.count) passages · \(Trace.memory())\n"
+            for row in results {
+                said += "palette:   \(row.title.prefix(70)) — \(row.subtitle.prefix(70))\n"
+            }
+            FileHandle.standardError.write(Data(said.utf8))
+            query = ""
+            try? await Task.sleep(for: .milliseconds(400))
+        }
+        Trace.summary()
+        #if os(macOS)
+        NSApp.terminate(nil)
+        #endif
     }
 
     private func dismiss() {
