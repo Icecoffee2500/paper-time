@@ -348,6 +348,7 @@ struct SettingsView: View {
             case .reading:
                 listSection(settings: settings)
                 readingSection(settings: settings)
+                writingSection(settings: settings)
             case .shortcuts: shortcutsSection
             case .log: logSection
             case .about: EmptyView()
@@ -716,6 +717,38 @@ struct SettingsView: View {
             ))
         }
     }
+
+    // MARK: - Writing
+
+    #if os(macOS)
+    /// Latex Suite in the note and in the text cards on the page — the two
+    /// places on the Mac where LaTeX is typed, so one switch for both. The
+    /// line under it is the feature in one example, because a name with
+    /// "shortcuts" in it says nothing about what will happen to the keys; the
+    /// line under that is the credit the snippets' licence asks for. Only on
+    /// the Mac: that is where the text views are that do it.
+    private func writingSection(settings: AppSettings) -> some View {
+        Section {
+            Toggle(L("LaTeX 단축 입력", "LaTeX Shortcuts"), isOn: Bindable(settings).latexShortcuts)
+        } header: {
+            pageHeader(L("쓰기", "Writing"))
+        } footer: {
+            VStack(alignment: .leading, spacing: 6) {
+                // Read as Markdown, so the trigger is set as code.
+                let help = L(
+                    "`//`를 치면 분수가 되는 것처럼, 짧게 친 말을 LaTeX로 바꿔요.",
+                    "Expands short triggers into LaTeX as you type, like // into a fraction."
+                )
+                Text((try? AttributedString(markdown: help)) ?? AttributedString(help))
+                Text(L(
+                    "기본 스니펫과 동작은 artisticat1의 Latex Suite(MIT 라이선스)에서 가져왔어요.",
+                    "Snippets and behavior from Latex Suite by artisticat1, under the MIT License."
+                ))
+                .foregroundStyle(.tertiary)
+            }
+        }
+    }
+    #endif
 
     /// The shortcut search, sitting above the page.
     ///

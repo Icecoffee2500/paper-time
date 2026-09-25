@@ -58,6 +58,7 @@ struct FeatureDemoView: View {
             case .feedback: FeedbackDemo(scale: scale)
             case .together: TogetherDemo(scale: scale)
             case .twoLanguages: TwoLanguagesDemo(scale: scale)
+            case .latexShortcuts: LatexShortcutsDemo(scale: scale)
             }
         }
         .padding(scale.pad)
@@ -104,6 +105,296 @@ private struct Rule: View {
         Capsule()
             .fill(.quaternary)
             .frame(width: width, height: 3)
+    }
+}
+
+// MARK: - LaTeX shortcuts
+
+/// A formula typed the short way, key by key, through the real engine.
+///
+/// Nobody finds out on their own that `//` is a fraction or that Tab moves to
+/// the denominator, and a sentence saying so is a list of codes. So the keys
+/// are pressed here, one after another, into the same Latex Suite the note
+/// runs — what appears is what the note would do, down to where the caret
+/// lands and which placeholders are still waiting. Under it is the line as
+/// the note sets it once the caret has gone.
+private struct LatexShortcutsDemo: View {
+    let scale: DemoScale
+    /// How many keys of the script have been typed.
+    @State private var typed: Int
+    @State private var player: Task<Void, Never>?
+    private let frames: [LatexTypingPlayback.Frame]
+
+    /// One step of the script: the keys, as they are written on the caps,
+    /// and what the step does when it does something worth naming.
+    private struct Step {
+        let keys: [LatexSuite.Input]
+        let cap: String
+        let meaning: String?
+    }
+
+    private static var steps: [Step] {
+        [
+            Step(keys: [.text("/"), .text("/")], cap: "//", meaning: ReleaseNotes.string("분수", "fraction")),
+            Step(keys: [.text("x"), .text("1")], cap: "x1", meaning: ReleaseNotes.string("아래 첨자", "subscript")),
+            Step(keys: [.text("s"), .text("r")], cap: "sr", meaning: ReleaseNotes.string("제곱", "squared")),
+            Step(keys: [.text("+")], cap: "+", meaning: nil),
+            Step(keys: [.text("x"), .text("2")], cap: "x2", meaning: nil),
+            Step(keys: [.text("s"), .text("r")], cap: "sr", meaning: nil),
+            Step(keys: [.tab], cap: "⇥", meaning: ReleaseNotes.string("다음 칸", "next field")),
+            Step(keys: [.text("2")], cap: "2", meaning: nil),
+            Step(keys: [.tab], cap: "⇥", meaning: ReleaseNotes.string("밖으로", "out")),
+        ]
+    }
+
+    private static var keyCount: Int { steps.reduce(0) { $0 + $1.keys.count } }
+
+    init(scale: DemoScale, typed: Int? = nil) {
+        self.scale = scale
+        let start = ReleaseNotes.string("제곱 평균: ", "Mean square: ") + "$$"
+        frames = LatexTypingPlayback.frames(
+            from: start, caret: (start as NSString).length - 1,
+            typing: Self.steps.flatMap(\.keys)
+        )
+        _typed = State(initialValue: min(typed ?? Self.keyCount, Self.keyCount))
+    }
+
+    private var frame: LatexTypingPlayback.Frame { frames[min(typed, frames.count - 1)] }
+
+    /// Which step the last key typed belongs to.
+    private var currentStep: Int? {
+        guard typed > 0 else { return nil }
+        var count = 0
+        for (index, step) in Self.steps.enumerated() {
+            count += step.keys.count
+            if typed <= count { return index }
+        }
+        return nil
+    }
+
+    var body: some View {
+        let full = scale.isFull
+        return VStack(alignment: .leading, spacing: scale.gap) {
+            Paper(scale: scale) {
+                VStack(alignment: .leading, spacing: full ? 10 : 6) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(ReleaseNotes.string("치는 동안", "As you type"))
+                            .font(scale.small)
+                            .foregroundStyle(.tertiary)
+                        typedLine
+                            .font(.system(size: lineSize, design: .monospaced))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                    }
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(ReleaseNotes.string("줄을 떠나면", "Once the caret leaves"))
+                            .font(scale.small)
+                            .foregroundStyle(.tertiary)
+                        setLine
+                    }
+                }
+            }
+
+            HStack(alignment: .top, spacing: full ? 6 : 4) {
+                ForEach(Array(Self.steps.enumerated()), id: \.offset) { index, step in
+                    keyCap(step, lit: index == currentStep, done: currentStep.map { index < $0 } ?? false)
+                }
+                Spacer(minLength: 0)
+            }
+
+            HStack {
+                Button {
+                    play()
+                } label: {
+                    Label(ReleaseNotes.string("입력해 보기", "Type It"), systemImage: "keyboard")
+                }
+                .disabled(player != nil)
+                Spacer()
+                Text(ReleaseNotes.string("⌘Z 한 번이면 친 그대로 돌아와요", "One ⌘Z gives back what you typed"))
+                    .font(scale.small)
+                    .foregroundStyle(.secondary)
+            }
+            .font(scale.body)
+            .buttonStyle(.bordered)
+            .controlSize(full ? .regular : .small)
+        }
+        .onDisappear {
+            player?.cancel()
+            player = nil
+        }
+    }
+
+    /// Types the script again from the start, a key at a time, lingering
+    /// where a key turned into something so the change can be seen.
+    private func play() {
+        player?.cancel()
+        typed = 0
+        player = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(450))
+            for next in 1...Self.keyCount {
+                guard !Task.isCancelled else { return }
+                typed = next
+                try? await Task.sleep(for: .milliseconds(frames[next].expanded ? 650 : 280))
+            }
+            player = nil
+        }
+    }
+
+    private func keyCap(_ step: Step, lit: Bool, done: Bool) -> some View {
+        VStack(spacing: 3) {
+            Text(step.cap)
+                .font(.system(size: scale.isFull ? 12 : 9, weight: .medium, design: .monospaced))
+                .foregroundStyle(lit ? AnyShapeStyle(.tint) : done ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
+                .padding(.horizontal, scale.isFull ? 7 : 5)
+                .padding(.vertical, scale.isFull ? 3 : 2)
+                .background(
+                    RoundedRectangle(cornerRadius: Corner.inner(Corner.control, inset: 3), style: .continuous)
+                        .fill(lit ? AnyShapeStyle(Color.accentColor.opacity(0.14)) : AnyShapeStyle(.quaternary.opacity(0.6)))
+                )
+            if let meaning = step.meaning, scale.isFull {
+                Text(meaning)
+                    .font(.caption2)
+                    .foregroundStyle(lit ? AnyShapeStyle(.tint) : AnyShapeStyle(.tertiary))
+                    .fixedSize()
+            }
+        }
+        .animation(Motion.tap, value: lit)
+    }
+
+    /// The line as the note shows it while the caret is on it: the LaTeX as
+    /// written, the caret, and the placeholders still to come — a faint wash
+    /// round one with words in it, a dotted upright where an empty one waits.
+    private var typedLine: Text {
+        let text = frame.text as NSString
+        var marks: [(at: Int, isCaret: Bool)] = frame.selection.filter { $0.length == 0 }.map { ($0.location, true) }
+        // A selected placeholder is the selection; the ones to come are
+        // washed in their expansion's colour.
+        var washes: [(range: NSRange, colour: Color)] = frame.selection.filter { $0.length > 0 }.map { ($0, Color.accentColor.opacity(0.3)) }
+        let colours: [Color] = [.blue, .orange, .green]
+        for (index, group) in frame.tabstops.groups.enumerated() where index > frame.tabstops.index {
+            for range in group.ranges {
+                if range.length == 0 { marks.append((range.location, false)) }
+                else { washes.append((range, colours[group.color % colours.count].opacity(0.2))) }
+            }
+        }
+        // Cut where a wash begins or ends, so every piece is washed whole or
+        // not at all.
+        func plain(_ range: NSRange) -> Text {
+            let end = range.location + range.length
+            let cuts = Set([range.location, end] + washes.flatMap { [$0.range.location, $0.range.location + $0.range.length] })
+                .filter { $0 >= range.location && $0 <= end }
+                .sorted()
+            var line = Text("")
+            for (from, to) in zip(cuts, cuts.dropFirst()) where to > from {
+                let piece = NSRange(location: from, length: to - from)
+                var words = AttributedString(text.substring(with: piece))
+                if let wash = washes.first(where: { NSIntersectionRange($0.range, piece).length == piece.length }) {
+                    words.backgroundColor = wash.colour
+                }
+                line = line + Text(words)
+            }
+            return line
+        }
+        var line = Text("")
+        var cursor = 0
+        for mark in marks.sorted(by: { ($0.at, $0.isCaret ? 1 : 0) < ($1.at, $1.isCaret ? 1 : 0) }) {
+            line = line + plain(NSRange(location: cursor, length: mark.at - cursor))
+            line = line + Text(upright(dotted: !mark.isCaret)).baselineOffset(-lineSize * 0.22)
+            cursor = mark.at
+        }
+        return line + plain(NSRange(location: cursor, length: text.length - cursor))
+    }
+
+    private var lineSize: CGFloat { scale.isFull ? 13 : 10 }
+
+    /// A caret, or the dotted upright where an empty placeholder waits, as
+    /// the note draws them: a hairline between two letters. A character for
+    /// either takes a whole cell of the monospaced line, and the gap it left
+    /// read as a space that was not in the text.
+    private func upright(dotted: Bool) -> Image {
+        let height = lineSize * 1.25
+        return Image(size: CGSize(width: 1.5, height: height)) { context in
+            if dotted {
+                var path = Path()
+                path.move(to: CGPoint(x: 0.75, y: 1))
+                path.addLine(to: CGPoint(x: 0.75, y: height - 1))
+                context.stroke(path, with: .color(.secondary), style: StrokeStyle(lineWidth: 1.2, dash: [1.4, 1.6]))
+            } else {
+                context.fill(Path(CGRect(x: 0, y: 0, width: 1.5, height: height)), with: .color(.accentColor))
+            }
+        }
+    }
+
+    /// The same line set as the note sets it: the words, then the formula —
+    /// by the typesetter the notes use, on the Mac.
+    private var setLine: some View {
+        let text = frame.text as NSString
+        let open = text.range(of: "$")
+        let close = text.range(of: "$", options: .backwards)
+        let words = open.location == NSNotFound ? frame.text : text.substring(to: open.location)
+        let latex = open.location != NSNotFound && close.location > open.location
+            ? text.substring(with: NSRange(location: open.location + 1, length: close.location - open.location - 1))
+            : ""
+        var formula = Text("")
+        #if os(macOS)
+        if let made = MathTypesetter.image(
+            latex: latex, display: false,
+            pointSize: scale.isFull ? 17 : 12, color: .labelColor
+        ) {
+            formula = Text(Image(nsImage: made.image)).baselineOffset(-made.descent)
+        } else {
+            formula = Text(latex).italic()
+        }
+        #else
+        formula = Text(latex).italic()
+        #endif
+        return (Text(words) + formula)
+            .font(scale.isFull ? .body : .caption)
+            .frame(minHeight: scale.isFull ? 36 : 22, alignment: .leading)
+    }
+}
+
+/// The real engine, run over a script of keys as an editor would run it: a
+/// key Latex Suite takes becomes its edit, and one it leaves goes in the way
+/// any text view would put it in.
+enum LatexTypingPlayback {
+    struct Frame {
+        var text: String
+        var selection: [NSRange]
+        var tabstops: LatexSuite.Tabstops
+        /// The key before this frame was turned into something.
+        var expanded = false
+    }
+
+    static func frames(from text: String, caret: Int, typing keys: [LatexSuite.Input]) -> [Frame] {
+        let engine = LatexSuite.Engine()
+        var frame = Frame(text: text, selection: [NSRange(location: caret, length: 0)], tabstops: .none)
+        var frames = [frame]
+        for key in keys {
+            if let edit = engine.handle(key, text: frame.text, selection: frame.selection, tabstops: frame.tabstops) {
+                let changed = NSMutableString(string: frame.text)
+                for change in edit.changes.reversed() { changed.replaceCharacters(in: change.range, with: change.text) }
+                frame = Frame(text: changed as String, selection: edit.selection, tabstops: edit.tabstops,
+                              expanded: !edit.changes.isEmpty)
+            } else {
+                let typed: String
+                switch key {
+                case .text(let character): typed = character
+                case .tab: typed = "\t"
+                case .enter, .shiftEnter: typed = "\n"
+                case .backspace, .shiftTab: typed = ""
+                }
+                let range = frame.selection.first ?? NSRange(location: (frame.text as NSString).length, length: 0)
+                let change = LatexSuite.Change(range: range, text: typed)
+                let after = [NSRange(location: range.location + (typed as NSString).length, length: 0)]
+                frame = Frame(
+                    text: (frame.text as NSString).replacingCharacters(in: range, with: typed),
+                    selection: after, tabstops: frame.tabstops.afterEdit([change], selection: after)
+                )
+            }
+            frames.append(frame)
+        }
+        return frames
     }
 }
 
@@ -2840,6 +3131,11 @@ enum DemoRenderer {
         write("resonance-rule", ResonanceDemo(scale: .full, step: 4, showsRule: true), full: true)
         for step in 1...3 { write("atlas-step\(step)", AtlasDemo(scale: .full, step: step), full: true) }
         for step in 1...3 { write("express-step\(step)", ExpressDemo(scale: .full, step: step), full: true) }
+        // The formula part-way, with the placeholders still waiting.
+        for typed in [0, 2, 6, 11, 13] {
+            write("latexShortcuts-key\(typed)", LatexShortcutsDemo(scale: .full, typed: typed), full: true)
+        }
+        write("latexShortcuts-key6-compact", LatexShortcutsDemo(scale: .compact, typed: 6), full: false)
         exit(0)
     }
 }

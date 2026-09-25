@@ -1788,6 +1788,9 @@ final class SketchInputView: NSView, SketchEditing {
     /// script can draw, select, move and type on the test library while
     /// the person at the keyboard goes on with their own work. Page
     /// coordinates throughout. Returns a line to print.
+    /// The card being typed into, for a probe that types into it.
+    var editingTextView: SketchTextEditor? { textEditor }
+
     func performProbe(_ op: String) -> String {
         guard let pdfView, let window, let page = pdfView.currentPage else { return "probe: no page" }
         let index = session.document.index(for: page)
@@ -2298,8 +2301,9 @@ final class SketchInputView: NSView, SketchEditing {
 /// Figma's way: no field. The words appear in their own face, size and
 /// colour on the page itself, with a caret; the card behind them is drawn by
 /// the view underneath, so what is seen while typing is what will be there
-/// when the typing stops.
-final class SketchTextEditor: NSTextView {
+/// when the typing stops. A card's `$…$` is set as mathematics, so it types
+/// LaTeX the way a note does (`LatexSuiteTextView`).
+final class SketchTextEditor: LatexSuiteTextView {
     var onChange: (() -> Void)?
     var onFinish: (() -> Void)?
     /// Typing undoes on its own stack. On the window's, the text view
@@ -2309,6 +2313,28 @@ final class SketchTextEditor: NSTextView {
     /// when the editing ends.
     private let ownUndoManager = UndoManager()
     override var undoManager: UndoManager? { ownUndoManager }
+
+    // ⌘Z while typing is taken here, on the card's own stack. The Edit menu
+    // sends `undo:` up the responder chain and the first to answer it was the
+    // window, which undoes on the window's manager: typing was never undone,
+    // and the step taken back was whatever had been drawn before the card —
+    // under the words still being typed. It matters more now that a key can
+    // turn into LaTeX, because one ⌘Z has to give the typed key back.
+    @objc func undo(_ sender: Any?) { ownUndoManager.undo() }
+    @objc func redo(_ sender: Any?) { ownUndoManager.redo() }
+
+    override func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
+        switch item.action {
+        case #selector(undo(_:)):
+            (item as? NSMenuItem)?.title = ownUndoManager.undoMenuItemTitle
+            return ownUndoManager.canUndo
+        case #selector(redo(_:)):
+            (item as? NSMenuItem)?.title = ownUndoManager.redoMenuItemTitle
+            return ownUndoManager.canRedo
+        default:
+            return super.validateUserInterfaceItem(item)
+        }
+    }
 
     override init(frame frameRect: NSRect, textContainer container: NSTextContainer?) {
         super.init(frame: frameRect, textContainer: container)

@@ -1321,6 +1321,16 @@ final class ReaderCoordinator: NSObject {
                         try? await Task.sleep(for: .seconds(Double(op.dropFirst(5)) ?? 0.5))
                         continue
                     }
+                    // `cardtext=$x|$` · `keys=// x1 Tab` · `cardreport`: the
+                    // card being typed into, through Latex Suite.
+                    if op.hasPrefix("cardtext=") || op.hasPrefix("keys=") || op == "cardreport" {
+                        guard let editor = sketchInput?.editingTextView else {
+                            say("sketch probe: no card is being typed into")
+                            continue
+                        }
+                        say(await LatexSuiteTypingProbe.card(op, in: editor))
+                        continue
+                    }
                     if let input = sketchInput {
                         say(input.performProbe(op))
                     } else {
