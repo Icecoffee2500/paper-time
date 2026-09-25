@@ -61,6 +61,8 @@ export interface Settings {
   selectedPaperID: string | null
   /** Latex Suite in the note and on the cards: `@a` into `\alpha`, `//` into a fraction. */
   latexShortcuts: boolean
+  /** Search by meaning in the palette. On unless turned off. */
+  semanticSearch: boolean
 }
 
 /** What one reader — one pane — knows about the paper it shows. */
@@ -183,6 +185,7 @@ export const store: Store = {
     pageLayout: 'continuous',
     selectedPaperID: null,
     latexShortcuts: true,
+    semanticSearch: true,
   },
   windowState: { maximized: false, fullScreen: false, focused: true },
   trail: [],

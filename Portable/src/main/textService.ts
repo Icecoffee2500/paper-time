@@ -27,6 +27,9 @@ export type ServiceRequest =
   | { type: 'warm'; ids: string[] }
   | { type: 'search'; token: number; query: string; ids: string[]; titles: Record<string, string>; limit?: number }
   | { type: 'cancel'; token: number }
+  /** The pages of these papers, for search by meaning: from memory or the
+   *  cache, and read only when neither has them. */
+  | { type: 'texts'; token: number; ids: string[] }
   | { type: 'asset'; request: number; data: Uint8Array | null }
   | { type: 'stats' }
 
@@ -35,6 +38,7 @@ export type ServiceReply =
   | { type: 'hits'; token: number; hits: TextHit[] }
   | { type: 'done'; token: number; searched: number; found: number; ms: number }
   | { type: 'warmed'; loaded: number; total: number; ms: number; removed: number }
+  | { type: 'texts'; token: number; papers: { id: string; pages: string[] }[]; unread: string[]; ms: number }
   | { type: 'asset'; request: number; kind: 'cmap' | 'font'; name: string }
   | { type: 'stats'; stats: ServiceStats }
 
@@ -266,6 +270,32 @@ async function warm(ids: string[]) {
   post({ type: 'warmed', loaded: index.size, total: list.length, ms: warmMs, removed })
 }
 
+/**
+ * The pages of the papers asked for, a few read at once — what search by
+ * meaning is cut from. Nothing is read twice: what the warm-up brought in is
+ * in memory, what an earlier session read is in the cache, and only a paper
+ * neither has is read from its file.
+ */
+async function texts(request: Extract<ServiceRequest, { type: 'texts' }>) {
+  const started = performance.now()
+  const papers: { id: string; pages: string[] }[] = []
+  const unread: string[] = []
+  if (index) {
+    const queue = request.ids.map((id) => sources.get(id)).filter((one): one is TextSource => Boolean(one))
+    await index.revalidate(queue)
+    await Promise.all(Array.from({ length: readers.width }, async () => {
+      while (queue.length > 0) {
+        const source = queue.shift()!
+        const text = await index!.load(source)
+        if (text) papers.push({ id: source.id, pages: text.pages })
+        else unread.push(source.id)
+      }
+    }))
+  }
+  watchMemory()
+  post({ type: 'texts', token: request.token, papers, unread, ms: performance.now() - started })
+}
+
 async function search(request: Extract<ServiceRequest, { type: 'search' }>) {
   if (!index) return post({ type: 'done', token: request.token, searched: 0, found: 0, ms: 0 })
   const started = performance.now()
@@ -322,6 +352,9 @@ port.on('message', ({ data: request }) => {
       break
     case 'cancel':
       cancelled.add(request.token)
+      break
+    case 'texts':
+      void texts(request)
       break
     case 'asset':
       if (request.data) assetsFound += 1

@@ -32,6 +32,8 @@ export interface Settings {
   selectedPaperID: string | null
   /** Latex Suite's shortcuts in the note and on the cards. On unless turned off. */
   latexShortcuts: boolean
+  /** Search by meaning in the palette, and the index it needs. On unless turned off. */
+  semanticSearch: boolean
 }
 
 const DEFAULTS: Settings = {
@@ -49,6 +51,7 @@ const DEFAULTS: Settings = {
   pageLayout: 'continuous',
   selectedPaperID: null,
   latexShortcuts: true,
+  semanticSearch: true,
 }
 
 let cached: Settings | null = null

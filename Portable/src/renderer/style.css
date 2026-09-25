@@ -1746,6 +1746,15 @@ body[data-platform='darwin'] .window-buttons {
   padding: 8px 18px;
 }
 
+/* One quiet line under the results — the index for search by meaning still
+   filling. No spinner: it is not the palette that is busy. */
+.palette-footer {
+  padding: 10px 20px 2px;
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  user-select: none;
+}
+
 /* A small ring that turns — the palette reading the papers, the find bar
    reading the pages. */
 .spinner {

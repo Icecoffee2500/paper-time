@@ -21,12 +21,15 @@ import { SemanticVectorStore } from '../shared/semantic/vectorStore.js'
 import { MODEL_ID } from '../shared/semantic/model.js'
 import type { SemanticEmbedder } from '../shared/semantic/embedder.js'
 import { loadEmbedder } from './semanticModel.js'
+import { emptyManifest, noted, parseManifest, retained, type SeenManifest } from '../shared/semantic/manifest.js'
 
 /** What the main process says. */
 export type SemanticRequest =
   | { type: 'configure'; modelDirectory: string; storeFile: string; threads?: number }
   | { type: 'pages'; pages: SemanticPage[] }
   | { type: 'fill'; token: number }
+  /** Forgets papers not seen for a month and drops their vectors. */
+  | { type: 'sweep' }
   | { type: 'cancel'; token: number }
   | { type: 'search'; token: number; query: string; k: number }
   | { type: 'save' }
@@ -34,7 +37,8 @@ export type SemanticRequest =
 
 /** What this process says back. */
 export type SemanticReply =
-  | { type: 'pages'; passages: number; missing: number }
+  | { type: 'pages'; passages: number; missing: number; papers: number }
+  | { type: 'swept'; forgotten: number; dropped: number }
   | { type: 'progress'; token: number; done: number; total: number }
   | { type: 'filled'; token: number; embedded: number; ms: number }
   | { type: 'hits'; token: number; hits: SemanticResult[]; ms: number }
@@ -66,6 +70,12 @@ let modelDirectory = ''
 let storeFile = ''
 let threads: number | undefined
 let index: SemanticIndex | null = null
+/**
+ * Which papers the store has seen and when — `manifest.ts` — beside the
+ * store as `<store>.papers.json`. A paper away for less than a month keeps
+ * its vectors; that is what makes plugging a disk back in cost nothing.
+ */
+let manifest: SeenManifest | null = null
 let embedder: Promise<SemanticEmbedder> | null = null
 let loadMs: number | null = null
 const fills = new Map<number, AbortController>()
@@ -95,17 +105,52 @@ function openIndex(): SemanticIndex {
   return index
 }
 
+function manifestFile(): string {
+  return `${storeFile}.papers.json`
+}
+
+function openManifest(): SeenManifest {
+  if (manifest) return manifest
+  try {
+    manifest = fs.existsSync(manifestFile()) ? parseManifest(fs.readFileSync(manifestFile(), 'utf8')) : emptyManifest()
+  } catch {
+    manifest = emptyManifest()
+  }
+  return manifest
+}
+
+let manifestDirty = false
+
 /** Writes the cache whole and renames it into place: a crash halfway leaves the old cache. */
 async function save(): Promise<number> {
   const current = openIndex()
+  await fsp.mkdir(path.dirname(storeFile), { recursive: true })
+  if (manifestDirty) {
+    const part = `${manifestFile()}.part`
+    await fsp.writeFile(part, JSON.stringify(openManifest()))
+    await fsp.rename(part, manifestFile())
+    manifestDirty = false
+  }
   if (!current.changed) return 0
   const bytes = current.store.encoded()
-  await fsp.mkdir(path.dirname(storeFile), { recursive: true })
   const part = `${storeFile}.part`
   await fsp.writeFile(part, bytes)
   await fsp.rename(part, storeFile)
   current.saved()
   return bytes.length
+}
+
+/** Forgets the papers past the grace and drops what only they had. */
+function sweep(): { forgotten: number; dropped: number } {
+  const current = openIndex()
+  const before = current.store.count
+  const { keep, manifest: kept, forgotten } = retained(openManifest(), Date.now())
+  if (forgotten.length > 0) {
+    manifest = kept
+    manifestDirty = true
+  }
+  current.prune(keep)
+  return { forgotten: forgotten.length, dropped: before - current.store.count }
 }
 
 port.on('message', ({ data }) => {
@@ -123,8 +168,18 @@ async function handle(request: SemanticRequest) {
       threads = request.threads
       break
     case 'pages': {
-      const missing = openIndex().setPages(request.pages)
-      post({ type: 'pages', passages: openIndex().passageCount, missing: missing.length })
+      const current = openIndex()
+      const missing = current.setPages(request.pages)
+      const byPaper = current.keysByPaper()
+      manifest = noted(openManifest(), byPaper, Date.now())
+      manifestDirty = true
+      post({ type: 'pages', passages: current.passageCount, missing: missing.length, papers: byPaper.size })
+      break
+    }
+    case 'sweep': {
+      const result = sweep()
+      await save()
+      post({ type: 'swept', ...result })
       break
     }
     case 'fill': {
@@ -136,7 +191,7 @@ async function handle(request: SemanticRequest) {
         const embedded = await current.fill(await model(), (done, total) => {
           if (done % 16 === 0 || done === total) post({ type: 'progress', token: request.token, done, total })
         }, controller.signal)
-        current.prune()
+        sweep()
         await save()
         post({ type: 'filled', token: request.token, embedded, ms: performance.now() - t0 })
       } finally {

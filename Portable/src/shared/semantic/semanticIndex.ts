@@ -76,10 +76,28 @@ export class SemanticIndex {
     return done
   }
 
-  /** Drops vectors of passages no page has any more. */
-  prune(): void {
+  /** Every paper among the pages, with the keys its passages have. */
+  keysByPaper(): Map<string, ChunkKey[]> {
+    const out = new Map<string, ChunkKey[]>()
+    for (const [key, chunks] of this.places) {
+      for (const id of new Set(chunks.map((chunk) => chunk.paperID))) {
+        const list = out.get(id)
+        if (list) list.push(key)
+        else out.set(id, [key])
+      }
+    }
+    return out
+  }
+
+  /**
+   * Drops vectors of passages no page has any more — except `alsoKeep`, the
+   * keys of papers that are only away for a while (`manifest.ts`).
+   */
+  prune(alsoKeep?: ReadonlySet<ChunkKey>): void {
     const before = this.store.count
-    this.store.retain(new Set(this.places.keys()))
+    const keep = new Set(this.places.keys())
+    if (alsoKeep) for (const key of alsoKeep) keep.add(key)
+    this.store.retain(keep)
     if (this.store.count !== before) this.dirty = true
   }
 

@@ -23,6 +23,8 @@ import {
 } from '../../shared/searchRank.js'
 import { searchable, store, textSources } from '../state.js'
 import { passageSubtitle, searchText, warmText, type TextHit } from '../textSearch.js'
+import { asTextHit, meaningFooter, meaningStatus, onMeaningStatus, searchMeaning, type MeaningHit } from '../meaningSearch.js'
+import { placeKey } from '../../shared/semantic/results.js'
 
 export interface PaletteActions {
   openPaper: (id: string) => void
@@ -37,7 +39,7 @@ export interface PaletteActions {
 }
 
 /** The groups, in the order they are shown — the Mac's `ResultGroup`. */
-const GROUPS = ['showAll', 'paper', 'note', 'collection', 'tag', 'action', 'passage'] as const
+const GROUPS = ['showAll', 'paper', 'note', 'collection', 'tag', 'action', 'passage', 'meaning'] as const
 type Group = (typeof GROUPS)[number]
 
 function groupTitle(group: Group): string {
@@ -51,6 +53,9 @@ function groupTitle(group: Group): string {
     // Last on purpose: a title match is a surer thing than a word in the
     // middle of page nine, and these arrive a moment later anyway.
     case 'passage': return L('논문 본문', 'In the Papers')
+    // After the words themselves: a passage that says the words is a surer
+    // thing than one that means them, and these arrive a moment later too.
+    case 'meaning': return L('뜻이 비슷한 구절', 'Similar in Meaning')
   }
 }
 
@@ -105,6 +110,7 @@ let current: {
   activate: (index: number) => void
   rows: () => Row[]
   rankMs: () => number
+  meaningMs: () => number | null
 } | null = null
 export const timings: QueryTiming[] = []
 
@@ -153,6 +159,9 @@ export function openPalette(actions: PaletteActions, initial = '') {
 
   let typed: RankedResult[] = []
   let passages: TextHit[] = []
+  let meanings: MeaningHit[] = []
+  let meaningTimer: ReturnType<typeof setTimeout> | null = null
+  let meaningAsked = 0
   let scanning = false
   let highlighted = 0
   let stopScan: (() => void) | null = null
@@ -199,10 +208,27 @@ export function openPalette(actions: PaletteActions, initial = '') {
    * having searched the text at all. The arrows walk the rows as they are
    * shown — down goes to the row below, whichever group it is in.
    */
+  /** A passage by meaning: the same row, and the reader is sent to the
+   *  passage itself rather than to the words typed, which it need not say. */
+  const meaningRow = (hit: MeaningHit): Row => {
+    const text = asTextHit(hit)
+    return {
+      group: 'meaning',
+      title: text.snippet,
+      subtitle: passageSubtitle(text),
+      icon: 'text.magnifyingglass',
+      run: () => actions.openPassage(text, ''),
+    }
+  }
+
   const build = () => {
     const query = input.value.trim()
     const room = scanning || passages.length > 0 ? SHOWN - 4 : SHOWN
-    const flat = [...typed.slice(0, room).map(rowFor), ...passages.map((hit) => passageRow(hit, query))]
+    const flat = [
+      ...typed.slice(0, room).map(rowFor),
+      ...passages.map((hit) => passageRow(hit, query)),
+      ...meanings.map(meaningRow),
+    ]
     rows = GROUPS.flatMap((group) => flat.filter((row) => row.group === group))
     if (highlighted >= rows.length) highlighted = Math.max(rows.length - 1, 0)
     draw()
@@ -251,7 +277,11 @@ export function openPalette(actions: PaletteActions, initial = '') {
         el('span', { text: L('논문 본문을 읽는 중…', 'Reading the papers…') }),
       ]))
     }
-    list.classList.toggle('empty', rows.length === 0 && !scanning)
+    // Quietly, and only while something is typed: the index fills once, in
+    // the background, and a section that is not there yet should say why.
+    const footer = input.value.trim() ? meaningFooter(meaningStatus()) : null
+    if (footer) list.append(el('div', { class: 'palette-footer', text: footer }))
+    list.classList.toggle('empty', rows.length === 0 && !scanning && !footer)
     list.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' })
   }
 
@@ -301,7 +331,32 @@ export function openPalette(actions: PaletteActions, initial = '') {
     }, 220)
   }
 
+  /**
+   * The passages that mean what was typed, 150 ms after the typing stops —
+   * a debounce of its own, so the exact results above never wait for it.
+   * Nothing is asked while the index is not built; the footer says so.
+   */
+  const askMeaning = (query: string) => {
+    if (meaningTimer) clearTimeout(meaningTimer)
+    meaningTimer = null
+    meanings = []
+    const mine = (meaningAsked += 1)
+    if (graphemes(query).length <= 2 || !meaningStatus().ready) return
+    meaningTimer = setTimeout(() => {
+      meaningTimer = null
+      const shown = passages.map((hit) => placeKey(hit.passage))
+      const started = performance.now()
+      void searchMeaning(query, shown).then((answer) => {
+        if (mine !== meaningAsked || !current) return
+        meanings = answer.hits.filter((hit) => !passages.some((seen) => placeKey(seen.passage) === placeKey(hit.passage)))
+        lastMeaningMs = performance.now() - started
+        build()
+      })
+    }, 150)
+  }
+
   let lastRankMs = 0
+  let lastMeaningMs: number | null = null
   const match = () => {
     const query = input.value.trim()
     const started = performance.now()
@@ -309,8 +364,16 @@ export function openPalette(actions: PaletteActions, initial = '') {
     lastRankMs = performance.now() - started
     highlighted = 0
     scan(query)
+    askMeaning(query)
     build()
   }
+  // The index became ready, or filled a little more, while the palette is
+  // open: the footer moves on, and a query already typed gets its section.
+  const stopWatchingMeaning = onMeaningStatus((status) => {
+    if (!current) return
+    if (status.ready && meanings.length === 0 && meaningTimer === null) askMeaning(input.value.trim())
+    build()
+  })
 
   const move = (by: number) => {
     if (rows.length === 0) return
@@ -340,6 +403,8 @@ export function openPalette(actions: PaletteActions, initial = '') {
   const close = () => {
     stopScan?.()
     if (scanTimer) clearTimeout(scanTimer)
+    if (meaningTimer) clearTimeout(meaningTimer)
+    stopWatchingMeaning()
     clearTimeout(warming)
     scrim.remove()
     box.remove()
@@ -362,6 +427,7 @@ export function openPalette(actions: PaletteActions, initial = '') {
     activate,
     rows: () => rows,
     rankMs: () => lastRankMs,
+    meaningMs: () => lastMeaningMs,
   }
   if (initial) current.setQuery(initial)
   else build()
@@ -378,4 +444,5 @@ export function openPalette(actions: PaletteActions, initial = '') {
   rows: () => current?.rows().map(({ group, title, subtitle }) => ({ group, title, subtitle })) ?? [],
   activate: (index: number) => current?.activate(index),
   rankMs: () => current?.rankMs() ?? null,
+  meaningMs: () => current?.meaningMs() ?? null,
 }
