@@ -40,6 +40,20 @@ enum Motion {
     /// Something going out on its own, with nobody waiting for it.
     static var fade: Animation { reduced ? .easeOut(duration: 0.2) : .easeOut(duration: 0.4) }
 
+    /// The same rungs for AppKit, which animates by duration rather than by
+    /// curve — a floating panel fading in takes a tap's time, not a number
+    /// of its own.
+    enum Rung { case tap, move, surface }
+    static func seconds(_ rung: Rung) -> TimeInterval {
+        let duration: TimeInterval
+        switch rung {
+        case .tap: duration = 0.14
+        case .move: duration = 0.22
+        case .surface: duration = 0.32
+        }
+        return reduced ? min(duration, 0.15) : duration
+    }
+
     /// Whether the system has been asked for less movement.
     ///
     /// Read once and kept, because these are asked for on every redraw; the

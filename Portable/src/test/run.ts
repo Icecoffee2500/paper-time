@@ -37,6 +37,7 @@ import { annotationSuite } from './annotations.js'
 import { searchSuite } from './search.js'
 import { semanticSuite } from './semantic.js'
 import { semanticPaletteSuite } from './semanticPalette.js'
+import { noteMathSuite } from './noteMath.js'
 import { PaperMeta, PaperState } from '../shared/model.js'
 import { entryFor, formatEntry, protectTitle } from '../shared/bibtex.js'
 import { escapeLaTeX } from '../shared/latexTable.js'
@@ -393,6 +394,7 @@ async function main() {
   await searchSuite(test, suite)
   await semanticSuite(test, suite)
   await semanticPaletteSuite(test, suite)
+  await noteMathSuite(test, suite)
 
   // --------------------------------------------------------------------- ink
   suite('Handwriting')

@@ -448,7 +448,7 @@ enum NoteMarkdown {
 
         // Every line is read before any is set, because a quoted line needs
         // to know whether the line above and below it are quoted too.
-        let lineRanges = lines(of: text)
+        let lineRanges = lines(of: text, joiningMathBlocksIn: source)
         var blocks = lineRanges.map { Block(line: text.substring(with: $0)) }
         for index in blocks.indices where blocks[index].kind == .quote {
             var edge: QuoteEdge = []
@@ -801,12 +801,33 @@ enum NoteMarkdown {
         return result
     }
 
+    /// The lines, with a `$$` that opens on one line and closes on another
+    /// read as one. Latex Suite's `dm` writes exactly that shape —
+    /// `$$`, a line of LaTeX, `$$` — and read a line at a time it was three
+    /// lines of prose, so the formula stayed raw. Joined, the block goes
+    /// through the same formula pattern as `$$x$$` on a line, and the
+    /// caret anywhere in it shows the whole block as it is written.
+    static func lines(of text: NSString, joiningMathBlocksIn source: String) -> [NSRange] {
+        var ranges = lines(of: text)
+        for block in NoteMath.blocks(in: source).reversed() {
+            guard let first = ranges.firstIndex(where: { $0.location == block.location }),
+                  let last = ranges.firstIndex(where: {
+                      $0.location + $0.length == block.location + block.length
+                  }), last >= first
+            else { continue }
+            ranges.replaceSubrange(first...last, with: [block])
+        }
+        return ranges
+    }
+
     // MARK: - Inline
 
     private enum Kind {
         case anchorLink(label: String, url: URL)
         case noteLink(id: String, title: String)
-        case math(latex: String, display: Bool)
+        /// `source` is the span as written, delimiters and line breaks and
+        /// all: the run has to stand for exactly those characters.
+        case math(latex: String, display: Bool, source: String)
         case emphasis(text: String, bold: Bool, italic: Bool, mono: Bool, source: String)
     }
 
@@ -874,7 +895,9 @@ enum NoteMarkdown {
             let body = display ? match.range(at: 2) : match.range(at: 5)
             if body.location != NSNotFound {
                 consider(Token(range: match.range, kind: .math(
-                    latex: line.substring(with: body), display: display
+                    latex: line.substring(with: body)
+                        .trimmingCharacters(in: .whitespacesAndNewlines),
+                    display: display, source: line.substring(with: match.range)
                 )))
             }
         }
@@ -930,16 +953,15 @@ enum NoteMarkdown {
             return atomic(shown, source: source,
                           attributes: linkAttributes(noteURL(id: id)), style: style)
 
-        case .math(let latex, let display):
+        case .math(let latex, let display, let source):
             #if os(macOS)
-            if let piece = mathPiece(latex: latex, display: display,
+            if let piece = mathPiece(latex: latex, display: display, source: source,
                                      size: NoteTypography.baseSize, style: style,
                                      width: available) {
                 return piece
             }
             #endif
-            let marker = display ? "$$" : "$"
-            return NSAttributedString(string: "\(marker)\(latex)\(marker)", attributes: [
+            return NSAttributedString(string: source, attributes: [
                 .font: NoteTypography.mono(),
                 .foregroundColor: NoteColor.secondaryLabelColor,
                 .paragraphStyle: style,
@@ -978,7 +1000,7 @@ enum NoteMarkdown {
     private nonisolated(unsafe) static var mathCache: [String: (image: NSImage, descent: CGFloat)] = [:]
 
     private static func mathPiece(
-        latex: String, display: Bool, size: CGFloat, style: NSParagraphStyle,
+        latex: String, display: Bool, source: String, size: CGFloat, style: NSParagraphStyle,
         width: CGFloat?
     ) -> NSAttributedString? {
         // Rounded, so nudging the pane by a point does not redraw every
@@ -1006,9 +1028,8 @@ enum NoteMarkdown {
                                    width: drawn.image.size.width,
                                    height: drawn.image.size.height)
         let piece = NSMutableAttributedString(attachment: attachment)
-        let marker = display ? "$$" : "$"
         piece.addAttributes([
-            .paperTimeSource: "\(marker)\(latex)\(marker)",
+            .paperTimeSource: source,
             .font: NoteTypography.body(),
             .foregroundColor: NoteColor.labelColor,
             .paragraphStyle: style,

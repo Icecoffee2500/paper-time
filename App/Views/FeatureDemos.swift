@@ -60,6 +60,7 @@ struct FeatureDemoView: View {
             case .twoLanguages: TwoLanguagesDemo(scale: scale)
             case .latexShortcuts: LatexShortcutsDemo(scale: scale)
             case .meaning: MeaningDemo(scale: scale)
+            case .mathPreview: MathPreviewDemo(scale: scale)
             }
         }
         .padding(scale.pad)
@@ -4137,5 +4138,153 @@ private struct FramesDemo: View {
                 .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Color.accentColor.opacity(horizontal == value ? 0.18 : 0.05)))
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// A note line with the caret inside a formula, and the card under it that
+/// shows the formula set — the same typesetter, a keystroke behind.
+///
+/// The line is what the editor shows while the caret is on it: the
+/// Markdown, exactly as written. The card is what the formula will be once
+/// the caret leaves. Press the steps to type the formula out and watch the
+/// card keep up.
+private struct MathPreviewDemo: View {
+    let scale: DemoScale
+    /// How much of the formula has been typed.
+    @State private var typed: Int
+    @State private var player: Task<Void, Never>?
+
+    private static let before = ReleaseNotes.string("표본 평균은 ", "The sample mean is ")
+    private static let formula = #"\bar{x} = \frac{1}{n}\sum_{i=1}^{n} x_i"#
+    private static let after = ReleaseNotes.string(" 이에요", " here")
+    /// Where the typing may stop, so each stop sets something whole.
+    private static let stops = [8, 21, 30, formula.count]
+
+    init(scale: DemoScale, typed: Int? = nil) {
+        self.scale = scale
+        _typed = State(initialValue: min(typed ?? Self.formula.count, Self.formula.count))
+    }
+
+    private var partial: String { String(Self.formula.prefix(typed)) }
+
+    var body: some View {
+        let full = scale.isFull
+        return VStack(alignment: .leading, spacing: scale.gap) {
+            Paper(scale: scale) {
+                VStack(alignment: .leading, spacing: 0) {
+                    line
+                    card
+                        .padding(.top, 4)
+                        .padding(.leading, leading)
+                    Spacer(minLength: 0)
+                }
+                .frame(height: full ? 116 : 68, alignment: .top)
+            }
+            HStack(spacing: full ? 6 : 4) {
+                ForEach(Array(Self.stops.enumerated()), id: \.offset) { index, stop in
+                    Button {
+                        play(to: stop)
+                    } label: {
+                        Text(index == Self.stops.count - 1
+                             ? ReleaseNotes.string("끝까지", "All of it")
+                             : "\(stop)")
+                            .font(scale.small.monospacedDigit())
+                            .padding(.horizontal, full ? 8 : 6)
+                            .padding(.vertical, full ? 4 : 3)
+                            .background(
+                                RoundedRectangle(cornerRadius: Corner.control, style: .continuous)
+                                    .fill(typed == stop ? AnyShapeStyle(Color.accentColor.opacity(0.18))
+                                                        : AnyShapeStyle(Color.primary.opacity(0.055)))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer(minLength: 0)
+                Text(ReleaseNotes.string("치는 대로 카드가 따라와요", "The card keeps up as you type"))
+                    .font(scale.small)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .onDisappear { player?.cancel() }
+    }
+
+    /// Types the formula out from a stop, so a press shows the card keeping
+    /// up rather than jumping.
+    private func play(to stop: Int) {
+        player?.cancel()
+        let from = min(typed, stop)
+        guard from < stop else {
+            withAnimation(Motion.tap) { typed = stop }
+            return
+        }
+        player = Task { @MainActor in
+            for count in (from + 1)...stop {
+                try? await Task.sleep(for: .milliseconds(60))
+                guard !Task.isCancelled else { return }
+                withAnimation(Motion.tap) { typed = count }
+            }
+        }
+    }
+
+    private var lineSize: CGFloat { scale.isFull ? 14 : 10.5 }
+
+    /// The caret's line as the editor shows it: prose in the note's face,
+    /// the formula as written, a caret after what has been typed.
+    private var line: some View {
+        (Text(Self.before)
+         + Text("$" + partial).font(.system(size: lineSize, design: .monospaced)).foregroundColor(.secondary)
+         + Text("|").foregroundColor(.accentColor)
+         + Text("$").font(.system(size: lineSize, design: .monospaced)).foregroundColor(.secondary)
+         + Text(Self.after))
+            .font(.system(size: lineSize))
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+    }
+
+    /// The card's left edge is the formula's: under the `$`, not under the
+    /// start of the line.
+    private var leading: CGFloat {
+        let width = (Self.before as NSString).size(withAttributes: [
+            .font: NoteFont.systemFont(ofSize: lineSize),
+        ]).width
+        return min(width, scale.isFull ? 160 : 90)
+    }
+
+    /// The card: the set formula, or — while the typing is mid-command — the
+    /// last one that set, dimmed, which is what the app does too.
+    private var card: some View {
+        Group {
+            #if os(macOS)
+            if let made = MathTypesetter.image(
+                latex: partial, display: false,
+                pointSize: scale.isFull ? 15 : 11, color: .labelColor
+            ) {
+                Image(nsImage: made.image)
+            } else if let made = MathTypesetter.image(
+                latex: String(Self.formula.prefix(Self.stops.last(where: { $0 <= typed }) ?? 0)),
+                display: false, pointSize: scale.isFull ? 15 : 11, color: .labelColor
+            ) {
+                Image(nsImage: made.image).opacity(0.45)
+            } else {
+                Text(partial.isEmpty ? " " : partial)
+                    .font(.system(size: lineSize, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+            #else
+            Text(partial).italic().font(.system(size: lineSize))
+            #endif
+        }
+        .padding(.horizontal, scale.isFull ? 12 : 8)
+        .padding(.vertical, scale.isFull ? 8 : 5)
+        .background(
+            RoundedRectangle(cornerRadius: Corner.popover, style: .continuous)
+                .fill(.regularMaterial)
+                .shadow(color: .black.opacity(0.18), radius: scale.isFull ? 10 : 6, y: 3)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Corner.popover, style: .continuous)
+                .strokeBorder(.separator, lineWidth: 0.5)
+        )
+        .animation(Motion.tap, value: typed)
     }
 }

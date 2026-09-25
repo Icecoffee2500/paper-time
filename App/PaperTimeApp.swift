@@ -43,6 +43,8 @@ struct PaperTimeApp: App {
         // was never reached — its "window on screen" mark never printed —
         // and a probe hung on it waits for nothing.
         LatexSuiteTypingProbe.runIfAsked()
+        // Types into a formula and photographs the card that sets it.
+        MathPreviewProbe.runIfAsked()
         #endif
     }
 

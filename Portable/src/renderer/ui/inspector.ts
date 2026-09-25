@@ -16,6 +16,7 @@ import { L } from '../../shared/lang.js'
 import { type DocumentKind } from '../../shared/documentKind.js'
 import { buildSketchInspector } from './sketchInspector.js'
 import { attachLatexSuite } from './latexSuiteInput.js'
+import { attachMathPreview } from './mathPreview.js'
 
 export interface InspectorActions {
   editMeta: (id: string, patch: Record<string, unknown>) => void
@@ -346,6 +347,7 @@ function marks(body: HTMLElement, paper: Paper) {
 
 function note(body: HTMLElement, paper: Paper, actions: InspectorActions) {
   const area = el('textarea', {
+    class: 'note-area',
     rows: '20',
     placeholder: L('이 논문에 대한 노트…', 'A note about this paper…'),
   }) as HTMLTextAreaElement
@@ -368,4 +370,8 @@ function note(body: HTMLElement, paper: Paper, actions: InspectorActions) {
   body.append(el('div', { class: 'field' }, [area]))
   // Math in the note is typed with Latex Suite: `@a`, `//`, Tab out of the equation.
   attachLatexSuite(area)
+  // And shown set, under the line, while the caret is inside it.
+  const preview = attachMathPreview(area)
+  // For the probe (`--papertime-probe`): where the card is and what it shows.
+  ;(window as unknown as { __mathPreview?: () => string }).__mathPreview = () => preview.report()
 }

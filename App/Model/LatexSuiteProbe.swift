@@ -256,7 +256,7 @@ enum LatexSuiteTypingProbe {
     /// saw every key of a case as one step. An event of the app's own kind,
     /// put at the end of its own queue (never the system's), is handled the
     /// same way and closes the group the same way.
-    private static func endOfEvent(_ window: NSWindow) async {
+    static func endOfEvent(_ window: NSWindow) async {
         if let marker = NSEvent.otherEvent(
             with: .applicationDefined, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
             windowNumber: window.windowNumber, context: nil, subtype: 0, data1: 0, data2: 0
@@ -267,7 +267,7 @@ enum LatexSuiteTypingProbe {
     }
 
     /// One keypress, the way it arrives from a keyboard.
-    private static func press(_ key: String, in view: LatexSuiteTextView, window: NSWindow) async -> String {
+    static func press(_ key: String, in view: LatexSuiteTextView, window: NSWindow) async -> String {
         func event(_ characters: String, _ code: UInt16, _ flags: NSEvent.ModifierFlags = []) -> NSEvent? {
             NSEvent.keyEvent(
                 with: .keyDown, location: .zero, modifierFlags: flags, timestamp: ProcessInfo.processInfo.systemUptime,
@@ -543,13 +543,13 @@ enum LatexSuiteTypingProbe {
         return result as String
     }
 
-    private static func set(_ selection: [NSRange], in view: LatexSuiteTextView) {
+    static func set(_ selection: [NSRange], in view: LatexSuiteTextView) {
         guard let storage = view.textStorage else { return }
         let display = LatexSuiteDisplay(storage)
         view.setSelectedRanges(selection.map { NSValue(range: display.displayRange(for: $0)) }, affinity: .downstream, stillSelecting: false)
     }
 
-    private static func noteTextView(in view: NSView) -> NoteTextView? {
+    static func noteTextView(in view: NSView) -> NoteTextView? {
         if let text = view as? NoteTextView { return text }
         for child in view.subviews { if let found = noteTextView(in: child) { return found } }
         return nil
