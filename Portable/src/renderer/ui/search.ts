@@ -23,7 +23,7 @@ import {
 } from '../../shared/searchRank.js'
 import { searchable, store, textSources } from '../state.js'
 import { passageSubtitle, searchText, warmText, type TextHit } from '../textSearch.js'
-import { asTextHit, meaningFooter, meaningStatus, onMeaningStatus, searchMeaning, type MeaningHit } from '../meaningSearch.js'
+import { asTextHit, meaningFooter, meaningStatus, noteSubtitle, onMeaningStatus, searchMeaning, type MeaningHit } from '../meaningSearch.js'
 import { placeKey } from '../../shared/semantic/results.js'
 
 export interface PaletteActions {
@@ -212,6 +212,18 @@ export function openPalette(actions: PaletteActions, initial = '') {
    *  passage itself rather than to the words typed, which it need not say. */
   const meaningRow = (hit: MeaningHit): Row => {
     const text = asTextHit(hit)
+    if (hit.note) {
+      // A note's passage: the note's name and «노트», and it opens the
+      // note — the paper's, with the Notes tab in front.
+      const paperID = hit.note.paperID ?? hit.note.id
+      return {
+        group: 'meaning',
+        title: text.snippet,
+        subtitle: noteSubtitle(text),
+        icon: 'note',
+        run: () => actions.openNote(paperID),
+      }
+    }
     return {
       group: 'meaning',
       title: text.snippet,

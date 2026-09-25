@@ -15,9 +15,12 @@
  * holds; no PDF is opened for this.
  */
 import path from 'node:path'
+import { createHash } from 'node:crypto'
 import { SemanticClient } from './semanticClient.js'
 import type { SemanticPage } from '../shared/semantic/semanticIndex.js'
 import { pickResults, type MeaningHit } from '../shared/semantic/results.js'
+import { plainNoteText } from '../shared/semantic/noteText.js'
+import { noteTitle } from '../shared/searchRank.js'
 import type { TextSource } from './textIndex.js'
 
 export interface SemanticStatus {
@@ -25,13 +28,26 @@ export interface SemanticStatus {
   /** Whether a search would answer with anything. */
   ready: boolean
   passages: number
+  /** How many notes are in, and how many passages they cut to. */
+  notes: number
+  notePassages: number
   /** Of a fill under way, or null. */
   progress: { done: number; total: number } | null
+}
+
+/** A note as the index takes it: here, a paper's summary note. */
+export interface NoteSource {
+  /** The note's id — the paper's, since a paper has one note. */
+  id: string
+  paperID: string | null
+  markdown: string
 }
 
 export interface SemanticHooks {
   /** The papers the text service may be asked about. */
   sources: () => TextSource[]
+  /** The notes, as they are now. Asked at build time, not at scheduling. */
+  notes: () => NoteSource[]
   /** The pages of these papers from the text service; `unread` are the ones it could not read. */
   texts: (ids: string[]) => Promise<{ papers: { id: string; pages: string[] }[]; unread: string[]; ms: number }>
   enabled: () => boolean
@@ -49,6 +65,8 @@ export class SemanticSearch {
   private wanted = false
   private builtSignature = ''
   private passages = 0
+  private noteCount = 0
+  private notePassages = 0
   private progress: { done: number; total: number } | null = null
   /** Whether the worker has the current pages: ended workers forget them. */
   private ready = false
@@ -73,6 +91,8 @@ export class SemanticSearch {
       enabled: this.hooks.enabled(),
       ready: this.hooks.enabled() && this.ready && this.progress === null && this.passages > 0,
       passages: this.passages,
+      notes: this.noteCount,
+      notePassages: this.notePassages,
       progress: this.progress,
     }
   }
@@ -114,9 +134,16 @@ export class SemanticSearch {
 
   private async run() {
     const sources = this.hooks.sources()
-    const signature = sources.map((one) => `${one.id}\u0000${one.file}`).sort().join('\n')
+    // The notes are part of what was built: an edited note is a changed
+    // signature, and the same notes cost a hash and nothing sent.
+    const notes = this.hooks.notes().filter((note) => note.markdown.trim().length > 0)
+    const noteStamp = createHash('sha256')
+    for (const note of notes.slice().sort((a, b) => (a.id < b.id ? -1 : 1))) {
+      noteStamp.update(`${note.id}\u0000${note.paperID ?? ''}\u0000${note.markdown}\u0001`)
+    }
+    const signature = sources.map((one) => `${one.id}\u0000${one.file}`).sort().join('\n') + '\n' + noteStamp.digest('hex')
     if (signature === this.builtSignature && this.ready && this.client.hasPages) {
-      this.hooks.log(`semantic: ${sources.length} papers unchanged — nothing to do`)
+      this.hooks.log(`semantic: ${sources.length} papers and ${notes.length} notes unchanged — nothing to do`)
       return
     }
     const t0 = performance.now()
@@ -129,10 +156,24 @@ export class SemanticSearch {
         if (text.trim().length > 0) pages.push({ paperID: paper.id, pageIndex, text })
       })
     }
+    // Then the notes, after the papers, each a page of its own with the
+    // Markdown taken out. Small, and the person's own words on a paper.
+    let notePages = 0
+    for (const note of notes) {
+      const text = plainNoteText(note.markdown)
+      if (text.trim().length === 0) continue
+      notePages += 1
+      pages.push({
+        paperID: `note:${note.id}`, pageIndex: 0, text,
+        note: { id: note.id, paperID: note.paperID, title: noteTitle(note.markdown) },
+      })
+    }
     const t1 = performance.now()
     const cut = await this.client.setPages(pages)
     this.passages = cut.passages
-    this.hooks.log(`semantic: ${texts.papers.length} papers, ${pages.length} pages from the text service in ${Math.round(texts.ms)} ms (${texts.unread.length} unread) · ${cut.passages} passages, ${cut.missing} to embed · cut in ${Math.round(performance.now() - t1)} ms`)
+    this.noteCount = cut.notes
+    this.notePassages = cut.notePassages
+    this.hooks.log(`semantic: ${texts.papers.length} papers, ${pages.length - notePages} pages from the text service in ${Math.round(texts.ms)} ms (${texts.unread.length} unread) · ${notePages} notes in ${cut.notePassages} passages · ${cut.passages} passages, ${cut.missing} to embed · cut in ${Math.round(performance.now() - t1)} ms`)
     if (cut.missing > 0) {
       const { token, done } = this.client.fill()
       this.filling = token
@@ -155,9 +196,15 @@ export class SemanticSearch {
     this.hooks.send('semantic:ready', this.status())
   }
 
+  /** A note changed: the notes again, once the typing has settled. */
+  scheduleNotes(afterMs = 5000) {
+    this.schedule(afterMs)
+  }
+
   /**
    * The best passages for a query — at most `k`, at most three from one
-   * paper, none at a place `shown` (the exact search's) already has.
+   * paper and two from one note, none at a place `shown` (the exact
+   * search's) already has.
    */
   async search(query: string, k = 8, shown: string[] = []): Promise<{ hits: MeaningHit[]; ms: number; ready: boolean }> {
     const text = query.trim()

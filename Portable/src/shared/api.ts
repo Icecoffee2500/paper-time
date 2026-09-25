@@ -85,15 +85,21 @@ export interface Requests {
 }
 
 export interface MeaningHitDTO {
+  /** For a note, `paperID` is `note:<id>` — see `note`. */
   passage: { paperID: string; pageIndex: number; location: number; length: number }
   snippet: string
   score: number
+  /** Which note the passage is in, when it is in one: its id (the paper's), the paper, and its title. */
+  note?: { id: string; paperID: string | null; title: string }
 }
 
 export interface SemanticStatusDTO {
   enabled: boolean
   ready: boolean
   passages: number
+  /** How many notes are in the index, and how many passages they cut to. */
+  notes: number
+  notePassages: number
   progress: { done: number; total: number } | null
 }
 

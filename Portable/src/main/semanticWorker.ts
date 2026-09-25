@@ -37,7 +37,7 @@ export type SemanticRequest =
 
 /** What this process says back. */
 export type SemanticReply =
-  | { type: 'pages'; passages: number; missing: number; papers: number }
+  | { type: 'pages'; passages: number; missing: number; papers: number; notes: number; notePassages: number }
   | { type: 'swept'; forgotten: number; dropped: number }
   | { type: 'progress'; token: number; done: number; total: number }
   | { type: 'filled'; token: number; embedded: number; ms: number }
@@ -173,7 +173,9 @@ async function handle(request: SemanticRequest) {
       const byPaper = current.keysByPaper()
       manifest = noted(openManifest(), byPaper, Date.now())
       manifestDirty = true
-      post({ type: 'pages', passages: current.passageCount, missing: missing.length, papers: byPaper.size })
+      const notes = current.noteCounts
+      post({ type: 'pages', passages: current.passageCount, missing: missing.length, papers: byPaper.size - notes.notes,
+        notes: notes.notes, notePassages: notes.passages })
       break
     }
     case 'sweep': {

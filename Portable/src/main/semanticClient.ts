@@ -104,10 +104,10 @@ export class SemanticClient {
   }
 
   /** The pages to search; the worker says how many passages the cache lacks. */
-  async setPages(pages: SemanticPage[]): Promise<{ passages: number; missing: number; papers: number }> {
+  async setPages(pages: SemanticPage[]): Promise<{ passages: number; missing: number; papers: number; notes: number; notePassages: number }> {
     const reply = await this.askUntagged({ type: 'pages', pages }, 'pages')
     this.pagesSent = true
-    return { passages: reply.passages, missing: reply.missing, papers: reply.papers }
+    return { passages: reply.passages, missing: reply.missing, papers: reply.papers, notes: reply.notes, notePassages: reply.notePassages }
   }
 
   /** Forgets papers gone for a month and drops the vectors only they had. */

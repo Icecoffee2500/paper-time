@@ -459,6 +459,13 @@ public final class NotesModel {
 
     public func note(_ id: String) -> Zettel? { byID[id] }
 
+    /// Words the editor should show once the note is open: set with
+    /// `openNoteID` by a search that found a passage inside a note, read
+    /// and cleared by the editor when it has scrolled there. Words rather
+    /// than a range, because the range the index has is into the plain
+    /// text and the editor shows the Markdown.
+    public var reveal: String?
+
     /// The notes written while reading one paper, newest first.
     public func notes(forPaper paperID: UUID) -> [Zettel] {
         notes.filter { $0.paperID == paperID }
@@ -684,6 +691,11 @@ public final class NotesModel {
             byID[edited.id] = edited
             if before.title != edited.title || before.body != edited.body {
                 changedSinceIndex.insert(edited.id)
+                #if os(macOS)
+                // And search by meaning cuts the note again once the
+                // typing has settled — each keystroke pushes that back.
+                SemanticIndex.shared.scheduleNotes()
+                #endif
             }
             if before.links != edited.links || before.tags != edited.tags {
                 rebuildConnections()

@@ -2,6 +2,18 @@ import Foundation
 import LibraryStore
 import PaperCore
 
+/// A place inside a note, in the note's words made plain: which note, the
+/// paper it is about if any, and where in the words. `location`/`length`
+/// are UTF-16 offsets into the plain text the index cut, which is not the
+/// Markdown the editor shows — so going there is done by the words, not the
+/// offset (`NotesModel.reveal`).
+struct NotePassage: Hashable, Sendable {
+    var noteID: String
+    var paperID: UUID?
+    var location: Int
+    var length: Int
+}
+
 /// One candidate the search palette can show: a paper, a collection, a tag,
 /// or a fixed action.
 struct SearchResult: Identifiable, Hashable {
@@ -15,6 +27,9 @@ struct SearchResult: Identifiable, Hashable {
         /// A place inside a paper that says what was typed in other words:
         /// found by the meaning, not the letters.
         case meaning(PaperTextIndex.Passage)
+        /// The same, inside a note: the person's own words on a paper, or
+        /// a thought of their own, found by what it means.
+        case meaningNote(NotePassage)
         case note(String)
         case collection(UUID)
         case tag(UUID)
@@ -90,15 +105,27 @@ extension SearchResult {
     /// passage leads as a literal hit's does; there is no count, because
     /// "close in meaning" is not a thing that happens three times.
     init(meaning hit: SemanticIndex.Hit) {
-        let page = ReleaseNotes.string("\(hit.passage.pageIndex + 1)쪽",
-                                       "p. \(hit.passage.pageIndex + 1)")
-        self.init(
-            kind: .meaning(hit.passage),
-            title: hit.snippet,
-            subtitle: "\(hit.title) · \(page)",
-            symbolName: "sparkle.magnifyingglass",
-            score: Double(hit.score)
-        )
+        switch hit.origin {
+        case let .paper(passage):
+            let page = ReleaseNotes.string("\(passage.pageIndex + 1)쪽", "p. \(passage.pageIndex + 1)")
+            self.init(
+                kind: .meaning(passage),
+                title: hit.snippet,
+                subtitle: "\(hit.title) · \(page)",
+                symbolName: "sparkle.magnifyingglass",
+                score: Double(hit.score)
+            )
+        case let .note(place):
+            // The note's name and then the word the exact search's note
+            // rows wear, so a note reads as a note wherever it stands.
+            self.init(
+                kind: .meaningNote(place),
+                title: hit.snippet,
+                subtitle: "\(hit.title) · \(L("노트", "Note"))",
+                symbolName: "note.text",
+                score: Double(hit.score)
+            )
+        }
     }
 }
 #endif
@@ -112,6 +139,17 @@ extension SearchResult {
 /// Here rather than in the palette because two places ask for it now — the
 /// palette, and the list of search results, which groups the papers that say
 /// the word in their text under the ones that say it in their titles.
+/// Opens the note a passage was found in and asks the editor to show the
+/// passage's words. The slip-box shows the note whether it is about a
+/// paper or not; the passage is found again by its words, since the index
+/// cut the plain text and the editor holds the Markdown.
+@MainActor
+func openNotePassage(_ place: NotePassage, words: String, in model: LibraryModel) {
+    model.scope = .notes
+    model.notes.reveal = words
+    model.notes.openNoteID = place.noteID
+}
+
 @MainActor
 func openPassage(_ passage: PaperTextIndex.Passage, in model: LibraryModel, link: ReaderLink) {
     guard let paper = model.paper(passage.paperID) else { return }

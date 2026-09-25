@@ -210,6 +210,7 @@ enum SearchBench {
         case .paper: "paper"
         case .passage: "passage"
         case .meaning: "meaning"
+        case .meaningNote: "meaning-note"
         case .note: "note"
         case .collection: "collection"
         case .tag: "tag"

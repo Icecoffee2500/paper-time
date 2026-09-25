@@ -91,11 +91,45 @@ public enum SemanticChunker {
         windowWords: Int = SemanticChunker.windowWords,
         overlapWords: Int = SemanticChunker.overlapWords
     ) -> [SemanticChunk] {
+        windows(of: text, windowWords: windowWords, overlapWords: overlapWords).map {
+            SemanticChunk(paperID: paperID, pageIndex: pageIndex, location: $0.location,
+                          length: $0.length, text: $0.text, key: $0.key)
+        }
+    }
+
+    /// A window of words in a text that is not a page: a note.
+    ///
+    /// The same cut as a page's — the same width, the same overlap, the
+    /// same key for the same words — with nowhere to be but an offset into
+    /// the text it was cut from.
+    public struct Window: Hashable, Sendable {
+        /// UTF-16 offsets into the text, first word's first character to
+        /// last word's last.
+        public var location: Int
+        public var length: Int
+        public var text: String
+        public var key: ChunkKey
+
+        public var range: NSRange { NSRange(location: location, length: length) }
+    }
+
+    /// The note's passages. The note is one text, not pages, so the windows
+    /// run across headings and paragraphs the way they run across a page's
+    /// columns; a note shorter than a window is one passage.
+    public static func chunks(ofNote markdown: String) -> [Window] {
+        windows(of: NoteText.plain(markdown))
+    }
+
+    public static func windows(
+        of text: String,
+        windowWords: Int = SemanticChunker.windowWords,
+        overlapWords: Int = SemanticChunker.overlapWords
+    ) -> [Window] {
         let words = self.words(in: text)
         guard !words.isEmpty, windowWords > 0 else { return [] }
         let stride = max(windowWords - max(overlapWords, 0), 1)
         let utf16 = text.utf16
-        var chunks: [SemanticChunk] = []
+        var windows: [Window] = []
         var start = 0
         while true {
             let end = min(start + windowWords, words.count)
@@ -106,9 +140,7 @@ public enum SemanticChunker {
             }
             let joined = pieces.joined(separator: " ")
             let location = words[start].lowerBound
-            chunks.append(SemanticChunk(
-                paperID: paperID,
-                pageIndex: pageIndex,
+            windows.append(Window(
                 location: location,
                 length: words[end - 1].upperBound - location,
                 text: joined,
@@ -117,7 +149,7 @@ public enum SemanticChunker {
             if end == words.count { break }
             start += stride
         }
-        return chunks
+        return windows
     }
 
     /// Each word's UTF-16 range on the page.

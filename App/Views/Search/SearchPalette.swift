@@ -428,7 +428,7 @@ struct SearchPalette: View {
         case .showAll: .library
         case .paper: .papers
         case .passage: .passages
-        case .meaning: .meanings
+        case .meaning, .meaningNote: .meanings
         case .note: .notes
         case .collection: .collections
         case .tag: .tags
@@ -455,6 +455,8 @@ struct SearchPalette: View {
             model.selectedPaperID = id
         case let .passage(passage), let .meaning(passage):
             openPassage(passage, in: model, link: link)
+        case let .meaningNote(place):
+            openNotePassage(place, words: result.title, in: model)
         case let .note(id):
             model.scope = .notes
             model.notes.openNoteID = id
@@ -557,7 +559,7 @@ struct SearchPalette: View {
         let shown = Set(passages.compactMap { result -> PaperTextIndex.Passage? in
             if case let .passage(passage) = result.kind { passage } else { nil }
         })
-        meanings = hits.filter { !shown.contains($0.passage) }.map(SearchResult.init(meaning:))
+        meanings = hits.filter { $0.passage.map { !shown.contains($0) } ?? true }.map(SearchResult.init(meaning:))
         Trace.mark(String(format: "palette: “%@” %d by meaning after %.1f ms", text, meanings.count,
                           Double(DispatchTime.now().uptimeNanoseconds - started) / 1e6))
     }
