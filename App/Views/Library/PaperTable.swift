@@ -36,6 +36,8 @@ struct PaperTable: NSViewRepresentable {
         /// found again without rebuilding it.
         case note(String)
         case passage(String)
+        /// A passage found by what it means rather than by its words.
+        case meaning(String)
     }
 
     let entries: [Entry]
@@ -253,7 +255,22 @@ struct PaperTable: NSViewRepresentable {
 
         private func body(for entry: Entry) -> AnyView {
             guard case let .paper(id) = entry, let paper = owner.model.paper(id) else {
-                return AnyView(owner.note(entry).padding(.horizontal, 10).environment(owner.app))
+                // Pinned to the leading edge. A SwiftUI view narrower than
+                // its hosting view sits in the middle of it, so a passage
+                // whose sentence and title were both short was the one row
+                // that started a hundred points in from the rest — every
+                // other passage was wide enough to fill the column. The
+                // headings are the exception on purpose: a group row is
+                // drawn centred.
+                if case .heading = entry {
+                    return AnyView(owner.note(entry).padding(.horizontal, 10).environment(owner.app))
+                }
+                return AnyView(
+                    owner.note(entry)
+                        .padding(.horizontal, 10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .environment(owner.app)
+                )
             }
             return AnyView(
                 PaperRow(

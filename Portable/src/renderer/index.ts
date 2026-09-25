@@ -63,7 +63,7 @@ import { closePages, isPagesShowing, togglePages } from './ui/pages.js'
 import { closePalette, isPaletteOpen, openPalette } from './ui/search.js'
 import { FindBar } from './ui/findBar.js'
 import { handleTextEvent, searchText, type TextHit } from './textSearch.js'
-import { handleMeaningEvent } from './meaningSearch.js'
+import { asTextHit, handleMeaningEvent, meaningStatus, searchMeaning } from './meaningSearch.js'
 import { graphemes } from '../shared/textFold.js'
 import type { LibrarySnapshot, WindowBounds } from '../shared/api.js'
 import { expandedIDs } from '../shared/sketch.js'
@@ -262,7 +262,7 @@ const paperList = buildPaperList({
     changed('papers')
   },
   refresh: () => void reload(),
-  openPassage: (hit) => void openPassage(hit, store.searchQuery),
+  openPassage: (hit, byMeaning) => void openPassage(hit, byMeaning ? '' : store.searchQuery),
 })
 
 /** The answer to "a paper, a book, course material, or a document?", from the
@@ -1177,7 +1177,9 @@ function scanListText() {
   listScan = { key, stop: null }
   store.searchPassages = []
   store.searchScanning = false
+  store.searchMeanings = []
   if (!key || graphemes(key).length <= 1) return
+  askListMeaning(key)
   // The papers already on the list by their titles are the ones not to read
   // for the same words again.
   const named = new Set(shelfPapers().map((entry) => entry.id))
@@ -1197,6 +1199,21 @@ function scanListText() {
       listScan.stop = null
       paperList.update()
     },
+  })
+}
+
+/**
+ * The list's passages by meaning: the palette's rows, kept when the palette
+ * is put away. Nothing is asked while the index is not built or the switch
+ * is off — the group is left out, not shown empty. The list drops what the
+ * words already found when it draws, since those arrive after this answer.
+ */
+function askListMeaning(key: string) {
+  if (graphemes(key).length <= 2 || !meaningStatus().ready) return
+  void searchMeaning(key).then((answer) => {
+    if (listScan.key !== key || !answer.ready) return
+    store.searchMeanings = answer.hits.map(asTextHit)
+    paperList.update()
   })
 }
 
