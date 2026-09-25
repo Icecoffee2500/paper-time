@@ -465,10 +465,15 @@ struct NoteEditor: NSViewRepresentable {
 
 /// The text view itself: everything that has to happen at the moment a key is
 /// pressed rather than after the text has already changed.
-final class NoteTextView: NSTextView {
+final class NoteTextView: LatexSuiteTextView {
     weak var coordinator: NoteEditor.Coordinator?
     /// True while the mouse is down and dragging out a selection.
     private(set) var isSelectingByHand = false
+
+    /// Setting the note again replaces every character and then puts the
+    /// caret back. In between, the selection is wherever TextKit left it, and
+    /// Latex Suite is not to read that as a step out of its placeholders.
+    override var isSettingText: Bool { coordinator?.isRestyling ?? false }
 
     // MARK: Copying
 

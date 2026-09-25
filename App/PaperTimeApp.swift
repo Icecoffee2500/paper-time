@@ -32,6 +32,16 @@ struct PaperTimeApp: App {
         if let markdown = Boot.setting("PAPERTIME_DUMP_NOTE") {
             NoteMarkdown.dump(markdown)
         }
+        // Types a few Latex Suite keystrokes in memory, prints them and quits.
+        if Boot.isSet("PAPERTIME_LATEX_SUITE") {
+            LatexSuiteProbe.run()
+        }
+        // Types Latex Suite's fixtures into a note and a text card in a window
+        // of its own, off every display, and quits. Started from here, not
+        // from the window's `.task` below: in a run launched hidden that task
+        // was never reached — its "window on screen" mark never printed —
+        // and a probe hung on it waits for nothing.
+        LatexSuiteTypingProbe.runIfAsked()
         #endif
     }
 

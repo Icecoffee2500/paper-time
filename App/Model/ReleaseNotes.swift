@@ -49,6 +49,16 @@ enum ReleaseNotes {
     /// twenty is a list nobody reads.
     static let highlights: [Highlight] = [
         Highlight(
+            symbol: "textformat.superscript",
+            title: Text2("수식은 짧게 쳐도 돼요 — LaTeX 단축 입력", "Math in shorthand: LaTeX Shortcuts"),
+            detail: Text2(
+                "노트에 수식을 적다 보면 \\frac{}{}를 치는 사이에 생각을 놓쳐요. 이제 //를 치면 분수가, x1을 치면 x_{1}이, sr을 치면 제곱이 되고, Tab을 누르면 다음 칸으로 가요. Obsidian의 Latex Suite를 그대로 따라서, 쓰던 손이 그대로 통해요. 아래에서 눌러 보세요.",
+                "A thought gets lost somewhere inside \\frac{}{}. Now // is a fraction, x1 is x_{1}, sr is a square, and Tab moves on to the next field. These are Latex Suite's own snippets, and they behave as they do in Obsidian. Try it below."
+            ),
+            demo: .latexShortcuts,
+            tier: .one
+        ),
+        Highlight(
             symbol: "folder",
             title: Text2("라이브러리가 열려요", "The libraries open"),
             detail: Text2(
@@ -276,6 +286,33 @@ enum ReleaseNotes {
     /// thing they care about moved; making them read a paragraph to find out
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
+        Release(
+            version: "0.9.9",
+            date: Text2("2026년 9월", "September 2026"),
+            note: Text2(
+                "노트에 수식을 짧게 쳐도 돼요. //는 분수가 되고, Tab을 누르면 다음 칸으로 가요.",
+                "Math goes into a note in shorthand now: // becomes a fraction, and Tab moves on to the next field."
+            ),
+            added: [
+                Entry(
+                    Text2("LaTeX 단축 입력", "LaTeX Shortcuts"),
+                    Text2(
+                        "수식 안에서 x1을 치면 x_{1}, sr은 ^{2}, //는 분수가 되고, Tab을 누르면 다음 칸으로 가요. /는 앞에 친 것을 분자로 삼고, mk는 인라인 수식을, dm은 디스플레이 수식을 열어요. Obsidian의 Latex Suite를 기본값까지 그대로 따라서, 거기서 익힌 손이 여기서도 통해요. 노트에서도, 쪽 위의 글 카드에서도 돼요. 바뀐 게 마음에 안 들면 ⌘Z 한 번에 친 그대로 돌아오고, 한글을 조합하는 동안에는 아무것도 바꾸지 않아요. 설정의 «읽기»에서 끌 수 있어요.",
+                        "Inside math, x1 becomes x_{1}, sr becomes ^{2}, // becomes a fraction, and Tab moves on to the next field. A / takes what came before it as the numerator; mk opens inline math, and dm opens display math. It follows Obsidian's Latex Suite down to its defaults, so hands trained there work here, in notes and in text cards on the page. One ⌘Z gives back exactly what you typed, and nothing changes while an input method is composing. Turn it off in Settings, under Reading."
+                    ),
+                    demo: .latexShortcuts
+                ),
+            ],
+            fixed: [
+                Entry(
+                    Text2("글 카드에서 ⌘Z가 친 글을 되돌려요", "⌘Z in a text card undoes the typing"),
+                    Text2(
+                        "쪽 위의 글 카드에 글을 치다가 ⌘Z를 누르면, 친 글이 아니라 그 전에 그린 도형이 되돌아갔어요. ⌘Z가 카드가 아니라 창의 기록으로 갔거든요. 이제 카드에 치는 동안의 ⌘Z는 카드 안에서만 되돌려요.",
+                        "Pressing ⌘Z while typing in a text card took back the shape drawn before it, not the typing: the key went to the window's history instead of the card's. While a card is being typed into, ⌘Z now undoes inside the card."
+                    )
+                ),
+            ]
+        ),
         Release(
             version: "0.9.8",
             date: Text2("2026년 9월", "September 2026"),
@@ -1476,6 +1513,8 @@ enum ReleaseNotes {
                     Text2("읽는 쪽과 낱말을 나누는 다른 논문의 노트가 Notes 탭 맨 위에 올라온다. 노트 아래에는 아직 잇지 않은 울림이 모인다.", "Notes from other papers that share the page's words rise to the top of the Notes tab; under a note, the echoes not yet linked are gathered.")),
             Feature(Text2("Markdown과 LaTeX", "Markdown and LaTeX"),
                     Text2("쓰는 대로 조판된다. $x^2$는 수식이 되고, 저장되는 것은 여전히 원문이다.", "Both are set as you write them. $x^2$ becomes mathematics; the source is still what is saved.")),
+            Feature(Text2("LaTeX 단축 입력", "LaTeX Shortcuts"),
+                    Text2("Obsidian의 Latex Suite와 같아요. 수식 안에서 //는 분수, x1은 x_{1}, sr은 제곱이 되고 Tab은 다음 칸으로 가요. 글 카드에서도 돼요.", "The same as Latex Suite in Obsidian: inside math, // is a fraction, x1 is x_{1}, sr a square, and Tab moves to the next field. Text cards too.")),
             Feature(Text2("원문 보기", "Raw"),
                     Text2("</> 버튼이 노트를 Markdown 그대로 보여준다. 링크나 수식을 손으로 고칠 때 쓴다.", "The </> button shows the note as Markdown, for fixing a link or a formula by hand.")),
         ]),
@@ -1720,6 +1759,10 @@ enum ReleaseNotes {
         /// One folder, three desktops: a mark made on any of them is in the
         /// PDF, so the other two have it the moment the folder catches up.
         case crossPlatform
+        /// A formula typed the short way through the real Latex Suite, key by
+        /// key: `//` a fraction, `x1` a subscript, `sr` a square, Tab the
+        /// next field — and the line as the note sets it.
+        case latexShortcuts
 
         var id: String { rawValue }
     }

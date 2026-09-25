@@ -1160,6 +1160,12 @@ public final class AppSettings {
     /// Which fields appear under a paper's title in the list, in order.
     @ObservationIgnored
     @AppStorage("listSubtitleFields") public var listSubtitleFields = "authors,year,venue"
+    /// Latex Suite's snippets in the note and in text cards: `//` into a
+    /// fraction, Tab to the next placeholder. On unless turned off; the text
+    /// views read the same key (`LatexSuiteTyping.isEnabled`).
+    @ObservationIgnored
+    @AppStorage(AppSettings.latexShortcutsKey) public var latexShortcuts = true
+    public static let latexShortcutsKey = "latexShortcuts"
     /// How wide the paper list is, remembered so hiding and showing it gives
     /// back the column you had rather than a default.
 
