@@ -11,9 +11,11 @@ import {
   BrowserWindow, app, dialog, ipcMain, nativeTheme, screen, shell, utilityProcess,
   type UtilityProcess, type WebContents,
 } from 'electron'
+import crypto from 'node:crypto'
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
+import { Worker } from 'node:worker_threads'
 import { CHANNEL, type LibrarySnapshot } from '../shared/api.js'
 import { Library, claimedBy, deviceIdentity, readJSON, writeJSON } from './library.js'
 import * as L from './layout.js'
@@ -24,11 +26,14 @@ import { InkStroke } from '../shared/ink.js'
 import {
   WriteRefused,
   isOurMark,
+  keptReason,
   readDrawings,
   readMarks,
   rightsLock,
   stripOwnedForDisplay,
-  writeDrawings,
+  writeDrawingsDetailed,
+  writeRefusal,
+  type KeptReason,
   type MarkupRecord,
   type PageDrawing,
 } from './pdfwrite.js'
@@ -42,7 +47,7 @@ import {
   type Journal,
 } from '../shared/markJournal.js'
 import { isoTimestamp } from '../shared/coding.js'
-import { diagnose, headBytes, headLine, looksWhole, namesEncryption, type ByteTrouble } from '../shared/pdfLock.js'
+import { diagnose, headBytes, headLine, looksWhole, type ByteTrouble } from '../shared/pdfLock.js'
 import { holdInMemory, rememberLibrary, settings, update } from './settings.js'
 // `L` is the layout module in this file, so the two-language helper comes
 // in under a name of its own.
@@ -977,8 +982,9 @@ const handlers: Record<string, Handler> = {
     // An encrypted file carries none of what was made on it here, and the
     // window says so the moment the paper opens — not only after the next
     // save is turned away, which after a restart may be never.
-    if (namesEncryption(bytes) && await holdsAnything(owner, id, pages)) {
-      send('paper:kept', { id, reason: 'encrypted' })
+    const refused = await writeRefusal(bytes)
+    if (refused && await holdsAnything(owner, id, pages)) {
+      send('paper:kept', { id, reason: refused })
     }
     return out
   }) as Handler,
@@ -1192,7 +1198,7 @@ function schedulePDFWrite(id: string) {
 /** One write at a time per paper: two would read the same file and race. */
 const flushing = new Map<string, Promise<unknown>>()
 
-type FlushResult = { written: number } | { kept: 'encrypted' } | { error: string }
+type FlushResult = { written: number } | { kept: KeptReason } | { error: string }
 
 function flushToPDF(id: string): Promise<FlushResult> {
   const before = flushing.get(id) ?? Promise.resolve()
@@ -1215,6 +1221,7 @@ async function writePDF(id: string): Promise<FlushResult> {
   try {
     const pages = await owner.annotatedPages(id)
     const saved = touched(id)
+    const was = await fsp.stat(row.file)
     const current = await fsp.readFile(row.file)
     // The marks the file should hold: what it holds now, overruled by every
     // device's journal — this machine's changes are in its own by now, and a
@@ -1244,9 +1251,25 @@ async function writePDF(id: string): Promise<FlushResult> {
       })
     }
     if (drawings.length === 0) return { written: 0 }
-    const bytes = await writeDrawings(current, drawings)
+    const written = await writeDrawingsDetailed(current, drawings)
     // Nothing to change is nothing to write: the same bytes come back.
-    if (bytes !== current) await writeAtomically(row.file, bytes)
+    if (written.changed) {
+      // The base for compaction, the way the Mac records it: the file as it
+      // is just before the first update goes onto it, once.
+      await recordBaseIfAbsent(owner.root, id, current)
+      const placed = await appendVerified(row.file, was, current, written.bytes, written.pages)
+      if (placed === 'moved') {
+        // Somebody else wrote the file between the read and the write — the
+        // Mac through the cloud, most likely. Theirs stands; this save goes
+        // again on top of it.
+        schedulePDFWrite(id)
+        return { written: 0 }
+      }
+      if (written.stats) {
+        const s = written.stats
+        process.stderr.write(`pdf append: ${path.basename(row.file)} +${s.bytesAfter - s.bytesBefore} B, xref=${s.xrefKind}, pages=${s.pagesChanged}, added=${s.annotationsAdded}, removed=${s.annotationsRemoved}, freed=${s.objectsFreed}, ${s.ms} ms\n`)
+      }
+    }
     send('paper:saved', { id })
     return { written: drawings.length }
   } catch (error) {
@@ -1256,12 +1279,89 @@ async function writePDF(id: string): Promise<FlushResult> {
       // journal — and the window says that the file is not where they are.
       // Once the last of them is taken away there is nothing left to say it
       // about, and the line goes.
+      const reason = keptReason(error.reason)
+      process.stderr.write(`pdf append refused: ${path.basename(row.file)}: ${error.message}\n`)
       const held = await holdsAnything(owner, id, wanted)
-      send('paper:kept', { id, reason: held ? error.reason : null })
-      return { kept: error.reason }
+      send('paper:kept', { id, reason: held ? reason : null })
+      return { kept: reason }
     }
     return { error: String((error as Error).message ?? error) }
   }
+}
+
+/**
+ * `.papertime/papers/<id>/pdf/base.json`: the length and digest of the file
+ * before anything was ever appended to it — what compaction on the Mac
+ * rebases onto (`PDFBase`). Written once, never changed; the same bytes the
+ * Mac writes, so either build can have been first.
+ */
+async function recordBaseIfAbsent(root: string, id: string, bytes: Uint8Array) {
+  const file = path.join(L.paperDir(root, id), 'pdf', 'base.json')
+  if (fs.existsSync(file)) return
+  const digest = crypto.createHash('sha256').update(bytes).digest('hex')
+  await writeJSON(file, { digest, length: bytes.length })
+}
+
+/**
+ * Puts the appended file in the original's place — and only when it is what
+ * it claims to be.
+ *
+ * The paper is the one thing in this library that cannot be regenerated, so
+ * nothing replaces it that has not been read back and checked: the file on
+ * disk is still the one that was read (size and time), the temporary file
+ * begins with the very bytes that were read (length and a digest of the
+ * prefix), and pdf.js opens it with the page count our own reader found. A
+ * check that fails leaves the original untouched and the marks in the
+ * journal. Temporary file beside the original, then rename over it.
+ */
+async function appendVerified(file: string, was: fs.Stats, original: Uint8Array, result: Uint8Array, pages: number): Promise<'placed' | 'moved'> {
+  const temporary = `${file}.${process.pid}.tmp`
+  try {
+    await fsp.writeFile(temporary, result)
+    const back = await fsp.readFile(temporary)
+    if (back.length !== result.length || back.length < original.length) throw new WriteRefused('verification', 'the temporary file is not the right length')
+    const wanted = crypto.createHash('sha256').update(original).digest('hex')
+    const got = crypto.createHash('sha256').update(back.subarray(0, original.length)).digest('hex')
+    if (wanted !== got) throw new WriteRefused('verification', 'the result does not begin with the original bytes')
+    const counted = await pageCountWithPDFJS(back)
+    if (counted !== pages) throw new WriteRefused('verification', `pdf.js reads ${counted} pages, the file says ${pages}`)
+    const now = await fsp.stat(file)
+    if (now.size !== was.size || now.mtimeMs !== was.mtimeMs) {
+      await fsp.rm(temporary, { force: true })
+      return 'moved'
+    }
+    await fsp.rename(temporary, file)
+    return 'placed'
+  } catch (error) {
+    await fsp.rm(temporary, { force: true })
+    throw error
+  }
+}
+
+/**
+ * How many pages pdf.js reads in these bytes — the reader the window uses,
+ * asked on a thread of its own so the process that owns the windows never
+ * loads a document. The text service's worker script already knows how to
+ * be that thread; it is started here for this one answer and let go.
+ */
+function pageCountWithPDFJS(bytes: Uint8Array): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const script = path.join(__dirname, 'textWorker.js')
+    const unpacked = script.replace(/app\.asar(?=[\\/])/, 'app.asar.unpacked')
+    const worker = new Worker(unpacked !== script && fs.existsSync(unpacked) ? unpacked : script)
+    const done = (settle: () => void) => {
+      settle()
+      void worker.terminate()
+    }
+    worker.on('message', (message: { type: string; pages?: number; error?: string }) => {
+      if (message.type === 'pages') done(() => resolve(message.pages ?? -1))
+      else if (message.type === 'failed') done(() => reject(new WriteRefused('verification', `pdf.js: ${message.error ?? 'cannot open the result'}`)))
+    })
+    worker.on('error', (error) => done(() => reject(error)))
+    // A copy of its own: a Buffer's `.buffer` is Node's shared pool.
+    const owned = new Uint8Array(bytes).buffer
+    worker.postMessage({ type: 'pages', job: 1, bytes: owned }, [owned])
+  })
 }
 
 /**
@@ -1272,18 +1372,6 @@ async function holdsAnything(owner: Library, id: string, marks: Map<number, Mark
   for (const list of marks.values()) if (list.some(isOurMark)) return true
   const drawn = await owner.annotatedPages(id)
   return drawn.sketch.length > 0 || drawn.ink.length > 0
-}
-
-/**
- * Replaces a PDF without ever leaving it half-written.
- *
- * The user's papers are the one thing in this app that cannot be regenerated,
- * and a PDF is rewritten whole. Temporary file, then rename over the original.
- */
-async function writeAtomically(file: string, bytes: Uint8Array) {
-  const temporary = `${file}.${process.pid}.tmp`
-  await fsp.writeFile(temporary, bytes)
-  await fsp.rename(temporary, file)
 }
 
 /**

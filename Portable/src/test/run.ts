@@ -34,6 +34,7 @@ import { guessKind, hasAbstract, hasIdentifier, hasReferences } from '../shared/
 import { SketchTree, adopted, guessedDirection, ordered, pruned, copied } from '../shared/sketchTree.js'
 import { sketchSnapSuite } from './sketchSnap.js'
 import { annotationSuite } from './annotations.js'
+import { pdfUpdateSuite } from './pdfupdate.js'
 import { searchSuite } from './search.js'
 import { semanticSuite } from './semantic.js'
 import { semanticPaletteSuite } from './semanticPalette.js'
@@ -391,6 +392,7 @@ async function main() {
 
   await sketchSnapSuite(test, suite)
   await annotationSuite(test, suite)
+  await pdfUpdateSuite(test, suite)
   await searchSuite(test, suite)
   await semanticSuite(test, suite)
   await semanticPaletteSuite(test, suite)

@@ -1499,7 +1499,7 @@ onEvent((event, payload) => {
       // What was made here is in Paper Time and not in the file. The reader
       // for that paper says so, once, where it says the page and the zoom;
       // no reason means there is nothing left to say it about.
-      const { id, reason } = payload as { id: string; reason: 'encrypted' | null }
+      const { id, reason } = payload as { id: string; reason: 'encrypted' | 'permissions' | 'structure' | null }
       readers.get(id)?.noteKept(reason)
       break
     }

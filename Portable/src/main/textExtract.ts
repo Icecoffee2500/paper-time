@@ -111,3 +111,29 @@ export async function extractPages(bytes: Uint8Array, assets: ExtractAssets): Pr
     await document.destroy()
   }
 }
+
+/**
+ * How many pages pdf.js finds in these bytes — nothing else read, no text
+ * asked for. The appender's last check before a file goes into a paper's
+ * place: pdf.js is what the window will open it with.
+ */
+export async function countPages(bytes: Uint8Array): Promise<number> {
+  const task = pdfjs.getDocument({
+    data: bytes,
+    useWorkerFetch: false,
+    disableFontFace: true,
+    isEvalSupported: false,
+    verbosity: 0,
+  })
+  // A document that wants a password is not one the appender writes; and
+  // pdf.js otherwise waits for the answer for ever.
+  task.onPassword = () => {
+    void task.destroy()
+  }
+  const document = await task.promise
+  try {
+    return document.numPages
+  } finally {
+    await document.destroy()
+  }
+}
