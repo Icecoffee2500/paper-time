@@ -65,7 +65,7 @@ final class MathPreviewCard {
         let panel = self.panel ?? makePanel()
         self.panel = panel
         guard let hosting, let face else { return }
-        hosting.rootView = ContentView(face: face, room: room, drawsOwnGlass: !Self.hasSystemGlass)
+        hosting.rootView = ContentView(face: face, room: room, ground: nil)
         let fitted = hosting.fittingSize
         let cardSize = NSSize(width: min(max(fitted.width, 44), room), height: max(fitted.height, 28))
         panel.setContentSize(cardSize)
@@ -77,6 +77,13 @@ final class MathPreviewCard {
         }
         origin.x = min(max(origin.x, bounds.minX), max(bounds.minX, bounds.maxX - cardSize.width))
         panel.setFrameOrigin(origin)
+
+        // What lies under the card, for the glass to show: a picture of
+        // the note there, diffused. Taken from the view, not the screen, so
+        // no permission is asked and a probe's photograph has it too.
+        let screenRect = NSRect(origin: origin, size: cardSize)
+        let local = view.convert(window.convertFromScreen(screenRect), from: nil)
+        hosting.rootView = ContentView(face: face, room: room, ground: Self.ground(under: local, of: view))
 
         if !panel.isVisible {
             panel.alphaValue = 0
@@ -129,45 +136,55 @@ final class MathPreviewCard {
         )
         panel.isFloatingPanel = true
         panel.level = .popUpMenu
-        panel.hasShadow = true
+        panel.hasShadow = false
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hidesOnDeactivate = true
         // Never in the way: a click through it goes to the note.
         panel.ignoresMouseEvents = true
-        let hosting = NSHostingView(rootView: ContentView(face: .raw(""), room: 120, drawsOwnGlass: !Self.hasSystemGlass))
+        let hosting = NSHostingView(rootView: ContentView(face: .raw(""), room: 120, ground: nil))
         hosting.autoresizingMask = [.width, .height]
         self.hosting = hosting
-        // The glass is the system's where the system has it. Drawn by hand
-        // — a white body, a shadow, a hairline round the rim — it read as a
-        // bar of soap: opaque in the middle and doubled at the corners where
-        // the stroke, the shadow and the fill each rounded off on their own.
-        // `NSGlassEffectView` bends what is behind the card instead of
-        // painting over it, and draws the rim as light caught on a curve.
-        // Sonoma has no such view and keeps the hand-made surface.
-        if #available(macOS 26, *) {
-            let glass = NSGlassEffectView()
-            glass.style = .regular
-            glass.cornerRadius = Corner.popover
-            glass.contentView = hosting
-            panel.contentView = glass
-        } else {
-            panel.contentView = hosting
-        }
+        // The glass is `GlassSlab`, not the system's `NSGlassEffectView`:
+        // that one is set for a window's chrome, and over a white page it
+        // read as a white card with a rim. The slab is built from the
+        // material's parts — the diffused ground, a thin body, a darkened
+        // rim, a specular line — and shows the note through itself.
+        panel.contentView = hosting
+        // The slab casts its own shadow; a second one from the window
+        // doubled the edge.
+        panel.hasShadow = false
         return panel
     }
 
-    /// Whether the system draws the glass (macOS 26), or the card does.
-    static var hasSystemGlass: Bool {
-        if #available(macOS 26, *) { return true } else { return false }
+    /// A picture of `rect` of `view` (the view's coordinates), diffused as
+    /// the glass shows it. Nil when the card lies wholly outside the view.
+    private static func ground(under rect: NSRect, of view: NSView) -> NSImage? {
+        let inside = rect.intersection(view.bounds)
+        guard !inside.isNull, inside.width > 1, inside.height > 1 else { return nil }
+        guard let rep = view.bitmapImageRepForCachingDisplay(in: rect) else { return nil }
+        view.cacheDisplay(in: rect, to: rep)
+        let taken = NSImage(size: rect.size)
+        taken.addRepresentation(rep)
+        // A text view that leaves its background to the window is clear
+        // where there is no ink, and a clear ground diffuses to grey. The
+        // paper under the words is the window's.
+        let paper = (view as? NSTextView).flatMap { $0.drawsBackground ? $0.backgroundColor : nil }
+            ?? view.window?.backgroundColor ?? .textBackgroundColor
+        let image = NSImage(size: rect.size, flipped: false) { bounds in
+            paper.setFill()
+            bounds.fill()
+            taken.draw(in: bounds)
+            return true
+        }
+        return GlassSlab<RoundedRectangle>.diffuse(image)
     }
 
     struct ContentView: View {
         var face: Face
         var room: CGFloat
-        /// Sonoma: the surface is assembled here. macOS 26: the panel's glass
-        /// view is the surface, and this is only what lies on it.
-        var drawsOwnGlass: Bool
+        /// What lies under the card, diffused — the ground the glass shows.
+        var ground: NSImage?
 
         var body: some View {
             Group {
@@ -188,14 +205,7 @@ final class MathPreviewCard {
             .frame(maxWidth: room)
             .fixedSize(horizontal: true, vertical: true)
             .background {
-                if drawsOwnGlass {
-                    Color.clear
-                        .liquidGlass(.floating, in: RoundedRectangle(cornerRadius: Corner.popover, style: .continuous))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: Corner.popover, style: .continuous)
-                                .strokeBorder(.separator, lineWidth: 0.5)
-                        }
-                }
+                GlassSlab(ground: ground, shape: RoundedRectangle(cornerRadius: Corner.popover, style: .continuous))
             }
             .animation(Motion.tap, value: face)
         }
