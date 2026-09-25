@@ -59,6 +59,7 @@ struct FeatureDemoView: View {
             case .together: TogetherDemo(scale: scale)
             case .twoLanguages: TwoLanguagesDemo(scale: scale)
             case .latexShortcuts: LatexShortcutsDemo(scale: scale)
+            case .meaning: MeaningDemo(scale: scale)
             }
         }
         .padding(scale.pad)
@@ -1647,6 +1648,212 @@ private struct SearchDemo: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Text(row.subtitle)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, scale.isFull ? 10 : 7)
+        .frame(height: scale.isFull ? 38 : 28)
+        .background(
+            RoundedRectangle(cornerRadius: Corner.row, style: .continuous)
+                .fill(isHighlighted ? AnyShapeStyle(.tint.opacity(0.15)) : AnyShapeStyle(.clear))
+        )
+        .padding(.horizontal, scale.isFull ? 6 : 4)
+        .contentShape(.rect)
+    }
+}
+
+// MARK: - Search by meaning
+
+/// The palette with a question in it, and the two answers it gives: the
+/// passages that contain the words, and under them the passages that say
+/// the same thing in other words. The questions are buttons — press
+/// another and both sections change — because "search by meaning" is not
+/// something a sentence conveys, and one exact match next to three that
+/// share no word with the question is.
+///
+/// The passages are real sentences of the kind found in papers, chosen so
+/// that none of the ones under "Similar in Meaning" contains the question's
+/// words: that is the whole point, and a reader checks it in a second.
+private struct MeaningDemo: View {
+    let scale: DemoScale
+    @Environment(AppModel.self) private var app
+    @State private var chosen = 0
+    @State private var highlighted = 0
+
+    private struct Passage {
+        let text: String
+        let paper: String
+        let page: Int
+    }
+
+    private struct Question {
+        let query: String
+        let exact: [Passage]
+        let similar: [Passage]
+    }
+
+    /// Not translated: the papers are in English, and so are the questions
+    /// a person types at them.
+    private static let questions: [Question] = [
+        Question(
+            query: "why do models forget",
+            exact: [
+                Passage(text: "…neural networks forget previously learned tasks when trained on new ones…",
+                        paper: "Overcoming Catastrophic Forgetting", page: 1),
+            ],
+            similar: [
+                Passage(text: "…accuracy on the first task drops sharply once training on the second begins…",
+                        paper: "Continual Learning Survey", page: 4),
+                Passage(text: "…weights important for earlier data are overwritten by later gradient steps…",
+                        paper: "Elastic Weight Consolidation", page: 2),
+                Passage(text: "…the representation drifts away from what the old classifier expects…",
+                        paper: "Learning without Forgetting", page: 7),
+            ]
+        ),
+        Question(
+            query: "removing a person's data from a trained model",
+            exact: [],
+            similar: [
+                Passage(text: "…the unlearned model should be indistinguishable from one never trained on the sample…",
+                        paper: "Machine Unlearning", page: 3),
+                Passage(text: "…a request under the right to be forgotten requires the influence of those records to go…",
+                        paper: "Certified Data Removal", page: 1),
+                Passage(text: "…retraining from scratch on the remaining set is the gold standard, and too slow…",
+                        paper: "SISA Training", page: 2),
+            ]
+        ),
+        Question(
+            query: "looking at parts of an image",
+            exact: [],
+            similar: [
+                Passage(text: "…each query attends to the patch embeddings with the highest affinity…",
+                        paper: "Vision Transformers", page: 5),
+                Passage(text: "…the region proposals are pooled to fixed size before classification…",
+                        paper: "Faster R-CNN", page: 3),
+                Passage(text: "…a saliency map marks which pixels moved the prediction most…",
+                        paper: "Grad-CAM", page: 2),
+            ]
+        ),
+    ]
+
+    private var question: Question { Self.questions[chosen] }
+
+    /// Every row, in the palette's order, so one highlight runs through the
+    /// two sections.
+    private var rows: [(offset: Int, section: String, passage: Passage)] {
+        var out: [(Int, String, Passage)] = []
+        for passage in question.exact {
+            out.append((out.count, ReleaseNotes.string("논문 본문", "In the Papers"), passage))
+        }
+        for passage in question.similar {
+            out.append((out.count, ReleaseNotes.string("뜻이 비슷한 구절", "Similar in Meaning"), passage))
+        }
+        return out.map { (offset: $0.0, section: $0.1, passage: $0.2) }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: scale.gap) {
+            questions
+            palette
+        }
+    }
+
+    private var questions: some View {
+        HStack(spacing: 6) {
+            ForEach(Self.questions.indices, id: \.self) { index in
+                Button {
+                    withAnimation(Motion.tap) {
+                        chosen = index
+                        highlighted = 0
+                    }
+                } label: {
+                    Text(Self.questions[index].query)
+                        .font(scale.small)
+                        .lineLimit(1)
+                        .padding(.horizontal, scale.isFull ? 10 : 7)
+                        .padding(.vertical, scale.isFull ? 5 : 3)
+                        .background(
+                            Capsule().fill(chosen == index ? AnyShapeStyle(.tint.opacity(0.18)) : AnyShapeStyle(.quaternary.opacity(0.5)))
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private var palette: some View {
+        VStack(spacing: 0) {
+            field
+            Divider()
+            results
+        }
+        .background(
+            RoundedRectangle(cornerRadius: scale.isFull ? Corner.panel : Corner.popover, style: .continuous)
+                .fill(.background)
+        )
+        .clipShape(
+            RoundedRectangle(cornerRadius: scale.isFull ? Corner.panel : Corner.popover, style: .continuous)
+        )
+        .shadow(color: .black.opacity(0.12), radius: scale.isFull ? 14 : 6, y: scale.isFull ? 5 : 2)
+    }
+
+    private var field: some View {
+        HStack(spacing: scale.isFull ? 12 : 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: scale.isFull ? 20 : 13))
+                .foregroundStyle(.secondary)
+            Text(question.query)
+                .font(.system(size: scale.isFull ? 20 : 13))
+                .lineLimit(1)
+            Spacer(minLength: 0)
+            Text(app.shortcut(for: .searchEverything).display)
+                .font(scale.small)
+                .monospaced()
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, scale.isFull ? 16 : 10)
+        .padding(.vertical, scale.isFull ? 12 : 7)
+    }
+
+    private var results: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            let sections = Array(Set(rows.map(\.section))).sorted { lhs, _ in
+                lhs == ReleaseNotes.string("논문 본문", "In the Papers")
+            }
+            ForEach(sections, id: \.self) { section in
+                Text(section.uppercased())
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, scale.isFull ? 16 : 10)
+                    .padding(.top, scale.isFull ? 10 : 7)
+                    .padding(.bottom, 3)
+                ForEach(rows.filter { $0.section == section }, id: \.offset) { entry in
+                    row(entry.passage, exact: section == ReleaseNotes.string("논문 본문", "In the Papers"),
+                        isHighlighted: entry.offset == highlighted)
+                        .onHover { if $0 { highlighted = entry.offset } }
+                        .onTapGesture { highlighted = entry.offset }
+                }
+            }
+        }
+        .padding(.bottom, 7)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func row(_ passage: Passage, exact: Bool, isHighlighted: Bool) -> some View {
+        HStack(spacing: scale.isFull ? 11 : 8) {
+            Image(systemName: exact ? "text.magnifyingglass" : "sparkle.magnifyingglass")
+                .font(.system(size: scale.isFull ? 14 : 11))
+                .frame(width: scale.isFull ? 20 : 15)
+                .foregroundStyle(isHighlighted ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+            VStack(alignment: .leading, spacing: 0) {
+                Text(passage.text)
+                    .font(scale.body)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Text(ReleaseNotes.string("\(passage.paper) · \(passage.page)쪽", "\(passage.paper) · p. \(passage.page)"))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)

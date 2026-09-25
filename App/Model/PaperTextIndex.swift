@@ -240,6 +240,14 @@ actor PaperTextIndex {
         }.value
     }
 
+    /// The whole text of one paper: what is kept, or a read of it — through
+    /// the same few readers as a search, so that an index built on top of
+    /// this one (the passages by meaning) never reads a PDF of its own.
+    func text(for source: Source) async -> PaperText? {
+        if let known = texts[source.id] { return known }
+        return await reader(for: source, priority: .utility).value
+    }
+
     /// Where a passage sits on its page, so the reader can be sent there.
     ///
     /// The document is opened again rather than kept: this happens once, when

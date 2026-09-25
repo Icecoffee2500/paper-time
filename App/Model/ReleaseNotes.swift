@@ -49,6 +49,16 @@ enum ReleaseNotes {
     /// twenty is a list nobody reads.
     static let highlights: [Highlight] = [
         Highlight(
+            symbol: "sparkle.magnifyingglass",
+            title: Text2("낱말이 아니라 뜻으로 찾아요", "Search by meaning, not by the word"),
+            detail: Text2(
+                "«모델이 왜 잊는지»라고 치면, 그 낱말이 하나도 없는 구절도 나와요 — «첫 과제의 정확도가 두 번째 과제를 배우자 급히 떨어진다» 같은 문장이요. 찾기(⌘K)의 정확히 맞는 결과 아래에 «뜻이 비슷한 구절»로 서요. 작은 모델이 이 맥에서만 돌고, 논문은 밖으로 나가지 않아요. 아래에서 질문을 바꿔 보세요.",
+                "Type “why do models forget” and the passages that answer it come up even when none of those words is in them — “accuracy on the first task drops sharply once the second is trained.” They stand under the exact matches in Search Everything (⌘K), as Similar in Meaning. A small model runs on this Mac, and the papers never leave it. Try another question below."
+            ),
+            demo: .meaning,
+            tier: .one
+        ),
+        Highlight(
             symbol: "textformat.superscript",
             title: Text2("수식은 짧게 쳐도 돼요 — LaTeX 단축 입력", "Math in shorthand: LaTeX Shortcuts"),
             detail: Text2(
@@ -290,10 +300,18 @@ enum ReleaseNotes {
             version: "0.9.9",
             date: Text2("2026년 9월", "September 2026"),
             note: Text2(
-                "노트에 수식을 짧게 쳐도 돼요. //는 분수가 되고, Tab을 누르면 다음 칸으로 가요.",
-                "Math goes into a note in shorthand now: // becomes a fraction, and Tab moves on to the next field."
+                "찾기가 이제 뜻으로도 찾아요. 그리고 노트에 수식을 짧게 쳐도 돼요 — //는 분수가 되고, Tab을 누르면 다음 칸으로 가요.",
+                "Search finds passages by what they mean now. And math goes into a note in shorthand: // becomes a fraction, and Tab moves on to the next field."
             ),
             added: [
+                Entry(
+                    Text2("뜻으로 찾기", "Search by Meaning"),
+                    Text2(
+                        "찾기(⌘K)에 «모델이 왜 잊는지»라고 치면, 그 낱말이 없는 구절도 찾아요. 논문마다 본문을 백 낱말쯤의 구절로 나눠 작은 언어 모델(all-MiniLM-L6-v2)로 벡터를 만들어 두고, 친 말과 가장 가까운 여덟 구절을 정확히 맞는 결과 아래 «뜻이 비슷한 구절»로 보여줘요. 누르면 그 구절로 가요. 준비는 라이브러리를 연 뒤 조용히 돼요 — 논문 하나가 1초쯤이고, 한 번 하면 파일이 바뀌지 않는 한 다시 안 해요. 모델은 이 맥에서만 돌아요. 설정 → 읽기에서 끌 수 있어요.",
+                        "Type “why do models forget” into Search Everything (⌘K) and the passages that answer it come up even without those words in them. Each paper's text is cut into passages of about a hundred words and given a vector by a small language model (all-MiniLM-L6-v2); the eight closest to what you typed stand under the exact matches, as Similar in Meaning, and pressing one goes to that passage. The library is prepared quietly after it opens — about a second a paper, once, and not again while the file stays the same. The model runs on this Mac only. Turn it off in Settings, under Reading."
+                    ),
+                    demo: .meaning
+                ),
                 Entry(
                     Text2("저장해도 논문은 그대로", "Your paper's bytes stay as they were"),
                     Text2(
@@ -1819,6 +1837,10 @@ enum ReleaseNotes {
         /// key: `//` a fraction, `x1` a subscript, `sr` a square, Tab the
         /// next field — and the line as the note sets it.
         case latexShortcuts
+        /// A question typed into Search Everything, and under the exact
+        /// matches the passages that answer it without using its words —
+        /// press another question and both sections change.
+        case meaning
 
         var id: String { rawValue }
     }

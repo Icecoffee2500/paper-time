@@ -867,6 +867,14 @@ public final class AppModel {
             phase = .ready
             await model.refresh()
             Trace.mark("library ready — \(model.papers.count) papers")
+            #if os(macOS)
+            // The passages by meaning, a few seconds after the window has
+            // its list — never in the same instant. A probe that asked for
+            // the index (`--papertime-semantic-index=1`) waits for it below.
+            if !Boot.isSet("PAPERTIME_SEMANTIC_INDEX"), !Boot.isSet("PAPERTIME_SEMANTIC_QUERY") {
+                SemanticIndex.shared.schedule(model.semanticSources)
+            }
+            #endif
             // `--papertime-import=<경로>`가 드롭·«PDF 더하기» 패널이 지나는 그
             // 길로 파일을 하나 들여온다. 라이브러리 폴더 안에 이미 있는 파일을
             // 이 길로 들이면 «남은 PDF» 목록이 낡은 채로 남고, 그 다음 줄을
@@ -1140,6 +1148,14 @@ public final class AppModel {
                 Trace.summary()
                 NSApp.terminate(nil)
             }
+            // `--papertime-semantic-index=1` builds the passages-by-meaning
+            // index for this library now and says what it did;
+            // `--papertime-semantic-query=<text>` then prints the passages
+            // closest to the text. Without `PAPERTIME_SHOW_SEARCH` the run
+            // quits afterwards, so the trace can add up.
+            if isProbeLibrary, Boot.isSet("PAPERTIME_SEMANTIC_INDEX") || Boot.isSet("PAPERTIME_SEMANTIC_QUERY") {
+                await SemanticIndexProbe.run(in: model)
+            }
             // `--papertime-quit-after=<초>` ends a probe's run on its own, the
             // way a person quits, so the trace adds up what the time went on.
             // Killed from outside, it never gets to say.
@@ -1192,6 +1208,13 @@ public final class AppSettings {
     @ObservationIgnored
     @AppStorage(AppSettings.latexShortcutsKey) public var latexShortcuts = true
     public static let latexShortcutsKey = "latexShortcuts"
+    /// Passages found by what they mean, under the exact matches in Search
+    /// Everything. On unless turned off: it is a 45 MB model running in the
+    /// background, and not everybody wants one. `SemanticIndex` reads the
+    /// same key.
+    @ObservationIgnored
+    @AppStorage(AppSettings.searchByMeaningKey) public var searchByMeaning = true
+    public static let searchByMeaningKey = "searchByMeaning"
     /// How wide the paper list is, remembered so hiding and showing it gives
     /// back the column you had rather than a default.
 

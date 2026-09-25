@@ -50,6 +50,10 @@ targets:
         product: PDFReader
       - package: PaperTimeKit
         product: Importers
+      # Search by meaning: the MiniLM model and its vocabulary ride in the
+      # package's resource bundle, which Xcode copies into the app.
+      - package: PaperTimeKit
+        product: Semantic
     info:
       path: App/Resources/Info.plist
       properties:

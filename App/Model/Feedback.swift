@@ -706,15 +706,23 @@ public enum WindowProbe {
     /// of what is on screen.
     private static func dump(_ element: Any?, depth: Int, into lines: inout [String]) {
         guard depth < 12, let element = element as? NSObject else { return }
-        let role = (element.value(forKey: "accessibilityRole") as? String) ?? ""
-        let label = (element.value(forKey: "accessibilityLabel") as? String) ?? ""
-        let value = (element.value(forKey: "accessibilityValue") as? String) ?? ""
-        let title = (element.value(forKey: "accessibilityTitle") as? String) ?? ""
+        // Asked only of elements that answer: AppKit's cell proxies
+        // (`NSAccessibilityReparentingCellProxy`, under an open palette) do
+        // not implement `accessibilityRole`, and `valueForKey:` on one throws
+        // — inside a Swift task, which is the crash that lands somewhere
+        // else entirely (`Hitches.watch`) a moment later.
+        func ask(_ key: String) -> Any? {
+            element.responds(to: Selector(key)) ? element.value(forKey: key) : nil
+        }
+        let role = (ask("accessibilityRole") as? String) ?? ""
+        let label = (ask("accessibilityLabel") as? String) ?? ""
+        let value = (ask("accessibilityValue") as? String) ?? ""
+        let title = (ask("accessibilityTitle") as? String) ?? ""
         let said = [title, label, value].filter { !$0.isEmpty }.joined(separator: " / ")
         if !said.isEmpty || !role.isEmpty {
             lines.append(String(repeating: "  ", count: depth) + "\(role) \(said)")
         }
-        let children = (element.value(forKey: "accessibilityChildren") as? [Any]) ?? []
+        let children = (ask("accessibilityChildren") as? [Any]) ?? []
         for child in children { dump(child, depth: depth + 1, into: &lines) }
     }
 
