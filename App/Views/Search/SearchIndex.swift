@@ -12,6 +12,9 @@ struct SearchResult: Identifiable, Hashable {
         case paper(UUID)
         /// A place inside a paper: the word was in the text, not the title.
         case passage(PaperTextIndex.Passage)
+        /// A place inside a paper that says what was typed in other words:
+        /// found by the meaning, not the letters.
+        case meaning(PaperTextIndex.Passage)
         case note(String)
         case collection(UUID)
         case tag(UUID)
@@ -80,6 +83,25 @@ extension SearchResult {
         )
     }
 }
+
+#if os(macOS)
+extension SearchResult {
+    /// A row for a passage that says what was typed in other words. The
+    /// passage leads as a literal hit's does; there is no count, because
+    /// "close in meaning" is not a thing that happens three times.
+    init(meaning hit: SemanticIndex.Hit) {
+        let page = ReleaseNotes.string("\(hit.passage.pageIndex + 1)쪽",
+                                       "p. \(hit.passage.pageIndex + 1)")
+        self.init(
+            kind: .meaning(hit.passage),
+            title: hit.snippet,
+            subtitle: "\(hit.title) · \(page)",
+            symbolName: "sparkle.magnifyingglass",
+            score: Double(hit.score)
+        )
+    }
+}
+#endif
 
 /// Opens the paper a word was found in and sends the reader to the line.
 ///

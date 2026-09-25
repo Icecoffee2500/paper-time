@@ -23,6 +23,9 @@ struct SearchPalette: View {
     @State private var highlightedIndex = 0
     /// What the words themselves turned up, as the papers are read.
     @State private var passages: [SearchResult] = []
+    /// What says the same thing in other words, when the library's passages
+    /// have been embedded. Never waited for by anything above it.
+    @State private var meanings: [SearchResult] = []
     @State private var isScanning = false
     /// The query the words inside the papers were last read to the end for.
     @State private var settled: String?
@@ -41,9 +44,13 @@ struct SearchPalette: View {
         case collections = "Collections"
         case tags = "Tags"
         case actions = "Actions"
-        /// Last on purpose: a title match is a surer thing than a word in
+        /// Late on purpose: a title match is a surer thing than a word in
         /// the middle of page nine, and these arrive a moment later anyway.
         case passages = "In the Papers"
+        /// Last: passages that say it without saying it. Under the exact
+        /// matches, because a passage with the word in it is the surer
+        /// answer, and only once every passage in the library has a vector.
+        case meanings = "Similar in Meaning"
 
         var title: String {
             switch self {
@@ -54,6 +61,7 @@ struct SearchPalette: View {
             case .tags: L("태그", "Tags")
             case .actions: L("동작", "Actions")
             case .passages: L("논문 본문", "In the Papers")
+            case .meanings: L("뜻이 비슷한 구절", "Similar in Meaning")
             }
         }
     }
@@ -89,7 +97,7 @@ struct SearchPalette: View {
         // same as not having searched the text at all: what is below the fold
         // of a palette does not exist.
         let room = isScanning || !passages.isEmpty ? maxDisplayedResults - 4 : maxDisplayedResults
-        return Array(typed.prefix(room)) + passages
+        return Array(typed.prefix(room)) + passages + meanings
     }
 
     /// Results split into their display groups, each row carrying the index it
@@ -176,6 +184,12 @@ struct SearchPalette: View {
             try? await Task.sleep(for: .milliseconds(700))
             guard !Task.isCancelled else { return }
             warming = PaperTextIndex.shared.warm(sources(excluding: []))
+            #if os(macOS)
+            // And the passages by meaning catch up with whatever came or
+            // went since the library opened. Nothing to do when nothing
+            // did: every paper's stamp is compared and no vector is made.
+            SemanticIndex.shared.schedule(sources(excluding: []), after: .seconds(2))
+            #endif
             // And what is kept of papers the library no longer has goes,
             // once a session. Every paper counts here, supplements too: the
             // echoes read those.
@@ -194,6 +208,9 @@ struct SearchPalette: View {
             _ = SearchIndex.prepared(for: model)
         }
         .task(id: query) { await scan() }
+        #if os(macOS)
+        .task(id: query) { await mean() }
+        #endif
         // `--papertime-search-script=<q1|q2|…>` types each query into the
         // field a letter at a time, the way a hand would, and says what came
         // back and when. A key posted from outside goes to whatever is in
@@ -295,13 +312,19 @@ struct SearchPalette: View {
                         }
                     }
                     if isScanning { scanning }
+                    #if os(macOS)
+                    if let progress = semantic.progress, !query.trimmingCharacters(in: .whitespaces).isEmpty {
+                        preparing(progress)
+                    }
+                    #endif
                 }
                 .padding(.bottom, 8)
             }
             // As tall as its rows and no taller: two offers under an empty
             // field are two rows, not a panel with two rows at the top.
             .frame(height: min(CGFloat(results.count) * rowHeight
-                                   + CGFloat(groups.count) * 30 + (isScanning ? 30 : 0) + 8,
+                                   + CGFloat(groups.count) * 30 + (isScanning ? 30 : 0)
+                                   + (footerShown ? 26 : 0) + 8,
                                CGFloat(maxDisplayedResults + 2) * rowHeight + 70))
             .onChange(of: highlightedIndex) { _, newValue in
                 guard results.indices.contains(newValue) else { return }
@@ -327,6 +350,29 @@ struct SearchPalette: View {
         .padding(.top, 10)
         .padding(.bottom, 2)
     }
+
+    #if os(macOS)
+    private var semantic: SemanticIndexStatus { SemanticIndex.shared.status }
+
+    private var footerShown: Bool {
+        semantic.progress != nil && !query.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    /// Said quietly, once, under the results: the passages are still being
+    /// embedded, and until every one of them is the section stays away — a
+    /// list ranked over half the library would name the wrong half.
+    private func preparing(_ progress: (done: Int, total: Int)) -> some View {
+        Text(L("뜻으로 찾기 준비 중 · \(progress.done)/\(progress.total)",
+               "Getting ready to search by meaning · \(progress.done)/\(progress.total)"))
+            .font(.caption)
+            .foregroundStyle(.tertiary)
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+            .padding(.bottom, 2)
+    }
+    #else
+    private var footerShown: Bool { false }
+    #endif
 
     private func resultRow(_ result: SearchResult, isHighlighted: Bool) -> some View {
         HStack(spacing: 12) {
@@ -382,6 +428,7 @@ struct SearchPalette: View {
         case .showAll: .library
         case .paper: .papers
         case .passage: .passages
+        case .meaning: .meanings
         case .note: .notes
         case .collection: .collections
         case .tag: .tags
@@ -406,7 +453,7 @@ struct SearchPalette: View {
             model.showSearchResults(for: query)
         case let .paper(id):
             model.selectedPaperID = id
-        case let .passage(passage):
+        case let .passage(passage), let .meaning(passage):
             openPassage(passage, in: model, link: link)
         case let .note(id):
             model.scope = .notes
@@ -489,6 +536,33 @@ struct SearchPalette: View {
         if !Task.isCancelled { settled = text }
     }
 
+    #if os(macOS)
+    /// Asks the passages what says the same thing, a beat after the typing
+    /// stops. Off the main thread: the query is embedded by the model
+    /// (about a millisecond, once it is loaded) and scored against every
+    /// passage, and none of it holds up the rows above. While the library
+    /// is still being embedded there is nothing to ask, and nothing is
+    /// shown — the index brings the library up to date each time the
+    /// palette opens.
+    private func mean() async {
+        meanings = []
+        let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.count > 2, SemanticIndex.isEnabled else { return }
+        try? await Task.sleep(for: .milliseconds(320))
+        guard !Task.isCancelled, await SemanticIndex.shared.isReady else { return }
+        let started = DispatchTime.now().uptimeNanoseconds
+        let hits = await SemanticIndex.shared.hits(for: text, k: 8)
+        guard !Task.isCancelled else { return }
+        // A passage already named above, word for word, is not news twice.
+        let shown = Set(passages.compactMap { result -> PaperTextIndex.Passage? in
+            if case let .passage(passage) = result.kind { passage } else { nil }
+        })
+        meanings = hits.filter { !shown.contains($0.passage) }.map(SearchResult.init(meaning:))
+        Trace.mark(String(format: "palette: “%@” %d by meaning after %.1f ms", text, meanings.count,
+                          Double(DispatchTime.now().uptimeNanoseconds - started) / 1e6))
+    }
+    #endif
+
     /// Types each query in, a letter every ninety milliseconds, waits for
     /// the words inside the papers to come back, and writes down what the
     /// palette is showing. Then quits, so the trace can add it up.
@@ -505,7 +579,7 @@ struct SearchPalette: View {
             while settled != wanted, Date.now < deadline {
                 try? await Task.sleep(for: .milliseconds(20))
             }
-            var said = "palette: “\(wanted)” shows \(typed.count) typed · \(passages.count) passages · \(Trace.memory())\n"
+            var said = "palette: “\(wanted)” shows \(typed.count) typed · \(passages.count) passages · \(meanings.count) by meaning · \(Trace.memory())\n"
             for row in results {
                 said += "palette:   \(row.title.prefix(70)) — \(row.subtitle.prefix(70))\n"
             }

@@ -351,6 +351,7 @@ struct SettingsView: View {
                 listSection(settings: settings)
                 readingSection(settings: settings)
                 writingSection(settings: settings)
+                searchSection(settings: settings)
             case .shortcuts: shortcutsSection
             case .log: logSection
             case .about: EmptyView()
@@ -965,6 +966,42 @@ struct SettingsView: View {
                     "Snippets and behavior from Latex Suite by artisticat1, under the MIT License."
                 ))
                 .foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    /// Search by meaning: one switch, because it is a 45 MB model running
+    /// in the background and not everybody wants one. Off, the passages'
+    /// vectors are left where they are, so turning it back on costs
+    /// nothing; the line under it says how far the library has got.
+    private func searchSection(settings: AppSettings) -> some View {
+        let status = SemanticIndex.shared.status
+        return Section {
+            Toggle(L("뜻으로 찾기", "Search by Meaning"), isOn: Bindable(settings).searchByMeaning)
+                .onChange(of: settings.searchByMeaning) { _, on in
+                    if on, let library = app.library {
+                        SemanticIndex.shared.schedule(library.semanticSources, after: .seconds(1))
+                    } else if !on {
+                        Task { await SemanticIndex.shared.stop() }
+                    }
+                }
+        } header: {
+            pageHeader(L("찾기", "Search"))
+        } footer: {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(L(
+                    "찾기(⌘K)에서 친 말과 뜻이 비슷한 구절도 찾아요. 논문을 이 맥에서만 읽고, 밖으로 보내지 않아요.",
+                    "Search Everything also finds passages that mean what you typed. The papers are read on this Mac and never sent anywhere."
+                ))
+                if settings.searchByMeaning {
+                    if let progress = status.progress {
+                        Text(L("준비 중 · \(progress.done)/\(progress.total)", "Getting ready · \(progress.done)/\(progress.total)"))
+                            .foregroundStyle(.tertiary)
+                    } else if status.isReady {
+                        Text(L("구절 \(status.passageCount)개를 알고 있어요", "\(status.passageCount) passages ready"))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
             }
         }
     }

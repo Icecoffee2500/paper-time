@@ -53,6 +53,18 @@ public struct SemanticChunk: Hashable, Sendable, Codable {
     public var text: String
     public var key: ChunkKey
 
+    /// A passage put back together from what a manifest kept of it — its
+    /// place and its words — so that a vector the store has lost can be made
+    /// again without cutting the page afresh.
+    public init(paperID: UUID, pageIndex: Int, location: Int, length: Int, text: String, key: ChunkKey) {
+        self.paperID = paperID
+        self.pageIndex = pageIndex
+        self.location = location
+        self.length = length
+        self.text = text
+        self.key = key
+    }
+
     public var range: NSRange { NSRange(location: location, length: length) }
 }
 
