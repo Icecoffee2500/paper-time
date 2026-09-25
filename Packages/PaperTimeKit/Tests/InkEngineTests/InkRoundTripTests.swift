@@ -10,6 +10,8 @@ import Testing
 /// by an unrelated PDF reader, and lands where it was drawn.
 @Suite("Ink round trip")
 struct InkRoundTripTests {
+    init() { PencilKitHost.prepare() }
+
     static func blankPDF(size: CGSize = CGSize(width: 612, height: 792), pages: Int = 2) -> Data {
         let data = NSMutableData()
         guard let consumer = CGDataConsumer(data: data) else { return Data() }
@@ -175,6 +177,88 @@ struct InkRoundTripTests {
         let bounds = stroke.renderBounds
         #expect(abs(bounds.minX - 100) < 6 && abs(bounds.maxX - 220) < 6)
         #expect(abs(bounds.midY - 205) < 8)
+    }
+
+    // MARK: - Stroke by stroke
+
+    static func strokes(_ count: Int) -> [PKStroke] {
+        (0..<count).map { n in
+            stroke(from: CGPoint(x: 40, y: 40 + CGFloat(n) * 12), to: CGPoint(x: 300, y: 60 + CGFloat(n) * 12), width: 2 + CGFloat(n % 3))
+        }
+    }
+
+    @Test("Applying the same drawing again leaves the page's ink exactly as it was")
+    func unchangedInkIsLeftAlone() throws {
+        let document = try #require(PDFDocument(data: Self.blankPDF()))
+        let page = try #require(document.page(at: 0))
+        let drawing = PKDrawing(strokes: Self.strokes(5))
+        #expect(InkConverter.apply(drawing, to: page) == 5)
+        let before = page.annotations.map(ObjectIdentifier.init)
+        #expect(InkConverter.isAlreadyWritten(drawing, on: page))
+        #expect(InkConverter.apply(drawing, to: page) == 0)
+        #expect(page.annotations.map(ObjectIdentifier.init) == before)
+    }
+
+    @Test("One stroke more adds one annotation; the others stay the same objects")
+    func oneStrokeMoreIsOneAnnotationMore() throws {
+        let document = try #require(PDFDocument(data: Self.blankPDF()))
+        let page = try #require(document.page(at: 0))
+        let five = Self.strokes(6)
+        InkConverter.apply(PKDrawing(strokes: Array(five.prefix(5))), to: page)
+        let kept = Set(page.annotations.map(ObjectIdentifier.init))
+        #expect(InkConverter.apply(PKDrawing(strokes: five), to: page) == 1)
+        let now = Set(page.annotations.map(ObjectIdentifier.init))
+        #expect(kept.isSubset(of: now) && now.count == 6)
+
+        // Rubbing one out takes that one and nothing else.
+        var fewer = five
+        fewer.remove(at: 2)
+        #expect(InkConverter.apply(PKDrawing(strokes: fewer), to: page) == 0)
+        #expect(page.annotations.count == 5)
+        #expect(Set(page.annotations.map(ObjectIdentifier.init)).isSubset(of: now))
+    }
+
+    @Test("Two identical strokes are two annotations, and stay two")
+    func duplicatesAreCounted() throws {
+        let document = try #require(PDFDocument(data: Self.blankPDF()))
+        let page = try #require(document.page(at: 0))
+        let one = Self.stroke(from: CGPoint(x: 10, y: 10), to: CGPoint(x: 90, y: 30))
+        let drawing = PKDrawing(strokes: [one, one])
+        #expect(InkConverter.apply(drawing, to: page) == 2)
+        #expect(InkConverter.apply(drawing, to: page) == 0)
+        #expect(InkConverter.apply(PKDrawing(strokes: [one]), to: page) == 0)
+        #expect(page.annotations.count == 1)
+    }
+
+    @Test("The digest survives the file, so a reopened page is already written")
+    func digestSurvivesTheFile() throws {
+        let document = try #require(PDFDocument(data: Self.blankPDF()))
+        let page = try #require(document.page(at: 0))
+        let drawing = PKDrawing(strokes: Self.strokes(3))
+        InkConverter.apply(drawing, to: page)
+        let saved = try #require(document.dataRepresentation())
+        let reopened = try #require(PDFDocument(data: saved)?.page(at: 0))
+        #expect(InkConverter.isAlreadyWritten(drawing, on: reopened))
+        // Read back through the sidecar's own format, too: what a later save
+        // hands the writer is a drawing decoded from its data.
+        let decoded = try PKDrawing(data: drawing.dataRepresentation())
+        #expect(InkConverter.isAlreadyWritten(decoded, on: reopened))
+    }
+
+    @Test("Ink of ours from before the digest is written again, once")
+    func inkWithoutADigestIsReplacedOnce() throws {
+        let document = try #require(PDFDocument(data: Self.blankPDF()))
+        let page = try #require(document.page(at: 0))
+        let drawing = PKDrawing(strokes: Self.strokes(2))
+        for annotation in InkConverter.annotations(from: drawing, geometry: PageGeometry(page: page)) {
+            annotation.setValue("", forAnnotationKey: InkConverter.strokeKey)
+            annotation.removeValue(forAnnotationKey: InkConverter.strokeKey)
+            page.addAnnotation(annotation)
+        }
+        #expect(!InkConverter.isAlreadyWritten(drawing, on: page))
+        #expect(InkConverter.apply(drawing, to: page) == 2)
+        #expect(page.annotations.count == 2)
+        #expect(InkConverter.apply(drawing, to: page) == 0)
     }
 }
 

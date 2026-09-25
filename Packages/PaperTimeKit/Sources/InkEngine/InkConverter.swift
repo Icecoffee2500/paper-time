@@ -1,4 +1,5 @@
 import CoreGraphics
+import CryptoKit
 import Foundation
 import PDFKit
 import PencilKit
@@ -24,6 +25,19 @@ public enum InkConverter {
     /// a page of dense handwriting does not produce a megabyte of coordinates.
     static let samplingDistance: CGFloat = 1.5
 
+    /// On every ink annotation of ours: what stroke it was written from, as
+    /// a digest of exactly what went into it — its points on the page, its
+    /// width, its colour.
+    ///
+    /// The writer puts every page's ink back into the file on every save, so
+    /// that the file agrees with the sidecar whoever wrote last. Without a
+    /// way to tell that a stroke is already there, that meant taking every
+    /// stroke off the page and making it again: four hundred strokes to save
+    /// the four hundred and first, and a file that grew by all of them each
+    /// time it was saved. With it, a page whose ink has not changed is left
+    /// alone, and a page that gained one stroke gains one annotation.
+    static let strokeKey = PDFAnnotationKey(rawValue: "/PTInkStroke")
+
     public static func annotations(
         from drawing: PKDrawing,
         geometry: PageGeometry
@@ -32,6 +46,20 @@ public enum InkConverter {
     }
 
     static func annotation(from stroke: PKStroke, geometry: PageGeometry) -> PDFAnnotation? {
+        sample(stroke, geometry: geometry).flatMap(annotation(from:))
+    }
+
+    /// A stroke as it goes into the file: sampled, placed on the page, and
+    /// named by its digest — everything but the annotation itself, which is
+    /// only made for a stroke that is not already there.
+    struct Sampled {
+        var points: [CGPoint]
+        var width: CGFloat
+        var colour: PlatformColor
+        var digest: String
+    }
+
+    static func sample(_ stroke: PKStroke, geometry: PageGeometry) -> Sampled? {
         var points: [CGPoint] = []
         var widths: [CGFloat] = []
 
@@ -45,9 +73,41 @@ public enum InkConverter {
         let width = widths.isEmpty
             ? 2
             : widths.reduce(0, +) / CGFloat(widths.count)
-        guard let path = PlatformBezierPath.polyline(points) else { return nil }
+        let colour = colour(for: stroke)
+        return Sampled(points: points, width: width, colour: colour, digest: digest(points: points, width: width, colour: colour))
+    }
 
-        let padding = max(width, 2)
+    /// The name a stroke goes by in the file. Rounded to a hundredth of a
+    /// point, which is finer than any reader draws and coarser than the
+    /// noise of a drawing read back from its sidecar.
+    static func digest(points: [CGPoint], width: CGFloat, colour: PlatformColor) -> String {
+        var text = "ink1 w\(rounded(width, 100))"
+        if let c = rgba(colour) {
+            text += " c\(rounded(c.0, 1000)),\(rounded(c.1, 1000)),\(rounded(c.2, 1000)),\(rounded(c.3, 1000))"
+        }
+        for p in points { text += " \(rounded(p.x, 100)),\(rounded(p.y, 100))" }
+        return SHA256.hash(data: Data(text.utf8)).prefix(16).map { String(format: "%02x", $0) }.joined()
+    }
+
+    private static func rounded(_ value: CGFloat, _ scale: CGFloat) -> Int {
+        Int((value * scale).rounded())
+    }
+
+    static func rgba(_ colour: PlatformColor) -> (CGFloat, CGFloat, CGFloat, CGFloat)? {
+        #if canImport(UIKit)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        guard colour.getRed(&r, green: &g, blue: &b, alpha: &a) else { return nil }
+        return (r, g, b, a)
+        #else
+        guard let c = colour.usingColorSpace(.sRGB) else { return nil }
+        return (c.redComponent, c.greenComponent, c.blueComponent, c.alphaComponent)
+        #endif
+    }
+
+    static func annotation(from sampled: Sampled) -> PDFAnnotation? {
+        guard let path = PlatformBezierPath.polyline(sampled.points) else { return nil }
+
+        let padding = max(sampled.width, 2)
         let bounds = path.bounds.insetBy(dx: -padding, dy: -padding)
         let annotation = PDFAnnotation(bounds: bounds, forType: .ink, withProperties: nil)
         // PDFKit takes the path relative to the annotation's own origin and
@@ -57,12 +117,13 @@ public enum InkConverter {
         // iPad showed its ink from the sidecar and never noticed; the Mac saw
         // nothing.
         annotation.add(Self.translated(path, by: CGPoint(x: -bounds.minX, y: -bounds.minY)))
-        annotation.color = colour(for: stroke)
+        annotation.color = sampled.colour
         let border = PDFBorder()
-        border.lineWidth = width
+        border.lineWidth = sampled.width
         annotation.border = border
         annotation.userName = ownerName
         annotation.setValue(ownerName, forAnnotationKey: ownerKey)
+        annotation.setValue(sampled.digest, forAnnotationKey: strokeKey)
         return annotation
     }
 
@@ -81,24 +142,67 @@ public enum InkConverter {
 
     // MARK: - Reconciling a page
 
-    /// Replaces the ink this app previously wrote on a page with the drawing's
-    /// current contents.
+    /// Brings the ink this app wrote on a page to the drawing's current
+    /// contents, and returns how many annotations it had to add.
     ///
-    /// Regenerating wholesale, rather than diffing stroke by stroke, keeps the
-    /// file and the sidecar in step by construction. The cost is that edits
-    /// made to *these* annotations in another app are overwritten on the next
-    /// save; highlights and notes are untouched because they are not ours.
+    /// Stroke by stroke: an annotation of ours whose digest names a stroke
+    /// still in the drawing stays exactly as it is — the same object, so a
+    /// save that follows writes nothing for it — and everything else of ours
+    /// goes: strokes rubbed out, and ink from before there were digests,
+    /// which is made again once with one. The file and the sidecar still
+    /// agree by construction. Edits made to *these* annotations in another
+    /// app are still overwritten on the next save, as before; highlights and
+    /// notes are untouched because they are not ours.
     @discardableResult
     public static func apply(
         _ drawing: PKDrawing,
         to page: PDFPage,
         geometry: PageGeometry? = nil
     ) -> Int {
+        let plan = plan(for: drawing, on: page, geometry: geometry)
+        for annotation in plan.remove { page.removeAnnotation(annotation) }
+        var added = 0
+        for sampled in plan.add {
+            guard let annotation = annotation(from: sampled) else { continue }
+            page.addAnnotation(annotation)
+            added += 1
+        }
+        return added
+    }
+
+    /// True when the page already carries exactly this drawing's strokes,
+    /// and nothing else of ours.
+    public static func isAlreadyWritten(_ drawing: PKDrawing, on page: PDFPage, geometry: PageGeometry? = nil) -> Bool {
+        let plan = plan(for: drawing, on: page, geometry: geometry)
+        return plan.remove.isEmpty && plan.add.isEmpty
+    }
+
+    private static func plan(
+        for drawing: PKDrawing, on page: PDFPage, geometry: PageGeometry?
+    ) -> (remove: [PDFAnnotation], add: [Sampled]) {
         let resolved = geometry ?? PageGeometry(page: page)
-        removeOwnedAnnotations(from: page)
-        let created = annotations(from: drawing, geometry: resolved)
-        for annotation in created { page.addAnnotation(annotation) }
-        return created.count
+        let wanted = drawing.strokes.compactMap { sample($0, geometry: resolved) }
+        // How many of each stroke are still to be found on the page: two
+        // strokes drawn exactly alike are two annotations.
+        var missing: [String: Int] = [:]
+        for stroke in wanted { missing[stroke.digest, default: 0] += 1 }
+        var remove: [PDFAnnotation] = []
+        for annotation in page.annotations where isOwned(annotation) {
+            if annotation.type == "Ink", !isMisplaced(annotation),
+               let digest = annotation.value(forAnnotationKey: strokeKey) as? String,
+               let count = missing[digest], count > 0 {
+                missing[digest] = count - 1
+            } else {
+                remove.append(annotation)
+            }
+        }
+        var add: [Sampled] = []
+        for stroke in wanted {
+            guard let count = missing[stroke.digest], count > 0 else { continue }
+            missing[stroke.digest] = count - 1
+            add.append(stroke)
+        }
+        return (remove, add)
     }
 
     static func translated(_ path: PlatformBezierPath, by offset: CGPoint) -> PlatformBezierPath {

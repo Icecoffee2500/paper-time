@@ -244,6 +244,29 @@ struct TextMarkupTests {
         #expect(TextMarkupWriter.isAlreadyWritten(descriptor, on: reloadedPage))
     }
 
+    @Test("A note with words on it is already written once it is in the file")
+    func writtenNotesAreLeftAlone() throws {
+        let document = try Self.makeDocument(text: "handwriting sample")
+        let page = try #require(document.page(at: 0))
+        let note = MarkupDescriptor(
+            kind: .note, pageIndex: 0, rects: [CGRect(x: 72, y: 700, width: 80, height: 14)],
+            color: .blue, comment: "메모 — look again"
+        )
+        #expect(!TextMarkupWriter.isAlreadyWritten(note, on: page))
+        TextMarkupWriter.apply(note, to: page)
+        #expect(TextMarkupWriter.isAlreadyWritten(note, on: page))
+        var reworded = note
+        reworded.comment = "something else"
+        #expect(!TextMarkupWriter.isAlreadyWritten(reworded, on: page))
+
+        let written = try #require(document.dataRepresentation())
+        let reloadedPage = try #require(PDFDocument(data: written)?.page(at: 0))
+        #expect(TextMarkupWriter.isAlreadyWritten(note, on: reloadedPage))
+        // What the list shows is still the note's words.
+        let back = TextMarkupWriter.descriptors(in: try #require(PDFDocument(data: written)))
+        #expect(back.first { $0.id == note.id }?.comment == note.comment)
+    }
+
     @Test("A rectangle with nan in it is not finite, whatever isEmpty says")
     func nanRectangleIsCaught() {
         let bad = CGRect(x: CGFloat.nan, y: CGFloat.nan, width: 316, height: 34)
