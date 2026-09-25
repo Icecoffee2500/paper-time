@@ -171,3 +171,40 @@ export function rightsHandler(bytes: Uint8Array): string | null {
   const text = new TextDecoder('latin1').decode(bytes)
   return KNOWN_HANDLERS.find((handler) => text.includes(handler)) ?? null
 }
+
+const ENCRYPT = new TextEncoder().encode('/Encrypt')
+
+/**
+ * Whether the file names an `/Encrypt` dictionary anywhere a trailer would.
+ *
+ * Asked before anything is written into a file. pdf-lib opens an encrypted
+ * PDF when it is told to ignore the encryption, and then writes every new
+ * string and stream in the clear beside objects that are not — measured, qpdf
+ * decrypts the marks it wrote to garbage and pdf.js shows them empty. So the
+ * question is asked of the bytes as well as of pdf-lib: a trailer's
+ * `/Encrypt` is never inside a compressed stream, even in a file whose cross
+ * reference is one, so it is always there to be read. The key has to be
+ * followed by a dictionary or a reference — `/EncryptMetadata` is not it.
+ *
+ * It can be wrong in one direction only: a page whose content stream is not
+ * compressed and prints those words makes a file this app will not write
+ * into. The marks then stay in Paper Time, which loses nothing.
+ */
+export function namesEncryption(bytes: Uint8Array): boolean {
+  let from = 0
+  for (;;) {
+    const at = bytes.indexOf(ENCRYPT[0], from)
+    if (at < 0 || at + ENCRYPT.length > bytes.length) return false
+    from = at + 1
+    let same = true
+    for (let k = 1; k < ENCRYPT.length; k += 1) {
+      if (bytes[at + k] !== ENCRYPT[k]) {
+        same = false
+        break
+      }
+    }
+    if (!same) continue
+    const after = latin1(bytes, at + ENCRYPT.length, at + ENCRYPT.length + 32)
+    if (/^\s*(?:<<|\d+\s+\d+\s+R)/.test(after)) return true
+  }
+}

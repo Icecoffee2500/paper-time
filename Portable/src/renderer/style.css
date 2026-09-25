@@ -840,6 +840,23 @@ body[data-platform='darwin'] .window-buttons {
   border-top: 1px solid var(--separator);
 }
 
+.reader-footer-end {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* A state, not an error: the same grey as the rest of the line, and it gives
+   way first when the pane is narrow. */
+.reader-kept {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: default;
+}
+
 /* ---------------------------------------------------------------- inspector */
 
 .field {

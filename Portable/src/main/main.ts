@@ -19,6 +19,7 @@ import { DEFAULT_EXPORT, formatBibliography } from '../shared/bibtex.js'
 import { SketchElement } from '../shared/sketch.js'
 import { InkStroke } from '../shared/ink.js'
 import {
+  WriteRefused,
   isOurMark,
   readDrawings,
   readMarks,
@@ -28,7 +29,17 @@ import {
   type MarkupRecord,
   type PageDrawing,
 } from './pdfwrite.js'
-import { diagnose, headBytes, headLine, looksWhole, type ByteTrouble } from '../shared/pdfLock.js'
+import {
+  freshJournal,
+  merged,
+  reconcile,
+  recordChanges,
+  upgradeLegacy,
+  type Held,
+  type Journal,
+} from '../shared/markJournal.js'
+import { isoTimestamp } from '../shared/coding.js'
+import { diagnose, headBytes, headLine, looksWhole, namesEncryption, type ByteTrouble } from '../shared/pdfLock.js'
 import { holdInMemory, rememberLibrary, settings, update } from './settings.js'
 // `L` is the layout module in this file, so the two-language helper comes
 // in under a name of its own.
@@ -719,6 +730,7 @@ const handlers: Record<string, Handler> = {
 
   'sketch:save': (async ({ id, pageIndex, elements }: { id: string; pageIndex: number; elements: unknown[] }) => {
     await (await ownerOf(id))?.saveSketch(id, pageIndex, elements)
+    touched(id).sketch.add(pageIndex)
     schedulePDFWrite(id)
   }) as Handler,
 
@@ -729,26 +741,49 @@ const handlers: Record<string, Handler> = {
     if (!library) return
     await library.saveInk(id, pageIndex, strokes)
     await supersedeAppleInk(id, pageIndex)
+    touched(id).ink.add(pageIndex)
     schedulePDFWrite(id)
   }) as Handler,
 
   'marks:load': (async ({ id }: { id: string }) => {
-    const row = await (await ownerOf(id))?.paper(id)
-    if (!row?.file || !row.exists) return {}
-    const found = await readMarks(await fsp.readFile(row.file))
+    const owner = await ownerOf(id)
+    const row = await owner?.paper(id)
+    if (!owner || !row?.file || !row.exists) return {}
+    const bytes = await fsp.readFile(row.file)
+    const found = await readMarks(bytes)
+    // This machine's journal from before 0.9.9 said only when each mark was
+    // made, which the Mac reads as "taken away". Brought up to date from the
+    // file the first time the paper is opened here.
+    const own = await ownJournal(id, owner.root)
+    if (upgradeLegacy(own.journal, found)) {
+      own.journal.updated = isoTimestamp(new Date())
+      await keepOwnJournal(id, owner.root, own)
+    }
+    // What the file holds, overruled by what every device's journal says: a
+    // mark made on a Mac a second ago, or one this machine could not put into
+    // an encrypted file, is a mark all the same.
+    const { pages } = reconcile(found, merged(await journalsFor(id, owner.root)))
     const out: Record<number, MarkupRecord[]> = {}
-    for (const [pageIndex, marks] of found) out[pageIndex] = marks
-    // Held here too, so a save that only touched the pen can put every page's
-    // marks back exactly as they were.
+    for (const [pageIndex, marks] of pages) out[pageIndex] = marks
+    // Held here as the window has them, so the next save can tell what the
+    // window changed.
     marksInMemory.set(id, out)
+    // An encrypted file carries none of what was made on it here, and the
+    // window says so the moment the paper opens — not only after the next
+    // save is turned away, which after a restart may be never.
+    if (namesEncryption(bytes) && await holdsAnything(owner, id, pages)) {
+      send('paper:kept', { id, reason: 'encrypted' })
+    }
     return out
   }) as Handler,
 
   'marks:save': (async ({ id, pageIndex, marks }: { id: string; pageIndex: number; marks: MarkupRecord[] }) => {
     const pages = marksInMemory.get(id) ?? {}
+    const before = pages[pageIndex] ?? []
     pages[pageIndex] = marks
     marksInMemory.set(id, pages)
-    await noteMarksInJournal(id, marks)
+    await recordInJournal(id, pageIndex, before, marks, pages)
+    touched(id).marks.add(pageIndex)
     schedulePDFWrite(id)
   }) as Handler,
 
@@ -872,14 +907,37 @@ const PDF_WRITE_DELAY = 1500
 const pending = new Map<string, NodeJS.Timeout>()
 
 /**
- * Every page's marks for the papers that are open.
+ * Every page's marks for the papers that are open, as the window has them.
  *
- * Marks live in the PDF and nowhere else — that is how a highlight made here
- * shows up in Preview — so a save has to put back the pages it is not
- * changing as well as the one it is. Read once when the paper opens, kept
- * here, written whole.
+ * Read when the paper opens and replaced page by page as the window saves, so
+ * that each save can be told apart from what came before it — which is what
+ * goes into the journal. The file itself is written from the journals, not
+ * from here: see `writePDF`.
  */
 const marksInMemory = new Map<string, Record<number, MarkupRecord[]>>()
+
+/**
+ * The pages whose layers this run has saved, per paper.
+ *
+ * A page is this build's to rewrite for a layer when it has a sidecar here —
+ * or when it was saved here and has none any more, because the last stroke on
+ * it was rubbed out and an empty sidecar is removed. What a page must never be
+ * is rewritten because it merely has something in the file: a page drawn on a
+ * Mac carries the Mac's strokes in the PDF and in its `.drawing`, and in no
+ * sidecar of this build's, and treating "no sidecar" as "no strokes" rubbed
+ * them out of the file the first time this machine saved anything else.
+ * Kept for the run; a page saved once stays this build's to write.
+ */
+const touchedPages = new Map<string, { sketch: Set<number>; ink: Set<number>; marks: Set<number> }>()
+
+function touched(id: string) {
+  let pages = touchedPages.get(id)
+  if (!pages) {
+    pages = { sketch: new Set(), ink: new Set(), marks: new Set() }
+    touchedPages.set(id, pages)
+  }
+  return pages
+}
 
 function schedulePDFWrite(id: string) {
   clearTimeout(pending.get(id))
@@ -889,45 +947,89 @@ function schedulePDFWrite(id: string) {
   }, PDF_WRITE_DELAY))
 }
 
-async function flushToPDF(id: string): Promise<{ written: number } | { error: string }> {
-  if (!library) return { error: 'No library is open.' }
-  const row = await library.paper(id)
+/** One write at a time per paper: two would read the same file and race. */
+const flushing = new Map<string, Promise<unknown>>()
+
+type FlushResult = { written: number } | { kept: 'encrypted' } | { error: string }
+
+function flushToPDF(id: string): Promise<FlushResult> {
+  const before = flushing.get(id) ?? Promise.resolve()
+  const next = before.then(() => writePDF(id), () => writePDF(id))
+  flushing.set(id, next)
+  void next.finally(() => {
+    if (flushing.get(id) === next) flushing.delete(id)
+  })
+  return next
+}
+
+async function writePDF(id: string): Promise<FlushResult> {
+  // The folder the paper is in, and every sidecar and journal from there:
+  // the file, its drawings and its marks all live in one folder.
+  const owner = await ownerOf(id)
+  if (!owner) return { error: 'No library is open.' }
+  const row = await owner.paper(id)
   if (!row?.file || !row.exists) return { error: 'The PDF is not where the record says it is.' }
+  let wanted = new Map<number, MarkupRecord[]>()
   try {
-    const pages = await library.annotatedPages(id)
-    const marks = marksInMemory.get(id) ?? {}
-    const inFile = await readDrawings(await fsp.readFile(row.file))
-    // Every page that has anything of ours on it, or had something on it that
-    // has since been rubbed out and must now come out of the file too.
-    const indices = [...new Set([
-      ...pages.sketch,
-      ...pages.ink,
-      ...Object.keys(marks).map(Number),
-      ...inFile.keys(),
-    ])].sort((a, b) => a - b)
+    const pages = await owner.annotatedPages(id)
+    const saved = touched(id)
+    const current = await fsp.readFile(row.file)
+    // The marks the file should hold: what it holds now, overruled by every
+    // device's journal — this machine's changes are in its own by now, and a
+    // Mac that marked the page a second ago is in its. `DocumentSession`
+    // writes the file the same way, to agree with all of them.
+    const reconciled = reconcile(await readMarks(current), merged(await journalsFor(id, owner.root)))
+    wanted = reconciled.pages
+    const dirty = reconciled.dirty
+    const sketchPages = new Set([...pages.sketch, ...saved.sketch])
+    const inkPages = new Set([...pages.ink, ...saved.ink])
+    const markPages = new Set([...saved.marks, ...dirty])
+    const indices = [...new Set([...sketchPages, ...inkPages, ...markPages])].sort((a, b) => a - b)
     const drawings: PageDrawing[] = []
     for (const pageIndex of indices) {
-      const elements = ((await library.loadSketch(id, pageIndex)) ?? []).map(SketchElement.from)
-      const strokes = ((await library.loadInk(id, pageIndex)) ?? []).map(InkStroke.from)
-      const pageMarks = marks[pageIndex]
+      const managesSketch = sketchPages.has(pageIndex)
+      const managesInk = inkPages.has(pageIndex)
       drawings.push({
         pageIndex,
-        elements,
-        strokes,
+        elements: managesSketch ? ((await owner.loadSketch(id, pageIndex)) ?? []).map(SketchElement.from) : [],
+        strokes: managesInk ? ((await owner.loadInk(id, pageIndex)) ?? []).map(InkStroke.from) : [],
         // Only the marks this app made are ours to rewrite; one that was in
         // the file when it arrived stays where it is, untouched.
-        marks: pageMarks?.filter(isOurMark),
-        managesMarks: pageMarks !== undefined,
+        marks: (wanted.get(pageIndex) ?? []).filter(isOurMark),
+        managesSketch,
+        managesInk,
+        managesMarks: markPages.has(pageIndex),
       })
     }
     if (drawings.length === 0) return { written: 0 }
-    const bytes = await writeDrawings(await fsp.readFile(row.file), drawings)
-    await writeAtomically(row.file, bytes)
+    const bytes = await writeDrawings(current, drawings)
+    // Nothing to change is nothing to write: the same bytes come back.
+    if (bytes !== current) await writeAtomically(row.file, bytes)
     send('paper:saved', { id })
     return { written: drawings.length }
   } catch (error) {
+    if (error instanceof WriteRefused) {
+      // Not a failure, and not said as one. Everything is where it was put —
+      // the shapes and the strokes in their sidecars, the marks in the
+      // journal — and the window says that the file is not where they are.
+      // Once the last of them is taken away there is nothing left to say it
+      // about, and the line goes.
+      const held = await holdsAnything(owner, id, wanted)
+      send('paper:kept', { id, reason: held ? error.reason : null })
+      return { kept: error.reason }
+    }
     return { error: String((error as Error).message ?? error) }
   }
+}
+
+/**
+ * Whether anything this build made is on the paper — a mark, a shape, a
+ * stroke — for the line that says the file does not carry it.
+ */
+async function holdsAnything(owner: Library, id: string, marks: Map<number, MarkupRecord[]>): Promise<boolean> {
+  for (const list of marks.values()) if (list.some(isOurMark)) return true
+  const drawn = await owner.annotatedPages(id)
+  return drawn.sketch.length > 0 || drawn.ink.length > 0
 }
 
 /**
@@ -1007,32 +1109,117 @@ async function supersedeAppleInk(id: string, pageIndex: number) {
   await fsp.rename(file, `${file}.superseded-${stamp}`)
 }
 
+// MARK: - The marks journal
+
+/** What the Mac's `DeviceIdentity.platformName` is for this machine. */
+const PLATFORM_NAME = process.platform === 'win32' ? 'Windows' : process.platform === 'linux' ? 'Linux' : 'Mac'
+
 /**
- * Records in this device's journal that it made these marks.
+ * This device's journal for each paper, held here once read.
+ *
+ * Held, not re-read, because it is the one journal nobody else writes, and
+ * because a save must not depend on the file coming back: `loaded` is false
+ * when the copy on disk would not be read — still arriving down a cloud
+ * drive, or damaged — and a journal that was not read is never written over.
+ * What is recorded meanwhile is kept here, merged in once it can be read.
+ */
+const ownJournals = new Map<string, { journal: Journal; loaded: boolean }>()
+
+async function ownJournal(id: string, root: string) {
+  const known = ownJournals.get(id)
+  if (known?.loaded) return known
+  const file = L.marksPath(root, id, deviceIdentity)
+  try {
+    const disk = asJournal(await readJSON(file)) ?? freshJournal(deviceIdentity, PLATFORM_NAME)
+    for (const [key, entry] of Object.entries(known?.journal.entries ?? {})) {
+      const there = disk.entries[key]
+      if (!there || Date.parse(there.at) < Date.parse(entry.at)) disk.entries[key] = entry
+    }
+    const own = { journal: disk, loaded: true }
+    ownJournals.set(id, own)
+    return own
+  } catch (error) {
+    console.error("marks journal - this device's journal could not be read, and is not written over:", error)
+    if (known) return known
+    const own = { journal: freshJournal(deviceIdentity, PLATFORM_NAME), loaded: false }
+    ownJournals.set(id, own)
+    return own
+  }
+}
+
+async function keepOwnJournal(id: string, root: string, own: { journal: Journal; loaded: boolean }) {
+  if (!own.loaded) return
+  own.journal.device = deviceIdentity
+  own.journal.name = PLATFORM_NAME
+  await writeJSON(L.marksPath(root, id, deviceIdentity), own.journal)
+}
+
+/** A record read from disk, if it has a journal's shape. */
+function asJournal(raw: unknown): Journal | null {
+  if (!raw || typeof raw !== 'object') return null
+  const journal = raw as Journal
+  if (!journal.entries || typeof journal.entries !== 'object') journal.entries = {}
+  return journal
+}
+
+/**
+ * Every device's journal for a paper: the others as their files have them,
+ * this one as it is held here. A journal that will not be read is left out —
+ * it is somebody's, and it is late, and the file already holds what it said
+ * the last time that device wrote it.
+ */
+async function journalsFor(id: string, root: string): Promise<Held[]> {
+  const out: Held[] = []
+  let names: string[] = []
+  try {
+    names = await fsp.readdir(L.marksDir(root, id))
+  } catch {
+    names = []
+  }
+  for (const name of names) {
+    if (!name.endsWith('.json')) continue
+    try {
+      const journal = asJournal(await readJSON(path.join(L.marksDir(root, id), name)))
+      if (!journal) continue
+      const device = typeof journal.device === 'string' ? journal.device : name.slice(0, -'.json'.length)
+      if (device === deviceIdentity) continue
+      out.push({ device, journal })
+    } catch {
+      continue
+    }
+  }
+  const own = await ownJournal(id, root)
+  out.push({ device: deviceIdentity, journal: own.journal })
+  return out
+}
+
+/**
+ * Records in this device's journal what one save of a page changed.
  *
  * The journal is the fast path between machines: the PDF is the durable
  * record and is rewritten a second or so later, but a small file naming what
- * this device just did lands in the synced folder immediately. The Mac writes
- * the same shape — a device name and a map of mark id to when it was made —
+ * this device just did lands in the synced folder at once. It is also where a
+ * mark stays when the PDF cannot take it. The Mac writes the same shape — a
+ * `MarkupDescriptor` for a mark made or changed, nothing for one taken away —
  * and reconciles from it.
  */
-async function noteMarksInJournal(id: string, marks: MarkupRecord[]) {
-  if (!library) return
-  const file = L.marksPath(library.root, id, deviceIdentity)
-  const existing = (await readJSON(file)) ?? {}
-  const entries = (existing.entries as Record<string, unknown>) ?? {}
-  const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
-  for (const mark of marks) {
-    if (!isOurMark(mark)) continue
-    if (!entries[mark.id]) entries[mark.id] = { at: now }
+async function recordInJournal(
+  id: string,
+  pageIndex: number,
+  before: MarkupRecord[],
+  after: MarkupRecord[],
+  pages: Record<number, MarkupRecord[]>,
+) {
+  const owner = await ownerOf(id)
+  if (!owner) return
+  const own = await ownJournal(id, owner.root)
+  const elsewhere = new Set<string>()
+  for (const [index, marks] of Object.entries(pages)) {
+    if (Number(index) === pageIndex) continue
+    for (const mark of marks) elsewhere.add(mark.id.toUpperCase())
   }
-  await writeJSON(file, {
-    ...existing,
-    device: deviceIdentity,
-    name: process.platform === 'win32' ? 'Windows' : process.platform === 'linux' ? 'Linux' : 'Mac',
-    entries,
-    updated: now,
-  })
+  if (!recordChanges(own.journal, pageIndex, before, after, new Date(), elsewhere)) return
+  await keepOwnJournal(id, owner.root, own)
 }
 
 /** How many pages a PDF has, read without rendering it. */

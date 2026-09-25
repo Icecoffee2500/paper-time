@@ -1371,8 +1371,19 @@ onEvent((event, payload) => {
     case 'theme:changed':
       if (store.settings.appearance === 'system') applyTheme()
       break
-    case 'paper:saved':
+    case 'paper:saved': {
+      const { id } = payload as { id: string }
+      readers.get(id)?.noteKept(null)
       break
+    }
+    case 'paper:kept': {
+      // What was made here is in Paper Time and not in the file. The reader
+      // for that paper says so, once, where it says the page and the zoom;
+      // no reason means there is nothing left to say it about.
+      const { id, reason } = payload as { id: string; reason: 'encrypted' | null }
+      readers.get(id)?.noteKept(reason)
+      break
+    }
     case 'menu':
       runMenuCommand(String(payload))
       break
