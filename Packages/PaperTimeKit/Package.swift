@@ -14,6 +14,7 @@ let package = Package(
         .library(name: "PDFReader", targets: ["PDFReader"]),
         .library(name: "PDFUpdate", targets: ["PDFUpdate"]),
         .library(name: "Importers", targets: ["Importers"]),
+        .library(name: "Semantic", targets: ["Semantic"]),
     ],
     targets: [
         .executableTarget(
@@ -46,6 +47,17 @@ let package = Package(
         .target(name: "PDFUpdate"),
         .target(name: "PDFReader", dependencies: ["PaperCore", "InkEngine", "LibraryStore", "PDFUpdate"]),
         .target(name: "Importers", dependencies: ["PaperCore", "Bibliography", "LibraryStore"]),
+        // Search by meaning. The model is committed compiled (.mlmodelc) and
+        // copied as it is: `swift test` cannot compile a Core ML model, and a
+        // model compiled on the reader's machine costs seconds on first use.
+        .target(
+            name: "Semantic",
+            resources: [
+                .copy("Resources/MiniLM-L6-v2.mlmodelc"),
+                .copy("Resources/vocab.txt"),
+                .copy("Resources/MiniLM-L6-v2-LICENSE.txt"),
+            ]
+        ),
 
         .testTarget(name: "PaperCoreTests", dependencies: ["PaperCore"], resources: [.copy("Fixtures")]),
         .testTarget(name: "LibraryStoreTests", dependencies: ["LibraryStore"]),
@@ -59,5 +71,6 @@ let package = Package(
         .testTarget(name: "InkEngineTests", dependencies: ["InkEngine"]),
         .testTarget(name: "PDFReaderTests", dependencies: ["PDFReader"]),
         .testTarget(name: "PDFUpdateTests", dependencies: ["PDFUpdate"], resources: [.copy("Fixtures")]),
+        .testTarget(name: "SemanticTests", dependencies: ["Semantic"], resources: [.copy("Fixtures")]),
     ]
 )
