@@ -139,6 +139,19 @@ export function showSettings(actions: SettingsActions) {
       (value) => actions.set({ pageTint: value }),
     ))
 
+    // Where the Mac keeps it, under Reading: the switch for the palette's
+    // section of passages that mean what was typed, and for the index it
+    // builds in the background to answer with.
+    body.append(toggle(
+      L('뜻으로 찾기', 'Search by Meaning'),
+      store.settings.semanticSearch !== false,
+      (value) => actions.set({ semanticSearch: value }),
+    ))
+    body.append(note(L(
+      '찾을 때 뜻이 비슷한 구절도 같이 보여줘요. 논문은 이 기기에서만 읽어요.',
+      'Finds passages that mean what you typed, beside the exact matches. Everything stays on this device.',
+    )))
+
     body.append(el('div', { class: 'set-section', text: L('쓰기', 'Writing') }))
     body.append(toggle(
       L('LaTeX 단축 입력', 'LaTeX Shortcuts'),

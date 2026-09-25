@@ -53,6 +53,7 @@ import { captureAndQuit, probeArgument, runProbe } from './probe.js'
 import { capture as captureWindow, send as sendFeedback } from './feedback.js'
 import type { ServiceReply, ServiceStats } from './textService.js'
 import type { TextSource } from './textIndex.js'
+import { SemanticSearch } from './semantic.js'
 
 const isMac = process.platform === 'darwin'
 /** See `--papertime-chrome` in `preload.ts`. */
@@ -346,6 +347,9 @@ async function snapshot(refused: string[] = []): Promise<LibrarySnapshot | { err
     }
     textSources = readable
     textSourcesSent = false
+    // The papers may have changed; search by meaning catches up once things
+    // are quiet. Same papers as last time costs a comparison and nothing sent.
+    semantic().schedule(5000)
     await settleVocabulary(rows)
     const { tags, collections } = await vocabulary()
     return {
@@ -551,6 +555,12 @@ const textSearches = new Map<number, { target: WebContents; token: number }>()
 const textTokens = new Map<string, number>()
 let textTokenCount = 0
 const textStatsWaiting: ((stats: ServiceStats | null) => void)[] = []
+/** Pages asked of the text service for search by meaning, by request number. */
+const textTextsWaiting = new Map<number, {
+  resolve: (reply: { papers: { id: string; pages: string[] }[]; unread: string[]; ms: number }) => void
+  reject: (error: Error) => void
+}>()
+let textTextsCount = 0
 
 /**
  * Where the text is kept: the app's own folder, never the library's.
@@ -564,6 +574,41 @@ function textCacheDirectory(): string {
   if (chosen) return chosen
   if (isProbeRun()) return path.join(app.getPath('temp'), 'Paper Time probe', 'Text')
   return path.join(app.getPath('userData'), 'Text')
+}
+
+/**
+ * Where the vectors are kept: beside the text, under the same rule. One
+ * store for the app rather than one per folder — it keys by passage text,
+ * and a paper in two folders shares its vectors.
+ */
+function semanticCacheDirectory(): string {
+  const chosen = probeArgument('semantic-cache')
+  if (chosen) return chosen
+  if (isProbeRun()) return path.join(app.getPath('temp'), 'Paper Time probe', 'Semantic')
+  return path.join(app.getPath('userData'), 'Semantic')
+}
+
+const semanticProbe = probeArgument('semantic-index') === '1' || probeArgument('semantic-query') != null
+
+let semanticSearch: SemanticSearch | null = null
+
+/** Search by meaning, made the first time anything asks about it. */
+function semantic(): SemanticSearch {
+  if (semanticSearch) return semanticSearch
+  semanticSearch = new SemanticSearch(semanticCacheDirectory(), {
+    sources: () => [...textSources.values()],
+    texts: (ids) => new Promise((resolve, reject) => {
+      const token = (textTextsCount += 1)
+      textTextsWaiting.set(token, { resolve, reject })
+      textsWithSources().postMessage({ type: 'texts', token, ids })
+    }),
+    enabled: () => settings().semanticSearch !== false,
+    send,
+    log: (line) => {
+      if (semanticProbe || isProbeRun()) process.stderr.write(`${line}\n`)
+    },
+  })
+  return semanticSearch
 }
 
 /** The files pdf.js may ask for, by name — nothing with a path in it. */
@@ -619,7 +664,16 @@ function texts(): UtilityProcess {
       }
       case 'warmed':
         send('text:warmed', message)
+        // The pages are in hand now; search by meaning catches up shortly.
+        semantic().schedule(2000)
         break
+      case 'texts': {
+        const asked = textTextsWaiting.get(message.token)
+        if (!asked) break
+        textTextsWaiting.delete(message.token)
+        asked.resolve({ papers: message.papers, unread: message.unread, ms: message.ms })
+        break
+      }
       case 'asset':
         void textAsset(message.kind, message.name).then((data) => {
           child.postMessage({ type: 'asset', request: message.request, data })
@@ -640,6 +694,8 @@ function texts(): UtilityProcess {
     textSearches.clear()
     textTokens.clear()
     for (const waiting of textStatsWaiting.splice(0)) waiting(null)
+    for (const waiting of textTextsWaiting.values()) waiting.reject(new Error('the text service ended'))
+    textTextsWaiting.clear()
   })
   textService = child
   return child
@@ -697,7 +753,16 @@ const handlers: Record<string, Handler> = {
   // The effective root, not the remembered one: a probe run opens a folder
   // of its own and the window must be told about that one.
   'settings:get': () => ({ ...settings(), libraryRoot: library?.root ?? settings().libraryRoot }),
-  'settings:set': ((patch: Record<string, unknown>) => update(patch)) as Handler,
+  'settings:set': ((patch: Record<string, unknown>) => {
+    const next = update(patch)
+    // The switch for search by meaning: off ends the worker and what it was
+    // doing; on starts the build the way a library read would.
+    if ('semanticSearch' in patch) {
+      if (next.semanticSearch === false) semantic().stop()
+      else semantic().schedule(500)
+    }
+    return next
+  }) as Handler,
 
   'library:choose': async (_args: never, sender: BrowserWindow | null) => {
     const result = await dialog.showOpenDialog(sender ?? window!, {
@@ -1051,6 +1116,17 @@ const handlers: Record<string, Handler> = {
     textStatsWaiting.push(resolve)
     textService.postMessage({ type: 'stats' })
   }),
+
+  // Search by meaning. The window says what was typed and which places its
+  // exact search already shows; the answer is passages, best first.
+  'semantic:search': (({ query, k, shown }: { query: string; k?: number; shown?: string[] }) =>
+    semantic().search(query, k ?? 8, shown ?? [])) as Handler,
+  'semantic:status': () => semantic().status(),
+  /** For a probe: builds now and waits, then says what the worker has. */
+  'semantic:build': async () => {
+    await semantic().build()
+    return { status: semantic().status(), stats: await semantic().stats(), unread: semantic().unread }
+  },
 }
 
 ipcMain.handle(CHANNEL.invoke, async (event, name: string, args: unknown) => {
@@ -1465,9 +1541,40 @@ app.whenReady().then(async () => {
 
   const probe = probeArgument('probe')
   const shot = probeArgument('shot')
-  if (probe && window) void runProbe(window, probe)
+  // `--papertime-semantic-index=1` builds the index for the probe library
+  // now and says what it cost; `--papertime-semantic-query=<text>` asks it,
+  // twice, so the second line shows the cost once the model is warm. Both
+  // print to stderr. Then the probe's own steps, if any; otherwise quit.
+  if (semanticProbe) void runSemanticProbe().then(() => {
+    if (probe && window) void runProbe(window, probe)
+    else if (shot && window) void captureAndQuit(window, shot)
+    else app.quit()
+  })
+  else if (probe && window) void runProbe(window, probe)
   else if (shot && window) void captureAndQuit(window, shot)
 })
+
+async function runSemanticProbe() {
+  const out = (line: string) => process.stderr.write(`${line}\n`)
+  if (!library) return out('semantic: no library')
+  await semantic().build()
+  const stats = await semantic().stats()
+  const status = semantic().status()
+  out(`semantic: status enabled=${status.enabled} ready=${status.ready} passages=${status.passages}` +
+    (stats ? ` · worker loaded=${stats.loaded} loadMs=${stats.loadMs === null ? '-' : Math.round(stats.loadMs)} vectors=${stats.vectors} rss=${stats.rssMB} MB` : ''))
+  const query = probeArgument('semantic-query')
+  if (!query) return
+  for (const round of [1, 2]) {
+    const t0 = performance.now()
+    const answer = await semantic().search(query, 8)
+    out(`semantic: “${query}” → ${answer.hits.length} passages in ${(performance.now() - t0).toFixed(1)} ms (worker ${answer.ms.toFixed(1)} ms)${round === 2 ? ' · asked again' : ''}`)
+    if (round === 2) break
+    answer.hits.forEach((hit, i) => {
+      const title = textSources.get(hit.passage.paperID)?.title ?? hit.passage.paperID
+      out(`semantic:   ${i + 1}. ${hit.score.toFixed(3)}  ${title.slice(0, 40)} · p${hit.passage.pageIndex + 1} @${hit.passage.location}+${hit.passage.length} | ${hit.snippet.slice(0, 90)}`)
+    })
+  }
+}
 
 app.on('window-all-closed', () => {
   if (!isMac) app.quit()
@@ -1476,6 +1583,7 @@ app.on('window-all-closed', () => {
 // The text service goes with the app, whatever it was in the middle of.
 app.on('will-quit', () => {
   textService?.kill()
+  semanticSearch?.end()
 })
 
 app.on('activate', () => {

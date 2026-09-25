@@ -69,6 +69,32 @@ export interface Requests {
     }
     result: { ok: boolean; url?: string; kept?: string; error?: string }
   }
+  /**
+   * Search by meaning: the passages closest to what was typed, best first —
+   * at most `k`, at most three from one paper, none at a place in `shown`
+   * (`"paperID#page"`, the exact search's). `ready` false means the index is
+   * not built, or the switch is off, and the palette shows no section.
+   */
+  'semantic:search': {
+    args: { query: string; k?: number; shown?: string[] }
+    result: { hits: MeaningHitDTO[]; ms: number; ready: boolean }
+  }
+  'semantic:status': { args: void; result: SemanticStatusDTO }
+  /** For a probe: builds now and waits. */
+  'semantic:build': { args: void; result: { status: SemanticStatusDTO; stats: unknown; unread: string[] } }
+}
+
+export interface MeaningHitDTO {
+  passage: { paperID: string; pageIndex: number; location: number; length: number }
+  snippet: string
+  score: number
+}
+
+export interface SemanticStatusDTO {
+  enabled: boolean
+  ready: boolean
+  passages: number
+  progress: { done: number; total: number } | null
 }
 
 export type RequestName = keyof Requests

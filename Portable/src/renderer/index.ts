@@ -63,6 +63,7 @@ import { closePages, isPagesShowing, togglePages } from './ui/pages.js'
 import { closePalette, isPaletteOpen, openPalette } from './ui/search.js'
 import { FindBar } from './ui/findBar.js'
 import { handleTextEvent, searchText, type TextHit } from './textSearch.js'
+import { handleMeaningEvent } from './meaningSearch.js'
 import { graphemes } from '../shared/textFold.js'
 import type { LibrarySnapshot, WindowBounds } from '../shared/api.js'
 import { expandedIDs } from '../shared/sketch.js'
@@ -1444,6 +1445,10 @@ onEvent((event, payload) => {
     case 'text:done':
     case 'text:warmed':
       handleTextEvent(event, payload)
+      break
+    case 'semantic:progress':
+    case 'semantic:ready':
+      handleMeaningEvent(event, payload)
       break
     case 'menu:feedback':
       void showFeedback()

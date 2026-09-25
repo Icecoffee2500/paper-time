@@ -6,7 +6,8 @@
  * the process after ten idle minutes; the next question starts it again,
  * and the cache on disk means that costs a model load and nothing more.
  *
- * No window is wired to this yet: the palette that uses it is a later task.
+ * `main.ts` owns one of these: it hands over the pages the text service has,
+ * fills, and answers the palette's `semantic:search`.
  */
 import { utilityProcess, type UtilityProcess } from 'electron'
 import fs from 'node:fs'
@@ -103,10 +104,21 @@ export class SemanticClient {
   }
 
   /** The pages to search; the worker says how many passages the cache lacks. */
-  async setPages(pages: SemanticPage[]): Promise<{ passages: number; missing: number }> {
+  async setPages(pages: SemanticPage[]): Promise<{ passages: number; missing: number; papers: number }> {
     const reply = await this.askUntagged({ type: 'pages', pages }, 'pages')
     this.pagesSent = true
-    return { passages: reply.passages, missing: reply.missing }
+    return { passages: reply.passages, missing: reply.missing, papers: reply.papers }
+  }
+
+  /** Forgets papers gone for a month and drops the vectors only they had. */
+  async sweep(): Promise<{ forgotten: number; dropped: number }> {
+    const reply = await this.askUntagged({ type: 'sweep' }, 'swept')
+    return { forgotten: reply.forgotten, dropped: reply.dropped }
+  }
+
+  /** Whether a search would answer: the pages are with the worker. */
+  get hasPages(): boolean {
+    return this.pagesSent
   }
 
   /** Embeds what the cache lacks and saves it. Returns a token `cancel` takes. */
