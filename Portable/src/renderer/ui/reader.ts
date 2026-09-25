@@ -16,6 +16,7 @@ import { freshReaderState, store, type ReaderState } from '../state.js'
 import { PAPER_DRAG_TYPE } from '../../shared/split.js'
 import { loadDocument, TextLayer, type PDFDocumentProxy, type PDFPageProxy } from '../pdf.js'
 import { headBytes, headLine, rightsHandler, type ByteTrouble, type PDFLock } from '../../shared/pdfLock.js'
+import type { KeptReason } from '../../shared/api.js'
 import {
   guessKind, hasAbstract, hasIdentifier, hasReferences, namesACourse, type DocumentKind,
 } from '../../shared/documentKind.js'
@@ -463,7 +464,7 @@ export class Reader {
    * footer, where the Mac says it, in the voice of a state and not of an
    * error: nothing was lost, and nothing needs doing.
    */
-  private kept: 'encrypted' | null = null
+  private kept: KeptReason | null = null
   private readonly onSelectionChange = () => this.updateMarkBar()
   private readonly onMathReady = () => this.redrawAll()
 
@@ -1050,7 +1051,7 @@ export class Reader {
    * was made here stays out of the file, or null once the file has it — or
    * once there is nothing left that it could have.
    */
-  noteKept(kept: 'encrypted' | null) {
+  noteKept(kept: KeptReason | null) {
     if (kept === this.kept) return
     this.kept = kept
     this.updateFooter()
@@ -1581,13 +1582,24 @@ export class Reader {
     // the footer keeps its shape. The why is one hover away; the what is
     // on the line itself, because it is the thing a person needs to know
     // before sending this file to someone.
+    const why = {
+      encrypted: L(
+        '열쇠를 모르는 PDF에는 쓰지 않아요. 다른 앱에서는 이 표시가 안 보여요.',
+        "Paper Time can't unlock this PDF, so it doesn't write into it. Other apps won't show these marks.",
+      ),
+      permissions: L(
+        '이 PDF는 표시를 더하지 못하게 되어 있어요. 다른 앱에서는 이 표시가 안 보여요.',
+        "This PDF doesn't allow annotations, so Paper Time doesn't write into it. Other apps won't show these marks.",
+      ),
+      structure: L(
+        '이 PDF는 구조를 확실히 읽지 못해서 쓰지 않아요. 다른 앱에서는 이 표시가 안 보여요.',
+        "Paper Time can't read this PDF's structure for certain, so it doesn't write into it. Other apps won't show these marks.",
+      ),
+    }[this.kept]
     const kept = el('span', {
       class: 'reader-kept',
       text: L('표시는 Paper Time에만 있어요', 'Marks stay in Paper Time'),
-      title: L(
-        '암호가 있는 PDF에는 쓰지 않아요. 다른 앱에서는 이 표시가 안 보여요.',
-        "Paper Time doesn't write into encrypted PDFs. Other apps won't show these marks.",
-      ),
+      title: why,
     })
     this.footer.append(el('span', { class: 'reader-footer-end' }, [kept, zoom]))
   }

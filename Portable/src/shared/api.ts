@@ -12,6 +12,14 @@ export interface WindowBounds {
   height: number
 }
 
+/**
+ * Why what was made here stays out of the file: the PDF cannot be unlocked
+ * with what this build knows (`encrypted`), forbids annotations
+ * (`permissions`), or cannot be read without guessing at its structure
+ * (`structure`). The writer never rewrites a file to get around any of them.
+ */
+export type KeptReason = 'encrypted' | 'permissions' | 'structure'
+
 export interface WindowState {
   maximized: boolean
   fullScreen: boolean
@@ -45,7 +53,7 @@ export interface Requests {
   'drawing:flush': {
     args: { id: string }
     /** `kept`: nothing went into the file, and everything stays in Paper Time. */
-    result: { written: number } | { kept: 'encrypted' } | { error: string }
+    result: { written: number } | { kept: KeptReason } | { error: string }
   }
   'collections:save': { args: { collections: unknown[] }; result: unknown }
   'window:minimize': { args: void; result: void }

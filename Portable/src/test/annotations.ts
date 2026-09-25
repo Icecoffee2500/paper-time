@@ -527,7 +527,7 @@ export async function annotationSuite(test: Test, suite: (name: string) => void)
     })
   }
 
-  suite('An encrypted file is not written into')
+  suite('An encrypted file is written with its own key, or not at all')
 
   await test('the trailer\'s /Encrypt is found, and /EncryptMetadata is not it', () => {
     const bytes = (text: string) => new Uint8Array(Buffer.from(text, 'latin1'))
@@ -537,11 +537,13 @@ export async function annotationSuite(test: Test, suite: (name: string) => void)
     assert.ok(!namesEncryption(bytes('%PDF-1.7 nothing here')))
   })
 
-  await test('writing refuses, and leaves the bytes alone', async () => {
+  await test('an /Encrypt whose key nobody has is refused, and the bytes left alone', async () => {
+    // Zeroed /O and /U: no password reproduces them, so the empty one does
+    // not either — the file asks for a password this build was not given.
     const bytes = await encrypted()
     await assert.rejects(
       writeDrawings(bytes, [{ pageIndex: 0, elements: [], strokes: [], marks: [portableMark()], managesMarks: true }]),
-      (error: unknown) => error instanceof WriteRefused && error.reason === 'encrypted',
+      (error: unknown) => error instanceof WriteRefused && error.reason === 'needsPassword',
     )
   })
 
@@ -557,17 +559,22 @@ export async function annotationSuite(test: Test, suite: (name: string) => void)
     ['AES-256 in object streams', AES_256_OBJECT_STREAMS],
     ['RC4-128', RC4_128],
   ] as const) {
-    await test(`a file qpdf encrypted with ${name} is refused, read as holding nothing of ours, and shown as it is`, async () => {
+    await test(`a file qpdf encrypted with ${name} takes a mark, encrypted with the file's key, and reads it back`, async () => {
       const bytes = bytesOf(base64)
       assert.ok(namesEncryption(bytes))
       assert.ok(await isEncryptedPDF(bytes))
-      await assert.rejects(
-        writeDrawings(bytes, [{ pageIndex: 0, elements: [], strokes: [], marks: [portableMark()], managesMarks: true }]),
-        (error: unknown) => error instanceof WriteRefused && error.reason === 'encrypted',
-      )
-      assert.equal((await readMarks(bytes)).size, 0)
-      assert.equal((await readDrawings(bytes)).size, 0)
-      assert.equal(await stripOwnedForDisplay(bytes), bytes)
+      const written = await writeDrawings(bytes, [{ pageIndex: 0, elements: [], strokes: [], marks: [portableMark()], managesMarks: true }])
+      assert.notEqual(written, bytes)
+      assert.deepEqual([...written.subarray(0, bytes.length)], [...bytes], 'the original bytes come first')
+      const back = (await readMarks(written)).get(0) ?? []
+      assert.ok(back.some((mark) => mark.id === portableMark().id), 'the mark reads back through the key')
+      // In the clear nowhere: the identifier is in the file only as ciphertext.
+      const utf16 = Buffer.from(`\ufeff${portableMark().id}`, 'utf16le').swap16()
+      assert.ok(!Buffer.from(written).includes(utf16))
+      // For the screen, ours is taken out again — by the same kind of update.
+      const shown = await stripOwnedForDisplay(written)
+      assert.notEqual(shown, written)
+      assert.equal((await readMarks(shown)).size, 0)
     })
   }
 
