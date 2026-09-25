@@ -19,11 +19,15 @@ public enum FileOperations {
         /// An update that would have changed a file's existing bytes rather
         /// than adding to them.
         case notAnAppend(URL)
+        /// A replacement that found the file no longer what it was read as.
+        case changedUnderneath(URL)
 
         public var errorDescription: String? {
             switch self {
             case let .notAnAppend(url):
                 "Paper Time left \(url.lastPathComponent) alone: saving would have changed what was already in it."
+            case let .changedUnderneath(url):
+                "\(url.lastPathComponent) changed while Paper Time was working on it, so it was left alone."
             case .stillDownloading:
                 "This library is still arriving from iCloud. Give it a moment and try again."
             case let .coordinationFailed(url, error):
@@ -154,6 +158,77 @@ public enum FileOperations {
         if let coordinatorError { throw Failure.coordinationFailed(url, coordinatorError) }
         if let failure { throw failure }
         return wrote
+    }
+
+    /// Replaces a file's contents outright — the one write here that is not
+    /// an append — but only if the file is still byte for byte what
+    /// `expected` says it was when the caller read it. Compaction and a
+    /// restore both work from a copy they read a moment ago; a version that
+    /// landed from another device in between must not be written over.
+    ///
+    /// With `trashingOld`, the file being replaced goes to the Trash rather
+    /// than being overwritten, and its new place is returned. The system
+    /// Trash first; failing that (a folder whose provider has none), the
+    /// library's own `Trash` folder, which is where a paper deleted from the
+    /// list goes too. Never simply deleted.
+    @discardableResult
+    public static func replace(
+        _ url: URL,
+        with new: Data,
+        ifStill expected: Data?,
+        trashingOld: Bool = false,
+        libraryRoot: URL? = nil
+    ) throws -> URL? {
+        var coordinatorError: NSError?
+        var failure: (any Error)?
+        var trashed: URL?
+
+        NSFileCoordinator(filePresenter: nil).coordinate(
+            writingItemAt: url,
+            options: .forReplacing,
+            error: &coordinatorError
+        ) { actualURL in
+            do {
+                if let expected {
+                    let current = try Data(contentsOf: actualURL)
+                    guard current == expected else { throw Failure.changedUnderneath(url) }
+                }
+                let temporary = actualURL.deletingLastPathComponent().appending(
+                    path: ".\(actualURL.lastPathComponent).\(UUID().uuidString.prefix(6)).tmp"
+                )
+                do {
+                    try new.write(to: temporary, options: .atomic)
+                    if trashingOld {
+                        var resting: NSURL?
+                        do {
+                            try FileManager.default.trashItem(at: actualURL, resultingItemURL: &resting)
+                            trashed = resting as URL?
+                        } catch {
+                            let bin = LibraryLayout.trashURL(inLibrary: libraryRoot ?? actualURL.deletingLastPathComponent())
+                            try ensureDirectory(at: bin)
+                            let name = LibraryLayout.availableFileName(for: actualURL.lastPathComponent, inLibrary: bin)
+                            let place = bin.appending(path: name)
+                            try FileManager.default.moveItem(at: actualURL, to: place)
+                            trashed = place
+                        }
+                        try FileManager.default.moveItem(at: temporary, to: actualURL)
+                    } else {
+                        _ = try FileManager.default.replaceItemAt(actualURL, withItemAt: temporary)
+                    }
+                } catch {
+                    try? FileManager.default.removeItem(at: temporary)
+                    throw error
+                }
+                let size = (try? FileManager.default.attributesOfItem(atPath: actualURL.path(percentEncoded: false)))?[.size] as? Int
+                guard size == new.count else { throw Failure.writeVerificationFailed(url) }
+            } catch {
+                failure = error
+            }
+        }
+
+        if let coordinatorError { throw Failure.coordinationFailed(url, coordinatorError) }
+        if let failure { throw failure }
+        return trashed
     }
 
     public static func encodeAndWrite(_ value: some Encodable, to url: URL) throws {
