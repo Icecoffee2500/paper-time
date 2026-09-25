@@ -58,6 +58,13 @@ export interface ProbeStep {
   click?: { selector: string; at?: [number, number] }
   /** A key, delivered to the page rather than to the desktop. */
   key?: { key: string; shift?: boolean; meta?: boolean }
+  /**
+   * Text typed into an element, the one way a textarea takes text without
+   * losing its undo stack: focus it, put the caret at `at` (or where it is),
+   * then `insertText` a character at a time, so every listener sees each
+   * keystroke as it would from a keyboard.
+   */
+  type?: { selector: string; text: string; at?: number }
   note?: string
 }
 
@@ -119,6 +126,13 @@ const GESTURE = `
       node.click?.()
       return true
     },
+    type(selector, text, at) {
+      const node = this.element(selector)
+      node.focus()
+      if (typeof at === 'number' && typeof node.setSelectionRange === 'function') node.setSelectionRange(at, at)
+      for (const character of text) document.execCommand('insertText', false, character)
+      return node.value !== undefined ? node.value.length : true
+    },
     key(key, shift, meta) {
       const event = new KeyboardEvent('keydown', {
         key, bubbles: true, cancelable: true,
@@ -145,6 +159,9 @@ export async function runProbe(window: BrowserWindow, file: string) {
       } else if (step.drag) {
         results.push(await window.webContents.executeJavaScript(
           `window.__probe.drag(${JSON.stringify(step.drag.selector)}, ${JSON.stringify(step.drag.from)}, ${JSON.stringify(step.drag.to)}, ${step.drag.steps ?? 12}, ${JSON.stringify(step.drag.keys ?? {})}, ${Boolean(step.drag.hold)})`))
+      } else if (step.type) {
+        results.push(await window.webContents.executeJavaScript(
+          `window.__probe.type(${JSON.stringify(step.type.selector)}, ${JSON.stringify(step.type.text)}, ${JSON.stringify(step.type.at ?? null)})`))
       } else if (step.key) {
         results.push(await window.webContents.executeJavaScript(
           `window.__probe.key(${JSON.stringify(step.key.key)}, ${Boolean(step.key.shift)}, ${Boolean(step.key.meta)})`))

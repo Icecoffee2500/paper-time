@@ -348,6 +348,14 @@ enum ReleaseNotes {
                     ),
                     demo: .latexShortcuts
                 ),
+                Entry(
+                    Text2("수식을 치는 동안 미리 보기", "See the formula as you type it"),
+                    Text2(
+                        "노트에서 $…$ 안에 캐럿이 있으면 그 줄 아래에 작은 카드가 떠서 수식이 조판된 모습을 보여줘요. 한 글자 칠 때마다 따라오고, 아직 다 못 친 수식이면 마지막으로 완성됐던 모습을 흐리게 둬요. 캐럿이 수식을 벗어나면 사라지고, 키보드는 그대로 노트가 받아요 — Tab으로 다음 칸에 가는 것도 그대로예요. 여러 줄에 걸친 $$ 블록도 이제 수식으로 보여요.",
+                        "With the caret inside $…$ in a note, a small card under the line shows the formula set. It follows every keystroke, and while the formula is half typed it keeps the last one that set, dimmed. It goes when the caret leaves the formula, and the keyboard stays with the note — Tab still moves to the next field. A $$ block that spans lines now sets as a formula too."
+                    ),
+                    demo: .mathPreview
+                ),
             ],
             fixed: [
                 Entry(
@@ -1841,6 +1849,9 @@ enum ReleaseNotes {
         /// matches the passages that answer it without using its words —
         /// press another question and both sections change.
         case meaning
+        /// A note line with the caret inside `$…$`, and under it the card
+        /// that shows the formula set as it is typed.
+        case mathPreview
 
         var id: String { rawValue }
     }

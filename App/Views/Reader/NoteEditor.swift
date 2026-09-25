@@ -153,6 +153,9 @@ struct NoteEditor: NSViewRepresentable {
         weak var textView: NoteTextView?
 
         let completions = WikiLinkPopover()
+        /// The formula under the caret, set — see `MathPreviewCard`.
+        let mathPreview = MathPreviewCard()
+        private var mathPreviewWork: DispatchWorkItem?
 
         /// The line the caret was on when the text was last set: syntax is
         /// shown on that line and nowhere else, so leaving a line sets it.
@@ -180,6 +183,7 @@ struct NoteEditor: NSViewRepresentable {
             lastKnownMarkdown = source
             markdown = source
             updateCompletions(in: textView)
+            updateMathPreview(in: textView)
             scheduleRestyle(in: textView)
         }
 
@@ -187,6 +191,7 @@ struct NoteEditor: NSViewRepresentable {
             guard let textView = notification.object as? NoteTextView,
                   !textView.hasMarkedText(), !isRestyling
             else { return }
+            updateMathPreview(in: textView)
             // Never rebuild the text under a selection: that is what made a
             // drag let go of what it had just selected.
             guard textView.selectedRange().length == 0, !textView.isSelectingByHand else {
@@ -398,6 +403,52 @@ struct NoteEditor: NSViewRepresentable {
             textView.window?.makeFirstResponder(textView)
         }
 
+        // MARK: The formula being typed
+
+        /// Shows the set formula under the caret's line, a moment after the
+        /// keystroke — 80 ms, so a word typed at speed sets once, not once a
+        /// letter — and takes it away when the caret leaves the formula or
+        /// the note loses the keyboard.
+        func updateMathPreview(in textView: NoteTextView, now: Bool = false) {
+            mathPreviewWork?.cancel()
+            let work = DispatchWorkItem { [weak self, weak textView] in
+                guard let self, let textView else { return }
+                self.placeMathPreview(in: textView)
+            }
+            mathPreviewWork = work
+            if now {
+                work.perform()
+            } else {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.08, execute: work)
+            }
+        }
+
+        private func placeMathPreview(in textView: NoteTextView) {
+            guard let storage = textView.textStorage, let window = textView.window,
+                  window.firstResponder === textView,
+                  textView.selectedRange().length == 0, !textView.hasMarkedText(),
+                  !showsRawText
+            else { return mathPreview.hide() }
+            let source = NoteMarkdown.markdown(from: storage)
+            let caret = NoteMarkdown.sourceIndex(in: storage, displayIndex: textView.selectedRange().location)
+            guard let span = NoteMath.span(at: caret, in: source) else { return mathPreview.hide() }
+
+            // The line is the caret's, shown as written, so its source and
+            // its display are the same characters — but the rest of the
+            // note is not, and the offsets are mapped rather than assumed.
+            let display = LatexSuiteDisplay(storage)
+            let start = display.displayOffset(forSource: span.range.location)
+            let end = display.displayOffset(forSource: span.range.location + span.range.length)
+            guard end > start else { return mathPreview.hide() }
+            let first = textView.firstRect(forCharacterRange: NSRange(location: start, length: 1), actualRange: nil)
+            let last = textView.firstRect(forCharacterRange: NSRange(location: end - 1, length: 1), actualRange: nil)
+            guard first.isFinite, last.isFinite, first.width + first.height > 0 else { return mathPreview.hide() }
+
+            let visible = textView.enclosingScrollView?.documentVisibleRect ?? textView.bounds
+            let bounds = window.convertToScreen(textView.convert(visible, to: nil))
+            mathPreview.show(span, startX: first.minX, line: last, bounds: bounds, in: textView)
+        }
+
         // MARK: Completions
 
         /// The text between the `[[` that is open on this line and the caret.
@@ -530,7 +581,19 @@ final class NoteTextView: LatexSuiteTextView {
         setHoveredChip(nil)
     }
 
-    @objc func scrolled() { setHoveredChip(nil) }
+    @objc func scrolled() {
+        setHoveredChip(nil)
+        // The card is placed under a line; when the line moves, it follows.
+        if let coordinator, coordinator.mathPreview.isShowing {
+            coordinator.updateMathPreview(in: self, now: true)
+        }
+    }
+
+    override func resignFirstResponder() -> Bool {
+        let resigned = super.resignFirstResponder()
+        if resigned { coordinator?.mathPreview.hide() }
+        return resigned
+    }
 
     /// The whole chip under the pointer, in document offsets — and only when
     /// the pointer is on its letters. `characterIndexForInsertion` snaps to

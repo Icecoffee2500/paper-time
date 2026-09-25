@@ -2101,6 +2101,46 @@ body[data-platform='darwin'] .window-buttons {
 }
 /* The other half of a mirrored placeholder, typed into with the caret. */
 .ls-overlay .ls-caret { border-left: 1.4px solid var(--accent); }
+
+/* The formula being typed, set, in a card under its line (`ui/mathPreview.ts`).
+   A card like the menus — the same panel, radius and shadow — that answers the
+   hand, so it takes a tap's time. Never in the way: pointer events pass
+   through it, and nothing in it takes focus. */
+.math-preview {
+  position: absolute;
+  z-index: 20;
+  padding: 8px 12px;
+  border-radius: var(--radius-popover);
+  background: var(--panel);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.1), 0 6px 20px rgba(0, 0, 0, 0.18);
+  color: var(--text);
+  pointer-events: none;
+  white-space: nowrap;
+  transform-origin: top left;
+  animation: math-preview-in var(--motion-tap) var(--ease);
+}
+.math-preview svg { display: block; max-width: 100%; height: auto; font-size: 16px; }
+.math-preview.stale { opacity: 0.45; }
+.math-preview.raw {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+}
+@keyframes math-preview-in {
+  from { opacity: 0; transform: translateY(-3px); }
+}
+/* Measures where a character falls in the textarea; never seen. */
+.math-preview-mirror {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+  overflow: hidden;
+  margin: 0;
+  border-style: solid;
+  border-color: transparent;
+  white-space: pre-wrap;
+}
 .ls-overlay .ls-mirror { background: color-mix(in srgb, var(--accent) 24%, transparent); }
 .set-foot {
   display: flex;
