@@ -40,7 +40,7 @@ struct SyncTests {
         // The other device writes; the file's date moves on.
         try await Task.sleep(for: .milliseconds(1100))
         let theirs = Self.mark(40)
-        try DocumentSession.write(to: paper.documentURL, additions: [theirs], removals: [], ink: [:]).get()
+        _ = try DocumentSession.write(to: paper.documentURL, additions: [theirs], removals: [], ink: [:]).get()
 
         let before = session.revision
         await session.reloadFromDisk()
@@ -58,7 +58,7 @@ struct SyncTests {
 
         try await Task.sleep(for: .milliseconds(1100))
         let theirs = Self.mark(40)
-        try DocumentSession.write(to: paper.documentURL, additions: [theirs], removals: [], ink: [:]).get()
+        _ = try DocumentSession.write(to: paper.documentURL, additions: [theirs], removals: [], ink: [:]).get()
 
         await session.reloadFromDisk()
         #expect(Set(session.markups.map(\.id)) == [mine.id, theirs.id])
@@ -68,13 +68,13 @@ struct SyncTests {
     func foreignRemoval() async throws {
         let (store, paper) = try Self.makeLibrary()
         let shared = Self.mark(40)
-        try DocumentSession.write(to: paper.documentURL, additions: [shared], removals: [], ink: [:]).get()
+        _ = try DocumentSession.write(to: paper.documentURL, additions: [shared], removals: [], ink: [:]).get()
         let session = try await DocumentSession.open(paper: paper, store: store)
         try await Task.sleep(for: .milliseconds(300))
         #expect(session.markups.map(\.id) == [shared.id])
 
         try await Task.sleep(for: .milliseconds(1100))
-        try DocumentSession.write(to: paper.documentURL, additions: [], removals: [shared.id], ink: [:]).get()
+        _ = try DocumentSession.write(to: paper.documentURL, additions: [], removals: [shared.id], ink: [:]).get()
         await session.reloadFromDisk()
         #expect(session.markups.isEmpty)
     }

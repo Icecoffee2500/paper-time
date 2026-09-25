@@ -75,25 +75,33 @@ struct ContentsPopup: View {
     /// key press for. PDFKit's document is not to be read from two threads at
     /// once, so the copy is opened from the same file, and the headings come
     /// back as page indices and points that the view's own document can go to.
+    ///
+    /// The file, not the open document: the session opens its document from
+    /// bytes, so the document has no URL of its own, and serialising it to
+    /// get a copy took a quarter of a second on the main thread — and is the
+    /// one thing that must never be done to a paper (`IncrementalWriter`).
     private func load() {
-        guard let document = link.session?.document else { reading = false; return }
+        guard let session = link.session else { reading = false; return }
+        let document = session.document
         let size = Self.listSize
-        if let url = document.documentURL, let cached = Self.known[url] {
+        let url = session.paper.documentURL
+        if let cached = Self.known[url] {
             items = cached
             reading = false
             return
         }
-        let url = document.documentURL
-        let data = url == nil ? document.dataRepresentation() : nil
         let identity = ObjectIdentifier(document)
         Self.reader.async {
-            let copy = url.flatMap { PDFDocument(url: $0) } ?? data.flatMap { PDFDocument(data: $0) }
+            // A file that asks for a password opens locked here — the session
+            // does not keep it — and is then read by sight, like a scan.
+            let copy = PDFDocument(url: url).flatMap { $0.isLocked ? nil : $0 }
             let found = Trace.time("contents: read the headings") {
                 copy.map { PaperContents.items(in: $0, listSize: size) } ?? []
             }
+            let read = copy != nil
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
-                    if let url { Self.known[url] = found }
+                    if read { Self.known[url] = found }
                     // Still the same paper: the reader may have moved on.
                     guard link.session.map({ ObjectIdentifier($0.document) }) == identity else { return }
                     items = found

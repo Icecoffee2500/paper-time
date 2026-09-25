@@ -2,6 +2,7 @@ import Foundation
 import InkEngine
 import LibraryStore
 import PDFKit
+import PDFUpdate
 import PaperCore
 import PencilKit
 
@@ -10,11 +11,16 @@ import PencilKit
 ///
 /// Saving is split in two on purpose. A page's `PKDrawing` is written the
 /// moment the pencil lifts, because it is a few kilobytes and it is the copy
-/// with full pressure information. The PDF itself is rewritten on a longer
-/// delay, because PDFKit can only serialise a whole document at once and doing
-/// that after every stroke would stall on a six-hundred-page book. The user's
-/// work is never at risk in the gap: the sidecar already holds it, and the PDF
-/// is always rebuilt from the sidecars.
+/// with full pressure information. The PDF follows on a longer delay. The
+/// user's work is never at risk in the gap: the sidecar already holds it, and
+/// the PDF is always brought to what the journals and sidecars say.
+///
+/// The PDF is never rewritten. Marks go in as an incremental update — the
+/// paper's own bytes stay exactly as they were, and the marks are appended
+/// after them (`IncrementalWriter`). Writing the whole document back out with
+/// PDFKit re-subset its fonts and destroyed the text of papers set in TeX:
+/// one highlight turned every "ff" in LeJEPA into "!", in the file, for every
+/// reader.
 @MainActor
 @Observable
 public final class DocumentSession {
@@ -26,6 +32,41 @@ public final class DocumentSession {
         /// Another device had changed the file; our marks were re-applied on
         /// top of theirs rather than overwriting them.
         case mergedExternalChanges
+        /// The marks are safe here — in the journal and the sidecars, and on
+        /// screen — and this file would not take them. Not a failure: nothing
+        /// was lost, and the file was left exactly as it was.
+        case keptInApp(KeptReason)
+    }
+
+    /// Why a file would not take the marks.
+    public enum KeptReason: Equatable, Sendable {
+        /// It asks for a password, or is locked by another kind of security.
+        case locked
+        /// Its permissions, or its certification, forbid annotations.
+        case forbidden
+        /// It is put together in a way the writer will not risk writing into.
+        case unusual
+        /// The update was made, but did not read back as it should have.
+        case unconfirmed
+
+        init(_ refusal: IncrementalWriter.Refusal) {
+            switch refusal {
+            case .encrypted, .needsPassword: self = .locked
+            case .permissions: self = .forbidden
+            case .verificationFailed: self = .unconfirmed
+            case .unreadableStructure, .pageCountMismatch, .annotationMapping, .inPlaceEdit: self = .unusual
+            }
+        }
+    }
+
+    /// What one save came to.
+    public enum WriteOutcome: Equatable, Sendable {
+        /// The marks were appended to the file.
+        case appended(bytes: Int)
+        /// The file already held everything; nothing was written.
+        case unchanged
+        /// The file would not take them; nothing was written.
+        case keptInApp(IncrementalWriter.Refusal)
     }
 
     public private(set) var document: PDFDocument
@@ -70,8 +111,13 @@ public final class DocumentSession {
     private var pollTask: Task<Void, Never>?
     private var reloadTask: Task<Void, Never>?
     private var changedWhileSaving = false
+    /// The file as it was when it last would not take the marks, and why.
+    /// Asking the same file again changes nothing; a file that changed — a
+    /// new version from another device, a password removed — is asked again.
+    private var refused: (file: FileFingerprint?, reason: KeptReason)?
 
-    /// How long the app waits after the last change before rewriting the PDF.
+    /// How long the app waits after the last change before writing the marks
+    /// into the PDF.
     /// Short, because another device is waiting to see it: iCloud adds its
     /// own seconds on top.
     private let flushDelay: Duration = .milliseconds(1500)
@@ -685,23 +731,25 @@ public final class DocumentSession {
         }
     }
 
-    /// Writes the PDF. Called on a delay, when the reader closes, and whenever
-    /// the app goes to the background.
+    /// Writes the marks into the PDF. Called on a delay, when the reader
+    /// closes, and whenever the app goes to the background.
     ///
-    /// The file is rebuilt from disk on a background thread rather than
-    /// serialised from the open document. `PDFDocument.dataRepresentation()`
-    /// takes between a third and three quarters of a second on a real paper,
-    /// and doing that on the main actor froze the window every couple of
-    /// seconds while marking one up. Starting from the file also means another
-    /// device's changes are merged rather than overwritten, and the document on
-    /// screen is never touched by the writer.
+    /// The update is worked out from the file on disk, on a background
+    /// thread, never from the open document: starting from the file means
+    /// another device's changes are merged rather than overwritten, and the
+    /// document on screen is never touched by the writer.
     public func flush() async {
         flushTask?.cancel()
         flushTask = nil
         guard saveState == .pending || !pagesNeedingInkRewrite.isEmpty || !pagesNeedingSketchRewrite.isEmpty else { return }
-        saveState = .saving
-
         let url = paper.documentURL
+        // The same file said no before. Asking again would read and parse it
+        // to hear the same answer; the marks are safe where they are.
+        if let refused, refused.file == FileFingerprint(url: url) {
+            saveState = .keptInApp(refused.reason)
+            return
+        }
+        saveState = .saving
         // The file is written to agree with every journal, not just with
         // what changed here: whichever device writes, the PDF ends up
         // holding what all of them have said.
@@ -741,12 +789,23 @@ public final class DocumentSession {
         }.value
 
         switch outcome {
-        case .success:
+        case let .success(written):
             // Whether another device had also written is no longer something
-            // to report: the file is rebuilt from whatever is on disk, so
-            // their marks and ours both survive.
+            // to report: the update is worked out from whatever is on disk,
+            // so their marks and ours both survive.
             _ = baseline
-            fileFingerprint = FileFingerprint(url: url)
+            if case let .keptInApp(refusal) = written {
+                // The pages stay pending, so a save the file does take will
+                // carry them. Until the file changes, it is not asked again.
+                let reason = KeptReason(refusal)
+                refused = (FileFingerprint(url: url), reason)
+                saveState = .keptInApp(reason)
+                break
+            }
+            refused = nil
+            // A save that wrote nothing leaves the file — and so what this
+            // session knows of it — exactly as it was.
+            if case .appended = written { fileFingerprint = FileFingerprint(url: url) }
             fileMarks = additions + fileMarks.filter { mark in !additions.contains { $0.id == mark.id } && !removals.contains(mark.id) }
             pagesNeedingInkRewrite.removeAll()
             pagesNeedingSketchRewrite.removeAll()
@@ -754,58 +813,102 @@ public final class DocumentSession {
         case let .failure(error):
             saveState = .failed(error.localizedDescription)
         }
+        lastWrite = outcome
         if changedWhileSaving {
             changedWhileSaving = false
             await fileMayHaveChanged()
         }
     }
 
-    /// Applies this session's pending changes to the file, off the main actor.
-    nonisolated static func write(
+    /// What the last save came to — for the probes that check a save of
+    /// nothing writes nothing.
+    public private(set) var lastWrite: Result<WriteOutcome, any Error>?
+
+    /// Saves again from the journals and sidecars even though nothing is
+    /// pending. For probes and checks: on a file that already holds every
+    /// mark it writes nothing, and `lastWrite` says so.
+    public func saveAgain() async {
+        refused = nil
+        if saveState == .idle { saveState = .pending }
+        await flush()
+    }
+
+    /// Applies this session's pending changes to the file, off the main actor,
+    /// as an incremental update — never by writing the paper out again.
+    ///
+    /// The read, the update and the write are one coordinated access
+    /// (`FileOperations.update`), so another device's version cannot land in
+    /// between; and the update is checked by opening it again with PDFKit
+    /// before the file is replaced (`IncrementalWriter.Options.verify`).
+    public nonisolated static func write(
         to url: URL,
         additions: [MarkupDescriptor],
         removals: [UUID],
         ink: [Int: Data],
         sketches: [Int: Data] = [:]
-    ) -> Result<Void, any Error> {
+    ) -> Result<WriteOutcome, any Error> {
         do {
-            let data = try FileOperations.read(contentsOf: url)
-            guard let document = PDFDocument(data: data) else {
-                throw FileOperations.Failure.documentMissing(url)
+            var result = WriteOutcome.unchanged
+            try FileOperations.update(url) { data in
+                let outcome: IncrementalWriter.Outcome
+                do {
+                    outcome = try IncrementalWriter.update(data) { document in
+                        edit(document, additions: additions, removals: removals, ink: ink, sketches: sketches)
+                    }
+                } catch let refusal as IncrementalWriter.Refusal {
+                    result = .keptInApp(refusal)
+                    return nil
+                }
+                switch outcome {
+                case .unchanged:
+                    return nil
+                case let .appended(out, stats):
+                    result = .appended(bytes: stats.appended)
+                    return out
+                }
             }
-            for index in 0..<document.pageCount {
-                guard let page = document.page(at: index) else { continue }
-                for id in removals { TextMarkupWriter.remove(id: id, from: page) }
-            }
-            for descriptor in additions {
-                guard let page = document.page(at: descriptor.pageIndex) else { continue }
-                // Already in the file, exactly as the journals describe it:
-                // writing it again would produce the same bytes and a storm of
-                // notifications from this thread. See `isAlreadyWritten`.
-                guard !TextMarkupWriter.isAlreadyWritten(descriptor, on: page) else { continue }
-                TextMarkupWriter.remove(id: descriptor.id, from: page)
-                TextMarkupWriter.apply(descriptor, to: page)
-            }
-            for (index, drawingData) in ink {
-                guard let page = document.page(at: index),
-                      let drawing = try? PKDrawing(data: drawingData)
-                else { continue }
-                InkConverter.apply(drawing, to: page)
-            }
-            for (index, sketchData) in sketches {
-                guard let page = document.page(at: index),
-                      let elements = decodeSketch(sketchData),
-                      !SketchWriter.isAlreadyWritten(elements, on: page)
-                else { continue }
-                SketchWriter.apply(elements, to: page)
-            }
-            guard let out = document.dataRepresentation() else {
-                throw FileOperations.Failure.writeVerificationFailed(url)
-            }
-            try FileOperations.write(out, to: url)
-            return .success(())
+            return .success(result)
         } catch {
             return .failure(error)
+        }
+    }
+
+    /// Brings a document to what the journals and sidecars say — the app's
+    /// own writers, on a document opened from the file.
+    nonisolated static func edit(
+        _ document: PDFDocument,
+        additions: [MarkupDescriptor],
+        removals: [UUID],
+        ink: [Int: Data],
+        sketches: [Int: Data]
+    ) {
+        for index in 0..<document.pageCount {
+            guard let page = document.page(at: index) else { continue }
+            for id in removals { TextMarkupWriter.remove(id: id, from: page) }
+        }
+        for descriptor in additions {
+            guard let page = document.page(at: descriptor.pageIndex) else { continue }
+            // Already in the file, exactly as the journals describe it:
+            // writing it again would produce the same bytes and a storm of
+            // notifications from this thread. See `isAlreadyWritten`.
+            guard !TextMarkupWriter.isAlreadyWritten(descriptor, on: page) else { continue }
+            TextMarkupWriter.remove(id: descriptor.id, from: page)
+            TextMarkupWriter.apply(descriptor, to: page)
+        }
+        for (index, drawingData) in ink {
+            guard let page = document.page(at: index),
+                  let drawing = try? PKDrawing(data: drawingData)
+            else { continue }
+            // Stroke by stroke: a page whose ink is already there is left
+            // alone, and one new stroke is one new annotation.
+            InkConverter.apply(drawing, to: page)
+        }
+        for (index, sketchData) in sketches {
+            guard let page = document.page(at: index),
+                  let elements = decodeSketch(sketchData),
+                  !SketchWriter.isAlreadyWritten(elements, on: page)
+            else { continue }
+            SketchWriter.apply(elements, to: page)
         }
     }
 
