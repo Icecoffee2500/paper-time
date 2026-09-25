@@ -413,6 +413,13 @@ public enum TextMarkupWriter {
             annotation.color = descriptor.color.platformColor
             annotation.contents = descriptor.comment
             annotation.setValue(descriptor.id.uuidString, forAnnotationKey: idKey)
+            // The same key the other kinds carry, for the same reason: it is
+            // what `isAlreadyWritten` compares. Without it every note with
+            // words on it looked unwritten, and every save wrote it again —
+            // and PDFKit left another popup behind each time.
+            if !descriptor.comment.isEmpty {
+                annotation.setValue(descriptor.comment, forAnnotationKey: commentKey)
+            }
             page.addAnnotation(annotation)
             created.append(annotation)
         }

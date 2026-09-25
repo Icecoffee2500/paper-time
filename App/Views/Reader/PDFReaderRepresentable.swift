@@ -1241,6 +1241,44 @@ final class ReaderCoordinator: NSObject {
             say(String(format: "%d lines, %d rects, %.1f ms",
                        selection.selectionsByLine().count,
                        made.first?.rects.count ?? 0, took))
+            // `--papertime-mark-test-keep=<path in the container>`: save the
+            // mark into the file before taking it back off, and say what each
+            // save wrote — the mark, the same again, the removal, the same
+            // again. The file after the first save is copied to the path, so
+            // its text can be held against the original's. Only in a library
+            // named on the command line: it writes into the paper.
+            if let copy = Boot.setting("PAPERTIME_MARK_TEST_KEEP"), Boot.isSet("PAPERTIME_LIBRARY") {
+                let file = session.paper.documentURL
+                func size() -> Int { ((try? FileManager.default.attributesOfItem(atPath: file.path))?[.size] as? Int) ?? -1 }
+                @MainActor func report(_ step: String, started: Date) {
+                    let what: String = switch session.lastWrite {
+                    case let .success(.appended(bytes))?: "appended \(bytes) B"
+                    case .success(.unchanged)?: "unchanged"
+                    case let .success(.keptInApp(why))?: "kept in app (\(why))"
+                    case let .failure(error)?: "failed: \(error)"
+                    case nil: "no save"
+                    }
+                    say(String(format: "%@: %@, file %d B, %.0f ms, state %@", step, what, size(),
+                               Date().timeIntervalSince(started) * 1000, "\(session.saveState)"))
+                }
+                say("keep: file \(size()) B before")
+                var t = Date()
+                await session.flush()
+                report("save 1 (the mark)", started: t)
+                try? FileManager.default.removeItem(atPath: copy)
+                try? FileManager.default.copyItem(at: file, to: URL(fileURLWithPath: copy))
+                t = Date()
+                await session.saveAgain()
+                report("save 2 (the same again)", started: t)
+                for descriptor in made { session.removeMarkup(id: descriptor.id) }
+                t = Date()
+                await session.flush()
+                report("save 3 (the removal)", started: t)
+                t = Date()
+                await session.saveAgain()
+                report("save 4 (the same again)", started: t)
+                return
+            }
             // Put the paper back as it was: a probe must not leave marks in
             // somebody's library.
             for descriptor in made { session.removeMarkup(id: descriptor.id) }

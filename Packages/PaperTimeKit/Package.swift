@@ -12,6 +12,7 @@ let package = Package(
         .library(name: "MetadataPipeline", targets: ["MetadataPipeline"]),
         .library(name: "InkEngine", targets: ["InkEngine"]),
         .library(name: "PDFReader", targets: ["PDFReader"]),
+        .library(name: "PDFUpdate", targets: ["PDFUpdate"]),
         .library(name: "Importers", targets: ["Importers"]),
     ],
     targets: [
@@ -19,6 +20,13 @@ let package = Package(
             name: "papertime-seed",
             dependencies: ["PaperCore", "LibraryStore", "MetadataPipeline", "Bibliography"],
             path: "Sources/Tools/papertime-seed"
+        ),
+        // What the incremental writer does to real papers, from outside the
+        // app: `swift run -c release papertime-pdfcheck protocol <copy.pdf> <dir>`.
+        .executableTarget(
+            name: "papertime-pdfcheck",
+            dependencies: ["InkEngine", "PDFReader", "PDFUpdate"],
+            path: "Sources/Tools/papertime-pdfcheck"
         ),
         .executableTarget(
             name: "papertime-eval",
@@ -32,7 +40,11 @@ let package = Package(
         .target(name: "Bibliography", dependencies: ["PaperCore"]),
         .target(name: "MetadataPipeline", dependencies: ["PaperCore", "Bibliography"]),
         .target(name: "InkEngine", dependencies: ["PaperCore"]),
-        .target(name: "PDFReader", dependencies: ["PaperCore", "InkEngine", "LibraryStore"]),
+        // Writes marks into a PDF as an incremental update, never by
+        // re-serialising the paper. Foundation, zlib, CryptoKit and PDFKit
+        // only, so it can be read and tested on its own.
+        .target(name: "PDFUpdate"),
+        .target(name: "PDFReader", dependencies: ["PaperCore", "InkEngine", "LibraryStore", "PDFUpdate"]),
         .target(name: "Importers", dependencies: ["PaperCore", "Bibliography", "LibraryStore"]),
 
         .testTarget(name: "PaperCoreTests", dependencies: ["PaperCore"], resources: [.copy("Fixtures")]),
@@ -46,5 +58,6 @@ let package = Package(
         .testTarget(name: "ImportersTests", dependencies: ["Importers"]),
         .testTarget(name: "InkEngineTests", dependencies: ["InkEngine"]),
         .testTarget(name: "PDFReaderTests", dependencies: ["PDFReader"]),
+        .testTarget(name: "PDFUpdateTests", dependencies: ["PDFUpdate"], resources: [.copy("Fixtures")]),
     ]
 )

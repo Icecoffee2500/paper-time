@@ -233,6 +233,14 @@ struct ReaderScreen: View {
                 Label(L("다른 기기의 변경을 합쳤어요", "Merged changes from another device"), systemImage: "arrow.triangle.merge")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+            case let .keptInApp(reason):
+                // Not a warning: nothing was lost. The marks are on screen,
+                // in the journal and the sidecars; only this file said no.
+                Label(L("표시는 Paper Time에 있어요", "Marks stay in Paper Time"), systemImage: "info.circle")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .help(Self.keptExplanation(reason))
             case let .failed(message):
                 Label(message, systemImage: "exclamationmark.triangle.fill")
                     .font(.footnote)
@@ -268,6 +276,33 @@ struct ReaderScreen: View {
         .frame(maxWidth: .infinity)
         .background(.regularMaterial)
         #endif
+    }
+
+    /// Why a file would not take the marks, in words: that they are safe,
+    /// that the file is as it was, and what about the file stopped it.
+    static func keptExplanation(_ reason: DocumentSession.KeptReason) -> String {
+        switch reason {
+        case .locked:
+            L(
+                "이 PDF는 잠겨 있어서 표시를 파일에 넣지 않았어요. 표시는 Paper Time에 그대로 있어요.",
+                "This PDF is locked, so the marks stay in Paper Time. The file is unchanged."
+            )
+        case .forbidden:
+            L(
+                "이 PDF는 주석을 허락하지 않아요. 파일은 그대로 두고, 표시는 Paper Time에 두었어요.",
+                "This PDF doesn't allow annotations. The marks stay in Paper Time, and the file is unchanged."
+            )
+        case .unusual:
+            L(
+                "이 PDF는 짜임이 흔하지 않아서, 표시를 넣으면 파일이 상할 수 있어요. 파일은 그대로 두고, 표시는 Paper Time에 두었어요.",
+                "This PDF is built in an unusual way, and writing into it could damage it. The marks stay in Paper Time, and the file is unchanged."
+            )
+        case .unconfirmed:
+            L(
+                "표시를 넣고 다시 읽어 보니 맞지 않았어요. 파일은 그대로 두고, 표시는 Paper Time에 두었어요.",
+                "The marks didn't read back as written. They stay in Paper Time, and the file is unchanged."
+            )
+        }
     }
 
     /// The note editor on iPhone and iPad, where the markup actions themselves

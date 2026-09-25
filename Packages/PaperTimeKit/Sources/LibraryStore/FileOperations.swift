@@ -16,9 +16,14 @@ public enum FileOperations {
         case documentMissing(URL)
         case writeVerificationFailed(URL)
         case stillDownloading(URL)
+        /// An update that would have changed a file's existing bytes rather
+        /// than adding to them.
+        case notAnAppend(URL)
 
         public var errorDescription: String? {
             switch self {
+            case let .notAnAppend(url):
+                "Paper Time left \(url.lastPathComponent) alone: saving would have changed what was already in it."
             case .stillDownloading:
                 "This library is still arriving from iCloud. Give it a moment and try again."
             case let .coordinationFailed(url, error):
@@ -96,6 +101,59 @@ public enum FileOperations {
 
         if let coordinatorError { throw Failure.coordinationFailed(url, coordinatorError) }
         if let writeError { throw writeError }
+    }
+
+    /// Reads a file and replaces it with what `transform` makes of it, in one
+    /// coordinated access — nobody else's version can land between the read
+    /// and the write. `transform` returns nil to leave the file alone.
+    ///
+    /// Only for files that grow at the end: the new bytes must begin with the
+    /// old ones, byte for byte, or nothing is written. That is what an
+    /// incremental update to a PDF is, and checking it here means a mistake
+    /// anywhere above cannot take a paper's own bytes with it. The new file
+    /// goes through a temporary one and is swapped in, as `write` does.
+    ///
+    /// Returns whether it wrote.
+    @discardableResult
+    public static func update(_ url: URL, _ transform: (Data) throws -> Data?) throws -> Bool {
+        var coordinatorError: NSError?
+        var failure: (any Error)?
+        var wrote = false
+
+        NSFileCoordinator(filePresenter: nil).coordinate(
+            writingItemAt: url,
+            options: .forMerging,
+            error: &coordinatorError
+        ) { actualURL in
+            do {
+                let old = try Data(contentsOf: actualURL)
+                guard let new = try transform(old), new.count != old.count || new != old else { return }
+                guard new.count > old.count, new.prefix(old.count) == old else {
+                    throw Failure.notAnAppend(url)
+                }
+                let temporary = actualURL.deletingLastPathComponent().appending(
+                    path: ".\(actualURL.lastPathComponent).\(UUID().uuidString.prefix(6)).tmp"
+                )
+                do {
+                    try new.write(to: temporary, options: .atomic)
+                    _ = try FileManager.default.replaceItemAt(actualURL, withItemAt: temporary)
+                } catch {
+                    try? FileManager.default.removeItem(at: temporary)
+                    throw error
+                }
+                // What is there now is what was meant to be: one stat, not a
+                // second read of a file that may be a hundred megabytes.
+                let size = (try? FileManager.default.attributesOfItem(atPath: actualURL.path(percentEncoded: false)))?[.size] as? Int
+                guard size == new.count else { throw Failure.writeVerificationFailed(url) }
+                wrote = true
+            } catch {
+                failure = error
+            }
+        }
+
+        if let coordinatorError { throw Failure.coordinationFailed(url, coordinatorError) }
+        if let failure { throw failure }
+        return wrote
     }
 
     public static func encodeAndWrite(_ value: some Encodable, to url: URL) throws {
