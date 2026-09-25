@@ -533,8 +533,27 @@ struct PaperListView: View {
                                       title: $0.meta.displayTitle)
             }
         scanning = true
-        for await hit in PaperTextIndex.shared.hits(for: query, in: sources) {
-            passages.append(hit)
+        let started = DispatchTime.now().uptimeNanoseconds
+        func since() -> Double { Double(DispatchTime.now().uptimeNanoseconds - started) / 1e6 }
+        // Taken in the handfuls the index finds them in rather than one at a
+        // time. Every change to `passages` builds the table's entries again
+        // and asks SwiftUI to look at the list, and once the papers are read
+        // the answers arrive faster than anybody can read them — six hundred
+        // of them for "le", six hundred passes over the list. A paper that
+        // still has to be read is its own handful, so it shows the moment it
+        // has been, as before.
+        var handfuls = 0
+        for await found in PaperTextIndex.shared.hitBatches(for: query, in: sources) {
+            let first = passages.isEmpty
+            passages.append(contentsOf: found)
+            handfuls += 1
+            if first {
+                Trace.mark(String(format: "list: “%@” first passage after %.1f ms", query, since()))
+            }
+        }
+        if Trace.isOn {
+            Trace.mark(String(format: "list: “%@” read to the end after %.1f ms — %d passages in %d handful(s) · %@",
+                              query, since(), passages.count, handfuls, Trace.memory()))
         }
         scanning = false
     }
