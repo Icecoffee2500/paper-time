@@ -129,6 +129,10 @@ struct ZettelEditorView: View {
                     get: { loadedID == noteID ? pending : nil },
                     set: { link?.pendingNoteAnchor = $0 }
                 ),
+                pendingReveal: Binding(
+                    get: { loadedID == noteID ? notes.reveal : nil },
+                    set: { notes.reveal = $0 }
+                ),
                 showsRawText: showsRaw,
                 onFollow: { anchor in
                     link?.anchorRequest = ReaderLink.Anchor(

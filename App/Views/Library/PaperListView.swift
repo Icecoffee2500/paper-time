@@ -358,7 +358,7 @@ struct PaperListView: View {
         #if os(macOS)
         if hasMeanings {
             entries.append(.heading(L("뜻이 비슷한 구절", "Similar in Meaning")))
-            entries.append(contentsOf: shownMeanings.map { PaperTable.Entry.meaning(Self.key(of: $0.passage)) })
+            entries.append(contentsOf: shownMeanings.map { PaperTable.Entry.meaning(Self.key(of: $0)) })
         }
         #endif
         return entries
@@ -368,6 +368,17 @@ struct PaperListView: View {
     static func key(of passage: PaperTextIndex.Passage) -> String {
         "\(passage.paperID.uuidString)#\(passage.pageIndex)@\(passage.location)+\(passage.length)"
     }
+
+    #if os(macOS)
+    /// A passage by meaning, on a page or in a note, as a name a row can be
+    /// told apart by.
+    static func key(of hit: SemanticIndex.Hit) -> String {
+        switch hit.origin {
+        case let .paper(passage): key(of: passage)
+        case let .note(place): "note:\(place.noteID)@\(place.location)+\(place.length)"
+        }
+    }
+    #endif
 
     /// The rows that speak for the folder rather than for a paper.
     @ViewBuilder
@@ -435,7 +446,7 @@ struct PaperListView: View {
             }
         #if os(macOS)
         case let .meaning(key):
-            if let hit = meanings.first(where: { Self.key(of: $0.passage) == key }) {
+            if let hit = meanings.first(where: { Self.key(of: $0) == key }) {
                 meaningRow(hit)
             }
         #endif
@@ -497,7 +508,7 @@ struct PaperListView: View {
     /// its meaning is not news twice.
     private var shownMeanings: [SemanticIndex.Hit] {
         let named = Set(passages.map(\.passage))
-        return meanings.filter { !named.contains($0.passage) }
+        return meanings.filter { $0.passage.map { !named.contains($0) } ?? true }
     }
 
     private var hasMeanings: Bool { isSearch && !shownMeanings.isEmpty }
@@ -516,10 +527,21 @@ struct PaperListView: View {
     #if os(macOS)
     /// A passage that says what was searched for in other words. The same
     /// row as a passage, with the palette's symbol for the group.
+    @ViewBuilder
     private func meaningRow(_ hit: SemanticIndex.Hit) -> some View {
-        foundRow(hit.passage, snippet: hit.snippet,
-                 subtitle: "\(hit.title) · \(pageLabel(hit.passage))",
-                 symbol: "sparkle.magnifyingglass")
+        switch hit.origin {
+        case let .paper(passage):
+            foundRow(hit.passage, snippet: hit.snippet,
+                     subtitle: "\(hit.title) · \(pageLabel(passage))",
+                     symbol: "sparkle.magnifyingglass")
+        case let .note(place):
+            // A note's row: the same shape, and it opens the note.
+            foundRow(nil, snippet: hit.snippet,
+                     subtitle: "\(hit.title) · \(L("노트", "Note"))",
+                     symbol: "note.text") {
+                openNotePassage(place, words: hit.snippet, in: model)
+            }
+        }
     }
     #endif
 
@@ -527,10 +549,15 @@ struct PaperListView: View {
     ///
     /// Pinned to the leading edge — see `PaperTable.body(for:)` for the row
     /// that was not, and for the same reason on iPad.
-    private func foundRow(_ passage: PaperTextIndex.Passage, snippet: String,
-                          subtitle: String, symbol: String) -> some View {
+    private func foundRow(_ passage: PaperTextIndex.Passage?, snippet: String,
+                          subtitle: String, symbol: String,
+                          open: (() -> Void)? = nil) -> some View {
         Button {
-            openPassage(passage, in: model, link: link)
+            if let open {
+                open()
+            } else if let passage {
+                openPassage(passage, in: model, link: link)
+            }
             #if os(iOS)
             app.compactColumn = .detail
             #endif

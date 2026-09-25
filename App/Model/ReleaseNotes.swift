@@ -297,6 +297,24 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.9.10",
+            date: Text2("2026년 9월", "September 2026"),
+            note: Text2(
+                "뜻으로 찾기가 노트도 읽어요.",
+                "Search by meaning reads your notes too."
+            ),
+            added: [
+                Entry(
+                    Text2("노트도 뜻으로 찾기", "Notes, by Meaning"),
+                    Text2(
+                        "찾기(⌘K)의 «뜻이 비슷한 구절»에 노트의 구절도 서요. 논문에 적은 노트든 논문 없는 노트든, 그 낱말이 없어도 뜻이 가까우면 나와요. 줄에는 노트 이름과 «노트»가 붙고, 누르면 그 노트가 열리고 그 구절로 가요. 노트를 고치면 5초쯤 뒤에 조용히 다시 읽어요.",
+                        "Similar in Meaning in Search Everything (⌘K) now includes your notes — the ones on a paper and the ones on their own — even when none of the words you typed is in them. A row names the note and says Note; press it and the note opens at that passage. An edited note is read again a few seconds after you stop typing."
+                    )
+                ),
+            ],
+            fixed: []
+        ),
+        Release(
             version: "0.9.9",
             date: Text2("2026년 9월", "September 2026"),
             note: Text2(

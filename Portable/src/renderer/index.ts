@@ -263,6 +263,7 @@ const paperList = buildPaperList({
   },
   refresh: () => void reload(),
   openPassage: (hit, byMeaning) => void openPassage(hit, byMeaning ? '' : store.searchQuery),
+  openNote: (paperID) => void openNote(paperID),
 })
 
 /** The answer to "a paper, a book, course material, or a document?", from the

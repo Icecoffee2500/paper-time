@@ -871,6 +871,9 @@ public final class AppModel {
             // The passages by meaning, a few seconds after the window has
             // its list — never in the same instant. A probe that asked for
             // the index (`--papertime-semantic-index=1`) waits for it below.
+            // The notes go in after the papers, read from the model when
+            // the build gets to them.
+            await SemanticIndex.shared.setNotesProvider { [weak model] in model?.notes.semanticSources ?? [] }
             if !Boot.isSet("PAPERTIME_SEMANTIC_INDEX"), !Boot.isSet("PAPERTIME_SEMANTIC_QUERY") {
                 SemanticIndex.shared.schedule(model.semanticSources)
             }
@@ -1193,7 +1196,16 @@ public final class AppModel {
                     }
                 }
             }
-            if let noteID = Boot.setting("PAPERTIME_OPEN_NOTE") { model.notes.openNoteID = noteID }
+            if let noteID = Boot.setting("PAPERTIME_OPEN_NOTE") {
+                // `--papertime-note-reveal=<words>` opens the note the way a
+                // passage found by meaning does: in the slip-box, scrolled
+                // to those words. The editor says on stderr where it went.
+                if let words = Boot.setting("PAPERTIME_NOTE_REVEAL") {
+                    model.scope = .notes
+                    model.notes.reveal = words
+                }
+                model.notes.openNoteID = noteID
+            }
             // `--papertime-search-bench=1` times Search Everything and writes
             // down every answer it gives, then quits — see `SearchBench`.
             #if os(macOS)

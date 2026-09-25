@@ -53,7 +53,7 @@ import { captureAndQuit, probeArgument, runProbe } from './probe.js'
 import { capture as captureWindow, send as sendFeedback } from './feedback.js'
 import type { ServiceReply, ServiceStats } from './textService.js'
 import type { TextSource } from './textIndex.js'
-import { SemanticSearch } from './semantic.js'
+import { SemanticSearch, type NoteSource } from './semantic.js'
 
 const isMac = process.platform === 'darwin'
 /** See `--papertime-chrome` in `preload.ts`. */
@@ -324,6 +324,7 @@ async function snapshot(refused: string[] = []): Promise<LibrarySnapshot | { err
       return { one, papers, loose: free.length, trouble }
     }))
     const readable = new Map<string, TextSource>()
+    const notes = new Map<string, NoteSource>()
     for (const folder of read) {
       unreadableRecords.push(...folder.trouble)
       for (const row of folder.papers) {
@@ -333,6 +334,10 @@ async function snapshot(refused: string[] = []): Promise<LibrarySnapshot | { err
         if (row.file && row.exists) {
           readable.set(row.id, { id: row.id, file: row.file, title: new PaperMeta(row.meta).displayTitle })
         }
+        // The paper's note, for search by meaning: a paper has one, kept
+        // in its state, and the index reads it beside the paper's pages.
+        const summary = String((row.state as { summaryNote?: unknown }).summaryNote ?? '')
+        if (summary.trim().length > 0) notes.set(row.id, { id: row.id, paperID: row.id, markdown: summary })
         rows.push({
           id: row.id,
           meta: row.meta,
@@ -346,6 +351,7 @@ async function snapshot(refused: string[] = []): Promise<LibrarySnapshot | { err
       loose += folder.loose
     }
     textSources = readable
+    noteSources = notes
     textSourcesSent = false
     // The papers may have changed; search by meaning catches up once things
     // are quiet. Same papers as last time costs a comparison and nothing sent.
@@ -543,6 +549,8 @@ async function settleFolder(): Promise<void> {
 
 /** Every paper with a file to read, from the last read of the folders. */
 let textSources = new Map<string, TextSource>()
+/** The papers' notes, for search by meaning — one a paper, keyed by the paper. */
+let noteSources = new Map<string, NoteSource>()
 /** Whether the text service has been told about this list yet. */
 let textSourcesSent = false
 let textService: UtilityProcess | null = null
@@ -597,6 +605,7 @@ function semantic(): SemanticSearch {
   if (semanticSearch) return semanticSearch
   semanticSearch = new SemanticSearch(semanticCacheDirectory(), {
     sources: () => [...textSources.values()],
+    notes: () => [...noteSources.values()],
     texts: (ids) => new Promise((resolve, reject) => {
       const token = (textTextsCount += 1)
       textTextsWaiting.set(token, { resolve, reject })
@@ -901,6 +910,14 @@ const handlers: Record<string, Handler> = {
       lastOpenedAt: patch.lastOpenedAt ? new Date(String(patch.lastOpenedAt)) : state.lastOpenedAt,
     })
     const saved = await owner.saveState(id, state)
+    // A note that changed goes back into search by meaning once the
+    // typing has settled; each keystroke pushes that back.
+    if ('summaryNote' in patch) {
+      const summary = String(patch.summaryNote ?? '')
+      if (summary.trim().length > 0) noteSources.set(id, { id, paperID: id, markdown: summary })
+      else noteSources.delete(id)
+      semantic().scheduleNotes(5000)
+    }
     return saved.encode()
   }) as Handler,
 
@@ -1560,16 +1577,21 @@ async function runSemanticProbe() {
   await semantic().build()
   const stats = await semantic().stats()
   const status = semantic().status()
-  out(`semantic: status enabled=${status.enabled} ready=${status.ready} passages=${status.passages}` +
+  out(`semantic: status enabled=${status.enabled} ready=${status.ready} passages=${status.passages} notes=${status.notes} notePassages=${status.notePassages}` +
     (stats ? ` · worker loaded=${stats.loaded} loadMs=${stats.loadMs === null ? '-' : Math.round(stats.loadMs)} vectors=${stats.vectors} rss=${stats.rssMB} MB` : ''))
   const query = probeArgument('semantic-query')
   if (!query) return
   for (const round of [1, 2]) {
     const t0 = performance.now()
     const answer = await semantic().search(query, 8)
-    out(`semantic: “${query}” → ${answer.hits.length} passages in ${(performance.now() - t0).toFixed(1)} ms (worker ${answer.ms.toFixed(1)} ms)${round === 2 ? ' · asked again' : ''}`)
+    const fromNotes = answer.hits.filter((hit) => hit.note).length
+    out(`semantic: “${query}” → ${answer.hits.length} passages (${fromNotes} from notes) in ${(performance.now() - t0).toFixed(1)} ms (worker ${answer.ms.toFixed(1)} ms)${round === 2 ? ' · asked again' : ''}`)
     if (round === 2) break
     answer.hits.forEach((hit, i) => {
+      if (hit.note) {
+        out(`semantic:   ${i + 1}. ${hit.score.toFixed(3)}  NOTE ${hit.note.id} “${hit.note.title.slice(0, 40)}” @${hit.passage.location}+${hit.passage.length} | ${hit.snippet.slice(0, 90)}`)
+        return
+      }
       const title = textSources.get(hit.passage.paperID)?.title ?? hit.passage.paperID
       out(`semantic:   ${i + 1}. ${hit.score.toFixed(3)}  ${title.slice(0, 40)} · p${hit.passage.pageIndex + 1} @${hit.passage.location}+${hit.passage.length} | ${hit.snippet.slice(0, 90)}`)
     })

@@ -119,7 +119,7 @@ enum LatexSuiteTypingProbe {
     struct NoteHost: View {
         @Bindable var note: Note
         var body: some View {
-            NoteEditor(markdown: $note.markdown, pendingAnchor: .constant(nil), onFollow: { _ in })
+            NoteEditor(markdown: $note.markdown, pendingAnchor: .constant(nil), pendingReveal: .constant(nil), onFollow: { _ in })
         }
     }
 

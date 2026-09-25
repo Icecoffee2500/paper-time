@@ -49,6 +49,12 @@ export interface TextHit {
   /** The sentence around the match, whitespace tidied. */
   snippet: string
   count: number
+  /**
+   * Set when the hit is in a note rather than on a page — search by
+   * meaning finds those. `passage.paperID` is then `note:<id>`, `title`
+   * is the note's, and the row opens the note.
+   */
+  note?: { id: string; paperID: string | null; title: string }
 }
 
 /** What reading a paper gives: its pages, and the same pages folded. */

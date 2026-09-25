@@ -27,6 +27,12 @@ struct NoteEditor: NSViewRepresentable {
     @Binding var markdown: String
     /// Set to drop a link at the cursor; cleared once it has been dropped.
     @Binding var pendingAnchor: NoteAnchor?
+    /// Words to scroll to and flash; cleared once they have been shown. A
+    /// passage found by meaning is a run of the note's words with the
+    /// Markdown taken out, so the first few of them are looked for in
+    /// what is on screen, and the whole run is not asked for — a formula
+    /// or a link in the middle of it is spelled differently here.
+    @Binding var pendingReveal: String?
     /// Shows the Markdown as written, for when a link or a formula needs
     /// changing by hand.
     var showsRawText = false
@@ -127,6 +133,43 @@ struct NoteEditor: NSViewRepresentable {
                 context.coordinator.insert(anchor, into: textView)
                 pendingAnchor = nil
             }
+        }
+
+        if let words = pendingReveal {
+            DispatchQueue.main.async {
+                Self.reveal(words, in: textView)
+                pendingReveal = nil
+            }
+        }
+    }
+
+    /// Scrolls to the first place the first few of these words stand, and
+    /// flashes it the way Find does. Nothing when they are not on screen
+    /// — the note is open, which is most of the way there.
+    static func reveal(_ words: String, in textView: NSTextView) {
+        let shown = textView.string as NSString
+        let pieces = words.split(whereSeparator: \.isWhitespace)
+        // The longest run of leading words that is found, down to three;
+        // a shorter run than that lands on the wrong line too often.
+        for count in stride(from: min(pieces.count, 8), through: min(pieces.count, 3), by: -1) where count > 0 {
+            let phrase = pieces.prefix(count).joined(separator: " ")
+            // Any white space between the words: the index joined them
+            // with spaces, and on screen a title's line break stands there.
+            let pattern = pieces.prefix(count).map { NSRegularExpression.escapedPattern(for: String($0)) }
+                .joined(separator: #"\s+"#)
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+                  let match = regex.firstMatch(in: shown as String, range: NSRange(location: 0, length: shown.length))
+            else { continue }
+            let range = match.range
+            textView.scrollRangeToVisible(range)
+            textView.showFindIndicator(for: range)
+            if Boot.isSet("PAPERTIME_NOTE_REVEAL") {
+                FileHandle.standardError.write(Data("note reveal: “\(phrase)” at \(range.location)+\(range.length) of \(shown.length)\n".utf8))
+            }
+            return
+        }
+        if Boot.isSet("PAPERTIME_NOTE_REVEAL") {
+            FileHandle.standardError.write(Data("note reveal: “\(words.prefix(40))” not on screen\n".utf8))
         }
     }
 

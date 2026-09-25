@@ -15,7 +15,7 @@ import type { TextHit } from './textSearch.js'
 
 export type MeaningHit = MeaningHitDTO
 
-let status: SemanticStatusDTO = { enabled: true, ready: false, passages: 0, progress: null }
+let status: SemanticStatusDTO = { enabled: true, ready: false, passages: 0, notes: 0, notePassages: 0, progress: null }
 let asked = false
 const listeners = new Set<(status: SemanticStatusDTO) => void>()
 
@@ -51,8 +51,16 @@ export async function searchMeaning(query: string, shown: string[] = [], k = 8):
 
 /** A meaning hit as the reader takes it: the same shape as a text hit. */
 export function asTextHit(hit: MeaningHit): TextHit {
+  if (hit.note) {
+    return { passage: hit.passage, title: hit.note.title, snippet: hit.snippet, count: 1, note: hit.note }
+  }
   const paper = store.papers.find((one) => one.id === hit.passage.paperID)
   return { passage: hit.passage, title: paper?.meta.displayTitle ?? '', snippet: hit.snippet, count: 1 }
+}
+
+/** «<note's title> · 노트» — a note's row says it is a note, the way the exact search's note rows do. */
+export function noteSubtitle(hit: TextHit): string {
+  return `${hit.title} · ${L('노트', 'Note')}`
 }
 
 /** «뜻으로 찾기 준비 중 · 120/630» — the palette's footer while the index fills. */

@@ -10,6 +10,7 @@ import { SemanticVectorStore } from '../shared/semantic/vectorStore.js'
 import { DIMENSION } from '../shared/semantic/model.js'
 import { emptyManifest, GRACE_MS, noted, parseManifest, retained } from '../shared/semantic/manifest.js'
 import { pickResults, placeKey } from '../shared/semantic/results.js'
+import { plainNoteText } from '../shared/semantic/noteText.js'
 import { store } from '../renderer/state.js'
 
 type Test = (name: string, body: () => void | Promise<void>) => Promise<void>
@@ -127,6 +128,79 @@ export async function semanticPaletteSuite(test: Test, suite: (name: string) => 
     assert.deepEqual(parseManifest('{"version":2,"papers":{}}'), emptyManifest())
     const good = parseManifest('{"version":1,"papers":{"A":{"seen":5,"keys":["k",3]}}}')
     assert.deepEqual(good.papers.A, { seen: 5, keys: ['k'] })
+  })
+
+  suite('Notes among the passages — the Mac\'s rule')
+
+  await test('a note\'s Markdown comes out and its words stay, as on the Mac', () => {
+    // The same note as `NoteTextTests.markdown` in the Swift tests, held
+    // to the same answer: both builds must cut a note to the same passages.
+    const note = [
+      '## Why models forget',
+      '> The **first task\'s** accuracy _drops_ once the *second* is trained.',
+      '- See [[202609061204|the EWC note]] and [the paper](https://arxiv.org/abs/1612.00796).',
+      '1. `Fisher` diagonal',
+      '![figure](fig.png) shows it. #catastrophic-forgetting',
+    ].join('\n')
+    assert.equal(plainNoteText(note), [
+      'Why models forget',
+      'The first task\'s accuracy drops once the second is trained.',
+      'See the EWC note and the paper.',
+      'Fisher diagonal',
+      'figure shows it. catastrophic-forgetting',
+    ].join('\n'))
+  })
+
+  await test('a formula keeps its letters and loses its dollars; fences and front matter go', () => {
+    const plain = plainNoteText('Loss $$\\mathcal{L}_{\\text{rollout}}$$ and $x^2$ inline.')
+    assert.ok(!plain.includes('$'))
+    assert.ok(plain.includes('\\mathcal{L}_{\\text{rollout}}'))
+    assert.ok(plain.includes('x^2'))
+    const fenced = plainNoteText('---\nid: 1\n---\n```python\nx = 1\n```\n\n---\n\nafter')
+    assert.ok(!fenced.includes('```') && !fenced.includes('id: 1') && !fenced.includes('---'))
+    assert.ok(fenced.includes('x = 1') && fenced.includes('after'))
+  })
+
+  await test('the same words on a page and in a note share one key', () => {
+    const words = 'Elastic weight consolidation slows learning.'
+    const [page] = chunksOfPage(words, 'A', 0)
+    const [note] = chunksOfPage(plainNoteText('> ' + words), 'note:1', 0)
+    assert.equal(page.key, note.key)
+  })
+
+  await test('a note\'s passage comes back as a note, two a note at most, mixed with the papers by score', () => {
+    const store = new SemanticVectorStore()
+    const index = new SemanticIndex(store)
+    index.setPages([
+      { paperID: 'A', pageIndex: 0, text: 'alpha '.repeat(30) },
+      { paperID: 'note:N', pageIndex: 0, text: Array.from({ length: 180 }, (_, i) => `w${i}`).join(' '), note: { id: 'N', paperID: 'A', title: 'A thought' } },
+    ])
+    assert.deepEqual(index.noteCounts, { notes: 1, passages: 3 })
+    const found: SemanticResult[] = index.missing().map((chunk, i) => ({
+      key: chunk.key, score: 0.9 - i * 0.1, paperID: chunk.paperID, pageIndex: chunk.pageIndex,
+      location: chunk.location, length: chunk.length, text: chunk.text,
+      ...(chunk.paperID === 'note:N' ? { note: { id: 'N', paperID: 'A', title: 'A thought' } } : {}),
+    }))
+    const picked = pickResults(found)
+    assert.equal(picked.length, 3, 'one from the paper, two of the note\'s three')
+    assert.equal(picked[0].note, undefined)
+    assert.deepEqual(picked[1].note, { id: 'N', paperID: 'A', title: 'A thought' })
+    assert.equal(picked.filter((h) => h.note).length, 2)
+    assert.ok(picked.every((h, i) => i === 0 || picked[i - 1].score >= h.score))
+  })
+
+  await test('a note that quotes its paper is not a second row for the same words', () => {
+    const words = 'the same passage in both '.repeat(8)
+    const [page] = chunksOfPage(words, 'A', 3)
+    const [note] = chunksOfPage(words, 'note:N', 0)
+    const asFound = (chunk: typeof page, score: number, noted: boolean): SemanticResult => ({
+      key: chunk.key, score, paperID: chunk.paperID, pageIndex: chunk.pageIndex,
+      location: chunk.location, length: chunk.length, text: chunk.text,
+      ...(noted ? { note: { id: 'N', paperID: 'A', title: 'Quote' } } : {}),
+    })
+    const picked = pickResults([asFound(page, 0.9, false), asFound(note, 0.9, true)])
+    assert.equal(picked.length, 1)
+    assert.equal(picked[0].passage.paperID, 'A')
   })
 
   suite('The switch')

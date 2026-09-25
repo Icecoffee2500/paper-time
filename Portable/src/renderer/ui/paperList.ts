@@ -16,6 +16,7 @@ import { basename } from './sidebar.js'
 import { L } from '../../shared/lang.js'
 import { PAPER_DRAG_TYPE } from '../../shared/split.js'
 import { passageKey, passageSubtitle, type TextHit } from '../textSearch.js'
+import { noteSubtitle } from '../meaningSearch.js'
 import { placeKey } from '../../shared/semantic/results.js'
 
 export interface PaperListActions {
@@ -35,6 +36,8 @@ export interface PaperListActions {
   /** A passage the search found inside a paper: that paper, at that line. */
   /** `byMeaning`: the reader goes to the passage itself, not to the words typed — which it need not say. */
   openPassage: (hit: TextHit, byMeaning?: boolean) => void
+  /** A passage found by meaning inside a paper's note: that paper, with the note in front. */
+  openNote: (paperID: string) => void
 }
 
 const STATUS_ICON = {
@@ -350,15 +353,16 @@ function paperRow(entry: Paper, actions: PaperListActions): BuiltRow {
  * left on.
  */
 function passageRow(hit: TextHit, actions: PaperListActions, byMeaning = false): HTMLElement {
-  const icon = iconNode('text.magnifyingglass')
+  const note = hit.note
+  const icon = iconNode(note ? 'note' : 'text.magnifyingglass')
   const row = el('div', { class: 'passage-row', role: 'option' }, [
     el('span', { class: 'passage-icon' }, icon ? [icon] : []),
     el('div', { class: 'paper-main' }, [
       el('div', { class: 'passage-snippet', text: hit.snippet }),
-      el('div', { class: 'paper-subtitle', text: passageSubtitle(hit) }),
+      el('div', { class: 'paper-subtitle', text: note ? noteSubtitle(hit) : passageSubtitle(hit) }),
     ]),
   ])
-  on(row, 'click', () => actions.openPassage(hit, byMeaning))
+  on(row, 'click', () => (note ? actions.openNote(note.paperID ?? note.id) : actions.openPassage(hit, byMeaning)))
   return row
 }
 
