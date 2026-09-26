@@ -998,20 +998,31 @@ const toolbar = buildToolbar({
         action: () => setSort(store.settings.sort.field, !store.settings.sort.ascending),
       },
       { separator: true },
-      { caption: L('쪽 배치', 'Page Layout') },
-      ...(['continuous', 'single', 'book'] as const).map((layout) => ({
-        label: { continuous: L('이어서 보기', 'Continuous'), single: L('한 쪽씩 보기', 'Single Page'), book: L('책처럼 보기', 'Book') }[layout],
-        checked: store.settings.pageLayout === layout,
-        action: () => setLayout(layout),
-      })),
-      { separator: true },
-      { caption: L('쪽 색조', 'Page Tint') },
-      // The custom one draws with the colour chosen in Settings.
-      ...PAGE_TINTS.map((tint) => ({
-        label: tintLabel(tint),
-        checked: store.settings.pageTint === tint,
-        action: () => setSettings({ pageTint: tint }),
-      })),
+      // Pickers are submenus here, as the Mac's are.
+      {
+        label: L('쪽 배치', 'Page Layout'),
+        icon: 'book.pages',
+        children: (['continuous', 'single', 'book'] as const).map((layout) => ({
+          label: { continuous: L('이어서 보기', 'Continuous'), single: L('한 쪽씩 보기', 'Single Page'), book: L('책처럼 보기', 'Book') }[layout],
+          checked: store.settings.pageLayout === layout,
+          action: () => setLayout(layout),
+        })),
+      },
+      {
+        label: L('쪽 색조', 'Page Tint'),
+        icon: 'circle.lefthalf.filled',
+        children: PAGE_TINTS.map((tint) => ({
+          label: tintLabel(tint),
+          checked: store.settings.pageTint === tint,
+          action: () => {
+            setSettings({ pageTint: tint })
+            // Choosing a colour is the next thing anyone does after choosing
+            // Custom Color, so Settings opens at its colour well — the Mac
+            // opens its colour panel from the same item.
+            if (tint === 'custom') openSettings('reading')
+          },
+        })),
+      },
       { separator: true },
       {
         label: L('화면 모드', 'Appearance'),

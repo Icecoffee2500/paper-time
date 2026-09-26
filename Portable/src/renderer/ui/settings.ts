@@ -39,7 +39,7 @@ export interface SettingsActions {
 }
 
 /** Where the sheet opens: at the top, or at one of its sections. */
-export type SettingsSection = 'about' | 'shortcuts'
+export type SettingsSection = 'about' | 'shortcuts' | 'reading'
 
 const PAGE_URL = 'https://icecoffee2500.github.io/paper-time/'
 const TOGETHER_URL = 'https://icecoffee2500.github.io/paper-time/#together'
@@ -156,7 +156,11 @@ export function showSettings(actions: SettingsActions, section?: SettingsSection
       ),
     }))
 
-    body.append(el('div', { class: 'set-section', text: L('읽기', 'Reading') }))
+    const reading = el('div', { class: 'set-section', text: L('읽기', 'Reading') })
+    // Where «Custom Color» in the ⋯ menu opens the sheet: the colour well is
+    // right under this, as the Mac's menu opens its colour panel.
+    reading.dataset.section = 'reading'
+    body.append(reading)
     body.append(choices(
       L('쪽 배치', 'Page Layout'),
       [['continuous', L('이어서', 'Continuous')], ['single', L('한 쪽씩', 'Single')], ['book', L('책처럼', 'Book')]] as const,
