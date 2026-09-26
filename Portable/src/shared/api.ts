@@ -88,6 +88,15 @@ export interface Requests {
     result: { hits: MeaningHitDTO[]; ms: number; ready: boolean }
   }
   'semantic:status': { args: void; result: SemanticStatusDTO }
+  /** The slip-box: every note in every open folder, and the loose ones. */
+  'notes:load': { args: void; result: { notes: NoteDTO[]; notesFolder: NotesFolderDTO } }
+  /** Writes a note into its box; an empty note takes its file away. Answers with the box it went to. */
+  'notes:save': { args: { note: NoteDTO }; result: NoteDTO }
+  'notes:delete': { args: { id: string }; result: void }
+  /** Asks for a folder for the notes about no paper and moves them there. */
+  'notes:chooseFolder': { args: void; result: { moved: number; kept: number; notesFolder: NotesFolderDTO } | { error: string } | null }
+  /** The way back: the loose notes return to the app's own folder. */
+  'notes:useAppFolder': { args: void; result: { moved: number; kept: number; notesFolder: NotesFolderDTO } }
   /** For a probe: builds now and waits. */
   'semantic:build': { args: void; result: { status: SemanticStatusDTO; stats: unknown; unread: string[] } }
 }
@@ -99,6 +108,36 @@ export interface MeaningHitDTO {
   score: number
   /** Which note the passage is in, when it is in one: its id (the paper's), the paper, and its title. */
   note?: { id: string; paperID: string | null; title: string }
+}
+
+/** One note of the slip-box, as it crosses to the window — `shared/zettel.ts` with the box it is in. */
+export interface NoteDTO {
+  id: string
+  kind: 'note' | 'map' | 'draft'
+  title: string
+  body: string
+  /** The paper it was written against, an upper-case UUID, or null. */
+  paperID: string | null
+  /** Milliseconds since 1970: a Date does not cross the bridge. */
+  created: number
+  modified: number
+  /** The box it was read from and goes back to: a library's root, or the loose folder. */
+  box: string
+}
+
+/** Where the notes about no paper live. */
+export interface NotesFolderDTO {
+  /** The folder they are read from and written to now. */
+  loose: string
+  /** Whether that is a folder the reader chose rather than the app's own. */
+  chosen: boolean
+  /** The folder the reader chose, whether or not it can be reached. */
+  chosenPath: string | null
+  appFolder: string
+  /** The chosen folder cannot be reached: notes go to the app's own meanwhile. */
+  away: boolean
+  /** Folders a move left notes in, because a name was taken where they were going. */
+  leftBehind: string[]
 }
 
 export interface SemanticStatusDTO {
@@ -150,4 +189,7 @@ export interface LibrarySnapshot {
    * its own and a record that is broken has to be found.
    */
   unreadable?: string[]
+  /** The slip-box, read with the folders: every note, and where the loose ones live. */
+  notes?: NoteDTO[]
+  notesFolder?: NotesFolderDTO
 }

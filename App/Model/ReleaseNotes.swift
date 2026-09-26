@@ -297,6 +297,24 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.9.11",
+            date: Text2("2026년 9월", "September 2026"),
+            note: Text2(
+                "맥에서 쓴 노트가 윈도우·리눅스에도 보여요.",
+                "Notes written on the Mac now show on Windows and Linux."
+            ),
+            added: [
+                Entry(
+                    Text2("윈도우·리눅스의 슬립박스", "The Slip-Box on Windows and Linux"),
+                    Text2(
+                        "윈도우·리눅스가 이제 맥과 같은 노트 파일을 읽고 써요. 논문에 쓴 노트는 그 논문의 폴더에, 논문 없는 노트는 따로 둔 폴더에 있어요. Notes 탭에 그 논문의 노트가 줄로 서고, 옆 목록의 «노트»가 슬립박스 전체를 열어요 — 찾기, 태그, 지도와 초안, 노트 사이의 [[링크]]까지요. 맥에서 고른 노트 파일이 바이트까지 같아서 클라우드 폴더에서 서로 겹쳐 쓰지 않아요. 전에 Notes 탭에 적은 글은 정보 탭의 «메모»에 그대로 있어요.",
+                        "Windows and Linux now read and write the same note files as the Mac. A note about a paper lives in that paper's folder; a note about no paper in a folder of its own. The Notes tab lists the notes on the paper you are reading, and Notes in the sidebar opens the whole slip-box: search, tags, maps and drafts, and the [[links]] between notes. The files are the Mac's byte for byte, so a cloud folder never sees the two builds write over each other. What you typed in the old Notes tab is in the Info tab's Note field, as it was."
+                    )
+                ),
+            ],
+            fixed: []
+        ),
+        Release(
             version: "0.9.10",
             date: Text2("2026년 9월", "September 2026"),
             note: Text2(

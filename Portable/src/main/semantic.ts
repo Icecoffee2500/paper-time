@@ -35,12 +35,14 @@ export interface SemanticStatus {
   progress: { done: number; total: number } | null
 }
 
-/** A note as the index takes it: here, a paper's summary note. */
+/** A note as the index takes it: one of the slip-box's, by its own id. */
 export interface NoteSource {
-  /** The note's id — the paper's, since a paper has one note. */
   id: string
   paperID: string | null
+  /** The note's body; the title is not in it, as on the Mac. */
   markdown: string
+  /** What a row calls it — the Mac's `displayTitle`. Its first line when absent. */
+  title?: string
 }
 
 export interface SemanticHooks {
@@ -165,7 +167,7 @@ export class SemanticSearch {
       notePages += 1
       pages.push({
         paperID: `note:${note.id}`, pageIndex: 0, text,
-        note: { id: note.id, paperID: note.paperID, title: noteTitle(note.markdown) },
+        note: { id: note.id, paperID: note.paperID, title: note.title ?? noteTitle(note.markdown) },
       })
     }
     const t1 = performance.now()

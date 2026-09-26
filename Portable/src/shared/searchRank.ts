@@ -167,8 +167,9 @@ export function paperHaystack(paper: SearchablePaper): string {
 }
 
 export interface SearchableNote {
-  /** The paper the note is about — Portable's notes are the papers' own. */
-  paperID: string
+  id: string
+  /** The paper the note is about, or null for a note of one's own. */
+  paperID: string | null
   title: string
   preview: string
   /** Which paper, said under the note's own title. */
@@ -202,7 +203,7 @@ export interface RankWords {
 export type ResultKind =
   | { type: 'showAll'; query: string }
   | { type: 'paper'; id: string }
-  | { type: 'note'; paperID: string }
+  | { type: 'note'; id: string; paperID: string | null }
   | { type: 'collection'; id: string }
   | { type: 'tag'; id: string }
   | { type: 'action'; name: ActionName }
@@ -320,7 +321,7 @@ export function rank(query: string, prepared: Prepared, words: RankWords, now = 
     const score = matchScore(folded, field)
     if (score === null) continue
     results.push({
-      kind: { type: 'note', paperID: note.paperID },
+      kind: { type: 'note', id: note.id, paperID: note.paperID },
       title: note.title,
       subtitle: note.paperTitle ? `${words.note} · ${note.paperTitle}` : words.note,
       score: score - 0.05,

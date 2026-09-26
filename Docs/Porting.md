@@ -35,7 +35,8 @@ opens two-megabyte PDFs is not the binding constraint.
 | Shapes, arrows, text cards | sidecar `sketch/pNNNN.json`, **and** `/PTSketch` on each annotation | yes, either way |
 | Highlights, underlines | standard PDF annotations, plus the per-device journal | yes |
 | Handwriting | PDF ink annotations | shape, width and colour — not pressure |
-| Reading state, notes, favourites | `state.json` | yes |
+| Reading state, the memo, favourites | `state.json` | yes |
+| The slip-box's notes | `.papertime/notes/<id>.md`, the loose ones in a folder of their own | yes, byte for byte |
 | BibTeX export | — | identical output, verified |
 
 Two things make this work, and both were already in the Mac app before the
@@ -103,8 +104,11 @@ status menu, the chosen subtitle fields), attach by dropping or by
 «Attach To…». Search Everything with the words inside the papers and by
 meaning, find in document. Highlights, underlines and strikethroughs with the
 selection bar; a mark clicked is recoloured, noted or removed, the Marks tab
-lists them, ⌘Z takes any of it back. ⌘L quotes a passage into the paper's note
-in the Mac's Markdown; Ctrl-click on its page link goes back. Links in the
+lists them, ⌘Z takes any of it back. The slip-box: the Mac's note files, read
+from every open folder and the loose folder, written back byte for byte; the
+Notes tab lists the notes on a paper and ⌘N starts one; ⌘L quotes a passage
+into the open note in the Mac's Markdown; Ctrl-click on its page link goes
+back, and on a `[[link]]` goes to that note. Links in the
 paper, with Back through them; the contents (the PDF's outline) and the page
 grid on ⇧⌘L; continuous, single page and the book spread. The whole drawing
 layer — select, pen, highlighter, eraser, rectangle, ellipse, arrow, line,
@@ -121,11 +125,15 @@ nothing is:
 - **Metadata resolution** — no heuristics, no OpenAlex or Crossref lookup. A
   new record is `unparsed`, titled by its file name, until a Mac sees it; the
   candidates, Re-run and Resolve Missing are not here.
-- **The slip-box** — one note per paper (the Mac's Info-tab memo, a plain
-  textarea with Latex Suite and the formula card), not the Mac's note files
-  (`.papertime/notes/*.md`): notes written on the Mac do not show here, and
-  there are no links between notes, maps, drafts, resonance or typeset
-  rendering.
+- **The slip-box's rendering** — the notes are the Mac's files
+  (`.papertime/notes/*.md`) and the same box: the Notes tab per paper, the
+  sidebar's Notes shelf with search, tags, maps and drafts, the `[[links]]`
+  between notes and the page links back into the paper. What is still
+  missing is what the Mac draws on top: Markdown and formulas set as they
+  are typed (here the note is shown as Markdown, with the formula card
+  under the caret), the `[[` completion pop-up, resonance («notes that echo
+  this page»), the map as a board of cards, and a draft rendered to a
+  manuscript with its `.bib`.
 - **Ultracopy**, and the maths transcription behind ⌘L — a quotation here is
   the words the text layer gives.
 - **Headings read off the pages** when a PDF has no outline (`PaperContents`).

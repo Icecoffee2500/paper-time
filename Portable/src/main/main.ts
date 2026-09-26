@@ -16,7 +16,7 @@ import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 import { Worker } from 'node:worker_threads'
-import { CHANNEL, type LibrarySnapshot } from '../shared/api.js'
+import { CHANNEL, type LibrarySnapshot, type NoteDTO } from '../shared/api.js'
 import { Library, claimedBy, deviceIdentity, readJSON, writeJSON } from './library.js'
 import * as L from './layout.js'
 import { PaperMeta, PaperState, type Collection, type Tag } from '../shared/model.js'
@@ -54,6 +54,8 @@ import { holdInMemory, rememberLibrary, settings, update } from './settings.js'
 import { L as say, resolveKorean, setKorean } from '../shared/lang.js'
 import { buildMenu } from './menu.js'
 import { watchLibrary } from './watcher.js'
+import { NotesStore } from './slipBox.js'
+import { zettelDisplayTitle } from '../shared/zettel.js'
 import { captureAndQuit, probeArgument, runProbe } from './probe.js'
 import { capture as captureWindow, send as sendFeedback } from './feedback.js'
 import type { ServiceReply, ServiceStats } from './textService.js'
@@ -87,6 +89,31 @@ let library: Library | null = null
 let extraLibraries: Library[] = []
 
 const allLibraries = (): Library[] => (library ? [library, ...extraLibraries] : [])
+
+/**
+ * The slip-box's boxes: one per folder, plus the loose one. Made when a
+ * library is opened, because where the loose notes go for a probe run is
+ * beside the probe's own library — the Mac's `<name>-loose-notes` — and
+ * never the folder that belongs to whoever uses this copy.
+ */
+let notesStore: NotesStore | null = null
+
+function openNotes(root: string): NotesStore {
+  const appFolder = isProbeLibrary()
+    ? `${root.replace(/[\\/]+$/, '')}-loose-notes`
+    : path.join(app.getPath('userData'), 'Notes')
+  // `--papertime-notes-chosen=<path>` stands in for the stored choice, so
+  // the way a launch finds the chosen folder can be run without one.
+  const chosen = isProbeLibrary() ? probeArgument('notes-chosen') : settings().notesFolder
+  const store = new NotesStore(appFolder, chosen)
+  notesStore = store
+  // Whatever fell back into the app's folder while the chosen one was away
+  // goes across first, before the notes are read.
+  if (chosen) void store.catchUp()
+  return store
+}
+
+const notes = (): NotesStore => notesStore ?? openNotes(library?.root ?? app.getPath('temp'))
 
 /** True when this run was told which folder to open, so it is a probe. */
 const isProbeLibrary = () => probeArgument('library') != null
@@ -329,7 +356,6 @@ async function snapshot(refused: string[] = []): Promise<LibrarySnapshot | { err
       return { one, papers, loose: free.length, trouble }
     }))
     const readable = new Map<string, TextSource>()
-    const notes = new Map<string, NoteSource>()
     for (const folder of read) {
       unreadableRecords.push(...folder.trouble)
       for (const row of folder.papers) {
@@ -339,10 +365,6 @@ async function snapshot(refused: string[] = []): Promise<LibrarySnapshot | { err
         if (row.file && row.exists) {
           readable.set(row.id, { id: row.id, file: row.file, title: new PaperMeta(row.meta).displayTitle })
         }
-        // The paper's note, for search by meaning: a paper has one, kept
-        // in its state, and the index reads it beside the paper's pages.
-        const summary = String((row.state as { summaryNote?: unknown }).summaryNote ?? '')
-        if (summary.trim().length > 0) notes.set(row.id, { id: row.id, paperID: row.id, markdown: summary })
         rows.push({
           id: row.id,
           meta: row.meta,
@@ -356,7 +378,13 @@ async function snapshot(refused: string[] = []): Promise<LibrarySnapshot | { err
       loose += folder.loose
     }
     textSources = readable
-    noteSources = notes
+    // The slip-box, read with the folders: the notes about these papers live
+    // beside them, and the ones about no paper in the loose box. Search by
+    // meaning reads the notes beside the papers' pages.
+    const box = notes()
+    box.setFolders(folders.map((one) => one.root), (paperID) => ownerByID.get(paperID)?.root ?? null)
+    const noteRows = await box.load()
+    noteSources = noteSourcesFrom(noteRows)
     textSourcesSent = false
     // The papers may have changed; search by meaning catches up once things
     // are quiet. Same papers as last time costs a comparison and nothing sent.
@@ -376,6 +404,8 @@ async function snapshot(refused: string[] = []): Promise<LibrarySnapshot | { err
       unreadable: unreadableRecords,
       // …and the ones this press of that button could not take in.
       refused,
+      notes: noteRows,
+      notesFolder: box.info(),
     }
   } catch (error) {
     return { error: String((error as Error).message ?? error) }
@@ -456,6 +486,7 @@ async function openLibrary(root: string) {
   stopWatching?.()
   library = await Library.open(root)
   if (!isProbeLibrary()) rememberLibrary(root)
+  openNotes(root)
   // All of them at once, and in the order they were remembered whatever
   // order they answer in: that order is the sidebar's list of libraries, and
   // a folder on a cloud drive that has to wake up should not hold up a folder
@@ -481,6 +512,12 @@ function startWatchingFolders() {
   stopWatching = roots[0] ? watchLibrary(roots[0], () => void folderDidChange()) : null
   for (const root of roots.slice(1)) {
     extraWatchers.push(watchLibrary(root, () => void folderDidChange()))
+  }
+  // And the loose notes' folder, which may be in a cloud drive too: a note
+  // the Mac wrote there arrives as a file appearing.
+  const loose = notesStore?.info().loose
+  if (loose && !roots.some((root) => loose.startsWith(root))) {
+    extraWatchers.push(watchLibrary(loose, () => void folderDidChange()))
   }
 }
 
@@ -554,8 +591,18 @@ async function settleFolder(): Promise<void> {
 
 /** Every paper with a file to read, from the last read of the folders. */
 let textSources = new Map<string, TextSource>()
-/** The papers' notes, for search by meaning — one a paper, keyed by the paper. */
+/** The slip-box's notes, for search by meaning, by note. */
 let noteSources = new Map<string, NoteSource>()
+
+/** Every note with words in it, as the index takes it — the Mac's `semanticSources`. */
+function noteSourcesFrom(rows: NoteDTO[]): Map<string, NoteSource> {
+  const found = new Map<string, NoteSource>()
+  for (const note of rows) {
+    if (note.title.trim().length === 0 && note.body.trim().length === 0) continue
+    found.set(note.id, { id: note.id, paperID: note.paperID, markdown: note.body, title: zettelDisplayTitle(note) })
+  }
+  return found
+}
 /** Whether the text service has been told about this list yet. */
 let textSourcesSent = false
 let textService: UtilityProcess | null = null
@@ -923,14 +970,6 @@ const handlers: Record<string, Handler> = {
       lastOpenedAt: patch.lastOpenedAt ? new Date(String(patch.lastOpenedAt)) : state.lastOpenedAt,
     })
     const saved = await owner.saveState(id, state)
-    // A note that changed goes back into search by meaning once the
-    // typing has settled; each keystroke pushes that back.
-    if ('summaryNote' in patch) {
-      const summary = String(patch.summaryNote ?? '')
-      if (summary.trim().length > 0) noteSources.set(id, { id, paperID: id, markdown: summary })
-      else noteSources.delete(id)
-      semantic().scheduleNotes(5000)
-    }
     return saved.encode()
   }) as Handler,
 
@@ -1198,6 +1237,65 @@ const handlers: Record<string, Handler> = {
     await semantic().build()
     return { status: semantic().status(), stats: await semantic().stats(), unread: semantic().unread }
   },
+
+  // MARK: The slip-box
+
+  'notes:load': async () => ({ notes: await notes().load(), notesFolder: notes().info() }),
+
+  'notes:save': (async ({ note }: { note: NoteDTO }) => {
+    const saved = await notes().save(note)
+    // Back into search by meaning once the typing has settled; each
+    // keystroke pushes that back.
+    const source = noteSourcesFrom([saved]).get(saved.id)
+    if (source) noteSources.set(saved.id, source)
+    else noteSources.delete(saved.id)
+    semantic().scheduleNotes(5000)
+    return saved
+  }) as Handler,
+
+  'notes:delete': (async ({ id }: { id: string }) => {
+    await notes().delete(id)
+    noteSources.delete(id)
+    semantic().scheduleNotes(5000)
+  }) as Handler,
+
+  /**
+   * A folder for the notes about no paper, and the notes moved into it — the
+   * Mac's «Loose Notes» in the settings. Not a library's own records: a
+   * second box over the same files would move every note about a paper out
+   * of it. The choice is remembered before anything moves, so a move stopped
+   * halfway is finished by the next launch.
+   */
+  'notes:chooseFolder': (async (_args: never, sender: BrowserWindow | null) => {
+    const result = await dialog.showOpenDialog(sender ?? window!, {
+      title: say('논문 없는 노트를 둘 폴더', 'A folder for notes that are not about a paper'),
+      message: say(
+        '논문 없는 노트를 둘 폴더를 골라주세요. 지금 있는 노트도 그리로 옮겨요.',
+        "Choose a folder for notes that aren't about a paper. The ones you have move there too.",
+      ),
+      properties: ['openDirectory', 'createDirectory'],
+      buttonLabel: say('여기에 두기', 'Keep Notes Here'),
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+    const chosen = result.filePaths[0]
+    if (chosen.split(/[\\/]/).includes(L.SUPPORT_DIR)) {
+      return { error: say('이 폴더에는 라이브러리의 기록이 있어요. 다른 폴더를 골라주세요.', 'That folder holds a library\'s records. Choose another one.') }
+    }
+    if (path.resolve(chosen) === path.resolve(notes().info().appFolder)) return { error: say('그 폴더는 이미 앱의 노트 폴더예요.', "That is already the app's own notes folder.") }
+    if (!isProbeLibrary()) update({ notesFolder: chosen })
+    const moved = await notes().relocate(chosen)
+    startWatchingFolders()
+    send('library:changed')
+    return { ...moved, notesFolder: notes().info() }
+  }) as Handler,
+
+  'notes:useAppFolder': (async () => {
+    if (!isProbeLibrary()) update({ notesFolder: null })
+    const moved = await notes().relocate(null)
+    startWatchingFolders()
+    send('library:changed')
+    return { ...moved, notesFolder: notes().info() }
+  }) as Handler,
 }
 
 ipcMain.handle(CHANNEL.invoke, async (event, name: string, args: unknown) => {
@@ -1682,6 +1780,7 @@ app.whenReady().then(async () => {
       // and not the ones beside it, which belong to whoever uses this copy.
       library = await Library.open(root)
       extraLibraries = []
+      openNotes(root)
       startWatchingFolders()
     } else {
       // Through the same door a chosen folder goes through, so the folders

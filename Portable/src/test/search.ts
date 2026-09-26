@@ -189,7 +189,7 @@ export async function searchSuite(test: Test, suite: (name: string) => void) {
   await test('notes rank a hair below the same match in a title; collections, tags and actions by name', () => {
     const prepared = prepare({
       papers: [paper('p', 'Forgetting Curves')],
-      notes: [{ paperID: 'p', title: noteTitle('# Forgetting curves\nread again in a week'), preview: 'read again', paperTitle: 'Forgetting Curves' }],
+      notes: [{ id: 'n1', paperID: 'p', title: noteTitle('# Forgetting curves\nread again in a week'), preview: 'read again', paperTitle: 'Forgetting Curves' }],
       collections: [{ id: 'c', name: 'Forgetting', smart: true }],
       tags: [{ id: 't', name: 'forgetting' }],
       actions: [{ name: 'exportBibTeX', title: 'Export BibTeX…' }],

@@ -123,10 +123,11 @@ function shelfCounts(papers: Paper[]): ShelfCounts {
       && (entry.meta.confidence === 'needsReview' || entry.meta.confidence === 'unparsed')) {
       counts.review += 1
     }
-    if (entry.state.summaryNote.trim().length > 0) counts.notes += 1
     for (const id of entry.meta.collectionIDs) bump(counts.collections, id)
     for (const id of entry.meta.tagIDs) bump(counts.tags, id)
   }
+  // Every note in the box, as the Mac's row counts them — not the papers.
+  counts.notes = store.notes.length
   // A smart collection has no members written down — its count is whoever
   // its rule matches, the same papers its shelf shows.
   for (const collection of store.collections) {

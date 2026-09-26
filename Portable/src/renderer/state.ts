@@ -6,7 +6,8 @@
  * the whole renderer readable, and keeps the Windows build and the Linux build
  * from differing by way of somebody's runtime.
  */
-import type { LibrarySnapshot, PaperRowDTO } from '../shared/api.js'
+import type { LibrarySnapshot, NoteDTO, NotesFolderDTO, PaperRowDTO } from '../shared/api.js'
+import type { Zettel } from '../shared/zettel.js'
 import type { TextHit } from '../main/textIndex.js'
 import { isLookedUp, type DocumentKind } from '../shared/documentKind.js'
 import { foldTitle } from '../shared/textFold.js'
@@ -39,6 +40,12 @@ export type Shelf =
   | { kind: 'tag'; id: string }
   /** What the palette's «Show All Results» found: `store.searchQuery`. */
   | { kind: 'search' }
+
+/** One note of the slip-box, and the box it was read from. */
+export interface Note extends Zettel {
+  /** A library's root, the loose folder — or '' for a note not yet written anywhere. */
+  box: string
+}
 
 export interface Paper {
   id: string
@@ -104,6 +111,19 @@ export interface Store {
   looseCount: number
   /** What the last "add the loose PDFs" could not read, by name. */
   refused: string[]
+  /**
+   * The slip-box: every note in every open folder and the loose ones, in
+   * the order they were written — a list that re-sorted itself by the last
+   * edit moved the note just touched to the top, as the Mac found.
+   */
+  notes: Note[]
+  /** Where the notes about no paper live. */
+  notesFolder: NotesFolderDTO | null
+  /** The note open in the inspector's Notes tab, or null for the list. */
+  noteOpenID: string | null
+  /** The slip-box shelf: the note open beside the list, the search and the
+   *  tag narrowing it, and the paper shown instead after a link was followed. */
+  slipBox: { openID: string | null; query: string; tag: string | null; paperID: string | null }
   shelf: Shelf
   /** The paper showing — with panes side by side, the one in focus. */
   selectedID: string | null
@@ -184,6 +204,10 @@ export const store: Store = {
   tags: [],
   looseCount: 0,
   refused: [],
+  notes: [],
+  notesFolder: null,
+  noteOpenID: null,
+  slipBox: { openID: null, query: '', tag: null, paperID: null },
   shelf: { kind: 'all' },
   selectedID: null,
   openPaperIDs: [],
@@ -349,6 +373,30 @@ export function changed(...keys: string[]) {
 export function failed(message: string) {
   store.error = message
   store.ready = true
+}
+
+/** A note as it came over the bridge, with its dates back. */
+export function noteFromDTO(dto: NoteDTO): Note {
+  return {
+    id: dto.id, kind: dto.kind, title: dto.title, body: dto.body, paperID: dto.paperID,
+    created: new Date(dto.created), modified: new Date(dto.modified), box: dto.box,
+  }
+}
+
+export function noteDTO(note: Note): NoteDTO {
+  return {
+    id: note.id, kind: note.kind, title: note.title, body: note.body, paperID: note.paperID,
+    created: note.created.getTime(), modified: note.modified.getTime(), box: note.box,
+  }
+}
+
+export function noteByID(id: string): Note | undefined {
+  return store.notes.find((note) => note.id === id)
+}
+
+/** The notes written while reading one paper, newest first. */
+export function notesForPaper(paperID: string): Note[] {
+  return store.notes.filter((note) => note.paperID === paperID).reverse()
 }
 
 export function adopt(snapshot: LibrarySnapshot) {
@@ -581,9 +629,13 @@ export function shelfPapers(): Paper[] {
       filtered = all.filter((entry) => isLookedUp(entry.meta.effectiveKind)
         && (entry.meta.confidence === 'needsReview' || entry.meta.confidence === 'unparsed'))
       break
-    case 'notes':
-      filtered = all.filter((entry) => entry.state.summaryNote.trim().length > 0)
+    case 'notes': {
+      // The papers with a note written against them, for the arrows to
+      // walk; the column itself shows the slip-box.
+      const noted = new Set(store.notes.map((note) => note.paperID))
+      filtered = all.filter((entry) => noted.has(entry.id))
       break
+    }
     case 'collection': {
       // A smart collection is whoever its rule matches — the Mac's
       // `SmartRuleEvaluator`; filtering by membership left every smart
