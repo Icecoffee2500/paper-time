@@ -11,6 +11,7 @@
 import { app } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
+import { DEFAULT_TINT_COLOR, pageTintFrom, tintColorFrom, type PageTint } from '../shared/pageTint.js'
 
 export interface Settings {
   libraryRoot: string | null
@@ -26,8 +27,11 @@ export interface Settings {
   appearance: 'system' | 'light' | 'dark'
   /** Same shape as `appearance`: the desktop's locale, or the reader's word. */
   language: 'system' | 'ko' | 'en'
-  /** A wash over the page, for reading at night or on a bright screen. */
-  pageTint: 'none' | 'sepia' | 'grey' | 'night'
+  /** A ground for the page and how the paper is drawn on it — the Mac's
+   *  model (`shared/pageTint.ts`). */
+  pageTint: PageTint
+  /** The custom tint's ground, `#rrggbb`. */
+  pageTintColor: string
   pageLayout: 'single' | 'continuous'
   selectedPaperID: string | null
   /** Latex Suite's shortcuts in the note and on the cards. On unless turned off. */
@@ -48,6 +52,7 @@ const DEFAULTS: Settings = {
   appearance: 'system',
   language: 'system',
   pageTint: 'none',
+  pageTintColor: DEFAULT_TINT_COLOR,
   pageLayout: 'continuous',
   selectedPaperID: null,
   latexShortcuts: true,
@@ -83,6 +88,12 @@ export function settings(): Settings {
       panes: { ...DEFAULTS.panes, ...raw.panes },
       columns: { ...DEFAULTS.columns, ...raw.columns },
       sort: { ...DEFAULTS.sort, ...raw.sort },
+      // The old four washes under their new names: «grey» was a paler white
+      // and is Paper White now, «night» a blue-grey multiplied over black
+      // words and is Dimmed. Read that way rather than rewritten, so the file
+      // changes only when somebody next changes a setting.
+      pageTint: pageTintFrom(raw.pageTint),
+      pageTintColor: tintColorFrom(raw.pageTintColor),
     }
   } catch {
     cached = { ...DEFAULTS }
@@ -92,6 +103,9 @@ export function settings(): Settings {
 
 export function update(patch: Partial<Settings>): Settings {
   const next = { ...settings(), ...patch }
+  // What the window sends is kept to what the reader can draw.
+  if ('pageTint' in patch) next.pageTint = pageTintFrom(patch.pageTint)
+  if ('pageTintColor' in patch) next.pageTintColor = tintColorFrom(patch.pageTintColor)
   cached = next
   if (heldInMemory) return next
   try {

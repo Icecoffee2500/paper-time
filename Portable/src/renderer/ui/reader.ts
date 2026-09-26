@@ -5,16 +5,18 @@
  * window, because a forty-page paper rendered eagerly costs a second of
  * stutter and two hundred megabytes for pages nobody has scrolled to.
  *
- * Every page carries four layers, bottom to top: the rendered page, a tint,
- * the drawing (ink and shapes, drawn from the sidecars rather than from the
- * PDF's copies — the copies are hidden, exactly as the Mac hides them under
- * its overlay), and the text layer you select words in. When the pen is out, a
- * fifth surface takes the mouse and the text layer steps aside.
+ * Every page carries these layers, bottom to top: the print — the rendered
+ * page with the marks, what a search found and the drawing on it (ink and
+ * shapes, drawn from the sidecars rather than from the PDF's copies — the
+ * copies are hidden, exactly as the Mac hides them under its overlay), in one
+ * box that a tint blends onto the ground as one thing; under night, the
+ * pictures again as printed; and the text layer you select words in. When the
+ * pen is out, one more surface takes the mouse and the text layer steps aside.
  */
 import { clear, el, on } from '../dom.js'
 import { freshReaderState, store, type ReaderState } from '../state.js'
 import { PAPER_DRAG_TYPE } from '../../shared/split.js'
-import { loadDocument, TextLayer, type PDFDocumentProxy, type PDFPageProxy } from '../pdf.js'
+import { loadDocument, OPS, TextLayer, type PDFDocumentProxy, type PDFPageProxy } from '../pdf.js'
 import { headBytes, headLine, rightsHandler, type ByteTrouble, type PDFLock } from '../../shared/pdfLock.js'
 import type { KeptReason } from '../../shared/api.js'
 import {
@@ -59,12 +61,21 @@ import { pagesOf, type Snapshot } from './sketchUndo.js'
 import { installMathProvider, removeMathListener } from '../sketchMath.js'
 import { icon } from '../icons.js'
 import { L } from '../../shared/lang.js'
+import { NIGHT_FILTER, groundFor, renderingFor, type PageRendering } from '../../shared/pageTint.js'
+import { imageRects, isInkOnWhite, pixelRect, tones, type OperatorList, type PageRect } from '../../shared/pageImages.js'
 
-const TINTS: Record<string, string | null> = {
-  none: null,
-  sepia: 'rgba(247, 231, 198, 1)',
-  grey: 'rgba(232, 232, 234, 1)',
-  night: 'rgba(150, 156, 168, 1)',
+/** Whether the window is showing its dark appearance — what Glass does
+ *  depends on it. `applyTheme` has already resolved «system» into this. */
+function isDarkAppearance(): boolean {
+  return document.documentElement.dataset.theme === 'dark'
+}
+
+/** A picture found on the page, and — once the page has been drawn and the
+ *  picture looked at — whether it is a picture at all (`isInkOnWhite`). */
+interface PageImage {
+  rect: PageRect
+  picture?: boolean
+  tones?: { paper: number; tone: number; coloured: number }
 }
 
 export interface ReaderActions {
@@ -128,9 +139,31 @@ export class PageView {
   private textDivs: HTMLElement[] = []
   private textStarts: number[] = []
   drawCanvas: HTMLCanvasElement
+  /**
+   * The paper as printed and everything drawn onto it — the page, the marks,
+   * what a search found, the drawing — in one box, so a tint can blend it
+   * onto the ground as one thing: multiplied, so the paper's white falls away
+   * and the ink stays; or turned to night and screened, so the paper's black
+   * falls away and the ink is light. Either way no edge is left where the
+   * page ends.
+   */
+  print: HTMLElement
+  /** Under night, the page's pictures again as printed, over the inverted
+   *  page and under the words. Zero pixels wide at any other time. */
+  imageCanvas: HTMLCanvasElement
   textLayer: HTMLElement
   inputSurface: HTMLElement
-  tint: HTMLElement
+  /** How the reader draws its pages now, and the ground under night. */
+  private rendering: PageRendering = 'plain'
+  private ground = '#000000'
+  /** Where the pictures are: found the first time night meets the page, and
+   *  kept (`findImages`). */
+  private images: PageImage[] | null = null
+  private imagesAsked: Promise<PageImage[]> | null = null
+  /** Which list they came from, for a probe: the one drawn, or one asked for. */
+  private imagesFrom: 'drawn' | 'asked' | null = null
+  /** Whether the page canvas holds this layout's page yet. */
+  private painted = false
   elements: SketchElement[] = []
   strokes: InkStroke[] = []
   marks: Mark[] = []
@@ -159,15 +192,20 @@ export class PageView {
     this.markCanvas = el('canvas', { class: 'mark-canvas' })
     this.findLayer = el('div', { class: 'find-layer' })
     this.drawCanvas = el('canvas', { class: 'draw-canvas' })
-    this.textLayer = el('div', { class: 'text-layer' })
-    this.inputSurface = el('div', { class: 'sketch-input' })
-    this.tint = el('div', { class: 'page-tint' })
-    this.root = el('div', { class: 'page', 'data-page': String(index) }, [
+    this.print = el('div', { class: 'page-print' }, [
       this.canvas,
       this.markCanvas,
       this.findLayer,
-      this.tint,
       this.drawCanvas,
+    ])
+    this.imageCanvas = el('canvas', { class: 'image-canvas' })
+    this.imageCanvas.width = 0
+    this.imageCanvas.height = 0
+    this.textLayer = el('div', { class: 'text-layer' })
+    this.inputSurface = el('div', { class: 'sketch-input' })
+    this.root = el('div', { class: 'page', 'data-page': String(index) }, [
+      this.print,
+      this.imageCanvas,
       this.textLayer,
       this.inputSurface,
     ])
@@ -194,6 +232,7 @@ export class PageView {
     this.root.style.setProperty('--scale-factor', String(scale))
     this.rendered = false
     this.drawing = null
+    this.painted = false
   }
 
   /** Page coordinates from a point in the page element's own box. */
@@ -237,11 +276,18 @@ export class PageView {
 
   private async draw(generation: number) {
     if (!this.viewport) return
+    // The layout this render is for: laid out again while it runs, the page
+    // it paints is the last size's, and the pictures are not placed on it.
+    const layout = this.viewport
     const dpr = Math.min(window.devicePixelRatio || 1, 2)
     const viewport = this.proxy.getViewport({ scale: this.viewport.scale })
     this.canvas.width = Math.floor(viewport.width * dpr)
     this.canvas.height = Math.floor(viewport.height * dpr)
     const context = this.canvas.getContext('2d', { alpha: false })!
+    // Paper before pdf.js paints it: a canvas sized afresh is black until the
+    // page's background arrives, and under night black is what turns white.
+    context.fillStyle = '#ffffff'
+    context.fillRect(0, 0, this.canvas.width, this.canvas.height)
     this.renderTask?.cancel()
     const task = this.proxy.render({
       canvasContext: context,
@@ -263,9 +309,12 @@ export class PageView {
       }
       return
     }
+    this.painted = this.viewport === layout
     await this.renderText(viewport)
     this.redraw()
     this.drawFind()
+    // The pictures, the first time night meets this page.
+    if (this.rendering === 'night' && !this.images) void this.findImages().then(() => this.composeImages())
   }
 
   private async renderText(viewport: unknown) {
@@ -424,12 +473,221 @@ export class PageView {
     drawElements(this.hidden.size === 0 ? this.elements : this.elements.filter((element) => !this.hidden.has(element.id)), context)
     this.input?.drawOverlay(context)
     this.guest?.(context)
+    // The pictures carry a copy of what is drawn over them.
+    if (this.rendering === 'night') this.composeImages()
   }
 
-  applyTint() {
-    const colour = TINTS[store.settings.pageTint]
-    this.tint.style.background = colour ?? 'transparent'
-    this.tint.style.display = colour ? '' : 'none'
+  /**
+   * How the page is drawn for the reader's tint. The blending itself is CSS
+   * on the reader (`data-rendering`); what is left for the page is its
+   * pictures, which night must not turn into negatives.
+   *
+   * @param ground what the page is screened onto under night — the tint's
+   *   ground, or the panel itself under Glass — for the drawing laid over a
+   *   picture, which has to come out the colour it is beside the picture.
+   */
+  applyTint(rendering: PageRendering, ground: string) {
+    this.rendering = rendering
+    this.ground = ground
+    if (rendering !== 'night') {
+      this.clearImages()
+      return
+    }
+    if (this.images) this.composeImages()
+    else if (this.painted) void this.findImages().then(() => this.composeImages())
+  }
+
+  private clearImages() {
+    if (this.imageCanvas.width === 0 && this.imageCanvas.height === 0) return
+    this.imageCanvas.width = 0
+    this.imageCanvas.height = 0
+  }
+
+  /**
+   * Where the pictures are, found once per page and kept: they are in the
+   * page's own space, so a new zoom does not move them.
+   *
+   * Read from the operator list pdf.js has just drawn the page with, when it
+   * lets that be read — `_intentStates` is its own bookkeeping, not an API,
+   * so failing that it is asked for a list of its own. The one it drew with
+   * is the better answer twice over: it is exactly what is on the canvas,
+   * and asking for another makes pdf.js read the page again and hand every
+   * picture over a second time, decoded, to be kept as long as the page is.
+   */
+  private findImages(): Promise<PageImage[]> {
+    if (this.images) return Promise.resolve(this.images)
+    if (!this.imagesAsked) {
+      const [x0, y0, x1, y1] = this.proxy.view as number[]
+      const walk = (list: OperatorList) => {
+        this.images = imageRects(list, OPS as never, { bounds: { x: x0, y: y0, width: x1 - x0, height: y1 - y0 } })
+          .map((rect) => ({ rect }))
+        return this.images
+      }
+      const drawn = this.drawnList()
+      this.imagesFrom = drawn ? 'drawn' : 'asked'
+      this.imagesAsked = drawn
+        ? Promise.resolve(walk(drawn))
+        : this.proxy
+          // The same annotations the page is drawn with: another app's stamp
+          // may be a picture too.
+          .getOperatorList({ annotationMode: 1 })
+          .then(walk)
+          .catch(() => walk({ fnArray: [], argsArray: [] }))
+    }
+    return this.imagesAsked
+  }
+
+  /** The finished operator list pdf.js drew this page with, if it has one
+   *  and lets it be seen. */
+  private drawnList(): OperatorList | null {
+    const states = (this.proxy as unknown as { _intentStates?: unknown })._intentStates
+    if (!(states instanceof Map)) return null
+    for (const state of states.values()) {
+      const list = (state as { operatorList?: OperatorList & { lastChunk?: boolean } } | null)?.operatorList
+      if (list?.lastChunk && Array.isArray(list.fnArray) && Array.isArray(list.argsArray)) return list
+    }
+    return null
+  }
+
+  /** A canvas for laying the drawing over a picture, shared by every page. */
+  private static scratch: HTMLCanvasElement | null = null
+
+  private static scratchContext(width: number, height: number): CanvasRenderingContext2D {
+    const canvas = (PageView.scratch ??= document.createElement('canvas'))
+    if (canvas.width < width || canvas.height < height) {
+      canvas.width = Math.max(canvas.width, width)
+      canvas.height = Math.max(canvas.height, height)
+    }
+    return canvas.getContext('2d')!
+  }
+
+  /** And a small one to look at a picture through — its own, because a
+   *  canvas that is read back is moved off the graphics card, and the one
+   *  above has filters to run. */
+  private static looking: CanvasRenderingContext2D | null = null
+
+  /**
+   * Whether a picture is one, looked at in the page as drawn. Ink on white —
+   * a scanned page of text, a line drawing, a black-and-white chart — goes to
+   * night with the words, because kept as printed it is the white rectangle
+   * night exists to take away (`isInkOnWhite`).
+   */
+  private isPicture(image: PageImage, box: { x: number; y: number; width: number; height: number }): boolean {
+    const side = 64
+    if (!PageView.looking) {
+      const canvas = document.createElement('canvas')
+      canvas.width = side
+      canvas.height = side
+      PageView.looking = canvas.getContext('2d', { willReadFrequently: true })
+    }
+    const context = PageView.looking
+    if (!context) return true
+    // Single pixels, not averages: a line of type averaged is grey.
+    context.globalCompositeOperation = 'copy'
+    context.imageSmoothingEnabled = false
+    context.drawImage(this.canvas, box.x, box.y, box.width, box.height, 0, 0, side, side)
+    context.globalCompositeOperation = 'source-over'
+    try {
+      const pixels = context.getImageData(0, 0, side, side).data
+      image.tones = tones(pixels)
+      return !isInkOnWhite(pixels)
+    } catch {
+      return true
+    }
+  }
+
+  /**
+   * Draws the pictures as printed onto their own canvas, over the inverted
+   * page.
+   *
+   * Copied from the page canvas, which holds the page as printed — the night
+   * filter is applied on the way to the screen, not to its pixels — and then
+   * with what lies over each picture laid over it again the way it looks
+   * beside it: the marks multiplied as they are on paper, and the drawing
+   * turned to night and screened onto the ground, so a stroke that runs
+   * across a photograph is one colour all the way and a white card over it
+   * is the ground's colour, as it is everywhere else.
+   *
+   * The canvas is only as big as the pictures together, placed over them in
+   * fractions of the page — a page canvas's worth of pixels for a photograph
+   * a tenth of its size would be most of the cost of night.
+   */
+  private composeImages() {
+    if (this.rendering !== 'night') return this.clearImages()
+    const images = this.images
+    // Not drawn yet at this size: what is there is the last size's, and it
+    // scales with the page until the new one arrives.
+    if (!images || !this.painted || !this.viewport) return
+    const page = this.canvas
+    const dpr = Math.min(window.devicePixelRatio || 1, 2)
+    const boxes: { x: number; y: number; width: number; height: number }[] = []
+    for (const image of images) {
+      if (image.picture === false) continue
+      const box = pixelRect(image.rect, this.viewport.transform, dpr, page)
+      if (!box) continue
+      if (image.picture === undefined) image.picture = this.isPicture(image, box)
+      if (image.picture) boxes.push(box)
+    }
+    if (boxes.length === 0) return this.clearImages()
+    const left = Math.min(...boxes.map((box) => box.x))
+    const top = Math.min(...boxes.map((box) => box.y))
+    const right = Math.max(...boxes.map((box) => box.x + box.width))
+    const bottom = Math.max(...boxes.map((box) => box.y + box.height))
+    const target = this.imageCanvas
+    if (target.width !== right - left || target.height !== bottom - top) {
+      target.width = right - left
+      target.height = bottom - top
+    }
+    Object.assign(target.style, {
+      left: `${(100 * left) / page.width}%`,
+      top: `${(100 * top) / page.height}%`,
+      width: `${(100 * (right - left)) / page.width}%`,
+      height: `${(100 * (bottom - top)) / page.height}%`,
+      right: 'auto',
+      bottom: 'auto',
+    })
+    const context = target.getContext('2d')!
+    context.setTransform(1, 0, 0, 1, 0, 0)
+    context.globalCompositeOperation = 'source-over'
+    context.filter = 'none'
+    context.clearRect(0, 0, target.width, target.height)
+    // Only what is there to lay over: most pages have neither.
+    const marks = this.marks.length > 0 && this.markCanvas.width === page.width && this.markCanvas.height === page.height
+    const drawn = this.strokes.length > 0 || this.elements.length > 0 || this.input !== null || this.guest !== null
+    const drawing = drawn && this.drawCanvas.width === page.width && this.drawCanvas.height === page.height
+    for (const { x, y, width: w, height: h } of boxes) {
+      const [dx, dy] = [x - left, y - top]
+      context.drawImage(page, x, y, w, h, dx, dy, w, h)
+      if (marks) {
+        context.globalCompositeOperation = 'multiply'
+        context.drawImage(this.markCanvas, x, y, w, h, dx, dy, w, h)
+        context.globalCompositeOperation = 'source-over'
+      }
+      if (drawing) {
+        // Night, then screened onto the ground — and the drawing's own
+        // coverage put back, so the ground shows only where it is drawn.
+        const scratch = PageView.scratchContext(w, h)
+        scratch.setTransform(1, 0, 0, 1, 0, 0)
+        scratch.globalCompositeOperation = 'copy'
+        scratch.filter = NIGHT_FILTER
+        scratch.drawImage(this.drawCanvas, x, y, w, h, 0, 0, w, h)
+        scratch.filter = 'none'
+        scratch.globalCompositeOperation = 'screen'
+        scratch.fillStyle = this.ground
+        scratch.fillRect(0, 0, w, h)
+        scratch.globalCompositeOperation = 'destination-in'
+        scratch.drawImage(this.drawCanvas, x, y, w, h, 0, 0, w, h)
+        scratch.globalCompositeOperation = 'source-over'
+        context.drawImage(scratch.canvas, 0, 0, w, h, dx, dy, w, h)
+      }
+    }
+  }
+
+  /** For a probe: the pictures this page found, and which of them it keeps
+   *  as printed (null until the page has been drawn under night). */
+  imageReport(): { from: string | null; rect: PageRect; picture: boolean | null; tones: { paper: number; tone: number; coloured: number } | null }[] | null {
+    if (!this.images) return null
+    return this.images.map((image) => ({ from: this.imagesFrom, rect: image.rect, picture: image.picture ?? null, tones: image.tones ?? null }))
   }
 
   setDrawing(on: boolean) {
@@ -1076,9 +1334,9 @@ export class Reader {
     const scale = this.baseScale() * this.state.zoom
     for (const page of this.pages) {
       page.layout(scale)
-      page.applyTint()
       page.setDrawing(this.state.drawing)
     }
+    this.applyTint()
     this.applyLayout()
     this.renderVisible()
   }
@@ -1609,7 +1867,35 @@ export class Reader {
     for (const page of this.pages) page.redraw()
   }
 
+  /**
+   * Draws the paper for the reader's tint (`shared/pageTint.ts`).
+   *
+   * The ground is the whole reading area and not the page: under multiply
+   * and night the pages have no background and no shadow of their own, so
+   * the gap between two pages is the same colour as the paper they are
+   * printed on and a page does not read as a card. Glass has no ground of
+   * its own — the area is clear and the panel shows. Asked again whenever
+   * the tint, its colour or the window's appearance changes.
+   */
   applyTint() {
-    for (const page of this.pages) page.applyTint()
+    const { pageTint, pageTintColor } = store.settings
+    const rendering = renderingFor(pageTint, pageTintColor, isDarkAppearance())
+    const ground = groundFor(pageTint, pageTintColor)
+    this.node.dataset.rendering = rendering
+    if (ground) this.node.style.setProperty('--tint-ground', ground)
+    else this.node.style.removeProperty('--tint-ground')
+    // What night screens onto — under Glass the panel's own colour, which the
+    // stylesheet knows and the canvas does not.
+    const under = rendering !== 'night' ? '#000000' : ground ?? (getComputedStyle(this.node).backgroundColor || '#000000')
+    for (const page of this.pages) page.applyTint(rendering, under)
+  }
+
+  /** For a probe: how the paper is drawn now, and each page's pictures. */
+  tintReport() {
+    return {
+      rendering: this.node.dataset.rendering ?? null,
+      ground: getComputedStyle(this.scroll).backgroundColor,
+      pages: this.pages.map((page) => page.imageReport()),
+    }
   }
 }

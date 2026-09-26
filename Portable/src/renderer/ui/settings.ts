@@ -23,24 +23,33 @@
 import { clear, el, on } from '../dom.js'
 import { L } from '../../shared/lang.js'
 import { store } from '../state.js'
+import { PAGE_TINTS, tintColorFrom, tintLabel } from '../../shared/pageTint.js'
 
 export interface SettingsActions {
-  /** Writes the patch and makes the window follow it. */
-  set: (patch: Record<string, unknown>) => void
+  /** Writes the patch and makes the window follow it. `live` is a value
+   *  still moving under the hand: followed at once, written when it rests,
+   *  and the sheet left as it is so the control keeps the pointer. */
+  set: (patch: Record<string, unknown>, options?: { live?: boolean }) => void
   chooseLibrary: () => void
   showReleaseNotes?: () => void
 }
 
 let open = false
 
-/** One row: a name on the left, and the choices on the right. */
+/**
+ * One row: a name on the left, and the choices on the right — or, when
+ * `stacked`, the choices across the whole row under the name: five names in
+ * two languages do not fit beside a label in a sheet this wide.
+ */
 function choices<T extends string>(
   label: string,
   options: readonly (readonly [T, string])[],
   current: T,
   pick: (value: T) => void,
+  setting?: string,
+  stacked = false,
 ): HTMLElement {
-  const row = el('div', { class: 'set-row' })
+  const row = el('div', { class: stacked ? 'set-row set-row-stacked' : 'set-row', 'data-setting': setting })
   row.append(el('span', { class: 'set-label', text: label }))
   const group = el('div', { class: 'segmented set-seg', role: 'group' })
   for (const [value, name] of options) {
@@ -50,12 +59,27 @@ function choices<T extends string>(
     const button = el('button', {
       type: 'button',
       text: name,
+      'data-value': value,
       'aria-selected': String(value === current),
     })
     on(button, 'click', () => pick(value))
     group.append(button)
   }
   row.append(group)
+  return row
+}
+
+/**
+ * The custom tint's ground: a colour well, followed by the page while it is
+ * dragged and written once it rests.
+ */
+function groundColor(actions: SettingsActions): HTMLElement {
+  const row = el('label', { class: 'set-row', 'data-setting': 'pageTintColor' })
+  const well = el('input', { type: 'color', class: 'set-color' }) as HTMLInputElement
+  well.value = tintColorFrom(store.settings.pageTintColor)
+  on(well, 'input', () => actions.set({ pageTintColor: well.value }, { live: true }))
+  on(well, 'change', () => actions.set({ pageTintColor: well.value }))
+  row.append(el('span', { class: 'set-label', text: L('바탕색', 'Ground Color') }), well)
   return row
 }
 
@@ -128,16 +152,27 @@ export function showSettings(actions: SettingsActions) {
       [['continuous', L('이어서', 'Continuous')], ['single', L('한 쪽씩', 'Single')]] as const,
       store.settings.pageLayout,
       (value) => actions.set({ pageLayout: value }),
+      'pageLayout',
     ))
     body.append(choices(
       L('쪽 색조', 'Page Tint'),
-      [
-        ['none', L('없음', 'None')], ['sepia', L('세피아', 'Sepia')],
-        ['grey', L('회색', 'Grey')], ['night', L('밤', 'Night')],
-      ] as const,
+      PAGE_TINTS.map((tint) => [tint, tintLabel(tint)] as const),
       store.settings.pageTint,
       (value) => actions.set({ pageTint: value }),
+      'pageTint',
+      true,
     ))
+    // The custom tint's ground, only while it is the one chosen — the Mac
+    // shows its colour well the same way. Which way the page is drawn on it
+    // follows from how light it is, and the note says so, because a grey
+    // that tips the page over to night would otherwise look like a fault.
+    if (store.settings.pageTint === 'custom') {
+      body.append(groundColor(actions))
+      body.append(note(L(
+        '밝은 색은 세피아처럼, 어두운 색은 «어둡게»처럼 그려요.',
+        'A light color reads like Sepia. A dark one reads like Dimmed.',
+      )))
+    }
 
     // Where the Mac keeps it, under Reading: the switch for the palette's
     // section of passages that mean what was typed, and for the index it
@@ -172,6 +207,7 @@ export function showSettings(actions: SettingsActions) {
       ] as const,
       store.settings.appearance,
       (value) => actions.set({ appearance: value }),
+      'appearance',
     ))
     // The one thing that had no way in at all. Changing it takes a restart —
     // the window's words are read once, at build time of every string — and
@@ -184,6 +220,7 @@ export function showSettings(actions: SettingsActions) {
       ] as const,
       store.settings.language,
       (value) => actions.set({ language: value }),
+      'language',
     ))
     body.append(el('p', {
       class: 'set-note',

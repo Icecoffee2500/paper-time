@@ -81,6 +81,7 @@ import { icon } from './icons.js'
 import { L } from '../shared/lang.js'
 import { type ByteTrouble, type PDFLock } from '../shared/pdfLock.js'
 import { isCitable, isLookedUp, type DocumentKind } from '../shared/documentKind.js'
+import { PAGE_TINTS, tintLabel } from '../shared/pageTint.js'
 
 document.body.dataset.platform = platform
 /** This window shows one paper on its own: no library columns. */
@@ -789,25 +790,18 @@ const toolbar = buildToolbar({
       })),
       { separator: true },
       { caption: L('쪽 색조', 'Page Tint') },
-      ...(['none', 'sepia', 'grey', 'night'] as const).map((tint) => ({
-        label: { none: L('없음', 'None'), sepia: L('세피아', 'Sepia'), grey: L('회색', 'Grey'), night: L('밤', 'Night') }[tint],
+      // The custom one draws with the colour chosen in Settings.
+      ...PAGE_TINTS.map((tint) => ({
+        label: tintLabel(tint),
         checked: store.settings.pageTint === tint,
-        action: () => {
-          store.settings.pageTint = tint
-          void call('settings:set', { pageTint: tint })
-          for (const reader of readers.values()) reader.applyTint()
-        },
+        action: () => setSettings({ pageTint: tint }),
       })),
       { separator: true },
       { caption: L('화면 모드', 'Appearance') },
       ...(['system', 'light', 'dark'] as const).map((appearance) => ({
         label: { system: L('시스템에 따라', 'System'), light: L('밝게', 'Light'), dark: L('어둡게', 'Dark') }[appearance],
         checked: store.settings.appearance === appearance,
-        action: () => {
-          store.settings.appearance = appearance
-          void call('settings:set', { appearance })
-          applyTheme()
-        },
+        action: () => setSettings({ appearance }),
       })),
     ], 'right')
   },
@@ -1418,6 +1412,9 @@ function applyTheme() {
   } else {
     document.documentElement.setAttribute('data-theme', choice)
   }
+  // Glass is the panel's colour, and so goes with the appearance: multiplied
+  // onto a light panel, turned to night on a dark one.
+  for (const reader of readers.values()) reader.applyTint()
 }
 
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
@@ -1519,22 +1516,62 @@ onEvent((event, payload) => {
  */
 function openSettings() {
   openSettingsSheet = showSettings({
-    set: (patch: Record<string, unknown>) => {
-      Object.assign(store.settings, patch)
-      void call('settings:set', patch)
-      // The window has to follow what was just chosen, or the sheet is a form
-      // that saves and shows nothing.
-      if ('appearance' in patch) applyTheme()
-      if ('pageTint' in patch) for (const reader of readers.values()) reader.applyTint()
-      if ('pageLayout' in patch) setLayout(store.settings.pageLayout)
-      changed('settings', 'toolbar')
-      openSettingsSheet?.redraw()
-    },
+    set: setSettings,
     chooseLibrary: () => void call('library:choose').then(() => void reload()),
   })
 }
 
 let openSettingsSheet: { redraw: () => void; close: () => void } | undefined
+
+/** What is waiting to be written while a colour is being dragged. */
+let pendingSettings: Record<string, unknown> = {}
+let pendingSettingsTimer = 0
+
+/**
+ * Changes settings from the sheet, the ⋯ menu or a probe, and makes the
+ * window follow at once — a sheet that saves and shows nothing is a form.
+ *
+ * `live` is for a value still moving under the hand, the ground colour while
+ * its well is dragged: the page follows every step, the file is written once
+ * the hand rests, and the sheet is not drawn again — drawing it again would
+ * take the colour well away from under the pointer, and the picker with it.
+ */
+function setSettings(patch: Record<string, unknown>, options: { live?: boolean } = {}) {
+  Object.assign(store.settings, patch)
+  if (options.live) {
+    Object.assign(pendingSettings, patch)
+    clearTimeout(pendingSettingsTimer)
+    pendingSettingsTimer = window.setTimeout(flushSettings, 300)
+  } else {
+    Object.assign(pendingSettings, patch)
+    flushSettings()
+  }
+  if ('appearance' in patch) applyTheme()
+  else if ('pageTint' in patch || 'pageTintColor' in patch) {
+    for (const reader of readers.values()) reader.applyTint()
+  }
+  if ('pageLayout' in patch) setLayout(store.settings.pageLayout)
+  if (options.live) return
+  changed('settings', 'toolbar')
+  openSettingsSheet?.redraw()
+}
+
+function flushSettings() {
+  clearTimeout(pendingSettingsTimer)
+  const patch = pendingSettings
+  pendingSettings = {}
+  if (Object.keys(patch).length > 0) void call('settings:set', patch)
+}
+
+// A colour still resting when the window goes is written as it goes.
+on(window, 'beforeunload', flushSettings)
+
+// For a probe: settings changed the way the sheet changes them — held in
+// memory by a probe run, like everything else it sets.
+;(window as unknown as { __papertimeSettings: unknown }).__papertimeSettings = {
+  set: (patch: Record<string, unknown>) => setSettings(patch),
+  tint: () => focused()?.tintReport() ?? null,
+}
 
 function runMenuCommand(command: string) {
   const reader = focused()

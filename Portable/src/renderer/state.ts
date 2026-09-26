@@ -14,6 +14,7 @@ import { paperHaystack, type SearchablePaper } from '../shared/searchRank.js'
 import { PaperMeta, PaperState, type Collection, type Tag } from '../shared/model.js'
 import { SketchColor, SketchStyle } from '../shared/sketch.js'
 import { splitContains, splitDock, splitPapers, splitRemove, type DockZone, type SplitArrangement } from '../shared/split.js'
+import { DEFAULT_TINT_COLOR, type PageTint } from '../shared/pageTint.js'
 
 export type Pane = 'sidebar' | 'paperList' | 'reader' | 'inspector'
 export type InspectorTab = 'details' | 'marks' | 'note' | 'tools'
@@ -56,7 +57,10 @@ export interface Settings {
   appearance: 'system' | 'light' | 'dark'
   /** The words, when the desktop's own language is not what somebody wants. */
   language: 'system' | 'ko' | 'en'
-  pageTint: 'none' | 'sepia' | 'grey' | 'night'
+  /** A ground for the page, and how the paper is drawn on it (`shared/pageTint.ts`). */
+  pageTint: PageTint
+  /** The custom tint's ground, `#rrggbb`. */
+  pageTintColor: string
   pageLayout: 'single' | 'continuous'
   selectedPaperID: string | null
   /** Latex Suite in the note and on the cards: `@a` into `\alpha`, `//` into a fraction. */
@@ -184,6 +188,7 @@ export const store: Store = {
     appearance: 'system',
     language: 'system',
     pageTint: 'none',
+    pageTintColor: DEFAULT_TINT_COLOR,
     pageLayout: 'continuous',
     selectedPaperID: null,
     latexShortcuts: true,
