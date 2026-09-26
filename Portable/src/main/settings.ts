@@ -42,6 +42,8 @@ export interface Settings {
   listSubtitle: string
   /** «Protect Case in Titles» for the `.bib`. On unless turned off. */
   bibtexProtectCase: boolean
+  /** The folder the notes about no paper live in, when the reader chose one — the Mac's «Loose Notes» folder. */
+  notesFolder: string | null
 }
 
 const DEFAULTS: Settings = {
@@ -63,6 +65,7 @@ const DEFAULTS: Settings = {
   semanticSearch: true,
   listSubtitle: 'authors,year,venue',
   bibtexProtectCase: true,
+  notesFolder: null,
 }
 
 let cached: Settings | null = null

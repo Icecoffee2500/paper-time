@@ -18,9 +18,10 @@ import { iconNode } from '../icons.js'
 import { L } from '../../shared/lang.js'
 import { graphemes } from '../../shared/textFold.js'
 import {
-  noteTitle, notePreview, prepare, rank,
+  prepare, rank,
   type ActionName, type Prepared, type RankedResult, type RankWords,
 } from '../../shared/searchRank.js'
+import { zettelDisplayTitle, zettelIsEmpty, zettelPreview } from '../../shared/zettel.js'
 import { searchable, store, textSources } from '../state.js'
 import { passageSubtitle, searchText, warmText, type TextHit } from '../textSearch.js'
 import { asTextHit, meaningFooter, meaningStatus, noteSubtitle, onMeaningStatus, searchMeaning, type MeaningHit } from '../meaningSearch.js'
@@ -29,8 +30,8 @@ import { placeKey } from '../../shared/semantic/results.js'
 export interface PaletteActions {
   openPaper: (id: string) => void
   openPassage: (hit: TextHit, query: string) => void
-  /** A summary note: its paper, with the Notes tab in front. */
-  openNote: (paperID: string) => void
+  /** A note of the slip-box, by its id: its paper with the Notes tab in front, or the slip-box. */
+  openNote: (noteID: string) => void
   openCollection: (id: string) => void
   openTag: (id: string) => void
   /** The search shelf, with this query — «Show All Results». */
@@ -143,13 +144,16 @@ export function openPalette(actions: PaletteActions, initial = '') {
   const actionList = ACTIONS()
   const prepared: Prepared = prepare({
     papers: store.papers.map(searchable),
-    notes: store.papers
-      .filter((entry) => entry.state.summaryNote.trim().length > 0)
-      .map((entry) => ({
-        paperID: entry.id,
-        title: noteTitle(entry.state.summaryNote) || L('노트', 'Note'),
-        preview: notePreview(entry.state.summaryNote),
-        paperTitle: entry.meta.displayTitle,
+    // The slip-box's notes, named as their rows name them, each with the
+    // paper it was written against — as the Mac folds them.
+    notes: store.notes
+      .filter((note) => !zettelIsEmpty(note))
+      .map((note) => ({
+        id: note.id,
+        paperID: note.paperID,
+        title: zettelDisplayTitle(note),
+        preview: zettelPreview(note.body),
+        paperTitle: (note.paperID && store.papers.find((entry) => entry.id === note.paperID)?.meta.displayTitle) || '',
       })),
     collections: store.collections.map((one) => ({ id: one.id, name: one.name, smart: Boolean(one.rule) })),
     tags: store.tags.map((one) => ({ id: one.id, name: one.name })),
@@ -176,7 +180,7 @@ export function openPalette(actions: PaletteActions, initial = '') {
       case 'paper':
         return { group: 'paper', title: result.title, subtitle: result.subtitle, icon: 'text.page', run: () => actions.openPaper(kind.id) }
       case 'note':
-        return { group: 'note', title: result.title, subtitle: result.subtitle, icon: 'note', run: () => actions.openNote(kind.paperID) }
+        return { group: 'note', title: result.title, subtitle: result.subtitle, icon: 'note', run: () => actions.openNote(kind.id) }
       case 'collection': {
         const smart = store.collections.find((one) => one.id === kind.id)?.rule
         return { group: 'collection', title: result.title, subtitle: result.subtitle, icon: smart ? 'folder.badge.gearshape' : 'folder', run: () => actions.openCollection(kind.id) }
@@ -213,15 +217,14 @@ export function openPalette(actions: PaletteActions, initial = '') {
   const meaningRow = (hit: MeaningHit): Row => {
     const text = asTextHit(hit)
     if (hit.note) {
-      // A note's passage: the note's name and «노트», and it opens the
-      // note — the paper's, with the Notes tab in front.
-      const paperID = hit.note.paperID ?? hit.note.id
+      // A note's passage: the note's name and «노트», and it opens the note.
+      const noteID = hit.note.id
       return {
         group: 'meaning',
         title: text.snippet,
         subtitle: noteSubtitle(text),
         icon: 'note',
-        run: () => actions.openNote(paperID),
+        run: () => actions.openNote(noteID),
       }
     }
     return {

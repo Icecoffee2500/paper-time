@@ -38,6 +38,8 @@ export function watchLibrary(root: string, onChange: () => void): () => void {
   if (!recursive) {
     const support = path.join(root, '.papertime', 'papers')
     watch(path.join(root, '.papertime'), false)
+    // The slip-box: a note the Mac wrote arrives as a file appearing here.
+    watch(path.join(root, '.papertime', 'notes'), false)
     try {
       for (const entry of fs.readdirSync(support)) {
         watch(path.join(support, entry), false)

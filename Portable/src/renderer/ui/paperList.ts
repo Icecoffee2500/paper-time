@@ -45,8 +45,8 @@ export interface PaperListActions {
   /** A passage the search found inside a paper: that paper, at that line. */
   /** `byMeaning`: the reader goes to the passage itself, not to the words typed — which it need not say. */
   openPassage: (hit: TextHit, byMeaning?: boolean) => void
-  /** A passage found by meaning inside a paper's note: that paper, with the note in front. */
-  openNote: (paperID: string) => void
+  /** A passage found by meaning inside a note: that note, wherever it is shown. */
+  openNote: (noteID: string) => void
   /** ↓ and ↑ in the list: the next or previous paper on the shelf. */
   step: (by: number) => void
 }
@@ -457,7 +457,7 @@ function passageRow(hit: TextHit, actions: PaperListActions, byMeaning = false):
       el('div', { class: 'paper-subtitle', text: note ? noteSubtitle(hit) : passageSubtitle(hit) }),
     ]),
   ])
-  on(row, 'click', () => (note ? actions.openNote(note.paperID ?? note.id) : actions.openPassage(hit, byMeaning)))
+  on(row, 'click', () => (note ? actions.openNote(note.id) : actions.openPassage(hit, byMeaning)))
   return row
 }
 

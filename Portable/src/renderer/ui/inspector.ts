@@ -15,10 +15,8 @@ import { fullName, type CSLName } from '../../shared/model.js'
 import { L } from '../../shared/lang.js'
 import { type DocumentKind } from '../../shared/documentKind.js'
 import { buildSketchInspector } from './sketchInspector.js'
-import { attachLatexSuite } from './latexSuiteInput.js'
-import { attachMathPreview } from './mathPreview.js'
-import { anchorAt, quotationInsertion } from '../../shared/noteQuote.js'
-import { isCommand, platform } from '../bridge.js'
+import { renderNotesTab } from './notesTab.js'
+import { quotationInsertion } from '../../shared/noteQuote.js'
 import { cssColor, type Mark } from '../../shared/marks.js'
 import type { MenuEntry } from './toolbar.js'
 
@@ -40,6 +38,8 @@ export interface InspectorActions {
   detach: (id: string) => void
   /** A quotation's page link followed: that paper, at that passage. */
   openAnchor: (place: { pageIndex: number; rect: { x: number; y: number; width: number; height: number }; paperID?: string }) => void
+  /** A `[[link]]` in a note followed: that note, wherever it is shown. */
+  openNote: (id: string) => void
   /** The marks of the paper in front, in reading order — the Marks tab. */
   marks: () => { pageIndex: number; mark: Mark }[]
   revealMark: (pageIndex: number, id: string) => void
@@ -103,7 +103,7 @@ export function buildInspector(actions: InspectorActions): InspectorPanel {
     switch (store.settings.inspectorTab) {
       case 'details': details(body, paper, actions); break
       case 'marks': marks(body, paper, actions, update); break
-      case 'note': note(body, paper, actions); break
+      case 'note': renderNotesTab(body, paper, { openAnchor: actions.openAnchor, openNote: actions.openNote }); break
     }
   }
 
@@ -444,6 +444,12 @@ function details(body: HTMLElement, paper: Paper, actions: InspectorActions) {
     stars.append(star)
   }
   body.append(el('div', { class: 'field field-inline' }, [favourite, el('span', { class: 'toolbar-spacer' }), stars]))
+  // The Mac's memo, under the rating: one line on the paper's record. Not
+  // the slip-box — those are files of their own, in the Notes tab — and what
+  // this build's Notes tab held before it had a slip-box.
+  body.append(editable(L('메모', 'Note'), paper.state.summaryNote, (next) => {
+    actions.editState(paper.id, { summaryNote: next })
+  }, { multiline: true }))
 
   // "Confidence" is about a registrar agreeing with us, and no registrar has
   // an opinion about a manual.
@@ -621,56 +627,4 @@ function flashMarkRow(body: HTMLElement, id: string) {
   row.classList.remove('flash')
   void row.offsetWidth
   row.classList.add('flash')
-}
-
-function note(body: HTMLElement, paper: Paper, actions: InspectorActions) {
-  const area = el('textarea', {
-    class: 'note-area',
-    rows: '20',
-    placeholder: L('이 논문에 대한 노트…', 'A note about this paper…'),
-  }) as HTMLTextAreaElement
-  area.value = paper.state.summaryNote
-  // A note opens at its end, where the next thought goes — so a quotation
-  // sent here before anybody clicked into it lands after what is written.
-  area.setSelectionRange(area.value.length, area.value.length)
-  area.style.minHeight = '60vh'
-  let last = area.value
-  const save = () => {
-    if (area.value === last) return
-    last = area.value
-    actions.editState(paper.id, { summaryNote: area.value })
-  }
-  on(area, 'blur', save)
-  on(area, 'keydown', (event: KeyboardEvent) => event.stopPropagation())
-  // A note is worth saving without waiting for the focus to leave it.
-  let timer: ReturnType<typeof setTimeout> | null = null
-  on(area, 'input', () => {
-    if (timer) clearTimeout(timer)
-    timer = setTimeout(save, 900)
-  })
-  // A quotation's page link goes back to the passage — the Mac's page chip.
-  // A textarea cannot hold a link, so it is Ctrl-click (⌘-click on a Mac):
-  // a plain click puts the caret there, as a click in any editor does.
-  on(area, 'click', (event: MouseEvent) => {
-    if (!isCommand(event)) return
-    const place = anchorAt(area.value, area.selectionStart)
-    if (!place) return
-    event.preventDefault()
-    actions.openAnchor(place)
-  })
-  const field = el('div', { class: 'field' }, [area])
-  if (/\]\(papertime:\/\/anchor/.test(area.value)) {
-    const key = platform === 'darwin' ? '⌘' : 'Ctrl'
-    field.append(el('p', {
-      class: 'set-note',
-      text: L(`인용 끝의 쪽 링크를 ${key}-클릭하면 그 자리로 가요.`, `${key}-click a page link to go back to the passage.`),
-    }))
-  }
-  body.append(field)
-  // Math in the note is typed with Latex Suite: `@a`, `//`, Tab out of the equation.
-  attachLatexSuite(area)
-  // And shown set, under the line, while the caret is inside it.
-  const preview = attachMathPreview(area)
-  // For the probe (`--papertime-probe`): where the card is and what it shows.
-  ;(window as unknown as { __mathPreview?: () => string }).__mathPreview = () => preview.report()
 }

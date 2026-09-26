@@ -34,6 +34,10 @@ export interface SettingsActions {
    *  and the sheet left as it is so the control keeps the pointer. */
   set: (patch: Record<string, unknown>, options?: { live?: boolean }) => void
   chooseLibrary: () => void
+  /** A folder for the notes about no paper, and the notes moved into it. */
+  chooseNotesFolder: () => void
+  /** The way back: those notes return to the app's own folder. */
+  useAppNotesFolder: () => void
   /** The report sheet, from the About section. */
   feedback: () => void
 }
@@ -155,6 +159,36 @@ export function showSettings(actions: SettingsActions, section?: SettingsSection
         'Opening another folder beside it is Add Library… in the sidebar.',
       ),
     }))
+
+    // Where the notes about no paper live — the Mac's «Loose Notes». A note
+    // about a paper is in that paper's folder; the rest have no folder to
+    // belong to, so they are in the app's own until a folder is chosen for
+    // them — one in a cloud drive, say, so they follow you between machines.
+    const where = store.notesFolder
+    const loose = el('div', { class: 'set-row' })
+    loose.append(el('span', { class: 'set-label', text: L('논문 없는 노트', 'Loose Notes') }))
+    const looseName = where?.chosenPath
+      ? where.chosenPath.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? where.chosenPath
+      : L('앱 폴더', "The app's folder")
+    const loosePath = el('span', { class: 'set-path', text: looseName })
+    loosePath.title = where?.chosenPath ?? where?.appFolder ?? ''
+    const pickLoose = el('button', { class: 'plain-button', text: L('고르기…', 'Choose…') })
+    on(pickLoose, 'click', () => actions.chooseNotesFolder())
+    loose.append(loosePath, pickLoose)
+    if (where?.chosenPath) {
+      const back = el('button', { class: 'plain-button', text: L('앱 폴더로 되돌리기', 'Back to the App') })
+      on(back, 'click', () => actions.useAppNotesFolder())
+      loose.append(back)
+    }
+    body.append(loose)
+    body.append(note(where?.away
+      ? L('고른 폴더에 지금은 닿을 수 없어요. 그동안 쓴 노트는 앱 폴더에 두고, 폴더가 돌아오면 옮겨요.',
+          "The chosen folder can't be reached right now. Notes written meanwhile stay in the app's folder and move when it is back.")
+      : where && where.leftBehind.length > 0
+        ? L('같은 이름의 노트가 있어 옮기지 못한 노트가 앱 폴더에 남아 있어요. 거기서도 계속 읽어요.',
+            "Some notes stayed in the app's folder because a note of the same name was already in the chosen one. They are still read from there.")
+        : L('논문에 대한 노트는 그 논문의 폴더에 있어요. 나머지 노트를 둘 곳이에요.',
+            "Notes about a paper live in that paper's folder. This is where the rest go.")))
 
     const reading = el('div', { class: 'set-section', text: L('읽기', 'Reading') })
     // Where «Custom Color» in the ⋯ menu opens the sheet: the colour well is

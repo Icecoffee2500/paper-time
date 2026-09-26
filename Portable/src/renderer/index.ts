@@ -37,6 +37,8 @@ import {
   panePapers,
   paper as findPaper,
   remember,
+  noteByID,
+  notesForPaper,
   shelfPapers,
   store,
   setSketchTool,
@@ -53,6 +55,9 @@ import { buildToolbar, showMenu, toast, type MenuEntry } from './ui/toolbar.js'
 import { buildSidebar } from './ui/sidebar.js'
 import { buildPaperList } from './ui/paperList.js'
 import { buildInspector } from './ui/inspector.js'
+import { buildSlipBox, openNoteInSlipBox, slipBoxEditor } from './ui/slipBox.js'
+import { openEditor as openNoteEditor, openNoteInTab } from './ui/notesTab.js'
+import { adoptNotes, createNote } from './notesModel.js'
 import { Reader, type ReaderPlace } from './ui/reader.js'
 import { buildSketchRack, TOOLS } from './ui/sketchToolbar.js'
 import { undoStack, type SketchInputEditing } from './ui/sketchInput.js'
@@ -108,6 +113,7 @@ function addLibraryFolder() {
     const snapshot = await call<LibrarySnapshot>('library:addFolder', {})
     if ('error' in snapshot) return
     adopt(snapshot)
+    adoptNotes(snapshot.notes, snapshot.notesFolder)
     changed('papers', 'shelf', 'sidebar')
   })()
 }
@@ -115,6 +121,7 @@ function addLibraryFolder() {
 const sidebar = buildSidebar({
   select: (shelf: Shelf) => {
     store.shelf = shelf
+    if (shelf.kind === 'notes') store.slipBox.paperID = null
     changed('shelf')
   },
   addFolder: () => addLibraryFolder(),
@@ -125,6 +132,7 @@ const sidebar = buildSidebar({
       // Papers from that folder are gone: whatever was showing goes with them.
       if (store.shelf.kind === 'folder' && store.shelf.root === root) store.shelf = { kind: 'all' }
       adopt(snapshot)
+      adoptNotes(snapshot.notes, snapshot.notesFolder)
       store.openPaperIDs = store.openPaperIDs.filter((id) => findPaper(id))
       for (const id of panePapers()) if (!findPaper(id)) undock(id)
       if (store.selectedID && !findPaper(store.selectedID)) store.selectedID = null
@@ -340,13 +348,57 @@ const paperList = buildPaperList({
     const snapshot = await call<LibrarySnapshot>('library:adoptLoose')
     if ('error' in snapshot) return toast(String(snapshot.error))
     adopt(snapshot)
+    adoptNotes(snapshot.notes, snapshot.notesFolder)
     changed('papers')
   },
   refresh: () => void reload(),
   openPassage: (hit, byMeaning) => void openPassage(hit, byMeaning ? '' : store.searchQuery),
-  openNote: (paperID) => void openNote(paperID),
+  openNote: (id) => void openNote(id),
   step: (by) => stepPaper(by),
 })
+
+/**
+ * The slip-box, shown while the sidebar's «Notes» row is chosen: the list of
+ * notes in the list column and the open note in the page area.
+ */
+const slipBox = buildSlipBox({
+  paper: (id) => findPaper(id) ?? undefined,
+  openAnchor: (place) => void openAnchorFromSlipBox(place),
+  openNote: (id) => void openNote(id),
+})
+
+/** The list column: the papers, or on the Notes shelf the slip-box. */
+const listSlot = el('div', { class: 'pane-slot' })
+
+function syncListSlot() {
+  const wanted = store.shelf.kind === 'notes' && !solo ? slipBox.node : paperList.node
+  if (wanted.parentElement !== listSlot) {
+    clear(listSlot)
+    listSlot.append(wanted)
+  }
+}
+
+/**
+ * A passage followed out of a note in the slip-box: its paper takes the
+ * page area, and the note stays open in the list beside it — pressing the
+ * note again brings it back.
+ */
+async function openAnchorFromSlipBox(place: { pageIndex: number; rect: { x: number; y: number; width: number; height: number }; paperID?: string }) {
+  const open = store.slipBox.openID ? noteByID(store.slipBox.openID) : undefined
+  const named = place.paperID ? store.papers.find((entry) => entry.id.toUpperCase() === place.paperID!.toUpperCase())?.id : undefined
+  const target = named ?? open?.paperID ?? undefined
+  if (!target || !findPaper(target)) {
+    toast(L('이 노트의 논문이 라이브러리에 없어요.', "This note's paper is not in the library."))
+    return
+  }
+  store.slipBox.paperID = target
+  if (store.selectedID !== target) await showPaper(target)
+  else {
+    reconcileReaders()
+    changed('reader')
+  }
+  await openAnchor({ ...place, paperID: target })
+}
 
 /** The answer to "a paper, a book, course material, or a document?", from the
  *  inspector or the row's menu. */
@@ -497,6 +549,7 @@ const inspector = buildInspector({
     toast(L('복사했어요', 'Copied'))
   },
   markMenu: (anchor, entries) => showMenu(anchor, entries),
+  openNote: (id) => void openNote(id),
   open: (id) => void showPaper(id),
   detach: (id) => void detach(id),
   openAnchor: (place) => void openAnchor(place),
@@ -664,6 +717,10 @@ async function loadInto(reader: Reader, id: string) {
  * rack. Everything that changes what is in the page area ends here.
  */
 function reconcileReaders() {
+  if (!solo && store.shelf.kind === 'notes' && store.slipBox.paperID === null) {
+    showSlipBoxDetail()
+    return
+  }
   const wanted = panePapers()
   const split = store.split
   const previous = focused()
@@ -730,11 +787,37 @@ function reconcileReaders() {
     focusChanged()
     for (const reader of readers.values()) reader.relayout()
   })
+  // Back from the slip-box: the papers go where they were being read. Not
+  // `keepingPlaces`'s doing — it measured them while they were out of the
+  // document, at the top.
+  if (placesBeforeNotes) {
+    const places = placesBeforeNotes
+    placesBeforeNotes = null
+    for (const [id, place] of places) readers.get(id)?.returnTo(place)
+  }
 }
 
 /** What the page area is showing, so that it is only rebuilt when that
  *  changes. See the note in `reconcileReaders`. */
 let showing = ''
+
+/** Where each paper was being read when the slip-box took the page area. */
+let placesBeforeNotes: Map<string, ReaderPlace> | null = null
+
+/** The page area while the slip-box is open: the note, not a paper. */
+function showSlipBoxDetail() {
+  const shape = 'slip-box'
+  if (showing === shape && pageArea.contains(slipBox.detail)) {
+    slipBox.update()
+    return
+  }
+  placesBeforeNotes = new Map([...readers].map(([id, reader]) => [id, reader.place()]))
+  showing = shape
+  clear(pageArea)
+  pageArea.append(slipBox.detail, dockZone)
+  if (findBar.isOpen) findBar.close()
+  slipBox.update()
+}
 
 /**
  * Runs something that re-appends a panel, and puts the papers back afterwards.
@@ -1051,6 +1134,7 @@ let panesShown = new Set<Pane>()
 
 function layoutPanes() {
   clear(panes)
+  syncListSlot()
   if (solo) {
     // One paper, and nothing else: the reader fills the window.
     pageArea.style.flex = '1 1 auto'
@@ -1060,7 +1144,7 @@ function layoutPanes() {
   const visible = store.settings.panes
   const pieces: { pane: Pane; node: HTMLElement; width?: number; resizes?: 'leading' | 'trailing' }[] = []
   if (visible.sidebar) pieces.push({ pane: 'sidebar', node: sidebar.node, width: store.settings.columns.sidebar })
-  if (visible.paperList) pieces.push({ pane: 'paperList', node: paperList.node, width: store.settings.columns.paperList })
+  if (visible.paperList) pieces.push({ pane: 'paperList', node: listSlot, width: store.settings.columns.paperList })
   if (visible.reader) pieces.push({ pane: 'reader', node: pageArea })
   if (visible.inspector) {
     pieces.push({ pane: 'inspector', node: inspector.node, width: store.settings.columns.inspector, resizes: 'trailing' })
@@ -1143,7 +1227,7 @@ function divider(pane: 'sidebar' | 'paperList' | 'inspector', inverted: boolean)
 /** The panel a column's name stands for. */
 function paneNode(pane: 'sidebar' | 'paperList' | 'inspector'): HTMLElement {
   if (pane === 'sidebar') return sidebar.node
-  if (pane === 'paperList') return paperList.node
+  if (pane === 'paperList') return listSlot
   return inspector.node
 }
 
@@ -1166,6 +1250,7 @@ async function chooseLibrary() {
   const snapshot = await call<LibrarySnapshot>('library:open', { root: chosen })
   if ('error' in snapshot) return toast(String(snapshot.error))
   adopt(snapshot)
+  adoptNotes(snapshot.notes, snapshot.notesFolder)
   changed('papers', 'shelf')
 }
 
@@ -1173,6 +1258,7 @@ async function addPapers() {
   const snapshot = await call<LibrarySnapshot>('library:import', { root: importDestination() })
   if ('error' in snapshot) return toast(String(snapshot.error))
   adopt(snapshot)
+  adoptNotes(snapshot.notes, snapshot.notesFolder)
   changed('papers')
 }
 
@@ -1199,6 +1285,7 @@ async function reload() {
   }
   const selected = store.selectedID
   adopt(snapshot)
+  adoptNotes(snapshot.notes, snapshot.notesFolder)
   store.selectedID = selected
   // Papers gone from the folder leave the shelf and the page area.
   store.openPaperIDs = store.openPaperIDs.filter((id) => findPaper(id))
@@ -1403,6 +1490,7 @@ function closeSearch() {
 
 function selectShelf(shelf: Shelf) {
   store.shelf = shelf
+  if (shelf.kind === 'notes') store.slipBox.paperID = null
   changed('shelf')
 }
 
@@ -1422,10 +1510,27 @@ async function openPassage(hit: TextHit, query: string) {
   await reader.revealPassage(hit.passage, query)
 }
 
-/** A summary note from the palette: its paper, with the note in front. */
-async function openNote(paperID: string) {
-  await showPaper(paperID)
-  showNoteTab()
+/**
+ * A note from the palette, a search row or a link: its paper with the Notes
+ * tab in front — or, for a note about no paper, the slip-box with the note
+ * open beside the list.
+ */
+async function openNote(id: string) {
+  const note = noteByID(id)
+  if (!note || solo) return
+  const paper = note.paperID ? findPaper(note.paperID) : undefined
+  // Inside the slip-box a link stays in the slip-box, as on the Mac: the
+  // note opens beside the list, whichever paper it is about.
+  if (paper && store.shelf.kind !== 'notes') {
+    if (store.selectedID !== paper.id) await showPaper(paper.id)
+    showNoteTab()
+    openNoteInTab(id)
+    return
+  }
+  store.slipBox.query = ''
+  store.slipBox.tag = null
+  selectShelf({ kind: 'notes' })
+  openNoteInSlipBox(id)
 }
 
 /** The inspector, open on the Notes tab of the paper in front. */
@@ -1440,18 +1545,21 @@ function showNoteTab() {
 }
 
 /**
- * Command-N. The Mac opens a new note on the paper being read; this build
- * keeps one note for each paper, so it opens that note with the caret at its
- * end, which is where the new thought goes. The menu item and its key used to
- * answer «not in this build yet».
+ * Command-N: a new note on the paper being read, open in the Notes tab with
+ * the caret in it — or, with no paper open or the slip-box showing, a note
+ * of your own in the slip-box, as the Mac's ⌘N writes one.
  */
 function newNote() {
-  if (!store.selectedID || !findPaper(store.selectedID)) {
-    toast(L('먼저 논문을 열어주세요.', 'Open a paper first.'))
+  if (solo) return
+  if (store.selectedID && findPaper(store.selectedID) && store.shelf.kind !== 'notes') {
+    showNoteTab()
+    openNoteInTab(createNote(store.selectedID).id)
+    inspector.focusNote()
     return
   }
-  showNoteTab()
-  inspector.focusNote()
+  selectShelf({ kind: 'notes' })
+  openNoteInSlipBox(createNote(null).id)
+  slipBoxEditor()?.area.focus()
 }
 
 /**
@@ -1471,6 +1579,12 @@ function linkSelectionToNote() {
     (page) => L(`${page}쪽`, `p. ${page}`),
   )
   showNoteTab()
+  // With no note open, the last one written about this paper carries on —
+  // or a new one starts, as on the Mac.
+  if (!openNoteEditor()) {
+    const latest = notesForPaper(store.selectedID)[0]
+    openNoteInTab(latest ? latest.id : createNote(store.selectedID).id)
+  }
   if (!inspector.insertIntoNote(block)) return
   reader.hideMarkBar()
 }
@@ -1776,6 +1890,18 @@ let wasDrawing = false
 let tabBeforeDrawing: InspectorTab | null = null
 
 subscribe((keys) => {
+  if (keys.has('shelf')) {
+    syncListSlot()
+    reconcileReaders()
+  }
+  if (keys.has('notes') || keys.has('slipBox') || keys.has('papers')) {
+    if (store.shelf.kind === 'notes' && !solo) {
+      slipBox.update()
+      reconcileReaders()
+    }
+    if (keys.has('notes') && store.settings.inspectorTab === 'note') inspector.update()
+    if (keys.has('notes')) sidebar.update()
+  }
   if (keys.has('shelf') || keys.has('papers')) scanListText()
   if (keys.has('papers') || keys.has('shelf') || keys.has('selection')) {
     sidebar.update()
@@ -1891,9 +2017,28 @@ function openSettings(section?: SettingsSection) {
     // folder; this called it and then read the old library again, so the
     // sheet's «Choose…» let somebody pick a folder and changed nothing.
     chooseLibrary: () => void chooseLibrary(),
+    chooseNotesFolder: () => void moveLooseNotes('notes:chooseFolder'),
+    useAppNotesFolder: () => void moveLooseNotes('notes:useAppFolder'),
     feedback: () => void showFeedback(),
   }, section)
   if (sheet) openSettingsSheet = sheet
+}
+
+/**
+ * A folder for the notes about no paper, and the notes carried into it —
+ * the settings' «Loose Notes». What could not go — a note of the same name
+ * already there — stays where it was, and the toast says how many.
+ */
+async function moveLooseNotes(request: 'notes:chooseFolder' | 'notes:useAppFolder') {
+  const result = await call<{ moved: number; kept: number } | { error: string } | null>(request)
+  if (!result) return
+  if ('error' in result) return toast(result.error)
+  const { moved, kept } = result
+  toast(kept > 0
+    ? L(`노트 ${moved}개를 옮겼어요. ${kept}개는 이름이 겹쳐 그대로 뒀어요.`, `Moved ${moved} note${moved === 1 ? '' : 's'}. ${kept} stayed: a note of the same name was already there.`)
+    : L(`노트 ${moved}개를 옮겼어요.`, `Moved ${moved} note${moved === 1 ? '' : 's'}.`))
+  await reload()
+  openSettingsSheet?.redraw()
 }
 
 let openSettingsSheet: { redraw: () => void; close: () => void } | undefined
@@ -2038,10 +2183,26 @@ on(window, 'drop', async (event: DragEvent) => {
   const snapshot = await call<LibrarySnapshot>('library:import', { paths: files, root: importDestination() })
   if ('error' in snapshot) return toast(String(snapshot.error))
   adopt(snapshot)
+  adoptNotes(snapshot.notes, snapshot.notesFolder)
   changed('papers')
 })
 
 on(window, 'resize', () => relayoutReaders())
+
+// For a probe (`--papertime-probe`): the slip-box as the window holds it,
+// and the ways into a note, so «does the Mac's note show» can be asked from
+// inside the page.
+;(window as unknown as { __papertimeNotes: unknown }).__papertimeNotes = {
+  list: () => store.notes.map((note) => ({ id: note.id, kind: note.kind, title: note.title, body: note.body, paperID: note.paperID, box: note.box })),
+  folder: () => store.notesFolder,
+  open: (id: string) => openNote(id),
+  create: (paperID: string | null) => createNote(paperID).id,
+  openInSlipBox: (id: string) => openNoteInSlipBox(id),
+  openInTab: (id: string) => openNoteInTab(id),
+  tabEditor: () => openNoteEditor()?.id ?? null,
+  slipBoxEditor: () => slipBoxEditor()?.id ?? null,
+  shelf: () => store.shelf.kind,
+}
 
 // ------------------------------------------------------------------- start
 
@@ -2065,6 +2226,7 @@ async function start() {
       changed('papers', 'shelf')
     } else {
       adopt(snapshot)
+      adoptNotes(snapshot.notes, snapshot.notesFolder)
       changed('papers', 'shelf')
       if (solo) {
         // A window for one paper: that paper, kept, and nothing else.

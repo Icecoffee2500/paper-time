@@ -1,0 +1,738 @@
+{
+  "derived" : [
+    {
+      "body" : "",
+      "displayTitle" : "Untitled Note",
+      "isEmpty" : true,
+      "linkMarkdown" : "[[202609081530|Untitled Note]]",
+      "links" : [
+
+      ],
+      "name" : "nothing",
+      "preview" : "",
+      "previewBody" : "",
+      "tags" : [
+
+      ],
+      "title" : ""
+    },
+    {
+      "body" : "$$x^2$$",
+      "displayTitle" : "Formula",
+      "isEmpty" : false,
+      "linkMarkdown" : "[[202609081530|Formula]]",
+      "links" : [
+
+      ],
+      "name" : "a formula and nothing else",
+      "preview" : "",
+      "previewBody" : "",
+      "tags" : [
+
+      ],
+      "title" : ""
+    },
+    {
+      "body" : "   ",
+      "displayTitle" : "Untitled Note",
+      "isEmpty" : true,
+      "linkMarkdown" : "[[202609081530|Untitled Note]]",
+      "links" : [
+
+      ],
+      "name" : "spaces only",
+      "preview" : "",
+      "previewBody" : "",
+      "tags" : [
+
+      ],
+      "title" : ""
+    },
+    {
+      "body" : "# Heading\n\nSome **bold** text with `code` and a [link](http://x.y) and ![img](a.png).",
+      "displayTitle" : "Heading Some bold text with code and a link and.",
+      "isEmpty" : false,
+      "linkMarkdown" : "[[202609081530|Heading Some bold text with code and a link and.]]",
+      "links" : [
+
+      ],
+      "name" : "Markdown of every kind",
+      "preview" : "Heading Some bold text with code and a link and.",
+      "previewBody" : "",
+      "tags" : [
+
+      ],
+      "title" : ""
+    },
+    {
+      "body" : "> quoted line\n- item one\n2. item two\n* star item",
+      "displayTitle" : "quoted line item one item two star item",
+      "isEmpty" : false,
+      "linkMarkdown" : "[[202609081530|quoted line item one item two star item]]",
+      "links" : [
+
+      ],
+      "name" : "quotes and lists",
+      "preview" : "quoted line item one item two star item",
+      "previewBody" : "",
+      "tags" : [
+
+      ],
+      "title" : ""
+    },
+    {
+      "body" : "a formula, $x$, should read , well ; ok",
+      "displayTitle" : "a formula, should read, well; ok",
+      "isEmpty" : false,
+      "linkMarkdown" : "[[202609081530|a formula, should read, well; ok]]",
+      "links" : [
+
+      ],
+      "name" : "punctuation left holding hands",
+      "preview" : "a formula, should read, well; ok",
+      "previewBody" : "",
+      "tags" : [
+
+      ],
+      "title" : ""
+    },
+    {
+      "body" : "See [[202609061204|Discretising actions]] and [[202609071010]].",
+      "displayTitle" : "See Discretising actions and 202609071010.",
+      "isEmpty" : false,
+      "linkMarkdown" : "[[202609081530|See Discretising actions and 202609071010.]]",
+      "links" : [
+        "202609061204",
+        "202609071010"
+      ],
+      "name" : "links to notes",
+      "preview" : "See Discretising actions and 202609071010.",
+      "previewBody" : "",
+      "tags" : [
+
+      ],
+      "title" : ""
+    },
+    {
+      "body" : "Body #tag",
+      "displayTitle" : "Title",
+      "isEmpty" : false,
+      "linkMarkdown" : "[[202609081530|Title]]",
+      "links" : [
+
+      ],
+      "name" : "a title of its own",
+      "preview" : "Body #tag",
+      "previewBody" : "Body #tag",
+      "tags" : [
+        "tag"
+      ],
+      "title" : "Title"
+    },
+    {
+      "body" : "A very long first line that goes on and on beyond sixty characters to test the prefix cut here",
+      "displayTitle" : "A very long first line that goes on and on beyond sixty char",
+      "isEmpty" : false,
+      "linkMarkdown" : "[[202609081530|A very long first line that goes on and on beyond sixty char]]",
+      "links" : [
+
+      ],
+      "name" : "a long first line",
+      "preview" : "A very long first line that goes on and on beyond sixty characters to test the prefix cut here",
+      "previewBody" : "acters to test the prefix cut here",
+      "tags" : [
+
+      ],
+      "title" : ""
+    },
+    {
+      "body" : "한국어 노트의 첫 줄이 꽤 길어서 육십 글자를 넘어가면 어디서 잘리는지 확인하는 문장입니다 정말로요 그렇죠",
+      "displayTitle" : "한국어 노트의 첫 줄이 꽤 길어서 육십 글자를 넘어가면 어디서 잘리는지 확인하는 문장입니다 정말로요 그렇죠",
+      "isEmpty" : false,
+      "linkMarkdown" : "[[202609081530|한국어 노트의 첫 줄이 꽤 길어서 육십 글자를 넘어가면 어디서 잘리는지 확인하는 문장입니다 정말로요 그렇죠]]",
+      "links" : [
+
+      ],
+      "name" : "a long Korean first line",
+      "preview" : "한국어 노트의 첫 줄이 꽤 길어서 육십 글자를 넘어가면 어디서 잘리는지 확인하는 문장입니다 정말로요 그렇죠",
+      "previewBody" : "",
+      "tags" : [
+
+      ],
+      "title" : ""
+    },
+    {
+      "body" : "```\ncode block\n```\nafter code",
+      "displayTitle" : "after code",
+      "isEmpty" : false,
+      "linkMarkdown" : "[[202609081530|after code]]",
+      "links" : [
+
+      ],
+      "name" : "fenced code",
+      "preview" : "after code",
+      "previewBody" : "",
+      "tags" : [
+
+      ],
+      "title" : ""
+    },
+    {
+      "body" : "family 👩‍👩‍👧‍👦 family 👩‍👩‍👧‍👦 family 👩‍👩‍👧‍👦 family 👩‍👩‍👧‍👦 family 👩‍👩‍👧‍👦 family 👩‍👩‍👧‍👦 family 👩‍👩‍👧‍👦 family 👩‍👩‍👧‍👦 family 👩‍👩‍👧‍👦 ",
+      "displayTitle" : "family 👩‍👩‍👧‍👦 family 👩‍👩‍👧‍👦 family 👩‍👩‍👧‍👦 family 👩‍👩‍👧‍👦 family 👩‍👩‍👧‍👦 family 👩‍👩‍👧‍👦 family",
+      "isEmpty" : false,
+      "linkMarkdown" : "[[202609081530|family 👩‍👩‍👧‍👦 family 👩‍👩‍👧‍👦 family 👩‍👩‍👧‍👦 family 👩‍👩‍👧‍👦 family 👩‍👩‍👧‍👦 family 👩‍👩‍👧‍👦 family]]",
+      "links" : [
+
+      ],
+      "name" : "emoji as one letter each",
+      "preview" : "family 👩‍👩‍👧‍👦 family 👩‍👩‍👧‍👦 family 👩‍👩‍👧‍👦 family 👩‍👩‍👧‍👦 family 👩‍👩‍👧‍👦 family 👩‍👩‍👧‍👦 family 👩‍👩‍👧‍👦 family 👩‍👩‍👧‍👦 family 👩‍👩‍👧‍👦",
+      "previewBody" : "👩‍👩‍👧‍👦 family 👩‍👩‍👧‍👦 family 👩‍👩‍👧‍👦",
+      "tags" : [
+
+      ],
+      "title" : ""
+    },
+    {
+      "body" : "x",
+      "displayTitle" : "x",
+      "isEmpty" : false,
+      "linkMarkdown" : "[[202609081530|x]]",
+      "links" : [
+
+      ],
+      "name" : "a title of spaces",
+      "preview" : "x",
+      "previewBody" : "",
+      "tags" : [
+
+      ],
+      "title" : "  "
+    },
+    {
+      "body" : "multiple   spaces\tand\ttabs",
+      "displayTitle" : "multiple spaces\tand\ttabs",
+      "isEmpty" : false,
+      "linkMarkdown" : "[[202609081530|multiple spaces\tand\ttabs]]",
+      "links" : [
+
+      ],
+      "name" : "runs of spaces and tabs",
+      "preview" : "multiple spaces\tand\ttabs",
+      "previewBody" : "",
+      "tags" : [
+
+      ],
+      "title" : ""
+    },
+    {
+      "body" : "1. first\n10. tenth\n١. arabic-indic digit",
+      "displayTitle" : "first tenth arabic-indic digit",
+      "isEmpty" : false,
+      "linkMarkdown" : "[[202609081530|first tenth arabic-indic digit]]",
+      "links" : [
+
+      ],
+      "name" : "numbered lists",
+      "preview" : "first tenth arabic-indic digit",
+      "previewBody" : "",
+      "tags" : [
+
+      ],
+      "title" : ""
+    },
+    {
+      "body" : "The loss $\\mathcal{L}$ falls; then $$\\sum_i x_i$$ rises.",
+      "displayTitle" : "The loss falls; then rises.",
+      "isEmpty" : false,
+      "linkMarkdown" : "[[202609081530|The loss falls; then rises.]]",
+      "links" : [
+
+      ],
+      "name" : "a formula between words",
+      "preview" : "The loss falls; then rises.",
+      "previewBody" : "",
+      "tags" : [
+
+      ],
+      "title" : ""
+    },
+    {
+      "body" : "###\n>>>\nreal words",
+      "displayTitle" : "real words",
+      "isEmpty" : false,
+      "linkMarkdown" : "[[202609081530|real words]]",
+      "links" : [
+
+      ],
+      "name" : "a heading that is only marks",
+      "preview" : "real words",
+      "previewBody" : "",
+      "tags" : [
+
+      ],
+      "title" : ""
+    }
+  ],
+  "read" : [
+    {
+      "fallbackID" : "fallback",
+      "modified" : 1757100000,
+      "name" : "written: the least a note can be",
+      "note" : {
+        "body" : "just a thought",
+        "created" : 1757000000,
+        "id" : "202609081530",
+        "kind" : "note",
+        "title" : ""
+      },
+      "text" : "---\nid: 202609081530\ncreated: 2025-09-04T15:33:20Z\n---\n\njust a thought"
+    },
+    {
+      "fallbackID" : "fallback",
+      "modified" : 1757100000,
+      "name" : "written: a literature note with a tag and a link",
+      "note" : {
+        "body" : "The action head is detokenised text. #vla\nSee [[202609061204|Discretising actions]].",
+        "created" : 1757000000,
+        "id" : "202609081530",
+        "kind" : "note",
+        "paperID" : "4F3A1C08-0000-4000-8000-000000000001",
+        "title" : "OpenVLA turns a VLM into a policy"
+      },
+      "text" : "---\nid: 202609081530\ntitle: OpenVLA turns a VLM into a policy\npaper: 4F3A1C08-0000-4000-8000-000000000001\ntags: vla\ncreated: 2025-09-04T15:33:20Z\n---\n\nThe action head is detokenised text. #vla\nSee [[202609061204|Discretising actions]]."
+    },
+    {
+      "fallbackID" : "fallback",
+      "modified" : 1757100000,
+      "name" : "written: a map",
+      "note" : {
+        "body" : "# Models\n- [[202609081530|OpenVLA]]\n",
+        "created" : 1757000060,
+        "id" : "202609081531",
+        "kind" : "map",
+        "title" : "VLA"
+      },
+      "text" : "---\nid: 202609081531\nkind: map\ntitle: VLA\ncreated: 2025-09-04T15:34:20Z\n---\n\n# Models\n- [[202609081530|OpenVLA]]\n"
+    },
+    {
+      "fallbackID" : "fallback",
+      "modified" : 1757100000,
+      "name" : "written: an empty draft with a title",
+      "note" : {
+        "body" : "",
+        "created" : 1757000120,
+        "id" : "202609081532",
+        "kind" : "draft",
+        "title" : "Related work"
+      },
+      "text" : "---\nid: 202609081532\nkind: draft\ntitle: Related work\ncreated: 2025-09-04T15:35:20Z\n---\n\n"
+    },
+    {
+      "fallbackID" : "fallback",
+      "modified" : 1757100000,
+      "name" : "written: tags, and the things that are not tags",
+      "note" : {
+        "body" : "#vla #robot-learning #vla\n#강화학습 and a#b, #a/b, (#paren) #_x #-x ##double # heading #123 #café",
+        "created" : 1757000000,
+        "id" : "202609081533",
+        "kind" : "note",
+        "title" : ""
+      },
+      "text" : "---\nid: 202609081533\ntags: vla, robot-learning, 강화학습, a/b, 123, cafe\ncreated: 2025-09-04T15:33:20Z\n---\n\n#vla #robot-learning #vla\n#강화학습 and a#b, #a/b, (#paren) #_x #-x ##double # heading #123 #café"
+    },
+    {
+      "fallbackID" : "fallback",
+      "modified" : 1757100000,
+      "name" : "written: a title with a colon and spaces, a body opening on blank lines",
+      "note" : {
+        "body" : "leading blank lines",
+        "created" : 1757000000,
+        "id" : "x-1",
+        "kind" : "note",
+        "title" : "spaced : title"
+      },
+      "text" : "---\nid: x-1\ntitle:   spaced : title  \ncreated: 2025-09-04T15:33:20Z\n---\n\n\n\nleading blank lines"
+    },
+    {
+      "fallbackID" : "fallback",
+      "modified" : 1757100000,
+      "name" : "written: mathematics, a rule and an emoji, at the epoch",
+      "note" : {
+        "body" : "$$\n\\frac{a}{b}\n$$\n\n---\n\nafter a rule 😀",
+        "created" : 0,
+        "id" : "202609081534",
+        "kind" : "note",
+        "paperID" : "4F3A1C08-0000-4000-8000-000000000001",
+        "title" : "수식"
+      },
+      "text" : "---\nid: 202609081534\ntitle: 수식\npaper: 4F3A1C08-0000-4000-8000-000000000001\ncreated: 1970-01-01T00:00:00Z\n---\n\n$$\n\\frac{a}{b}\n$$\n\n---\n\nafter a rule 😀"
+    },
+    {
+      "fallbackID" : "fallback",
+      "modified" : 1757100000,
+      "name" : "written: tags after unusual spaces",
+      "note" : {
+        "body" : "word #nbsp\tword\t#tab #ls　#ideographic\u000b#vt﻿#bom",
+        "created" : 1757000180,
+        "id" : "202609081535",
+        "kind" : "note",
+        "title" : ""
+      },
+      "text" : "---\nid: 202609081535\ntags: nbsp, tab, ls, ideographic, vt\ncreated: 2025-09-04T15:36:20Z\n---\n\nword #nbsp\tword\t#tab #ls　#ideographic\u000b#vt﻿#bom"
+    },
+    {
+      "fallbackID" : "202609081530",
+      "modified" : 1757000123.25,
+      "name" : "no header at all",
+      "note" : {
+        "body" : "just a thought",
+        "created" : 1757000123.25,
+        "id" : "202609081530",
+        "kind" : "note",
+        "title" : ""
+      },
+      "text" : "just a thought"
+    },
+    {
+      "fallbackID" : "fallback-id",
+      "modified" : 1757000000,
+      "name" : "a header with no id",
+      "note" : {
+        "body" : "body",
+        "created" : 1757000000,
+        "id" : "fallback-id",
+        "kind" : "note",
+        "title" : "No id"
+      },
+      "text" : "---\ntitle: No id\n---\n\nbody"
+    },
+    {
+      "fallbackID" : "f",
+      "modified" : 1757000000,
+      "name" : "a kind this build does not know",
+      "note" : {
+        "body" : "x",
+        "created" : 1757000000,
+        "id" : "1",
+        "kind" : "note",
+        "title" : ""
+      },
+      "text" : "---\nid: 1\nkind: board\n---\n\nx"
+    },
+    {
+      "fallbackID" : "f",
+      "modified" : 1757000000,
+      "name" : "a paper in lower case",
+      "note" : {
+        "body" : "lower",
+        "created" : 1757000000,
+        "id" : "2",
+        "kind" : "note",
+        "paperID" : "4F3A1C08-0000-4000-8000-000000000001",
+        "title" : ""
+      },
+      "text" : "---\nid: 2\npaper: 4f3a1c08-0000-4000-8000-000000000001\n---\n\nlower"
+    },
+    {
+      "fallbackID" : "f",
+      "modified" : 1757000000,
+      "name" : "a paper that is not an identifier",
+      "note" : {
+        "body" : "bad paper",
+        "created" : 1757000000,
+        "id" : "3",
+        "kind" : "note",
+        "title" : ""
+      },
+      "text" : "---\nid: 3\npaper: not-a-uuid\n---\n\nbad paper"
+    },
+    {
+      "fallbackID" : "f",
+      "modified" : 1757000000,
+      "name" : "a creation time with a fraction",
+      "note" : {
+        "body" : "fraction",
+        "created" : 1788881400.1230001,
+        "id" : "4",
+        "kind" : "note",
+        "title" : ""
+      },
+      "text" : "---\nid: 4\ncreated: 2026-09-08T15:30:00.123Z\n---\n\nfraction"
+    },
+    {
+      "fallbackID" : "f",
+      "modified" : 1757000000,
+      "name" : "a creation time with an offset",
+      "note" : {
+        "body" : "offset",
+        "created" : 1788849000,
+        "id" : "5",
+        "kind" : "note",
+        "title" : ""
+      },
+      "text" : "---\nid: 5\ncreated: 2026-09-08T15:30:00+09:00\n---\n\noffset"
+    },
+    {
+      "fallbackID" : "f",
+      "modified" : 1757000000.75,
+      "name" : "a creation time nobody can read",
+      "note" : {
+        "body" : "unparseable",
+        "created" : 1757000000.75,
+        "id" : "6",
+        "kind" : "note",
+        "title" : ""
+      },
+      "text" : "---\nid: 6\ncreated: yesterday\n---\n\nunparseable"
+    },
+    {
+      "fallbackID" : "f",
+      "modified" : 1757000000,
+      "name" : "keys in capitals, and a line with no colon",
+      "note" : {
+        "body" : "keys",
+        "created" : 1757000000,
+        "id" : "7",
+        "kind" : "note",
+        "title" : "Upper Keys"
+      },
+      "text" : "---\nID: 7\nTitle:  Upper Keys  \nnocolon line\n---\n\nkeys"
+    },
+    {
+      "fallbackID" : "f",
+      "modified" : 1757000000,
+      "name" : "the fence closes the file",
+      "note" : {
+        "body" : "",
+        "created" : 1757000000,
+        "id" : "8",
+        "kind" : "note",
+        "title" : ""
+      },
+      "text" : "---\nid: 8\n---"
+    },
+    {
+      "fallbackID" : "f",
+      "modified" : 1757000000,
+      "name" : "an empty header",
+      "note" : {
+        "body" : "---\n---\nbody",
+        "created" : 1757000000,
+        "id" : "f",
+        "kind" : "note",
+        "title" : ""
+      },
+      "text" : "---\n---\nbody"
+    },
+    {
+      "fallbackID" : "f",
+      "modified" : 1757000000,
+      "name" : "a byte order mark first",
+      "note" : {
+        "body" : "﻿---\nid: 9\n---\n\nbom",
+        "created" : 1757000000,
+        "id" : "f",
+        "kind" : "note",
+        "title" : ""
+      },
+      "text" : "﻿---\nid: 9\n---\n\nbom"
+    },
+    {
+      "fallbackID" : "empty",
+      "modified" : 1757000000,
+      "name" : "nothing at all",
+      "note" : {
+        "body" : "",
+        "created" : 1757000000,
+        "id" : "empty",
+        "kind" : "note",
+        "title" : ""
+      },
+      "text" : ""
+    },
+    {
+      "fallbackID" : "f",
+      "modified" : 1757000000,
+      "name" : "Windows line ends",
+      "note" : {
+        "body" : "---\r\nid: 10\r\ntitle: CRLF\r\n---\r\n\r\ncrlf body\r\n",
+        "created" : 1757000000,
+        "id" : "f",
+        "kind" : "note",
+        "title" : ""
+      },
+      "text" : "---\r\nid: 10\r\ntitle: CRLF\r\n---\r\n\r\ncrlf body\r\n"
+    },
+    {
+      "fallbackID" : "f",
+      "modified" : 1757000000,
+      "name" : "colons in the value",
+      "note" : {
+        "body" : "colons",
+        "created" : 1757000000,
+        "id" : "11",
+        "kind" : "note",
+        "title" : "a: b: c"
+      },
+      "text" : "---\nid: 11\ntitle: a: b: c\n---\n\ncolons"
+    },
+    {
+      "fallbackID" : "f",
+      "modified" : 1757000000,
+      "name" : "no blank line after the fence",
+      "note" : {
+        "body" : "no blank line after fence",
+        "created" : 1757000000,
+        "id" : "12",
+        "kind" : "note",
+        "title" : ""
+      },
+      "text" : "---\nid: 12\n---\nno blank line after fence"
+    },
+    {
+      "fallbackID" : "f",
+      "modified" : 1757000000,
+      "name" : "four dashes are not the fence",
+      "note" : {
+        "body" : "after",
+        "created" : 1757000000,
+        "id" : "13",
+        "kind" : "note",
+        "title" : ""
+      },
+      "text" : "---\nid: 13\n----\nmore\n---\n\nafter"
+    },
+    {
+      "fallbackID" : "f",
+      "modified" : 1757000000,
+      "name" : "spaces after the fence",
+      "note" : {
+        "body" : "---\nid: 14\ntitle: x\n---   \n\ntrailing spaces after fence",
+        "created" : 1757000000,
+        "id" : "f",
+        "kind" : "note",
+        "title" : ""
+      },
+      "text" : "---\nid: 14\ntitle: x\n---   \n\ntrailing spaces after fence"
+    },
+    {
+      "fallbackID" : "f",
+      "modified" : 1757000000,
+      "name" : "an indented first line",
+      "note" : {
+        "body" : "  indented first line",
+        "created" : 1788881400,
+        "id" : "15",
+        "kind" : "note",
+        "title" : ""
+      },
+      "text" : "---\nid: 15\ncreated: 2026-09-08T15:30:00Z\n---\n\n\n\n  indented first line"
+    },
+    {
+      "fallbackID" : "f",
+      "modified" : 1757000000,
+      "name" : "a header that never closes",
+      "note" : {
+        "body" : "---\nid: 16\ntitle: open\n\nbody without a fence",
+        "created" : 1757000000,
+        "id" : "f",
+        "kind" : "note",
+        "title" : ""
+      },
+      "text" : "---\nid: 16\ntitle: open\n\nbody without a fence"
+    }
+  ],
+  "write" : [
+    {
+      "name" : "the least a note can be",
+      "note" : {
+        "body" : "just a thought",
+        "created" : 1757000000,
+        "id" : "202609081530",
+        "kind" : "note",
+        "title" : ""
+      },
+      "text" : "---\nid: 202609081530\ncreated: 2025-09-04T15:33:20Z\n---\n\njust a thought"
+    },
+    {
+      "name" : "a literature note with a tag and a link",
+      "note" : {
+        "body" : "The action head is detokenised text. #vla\nSee [[202609061204|Discretising actions]].",
+        "created" : 1757000000,
+        "id" : "202609081530",
+        "kind" : "note",
+        "paperID" : "4F3A1C08-0000-4000-8000-000000000001",
+        "title" : "OpenVLA turns a VLM into a policy"
+      },
+      "text" : "---\nid: 202609081530\ntitle: OpenVLA turns a VLM into a policy\npaper: 4F3A1C08-0000-4000-8000-000000000001\ntags: vla\ncreated: 2025-09-04T15:33:20Z\n---\n\nThe action head is detokenised text. #vla\nSee [[202609061204|Discretising actions]]."
+    },
+    {
+      "name" : "a map",
+      "note" : {
+        "body" : "# Models\n- [[202609081530|OpenVLA]]\n",
+        "created" : 1757000060,
+        "id" : "202609081531",
+        "kind" : "map",
+        "title" : "VLA"
+      },
+      "text" : "---\nid: 202609081531\nkind: map\ntitle: VLA\ncreated: 2025-09-04T15:34:20Z\n---\n\n# Models\n- [[202609081530|OpenVLA]]\n"
+    },
+    {
+      "name" : "an empty draft with a title",
+      "note" : {
+        "body" : "",
+        "created" : 1757000120,
+        "id" : "202609081532",
+        "kind" : "draft",
+        "title" : "Related work"
+      },
+      "text" : "---\nid: 202609081532\nkind: draft\ntitle: Related work\ncreated: 2025-09-04T15:35:20Z\n---\n\n"
+    },
+    {
+      "name" : "tags, and the things that are not tags",
+      "note" : {
+        "body" : "#vla #robot-learning #vla\n#강화학습 and a#b, #a/b, (#paren) #_x #-x ##double # heading #123 #café",
+        "created" : 1757000000.999,
+        "id" : "202609081533",
+        "kind" : "note",
+        "title" : ""
+      },
+      "text" : "---\nid: 202609081533\ntags: vla, robot-learning, 강화학습, a/b, 123, cafe\ncreated: 2025-09-04T15:33:20Z\n---\n\n#vla #robot-learning #vla\n#강화학습 and a#b, #a/b, (#paren) #_x #-x ##double # heading #123 #café"
+    },
+    {
+      "name" : "a title with a colon and spaces, a body opening on blank lines",
+      "note" : {
+        "body" : "\n\nleading blank lines",
+        "created" : 1757000000.5,
+        "id" : "x-1",
+        "kind" : "note",
+        "title" : "  spaced : title  "
+      },
+      "text" : "---\nid: x-1\ntitle:   spaced : title  \ncreated: 2025-09-04T15:33:20Z\n---\n\n\n\nleading blank lines"
+    },
+    {
+      "name" : "mathematics, a rule and an emoji, at the epoch",
+      "note" : {
+        "body" : "$$\n\\frac{a}{b}\n$$\n\n---\n\nafter a rule 😀",
+        "created" : 0,
+        "id" : "202609081534",
+        "kind" : "note",
+        "paperID" : "4F3A1C08-0000-4000-8000-000000000001",
+        "title" : "수식"
+      },
+      "text" : "---\nid: 202609081534\ntitle: 수식\npaper: 4F3A1C08-0000-4000-8000-000000000001\ncreated: 1970-01-01T00:00:00Z\n---\n\n$$\n\\frac{a}{b}\n$$\n\n---\n\nafter a rule 😀"
+    },
+    {
+      "name" : "tags after unusual spaces",
+      "note" : {
+        "body" : "word #nbsp\tword\t#tab #ls　#ideographic\u000b#vt﻿#bom",
+        "created" : 1757000180,
+        "id" : "202609081535",
+        "kind" : "note",
+        "title" : ""
+      },
+      "text" : "---\nid: 202609081535\ntags: nbsp, tab, ls, ideographic, vt\ncreated: 2025-09-04T15:36:20Z\n---\n\nword #nbsp\tword\t#tab #ls　#ideographic\u000b#vt﻿#bom"
+    }
+  ]
+}
