@@ -64,6 +64,7 @@
       Push $1   ; the page's text
       Push $2   ; what is asked for, then the answer
       Push $3   ; what to say ("" when the folder is fine)
+      Push $4   ; Windows' reason, when it says no
 
       ; The page's text sits above the path box (1006, and the box is 1019).
       ; NSIS first calls this while the page is still being made, so take the
@@ -118,20 +119,29 @@
           ${Loop}
         ${EndIf}
 
-        StrCpy $3 "denied"
+        ; Install is greyed out only when Windows says, in so many words, that
+        ; this account may not write here (ERROR_ACCESS_DENIED). Anything else
+        ; — no folder found above the path (a share, a drive that is gone), a
+        ; call that did not run, another error — leaves the page as it was,
+        ; for NSIS and the install to judge: this has never run on Windows
+        ; here, and a check that said no by mistake would leave no folder
+        ; anyone could install to.
+        StrCpy $3 ""
         ${If} $0 != ""
           ; "C:" alone names the current folder on C:, not its root.
-          StrLen $3 $0
-          ${If} $3 = 2
+          StrLen $4 $0
+          ${If} $4 = 2
             StrCpy $0 "$0\"
           ${EndIf}
           ; OPEN_EXISTING and FILE_FLAG_BACKUP_SEMANTICS, the only way a folder
-          ; opens; every kind of sharing, so nobody else is in the way.
-          System::Call 'kernel32::CreateFileW(w r0, i r2, i 7, p 0, i 3, i 0x02000000, p 0) p .r2'
-          StrCpy $3 "denied"
+          ; opens; every kind of sharing, so nobody else is in the way. ?e
+          ; puts GetLastError on the stack.
+          System::Call 'kernel32::CreateFileW(w r0, i r2, i 7, p 0, i 3, i 0x02000000, p 0) p .r2 ?e'
+          Pop $4
           ${If} $2 P<> -1
             System::Call 'kernel32::CloseHandle(p r2)'
-            StrCpy $3 ""
+          ${ElseIf} $4 = 5
+            StrCpy $3 "denied"
           ${EndIf}
         ${EndIf}
       ${EndIf}
@@ -158,12 +168,14 @@
       ; Abort here is what greys out Install, so the verdict is read before
       ; the registers go back.
       ${If} $3 == ""
+        Pop $4
         Pop $3
         Pop $2
         Pop $1
         Pop $0
         Return
       ${EndIf}
+      Pop $4
       Pop $3
       Pop $2
       Pop $1
@@ -240,6 +252,11 @@
     ${EndIf}
     Sleep 250
   ${Loop}
+  ClearErrors
+
+  ; The icon file versions before 0.9.10 wrote next to the uninstaller: this
+  ; one does not, and the registry now points at the app itself.
+  Delete "$INSTDIR\uninstallerIcon.ico"
   ClearErrors
 
   ; What customRemoveFiles set aside and could not delete — the uninstaller
