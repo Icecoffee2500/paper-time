@@ -135,7 +135,11 @@ enum NightMode {
 /// figure comes out as printed. Nothing is drawn when the page is not dimmed.
 final class FigureOverlayView: NSView {
     private weak var page: PDFPage?
-    private var rendered: [Int: NSImage] = [:]
+    /// The whole page, drawn once and passed through the night filters once.
+    private var inverted: CGImage?
+    /// Each figure's piece of it, and where that piece lies on the page.
+    private var pieces: [Int: (image: CGImage, rect: CGRect)] = [:]
+    nonisolated(unsafe) private static let ciContext = CIContext()
 
     init(page: PDFPage) {
         self.page = page
@@ -151,49 +155,77 @@ final class FigureOverlayView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         guard NightMode.isOn, let page, let context = NSGraphicsContext.current?.cgContext else { return }
+        let rects = PageImages.rects(on: page)
+        guard !rects.isEmpty else { return }
         let box = page.bounds(for: .cropBox)
         guard box.width > 0, box.height > 0 else { return }
         let scale = bounds.width / box.width
-        for (index, rect) in PageImages.rects(on: page).enumerated() {
-            let onScreen = CGRect(
+        for (index, rect) in rects.enumerated() {
+            let rough = CGRect(
                 x: (rect.minX - box.minX) * scale, y: (rect.minY - box.minY) * scale,
                 width: rect.width * scale, height: rect.height * scale
             )
-            guard onScreen.intersects(dirtyRect.insetBy(dx: -2, dy: -2)) else { continue }
-            if rendered[index] == nil { rendered[index] = Self.preinverted(rect, on: page) }
-            rendered[index]?.draw(in: onScreen)
+            guard rough.intersects(dirtyRect.insetBy(dx: -2, dy: -2)) else { continue }
+            if pieces[index] == nil, let piece = piece(of: rect, on: page) { pieces[index] = piece }
+            guard let piece = pieces[index] else { continue }
+            let onScreen = CGRect(
+                x: (piece.rect.minX - box.minX) * scale, y: (piece.rect.minY - box.minY) * scale,
+                width: piece.rect.width * scale, height: piece.rect.height * scale
+            )
+            context.draw(piece.image, in: onScreen)
         }
-        _ = context
     }
 
-    /// The figure as printed, passed through the dimming filters once.
-    private static func preinverted(_ rect: CGRect, on page: PDFPage) -> NSImage? {
-        let pixelScale: CGFloat = 2
-        let size = NSSize(width: rect.width * pixelScale, height: rect.height * pixelScale)
-        guard size.width > 1, size.height > 1, size.width < 6000, size.height < 6000 else { return nil }
-        let plain = NSImage(size: size)
-        plain.lockFocus()
-        if let context = NSGraphicsContext.current?.cgContext {
-            context.setFillColor(NSColor.white.cgColor)
-            context.fill(CGRect(origin: .zero, size: size))
-            context.scaleBy(x: pixelScale, y: pixelScale)
-            let media = page.bounds(for: .mediaBox)
-            context.translateBy(x: -(rect.minX - media.minX), y: -(rect.minY - media.minY))
-            page.draw(with: .mediaBox, to: context)
-        }
-        plain.unlockFocus()
+    /// A figure's part of the inverted page, cut on whole pixels, with the
+    /// page rectangle those pixels cover — so it lands exactly where it was
+    /// cut from.
+    ///
+    /// The page is drawn **once** for all its figures. It used to be drawn
+    /// once per figure, which was harmless at a few figures a page and is
+    /// not at a grid of forty-eight video frames: PDFKit's page drawing on
+    /// the main thread, forty-eight times, is the pattern that once made
+    /// table pages stall (see `InkStrip`).
+    private func piece(of rect: CGRect, on page: PDFPage) -> (image: CGImage, rect: CGRect)? {
+        if inverted == nil { inverted = Self.preinverted(page) }
+        guard let sheet = inverted else { return nil }
+        let media = page.bounds(for: .mediaBox)
+        let pixelScale = CGFloat(sheet.width) / media.width
+        // Image rows run from the top; page space runs from the bottom.
+        let pixels = CGRect(
+            x: (rect.minX - media.minX) * pixelScale, y: (media.maxY - rect.maxY) * pixelScale,
+            width: rect.width * pixelScale, height: rect.height * pixelScale
+        ).integral.intersection(CGRect(x: 0, y: 0, width: sheet.width, height: sheet.height))
+        guard !pixels.isNull, pixels.width >= 1, pixels.height >= 1, let cut = sheet.cropping(to: pixels) else { return nil }
+        let covered = CGRect(
+            x: media.minX + pixels.minX / pixelScale, y: media.maxY - pixels.maxY / pixelScale,
+            width: pixels.width / pixelScale, height: pixels.height / pixelScale
+        )
+        return (cut, covered)
+    }
 
-        guard let tiff = plain.tiffRepresentation, let input = CIImage(data: tiff),
-              let invert = CIFilter(name: "CIColorInvert"),
-              let hue = CIFilter(name: "CIHueAdjust", parameters: [kCIInputAngleKey: Double.pi])
-        else { return plain }
-        invert.setValue(input, forKey: kCIInputImageKey)
-        hue.setValue(invert.outputImage, forKey: kCIInputImageKey)
-        guard let output = hue.outputImage else { return plain }
-        let representation = NSCIImageRep(ciImage: output)
-        let result = NSImage(size: size)
-        result.addRepresentation(representation)
-        return result
+    /// The page as printed, passed through the night filters once, so that
+    /// when the layer inverts everything on its way to the screen the
+    /// figures come out the right way round.
+    private static func preinverted(_ page: PDFPage) -> CGImage? {
+        let media = page.bounds(for: .mediaBox)
+        guard media.width > 1, media.height > 1 else { return nil }
+        let pixelScale = min(2, 4000 / max(media.width, media.height))
+        let width = Int(media.width * pixelScale), height = Int(media.height * pixelScale)
+        guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+              let context = CGContext(
+                data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: space,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+              ) else { return nil }
+        context.setFillColor(CGColor(gray: 1, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        context.scaleBy(x: pixelScale, y: pixelScale)
+        page.draw(with: .mediaBox, to: context)
+        guard let plain = context.makeImage() else { return nil }
+        let input = CIImage(cgImage: plain)
+        let output = input
+            .applyingFilter("CIColorInvert")
+            .applyingFilter("CIHueAdjust", parameters: [kCIInputAngleKey: Double.pi])
+        return ciContext.createCGImage(output, from: input.extent, format: .RGBA8, colorSpace: space)
     }
 }
 
