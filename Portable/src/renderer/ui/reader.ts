@@ -45,17 +45,19 @@ import {
   type MarkKind,
 } from '../../shared/marks.js'
 import { makeUUID } from '../../shared/coding.js'
-import { call } from '../bridge.js'
+import { call, platform } from '../bridge.js'
+import { withKey } from '../../shared/shortcuts.js'
 import {
   attachSketchInput,
   hitsDrawing,
   resetSketchInput,
   sketchEditingFor,
+  undoStack,
   type SketchInput,
   type SketchInputHost,
 } from './sketchInput.js'
 import { sketchEditor } from './sketchEditing.js'
-import { pagesOf, type Snapshot } from './sketchUndo.js'
+import { marksSnapshot, pagesOf, type Snapshot } from './sketchUndo.js'
 import { installMathProvider, removeMathListener } from '../sketchMath.js'
 import { icon } from '../icons.js'
 import { L } from '../../shared/lang.js'
@@ -87,6 +89,10 @@ export interface ReaderActions {
    *  cannot open it: the next thing to try is the app the company registered,
    *  and that is reached from the folder. */
   reveal?: () => void
+  /** The highlights and underlines changed — the Marks tab lists them. */
+  marksChanged?: () => void
+  /** A mark on the page was clicked: the Marks tab brings its row forward. */
+  markShown?: (id: string) => void
 }
 
 /** A place in a paper: how far down, and down how much. */
@@ -111,6 +117,32 @@ export interface TextRange {
 /** A place found on a page, and whether it is the one being shown. */
 interface FindMark extends TextRange {
   current: boolean
+}
+
+/** One of the five mark colours, said in the window's language. */
+function colourWord(name: string): string {
+  return ({
+    yellow: L('노랑', 'yellow'),
+    green: L('초록', 'green'),
+    blue: L('파랑', 'blue'),
+    pink: L('분홍', 'pink'),
+    purple: L('보라', 'purple'),
+  } as Record<string, string>)[name] ?? name
+}
+
+/** Which of the five a mark's colour is nearest — the one its editor rings. */
+function nearestColourName(rgb: [number, number, number]): string {
+  let best = MARK_COLOR_NAMES[0]
+  let closest = Infinity
+  for (const name of MARK_COLOR_NAMES) {
+    const [r, g, b] = MARK_COLORS[name]
+    const distance = (r - rgb[0]) ** 2 + (g - rgb[1]) ** 2 + (b - rgb[2]) ** 2
+    if (distance < closest) {
+      closest = distance
+      best = name
+    }
+  }
+  return best
 }
 
 export class PageView {
@@ -503,6 +535,18 @@ export class Reader {
       this.actions.changed()
       page.input?.press(event)
     })
+    // A click on a mark — a press, not a drag across it, which is a
+    // selection — brings up its controls, as the Mac's click on a mark does.
+    // A press anywhere else puts them away.
+    on(this.pagesBox, 'click', (event: MouseEvent) => {
+      if (this.state.drawing || event.button !== 0) return
+      const selection = window.getSelection()
+      if (selection && !selection.isCollapsed) return
+      const page = this.pageContaining(event.target as Node) ?? this.pageAtClient(event.clientX, event.clientY)
+      const mark = page ? this.markAt(page, page.toPageFromClient(event.clientX, event.clientY)) : null
+      if (page && mark && !mark.id.startsWith('foreign-')) this.showMarkEditor(page, mark)
+      else this.hideMarkEditor()
+    })
     // A formula's picture arrives after the card was drawn; the page is
     // drawn again when it does.
     installMathProvider(this.onMathReady)
@@ -534,6 +578,15 @@ export class Reader {
     for (const part of pagesOf(snapshot)) {
       const page = this.pages[part.pageIndex]
       if (!page) continue
+      if (part.marks) {
+        // A step of the marks touches the marks and nothing else.
+        page.marks = marksSnapshot(part.pageIndex, part.marks).marks ?? []
+        page.redraw()
+        void this.saveMarks(page)
+        this.hideMarkEditor()
+        this.actions.marksChanged?.()
+        continue
+      }
       page.elements = part.elements.map((element) => element.copy())
       page.strokes = part.strokes.map((stroke) => stroke.translated({ x: 0, y: 0 }))
       page.redraw()
@@ -1210,6 +1263,8 @@ export class Reader {
       page.marks = list
       page.redraw()
     }
+    // The Marks tab lists what just arrived.
+    this.actions.marksChanged?.()
     if (adopted.unreadable.length > 0) {
       const pages = adopted.unreadable.map((index) => index + 1).join(', ')
       this.actions.toast(L(
@@ -1236,35 +1291,42 @@ export class Reader {
   }
 
   /**
-   * Marks whatever is selected, and clears the selection.
+   * The selection as marks take it: for each page it touches, its lines as
+   * quads, and its words.
    *
    * The rectangles come from the text layer rather than from the PDF's own
    * text positions, because the text layer is what the reader actually
    * dragged over — so the mark lands where the pointer went, including across
    * a column break, where a run of PDF text indices would flood half the page.
+   * Each rectangle goes to the page it lies on, so a selection that runs from
+   * the foot of one page onto the next marks both — asked of the range's
+   * common ancestor, it used to mark neither.
    */
-  markSelection(kind: MarkKind, colorName = 'yellow'): boolean {
+  private selectionParts(): { page: PageView; quads: number[][]; text: string }[] {
     const selection = window.getSelection()
-    if (!selection || selection.isCollapsed || selection.rangeCount === 0) return false
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0) return []
     const text = selection.toString()
     const byPage = new Map<PageView, DOMRect[]>()
     for (let index = 0; index < selection.rangeCount; index += 1) {
       const range = selection.getRangeAt(index)
-      const page = this.pageContaining(range.commonAncestorContainer)
-      if (!page) continue
+      const inside = range.commonAncestorContainer instanceof Element
+        ? range.commonAncestorContainer
+        : range.commonAncestorContainer.parentElement
+      if (!inside || !this.node.contains(inside)) continue
       // The boxes as the text layer gives them. With `--scale-factor` set, a
       // run's box is its em box: measured, the words sit from a tenth of the
       // way down it to seven tenths, and the line below clears it altogether
       // — the pitch is 1.10 of the box. There is nothing to trim.
-      const rects = [...range.getClientRects()].filter((rect) => rect.width > 0.5 && rect.height > 0.5)
-      byPage.set(page, [...(byPage.get(page) ?? []), ...rects])
+      for (const rect of range.getClientRects()) {
+        if (rect.width <= 0.5 || rect.height <= 0.5) continue
+        const page = this.pageAtClient(rect.left + rect.width / 2, rect.top + rect.height / 2)
+        if (!page) continue
+        byPage.set(page, [...(byPage.get(page) ?? []), rect])
+      }
     }
-    if (byPage.size === 0) return false
-
-    const color = (MARK_COLORS[colorName] ?? MARK_COLORS.yellow) as [number, number, number]
+    const parts: { page: PageView; quads: number[][]; text: string }[] = []
     for (const [page, rects] of byPage) {
-      const lines = linesFromRuns(rects)
-      const quads = lines.map((line) => {
+      const quads = linesFromRuns(rects).map((line) => {
         // Two opposite corners through the page's own transform, which keeps
         // a rotated page honest, and kept on the page: the text layer's boxes
         // are the font's em boxes and some of them stand well outside the
@@ -1279,29 +1341,172 @@ export class Reader {
           height: Math.abs(bottomRight.y - topLeft.y),
         })
       })
-      if (quads.length === 0) continue
-      page.marks = [...page.marks, { id: makeUUID(), kind, quads, color, text }]
-      page.redraw()
-      void this.saveMarks(page)
+      if (quads.length > 0) parts.push({ page, quads, text })
     }
-    selection.removeAllRanges()
+    return parts.sort((a, b) => a.page.index - b.page.index)
+  }
+
+  /** Marks whatever is selected, and clears the selection. */
+  markSelection(kind: MarkKind, colorName = 'yellow', comment?: string): boolean {
+    const parts = this.selectionParts()
+    if (parts.length === 0) return false
+    this.addMarks(parts, kind, colorName, comment)
+    window.getSelection()?.removeAllRanges()
     return true
   }
 
-  /** Takes back the marks under a point — the undo a reader reaches for. */
-  removeMarkAt(page: PageView, point: { x: number; y: number }): boolean {
-    const before = page.marks.length
-    page.marks = page.marks.filter((mark) =>
-      !mark.quads.some((quad) => {
-        const xs = [quad[0], quad[2], quad[4], quad[6]]
-        const ys = [quad[1], quad[3], quad[5], quad[7]]
-        return point.x >= Math.min(...xs) && point.x <= Math.max(...xs)
-          && point.y >= Math.min(...ys) && point.y <= Math.max(...ys)
-      }))
-    if (page.marks.length === before) return false
+  private addMarks(parts: { page: PageView; quads: number[][]; text: string }[], kind: MarkKind, colorName: string, comment?: string) {
+    const color = [...(MARK_COLORS[colorName] ?? MARK_COLORS.yellow)] as [number, number, number]
+    for (const { page, quads, text } of parts) {
+      const mark: Mark = { id: makeUUID(), kind, quads, color, text }
+      if (comment) mark.comment = comment
+      this.changeMarks(page, [...page.marks, mark])
+    }
+  }
+
+  /**
+   * Every change to a page's marks goes through here: drawn, written to the
+   * journal (and the file after it), put on the undo stack — so ⌘Z takes a
+   * highlight back, or brings a removed one back, as it does on the Mac.
+   */
+  private changeMarks(page: PageView, next: Mark[]) {
+    const paperID = this.paperID ?? undefined
+    undoStack.record(marksSnapshot(page.index, page.marks, paperID), marksSnapshot(page.index, next, paperID))
+    page.marks = next
     page.redraw()
     void this.saveMarks(page)
-    return true
+    this.actions.marksChanged?.()
+  }
+
+  /**
+   * The passage selected on this reader's pages, as a note cites it: its
+   * page, the box it fills there in the page's own coordinates, and its
+   * words — what Command-L puts into the note (`ReaderLink.selectionAnchor`).
+   */
+  selectionAnchor(): { pageIndex: number; rect: { x: number; y: number; width: number; height: number }; text: string } | null {
+    const selection = window.getSelection()
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0) return null
+    const text = selection.toString()
+    if (!text.trim()) return null
+    const range = selection.getRangeAt(0)
+    const page = this.pageContaining(range.startContainer)
+    if (!page || !this.node.contains(page.root)) return null
+    const box = page.root.getBoundingClientRect()
+    const rects = [...range.getClientRects()].filter((rect) => rect.width > 0.5 && rect.height > 0.5
+      && rect.right > box.left && rect.left < box.right && rect.bottom > box.top && rect.top < box.bottom)
+    if (rects.length === 0) return null
+    const left = Math.min(...rects.map((rect) => rect.left))
+    const right = Math.max(...rects.map((rect) => rect.right))
+    const top = Math.min(...rects.map((rect) => rect.top))
+    const bottom = Math.max(...rects.map((rect) => rect.bottom))
+    const a = page.toPageFromClient(left, top)
+    const b = page.toPageFromClient(right, bottom)
+    return {
+      pageIndex: page.index,
+      rect: {
+        x: Math.min(a.x, b.x),
+        y: Math.min(a.y, b.y),
+        width: Math.abs(b.x - a.x),
+        height: Math.abs(b.y - a.y),
+      },
+      text,
+    }
+  }
+
+  /** The mark under a point of a page, the topmost when two overlap. */
+  markAt(page: PageView, point: { x: number; y: number }): Mark | null {
+    for (let index = page.marks.length - 1; index >= 0; index -= 1) {
+      const mark = page.marks[index]
+      const hit = mark.quads.some((quad) => {
+        const xs = [quad[0], quad[2], quad[4], quad[6]]
+        const ys = [quad[1], quad[3], quad[5], quad[7]]
+        // An underline is a thin line under its words: the words' box is
+        // what a hand aims at, and it is the box that is kept.
+        return point.x >= Math.min(...xs) && point.x <= Math.max(...xs)
+          && point.y >= Math.min(...ys) && point.y <= Math.max(...ys)
+      })
+      if (hit) return mark
+    }
+    return null
+  }
+
+  /** Every mark in the paper in reading order — page by page, top to bottom. */
+  marksList(): { pageIndex: number; mark: Mark }[] {
+    const top = (mark: Mark) => Math.max(...mark.quads.map((quad) => Math.max(quad[1], quad[3])))
+    const left = (mark: Mark) => Math.min(...mark.quads.map((quad) => Math.min(quad[0], quad[4])))
+    const out: { pageIndex: number; mark: Mark }[] = []
+    for (const page of this.pages) {
+      // The page's y goes up, so the highest top is the first line.
+      const sorted = [...page.marks].sort((a, b) => top(b) - top(a) || left(a) - left(b))
+      for (const mark of sorted) out.push({ pageIndex: page.index, mark })
+    }
+    return out
+  }
+
+  /** Takes a mark off its page — the Marks tab's Delete, the editor's trash. */
+  removeMark(pageIndex: number, id: string) {
+    const page = this.pages[pageIndex]
+    if (!page || !page.marks.some((mark) => mark.id === id)) return
+    this.changeMarks(page, page.marks.filter((mark) => mark.id !== id))
+    this.hideMarkEditor()
+  }
+
+  /** What the reader wrote about a mark: an empty note takes it away. */
+  setMarkComment(pageIndex: number, id: string, comment: string) {
+    const page = this.pages[pageIndex]
+    if (!page) return
+    const trimmed = comment.trim()
+    this.changeMarks(page, page.marks.map((mark) => {
+      if (mark.id !== id) return mark
+      const next: Mark = { ...mark }
+      if (trimmed) next.comment = trimmed
+      else delete next.comment
+      return next
+    }))
+  }
+
+  /** A mark in another of the five colours. */
+  recolorMark(pageIndex: number, id: string, colorName: string) {
+    const page = this.pages[pageIndex]
+    const color = MARK_COLORS[colorName]
+    if (!page || !color) return
+    this.changeMarks(page, page.marks.map((mark) =>
+      (mark.id === id ? { ...mark, color: [...color] as [number, number, number] } : mark)))
+  }
+
+  /** The box a mark covers, in the window — where its controls stand. */
+  private markClientBox(page: PageView, mark: Mark): DOMRect | null {
+    const box = page.root.getBoundingClientRect()
+    const points = mark.quads.flatMap((quad) => [
+      page.toView(quad[0], quad[1]), page.toView(quad[2], quad[3]),
+      page.toView(quad[4], quad[5]), page.toView(quad[6], quad[7]),
+    ])
+    if (points.length === 0) return null
+    const xs = points.map((point) => point.x + box.left)
+    const ys = points.map((point) => point.y + box.top)
+    const left = Math.min(...xs)
+    const top = Math.min(...ys)
+    return new DOMRect(left, top, Math.max(...xs) - left, Math.max(...ys) - top)
+  }
+
+  /**
+   * Sends the reader to a mark — a row of the Marks tab pressed — and shows
+   * it with its controls over it, which is also how the eye finds it.
+   */
+  async revealMark(pageIndex: number, id: string) {
+    const page = this.pages[pageIndex]
+    const mark = page?.marks.find((one) => one.id === id)
+    if (!page || !mark) return
+    if (store.settings.pageLayout === 'single' && this.state.currentPage !== pageIndex) {
+      this.state.currentPage = pageIndex
+      this.applyLayout()
+      this.updateFooter()
+    }
+    await page.render()
+    const tops = mark.quads.map((quad) => page.toView(quad[0], Math.max(quad[1], quad[3])).y)
+    this.scroll.scrollTop = Math.max(0, page.root.offsetTop + Math.min(...tops) - this.scroll.clientHeight / 3)
+    // After the scroll has been told about: a scroll puts the bar away.
+    setTimeout(() => this.showMarkEditor(page, mark), 60)
   }
 
   async saveMarks(page: PageView) {
@@ -1346,78 +1551,229 @@ export class Reader {
   }
 
   /**
-   * The little bar that appears over a selection.
+   * The little bar over a selection, and over a mark that was clicked.
    *
    * Marking a passage should be one gesture away from having selected it —
-   * reaching for a menu breaks the reading. Five colours and an underline,
-   * which is all the Mac offers too, and it goes away the moment the
-   * selection does.
+   * reaching for a menu breaks the reading. Over a selection it is the Mac's
+   * bar: five colours, underline and strikethrough, then a note about the
+   * passage and a plain copy. Over a mark already on the page it is the
+   * Mac's editor for one: its colour changed, a note written on it, or the
+   * mark taken off — a highlight made here used to be there for good.
    */
   private markBar: HTMLElement | null = null
+  /** While a note is being written, the way to finish it. The bar stays put
+   *  for that — a scroll or the selection going must not throw the words away. */
+  private composing: { finish: (keep: boolean) => void } | null = null
+  /** The mark whose controls are showing, when the bar is a mark's. */
+  private editing: { pageIndex: number; id: string } | null = null
+
+  private bar(): HTMLElement {
+    if (!this.markBar) {
+      this.markBar = el('div', { class: 'mark-bar' })
+      this.overlayHost.append(this.markBar)
+    }
+    return this.markBar
+  }
+
+  /** One of the bar's buttons. The selection has to survive the press, so the
+   *  default mousedown — which would collapse it — never happens. */
+  private barButton(className: string, title: string, html: string, press: () => void): HTMLElement {
+    const button = el('button', { class: className, title, 'aria-label': title, html })
+    on(button, 'mousedown', (event: MouseEvent) => event.preventDefault())
+    on(button, 'click', press)
+    return button
+  }
+
+  private swatch(name: string, title: string, press: () => void, current = false): HTMLElement {
+    const button = this.barButton('mark-swatch', title, '', press)
+    button.style.background = cssColor(MARK_COLORS[name] as [number, number, number])
+    if (current) button.setAttribute('aria-pressed', 'true')
+    return button
+  }
+
+  /** The bar over a box in the window: above it, or under it with no room. */
+  private placeBar(rect: DOMRect) {
+    const bar = this.bar()
+    bar.style.display = 'flex'
+    const host = this.overlayHost.getBoundingClientRect()
+    const size = bar.getBoundingClientRect()
+    const width = size.width || 190
+    let left = rect.left + rect.width / 2 - host.left - width / 2
+    left = Math.max(6, Math.min(left, host.width - width - 6))
+    let top = rect.top - host.top - (size.height || 31) - 7
+    if (top < 4) top = rect.bottom - host.top + 8
+    bar.style.left = `${left}px`
+    bar.style.top = `${top}px`
+  }
 
   private updateMarkBar() {
+    // The note being written keeps the bar where it is.
+    if (this.composing) return
     const selection = window.getSelection()
     if (!selection || selection.isCollapsed || selection.rangeCount === 0 || this.state.drawing) {
-      return this.hideMarkBar()
+      if (!this.editing) this.hideMarkBar()
+      return
     }
     const range = selection.getRangeAt(0)
     const inside = (range.commonAncestorContainer instanceof Element
       ? range.commonAncestorContainer
-      : range.commonAncestorContainer.parentElement)?.closest('.text-layer')
+      : range.commonAncestorContainer.parentElement)?.closest('.text-layer, .reader-pages')
     // This reader's own text, not a neighbouring pane's.
     if (!inside || !this.node.contains(inside)) return this.hideMarkBar()
 
     const rect = range.getBoundingClientRect()
     if (rect.width === 0 && rect.height === 0) return this.hideMarkBar()
+    this.editing = null
+    this.fillSelectionBar()
+    this.placeBar(rect)
+  }
 
-    if (!this.markBar) {
-      this.markBar = el('div', { class: 'mark-bar' })
-      for (const name of MARK_COLOR_NAMES) {
-        const colour = ({
-          yellow: L('노랑', 'yellow'),
-          green: L('초록', 'green'),
-          blue: L('파랑', 'blue'),
-          pink: L('분홍', 'pink'),
-          purple: L('보라', 'purple'),
-        } as Record<string, string>)[name] ?? name
-        const swatch = el('button', {
-          class: 'mark-swatch',
-          title: L(`${colour} 형광펜`, `Highlight in ${colour}`),
-          style: `background: ${cssColor(MARK_COLORS[name] as [number, number, number])}`,
-        })
-        // The selection has to survive the press, so the default mousedown
-        // (which would collapse it) never happens.
-        on(swatch, 'mousedown', (event: MouseEvent) => event.preventDefault())
-        on(swatch, 'click', () => {
-          this.markSelection('highlight', name)
-          this.hideMarkBar()
-        })
-        this.markBar.append(swatch)
-      }
-      const underline = el('button', { class: 'mark-action', title: L('밑줄', 'Underline'), html: icon('line.solid') })
-      on(underline, 'mousedown', (event: MouseEvent) => event.preventDefault())
-      on(underline, 'click', () => {
-        this.markSelection('underline', 'yellow')
+  private fillSelectionBar() {
+    const bar = this.bar()
+    if (bar.dataset.mode === 'selection') return
+    bar.dataset.mode = 'selection'
+    clear(bar)
+    for (const name of MARK_COLOR_NAMES) {
+      const colour = colourWord(name)
+      bar.append(this.swatch(name, L(`${colour} 형광펜`, `Highlight in ${colour}`), () => {
+        this.markSelection('highlight', name)
         this.hideMarkBar()
-      })
-      this.markBar.append(underline)
-      this.overlayHost.append(this.markBar)
+      }))
     }
+    bar.append(el('span', { class: 'mark-divider' }))
+    bar.append(this.barButton('mark-action', withKey(L('밑줄', 'Underline'), 'underline', platform), icon('underline'), () => {
+      this.markSelection('underline', 'yellow')
+      this.hideMarkBar()
+    }))
+    bar.append(this.barButton('mark-action', L('취소선', 'Strikethrough'), icon('strikethrough'), () => {
+      this.markSelection('strikethrough', 'yellow')
+      this.hideMarkBar()
+    }))
+    bar.append(el('span', { class: 'mark-divider' }))
+    bar.append(this.barButton('mark-action', L('이 구절에 노트 달기', 'Add a note about this passage'), icon('square.and.pencil'), () => this.composeNote()))
+    bar.append(this.barButton('mark-action', L('복사', 'Copy'), icon('doc.on.doc'), () => this.copySelection()))
+  }
 
-    const host = this.overlayHost.getBoundingClientRect()
-    const size = this.markBar.getBoundingClientRect()
-    const width = size.width || 190
-    let left = rect.left + rect.width / 2 - host.left - width / 2
-    left = Math.max(6, Math.min(left, host.width - width - 6))
-    let top = rect.top - host.top - 38
-    if (top < 4) top = rect.bottom - host.top + 8
-    this.markBar.style.left = `${left}px`
-    this.markBar.style.top = `${top}px`
-    this.markBar.style.display = 'flex'
+  /** Copies the selected words as they are, and says so. */
+  private copySelection() {
+    const text = window.getSelection()?.toString() ?? ''
+    if (!text) return
+    void navigator.clipboard.writeText(text)
+    this.actions.toast(L('복사했어요', 'Copied'))
+    window.getSelection()?.removeAllRanges()
+    this.hideMarkBar()
+  }
+
+  /**
+   * A note in the bar: about the selected passage — a yellow highlight with
+   * the words written on it, which is what a note on the Mac is — or the note
+   * of a mark already on the page. Return keeps it, Escape does not; clicking
+   * away keeps what was typed rather than throwing it out.
+   */
+  private composeNote(target?: { pageIndex: number; id: string }) {
+    const parts = target ? [] : this.selectionParts()
+    const page = target ? this.pages[target.pageIndex] : null
+    const mark = target ? page?.marks.find((one) => one.id === target.id) : null
+    if (!target && parts.length === 0) return
+    if (target && (!page || !mark)) return
+    const rect = target && page && mark
+      ? this.markClientBox(page, mark)
+      : window.getSelection()?.getRangeAt(0).getBoundingClientRect() ?? null
+    if (!rect) return
+    const bar = this.bar()
+    bar.dataset.mode = 'compose'
+    clear(bar)
+    const input = el('input', {
+      type: 'text',
+      class: 'mark-note-field',
+      placeholder: L('노트', 'Note'),
+      'aria-label': L('노트', 'Note'),
+      spellcheck: 'true',
+    }) as HTMLInputElement
+    input.value = mark?.comment ?? ''
+    const save = el('button', { class: 'mark-note-save', text: L('저장', 'Save') })
+    const finish = (keep: boolean) => {
+      if (!this.composing) return
+      this.composing = null
+      const text = input.value.trim()
+      if (keep) {
+        if (target) this.setMarkComment(target.pageIndex, target.id, text)
+        else if (text) this.addMarks(parts, 'highlight', 'yellow', text)
+      }
+      window.getSelection()?.removeAllRanges()
+      this.editing = null
+      this.hideMarkBar()
+    }
+    on(input, 'keydown', (event: KeyboardEvent) => {
+      // The window's keys — a letter picks a drawing tool — must not see this.
+      event.stopPropagation()
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        finish(true)
+      } else if (event.key === 'Escape') {
+        event.preventDefault()
+        finish(false)
+      }
+    })
+    on(input, 'blur', () => finish(input.value.trim().length > 0 || Boolean(target)))
+    on(save, 'mousedown', (event: MouseEvent) => event.preventDefault())
+    on(save, 'click', () => finish(true))
+    bar.append(input, save)
+    this.composing = { finish }
+    this.placeBar(rect)
+    input.focus()
+  }
+
+  /** The controls for a mark already on the page, over it. */
+  showMarkEditor(page: PageView, mark: Mark) {
+    // A mark another app made is shown and left alone: this build writes
+    // only its own marks back to the file, so an edit here would not stay.
+    if (mark.id.startsWith('foreign-')) return
+    const rect = this.markClientBox(page, mark)
+    if (!rect) return
+    this.composing = null
+    const bar = this.bar()
+    bar.dataset.mode = 'mark'
+    clear(bar)
+    const current = nearestColourName(mark.color)
+    for (const name of MARK_COLOR_NAMES) {
+      const colour = colourWord(name)
+      bar.append(this.swatch(name, L(`색 바꾸기: ${colour}`, `Change to ${colour}`), () => {
+        this.recolorMark(page.index, mark.id, name)
+        this.hideMarkEditor()
+      }, name === current))
+    }
+    bar.append(el('span', { class: 'mark-divider' }))
+    bar.append(this.barButton(
+      'mark-action',
+      mark.comment ? L('노트 고치기', 'Edit Note') : L('노트 달기', 'Add Note'),
+      icon('square.and.pencil'),
+      () => this.composeNote({ pageIndex: page.index, id: mark.id }),
+    ))
+    bar.append(this.barButton('mark-action', L('표시 지우기', 'Remove Mark'), icon('trash'), () => this.removeMark(page.index, mark.id)))
+    this.editing = { pageIndex: page.index, id: mark.id }
+    this.placeBar(rect)
+    this.actions.markShown?.(mark.id)
+  }
+
+  hideMarkEditor() {
+    if (!this.editing) return
+    this.editing = null
+    this.hideMarkBar()
+  }
+
+  /** Whether the bar is up over a selection or a mark — Escape's first step. */
+  get markBarShowing(): boolean {
+    return this.markBar?.style.display === 'flex'
   }
 
   hideMarkBar() {
-    if (this.markBar) this.markBar.style.display = 'none'
+    if (this.composing) return
+    if (this.markBar) {
+      this.markBar.style.display = 'none'
+      delete this.markBar.dataset.mode
+    }
+    this.editing = null
   }
 
   private noteCurrentPage() {
@@ -1520,7 +1876,7 @@ export class Reader {
     if (paper) {
       const draw = el('button', {
         class: 'icon-button',
-        title: L('쪽에 그리기', 'Draw on the Page'),
+        title: withKey(L('쪽에 그리기', 'Draw on the page'), 'draw', platform),
         'aria-pressed': String(this.state.drawing),
         html: icon('pen'),
       })
@@ -1550,9 +1906,10 @@ export class Reader {
   private updateFooter() {
     clear(this.footer)
     if (!this.document) return
+    // The Mac's words: «14쪽 중 1쪽», «Page 1 of 14».
     const position = el('span', {
       text: L(
-        `${this.state.currentPage + 1} / ${this.state.pageCount}쪽`,
+        `${this.state.pageCount}쪽 중 ${this.state.currentPage + 1}쪽`,
         `Page ${this.state.currentPage + 1} of ${this.state.pageCount}`,
       ),
     })

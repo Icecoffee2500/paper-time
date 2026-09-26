@@ -12,6 +12,7 @@ import { el, on, place, clear } from '../dom.js'
 import { canGoBack, canGoForward, store, type InspectorTab, type Pane } from '../state.js'
 import { platform } from '../bridge.js'
 import { L } from '../../shared/lang.js'
+import { withKey } from '../../shared/shortcuts.js'
 
 export interface ToolbarActions {
   togglePane: (pane: Pane) => void
@@ -53,11 +54,28 @@ export function buildToolbar(actions: ToolbarActions): { node: HTMLElement; upda
   const paneButton = (pane: Pane, name: string, label: string) =>
     button(name, label, () => actions.togglePane(pane), { pressed: store.settings.panes[pane] })
 
+  /**
+   * A pane button's tooltip the Mac's way: what pressing it does now, and its
+   * key — «옆 목록 숨기기 (Ctrl+[)». On Windows and Linux there is no menu bar
+   * to read a key off, so the tooltip is where a person learns it.
+   */
+  const paneTip = (pane: Pane, title: string) => {
+    const on = store.settings.panes[pane]
+    return withKey(
+      L(`${title} ${on ? '숨기기' : '보이기'}`, `${on ? 'Hide' : 'Show'} the ${title.toLowerCase()}`),
+      pane, platform,
+    )
+  }
+  const tip = (b: HTMLElement, text: string) => {
+    b.title = text
+    b.setAttribute('aria-label', text)
+  }
+
   // ------------------------------------------------------------- leading
   const sidebarButton = paneButton('sidebar', 'sidebar.left', L('옆 목록', 'Sidebar'))
   const listButton = paneButton('paperList', 'list.bullet.rectangle.portrait', L('논문 목록', 'Paper List'))
-  const backButton = button('chevron.left', L('뒤로', 'Back'), actions.back)
-  const forwardButton = button('chevron.right', L('앞으로', 'Forward'), actions.forward)
+  const backButton = button('chevron.left', withKey(L('왔던 논문으로 돌아가기', 'Back to the paper you came from'), 'back', platform), actions.back)
+  const forwardButton = button('chevron.right', withKey(L('다시 앞으로', 'Forward again'), 'forward', platform), actions.forward)
 
   node.append(
     el('div', { class: 'toolbar-group' }, [
@@ -73,9 +91,9 @@ export function buildToolbar(actions: ToolbarActions): { node: HTMLElement; upda
   // ------------------------------------------------------------ trailing
   const readerButton = paneButton('reader', 'text.page', L('논문', 'Paper'))
   const inspectorButton = paneButton('inspector', 'sidebar.right', L('정보 패널', 'Inspector'))
-  const moreButton = button('ellipsis', L('더 보기', 'More'), (event) =>
+  const moreButton = button('ellipsis', L('맞추기·정렬·쪽 배치·공유', 'Sync, sort, page layout, share'), (event) =>
     actions.moreMenu(event.currentTarget as Element))
-  const settingsButton = button('gear', L('설정', 'Settings'), actions.settings)
+  const settingsButton = button('gear', withKey(L('설정', 'Settings'), 'settings', platform), actions.settings)
 
   const tabs = el('div', { class: 'segmented', role: 'tablist' })
   const tabButtons: Record<string, HTMLElement> = {}
@@ -95,8 +113,8 @@ export function buildToolbar(actions: ToolbarActions): { node: HTMLElement; upda
 
   node.append(
     el('div', { class: 'toolbar-group' }, [
-      button('magnifyingglass', L('전부 찾기', 'Search Everything'), actions.search),
-      button('plus', L('PDF 더하기', 'Add PDFs'), actions.addPapers),
+      button('magnifyingglass', withKey(L('논문과 노트에서 찾기', 'Search papers and notes'), 'searchEverything', platform), actions.search),
+      button('plus', withKey(L('라이브러리에 PDF 더하기', 'Add PDFs to the library'), 'addPapers', platform), actions.addPapers),
       el('div', { class: 'toolbar-divider' }),
       readerButton,
       inspectorButton,
@@ -129,12 +147,18 @@ export function buildToolbar(actions: ToolbarActions): { node: HTMLElement; upda
     listButton.setAttribute('aria-pressed', String(store.settings.panes.paperList))
     readerButton.setAttribute('aria-pressed', String(store.settings.panes.reader))
     inspectorButton.setAttribute('aria-pressed', String(store.settings.panes.inspector))
+    tip(sidebarButton, paneTip('sidebar', L('옆 목록', 'Sidebar')))
+    tip(listButton, paneTip('paperList', L('논문 목록', 'Paper List')))
+    tip(readerButton, paneTip('reader', L('논문', 'Paper')))
+    tip(inspectorButton, paneTip('inspector', L('정보 패널', 'Inspector')))
     backButton.toggleAttribute('disabled', !canGoBack())
     forwardButton.toggleAttribute('disabled', !canGoForward())
     for (const [tab, b] of Object.entries(tabButtons)) {
       b.setAttribute('aria-selected', String(store.settings.inspectorTab === tab))
     }
-    tabs.style.display = store.settings.panes.inspector ? '' : 'none'
+    // Only with a paper to be about, as on the Mac: with nothing chosen the
+    // four names point at nothing.
+    tabs.style.display = store.settings.panes.inspector && store.selectedID ? '' : 'none'
     // The maximise button changes shape when the window is already maximised,
     // the way both desktops draw it.
     const maximise = windowButtons.children[1]

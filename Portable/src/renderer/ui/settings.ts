@@ -23,13 +23,23 @@
 import { clear, el, on } from '../dom.js'
 import { L } from '../../shared/lang.js'
 import { store } from '../state.js'
+import { call, platform } from '../bridge.js'
+import { SHORTCUTS, groupTitle, keyFor, type ShortcutGroup } from '../../shared/shortcuts.js'
+import { SUBTITLE_FIELDS, encodeSubtitle, parseSubtitle, subtitleName, toggledSubtitle } from '../../shared/subtitle.js'
 
 export interface SettingsActions {
   /** Writes the patch and makes the window follow it. */
   set: (patch: Record<string, unknown>) => void
   chooseLibrary: () => void
-  showReleaseNotes?: () => void
+  /** The report sheet, from the About section. */
+  feedback: () => void
 }
+
+/** Where the sheet opens: at the top, or at one of its sections. */
+export type SettingsSection = 'about' | 'shortcuts'
+
+const PAGE_URL = 'https://icecoffee2500.github.io/paper-time/'
+const TOGETHER_URL = 'https://icecoffee2500.github.io/paper-time/#together'
 
 let open = false
 
@@ -76,7 +86,7 @@ function note(text: string): HTMLElement {
   return line
 }
 
-export function showSettings(actions: SettingsActions) {
+export function showSettings(actions: SettingsActions, section?: SettingsSection) {
   if (open) return
   open = true
 
@@ -152,6 +162,26 @@ export function showSettings(actions: SettingsActions) {
       'Finds passages that mean what you typed, beside the exact matches. Everything stays on this device.',
     )))
 
+    // What stands under a title in the list, and in what order — the Mac's
+    // «Under the Title». The order is the order they were switched on in.
+    const fields = parseSubtitle(store.settings.listSubtitle)
+    const under = el('div', { class: 'set-row set-wrap' })
+    under.append(el('span', { class: 'set-label', text: L('제목 아래에', 'Under the Title') }))
+    const chips = el('div', { class: 'set-chips' })
+    for (const field of SUBTITLE_FIELDS) {
+      const chip = el('button', {
+        type: 'button',
+        class: 'set-chip',
+        text: subtitleName(field),
+        'aria-pressed': String(fields.includes(field)),
+      })
+      on(chip, 'click', () => actions.set({ listSubtitle: encodeSubtitle(toggledSubtitle(fields, field)) }))
+      chips.append(chip)
+    }
+    under.append(chips)
+    body.append(under)
+    body.append(el('p', { class: 'set-note', text: fields.map(subtitleName).join(' · ') }))
+
     body.append(el('div', { class: 'set-section', text: L('쓰기', 'Writing') }))
     body.append(toggle(
       L('LaTeX 단축 입력', 'LaTeX Shortcuts'),
@@ -189,6 +219,64 @@ export function showSettings(actions: SettingsActions) {
       class: 'set-note',
       text: L('말을 바꾸면 앱을 다시 열어야 해요.', 'Changing the language takes effect when you reopen the app.'),
     }))
+
+    body.append(el('div', { class: 'set-section', text: 'BibTeX' }))
+    body.append(toggle(
+      L('제목 대소문자 지키기', 'Protect Case in Titles'),
+      store.settings.bibtexProtectCase !== false,
+      (value) => actions.set({ bibtexProtectCase: value }),
+    ))
+    body.append(note(L(
+      '제목의 대문자를 `{}`로 감싸서, 인용 양식이 «BERT»를 «bert»로 바꾸지 못하게 해요.',
+      'Wraps capitals in a title in `{}`, so a citation style cannot turn BERT into bert.',
+    )))
+
+    // Every key, to read: on Windows and Linux the window has no menu bar to
+    // read them off, so this list and the tooltips are where they are found.
+    const keys = el('div', { class: 'set-section', text: L('단축키', 'Shortcuts') })
+    keys.dataset.section = 'shortcuts'
+    body.append(keys)
+    const groups: ShortcutGroup[] = ['library', 'reading', 'marking', 'panes', 'moving', 'app']
+    for (const group of groups) {
+      body.append(el('div', { class: 'set-subsection', text: groupTitle(group) }))
+      for (const entry of SHORTCUTS.filter((one) => one.group === group)) {
+        const row = el('div', { class: 'set-row set-key-row' })
+        row.append(
+          el('span', { class: 'set-label', text: entry.title() }),
+          el('span', { class: 'set-key', text: keyFor(entry.command, platform) }),
+        )
+        body.append(row)
+      }
+    }
+
+    // About, as the Mac has it at the end of its settings: which version this
+    // is, what changed, and the two ways to say something back.
+    const about = el('div', { class: 'set-section', text: L('정보', 'About') })
+    about.dataset.section = 'about'
+    body.append(about)
+    const version = el('span', { class: 'set-path', text: '' })
+    body.append(el('div', { class: 'set-row' }, [
+      el('span', { class: 'set-label', text: 'Paper Time' }),
+      version,
+    ]))
+    void call<{ version: string }>('app:about').then((answer) => {
+      version.textContent = L(`버전 ${answer.version}`, `Version ${answer.version}`)
+    }).catch(() => undefined)
+    const links = el('div', { class: 'set-row set-links' })
+    const link = (label: string, press: () => void) => {
+      const button = el('button', { type: 'button', class: 'plain-button', text: label })
+      on(button, 'click', press)
+      return button
+    }
+    links.append(
+      link(L('새로운 기능', "What's New"), () => void call('shell:openExternal', { url: PAGE_URL })),
+      link(L('함께 만드는 중', 'Built together'), () => void call('shell:openExternal', { url: TOGETHER_URL })),
+      link(L('한마디 보내기…', 'Send Feedback…'), () => {
+        close()
+        actions.feedback()
+      }),
+    )
+    body.append(links)
   }
 
   draw()
@@ -205,6 +293,17 @@ export function showSettings(actions: SettingsActions) {
   })
   document.addEventListener('keydown', onKey)
   done.focus()
+  if (section) {
+    // Opened for one part of itself — «About Paper Time» from the ⋯ menu.
+    body.querySelector(`[data-section="${section}"]`)?.scrollIntoView({ block: 'start' })
+  }
 
-  return { redraw: draw, close }
+  /** Redrawn in place: a choice that does not light up reads as a press
+   *  that did not land — but the page stays where it was scrolled to. */
+  const redraw = () => {
+    const top = body.scrollTop
+    draw()
+    body.scrollTop = top
+  }
+  return { redraw, close }
 }

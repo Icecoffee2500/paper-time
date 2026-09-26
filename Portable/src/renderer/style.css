@@ -509,6 +509,20 @@ body[data-platform='darwin'] .window-buttons {
   height: 16px;
 }
 
+/* A tag's mark: its colour, as a dot. */
+.row-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+/* A row a paper can be dropped on, while one is held over it: a ring, not
+   the row's background — the background belongs to the row that is chosen,
+   and a drop can land on any of them. */
+.row.drop-target {
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
 .row-label {
   flex: 1 1 auto;
   overflow: hidden;
@@ -675,6 +689,45 @@ body[data-platform='darwin'] .window-buttons {
 .paper-star[data-on='true'] {
   color: var(--star);
 }
+
+/* The tags a paper wears, under its subtitle: the tag's colour, pale behind
+   and deep in front, as the Mac's row draws them. */
+.paper-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+}
+.paper-tag {
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  line-height: 1.5;
+  background: color-mix(in srgb, var(--tag) 18%, transparent);
+  color: color-mix(in srgb, var(--tag) 70%, var(--text));
+}
+
+/* The paperclip: how many supplements a paper has, and the way into them. */
+.paper-clip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 6px;
+  margin-top: -1px;
+  border-radius: 999px;
+  border: 1px solid var(--separator);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  transition: background-color var(--motion-tap) var(--ease);
+}
+.paper-clip:hover { background: var(--hover); }
+.paper-clip svg { width: 12px; height: 12px; display: block; }
+
+/* A paper held over another: dropping it makes it that one's supplement. A
+   ring, not the row's background — that belongs to the row that is chosen. */
+.paper-row.drop-target { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 60%, transparent); }
 
 /* ------------------------------------------------------------------- reader */
 
@@ -906,6 +959,78 @@ body[data-platform='darwin'] .window-buttons {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
+
+/* The Marks tab (`inspector.ts`): the filters as capsules with their counts,
+   then one row a mark — the Mac's `MarkupListView`. */
+.mark-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--separator);
+}
+.mark-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: var(--hover);
+  color: var(--text);
+  transition: background-color var(--motion-tap) var(--ease), color var(--motion-tap) var(--ease);
+}
+.mark-filter[aria-pressed='true'] { background: var(--accent); color: #fff; }
+.mark-filter[disabled] { opacity: 0.45; cursor: default; }
+.mark-filter-count { font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+.mark-filter[aria-pressed='true'] .mark-filter-count { color: rgba(255, 255, 255, 0.75); }
+.mark-list { padding: 6px 8px 14px; }
+.mark-row {
+  padding: 8px 8px;
+  border-radius: var(--radius-row);
+  cursor: default;
+  outline: none;
+  transition: background-color var(--motion-tap) var(--ease);
+}
+.mark-row:hover { background: var(--hover); }
+.mark-row.flash { animation: mark-row-flash 1.4s var(--ease); }
+@keyframes mark-row-flash {
+  0%, 60% { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+}
+.mark-row-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.mark-dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
+.mark-kind { display: inline-flex; align-items: center; gap: 3px; }
+.mark-kind svg { width: 12px; height: 12px; display: block; }
+.mark-words {
+  margin-top: 5px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text);
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  user-select: text;
+}
+.mark-comment-edit { display: flex; gap: 6px; margin-top: 7px; }
+.mark-comment-field {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-control);
+  background: var(--panel-soft);
+  font-size: 12.5px;
+  outline: none;
+}
+.mark-comment-field:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.mark-comment-done { padding: 4px 12px; border-radius: 999px; font-size: 12px; }
 
 .chip-row {
   display: flex;
@@ -1534,11 +1659,45 @@ body[data-platform='darwin'] .window-buttons {
   background: var(--pressed);
 }
 
+/* The paper list takes the keyboard when a row is pressed (↓/↑ walk it);
+   the selected row already says where it is, so no ring is drawn. */
+.paper-list-body:focus { outline: none; }
+
+.filled-button[disabled] {
+  opacity: 0.45;
+  filter: none;
+  cursor: default;
+}
+
+/* A name asked for in a sheet (`ui/ask.ts`) — the Mac's small name sheet:
+   a title, one field, Cancel and Create. */
+.ask-sheet { width: 360px; }
+.ask-body { padding: 0 20px 18px; }
+.ask-field {
+  width: 100%;
+  background: var(--panel-soft);
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-control);
+  padding: 6px 8px;
+  font-size: 13px;
+  outline: none;
+}
+.ask-field:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.ask-sheet .set-foot { gap: 8px; }
+
 /* The menu that hangs off ⋯, and the pop-ups in the inspector. */
 .menu {
   position: fixed;
   z-index: 100;
   min-width: 200px;
+  /* Never taller than the window: a small window scrolls the menu rather
+     than cutting its last rows off. (A submenu is fixed to the window, so
+     this clips nothing of it.) */
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
   padding: 5px;
   border-radius: var(--radius-popover);
   background: var(--panel);
@@ -1995,8 +2154,41 @@ body[data-platform='darwin'] .window-buttons {
   align-items: center;
   justify-content: center;
   color: var(--text-secondary);
-  margin-left: 2px;
-  box-shadow: inset 1px 0 0 var(--separator);
+}
+
+/* Between the colours and the lines, and between marking and the rest. */
+.mark-divider {
+  width: 1px;
+  height: 15px;
+  margin: 0 2px;
+  background: var(--separator);
+}
+
+/* The colour a clicked mark already has. */
+.mark-swatch[aria-pressed='true'] {
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1), 0 0 0 2px var(--panel), 0 0 0 3.5px var(--accent);
+}
+
+/* A note written in the bar, about a passage or on a mark. */
+.mark-note-field {
+  width: 220px;
+  height: 22px;
+  padding: 2px 7px;
+  border: 1px solid var(--separator);
+  border-radius: calc(var(--radius-bar) - 5px);
+  background: var(--panel-soft);
+  font-size: 12.5px;
+  outline: none;
+}
+.mark-note-field:focus { border-color: var(--accent); }
+.mark-note-save {
+  height: 22px;
+  padding: 0 9px;
+  border-radius: calc(var(--radius-bar) - 5px);
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .mark-action:hover {
@@ -2072,6 +2264,41 @@ body[data-platform='darwin'] .window-buttons {
   height: 14px;
   accent-color: var(--accent);
 }
+/* Under the Title: the fields as chips that wrap, lit when they are on. */
+.set-wrap { align-items: flex-start; }
+.set-wrap .set-label { padding-top: 5px; }
+.set-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-left: auto;
+}
+.set-chip {
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--hover);
+  transition: background-color var(--motion-tap) var(--ease), color var(--motion-tap) var(--ease);
+}
+.set-chip[aria-pressed='true'] { background: var(--accent); color: #fff; }
+/* The keys, to read: a name, and its key in the desktop's own writing. */
+.set-subsection {
+  padding: 10px 0 2px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.set-key-row { min-height: 24px; padding: 1px 0; }
+.set-key {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.set-links { gap: 6px; flex-wrap: wrap; }
 
 /* Latex Suite's placeholders, drawn over a textarea that cannot mark its own
    text: the same words in the same place, invisible, with a faint box where a

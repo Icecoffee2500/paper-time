@@ -16,17 +16,24 @@ import {
 import { isLookedUp } from '../../shared/documentKind.js'
 import { L } from '../../shared/lang.js'
 import { providerIcon, providerOf } from '../../shared/cloudProvider.js'
+import { inCollection } from '../../shared/smartRule.js'
+import { PAPER_DRAG_TYPE } from '../../shared/split.js'
+import { tagColor } from './paperList.js'
 
 export interface SidebarActions {
   select: (shelf: Shelf) => void
   newCollection: () => void
-  openGraph: () => void
   /** Another folder, read beside the ones already open. */
   addFolder: () => void
   /** Stops reading a folder. Its files stay where they are. */
   removeFolder: (root: string) => void
+  /** Opens the folder in the desktop's own file manager. */
+  revealFolder: (root: string) => void
   /** Puts the search away: its row goes, and its shelf with it. */
   clearSearch: () => void
+  /** A paper dropped on a row: filed under it — a reading status, the
+   *  favourites, a collection, a tag. */
+  file: (paperID: string, shelf: Shelf) => void
 }
 
 /** One row of the list, as data — what it says and what it stands for. */
@@ -52,6 +59,10 @@ interface RowSpec {
   detail?: string
   /** An × in the row's corner that puts the row away. */
   dismiss?: { label: string; press: () => void }
+  /** Takes a paper dropped on it (`SidebarActions.file`). */
+  drop?: boolean
+  /** A colour for the row's mark — a tag's own, drawn as the Mac's dot. */
+  tint?: string
 }
 
 /**
@@ -115,6 +126,13 @@ function shelfCounts(papers: Paper[]): ShelfCounts {
     if (entry.state.summaryNote.trim().length > 0) counts.notes += 1
     for (const id of entry.meta.collectionIDs) bump(counts.collections, id)
     for (const id of entry.meta.tagIDs) bump(counts.tags, id)
+  }
+  // A smart collection has no members written down — its count is whoever
+  // its rule matches, the same papers its shelf shows.
+  for (const collection of store.collections) {
+    if (!collection.rule) continue
+    counts.collections.set(collection.id, papers.filter((entry) =>
+      inCollection(collection, entry.meta, entry.state, store.tags)).length)
   }
   return counts
 }
@@ -190,9 +208,14 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
         count: counts.folders.get(root) ?? 0,
         chip: true,
         title: root,
-        menu: root === store.root
-          ? undefined
-          : [{ label: L('연결 해제', 'Disconnect'), icon: 'eject', action: () => actions.removeFolder(root) }],
+        // Every library can be shown where it is; all but the first can be
+        // disconnected (the first is where the library began).
+        menu: [
+          { label: L('폴더에서 보기', 'Show in Folder'), icon: 'folder', action: () => actions.revealFolder(root) },
+          ...(root === store.root
+            ? []
+            : [{ label: L('연결 해제', 'Disconnect'), icon: 'eject', action: () => actions.removeFolder(root) }]),
+        ],
       })
     }
     if (open) {
@@ -257,14 +280,14 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
     rows.push({ key: 'gap:2', kind: 'section', label: '' })
 
     // How far through. One paper is on exactly one of these.
-    rows.push({ key: 'status:unread', kind: 'row', shelf: { kind: 'status', status: 'unread' }, icon: 'circle', label: L('안 읽음', 'Unread'), count: counts.unread })
-    rows.push({ key: 'status:reading', kind: 'row', shelf: { kind: 'status', status: 'reading' }, icon: 'circle.lefthalf.filled', label: L('읽는 중', 'Reading'), count: counts.reading })
-    rows.push({ key: 'status:read', kind: 'row', shelf: { kind: 'status', status: 'read' }, icon: 'checkmark.circle', label: L('읽음', 'Read'), count: counts.read })
+    rows.push({ key: 'status:unread', kind: 'row', shelf: { kind: 'status', status: 'unread' }, icon: 'circle', label: L('안 읽음', 'Unread'), count: counts.unread, drop: true })
+    rows.push({ key: 'status:reading', kind: 'row', shelf: { kind: 'status', status: 'reading' }, icon: 'circle.lefthalf.filled', label: L('읽는 중', 'Reading'), count: counts.reading, drop: true })
+    rows.push({ key: 'status:read', kind: 'row', shelf: { kind: 'status', status: 'read' }, icon: 'checkmark.circle', label: L('읽음', 'Read'), count: counts.read, drop: true })
     rows.push({ key: 'gap:3', kind: 'section', label: '' })
 
     // What you did about it, and what is open right now — a row of tabs, as a
     // shelf. From here a paper is closed, or put beside another.
-    rows.push({ key: 'favorites', kind: 'row', shelf: { kind: 'favorites' }, icon: 'star', label: L('즐겨찾기', 'Favorites'), count: counts.favorites })
+    rows.push({ key: 'favorites', kind: 'row', shelf: { kind: 'favorites' }, icon: 'star', label: L('즐겨찾기', 'Favorites'), count: counts.favorites, drop: true })
     rows.push({ key: 'review', kind: 'row', shelf: { kind: 'review' }, icon: 'exclamationmark.triangle', label: L('살펴볼 것', 'Needs Review'), count: counts.review })
     rows.push({ key: 'open', kind: 'row', shelf: { kind: 'open' }, icon: 'rectangle.on.rectangle', label: L('열린 문서', 'Open Documents'), count: store.openPaperIDs.length })
 
@@ -280,6 +303,8 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
         icon: collection.rule ? 'folder.badge.gearshape' : 'folder',
         label: collection.name,
         count: counts.collections.get(collection.id) ?? 0,
+        // A smart collection is filled by its rule, not by hand.
+        drop: !collection.rule,
       })
     }
     rows.push({
@@ -296,6 +321,8 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
         icon: 'tag',
         label: tag.name,
         count: counts.tags.get(tag.id) ?? 0,
+        tint: tagColor(tag.color),
+        drop: true,
       })
     }
 
@@ -333,8 +360,10 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
       }
     }
 
-    rows.push({ key: 'gap:4', kind: 'section', label: '' })
-    rows.push({ key: 'graph', kind: 'button', icon: 'graph', label: L('그래프', 'Graph'), press: actions.openGraph })
+    // No «Graph» row. The Mac draws the citation graph there; this build has
+    // no graph, and the row it had answered every press with «not in this
+    // build yet» — a row that does nothing is worse than no row. It comes
+    // back with the graph.
     return rows
   }
 
@@ -359,8 +388,13 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
       'aria-selected': spec.shelf ? String(selected) : undefined,
     })
     const glyph = el('span', { class: 'row-icon' })
-    const drawn = spec.icon ? iconNode(spec.icon) : null
-    if (drawn) glyph.append(drawn)
+    if (spec.tint) {
+      // A tag is its colour on the Mac: a dot, not a luggage label.
+      glyph.append(el('span', { class: 'row-dot', style: `background: ${spec.tint}` }))
+    } else {
+      const drawn = spec.icon ? iconNode(spec.icon) : null
+      if (drawn) glyph.append(drawn)
+    }
     // A library's name wears the chip the crumb over this list used to wear:
     // it names where something came from.
     const label = el('span', { class: spec.chip ? 'row-label folder-name' : 'row-label', text: spec.label })
@@ -413,12 +447,34 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
         showMenu(row, items)
       })
     }
+    if (spec.drop && shelf) {
+      // Filing a paper by dropping it on what it is filed under — the gesture
+      // Finder and Mail taught everybody, and the Mac's sidebar takes it too.
+      const carries = (event: DragEvent) => Boolean(event.dataTransfer
+        && [...event.dataTransfer.types].includes(PAPER_DRAG_TYPE))
+      on(row, 'dragover', (event: DragEvent) => {
+        if (!carries(event)) return
+        event.preventDefault()
+        event.stopPropagation()
+        if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+        row.classList.add('drop-target')
+      })
+      on(row, 'dragleave', () => row.classList.remove('drop-target'))
+      on(row, 'drop', (event: DragEvent) => {
+        row.classList.remove('drop-target')
+        if (!carries(event)) return
+        event.preventDefault()
+        event.stopPropagation()
+        const paperID = event.dataTransfer?.getData(PAPER_DRAG_TYPE)
+        if (paperID) actions.file(paperID, shelf)
+      })
+    }
     return row
   }
 
   /** What has to be redrawn rather than merely re-labelled. */
   function shape(spec: RowSpec): string {
-    return `${spec.kind}|${spec.key}|${spec.icon ?? ''}|${spec.label}|${spec.detail ?? ''}|${spec.chip ? 1 : 0}|${spec.menu ? 1 : 0}|${spec.indent ?? 0}|${spec.fold ? (spec.fold.open ? 'v' : '>') : ''}`
+    return `${spec.kind}|${spec.key}|${spec.icon ?? ''}|${spec.label}|${spec.detail ?? ''}|${spec.chip ? 1 : 0}|${spec.menu ? 1 : 0}|${spec.indent ?? 0}|${spec.fold ? (spec.fold.open ? 'v' : '>') : ''}|${spec.drop ? 1 : 0}|${spec.tint ?? ''}`
   }
 
   let drawnSpecs: RowSpec[] = []

@@ -17,9 +17,11 @@ import { clear, el, on } from './dom.js'
 // Imported for its side effect: the sheet registers its own ⌥⌘/ so nothing
 // in the shell has to know it exists.
 import { showFeedback } from './ui/feedback.js'
-import { showSettings } from './ui/settings.js'
+import { showSettings, type SettingsSection } from './ui/settings.js'
+import { askForName } from './ui/ask.js'
 import {
   adopt,
+  attachmentsOf,
   canGoBack,
   canGoForward,
   changed,
@@ -45,7 +47,7 @@ import {
   type Shelf,
   type SketchTool,
 } from './state.js'
-import { buildToolbar, showMenu, toast } from './ui/toolbar.js'
+import { buildToolbar, showMenu, toast, type MenuEntry } from './ui/toolbar.js'
 import { buildSidebar } from './ui/sidebar.js'
 import { buildPaperList } from './ui/paperList.js'
 import { buildInspector } from './ui/inspector.js'
@@ -81,6 +83,7 @@ import { icon } from './icons.js'
 import { L } from '../shared/lang.js'
 import { type ByteTrouble, type PDFLock } from '../shared/pdfLock.js'
 import { isCitable, isLookedUp, type DocumentKind } from '../shared/documentKind.js'
+import { passageText, quotationSource } from '../shared/noteQuote.js'
 
 document.body.dataset.platform = platform
 /** This window shows one paper on its own: no library columns. */
@@ -126,7 +129,13 @@ const sidebar = buildSidebar({
     })()
   },
   newCollection: async () => {
-    const name = await prompt(L('새 컬렉션', 'New collection'))
+    // A sheet of the window's own: `window.prompt` throws in Electron, so
+    // this row used to do nothing at all.
+    const name = await askForName({
+      title: L('새 컬렉션', 'New Collection'),
+      placeholder: L('컬렉션 이름', 'Collection Name'),
+      confirm: L('만들기', 'Create'),
+    })
     if (!name) return
     const collections = [...store.collections, {
       id: crypto.randomUUID().toUpperCase(),
@@ -137,9 +146,43 @@ const sidebar = buildSidebar({
     await call('collections:save', { collections })
     await reload()
   },
-  openGraph: () => toast(L('인용 그래프는 아직 이 빌드에 없어요.', 'The citation graph is not in this build yet.')),
   clearSearch: () => clearSearchResults(),
+  revealFolder: (root: string) => void call('library:revealFolder', { root }),
+  file: (paperID: string, shelf: Shelf) => void fileUnder(paperID, shelf),
 })
+
+/**
+ * A paper dropped on a sidebar row, filed under it — the Mac's `dropTarget`s:
+ * a reading status, the favourites, a collection, a tag. Nothing else takes
+ * a drop, and a paper already there is left as it is.
+ */
+async function fileUnder(paperID: string, shelf: Shelf) {
+  const entry = findPaper(paperID)
+  if (!entry) return
+  switch (shelf.kind) {
+    case 'status':
+      if (entry.state.readingStatus !== shelf.status) await setStatus(paperID, shelf.status)
+      return
+    case 'favorites':
+      if (!entry.state.isFavorite) await setFavorite(paperID, true)
+      return
+    case 'collection': {
+      const collection = store.collections.find((one) => one.id === shelf.id)
+      if (!collection || collection.rule || entry.meta.collectionIDs.includes(shelf.id)) return
+      await call('paper:meta', { id: paperID, patch: { collectionIDs: [...entry.meta.collectionIDs, shelf.id] } })
+      await reload()
+      toast(L(`“${collection.name}”에 넣었어요`, `Added to “${collection.name}”`))
+      return
+    }
+    case 'tag': {
+      const tag = store.tags.find((one) => one.id === shelf.id)
+      if (!tag || entry.meta.tagIDs.includes(shelf.id)) return
+      await call('paper:meta', { id: paperID, patch: { tagIDs: [...entry.meta.tagIDs, shelf.id] } })
+      await reload()
+      return
+    }
+  }
+}
 
 const ZONE_LABELS = (): Record<DockZone, string> => ({
   left: L('왼쪽에', 'Left Half'),
@@ -162,13 +205,36 @@ const ZONE_ICONS: Record<DockZone, string> = {
 const paperList = buildPaperList({
   chooseLibrary: () => void chooseLibrary(),
   open: (id) => void showPaper(id),
-  cycleStatus: async (id) => {
+  statusMenu: (id, anchor) => {
     const entry = findPaper(id)
     if (!entry) return
-    const next = { unread: 'reading', reading: 'read', read: 'unread' } as const
-    await call('paper:state', { id, patch: { readingStatus: next[entry.state.readingStatus] } })
-    await reload()
+    // The Mac's status button: the kind first — a handful of wrongly
+    // answered imports is corrected down the list without the inspector —
+    // then the reading status, each with its answer ticked.
+    showMenu(anchor, [
+      { caption: L('종류', 'Kind') },
+      ...kindEntries(entry),
+      { separator: true },
+      { caption: L('읽기 상태', 'Reading Status') },
+      ...statusEntries(entry),
+    ], 'right')
   },
+  attachments: (id, anchor) => {
+    const children = attachmentsOf(id)
+    if (children.length === 0) return
+    showMenu(anchor, [
+      { caption: L('보충 자료', 'Supplementary Material') },
+      ...children.map((child) => ({
+        label: child.meta.displayTitle,
+        icon: 'doc',
+        children: [
+          { label: L('열기', 'Open'), icon: 'text.page', action: () => void showPaper(child.id) },
+          { label: L('논문에서 떼기', 'Detach from Paper'), icon: 'paperclip', action: () => void detach(child.id) },
+        ],
+      })),
+    ], 'right')
+  },
+  attach: (child, parent) => void attach(child, parent),
   toggleFavorite: async (id) => {
     const entry = findPaper(id)
     if (!entry) return
@@ -225,15 +291,14 @@ const paperList = buildPaperList({
         ? [{ label: L('인용 키 복사', 'Copy Citation Key'), icon: 'doc.on.doc', action: () => copyKey(id) }]
         : []),
       { separator: true },
+      // The Mac's row menu has the reading status as a picker of its own.
+      { label: L('읽기 상태', 'Reading Status'), icon: 'circle.lefthalf.filled', children: statusEntries(entry) },
       {
         label: entry.state.isFavorite
           ? L('즐겨찾기에서 빼기', 'Remove from Favorites')
           : L('즐겨찾기에 더하기', 'Add to Favorites'),
         icon: 'star',
-        action: async () => {
-          await call('paper:state', { id, patch: { isFavorite: !entry.state.isFavorite } })
-          await reload()
-        },
+        action: () => void setFavorite(id, !entry.state.isFavorite),
       },
       { separator: true },
       {
@@ -264,6 +329,7 @@ const paperList = buildPaperList({
   refresh: () => void reload(),
   openPassage: (hit, byMeaning) => void openPassage(hit, byMeaning ? '' : store.searchQuery),
   openNote: (paperID) => void openNote(paperID),
+  step: (by) => stepPaper(by),
 })
 
 /** The answer to "a paper, a book, course material, or a document?", from the
@@ -291,6 +357,72 @@ async function setKind(id: string, kind: DocumentKind) {
     patch.csl = csl
   }
   await call('paper:meta', { id, patch })
+  await reload()
+}
+
+/** The four kinds as menu rows, the paper's own ticked — the Mac's Kind picker. */
+function kindEntries(entry: NonNullable<ReturnType<typeof findPaper>>): MenuEntry[] {
+  return ([
+    ['paper', L('논문', 'Paper'), 'text.document'],
+    ['book', L('책', 'Book'), 'book'],
+    ['lecture', L('강의자료', 'Course Material'), 'lecture'],
+    ['document', L('일반 문서', 'Document'), 'doc'],
+  ] as const).map(([value, label, glyph]) => ({
+    label,
+    icon: glyph,
+    checked: entry.meta.effectiveKind === value,
+    action: () => { if (entry.meta.effectiveKind !== value || entry.meta.kindIsUnanswered) void setKind(entry.id, value) },
+  }))
+}
+
+/** The three reading statuses as menu rows, the paper's own ticked. */
+function statusEntries(entry: NonNullable<ReturnType<typeof findPaper>>): MenuEntry[] {
+  return ([
+    ['unread', L('안 읽음', 'Unread'), 'circle'],
+    ['reading', L('읽는 중', 'Reading'), 'circle.lefthalf.filled'],
+    ['read', L('읽음', 'Read'), 'checkmark.circle'],
+  ] as const).map(([value, label, glyph]) => ({
+    label,
+    icon: glyph,
+    checked: entry.state.readingStatus === value,
+    action: () => void setStatus(entry.id, value),
+  }))
+}
+
+async function setStatus(id: string, readingStatus: 'unread' | 'reading' | 'read') {
+  await call('paper:state', { id, patch: { readingStatus } })
+  await reload()
+}
+
+async function setFavorite(id: string, isFavorite: boolean) {
+  await call('paper:state', { id, patch: { isFavorite } })
+  await reload()
+}
+
+/**
+ * Makes one paper another's supplement: it leaves every shelf and hangs off
+ * that paper's row by its paperclip. Not onto itself, not onto a paper that
+ * is itself a supplement, and not a paper that has supplements of its own —
+ * the Mac's rules, one level deep.
+ */
+async function attach(child: string, parent: string) {
+  const entry = findPaper(child)
+  const target = findPaper(parent)
+  if (!entry || !target || child === parent) return
+  if (target.meta.parentID || entry.meta.parentID === parent) return
+  if (attachmentsOf(child).length > 0) {
+    toast(L('보충 자료가 붙은 논문은 다른 논문에 붙일 수 없어요.', "A paper with supplements of its own can't become one."))
+    return
+  }
+  await call('paper:meta', { id: child, patch: { parentID: parent } })
+  // It is off the shelves now; a pane showing it stays, as it would on the Mac.
+  await reload()
+  toast(L(`“${target.meta.displayTitle}”에 붙였어요`, `Attached to “${target.meta.displayTitle}”`))
+}
+
+/** Takes a supplement off its paper: a paper of its own again. */
+async function detach(child: string) {
+  await call('paper:meta', { id: child, patch: { parentID: null } })
   await reload()
 }
 
@@ -326,6 +458,16 @@ const inspector = buildInspector({
     changed('shelf')
   },
   sketchChanged: () => changed('sketch'),
+  marks: () => focused()?.marksList() ?? [],
+  revealMark: (pageIndex, id) => void focused()?.revealMark(pageIndex, id),
+  removeMark: (pageIndex, id) => focused()?.removeMark(pageIndex, id),
+  commentMark: (pageIndex, id, comment) => focused()?.setMarkComment(pageIndex, id, comment),
+  copyText: (text) => {
+    if (!text) return
+    void navigator.clipboard.writeText(text)
+    toast(L('복사했어요', 'Copied'))
+  },
+  markMenu: (anchor, entries) => showMenu(anchor, entries),
 })
 
 // ------------------------------------------------------------ the page area
@@ -373,6 +515,9 @@ function readerFor(id: string, pane: boolean): Reader {
   const reader = new Reader({
     changed: () => changed('sketch'),
     toast,
+    // The Marks tab follows the page, and a mark clicked there is found in it.
+    marksChanged: () => { if (store.selectedID === id) changed('marks') },
+    markShown: (markID) => inspector.showMark(markID),
     activated: () => {
       // A press in a pane makes it the one in use: the pane in focus, and a
       // paper kept open.
@@ -728,6 +873,9 @@ on(window, 'mousemove', (event: MouseEvent) => {
  * that holds it (`sketchInput.ts`), so the rack, the Tools tab and the keys
  * below are three ways of saying the same thing to one place.
  */
+// Every undo step remembers the paper it was taken in (`applyUndo`).
+undoStack.paperOf = () => store.selectedID
+
 const rack = buildSketchRack({
   setTool: (tool: SketchTool) => pickTool(tool),
   undo: () => applyUndo(false),
@@ -760,21 +908,28 @@ const toolbar = buildToolbar({
   },
   moreMenu: (anchor) => {
     showMenu(anchor, [
-      { label: L('폴더에서 새로 읽기', 'Refresh Folder'), icon: 'arrow.clockwise', action: () => void reload() },
+      // The Mac's word for the same errand: fetch what the folders have and
+      // tell the papers to look at their files again.
+      { label: L('지금 맞추기', 'Sync Now'), icon: 'arrow.clockwise', action: () => void reload() },
       { label: L('라이브러리 폴더 고르기…', 'Choose Library Folder…'), icon: 'folder', action: () => void chooseLibrary() },
       { separator: true },
-      { caption: L('정렬 기준', 'Sort By') },
-      ...(['title', 'author', 'year', 'added', 'opened'] as const).map((field) => ({
-        label: {
-          title: L('제목', 'Title'),
-          author: L('저자', 'Author'),
-          year: L('해', 'Year'),
-          added: L('더한 날', 'Date Added'),
-          opened: L('마지막으로 연 날', 'Last Opened'),
-        }[field],
-        checked: store.settings.sort.field === field,
-        action: () => setSort(field, store.settings.sort.ascending),
-      })),
+      // A picker is a submenu, as the Mac's pickers in a menu are: the whole
+      // list of choices inline made this menu taller than a small window.
+      {
+        label: L('정렬 기준', 'Sort By'),
+        icon: 'arrow.up.arrow.down',
+        children: (['title', 'author', 'year', 'added', 'opened'] as const).map((field) => ({
+          label: {
+            title: L('제목', 'Title'),
+            author: L('저자', 'Author'),
+            year: L('해', 'Year'),
+            added: L('더한 날', 'Date Added'),
+            opened: L('마지막으로 연 날', 'Last Opened'),
+          }[field],
+          checked: store.settings.sort.field === field,
+          action: () => setSort(field, store.settings.sort.ascending),
+        })),
+      },
       {
         label: L('오름차순', 'Ascending'),
         checked: store.settings.sort.ascending,
@@ -799,16 +954,20 @@ const toolbar = buildToolbar({
         },
       })),
       { separator: true },
-      { caption: L('화면 모드', 'Appearance') },
-      ...(['system', 'light', 'dark'] as const).map((appearance) => ({
-        label: { system: L('시스템에 따라', 'System'), light: L('밝게', 'Light'), dark: L('어둡게', 'Dark') }[appearance],
-        checked: store.settings.appearance === appearance,
-        action: () => {
-          store.settings.appearance = appearance
-          void call('settings:set', { appearance })
-          applyTheme()
-        },
-      })),
+      {
+        label: L('화면 모드', 'Appearance'),
+        icon: 'textformat.size',
+        children: (['system', 'light', 'dark'] as const).map((appearance) => ({
+          label: { system: L('시스템에 따라', 'System'), light: L('밝게', 'Light'), dark: L('어둡게', 'Dark') }[appearance],
+          checked: store.settings.appearance === appearance,
+          action: () => {
+            store.settings.appearance = appearance
+            void call('settings:set', { appearance })
+            applyTheme()
+          },
+        })),
+      },
+      ...moreMenuTail(),
     ], 'right')
   },
   settings: () => openSettings(),
@@ -945,10 +1104,21 @@ async function chooseLibrary() {
 }
 
 async function addPapers() {
-  const snapshot = await call<LibrarySnapshot>('library:import', {})
+  const snapshot = await call<LibrarySnapshot>('library:import', { root: importDestination() })
   if ('error' in snapshot) return toast(String(snapshot.error))
   adopt(snapshot)
   changed('papers')
+}
+
+/**
+ * The library a PDF added now goes into: the one whose own shelf is showing,
+ * as on the Mac (`importDestination`). Nothing — the first library — on every
+ * other shelf, a folder inside a library included.
+ */
+function importDestination(): string | undefined {
+  if (store.shelf.kind !== 'folder') return undefined
+  const root = (store.shelf as { root: string }).root
+  return store.roots.includes(root) ? root : undefined
 }
 
 async function reload() {
@@ -1010,6 +1180,23 @@ function statusOnOpen(id: string): string {
 }
 
 /**
+ * The next or previous paper on the shelf showing — ⌥⌘↓/⌥⌘↑ on the Mac,
+ * Ctrl+Alt+↓/↑ here, and ↓/↑ in the list itself. Nothing chosen yet: the
+ * first. At either end: nowhere (`RootView.step(by:)`).
+ */
+function stepPaper(by: number) {
+  const papers = shelfPapers()
+  if (papers.length === 0) return
+  const at = papers.findIndex((entry) => entry.id === store.selectedID)
+  if (at < 0) {
+    void showPaper(papers[0].id)
+    return
+  }
+  const next = papers[at + by]
+  if (next) void showPaper(next.id)
+}
+
+/**
  * Back and forward walk the papers you have opened, the way a browser walks
  * pages: going back and then opening something else forgets what lay ahead.
  */
@@ -1065,6 +1252,35 @@ function setSort(field: typeof store.settings.sort.field, ascending: boolean) {
   void call('settings:set', { sort: store.settings.sort })
   changed('papers')
 }
+
+/**
+ * The ⋯ menu's last part, in the Mac's order: the paper's kind (one of the
+ * two places it is changed — the row's menu is the other), then sharing, then
+ * help.
+ *
+ * Help is here because on Windows and Linux it has nowhere else to be. The
+ * window is frameless there, and Electron draws no menu bar in a frameless
+ * window — its keys work, but an item that is only in the menu is an item
+ * nobody can reach: «Built together» was one, and «Send Feedback» hid behind
+ * Ctrl+Alt+/ alone.
+ */
+function moreMenuTail(): MenuEntry[] {
+  const entry = store.selectedID ? findPaper(store.selectedID) : null
+  const kinds: MenuEntry[] = entry
+    ? [{ separator: true }, { label: L('종류', 'Kind'), icon: 'text.document', children: kindEntries(entry) }]
+    : []
+  return [
+    ...kinds,
+    { separator: true },
+    { label: L('BibTeX 내보내기…', 'Export BibTeX…'), icon: 'square.and.arrow.up', action: () => runMenuCommand('exportBibTeX') },
+    { separator: true },
+    { label: L('한마디 보내기…', 'Send Feedback…'), action: () => void showFeedback() },
+    { label: L('함께 만드는 중', 'Built together'), action: () => void call('shell:openExternal', { url: TOGETHER_URL }) },
+    { label: L('Paper Time 정보', 'About Paper Time'), icon: 'info', action: () => openSettings('about') },
+  ]
+}
+
+const TOGETHER_URL = 'https://icecoffee2500.github.io/paper-time/#together'
 
 async function copyKey(id: string) {
   const entry = findPaper(id)
@@ -1135,10 +1351,54 @@ async function openPassage(hit: TextHit, query: string) {
 /** A summary note from the palette: its paper, with the note in front. */
 async function openNote(paperID: string) {
   await showPaper(paperID)
-  store.settings.inspectorTab = 'note'
-  void call('settings:set', { inspectorTab: 'note' })
+  showNoteTab()
+}
+
+/** The inspector, open on the Notes tab of the paper in front. */
+function showNoteTab() {
+  if (store.settings.inspectorTab !== 'note') {
+    store.settings.inspectorTab = 'note'
+    void call('settings:set', { inspectorTab: 'note' })
+  }
   if (!store.settings.panes.inspector) togglePane('inspector')
-  changed('inspector')
+  inspector.update()
+  toolbar.update()
+}
+
+/**
+ * Command-N. The Mac opens a new note on the paper being read; this build
+ * keeps one note for each paper, so it opens that note with the caret at its
+ * end, which is where the new thought goes. The menu item and its key used to
+ * answer «not in this build yet».
+ */
+function newNote() {
+  if (!store.selectedID || !findPaper(store.selectedID)) {
+    toast(L('먼저 논문을 열어주세요.', 'Open a paper first.'))
+    return
+  }
+  showNoteTab()
+  inspector.focusNote()
+}
+
+/**
+ * Command-L: the selected passage goes into the paper's note as a quotation,
+ * with a link back to its page, and the note comes forward — the Markdown
+ * the Mac writes, so either build's editor reads it as its own.
+ */
+function linkSelectionToNote() {
+  const reader = focused()
+  const anchor = reader?.selectionAnchor()
+  if (!reader || !anchor || !store.selectedID) {
+    toast(L('먼저 글을 골라주세요.', 'Select some text first.'))
+    return
+  }
+  const block = quotationSource(
+    { pageIndex: anchor.pageIndex, rect: anchor.rect, quotedText: passageText(anchor.text) },
+    (page) => L(`${page}쪽`, `p. ${page}`),
+  )
+  showNoteTab()
+  if (!inspector.insertIntoNote(block)) return
+  reader.hideMarkBar()
 }
 
 /**
@@ -1251,6 +1511,7 @@ on(window, 'keydown', (event: KeyboardEvent) => {
     if (isPaletteOpen()) return closeSearch()
     if (findBar.isOpen) return findBar.close()
     if (isOpenPapersShowing()) return closeOpenPapers()
+    if (reader?.markBarShowing) return reader.hideMarkBar()
     if (store.sketch.selection) {
       store.sketch.selection = null
       reader?.redrawAll()
@@ -1399,8 +1660,13 @@ function nudge(key: string, distance: number) {
 function applyUndo(redo: boolean) {
   const snapshot = redo ? undoStack.redo() : undoStack.undo()
   if (!snapshot) return
+  // Into the paper the step was taken in, or nowhere. Put into whichever
+  // paper happened to be in front, an undo wrote one paper's page over
+  // another's.
+  const target = snapshot.paperID ? readers.get(snapshot.paperID) ?? null : focused()
+  if (!target) return
   // A step may cover two pages — a selection carried from one to the other.
-  focused()?.restore(snapshot)
+  target.restore(snapshot)
   store.sketch.selection = null
   changed('sketch')
 }
@@ -1427,6 +1693,8 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () 
 // ------------------------------------------------------------- redrawing
 
 let wasDrawing = false
+/** The inspector's tab before the pen came out, to go back to. */
+let tabBeforeDrawing: InspectorTab | null = null
 
 subscribe((keys) => {
   if (keys.has('shelf') || keys.has('papers')) scanListText()
@@ -1437,12 +1705,29 @@ subscribe((keys) => {
     refreshOpenPapers()
   }
   if (keys.has('inspector')) inspector.update()
+  if (keys.has('marks') && store.settings.inspectorTab === 'marks') inspector.update()
   if (keys.has('sketch')) {
-    // Picking up the pen brings the Tools tab forward, as it does on the Mac;
-    // putting it down leaves the tab where it is.
-    if (store.reader.drawing && !wasDrawing && store.settings.inspectorTab !== 'tools') {
-      store.settings.inspectorTab = 'tools'
-      void call('settings:set', { inspectorTab: 'tools' })
+    // Picking up the pen brings the Tools tab forward, as it does on the Mac,
+    // and putting it down gives the panel back — the tab that was showing
+    // before, unless another was chosen with the pen in hand. It used to go
+    // one way only, so an afternoon in the Notes tab ended on Tools the first
+    // time a pen was picked up, and stayed there.
+    if (store.reader.drawing && !wasDrawing) {
+      if (store.settings.inspectorTab !== 'tools') {
+        tabBeforeDrawing = store.settings.inspectorTab
+        store.settings.inspectorTab = 'tools'
+        void call('settings:set', { inspectorTab: 'tools' })
+      }
+      // The Mac shows the inspector with the pen: the Tools tab is where the
+      // drawing's style is set. Not in focus, which hid it on purpose.
+      if (!store.settings.panes.inspector && !beforeFocus && !solo) togglePane('inspector')
+    } else if (!store.reader.drawing && wasDrawing) {
+      if (store.settings.inspectorTab === 'tools' && tabBeforeDrawing) {
+        store.settings.inspectorTab = tabBeforeDrawing
+        void call('settings:set', { inspectorTab: tabBeforeDrawing })
+        inspector.update()
+      }
+      tabBeforeDrawing = null
     }
     wasDrawing = store.reader.drawing
     rack.update()
@@ -1517,8 +1802,8 @@ onEvent((event, payload) => {
  * The settings sheet — from the ⚙ in the bar, from the menu, and from
  * `Ctrl+,`, which until now went nowhere at all.
  */
-function openSettings() {
-  openSettingsSheet = showSettings({
+function openSettings(section?: SettingsSection) {
+  const sheet = showSettings({
     set: (patch: Record<string, unknown>) => {
       Object.assign(store.settings, patch)
       void call('settings:set', patch)
@@ -1527,11 +1812,17 @@ function openSettings() {
       if ('appearance' in patch) applyTheme()
       if ('pageTint' in patch) for (const reader of readers.values()) reader.applyTint()
       if ('pageLayout' in patch) setLayout(store.settings.pageLayout)
+      if ('listSubtitle' in patch) paperList.update()
       changed('settings', 'toolbar')
       openSettingsSheet?.redraw()
     },
-    chooseLibrary: () => void call('library:choose').then(() => void reload()),
-  })
+    // The same errand as the ⋯ menu's. `library:choose` only asks which
+    // folder; this called it and then read the old library again, so the
+    // sheet's «Choose…» let somebody pick a folder and changed nothing.
+    chooseLibrary: () => void chooseLibrary(),
+    feedback: () => void showFeedback(),
+  }, section)
+  if (sheet) openSettingsSheet = sheet
 }
 
 let openSettingsSheet: { redraw: () => void; close: () => void } | undefined
@@ -1568,8 +1859,13 @@ function runMenuCommand(command: string) {
       break
     case 'exportBibTeX':
       void (async () => {
+        // What a bibliography holds: papers and books. Course material and a
+        // document are read, not cited (`isCitable`) — and an empty list must
+        // not go at all, because the main process reads «no ids» as «all».
+        const ids = shelfPapers().filter((entry) => isCitable(entry.meta.effectiveKind)).map((entry) => entry.id)
+        if (ids.length === 0) return toast(L('내보낼 논문이 없어요.', 'There is nothing to export.'))
         const result = await call<{ written?: number; error?: string; cancelled?: boolean }>(
-          'bibtex:export', { ids: shelfPapers().map((entry) => entry.id) },
+          'bibtex:export', { ids, protectCase: store.settings.bibtexProtectCase !== false },
         )
         if (result.cancelled) return
         if (result.error) return toast(result.error)
@@ -1589,6 +1885,12 @@ function runMenuCommand(command: string) {
     case 'pages': showPagesPopup(); break
     case 'openInNewWindow': if (store.selectedID) openInWindow(store.selectedID); break
     case 'closeWindow': closeWindowOrPane(); break
+    case 'newNote': newNote(); break
+    case 'linkToNote': linkSelectionToNote(); break
+    case 'nextPage': reader?.turnPage(1); break
+    case 'previousPage': reader?.turnPage(-1); break
+    case 'nextPaper': stepPaper(1); break
+    case 'previousPaper': stepPaper(-1); break
     default:
       toast(L(`“${command}”은 아직 이 빌드에 없어요.`, `“${command}” is not in this build yet.`))
   }
@@ -1612,7 +1914,7 @@ on(window, 'drop', async (event: DragEvent) => {
     if (dropped.length > 0) toast(L('PDF만 더할 수 있어요.', 'Only PDFs can be added to the library.'))
     return
   }
-  const snapshot = await call<LibrarySnapshot>('library:import', { paths: files })
+  const snapshot = await call<LibrarySnapshot>('library:import', { paths: files, root: importDestination() })
   if ('error' in snapshot) return toast(String(snapshot.error))
   adopt(snapshot)
   changed('papers')
