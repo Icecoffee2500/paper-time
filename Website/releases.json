@@ -2,6 +2,95 @@
   "repo": "Icecoffee2500/paper-time",
   "releases": [
     {
+      "version": "0.9.10",
+      "date": "2026-09-26T12:27:58Z",
+      "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.10/Paper.Time.0.9.10.dmg",
+      "size": 50902680,
+      "downloads": 0,
+      "builds": {
+        "mac": [
+          {
+            "label": "디스크 이미지",
+            "label_en": "Disk image",
+            "arch": "Apple Silicon",
+            "arch_en": "Apple Silicon",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.10/Paper.Time.0.9.10.dmg",
+            "size": 50902680,
+            "downloads": 0
+          }
+        ],
+        "windows": [
+          {
+            "label": "설치본",
+            "label_en": "Installer",
+            "arch": "64비트 · ARM",
+            "arch_en": "64-bit and ARM",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.10/Paper.Time.Setup.0.9.10.exe",
+            "size": 264714074,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "64비트",
+            "arch_en": "64-bit",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.10/Paper.Time-0.9.10-win.zip",
+            "size": 162407255,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.10/Paper.Time-0.9.10-arm64-win.zip",
+            "size": 167354931,
+            "downloads": 0
+          }
+        ],
+        "linux": [
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.10/Paper.Time-0.9.10-x86_64.AppImage",
+            "size": 159878038,
+            "downloads": 0
+          },
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.10/Paper.Time-0.9.10-arm64.AppImage",
+            "size": 160264539,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.10/paper-time-0.9.10.tar.gz",
+            "size": 153534391,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.10/paper-time-0.9.10-arm64.tar.gz",
+            "size": 158030852,
+            "downloads": 0
+          }
+        ]
+      },
+      "note": "밤에도 쪽이 잘 읽혀요. 글자는 밝아지고 사진은 인쇄된 그대로예요. 윈도우·리눅스는 맥처럼 움직이고, 덮어 설치할 때 더 멈추지 않아요.",
+      "note_en": "Pages read well at night: the words turn light and photographs stay as printed. Windows and Linux work like the Mac, and installing over an old version no longer stops."
+    },
+    {
       "version": "0.9.9",
       "date": "2026-09-25T17:30:23Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.9/Paper.Time.0.9.9.dmg",
