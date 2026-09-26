@@ -14,9 +14,10 @@
  * corners are where that square lands. Stencil masks are left out: an
  * `ImageMask` is paint in the shape of a picture — usually a glyph, a rule or
  * a logo in one colour — and it inverts with the ink around it, as it should.
- * So are pictures too small to be a figure, which is the Mac's rule too: a
- * logo in a corner or a hairline drawn as an image is not something anyone
- * looks at.
+ * So is a hairline drawn as an image, which is the Mac's rule too; anything
+ * bigger is kept, because a figure made of small photographs — a grid of
+ * video frames, a row of robot views — is the common case, and each of them
+ * turned into a negative is what «the pictures are inverted too» meant.
  *
  * Pure over the operator list, with pdf.js's operator numbers handed in, so
  * the walk is tested without a window and the renderer's bundle is the only
@@ -55,9 +56,10 @@ export interface PageRect {
   height: number
 }
 
-/** Smaller than this, in points, and it is not a figure (`PageImages.swift`). */
-export const MIN_IMAGE_WIDTH = 40
-export const MIN_IMAGE_HEIGHT = 24
+/** No bigger than this, in points, and it is a rule, not a picture — the
+ *  Mac's number (`PageImages.swift`, which once kept only 40 × 24 and up). */
+export const MIN_IMAGE_WIDTH = 12
+export const MIN_IMAGE_HEIGHT = 12
 
 const IDENTITY: Matrix = [1, 0, 0, 1, 0, 0]
 

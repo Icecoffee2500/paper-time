@@ -205,18 +205,22 @@ export async function pageTintSuite(test: Test, suite: (name: string) => void) {
     near(rects[2], [20, 400, 120, 80], 'the inline group')
   })
 
-  await test('stencil masks, small pictures and pictures off the page are not kept', () => {
+  await test('stencil masks, hairlines and pictures off the page are not kept; small photographs are', () => {
     const rects = imageRects(list([
       ['save'], ['transform', [200, 0, 0, 100, 50, 450]], ['paintImageMaskXObject', [{}]], ['restore'],
       ['save'], ['transform', [200, 0, 0, 100, 50, 450]], ['paintSolidColorImageMask'], ['restore'],
-      ['save'], ['transform', [40, 0, 0, 100, 0, 0]], ['paintImageXObject', ['img_1', 4, 4]], ['restore'],
-      ['save'], ['transform', [100, 0, 0, 24, 0, 0]], ['paintImageXObject', ['img_1', 4, 4]], ['restore'],
+      // A rule drawn as an image, either way round: 12 points is not a picture.
+      ['save'], ['transform', [12, 0, 0, 300, 0, 0]], ['paintImageXObject', ['img_1', 4, 4]], ['restore'],
+      ['save'], ['transform', [300, 0, 0, 12, 0, 0]], ['paintImageXObject', ['img_1', 4, 4]], ['restore'],
       ['save'], ['transform', [100, 0, 0, 50, 700, 700]], ['paintImageXObject', ['img_1', 4, 4]], ['restore'],
       ['save'], ['transform', [100, 0, 0, 50, 560, 20]], ['paintImageXObject', ['img_1', 4, 4]], ['restore'],
+      // One frame of a grid of video frames: small, and a photograph.
+      ['save'], ['transform', [20, 0, 0, 14, 300, 300]], ['paintImageXObject', ['img_1', 4, 4]], ['restore'],
     ]), OPS, { bounds: { x: 0, y: 0, width: 612, height: 792 } })
-    assert.equal(rects.length, 1)
+    assert.equal(rects.length, 2)
     // Half off the page: kept, and cut to it.
     near(rects[0], [560, 20, 52, 50], 'cut to the page')
+    near(rects[1], [300, 300, 20, 14], 'a small frame')
   })
 
   await test('a restore with nothing saved changes nothing, and a name pdf.js lacks is never matched', () => {
@@ -318,8 +322,8 @@ export async function pageTintSuite(test: Test, suite: (name: string) => void) {
  * One page, and a picture in each of the shapes the reader has to find: an
  * image placed with `cm`, one inside a form with its own matrix, one turned a
  * quarter, an inline one, one half off the page, and one in a stamp's
- * appearance — beside what must not be found: a stencil mask, a picture too
- * small to be a figure, and one wholly off the page.
+ * appearance — beside what must not be found: a stencil mask, a picture no
+ * bigger than a rule (10 points square), and one wholly off the page.
  */
 async function pictureFixture(): Promise<Uint8Array> {
   const doc = await PDFDocument.create()
@@ -342,7 +346,7 @@ async function pictureFixture(): Promise<Uint8Array> {
   const content = [
     'q 200 0 0 100 50 600 cm /P Do Q',
     'q 200 0 0 100 50 450 cm /M Do Q',
-    'q 20 0 0 20 400 700 cm /S Do Q',
+    'q 10 0 0 10 400 700 cm /S Do Q',
     'q /F Do Q',
     'q 0 1 -1 0 500 300 cm 120 0 0 60 0 0 cm /P Do Q',
     `q 100 0 0 50 300 650 cm BI /W 2 /H 2 /CS /G /BPC 8 ID ${'\x80\x40\x40\x80'} EI Q`,
