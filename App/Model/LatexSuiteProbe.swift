@@ -150,13 +150,10 @@ enum LatexSuiteTypingProbe {
         try? await Task.sleep(for: .seconds(1))
 
         // A window of the probe's own, far outside every display.
-        let displays = NSScreen.screens.map(\.frame).reduce(CGRect.null) { $0.union($1) }
-        let window = NSWindow(
+        let window = WindowProbe.ownWindow(
             contentRect: NSRect(x: 0, y: 0, width: 640, height: 420),
-            styleMask: [.titled, .resizable], backing: .buffered, defer: false
+            styleMask: [.titled, .resizable]
         )
-        window.isReleasedWhenClosed = false
-        window.setFrameOrigin(NSPoint(x: displays.minX - 60_000, y: displays.minY - 60_000))
         let note = Note()
         let hosting = NSHostingView(rootView: NoteHost(note: note))
         let container = NSView(frame: NSRect(x: 0, y: 0, width: 640, height: 420))
@@ -169,6 +166,11 @@ enum LatexSuiteTypingProbe {
         container.addSubview(card)
         window.contentView = container
         window.orderFront(nil)
+        if WindowProbe.isOnAScreen(window) {
+            window.orderOut(nil)
+            say("latex typing: the window landed on a screen at \(window.frame) — put away, nothing typed")
+            return NSApp.terminate(nil)
+        }
         hosting.layoutSubtreeIfNeeded()
         try? await Task.sleep(for: .milliseconds(600))
         guard let text = noteTextView(in: hosting), let coordinator = text.coordinator else {

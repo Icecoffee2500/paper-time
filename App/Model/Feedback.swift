@@ -671,6 +671,24 @@ public enum WindowProbe {
         override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect { frameRect }
     }
 
+    /// A window of a probe's own, outside every display, that AppKit cannot
+    /// pull back onto one. A probe orders it on itself, then asks
+    /// `isOnAScreen` and puts it away at once if the answer is yes — a plain
+    /// `NSWindow` made the same way came up at (290, 282) on the main display
+    /// in one run of two, and stayed there for the whole probe.
+    static func ownWindow(contentRect: NSRect, styleMask: NSWindow.StyleMask) -> NSWindow {
+        let window = Unconstrained(contentRect: contentRect, styleMask: styleMask, backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        let displays = NSScreen.screens.map(\.frame).reduce(CGRect.null) { $0.union($1) }
+        window.setFrameOrigin(NSPoint(x: displays.minX - 60_000, y: displays.minY - 60_000))
+        return window
+    }
+
+    /// Whether any part of `window` lies on a display.
+    static func isOnAScreen(_ window: NSWindow) -> Bool {
+        NSScreen.screens.contains { $0.frame.intersects(window.frame) }
+    }
+
     /// Settings, in a window that is on no display.
     ///
     /// Borderless, so AppKit has no title bar to keep on a screen and leaves

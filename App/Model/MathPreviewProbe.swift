@@ -29,18 +29,19 @@ enum MathPreviewProbe {
 
     private static func run(_ path: String) async {
         try? await Task.sleep(for: .seconds(1))
-        let displays = NSScreen.screens.map(\.frame).reduce(CGRect.null) { $0.union($1) }
-        let window = NSWindow(
+        // A window AppKit cannot pull back onto a display: a plain titled
+        // window put 60 000 points away came up on the main display in one
+        // run of two.
+        let window = WindowProbe.ownWindow(
             contentRect: NSRect(x: 0, y: 0, width: 560, height: 360),
-            styleMask: [.titled, .resizable], backing: .buffered, defer: false
+            styleMask: [.titled, .resizable]
         )
-        window.isReleasedWhenClosed = false
-        window.setFrameOrigin(NSPoint(x: displays.minX - 60_000, y: displays.minY - 60_000))
         // `--papertime-math-preview-onscreen=1` puts the window in the
         // bottom-right corner of the main display instead, without taking
         // the keyboard — the only way to see the card over the window
         // server's pixels. Asked for by a person, never by default.
-        if Boot.isSet("PAPERTIME_MATH_PREVIEW_ONSCREEN"), let main = NSScreen.main {
+        let onScreenByRequest = Boot.isSet("PAPERTIME_MATH_PREVIEW_ONSCREEN")
+        if onScreenByRequest, let main = NSScreen.main {
             window.setFrameOrigin(NSPoint(x: main.visibleFrame.maxX - 580, y: main.visibleFrame.minY + 20))
         }
         // `--papertime-dark=1` darkens the app's own windows through
@@ -51,6 +52,12 @@ enum MathPreviewProbe {
         hosting.frame = NSRect(x: 0, y: 0, width: 560, height: 360)
         window.contentView = hosting
         window.orderFront(nil)
+        if !onScreenByRequest, WindowProbe.isOnAScreen(window) {
+            window.orderOut(nil)
+            say("math preview: the window landed on a screen at \(window.frame) — put away, nothing typed")
+            return NSApp.terminate(nil)
+        }
+        say("math preview: window at \(Int(window.frame.minX)),\(Int(window.frame.minY)) \(onScreenByRequest ? "on screen by request" : "off every screen")")
         hosting.layoutSubtreeIfNeeded()
         try? await Task.sleep(for: .milliseconds(600))
         guard let text = LatexSuiteTypingProbe.noteTextView(in: hosting), let coordinator = text.coordinator else {

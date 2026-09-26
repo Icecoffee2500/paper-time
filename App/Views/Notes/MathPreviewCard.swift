@@ -40,6 +40,14 @@ final class MathPreviewCard {
     /// Where the glass got its ground: "window" (the window server),
     /// "view" (the text view's own drawing) or "none".
     private(set) var groundSource = "none"
+    /// How long the last slab took to render, in milliseconds.
+    private(set) var renderMilliseconds = 0.0
+    /// The slab last rendered, kept under the face while the next one is
+    /// computed — the render is a few hundred thousand pixels and runs off
+    /// the main thread, so a keystroke never waits for it.
+    private var lastSlab: NSImage?
+    /// Counts `show` calls, so a slab rendered for an earlier one is dropped.
+    private var generation = 0
 
     /// A child window outlives its owner: the parent window keeps it. So
     /// the card takes its panel down with it — which is how a card was
@@ -108,11 +116,30 @@ final class MathPreviewCard {
         panel.appearance = view.effectiveAppearance
         let ground = Self.ground(under: local, of: view)
         groundSource = ground?.source ?? "none"
-        let slab = ground.flatMap {
-            GlassSlab.render(ground: $0.image, size: cardSize, cornerRadius: Corner.popover, dark: dark,
-                             scale: window.backingScaleFactor)
+        // The last slab stays under the face while the new one is computed,
+        // when it is the same size; a card that changed size shows the
+        // plain backing for the few milliseconds until the slab lands.
+        let held = lastSlab.flatMap { $0.size == cardSize ? $0 : nil }
+        hosting.rootView = ContentView(face: face, room: room, ground: held)
+        generation += 1
+        let mark = generation
+        if let ground {
+            nonisolated(unsafe) let picture = ground.image
+            let scale = window.backingScaleFactor
+            Task.detached(priority: .userInitiated) { [weak self] in
+                let started = Date()
+                nonisolated(unsafe) let slab = GlassSlab.render(
+                    ground: picture, size: cardSize, cornerRadius: Corner.popover, dark: dark, scale: scale
+                )
+                let took = Date().timeIntervalSince(started) * 1000
+                await MainActor.run {
+                    guard let self, self.generation == mark, let hosting = self.hosting, let face = self.face else { return }
+                    self.renderMilliseconds = took
+                    self.lastSlab = slab
+                    hosting.rootView = ContentView(face: face, room: room, ground: slab)
+                }
+            }
         }
-        hosting.rootView = ContentView(face: face, room: room, ground: slab)
 
         if !panel.isVisible {
             panel.alphaValue = 0
@@ -143,7 +170,7 @@ final class MathPreviewCard {
         case .raw(let text): kind = "raw \(text.debugDescription)"
         }
         let frame = panel.frame
-        return "math preview: visible \(kind) at \(Int(frame.minX)),\(Int(frame.minY)) \(Int(frame.width))×\(Int(frame.height)) ground \(groundSource) for \(latex?.debugDescription ?? "nil")"
+        return "math preview: visible \(kind) at \(Int(frame.minX)),\(Int(frame.minY)) \(Int(frame.width))×\(Int(frame.height)) ground \(groundSource) slab \(lastSlab == nil ? "pending" : String(format: "%.0f ms", renderMilliseconds)) for \(latex?.debugDescription ?? "nil")"
     }
 
     /// The card's pixels, for a probe that photographs the editor: a child
@@ -228,12 +255,33 @@ final class MathPreviewCard {
         // paper under the words is the window's.
         let paper = (view as? NSTextView).flatMap { $0.drawsBackground ? $0.backgroundColor : nil }
             ?? view.window?.backgroundColor ?? .textBackgroundColor
-        let image = NSImage(size: rect.size, flipped: false) { bounds in
+        // Painted into pixels here, on the main thread: an image made of a
+        // drawing handler runs that handler wherever it is first drawn, and
+        // the slab is rendered on another thread — the handler's actor check
+        // trapped there.
+        let scale = view.window?.backingScaleFactor ?? 2
+        let wide = max(Int(rect.width * scale), 1), high = max(Int(rect.height * scale), 1)
+        guard let bitmap = NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: wide, pixelsHigh: high, bitsPerSample: 8, samplesPerPixel: 4,
+            hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+        ) else { return nil }
+        bitmap.size = rect.size
+        NSGraphicsContext.saveGraphicsState()
+        defer { NSGraphicsContext.restoreGraphicsState() }
+        guard let context = NSGraphicsContext(bitmapImageRep: bitmap) else { return nil }
+        NSGraphicsContext.current = context
+        let bounds = NSRect(origin: .zero, size: rect.size)
+        // Under the view's own appearance: the paper is a dynamic colour,
+        // and filled outside a drawing pass it comes out as the light one —
+        // a dark note's card was rendered over white.
+        view.effectiveAppearance.performAsCurrentDrawingAppearance {
             paper.setFill()
             bounds.fill()
             taken.draw(in: bounds)
-            return true
         }
+        context.flushGraphics()
+        let image = NSImage(size: rect.size)
+        image.addRepresentation(bitmap)
         return (image, "view")
     }
 
