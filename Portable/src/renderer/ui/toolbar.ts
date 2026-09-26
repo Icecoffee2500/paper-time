@@ -182,6 +182,8 @@ export interface MenuEntry {
   caption?: string
   separator?: boolean
   checked?: boolean
+  /** Shown greyed and not pressable — the Mac's `.disabled`. */
+  disabled?: boolean
   action?: () => void
   /** A submenu, opened beside the item when the pointer rests on it. */
   children?: MenuEntry[]
@@ -240,10 +242,14 @@ function buildMenu(entries: MenuEntry[]): HTMLElement {
       on(item, 'click', open)
     } else {
       on(item, 'mouseenter', closeSubmenu)
-      on(item, 'click', () => {
-        closeMenu()
-        entry.action?.()
-      })
+      if (entry.disabled) {
+        item.setAttribute('disabled', '')
+      } else {
+        on(item, 'click', () => {
+          closeMenu()
+          entry.action?.()
+        })
+      }
     }
     menu.append(item)
   }

@@ -19,6 +19,8 @@ import { clear, el, on } from './dom.js'
 import { showFeedback } from './ui/feedback.js'
 import { showSettings, type SettingsSection } from './ui/settings.js'
 import { askForName } from './ui/ask.js'
+import { showAttachSheet } from './ui/attachSheet.js'
+import { showExportSheet } from './ui/exportSheet.js'
 import {
   adopt,
   attachmentsOf,
@@ -285,6 +287,18 @@ const paperList = buildPaperList({
         .map(([value, label, glyph]) => ({
           label, icon: glyph, action: () => void setKind(id, value),
         })),
+      // A search for the one to go under, as on the Mac — greyed for a paper
+      // that is a supplement already, has its own, or has nothing to go under.
+      {
+        label: L('다른 논문에 붙이기…', 'Attach To…'),
+        icon: 'paperclip',
+        disabled: Boolean(entry.meta.parentID) || attachmentsOf(id).length > 0 || attachTargets(id).length === 0,
+        action: () => showAttachSheet({
+          child: { id, title: entry.meta.displayTitle },
+          candidates: attachTargets(id),
+          attach: (parent) => void attach(id, parent),
+        }),
+      },
       { separator: true },
       { label: L('폴더에서 보기', 'Show in Folder'), icon: 'folder', action: () => void call('paper:reveal', { id }) },
       ...(isCitable(entry.meta.effectiveKind)
@@ -415,9 +429,22 @@ async function attach(child: string, parent: string) {
     return
   }
   await call('paper:meta', { id: child, patch: { parentID: parent } })
-  // It is off the shelves now; a pane showing it stays, as it would on the Mac.
   await reload()
+  // Off the shelves now; if it was the one showing, its paper comes forward
+  // (`LibraryModel.attach`).
+  if (store.selectedID === child) await showPaper(parent)
   toast(L(`“${target.meta.displayTitle}”에 붙였어요`, `Attached to “${target.meta.displayTitle}”`))
+}
+
+/** Every paper another could go under: standing on its own, and not itself. */
+function attachTargets(id: string): { id: string; title: string; fileName: string }[] {
+  return store.papers
+    .filter((entry) => entry.id !== id && !entry.meta.parentID)
+    .map((entry) => ({
+      id: entry.id,
+      title: entry.meta.displayTitle,
+      fileName: entry.meta.file.originalName || entry.meta.file.relativePath.split(/[\\/]/).pop() || '',
+    }))
 }
 
 /** Takes a supplement off its paper: a paper of its own again. */
@@ -1883,22 +1910,20 @@ function runMenuCommand(command: string) {
       if (!reader?.markSelection('underline')) toast(L('먼저 글을 골라주세요.', 'Select some text first.'))
       break
     case 'exportBibTeX':
-      void (async () => {
-        // What a bibliography holds: papers and books. Course material and a
-        // document are read, not cited (`isCitable`) — and an empty list must
-        // not go at all, because the main process reads «no ids» as «all».
-        const ids = shelfPapers().filter((entry) => isCitable(entry.meta.effectiveKind)).map((entry) => entry.id)
-        if (ids.length === 0) return toast(L('내보낼 논문이 없어요.', 'There is nothing to export.'))
-        const result = await call<{ written?: number; error?: string; cancelled?: boolean }>(
-          'bibtex:export', { ids, protectCase: store.settings.bibtexProtectCase !== false },
-        )
-        if (result.cancelled) return
-        if (result.error) return toast(result.error)
-        toast(L(
-          `${result.written}편을 내보냈어요`,
-          `Exported ${result.written} ${result.written === 1 ? 'entry' : 'entries'}`,
-        ))
-      })()
+      // The Mac's sheet: the scope, the options, the file previewed.
+      showExportSheet({
+        view: () => shelfPapers(),
+        copy: (text) => {
+          void navigator.clipboard.writeText(text)
+          toast(L('BibTeX를 복사했어요', 'BibTeX copied'))
+        },
+        save: async (text) => {
+          const result = await call<{ path?: string; cancelled?: boolean }>('bibtex:save', { text })
+          if (result.cancelled || !result.path) return false
+          toast(L('BibTeX를 저장했어요', 'BibTeX saved'))
+          return true
+        },
+      })
       break
     case 'copyCitationKey':
       if (store.selectedID) void copyKey(store.selectedID)

@@ -1087,6 +1087,18 @@ const handlers: Record<string, Handler> = {
     return { written: chosen.length, path: result.filePath }
   }) as Handler,
 
+  // The sheet's «Save…»: the text it previewed, where the person says.
+  'bibtex:save': (async ({ text }: { text: string }, sender: BrowserWindow | null) => {
+    const result = await dialog.showSaveDialog(sender ?? window!, {
+      title: say('BibTeX 내보내기', 'Export BibTeX'),
+      defaultPath: 'references.bib',
+      filters: [{ name: 'BibTeX', extensions: ['bib'] }],
+    })
+    if (result.canceled || !result.filePath) return { cancelled: true }
+    await fsp.writeFile(result.filePath, text, 'utf8')
+    return { path: result.filePath }
+  }) as Handler,
+
   // The window sends the whole list; it is put back folder by folder. Each
   // folder keeps the collections it already had, and a new one goes into the
   // first — the folder a paper added now would go into.

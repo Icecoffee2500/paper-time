@@ -15,6 +15,7 @@ import { encodeSubtitle, parseSubtitle, subtitleLine, toggledSubtitle } from '..
 import { SHORTCUTS, acceleratorFor, displayAccelerator, keyFor, withKey } from '../shared/shortcuts.js'
 import { setKorean } from '../shared/lang.js'
 import { currentHeading } from '../renderer/ui/pages.js'
+import { attachCandidate, rankAttachments } from '../shared/attachmentSearch.js'
 
 type Test = (name: string, body: () => void | Promise<void>) => Promise<void>
 
@@ -156,6 +157,40 @@ export async function paritySuite(test: Test, suite: (name: string) => void) {
     assert.equal(currentHeading(entries, 3), 2, 'the deepest heading already begun')
     assert.equal(currentHeading(entries, 9), 4)
     assert.equal(currentHeading([{ title: 'Late', depth: 0, pageIndex: 4, top: null }], 1), -1, 'nothing begun yet')
+  })
+
+  suite('Finding the paper to attach to, as AttachmentSearchTests does')
+
+  const shelf = [
+    attachCandidate('1', 'Efficient Test-Time Adaptation of Vision-Language Models', 'Karmanov_Efficient_Test-Time_Adaptation_CVPR_2024.pdf'),
+    attachCandidate('2', 'Attention Is All You Need', '1706.03762v7.pdf'),
+    attachCandidate('3', 'Deep Residual Learning for Image Recognition', 'Deep Residual Learning for Image Recognition.pdf'),
+    attachCandidate('4', '강화학습의 수학적 기초', 'rl-foundations.pdf'),
+    attachCandidate('5', 'Zero-Shot Text-to-Image Generation', 'Zero-Shot Text-to-Image Generation.pdf'),
+  ]
+  const first = (query: string) => rankAttachments(shelf, query)[0]?.title
+
+  await test('nothing typed lists every paper in title order', () => {
+    const titles = rankAttachments(shelf, '').map((one) => one.title)
+    assert.equal(titles.length, shelf.length)
+    assert.deepEqual(titles, [...titles].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })))
+  })
+
+  await test('a phrase from the middle of a title, the file name, a word prefix, Korean through its particle', () => {
+    assert.equal(first('vision-language'), 'Efficient Test-Time Adaptation of Vision-Language Models')
+    assert.equal(first('karmanov'), 'Efficient Test-Time Adaptation of Vision-Language Models')
+    assert.equal(first('1706.03762'), 'Attention Is All You Need')
+    assert.equal(first('adapt'), 'Efficient Test-Time Adaptation of Vision-Language Models')
+    assert.equal(first('resid'), 'Deep Residual Learning for Image Recognition')
+    assert.equal(first('강화학습'), '강화학습의 수학적 기초')
+  })
+
+  await test('every word beats most of them; nothing matching is not offered; a typo still finds it', () => {
+    const ranked = rankAttachments(shelf, 'image recognition').map((one) => one.title)
+    assert.equal(ranked[0], 'Deep Residual Learning for Image Recognition')
+    assert.equal(ranked[1], 'Zero-Shot Text-to-Image Generation')
+    assert.deepEqual(rankAttachments(shelf, 'photosynthesis'), [])
+    assert.equal(first('attentoin is all you ned'), 'Attention Is All You Need')
   })
 
   suite('The keys, as each desktop writes them')
