@@ -300,10 +300,17 @@ enum ReleaseNotes {
             version: "0.9.10",
             date: Text2("2026년 9월", "September 2026"),
             note: Text2(
-                "뜻으로 찾기가 노트도 읽어요.",
-                "Search by meaning reads your notes too."
+                "뜻으로 찾기가 노트도 읽어요. 윈도우·리눅스에서도 저장이 논문 파일을 다시 쓰지 않아요.",
+                "Search by meaning reads your notes too. On Windows and Linux, saving no longer rewrites the paper's file."
             ),
             added: [
+                Entry(
+                    Text2("윈도우·리눅스도 덧붙여 저장", "Appended saves on Windows and Linux"),
+                    Text2(
+                        "윈도우·리눅스에서도 표시를 저장할 때 논문 파일을 처음부터 다시 쓰지 않고 뒤에 덧붙여요. 원래 바이트는 그대로고, 맥과 서로 붙인 파일을 그대로 읽어요. 덧붙일 수 없는 파일이면 표시를 Paper Time 안에 두고 왜 그런지 말해요.",
+                        "Saving marks on Windows and Linux appends them to the PDF instead of rewriting it. The original bytes stay, and files appended on the Mac and here read each other. A file that cannot take an appended revision keeps its marks in Paper Time and says why."
+                    )
+                ),
                 Entry(
                     Text2("노트도 뜻으로 찾기", "Notes, by Meaning"),
                     Text2(
