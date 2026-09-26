@@ -89,33 +89,52 @@ which the Mac fills in the next time it sees it.
 ## What is in this build
 
 The reader, the four panes and the toolbar, with the Mac's arrangement and the
-Mac's keys (⌘ becomes Ctrl and nothing else changes). Library open, import,
-adopt-in-place, trash, folder watching. The shelves, sort, search over the
-library. Highlights and underlines, with the selection bar. The whole drawing
+Mac's keys (⌘ becomes Ctrl and nothing else changes; Back and Forward are
+Alt+←/→ there, the desktop's own). One list of keys (`src/shared/shortcuts.ts`)
+feeds the menu, the tooltips and Settings → Shortcuts — on Windows and Linux
+the window is frameless and has no menu bar, so the menu's items that have no
+key of their own (Help) are in the ⋯ menu too.
+
+Library open, import (into the library whose shelf is showing), adopt-in-place,
+trash, folder watching, several folders. The shelves — reading status,
+favourites, collections (smart ones by their rule) and tags take a dropped
+paper — sort, the Mac's row (tags, the paperclip with its supplements, the
+status menu, the chosen subtitle fields), attach by dropping or by
+«Attach To…». Search Everything with the words inside the papers and by
+meaning, find in document. Highlights, underlines and strikethroughs with the
+selection bar; a mark clicked is recoloured, noted or removed, the Marks tab
+lists them, ⌘Z takes any of it back. ⌘L quotes a passage into the paper's note
+in the Mac's Markdown; Ctrl-click on its page link goes back. Links in the
+paper, with Back through them; the contents (the PDF's outline) and the page
+grid on ⇧⌘L; continuous, single page and the book spread. The whole drawing
 layer — select, pen, highlighter, eraser, rectangle, ellipse, arrow, line,
 text, the style panel, handles, bending, marquee, framing a selection, z-order,
-undo. The inspector's details, editable. BibTeX export. Page tint, zoom, dark
-mode.
+undo. The inspector's Info form, editable. BibTeX export through the Mac's
+sheet. Settings (library, reading, writing, BibTeX, shortcuts, about), page
+tint, zoom, dark mode.
 
 ## What is not, yet
 
 Named plainly, because a list of what is missing is more use than a claim that
 nothing is:
 
-- **Metadata resolution** — no OpenAlex or Crossref lookup. New records are
-  `unparsed` until a Mac sees them.
-- **The slip-box** — one summary note per paper, not the note list, the
-  editor, the links between notes, or the typeset maths.
-- **⌘L, quote into a note** — and the maths transcription behind it.
-- **Full-text search** — the palette searches titles, authors, venues and
-  citation keys, not the text of the papers.
-- **Find in document.**
+- **Metadata resolution** — no heuristics, no OpenAlex or Crossref lookup. A
+  new record is `unparsed`, titled by its file name, until a Mac sees it; the
+  candidates, Re-run and Resolve Missing are not here.
+- **The slip-box** — one note per paper (the Mac's Info-tab memo, a plain
+  textarea with Latex Suite and the formula card), not the Mac's note files
+  (`.papertime/notes/*.md`): notes written on the Mac do not show here, and
+  there are no links between notes, maps, drafts, resonance or typeset
+  rendering.
+- **Ultracopy**, and the maths transcription behind ⌘L — a quotation here is
+  the words the text layer gives.
+- **Headings read off the pages** when a PDF has no outline (`PaperContents`).
 - **The citation graph.**
-- **The marks list** in the inspector — marks are made and saved, but the
-  inspector's Marks tab does not list them yet.
+- **Citation Styles, Import Existing Library, Restore Original Text.**
 - **Book trim**, the margin mask.
-- **The feature demos and What's New.**
-- **A settings window** — the preferences that exist are in the ⋯ menu.
+- **The feature demos and What's New** — About links to the release page.
+- **Changing the keys** — Settings lists them to read.
+- **Settings as pages** with a list down the side — here it is one sheet.
 
 ## Where the appearance is deliberately not identical
 

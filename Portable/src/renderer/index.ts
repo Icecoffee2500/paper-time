@@ -86,6 +86,7 @@ import { L } from '../shared/lang.js'
 import { type ByteTrouble, type PDFLock } from '../shared/pdfLock.js'
 import { isCitable, isLookedUp, type DocumentKind } from '../shared/documentKind.js'
 import { passageText, quotationSource } from '../shared/noteQuote.js'
+import { entryFor } from '../shared/bibtex.js'
 
 document.body.dataset.platform = platform
 /** This window shows one paper on its own: no library columns. */
@@ -1351,7 +1352,9 @@ const TOGETHER_URL = 'https://icecoffee2500.github.io/paper-time/#together'
 async function copyKey(id: string) {
   const entry = findPaper(id)
   if (!entry) return
-  await navigator.clipboard.writeText(entry.meta.bibKey || entry.meta.displayTitle)
+  // The key the exported file gives it — its own, or the one the export
+  // makes up — and never its title, which no \cite{} would find.
+  await navigator.clipboard.writeText(entryFor(entry.meta).key)
   toast(L('인용 키를 복사했어요', 'Citation key copied'))
 }
 
