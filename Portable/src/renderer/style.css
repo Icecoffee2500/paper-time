@@ -809,12 +809,71 @@ body[data-platform='darwin'] .window-buttons {
   display: block;
 }
 
-.page-tint {
+/* The paper as printed and everything drawn onto it — the page, the marks,
+   what a search found, the drawing — in one box, so a tint can blend it onto
+   the ground as one thing. A stacking context of its own in every rendering,
+   so the marks inside it multiply onto the page and not onto whatever is
+   behind the page. */
+.page-print {
   position: absolute;
   inset: 0;
+  z-index: 0;
+}
+
+/* Under night, the pictures as printed: over the inverted page, under the
+   words. Blends with nothing — a photograph is not a negative. */
+.page canvas.image-canvas {
   z-index: 2;
   pointer-events: none;
+}
+
+/*
+ * The tints (`shared/pageTint.ts`, the Mac's model). Under multiply and night
+ * the ground is the whole reading area and the pages have no paper and no
+ * shadow of their own: the gap between two pages is then the colour of the
+ * paper they are printed on, and a page does not read as a card on a table.
+ * Glass has no ground but the panel's, so the area is left clear.
+ */
+.reader-panel[data-rendering='multiply'] .reader-scroll,
+.reader-panel[data-rendering='night'] .reader-scroll {
+  background: var(--tint-ground, transparent);
+}
+
+.reader-panel[data-rendering='multiply'] .page,
+.reader-panel[data-rendering='night'] .page {
+  background: transparent;
+  box-shadow: none;
+}
+
+/* A light ground takes the ink by multiplying: the paper's white falls away
+   to the ground and the ink stays ink. White behind the canvas, so a page
+   not drawn yet is the ground too rather than a hole. */
+.reader-panel[data-rendering='multiply'] .page-print {
+  background: #fff;
   mix-blend-mode: multiply;
+}
+
+/* A dark ground cannot — black ink multiplied into it is nothing — so the
+   page goes to night: luminance turned over with every hue put back
+   (`invert` then `hue-rotate(180deg)`, 1 − M·c), and the result screened onto
+   the ground, so the paper's black falls away exactly as the white did under
+   multiply. Nothing inside may be transparent: a clear pixel turned over is
+   white. The white behind the canvas is the paper of a page not drawn yet. */
+.reader-panel[data-rendering='night'] .page-print {
+  background: #fff;
+  filter: invert(1) hue-rotate(180deg);
+  mix-blend-mode: screen;
+}
+
+/* The words of a card being typed are drawn by the text box, not the canvas,
+   so they are turned to night the same way the card under them is. */
+.reader-panel[data-rendering='night'] .sketch-text-editor {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/* A selection on the dark page, where the paper's pale blue would be lost. */
+.reader-panel[data-rendering='night'] .page .text-layer ::selection {
+  background: rgba(110, 150, 255, 0.4);
 }
 
 .reader-footer .icon-button {
@@ -2072,6 +2131,42 @@ body[data-platform='darwin'] .window-buttons {
   height: 14px;
   accent-color: var(--accent);
 }
+/* A row of more choices than fit beside a label: the name above, and the
+   choices across the whole row, each as wide as its word. */
+.set-row-stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding-bottom: 6px;
+}
+.set-row-stacked .set-seg {
+  display: flex;
+  margin-left: 0;
+}
+.set-row-stacked .set-seg button {
+  flex: 1 1 auto;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+/* The ground colour's well: the colour itself in the window's own rounded
+   shape, not the desktop's colour button — the picker it opens is the
+   desktop's, and that is the one part that may be. */
+.set-color {
+  margin: 0 0 0 auto;
+  width: 44px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: calc(var(--radius-control) - 2px);
+  background: none;
+  box-shadow: 0 0 0 0.5px var(--separator-strong);
+  cursor: default;
+  -webkit-appearance: none;
+  appearance: none;
+  overflow: hidden;
+}
+.set-color::-webkit-color-swatch-wrapper { padding: 0; }
+.set-color::-webkit-color-swatch { border: 0; border-radius: 0; }
 
 /* Latex Suite's placeholders, drawn over a textarea that cannot mark its own
    text: the same words in the same place, invisible, with a faint box where a

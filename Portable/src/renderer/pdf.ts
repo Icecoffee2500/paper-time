@@ -58,4 +58,4 @@ export async function loadDocument(
   return task.promise
 }
 
-export const { TextLayer, Util } = pdfjs
+export const { TextLayer, Util, OPS } = pdfjs
