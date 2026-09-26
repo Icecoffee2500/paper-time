@@ -151,8 +151,10 @@ export function buildToolbar(actions: ToolbarActions): { node: HTMLElement; upda
     tip(listButton, paneTip('paperList', L('논문 목록', 'Paper List')))
     tip(readerButton, paneTip('reader', L('논문', 'Paper')))
     tip(inspectorButton, paneTip('inspector', L('정보 패널', 'Inspector')))
-    backButton.toggleAttribute('disabled', !canGoBack())
-    forwardButton.toggleAttribute('disabled', !canGoForward())
+    // Back walks the paper's own history first — a followed link — and then
+    // the papers, as on the Mac.
+    backButton.toggleAttribute('disabled', !(canGoBack() || store.reader.canGoBack))
+    forwardButton.toggleAttribute('disabled', !(canGoForward() || store.reader.canGoForward))
     for (const [tab, b] of Object.entries(tabButtons)) {
       b.setAttribute('aria-selected', String(store.settings.inspectorTab === tab))
     }

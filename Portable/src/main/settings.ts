@@ -28,7 +28,7 @@ export interface Settings {
   language: 'system' | 'ko' | 'en'
   /** A wash over the page, for reading at night or on a bright screen. */
   pageTint: 'none' | 'sepia' | 'grey' | 'night'
-  pageLayout: 'single' | 'continuous'
+  pageLayout: 'single' | 'continuous' | 'book'
   selectedPaperID: string | null
   /** Latex Suite's shortcuts in the note and on the cards. On unless turned off. */
   latexShortcuts: boolean

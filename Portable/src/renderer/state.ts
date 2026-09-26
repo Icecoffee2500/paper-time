@@ -58,7 +58,7 @@ export interface Settings {
   /** The words, when the desktop's own language is not what somebody wants. */
   language: 'system' | 'ko' | 'en'
   pageTint: 'none' | 'sepia' | 'grey' | 'night'
-  pageLayout: 'single' | 'continuous'
+  pageLayout: 'single' | 'continuous' | 'book'
   selectedPaperID: string | null
   /** Latex Suite in the note and on the cards: `@a` into `\alpha`, `//` into a fraction. */
   latexShortcuts: boolean
@@ -79,6 +79,9 @@ export interface ReaderState {
   zoom: number
   /** The pen is out: the page takes the mouse instead of the text layer. */
   drawing: boolean
+  /** A followed link can be walked back, or forward again, inside this paper. */
+  canGoBack?: boolean
+  canGoForward?: boolean
 }
 
 export const freshReaderState = (): ReaderState => ({ pageCount: 0, currentPage: 0, zoom: 1, drawing: false })

@@ -468,6 +468,8 @@ const inspector = buildInspector({
     toast(L('복사했어요', 'Copied'))
   },
   markMenu: (anchor, entries) => showMenu(anchor, entries),
+  open: (id) => void showPaper(id),
+  detach: (id) => void detach(id),
 })
 
 // ------------------------------------------------------------ the page area
@@ -498,9 +500,17 @@ const findBar = new FindBar()
 const pageArea = el('div', { class: 'page-area' })
 const dockZone = el('div', { class: 'dock-zone', 'data-on': 'false' })
 /** What the page area shows when nothing is open. */
+// The Mac's words for it, rather than an empty grey page that looks like a
+// paper failing to load.
 const emptyReader = el('div', { class: 'panel reader-panel' }, [
   el('div', { class: 'reader-header' }),
-  el('div', { class: 'reader-scroll' }),
+  el('div', { class: 'reader-scroll' }, [
+    el('div', { class: 'empty' }, [
+      el('span', { html: icon('text.document') }),
+      el('h2', { text: L('고른 논문이 없어요', 'No Paper Selected') }),
+      el('p', { text: L('읽을 논문을 하나 골라보세요.', 'Choose a paper to start reading.') }),
+    ]),
+  ]),
 ])
 pageArea.append(emptyReader, dockZone)
 
@@ -517,6 +527,7 @@ function readerFor(id: string, pane: boolean): Reader {
     toast,
     // The Marks tab follows the page, and a mark clicked there is found in it.
     marksChanged: () => { if (store.selectedID === id) changed('marks') },
+    historyChanged: () => toolbar.update(),
     markShown: (markID) => inspector.showMark(markID),
     activated: () => {
       // A press in a pane makes it the one in use: the pane in focus, and a
@@ -787,9 +798,15 @@ function showPagesPopup() {
   if (!reader) return
   togglePages(pageArea, {
     pageCount: () => reader.pages_count,
-    currentPage: () => Math.max(0, reader.state.currentPage - 1),
+    // Counted from nought already; the «− 1» that was here ringed the page
+    // before the one being read.
+    currentPage: () => reader.state.currentPage,
     draw: (index, width) => reader.thumbnail(index, width),
-    go: (index) => reader.scrollToPage(index),
+    // A jump Back comes back from, and one that works with one page showing
+    // (the page scrolled to used to be hidden in that layout).
+    go: (index) => void reader.jumpTo(index, null),
+    outline: () => reader.outline(),
+    goToHeading: (entry) => { if (entry.pageIndex !== null) void reader.jumpTo(entry.pageIndex, entry.top) },
   })
 }
 
@@ -937,8 +954,8 @@ const toolbar = buildToolbar({
       },
       { separator: true },
       { caption: L('쪽 배치', 'Page Layout') },
-      ...(['continuous', 'single'] as const).map((layout) => ({
-        label: { continuous: L('이어서 보기', 'Continuous'), single: L('한 쪽씩 보기', 'Single Page') }[layout],
+      ...(['continuous', 'single', 'book'] as const).map((layout) => ({
+        label: { continuous: L('이어서 보기', 'Continuous'), single: L('한 쪽씩 보기', 'Single Page'), book: L('책처럼 보기', 'Book') }[layout],
         checked: store.settings.pageLayout === layout,
         action: () => setLayout(layout),
       })),
@@ -1201,6 +1218,10 @@ function stepPaper(by: number) {
  * pages: going back and then opening something else forgets what lay ahead.
  */
 function goBack() {
+  // The paper's own history first — the sentence a followed link came from —
+  // then the papers (`goBackInHistory` on the Mac).
+  const reader = focused()
+  if (reader?.canGoBackInDocument) return reader.goBackInDocument()
   if (!canGoBack()) return
   const id = travel(store.trailIndex - 1)
   if (!id) return
@@ -1209,6 +1230,8 @@ function goBack() {
 }
 
 function goForward() {
+  const reader = focused()
+  if (reader?.canGoForwardInDocument) return reader.goForwardInDocument()
   if (!canGoForward()) return
   const id = travel(store.trailIndex + 1)
   if (!id) return
@@ -1241,7 +1264,7 @@ function toggleFocus() {
   })
 }
 
-function setLayout(layout: 'single' | 'continuous') {
+function setLayout(layout: 'single' | 'continuous' | 'book') {
   store.settings.pageLayout = layout
   for (const reader of readers.values()) reader.setLayout(layout)
   void call('settings:set', { pageLayout: layout })
@@ -1594,7 +1617,9 @@ on(window, 'keydown', (event: KeyboardEvent) => {
     return
   }
 
-  if (store.settings.pageLayout === 'single' && !store.reader.drawing && reader) {
+  // Turned rather than scrolled — one page, or a book's spread — the arrows
+  // and Page Up/Down turn.
+  if (store.settings.pageLayout !== 'continuous' && !store.reader.drawing && reader) {
     if (event.key === 'PageDown' || event.key === 'ArrowRight') {
       event.preventDefault()
       return reader.turnPage(1)
@@ -1881,6 +1906,7 @@ function runMenuCommand(command: string) {
     case 'focus': toggleFocus(); break
     case 'layoutContinuous': setLayout('continuous'); break
     case 'layoutSinglePage': setLayout('single'); break
+    case 'layoutBook': setLayout('book'); break
     case 'openPapers': if (!solo) showOpenPapersPopup(); break
     case 'pages': showPagesPopup(); break
     case 'openInNewWindow': if (store.selectedID) openInWindow(store.selectedID); break

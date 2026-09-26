@@ -135,7 +135,7 @@ export function showSettings(actions: SettingsActions, section?: SettingsSection
     body.append(el('div', { class: 'set-section', text: L('읽기', 'Reading') }))
     body.append(choices(
       L('쪽 배치', 'Page Layout'),
-      [['continuous', L('이어서', 'Continuous')], ['single', L('한 쪽씩', 'Single')]] as const,
+      [['continuous', L('이어서', 'Continuous')], ['single', L('한 쪽씩', 'Single')], ['book', L('책처럼', 'Book')]] as const,
       store.settings.pageLayout,
       (value) => actions.set({ pageLayout: value }),
     ))

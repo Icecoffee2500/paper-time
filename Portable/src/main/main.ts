@@ -915,6 +915,9 @@ const handlers: Record<string, Handler> = {
     if (!owner) return null
     const row = await owner.paper(id)
     const state = new PaperState(row?.state ?? {})
+    // `null` takes a field off — a rating taken back to none — and the Mac's
+    // record has no key for a nil Optional, so none is written.
+    for (const [key, value] of Object.entries(patch)) if (value === null) patch[key] = undefined
     // A patch crosses the bridge as JSON, so its dates arrive as strings.
     Object.assign(state, patch, {
       lastOpenedAt: patch.lastOpenedAt ? new Date(String(patch.lastOpenedAt)) : state.lastOpenedAt,

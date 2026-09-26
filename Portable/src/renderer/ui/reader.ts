@@ -93,6 +93,8 @@ export interface ReaderActions {
   marksChanged?: () => void
   /** A mark on the page was clicked: the Marks tab brings its row forward. */
   markShown?: (id: string) => void
+  /** A link was followed, or Back walked the paper: the arrows may change. */
+  historyChanged?: () => void
 }
 
 /** A place in a paper: how far down, and down how much. */
@@ -118,6 +120,28 @@ export interface TextRange {
 interface FindMark extends TextRange {
   current: boolean
 }
+
+/** A link on a page: where it is, and where it goes. */
+export interface PageLink {
+  /** `[x1, y1, x2, y2]` in the page's own coordinates. */
+  rect: number[]
+  /** Out of the paper, to the browser. */
+  url?: string
+  /** Inside the paper: a named or an explicit destination. */
+  dest?: unknown
+  /** A named action — NextPage, PrevPage, GoBack… */
+  action?: string
+}
+
+/** Where the reader stands in a paper, for the history links make. */
+interface DocumentPlace {
+  page: number
+  top: number
+  of: number
+}
+
+/** The gutter between the two pages of a book's spread, in the window's pixels. */
+const BOOK_GUTTER = 24
 
 /** One of the five mark colours, said in the window's language. */
 function colourWord(name: string): string {
@@ -226,6 +250,42 @@ export class PageView {
     this.root.style.setProperty('--scale-factor', String(scale))
     this.rendered = false
     this.drawing = null
+  }
+
+  /**
+   * The page's links — a citation to its reference, a figure's number to the
+   * figure, a URL — read once from the PDF's own link annotations. Nothing is
+   * laid over the page for them: a press is looked up here instead
+   * (`Reader.followLink`), the way PDFKit follows a link on the Mac.
+   */
+  private linksRead: Promise<PageLink[]> | null = null
+  links: PageLink[] = []
+
+  pageLinks(): Promise<PageLink[]> {
+    if (!this.linksRead) {
+      this.linksRead = this.proxy.getAnnotations({ intent: 'display' })
+        .then((annotations: unknown[]) => (annotations as {
+          subtype?: string; rect?: number[]; url?: string; dest?: unknown; action?: string
+        }[])
+          .filter((one) => one.subtype === 'Link' && Array.isArray(one.rect) && (one.url || one.dest != null || one.action))
+          .map((one) => ({ rect: one.rect as number[], url: one.url, dest: one.dest, action: one.action })))
+        .catch(() => [])
+        .then((links: PageLink[]) => {
+          this.links = links
+          return links
+        })
+    }
+    return this.linksRead
+  }
+
+  /** The link under a point of the page, in the page's own coordinates. */
+  linkAt(point: { x: number; y: number }): PageLink | null {
+    for (const link of this.links) {
+      const [x1, y1, x2, y2] = link.rect
+      if (point.x >= Math.min(x1, x2) && point.x <= Math.max(x1, x2)
+        && point.y >= Math.min(y1, y2) && point.y <= Math.max(y1, y2)) return link
+    }
+    return null
   }
 
   /** Page coordinates from a point in the page element's own box. */
@@ -538,15 +598,38 @@ export class Reader {
     // A click on a mark — a press, not a drag across it, which is a
     // selection — brings up its controls, as the Mac's click on a mark does.
     // A press anywhere else puts them away.
+    // A link in the paper goes where it points — a citation to its
+    // reference, a URL to the browser — ahead of any mark under it.
     on(this.pagesBox, 'click', (event: MouseEvent) => {
       if (this.state.drawing || event.button !== 0) return
       const selection = window.getSelection()
       if (selection && !selection.isCollapsed) return
       const page = this.pageContaining(event.target as Node) ?? this.pageAtClient(event.clientX, event.clientY)
-      const mark = page ? this.markAt(page, page.toPageFromClient(event.clientX, event.clientY)) : null
-      if (page && mark && !mark.id.startsWith('foreign-')) this.showMarkEditor(page, mark)
-      else this.hideMarkEditor()
+      if (!page) return this.hideMarkEditor()
+      const point = page.toPageFromClient(event.clientX, event.clientY)
+      void page.pageLinks().then(() => {
+        const link = page.linkAt(point)
+        if (link) {
+          this.hideMarkEditor()
+          void this.followLink(link)
+          return
+        }
+        const mark = this.markAt(page, point)
+        if (mark && !mark.id.startsWith('foreign-')) this.showMarkEditor(page, mark)
+        else this.hideMarkEditor()
+      })
     })
+    // Over a link the pointer says so, and a URL shows where it goes.
+    on(this.pagesBox, 'mousemove', (event: MouseEvent) => {
+      if (this.state.drawing) return
+      this.hover = { x: event.clientX, y: event.clientY, target: event.target as Node }
+      if (this.hoverFrame) return
+      this.hoverFrame = requestAnimationFrame(() => {
+        this.hoverFrame = 0
+        void this.updateHover()
+      })
+    })
+    on(this.pagesBox, 'mouseleave', () => this.showOverLink(null))
     // A formula's picture arrives after the card was drawn; the page is
     // drawn again when it does.
     installMathProvider(this.onMathReady)
@@ -911,6 +994,13 @@ export class Reader {
     this.folds.clear()
     this.pageTextCache.clear()
     this.showingPassage = false
+    // The outline and the history belong to the paper that was open.
+    this.outlineRead = null
+    this.backPlaces = []
+    this.forwardPlaces = []
+    this.noteHistory()
+    this.composing = null
+    this.hideMarkBar()
   }
 
   // MARK: - Finding words
@@ -1036,12 +1126,8 @@ export class Reader {
   async scrollToFound(pageIndex: number) {
     const page = this.pages[pageIndex]
     if (!page) return
-    if (store.settings.pageLayout === 'single') {
-      if (this.state.currentPage !== pageIndex) {
-        this.state.currentPage = pageIndex
-        this.applyLayout()
-        this.updateFooter()
-      }
+    if (this.turnsPages) {
+      this.ensureShowing(pageIndex)
     } else {
       const top = page.root.offsetTop
       const bottom = top + page.root.offsetHeight
@@ -1121,8 +1207,12 @@ export class Reader {
     const first = this.pages[0]
     if (!first) return 1
     const unit = first.proxy.getViewport({ scale: 1 })
-    const available = Math.max(this.scroll.clientWidth - 40, 200)
-    return available / unit.width
+    // A book fills the window with two pages across it and the gutter
+    // between them, as the Mac's spread does — not two pages fitted to its
+    // height and floating small in the middle.
+    const across = store.settings.pageLayout === 'book' ? 2 : 1
+    const available = Math.max(this.scroll.clientWidth - 40 - (across - 1) * BOOK_GUTTER, 200)
+    return available / (unit.width * across)
   }
 
   relayout() {
@@ -1137,40 +1227,74 @@ export class Reader {
   }
 
   /**
-   * One page at a time, or all of them.
+   * One page at a time, two across, or all of them.
    *
    * Single-page reading is not a smaller continuous scroll — it is a
    * different way of reading, where the page is the unit and turning it is
    * deliberate. So the others are taken out of the flow entirely rather than
    * scrolled past, and the arrow keys turn pages instead of nudging the
-   * scroll by a line.
+   * scroll by a line. A book is the same with two pages facing — the Mac's
+   * spread: pages 1 and 2 face each other (a paper's first spread is its
+   * title and its introduction, not a cover), and ←/→ turn the spread.
    */
   applyLayout() {
-    const single = store.settings.pageLayout === 'single'
+    const shown = this.shownPages()
+    this.pagesBox.dataset.layout = store.settings.pageLayout
     for (const page of this.pages) {
-      page.root.style.display = !single || page.index === this.state.currentPage ? '' : 'none'
+      page.root.style.display = !shown || shown.has(page.index) ? '' : 'none'
     }
-    if (single) this.scroll.scrollTop = 0
+    if (shown) this.scroll.scrollTop = 0
   }
 
-  /** Moves by whole pages. Only meaningful when one page is showing. */
-  turnPage(by: number) {
-    const next = Math.max(0, Math.min(this.state.currentPage + by, this.pages.length - 1))
-    if (next === this.state.currentPage) return
-    this.state.currentPage = next
-    if (store.settings.pageLayout === 'single') {
-      this.applyLayout()
-      void this.pages[next]?.render()
-      this.updateFooter()
-    } else {
-      this.scrollToPage(next)
-    }
+  /** Whether pages are turned (one, or a spread) rather than scrolled. */
+  private get turnsPages(): boolean {
+    return store.settings.pageLayout !== 'continuous'
   }
 
-  setLayout(layout: 'single' | 'continuous') {
-    store.settings.pageLayout = layout
+  /** The first page of what shows with a page: itself, or its spread's left page. */
+  private spreadStart(index: number): number {
+    return store.settings.pageLayout === 'book' ? index - (index % 2) : index
+  }
+
+  /** The pages on show when pages are turned; null when they all scroll. */
+  private shownPages(): Set<number> | null {
+    if (!this.turnsPages) return null
+    const start = this.spreadStart(this.state.currentPage)
+    return new Set(store.settings.pageLayout === 'book' ? [start, start + 1] : [start])
+  }
+
+  /** Turns to the page wanted, when pages are turned; a scroll shows them all. */
+  private ensureShowing(pageIndex: number) {
+    if (!this.turnsPages || this.shownPages()?.has(pageIndex)) return
+    this.state.currentPage = pageIndex
     this.applyLayout()
-    this.renderVisible()
+    this.updateFooter()
+  }
+
+  /** Moves by whole pages — by spreads in a book. */
+  turnPage(by: number) {
+    if (!this.turnsPages) {
+      const next = Math.max(0, Math.min(this.state.currentPage + by, this.pages.length - 1))
+      if (next === this.state.currentPage) return
+      this.state.currentPage = next
+      this.scrollToPage(next)
+      return
+    }
+    const step = store.settings.pageLayout === 'book' ? 2 : 1
+    const from = this.spreadStart(this.state.currentPage)
+    const next = this.spreadStart(Math.max(0, Math.min(from + by * step, this.pages.length - 1)))
+    if (next === from) return
+    this.state.currentPage = next
+    this.applyLayout()
+    for (const index of this.shownPages() ?? []) void this.pages[index]?.render()
+    this.updateFooter()
+  }
+
+  setLayout(layout: 'single' | 'continuous' | 'book') {
+    store.settings.pageLayout = layout
+    // Laid out again: a book is two pages across the column, so its pages
+    // are drawn smaller than the others are.
+    this.relayout()
     this.updateFooter()
   }
 
@@ -1497,16 +1621,185 @@ export class Reader {
     const page = this.pages[pageIndex]
     const mark = page?.marks.find((one) => one.id === id)
     if (!page || !mark) return
-    if (store.settings.pageLayout === 'single' && this.state.currentPage !== pageIndex) {
-      this.state.currentPage = pageIndex
-      this.applyLayout()
-      this.updateFooter()
-    }
+    this.ensureShowing(pageIndex)
     await page.render()
     const tops = mark.quads.map((quad) => page.toView(quad[0], Math.max(quad[1], quad[3])).y)
     this.scroll.scrollTop = Math.max(0, page.root.offsetTop + Math.min(...tops) - this.scroll.clientHeight / 3)
     // After the scroll has been told about: a scroll puts the bar away.
     setTimeout(() => this.showMarkEditor(page, mark), 60)
+  }
+
+  // ------------------------------------------------------------- links
+
+  private hover: { x: number; y: number; target: Node } | null = null
+  private hoverFrame = 0
+  private overLink: PageLink | null = null
+
+  private async updateHover() {
+    const at = this.hover
+    if (!at) return
+    const page = this.pageContaining(at.target)
+    if (!page) return this.showOverLink(null)
+    await page.pageLinks()
+    this.showOverLink(page.linkAt(page.toPageFromClient(at.x, at.y)))
+  }
+
+  private showOverLink(link: PageLink | null) {
+    if (link === this.overLink) return
+    this.overLink = link
+    this.scroll.classList.toggle('over-link', Boolean(link))
+    if (link?.url) this.scroll.title = link.url
+    else this.scroll.removeAttribute('title')
+  }
+
+  /**
+   * Where the reader stood before a link was followed, to come back to. The
+   * Mac's PDF view keeps the same history, and Back walks it before it walks
+   * the papers (`goBackInHistory`): follow a citation to the references, and
+   * Back is the sentence it came from.
+   */
+  private backPlaces: DocumentPlace[] = []
+  private forwardPlaces: DocumentPlace[] = []
+
+  get canGoBackInDocument(): boolean {
+    return this.backPlaces.length > 0
+  }
+
+  get canGoForwardInDocument(): boolean {
+    return this.forwardPlaces.length > 0
+  }
+
+  private here(): DocumentPlace {
+    return { page: this.state.currentPage, top: this.scroll.scrollTop, of: this.scroll.scrollHeight }
+  }
+
+  private goTo(place: DocumentPlace) {
+    if (this.turnsPages && !this.shownPages()?.has(place.page)) {
+      this.ensureShowing(place.page)
+      void this.pages[place.page]?.render()
+    }
+    const height = this.scroll.scrollHeight
+    const moved = place.of > 0 && Math.abs(height - place.of) > 1
+    this.scroll.scrollTop = moved ? Math.round(place.top * (height / place.of)) : place.top
+  }
+
+  private noteHistory() {
+    this.state.canGoBack = this.backPlaces.length > 0
+    this.state.canGoForward = this.forwardPlaces.length > 0
+    this.actions.historyChanged?.()
+  }
+
+  goBackInDocument() {
+    const place = this.backPlaces.pop()
+    if (!place) return
+    this.forwardPlaces.push(this.here())
+    this.goTo(place)
+    this.noteHistory()
+  }
+
+  goForwardInDocument() {
+    const place = this.forwardPlaces.pop()
+    if (!place) return
+    this.backPlaces.push(this.here())
+    this.goTo(place)
+    this.noteHistory()
+  }
+
+  /** Goes where a link points, and remembers where from. */
+  async followLink(link: PageLink) {
+    if (link.url) {
+      // Out to the browser; only the web's own two schemes are let through.
+      void call('shell:openExternal', { url: link.url })
+      return
+    }
+    if (link.action) {
+      switch (link.action) {
+        case 'NextPage': return this.turnPage(1)
+        case 'PrevPage': return this.turnPage(-1)
+        case 'FirstPage': return this.jumpTo(0, null)
+        case 'LastPage': return this.jumpTo(this.pages.length - 1, null)
+        case 'GoBack': return this.goBackInDocument()
+        case 'GoForward': return this.goForwardInDocument()
+      }
+      return
+    }
+    const target = await this.destinationPlace(link.dest)
+    if (target) await this.jumpTo(target.pageIndex, target.top)
+  }
+
+  /** A jump inside the paper that Back comes back from. */
+  async jumpTo(pageIndex: number, top: number | null) {
+    if (!this.pages[pageIndex]) return
+    this.backPlaces.push(this.here())
+    this.forwardPlaces = []
+    await this.showPlace(pageIndex, top)
+    this.noteHistory()
+  }
+
+  /**
+   * Where a destination points — a link's, or a heading of the outline: its
+   * page, and how far down it in the page's own coordinates when it says.
+   */
+  async destinationPlace(dest: unknown): Promise<{ pageIndex: number; top: number | null } | null> {
+    const document = this.document
+    if (!document || dest == null) return null
+    try {
+      const explicit = typeof dest === 'string' ? await document.getDestination(dest) : dest
+      if (!Array.isArray(explicit) || explicit.length === 0) return null
+      const [ref, kind, ...args] = explicit as [unknown, { name?: string } | undefined, ...unknown[]]
+      const pageIndex = typeof ref === 'number'
+        ? ref
+        : ref && typeof ref === 'object' && 'num' in ref
+          ? await document.getPageIndex(ref as never)
+          : null
+      if (pageIndex === null || !this.pages[pageIndex]) return null
+      const name = kind?.name
+      const top = name === 'XYZ' ? args[1] : name === 'FitH' || name === 'FitBH' ? args[0] : name === 'FitR' ? args[3] : null
+      return { pageIndex, top: typeof top === 'number' ? top : null }
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * The outline the PDF carries — the headings a LaTeX paper's bookmarks
+   * are — flattened in reading order, each with the page and height it goes
+   * to. Read once a paper, since a jump back in is the common case.
+   */
+  private outlineRead: Promise<{ title: string; depth: number; pageIndex: number | null; top: number | null }[]> | null = null
+
+  outline(): Promise<{ title: string; depth: number; pageIndex: number | null; top: number | null }[]> {
+    const document = this.document
+    if (!document) return Promise.resolve([])
+    if (!this.outlineRead) {
+      type Node = { title?: string; dest?: unknown; items?: Node[] }
+      this.outlineRead = document.getOutline().then(async (tree: Node[] | null) => {
+        const flat: { title: string; depth: number; dest: unknown }[] = []
+        const walk = (nodes: Node[], depth: number) => {
+          for (const node of nodes) {
+            const title = (node.title ?? '').replace(/\s+/g, ' ').trim()
+            if (title) flat.push({ title, depth, dest: node.dest })
+            if (node.items?.length) walk(node.items, depth + 1)
+          }
+        }
+        walk(tree ?? [], 0)
+        return Promise.all(flat.map(async (entry) => {
+          const place = await this.destinationPlace(entry.dest)
+          return { title: entry.title, depth: entry.depth, pageIndex: place?.pageIndex ?? null, top: place?.top ?? null }
+        }))
+      }).catch(() => [])
+    }
+    return this.outlineRead
+  }
+
+  /** Shows a page, and a height on it when there is one to show. */
+  async showPlace(pageIndex: number, top: number | null) {
+    const page = this.pages[pageIndex]
+    if (!page) return
+    this.ensureShowing(pageIndex)
+    await page.render()
+    const y = top === null ? 0 : page.toView(0, top).y
+    this.scroll.scrollTop = Math.max(0, page.root.offsetTop + y - 14)
   }
 
   async saveMarks(page: PageView) {
@@ -1777,9 +2070,9 @@ export class Reader {
   }
 
   private noteCurrentPage() {
-    // In single-page mode the scroll position says nothing about which page
+    // With pages turned the scroll position says nothing about which page
     // is showing; the page is whatever was turned to.
-    if (store.settings.pageLayout === 'single') return
+    if (this.turnsPages) return
     const middle = this.scroll.scrollTop + this.scroll.clientHeight / 2
     let current = 0
     for (const page of this.pages) {
@@ -1906,15 +2199,18 @@ export class Reader {
   private updateFooter() {
     clear(this.footer)
     if (!this.document) return
-    // The Mac's words: «14쪽 중 1쪽», «Page 1 of 14».
+    // The Mac's words: «14쪽 중 1쪽», «Page 1 of 14» — and a spread's two
+    // pages, «14쪽 중 1–2쪽», «Pages 1–2 of 14».
+    const count = this.state.pageCount
+    const left = this.spreadStart(this.state.currentPage) + 1
+    const right = store.settings.pageLayout === 'book' ? Math.min(left + 1, count) : left
     const position = el('span', {
-      text: L(
-        `${this.state.pageCount}쪽 중 ${this.state.currentPage + 1}쪽`,
-        `Page ${this.state.currentPage + 1} of ${this.state.pageCount}`,
-      ),
+      text: left === right
+        ? L(`${count}쪽 중 ${left}쪽`, `Page ${left} of ${count}`)
+        : L(`${count}쪽 중 ${left}–${right}쪽`, `Pages ${left}–${right} of ${count}`),
     })
     this.footer.append(position)
-    if (store.settings.pageLayout === 'single') {
+    if (this.turnsPages) {
       const turn = (label: string, by: number, disabled: boolean) => {
         const button = el('button', {
           class: 'icon-button',
@@ -1926,8 +2222,8 @@ export class Reader {
         return button
       }
       this.footer.append(el('div', { class: 'toolbar-group' }, [
-        turn('chevron.left', -1, this.state.currentPage === 0),
-        turn('chevron.right', 1, this.state.currentPage >= this.state.pageCount - 1),
+        turn('chevron.left', -1, left <= 1),
+        turn('chevron.right', 1, right >= count),
       ]))
     }
     const zoom = el('span', { text: `${Math.round(this.state.zoom * 100)}%` })

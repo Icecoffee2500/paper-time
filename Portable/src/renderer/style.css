@@ -785,6 +785,14 @@ body[data-platform='darwin'] .window-buttons {
   padding: 14px 0 20px;
 }
 
+/* A book: the spread's two pages facing across a gutter (`BOOK_GUTTER`). */
+.reader-pages[data-layout='book'] {
+  flex-direction: row;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 24px;
+}
+
 .page {
   position: relative;
   background: #fff;
@@ -940,6 +948,36 @@ body[data-platform='darwin'] .window-buttons {
   outline: none;
   resize: vertical;
 }
+
+/* Volume, issue and pages side by side, as short as what they hold. */
+.field-row { display: flex; gap: 8px; }
+.field-row .field { flex: 1 1 0; min-width: 0; padding-left: 0; padding-right: 0; }
+.field-row .field:first-child { padding-left: 14px; }
+.field-row .field:last-child { padding-right: 14px; }
+
+/* The star and the rating, on one line under the reading status. */
+.field-inline { display: flex; align-items: center; gap: 8px; }
+.field-toggle { display: inline-flex; align-items: center; gap: 5px; }
+.field-toggle svg { width: 14px; height: 14px; }
+.field-toggle[aria-pressed='true'] svg { color: var(--star); }
+.rating { display: inline-flex; gap: 1px; }
+.rating-star { padding: 2px; color: var(--text-tertiary); }
+.rating-star[aria-pressed='true'] { color: var(--star); }
+.rating-star svg { width: 15px; height: 15px; display: block; }
+
+/* What a paper is attached to, or what hangs off it. */
+.supplement-list { display: flex; flex-direction: column; gap: 4px; }
+.supplement-row { display: flex; align-items: center; gap: 6px; }
+.supplement-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 auto;
+  text-align: left;
+}
+.supplement-link svg { width: 14px; height: 14px; flex: 0 0 auto; }
+.supplement-link span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Why a field would not take what was typed — under the field it belongs to,
    and gone the moment it has nothing to say. */
@@ -2169,6 +2207,9 @@ body[data-platform='darwin'] .window-buttons {
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1), 0 0 0 2px var(--panel), 0 0 0 3.5px var(--accent);
 }
 
+/* Over a link in the paper, the pointer is a hand (`Reader.showOverLink`). */
+.reader-scroll.over-link .page .text-layer { cursor: pointer; }
+
 /* A note written in the bar, about a passage or on a mark. */
 .mark-note-field {
   width: 220px;
@@ -2742,7 +2783,34 @@ body[data-solo='true'] .reader-header button {
 
 /* Every page of a document, small: the way into something with no headings
    to list. The grid is as wide as the popup and fills it row by row. */
-.pages-popup { width: min(520px, 80vw); }
+/* Within the paper's own column — the Mac's contents stand over the paper,
+   not over the list beside it — however narrow the column is. */
+.pages-popup { width: min(520px, calc(100% - 24px)); }
+
+/* «차례 | 쪽» at the head of the popup, and the headings under it. */
+.contents-tabs { flex: 0 0 auto; }
+.contents-list {
+  overflow-y: auto;
+  max-height: min(60vh, 520px);
+  padding: 4px 6px 10px;
+}
+.contents-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 5px 10px;
+  border-radius: var(--radius-row);
+  text-align: left;
+  font-size: 13px;
+  color: var(--text-secondary);
+  transition: background-color var(--motion-tap) var(--ease);
+}
+.contents-row.top { color: var(--text); font-weight: 500; }
+.contents-row:hover { background: var(--hover); }
+.contents-row[data-current='true'] { background: var(--accent-soft); color: var(--accent-text); }
+.contents-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.contents-page { flex: 0 0 auto; font-size: 11px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
 
 .pages-grid {
   display: grid;

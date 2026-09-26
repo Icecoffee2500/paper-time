@@ -33,6 +33,10 @@ export interface InspectorActions {
   setKind: (id: string, kind: DocumentKind) => void
   /** The default drawing style changed; the rack and the page should follow. */
   sketchChanged: () => void
+  /** Another paper, shown — a supplement's parent, or one of its supplements. */
+  open: (id: string) => void
+  /** A supplement made a paper of its own again. */
+  detach: (id: string) => void
   /** The marks of the paper in front, in reading order — the Marks tab. */
   marks: () => { pageIndex: number; mark: Mark }[]
   revealMark: (pageIndex: number, id: string) => void
@@ -88,8 +92,8 @@ export function buildInspector(actions: InspectorActions): InspectorPanel {
     const paper = store.papers.find((entry) => entry.id === store.selectedID)
     if (!paper) {
       body.append(el('div', { class: 'empty' }, [
-        el('h2', { text: L('고른 논문이 없어요', 'No paper selected') }),
-        el('p', { text: L('목록에서 하나를 고르면 그 기록이 보여요.', 'Pick one from the list to see its record.') }),
+        el('h2', { text: L('고른 논문이 없어요', 'No Paper Selected') }),
+        el('p', { text: L('논문을 고르면 서지를 보고 고칠 수 있어요.', 'Choose a paper to see its details.') }),
       ]))
       return
     }
@@ -144,12 +148,13 @@ function editable(
   label: string,
   value: string,
   commit: (next: string) => void,
-  options: { multiline?: boolean } = {},
+  options: { multiline?: boolean; placeholder?: string } = {},
 ): HTMLElement {
   const input = options.multiline
     ? (el('textarea', { rows: '3' }) as HTMLTextAreaElement)
     : (el('input', { type: 'text' }) as HTMLInputElement)
   input.value = value
+  if (options.placeholder) input.placeholder = options.placeholder
   let last = value
   const send = () => {
     if (input.value === last) return
@@ -270,6 +275,44 @@ function kindQuestion(body: HTMLElement, paper: Paper, actions: InspectorActions
   ]))
 }
 
+/**
+ * What a paper is attached to, or what is attached to it — the Mac's
+ * «Belongs To» and «Supplementary Material». A supplement is on no shelf of
+ * its own, so this and the row's paperclip are the ways to and from it.
+ */
+function supplements(body: HTMLElement, paper: Paper, actions: InspectorActions) {
+  const parentID = paper.meta.parentID
+  if (parentID) {
+    const parent = store.papers.find((entry) => entry.id === parentID)
+    const open = el('button', { class: 'plain-button supplement-link', html: icon('text.document') })
+    open.append(el('span', { text: parent?.meta.displayTitle ?? L('찾을 수 없는 논문', 'A paper that is not here') }))
+    on(open, 'click', () => actions.open(parentID))
+    const free = el('button', { class: 'plain-button', text: L('따로 논문으로 두기', 'Make a Paper of Its Own') })
+    on(free, 'click', () => actions.detach(paper.id))
+    body.append(el('div', { class: 'field' }, [
+      el('div', { class: 'field-label', text: L('붙어 있는 논문', 'Belongs To') }),
+      el('div', { class: 'chip-row' }, [open]),
+      el('div', { class: 'chip-row', style: 'margin-top: 6px' }, [free]),
+    ]))
+    return
+  }
+  const children = store.papers.filter((entry) => entry.meta.parentID === paper.id)
+  if (children.length === 0) return
+  const list = el('div', { class: 'supplement-list' })
+  for (const child of children) {
+    const open = el('button', { class: 'plain-button supplement-link', html: icon('doc') })
+    open.append(el('span', { text: child.meta.displayTitle }))
+    on(open, 'click', () => actions.open(child.id))
+    const detach = el('button', { class: 'plain-button', text: L('떼기', 'Detach') })
+    on(detach, 'click', () => actions.detach(child.id))
+    list.append(el('div', { class: 'supplement-row' }, [open, detach]))
+  }
+  body.append(el('div', { class: 'field' }, [
+    el('div', { class: 'field-label', text: L('보충 자료', 'Supplementary Material') }),
+    list,
+  ]))
+}
+
 function details(body: HTMLElement, paper: Paper, actions: InspectorActions) {
   const meta = paper.meta
   const kind = meta.effectiveKind
@@ -280,10 +323,18 @@ function details(body: HTMLElement, paper: Paper, actions: InspectorActions) {
   // row's own menu: a form is no place for a switch that is never touched
   // again.
   if (meta.kindIsUnanswered) kindQuestion(body, paper, actions)
+  supplements(body, paper, actions)
 
+  // With no title written down the list shows the file's name; the field
+  // says so faintly rather than standing empty beside a name it is not.
   body.append(editable(L('제목', 'Title'), meta.csl.title ?? '', (next) => {
     actions.editMeta(paper.id, { csl: { ...meta.csl, title: next }, confidence: 'manual' })
-  }, { multiline: true }))
+  }, { multiline: true, placeholder: meta.displayTitle }))
+  const cslText = (key: string) => String((meta.csl as Record<string, unknown>)[key] ?? '')
+  const cslField = (label: string, key: string) => editable(label, cslText(key), (next) => {
+    actions.editMeta(paper.id, { csl: { ...meta.csl, [key]: next || undefined }, confidence: 'manual' })
+  })
+  body.append(cslField(L('부제', 'Subtitle'), 'subtitle'))
 
   const authors = el('div', { class: 'chip-row' })
   for (const name of (meta.csl.author ?? []) as CSLName[]) {
@@ -304,6 +355,13 @@ function details(body: HTMLElement, paper: Paper, actions: InspectorActions) {
     body.append(editable(L('학술지·학회', 'Venue'), meta.csl['container-title'] ?? '', (next) => {
       actions.editMeta(paper.id, { csl: { ...meta.csl, 'container-title': next }, confidence: 'manual' })
     }))
+    // The Mac's paper form: where in the journal, as well as which journal.
+    const where = el('div', { class: 'field-row' }, [
+      cslField(L('권', 'Volume'), 'volume'),
+      cslField(L('호', 'Issue'), 'issue'),
+      cslField(L('쪽', 'Pages'), 'page'),
+    ])
+    body.append(where)
   } else {
     body.append(editable(isBook ? L('출판사', 'Publisher') : L('펴낸 곳', 'From'), meta.csl.publisher ?? '', (next) => {
       actions.editMeta(paper.id, { csl: { ...meta.csl, publisher: next }, confidence: 'manual' })
@@ -331,7 +389,10 @@ function details(body: HTMLElement, paper: Paper, actions: InspectorActions) {
     actions.editMeta(paper.id, { csl: { ...meta.csl, issued }, confidence: 'manual' })
   }))
 
-  if (isPaper && meta.csl.DOI) body.append(field('DOI', meta.csl.DOI))
+  // Written by hand as well as read: a DOI is what a registrar is asked
+  // with, and the Mac's form lets it be corrected.
+  if (isPaper) body.append(cslField('DOI', 'DOI'))
+  body.append(cslField('URL', 'URL'))
   // A book is cited too — that is the whole reason it is not a document — so
   // it keeps its key.
   if (isPaper || isBook) {
@@ -357,6 +418,29 @@ function details(body: HTMLElement, paper: Paper, actions: InspectorActions) {
     el('div', { class: 'field-label', text: L('읽기 상태', 'Reading') }),
     status,
   ]))
+
+  // The rest of the Mac's Reading section: the star, and a rating.
+  const favourite = el('button', {
+    class: 'plain-button field-toggle',
+    'aria-pressed': String(paper.state.isFavorite),
+    html: icon(paper.state.isFavorite ? 'star.fill' : 'star'),
+  })
+  favourite.append(el('span', { text: L('즐겨찾기', 'Favorite') }))
+  on(favourite, 'click', () => actions.editState(paper.id, { isFavorite: !paper.state.isFavorite }))
+  const stars = el('div', { class: 'rating', role: 'group', 'aria-label': L('별점', 'Rating') })
+  const rating = paper.state.rating ?? 0
+  for (let value = 1; value <= 5; value += 1) {
+    const star = el('button', {
+      class: 'rating-star',
+      'aria-pressed': String(value <= rating),
+      title: L(`별 ${value}개`, `${value} star${value === 1 ? '' : 's'}`),
+      html: icon(value <= rating ? 'star.fill' : 'star'),
+    })
+    // Pressing the rating it already has takes it back to none.
+    on(star, 'click', () => actions.editState(paper.id, { rating: value === rating ? null : value }))
+    stars.append(star)
+  }
+  body.append(el('div', { class: 'field field-inline' }, [favourite, el('span', { class: 'toolbar-spacer' }), stars]))
 
   // "Confidence" is about a registrar agreeing with us, and no registrar has
   // an opinion about a manual.

@@ -14,6 +14,7 @@ import {
 import { encodeSubtitle, parseSubtitle, subtitleLine, toggledSubtitle } from '../shared/subtitle.js'
 import { SHORTCUTS, acceleratorFor, displayAccelerator, keyFor, withKey } from '../shared/shortcuts.js'
 import { setKorean } from '../shared/lang.js'
+import { currentHeading } from '../renderer/ui/pages.js'
 
 type Test = (name: string, body: () => void | Promise<void>) => Promise<void>
 
@@ -139,6 +140,22 @@ export async function paritySuite(test: Test, suite: (name: string) => void) {
     assert.equal(subtitleLine(manual, ['authors', 'venue']), 'ACME · 2024 · 15 pages')
     const bare = paper({ csl: { id: '', type: 'other' } }).meta
     assert.equal(subtitleLine(bare, ['authors', 'venue']), '', 'a paper with nothing says nothing')
+  })
+
+  suite('The contents mark the section being read')
+
+  await test('the heading is the last one at or before the page in front', () => {
+    const entries = [
+      { title: 'Introduction', depth: 0, pageIndex: 0, top: 700 },
+      { title: 'Method', depth: 0, pageIndex: 2, top: 500 },
+      { title: 'A detail', depth: 1, pageIndex: 2, top: 300 },
+      { title: 'Unplaced', depth: 0, pageIndex: null, top: null },
+      { title: 'Results', depth: 0, pageIndex: 5, top: 700 },
+    ]
+    assert.equal(currentHeading(entries, 0), 0)
+    assert.equal(currentHeading(entries, 3), 2, 'the deepest heading already begun')
+    assert.equal(currentHeading(entries, 9), 4)
+    assert.equal(currentHeading([{ title: 'Late', depth: 0, pageIndex: 4, top: null }], 1), -1, 'nothing begun yet')
   })
 
   suite('The keys, as each desktop writes them')
