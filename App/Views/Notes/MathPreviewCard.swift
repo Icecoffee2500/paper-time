@@ -62,7 +62,14 @@ final class MathPreviewCard {
 
     var isShowing: Bool { panel?.isVisible == true }
     /// Where the card is, on screen, while it shows.
-    var frame: NSRect? { isShowing ? panel?.frame : nil }
+    var frame: NSRect? { isShowing ? panel?.frame.insetBy(dx: Self.inset, dy: Self.inset) : nil }
+    /// Where the card's picture is — the card with the room its shadow
+    /// falls in around it.
+    var pictureFrame: NSRect? { isShowing ? panel?.frame : nil }
+    /// Room around the card inside the panel for the slab's shadow: a panel
+    /// the size of the card clipped the shadow to a rectangle, and that
+    /// rectangle's square corners showed as an outermost, unrounded border.
+    static let inset: CGFloat = 32
 
     /// Shows `span` set, under the line at `line` (screen coordinates) with
     /// its left edge at `startX`, kept inside `bounds` — the editor's visible
@@ -96,16 +103,20 @@ final class MathPreviewCard {
         guard let hosting, let face else { return }
         hosting.rootView = ContentView(face: face, room: room, ground: nil)
         let fitted = hosting.fittingSize
-        let cardSize = NSSize(width: min(max(fitted.width, 44), room), height: max(fitted.height, 28))
-        panel.setContentSize(cardSize)
-        hosting.frame = NSRect(origin: .zero, size: cardSize)
+        let cardSize = NSSize(
+            width: min(max(fitted.width - 2 * Self.inset, 44), room),
+            height: max(fitted.height - 2 * Self.inset, 28)
+        )
+        let panelSize = NSSize(width: cardSize.width + 2 * Self.inset, height: cardSize.height + 2 * Self.inset)
+        panel.setContentSize(panelSize)
+        hosting.frame = NSRect(origin: .zero, size: panelSize)
 
         var origin = NSPoint(x: startX, y: line.minY - cardSize.height - 4)
         if origin.y < bounds.minY {
             origin.y = line.maxY + 4
         }
         origin.x = min(max(origin.x, bounds.minX), max(bounds.minX, bounds.maxX - cardSize.width))
-        panel.setFrameOrigin(origin)
+        panel.setFrameOrigin(NSPoint(x: origin.x - Self.inset, y: origin.y - Self.inset))
 
         // What lies under and around the card, for the glass to bend: a
         // picture of the note there. Taken from the view, not the screen,
@@ -169,7 +180,7 @@ final class MathPreviewCard {
         case .stale: kind = "stale"
         case .raw(let text): kind = "raw \(text.debugDescription)"
         }
-        let frame = panel.frame
+        let frame = panel.frame.insetBy(dx: Self.inset, dy: Self.inset)
         return "math preview: visible \(kind) at \(Int(frame.minX)),\(Int(frame.minY)) \(Int(frame.width))×\(Int(frame.height)) ground \(groundSource) slab \(lastSlab == nil ? "pending" : String(format: "%.0f ms", renderMilliseconds)) for \(latex?.debugDescription ?? "nil")"
     }
 
@@ -312,6 +323,8 @@ final class MathPreviewCard {
             .background {
                 GlassSlab(picture: ground, cornerRadius: Corner.popover)
             }
+            // The room for the shadow; see `inset`.
+            .padding(MathPreviewCard.inset)
             .animation(Motion.tap, value: face)
         }
     }

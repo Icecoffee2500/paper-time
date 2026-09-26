@@ -79,10 +79,10 @@ struct GlassSlab: View {
     /// The two shadows, in points; the view draws them and the renderer
     /// bends them into the rim.
     nonisolated enum Shadow {
-        static let contact = 0.16, contactDark = 0.35
+        static let contact = 0.10, contactDark = 0.35
         static let contactRadius: CGFloat = 2, contactDrop: CGFloat = 1
-        static let soft = 0.24, softDark = 0.45
-        static let softRadius: CGFloat = 12, softDrop: CGFloat = 6
+        static let soft = 0.12, softDark = 0.45
+        static let softRadius: CGFloat = 10, softDrop: CGFloat = 7
     }
 
     #if os(macOS)
@@ -116,17 +116,17 @@ struct GlassSlab: View {
         let saturation = 1.35
         let fresnelGain = 0.65
         let specular = 0.89, specPower = 10.0, highlightWidth = 0.87, highlightBase = 0.80
-        let edgeLine = 0.30, edgeDark = 0.06
+        let edgeLine = 0.30, edgeDark = 0.0
         let tintAmount = 0.35
         // The "regular" variant's backing: a light grey, not white — over a
         // white page the system's material sits a shade under the paper.
-        let tint: (Double, Double, Double) = dark ? (0.050, 0.055, 0.065) : (0.80, 0.82, 0.85)
+        let tint: (Double, Double, Double) = dark ? (0.050, 0.055, 0.065) : (0.74, 0.76, 0.79)
         // What the body takes out of the light on its way through — in the
         // light a cool few percent, in the dark a little scattered lift.
         let absorb: (Double, Double, Double) = dark ? (-0.06, -0.06, -0.055) : (0.065, 0.055, 0.040)
         // The lamp: above and to the left, in the plane of the page.
         let lampX = -0.5, lampY = 0.866
-        let roomBright = dark ? 0.40 : 1.0, roomDark = dark ? 0.10 : 0.55
+        let roomBright = dark ? 0.40 : 1.0, roomDark = dark ? 0.10 : 1.0
         // Light the lamp scatters inside the frosted body: brighter where it
         // enters, on the lamp's side, fading across the slab.
         let scatter = dark ? 0.020 : 0.035
@@ -308,7 +308,10 @@ struct GlassSlab: View {
                 // The silhouette: a hair darker where the rim only reflects,
                 // and a crisp line of light just inside it on the lit side.
                 let contour = smoothstep(lineW, 0, abs(d + 0.55 * lineW))
-                let line = smoothstep(2.8 * lineW, 0, abs(d + 2.4 * lineW))
+                // The line of light sits on the silhouette itself: nothing
+                // darker lies outside it (a contour there read as a fourth
+                // layer, and a moat between it and the body as a fifth).
+                let line = smoothstep(2.2 * lineW, 0, abs(d + 1.4 * lineW))
                 let lit = 0.26 + 0.74 * max(gx * lampX + gy * lampY, 0)
                 let lineLight = edgeLine * line * lit * (dark ? 0.8 : 1)
                 let across = ((px - cx) * lampX + (py - cy) * lampY) / max(abs(hx * lampX) + abs(hy * lampY), 1)

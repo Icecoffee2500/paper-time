@@ -159,7 +159,7 @@ enum MathPreviewProbe {
             (window.backgroundColor ?? .textBackgroundColor).setFill()
             rect.fill()
             image.draw(in: rect)
-            if let picture = card.picture(), let frame = card.frame {
+            if let picture = card.picture(), let frame = card.pictureFrame {
                 // The card's screen frame, into the text view's own coordinates.
                 let local = text.convert(window.convertFromScreen(frame), from: nil)
                 // The text view is flipped and the picture is not.
