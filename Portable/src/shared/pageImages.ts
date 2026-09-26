@@ -216,15 +216,19 @@ export function imageRects(list: OperatorList, ops: ImageOps, options: ImageRect
 }
 
 /** A pixel this light (of 255, by luma) is paper. */
-export const PAPER_LUMA = 191
+export const PAPER_LUMA = 224
+/** Between this and paper, a pixel is a tone — what a photograph is made of
+ *  and type is not. Below it, ink. */
+export const TONE_LUMA = 96
 /** A pixel whose channels are this far apart (of 255) has a colour. */
 export const COLOURED_CHROMA = 64
 
-/** What a picture's pixels are: the share that is paper, and the share that
- *  is in colour, of the opaque ones. */
-export function tones(rgba: ArrayLike<number>): { light: number; coloured: number; seen: number } {
+/** What a picture's pixels are, as shares of the opaque ones: paper, tone
+ *  (light greys and mid-tones), and colour. */
+export function tones(rgba: ArrayLike<number>): { paper: number; tone: number; coloured: number; seen: number } {
   let seen = 0
-  let light = 0
+  let paper = 0
+  let tone = 0
   let coloured = 0
   for (let i = 0; i + 3 < rgba.length; i += 4) {
     if (rgba[i + 3] < 128) continue
@@ -232,30 +236,37 @@ export function tones(rgba: ArrayLike<number>): { light: number; coloured: numbe
     const g = rgba[i + 1]
     const b = rgba[i + 2]
     seen += 1
-    if (0.2126 * r + 0.7152 * g + 0.0722 * b >= PAPER_LUMA) light += 1
+    const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    if (luma >= PAPER_LUMA) paper += 1
+    else if (luma >= TONE_LUMA) tone += 1
     if (Math.max(r, g, b) - Math.min(r, g, b) >= COLOURED_CHROMA) coloured += 1
   }
-  return seen === 0 ? { light: 0, coloured: 0, seen } : { light: light / seen, coloured: coloured / seen, seen }
+  if (seen === 0) return { paper: 0, tone: 0, coloured: 0, seen }
+  return { paper: paper / seen, tone: tone / seen, coloured: coloured / seen, seen }
 }
 
 /**
- * Whether what an image shows is ink on white paper rather than a picture:
- * most of it paper, and next to none of it in colour.
+ * Whether what an image shows is ink on white paper rather than a picture.
  *
  * Night keeps pictures as printed so a photograph is not a negative — but a
  * scanned page is an image too, and so is a line drawing or a chart saved as
  * one, and kept as printed each is the white rectangle night exists to take
  * away. A scanned textbook in the corpus (686 pages, one image each and not
  * a word of text) read at night as a column of white cards. So an image that
- * is mostly paper (seven tenths of it at least) with almost nothing in colour
- * (a twentieth at most — a yellowed page is still paper) goes to night with
- * the words, and turned over it reads as the page around it does. Anything
- * with tone or colour in it is a picture. The samples are single pixels, not
- * averages: averaged, a line of type is grey.
+ * is paper and ink and little else goes to night with the words, and turned
+ * over it reads as the page around it does.
+ *
+ * Measured on the corpus, 64 × 64 samples each: the textbook's text blocks
+ * are 78–94% paper with 1–12% tone and no colour; a light grey photograph of
+ * a robot (v-jepa 2, Figure 1) is only 32% paper and 67% tone; photographs
+ * and coloured figures have colour in a fifth to all of them. Hence: at least
+ * three fifths paper, at most a fifth tone, at most a twentieth colour (a
+ * yellowed page is still paper). The samples are single pixels, not
+ * averages: averaged, a line of type is a tone.
  */
 export function isInkOnWhite(rgba: ArrayLike<number>): boolean {
-  const { light, coloured, seen } = tones(rgba)
-  return seen > 0 && light >= 0.7 && coloured <= 0.05
+  const { paper, tone, coloured, seen } = tones(rgba)
+  return seen > 0 && paper >= 0.6 && tone <= 0.2 && coloured <= 0.05
 }
 
 /** The part of `a` inside `b`, or null when they do not meet. */

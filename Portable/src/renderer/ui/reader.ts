@@ -62,7 +62,7 @@ import { installMathProvider, removeMathListener } from '../sketchMath.js'
 import { icon } from '../icons.js'
 import { L } from '../../shared/lang.js'
 import { NIGHT_FILTER, groundFor, renderingFor, type PageRendering } from '../../shared/pageTint.js'
-import { imageRects, isInkOnWhite, pixelRect, tones, type PageRect } from '../../shared/pageImages.js'
+import { imageRects, isInkOnWhite, pixelRect, tones, type OperatorList, type PageRect } from '../../shared/pageImages.js'
 
 /** Whether the window is showing its dark appearance — what Glass does
  *  depends on it. `applyTheme` has already resolved «system» into this. */
@@ -75,7 +75,7 @@ function isDarkAppearance(): boolean {
 interface PageImage {
   rect: PageRect
   picture?: boolean
-  tones?: { light: number; coloured: number }
+  tones?: { paper: number; tone: number; coloured: number }
 }
 
 export interface ReaderActions {
@@ -160,6 +160,8 @@ export class PageView {
    *  pdf.js reading the page a second time, so it is asked only under night. */
   private images: PageImage[] | null = null
   private imagesAsked: Promise<PageImage[]> | null = null
+  /** Which list they came from, for a probe: the one drawn, or one asked for. */
+  private imagesFrom: 'drawn' | 'asked' | null = null
   /** Whether the page canvas holds this layout's page yet. */
   private painted = false
   elements: SketchElement[] = []
@@ -501,24 +503,50 @@ export class PageView {
     this.imageCanvas.height = 0
   }
 
-  /** Where the pictures are, asked of pdf.js once per page and kept: they
-   *  are in the page's own space, so a new zoom does not move them. */
+  /**
+   * Where the pictures are, found once per page and kept: they are in the
+   * page's own space, so a new zoom does not move them.
+   *
+   * Read from the operator list pdf.js has just drawn the page with, when it
+   * lets that be read — `_intentStates` is its own bookkeeping, not an API,
+   * so failing that it is asked for a list of its own. The one it drew with
+   * is the better answer twice over: it is exactly what is on the canvas,
+   * and asking for another makes pdf.js read the page again and hand every
+   * picture over a second time, decoded, to be kept as long as the page is.
+   */
   private findImages(): Promise<PageImage[]> {
     if (this.images) return Promise.resolve(this.images)
     if (!this.imagesAsked) {
       const [x0, y0, x1, y1] = this.proxy.view as number[]
-      this.imagesAsked = this.proxy
-        // The same annotations the page is drawn with: another app's stamp
-        // may be a picture too.
-        .getOperatorList({ annotationMode: 1 })
-        .then((list) => imageRects(list, OPS as never, { bounds: { x: x0, y: y0, width: x1 - x0, height: y1 - y0 } }))
-        .catch(() => [] as PageRect[])
-        .then((rects) => {
-          this.images = rects.map((rect) => ({ rect }))
-          return this.images
-        })
+      const walk = (list: OperatorList) => {
+        this.images = imageRects(list, OPS as never, { bounds: { x: x0, y: y0, width: x1 - x0, height: y1 - y0 } })
+          .map((rect) => ({ rect }))
+        return this.images
+      }
+      const drawn = this.drawnList()
+      this.imagesFrom = drawn ? 'drawn' : 'asked'
+      this.imagesAsked = drawn
+        ? Promise.resolve(walk(drawn))
+        : this.proxy
+          // The same annotations the page is drawn with: another app's stamp
+          // may be a picture too.
+          .getOperatorList({ annotationMode: 1 })
+          .then(walk)
+          .catch(() => walk({ fnArray: [], argsArray: [] }))
     }
     return this.imagesAsked
+  }
+
+  /** The finished operator list pdf.js drew this page with, if it has one
+   *  and lets it be seen. */
+  private drawnList(): OperatorList | null {
+    const states = (this.proxy as unknown as { _intentStates?: unknown })._intentStates
+    if (!(states instanceof Map)) return null
+    for (const state of states.values()) {
+      const list = (state as { operatorList?: OperatorList & { lastChunk?: boolean } } | null)?.operatorList
+      if (list?.lastChunk && Array.isArray(list.fnArray) && Array.isArray(list.argsArray)) return list
+    }
+    return null
   }
 
   /** A canvas for laying the drawing over a picture, shared by every page. */
@@ -599,8 +627,10 @@ export class PageView {
     context.filter = 'none'
     context.clearRect(0, 0, width, height)
     const dpr = Math.min(window.devicePixelRatio || 1, 2)
+    // Only what is there to lay over: most pages have neither.
     const marks = this.marks.length > 0 && this.markCanvas.width === width && this.markCanvas.height === height
-    const drawing = this.drawCanvas.width === width && this.drawCanvas.height === height
+    const drawn = this.strokes.length > 0 || this.elements.length > 0 || this.input !== null || this.guest !== null
+    const drawing = drawn && this.drawCanvas.width === width && this.drawCanvas.height === height
     for (const image of images) {
       if (image.picture === false) continue
       const box = pixelRect(image.rect, this.viewport.transform, dpr, target)
@@ -639,9 +669,9 @@ export class PageView {
 
   /** For a probe: the pictures this page found, and which of them it keeps
    *  as printed (null until the page has been drawn under night). */
-  imageReport(): { rect: PageRect; picture: boolean | null; tones: { light: number; coloured: number } | null }[] | null {
+  imageReport(): { from: string | null; rect: PageRect; picture: boolean | null; tones: { paper: number; tone: number; coloured: number } | null }[] | null {
     if (!this.images) return null
-    return this.images.map((image) => ({ rect: image.rect, picture: image.picture ?? null, tones: image.tones ?? null }))
+    return this.images.map((image) => ({ from: this.imagesFrom, rect: image.rect, picture: image.picture ?? null, tones: image.tones ?? null }))
   }
 
   setDrawing(on: boolean) {
@@ -1836,12 +1866,11 @@ export class Reader {
     const rendering = renderingFor(pageTint, pageTintColor, isDarkAppearance())
     const ground = groundFor(pageTint, pageTintColor)
     this.node.dataset.rendering = rendering
-    this.node.dataset.tint = pageTint
     if (ground) this.node.style.setProperty('--tint-ground', ground)
     else this.node.style.removeProperty('--tint-ground')
-    // Under Glass the ground is the panel's own colour, which the stylesheet
-    // knows and the canvas does not.
-    const under = ground ?? (getComputedStyle(this.node).backgroundColor || '#000000')
+    // What night screens onto — under Glass the panel's own colour, which the
+    // stylesheet knows and the canvas does not.
+    const under = rendering !== 'night' ? '#000000' : ground ?? (getComputedStyle(this.node).backgroundColor || '#000000')
     for (const page of this.pages) page.applyTint(rendering, under)
   }
 

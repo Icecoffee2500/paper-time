@@ -255,14 +255,23 @@ export async function pageTintSuite(test: Test, suite: (name: string) => void) {
     }
     // A scanned page: paper, and a tenth of it type.
     assert.equal(isInkOnWhite(pixels(1000, (i) => (i % 10 === 0 ? [20, 20, 20] : [250, 250, 250]))), true)
+    // With the grey edges a scanner leaves round the letters (the corpus's
+    // textbook, at its greyest: 78% paper, 12% tone).
+    assert.equal(isInkOnWhite(pixels(100, (i) => (i < 10 ? [30, 30, 30] : i < 22 ? [150, 150, 150] : [252, 252, 252]))), true)
     // A yellowed page is still paper.
     assert.equal(isInkOnWhite(pixels(1000, (i) => (i % 8 === 0 ? [40, 35, 30] : [245, 238, 215]))), true)
     // A photograph: tone everywhere.
     assert.equal(isInkOnWhite(pixels(1000, (i) => [(i * 37) % 256, (i * 91) % 256, (i * 53) % 256])), false)
     // A black-and-white photograph: greys, mostly not paper.
     assert.equal(isInkOnWhite(pixels(1000, (i) => [i % 200, i % 200, i % 200])), false)
+    // A light grey photograph — the robot in v-jepa 2's Figure 1: a third
+    // paper and the rest light tones, no colour. Still a photograph.
+    assert.equal(isInkOnWhite(pixels(100, (i) => (i < 32 ? [236, 236, 236] : i < 78 ? [208, 208, 208] : [175, 175, 175]))), false)
     // A diagram of coloured boxes on white: paper, but a tenth of it colour.
     assert.equal(isInkOnWhite(pixels(1000, (i) => (i % 10 === 0 ? [230, 60, 50] : [255, 255, 255]))), false)
+    assert.deepEqual(tones(pixels(4, (i) => [[255, 255, 255], [128, 128, 128], [0, 0, 0], [255, 0, 0]][i] as [number, number, number])), {
+      paper: 0.25, tone: 0.25, coloured: 0.25, seen: 4,
+    })
     // Clear pixels are not looked at, and nothing at all is a picture.
     const clear = pixels(100, () => [255, 255, 255])
     for (let i = 3; i < clear.length; i += 4) clear[i] = 0
