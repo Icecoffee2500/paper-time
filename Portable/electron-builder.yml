@@ -52,15 +52,28 @@ win:
 
 nsis:
   oneClick: false
+  # Installing only for the person running it needs no administrator, and its
+  # default folder is theirs: %LOCALAPPDATA%\Programs\Paper Time. "Anyone who
+  # uses this computer" stays on the first page and asks for an administrator
+  # when chosen (allowElevation's default); a folder this account cannot write
+  # to — Program Files while installing only for me — is caught on the folder
+  # page, before anything is installed (assets/installer.nsh).
   perMachine: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: Paper Time
+  # No uninstallerIcon on purpose: it makes the installer write an .ico into
+  # the folder first thing, and on an upgrade that name was still held by the
+  # uninstaller that had just deleted it (see assets/installer.nsh). Without
+  # it the uninstaller wears this icon and Settings → Apps shows the app's own
+  # — the same picture.
   installerIcon: assets/icons/icon.ico
-  uninstallerIcon: assets/icons/icon.ico
   # A library folder is the user's own; uninstalling the app never touches it.
   deleteAppDataOnUninstall: false
+  # The build resources folder, like the icons — not `build/`, which this
+  # repository ignores everywhere.
+  include: assets/installer.nsh
 
 portable:
   artifactName: '${productName} ${version} portable.${ext}'

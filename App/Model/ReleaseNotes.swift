@@ -327,7 +327,15 @@ enum ReleaseNotes {
                     )
                 ),
             ],
-            fixed: []
+            fixed: [
+                Entry(
+                    Text2("윈도우에서 덮어 설치가 멈추던 것", "Installing over an old version stopped on Windows"),
+                    Text2(
+                        "다른 드라이브에 깔린 이전 버전 위에 설치하면 «다음 파일을 열 수 없습니다»가 두 번 떴어요. 이전 버전이 막 지운 파일을 다른 프로그램이 아직 붙잡고 있었거든요. 이제 그 이름이 풀릴 때까지 기다렸다가 써요. 관리자만 쓸 수 있는 폴더를 고르면 설치하기 전에 그렇다고 알려요. 설치 프로그램이 C:에 남기던 250MB짜리 사본도 이제 지워요.",
+                        "Installing over an earlier version on another drive stopped twice on “Error opening file for writing”: the old version had just deleted those files, and another program still held them. The installer now waits for the names to come free. The folder page says when a folder needs an administrator, before anything is installed, and the 250 MB copy of the installer left on C: is gone."
+                    )
+                ),
+            ]
         ),
         Release(
             version: "0.9.9",
