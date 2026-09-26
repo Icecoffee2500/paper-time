@@ -1563,6 +1563,9 @@ function flushSettings() {
   if (Object.keys(patch).length > 0) void call('settings:set', patch)
 }
 
+// A colour still resting when the window goes is written as it goes.
+on(window, 'beforeunload', flushSettings)
+
 // For a probe: settings changed the way the sheet changes them — held in
 // memory by a probe run, like everything else it sets.
 ;(window as unknown as { __papertimeSettings: unknown }).__papertimeSettings = {

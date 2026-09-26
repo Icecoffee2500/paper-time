@@ -156,8 +156,8 @@ export class PageView {
   /** How the reader draws its pages now, and the ground under night. */
   private rendering: PageRendering = 'plain'
   private ground = '#000000'
-  /** Where the pictures are, found once per page — the operator list is
-   *  pdf.js reading the page a second time, so it is asked only under night. */
+  /** Where the pictures are: found the first time night meets the page, and
+   *  kept (`findImages`). */
   private images: PageImage[] | null = null
   private imagesAsked: Promise<PageImage[]> | null = null
   /** Which list they came from, for a probe: the one drawn, or one asked for. */
@@ -607,43 +607,60 @@ export class PageView {
    * turned to night and screened onto the ground, so a stroke that runs
    * across a photograph is one colour all the way and a white card over it
    * is the ground's colour, as it is everywhere else.
+   *
+   * The canvas is only as big as the pictures together, placed over them in
+   * fractions of the page — a page canvas's worth of pixels for a photograph
+   * a tenth of its size would be most of the cost of night.
    */
-  composeImages() {
+  private composeImages() {
     if (this.rendering !== 'night') return this.clearImages()
     const images = this.images
     // Not drawn yet at this size: what is there is the last size's, and it
     // scales with the page until the new one arrives.
     if (!images || !this.painted || !this.viewport) return
-    if (images.every((image) => image.picture === false)) return this.clearImages()
-    const target = this.imageCanvas
-    const { width, height } = this.canvas
-    if (target.width !== width || target.height !== height) {
-      target.width = width
-      target.height = height
+    const page = this.canvas
+    const dpr = Math.min(window.devicePixelRatio || 1, 2)
+    const boxes: { x: number; y: number; width: number; height: number }[] = []
+    for (const image of images) {
+      if (image.picture === false) continue
+      const box = pixelRect(image.rect, this.viewport.transform, dpr, page)
+      if (!box) continue
+      if (image.picture === undefined) image.picture = this.isPicture(image, box)
+      if (image.picture) boxes.push(box)
     }
+    if (boxes.length === 0) return this.clearImages()
+    const left = Math.min(...boxes.map((box) => box.x))
+    const top = Math.min(...boxes.map((box) => box.y))
+    const right = Math.max(...boxes.map((box) => box.x + box.width))
+    const bottom = Math.max(...boxes.map((box) => box.y + box.height))
+    const target = this.imageCanvas
+    if (target.width !== right - left || target.height !== bottom - top) {
+      target.width = right - left
+      target.height = bottom - top
+    }
+    Object.assign(target.style, {
+      left: `${(100 * left) / page.width}%`,
+      top: `${(100 * top) / page.height}%`,
+      width: `${(100 * (right - left)) / page.width}%`,
+      height: `${(100 * (bottom - top)) / page.height}%`,
+      right: 'auto',
+      bottom: 'auto',
+    })
     const context = target.getContext('2d')!
     context.setTransform(1, 0, 0, 1, 0, 0)
     context.globalCompositeOperation = 'source-over'
     context.filter = 'none'
-    context.clearRect(0, 0, width, height)
-    const dpr = Math.min(window.devicePixelRatio || 1, 2)
+    context.clearRect(0, 0, target.width, target.height)
     // Only what is there to lay over: most pages have neither.
-    const marks = this.marks.length > 0 && this.markCanvas.width === width && this.markCanvas.height === height
+    const marks = this.marks.length > 0 && this.markCanvas.width === page.width && this.markCanvas.height === page.height
     const drawn = this.strokes.length > 0 || this.elements.length > 0 || this.input !== null || this.guest !== null
-    const drawing = drawn && this.drawCanvas.width === width && this.drawCanvas.height === height
-    for (const image of images) {
-      if (image.picture === false) continue
-      const box = pixelRect(image.rect, this.viewport.transform, dpr, target)
-      if (!box) continue
-      if (image.picture === undefined) {
-        image.picture = this.isPicture(image, box)
-        if (!image.picture) continue
-      }
-      const { x, y, width: w, height: h } = box
-      context.drawImage(this.canvas, x, y, w, h, x, y, w, h)
+    const drawing = drawn && this.drawCanvas.width === page.width && this.drawCanvas.height === page.height
+    for (const { x, y, width: w, height: h } of boxes) {
+      const [dx, dy] = [x - left, y - top]
+      context.drawImage(page, x, y, w, h, dx, dy, w, h)
       if (marks) {
         context.globalCompositeOperation = 'multiply'
-        context.drawImage(this.markCanvas, x, y, w, h, x, y, w, h)
+        context.drawImage(this.markCanvas, x, y, w, h, dx, dy, w, h)
         context.globalCompositeOperation = 'source-over'
       }
       if (drawing) {
@@ -661,10 +678,9 @@ export class PageView {
         scratch.globalCompositeOperation = 'destination-in'
         scratch.drawImage(this.drawCanvas, x, y, w, h, 0, 0, w, h)
         scratch.globalCompositeOperation = 'source-over'
-        context.drawImage(scratch.canvas, 0, 0, w, h, x, y, w, h)
+        context.drawImage(scratch.canvas, 0, 0, w, h, dx, dy, w, h)
       }
     }
-    if (images.every((image) => image.picture === false)) this.clearImages()
   }
 
   /** For a probe: the pictures this page found, and which of them it keeps
