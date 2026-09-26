@@ -9,7 +9,7 @@ import assert from 'node:assert/strict'
 import { PaperMeta, PaperState, type Collection, type Tag } from '../shared/model.js'
 import { displayName, inCollection, matchesRule } from '../shared/smartRule.js'
 import {
-  anchorLabel, anchorURL, parseAnchorURL, passageText, quotationInsertion, quotationSource,
+  anchorAt, anchorLabel, anchorURL, parseAnchorURL, passageText, quotationInsertion, quotationSource,
 } from '../shared/noteQuote.js'
 import { encodeSubtitle, parseSubtitle, subtitleLine, toggledSubtitle } from '../shared/subtitle.js'
 import { SHORTCUTS, acceleratorFor, displayAccelerator, keyFor, withKey } from '../shared/shortcuts.js'
@@ -115,6 +115,16 @@ export async function paritySuite(test: Test, suite: (name: string) => void) {
     assert.deepEqual(quotationInsertion('', 0, block), { insert: '> quoted\n\n', caret: 10 })
     assert.deepEqual(quotationInsertion('Thoughts', 8, block), { insert: '\n> quoted\n\n', caret: 19 })
     assert.deepEqual(quotationInsertion('A\n\nB', 2, block), { insert: '> quoted\n', caret: 11 })
+  })
+
+  await test('a click anywhere in a page link reads the place back; outside it, nothing', () => {
+    const note = 'Before.\n> quoted words [p. 4](papertime://anchor?p=3&x=145.00&y=95.00&w=366.50&h=12.00&paper=ABC)\n\nAfter [a link](https://example.com).'
+    const label = note.indexOf('[p. 4]') + 2
+    const address = note.indexOf('anchor?') + 3
+    assert.deepEqual(anchorAt(note, label), { pageIndex: 3, rect: { x: 145, y: 95, width: 366.5, height: 12 }, paperID: 'ABC' })
+    assert.deepEqual(anchorAt(note, address)?.pageIndex, 3)
+    assert.equal(anchorAt(note, note.indexOf('quoted')), null)
+    assert.equal(anchorAt(note, note.indexOf('example')), null, 'only papertime links are pages')
   })
 
   await test('the printed lines of a selection become one passage, hyphens rejoined', () => {

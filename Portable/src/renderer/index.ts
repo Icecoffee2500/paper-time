@@ -497,7 +497,23 @@ const inspector = buildInspector({
   markMenu: (anchor, entries) => showMenu(anchor, entries),
   open: (id) => void showPaper(id),
   detach: (id) => void detach(id),
+  openAnchor: (place) => void openAnchor(place),
 })
+
+/**
+ * A quotation's page link, followed from the note: its paper — the note's
+ * own unless the link names another — at the passage's top, as a jump Back
+ * comes back from.
+ */
+async function openAnchor(place: { pageIndex: number; rect: { x: number; y: number; width: number; height: number }; paperID?: string }) {
+  const known = place.paperID ? store.papers.find((entry) => entry.id.toUpperCase() === place.paperID!.toUpperCase()) : null
+  const id = known?.id ?? store.selectedID
+  if (!id) return
+  if (id !== store.selectedID) await showPaper(id)
+  const reader = readers.get(id)
+  if (!reader || !(await reader.whenOpen())) return
+  await reader.jumpTo(place.pageIndex, place.rect.y + place.rect.height)
+}
 
 // ------------------------------------------------------------ the page area
 

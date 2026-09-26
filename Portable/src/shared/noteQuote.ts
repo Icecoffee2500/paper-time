@@ -54,6 +54,19 @@ export function parseAnchorURL(url: string): { pageIndex: number; rect: NoteAnch
   return { pageIndex: Math.trunc(p), rect: { x, y, width: w, height: h }, ...(paperID ? { paperID } : {}) }
 }
 
+/**
+ * The page link a character of a note sits in — `[p. 4](papertime://anchor?…)`,
+ * label or address — read back into a place, or null. What a click on the
+ * quotation's page chip follows on the Mac.
+ */
+export function anchorAt(text: string, index: number): ReturnType<typeof parseAnchorURL> {
+  for (const match of text.matchAll(/\[((?:\\.|[^\\\]\n])*)\]\((papertime:\/\/anchor[^)\s]*)\)/g)) {
+    const start = match.index ?? 0
+    if (index >= start && index <= start + match[0].length) return parseAnchorURL(match[2])
+  }
+  return null
+}
+
 /** What the link reads as when the passage has no words: its first seven, or the page. */
 export function anchorLabel(anchor: NoteAnchor): string {
   const words = anchor.quotedText.replace(/\n/g, ' ').split(' ').filter((word) => word.length > 0)

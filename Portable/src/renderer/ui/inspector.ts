@@ -17,7 +17,8 @@ import { type DocumentKind } from '../../shared/documentKind.js'
 import { buildSketchInspector } from './sketchInspector.js'
 import { attachLatexSuite } from './latexSuiteInput.js'
 import { attachMathPreview } from './mathPreview.js'
-import { quotationInsertion } from '../../shared/noteQuote.js'
+import { anchorAt, quotationInsertion } from '../../shared/noteQuote.js'
+import { isCommand, platform } from '../bridge.js'
 import { cssColor, type Mark } from '../../shared/marks.js'
 import type { MenuEntry } from './toolbar.js'
 
@@ -37,6 +38,8 @@ export interface InspectorActions {
   open: (id: string) => void
   /** A supplement made a paper of its own again. */
   detach: (id: string) => void
+  /** A quotation's page link followed: that paper, at that passage. */
+  openAnchor: (place: { pageIndex: number; rect: { x: number; y: number; width: number; height: number }; paperID?: string }) => void
   /** The marks of the paper in front, in reading order — the Marks tab. */
   marks: () => { pageIndex: number; mark: Mark }[]
   revealMark: (pageIndex: number, id: string) => void
@@ -645,7 +648,25 @@ function note(body: HTMLElement, paper: Paper, actions: InspectorActions) {
     if (timer) clearTimeout(timer)
     timer = setTimeout(save, 900)
   })
-  body.append(el('div', { class: 'field' }, [area]))
+  // A quotation's page link goes back to the passage — the Mac's page chip.
+  // A textarea cannot hold a link, so it is Ctrl-click (⌘-click on a Mac):
+  // a plain click puts the caret there, as a click in any editor does.
+  on(area, 'click', (event: MouseEvent) => {
+    if (!isCommand(event)) return
+    const place = anchorAt(area.value, area.selectionStart)
+    if (!place) return
+    event.preventDefault()
+    actions.openAnchor(place)
+  })
+  const field = el('div', { class: 'field' }, [area])
+  if (/\]\(papertime:\/\/anchor/.test(area.value)) {
+    const key = platform === 'darwin' ? '⌘' : 'Ctrl'
+    field.append(el('p', {
+      class: 'set-note',
+      text: L(`인용 끝의 쪽 링크를 ${key}-클릭하면 그 자리로 가요.`, `${key}-click a page link to go back to the passage.`),
+    }))
+  }
+  body.append(field)
   // Math in the note is typed with Latex Suite: `@a`, `//`, Tab out of the equation.
   attachLatexSuite(area)
   // And shown set, under the line, while the caret is inside it.
