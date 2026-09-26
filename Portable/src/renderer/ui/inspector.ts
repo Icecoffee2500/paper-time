@@ -17,6 +17,10 @@ import { type DocumentKind } from '../../shared/documentKind.js'
 import { buildSketchInspector } from './sketchInspector.js'
 import { attachLatexSuite } from './latexSuiteInput.js'
 import { attachMathPreview } from './mathPreview.js'
+import { anchorAt, quotationInsertion } from '../../shared/noteQuote.js'
+import { isCommand, platform } from '../bridge.js'
+import { cssColor, type Mark } from '../../shared/marks.js'
+import type { MenuEntry } from './toolbar.js'
 
 export interface InspectorActions {
   editMeta: (id: string, patch: Record<string, unknown>) => void
@@ -30,9 +34,34 @@ export interface InspectorActions {
   setKind: (id: string, kind: DocumentKind) => void
   /** The default drawing style changed; the rack and the page should follow. */
   sketchChanged: () => void
+  /** Another paper, shown — a supplement's parent, or one of its supplements. */
+  open: (id: string) => void
+  /** A supplement made a paper of its own again. */
+  detach: (id: string) => void
+  /** A quotation's page link followed: that paper, at that passage. */
+  openAnchor: (place: { pageIndex: number; rect: { x: number; y: number; width: number; height: number }; paperID?: string }) => void
+  /** The marks of the paper in front, in reading order — the Marks tab. */
+  marks: () => { pageIndex: number; mark: Mark }[]
+  revealMark: (pageIndex: number, id: string) => void
+  removeMark: (pageIndex: number, id: string) => void
+  commentMark: (pageIndex: number, id: string, comment: string) => void
+  copyText: (text: string) => void
+  markMenu: (anchor: Element, entries: MenuEntry[]) => void
 }
 
-export function buildInspector(actions: InspectorActions): { node: HTMLElement; update: () => void } {
+export interface InspectorPanel {
+  node: HTMLElement
+  update: () => void
+  /** The caret in the note, at its end — Command-N. False when no note is showing. */
+  focusNote: () => boolean
+  /** A block typed into the note at its caret, as a keystroke would be:
+   *  undoable, and saved like typing — Command-L's quotation. */
+  insertIntoNote: (block: string) => boolean
+  /** A mark clicked on the page: its row in the Marks tab comes forward. */
+  showMark: (id: string) => void
+}
+
+export function buildInspector(actions: InspectorActions): InspectorPanel {
   const node = el('div', { class: 'panel' })
   const body = el('div', { class: 'panel-body' })
   node.append(body)
@@ -66,20 +95,49 @@ export function buildInspector(actions: InspectorActions): { node: HTMLElement; 
     const paper = store.papers.find((entry) => entry.id === store.selectedID)
     if (!paper) {
       body.append(el('div', { class: 'empty' }, [
-        el('h2', { text: L('고른 논문이 없어요', 'No paper selected') }),
-        el('p', { text: L('목록에서 하나를 고르면 그 기록이 보여요.', 'Pick one from the list to see its record.') }),
+        el('h2', { text: L('고른 논문이 없어요', 'No Paper Selected') }),
+        el('p', { text: L('논문을 고르면 서지를 보고 고칠 수 있어요.', 'Choose a paper to see its details.') }),
       ]))
       return
     }
     switch (store.settings.inspectorTab) {
       case 'details': details(body, paper, actions); break
-      case 'marks': marks(body, paper); break
+      case 'marks': marks(body, paper, actions, update); break
       case 'note': note(body, paper, actions); break
     }
   }
 
+  const noteArea = () => body.querySelector<HTMLTextAreaElement>('.note-area')
+
+  function focusNote(): boolean {
+    const area = noteArea()
+    if (!area) return false
+    area.focus()
+    area.setSelectionRange(area.value.length, area.value.length)
+    area.scrollTop = area.scrollHeight
+    return true
+  }
+
+  function insertIntoNote(block: string): boolean {
+    const area = noteArea()
+    if (!area) return false
+    // Where the caret was left — the end, in a note just opened.
+    const caret = area.selectionStart ?? area.value.length
+    const { insert } = quotationInsertion(area.value, caret, block)
+    area.focus()
+    area.setSelectionRange(caret, caret)
+    // The one way into a textarea that keeps its undo: Command-Z takes the
+    // quotation back out, as it would anything typed.
+    document.execCommand('insertText', false, insert)
+    return true
+  }
+
+  function showMark(id: string) {
+    if (store.settings.inspectorTab === 'marks') flashMarkRow(body, id)
+  }
+
   update()
-  return { node, update }
+  return { node, update, focusNote, insertIntoNote, showMark }
 }
 
 function field(label: string, value: Node | string): HTMLElement {
@@ -93,12 +151,13 @@ function editable(
   label: string,
   value: string,
   commit: (next: string) => void,
-  options: { multiline?: boolean } = {},
+  options: { multiline?: boolean; placeholder?: string } = {},
 ): HTMLElement {
   const input = options.multiline
     ? (el('textarea', { rows: '3' }) as HTMLTextAreaElement)
     : (el('input', { type: 'text' }) as HTMLInputElement)
   input.value = value
+  if (options.placeholder) input.placeholder = options.placeholder
   let last = value
   const send = () => {
     if (input.value === last) return
@@ -219,6 +278,44 @@ function kindQuestion(body: HTMLElement, paper: Paper, actions: InspectorActions
   ]))
 }
 
+/**
+ * What a paper is attached to, or what is attached to it — the Mac's
+ * «Belongs To» and «Supplementary Material». A supplement is on no shelf of
+ * its own, so this and the row's paperclip are the ways to and from it.
+ */
+function supplements(body: HTMLElement, paper: Paper, actions: InspectorActions) {
+  const parentID = paper.meta.parentID
+  if (parentID) {
+    const parent = store.papers.find((entry) => entry.id === parentID)
+    const open = el('button', { class: 'plain-button supplement-link', html: icon('text.document') })
+    open.append(el('span', { text: parent?.meta.displayTitle ?? L('찾을 수 없는 논문', 'A paper that is not here') }))
+    on(open, 'click', () => actions.open(parentID))
+    const free = el('button', { class: 'plain-button', text: L('따로 논문으로 두기', 'Make a Paper of Its Own') })
+    on(free, 'click', () => actions.detach(paper.id))
+    body.append(el('div', { class: 'field' }, [
+      el('div', { class: 'field-label', text: L('붙어 있는 논문', 'Belongs To') }),
+      el('div', { class: 'chip-row' }, [open]),
+      el('div', { class: 'chip-row', style: 'margin-top: 6px' }, [free]),
+    ]))
+    return
+  }
+  const children = store.papers.filter((entry) => entry.meta.parentID === paper.id)
+  if (children.length === 0) return
+  const list = el('div', { class: 'supplement-list' })
+  for (const child of children) {
+    const open = el('button', { class: 'plain-button supplement-link', html: icon('doc') })
+    open.append(el('span', { text: child.meta.displayTitle }))
+    on(open, 'click', () => actions.open(child.id))
+    const detach = el('button', { class: 'plain-button', text: L('떼기', 'Detach') })
+    on(detach, 'click', () => actions.detach(child.id))
+    list.append(el('div', { class: 'supplement-row' }, [open, detach]))
+  }
+  body.append(el('div', { class: 'field' }, [
+    el('div', { class: 'field-label', text: L('보충 자료', 'Supplementary Material') }),
+    list,
+  ]))
+}
+
 function details(body: HTMLElement, paper: Paper, actions: InspectorActions) {
   const meta = paper.meta
   const kind = meta.effectiveKind
@@ -229,10 +326,18 @@ function details(body: HTMLElement, paper: Paper, actions: InspectorActions) {
   // row's own menu: a form is no place for a switch that is never touched
   // again.
   if (meta.kindIsUnanswered) kindQuestion(body, paper, actions)
+  supplements(body, paper, actions)
 
+  // With no title written down the list shows the file's name; the field
+  // says so faintly rather than standing empty beside a name it is not.
   body.append(editable(L('제목', 'Title'), meta.csl.title ?? '', (next) => {
     actions.editMeta(paper.id, { csl: { ...meta.csl, title: next }, confidence: 'manual' })
-  }, { multiline: true }))
+  }, { multiline: true, placeholder: meta.displayTitle }))
+  const cslText = (key: string) => String((meta.csl as Record<string, unknown>)[key] ?? '')
+  const cslField = (label: string, key: string) => editable(label, cslText(key), (next) => {
+    actions.editMeta(paper.id, { csl: { ...meta.csl, [key]: next || undefined }, confidence: 'manual' })
+  })
+  body.append(cslField(L('부제', 'Subtitle'), 'subtitle'))
 
   const authors = el('div', { class: 'chip-row' })
   for (const name of (meta.csl.author ?? []) as CSLName[]) {
@@ -253,6 +358,13 @@ function details(body: HTMLElement, paper: Paper, actions: InspectorActions) {
     body.append(editable(L('학술지·학회', 'Venue'), meta.csl['container-title'] ?? '', (next) => {
       actions.editMeta(paper.id, { csl: { ...meta.csl, 'container-title': next }, confidence: 'manual' })
     }))
+    // The Mac's paper form: where in the journal, as well as which journal.
+    const where = el('div', { class: 'field-row' }, [
+      cslField(L('권', 'Volume'), 'volume'),
+      cslField(L('호', 'Issue'), 'issue'),
+      cslField(L('쪽', 'Pages'), 'page'),
+    ])
+    body.append(where)
   } else {
     body.append(editable(isBook ? L('출판사', 'Publisher') : L('펴낸 곳', 'From'), meta.csl.publisher ?? '', (next) => {
       actions.editMeta(paper.id, { csl: { ...meta.csl, publisher: next }, confidence: 'manual' })
@@ -280,7 +392,10 @@ function details(body: HTMLElement, paper: Paper, actions: InspectorActions) {
     actions.editMeta(paper.id, { csl: { ...meta.csl, issued }, confidence: 'manual' })
   }))
 
-  if (isPaper && meta.csl.DOI) body.append(field('DOI', meta.csl.DOI))
+  // Written by hand as well as read: a DOI is what a registrar is asked
+  // with, and the Mac's form lets it be corrected.
+  if (isPaper) body.append(cslField('DOI', 'DOI'))
+  body.append(cslField('URL', 'URL'))
   // A book is cited too — that is the whole reason it is not a document — so
   // it keeps its key.
   if (isPaper || isBook) {
@@ -307,6 +422,29 @@ function details(body: HTMLElement, paper: Paper, actions: InspectorActions) {
     status,
   ]))
 
+  // The rest of the Mac's Reading section: the star, and a rating.
+  const favourite = el('button', {
+    class: 'plain-button field-toggle',
+    'aria-pressed': String(paper.state.isFavorite),
+    html: icon(paper.state.isFavorite ? 'star.fill' : 'star'),
+  })
+  favourite.append(el('span', { text: L('즐겨찾기', 'Favorite') }))
+  on(favourite, 'click', () => actions.editState(paper.id, { isFavorite: !paper.state.isFavorite }))
+  const stars = el('div', { class: 'rating', role: 'group', 'aria-label': L('별점', 'Rating') })
+  const rating = paper.state.rating ?? 0
+  for (let value = 1; value <= 5; value += 1) {
+    const star = el('button', {
+      class: 'rating-star',
+      'aria-pressed': String(value <= rating),
+      title: L(`별 ${value}개`, `${value} star${value === 1 ? '' : 's'}`),
+      html: icon(value <= rating ? 'star.fill' : 'star'),
+    })
+    // Pressing the rating it already has takes it back to none.
+    on(star, 'click', () => actions.editState(paper.id, { rating: value === rating ? null : value }))
+    stars.append(star)
+  }
+  body.append(el('div', { class: 'field field-inline' }, [favourite, el('span', { class: 'toolbar-spacer' }), stars]))
+
   // "Confidence" is about a registrar agreeing with us, and no registrar has
   // an opinion about a manual.
   if (isPaper) {
@@ -331,18 +469,158 @@ function details(body: HTMLElement, paper: Paper, actions: InspectorActions) {
   body.append(row, el('div', { style: 'height: 14px' }))
 }
 
-function marks(body: HTMLElement, paper: Paper) {
-  body.append(el('div', { class: 'empty' }, [
-    el('span', { html: icon('highlighter') }),
-    el('h2', { text: L('표시', 'Marks') }),
-    el('p', {
-      text: L(
-        '쪽에 칠한 형광펜과 밑줄이 여기에 모여요. 펜으로 그린 것은 이미 PDF 안에 있어요.',
-        'Highlights and underlines from the page will appear here. '
-          + 'Pen strokes already live in the PDF.',
-      ),
-    }),
-  ]))
+/**
+ * The Marks tab: every highlight, underline and strikethrough in the paper,
+ * in reading order, the Mac's `MarkupListView`. A row is the mark's colour,
+ * its page and its kind, and what it says — the note written on it, or the
+ * words it marks. Pressing a row goes to the mark; its menu writes a note,
+ * copies the words, or takes the mark off. This tab used to be a sentence
+ * promising that the marks would appear here.
+ */
+type MarkFilter = 'all' | 'highlight' | 'underline' | 'strikethrough' | 'notes'
+let markFilter: MarkFilter = 'all'
+/** The row whose note is being written in place, if one is. */
+let editingMark: string | null = null
+
+function markFilters(): [MarkFilter, string, string][] {
+  return [
+    ['all', L('전부', 'All'), 'list.bullet'],
+    ['highlight', L('형광펜', 'Highlights'), 'highlighter'],
+    ['underline', L('밑줄', 'Underlines'), 'underline'],
+    ['strikethrough', L('취소선', 'Strikethroughs'), 'strikethrough'],
+    ['notes', L('노트', 'Notes'), 'text.bubble'],
+  ]
+}
+
+function markMatches(filter: MarkFilter, mark: Mark): boolean {
+  if (filter === 'all') return true
+  if (filter === 'notes') return Boolean(mark.comment)
+  return mark.kind === filter
+}
+
+function markKindName(mark: Mark): string {
+  switch (mark.kind) {
+    case 'highlight': return L('형광펜', 'Highlight')
+    case 'underline': return L('밑줄', 'Underline')
+    case 'strikethrough': return L('취소선', 'Strikethrough')
+  }
+}
+
+function marks(body: HTMLElement, paper: Paper, actions: InspectorActions, redraw: () => void) {
+  const items = actions.marks()
+  const chips = el('div', { class: 'mark-filters' })
+  for (const [value, label] of markFilters()) {
+    const count = items.filter((item) => markMatches(value, item.mark)).length
+    const chip = el('button', {
+      class: 'mark-filter',
+      'aria-pressed': String(markFilter === value),
+      title: `${label}: ${count}`,
+    }, [el('span', { text: label }), el('span', { class: 'mark-filter-count', text: String(count) })]) as HTMLButtonElement
+    chip.disabled = count === 0 && value !== 'all'
+    on(chip, 'click', () => {
+      markFilter = value
+      redraw()
+    })
+    chips.append(chip)
+  }
+  body.append(chips)
+
+  const shown = items.filter((item) => markMatches(markFilter, item.mark))
+  if (shown.length === 0) {
+    const filter = markFilters().find(([value]) => value === markFilter)!
+    const title = markFilter === 'all'
+      ? L('아직 표시가 없어요', 'No Marks Yet')
+      : L(`아직 ${filter[1]} 표시가 없어요`, `Nothing ${filter[1]} Yet`)
+    const message = markFilter === 'all'
+      ? L('글자를 골라 형광펜을 칠하거나, 펜으로 그려보세요.', 'Select text to highlight it, or draw with the pen.')
+      : markFilter === 'notes'
+        ? L('구절을 고르고 노트 단추를 누르면 돼요.', 'Select a passage, then choose the note button.')
+        : L(`논문에서 글자를 고르고, 표시 막대에서 ${filter[1]}을 고르면 돼요.`,
+            `Select text in the paper and pick ${filter[1].toLowerCase()} from the bar.`)
+    body.append(el('div', { class: 'empty' }, [
+      el('span', { html: icon(filter[2]) }),
+      el('h2', { text: title }),
+      el('p', { text: message }),
+    ]))
+    return
+  }
+
+  const list = el('div', { class: 'mark-list' })
+  for (const { pageIndex, mark } of shown) {
+    const words = mark.comment || mark.text
+    const row = el('div', { class: 'mark-row', role: 'button', tabindex: '0', 'data-mark': mark.id }, [
+      el('div', { class: 'mark-row-head' }, [
+        el('span', { class: 'mark-dot', style: `background: ${cssColor(mark.color)}` }),
+        el('span', { class: 'mark-page', text: L(`${pageIndex + 1}쪽`, `Page ${pageIndex + 1}`) }),
+        el('span', { class: 'toolbar-spacer' }),
+        el('span', { class: 'mark-kind' }, [
+          el('span', { html: icon(mark.comment ? 'text.bubble' : mark.kind === 'highlight' ? 'highlighter' : mark.kind) }),
+          el('span', { text: markKindName(mark) }),
+        ]),
+      ]),
+      ...(words ? [el('div', { class: 'mark-words', text: words })] : []),
+    ])
+    on(row, 'click', () => actions.revealMark(pageIndex, mark.id))
+    on(row, 'keydown', (event: KeyboardEvent) => {
+      if (event.key === 'Enter') actions.revealMark(pageIndex, mark.id)
+    })
+    const foreign = mark.id.startsWith('foreign-')
+    on(row, 'contextmenu', (event: MouseEvent) => {
+      event.preventDefault()
+      actions.markMenu(row, [
+        ...(foreign ? [] : [{
+          label: mark.comment ? L('노트 고치기…', 'Edit Note…') : L('노트 더하기…', 'Add Note…'),
+          icon: 'square.and.pencil',
+          action: () => {
+            editingMark = mark.id
+            redraw()
+          },
+        }]),
+        { label: L('글 복사', 'Copy Text'), icon: 'doc.on.doc', action: () => actions.copyText(mark.text || mark.comment || '') },
+        ...(foreign ? [] : [
+          { separator: true },
+          { label: L('지우기', 'Delete'), icon: 'trash', action: () => actions.removeMark(pageIndex, mark.id) },
+        ]),
+      ])
+    })
+    if (editingMark === mark.id) {
+      const input = el('input', { type: 'text', class: 'mark-comment-field', placeholder: L('노트', 'Note') }) as HTMLInputElement
+      input.value = mark.comment ?? ''
+      const done = el('button', { class: 'filled-button mark-comment-done', text: L('끝', 'Done') })
+      const commit = () => {
+        if (editingMark !== mark.id) return
+        editingMark = null
+        actions.commentMark(pageIndex, mark.id, input.value)
+      }
+      on(input, 'keydown', (event: KeyboardEvent) => {
+        event.stopPropagation()
+        if (event.key === 'Enter') commit()
+        if (event.key === 'Escape') {
+          editingMark = null
+          redraw()
+        }
+      })
+      on(input, 'click', (event: MouseEvent) => event.stopPropagation())
+      on(done, 'click', (event: MouseEvent) => {
+        event.stopPropagation()
+        commit()
+      })
+      row.append(el('div', { class: 'mark-comment-edit' }, [input, done]))
+      requestAnimationFrame(() => input.focus())
+    }
+    list.append(row)
+  }
+  body.append(list)
+}
+
+/** Brings a mark's row forward and pulses it — a mark clicked on the page. */
+function flashMarkRow(body: HTMLElement, id: string) {
+  const row = body.querySelector<HTMLElement>(`.mark-row[data-mark="${CSS.escape(id)}"]`)
+  if (!row) return
+  row.scrollIntoView({ block: 'nearest' })
+  row.classList.remove('flash')
+  void row.offsetWidth
+  row.classList.add('flash')
 }
 
 function note(body: HTMLElement, paper: Paper, actions: InspectorActions) {
@@ -352,6 +630,9 @@ function note(body: HTMLElement, paper: Paper, actions: InspectorActions) {
     placeholder: L('이 논문에 대한 노트…', 'A note about this paper…'),
   }) as HTMLTextAreaElement
   area.value = paper.state.summaryNote
+  // A note opens at its end, where the next thought goes — so a quotation
+  // sent here before anybody clicked into it lands after what is written.
+  area.setSelectionRange(area.value.length, area.value.length)
   area.style.minHeight = '60vh'
   let last = area.value
   const save = () => {
@@ -367,7 +648,25 @@ function note(body: HTMLElement, paper: Paper, actions: InspectorActions) {
     if (timer) clearTimeout(timer)
     timer = setTimeout(save, 900)
   })
-  body.append(el('div', { class: 'field' }, [area]))
+  // A quotation's page link goes back to the passage — the Mac's page chip.
+  // A textarea cannot hold a link, so it is Ctrl-click (⌘-click on a Mac):
+  // a plain click puts the caret there, as a click in any editor does.
+  on(area, 'click', (event: MouseEvent) => {
+    if (!isCommand(event)) return
+    const place = anchorAt(area.value, area.selectionStart)
+    if (!place) return
+    event.preventDefault()
+    actions.openAnchor(place)
+  })
+  const field = el('div', { class: 'field' }, [area])
+  if (/\]\(papertime:\/\/anchor/.test(area.value)) {
+    const key = platform === 'darwin' ? '⌘' : 'Ctrl'
+    field.append(el('p', {
+      class: 'set-note',
+      text: L(`인용 끝의 쪽 링크를 ${key}-클릭하면 그 자리로 가요.`, `${key}-click a page link to go back to the passage.`),
+    }))
+  }
+  body.append(field)
   // Math in the note is typed with Latex Suite: `@a`, `//`, Tab out of the equation.
   attachLatexSuite(area)
   // And shown set, under the line, while the caret is inside it.

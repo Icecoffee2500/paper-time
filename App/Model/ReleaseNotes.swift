@@ -335,6 +335,34 @@ enum ReleaseNotes {
                         "Installing over an earlier version on another drive stopped twice on “Error opening file for writing”: the old version had just deleted those files, and another program still held them. The installer now waits for the names to come free. The folder page says when a folder needs an administrator, before anything is installed, and the 250 MB copy of the installer left on C: is gone."
                     )
                 ),
+                Entry(
+                    Text2("윈도우·리눅스에서 눌러도 안 되던 것들", "Commands that did nothing on Windows and Linux"),
+                    Text2(
+                        "Ctrl+N과 Ctrl+L은 «아직 이 빌드에 없어요»라고만 했고, «새 컬렉션…»은 아무 일도 안 했고, 설정의 «고르기…»는 폴더를 골라도 바뀌지 않았어요. 이제 새 노트가 열리고, 고른 구절이 맥과 같은 인용으로 노트에 들어가고, 컬렉션 이름을 묻고, 폴더가 바뀌어요. 창에 메뉴 막대가 없는 두 데스크톱을 위해 단축키는 설정과 단추의 설명에, 도움말은 ⋯ 메뉴에 있어요.",
+                        "Ctrl+N and Ctrl+L said only that they were not in this build, New Collection… did nothing, and Choose… in Settings changed no folder. Now a new note opens, a selected passage lands in the note as the Mac's quotation, New Collection… asks for a name, and the folder changes. The window on those two desktops has no menu bar, so Settings lists every key, each button's tooltip names its own, and Help is in the ⋯ menu."
+                    )
+                ),
+                Entry(
+                    Text2("윈도우·리눅스에서 형광펜을 지울 수 있어요", "Take back a highlight on Windows and Linux"),
+                    Text2(
+                        "칠한 형광펜과 밑줄은 되돌릴 길이 없었어요. 이제 표시를 누르면 색을 바꾸거나, 노트를 달거나, 지울 수 있고, Ctrl+Z가 되돌려요. Marks 탭은 모든 표시를 맥처럼 종류별로 보여주고, 누르면 그 자리로 가요.",
+                        "A highlight or an underline, once made, was there for good. Click a mark to change its color, write a note on it, or remove it; Ctrl+Z takes any of it back. The Marks tab lists every mark by kind, as on the Mac, and goes to one when you press it."
+                    )
+                ),
+                Entry(
+                    Text2("윈도우·리눅스의 두 번째 라이브러리", "A second library on Windows and Linux"),
+                    Text2(
+                        "두 번째로 연 폴더의 논문에 그린 펜 선이 첫 폴더에 들어가서 다시 열면 사라졌고, BibTeX 내보내기는 첫 폴더의 논문만 담았어요. 이제 무엇이든 그 논문이 있는 폴더에 쓰고, 내보내기는 모든 폴더를 봐요.",
+                        "Pen strokes on a paper from a second library folder were saved into the first one and gone when the paper reopened, and Export BibTeX took only the first folder's papers. Everything is written beside its own paper now, and the export reads every folder."
+                    )
+                ),
+                Entry(
+                    Text2("윈도우·리눅스에서 논문 속 링크를 따라가요", "Links in a paper work on Windows and Linux"),
+                    Text2(
+                        "인용 번호도 그림 번호도 URL도 눌리지 않았어요. 이제 누르면 그리로 가고, 뒤로가 읽던 문장으로 돌아와요. ⇧⌘L의 차례, ⌘3의 두 쪽 보기, 맥에서 만든 스마트 컬렉션도 이제 맥과 같아요.",
+                        "Citation numbers, figure references and URLs could not be clicked. They go where they point now, and Back returns to the sentence you left. The contents on ⇧⌘L, the two-page spread on ⌘3 and smart collections made on the Mac work as they do there."
+                    )
+                ),
             ]
         ),
         Release(

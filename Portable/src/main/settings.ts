@@ -32,12 +32,16 @@ export interface Settings {
   pageTint: PageTint
   /** The custom tint's ground, `#rrggbb`. */
   pageTintColor: string
-  pageLayout: 'single' | 'continuous'
+  pageLayout: 'single' | 'continuous' | 'book'
   selectedPaperID: string | null
   /** Latex Suite's shortcuts in the note and on the cards. On unless turned off. */
   latexShortcuts: boolean
   /** Search by meaning in the palette, and the index it needs. On unless turned off. */
   semanticSearch: boolean
+  /** What stands under a title in the list — the Mac's `listSubtitleFields`. */
+  listSubtitle: string
+  /** «Protect Case in Titles» for the `.bib`. On unless turned off. */
+  bibtexProtectCase: boolean
 }
 
 const DEFAULTS: Settings = {
@@ -57,6 +61,8 @@ const DEFAULTS: Settings = {
   selectedPaperID: null,
   latexShortcuts: true,
   semanticSearch: true,
+  listSubtitle: 'authors,year,venue',
+  bibtexProtectCase: true,
 }
 
 let cached: Settings | null = null

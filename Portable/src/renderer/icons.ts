@@ -153,6 +153,42 @@ const SHAPES: Record<string, string> = {
     <circle cx="8" cy="8" r="5.6"/>
     <path d="M8 7.2v3.6"/>
     <circle cx="8" cy="5.2" r="0.72" fill="currentColor" stroke="none"/>`,
+  // A clip: the supplements hanging off a paper.
+  paperclip: `
+    <path d="M10.6 5.4 6.1 9.9a1.3 1.3 0 0 0 1.84 1.84l4.9-4.9a2.6 2.6 0 0 0-3.68-3.68l-4.9 4.9a3.9 3.9 0 0 0 5.52 5.52l3.8-3.8"/>`,
+  // The two marks that are lines: a U over its rule, an S through its rule.
+  underline: `
+    <path d="M5 2.8v4.4a3 3 0 0 0 6 0V2.8"/>
+    <path d="M3.6 13.4h8.8"/>`,
+  strikethrough: `
+    <path d="M11.2 4.4c-.5-1.1-1.7-1.8-3.2-1.8-1.9 0-3.2 1-3.2 2.4 0 1 .6 1.7 2 2.1"/>
+    <path d="M4.8 11.4c.5 1.2 1.7 2 3.3 2 2 0 3.3-1 3.3-2.5 0-.7-.3-1.3-.9-1.7"/>
+    <path d="M2.6 8.2h10.8"/>`,
+  // A card and a pencil: write a note about this.
+  'square.and.pencil': `
+    <path d="M13 8.6v3.8a1.6 1.6 0 0 1-1.6 1.6H3.6A1.6 1.6 0 0 1 2 12.4V4.6A1.6 1.6 0 0 1 3.6 3h3.8"/>
+    <path d="M11.6 2.2l2.2 2.2-5.6 5.6-2.8.6.6-2.8Z"/>`,
+  // A speech bubble with words in it: a mark that carries a note.
+  'text.bubble': `
+    <path d="M3.4 2.6h9.2a1.4 1.4 0 0 1 1.4 1.4v6a1.4 1.4 0 0 1-1.4 1.4H8.4l-3 2.4v-2.4h-2A1.4 1.4 0 0 1 2 10V4a1.4 1.4 0 0 1 1.4-1.4Z"/>
+    <path d="M5 5.6h6M5 8h4"/>`,
+  'list.bullet': `
+    <circle cx="3.4" cy="4.4" r="0.72" fill="currentColor" stroke="none"/>
+    <circle cx="3.4" cy="8" r="0.72" fill="currentColor" stroke="none"/>
+    <circle cx="3.4" cy="11.6" r="0.72" fill="currentColor" stroke="none"/>
+    <path d="M6 4.4h7.4M6 8h7.4M6 11.6h7.4"/>`,
+  // The contents: headings, and the sections under them set in.
+  'list.bullet.indent': `<path d="M2.6 3.6h10.8M5.2 6.6h8.2M5.2 9.6h8.2M2.6 12.6h10.8"/>`,
+  eject: `
+    <path d="M8 3.2 12.8 9H3.2Z"/>
+    <path d="M3.2 12.6h9.6"/>`,
+  // The three ways of laying pages out: a scroll of them, one, and a spread.
+  scroll: `
+    <rect x="3.6" y="1.8" width="8.8" height="5.4" rx="1.2"/>
+    <rect x="3.6" y="8.8" width="8.8" height="5.4" rx="1.2"/>`,
+  'book.pages': `
+    <path d="M8 4.2C6.6 3.2 4.6 2.8 2.2 3v9.6c2.4-.2 4.4.2 5.8 1.2 1.4-1 3.4-1.4 5.8-1.2V3c-2.4-.2-4.4.2-5.8 1.2Z"/>
+    <path d="M8 4.2v9.6"/>`,
   checkmark: `<path d="M3 8.4 6.4 11.8 13 5.2"/>`,
   xmark: `<path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6"/>`,
   'xmark.circle': `

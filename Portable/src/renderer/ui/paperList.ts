@@ -10,7 +10,9 @@
  */
 import { iconNode } from '../icons.js'
 import { clear, el, on } from '../dom.js'
-import { isPinned, papersByFolder, shelfPapers, store, type Paper } from '../state.js'
+import { attachmentsOf, isPinned, papersByFolder, shelfPapers, store, type Paper } from '../state.js'
+import { parseSubtitle, subtitleLine } from '../../shared/subtitle.js'
+import type { TagColor } from '../../shared/model.js'
 import { showMenu } from './toolbar.js'
 import { basename } from './sidebar.js'
 import { L } from '../../shared/lang.js'
@@ -22,8 +24,15 @@ import { placeKey } from '../../shared/semantic/results.js'
 export interface PaperListActions {
   chooseLibrary: () => void
   open: (id: string) => void
-  cycleStatus: (id: string) => void
+  /** The reading status and the kind, as a menu off the row's status button —
+   *  the Mac's: three states in a fixed order are two wrong guesses before the
+   *  right one when they cycle. */
+  statusMenu: (id: string, anchor: Element) => void
   toggleFavorite: (id: string) => void
+  /** The supplements hanging off a paper, from its paperclip. */
+  attachments: (id: string, anchor: Element) => void
+  /** A paper dropped on another's row: it goes under that one, as supplementary material. */
+  attach: (child: string, parent: string) => void
   /** The pin: keep the paper open, or close it. */
   togglePin: (id: string) => void
   /** The × on the Open Papers shelf. */
@@ -38,6 +47,8 @@ export interface PaperListActions {
   openPassage: (hit: TextHit, byMeaning?: boolean) => void
   /** A passage found by meaning inside a paper's note: that paper, with the note in front. */
   openNote: (paperID: string) => void
+  /** ↓ and ↑ in the list: the next or previous paper on the shelf. */
+  step: (by: number) => void
 }
 
 const STATUS_ICON = {
@@ -53,8 +64,20 @@ function statusName(status: keyof typeof STATUS_ICON): string {
 export function buildPaperList(actions: PaperListActions): { node: HTMLElement; update: () => void } {
   const node = el('div', { class: 'panel' })
   const header = el('div', { class: 'panel-header' })
-  const body = el('div', { class: 'panel-body' })
+  // Focusable, so the arrows have somewhere to go once a row is pressed —
+  // the Mac's list takes the keyboard the same way.
+  const body = el('div', { class: 'panel-body paper-list-body', tabindex: '-1' })
   node.append(header, body)
+  on(body, 'keydown', (event: KeyboardEvent) => {
+    if (event.target !== body || event.altKey || event.ctrlKey || event.metaKey) return
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+    event.preventDefault()
+    event.stopPropagation()
+    actions.step(event.key === 'ArrowDown' ? 1 : -1)
+    requestAnimationFrame(() => {
+      body.querySelector('.paper-row[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' })
+    })
+  })
 
   /** The rows on screen, by paper, so a redraw can keep the ones it has. */
   // A row, or a folder's name over the rows that came out of it.
@@ -232,6 +255,18 @@ interface BuiltRow {
   apply: (entry: Paper) => void
 }
 
+/** The paper being dragged out of this list, while it is — a drop target can
+ *  read only the kinds of data a drag carries, never the data, until the drop. */
+let dragging: string | null = null
+
+/** A tag's colour, as the Mac's semantic palette has it (`Tag.Color.swiftUIColor`). */
+export function tagColor(color: TagColor | string): string {
+  return ({
+    red: '#ff3b30', orange: '#ff9500', yellow: '#ffcc00', green: '#34c759', mint: '#00c7be',
+    teal: '#30b0c7', blue: '#007aff', indigo: '#5856d6', purple: '#af52de', pink: '#ff2d55', gray: '#8e8e93',
+  } as Record<string, string>)[color] ?? '#8e8e93'
+}
+
 function paperRow(entry: Paper, actions: PaperListActions): BuiltRow {
   const id = entry.id
   const row = el('div', { class: 'paper-row', role: 'option', draggable: 'true' })
@@ -248,12 +283,14 @@ function paperRow(entry: Paper, actions: PaperListActions): BuiltRow {
   const status = el('button', { class: 'paper-status' })
   on(status, 'click', (event: MouseEvent) => {
     event.stopPropagation()
-    actions.cycleStatus(id)
+    actions.statusMenu(id, status)
   })
 
   const title = el('div', { class: 'paper-title' })
   const subtitle = el('div', { class: 'paper-subtitle' })
-  const main = el('div', { class: 'paper-main' }, [title, subtitle])
+  // The tags it wears, in their colours, as the Mac's row has them.
+  const tagRow = el('div', { class: 'paper-tags' })
+  const main = el('div', { class: 'paper-main' }, [title, subtitle, tagRow])
   if (!entry.exists) {
     main.append(el('div', {
       class: 'paper-subtitle',
@@ -271,7 +308,20 @@ function paperRow(entry: Paper, actions: PaperListActions): BuiltRow {
     actions.toggleFavorite(id)
   })
 
-  row.append(pin, main, star, status)
+  // The paperclip and how many: a supplement is kept off every shelf, so
+  // this is the way to it — a badge alone would say it exists and give no
+  // way to reach it.
+  const clip = el('button', { class: 'paper-clip' })
+  const clipGlyph = iconNode('paperclip')
+  const clipCount = el('span')
+  if (clipGlyph) clip.append(clipGlyph)
+  clip.append(clipCount)
+  on(clip, 'click', (event: MouseEvent) => {
+    event.stopPropagation()
+    actions.attachments(id, clip)
+  })
+
+  row.append(pin, main, clip, star, status)
   if (store.shelf.kind === 'open' && isPinned(id)) {
     // Kept open: closed here, the way a tab is.
     const close = el('button', {
@@ -287,7 +337,11 @@ function paperRow(entry: Paper, actions: PaperListActions): BuiltRow {
     })
     row.append(close)
   }
-  on(row, 'click', () => actions.open(id))
+  on(row, 'click', () => {
+    // The list takes the keyboard, so ↓ and ↑ walk it from here.
+    ;(row.closest('.paper-list-body') as HTMLElement | null)?.focus({ preventScroll: true })
+    actions.open(id)
+  })
   on(row, 'contextmenu', (event: MouseEvent) => {
     event.preventDefault()
     actions.contextMenu(id, row)
@@ -297,6 +351,30 @@ function paperRow(entry: Paper, actions: PaperListActions): BuiltRow {
     event.dataTransfer.setData(PAPER_DRAG_TYPE, id)
     event.dataTransfer.setData('text/plain', title.textContent ?? '')
     event.dataTransfer.effectAllowed = 'copyMove'
+    dragging = id
+  })
+  on(row, 'dragend', () => { dragging = null })
+  // Dropping one paper on another makes it that one's supplement, as on the
+  // Mac. Not onto itself, and not onto a paper that is itself a supplement.
+  const accepts = (event: DragEvent) => Boolean(event.dataTransfer
+    && [...event.dataTransfer.types].includes(PAPER_DRAG_TYPE)
+    && dragging && dragging !== id)
+  on(row, 'dragover', (event: DragEvent) => {
+    if (!accepts(event)) return
+    event.preventDefault()
+    event.stopPropagation()
+    // One of the drag's own `copyMove`: anything else and the drop is refused.
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
+    row.classList.add('drop-target')
+  })
+  on(row, 'dragleave', () => row.classList.remove('drop-target'))
+  on(row, 'drop', (event: DragEvent) => {
+    row.classList.remove('drop-target')
+    if (!accepts(event)) return
+    event.preventDefault()
+    event.stopPropagation()
+    const child = event.dataTransfer?.getData(PAPER_DRAG_TYPE)
+    if (child && child !== id) actions.attach(child, id)
   })
 
   /** The parts of a row that change without the row changing shape. */
@@ -335,12 +413,29 @@ function paperRow(entry: Paper, actions: PaperListActions): BuiltRow {
     )
 
     if (title.textContent !== now.meta.displayTitle) title.textContent = now.meta.displayTitle
-    const said = [
-      now.meta.displayAuthors,
-      now.meta.year ? String(now.meta.year) : '',
-      now.meta.venue ?? '',
-    ].filter(Boolean).join(' · ')
+    // The fields the reader chose (Settings → Under the Title), in their order.
+    const said = subtitleLine(now.meta, parseSubtitle(store.settings.listSubtitle))
     if (subtitle.textContent !== said) subtitle.textContent = said
+    subtitle.style.display = said ? '' : 'none'
+
+    const tags = now.meta.tagIDs
+      .map((tagID) => store.tags.find((tag) => tag.id === tagID))
+      .filter((tag): tag is NonNullable<typeof tag> => Boolean(tag))
+    const tagKey = tags.map((tag) => `${tag.id}:${tag.name}:${tag.color}`).join('|')
+    if (tagRow.dataset.key !== tagKey) {
+      tagRow.dataset.key = tagKey
+      tagRow.replaceChildren(...tags.map((tag) => el('span', {
+        class: 'paper-tag',
+        text: tag.name,
+        style: `--tag: ${tagColor(tag.color)}`,
+      })))
+      tagRow.style.display = tags.length > 0 ? '' : 'none'
+    }
+
+    const supplements = attachmentsOf(now.id).length
+    clip.style.display = supplements > 0 ? '' : 'none'
+    clipCount.textContent = supplements > 0 ? String(supplements) : ''
+    clip.title = L(`보충 자료 ${supplements}개`, `${supplements} supplementary file${supplements === 1 ? '' : 's'}`)
   }
 
   apply(entry)

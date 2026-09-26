@@ -15,6 +15,7 @@ import { PaperMeta, PaperState, type Collection, type Tag } from '../shared/mode
 import { SketchColor, SketchStyle } from '../shared/sketch.js'
 import { splitContains, splitDock, splitPapers, splitRemove, type DockZone, type SplitArrangement } from '../shared/split.js'
 import { DEFAULT_TINT_COLOR, type PageTint } from '../shared/pageTint.js'
+import { inCollection } from '../shared/smartRule.js'
 
 export type Pane = 'sidebar' | 'paperList' | 'reader' | 'inspector'
 export type InspectorTab = 'details' | 'marks' | 'note' | 'tools'
@@ -61,12 +62,18 @@ export interface Settings {
   pageTint: PageTint
   /** The custom tint's ground, `#rrggbb`. */
   pageTintColor: string
-  pageLayout: 'single' | 'continuous'
+  pageLayout: 'single' | 'continuous' | 'book'
   selectedPaperID: string | null
   /** Latex Suite in the note and on the cards: `@a` into `\alpha`, `//` into a fraction. */
   latexShortcuts: boolean
   /** Search by meaning in the palette. On unless turned off. */
   semanticSearch: boolean
+  /** What stands under a title in the list, in order — the Mac's
+   *  `listSubtitleFields`, the same comma-separated words. */
+  listSubtitle: string
+  /** Braces round the capitals of a title in the `.bib`, so a style cannot
+   *  lower-case «BERT». The Mac's «Protect Case in Titles». */
+  bibtexProtectCase: boolean
 }
 
 /** What one reader — one pane — knows about the paper it shows. */
@@ -76,6 +83,9 @@ export interface ReaderState {
   zoom: number
   /** The pen is out: the page takes the mouse instead of the text layer. */
   drawing: boolean
+  /** A followed link can be walked back, or forward again, inside this paper. */
+  canGoBack?: boolean
+  canGoForward?: boolean
 }
 
 export const freshReaderState = (): ReaderState => ({ pageCount: 0, currentPage: 0, zoom: 1, drawing: false })
@@ -193,6 +203,8 @@ export const store: Store = {
     selectedPaperID: null,
     latexShortcuts: true,
     semanticSearch: true,
+    listSubtitle: 'authors,year,venue',
+    bibtexProtectCase: true,
   },
   windowState: { maximized: false, fullScreen: false, focused: true },
   trail: [],
@@ -387,6 +399,28 @@ export function paper(id: string | null): Paper | null {
   return papersByID.get(id) ?? null
 }
 
+/**
+ * The supplements that hang off a paper — every paper whose `parentID` is it.
+ * Worked out once per read of the library: every row asks.
+ */
+let childrenByParent: Map<string, Paper[]> | null = null
+let childrenIndexed: Paper[] | null = null
+
+export function attachmentsOf(id: string): Paper[] {
+  if (childrenIndexed !== store.papers || !childrenByParent) {
+    childrenByParent = new Map()
+    for (const entry of store.papers) {
+      const parent = entry.meta.parentID
+      if (!parent) continue
+      const list = childrenByParent.get(parent)
+      if (list) list.push(entry)
+      else childrenByParent.set(parent, [entry])
+    }
+    childrenIndexed = store.papers
+  }
+  return childrenByParent.get(id) ?? []
+}
+
 // MARK: - The open shelf
 
 export function isOpenPaper(id: string): boolean {
@@ -551,8 +585,14 @@ export function shelfPapers(): Paper[] {
       filtered = all.filter((entry) => entry.state.summaryNote.trim().length > 0)
       break
     case 'collection': {
+      // A smart collection is whoever its rule matches — the Mac's
+      // `SmartRuleEvaluator`; filtering by membership left every smart
+      // collection made there empty here.
       const id = (store.shelf as { kind: 'collection'; id: string }).id
-      filtered = all.filter((entry) => entry.meta.collectionIDs.includes(id))
+      const collection = store.collections.find((entry) => entry.id === id)
+      filtered = collection
+        ? all.filter((entry) => inCollection(collection, entry.meta, entry.state, store.tags))
+        : all.filter((entry) => entry.meta.collectionIDs.includes(id))
       break
     }
     case 'tag': {

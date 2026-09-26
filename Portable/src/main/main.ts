@@ -792,8 +792,13 @@ const handlers: Record<string, Handler> = {
   'library:open': (async ({ root }: { root: string }) => openLibrary(root)) as Handler,
   'library:reload': async () => snapshot(),
 
-  'library:import': (async ({ paths }: { paths?: string[] }, sender: BrowserWindow | null) => {
+  'library:import': (async ({ paths, root }: { paths?: string[]; root?: string }, sender: BrowserWindow | null) => {
     if (!library) return { error: 'No library is open.' }
+    // Into the folder being looked at, as on the Mac (`importDestination`):
+    // a paper added while one library's own shelf is showing belongs to that
+    // library. Anything else — every other shelf, a folder inside a library —
+    // goes to the first one.
+    const destination = allLibraries().find((one) => one.root === root) ?? library
     let chosen = paths
     if (!chosen || chosen.length === 0) {
       const result = await dialog.showOpenDialog(sender ?? window!, {
@@ -806,7 +811,7 @@ const handlers: Record<string, Handler> = {
       chosen = result.filePaths
     }
     for (const file of chosen) {
-      await library.importPDF(file, await pageCount(file))
+      await destination.importPDF(file, await pageCount(file))
     }
     return snapshot()
   }) as Handler,
@@ -910,6 +915,9 @@ const handlers: Record<string, Handler> = {
     if (!owner) return null
     const row = await owner.paper(id)
     const state = new PaperState(row?.state ?? {})
+    // `null` takes a field off — a rating taken back to none — and the Mac's
+    // record has no key for a nil Optional, so none is written.
+    for (const [key, value] of Object.entries(patch)) if (value === null) patch[key] = undefined
     // A patch crosses the bridge as JSON, so its dates arrive as strings.
     Object.assign(state, patch, {
       lastOpenedAt: patch.lastOpenedAt ? new Date(String(patch.lastOpenedAt)) : state.lastOpenedAt,
@@ -932,7 +940,11 @@ const handlers: Record<string, Handler> = {
     const row = await owner.paper(id)
     if (!row) return null
     const meta = new PaperMeta(row.meta)
-    Object.assign(meta, patch)
+    // `null` in a patch means «take it off» — a supplement detached from its
+    // paper. JSON cannot carry `undefined`, and the Mac's record has no key at
+    // all for a nil Optional, so none is written here either.
+    const cleared = Object.fromEntries(Object.entries(patch).map(([key, value]) => [key, value === null ? undefined : value]))
+    Object.assign(meta, cleared)
     await owner.saveMeta(meta)
     return meta.encode()
   }) as Handler,
@@ -946,6 +958,14 @@ const handlers: Record<string, Handler> = {
     if ('error' in result) return result
     send('library:changed')
     return { name: result.file ? path.basename(result.file) : name }
+  }) as Handler,
+
+  // A library's folder in the desktop's own file manager, from its row's
+  // menu. Only a folder the library is reading: the window does not get to
+  // open arbitrary paths.
+  'library:revealFolder': (async ({ root }: { root: string }) => {
+    if (!allLibraries().some((one) => one.root === root)) return
+    await shell.openPath(root)
   }) as Handler,
 
   'paper:reveal': (async ({ id }: { id: string }) => {
@@ -966,9 +986,15 @@ const handlers: Record<string, Handler> = {
     (await ownerOf(id))?.loadInk(id, pageIndex) ?? null) as Handler,
 
   'ink:save': (async ({ id, pageIndex, strokes }: { id: string; pageIndex: number; strokes: unknown[] }) => {
-    if (!library) return
-    await library.saveInk(id, pageIndex, strokes)
-    await supersedeAppleInk(id, pageIndex)
+    // Into the folder that holds the paper, as every other sidecar is. This
+    // wrote into the first folder, so a stroke on a paper from a second one
+    // was saved where nothing reads it back: gone when the paper reopened,
+    // and missing from the file too — the file is written from the owner's
+    // sidecars, and an empty page's worth of ink took the old strokes out.
+    const owner = await ownerOf(id)
+    if (!owner) return
+    await owner.saveInk(id, pageIndex, strokes)
+    await supersedeAppleInk(owner, id, pageIndex)
     touched(id).ink.add(pageIndex)
     schedulePDFWrite(id)
   }) as Handler,
@@ -1023,9 +1049,14 @@ const handlers: Record<string, Handler> = {
 
   'drawing:flush': (async ({ id }: { id: string }) => flushToPDF(id)) as Handler,
 
-  'bibtex:export': (async ({ ids }: { ids?: string[] }, sender: BrowserWindow | null) => {
+  'bibtex:export': (async ({ ids, protectCase }: { ids?: string[]; protectCase?: boolean }, sender: BrowserWindow | null) => {
     if (!library) return { error: 'No library is open.' }
-    const { papers: rows, trouble } = await library.read()
+    // Every folder, not the first: a shelf holds papers from all of them, and
+    // reading one folder dropped the others' papers from the file without a
+    // word — the one thing an export must never do quietly.
+    const reads = await Promise.all(allLibraries().map((one) => one.read()))
+    const rows = reads.flatMap((read) => read.papers)
+    const trouble = reads.flatMap((read) => read.trouble)
     const chosen = ids && ids.length > 0 ? rows.filter((row) => ids.includes(row.id)) : rows
     if (chosen.length === 0) return { error: 'There is nothing to export.' }
     // A list that is short by a paper is a list; a bibliography that is short
@@ -1043,7 +1074,9 @@ const handlers: Record<string, Handler> = {
         ),
       }
     }
-    const text = formatBibliography(chosen.map((row) => new PaperMeta(row.meta)), DEFAULT_EXPORT)
+    // The one export option this build has: Settings → BibTeX, as on the Mac.
+    const options = { ...DEFAULT_EXPORT, protectCase: protectCase ?? DEFAULT_EXPORT.protectCase }
+    const text = formatBibliography(chosen.map((row) => new PaperMeta(row.meta)), options)
     const result = await dialog.showSaveDialog(sender ?? window!, {
       title: 'Export BibTeX',
       defaultPath: `${path.basename(library.root)}.bib`,
@@ -1052,6 +1085,18 @@ const handlers: Record<string, Handler> = {
     if (result.canceled || !result.filePath) return { cancelled: true }
     await fsp.writeFile(result.filePath, text, 'utf8')
     return { written: chosen.length, path: result.filePath }
+  }) as Handler,
+
+  // The sheet's «Save…»: the text it previewed, where the person says.
+  'bibtex:save': (async ({ text }: { text: string }, sender: BrowserWindow | null) => {
+    const result = await dialog.showSaveDialog(sender ?? window!, {
+      title: say('BibTeX 내보내기', 'Export BibTeX'),
+      defaultPath: 'references.bib',
+      filters: [{ name: 'BibTeX', extensions: ['bib'] }],
+    })
+    if (result.canceled || !result.filePath) return { cancelled: true }
+    await fsp.writeFile(result.filePath, text, 'utf8')
+    return { path: result.filePath }
   }) as Handler,
 
   // The window sends the whole list; it is put back folder by folder. Each
@@ -1110,6 +1155,9 @@ const handlers: Record<string, Handler> = {
         recent: [],
       },
     })) as Handler,
+
+  // What the About section says: which version this is.
+  'app:about': () => ({ version: app.getVersion() }),
 
   'shell:openExternal': (({ url }: { url: string }) => {
     if (/^https?:/.test(url)) shell.openExternal(url)
@@ -1401,8 +1449,11 @@ async function holdsAnything(owner: Library, id: string, marks: Map<number, Mark
  * format but PencilKit's own can hold.
  */
 async function adoptFromFile(id: string) {
-  if (!library) return { pages: {}, unreadable: [] as number[] }
-  const row = await library.paper(id)
+  // The folder that holds the paper: asked of the first folder, a paper from
+  // a second one was never found, and its Mac drawings never came across.
+  const owner = await ownerOf(id)
+  if (!owner) return { pages: {}, unreadable: [] as number[] }
+  const row = await owner.paper(id)
   if (!row?.file || !row.exists) return { pages: {}, unreadable: [] as number[] }
   const found = await readDrawings(await fsp.readFile(row.file))
   const pages: Record<number, { elements: unknown[]; strokes: unknown[] }> = {}
@@ -1410,8 +1461,8 @@ async function adoptFromFile(id: string) {
     // Shapes are lossless in the file — the annotation carries the element's
     // own JSON — so a sidecar built from it is exactly the sidecar the Mac
     // had, and worth writing.
-    if (!(await library.loadSketch(id, pageIndex)) && drawing.elements.length > 0) {
-      await library.saveSketch(id, pageIndex, drawing.elements.map((e) => e.encode()))
+    if (!(await owner.loadSketch(id, pageIndex)) && drawing.elements.length > 0) {
+      await owner.saveSketch(id, pageIndex, drawing.elements.map((e) => e.encode()))
     }
     // Ink is not. The strokes in the file have one width each, where the
     // Mac's `.drawing` still holds the pressure at every point. They are
@@ -1428,9 +1479,9 @@ async function adoptFromFile(id: string) {
   // format outside Apple's frameworks can read. Rather than quietly showing a
   // page with the writing missing, the window is told which pages they are.
   const unreadable: number[] = []
-  const pageList = await library.annotatedPages(id)
+  const pageList = await owner.annotatedPages(id)
   for (const pageIndex of pageList.appleInk) {
-    if (await library.loadInk(id, pageIndex)) continue
+    if (await owner.loadInk(id, pageIndex)) continue
     if ((found.get(pageIndex)?.strokes.length ?? 0) > 0) continue
     unreadable.push(pageIndex)
   }
@@ -1448,9 +1499,8 @@ async function adoptFromFile(id: string) {
  * and nothing in this app deletes that. With the `.drawing` out of the way the
  * Mac falls back to the ink in the PDF, which is what both sides now agree on.
  */
-async function supersedeAppleInk(id: string, pageIndex: number) {
-  if (!library) return
-  const file = L.appleInkPath(library.root, id, pageIndex)
+async function supersedeAppleInk(owner: Library, id: string, pageIndex: number) {
+  const file = L.appleInkPath(owner.root, id, pageIndex)
   if (!fs.existsSync(file)) return
   const stamp = new Date().toISOString().replace(/[:.]/g, '-')
   await fsp.rename(file, `${file}.superseded-${stamp}`)
