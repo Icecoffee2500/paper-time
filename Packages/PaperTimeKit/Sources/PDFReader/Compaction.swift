@@ -20,8 +20,10 @@ import PDFUpdate
 /// `Thresholds` (or a comment was edited or removed — the privacy case), and
 /// the candidate replaces the file only when: nothing past the base was
 /// changed by anything but an annotation (`RevisionAudit`), the candidate
-/// shows exactly the same annotations page by page (`AnnotationComparison`,
-/// the strict canonical view), it is at least half as short as what it
+/// shows the same marks page by page (`AnnotationComparison.markDifference`
+/// — ours by what a reader shows of them, since the file may have been
+/// written by the Portable build and PDFKit spells every mark differently;
+/// anybody else's by their every key), it is at least half as short as what it
 /// replaces, and the file is still the one that was read.
 public enum Compaction {
     public struct Thresholds: Sendable {
@@ -124,7 +126,7 @@ public enum Compaction {
         }
 
         do {
-            if let why = try AnnotationComparison.canonicalDifference(current: data, candidate: candidate, password: password) {
+            if let why = try AnnotationComparison.markDifference(current: data, candidate: candidate, password: password) {
                 return .refused(why)
             }
         } catch {
