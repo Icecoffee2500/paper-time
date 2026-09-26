@@ -61,6 +61,7 @@ struct FeatureDemoView: View {
             case .latexShortcuts: LatexShortcutsDemo(scale: scale)
             case .meaning: MeaningDemo(scale: scale)
             case .mathPreview: MathPreviewDemo(scale: scale)
+            case .nightPage: NightPageDemo(scale: scale)
             }
         }
         .padding(scale.pad)
@@ -4286,5 +4287,178 @@ private struct MathPreviewDemo: View {
                 .strokeBorder(.separator, lineWidth: 0.5)
         )
         .animation(Motion.tap, value: typed)
+    }
+}
+
+
+// MARK: - Pages at night
+
+/// A page at night, two ways.
+///
+/// Every reader's night mode is an inversion, and an inversion turns each
+/// photograph into a negative — which is the whole difference, and one no
+/// sentence makes anybody see. So the same small page stands twice: inverted,
+/// as other PDF apps do it, and as the chosen tint draws it here, by the same
+/// rule the reader follows (`ReaderConfiguration.rendering`): a pale ground
+/// takes the ink by multiplying, a dark one turns the page to night with the
+/// pictures kept as printed, Glass is the card's own ground.
+private struct NightPageDemo: View {
+    let scale: DemoScale
+    @Environment(\.colorScheme) private var scheme
+    @State private var tint: ReaderConfiguration.PageTint = .dim
+    @State private var custom = Color(red: 0.12, green: 0.23, blue: 0.18)
+
+    private var customTint: ReaderConfiguration.TintColor {
+        #if canImport(AppKit)
+        let resolved = NSColor(custom).usingColorSpace(.sRGB)
+        return ReaderConfiguration.TintColor(
+            Double(resolved?.redComponent ?? 0.12), Double(resolved?.greenComponent ?? 0.23), Double(resolved?.blueComponent ?? 0.18)
+        )
+        #else
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(custom).getRed(&r, green: &g, blue: &b, alpha: &a)
+        return ReaderConfiguration.TintColor(Double(r), Double(g), Double(b))
+        #endif
+    }
+
+    /// The reader's own rule, applied to the demo's choice.
+    private var rendering: ReaderConfiguration.PageRendering {
+        switch tint {
+        case .none: .plain
+        case .sepia: .multiply
+        case .dim: .night
+        case .glass: scheme == .dark ? .night : .multiply
+        case .custom: customTint.luminance >= 0.5 ? .multiply : .night
+        }
+    }
+
+    private var ground: Color? {
+        switch tint {
+        case .none, .glass: nil
+        case .sepia: ReaderConfiguration.TintColor.sepia.color
+        case .dim: ReaderConfiguration.TintColor.night.color
+        case .custom: custom
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: scale.gap) {
+            HStack(alignment: .top, spacing: scale.gap) {
+                column(ReleaseNotes.string("다른 PDF 앱 · 반전", "Other PDF apps · Inverted")) {
+                    page(ink: .white, paper: .black, photoInverted: true)
+                }
+                column("Paper Time · \(tint.label)") {
+                    ours
+                }
+            }
+            .frame(height: scale.isFull ? 190 : 92)
+            HStack(spacing: 6) {
+                ForEach(ReaderConfiguration.PageTint.allCases) { choice in
+                    Button {
+                        withAnimation(Motion.move) { tint = choice }
+                    } label: {
+                        Text(choice.label)
+                            .font(scale.small)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(tint == choice ? AnyShapeStyle(.tint.opacity(0.18)) : AnyShapeStyle(.quaternary.opacity(0.5))))
+                    }
+                    .buttonStyle(.plain)
+                }
+                if tint == .custom {
+                    ColorPicker("", selection: $custom, supportsOpacity: false)
+                        .labelsHidden()
+                        .controlSize(.small)
+                }
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var ours: some View {
+        switch rendering {
+        case .plain:
+            page(ink: .black, paper: .white, photoInverted: false)
+        case .multiply:
+            // The paper's white multiplied away: the ink on the ground, the
+            // photograph taking the ground's colour the way paper would.
+            page(ink: .black, paper: .white, photoInverted: false)
+                .blendMode(.multiply)
+                .background(ground ?? Color.clear)
+                .compositingGroup()
+        case .night:
+            // Light ink on the ground and no edge to the page; the
+            // photograph as printed.
+            page(ink: Color(white: 0.9), paper: ground ?? Color.clear, photoInverted: false, edge: false)
+        }
+    }
+
+    private func column<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            content()
+            Text(title)
+                .font(scale.small)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// A page of a paper: a heading, lines of text, a photograph, more lines.
+    private func page(ink: Color, paper: Color, photoInverted: Bool, edge: Bool = true) -> some View {
+        let lineHeight: CGFloat = scale.isFull ? 3 : 2
+        let spacing: CGFloat = scale.isFull ? 7 : 4
+        return VStack(alignment: .leading, spacing: spacing) {
+            Capsule().fill(ink.opacity(0.9)).frame(width: scale.isFull ? 110 : 56, height: lineHeight + 1)
+            ForEach(0..<2, id: \.self) { _ in Capsule().fill(ink.opacity(0.55)).frame(height: lineHeight) }
+            HStack(alignment: .top, spacing: spacing) {
+                Photo(inverted: photoInverted)
+                    .frame(width: scale.isFull ? 92 : 44, height: scale.isFull ? 62 : 30)
+                VStack(alignment: .leading, spacing: spacing) {
+                    ForEach(0..<3, id: \.self) { index in
+                        // A link: blue, or orange once inverted.
+                        Capsule().fill((photoInverted ? Color(red: 0.8, green: 0.55, blue: 0.1) : Color(red: 0.2, green: 0.45, blue: 0.9)).opacity(index == 1 ? 0.9 : 0))
+                            .overlay(Capsule().fill(ink.opacity(index == 1 ? 0 : 0.55)))
+                            .frame(height: lineHeight)
+                    }
+                }
+            }
+            ForEach(0..<2, id: \.self) { _ in Capsule().fill(ink.opacity(0.55)).frame(height: lineHeight) }
+        }
+        .padding(scale.isFull ? 12 : 7)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: Corner.inner(scale.corner, inset: 2), style: .continuous)
+                .fill(paper)
+                .shadow(color: .black.opacity(edge ? 0.12 : 0), radius: 2, y: 1)
+        )
+    }
+
+    /// A photograph: sky, sun, a hill — colours anybody knows the right way
+    /// round, so a negative is obvious.
+    private struct Photo: View {
+        var inverted: Bool
+
+        var body: some View {
+            let picture = ZStack(alignment: .bottom) {
+                LinearGradient(colors: [Color(red: 0.35, green: 0.62, blue: 0.95), Color(red: 0.75, green: 0.87, blue: 1)],
+                               startPoint: .top, endPoint: .bottom)
+                Circle().fill(Color(red: 1, green: 0.82, blue: 0.25))
+                    .frame(width: 11, height: 11)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    .padding(5)
+                Ellipse().fill(Color(red: 0.25, green: 0.62, blue: 0.3))
+                    .frame(height: 22)
+                    .scaleEffect(x: 1.6, y: 1)
+                    .offset(y: 10)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
+            if inverted {
+                picture.colorInvert()
+            } else {
+                picture
+            }
+        }
     }
 }

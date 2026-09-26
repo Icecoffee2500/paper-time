@@ -13,6 +13,11 @@ import AppKit
 /// navigation chrome there.
 struct SettingsView: View {
     @Environment(AppModel.self) private var app
+    /// The page tint and the custom ground, through the view's own storage:
+    /// `AppSettings` keeps them out of observation, so a row that depends on
+    /// them would not appear until something else redrew the pane.
+    @AppStorage("readerTint") private var readerTintValue = "none"
+    @AppStorage(ReaderConfiguration.customTintKey) private var readerTintColorHex = ReaderConfiguration.TintColor.night.hex
     @State private var showsChangeFolderConfirmation = false
     @State private var showsReleaseNotes = false
     @State private var showsFeatureLog = false
@@ -924,10 +929,15 @@ struct SettingsView: View {
                     Label(layout.label, systemImage: layout.symbolName).tag(layout.rawValue)
                 }
             }
-            Picker(L("쪽 색조", "Page Tint"), selection: Bindable(settings).readerTint) {
+            Picker(L("쪽 색조", "Page Tint"), selection: $readerTintValue) {
                 ForEach(ReaderConfiguration.PageTint.allCases) { tint in
                     Text(tint.label).tag(tint.rawValue)
                 }
+            }
+            // The custom tint's ground. A pale colour takes the ink as sepia
+            // paper does; a dark one turns the page to night, as Dimmed does.
+            if readerTintValue == ReaderConfiguration.PageTint.custom.rawValue {
+                ColorPicker(L("바탕색", "Ground Color"), selection: groundColorBinding, supportsOpacity: false)
             }
         } header: {
             pageHeader(L("읽기", "Reading"))
@@ -937,6 +947,26 @@ struct SettingsView: View {
                 "How a paper looks when it opens. The AA menu on the page changes only the paper you are reading, not this setting."
             ))
         }
+    }
+
+    /// The custom ground as a SwiftUI colour, written back as `#rrggbb`.
+    private var groundColorBinding: Binding<Color> {
+        Binding(
+            get: { (ReaderConfiguration.TintColor(hex: readerTintColorHex) ?? .night).color },
+            set: { colour in
+                #if canImport(AppKit)
+                guard let resolved = NSColor(colour).usingColorSpace(.sRGB) else { return }
+                let tint = ReaderConfiguration.TintColor(
+                    Double(resolved.redComponent), Double(resolved.greenComponent), Double(resolved.blueComponent)
+                )
+                #else
+                var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+                UIColor(colour).getRed(&r, green: &g, blue: &b, alpha: &a)
+                let tint = ReaderConfiguration.TintColor(Double(r), Double(g), Double(b))
+                #endif
+                if tint.hex != readerTintColorHex { readerTintColorHex = tint.hex }
+            }
+        )
     }
 
     // MARK: - Writing

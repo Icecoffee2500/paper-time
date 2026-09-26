@@ -1265,6 +1265,10 @@ public final class AppSettings {
     @AppStorage("readerPageMode") public var readerPageMode = "continuous"
     @ObservationIgnored
     @AppStorage("readerTint") public var readerTint = "none"
+    /// The ground of the Custom tint, `#rrggbb`; the reader reads it back
+    /// from the defaults as it changes.
+    @ObservationIgnored
+    @AppStorage(ReaderConfiguration.customTintKey) public var readerTintColor = ReaderConfiguration.TintColor.night.hex
     /// Which fields appear under a paper's title in the list, in order.
     @ObservationIgnored
     @AppStorage("listSubtitleFields") public var listSubtitleFields = "authors,year,venue"

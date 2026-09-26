@@ -38,6 +38,10 @@ struct ReaderScreen: View {
     @State private var toastTask: Task<Void, Never>?
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.colorScheme) private var colorScheme
+    /// The custom tint's ground as Settings and the colour panel store it —
+    /// a view's `@AppStorage` hears the defaults change, where a model
+    /// object would need an observer of its own.
+    @AppStorage(ReaderConfiguration.customTintKey) private var customTintHex = ReaderConfiguration.TintColor.night.hex
 
     var body: some View {
         Group {
@@ -113,20 +117,28 @@ struct ReaderScreen: View {
         // Only under the glass tint. Multiplied over a dark ground the text
         // would go with the paper, which is why the other tints keep their
         // own opaque background instead.
-        // What the tinted page is multiplied against, or sits on: sepia
-        // paper under Sepia, a dark ground under Dimmed. Glass and Paper
-        // White have the panel.
+        // What the tinted page is multiplied or screened onto: sepia paper
+        // under Sepia, the dark ground under Dimmed, the chosen colour under
+        // Custom. Glass and Paper White have the panel.
         .background {
-            switch configuration.effectiveTint {
-            case .sepia: Color(red: 0.96, green: 0.93, blue: 0.86)
-            case .dim: Color(white: 0.13)
-            default: Color.clear
+            if let ground = configuration.groundColor {
+                ground.color
+            } else {
+                Color.clear
             }
         }
         // The tint's behaviour depends on the appearance; the reader is
         // where the appearance is known.
         .onAppear { configuration.isDarkAppearance = colorScheme == .dark }
         .onChange(of: colorScheme) { _, scheme in configuration.isDarkAppearance = scheme == .dark }
+        .onChange(of: customTintHex, initial: true) { _, hex in configuration.adoptCustomTint(hex: hex) }
+        #if os(macOS)
+        // Choosing a colour is the next thing anyone does after choosing
+        // Custom Color, so the panel comes with it.
+        .onChange(of: configuration.tint) { old, new in
+            if new == .custom, old != .custom { GroundColorPanel.shared.show(hex: customTintHex) }
+        }
+        #endif
         // Under the status bar in the scrolling layouts, where the page
         // flowing on beneath the glass is the point; not in a book, where
         // the bar was sitting on the last lines of both pages.

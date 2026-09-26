@@ -912,6 +912,15 @@ struct LibraryWindow: View {
                 .onChange(of: configuration.tint) { _, tint in
                     app.settings.readerTint = tint.rawValue
                 }
+            #if os(macOS)
+                // A colour well cannot live in a menu; the system's colour
+                // panel can, and the page follows it as it is dragged.
+                if configuration.tint == .custom {
+                    Button(L("바탕색 고르기…", "Choose Ground Color…")) {
+                        GroundColorPanel.shared.show(hex: app.settings.readerTintColor)
+                    }
+                }
+            #endif
             #if os(iOS)
             Toggle(L("손가락으로 그리기", "Draw with Finger"), isOn: $configuration.fingerDrawing)
             #endif

@@ -561,7 +561,13 @@ public enum WindowProbe {
                     say(line)
                 }
             }
-            if let png = pixels(of: content) {
+            // `--papertime-window-shot-server=1`: the window as the window
+            // server composites it, which is the only picture that has what
+            // Core Animation does — layer filters and compositing filters
+            // (the page tints), glass. Only this window is asked for, which
+            // needs no permission; an off-screen window still has its surface.
+            let shot = Boot.isSet("PAPERTIME_WINDOW_SHOT_SERVER") ? serverPixels(of: window) : pixels(of: content)
+            if let png = shot {
                 try? png.write(to: URL(fileURLWithPath: path))
                 say("window probe: wrote \(path); opaque=\(window.isOpaque) background=\(window.backgroundColor)")
                 // What is actually in the window, for the times a picture of
@@ -752,6 +758,14 @@ public enum WindowProbe {
     /// and a first-run screen came out empty: not bugs in the app, bugs in the
     /// camera. Rendering the layer tree instead catches what the screen shows,
     /// and needs no screen-recording permission.
+    /// The window's own surface from the window server, framing excluded.
+    private static func serverPixels(of window: NSWindow) -> Data? {
+        guard let image = CGWindowListCreateImage(
+            .null, .optionIncludingWindow, CGWindowID(window.windowNumber), [.boundsIgnoreFraming, .bestResolution]
+        ), image.width > 2, image.height > 2 else { return nil }
+        return NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])
+    }
+
     private static func pixels(of view: NSView) -> Data? {
         // `cacheDisplay` on the content view itself, which is what the report
         // sheet's own screenshot uses and what actually comes out right. The

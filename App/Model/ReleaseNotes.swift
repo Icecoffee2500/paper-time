@@ -312,6 +312,14 @@ enum ReleaseNotes {
                     )
                 ),
                 Entry(
+                    Text2("밤에 읽는 쪽", "Pages at Night"),
+                    Text2(
+                        "쪽 색조의 «어둡게»가 이제 쪽을 그냥 뒤집지 않아요. 글자는 밝아지고 색은 제 색을 지켜요. 사진과 그림은 인쇄된 그대로예요. 쪽의 흰 바탕은 창 바탕 속으로 사라져서 쪽의 테두리가 없어요. «유리»는 다크 모드에서도 창의 유리를 비춰요. «직접 고른 색»으로 바탕을 고를 수도 있어요 — 밝은 색은 세피아처럼, 어두운 색은 밤처럼 그려요. 윈도우·리눅스도 똑같아요.",
+                        "Dimmed no longer turns the page into a negative. The words turn light and colors keep their hue, while photographs stay as printed. The paper's white fades into the window, so the page has no edge. In Dark Mode, Glass shows the window's glass through the page too. Custom Color lets you pick the ground: a pale color reads like sepia paper, a dark one like night. Windows and Linux work the same way."
+                    ),
+                    demo: .nightPage
+                ),
+                Entry(
                     Text2("노트도 뜻으로 찾기", "Notes, by Meaning"),
                     Text2(
                         "찾기(⌘K)의 «뜻이 비슷한 구절»에 노트의 구절도 서요. 논문에 적은 노트든 논문 없는 노트든, 그 낱말이 없어도 뜻이 가까우면 나와요. 줄에는 노트 이름과 «노트»가 붙고, 누르면 그 노트가 열리고 그 구절로 가요. 노트를 고치면 5초쯤 뒤에 조용히 다시 읽어요.",
@@ -1804,6 +1812,9 @@ enum ReleaseNotes {
     /// and full size in About, where there is room to make them the real
     /// thing rather than a diagram of it.
     enum Demo: String, Identifiable, CaseIterable {
+        /// A page at night two ways — inverted, photographs and all, and as
+        /// Paper Time draws it — with the tints under it to try.
+        case nightPage
         /// The report sheet: a screenshot already taken, marked up with the
         /// app's own pen, and the public row it is about to become.
         case feedback

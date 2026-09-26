@@ -36,10 +36,12 @@ enum PageImages {
         let walk = Walk()
         let stream = CGPDFContentStreamCreateWithPage(ref)
         run(stream, walk: walk)
-        // Only pictures big enough to be a figure — a logo in a corner or a
-        // hairline rule drawn as an image is not something anyone reads.
+        // Not a hairline rule drawn as an image. Anything bigger is kept:
+        // a figure made of small photographs (a grid of video frames, a
+        // row of robot views) is the common case, and each of them turned
+        // into a negative is what "the pictures are inverted too" meant.
         let box = page.bounds(for: .mediaBox)
-        return walk.rects.filter { $0.width > 40 && $0.height > 24 && $0.intersects(box) }
+        return walk.rects.filter { $0.width > 12 && $0.height > 12 && $0.intersects(box) }
     }
 
     private static func run(_ stream: CGPDFContentStreamRef, walk: Walk) {
@@ -93,10 +95,19 @@ enum PageImages {
                     for index in 0..<6 { CGPDFArrayGetNumber(matrixArray, index, &values[index]) }
                     matrix = CGAffineTransform(a: values[0], b: values[1], c: values[2], d: values[3], tx: values[4], ty: values[5])
                 }
-                // Draw the form as the renderer would: its matrix, then ours.
+                // Draw the form as the renderer would: its matrix, then ours,
+                // and its own resources. The second argument is the form's
+                // `/Resources`, not its stream dictionary — given the latter,
+                // every name inside the form was looked up in the wrong place
+                // and no picture inside a form was ever found. A figure put
+                // into a TeX paper as a PDF is exactly such a form, so its
+                // photographs were inverted with the page (the corpus has
+                // 1,493 pictures of that size, of which 998 were being found).
                 walk.transforms.append(matrix.concatenating(walk.current))
                 walk.depth += 1
-                PageImages.run(CGPDFContentStreamCreateWithStream(xobject, dictionary, stream), walk: walk)
+                var resources: CGPDFDictionaryRef?
+                let own = CGPDFDictionaryGetDictionary(dictionary, "Resources", &resources) ? resources ?? dictionary : dictionary
+                PageImages.run(CGPDFContentStreamCreateWithStream(xobject, own, stream), walk: walk)
                 walk.depth -= 1
                 walk.transforms.removeLast()
             }

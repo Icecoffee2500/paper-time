@@ -99,7 +99,7 @@ final class ReaderCoordinator: NSObject {
     private weak var pdfView: PDFView?
     private var shownRevision = 0
     private var appliedLayout: ReaderConfiguration.PageLayout?
-    private var appliedTint: ReaderConfiguration.PageTint?
+    private var appliedTint: String?
     private var appliedMode: ReaderConfiguration.Mode?
     private var appliedFingerDrawing: Bool?
     /// The crop that makes the document a book, while it is one.
@@ -574,8 +574,8 @@ final class ReaderCoordinator: NSObject {
             appliedLayout = configuration.layout
             apply(layout: configuration.layout, to: view)
         }
-        if appliedTint != configuration.effectiveTint {
-            appliedTint = configuration.effectiveTint
+        if appliedTint != configuration.tintKey {
+            appliedTint = configuration.tintKey
             applyTint(to: view)
         }
         if appliedMode != configuration.mode || appliedFingerDrawing != configuration.fingerDrawing {
@@ -874,36 +874,35 @@ final class ReaderCoordinator: NSObject {
 
     private func applyTint(to view: PDFView) {
         #if canImport(UIKit)
-        switch configuration.effectiveTint {
-        case .none:
+        switch configuration.rendering {
+        case .plain:
             view.backgroundColor = .systemGroupedBackground
             view.pageShadowsEnabled = true
-        case .sepia:
-            view.backgroundColor = UIColor(red: 0.96, green: 0.93, blue: 0.86, alpha: 1)
-            view.pageShadowsEnabled = true
-        case .dim:
-            view.backgroundColor = UIColor(white: 0.12, alpha: 1)
-            view.pageShadowsEnabled = false
-        case .glass:
+        case .multiply, .night:
             // Nothing of its own behind the pages, and no shadow around them:
-            // both are opaque, and the point is to see the panel through the
-            // paper. The white of the page itself goes in `ReaderScreen`,
-            // which is where the compositing can be done.
+            // both are opaque, and the point is to see the ground through
+            // the paper. The ground itself goes in `ReaderScreen`, which is
+            // where the compositing can be done.
             view.backgroundColor = .clear
             view.pageShadowsEnabled = false
         }
         #else
-        // Sepia and Dimmed used to colour the space around the page and leave
-        // the page white, so the tint showed as a border. The paper is what
-        // has to change. Sepia is the glass trick with a sepia ground behind
-        // it: the page's white multiplies away to the ground and the ink
-        // stays ink. Dimmed cannot be a multiply — black ink over a dark
-        // ground is nothing — so it is an inversion with the hue turned
-        // back round, the way every reader's night mode is made: white paper
-        // becomes dark, black ink becomes light, and a colour keeps its hue.
-        let tint = configuration.effectiveTint
-        switch tint {
-        case .none:
+        // The paper is what has to change, not the space around it (Sepia
+        // and Dimmed once coloured that space and left the page white, so
+        // the tint showed as a border). A light ground takes the ink by
+        // multiplying: the page's white falls away to the ground drawn
+        // behind the view — sepia paper, a pale colour, or the panel under
+        // Glass — and the ink stays ink. A dark ground cannot, black ink
+        // multiplied into a dark ground being nothing, so it goes to night:
+        // the view's luminance is inverted with every hue turned back round,
+        // and the result is *screened* onto the ground, so the paper's black
+        // falls away into it exactly as the white did — no edge where the
+        // page ends, light ink on the ground, and under Glass the panel
+        // itself showing through. Which of the two a tint gets is decided
+        // by its ground (`ReaderConfiguration.rendering`).
+        let rendering = configuration.rendering
+        switch rendering {
+        case .plain:
             // In a spread the ground is the paper's own white and there is
             // no shadow under the pages: two white cards on a grey ground
             // read as two cards, and one white field with two pages in it
@@ -911,16 +910,31 @@ final class ReaderCoordinator: NSObject {
             let book = configuration.layout == .book
             view.backgroundColor = book ? .textBackgroundColor : .windowBackgroundColor
             view.pageShadowsEnabled = !book
-        case .sepia, .glass:
-            view.backgroundColor = .clear
-            view.pageShadowsEnabled = false
-        case .dim:
-            view.backgroundColor = .clear
+        case .multiply, .night:
+            // White, opaque — the paper's own colour — around the pages too:
+            // white multiplies away and, inverted, screens away, so the gap
+            // between pages becomes the ground exactly as the paper does.
+            // Clear was what Dimmed had, and under the inverting filters the
+            // gaps came out as white bars between the pages.
+            view.backgroundColor = .white
             view.pageShadowsEnabled = false
         }
-        setGlassCompositing(on: view, tint == .glass || tint == .sepia)
-        setNightFilter(on: view, tint == .dim)
-        NightMode.isOn = tint == .dim
+        setCompositing(on: view, rendering)
+        setNightFilter(on: view, rendering == .night)
+        NightMode.isOn = rendering == .night
+        // What the layer was actually given, for a probe: a photograph of an
+        // off-screen window cannot show layer filters (`cacheDisplay` walks
+        // `draw(_:)`, and the window server hands back Stage Manager's tilted
+        // thumbnail of a hidden app's window), so this line is the proof.
+        if Boot.isSet("PAPERTIME_TINT") {
+            let filters = (view.layer?.filters as? [CIFilter])?.map(\.name) ?? []
+            let compositing = (view.layer?.compositingFilter as? String) ?? "none"
+            FileHandle.standardError.write(Data((
+                "tint: \(configuration.tint.rawValue) rendering \(rendering.rawValue) ground \(configuration.groundColor?.hex ?? "panel") "
+                + "filters \(filters) compositing \(compositing) background \(view.backgroundColor.usingColorSpace(.sRGB).map { String(format: "%.2f,%.2f,%.2f,%.2f", $0.redComponent, $0.greenComponent, $0.blueComponent, $0.alphaComponent) } ?? "?") "
+                + "dark \(configuration.isDarkAppearance)\n"
+            ).utf8))
+        }
         // The figures overlay draws only under the dimmed tint; ask every
         // page to draw again so they appear or go.
         for page in view.visiblePages { MarkOverlayView.refresh(page) }
@@ -950,9 +964,15 @@ final class ReaderCoordinator: NSObject {
     /// and a clip is a compositing boundary — the blend was sealed inside it
     /// with nothing behind to multiply with. A compositing filter on the
     /// layer is the same operation stated where Core Animation will honour it.
-    private func setGlassCompositing(on view: PDFView, _ on: Bool) {
+    private func setCompositing(on view: PDFView, _ rendering: ReaderConfiguration.PageRendering) {
         view.wantsLayer = true
-        view.layer?.compositingFilter = on ? "multiplyBlendMode" : nil
+        switch rendering {
+        case .plain: view.layer?.compositingFilter = nil
+        case .multiply: view.layer?.compositingFilter = "multiplyBlendMode"
+        // Applied after the layer's own filters: the inverted page is what
+        // gets screened onto the ground.
+        case .night: view.layer?.compositingFilter = "screenBlendMode"
+        }
     }
     #endif
 
