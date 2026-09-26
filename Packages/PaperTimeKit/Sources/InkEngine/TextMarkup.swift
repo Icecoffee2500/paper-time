@@ -444,6 +444,20 @@ public enum TextMarkupWriter {
         return derivedIdentifier(of: annotation, pageIndex: index)
     }
 
+    /// The identifiers of the markups this app wrote — the ones carrying
+    /// `/PTMarkupID` — as opposed to those it only recognised and named by
+    /// their place. What compaction rebuilds: the others are in the base
+    /// already, as somebody else left them.
+    public static func ownIdentifiers(in document: PDFDocument) -> Set<UUID> {
+        var ids: Set<UUID> = []
+        for index in 0..<document.pageCount {
+            for annotation in document.page(at: index)?.annotations ?? [] {
+                if let own = annotation.value(forAnnotationKey: idKey) as? String, let id = UUID(uuidString: own) { ids.insert(id) }
+            }
+        }
+        return ids
+    }
+
     /// An identifier made from what the file already says: the subtype, the
     /// page, and the rectangle rounded to the point. Nothing about it changes
     /// unless the annotation itself moves.
@@ -617,7 +631,32 @@ public enum TextMarkupWriter {
         let contents = (annotation.contents ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !contents.isEmpty else { return "" }
         if annotation.type == "Text" { return contents }
-        return contents == quotedText(for: annotation, on: page) ? "" : contents
+        return isQuotation(contents, of: quotedText(for: annotation, on: page)) ? "" : contents
+    }
+
+    /// Whether `contents` is the words under the mark rather than words
+    /// about them.
+    ///
+    /// The quotation a writer put in `/Contents` and the one PDFKit reads
+    /// back from the box are never quite the same string: the box takes in
+    /// the ends of neighbouring words, the other build's text layer breaks
+    /// lines and ligatures its own way, and a trailing comma is in one and
+    /// not the other. Read strictly, that made every Portable underline
+    /// arrive with a comment of its own text. So the two are compared with
+    /// their spaces, case and punctuation taken out, and one that is most of
+    /// the other is the quotation. A comment that repeats the passage is
+    /// lost to this; a passage taken for a comment is the worse mistake.
+    static func isQuotation(_ contents: String, of quoted: String) -> Bool {
+        let a = folded(contents), b = folded(quoted)
+        guard !a.isEmpty, !b.isEmpty else { return false }
+        if a == b { return true }
+        let (short, long) = a.count <= b.count ? (a, b) : (b, a)
+        guard long.contains(short) else { return false }
+        return Double(short.count) >= 0.6 * Double(long.count)
+    }
+
+    private static func folded(_ text: String) -> String {
+        String(text.lowercased().unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) })
     }
 
     static func quotedText(for annotation: PDFAnnotation, on page: PDFPage) -> String {

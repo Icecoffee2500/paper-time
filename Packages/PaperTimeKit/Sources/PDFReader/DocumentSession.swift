@@ -872,12 +872,23 @@ public final class DocumentSession {
         // the file's, the journals', and the sidecars' — goes into the one
         // update, because after it the history is gone.
         var removals: [UUID] = []
-        for (id, entry) in MarkJournal.merged(journals) where entry.descriptor == nil { removals.append(id) }
+        var journalled: Set<UUID> = []
+        for (id, entry) in MarkJournal.merged(journals) {
+            if entry.descriptor == nil { removals.append(id) } else { journalled.insert(id) }
+        }
+        // Ours only. `markups` also lists the marks somebody else made,
+        // named by their place; those are in the base as they were left,
+        // and rebuilding them would make them ours — with the nearest of
+        // our five colours — while the comparison below, rightly, refused
+        // the result. A recognised mark the reader has acted on carries our
+        // identifier by then, and is in a journal.
+        let own = TextMarkupWriter.ownIdentifiers(in: document)
+        let additions = markups.filter { own.contains($0.id) || journalled.contains($0.id) }
         var inks: [Int: Data] = [:]
         for (index, drawing) in drawings where !drawing.strokes.isEmpty { inks[index] = drawing.dataRepresentation() }
         var sketchData: [Int: Data] = [:]
         for (index, elements) in sketches where !elements.isEmpty { sketchData[index] = Self.encodeSketch(elements) }
-        let state = Compaction.State(additions: markups, removals: removals, ink: inks, sketches: sketchData)
+        let state = Compaction.State(additions: additions, removals: removals, ink: inks, sketches: sketchData)
         let must = force || historyHoldsOldWords
         saveState = .saving
         let outcome = await Task.detached(priority: .utility) {

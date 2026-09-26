@@ -5,47 +5,28 @@ import PDFKit
 /// between a rebuilt file and the one it replaces.
 ///
 /// Two views of "the same", because they answer different questions. The
-/// canonical view (`Canonical.form`, what the writer uses to pair a replayed
-/// annotation with its original) reads the files themselves: every key and
-/// every referenced object, without the appearance streams, the dates and the
-/// links back to the page. That is the strict one, for compaction — where the
-/// file being replaced was written by this same writer and any difference at
-/// all means something in it is not ours. The summary view reads the files as
-/// PDFKit does: kind, our identifying keys, and where on the page. That is
-/// for a restore, where the file being replaced was written by another
-/// program and only the marks' meaning can be expected to match.
+/// mark view (`AnnotationMeaning`) reads the files themselves and reduces
+/// every annotation of ours to what a reader shows of it — kind, identifier,
+/// place, colour, comment, path, payload — and keeps everybody else's
+/// annotation whole (`Canonical.form`, every key and every referenced
+/// object, without appearance, dates and the link back to the page). That
+/// is for compaction, where the file being replaced was written by this app
+/// on either build and the writers spell the same mark differently, but a
+/// mark that somebody else put in the folded revisions must not be lost.
+/// The summary view reads the files as PDFKit does: kind, our identifying
+/// keys, and where on the page. That is for a restore, where the file being
+/// replaced was written by another program and only the marks' meaning can
+/// be expected to match.
 public enum AnnotationComparison {
-    /// The canonical form of every annotation but the popups, page by page,
-    /// sorted within each page. Popups are left out because PDFKit makes
-    /// them as it sees fit — a note written three times has three.
-    public static func canonicalPages(of data: Data, password: [UInt8] = []) throws -> [[[UInt8]]] {
-        let file = try PDFFile(data: data)
-        try openSecurity(of: file, password: password)
-        var pages: [[[UInt8]]] = []
-        for info in try file.pages() {
-            var forms: [[UInt8]] = []
-            for element in (try file.resolve(info.dict["Annots"])).array ?? [] {
-                guard let d = (try? file.resolve(element))?.dict, d["Subtype"] != nil || d["Rect"] != nil else { continue }
-                if d["Subtype"]?.name == "Popup" { continue }
-                forms.append(Canonical.form(element, in: file))
-            }
-            pages.append(forms.sorted { $0.lexicographicallyPrecedes($1) })
-        }
-        return pages
-    }
-
-    /// Where `candidate` shows different annotations from `current`, or nil
-    /// when every page shows the same.
-    public static func canonicalDifference(current: Data, candidate: Data, password: [UInt8] = []) throws -> String? {
-        let a = try canonicalPages(of: current, password: password)
-        let b = try canonicalPages(of: candidate, password: password)
-        guard a.count == b.count else { return "\(b.count) pages instead of \(a.count)" }
-        for (index, (x, y)) in zip(a, b).enumerated() where x != y {
-            let onlyCurrent = Set(x).subtracting(y).count
-            let onlyCandidate = Set(y).subtracting(x).count
-            return "page \(index): \(onlyCurrent) annotation(s) only in the current file, \(onlyCandidate) only in the candidate"
-        }
-        return nil
+    /// Where `candidate` shows different marks from `current`, or nil when
+    /// every page shows the same — the same marks of ours by their meaning,
+    /// the same annotations of anybody else's by their every key.
+    public static func markDifference(current: Data, candidate: Data, password: [UInt8] = []) throws -> String? {
+        let a = try PDFFile(data: current)
+        try openSecurity(of: a, password: password)
+        let b = try PDFFile(data: candidate)
+        try openSecurity(of: b, password: password)
+        return AnnotationMeaning.difference(current: try AnnotationMeaning.pages(of: a), candidate: try AnnotationMeaning.pages(of: b))
     }
 
     /// Where PDFKit reads different annotations off the pages of two

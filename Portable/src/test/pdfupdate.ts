@@ -503,6 +503,44 @@ export async function pdfUpdateSuite(test: Test, suite: (name: string) => void) 
     })
   }
 
+  // The Mac's compaction of `portable-history.pdf` (the Swift test
+  // `foldsPortableHistory`, run with `PAPERTIME_COMPACTED_OUT`): a hundred
+  // and one saves of this build folded into one update, every mark of them
+  // rebuilt by PDFKit. What this build has to read back is the marks, not
+  // the spelling.
+  const macCompacted = path.join(__dirname, '../../src/test/fixtures/mac-compacted.pdf')
+  await test('a file the Mac compacted still shows every mark this build made', async () => {
+    const bytes = await fsp.readFile(macCompacted)
+    assert.equal(chain(bytes).sections.length, 2, 'the history is one update on the base')
+    const marks = await readMarks(bytes)
+    const own = (marks.get(0) ?? []).filter((m) => !m.id.startsWith('foreign-'))
+    assert.deepEqual(own.map((m) => `${m.kind}:${m.id}`).sort(), [
+      'highlight:C3A6D2E0-5B1F-4E7A-9C2D-1F0E8B7A6D5C',
+      'underline:7D4B9F21-3C8E-4A6D-B1F5-2E9C0A7D4B31',
+    ])
+    const highlight = own.find((m) => m.kind === 'highlight')!
+    assert.equal(highlight.quads.length, 2, 'one highlight of two lines, whatever PDFKit cut it into')
+    assert.equal(highlight.comment, 'why here? — 여기가 왜')
+    assert.ok(!own.find((m) => m.kind === 'underline')!.comment, 'the underline still has no comment')
+    assert.equal((marks.get(0) ?? []).filter((m) => m.id.startsWith('foreign-')).length, 1, 'the colleague\'s highlight is still theirs')
+    const drawings = await readDrawings(bytes)
+    assert.equal(drawings.get(0)?.elements.length, 2)
+    assert.equal(drawings.get(0)?.strokes.length, 1)
+    // The screen copy hides ours and keeps the colleague's.
+    const shown = await readMarks(await stripOwnedForDisplay(bytes))
+    assert.equal((shown.get(0) ?? []).filter((m) => !m.id.startsWith('foreign-')).length, 0)
+    assert.equal((shown.get(0) ?? []).filter((m) => m.id.startsWith('foreign-')).length, 1)
+    // Saving what was read back: the first save respells the Mac's
+    // annotations in this build's own words, the second has nothing to say.
+    const page: PageDrawing = { pageIndex: 0, elements: drawings.get(0)!.elements, strokes: drawings.get(0)!.strokes, marks: own, managesMarks: true }
+    const once = await writeDrawingsDetailed(bytes, [page])
+    const twice = await writeDrawingsDetailed(once.bytes, [page])
+    assert.ok(!twice.changed, 'the second save has nothing to write')
+    const after = await readMarks(twice.bytes)
+    assert.equal((after.get(0) ?? []).filter((m) => !m.id.startsWith('foreign-')).length, 2)
+    assert.equal((await readDrawings(twice.bytes)).get(0)?.strokes.length, 1)
+  })
+
   const corpus = process.env.PAPERTIME_CORPUS
   if (corpus && fs.existsSync(corpus)) {
     const out = process.env.PAPERTIME_CORPUS_OUT ?? path.join(corpus, 'out')

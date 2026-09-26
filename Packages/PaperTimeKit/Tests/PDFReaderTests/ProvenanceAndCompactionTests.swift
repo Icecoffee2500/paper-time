@@ -114,7 +114,7 @@ struct ProvenanceAndCompactionTests {
         #expect(after.count - original.count <= (before.count - original.count) / 2)
         #expect(after.prefix(original.count) == original)
         #expect(try PDFFile(data: after).sections.count == 2)
-        #expect(try AnnotationComparison.canonicalDifference(current: before, candidate: after) == nil)
+        #expect(try AnnotationComparison.markDifference(current: before, candidate: after) == nil)
         #expect(PDFDocument(data: after)?.page(at: 0)?.string == text)
         // What is on the page, as the app reads it.
         let page = try #require(PDFDocument(data: after)?.page(at: 0))
