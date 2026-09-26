@@ -135,10 +135,10 @@ enum NightMode {
 /// figure comes out as printed. Nothing is drawn when the page is not dimmed.
 final class FigureOverlayView: NSView {
     private weak var page: PDFPage?
-    /// The whole page, drawn once and passed through the night filters once.
-    private var inverted: CGImage?
-    /// Each figure's piece of it, and where that piece lies on the page.
-    private var pieces: [Int: (image: CGImage, rect: CGRect)] = [:]
+    /// Each picture's part of the page, passed through the night filters, and
+    /// the page rectangle its whole pixels cover — made the first time the
+    /// page is drawn at night, and kept.
+    private var pieces: [(image: CGImage, rect: CGRect)]?
     nonisolated(unsafe) private static let ciContext = CIContext()
 
     init(page: PDFPage) {
@@ -155,58 +155,60 @@ final class FigureOverlayView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         guard NightMode.isOn, let page, let context = NSGraphicsContext.current?.cgContext else { return }
-        let rects = PageImages.rects(on: page)
-        guard !rects.isEmpty else { return }
+        if pieces == nil { pieces = Self.pieces(on: page) }
+        guard let pieces, !pieces.isEmpty else { return }
         let box = page.bounds(for: .cropBox)
         guard box.width > 0, box.height > 0 else { return }
         let scale = bounds.width / box.width
-        for (index, rect) in rects.enumerated() {
-            let rough = CGRect(
-                x: (rect.minX - box.minX) * scale, y: (rect.minY - box.minY) * scale,
-                width: rect.width * scale, height: rect.height * scale
-            )
-            guard rough.intersects(dirtyRect.insetBy(dx: -2, dy: -2)) else { continue }
-            if pieces[index] == nil, let piece = piece(of: rect, on: page) { pieces[index] = piece }
-            guard let piece = pieces[index] else { continue }
+        for piece in pieces {
             let onScreen = CGRect(
                 x: (piece.rect.minX - box.minX) * scale, y: (piece.rect.minY - box.minY) * scale,
                 width: piece.rect.width * scale, height: piece.rect.height * scale
             )
+            guard onScreen.intersects(dirtyRect.insetBy(dx: -2, dy: -2)) else { continue }
             context.draw(piece.image, in: onScreen)
         }
     }
 
-    /// A figure's part of the inverted page, cut on whole pixels, with the
-    /// page rectangle those pixels cover — so it lands exactly where it was
-    /// cut from.
+    /// The page's pictures, turned over in advance so that the layer's night
+    /// filters turn them back.
     ///
-    /// The page is drawn **once** for all its figures. It used to be drawn
-    /// once per figure, which was harmless at a few figures a page and is
-    /// not at a grid of forty-eight video frames: PDFKit's page drawing on
-    /// the main thread, forty-eight times, is the pattern that once made
-    /// table pages stall (see `InkStrip`).
-    private func piece(of rect: CGRect, on page: PDFPage) -> (image: CGImage, rect: CGRect)? {
-        if inverted == nil { inverted = Self.preinverted(page) }
-        guard let sheet = inverted else { return nil }
+    /// The page is drawn **once** for all of them — once per figure was
+    /// harmless at a few figures a page and is not at a grid of forty-eight
+    /// video frames: PDFKit's page drawing on the main thread, forty-eight
+    /// times, is the pattern that once made table pages stall (`InkStrip`).
+    /// A picture that is ink on white paper — a scanned page, a line drawing
+    /// — is left out, so it goes to night with the words (`PageTone`); each
+    /// piece kept is copied out, so the page-sized pictures are let go.
+    private static func pieces(on page: PDFPage) -> [(image: CGImage, rect: CGRect)] {
+        let rects = PageImages.rects(on: page)
+        guard !rects.isEmpty, let plain = printed(page) else { return [] }
         let media = page.bounds(for: .mediaBox)
-        let pixelScale = CGFloat(sheet.width) / media.width
-        // Image rows run from the top; page space runs from the bottom.
-        let pixels = CGRect(
-            x: (rect.minX - media.minX) * pixelScale, y: (media.maxY - rect.maxY) * pixelScale,
-            width: rect.width * pixelScale, height: rect.height * pixelScale
-        ).integral.intersection(CGRect(x: 0, y: 0, width: sheet.width, height: sheet.height))
-        guard !pixels.isNull, pixels.width >= 1, pixels.height >= 1, let cut = sheet.cropping(to: pixels) else { return nil }
-        let covered = CGRect(
-            x: media.minX + pixels.minX / pixelScale, y: media.maxY - pixels.maxY / pixelScale,
-            width: pixels.width / pixelScale, height: pixels.height / pixelScale
-        )
-        return (cut, covered)
+        let pixelScale = CGFloat(plain.width) / media.width
+        var inverted: CGImage?
+        var out: [(image: CGImage, rect: CGRect)] = []
+        for rect in rects {
+            // Image rows run from the top; page space runs from the bottom.
+            let pixels = CGRect(
+                x: (rect.minX - media.minX) * pixelScale, y: (media.maxY - rect.maxY) * pixelScale,
+                width: rect.width * pixelScale, height: rect.height * pixelScale
+            ).integral.intersection(CGRect(x: 0, y: 0, width: plain.width, height: plain.height))
+            guard !pixels.isNull, pixels.width >= 1, pixels.height >= 1,
+                  let seen = plain.cropping(to: pixels) else { continue }
+            if PageTone.isInkOnWhite(seen) { continue }
+            if inverted == nil { inverted = night(plain) }
+            guard let inverted, let cut = inverted.cropping(to: pixels), let own = copied(cut) else { continue }
+            let covered = CGRect(
+                x: media.minX + pixels.minX / pixelScale, y: media.maxY - pixels.maxY / pixelScale,
+                width: pixels.width / pixelScale, height: pixels.height / pixelScale
+            )
+            out.append((own, covered))
+        }
+        return out
     }
 
-    /// The page as printed, passed through the night filters once, so that
-    /// when the layer inverts everything on its way to the screen the
-    /// figures come out the right way round.
-    private static func preinverted(_ page: PDFPage) -> CGImage? {
+    /// The page as printed, on white, at twice its size (smaller when huge).
+    private static func printed(_ page: PDFPage) -> CGImage? {
         let media = page.bounds(for: .mediaBox)
         guard media.width > 1, media.height > 1 else { return nil }
         let pixelScale = min(2, 4000 / max(media.width, media.height))
@@ -220,12 +222,28 @@ final class FigureOverlayView: NSView {
         context.fill(CGRect(x: 0, y: 0, width: width, height: height))
         context.scaleBy(x: pixelScale, y: pixelScale)
         page.draw(with: .mediaBox, to: context)
-        guard let plain = context.makeImage() else { return nil }
-        let input = CIImage(cgImage: plain)
+        return context.makeImage()
+    }
+
+    /// The layer's own two filters, applied once in advance.
+    private static func night(_ image: CGImage) -> CGImage? {
+        guard let space = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+        let input = CIImage(cgImage: image)
         let output = input
             .applyingFilter("CIColorInvert")
             .applyingFilter("CIHueAdjust", parameters: [kCIInputAngleKey: Double.pi])
         return ciContext.createCGImage(output, from: input.extent, format: .RGBA8, colorSpace: space)
+    }
+
+    /// A crop in its own storage, so it does not keep the whole page alive.
+    private static func copied(_ image: CGImage) -> CGImage? {
+        guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+              let context = CGContext(
+                data: nil, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: 0, space: space,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+              ) else { return nil }
+        context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        return context.makeImage()
     }
 }
 
