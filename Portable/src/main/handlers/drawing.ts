@@ -9,6 +9,21 @@ import type { Library } from '../library.js'
 import * as L from '../layout.js'
 import type { Context, Handlers } from './context.js'
 
+/**
+ * One queue per page and layer, so two saves of the same page are written in
+ * the order they were asked for. Each save is its own request and the window
+ * sends them without waiting; handled side by side, a drag's last save could
+ * be overtaken by the one before it, and the file kept the older drawing.
+ */
+const queues = new Map<string, Promise<unknown>>()
+
+function inOrder<T>(key: string, work: () => Promise<T>): Promise<T> {
+  const next = (queues.get(key) ?? Promise.resolve()).catch(() => undefined).then(work)
+  queues.set(key, next)
+  void next.finally(() => { if (queues.get(key) === next) queues.delete(key) }).catch(() => undefined)
+  return next
+}
+
 export function drawingHandlers(ctx: Context): Partial<Handlers> {
   const { libraries, flush, journals, windows } = ctx
 
@@ -16,16 +31,16 @@ export function drawingHandlers(ctx: Context): Partial<Handlers> {
     'sketch:load': async ({ id, pageIndex }) =>
       (await libraries.ownerOf(id))?.loadSketch(id, pageIndex) ?? null,
 
-    'sketch:save': async ({ id, pageIndex, elements }) => {
+    'sketch:save': ({ id, pageIndex, elements }) => inOrder(`${id}:${pageIndex}:sketch`, async () => {
       await (await libraries.ownerOf(id))?.saveSketch(id, pageIndex, elements)
       flush.touched(id).sketch.add(pageIndex)
       flush.schedule(id)
-    },
+    }),
 
     'ink:load': async ({ id, pageIndex }) =>
       (await libraries.ownerOf(id))?.loadInk(id, pageIndex) ?? null,
 
-    'ink:save': async ({ id, pageIndex, strokes }) => {
+    'ink:save': ({ id, pageIndex, strokes }) => inOrder(`${id}:${pageIndex}:ink`, async () => {
       // Into the folder that holds the paper, as every other sidecar is.
       const holder = await libraries.ownerOf(id)
       if (!holder) return
@@ -33,7 +48,7 @@ export function drawingHandlers(ctx: Context): Partial<Handlers> {
       await supersedeAppleInk(holder, id, pageIndex)
       flush.touched(id).ink.add(pageIndex)
       flush.schedule(id)
-    },
+    }),
 
     'marks:load': async ({ id }) => {
       const holder = await libraries.ownerOf(id)
@@ -74,7 +89,7 @@ export function drawingHandlers(ctx: Context): Partial<Handlers> {
       return out
     },
 
-    'marks:save': async ({ id, pageIndex, marks }) => {
+    'marks:save': ({ id, pageIndex, marks }) => inOrder(`${id}:${pageIndex}:marks`, async () => {
       const holder = await libraries.ownerOf(id)
       if (!holder) return
       const pages = flush.marksInMemory.get(id) ?? {}
@@ -84,7 +99,7 @@ export function drawingHandlers(ctx: Context): Partial<Handlers> {
       await journals.record(id, holder.root, pageIndex, before, marks, pages)
       flush.touched(id).marks.add(pageIndex)
       flush.schedule(id)
-    },
+    }),
 
     'drawing:pages': async ({ id }) =>
       (await libraries.ownerOf(id))?.annotatedPages(id) ?? { sketch: [], ink: [], appleInk: [] },
@@ -111,7 +126,9 @@ export function drawingHandlers(ctx: Context): Partial<Handlers> {
       return { pages, unreadable: adopted.unreadable }
     },
 
-    'drawing:flush': ({ id }) => flush.flushAsked(id),
+    // A paper the window names without an identifier is no paper: nothing
+    // is written, rather than a path built from «undefined».
+    'drawing:flush': ({ id }) => (typeof id === 'string' && id ? flush.flushAsked(id) : Promise.resolve({ written: 0 })),
   }
 }
 

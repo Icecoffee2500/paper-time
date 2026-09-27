@@ -18,6 +18,8 @@
 import { figmaIcon, icon } from '../icons.js'
 import { clear, el, on, place } from '../dom.js'
 import { INK_TOOLS, SHAPE_TOOLS, readerState, store, type SketchTool } from '../state.js'
+import { platform } from '../bridge.js'
+import { isEditingSketchText } from './sketchInput.js'
 import { L } from '../../shared/lang.js'
 
 // The labels are getters so they are read when a button is built, not when
@@ -120,10 +122,21 @@ export function buildSketchRack(actions: SketchRackActions): { node: HTMLElement
       toolButton('text'),
       el('div', { class: 'sketch-rack-divider' }),
     )
-    const undo = el('button', { class: 'sketch-tool', title: L('되돌리기 (⌘Z)', 'Undo (⌘Z)'), html: icon('arrow.uturn.backward') })
-    const redo = el('button', { class: 'sketch-tool', title: L('다시 하기 (⇧⌘Z)', 'Redo (⇧⌘Z)'), html: icon('arrow.uturn.forward') })
-    on(undo, 'click', actions.undo)
-    on(redo, 'click', actions.redo)
+    // The desktop's own key in the tooltip: Ctrl+Z off the Mac.
+    const mac = platform === 'darwin'
+    const undo = el('button', { class: 'sketch-tool', title: L(`되돌리기 (${mac ? '⌘Z' : 'Ctrl+Z'})`, `Undo (${mac ? '⌘Z' : 'Ctrl+Z'})`), html: icon('arrow.uturn.backward') })
+    const redo = el('button', { class: 'sketch-tool', title: L(`다시 하기 (${mac ? '⇧⌘Z' : 'Ctrl+Shift+Z'})`, `Redo (${mac ? '⇧⌘Z' : 'Ctrl+Shift+Z'})`), html: icon('arrow.uturn.forward') })
+    // Pressed while typing into a card, Undo is the words' own undo — the
+    // press keeps the caret in the card, and the card's last change goes.
+    // It used to end the card and undo the drawing under it.
+    for (const [button, redoing] of [[undo, false], [redo, true]] as const) {
+      on(button, 'mousedown', (event: MouseEvent) => { if (isEditingSketchText()) event.preventDefault() })
+      on(button, 'click', () => {
+        if (isEditingSketchText()) document.execCommand(redoing ? 'redo' : 'undo')
+        else if (redoing) actions.redo()
+        else actions.undo()
+      })
+    }
     node.append(undo, redo)
 
     // The pressed square: the button of the tool, or of the group holding it.

@@ -265,33 +265,40 @@ function mathLayout(
  * or Korean, which has no spaces to break at — character by character, which
  * is what Core Text does with the same text.
  */
-function wrap(ctx: Ctx, paragraph: string, column: number): string[] {
+export function wrap(ctx: Ctx, paragraph: string, column: number): string[] {
   if (paragraph.length === 0) return ['']
   const out: string[] = []
+  const fits = (text: string) => ctx.measureText(text.replace(/\s+$/, '')).width <= column
   let line = ''
   const pieces = paragraph.match(/\S+\s*|\s+/g) ?? [paragraph]
-  for (const piece of pieces) {
-    const candidate = line + piece
-    if (ctx.measureText(candidate.replace(/\s+$/, '')).width <= column || line === '') {
-      if (ctx.measureText(candidate.replace(/\s+$/, '')).width > column && line === '') {
-        // One piece, too wide on its own: break it by character.
-        let run = ''
-        for (const character of candidate) {
-          if (ctx.measureText(run + character).width > column && run !== '') {
-            out.push(run)
-            run = character
-          } else {
-            run += character
-          }
-        }
-        line = run
+  for (let piece of pieces) {
+    if (fits(line + piece)) {
+      line += piece
+      continue
+    }
+    if (line !== '') {
+      out.push(line)
+      line = ''
+      piece = piece.replace(/^\s+/, '')
+      if (piece === '') continue
+      if (fits(piece)) {
+        line = piece
         continue
       }
-      line = candidate
-    } else {
-      out.push(line)
-      line = piece.replace(/^\s+/, '')
     }
+    // One piece, too wide on its own — at the start of the card or not:
+    // broken by character. A long word after the first on its line used to
+    // go down whole, and ran out of the card.
+    let run = ''
+    for (const character of piece) {
+      if (ctx.measureText(run + character).width > column && run !== '') {
+        out.push(run)
+        run = character
+      } else {
+        run += character
+      }
+    }
+    line = run
   }
   out.push(line)
   return out

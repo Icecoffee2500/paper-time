@@ -304,6 +304,7 @@ export class Reader implements PageOwner {
 
   /** Takes the reader down for good: its pages, its document, its listeners. */
   dispose() {
+    if (this.paperID) undoStack.forget(this.paperID)
     this.generation += 1
     this.close()
     if (this.relayoutFrame) cancelAnimationFrame(this.relayoutFrame)
@@ -806,24 +807,29 @@ export class Reader implements PageOwner {
     }
   }
 
-  /** Saves one page's drawing, sidecar first; the PDF follows behind. */
+  /** Saves one page's drawing, sidecar first; the PDF follows behind. A
+   *  save that fails says so — it used to vanish, and the drawing with it at
+   *  the next open. */
   async save(page: PageView) {
     if (!this.paperID) return
-    await call('sketch:save', {
-      id: this.paperID,
-      pageIndex: page.index,
-      elements: page.elements.map((element) => element.encode()),
-    })
-    await call('ink:save', {
-      id: this.paperID,
-      pageIndex: page.index,
-      strokes: page.strokes.map((stroke) => stroke.encode()),
-    })
+    const id = this.paperID
+    try {
+      await Promise.all([
+        call('sketch:save', { id, pageIndex: page.index, elements: page.elements.map((element) => element.encode()) }),
+        call('ink:save', { id, pageIndex: page.index, strokes: page.strokes.map((stroke) => stroke.encode()) }),
+      ])
+    } catch {
+      this.actions.toast(L('그림을 저장하지 못했어요.', "Paper Time couldn't save the drawing."))
+    }
   }
 
   async saveMarks(page: PageView) {
     if (!this.paperID) return
-    await call('marks:save', { id: this.paperID, pageIndex: page.index, marks: page.marks })
+    try {
+      await call('marks:save', { id: this.paperID, pageIndex: page.index, marks: page.marks })
+    } catch {
+      this.actions.toast(L('표시를 저장하지 못했어요.', "Paper Time couldn't save the mark."))
+    }
   }
 
   private readonly sketchHost: SketchInputHost = {
@@ -858,6 +864,11 @@ export class Reader implements PageOwner {
   /** Redraws every drawn page's marks and drawing. */
   redrawAll() {
     for (const page of this.pages) page.redraw()
+  }
+
+  /** Only the gesture layers — the selection changed, nothing on a page did. */
+  redrawOverlays() {
+    for (const page of this.near) page.redrawOverlay()
   }
 
   // ---------------------------------------------------------------- marks
