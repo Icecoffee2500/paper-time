@@ -48,7 +48,8 @@ import {
 } from '../shared/markJournal.js'
 import { isoTimestamp } from '../shared/coding.js'
 import { diagnose, headBytes, headLine, looksWhole, type ByteTrouble } from '../shared/pdfLock.js'
-import { holdInMemory, rememberLibrary, settings, update } from './settings.js'
+import { flushSettings, holdInMemory, rememberLibrary, settings, update } from './settings.js'
+import { providerOf } from '../shared/cloudProvider.js'
 // `L` is the layout module in this file, so the two-language helper comes
 // in under a name of its own.
 import { L as say, resolveKorean, setKorean } from '../shared/lang.js'
@@ -166,7 +167,9 @@ async function ownerOf(id: string): Promise<Library | null> {
       return one
     }
   }
-  return library
+  // No folder has it. Not the first folder: a sidecar written there for a
+  // paper it does not hold is a ghost record folder nothing reads back.
+  return null
 }
 let stopWatching: (() => void) | null = null
 
@@ -188,6 +191,36 @@ function sendTo(target: BrowserWindow | null, event: string, payload?: unknown) 
 }
 
 // MARK: - The window
+
+/** `--ground` in style.css, light and dark. */
+const GROUND = { light: '#e9eaec', dark: '#202024' }
+
+function launchGround(): string {
+  const appearance = settings().appearance
+  const dark = appearance === 'dark' || (appearance === 'system' && nativeTheme.shouldUseDarkColors)
+  return dark ? GROUND.dark : GROUND.light
+}
+
+/**
+ * The saved place, when a display still shows it. A window saved on a
+ * monitor that has since been unplugged opened off every screen, with no
+ * way to drag it back; its size is kept and the desktop picks the place.
+ */
+function onAScreen(saved: WindowShape): WindowShape {
+  const width = Number.isFinite(saved.width) ? Math.max(720, Math.round(saved.width)) : 1440
+  const height = Number.isFinite(saved.height) ? Math.max(480, Math.round(saved.height)) : 900
+  const shape: WindowShape = { width, height }
+  if (!Number.isFinite(saved.x) || !Number.isFinite(saved.y)) return shape
+  const x = Math.round(saved.x!)
+  const y = Math.round(saved.y!)
+  // Enough of the title bar to take hold of: 120 × 40 points on some display.
+  const visible = screen.getAllDisplays().some(({ workArea: area }) =>
+    x + width - 120 >= area.x && x + 120 <= area.x + area.width &&
+    y + 40 >= area.y && y <= area.y + area.height - 40)
+  if (!visible) return shape
+  const area = screen.getDisplayMatching({ x, y, width, height }).workArea
+  return { x, y, width: Math.min(width, area.width), height: Math.min(height, area.height) }
+}
 
 interface WindowShape {
   width: number
@@ -219,7 +252,9 @@ function makeWindow(shape: WindowShape, extraArguments: string[] = []): BrowserW
     frame: false,
     titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
     trafficLightPosition: isMac ? { x: 14, y: 16 } : undefined,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#202024' : '#ebeced',
+    // The page's own ground (`--ground` in style.css), from the appearance
+    // the reader chose, so the window does not flash another colour first.
+    backgroundColor: launchGround(),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -266,7 +301,7 @@ function makeWindow(shape: WindowShape, extraArguments: string[] = []): BrowserW
 
 function createWindow() {
   const saved = settings().window
-  window = makeWindow(saved, wantsSplit ? ['--papertime-split=1'] : [])
+  window = makeWindow(onAScreen(saved), wantsSplit ? ['--papertime-split=1'] : [])
   // A probe keeps its own window where nobody is, and so neither fills the
   // screen nor writes that place into the settings of whoever uses this copy.
   if (saved.maximized && !isProbeRun()) window.maximize()
@@ -274,7 +309,9 @@ function createWindow() {
   const remember = () => {
     if (!window || window.isDestroyed() || isProbeRun()) return
     const bounds = window.getBounds()
-    update({ window: { ...bounds, maximized: window.isMaximized() } })
+    // The frame a maximised window had before, not the whole screen.
+    const kept = window.isMaximized() ? { ...settings().window, maximized: true } : { ...bounds, maximized: false }
+    update({ window: kept }, { soon: true })
   }
   window.on('resize', remember)
   window.on('move', remember)
@@ -339,7 +376,9 @@ async function snapshot(refused: string[] = []): Promise<LibrarySnapshot | { err
     const rows: LibrarySnapshot['papers'] = []
     let loose = 0
     const unreadableRecords: string[] = []
-    ownerByID.clear()
+    // Built fresh and swapped in once the read is whole: cleared up front,
+    // every save that arrived during a slow read found no owner.
+    const owners = new Map<string, Library>()
     // Every folder at once, and each folder's loose PDFs worked out from the
     // records just read rather than by reading them all again. One of the
     // folders is often on a cloud drive that has to wake up, and it used to
@@ -359,7 +398,7 @@ async function snapshot(refused: string[] = []): Promise<LibrarySnapshot | { err
     for (const folder of read) {
       unreadableRecords.push(...folder.trouble)
       for (const row of folder.papers) {
-        ownerByID.set(row.id, folder.one)
+        owners.set(row.id, folder.one)
         // What the text index reads, kept here so a search never has to ask
         // the folders where a paper's file is.
         if (row.file && row.exists) {
@@ -377,6 +416,8 @@ async function snapshot(refused: string[] = []): Promise<LibrarySnapshot | { err
       }
       loose += folder.loose
     }
+    ownerByID.clear()
+    for (const [id, one] of owners) ownerByID.set(id, one)
     textSources = readable
     // The slip-box, read with the folders: the notes about these papers live
     // beside them, and the ones about no paper in the loose box. Search by
@@ -1055,7 +1096,13 @@ const handlers: Record<string, Handler> = {
     // What the file holds, overruled by what every device's journal says: a
     // mark made on a Mac a second ago, or one this machine could not put into
     // an encrypted file, is a mark all the same.
-    const { pages } = reconcile(found, merged(await journalsFor(id, owner.root)))
+    const { pages, dirty } = reconcile(found, merged(await journalsFor(id, owner.root)))
+    // A mark only a journal holds — made on a Mac, or here before a quit
+    // that did not wait — goes into the file now, not at the next change.
+    if (dirty.size > 0) {
+      for (const pageIndex of dirty) touched(id).marks.add(pageIndex)
+      schedulePDFWrite(id)
+    }
     const out: Record<number, MarkupRecord[]> = {}
     for (const [pageIndex, marks] of pages) out[pageIndex] = marks
     // Held here as the window has them, so the next save can tell what the
@@ -1086,7 +1133,14 @@ const handlers: Record<string, Handler> = {
 
   'drawing:adoptFromFile': (async ({ id }: { id: string }) => adoptFromFile(id)) as Handler,
 
-  'drawing:flush': (async ({ id }: { id: string }) => flushToPDF(id)) as Handler,
+  'drawing:flush': (async ({ id }: { id: string }) => {
+    const result = await flushToPDF(id)
+    if ('retry' in result) {
+      writeLater(id, FLUSH_RETRY[0])
+      return { written: 0 }
+    }
+    return result
+  }) as Handler,
 
   'bibtex:export': (async ({ ids, protectCase }: { ids?: string[]; protectCase?: boolean }, sender: BrowserWindow | null) => {
     if (!library) return { error: 'No library is open.' }
@@ -1189,8 +1243,8 @@ const handlers: Record<string, Handler> = {
           ? `${window.getBounds().width}×${window.getBounds().height}`
           : undefined,
         layout: settings().pageLayout,
-        paperCount: library?.papers.length,
-        libraryCloud: undefined,
+        paperCount: ownerByID.size,
+        libraryCloud: library ? providerOf(library.root) !== 'local' : undefined,
         recent: [],
       },
     })) as Handler,
@@ -1301,7 +1355,15 @@ const handlers: Record<string, Handler> = {
 ipcMain.handle(CHANNEL.invoke, async (event, name: string, args: unknown) => {
   const handler = handlers[name]
   if (!handler) throw new Error(`Unknown request: ${name}`)
-  return handler(args as never, BrowserWindow.fromWebContents(event.sender))
+  try {
+    return await handler(args as never, BrowserWindow.fromWebContents(event.sender))
+  } catch (error) {
+    // Said here, with the request's name, and passed on so the window's
+    // caller hears it too: Electron's own rethrow carried neither.
+    const id = args && typeof args === 'object' && 'id' in args ? ` (${String((args as { id: unknown }).id)})` : ''
+    console.error(`${name}${id} -`, error)
+    throw new Error(`${name}: ${(error as Error)?.message ?? String(error)}`)
+  }
 })
 
 // MARK: - The file, written behind the reader
@@ -1350,18 +1412,55 @@ function touched(id: string) {
   return pages
 }
 
+/**
+ * A save the file did not take is tried again — after 1.5, 5 and 15 seconds —
+ * and then the reader says the marks are in Paper Time and not in the file,
+ * until the next change tries once more. A file held by another program
+ * (Windows Defender, a sync client, Acrobat) is the usual reason, and it
+ * lets go within seconds. Before, the error went nowhere, and a file changed
+ * underneath each save was tried again every 1.5 seconds for ever.
+ */
+const FLUSH_RETRY = [1500, 5000, 15000]
+const flushAttempts = new Map<string, number>()
+
+/** A change to write into the file: starts the tries afresh. */
 function schedulePDFWrite(id: string) {
+  flushAttempts.delete(id)
+  writeLater(id, PDF_WRITE_DELAY)
+}
+
+function writeLater(id: string, delay: number) {
   clearTimeout(pending.get(id))
   pending.set(id, setTimeout(() => {
     pending.delete(id)
-    flushToPDF(id).catch((error) => send('error', String(error)))
-  }, PDF_WRITE_DELAY))
+    flushToPDF(id).then(
+      (result) => afterFlush(id, result),
+      (error) => afterFlush(id, { error: String((error as Error)?.message ?? error) }),
+    )
+  }, delay))
+}
+
+function afterFlush(id: string, result: FlushResult) {
+  if (!('error' in result) && !('retry' in result)) {
+    flushAttempts.delete(id)
+    return
+  }
+  const attempt = (flushAttempts.get(id) ?? 0) + 1
+  if (attempt > FLUSH_RETRY.length) {
+    flushAttempts.delete(id)
+    console.error(`pdf write - ${id} gave up after ${FLUSH_RETRY.length} tries:`, 'error' in result ? result.error : result.retry)
+    send('paper:kept', { id, reason: 'io' })
+    return
+  }
+  flushAttempts.set(id, attempt)
+  writeLater(id, FLUSH_RETRY[attempt - 1])
 }
 
 /** One write at a time per paper: two would read the same file and race. */
 const flushing = new Map<string, Promise<unknown>>()
 
-type FlushResult = { written: number } | { kept: KeptReason } | { error: string }
+/** `retry`: the file changed under the save, which goes again on top of it. */
+type FlushResult = { written: number } | { kept: KeptReason } | { error: string } | { retry: 'moved' }
 
 function flushToPDF(id: string): Promise<FlushResult> {
   const before = flushing.get(id) ?? Promise.resolve()
@@ -1424,9 +1523,8 @@ async function writePDF(id: string): Promise<FlushResult> {
       if (placed === 'moved') {
         // Somebody else wrote the file between the read and the write — the
         // Mac through the cloud, most likely. Theirs stands; this save goes
-        // again on top of it.
-        schedulePDFWrite(id)
-        return { written: 0 }
+        // again on top of it (`afterFlush`, three times at most).
+        return { retry: 'moved' }
       }
       if (written.stats) {
         const s = written.stats
@@ -1493,11 +1591,32 @@ async function appendVerified(file: string, was: fs.Stats, original: Uint8Array,
       await fsp.rm(temporary, { force: true })
       return 'moved'
     }
-    await fsp.rename(temporary, file)
+    await renameHeld(temporary, file)
     return 'placed'
   } catch (error) {
     await fsp.rm(temporary, { force: true })
     throw error
+  }
+}
+
+/**
+ * A rename over a file another program has open. On Windows that fails —
+ * EPERM, EBUSY, EACCES — while an antivirus scans the file it just saw
+ * change, a sync client uploads it, or a reader shows it, and each of them
+ * lets go within moments. Tried a few times before the save is given back
+ * to `afterFlush`.
+ */
+async function renameHeld(from: string, to: string) {
+  const waits = [100, 300, 1000, 2000]
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await fsp.rename(from, to)
+      return
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (attempt >= waits.length || !['EPERM', 'EBUSY', 'EACCES'].includes(code ?? '')) throw error
+      await new Promise((resolve) => setTimeout(resolve, waits[attempt]))
+    }
   }
 }
 
@@ -1620,9 +1739,25 @@ const PLATFORM_NAME = process.platform === 'win32' ? 'Windows' : process.platfor
  */
 const ownJournals = new Map<string, { journal: Journal; loaded: boolean }>()
 
-async function ownJournal(id: string, root: string) {
+/**
+ * One read at a time per paper: two marks made before the first read came
+ * back each read the file, and the second `set` replaced the first's copy —
+ * with the first mark in it gone.
+ */
+const journalReads = new Map<string, Promise<{ journal: Journal; loaded: boolean }>>()
+
+function ownJournal(id: string, root: string): Promise<{ journal: Journal; loaded: boolean }> {
   const known = ownJournals.get(id)
-  if (known?.loaded) return known
+  if (known?.loaded) return Promise.resolve(known)
+  const reading = journalReads.get(id)
+  if (reading) return reading
+  const next = readOwnJournal(id, root).finally(() => journalReads.delete(id))
+  journalReads.set(id, next)
+  return next
+}
+
+async function readOwnJournal(id: string, root: string) {
+  const known = ownJournals.get(id)
   const file = L.marksPath(root, id, deviceIdentity)
   try {
     const disk = asJournal(await readJSON(file)) ?? freshJournal(deviceIdentity, PLATFORM_NAME)
@@ -1642,11 +1777,36 @@ async function ownJournal(id: string, root: string) {
   }
 }
 
+/**
+ * Writes this device's journal 200 ms after the last change to it, as the
+ * Mac does — a stroke of the highlighter across a paragraph is several saves,
+ * and the journal is a file in a synced folder. What is held here is what
+ * the next PDF write reads, so nothing waits on the disk; `flushJournals`
+ * writes whatever is still waiting at quit.
+ */
+const journalWrites = new Map<string, { timer: NodeJS.Timeout; write: () => Promise<void> }>()
+
 async function keepOwnJournal(id: string, root: string, own: { journal: Journal; loaded: boolean }) {
   if (!own.loaded) return
-  own.journal.device = deviceIdentity
-  own.journal.name = PLATFORM_NAME
-  await writeJSON(L.marksPath(root, id, deviceIdentity), own.journal)
+  const waiting = journalWrites.get(id)
+  if (waiting) clearTimeout(waiting.timer)
+  const write = async () => {
+    journalWrites.delete(id)
+    own.journal.device = deviceIdentity
+    own.journal.name = PLATFORM_NAME
+    try {
+      await writeJSON(L.marksPath(root, id, deviceIdentity), own.journal)
+    } catch (error) {
+      console.error(`marks journal - ${id} could not be written:`, error)
+    }
+  }
+  journalWrites.set(id, { timer: setTimeout(() => void write(), 200), write })
+}
+
+async function flushJournals() {
+  const waiting = [...journalWrites.values()]
+  for (const one of waiting) clearTimeout(one.timer)
+  await Promise.allSettled(waiting.map((one) => one.write()))
 }
 
 /** A record read from disk, if it has a journal's shape. */
@@ -1750,7 +1910,56 @@ if (process.platform === 'linux' && !app.commandLine.hasSwitch('ozone-platform-h
   app.commandLine.appendSwitch('ozone-platform-hint', 'auto')
 }
 
+/**
+ * One copy at a time. A second launch — a PDF opened from Explorer, the
+ * Start menu pressed twice — hands its files to the first and leaves: two
+ * processes on one `settings.json` and one library each wrote over the
+ * other. A probe is not the reader's copy and takes no lock.
+ */
+const holdsTheLock = isProbeRun() || app.requestSingleInstanceLock()
+if (!holdsTheLock) app.exit(0)
+
+app.on('second-instance', (_event, argv) => {
+  const target = window && !window.isDestroyed() ? window : BrowserWindow.getAllWindows()[0]
+  if (target) {
+    if (target.isMinimized()) target.restore()
+    target.show()
+    target.focus()
+  }
+  void openFiles(pdfsIn(argv))
+})
+
+/** The PDFs named on a command line: what Explorer's «Open with» passes. */
+function pdfsIn(argv: string[]): string[] {
+  return argv.slice(1).filter((one) => !one.startsWith('-') && /\.pdf$/i.test(one) && fs.existsSync(one))
+}
+
+/** PDFs handed to the app from outside, into the first library. */
+async function openFiles(files: string[]) {
+  if (!library || files.length === 0) return
+  for (const file of files) {
+    try {
+      await library.importPDF(file, await pageCount(file))
+    } catch (error) {
+      console.error(`open file - ${file} could not be added:`, error)
+    }
+  }
+  send('library:changed')
+}
+
+// Whatever slips past every other guard is said, not thrown: an exception
+// nobody catches in the main process takes every window with it.
+process.on('uncaughtException', (error) => console.error('uncaught -', error))
+process.on('unhandledRejection', (reason) => console.error('unhandled rejection -', reason))
+
 app.whenReady().then(async () => {
+  // A probe is told which folder to open. One that is not — only steps or a
+  // picture — would open the reader's own library and notes, and write them.
+  if (isProbeRun() && !isProbeLibrary()) {
+    process.stderr.write('probe: refusing to run without --papertime-library=<folder>\n')
+    app.exit(2)
+    return
+  }
   // No Dock icon and no menu bar for a probe: an accessory app does not become
   // the active app by being launched, and its windows do not bounce the Dock.
   if (isMac && isProbeRun()) {
@@ -1774,7 +1983,7 @@ app.whenReady().then(async () => {
   // one the user last had open — the same isolation the Mac build uses so a
   // test never touches a real library.
   const root = probeArgument('library') ?? settings().libraryRoot
-  if (root && fs.existsSync(root)) {
+  if (root && fs.existsSync(root)) try {
     if (isProbeLibrary()) {
       // A probe opens its own folder and remembers nothing — not the folder,
       // and not the ones beside it, which belong to whoever uses this copy.
@@ -1790,6 +1999,11 @@ app.whenReady().then(async () => {
       await openLibrary(root)
     }
     send('library:opened', await snapshot())
+    void sweepTemporaries()
+    if (!isProbeRun()) await openFiles(pdfsIn(process.argv.slice(app.isPackaged ? 0 : 1)))
+  } catch (error) {
+    console.error('launch - the library could not be opened:', error)
+    send('library:opened', { error: String((error as Error)?.message ?? error) })
   }
   nativeTheme.on('updated', () => send('theme:changed', nativeTheme.shouldUseDarkColors))
 
@@ -1839,6 +2053,74 @@ app.on('window-all-closed', () => {
   if (!isMac) app.quit()
 })
 
+/**
+ * Nothing is left half done at quit: the PDF writes still waiting (the 1.5 s
+ * after the last mark) are done now, the ones running are waited for, and
+ * the journals and settings still held are written — ten seconds at most,
+ * then the app goes whatever is left. Before, a mark made in the last second
+ * reached the journal and not the file, and a write cut off in the middle
+ * left its temporary copy in the cloud folder.
+ */
+let drained = false
+let draining = false
+
+app.on('before-quit', (event) => {
+  if (drained) return
+  event.preventDefault()
+  if (draining) return
+  draining = true
+  void drain().finally(() => {
+    drained = true
+    app.quit()
+  })
+})
+
+async function drain() {
+  flushSettings()
+  const waiting = [...pending.keys()]
+  for (const id of waiting) clearTimeout(pending.get(id))
+  pending.clear()
+  const work = Promise.allSettled([
+    ...waiting.map((id) => flushToPDF(id)),
+    ...flushing.values(),
+    flushJournals(),
+  ])
+  await Promise.race([work, new Promise((resolve) => setTimeout(resolve, 10_000))])
+}
+
+/**
+ * A temporary copy a write left beside a paper when it was cut off — a crash,
+ * a power cut, a quit that did not wait — is removed when the library opens:
+ * `<paper>.pdf.<pid>.tmp` and older than ten minutes, so no write running now
+ * loses its file. Only the folders that hold papers are read, once each.
+ */
+async function sweepTemporaries() {
+  const folders = new Set<string>()
+  for (const one of allLibraries()) {
+    for (const row of (await one.read().catch(() => ({ papers: [] }))).papers) {
+      if (row.file) folders.add(path.dirname(row.file))
+    }
+  }
+  const old = Date.now() - 10 * 60_000
+  for (const folder of folders) {
+    let names: string[] = []
+    try {
+      names = await fsp.readdir(folder)
+    } catch {
+      continue
+    }
+    for (const name of names) {
+      if (!/\.pdf\.\d+(\.\d+)?\.tmp$/i.test(name)) continue
+      const file = path.join(folder, name)
+      try {
+        if ((await fsp.stat(file)).mtimeMs < old) await fsp.rm(file, { force: true })
+      } catch {
+        // Gone already, or not ours to remove.
+      }
+    }
+  }
+}
+
 // The text service goes with the app, whatever it was in the middle of.
 app.on('will-quit', () => {
   textService?.kill()
@@ -1850,11 +2132,9 @@ app.on('activate', () => {
 })
 
 /** Papers dropped on the app's icon, or opened from a file manager. */
-app.on('open-file', async (event, file) => {
+app.on('open-file', (event, file) => {
   event.preventDefault()
-  if (!library) return
-  await library.importPDF(file, await pageCount(file))
-  send('library:changed')
+  void openFiles([file])
 })
 
 export { deviceIdentity, readJSON, writeJSON }

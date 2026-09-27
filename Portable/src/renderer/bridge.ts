@@ -23,11 +23,28 @@ export const soloPaperID: string | null = window.papertime.paper ?? null
 export const flags = window.papertime.flags ?? { split: false }
 
 // Before anything draws: the main process already decided, and every string
-// below this line reads the answer.
+// below this line reads the answer — and so does the document, which said
+// `lang="ko"` in any language (hyphenation, the screen reader's voice).
 setKorean(window.papertime.korean)
+document.documentElement.lang = window.papertime.korean ? 'ko' : 'en'
+
+/** A request the main process answered by throwing, with which one it was. */
+export class BridgeError extends Error {
+  constructor(public request: string, message: string) {
+    super(message)
+    this.name = 'BridgeError'
+  }
+}
 
 export function call<T = unknown>(name: string, args?: unknown): Promise<T> {
-  return window.papertime.invoke(name, args) as Promise<T>
+  return (window.papertime.invoke(name, args) as Promise<T>).catch((error: unknown) => {
+    // Electron wraps the main process's message in its own sentence about
+    // the channel; what is left is `<request>: <why>`, logged here once.
+    const message = String((error as Error)?.message ?? error)
+      .replace(/^Error invoking remote method '[^']*': (Error: )?/, '')
+    console.error(`${name} -`, message)
+    throw new BridgeError(name, message)
+  })
 }
 
 export function onEvent(handler: (event: string, payload: unknown) => void) {

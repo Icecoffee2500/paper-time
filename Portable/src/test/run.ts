@@ -43,6 +43,7 @@ import { pageTintSuite } from './pageTint.js'
 import { paritySuite } from './parity.js'
 import { zettelSuite } from './zettel.js'
 import { slipBoxSuite } from './slipBox.js'
+import { safetySuite } from './safety.js'
 import { PaperMeta, PaperState } from '../shared/model.js'
 import { entryFor, formatEntry, protectTitle } from '../shared/bibtex.js'
 import { escapeLaTeX } from '../shared/latexTable.js'
@@ -405,6 +406,7 @@ async function main() {
   await paritySuite(test, suite)
   await zettelSuite(test, suite)
   await slipBoxSuite(test, suite)
+  await safetySuite(test, suite)
 
   // --------------------------------------------------------------------- ink
   suite('Handwriting')

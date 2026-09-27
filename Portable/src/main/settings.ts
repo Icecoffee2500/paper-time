@@ -11,62 +11,10 @@
 import { app } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
-import { DEFAULT_TINT_COLOR, pageTintFrom, tintColorFrom, type PageTint } from '../shared/pageTint.js'
+import { pageTintFrom, tintColorFrom } from '../shared/pageTint.js'
+import { DEFAULTS, fromFile, type Settings } from './settingsFile.js'
 
-export interface Settings {
-  libraryRoot: string | null
-  /** Folders opened beside the first one, in the order they were added. */
-  extraRoots: string[]
-  recentLibraries: string[]
-  window: { width: number; height: number; x?: number; y?: number; maximized?: boolean }
-  panes: { sidebar: boolean; paperList: boolean; reader: boolean; inspector: boolean }
-  columns: { sidebar: number; paperList: number; inspector: number }
-  inspectorTab: 'details' | 'marks' | 'note'
-  sort: { field: 'title' | 'author' | 'year' | 'added' | 'opened'; ascending: boolean }
-  /** 'system' follows the desktop; the other two are the reader's choice. */
-  appearance: 'system' | 'light' | 'dark'
-  /** Same shape as `appearance`: the desktop's locale, or the reader's word. */
-  language: 'system' | 'ko' | 'en'
-  /** A ground for the page and how the paper is drawn on it — the Mac's
-   *  model (`shared/pageTint.ts`). */
-  pageTint: PageTint
-  /** The custom tint's ground, `#rrggbb`. */
-  pageTintColor: string
-  pageLayout: 'single' | 'continuous' | 'book'
-  selectedPaperID: string | null
-  /** Latex Suite's shortcuts in the note and on the cards. On unless turned off. */
-  latexShortcuts: boolean
-  /** Search by meaning in the palette, and the index it needs. On unless turned off. */
-  semanticSearch: boolean
-  /** What stands under a title in the list — the Mac's `listSubtitleFields`. */
-  listSubtitle: string
-  /** «Protect Case in Titles» for the `.bib`. On unless turned off. */
-  bibtexProtectCase: boolean
-  /** The folder the notes about no paper live in, when the reader chose one — the Mac's «Loose Notes» folder. */
-  notesFolder: string | null
-}
-
-const DEFAULTS: Settings = {
-  libraryRoot: null,
-  extraRoots: [],
-  recentLibraries: [],
-  window: { width: 1440, height: 900 },
-  panes: { sidebar: true, paperList: true, reader: true, inspector: true },
-  columns: { sidebar: 240, paperList: 320, inspector: 320 },
-  inspectorTab: 'details',
-  sort: { field: 'added', ascending: false },
-  appearance: 'system',
-  language: 'system',
-  pageTint: 'none',
-  pageTintColor: DEFAULT_TINT_COLOR,
-  pageLayout: 'continuous',
-  selectedPaperID: null,
-  latexShortcuts: true,
-  semanticSearch: true,
-  listSubtitle: 'authors,year,venue',
-  bibtexProtectCase: true,
-  notesFolder: null,
-}
+export type { Settings } from './settingsFile.js'
 
 let cached: Settings | null = null
 
@@ -86,44 +34,87 @@ function file(): string {
   return path.join(app.getPath('userData'), 'settings.json')
 }
 
+/**
+ * Reads the file once. A file that is there but will not parse — a write torn
+ * by a power cut, a sync client's half copy — is moved aside rather than
+ * treated as "no settings": the next change would otherwise write the
+ * defaults over it and forget the library with everything else. The broken
+ * copy stays beside it as `settings.json.broken-<when>`, and until something
+ * changes, nothing is written.
+ */
 export function settings(): Settings {
   if (cached) return cached
+  let text: string | null = null
   try {
-    const raw = JSON.parse(fs.readFileSync(file(), 'utf8')) as Partial<Settings>
-    cached = {
-      ...DEFAULTS,
-      ...raw,
-      window: { ...DEFAULTS.window, ...raw.window },
-      panes: { ...DEFAULTS.panes, ...raw.panes },
-      columns: { ...DEFAULTS.columns, ...raw.columns },
-      sort: { ...DEFAULTS.sort, ...raw.sort },
-      // The old four washes under their new names: «grey» was a paler white
-      // and is Paper White now, «night» a blue-grey multiplied over black
-      // words and is Dimmed. Read that way rather than rewritten, so the file
-      // changes only when somebody next changes a setting.
-      pageTint: pageTintFrom(raw.pageTint),
-      pageTintColor: tintColorFrom(raw.pageTintColor),
-    }
+    text = fs.readFileSync(file(), 'utf8')
   } catch {
+    // No file yet: a first launch.
+  }
+  if (text === null) {
+    cached = { ...DEFAULTS }
+    return cached
+  }
+  try {
+    cached = fromFile(JSON.parse(text) as Partial<Settings>)
+  } catch (error) {
+    console.error('settings - settings.json would not be read; it is kept beside as a broken copy:', error)
+    if (!heldInMemory) {
+      try {
+        fs.renameSync(file(), `${file()}.broken-${new Date().toISOString().replace(/[:.]/g, '-')}`)
+      } catch {
+        // Moving it aside is a courtesy; the defaults are used either way.
+      }
+    }
     cached = { ...DEFAULTS }
   }
   return cached
 }
 
-export function update(patch: Partial<Settings>): Settings {
+let writeTimer: NodeJS.Timeout | null = null
+
+/**
+ * Changes the settings. `soon` holds the write back 300 ms, for what arrives
+ * in a stream — a window being dragged sends a move for every frame, and each
+ * one used to rewrite the file on the main process's thread.
+ */
+export function update(patch: Partial<Settings>, { soon = false }: { soon?: boolean } = {}): Settings {
   const next = { ...settings(), ...patch }
   // What the window sends is kept to what the reader can draw.
   if ('pageTint' in patch) next.pageTint = pageTintFrom(patch.pageTint)
   if ('pageTintColor' in patch) next.pageTintColor = tintColorFrom(patch.pageTintColor)
   cached = next
   if (heldInMemory) return next
-  try {
-    fs.mkdirSync(path.dirname(file()), { recursive: true })
-    fs.writeFileSync(file(), JSON.stringify(next, null, 2), 'utf8')
-  } catch {
-    // A preference that cannot be written is not worth failing a launch over.
-  }
+  if (writeTimer) clearTimeout(writeTimer)
+  writeTimer = null
+  if (soon) writeTimer = setTimeout(flushSettings, 300)
+  else flushSettings()
   return next
+}
+
+/**
+ * Writes what is held, now — also at quit, for a move still waiting.
+ * Beside the file and renamed over it, so a torn write leaves the old file
+ * whole rather than half of a new one.
+ */
+export function flushSettings() {
+  if (writeTimer) clearTimeout(writeTimer)
+  writeTimer = null
+  if (heldInMemory || !cached) return
+  const target = file()
+  const temporary = `${target}.${process.pid}.tmp`
+  try {
+    fs.mkdirSync(path.dirname(target), { recursive: true })
+    fs.writeFileSync(temporary, JSON.stringify(cached, null, 2), 'utf8')
+    fs.renameSync(temporary, target)
+  } catch (error) {
+    // A preference that cannot be written is not worth failing a launch over.
+    console.error('settings - could not be written:', error)
+    try {
+      fs.rmSync(temporary, { force: true })
+    } catch {
+      // Nothing more to do.
+    }
+  }
 }
 
 export function rememberLibrary(root: string) {

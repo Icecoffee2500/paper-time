@@ -2506,6 +2506,10 @@ export class Reader {
         '이 PDF는 구조를 확실히 읽지 못해서 쓰지 않아요. 다른 앱에서는 이 표시가 안 보여요.',
         "Paper Time can't read this PDF's structure for certain, so it doesn't write into it. Other apps won't show these marks.",
       ),
+      io: L(
+        '다른 프로그램이 이 PDF를 쥐고 있어서 쓰지 못했어요. 다음에 표시를 고치면 다시 써요.',
+        'Another program is holding this PDF, so Paper Time couldn\'t write into it. It tries again with your next change.',
+      ),
     }[this.kept]
     const kept = el('span', {
       class: 'reader-kept',
