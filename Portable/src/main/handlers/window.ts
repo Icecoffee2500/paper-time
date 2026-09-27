@@ -3,12 +3,29 @@ import { app, clipboard, shell, systemPreferences } from 'electron'
 import { isOpenableLink } from '../../shared/readerMath.js'
 import { providerOf } from '../../shared/cloudProvider.js'
 import { settings } from '../settings.js'
-import { capture as captureWindow, send as sendFeedback } from '../feedback.js'
+import { capture as captureWindow, diagnosticRows, lastRunCrashed, recentActions, send as sendFeedback, type FeedbackContext } from '../feedback.js'
 import type { Context, Handlers } from './context.js'
+
+/** What the app knows about this moment — never about the papers. */
+function feedbackContextFor(ctx: Context): FeedbackContext {
+  const { windows, libraries } = ctx
+  const main = windows.main && !windows.main.isDestroyed() ? windows.main : null
+  const panes = settings().panes
+  const open = (['sidebar', 'paperList', 'reader', 'inspector'] as const).filter((one) => panes?.[one])
+  return {
+    window: main ? `${main.getBounds().width}×${main.getBounds().height}` : undefined,
+    layout: settings().pageLayout,
+    panes: open.length > 0 ? open.join(', ') : undefined,
+    paperCount: libraries.paperCount,
+    libraryCloud: libraries.first ? providerOf(libraries.first.root) !== 'local' : undefined,
+    recent: recentActions(),
+  }
+}
 
 export function windowHandlers(ctx: Context): Partial<Handlers> {
   const { windows, libraries } = ctx
   const target = (sender: Parameters<Handlers['window:close']>[1]) => sender ?? windows.main
+  const feedbackContext = () => feedbackContextFor(ctx)
 
   return {
     'window:minimize': (_args, sender) => target(sender)?.minimize(),
@@ -51,19 +68,14 @@ export function windowHandlers(ctx: Context): Partial<Handlers> {
     // The app speaks to the outside world here and nowhere else, and only
     // because somebody pressed 보내기.
     'feedback:capture': (_args, sender) => captureWindow(target(sender)),
-    'feedback:send': (report) => {
-      const main = windows.main && !windows.main.isDestroyed() ? windows.main : null
-      return sendFeedback({
-        ...report,
-        context: {
-          window: main ? `${main.getBounds().width}×${main.getBounds().height}` : undefined,
-          layout: settings().pageLayout,
-          paperCount: libraries.paperCount,
-          libraryCloud: libraries.first ? providerOf(libraries.first.root) !== 'local' : undefined,
-          recent: [],
-        },
-      })
+    'feedback:diagnostics': () => {
+      const context = feedbackContext()
+      return { rows: diagnosticRows(context), crashed: lastRunCrashed() }
     },
+
+    // The same context the sheet listed, so the list and the payload cannot
+    // drift apart (`FeedbackDiagnostics.rows`).
+    'feedback:send': (report) => sendFeedback({ ...report, context: feedbackContext() }),
 
     // What the About section says: which version this is.
     'app:about': () => ({ version: app.getVersion() }),

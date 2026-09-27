@@ -21,7 +21,9 @@
  * no switch.
  */
 import { clear, el, on } from '../dom.js'
+import { icon } from '../icons.js'
 import { L } from '../../shared/lang.js'
+import { providerIcon, providerName, providerOf } from '../../shared/cloudProvider.js'
 import { store } from '../state.js'
 import { PAGE_TINTS, tintColorFrom, tintLabel } from '../../shared/pageTint.js'
 import { call, platform } from '../bridge.js'
@@ -38,6 +40,11 @@ export interface SettingsActions {
   chooseNotesFolder: () => void
   /** The way back: those notes return to the app's own folder. */
   useAppNotesFolder: () => void
+  /** The chosen folder looked for again, when it was away. */
+  reconnectNotesFolder: () => void
+  revealNotesFolder: () => void
+  /** What the last move of those notes did, to say under their row. */
+  lastNotesMove: () => { moved: number; kept: number; keptIn: string | null } | null
   /** The report sheet, from the About section. */
   feedback: () => void
 }
@@ -98,6 +105,19 @@ function groundColor(actions: SettingsActions): HTMLElement {
 }
 
 /** One row with a box to tick on the right: a setting that is on or off. */
+/** «Synced Via» and the service, for a folder on a cloud drive. */
+function syncedVia(folder: string): HTMLElement {
+  const provider = providerOf(folder)
+  const row = el('div', { class: 'set-row' })
+  row.append(el('span', { class: 'set-label', text: L('동기화', 'Synced Via') }))
+  row.append(el('span', { class: 'set-path set-provider' }, [
+    el('span', { html: icon(providerIcon(provider) as never) }),
+    el('span', { text: providerName(provider) }),
+  ]))
+  row.setAttribute('aria-label', L(`${providerName(provider)}로 동기화`, `Synced via ${providerName(provider)}`))
+  return row
+}
+
 function toggle(label: string, isOn: boolean, flip: (value: boolean) => void): HTMLElement {
   const row = el('label', { class: 'set-row' })
   const box = el('input', { type: 'checkbox', class: 'set-check' }) as HTMLInputElement
@@ -139,56 +159,87 @@ export function showSettings(actions: SettingsActions, section?: SettingsSection
   const draw = () => {
     clear(body)
 
+    // The library's folder by name, the service that carries it, and its
+    // path under the rows with the one thing to know about moving it — the
+    // Mac's Library section.
     body.append(el('div', { class: 'set-section', text: L('라이브러리', 'Library') }))
     const folder = el('div', { class: 'set-row' })
     folder.append(el('span', { class: 'set-label', text: L('폴더', 'Folder') }))
     const name = store.root?.replace(/[\\/]+$/, '').split(/[\\/]/).pop()
-    const path = el('span', { class: 'set-path', text: name ?? L('아직 고르지 않았어요', 'Not chosen yet') })
-    if (store.root) path.title = store.root
-    const pick = el('button', { class: 'plain-button', text: L('고르기…', 'Choose…') })
-    on(pick, 'click', () => {
+    folder.append(el('span', { class: 'set-path', text: name ?? L('연결 안 됨', 'Not Connected') }))
+    body.append(folder)
+    if (store.root) body.append(syncedVia(store.root))
+    const change = el('button', { class: 'plain-button', text: L('라이브러리 폴더 바꾸기…', 'Change Library Folder…') })
+    on(change, 'click', () => {
       close()
       actions.chooseLibrary()
     })
-    folder.append(path, pick)
-    body.append(folder)
-    body.append(el('p', {
-      class: 'set-note',
-      text: L(
-        '폴더를 더 여는 것은 사이드바의 «라이브러리 더하기…»에 있어요.',
-        'Opening another folder beside it is Add Library… in the sidebar.',
-      ),
-    }))
+    body.append(el('div', { class: 'set-row set-buttons' }, [change]))
+    if (store.root) body.append(el('p', { class: 'set-note set-mono', text: store.root }))
+    body.append(note(L(
+      '라이브러리를 옮길 때는 폴더를 통째로 옮겨주세요. 안에 숨어 있는 .papertime 폴더까지요. 서지와 노트, 잉크, 읽던 자리가 거기 있어요. PDF만 복사하면 새 라이브러리가 시작되고, 노트는 따라오지 않아요.',
+      'Move the whole folder, including the hidden .papertime inside it. That folder holds the records, notes, ink and reading progress. Copying only the PDFs starts a fresh library and leaves the notes behind.',
+    )))
+    body.append(note(L('폴더를 더 여는 것은 옆 목록의 «라이브러리 더하기…»에 있어요.', 'Opening another folder beside it is Add Library… in the sidebar.')))
 
-    // Where the notes about no paper live — the Mac's «Loose Notes». A note
-    // about a paper is in that paper's folder; the rest have no folder to
-    // belong to, so they are in the app's own until a folder is chosen for
-    // them — one in a cloud drive, say, so they follow you between machines.
+    // Where the notes about no paper live — the Mac's «Notes Without a
+    // Paper»: a warning when the chosen folder is away, which service carries
+    // it, the ways to move them, to reconnect, and to look; the path and what
+    // the last move did stay under the rows.
     const where = store.notesFolder
+    body.append(el('div', { class: 'set-section', text: L('논문 없는 노트', 'Notes Without a Paper') }))
     const loose = el('div', { class: 'set-row' })
-    loose.append(el('span', { class: 'set-label', text: L('논문 없는 노트', 'Loose Notes') }))
+    loose.append(el('span', { class: 'set-label', text: L('폴더', 'Folder') }))
     const looseName = where?.chosenPath
       ? where.chosenPath.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? where.chosenPath
       : L('앱 폴더', "The app's folder")
-    const loosePath = el('span', { class: 'set-path', text: looseName })
-    loosePath.title = where?.chosenPath ?? where?.appFolder ?? ''
-    const pickLoose = el('button', { class: 'plain-button', text: L('고르기…', 'Choose…') })
-    on(pickLoose, 'click', () => actions.chooseNotesFolder())
-    loose.append(loosePath, pickLoose)
-    if (where?.chosenPath) {
-      const back = el('button', { class: 'plain-button', text: L('앱 폴더로 되돌리기', 'Back to the App') })
-      on(back, 'click', () => actions.useAppNotesFolder())
-      loose.append(back)
-    }
+    const loosePath = el('span', { class: 'set-path' })
+    if (where?.away) loosePath.append(el('span', { class: 'set-warning', html: icon('exclamationmark.triangle') }))
+    loosePath.append(document.createTextNode(looseName))
+    loose.append(loosePath)
     body.append(loose)
-    body.append(note(where?.away
+    if (where?.chosenPath) body.append(syncedVia(where.chosenPath))
+    const buttons = el('div', { class: 'set-row set-buttons' })
+    const pickLoose = el('button', { class: 'plain-button', text: L('폴더 고르기…', 'Choose Folder…') })
+    on(pickLoose, 'click', () => actions.chooseNotesFolder())
+    buttons.append(pickLoose)
+    if (where?.chosenPath) {
+      const back = el('button', { class: 'plain-button', text: L('앱 폴더로 되돌리기', 'Move Back to This Computer') })
+      on(back, 'click', () => actions.useAppNotesFolder())
+      buttons.append(back)
+    }
+    if (where?.away) {
+      const again = el('button', { class: 'plain-button', text: L('다시 연결', 'Reconnect') })
+      on(again, 'click', () => actions.reconnectNotesFolder())
+      buttons.append(again)
+    }
+    const look = el('button', {
+      class: 'plain-button',
+      text: where?.away ? L('앱 폴더 보기', 'Show Notes on This Computer') : L('폴더에서 보기', 'Show in Folder'),
+    })
+    on(look, 'click', () => actions.revealNotesFolder())
+    buttons.append(look)
+    body.append(buttons)
+    const looseWhere = where?.chosenPath ?? where?.appFolder
+    if (looseWhere) body.append(el('p', { class: 'set-note set-mono', text: looseWhere }))
+    const move = actions.lastNotesMove()
+    const status = where?.away
       ? L('고른 폴더에 지금은 닿을 수 없어요. 그동안 쓴 노트는 앱 폴더에 두고, 폴더가 돌아오면 옮겨요.',
           "The chosen folder can't be reached right now. Notes written meanwhile stay in the app's folder and move when it is back.")
-      : where && where.leftBehind.length > 0
-        ? L('같은 이름의 노트가 있어 옮기지 못한 노트가 앱 폴더에 남아 있어요. 거기서도 계속 읽어요.',
-            "Some notes stayed in the app's folder because a note of the same name was already in the chosen one. They are still read from there.")
-        : L('논문에 대한 노트는 그 논문의 폴더에 있어요. 나머지 노트를 둘 곳이에요.',
-            "Notes about a paper live in that paper's folder. This is where the rest go.")))
+      : move
+        ? (move.kept > 0
+          ? L(`노트 ${move.moved}개를 옮겼어요. ${move.kept}개는 같은 이름이 있어서 있던 자리에 남았어요. 거기서도 계속 읽어요.`,
+              `Moved ${move.moved} note${move.moved === 1 ? '' : 's'}. ${move.kept} stayed where ${move.kept === 1 ? 'it was' : 'they were'}: a note of the same name was already there. ${move.kept === 1 ? 'It is' : 'They are'} still read from there.`)
+          : L(`노트 ${move.moved}개를 옮겼어요.`, `Moved ${move.moved} note${move.moved === 1 ? '' : 's'}.`))
+        : where && where.leftBehind.length > 0
+          ? L('같은 이름의 노트가 있어 옮기지 못한 노트가 앱 폴더에 남아 있어요. 거기서도 계속 읽어요.',
+              "Some notes stayed in the app's folder because a note of the same name was already in the chosen one. They are still read from there.")
+          : null
+    if (status) body.append(note(status))
+    body.append(note(L(
+      '논문에 대한 노트는 그 논문이 있는 폴더에 있어요. 여기에는 어느 논문에도 딸리지 않은 노트만 있어요. 클라우드 폴더를 고르면 다른 컴퓨터에서도 보여요.',
+      "Notes about a paper stay in that paper's folder. This folder holds the rest. Choose one in a cloud drive to see them on your other computers.",
+    )))
 
     const reading = el('div', { class: 'set-section', text: L('읽기', 'Reading') })
     // Where «Custom Color» in the ⋯ menu opens the sheet: the colour well is
@@ -277,9 +328,8 @@ export function showSettings(actions: SettingsActions, section?: SettingsSection
       (value) => actions.set({ appearance: value }),
       'appearance',
     ))
-    // The one thing that had no way in at all. Changing it takes a restart —
-    // the window's words are read once, at build time of every string — and
-    // saying so beside the choice is better than a window that half changes.
+    // The one thing that had no way in at all. It changes at once: the
+    // windows are made again where they stand, in the new words.
     body.append(choices(
       L('말', 'Language'),
       [
@@ -290,12 +340,20 @@ export function showSettings(actions: SettingsActions, section?: SettingsSection
       (value) => actions.set({ language: value }),
       'language',
     ))
-    body.append(el('p', {
-      class: 'set-note',
-      text: L('말을 바꾸면 앱을 다시 열어야 해요.', 'Changing the language takes effect when you reopen the app.'),
-    }))
 
     body.append(el('div', { class: 'set-section', text: 'BibTeX' }))
+    body.append(choices(
+      L('프리프린트 양식', 'Preprint Style'),
+      [['eprint', 'eprint (biblatex)'], ['arxivPreprintArticle', 'arXiv (BibTeX)']] as const,
+      (store.settings.bibtexPreprintStyle === 'arxivPreprintArticle' ? 'arxivPreprintArticle' : 'eprint') as 'eprint' | 'arxivPreprintArticle',
+      (value) => actions.set({ bibtexPreprintStyle: value }),
+      'preprint',
+    ))
+    body.append(toggle(
+      L('확인 안 된 항목도 내보내기', 'Include Unverified Records in Export'),
+      store.settings.bibtexIncludeUnverified === true,
+      (value) => actions.set({ bibtexIncludeUnverified: value }),
+    ))
     body.append(toggle(
       L('제목 대소문자 지키기', 'Protect Case in Titles'),
       store.settings.bibtexProtectCase !== false,

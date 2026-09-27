@@ -35,6 +35,9 @@ export interface Settings {
   listSubtitle: string
   /** «Protect Case in Titles» for the `.bib`. On unless turned off. */
   bibtexProtectCase: boolean
+  /** The export sheet's starting preprint style and unverified choice (Settings → BibTeX). */
+  bibtexPreprintStyle: string
+  bibtexIncludeUnverified: boolean
   /** The folder the notes about no paper live in, when the reader chose one — the Mac's «Loose Notes» folder. */
   notesFolder: string | null
   /** The style the next shape is drawn in, as the element file writes a
@@ -61,6 +64,8 @@ export const DEFAULTS: Settings = {
   semanticSearch: true,
   listSubtitle: 'authors,year,venue',
   bibtexProtectCase: true,
+  bibtexPreprintStyle: 'eprint',
+  bibtexIncludeUnverified: false,
   notesFolder: null,
   sketchStyle: null,
 }

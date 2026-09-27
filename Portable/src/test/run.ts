@@ -57,6 +57,7 @@ import { voiceSuite } from './voice.js'
 import { tokensSuite } from './tokens.js'
 import { libraryListSuite } from './libraryList.js'
 import { marksSuite } from './marks.js'
+import { librarySuite } from './library.js'
 import { PaperMeta, PaperState } from '../shared/model.js'
 import { entryFor, formatEntry, protectTitle } from '../shared/bibtex.js'
 import { escapeLaTeX } from '../shared/latexTable.js'
@@ -431,6 +432,7 @@ async function main() {
   await focusSuite(test, suite)
   await libraryListSuite(test, suite)
   await marksSuite(test, suite)
+  await librarySuite(test, suite)
   await voiceSuite(test, suite)
   await tokensSuite(test, suite)
 
@@ -777,7 +779,7 @@ async function main() {
     try {
       const library = await Library.open(root)
       fs.writeFileSync(path.join(root, '2403.18293v1.pdf'), '%PDF-1.7\n')
-      const imported = await library.importPDF(path.join(root, '2403.18293v1.pdf'), 12)
+      const imported = (await library.importPDF(path.join(root, '2403.18293v1.pdf'), 12)).row
       assert.ok(imported)
       const record = path.join(root, '.papertime', 'papers', imported.id)
 
@@ -810,7 +812,7 @@ async function main() {
     try {
       const library = await Library.open(root)
       fs.writeFileSync(path.join(root, 'paper.pdf'), '%PDF-1.7\n% paper\n')
-      const first = await library.importPDF(path.join(root, 'paper.pdf'), 2)
+      const first = (await library.importPDF(path.join(root, 'paper.pdf'), 2)).row
       assert.ok(first)
 
       // The same bytes, under another name, sitting in the library folder.
@@ -823,7 +825,7 @@ async function main() {
       // Matching bytes answer "already brought in" for a file arriving from
       // outside. For a file already in the folder that answer leaves a PDF the
       // list will not show, and "add 1 loose PDF" that stays at 1 for ever.
-      const second = await library.importPDF(path.join(root, 'paper copy.pdf'), 2)
+      const second = (await library.importPDF(path.join(root, 'paper copy.pdf'), 2)).row
       assert.ok(second)
       assert.notEqual(second.id, first.id, 'the copy is a paper of its own')
       assert.deepEqual(await library.looseFiles(), [], 'and nothing is left loose')
@@ -831,7 +833,7 @@ async function main() {
       // Handed the very file a record already claims, it is still that paper —
       // otherwise dragging a paper out of the window and back in would leave
       // two records claiming one file.
-      const again = await library.importPDF(path.join(root, 'paper.pdf'), 2)
+      const again = (await library.importPDF(path.join(root, 'paper.pdf'), 2)).row
       assert.equal(again?.id, first.id)
       assert.equal((await library.read()).papers.length, 2)
     } finally {
@@ -844,7 +846,7 @@ async function main() {
     try {
       const library = await Library.open(root)
       fs.writeFileSync(path.join(root, 'before.pdf'), '%PDF-1.7\n% before\n')
-      const paper = await library.importPDF(path.join(root, 'before.pdf'), 2)
+      const paper = (await library.importPDF(path.join(root, 'before.pdf'), 2)).row
       assert.ok(paper)
       await library.rename(paper.id, 'after')
 
@@ -859,7 +861,7 @@ async function main() {
       assert.ok(!stored.includes('\\'), 'a record never holds a backslash')
       assert.deepEqual(await library.looseFiles(), [])
 
-      const again = await library.importPDF(path.join(root, 'after.pdf'), 2)
+      const again = (await library.importPDF(path.join(root, 'after.pdf'), 2)).row
       assert.equal(again?.id, paper.id, 'and it is still the same paper')
       assert.equal((await library.read()).papers.length, 1)
     } finally {
@@ -874,7 +876,7 @@ async function main() {
       const ids: string[] = []
       for (const name of ['one.pdf', 'two.pdf', 'three.pdf']) {
         fs.writeFileSync(path.join(root, name), `%PDF-1.7\n% ${name}\n`)
-        const row = await library.importPDF(path.join(root, name), 2)
+        const row = (await library.importPDF(path.join(root, name), 2)).row
         assert.ok(row)
         ids.push(row.id)
       }
@@ -903,7 +905,7 @@ async function main() {
       // check is short by that record, which is a duplicate you can see, and
       // the alternative is a library that is shut for as long as the file is.
       fs.writeFileSync(path.join(root, 'four.pdf'), '%PDF-1.7\n% four\n')
-      const added = await library.importPDF(path.join(root, 'four.pdf'), 2)
+      const added = (await library.importPDF(path.join(root, 'four.pdf'), 2)).row
       assert.ok(added, 'a paper named by hand goes in although a record is late')
       assert.equal((await library.read()).papers.length, 3)
 
@@ -935,7 +937,7 @@ async function main() {
     try {
       const library = await Library.open(root)
       fs.writeFileSync(path.join(root, 'paper.pdf'), '%PDF-1.7\n% body\n')
-      const imported = await library.importPDF(path.join(root, 'paper.pdf'), 5)
+      const imported = (await library.importPDF(path.join(root, 'paper.pdf'), 5)).row
       assert.ok(imported)
 
       // Absent and half-written are different answers, and only the first one
@@ -965,7 +967,7 @@ async function main() {
       // because the set of PDFs no record claims is short by whatever that
       // sibling holds.
       fs.writeFileSync(path.join(root, 'other.pdf'), '%PDF-1.7\n% other\n')
-      const other = await library.importPDF(path.join(root, 'other.pdf'), 2)
+      const other = (await library.importPDF(path.join(root, 'other.pdf'), 2)).row
       assert.ok(other)
       fs.writeFileSync(state, '{}')
       fs.renameSync(path.join(root, 'paper.pdf'), path.join(root, 'paper (1).pdf'))

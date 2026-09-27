@@ -28,11 +28,12 @@ import { buildSidebar } from './ui/sidebar.js'
 import { buildPaperList } from './ui/paperList.js'
 import { buildInspector } from './ui/inspector.js'
 import { buildSlipBox } from './ui/slipBox.js'
+import { buildSetup } from './ui/setup.js'
 import { buildSketchRack } from './ui/sketchToolbar.js'
 import { refreshOpenPapers } from './ui/openPapers.js'
 import { flushPositions, focused, reconcileReaders, relayoutReadersSoon } from './pageArea.js'
 import {
-  addLibraryFolder, addPapers, adoptLoose, chooseLibrary, newCollection, reload, removeLibraryFolder, start,
+  addLibraryFolder, addPapers, adoptLoose, chooseLibrary, newCollection, openLibraryAt, reload, removeLibraryFolder, start,
 } from './library.js'
 import {
   attach, attachmentsMenu, copyKey, detach, editMeta, editState, fileUnder, paperMenu, renamePaper, setKind,
@@ -161,6 +162,13 @@ shell.inspector = buildInspector({
  * that holds it (`sketchInput.ts`), so the rack, the Tools tab and the keys
  * are three ways of saying the same thing to one place.
  */
+shell.setup = buildSetup({
+  choose: () => void chooseLibrary(),
+  open: (root) => void openLibraryAt(root),
+  retry: () => { if (store.unavailable) void openLibraryAt(store.unavailable.root) },
+  suggestions: () => call('library:suggestions'),
+})
+
 shell.rack = buildSketchRack({
   setTool: (tool: SketchTool) => pickTool(tool),
   undo: () => applyUndo(false),

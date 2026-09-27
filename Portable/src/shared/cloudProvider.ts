@@ -10,6 +10,8 @@
  * The Mac's copy is `CloudProvider.swift`. Every desktop puts these folders
  * somewhere else; the answers are the same.
  */
+import { L } from './lang.js'
+
 export type CloudProvider =
   | 'iCloudDrive'
   | 'googleDrive'
@@ -55,6 +57,6 @@ export function providerName(provider: CloudProvider): string {
     case 'dropbox': return 'Dropbox'
     case 'oneDrive': return 'OneDrive'
     case 'box': return 'Box'
-    case 'local': return 'This Device'
+    case 'local': return L('이 기기', 'This Device')
   }
 }

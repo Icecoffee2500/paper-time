@@ -14,6 +14,7 @@ import type { buildPaperList } from './ui/paperList.js'
 import type { buildInspector } from './ui/inspector.js'
 import type { buildSlipBox } from './ui/slipBox.js'
 import type { buildSketchRack } from './ui/sketchToolbar.js'
+import type { buildSetup } from './ui/setup.js'
 
 export interface Shell {
   toolbar: ReturnType<typeof buildToolbar>
@@ -22,6 +23,8 @@ export interface Shell {
   inspector: ReturnType<typeof buildInspector>
   slipBox: ReturnType<typeof buildSlipBox>
   rack: ReturnType<typeof buildSketchRack>
+  /** The first-run screen, and the one for a library that is not there. */
+  setup: ReturnType<typeof buildSetup>
   /** The list column: the papers, or on the Notes shelf the slip-box. */
   listSlot: HTMLElement
   /** The row the panes stand in. */

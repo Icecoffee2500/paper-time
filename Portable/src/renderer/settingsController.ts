@@ -73,7 +73,7 @@ export function setSettings(patch: Partial<Settings>, options: { live?: boolean 
 
 /** What another window chose, followed here without writing it again. The
  *  columns, the paper showing and the tab are each window's own. */
-const SHARED = new Set<string>(['appearance', 'language', 'pageTint', 'pageTintColor', 'pageLayout', 'latexShortcuts', 'semanticSearch', 'listSubtitle', 'bibtexProtectCase', 'sort', 'sketchStyle'])
+const SHARED = new Set<string>(['appearance', 'language', 'pageTint', 'pageTintColor', 'pageLayout', 'latexShortcuts', 'semanticSearch', 'listSubtitle', 'bibtexProtectCase', 'bibtexPreprintStyle', 'bibtexIncludeUnverified', 'sort', 'sketchStyle'])
 
 export function adoptSettings(patch: Record<string, unknown>) {
   const taken: Record<string, unknown> = {}
@@ -179,6 +179,9 @@ export function openSettings(section?: SettingsSection) {
     chooseLibrary: () => void chooseLibrary(),
     chooseNotesFolder: () => void moveLooseNotes('notes:chooseFolder'),
     useAppNotesFolder: () => void moveLooseNotes('notes:useAppFolder'),
+    reconnectNotesFolder: () => void moveLooseNotes('notes:reconnect'),
+    revealNotesFolder: () => void call('notes:reveal'),
+    lastNotesMove: () => lastNotesMove,
     feedback: () => void showFeedback(),
   }, section)
   if (sheet) openSheet = sheet
@@ -189,11 +192,19 @@ export function openSettings(section?: SettingsSection) {
  * the settings' «Loose Notes». What could not go — a note of the same name
  * already there — stays where it was, and the toast says how many.
  */
-async function moveLooseNotes(request: 'notes:chooseFolder' | 'notes:useAppFolder') {
+/** The last move of the loose notes, said under their row until the next —
+ *  not a toast that is gone before it is read (`AppModel.lastNotesMove`). */
+let lastNotesMove: { moved: number; kept: number; keptIn: string | null } | null = null
+
+async function moveLooseNotes(request: 'notes:chooseFolder' | 'notes:useAppFolder' | 'notes:reconnect') {
   const result = await call(request)
-  if (!result) return
+  if (!result) {
+    if (request === 'notes:reconnect') toast(L('아직 폴더에 닿을 수 없어요.', "The folder still isn't there."))
+    return
+  }
   if ('error' in result) return couldNot('moveNotes', result.error)
   const { moved, kept } = result
+  lastNotesMove = { moved, kept, keptIn: result.notesFolder.leftBehind[0] ?? null }
   toast(kept > 0
     ? L(`노트 ${moved}개를 옮겼어요. ${kept}개는 이름이 겹쳐 그대로 뒀어요.`, `Moved ${moved} note${moved === 1 ? '' : 's'}. ${kept} stayed: a note of the same name was already there.`)
     : L(`노트 ${moved}개를 옮겼어요.`, `Moved ${moved} note${moved === 1 ? '' : 's'}.`))

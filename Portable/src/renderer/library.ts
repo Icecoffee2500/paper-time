@@ -57,7 +57,10 @@ function ticket(): number {
 export function applySnapshot(snapshot: LibrarySnapshot, at: number = ticket()): boolean {
   if (at < shown) return false
   shown = at
+  // From the first-run or the unavailable screen into the columns.
+  const wasScreen = !store.root || store.unavailable !== null
   adopt(snapshot)
+  if (wasScreen) layoutPanes()
   adoptNotes(snapshot.notes, snapshot.notesFolder)
   // Inside a folder that is gone too: a subfolder of a library that is gone
   // is a shelf of nothing.
@@ -134,10 +137,17 @@ export async function chooseLibrary() {
   settle(await call('library:open', { root: chosen }), at, 'keep')
 }
 
-/** Another folder, read beside the ones already open. Also on the File menu. */
-export async function addLibraryFolder() {
+/** A folder by its path — a suggestion on the first-run screen, a library
+ *  opened before, the one that was not there tried again. */
+export async function openLibraryAt(root: string) {
   const at = ticket()
-  settle(await call('library:addFolder', {}), at, 'finish')
+  settle(await call('library:open', { root }), at, 'finish')
+}
+
+/** Another folder, read beside the ones already open. Also on the File menu. */
+export async function addLibraryFolder(root?: string) {
+  const at = ticket()
+  settle(await call('library:addFolder', root ? { root } : {}), at, 'finish')
 }
 
 /** A folder let go of — out of the list only; its files stay where they are. */
@@ -161,7 +171,19 @@ export function importDestination(): string | undefined {
 /** PDFs chosen from the open panel, or dropped on the window. */
 export async function addPapers(paths?: string[]) {
   const at = ticket()
-  settle(await call('library:import', { paths, root: importDestination() }), at, 'addPDFs')
+  const answer = await call('library:import', { paths, root: importDestination() })
+  settle(answer, at, 'addPDFs')
+  // What happened, said — a PDF dropped a second time used to look like a
+  // drop that did nothing (`importDocuments` → added, duplicates).
+  if ('error' in answer || !answer.imported) return
+  const { added, duplicates, refused } = answer.imported
+  const said: string[] = []
+  if (added > 0) said.push(L(`논문 ${added}편을 더했어요.`, `Added ${added} paper${added === 1 ? '' : 's'}.`))
+  if (duplicates > 0) said.push(L(`${duplicates}편은 이미 있어요.`, `${duplicates} ${duplicates === 1 ? 'was' : 'were'} already here.`))
+  if (refused.length > 0) {
+    said.push(L(`PDF ${refused.length}개는 읽지 못했어요.`, `${refused.length} PDF${refused.length === 1 ? '' : 's'} couldn't be read.`))
+  }
+  if (said.length > 0) toast(said.join(' '))
 }
 
 /**
@@ -224,11 +246,22 @@ export async function start() {
   store.windowState = await call('window:state')
 
   if (!saved.libraryRoot) {
+    // Nothing to read, and that is known: the first-run screen.
+    store.ready = true
+    layoutPanes()
     changed('papers')
     return
   }
   const at = ticket()
   const snapshot = await call('library:reload')
+  if ('error' in snapshot && snapshot.unavailable) {
+    store.root = null
+    store.unavailable = { root: snapshot.unavailable, message: snapshot.error }
+    store.ready = true
+    layoutPanes()
+    changed('papers', 'shelf')
+    return
+  }
   if ('error' in snapshot) {
     // There is a folder in the settings and it would not be read. Saying so
     // is the whole of it: this used to fall through to a window whose list

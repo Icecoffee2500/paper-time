@@ -16,7 +16,7 @@ import { clear, el, on } from '../dom.js'
 import { L } from '../../shared/lang.js'
 import { store, type Paper } from '../state.js'
 import { isCitable, isLookedUp } from '../../shared/documentKind.js'
-import { DEFAULT_EXPORT, entryFor, formatBibliography } from '../../shared/bibtex.js'
+import { DEFAULT_EXPORT, entryFor, formatBibliography, type ExportOptions } from '../../shared/bibtex.js'
 import { inCollection } from '../../shared/smartRule.js'
 
 export type ExportScope = 'selected' | 'view' | 'library' | 'collection'
@@ -41,12 +41,14 @@ export function showExportSheet(input: ExportSheetInput) {
   open = true
   let scope: ExportScope = 'view'
   let collectionID: string | null = store.collections[0]?.id ?? null
-  let protectCase = store.settings.bibtexProtectCase !== false
-  let includeAbstract = false
-  // On unless turned off, unlike the Mac: this build has no registrar to
-  // check a record against, so nearly everything added here is unchecked,
-  // and leaving it all out would export nothing. The count says how many.
-  let includeUnverified = true
+  // The Mac's options and the Mac's defaults — unverified records left out
+  // unless asked for; the warning counts them and says how to put them in.
+  const options: ExportOptions = {
+    ...DEFAULT_EXPORT,
+    protectCase: store.settings.bibtexProtectCase !== false,
+    preprintStyle: store.settings.bibtexPreprintStyle === 'arxivPreprintArticle' ? 'arxivPreprintArticle' : 'eprint',
+  }
+  let includeUnverified = store.settings.bibtexIncludeUnverified === true
 
   const backdrop = el('div', { class: 'sheet-backdrop' })
   const sheet = el('div', { class: 'fb-sheet export-sheet', role: 'dialog', 'aria-modal': 'true' })
@@ -55,11 +57,12 @@ export function showExportSheet(input: ExportSheetInput) {
   const warning = el('p', { class: 'export-warning' })
   const cancel = el('button', { class: 'plain-button', text: L('취소', 'Cancel') })
   const copy = el('button', { class: 'plain-button', text: L('복사', 'Copy') }) as HTMLButtonElement
-  const save = el('button', { class: 'filled-button', text: L('저장…', 'Save…') }) as HTMLButtonElement
+  const save = el('button', { class: 'plain-button', text: L('저장…', 'Save…') }) as HTMLButtonElement
+  const done = el('button', { class: 'filled-button', text: L('완료', 'Done') }) as HTMLButtonElement
   sheet.append(
     el('h2', { class: 'fb-title', text: L('BibTeX 내보내기', 'Export BibTeX') }),
     body,
-    el('div', { class: 'set-foot export-foot' }, [cancel, el('span', { class: 'fb-spacer' }), copy, save]),
+    el('div', { class: 'set-foot export-foot' }, [cancel, el('span', { class: 'fb-spacer' }), copy, save, done]),
   )
   backdrop.append(sheet)
   document.body.append(backdrop)
@@ -78,7 +81,8 @@ export function showExportSheet(input: ExportSheetInput) {
     const standing = store.papers.filter((entry) => !entry.meta.parentID)
     switch (scope) {
       case 'selected': return standing.filter((entry) => entry.id === store.selectedID)
-      case 'view': return input.view()
+      // The shelf's papers, never a supplement hanging off one.
+      case 'view': return input.view().filter((entry) => !entry.meta.parentID)
       case 'library': return standing
       case 'collection': {
         const collection = store.collections.find((one) => one.id === collectionID)
@@ -94,7 +98,6 @@ export function showExportSheet(input: ExportSheetInput) {
     .filter((entry) => includeUnverified || !unverified(entry))
 
   const text = () => {
-    const options = { ...DEFAULT_EXPORT, protectCase, includeAbstract }
     const metas = chosen().map((entry) => entry.meta)
     if (metas.length === 0) return ''
     const keyed = metas.map((meta) => ({ meta, key: entryFor(meta, options).key }))
@@ -136,6 +139,20 @@ export function showExportSheet(input: ExportSheetInput) {
     }
 
     body.append(el('div', { class: 'set-section', text: L('옵션', 'Options') }))
+    const style = el('select', { class: 'export-collection' }) as HTMLSelectElement
+    for (const [value, name] of [
+      ['eprint', L('eprint 필드 (biblatex)', 'eprint fields (biblatex)')],
+      ['arxivPreprintArticle', L('arXiv preprint (일반 BibTeX)', 'arXiv preprint (plain BibTeX)')],
+    ] as const) {
+      const option = el('option', { value, text: name }) as HTMLOptionElement
+      option.selected = options.preprintStyle === value
+      style.append(option)
+    }
+    on(style, 'change', () => {
+      options.preprintStyle = style.value as ExportOptions['preprintStyle']
+      draw()
+    })
+    body.append(el('div', { class: 'set-row' }, [el('span', { class: 'set-label', text: L('프리프린트 양식', 'Preprint Style') }), style]))
     const toggle = (label: string, value: boolean, flip: (next: boolean) => void) => {
       const row = el('label', { class: 'set-row' })
       const box = el('input', { type: 'checkbox', class: 'set-check' }) as HTMLInputElement
@@ -147,9 +164,13 @@ export function showExportSheet(input: ExportSheetInput) {
       row.append(el('span', { class: 'set-label', text: label }), box)
       return row
     }
+    // No «Include Keywords»: the Mac's toggle hands the writer no keywords,
+    // so it writes the same file either way — a switch that does nothing.
     body.append(
-      toggle(L('제목 대소문자 지키기', 'Protect Case in Titles'), protectCase, (next) => { protectCase = next }),
-      toggle(L('초록 넣기', 'Include Abstract'), includeAbstract, (next) => { includeAbstract = next }),
+      toggle(L('제목 대소문자 지키기', 'Protect Case in Titles'), options.protectCase, (next) => { options.protectCase = next }),
+      toggle(L('학술지 이름 줄이기', 'Abbreviate Journal Names'), options.abbreviateJournals, (next) => { options.abbreviateJournals = next }),
+      toggle(L('초록 넣기', 'Include Abstract'), options.includeAbstract, (next) => { options.includeAbstract = next }),
+      toggle(L('URL 넣기', 'Include URL'), options.includeURL, (next) => { options.includeURL = next }),
       toggle(L('확인 안 된 항목도 넣기', 'Include Unverified Records'), includeUnverified, (next) => { includeUnverified = next }),
     )
 
@@ -177,26 +198,45 @@ export function showExportSheet(input: ExportSheetInput) {
         : written)
       : L('아직 내보낼 것이 없어요.', 'Nothing to export yet.')
     body.append(preview)
+    body.append(overleaf())
     copy.disabled = !written
     save.disabled = !written
   }
 
+  /** How to use the file in Overleaf, folded (`ExportInstructionsView`). */
+  const overleaf = () => {
+    const details = el('details', { class: 'export-overleaf' })
+    details.append(el('summary', { text: L('이 파일을 Overleaf에서 쓰기', 'Using this file in Overleaf') }))
+    const steps = el('ol')
+    for (const step of [
+      L('내보낸 .bib 파일을 찾기 쉬운 곳에 저장하세요.', 'Save the exported .bib file where you can find it.'),
+      L('Overleaf에서 프로젝트를 여세요.', 'Open your project on Overleaf.'),
+      L('파일을 왼쪽 파일 목록에 끌어다 놓으세요. 프로젝트의 Upload 단추를 써도 돼요.', "Drag the file into the file list on the left, or use the project's Upload button."),
+      L('문서에서는 BibTeX이면 \\bibliography{refs}로, biblatex이면 \\addbibresource{refs.bib}로 불러요. refs 자리에는 파일에 붙인 이름을 쓰면 돼요.',
+        'Reference it from your document with \\bibliography{refs} for plain BibTeX, or \\addbibresource{refs.bib} for biblatex — using the name you gave the file.'),
+    ]) steps.append(el('li', { text: step }))
+    details.append(steps, el('p', { class: 'fine', text: L('같은 이름으로 올리면 프로젝트에 이미 있던 파일을 대신해요.', 'Uploading a file with the same name replaces the one already in the project.') }))
+    return details
+  }
+
   on(cancel, 'click', close)
+  // Copying and saving leave the sheet up, as the Mac's do: the next step
+  // is often another scope, or the same file again after one more change.
   on(copy, 'click', () => {
     const written = text()
     if (!written) return
     input.copy(written)
-    close()
   })
   on(save, 'click', () => {
     const written = text()
     if (!written) return
-    void input.save(written).then((saved) => { if (saved) close() })
+    void input.save(written)
   })
+  on(done, 'click', close)
   on(backdrop, 'mousedown', (event: MouseEvent) => {
     if (event.target === backdrop) close()
   })
   document.addEventListener('keydown', onKey)
   draw()
-  save.focus()
+  done.focus()
 }

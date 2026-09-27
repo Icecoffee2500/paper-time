@@ -60,15 +60,53 @@ export class Records {
       const row = await owner.paper(id)
       if (!row) return null
       const meta = new PaperMeta(row.meta)
-      const cleared = withoutNulls(patch)
+      const cleared = withoutNulls(acceptedMetaPatch(patch))
       if (options.stamp === false) {
         if ('guessedKind' in cleared && (meta.kind || meta.guessedKind)) return meta.encode()
       }
       Object.assign(meta, cleared)
-      await owner.saveMeta(meta, options)
-      return meta.encode()
+      const written = await owner.saveMeta(meta, { ...options, baseline: row.meta })
+      return written.encode()
     })
   }
+}
+
+const KINDS = ['paper', 'book', 'lecture', 'document']
+const CONFIDENCES = ['unparsed', 'needsReview', 'verified', 'manual', 'low', 'medium', 'high']
+
+/**
+ * The fields of a record the window may change, each of the kind it must be.
+ * Anything else — the file's place and digest, the dates, the identity — is
+ * the main process's to write, and a patch naming it is not a patch.
+ */
+export function acceptedMetaPatch(patch: Patch): Patch {
+  const out: Patch = {}
+  const strings = (value: unknown) => Array.isArray(value) && value.every((one) => typeof one === 'string')
+  for (const [key, value] of Object.entries(patch ?? {})) {
+    switch (key) {
+      case 'csl':
+        if (value && typeof value === 'object' && !Array.isArray(value)) out.csl = value
+        break
+      case 'bibKey':
+        if (typeof value === 'string') out.bibKey = value
+        break
+      case 'confidence':
+        if (typeof value === 'string' && CONFIDENCES.includes(value)) out.confidence = value
+        break
+      case 'kind':
+      case 'guessedKind':
+        if (value === null || (typeof value === 'string' && KINDS.includes(value))) out[key] = value
+        break
+      case 'tagIDs':
+      case 'collectionIDs':
+        if (strings(value)) out[key] = value
+        break
+      case 'parentID':
+        if (value === null || typeof value === 'string') out.parentID = value
+        break
+    }
+  }
+  return out
 }
 
 /** `null` in a patch means «take it off»; JSON cannot carry `undefined`. */

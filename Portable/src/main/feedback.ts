@@ -46,6 +46,73 @@ export function diagnostics() {
   }
 }
 
+/**
+ * The rows the sheet lists under «What gets sent», from the context that is
+ * sent — one list for both, so they cannot drift apart.
+ */
+export function diagnosticRows(context: FeedbackContext): [string, string][] {
+  const about = diagnostics()
+  const rows: [string, string][] = [
+    [L('버전', 'Version'), about.build ? `${about.version} (${about.build})` : about.version],
+    [L('운영체제', 'System'), `${about.platform} · ${about.arch}`],
+    [L('앱 언어', 'Language'), about.lang],
+  ]
+  if (context.window) rows.push([L('창 크기', 'Window'), context.window])
+  if (context.layout) rows.push([L('쪽 배치', 'Page layout'), context.layout])
+  if (context.panes) rows.push([L('열어 둔 칸', 'Panes open'), context.panes])
+  if (context.paperCount !== undefined) rows.push([L('논문 수', 'Papers'), String(context.paperCount)])
+  if (context.libraryCloud !== undefined) rows.push([L('클라우드 폴더', 'Cloud folder'), context.libraryCloud ? L('예', 'yes') : L('아니오', 'no')])
+  if (context.recent.length > 0) rows.push([L('최근에 한 일', 'Last few actions'), context.recent.join(' → ')])
+  return rows
+}
+
+/** The last few commands, by name only (`Feedback.Trail`): what somebody
+ *  did just before something went wrong, never what it was done to. */
+const trail: string[] = []
+
+export function noteAction(name: string) {
+  trail.push(name)
+  if (trail.length > 8) trail.splice(0, trail.length - 8)
+}
+
+export function recentActions(): string[] {
+  return trail.slice(-5)
+}
+
+/**
+ * Whether the last run ended without quitting — a file written at launch and
+ * taken away on a clean exit. Not in a probe run, which must write nothing of
+ * the person's.
+ */
+let crashedBefore = false
+
+function runningMarker(): string {
+  return path.join(app.getPath('userData'), 'running')
+}
+
+export function markRunning(probeRun: boolean) {
+  if (probeRun) return
+  try {
+    crashedBefore = fs.existsSync(runningMarker())
+    fs.writeFileSync(runningMarker(), String(process.pid))
+  } catch {
+    // A folder that cannot be written only loses the note.
+  }
+}
+
+export function markCleanExit(probeRun: boolean) {
+  if (probeRun) return
+  try {
+    fs.rmSync(runningMarker(), { force: true })
+  } catch {
+    // Nothing to do.
+  }
+}
+
+export function lastRunCrashed(): boolean {
+  return crashedBefore
+}
+
 function platformName(): string {
   switch (process.platform) {
     case 'win32':

@@ -5,6 +5,7 @@ import { L as say } from '../../shared/lang.js'
 import { samePath } from '../../shared/paths.js'
 import * as L from '../layout.js'
 import { update } from '../settings.js'
+import { isFolder } from '../suggestions.js'
 import type { Context, Handlers } from './context.js'
 
 export function notesHandlers(ctx: Context): Partial<Handlers> {
@@ -59,6 +60,22 @@ export function notesHandlers(ctx: Context): Partial<Handlers> {
       sync.start()
       windows.send('library:changed')
       return { ...moved, notesFolder: notes().info() }
+    },
+
+    'notes:reconnect': async () => {
+      const where = notes().info()
+      if (!where.away || !where.chosenPath) return null
+      if (!isFolder(where.chosenPath)) return null
+      const moved = await notes().relocate(where.chosenPath)
+      sync.start()
+      windows.send('library:changed')
+      return { ...moved, notesFolder: notes().info() }
+    },
+
+    'notes:reveal': async () => {
+      const where = notes().info()
+      const target = where.away ? where.appFolder : where.loose
+      if (isFolder(target)) await (await import('electron')).shell.openPath(target)
     },
 
     'notes:useAppFolder': async () => {

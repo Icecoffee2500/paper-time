@@ -252,7 +252,7 @@ export async function mainModulesSuite(test: Test, suite: (name: string) => void
     try {
       fs.writeFileSync(path.join(root, 'a.pdf'), PDF)
       const library = new Library(root)
-      const row = (await library.importPDF(path.join(root, 'a.pdf'), 1))!
+      const row = ((await library.importPDF(path.join(root, 'a.pdf'), 1)).row)!
       const records = new Records()
       await Promise.all([
         records.state(library, row.id, { isFavorite: true }),
