@@ -114,7 +114,11 @@ shell.inspector = buildInspector({
   copyKey: (id) => void copyKey(id),
   setKind: (id, kind) => void setKind(id, kind),
   openAuthor: (name) => chooseShelf({ kind: 'author', name }),
-  sketchChanged: () => changed('sketch'),
+  sketchChanged: () => {
+    changed('sketch')
+    // The style the next shape gets, kept for the next launch.
+    saveSettings({ sketchStyle: JSON.stringify(store.sketch.style.encode()) }, { soon: true })
+  },
   marks: () => focused()?.marksList() ?? [],
   revealMark: (pageIndex, id) => void focused()?.revealMark(pageIndex, id),
   removeMark: (pageIndex, id) => focused()?.removeMark(pageIndex, id),
@@ -189,6 +193,26 @@ function followThePen() {
   wasDrawing = drawing
 }
 
+/**
+ * The rack, the Tools tab and the selection's handles, once a frame. A
+ * marquee sweeps the selection on every pointer move, and each move used to
+ * build the rack and the whole Tools tab again and draw every page of the
+ * paper — sixty times a second, for a box being dragged.
+ */
+let drawingFrame = 0
+
+function drawingSoon() {
+  if (drawingFrame) return
+  drawingFrame = requestAnimationFrame(() => {
+    drawingFrame = 0
+    shell.rack.update()
+    if (store.settings.inspectorTab === 'tools') shell.inspector.update()
+    const reader = focused()
+    reader?.redrawOverlays()
+    reader?.update()
+  })
+}
+
 subscribe((keys) => {
   const onNotesShelf = store.shelf.kind === 'notes' && !solo
   if (keys.has('shelf')) {
@@ -216,11 +240,7 @@ subscribe((keys) => {
   if (keys.has('marks') && store.settings.inspectorTab === 'marks') shell.inspector.update()
   if (keys.has('sketch')) {
     followThePen()
-    shell.rack.update()
-    if (store.settings.inspectorTab === 'tools') shell.inspector.update()
-    const reader = focused()
-    reader?.redrawAll()
-    reader?.update()
+    drawingSoon()
   }
   if (keys.has('reader')) focused()?.update()
   shell.toolbar.update()

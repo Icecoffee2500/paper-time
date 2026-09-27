@@ -85,6 +85,14 @@ export class SketchUndo {
     this.done = []
     this.undone = []
   }
+
+  /** Lets go of one paper's steps — it has closed, and a step kept for it
+   *  would be taken by the next ⌘Z and put nowhere. */
+  forget(paperID: string) {
+    const other = (step: Step) => !step.before.some((one) => one.paperID === paperID)
+    this.done = this.done.filter(other)
+    this.undone = this.undone.filter(other)
+  }
 }
 
 function bundled(snapshots: Snapshot[]): Snapshot {

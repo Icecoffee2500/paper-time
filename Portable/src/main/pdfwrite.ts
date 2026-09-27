@@ -234,6 +234,8 @@ interface Built {
   appearance: string
   /** Alpha values the appearance needs, as ExtGState resources. */
   alphas: { name: string; stroke: number; fill: number }[]
+  /** `/F`: print (4) unless said otherwise — a group is hidden (2). */
+  flags?: number
 }
 
 function bbox(rect: Rect): number[] {
@@ -279,8 +281,27 @@ function buildElement(element: SketchElement): Built[] {
       ? [{ name: alphaName, stroke: style.opacity, fill: style.opacity * fillAlpha }]
       : []
 
-  if (element.kind === 'rectangle' || element.kind === 'ellipse') {
+  if (element.kind === 'group') {
+    // A group draws nothing, but it has to be in the file for a device
+    // without the sidecar to rebuild it: a square with no edge and no colour,
+    // hidden, carrying the payload — the Mac's ghost (`SketchWriter`). It
+    // used to fall through to the connector below and be written as a line
+    // from one corner of the group to the other.
+    return [{
+      entries: { Subtype: 'Square', BS: borderStyle(0, null) },
+      rect: element.rect,
+      appearance: '',
+      alphas: [],
+      flags: 2,
+    }]
+  }
+
+  if (element.kind === 'rectangle' || element.kind === 'ellipse' || element.kind === 'frame') {
+    // A frame is a box in the file, as it is on the Mac — its name is the
+    // window's, not the page's. Written as a connector, a frame showed in
+    // every other reader as a diagonal line with an arrowhead.
     const rect = element.bounds
+    const outlined = style.drawsOutline(element.kind)
     const content = new Content()
     content.save().roundCaps().lineWidth(style.width).dash(dash)
     if (wantsAlpha) content.gs(alphaName)
@@ -290,11 +311,15 @@ function buildElement(element: SketchElement): Built[] {
         content.roundedRect(element.rect, element.cornerRadius)
       else content.rect(element.rect)
     }
-    if (style.fill) {
+    if (style.fill && outlined) {
       content.fillColor(style.fill).strokeColor(style.stroke)
       shape()
       content.fillAndStroke()
-    } else {
+    } else if (style.fill) {
+      content.fillColor(style.fill)
+      shape()
+      content.fill()
+    } else if (outlined) {
       content.strokeColor(style.stroke)
       shape()
       content.stroke()
@@ -303,7 +328,8 @@ function buildElement(element: SketchElement): Built[] {
     const entries: Record<string, unknown> = {
       Subtype: element.kind === 'ellipse' ? 'Circle' : 'Square',
       C: colorArray(style.stroke),
-      BS: borderStyle(style.width, dash),
+      // An edge left undrawn is a border of no width.
+      BS: outlined ? borderStyle(style.width, dash) : borderStyle(0, null),
     }
     if (style.fill) entries.IC = colorArray(style.fill.flattenedOnWhite)
     out.push({ entries, rect, appearance: content.toString(), alphas: alphas(style.fill?.alpha ?? 1) })
@@ -446,13 +472,11 @@ function headShape(
  */
 function buildFreeText(element: SketchElement): Built {
   const style = element.style
-  const c = style.stroke
   return {
     entries: {
       Subtype: 'FreeText',
       Contents: text(element.text),
-      DA: text(`${n(c.red)} ${n(c.green)} ${n(c.blue)} rg /Helv ${n(style.textPoints)} Tf`),
-      Q: 0,
+      ...textLook(style, style.textAlign),
       C: style.fill ? colorArray(style.fill.flattenedOnWhite) : [],
       BS: borderStyle(style.border ? style.width : 0, style.border ? style.dashPattern : null),
     },
@@ -460,6 +484,27 @@ function buildFreeText(element: SketchElement): Built {
     appearance: '',
     alphas: [],
   }
+}
+
+/**
+ * How a free text's words look to a reader that lays them out itself: the
+ * size the card is set in (not the named size's default — a card set at 22
+ * points was written as 14), the alignment (`/Q`), and the family, in the
+ * default style string (`/DS`) that readers take a family from — `/DA` can
+ * only name a font resource, and the file has none of ours.
+ */
+function textLook(style: SketchElement['style'], align: 'left' | 'center' | 'right'): Record<string, unknown> {
+  const c = style.stroke
+  const hex = (value: number) => Math.round(Math.min(Math.max(value, 0), 1) * 255).toString(16).padStart(2, '0')
+  const look: Record<string, unknown> = {
+    DA: text(`${n(c.red)} ${n(c.green)} ${n(c.blue)} rg /Helv ${n(style.points)} Tf`),
+    Q: align === 'center' ? 1 : align === 'right' ? 2 : 0,
+  }
+  if (style.fontName) {
+    const family = style.fontName.replace(/["\\]/g, '')
+    look.DS = text(`font: ${n(style.points)}pt "${family}"; text-align:${align}; color:#${hex(c.red)}${hex(c.green)}${hex(c.blue)}`)
+  }
+  return look
 }
 
 function buildLabel(element: SketchElement): Built {
@@ -470,13 +515,11 @@ function buildLabel(element: SketchElement): Built {
     width: Math.max(element.rect.width - padding * 2, 1),
     height: Math.max(element.rect.height - padding * 2, 1),
   }
-  const c = element.style.stroke
   return {
     entries: {
       Subtype: 'FreeText',
       Contents: text(element.text),
-      DA: text(`${n(c.red)} ${n(c.green)} ${n(c.blue)} rg /Helv ${n(element.style.textPoints)} Tf`),
-      Q: 1,
+      ...textLook(element.style, 'center'),
       C: [],
       BS: borderStyle(0, null),
       [KEY_SKETCH_PART]: text('label'),
@@ -630,7 +673,7 @@ function annotationDict(item: Built): PDFDict {
   const d = new PDFDict()
   d.pairs.push(['Type', obj.name('Annot')])
   d.pairs.push(['Rect', obj.array(bbox(item.rect).map(num))])
-  d.pairs.push(['F', obj.int(4)]) // Print. Without it some readers show the mark on screen only.
+  d.pairs.push(['F', obj.int(item.flags ?? 4)]) // Print. Without it some readers show the mark on screen only.
   for (const [k, v] of Object.entries(item.entries)) d.set(k, toObj(v))
   return d
 }
@@ -802,7 +845,7 @@ function planPage(
 ): { remove: number[]; add: Built[] } {
   const remove: number[] = []
   const add: Built[] = []
-  const sketches = new Map<string, { indices: number[]; payload: string | null }>()
+  const sketches = new Map<string, { indices: number[]; payload: string | null; subtype: string | null }>()
   const marks = new Map<string, { indices: number[]; mark: MarkupRecord }>()
   const inks = new Map<string, number[]>()
   existing.dicts.forEach((dict, index) => {
@@ -813,10 +856,13 @@ function planPage(
         remove.push(index)
         return
       }
-      const group = sketches.get(id) ?? { indices: [], payload: null }
+      const group = sketches.get(id) ?? { indices: [], payload: null, subtype: null }
       group.indices.push(index)
       const payload = textValue(dict, KEY_SKETCH)
-      if (payload !== null) group.payload = payload
+      if (payload !== null) {
+        group.payload = payload
+        group.subtype = nameOf(dict.get('Subtype')) ?? null
+      }
       sketches.set(id, group)
     } else if (layers.ink && isInk(dict)) {
       const key = fingerprint(obj.dict(dict), file)
@@ -848,7 +894,10 @@ function planPage(
     for (const element of page.elements) {
       const group = sketches.get(element.id)
       sketches.delete(element.id)
-      if (group && samePayload(group.payload, element)) continue
+      // The same element, written the way this build writes it now: a frame
+      // or a group an older build put down as a line is written again.
+      if (group && samePayload(group.payload, element)
+        && (group.subtype === null || group.subtype === buildElement(element)[0].entries.Subtype)) continue
       if (group) remove.push(...group.indices)
       const payload = base64Payload(element)
       add.push(...buildElement(element).map((part, index) => ({

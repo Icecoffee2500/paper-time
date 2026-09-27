@@ -35,6 +35,7 @@ import { couldNot } from './notices.js'
 import { L } from '../shared/lang.js'
 import { findPath, isUnder } from '../shared/paths.js'
 import type { LibrarySnapshot } from '../shared/api.js'
+import { SketchStyle } from '../shared/sketch.js'
 
 type SnapshotAnswer = LibrarySnapshot | { error: string; refused?: true }
 
@@ -194,6 +195,14 @@ export async function start() {
   const saved = await call('settings:get')
   // The keys the window keeps, not the window's size and the folder list besides.
   for (const key of WINDOW_SETTINGS) (store.settings as Record<string, unknown>)[key] = saved[key]
+  // The next shape's style, as it was left.
+  if (saved.sketchStyle) {
+    try {
+      store.sketch.style = SketchStyle.from(JSON.parse(saved.sketchStyle))
+    } catch {
+      // A style this build cannot read: the default one.
+    }
+  }
   applyTheme()
   layoutPanes()
   shell.toolbar.update()

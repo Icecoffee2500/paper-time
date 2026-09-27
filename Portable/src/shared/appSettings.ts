@@ -37,6 +37,9 @@ export interface Settings {
   bibtexProtectCase: boolean
   /** The folder the notes about no paper live in, when the reader chose one — the Mac's «Loose Notes» folder. */
   notesFolder: string | null
+  /** The style the next shape is drawn in, as the element file writes a
+   *  style (JSON) — the Mac keeps it across launches (`SketchState`). */
+  sketchStyle: string | null
 }
 
 export const DEFAULTS: Settings = {
@@ -59,6 +62,7 @@ export const DEFAULTS: Settings = {
   listSubtitle: 'authors,year,venue',
   bibtexProtectCase: true,
   notesFolder: null,
+  sketchStyle: null,
 }
 
 /** What the file says, over the defaults, each group merged key by key. */

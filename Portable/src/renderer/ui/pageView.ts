@@ -78,6 +78,10 @@ export class PageView {
   private textDivs: HTMLElement[] = []
   private textStarts: number[] = []
   drawCanvas: HTMLCanvasElement
+  /** What a gesture draws while it lasts — handles, a marquee, a shape being
+   *  dragged, a stroke being written — over the drawing, so a pointer move
+   *  redraws this and not every stroke and shape on the page. */
+  overlayCanvas: HTMLCanvasElement
   /**
    * The paper as printed and everything drawn onto it — the page, the marks,
    * what a search found, the drawing — in one box, so a tint can blend it
@@ -137,11 +141,13 @@ export class PageView {
     this.markCanvas = el('canvas', { class: 'mark-canvas' })
     this.findLayer = el('div', { class: 'find-layer' })
     this.drawCanvas = el('canvas', { class: 'draw-canvas' })
+    this.overlayCanvas = el('canvas', { class: 'draw-canvas draw-overlay' })
     this.print = el('div', { class: 'page-print' }, [
       this.canvas,
       this.markCanvas,
       this.findLayer,
       this.drawCanvas,
+      this.overlayCanvas,
     ])
     this.textLayer = el('div', { class: 'text-layer' })
     this.inputSurface = el('div', { class: 'sketch-input' })
@@ -219,7 +225,7 @@ export class PageView {
     this.stop()
     if (this.composeFrame) cancelAnimationFrame(this.composeFrame)
     this.composeFrame = 0
-    for (const canvas of [this.canvas, this.markCanvas, this.drawCanvas]) {
+    for (const canvas of [this.canvas, this.markCanvas, this.drawCanvas, this.overlayCanvas]) {
       canvas.width = 0
       canvas.height = 0
     }
@@ -542,22 +548,35 @@ export class PageView {
       this.markCanvas.width = 0
       this.markCanvas.height = 0
     }
-    const drawn = this.strokes.length > 0 || this.elements.length > 0 || this.input !== null || this.guest !== null
-    if (drawn) {
+    if (this.strokes.length > 0 || this.elements.length > 0) {
       const context = this.surface(this.drawCanvas)
       if (context) {
         drawInk(this.hiddenStrokes.size === 0 ? this.strokes : this.strokes.filter((_, index) => !this.hiddenStrokes.has(index)), context)
         drawElements(this.hidden.size === 0 ? this.elements : this.elements.filter((element) => !this.hidden.has(element.id)), context)
-        this.input?.drawOverlay(context)
-        this.guest?.(context)
       }
     } else if (this.drawCanvas.width !== 0) {
       this.drawCanvas.width = 0
       this.drawCanvas.height = 0
     }
+    this.redrawOverlay()
     // The pictures carry a copy of what is drawn over them — once a frame,
     // however many strokes a frame brings.
     if (this.rendering === 'night') this.composeSoon()
+  }
+
+  /** Only the gesture's layer: handles, a marquee, what is in the hand. */
+  redrawOverlay() {
+    if (!this.drawing) return
+    if (this.input || this.guest) {
+      const context = this.surface(this.overlayCanvas)
+      if (context) {
+        this.input?.drawOverlay(context)
+        this.guest?.(context)
+      }
+    } else if (this.overlayCanvas.width !== 0) {
+      this.overlayCanvas.width = 0
+      this.overlayCanvas.height = 0
+    }
   }
 
   /**
@@ -607,7 +626,7 @@ export class PageView {
       transform: this.viewport.transform,
       dpr: devicePixels(window.devicePixelRatio),
       hasMarks: this.marks.length > 0,
-      hasDrawing: this.strokes.length > 0 || this.elements.length > 0 || this.input !== null || this.guest !== null,
+      hasDrawing: this.strokes.length > 0 || this.elements.length > 0,
     }, this.ground)
   }
 

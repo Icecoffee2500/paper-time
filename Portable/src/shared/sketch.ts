@@ -237,8 +237,12 @@ export class SketchStyle {
     }
   }
 
+  /** A copy field by field. Colours are shared: nothing changes one in
+   *  place — a new colour is a new `SketchColor`. */
   copy(): SketchStyle {
-    return SketchStyle.from(JSON.parse(JSON.stringify(this.encode())))
+    const style = new SketchStyle()
+    Object.assign(style, this)
+    return style
   }
 
   /** Dashes grow with the line, so a bold dashed line is not a dotted one. */
@@ -375,8 +379,29 @@ export class SketchElement {
     }
   }
 
+  /**
+   * A copy field by field — not through JSON. A drag copies every moving
+   * element on every pointer move, and each copy was an encode, a string, a
+   * parse and a decode; `clone().encode()` is the same bytes (tested).
+   */
   copy(): SketchElement {
-    return SketchElement.from(JSON.parse(JSON.stringify(this.encode())))
+    const copy = new SketchElement({
+      id: this.id,
+      kind: this.kind,
+      points: this.points.map((p) => point(p.x, p.y)),
+      bend: this.bend ? point(this.bend.x, this.bend.y) : null,
+      style: this.style.copy(),
+      text: this.text,
+      createdAt: new Date(this.createdAt.getTime()),
+    })
+    copy.parent = this.parent
+    copy.name = this.name
+    copy.clips = this.clips
+    copy.layout = this.layout ? { ...this.layout } : null
+    copy.textSizing = this.textSizing
+    copy.extra = structuredClone(this.extra)
+    copy.createdAtRaw = this.createdAtRaw
+    return copy
   }
 
   /** For a copy made now: the file's own timestamp is not this element's. */

@@ -67,7 +67,7 @@ export interface Paper {
 export const WINDOW_SETTINGS = [
   'libraryRoot', 'panes', 'columns', 'inspectorTab', 'sort', 'appearance', 'language', 'pageTint',
   'pageTintColor', 'pageLayout', 'selectedPaperID', 'latexShortcuts', 'semanticSearch', 'listSubtitle',
-  'bibtexProtectCase',
+  'bibtexProtectCase', 'sketchStyle',
 ] as const satisfies readonly (keyof AppSettings)[]
 
 export type Settings = Pick<AppSettings, (typeof WINDOW_SETTINGS)[number]>
@@ -241,6 +241,7 @@ export const store: Store = {
     semanticSearch: true,
     listSubtitle: 'authors,year,venue',
     bibtexProtectCase: true,
+    sketchStyle: null,
   },
   windowState: { maximized: false, fullScreen: false, focused: true },
   trail: [],
