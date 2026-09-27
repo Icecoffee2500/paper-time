@@ -74,7 +74,7 @@ import { FindBar } from './ui/findBar.js'
 import { handleTextEvent, searchText, type TextHit } from './textSearch.js'
 import { asTextHit, handleMeaningEvent, meaningStatus, searchMeaning } from './meaningSearch.js'
 import { graphemes } from '../shared/textFold.js'
-import type { LibrarySnapshot, WindowBounds } from '../shared/api.js'
+import type { KeptReason, LibrarySnapshot, WindowBounds } from '../shared/api.js'
 import { expandedIDs } from '../shared/sketch.js'
 import {
   DOCK_ZONES,
@@ -346,7 +346,7 @@ const paperList = buildPaperList({
   addPapers: () => void addPapers(),
   adoptLoose: async () => {
     const snapshot = await call<LibrarySnapshot>('library:adoptLoose')
-    if ('error' in snapshot) return toast(String(snapshot.error))
+    if ('error' in snapshot) return couldNot('addPDFs', snapshot.error)
     adopt(snapshot)
     adoptNotes(snapshot.notes, snapshot.notesFolder)
     changed('papers')
@@ -692,7 +692,7 @@ async function loadInto(reader: Reader, id: string) {
       undefined, result.head, result.line,
     )
   }
-  if (result.error || !result.data) return toast(result.error ?? 'unknown error')
+  if (result.error || !result.data) return couldNot('readPDF', result.error ?? 'no bytes')
   await reader.open(id, new Uint8Array(result.data), {
     trouble: result.trouble,
     size: result.size,
@@ -1244,11 +1244,36 @@ function togglePane(pane: Pane) {
 
 // ------------------------------------------------------------------ actions
 
+/**
+ * Something did not happen, said in the app's voice. The reason — an English
+ * message from the main process, a path — goes to the console for whoever
+ * reads the log; the person gets a sentence about what they asked for.
+ */
+const COULD_NOT = {
+  addPDFs: () => L('PDF를 더하지 못했어요.', "Paper Time couldn't add those PDFs."),
+  readPDF: () => L('이 논문의 PDF를 읽지 못했어요.', "Paper Time couldn't read this paper's PDF."),
+  moveNotes: () => L('노트를 옮기지 못했어요.', "Paper Time couldn't move the notes."),
+  finish: () => L('문제가 생겨서 하던 일을 마치지 못했어요.', "Paper Time couldn't finish that."),
+}
+
+function couldNot(what: keyof typeof COULD_NOT, reason: unknown) {
+  console.error(`${what} -`, reason)
+  toast(COULD_NOT[what]())
+}
+
+// A request nobody caught — the main process threw, a file went away — is
+// said once rather than lost in the console with nothing on screen.
+on(window, 'unhandledrejection', (event: PromiseRejectionEvent) => couldNot('finish', event.reason))
+
 async function chooseLibrary() {
   const chosen = await call<string | null>('library:choose')
   if (!chosen) return
   const snapshot = await call<LibrarySnapshot>('library:open', { root: chosen })
-  if ('error' in snapshot) return toast(String(snapshot.error))
+  if ('error' in snapshot) {
+    failed(String(snapshot.error))
+    changed('papers', 'shelf')
+    return
+  }
   adopt(snapshot)
   adoptNotes(snapshot.notes, snapshot.notesFolder)
   changed('papers', 'shelf')
@@ -1256,7 +1281,7 @@ async function chooseLibrary() {
 
 async function addPapers() {
   const snapshot = await call<LibrarySnapshot>('library:import', { root: importDestination() })
-  if ('error' in snapshot) return toast(String(snapshot.error))
+  if ('error' in snapshot) return couldNot('addPDFs', snapshot.error)
   adopt(snapshot)
   adoptNotes(snapshot.notes, snapshot.notesFolder)
   changed('papers')
@@ -1737,7 +1762,8 @@ on(window, 'keydown', (event: KeyboardEvent) => {
       }
       return
     }
-    if (event.key === 'z') {
+    // `Z` with Shift held: `event.key` is the capital, and ⇧⌘Z never matched.
+    if (event.key.toLowerCase() === 'z') {
       event.preventDefault()
       applyUndo(event.shiftKey)
       return
@@ -1990,7 +2016,7 @@ onEvent((event, payload) => {
       // What was made here is in Paper Time and not in the file. The reader
       // for that paper says so, once, where it says the page and the zoom;
       // no reason means there is nothing left to say it about.
-      const { id, reason } = payload as { id: string; reason: 'encrypted' | 'permissions' | 'structure' | null }
+      const { id, reason } = payload as { id: string; reason: KeptReason | null }
       readers.get(id)?.noteKept(reason)
       break
     }
@@ -1998,7 +2024,7 @@ onEvent((event, payload) => {
       runMenuCommand(String(payload))
       break
     case 'error':
-      toast(String(payload))
+      couldNot('finish', payload)
       break
   }
 })
@@ -2032,7 +2058,7 @@ function openSettings(section?: SettingsSection) {
 async function moveLooseNotes(request: 'notes:chooseFolder' | 'notes:useAppFolder') {
   const result = await call<{ moved: number; kept: number } | { error: string } | null>(request)
   if (!result) return
-  if ('error' in result) return toast(result.error)
+  if ('error' in result) return couldNot('moveNotes', result.error)
   const { moved, kept } = result
   toast(kept > 0
     ? L(`노트 ${moved}개를 옮겼어요. ${kept}개는 이름이 겹쳐 그대로 뒀어요.`, `Moved ${moved} note${moved === 1 ? '' : 's'}. ${kept} stayed: a note of the same name was already there.`)
@@ -2181,7 +2207,7 @@ on(window, 'drop', async (event: DragEvent) => {
     return
   }
   const snapshot = await call<LibrarySnapshot>('library:import', { paths: files, root: importDestination() })
-  if ('error' in snapshot) return toast(String(snapshot.error))
+  if ('error' in snapshot) return couldNot('addPDFs', snapshot.error)
   adopt(snapshot)
   adoptNotes(snapshot.notes, snapshot.notesFolder)
   changed('papers')

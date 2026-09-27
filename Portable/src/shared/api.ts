@@ -18,7 +18,8 @@ export interface WindowBounds {
  * (`permissions`), or cannot be read without guessing at its structure
  * (`structure`). The writer never rewrites a file to get around any of them.
  */
-export type KeptReason = 'encrypted' | 'permissions' | 'structure'
+/** Why marks are not in the file: the file refuses them, or (`io`) it could not be written just now. */
+export type KeptReason = 'encrypted' | 'permissions' | 'structure' | 'io'
 
 export interface WindowState {
   maximized: boolean

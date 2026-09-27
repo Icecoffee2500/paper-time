@@ -165,15 +165,12 @@ export class Library {
   constructor(public root: string) {}
 
   static async open(root: string): Promise<Library> {
-    const library = new Library(root)
-    await fsp.mkdir(L.papersDir(root), { recursive: true })
-    if (!fs.existsSync(L.manifestPath(root))) {
-      await writeJSON(L.manifestPath(root), newManifest(path.basename(root)))
-    }
-    if (!fs.existsSync(L.collectionsPath(root))) {
-      await writeJSON(L.collectionsPath(root), newCollectionSet(deviceIdentity))
-    }
-    return library
+    // Nothing is written on opening. A folder on a cloud drive that has not
+    // come down yet shows no `library.json`, and writing a new one there put
+    // a blank manifest over the real one arriving; a folder that cannot be
+    // written at all made the launch fail. The manifest and the collections
+    // are read with a default when absent and written when first changed.
+    return new Library(root)
   }
 
   async manifest(): Promise<LibraryManifest> {

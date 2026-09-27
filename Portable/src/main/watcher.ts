@@ -15,22 +15,62 @@ import path from 'node:path'
 
 const QUIET_PERIOD = 400
 
+/**
+ * An `fs.watch` handle emits `error` when what it watches goes away under it —
+ * an unplugged disk, a dropped network share, a cloud drive signing out — and
+ * an `error` nobody listens for is thrown, which in the main process is the
+ * end of the app. So each handle listens: it closes, and the folder is tried
+ * again after a while, longer each time, until it answers or the watch is
+ * stopped. The window is told once, so it can re-read what is left.
+ */
+const RETRY = [5_000, 15_000, 60_000]
+
 export function watchLibrary(root: string, onChange: () => void): () => void {
-  const watchers: fs.FSWatcher[] = []
+  const watchers = new Set<fs.FSWatcher>()
+  const retries = new Set<NodeJS.Timeout>()
   let timer: NodeJS.Timeout | null = null
+  let stopped = false
 
   const settle = () => {
+    if (stopped) return
     if (timer) clearTimeout(timer)
     timer = setTimeout(onChange, QUIET_PERIOD)
   }
 
-  const watch = (directory: string, recursive: boolean) => {
+  const watch = (directory: string, recursive: boolean, attempt = 0) => {
+    if (stopped) return
+    let watcher: fs.FSWatcher
     try {
-      watchers.push(fs.watch(directory, { recursive }, settle))
+      watcher = fs.watch(directory, { recursive }, settle)
     } catch {
-      // A folder that cannot be watched — a permission, a network mount —
-      // is not a reason to fail; the window can still be refreshed by hand.
+      // A folder that cannot be watched — a permission, a network mount, a
+      // folder not there yet — is not a reason to fail; the window can still
+      // be refreshed by hand. A folder that was being watched is tried again.
+      if (attempt > 0) again(directory, recursive, attempt)
+      return
     }
+    watchers.add(watcher)
+    watcher.on('error', (error) => {
+      console.error(`watcher - ${directory} stopped answering:`, error)
+      watchers.delete(watcher)
+      try {
+        watcher.close()
+      } catch {
+        // Already gone.
+      }
+      settle()
+      again(directory, recursive, attempt + 1)
+    })
+  }
+
+  const again = (directory: string, recursive: boolean, attempt: number) => {
+    if (stopped) return
+    const wait = RETRY[Math.min(attempt - 1, RETRY.length - 1)]
+    const retry = setTimeout(() => {
+      retries.delete(retry)
+      watch(directory, recursive, attempt)
+    }, wait)
+    retries.add(retry)
   }
 
   const recursive = process.platform !== 'linux'
@@ -50,7 +90,16 @@ export function watchLibrary(root: string, onChange: () => void): () => void {
   }
 
   return () => {
+    stopped = true
     if (timer) clearTimeout(timer)
-    for (const watcher of watchers) watcher.close()
+    for (const retry of retries) clearTimeout(retry)
+    for (const watcher of watchers) {
+      try {
+        watcher.close()
+      } catch {
+        // Already gone.
+      }
+    }
+    watchers.clear()
   }
 }
