@@ -23,6 +23,7 @@ import {
   formatError,
   isOpenableLink,
   pageAtOffset,
+  fitScale,
   pageViewport,
   shownPages,
   spreadStart,
@@ -95,6 +96,15 @@ export async function readerSuite(test: Test, suite: (name: string) => void) {
     assert.equal(turnedTo('continuous', 3, 1, 10), 4)
     assert.equal(turnedTo('single', 0, 1, 0), null, 'no page −1')
     assert.equal(turnedTo('continuous', 0, 1, 0), null)
+  })
+
+  await test('a page fits the column; a book fits its spread to the height as well', () => {
+    const letter = { width: 612, height: 792 }
+    assert.ok(Math.abs(fitScale(letter, { width: 652, height: 400 }, 'continuous', 24) - 1) < 1e-9, 'the width, whatever the height')
+    const wide = fitScale(letter, { width: 3000, height: 832 }, 'book', 24)
+    assert.ok(Math.abs(wide - 1) < 1e-9, 'a wide window: the height decides')
+    const narrow = fitScale(letter, { width: 1288, height: 5000 }, 'book', 24)
+    assert.ok(Math.abs(narrow - 1) < 1e-9, 'a tall window: two pages and the gutter across')
   })
 
   await test('the page under a height is found by halving the tops', () => {

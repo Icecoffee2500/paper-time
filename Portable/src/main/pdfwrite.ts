@@ -102,13 +102,16 @@ export class WriteRefused extends Error {
   }
 }
 
-/** The three things the window can say about a refusal. */
-export type KeptReason = 'encrypted' | 'permissions' | 'structure'
+/** What the window can say about a refusal — the Mac's four reasons
+ *  (`DocumentSession.KeptReason`: locked, forbidden, unusual, unconfirmed). */
+export type KeptReason = 'encrypted' | 'permissions' | 'structure' | 'unconfirmed'
 
 export function keptReason(reason: RefusedReason): KeptReason {
   switch (reason) {
     case 'encrypted': case 'needsPassword': return 'encrypted'
     case 'permissions': return 'permissions'
+    // Written, read back, and not what was written: the Mac's «unconfirmed».
+    case 'verification': return 'unconfirmed'
     default: return 'structure'
   }
 }
@@ -1147,6 +1150,18 @@ export async function readDrawings(bytes: Uint8Array, options: WriteOptions = {}
     if (elements.length > 0 || strokes.length > 0) out.set(pageIndex, { elements, strokes })
   })
   return out
+}
+
+/**
+ * Whether the file carries freehand ink that is not ours — another app's
+ * pen. Drawing here replaces it on the page it is on, and the footer says so
+ * before the first stroke, as the Mac's does (`hasForeignInk`).
+ */
+export function hasForeignInk(bytes: Uint8Array, options: WriteOptions = {}): boolean {
+  const opened = openForReading(bytes, options.password)
+  if (!opened) return false
+  return opened.pages.some((info) => annotationsOf(opened.file, info)
+    .some((dict) => nameOf(dict.get('Subtype')) === 'Ink' && !isInk(dict) && !isSketch(dict)))
 }
 
 /**

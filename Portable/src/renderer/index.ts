@@ -30,7 +30,7 @@ import { buildInspector } from './ui/inspector.js'
 import { buildSlipBox } from './ui/slipBox.js'
 import { buildSketchRack } from './ui/sketchToolbar.js'
 import { refreshOpenPapers } from './ui/openPapers.js'
-import { focused, reconcileReaders, relayoutReadersSoon } from './pageArea.js'
+import { flushPositions, focused, reconcileReaders, relayoutReadersSoon } from './pageArea.js'
 import {
   addLibraryFolder, addPapers, adoptLoose, chooseLibrary, newCollection, reload, removeLibraryFolder, start,
 } from './library.js'
@@ -256,6 +256,8 @@ installFileDrop()
 installListSearch()
 installMainEvents()
 window.addEventListener('resize', () => relayoutReadersSoon())
+// Where each paper was left, written as the window goes.
+window.addEventListener('beforeunload', () => void flushPositions())
 installProbeSurface()
 layoutPanes()
 void start()

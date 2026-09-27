@@ -171,6 +171,11 @@ export function revealPane(pane: Pane) {
  * What it hid has to be remembered, or leaving focus mode means putting three
  * columns back by hand. Leaving restores exactly what was open on the way in.
  */
+/** Focus mode on or off, from wherever it is. */
+export function setFocusMode(on: boolean) {
+  if (on !== Boolean(store.focusBefore)) toggleFocus()
+}
+
 export function toggleFocus() {
   if (solo) return
   if (store.focusBefore) {

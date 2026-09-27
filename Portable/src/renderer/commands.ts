@@ -53,9 +53,10 @@ export const COMMANDS = {
   focus: () => toggleFocus(),
   back: () => goBack(),
   forward: () => goForward(),
-  zoomIn: () => focused()?.zoomBy(1.15),
-  zoomOut: () => focused()?.zoomBy(1 / 1.15),
-  actualSize: () => focused()?.setZoom(1),
+  // A quarter at a time, as the Mac's commands zoom.
+  zoomIn: () => focused()?.zoomBy(1.25),
+  zoomOut: () => focused()?.zoomBy(1 / 1.25),
+  actualSize: () => focused()?.actualSize(),
   draw: () => {
     const reader = focused()
     if (!reader) return
@@ -145,6 +146,11 @@ export function installMainEvents() {
       case 'theme:changed':
         if (store.settings.appearance === 'system') applyTheme()
         break
+      case 'paper:saveState': {
+        const { id, state } = payload as { id: string; state: 'pending' | 'saving' | 'idle' }
+        readers.get(id)?.noteSaveState(state)
+        break
+      }
       case 'paper:saved': {
         const { id } = payload as { id: string }
         readers.get(id)?.noteKept(null)

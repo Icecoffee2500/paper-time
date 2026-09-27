@@ -55,6 +55,7 @@ export function installProbeSurface() {
         status: entry.state.readingStatus,
         kind: entry.meta.effectiveKind,
         parentID: entry.meta.parentID ?? null,
+        lastPage: entry.state.lastPageIndex,
       })),
       selected: () => store.selectedID,
       open: () => [...store.openPaperIDs],

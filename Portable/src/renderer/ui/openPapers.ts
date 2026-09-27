@@ -8,6 +8,7 @@
  * own drop handling takes that, since the row travels under the same type
  * as a row of the list.
  */
+import { closePages, whenPagesOpen } from './pages.js'
 import { icon } from '../icons.js'
 import { clear, el, on } from '../dom.js'
 import { isOpenPaper, store, type Paper, paper as findPaper } from '../state.js'
@@ -48,8 +49,12 @@ export function popupPapers(): Paper[] {
   return ids.map((id) => findPaper(id)).filter((entry): entry is Paper => Boolean(entry))
 }
 
+whenPagesOpen(() => closeOpenPapers())
+
 export function toggleOpenPapers(host: HTMLElement, actions: OpenPapersActions) {
   if (current) return closeOpenPapers()
+  // One popup over the page at a time.
+  closePages()
   showOpenPapers(host, actions)
 }
 
@@ -147,6 +152,9 @@ export function showOpenPapers(host: HTMLElement, actions: OpenPapersActions) {
   }
 
   const onKey = (event: KeyboardEvent) => {
+    // A key typed into a field — the find bar, a note — is the field's.
+    const target = event.target as HTMLElement | null
+    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
     switch (event.key) {
       case 'Escape':
         event.preventDefault()

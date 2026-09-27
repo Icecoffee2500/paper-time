@@ -75,7 +75,7 @@ export async function mainModulesSuite(test: Test, suite: (name: string) => void
   })
 
   await test('a write the file refused is tried three times, then the reader is told', async () => {
-    const events: unknown[] = []
+    const events: [string, unknown][] = []
     let tries = 0
     let held = true
     const flusher = new PDFFlusher({
@@ -92,7 +92,11 @@ export async function mainModulesSuite(test: Test, suite: (name: string) => void
     flusher.schedule('P')
     await wait(120)
     assert.equal(tries, 4)
-    assert.deepEqual(events, [['paper:kept', { id: 'P', reason: 'io' }]])
+    assert.deepEqual(events.filter(([name]) => name !== 'paper:saveState'), [['paper:kept', { id: 'P', reason: 'io' }]])
+    // And the footer is told where the file stands at each step: waiting,
+    // being written, and back to nothing to say.
+    const states = events.filter(([name]) => name === 'paper:saveState').map(([, payload]) => (payload as { state: string }).state)
+    assert.deepEqual([states[0], states[1], states.at(-1)], ['pending', 'saving', 'idle'])
     // The next change starts afresh, and a file let go of takes it.
     held = false
     flusher.schedule('P')

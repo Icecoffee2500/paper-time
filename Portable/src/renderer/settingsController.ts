@@ -15,6 +15,7 @@ import { showFeedback } from './ui/feedback.js'
 import { toast } from './ui/toolbar.js'
 import { couldNot } from './notices.js'
 import { reload, chooseLibrary } from './library.js'
+import { setFocusMode } from './layout.js'
 import { L } from '../shared/lang.js'
 
 /** What is waiting to be written while a colour is being dragged. */
@@ -63,9 +64,14 @@ export function setSettings(patch: Partial<Settings>, options: { live?: boolean 
 }
 
 export function setLayout(layout: Settings['pageLayout']) {
+  const was = store.settings.pageLayout
   store.settings.pageLayout = layout
   for (const reader of readers.values()) reader.setLayout(layout)
   saveSettings({ pageLayout: layout })
+  // A spread wants the whole window: choosing Book is the clearest thing a
+  // reader can say about being here to read, so the columns step aside — and
+  // come back when Book is left (`RootView`, `setFocusMode(layout == .book)`).
+  if (layout !== was && (layout === 'book' || was === 'book')) setFocusMode(layout === 'book')
 }
 
 export function setSort(field: Settings['sort']['field'], ascending: boolean) {

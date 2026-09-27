@@ -47,14 +47,11 @@ export async function showPaper(id: string) {
   changed('papers', 'selection', 'reader')
 }
 
-/** Opened now, and reading if it was unread — the row shows it at once,
- *  from the record the main process wrote. */
+/** Opened now — the row shows it at once, from the record the main process
+ *  wrote. The reading status is the reader's to set: opening a paper used to
+ *  mark it «reading» by itself, which the Mac never does. */
 async function markOpened(id: string) {
-  const status = findPaper(id)?.state.readingStatus
-  const state = await call('paper:state', {
-    id,
-    patch: { lastOpenedAt: new Date().toISOString(), readingStatus: status === 'unread' || !status ? 'reading' : status },
-  })
+  const state = await call('paper:state', { id, patch: { lastOpenedAt: new Date().toISOString() } })
   if (!state) return
   patchPaper(id, { state })
   changed('papers')
@@ -183,7 +180,7 @@ export async function openAnchor(place: { pageIndex: number; rect: { x: number; 
   if (id !== store.selectedID) await showPaper(id)
   const reader = readers.get(id)
   if (!reader || !(await reader.whenOpen())) return
-  await reader.jumpTo(place.pageIndex, place.rect.y + place.rect.height)
+  await reader.jumpToPassage(place.pageIndex, place.rect)
 }
 
 /** Every page of what is showing, small — the way into a document that has

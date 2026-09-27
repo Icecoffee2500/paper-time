@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import { isoTimestamp } from '../../shared/coding.js'
 import { merged, reconcile, upgradeLegacy } from '../../shared/markJournal.js'
-import { readDrawings, readMarks, writeRefusal, type MarkupRecord } from '../pdfwrite.js'
+import { hasForeignInk, readDrawings, readMarks, writeRefusal, type MarkupRecord } from '../pdfwrite.js'
 import { holdsAnything } from '../pdfFlush.js'
 import type { Library } from '../library.js'
 import * as L from '../layout.js'
@@ -112,7 +112,9 @@ export function drawingHandlers(ctx: Context): Partial<Handlers> {
     'drawing:loadAll': async ({ id }) => {
       const adopted = await adoptFromFile(libraries.ownerOf.bind(libraries), id)
       const holder = await libraries.ownerOf(id)
-      if (!holder) return { pages: {}, unreadable: [] }
+      if (!holder) return { pages: {}, unreadable: [], foreignInk: false }
+      const row = await holder.paper(id)
+      const foreignInk = row?.file && row.exists ? hasForeignInk(await fsp.readFile(row.file)) : false
       const known = await holder.annotatedPages(id)
       const indices = new Set<number>([...known.sketch, ...known.ink, ...Object.keys(adopted.pages).map(Number)])
       const pages: Record<number, { elements: unknown[]; strokes: unknown[] }> = {}
@@ -123,7 +125,7 @@ export function drawingHandlers(ctx: Context): Partial<Handlers> {
           strokes: strokes ?? adopted.pages[pageIndex]?.strokes ?? [],
         }
       }))
-      return { pages, unreadable: adopted.unreadable }
+      return { pages, unreadable: adopted.unreadable, foreignInk }
     },
 
     // A paper the window names without an identifier is no paper: nothing

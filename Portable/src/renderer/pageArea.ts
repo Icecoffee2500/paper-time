@@ -22,6 +22,7 @@ import { shell, solo } from './shell.js'
 import { Reader, type ReaderPlace } from './ui/reader.js'
 import { FindBar } from './ui/findBar.js'
 import { refreshOpenPapers } from './ui/openPapers.js'
+import { closePages } from './ui/pages.js'
 import { sketchEditor } from './ui/sketchEditing.js'
 import { toast } from './ui/toolbar.js'
 import { couldNot } from './notices.js'
@@ -98,6 +99,8 @@ function readerFor(id: string, pane: boolean): Reader {
     },
     close: () => closePaper(id),
     reveal: () => void call('paper:reveal', { id }),
+    title: () => findPaper(id)?.meta.displayTitle ?? '',
+    pageChanged: (index) => recordPosition(id, index),
     fileName: () => fileNameOf(findPaper(id)),
     guessed: (kind) => {
       // Only ever a guess, and only when nobody has one: the answer belongs
@@ -144,10 +147,36 @@ async function loadInto(reader: Reader, id: string) {
     trouble: result.trouble ?? undefined,
     size: result.size,
     again: () => void loadInto(reader, id),
-  })
+  }, findPaper(id)?.state.lastPageIndex ?? 0)
   reader.setDrawing(reader.state.drawing)
   reader.update()
   if (focused() === reader) focusChanged()
+}
+
+/**
+ * Where each paper is being read, remembered the way the Mac remembers it
+ * (`recordReadingPosition`): written a second and a half after the page
+ * stops changing, and at once when the paper closes or the window goes. It
+ * was never recorded at all, and every paper opened on its first page.
+ */
+const positions = new Map<string, number>()
+let positionTimer = 0
+
+function recordPosition(id: string, index: number) {
+  positions.set(id, index)
+  clearTimeout(positionTimer)
+  positionTimer = window.setTimeout(() => void flushPositions(), 1500)
+}
+
+export async function flushPositions() {
+  clearTimeout(positionTimer)
+  const pending = [...positions]
+  positions.clear()
+  for (const [id, index] of pending) {
+    if (findPaper(id)?.state.lastPageIndex === index) continue
+    const state = await call('paper:state', { id, patch: { lastPageIndex: index, lastOpenedAt: new Date().toISOString() } }).catch(() => null)
+    if (state) patchPaper(id, { state })
+  }
 }
 
 /** What the page area is showing, so that it is only rebuilt when that
@@ -183,6 +212,8 @@ export function reconcileReaders() {
       continue
     }
     if (findBar.isFor(reader)) findBar.close()
+    // Where it was left, written now rather than in a moment nobody waits for.
+    void flushPositions()
     reader.dispose()
     readers.delete(id)
   }
@@ -302,6 +333,8 @@ export function focusChanged() {
   if (reader !== focusedBefore) {
     focusedBefore = reader
     store.sketch.selection = null
+    // The page grid belongs to the paper it was opened over.
+    closePages()
   }
   if (reader) {
     // Moved only when it is somewhere else: appending a node that is already
