@@ -134,7 +134,19 @@ export class LibrarySet {
         refused: true,
       }
     }
-    this.extras.push(await Library.open(root))
+    // A folder that cannot take a `.papertime` — a read-only share, one this
+    // account may not write — is said, not thrown: the throw reached the
+    // window as a rejection nobody caught, and the person saw nothing.
+    let opened: Library
+    try {
+      opened = await Library.open(root)
+    } catch {
+      return {
+        error: say('이 폴더에는 쓸 수 없어서 라이브러리로 열지 못했어요.', "Paper Time can't write to that folder, so it can't open it as a library."),
+        refused: true,
+      }
+    }
+    this.extras.push(opened)
     this.rememberExtras()
     return null
   }

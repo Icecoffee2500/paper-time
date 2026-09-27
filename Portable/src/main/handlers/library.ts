@@ -10,6 +10,7 @@ import { acceptedPatch } from '../../shared/appSettings.js'
 import { L as say } from '../../shared/lang.js'
 import { settings, update } from '../settings.js'
 import { folderRefusal } from '../libraries.js'
+import { samePath } from '../../shared/paths.js'
 import { collectionsByFolder } from '../vocabulary.js'
 import { isFile, pageCount } from './shared.js'
 import type { Context, Handlers } from './context.js'
@@ -17,6 +18,39 @@ import type { Context, Handlers } from './context.js'
 export function libraryHandlers(ctx: Context): Partial<Handlers> {
   const { libraries, sync, windows } = ctx
   const owner = (sender: BrowserWindow | null) => sender ?? windows.main!
+
+  /** The adoption running now, which every further ask waits for. */
+  let adopting: ReturnType<typeof adoptLoose> | null = null
+
+  /** Every folder's loose PDFs taken in, the count sent as it falls. */
+  async function adoptLoose(sender: BrowserWindow | null) {
+    if (!libraries.first) return { error: say('열린 라이브러리가 없어요.', 'No library is open.') }
+    // Each folder takes in its own: adopting a PDF must never move it to
+    // another folder. One file at a time, and a file that will not be read
+    // does not take the rest of the folder with it: this loop used to throw
+    // on the first unreadable PDF, so two hundred good papers waited behind
+    // one bad one and the window was told nothing at all.
+    const refused: string[] = []
+    await sync.run(async () => {
+      // Listed inside the queue: the folder sync reads the same folders.
+      const all = await Promise.all(libraries.all().map(async (one) => ({ one, files: await one.looseFiles() })))
+      let remaining = all.reduce((sum, { files }) => sum + files.length, 0)
+      for (const { one, files } of all) {
+        for (const file of files) {
+          try {
+            await one.importPDF(file, await pageCount(ctx.pageCounter, file))
+          } catch {
+            refused.push(path.basename(file))
+          }
+          remaining -= 1
+          if (remaining > 0 && remaining % 25 === 0) windows.send('library:adopting', { remaining })
+        }
+      }
+    })
+    const snapshot = await ctx.snapshot(refused)
+    windows.sendExcept(sender, 'library:changed')
+    return snapshot
+  }
 
   return {
     // The effective root, not the remembered one: a probe run opens a folder
@@ -95,28 +129,12 @@ export function libraryHandlers(ctx: Context): Partial<Handlers> {
       return snapshot
     },
 
-    'library:adoptLoose': async (_args, sender) => {
-      if (!libraries.first) return { error: say('열린 라이브러리가 없어요.', 'No library is open.') }
-      // Each folder takes in its own: adopting a PDF must never move it to
-      // another folder. One file at a time, and a file that will not be read
-      // does not take the rest of the folder with it: this loop used to throw
-      // on the first unreadable PDF, so two hundred good papers waited behind
-      // one bad one and the window was told nothing at all.
-      const refused: string[] = []
-      await sync.run(async () => {
-        for (const one of libraries.all()) {
-          for (const file of await one.looseFiles()) {
-            try {
-              await one.importPDF(file, await pageCount(ctx.pageCounter, file))
-            } catch {
-              refused.push(path.basename(file))
-            }
-          }
-        }
-      })
-      const snapshot = await ctx.snapshot(refused)
-      windows.sendExcept(sender, 'library:changed')
-      return snapshot
+    'library:adoptLoose': (_args, sender) => {
+      // One adoption at a time, whoever asks: a second press, or a second
+      // window, gets the answer of the one already running rather than
+      // taking the same files in beside it.
+      adopting ??= adoptLoose(sender).finally(() => { adopting = null })
+      return adopting
     },
 
     // Another folder, read beside the ones already open. Nothing is copied or
@@ -159,8 +177,10 @@ export function libraryHandlers(ctx: Context): Partial<Handlers> {
     // menu. Only a folder the library is reading: the window does not get to
     // open arbitrary paths.
     'library:revealFolder': async ({ root }) => {
-      const known = libraries.roots.find((one) => one === root)
-      if (known) await (await import('electron')).shell.openPath(known)
+      // Shown where it sits, in its parent with it selected — as Finder's
+      // «Show in Finder» does — not opened.
+      const known = libraries.roots.find((one) => samePath(one, root))
+      if (known) (await import('electron')).shell.showItemInFolder(known)
     },
 
     'library:trash': async ({ id }, sender) => {

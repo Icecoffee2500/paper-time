@@ -99,6 +99,12 @@ const SHAPES = {
     <path d="M6.85 2.9 1.9 11.4a1.3 1.3 0 0 0 1.13 1.96h9.94a1.3 1.3 0 0 0 1.13-1.96L9.15 2.9a1.3 1.3 0 0 0-2.3 0Z"/>
     <path d="M8 6.2v2.7"/>
     <circle cx="8" cy="11" r="0.72" fill="currentColor" stroke="none"/>`,
+  // A record that wants a look, at the end of its row: the same triangle,
+  // filled, the mark white inside it.
+  'exclamationmark.triangle.fill': `
+    <path d="M6.85 2.9 1.9 11.4a1.3 1.3 0 0 0 1.13 1.96h9.94a1.3 1.3 0 0 0 1.13-1.96L9.15 2.9a1.3 1.3 0 0 0-2.3 0Z" fill="currentColor"/>
+    <path d="M8 6.2v2.7" stroke="var(--panel, #fff)"/>
+    <circle cx="8" cy="11" r="0.72" fill="var(--panel, #fff)" stroke="none"/>`,
   // The two kinds a library holds. A paper has writing on it and a title
   // above the writing; a document is a page and nothing more — the same pair
   // the Mac draws with text.document and doc.
@@ -136,6 +142,11 @@ const SHAPES = {
   // The folder that is open in the sidebar: the same folder, filled.
   'folder.fill': `
     <path d="M1.9 4.4a1.5 1.5 0 0 1 1.5-1.5h2.3l1.4 1.7h5.5a1.5 1.5 0 0 1 1.5 1.5v5.5a1.5 1.5 0 0 1-1.5 1.5H3.4a1.5 1.5 0 0 1-1.5-1.5Z" fill="currentColor"/>`,
+  // A tray with an arrow going into it: PDFs in the folder, to be taken in.
+  'tray.and.arrow.down': `
+    <path d="M2 9.2 3.5 4.4a1 1 0 0 1 .95-.7H5.6M10.4 3.7h1.15a1 1 0 0 1 .95.7L14 9.2v2.9a1.3 1.3 0 0 1-1.3 1.3H3.3A1.3 1.3 0 0 1 2 12.1Z"/>
+    <path d="M2 9.2h3.3l.8 1.5h3.8l.8-1.5H14"/>
+    <path d="M8 1.9v5.4M5.9 5.3 8 7.4l2.1-2.1"/>`,
   'plus.circle': `
     <circle cx="8" cy="8" r="5.6"/>
     <path d="M8 5.4v5.2M5.4 8h5.2"/>`,
@@ -278,6 +289,10 @@ const SHAPES = {
   'icloud': `
     <path d="M4.6 12.4h6.2a3 3 0 0 0 .3-6 4.1 4.1 0 0 0-7.7-.6A2.9 2.9 0 0 0 4.6 12.4Z"/>
     <path d="M6.4 9.6 8 8l1.6 1.6"/>`,
+  // A cloud that did not answer: the records it has not handed over yet.
+  'icloud.slash': `
+    <path d="M4.6 12.4h6.2a3 3 0 0 0 .3-6 4.1 4.1 0 0 0-7.7-.6A2.9 2.9 0 0 0 4.6 12.4Z"/>
+    <path d="M2.4 2.6 13.6 13.6"/>`,
   'internaldrive': `
     <rect x="1.9" y="4.2" width="12.2" height="7.6" rx="1.8"/>
     <circle cx="11.4" cy="8" r="1.2"/>

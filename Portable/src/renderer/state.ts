@@ -11,7 +11,8 @@ import { findPath, isInside, isUnder, pathKey, samePath, slashed } from '../shar
 import type { LibrarySnapshot, NoteDTO, NotesFolderDTO, PaperRowDTO } from '../shared/api.js'
 import type { Zettel } from '../shared/zettel.js'
 import type { TextHit } from '../main/textIndex.js'
-import { isLookedUp, type DocumentKind } from '../shared/documentKind.js'
+import { needsReview, type DocumentKind } from '../shared/documentKind.js'
+import { authorKey, caseInsensitiveOrder, nameShown, sortingSurname, standardOrder } from '../shared/authorKey.js'
 import { foldTitle } from '../shared/textFold.js'
 import { paperHaystack, type SearchablePaper } from '../shared/searchRank.js'
 import { PaperMeta, PaperState, type Collection, type Tag } from '../shared/model.js'
@@ -39,7 +40,8 @@ export type Shelf =
   | { kind: 'review' }
   | { kind: 'notes' }
   | { kind: 'collection'; id: string }
-  | { kind: 'author'; name: string }
+  /** One person, by `authorKey` — «Y. LeCun» and «Yann LeCun» are one shelf. */
+  | { kind: 'author'; key: string; name: string }
   | { kind: 'tag'; id: string }
   /** What the palette's «Show All Results» found: `store.searchQuery`. */
   | { kind: 'search' }
@@ -139,6 +141,20 @@ export interface Store {
   /** The paper showing — with panes side by side, the one in focus. */
   selectedID: string | null
   /**
+   * The rows chosen in the list, as the Mac's `selection: Set<UUID>`: a
+   * shift-click takes a run, a Ctrl-click (⌘ on a Mac) adds or drops one,
+   * and a drag that starts on any of them carries them all. The paper
+   * showing is one of them; anything that shows a paper by other means —
+   * the palette, Back, a supplement — makes the selection that paper alone
+   * (`selectedPapers`).
+   */
+  selection: string[]
+  /** Where a shift-click's run starts, and where the keyboard's run has got to. */
+  selectionAnchor: string | null
+  selectionLead: string | null
+  /** «Add n PDFs» under way: how many are left, or null. */
+  adopting: number | null
+  /**
    * The papers kept open this session, in the order they were kept.
    *
    * Not every paper looked at: walking down the list shows each in turn, and
@@ -219,6 +235,10 @@ export const store: Store = {
   slipBox: { openID: null, query: '', tag: null, paperID: null },
   shelf: { kind: 'all' },
   selectedID: null,
+  selection: [],
+  selectionAnchor: null,
+  selectionLead: null,
+  adopting: null,
   openPaperIDs: [],
   pinnedPaperIDs: [],
   split: null,
@@ -326,7 +346,8 @@ export function subfolders(folder: string): { path: string; name: string; count:
   }
   return [...counts]
     .map(([name, count]) => ({ path: `${base}/${name}`, name, count }))
-    .sort((a, b) => a.name.localeCompare(b.name))
+    // Finder's order: «Week 2» before «Week 10» (`localizedStandardCompare`).
+    .sort((a, b) => standardOrder.compare(a.name, b.name))
 }
 
 /**
@@ -351,13 +372,16 @@ export function papersByFolder(papers: Paper[]): { label: string; papers: Paper[
   if (groups.size < 2) return null
   return [...groups.values()]
     .map(({ folder, papers: found }) => ({ label: folderLabel(folder), papers: found }))
-    .sort((a, b) => a.label.localeCompare(b.label))
+    .sort((a, b) => standardOrder.compare(a.label, b.label))
 }
 
 /** A folder said the way somebody reads it aloud: the library's name, then
  *  the way down. The whole path would be a line of machinery. */
 export function folderLabel(folder: string): string {
-  return folderTrail(folder).map((one) => one.split('/').filter(Boolean).pop() ?? one).join(' › ')
+  // Split on either separator: the first step is the root as it is stored —
+  // `D:\Papers` on Windows — and that spelt the whole drive path into the
+  // heading.
+  return folderTrail(folder).map((one) => one.split(/[\\/]/).filter(Boolean).pop() ?? one).join(' › ')
 }
 
 /** The way down to this folder from its library root, root first. */
@@ -502,6 +526,18 @@ export function attachmentsOf(id: string): Paper[] {
   return childrenByParent.get(id) ?? []
 }
 
+/** A tag by identifier, without walking the tags for every row. */
+let tagsByID: Map<string, Tag> | null = null
+let tagsIndexed: Tag[] | null = null
+
+export function tagByID(id: string): Tag | undefined {
+  if (tagsIndexed !== store.tags || !tagsByID) {
+    tagsByID = new Map(store.tags.map((tag) => [tag.id, tag]))
+    tagsIndexed = store.tags
+  }
+  return tagsByID.get(id)
+}
+
 // MARK: - The open shelf
 
 export function isOpenPaper(id: string): boolean {
@@ -552,8 +588,93 @@ export function closeOpenPaper(id: string) {
 }
 
 export function closeOtherOpenPapers(keeping: string) {
+  // The pins go too: a closed paper that still answers «pinned» keeps a
+  // filled pin on every shelf that closes nothing when pressed.
+  store.pinnedPaperIDs = store.pinnedPaperIDs.filter((entry) => entry === keeping)
   store.openPaperIDs = store.openPaperIDs.filter((entry) => entry === keeping)
   if (store.selectedID !== keeping) store.selectedID = keeping
+}
+
+// MARK: - The rows chosen
+
+export type PickMode = 'only' | 'extend' | 'toggle'
+
+export interface Picking {
+  selection: string[]
+  anchor: string | null
+  showing: string | null
+}
+
+/** The rows chosen: the selection, or the paper showing alone. */
+export function selectedPapers(): string[] {
+  const showing = store.selectedID
+  if (!showing) return []
+  return store.selection.includes(showing) ? store.selection : [showing]
+}
+
+let selectedSet: Set<string> | null = null
+let selectedFor: { selection: string[]; showing: string | null } | null = null
+
+export function isSelected(id: string): boolean {
+  if (!selectedFor || selectedFor.selection !== store.selection || selectedFor.showing !== store.selectedID || !selectedSet) {
+    selectedSet = new Set(selectedPapers())
+    selectedFor = { selection: store.selection, showing: store.selectedID }
+  }
+  return selectedSet.has(id)
+}
+
+/** What a drag that starts on this row carries: every chosen row when it is
+ *  one of them, else itself — `draggedPapers(startingAt:)`. */
+export function draggedFrom(id: string): string[] {
+  const chosen = selectedPapers()
+  return chosen.includes(id) ? chosen : [id]
+}
+
+/** Which paper shows once the rows chosen change — the Mac's
+ *  `selection.didSet`: one row is that paper, none is nothing, and a paper
+ *  still among many stays. */
+function showingFor(selection: string[], showing: string | null, pressed: string | null): string | null {
+  if (selection.length === 0) return null
+  if (selection.length === 1) return selection[0]
+  if (showing && selection.includes(showing)) return showing
+  return pressed && selection.includes(pressed) ? pressed : selection[selection.length - 1]
+}
+
+/**
+ * A row pressed, the three things a list does (`PaperTable.clicked`): a
+ * plain press is this row alone, shift takes the run from the last row
+ * pressed to this one, and Ctrl (⌘ on a Mac) adds or drops this one.
+ * `order` is the list's rows, top to bottom.
+ */
+export function pickRow(now: Picking, id: string, mode: PickMode, order: string[]): Picking {
+  const current = now.showing
+    ? (now.selection.includes(now.showing) ? now.selection : [now.showing])
+    : now.selection
+  if (mode === 'extend' && now.anchor) {
+    const from = order.indexOf(now.anchor)
+    const to = order.indexOf(id)
+    if (from >= 0 && to >= 0) {
+      const run = order.slice(Math.min(from, to), Math.max(from, to) + 1)
+      const selection = [...current, ...run.filter((one) => !current.includes(one))]
+      return { selection, anchor: now.anchor, showing: showingFor(selection, now.showing, id) }
+    }
+  }
+  if (mode === 'toggle') {
+    const selection = current.includes(id) ? current.filter((one) => one !== id) : [...current, id]
+    return { selection, anchor: id, showing: showingFor(selection, now.showing, id) }
+  }
+  return { selection: [id], anchor: id, showing: id }
+}
+
+/** ⇧↑ and ⇧↓: the run from the anchor to the row the keyboard has got to,
+ *  and nothing else — the way a list's keyboard extends. */
+export function extendRun(now: Picking, lead: string, order: string[]): Picking {
+  const anchor = now.anchor && order.includes(now.anchor) ? now.anchor : (now.showing ?? lead)
+  const from = order.indexOf(anchor)
+  const to = order.indexOf(lead)
+  if (from < 0 || to < 0) return { selection: [lead], anchor: lead, showing: lead }
+  const selection = order.slice(Math.min(from, to), Math.max(from, to) + 1)
+  return { selection, anchor, showing: showingFor(selection, now.showing, lead) }
 }
 
 // MARK: - Side by side
@@ -681,6 +802,7 @@ export function pruneToLibrary() {
   const here = (id: string | null) => Boolean(id && paper(id))
   if (store.openPaperIDs.some((id) => !here(id))) store.openPaperIDs = store.openPaperIDs.filter(here)
   if (store.pinnedPaperIDs.some((id) => !here(id))) store.pinnedPaperIDs = store.pinnedPaperIDs.filter(here)
+  if (store.selection.some((id) => !here(id))) store.selection = store.selection.filter(here)
   for (const id of panePapers()) if (!here(id)) undock(id)
   if (store.selectedID && !here(store.selectedID)) store.selectedID = null
   if (store.slipBox.paperID && !here(store.slipBox.paperID)) store.slipBox.paperID = null
@@ -729,8 +851,7 @@ export function shelfPapers(): Paper[] {
     case 'review':
       // Neither a book nor a document has a registrar to disagree with, so
       // neither is ever a thing to review.
-      filtered = all.filter((entry) => isLookedUp(entry.meta.effectiveKind)
-        && (entry.meta.confidence === 'needsReview' || entry.meta.confidence === 'unparsed'))
+      filtered = all.filter((entry) => needsReview(entry.meta))
       break
     case 'notes': {
       // The papers with a note written against them, for the arrows to
@@ -756,8 +877,8 @@ export function shelfPapers(): Paper[] {
       break
     }
     case 'author': {
-      const name = (store.shelf as { kind: 'author'; name: string }).name
-      filtered = all.filter((entry) => authorsOf(entry).includes(name))
+      const key = (store.shelf as { kind: 'author'; key: string }).key
+      filtered = all.filter((entry) => authorKeysOf(entry).has(key))
       break
     }
     case 'search':
@@ -765,6 +886,94 @@ export function shelfPapers(): Paper[] {
       break
   }
   return sorted(filtered)
+}
+
+/**
+ * Whether two shelves are the same shelf — which row is lit. Every kind of
+ * shelf by what tells it apart: comparing only `kind` lit all four kind rows
+ * at once, and a folder by its path as the desktop compares paths.
+ */
+export function sameShelf(a: Shelf, b: Shelf): boolean {
+  if (a.kind !== b.kind) return false
+  switch (a.kind) {
+    case 'collection': return a.id === (b as typeof a).id
+    case 'tag': return a.id === (b as typeof a).id
+    case 'author': return a.key === (b as typeof a).key
+    case 'status': return a.status === (b as typeof a).status
+    case 'folder': return samePath(a.root, (b as typeof a).root)
+    case 'kind': return a.of === (b as typeof a).of
+    default: return true
+  }
+}
+
+/**
+ * How many papers each shelf holds — every count in one walk of the library.
+ *
+ * Every row used to filter the whole library to take the length of it, and the
+ * list is long: the folders, the kinds, three reading statuses, favourites,
+ * what needs a look, the slip-box, and one row per collection and per tag. A
+ * library of sixty papers with a dozen collections and tags walked itself
+ * twenty times to draw a list nobody had asked to change.
+ */
+export interface ShelfCounts {
+  all: number
+  papers: number
+  books: number
+  lectures: number
+  documents: number
+  folders: Map<string, number>
+  unread: number
+  reading: number
+  read: number
+  favorites: number
+  review: number
+  notes: number
+  collections: Map<string, number>
+  tags: Map<string, number>
+}
+
+export function shelfCounts(papers: Paper[]): ShelfCounts {
+  const counts: ShelfCounts = {
+    all: papers.length,
+    papers: 0,
+    books: 0,
+    lectures: 0,
+    documents: 0,
+    folders: new Map(),
+    unread: 0,
+    reading: 0,
+    read: 0,
+    favorites: 0,
+    review: 0,
+    notes: 0,
+    collections: new Map(),
+    tags: new Map(),
+  }
+  const bump = (map: Map<string, number>, key: string) => map.set(key, (map.get(key) ?? 0) + 1)
+  for (const entry of papers) {
+    if (entry.meta.effectiveKind === 'paper') counts.papers += 1
+    else if (entry.meta.effectiveKind === 'book') counts.books += 1
+    else if (entry.meta.effectiveKind === 'lecture') counts.lectures += 1
+    else counts.documents += 1
+    if (entry.root) bump(counts.folders, entry.root)
+    if (entry.state.readingStatus === 'unread') counts.unread += 1
+    else if (entry.state.readingStatus === 'reading') counts.reading += 1
+    else counts.read += 1
+    if (entry.state.isFavorite) counts.favorites += 1
+    if (needsReview(entry.meta)) counts.review += 1
+    for (const id of entry.meta.collectionIDs) bump(counts.collections, id)
+    for (const id of entry.meta.tagIDs) bump(counts.tags, id)
+  }
+  // Every note in the box, as the Mac's row counts them — not the papers.
+  counts.notes = store.notes.length
+  // A smart collection has no members written down — its count is whoever
+  // its rule matches, the same papers its shelf shows.
+  for (const collection of store.collections) {
+    if (!collection.rule) continue
+    counts.collections.set(collection.id, papers.filter((entry) =>
+      inCollection(collection, entry.meta, entry.state, store.tags)).length)
+  }
+  return counts
 }
 
 // MARK: - Searching
@@ -832,58 +1041,92 @@ export function textSources(excluding: Set<string> = new Set()): { id: string; t
     .map((entry) => ({ id: entry.id, title: entry.meta.displayTitle }))
 }
 
-export function authorsOf(entry: Paper): string[] {
-  return (entry.meta.csl.author ?? [])
-    .map((name) => [name.given, name.family].filter(Boolean).join(' ').trim())
-    .filter(Boolean)
+/** The people on a paper, one key each (`LibraryModel.authorKeys(of:)`). */
+export function authorKeysOf(entry: Paper): Set<string> {
+  const keys = new Set<string>()
+  for (const name of entry.meta.csl.author ?? []) {
+    const key = authorKey(name)
+    if (key) keys.add(key)
+  }
+  return keys
 }
 
-function sorted(papers: Paper[]): Paper[] {
-  const { field, ascending } = store.settings.sort
+/**
+ * The shelf's order, the Mac's `comparator`: a title by its words, case
+ * aside; an author by the first author's surname, and a paper nobody wrote
+ * after everybody who did; a year, and a paper with none before the rest.
+ * The direction turns every one of them round, and papers that tie keep the
+ * order they came in (the sort is stable) — breaking a tie by title while
+ * ignoring the direction read a descending list A to Z inside each year.
+ */
+export function sorted(papers: Paper[], sort: { field: string; ascending: boolean } = store.settings.sort): Paper[] {
+  const { field, ascending } = sort
   const direction = ascending ? 1 : -1
   const key = (entry: Paper): string | number => {
     switch (field) {
-      case 'title': return entry.meta.displayTitle.toLowerCase()
-      case 'author': return entry.meta.displayAuthors.toLowerCase()
+      case 'title': return entry.meta.displayTitle
+      case 'author': {
+        const first = entry.meta.csl.author?.[0]
+        return (first && sortingSurname(first)) || 'zzz'
+      }
       case 'year': return entry.meta.year ?? 0
       case 'opened': return entry.state.lastOpenedAt?.getTime() ?? 0
       case 'added': default: return entry.meta.addedAt.getTime()
     }
   }
-  // Each paper's key worked out once, not once per comparison. Sorting sixty
-  // papers makes some three hundred comparisons, and every one of them was
-  // lower-casing two titles to answer a question it had answered before.
-  const keyed = papers.map((entry) => ({ entry, key: key(entry), title: entry.meta.displayTitle }))
+  // Each paper's key worked out once, not once per comparison.
+  const keyed = papers.map((entry) => ({ entry, key: key(entry) }))
   keyed.sort((a, b) => {
-    if (a.key === b.key) return a.title.localeCompare(b.title)
-    return (a.key < b.key ? -1 : 1) * direction
+    const order = typeof a.key === 'string' && typeof b.key === 'string'
+      ? caseInsensitiveOrder.compare(a.key, b.key)
+      : (a.key as number) - (b.key as number)
+    return order * direction
   })
   return keyed.map((row) => row.entry)
 }
 
 /**
- * Every author in the library, with how many papers each one has.
+ * Every author in the library, ranked the Mac's way (`rebuildAuthorRanking`):
+ * one row per person however their name was written, the fullest spelling
+ * seen, counted over the papers a shelf shows — not their supplements, or
+ * the row said twelve where the shelf held ten — most papers first.
  *
- * Worked out when the library changes, not when the list is drawn: this walks
- * every author of every paper and then sorts a few hundred names, and the
- * sidebar asks for it on every redraw.
+ * Worked out when the library changes, not when the list is drawn.
  */
-let authorsCounted: { name: string; count: number }[] | null = null
+let authorsCounted: { key: string; name: string; count: number }[] | null = null
 let authorsFor: Paper[] | null = null
 
-export function authorCounts(): { name: string; count: number }[] {
+export function authorCounts(): { key: string; name: string; count: number }[] {
   if (authorsFor === store.papers && authorsCounted) return authorsCounted
   const counts = new Map<string, number>()
+  const names = new Map<string, string>()
   for (const entry of store.papers) {
-    for (const name of authorsOf(entry)) {
-      counts.set(name, (counts.get(name) ?? 0) + 1)
+    if (entry.meta.parentID) continue
+    const seen = new Set<string>()
+    for (const author of entry.meta.csl.author ?? []) {
+      const key = authorKey(author)
+      if (!key) continue
+      // Once per paper: a name written twice on one paper is one paper.
+      if (!seen.has(key)) counts.set(key, (counts.get(key) ?? 0) + 1)
+      seen.add(key)
+      const shown = nameShown(author)
+      // «Yann LeCun» over «Y. LeCun».
+      if ([...shown].length > [...(names.get(key) ?? '')].length) names.set(key, shown)
     }
   }
-  authorsCounted = [...counts.entries()]
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => a.name.localeCompare(b.name))
+  authorsCounted = [...counts]
+    .map(([key, count]) => ({ key, name: names.get(key) ?? key, count }))
+    .sort((a, b) => (a.count === b.count ? caseInsensitiveOrder.compare(a.name, b.name) : b.count - a.count))
   authorsFor = store.papers
   return authorsCounted
+}
+
+/** The author shelf for a name as a paper writes it. */
+export function authorShelf(name: import('../shared/model.js').CSLName): Shelf | null {
+  const key = authorKey(name)
+  if (!key) return null
+  const ranked = authorCounts().find((one) => one.key === key)
+  return { kind: 'author', key, name: ranked?.name ?? nameShown(name) }
 }
 
 export const STROKE_COLORS = SketchColor.strokes

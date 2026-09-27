@@ -296,7 +296,7 @@ app.whenReady().then(async () => {
     app.setActivationPolicy('accessory')
     app.dock?.hide()
   }
-  wantsKorean = resolveKorean(settings().language, app.getLocale())
+  wantsKorean = resolveKorean(probe.language() ?? settings().language, app.getLocale())
   setKorean(wantsKorean)
   windows.createMain()
   installMenu()

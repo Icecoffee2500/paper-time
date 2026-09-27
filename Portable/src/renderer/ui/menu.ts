@@ -24,6 +24,13 @@ export interface MenuEntry {
   children?: MenuEntry[]
   /** The shortcut list's command, whose key stands at the row's end. */
   key?: string
+  /** Red, for the one item that takes something away — the Mac's `.destructive`. */
+  danger?: boolean
+  /** A second, quieter line under the label: a supplement's file name. */
+  detail?: string
+  /** What a right-click on this item offers — the Mac's context menu on a
+   *  popover row. Opened beside the item, like a submenu. */
+  more?: MenuEntry[]
 }
 
 interface Open {
@@ -124,12 +131,26 @@ function buildMenu(entries: MenuEntry[], depth: number): HTMLElement {
     }
     const item = el('button', {
       role: 'menuitem',
+      class: entry.danger ? 'menu-danger' : undefined,
       'data-index': String(index),
       ...(entry.checked !== undefined ? { 'aria-checked': String(Boolean(entry.checked)) } : {}),
     }, [
       el('span', { html: entry.checked ? icon('checkmark') : icon(entry.icon ?? '') || spacer() }),
-      el('span', { class: 'menu-label', text: entry.label ?? '' }),
+      entry.detail
+        ? el('span', { class: 'menu-label menu-lines' }, [
+          el('span', { text: entry.label ?? '' }),
+          el('span', { class: 'menu-detail', text: entry.detail }),
+        ])
+        : el('span', { class: 'menu-label', text: entry.label ?? '' }),
     ])
+    if (entry.more) {
+      const more = entry.more
+      on(item, 'contextmenu', (event: MouseEvent) => {
+        event.preventDefault()
+        event.stopPropagation()
+        openSubmenu(item, { children: more }, true)
+      })
+    }
     const key = entry.key ? keyFor(entry.key, platform) : ''
     if (key) item.append(el('span', { class: 'menu-key', text: key }))
     if (entry.children) {

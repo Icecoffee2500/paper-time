@@ -223,6 +223,8 @@ export type RequestResult<K extends RequestName> = Requests[K]['result']
  */
 export interface Events {
   'library:changed': void
+  /** «Add n PDFs» under way: how many are left, every twenty-five. */
+  'library:adopting': { remaining: number }
   'library:opened': LibrarySnapshot | { error: string }
   'paper:changed': { id: string; layers: string[] }
   'paper:saved': { id: string }

@@ -38,7 +38,10 @@ import {
   attach, attachmentsMenu, copyKey, detach, editMeta, editState, fileUnder, paperMenu, renamePaper, setKind,
   statusMenu, toggleFavorite,
 } from './actions/paper.js'
-import { closePaper, goBack, goForward, keepPaper, openAnchor, showPaper, stepPaper } from './actions/openPapers.js'
+import {
+  closePaper, extendSelection, goBack, goForward, keepPaper, openAnchor, pickPaper, selectAllPapers, showPaper, stepPaper,
+  stepPaperTo,
+} from './actions/openPapers.js'
 import { openAnchorFromSlipBox, openNote } from './actions/notes.js'
 import { openPassage, openSearch } from './actions/search.js'
 import { clearSearchResults, installListSearch, scanListText } from './listSearch.js'
@@ -52,7 +55,7 @@ import { installSheetModality } from './ui/sheet.js'
 import { installProbeSurface } from './probe.js'
 import { showMoreMenu } from './moreMenu.js'
 import { L } from '../shared/lang.js'
-import { isPinned } from './state.js'
+import { authorShelf, isPinned } from './state.js'
 
 document.body.dataset.platform = platform
 if (solo) document.body.dataset.solo = 'true'
@@ -75,15 +78,20 @@ shell.sidebar = buildSidebar({
   newCollection: () => void newCollection(),
   clearSearch: () => clearSearchResults(),
   revealFolder: (folder) => void call('library:revealFolder', { root: folder }),
-  file: (paperID, shelf) => void fileUnder(paperID, shelf),
+  file: (paperIDs, shelf) => void fileUnder(paperIDs, shelf),
 })
 
 shell.paperList = buildPaperList({
   chooseLibrary: () => void chooseLibrary(),
   open: (id) => void showPaper(id),
+  pick: (id, mode) => pickPaper(id, mode),
+  extend: (by) => extendSelection(by),
+  selectAll: () => selectAllPapers(),
+  stepTo: (index) => stepPaperTo(index),
+  openSearch: () => openSearch(),
   statusMenu,
   attachments: attachmentsMenu,
-  attach: (child, parent) => void attach(child, parent),
+  attach: (children, parent) => void attach(children, parent),
   toggleFavorite: (id) => void toggleFavorite(id),
   togglePin: (id) => {
     if (isPinned(id)) closePaper(id)
@@ -114,7 +122,10 @@ shell.inspector = buildInspector({
   rename: renamePaper,
   copyKey: (id) => void copyKey(id),
   setKind: (id, kind) => void setKind(id, kind),
-  openAuthor: (name) => chooseShelf({ kind: 'author', name }),
+  openAuthor: (name) => {
+    const shelf = authorShelf(name)
+    if (shelf) chooseShelf(shelf)
+  },
   sketchChanged: () => {
     changed('sketch')
     // The style the next shape gets, kept for the next launch.

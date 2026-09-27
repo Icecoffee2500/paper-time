@@ -105,3 +105,12 @@ export function guessKind(parts: {
   }
   return { kind: 'document', reason: 'nothingFound' }
 }
+
+/**
+ * Whether a record wants a look: a paper whose lookup came back unsure. A
+ * book or a document has no registrar to disagree with, so neither is ever
+ * one (`PaperRow.needsReview`, the «Needs Review» shelf).
+ */
+export function needsReview(meta: { effectiveKind: DocumentKind; confidence?: string }): boolean {
+  return isLookedUp(meta.effectiveKind) && (meta.confidence === 'needsReview' || meta.confidence === 'unparsed')
+}

@@ -46,6 +46,17 @@ export const probe = {
     return path.join(app.getPath('userData'), 'Semantic')
   },
 
+  /**
+   * `--papertime-language=ko|en`: a probe run in the language asked for, so
+   * one machine can look at both — read in place of the person's setting,
+   * never written over it.
+   */
+  language(): 'ko' | 'en' | null {
+    if (!probe.isRun) return null
+    const asked = probeArgument('language')
+    return asked === 'ko' || asked === 'en' ? asked : null
+  },
+
   /** The loose notes' box for a probe: beside its library, never the app's own. */
   looseNotesFolder(root: string): string {
     return `${root.replace(/[\\/]+$/, '')}-loose-notes`
