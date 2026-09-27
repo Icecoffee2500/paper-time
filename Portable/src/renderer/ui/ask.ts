@@ -78,3 +78,52 @@ export function askForName(question: NameQuestion): Promise<string | null> {
     input.select()
   })
 }
+
+export interface ConfirmQuestion {
+  title: string
+  message: string
+  /** The confirming button's word. */
+  confirm: string
+  /** The confirming button in red: it takes something away. */
+  danger?: boolean
+}
+
+/** A yes or no, asked in the same sheet: true for the confirming button. */
+export function askToConfirm(question: ConfirmQuestion): Promise<boolean> {
+  return new Promise((resolve) => {
+    const backdrop = el('div', { class: 'sheet-backdrop' })
+    const sheet = el('div', { class: 'fb-sheet set-sheet ask-sheet', role: 'alertdialog', 'aria-modal': 'true' })
+    const cancel = el('button', { class: 'plain-button', text: L('취소', 'Cancel') })
+    const yes = el('button', { class: question.danger ? 'filled-button danger' : 'filled-button', text: question.confirm })
+    sheet.append(
+      el('h2', { class: 'fb-title', text: question.title }),
+      el('div', { class: 'set-body ask-body' }, [el('p', { class: 'ask-message', text: question.message })]),
+      el('div', { class: 'set-foot' }, [el('span', { class: 'fb-spacer' }), cancel, yes]),
+    )
+    backdrop.append(sheet)
+    document.body.append(backdrop)
+
+    let settled = false
+    const finish = (value: boolean) => {
+      if (settled) return
+      settled = true
+      backdrop.remove()
+      resolve(value)
+    }
+    on(sheet, 'keydown', (event: KeyboardEvent) => {
+      event.stopPropagation()
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        finish(false)
+      }
+    })
+    on(cancel, 'click', () => finish(false))
+    on(yes, 'click', () => finish(true))
+    on(backdrop, 'mousedown', (event: MouseEvent) => {
+      if (event.target === backdrop) finish(false)
+    })
+    // The safe answer has the keyboard: Enter on a sheet that throws
+    // something away should not be the throwing.
+    cancel.focus()
+  })
+}

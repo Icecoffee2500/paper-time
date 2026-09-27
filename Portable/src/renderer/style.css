@@ -93,6 +93,32 @@
 
   --danger: #d9382b;
   --star: #f0a82f;
+
+  /* The system's colours for states (the Mac's .orange, .green, .yellow,
+     .red): a shelf that is a state takes its own when it is the one lit, and
+     a row's read mark is the Read shelf's green. */
+  --shelf-reading: #ff9500;
+  --shelf-read: #34c759;
+  --shelf-favorites: #ffcc00;
+  --shelf-review: #ff3b30;
+  --warning: #ff9500;
+  /* What a shelf's words are drawn in: its colour deepened toward black, so
+     a yellow reads as type (`ScopeRow.textColor`). */
+  --shelf-ink: black;
+  --shelf-ink-share: 40%;
+
+  /* A tag's colour — Apple's system palette, which changes in the dark. */
+  --tag-red: #ff3b30;
+  --tag-orange: #ff9500;
+  --tag-yellow: #ffcc00;
+  --tag-green: #34c759;
+  --tag-mint: #00c7be;
+  --tag-teal: #30b0c7;
+  --tag-blue: #007aff;
+  --tag-indigo: #5856d6;
+  --tag-purple: #af52de;
+  --tag-pink: #ff2d55;
+  --tag-gray: #8e8e93;
 }
 
 :root[data-theme='dark'] {
@@ -120,6 +146,26 @@
 
   --page-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.08), 0 2px 12px rgba(0, 0, 0, 0.55);
   --reader-ground: #0e0e10;
+
+  --shelf-reading: #ff9f0a;
+  --shelf-read: #30d158;
+  --shelf-favorites: #ffd60a;
+  --shelf-review: #ff453a;
+  --warning: #ff9f0a;
+  --shelf-ink: white;
+  --shelf-ink-share: 25%;
+
+  --tag-red: #ff453a;
+  --tag-orange: #ff9f0a;
+  --tag-yellow: #ffd60a;
+  --tag-green: #30d158;
+  --tag-mint: #63e6e2;
+  --tag-teal: #40c8e0;
+  --tag-blue: #0a84ff;
+  --tag-indigo: #5e5ce6;
+  --tag-purple: #bf5af2;
+  --tag-pink: #ff375f;
+  --tag-gray: #98989d;
 }
 
 * {
@@ -413,14 +459,32 @@ body[data-platform='linux'] .window-buttons button.close:hover {
 
 .panel-header {
   flex: 0 0 auto;
-  height: 38px;
+  min-height: 38px;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 14px;
-  font-size: 13.5px;
+  /* The Mac's column header: `.headline`, 16 in from the side, a little
+     more air above than below. */
+  padding: 10px 16px 6px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text);
+}
+
+.panel-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The list and the words a pull uncovers, one over the other. */
+.paper-list-holder {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Why the list is short, beside the shelf's name. Lighter than the name and
@@ -502,30 +566,82 @@ body[data-platform='linux'] .window-buttons button.close:hover {
     color var(--motion-tap) var(--ease);
 }
 
-.row:hover {
-  background: var(--hover);
+/* No wash under the pointer: a source list's rows do not light as the
+   pointer passes (the Mac's `.listStyle(.sidebar)`); only the row chosen does. */
+.row {
+  --shelf: var(--accent);
+  position: relative;
+  cursor: default;
+  outline-offset: -2px;
 }
+.row[data-hue='reading'] { --shelf: var(--shelf-reading); }
+.row[data-hue='read'] { --shelf: var(--shelf-read); }
+.row[data-hue='favorites'] { --shelf: var(--shelf-favorites); }
+.row[data-hue='review'] { --shelf: var(--shelf-review); }
 
+/* The chosen row: its words, its count and its symbol in the shelf's own
+   colour — states take the system's colours for states, places the accent —
+   over the lit shape, which is drawn once behind the rows. */
 .row[aria-selected='true'] {
-  /* A source list selects with the accent itself, as the Mac's does — and
-     greys when the window is not the one in front. */
-  background: var(--accent);
-  color: #fff;
+  color: color-mix(in srgb, var(--shelf) calc(100% - var(--shelf-ink-share)), var(--shelf-ink));
   font-weight: 500;
 }
 
 .row[aria-selected='true'] .row-icon,
 .row[aria-selected='true'] .row-count {
-  color: rgba(255, 255, 255, 0.9);
+  color: inherit;
 }
 
-body[data-window-focused='false'] .row[aria-selected='true'] {
-  background: color-mix(in srgb, var(--text) 14%, transparent);
+.row[aria-selected='true']:not([data-hue='favorites']) .row-icon {
+  color: var(--shelf);
+}
+
+body[data-window-focused='false'] .row[aria-selected='true'],
+body[data-window-focused='false'] .row[aria-selected='true'] .row-icon {
   color: var(--text);
 }
 
-body[data-window-focused='false'] .row[aria-selected='true'] .row-icon {
+/* Actions under the rows — «Add Library…», «New Collection…», «Show All» —
+   read as actions, not as more shelves. */
+.row.row-action {
   color: var(--text-secondary);
+}
+.row.row-action .row-icon { color: var(--text-tertiary); }
+
+/* The lit shape: one, behind every row, travelling from the row you were on
+   to the one you chose. A pale wash of the shelf's colour, as the Mac's glass. */
+.sidebar-column .panel-body {
+  position: relative;
+}
+.sidebar-lit {
+  --shelf: var(--accent);
+  position: absolute;
+  top: 0;
+  z-index: 0;
+  border-radius: var(--radius-row);
+  background: color-mix(in srgb, var(--shelf) 20%, transparent);
+  box-shadow: inset 0 0 0 0.5px color-mix(in srgb, var(--shelf) 24%, transparent);
+  pointer-events: none;
+  transition:
+    transform var(--motion-surface) var(--ease),
+    height var(--motion-surface) var(--ease),
+    background-color var(--motion-surface) var(--ease),
+    opacity var(--motion-tap) var(--ease);
+}
+.sidebar-lit.still { transition: opacity var(--motion-tap) var(--ease); }
+.sidebar-lit[data-on='false'] { opacity: 0; }
+.sidebar-lit[data-hue='reading'] { --shelf: var(--shelf-reading); }
+.sidebar-lit[data-hue='read'] { --shelf: var(--shelf-read); }
+.sidebar-lit[data-hue='favorites'] { --shelf: var(--shelf-favorites); }
+.sidebar-lit[data-hue='review'] { --shelf: var(--shelf-review); }
+body[data-window-focused='false'] .sidebar-lit {
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  box-shadow: none;
+}
+.sidebar-column .row,
+.sidebar-column .sidebar-section {
+  position: relative;
+  z-index: 1;
 }
 
 .row-icon {
@@ -589,12 +705,11 @@ body[data-window-focused='false'] .row[aria-selected='true'] .row-icon {
   transition: background-color var(--motion-tap) var(--ease);
 }
 
-/* On the row you are on, the row is already wearing the pale accent; the
-   chip steps up so it is still a chip. */
-.row[aria-selected='true'] .folder-name {
-  background: rgba(255, 255, 255, 0.22);
-  border-color: rgba(255, 255, 255, 0.45);
-  color: #fff;
+/* On the row you are on the chip stays a chip: the lit shape under it is
+   pale, so the chip's own ground still reads. */
+.folder-name {
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 /* --------------------------------------------------------------- paper list */
@@ -630,11 +745,10 @@ body[data-window-focused='false'] .row[aria-selected='true'] .row-icon {
 .sidebar-fold.open .fold-chevron { transform: rotate(90deg); }
 
 .list-group {
-  padding: 14px 12px 4px;
-  font-size: 11px;
+  padding: 12px 18px 4px;
+  font-size: 11.5px;
   font-weight: 600;
-  letter-spacing: .02em;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   user-select: none;
 }
 .list-group:first-child { padding-top: 4px; }
@@ -655,10 +769,44 @@ body[data-window-focused='false'] .row[aria-selected='true'] .row-icon {
   background: var(--hover);
 }
 
+/* The chosen rows: a wash of the accent, the one row you can find without
+   reading — and the accent itself while the list has the keyboard, grey
+   when the window is behind another (an inset table's selection). */
 .paper-row[aria-selected='true'] {
-  background: var(--hover);
-  box-shadow: inset 0 0 0 1px var(--separator);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
+:root[data-theme='dark'] .paper-row[aria-selected='true'] {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+body:not([data-window-focused='false']) .paper-list-body:focus-within .paper-row[aria-selected='true'] {
+  background: var(--accent);
+  color: #fff;
+}
+body:not([data-window-focused='false']) .paper-list-body:focus-within .paper-row[aria-selected='true'] :is(.paper-title, .paper-subtitle, .paper-status, .paper-clip, .paper-pin, .paper-close, .paper-star:not([data-on='true'])) {
+  color: #fff;
+}
+body:not([data-window-focused='false']) .paper-list-body:focus-within .paper-row[aria-selected='true'] .paper-subtitle { opacity: 0.85; }
+body:not([data-window-focused='false']) .paper-list-body:focus-within .paper-row[aria-selected='true'] .paper-tag {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+body[data-window-focused='false'] .paper-row[aria-selected='true'] {
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+/* A read paper's mark is the Read shelf's green (`PaperRow.statusButton`). */
+.paper-status[data-on='true'] {
+  color: var(--shelf-read);
+}
+
+/* The one cue that a record wants a look, at the row's end. */
+.paper-flag {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--warning);
+  display: inline-flex;
+}
+.paper-flag svg { width: 14px; height: 14px; display: block; }
 
 .paper-status {
   flex: 0 0 auto;
@@ -741,7 +889,7 @@ body[data-window-focused='false'] .row[aria-selected='true'] .row-icon {
   font-size: 10.5px;
   line-height: 1.5;
   background: color-mix(in srgb, var(--tag) 18%, transparent);
-  color: color-mix(in srgb, var(--tag) 70%, var(--text));
+  color: var(--tag);
 }
 
 /* The paperclip: how many supplements a paper has, and the way into them. */
@@ -1819,6 +1967,12 @@ body[data-window-focused='false'] .row[aria-selected='true'] .row-icon {
   padding: 30px;
 }
 
+.empty .empty-icon svg {
+  width: 34px;
+  height: 34px;
+  color: var(--text-tertiary);
+}
+
 .empty h2 {
   margin: 0;
   font-size: 15px;
@@ -1874,6 +2028,8 @@ body[data-window-focused='false'] .row[aria-selected='true'] .row-icon {
 .filled-button:hover {
   filter: brightness(1.06);
 }
+
+.filled-button.danger { background: var(--danger); }
 
 .plain-button {
   padding: 5px 12px;
@@ -1999,6 +2155,13 @@ body[data-window-focused='false'] .row[aria-selected='true'] .row-icon {
    a title, one field, Cancel and Create. */
 .ask-sheet { width: 360px; }
 .ask-body { padding: 0 20px 18px; }
+.ask-message {
+  margin: 0;
+  max-width: 360px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
 .ask-field {
   width: 100%;
   background: var(--panel-soft);
@@ -2097,6 +2260,31 @@ body[data-window-focused='false'] .row[aria-selected='true'] .row-icon {
   margin: 4px 6px;
   background: var(--separator);
 }
+
+.menu button.menu-danger { color: var(--danger); }
+.menu button.menu-danger:hover,
+.menu button.menu-danger:focus { background: var(--danger); color: #fff; }
+
+.menu .menu-lines {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-width: 280px;
+}
+.menu .menu-lines > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.menu .menu-detail {
+  font-size: 11px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.menu button:hover .menu-detail,
+.menu button:focus .menu-detail { color: rgba(255, 255, 255, 0.85); }
 
 .menu .menu-caption {
   padding: 5px 9px 3px;
@@ -2257,6 +2445,43 @@ body[data-window-focused='false'] .row[aria-selected='true'] .row-icon {
 .list-note {
   padding: 8px 18px;
 }
+
+/* The folder's own rows at the top of the list — the records that have not
+   arrived, the PDFs left to add, the ones that could not be — full width, so
+   none of them fights the shelf's name for room (`Entry.note`). */
+button.list-note {
+  width: calc(100% - 16px);
+  margin: 1px 8px;
+  padding: 7px 10px;
+  border-radius: var(--radius-row);
+  font-size: 12.5px;
+  color: var(--text);
+  text-align: left;
+  transition: background-color var(--motion-tap) var(--ease);
+}
+button.list-note:hover { background: var(--hover); }
+.list-note svg { width: 15px; height: 15px; flex: 0 0 auto; color: var(--text-secondary); }
+.list-note.quiet { color: var(--text-secondary); font-size: 12.5px; padding: 7px 18px; }
+
+/* What pulling the list past its top uncovers, and what going on will do. */
+.pull-hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  opacity: 0;
+  pointer-events: none;
+  transition: color var(--motion-tap) var(--ease);
+}
+.pull-hint svg { width: 14px; height: 14px; }
+.pull-hint[data-armed='true'] { color: var(--accent-text); }
 
 /* One quiet line under the results — the index for search by meaning still
    filling. No spinner: it is not the palette that is busy. */

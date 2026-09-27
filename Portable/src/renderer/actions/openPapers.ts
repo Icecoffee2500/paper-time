@@ -11,14 +11,18 @@ import {
   closeOpenPaper,
   closeOtherOpenPapers,
   dock,
+  extendRun,
   keepOpen,
   patchPaper,
   paper as findPaper,
+  pickRow,
   remember,
   shelfPapers,
   store,
   travelBy,
   undock,
+  type Picking,
+  type PickMode,
 } from '../state.js'
 import { solo } from '../shell.js'
 import { focused, pageArea, readers, reconcileReaders } from '../pageArea.js'
@@ -32,8 +36,17 @@ import { splitContains, splitPapers, type DockZone, type SplitArrangement } from
  * Shows a paper. With papers side by side, the paper takes the place of the
  * pane in focus, so the arrangement keeps its shape.
  */
-export async function showPaper(id: string) {
-  if (store.selectedID === id || !findPaper(id)) return
+export async function showPaper(id: string, keepSelection = false) {
+  if (!findPaper(id)) return
+  // Shown by any other way than the list's own rows — the palette, Back, a
+  // supplement — a paper is the one row chosen (the Mac's `selectedPaperID`).
+  if (!keepSelection && (store.selection.length !== 1 || store.selection[0] !== id)) {
+    store.selection = [id]
+    store.selectionAnchor = id
+    store.selectionLead = id
+    changed('selection')
+  }
+  if (store.selectedID === id) return
   const previous = store.selectedID
   if (store.split && !splitContains(store.split, id)) {
     const target = previous && splitContains(store.split, previous) ? previous : splitPapers(store.split)[0]
@@ -55,6 +68,62 @@ async function markOpened(id: string) {
   if (!state) return
   patchPaper(id, { state })
   changed('papers')
+}
+
+function picking(): Picking {
+  return { selection: store.selection, anchor: store.selectionAnchor, showing: store.selectedID }
+}
+
+/** The rows chosen changed: the paper to show follows (`selection.didSet`). */
+function settlePicking(next: Picking, lead: string) {
+  store.selection = next.selection
+  store.selectionAnchor = next.anchor
+  store.selectionLead = lead
+  if (next.showing && next.showing !== store.selectedID) {
+    void showPaper(next.showing, true)
+  } else if (!next.showing && store.selectedID && !store.split) {
+    // No row chosen is no paper showing, as on the Mac.
+    store.selectedID = null
+    saveSettings({ selectedPaperID: null })
+    reconcileReaders()
+    changed('papers', 'selection', 'reader')
+    return
+  }
+  changed('selection')
+}
+
+/** A row pressed in the list, with the keys held (`PaperTable.clicked`). */
+export function pickPaper(id: string, mode: PickMode) {
+  if (!findPaper(id)) return
+  const order = shelfPapers().map((entry) => entry.id)
+  settlePicking(pickRow(picking(), id, mode, order), id)
+}
+
+/** ⇧↑/⇧↓ in the list: the run from the anchor grows or shrinks by a row. */
+export function extendSelection(by: number) {
+  const order = shelfPapers().map((entry) => entry.id)
+  if (order.length === 0) return
+  const lead = store.selectionLead && order.includes(store.selectionLead) ? store.selectionLead : store.selectedID
+  const at = lead ? order.indexOf(lead) : -1
+  const next = order[Math.min(Math.max(at + by, 0), order.length - 1)]
+  if (!next) return
+  settlePicking(extendRun(picking(), next, order), next)
+}
+
+/** Ctrl+A in the list (⌘A on a Mac): every row on the shelf. */
+export function selectAllPapers() {
+  const order = shelfPapers().map((entry) => entry.id)
+  if (order.length === 0) return
+  const showing = store.selectedID && order.includes(store.selectedID) ? store.selectedID : order[0]
+  settlePicking({ selection: order, anchor: store.selectionAnchor ?? showing, showing }, store.selectionLead ?? showing)
+}
+
+/** A row of the shelf by its place, for Home, End and the page keys. */
+export function stepPaperTo(index: number) {
+  const papers = shelfPapers()
+  if (papers.length === 0) return
+  const next = papers[Math.min(Math.max(index, 0), papers.length - 1)]
+  void showPaper(next.id)
 }
 
 function replaceInSplit(split: SplitArrangement, from: string, to: string): SplitArrangement {

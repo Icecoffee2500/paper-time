@@ -27,7 +27,7 @@ export interface InspectorActions {
   /** Renames the file on disk. Answers with what went wrong, or nothing. */
   rename: (id: string, name: string) => Promise<string | null>
   copyKey: (id: string) => void
-  openAuthor: (name: string) => void
+  openAuthor: (name: CSLName) => void
   /** The answer to "paper or document?", which decides the rest of this form. */
   setKind: (id: string, kind: DocumentKind) => void
   /** The default drawing style changed; the rack and the page should follow. */
@@ -342,7 +342,7 @@ function details(body: HTMLElement, paper: Paper, actions: InspectorActions) {
   const authors = el('div', { class: 'chip-row' })
   for (const name of (meta.csl.author ?? []) as CSLName[]) {
     const chip = el('button', { class: 'chip', text: fullName(name) })
-    on(chip, 'click', () => actions.openAuthor(fullName(name)))
+    on(chip, 'click', () => actions.openAuthor(name))
     authors.append(chip)
   }
   if (authors.childElementCount > 0) {

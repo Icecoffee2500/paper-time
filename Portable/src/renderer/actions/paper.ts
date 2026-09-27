@@ -27,9 +27,10 @@ import { applySnapshot, reload } from '../library.js'
 import { closeOthers, closePaper, dockPaper, keepPaper, openInWindow, showPaper } from './openPapers.js'
 import { showMenu, toast, type MenuEntry } from '../ui/toolbar.js'
 import { showAttachSheet } from '../ui/attachSheet.js'
+import { askToConfirm } from '../ui/ask.js'
 import { couldNot } from '../notices.js'
 import { L } from '../../shared/lang.js'
-import { isCitable, isLookedUp, type DocumentKind } from '../../shared/documentKind.js'
+import { isLookedUp, type DocumentKind } from '../../shared/documentKind.js'
 import { entryFor } from '../../shared/bibtex.js'
 import { DOCK_ZONES, type DockZone } from '../../shared/split.js'
 
@@ -121,20 +122,28 @@ export function statusEntries(entry: Paper): MenuEntry[] {
  * is itself a supplement, and not a paper that has supplements of its own —
  * the Mac's rules, one level deep.
  */
-export async function attach(child: string, parent: string) {
-  const entry = findPaper(child)
+export async function attach(children: string | string[], parent: string) {
   const target = findPaper(parent)
-  if (!entry || !target || child === parent) return
-  if (target.meta.parentID || entry.meta.parentID === parent) return
-  if (attachmentsOf(child).length > 0) {
-    toast(L('보충 자료가 붙은 논문은 다른 논문에 붙일 수 없어요.', "A paper with supplements of its own can't become one."))
-    return
+  if (!target || target.meta.parentID) return
+  let attached = 0
+  let refused = false
+  for (const child of Array.isArray(children) ? children : [children]) {
+    const entry = findPaper(child)
+    if (!entry || child === parent || entry.meta.parentID === parent) continue
+    if (attachmentsOf(child).length > 0) {
+      refused = true
+      continue
+    }
+    await editMeta(child, { parentID: parent })
+    attached += 1
+    // Off the shelves now; if it was the one showing, its paper comes
+    // forward (`LibraryModel.attach`).
+    if (store.selectedID === child) await showPaper(parent)
   }
-  await editMeta(child, { parentID: parent })
-  // Off the shelves now; if it was the one showing, its paper comes forward
-  // (`LibraryModel.attach`).
-  if (store.selectedID === child) await showPaper(parent)
-  toast(L(`“${target.meta.displayTitle}”에 붙였어요`, `Attached to “${target.meta.displayTitle}”`))
+  if (refused) {
+    toast(L('보충 자료가 붙은 논문은 다른 논문에 붙일 수 없어요.', "A paper with supplements of its own can't become one."))
+  }
+  if (attached > 0) toast(L(`“${target.meta.displayTitle}”에 붙였어요`, `Attached to “${target.meta.displayTitle}”`))
 }
 
 /** Takes a supplement off its paper: a paper of its own again. */
@@ -152,30 +161,45 @@ export function attachTargets(id: string): { id: string; title: string; fileName
  * a reading status, the favourites, a collection, a tag. Nothing else takes
  * a drop, and a paper already there is left as it is.
  */
-export async function fileUnder(paperID: string, shelf: Shelf) {
+export async function fileUnder(paperIDs: string | string[], shelf: Shelf) {
+  // Every paper the drag carried — the whole selection when it started on
+  // one of the chosen rows, as on the Mac.
+  let filed = 0
+  for (const paperID of Array.isArray(paperIDs) ? paperIDs : [paperIDs]) {
+    if (await fileOne(paperID, shelf)) filed += 1
+  }
+  if (filed > 0 && shelf.kind === 'collection') {
+    const collection = store.collections.find((one) => one.id === shelf.id)
+    if (collection) toast(L(`“${collection.name}”에 넣었어요`, `Added to “${collection.name}”`))
+  }
+}
+
+async function fileOne(paperID: string, shelf: Shelf): Promise<boolean> {
   const entry = findPaper(paperID)
-  if (!entry) return
+  if (!entry) return false
   switch (shelf.kind) {
     case 'status':
-      if (entry.state.readingStatus !== shelf.status) await setStatus(paperID, shelf.status)
-      return
+      if (entry.state.readingStatus === shelf.status) return false
+      await setStatus(paperID, shelf.status)
+      return true
     case 'favorites':
-      if (!entry.state.isFavorite) await setFavorite(paperID, true)
-      return
+      if (entry.state.isFavorite) return false
+      await setFavorite(paperID, true)
+      return true
     case 'collection': {
       const collection = store.collections.find((one) => one.id === shelf.id)
-      if (!collection || collection.rule || entry.meta.collectionIDs.includes(shelf.id)) return
+      if (!collection || collection.rule || entry.meta.collectionIDs.includes(shelf.id)) return false
       await editMeta(paperID, { collectionIDs: [...entry.meta.collectionIDs, shelf.id] })
-      toast(L(`“${collection.name}”에 넣었어요`, `Added to “${collection.name}”`))
-      return
+      return true
     }
     case 'tag': {
       const tag = store.tags.find((one) => one.id === shelf.id)
-      if (!tag || entry.meta.tagIDs.includes(shelf.id)) return
+      if (!tag || entry.meta.tagIDs.includes(shelf.id)) return false
       await editMeta(paperID, { tagIDs: [...entry.meta.tagIDs, shelf.id] })
-      return
+      return true
     }
   }
+  return false
 }
 
 /** Why a name was refused, in the reader's own language. */
@@ -201,17 +225,29 @@ export async function copyKey(id: string) {
   // The key the exported file gives it — its own, or the one the export
   // makes up — and never its title, which no \cite{} would find.
   const copied = await copyText(entryFor(entry.meta).key)
-  toast(copied ? L('인용 키를 복사했어요', 'Citation key copied') : L('복사하지 못했어요', "Paper Time couldn't copy that."))
+  toast(copied ? L('BibTeX 키를 복사했어요', 'BibTeX key copied') : L('복사하지 못했어요', "Paper Time couldn't copy that."))
 }
 
-/** Into the library's own Trash folder, asked first — nothing is deleted. */
+/**
+ * Into the library's own Trash folder, asked first — nothing is deleted.
+ *
+ * The Mac does it without asking; this build asks, on purpose (a decision
+ * kept for the Mac to make first). In a sheet of the window's own: the
+ * desktop's `confirm()` froze the window and looked like another program's.
+ */
 export async function trashPaper(id: string) {
   const entry = findPaper(id)
   if (!entry) return
-  if (!confirm(L(
-    `“${entry.meta.displayTitle}”\n\n라이브러리 휴지통에 넣을까요? 아무것도 지우지 않아요. PDF와 그 기록은 라이브러리 안 휴지통 폴더로 옮겨가요.`,
-    `Move “${entry.meta.displayTitle}” to the library's Trash?\n\nThe PDF and its record move to the Trash folder inside the library. Nothing is deleted.`,
-  ))) return
+  const sure = await askToConfirm({
+    title: L('휴지통에 넣을까요?', 'Move to Trash?'),
+    message: L(
+      `“${entry.meta.displayTitle}”의 PDF와 기록이 라이브러리 안 휴지통 폴더로 옮겨가요. 아무것도 지우지 않아요.`,
+      `The PDF and the record of “${entry.meta.displayTitle}” move to the Trash folder inside the library. Nothing is deleted.`,
+    ),
+    confirm: L('휴지통에 넣기', 'Move to Trash'),
+    danger: true,
+  })
+  if (!sure) return
   const snapshot = await call('library:trash', { id })
   if ('error' in snapshot) return couldNot('finish', snapshot.error)
   undock(id)
@@ -257,26 +293,31 @@ export function statusMenu(id: string, anchor: Element) {
 export function attachmentsMenu(id: string, anchor: Element) {
   const children = attachmentsOf(id)
   if (children.length === 0) return
+  // The Mac's popover: one press opens a supplement, each says its file name
+  // — which is how «supp.pdf» and «appendix.pdf» are told apart — the one
+  // showing is ticked, a right-click detaches, and the way back is last.
   showMenu(anchor, [
     { caption: L('보충 자료', 'Supplementary Material') },
-    ...children.map((child) => ({
+    ...children.map((child): MenuEntry => ({
       label: child.meta.displayTitle,
-      icon: 'doc',
-      children: [
-        { label: L('열기', 'Open'), icon: 'text.page', action: () => void showPaper(child.id) },
-        { label: L('논문에서 떼기', 'Detach from Paper'), icon: 'paperclip', action: () => void detach(child.id) },
-      ],
+      detail: child.meta.file.originalName,
+      icon: 'doc.text',
+      checked: store.selectedID === child.id,
+      action: () => void showPaper(child.id),
+      more: [{ label: L('논문에서 떼기', 'Detach from Paper'), icon: 'paperclip', action: () => void detach(child.id) }],
     })),
+    { separator: true },
+    { label: L('논문으로 돌아가기', 'Back to the Paper'), icon: 'arrow.uturn.backward', action: () => void showPaper(id) },
   ], 'right')
 }
 
-/** A row's own menu, in the Mac's order. */
+/** A row's own menu, in the Mac's order (`PaperMenu`). */
 export function paperMenu(id: string, anchor: Element) {
   const entry = findPaper(id)
   if (!entry) return
   const labels = ZONE_LABELS()
   showMenu(anchor, [
-    { label: L('열기', 'Open'), icon: 'text.page', action: () => void showPaper(id) },
+    { label: L('열기', 'Open'), icon: 'book', action: () => void showPaper(id) },
     // Beside the paper already open: a half, or a quarter, of the page.
     {
       label: L('나란히 열기', 'Open Side by Side'),
@@ -294,22 +335,20 @@ export function paperMenu(id: string, anchor: Element) {
             : []),
         ]
       : [{ label: L('열어 두기', 'Keep Open'), icon: 'pin', action: () => keepPaper(id, true) }]),
+    // Not on the Mac's row menu, where a paper goes to a window of its own by
+    // being dragged out of the open-papers popup; kept here on purpose — the
+    // gesture is not one Windows teaches.
     { label: L('새 창으로 열기', 'Open in New Window'), icon: 'macwindow.badge.plus', action: () => openInWindow(id) },
-    { separator: true },
-    // The same answer the inspector asks for, where a handful of rows can
-    // be corrected one after another — which is what a wrongly answered
-    // import feels like. The one it already is is left out: a menu offering
-    // what has already happened is a menu item that does nothing.
-    ...([
-      ['paper', L('논문으로 바꾸기', 'Make It a Paper'), 'text.document'],
-      ['book', L('책으로 바꾸기', 'Make It a Book'), 'book'],
-      ['lecture', L('강의자료로 바꾸기', 'Make It Course Material'), 'lecture'],
-      ['document', L('일반 문서로 바꾸기', 'Make It a Document'), 'note'],
-    ] as const)
-      .filter(([value]) => value !== entry.meta.effectiveKind)
-      .map(([value, label, glyph]) => ({
-        label, icon: glyph, action: () => void setKind(id, value),
-      })),
+    // The Mac's row menu has the reading status as a picker of its own. The
+    // kind is not here: it is in the status button's menu and the ⋯ menu.
+    { label: L('읽기 상태', 'Reading Status'), icon: 'circle.lefthalf.filled', children: statusEntries(entry) },
+    {
+      label: entry.state.isFavorite
+        ? L('즐겨찾기에서 빼기', 'Remove from Favorites')
+        : L('즐겨찾기에 더하기', 'Add to Favorites'),
+      icon: 'star',
+      action: () => void setFavorite(id, !entry.state.isFavorite),
+    },
     // A search for the one to go under, as on the Mac — greyed for a paper
     // that is a supplement already, has its own, or has nothing to go under.
     {
@@ -322,22 +361,15 @@ export function paperMenu(id: string, anchor: Element) {
         attach: (parent) => void attach(id, parent),
       }),
     },
-    { separator: true },
-    { label: L('폴더에서 보기', 'Show in Folder'), icon: 'folder', action: () => void call('paper:reveal', { id }) },
-    ...(isCitable(entry.meta.effectiveKind)
-      ? [{ label: L('인용 키 복사', 'Copy Citation Key'), icon: 'doc.on.doc', action: () => void copyKey(id) }]
+    ...(entry.meta.parentID
+      ? [{ label: L('논문에서 떼기', 'Detach from Paper'), icon: 'paperclip' as const, action: () => void detach(id) }]
       : []),
     { separator: true },
-    // The Mac's row menu has the reading status as a picker of its own.
-    { label: L('읽기 상태', 'Reading Status'), icon: 'circle.lefthalf.filled', children: statusEntries(entry) },
-    {
-      label: entry.state.isFavorite
-        ? L('즐겨찾기에서 빼기', 'Remove from Favorites')
-        : L('즐겨찾기에 더하기', 'Add to Favorites'),
-      icon: 'star',
-      action: () => void setFavorite(id, !entry.state.isFavorite),
-    },
+    // On every kind, as on the Mac: a document has a key too, the one the
+    // export would give it.
+    { label: L('BibTeX 키 복사', 'Copy BibTeX Key'), icon: 'doc.on.doc', action: () => void copyKey(id) },
+    { label: L('폴더에서 보기', 'Show in Folder'), icon: 'folder', action: () => void call('paper:reveal', { id }) },
     { separator: true },
-    { label: L('휴지통에 넣기', 'Move to Trash'), icon: 'trash', action: () => void trashPaper(id) },
+    { label: L('휴지통에 넣기', 'Move to Trash'), icon: 'trash', danger: true, action: () => void trashPaper(id) },
   ])
 }

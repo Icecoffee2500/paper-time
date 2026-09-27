@@ -10,7 +10,7 @@ import { addPapers } from './library.js'
 import { closeOpenPapers } from './ui/openPapers.js'
 import { toast } from './ui/toolbar.js'
 import { L } from '../shared/lang.js'
-import { PAPER_DRAG_TYPE, zoneAt, zoneRect, type DockZone } from '../shared/split.js'
+import { carriesPapers, draggedPapers, zoneAt, zoneRect, type DockZone } from '../shared/split.js'
 
 /**
  * A paper dragged over the page area — a row of the list, a pane's title, a
@@ -35,7 +35,7 @@ function lightZone(zone: DockZone | null) {
 }
 
 function carriesPaper(event: DragEvent): boolean {
-  return Boolean(event.dataTransfer && [...event.dataTransfer.types].includes(PAPER_DRAG_TYPE))
+  return carriesPapers(event.dataTransfer)
 }
 
 function zoneUnder(event: DragEvent): DockZone | null {
@@ -59,7 +59,8 @@ export function installDockDrop() {
     if (!carriesPaper(event)) return
     event.preventDefault()
     event.stopPropagation()
-    const id = event.dataTransfer?.getData(PAPER_DRAG_TYPE)
+    // A pane takes one paper: the one the drag started on leads its list.
+    const id = draggedPapers(event.dataTransfer)[0]
     const zone = zoneUnder(event)
     lightZone(null)
     if (!id || !zone) return

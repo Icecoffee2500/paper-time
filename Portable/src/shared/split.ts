@@ -124,3 +124,24 @@ export function zoneRect(zone: DockZone, size: Size): Rect {
 
 /** The MIME type a dragged paper travels under, inside the window. */
 export const PAPER_DRAG_TYPE = 'application/x-papertime-paper'
+
+/**
+ * The papers a drag carries. A drag that starts on one of several chosen
+ * rows carries all of them — the Mac's `draggedPapers(startingAt:)` — so
+ * filing a term's slides into a collection is one gesture. One identifier
+ * per line: a drag from the open-papers popup or a pane's title carries one,
+ * and reads the same.
+ */
+export function writeDraggedPapers(data: DataTransfer, ids: string[]) {
+  data.setData(PAPER_DRAG_TYPE, ids.join('\n'))
+}
+
+export function draggedPapers(data: DataTransfer | null | undefined): string[] {
+  const raw = data?.getData(PAPER_DRAG_TYPE) ?? ''
+  return raw.split('\n').map((one) => one.trim()).filter(Boolean)
+}
+
+/** Whether a drag is carrying papers — all a drop target can know before the drop. */
+export function carriesPapers(data: DataTransfer | null | undefined): boolean {
+  return Boolean(data && [...data.types].includes(PAPER_DRAG_TYPE))
+}

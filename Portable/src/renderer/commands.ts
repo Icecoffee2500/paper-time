@@ -130,6 +130,14 @@ export function installMainEvents() {
       case 'library:changed':
         void reload()
         break
+      case 'library:adopting':
+        // The count falls as the files go in: two hundred files under the
+        // same number the whole way through read as stuck.
+        if (store.adopting !== null) {
+          store.adopting = (payload as { remaining: number }).remaining
+          changed('papers')
+        }
+        break
       case 'library:opened':
         libraryOpened(payload as never)
         break

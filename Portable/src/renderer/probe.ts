@@ -58,6 +58,8 @@ export function installProbeSurface() {
         lastPage: entry.state.lastPageIndex,
       })),
       selected: () => store.selectedID,
+      selection: () => [...store.selection],
+      adopting: () => store.adopting,
       open: () => [...store.openPaperIDs],
       pinned: () => [...store.pinnedPaperIDs],
       split: () => store.split,

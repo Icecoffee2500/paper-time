@@ -6,7 +6,7 @@
  * → Under the Title), kept as the same comma-separated words the Mac keeps:
  * the order they were switched on in is the order they are read in.
  */
-import { L } from './lang.js'
+import { L, prefersKorean } from './lang.js'
 import type { PaperMeta } from './model.js'
 
 export type SubtitleField = 'authors' | 'year' | 'venue' | 'citationKey' | 'fileName' | 'pageCount' | 'addedDate'
@@ -33,8 +33,9 @@ export function parseSubtitle(raw: string | undefined): SubtitleField[] {
   const fields = (raw ?? '').split(',')
     .map((word) => word.trim())
     .filter((word): word is SubtitleField => (SUBTITLE_FIELDS as string[]).includes(word))
-  const unique = [...new Set(fields)]
-  return unique.length > 0 ? unique : ['authors', 'year', 'venue']
+  // Repeats kept, as `SubtitleField.parse` keeps them: the two builds read
+  // one string the same way.
+  return fields.length > 0 ? fields : ['authors', 'year', 'venue']
 }
 
 export function encodeSubtitle(fields: SubtitleField[]): string {
@@ -55,7 +56,9 @@ function value(field: SubtitleField, meta: PaperMeta): string | null {
     case 'citationKey': return meta.bibKey || null
     case 'fileName': return meta.file.originalName || null
     case 'pageCount': return meta.file.pageCount > 0 ? L(`${meta.file.pageCount}쪽`, `${meta.file.pageCount} pages`) : null
-    case 'addedDate': return meta.addedAt.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+    // In the app's language, not the desktop's: English words beside a
+    // Korean date is one line in two languages.
+    case 'addedDate': return meta.addedAt.toLocaleDateString(prefersKorean() ? 'ko' : 'en', { year: 'numeric', month: 'short', day: 'numeric' })
   }
 }
 

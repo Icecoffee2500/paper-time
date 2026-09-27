@@ -164,10 +164,22 @@ export async function addPapers(paths?: string[]) {
   settle(await call('library:import', { paths, root: importDestination() }), at, 'addPDFs')
 }
 
-/** «Add the n PDFs left in this folder». */
+/**
+ * «Add the n PDFs left in this folder». One at a time: a second press while
+ * one runs would take the same files in beside it, against a folder the
+ * watcher is also answering. While it runs the row is a count that falls.
+ */
 export async function adoptLoose() {
+  if (store.adopting !== null) return
+  store.adopting = store.looseCount
+  changed('papers')
   const at = ticket()
-  settle(await call('library:adoptLoose'), at, 'addPDFs')
+  try {
+    settle(await call('library:adoptLoose'), at, 'addPDFs')
+  } finally {
+    store.adopting = null
+    changed('papers')
+  }
 }
 
 /** A collection of the reader's own, named on a sheet of the window's own:
