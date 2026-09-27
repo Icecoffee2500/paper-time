@@ -5,11 +5,12 @@
     <!--
       No remote anything. The renderer shows PDFs and text that came from
       files the user did not write, so it is given no way to reach the network
-      and no way to run anything it did not ship with.
+      and no way to run anything it did not ship with. The one frame it may
+      show is its own: the website's demonstrations, shipped with it.
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self' blob:; worker-src 'self' blob:;"
+      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self' blob:; worker-src 'self' blob:; frame-src 'self';"
     />
     <title>Paper Time</title>
     <link rel="stylesheet" href="style.css" />

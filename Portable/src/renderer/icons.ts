@@ -59,6 +59,22 @@ const SHAPES = {
     <circle cx="8" cy="8" r="1.05" fill="currentColor" stroke="none"/>
     <circle cx="12.6" cy="8" r="1.05" fill="currentColor" stroke="none"/>`,
 
+  // A fix, in the Log.
+  wrench: `
+    <path d="M10.6 2.4a3.2 3.2 0 0 0-3.9 4.2L2.6 10.7a1.4 1.4 0 0 0 2 2l4.1-4.1a3.2 3.2 0 0 0 4.2-3.9l-2 2-1.8-.3-.3-1.8Z"/>`,
+  // Settings pages (`SettingsView.Pane.symbol`).
+  keyboard: `
+    <rect x="1.8" y="4.2" width="12.4" height="7.6" rx="1.6"/>
+    <path d="M4.2 6.6h.01M6.4 6.6h.01M8.6 6.6h.01M10.8 6.6h.01M4.2 8.6h.01M11.8 8.6h.01M5.8 9.8h4.4"/>`,
+  'list.bullet.rectangle': `
+    <rect x="1.8" y="2.6" width="12.4" height="10.8" rx="1.8"/>
+    <path d="M4.6 5.8h.01M4.6 8h.01M4.6 10.2h.01M6.8 5.8h4.6M6.8 8h4.6M6.8 10.2h4.6"/>`,
+  'info.circle': `
+    <circle cx="8" cy="8" r="6.2"/>
+    <path d="M8 7.2v4M8 4.9h.01"/>`,
+  'text.quote': `
+    <path d="M2.4 4h11.2M2.4 7h11.2M2.4 10h7M11.2 9.2c0-.9.6-1.5 1.5-1.5M11.2 9.2v2.4h2.2V9.4h-2.2"/>`,
+
   // </>: the Markdown as it is written.
   'chevron.left.forwardslash.chevron.right': `
     <path d="M5.2 4.6 2 8l3.2 3.4M10.8 4.6 14 8l-3.2 3.4M9.1 3.4 6.9 12.6"/>`,

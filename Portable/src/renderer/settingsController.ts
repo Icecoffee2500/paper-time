@@ -11,6 +11,7 @@ import { changed, store, type InspectorTab, type Settings } from './state.js'
 import { shell, solo } from './shell.js'
 import { SketchStyle } from '../shared/sketch.js'
 import { inkPresetsFrom } from '../shared/inkPresets.js'
+import { parseShortcutOverrides, setShortcutOverrides } from '../shared/shortcuts.js'
 import { readers } from './pageArea.js'
 import { showSettings, type SettingsSection } from './ui/settings.js'
 import { showFeedback } from './ui/feedback.js'
@@ -67,6 +68,11 @@ export function setSettings(patch: Partial<Settings>, options: { live?: boolean 
   }
   if ('pageLayout' in patch) setLayout(store.settings.pageLayout)
   if ('listSubtitle' in patch) shell.paperList.update()
+  // A key changed: every tooltip and list reads the new one from now on.
+  if ('shortcuts' in patch) {
+    setShortcutOverrides(parseShortcutOverrides(store.settings.shortcuts))
+    shell.toolbar.update()
+  }
   if (options.live) return
   changed('settings')
   openSheet?.redraw()
@@ -74,7 +80,7 @@ export function setSettings(patch: Partial<Settings>, options: { live?: boolean 
 
 /** What another window chose, followed here without writing it again. The
  *  columns, the paper showing and the tab are each window's own. */
-const SHARED = new Set<string>(['appearance', 'language', 'pageTint', 'pageTintColor', 'pageLayout', 'latexShortcuts', 'semanticSearch', 'listSubtitle', 'bibtexProtectCase', 'bibtexPreprintStyle', 'bibtexIncludeUnverified', 'sort', 'sketchStyle', 'inkPresets'])
+const SHARED = new Set<string>(['appearance', 'language', 'pageTint', 'pageTintColor', 'pageLayout', 'latexShortcuts', 'semanticSearch', 'listSubtitle', 'bibtexProtectCase', 'bibtexPreprintStyle', 'bibtexIncludeUnverified', 'sort', 'sketchStyle', 'inkPresets', 'shortcuts'])
 
 export function adoptSettings(patch: Record<string, unknown>) {
   const taken: Record<string, unknown> = {}
@@ -95,6 +101,7 @@ export function adoptSettings(patch: Record<string, unknown>) {
     }
   }
   if ('inkPresets' in taken) store.sketch.presets = inkPresetsFrom(taken.inkPresets)
+  if ('shortcuts' in taken) setShortcutOverrides(parseShortcutOverrides(taken.shortcuts))
   changed('settings', 'papers')
   openSheet?.redraw()
 }

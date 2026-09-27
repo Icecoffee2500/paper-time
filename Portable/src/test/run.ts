@@ -51,6 +51,7 @@ import { notesModelSuite } from './notesModel.js'
 import { noteBlocksSuite } from './noteBlocks.js'
 import { drawingToolsSuite } from './drawingTools.js'
 import { noteMarkdownSuite } from './noteMarkdown.js'
+import { shortcutsAndLogSuite } from './shortcutsAndLog.js'
 import { commandsSuite } from './commands.js'
 import { readerSuite } from './reader.js'
 import { sketchGeometrySuite } from './sketchGeometry.js'
@@ -433,6 +434,7 @@ async function main() {
   await noteBlocksSuite(test, suite)
   await drawingToolsSuite(test, suite)
   await noteMarkdownSuite(test, suite)
+  await shortcutsAndLogSuite(test, suite)
   await commandsSuite(test, suite)
   await readerSuite(test, suite)
   await sketchGeometrySuite(test, suite)

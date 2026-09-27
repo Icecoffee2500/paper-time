@@ -4,7 +4,7 @@
  */
 import { call } from './bridge.js'
 import { paper as findPaper, store } from './state.js'
-import { reload } from './library.js'
+import { isReading, reload } from './library.js'
 import { kindEntries } from './actions/paper.js'
 import { runCommand } from './commands.js'
 import { openSettings, setLayout, setSettings, setSort } from './settingsController.js'
@@ -19,7 +19,7 @@ export function showMoreMenu(anchor: Element) {
   showMenu(anchor, [
     // The Mac's word for the same errand: fetch what the folders have and
     // tell the papers to look at their files again.
-    { label: L('지금 맞추기', 'Sync Now'), icon: 'arrow.clockwise', action: () => void reload() },
+    { label: L('지금 맞추기', 'Sync Now'), icon: 'arrow.clockwise', disabled: isReading(), action: () => void reload() },
     // No «Choose Library Folder…» here, as on the Mac: it is in the Library
     // menu, the settings sheet and the first-run screen.
     { separator: true },

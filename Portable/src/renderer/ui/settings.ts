@@ -27,7 +27,9 @@ import { providerIcon, providerName, providerOf } from '../../shared/cloudProvid
 import { store } from '../state.js'
 import { PAGE_TINTS, tintColorFrom, tintLabel } from '../../shared/pageTint.js'
 import { call, platform } from '../bridge.js'
-import { SHORTCUTS, groupTitle, keyFor, type ShortcutGroup } from '../../shared/shortcuts.js'
+import { acceleratorFor, acceleratorFromEvent, assignShortcut, displayAccelerator, groupTitle, matchingShortcuts, shortcutOverrides, type ShortcutGroup } from '../../shared/shortcuts.js'
+import { meaningStatus, onMeaningStatus } from '../meaningSearch.js'
+import { contributors, drawLog, showAllFeatures, showWhatsNew, showcase } from './releaseNotes.js'
 import { SUBTITLE_FIELDS, encodeSubtitle, parseSubtitle, subtitleName, toggledSubtitle } from '../../shared/subtitle.js'
 
 export interface SettingsActions {
@@ -50,10 +52,8 @@ export interface SettingsActions {
 }
 
 /** Where the sheet opens: at the top, or at one of its sections. */
-export type SettingsSection = 'about' | 'shortcuts' | 'reading'
+export type SettingsSection = 'library' | 'bibtex' | 'reading' | 'shortcuts' | 'log' | 'about'
 
-const PAGE_URL = 'https://icecoffee2500.github.io/paper-time/'
-const TOGETHER_URL = 'https://icecoffee2500.github.io/paper-time/#together'
 
 let open = false
 
@@ -143,12 +143,44 @@ export function showSettings(actions: SettingsActions, section?: SettingsSection
   backdrop.append(sheet)
   document.body.append(backdrop)
 
+  const closers: (() => void)[] = []
   const close = () => {
     backdrop.remove()
     open = false
-    document.removeEventListener('keydown', onKey)
+    document.removeEventListener('keydown', onKey, true)
+    for (const closer of closers) closer()
   }
   function onKey(event: KeyboardEvent) {
+    // A recorder waiting for a key takes the next one: Escape lets it go,
+    // Delete or Backspace leaves the command with none, and anything that
+    // spells a shortcut becomes the command's (and no other's).
+    if (recordingCommand) {
+      event.preventDefault()
+      event.stopPropagation()
+      const command = recordingCommand
+      if (event.key === 'Escape') {
+        recordingCommand = null
+        redraw()
+        return
+      }
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        recordingCommand = null
+        actions.set({ shortcuts: JSON.stringify(assignShortcut(shortcutOverrides(), command, '', platform)) })
+        return
+      }
+      const pressed = acceleratorFromEvent(event, platform)
+      if (!pressed) return
+      recordingCommand = null
+      actions.set({ shortcuts: JSON.stringify(assignShortcut(shortcutOverrides(), command, pressed, platform)) })
+      return
+    }
+    // The showcase turns with ←→, as the Mac's does, unless a field has the keys.
+    const inField = event.target instanceof HTMLElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName)
+    if (page === 'about' && aboutShowcase && !inField && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+      event.preventDefault()
+      aboutShowcase.turn(event.key === 'ArrowLeft' ? -1 : 1)
+      return
+    }
     if (event.key === 'Escape') close()
   }
 
@@ -156,9 +188,13 @@ export function showSettings(actions: SettingsActions, section?: SettingsSection
 
   /** Redrawn after every change, because a choice that does not light up
    *  reads as a press that did not land. */
-  const draw = () => {
-    clear(body)
+  /** Which page is showing, and the Shortcuts page's search and recorder. */
+  let page: SettingsSection = section ?? 'library'
+  let keyQuery = ''
+  let capturedKey: string | null = null
+  let recordingCommand: string | null = null
 
+  const libraryPage = () => {
     // The library's folder by name, the service that carries it, and its
     // path under the rows with the one thing to know about moving it — the
     // Mac's Library section.
@@ -241,6 +277,32 @@ export function showSettings(actions: SettingsActions, section?: SettingsSection
       "Notes about a paper stay in that paper's folder. This folder holds the rest. Choose one in a cloud drive to see them on your other computers.",
     )))
 
+    body.append(el('div', { class: 'set-section', text: L('모양', 'Appearance') }))
+    body.append(choices(
+      L('화면 모드', 'Theme'),
+      [
+        ['system', L('시스템에 따라', 'System')],
+        ['light', L('밝게', 'Light')], ['dark', L('어둡게', 'Dark')],
+      ] as const,
+      store.settings.appearance,
+      (value) => actions.set({ appearance: value }),
+      'appearance',
+    ))
+    // The one thing that had no way in at all. It changes at once: the
+    // windows are made again where they stand, in the new words.
+    body.append(choices(
+      L('말', 'Language'),
+      [
+        ['system', L('시스템에 따라', 'System')],
+        ['ko', '한국어'], ['en', 'English'],
+      ] as const,
+      store.settings.language,
+      (value) => actions.set({ language: value }),
+      'language',
+    ))
+  }
+
+  const readingPage = () => {
     const reading = el('div', { class: 'set-section', text: L('읽기', 'Reading') })
     // Where «Custom Color» in the ⋯ menu opens the sheet: the colour well is
     // right under this, as the Mac's menu opens its colour panel.
@@ -281,6 +343,16 @@ export function showSettings(actions: SettingsActions, section?: SettingsSection
       store.settings.semanticSearch !== false,
       (value) => actions.set({ semanticSearch: value }),
     ))
+    // How far the index has got, under the switch (`SemanticIndex.status`).
+    const meaning = meaningStatus()
+    if (store.settings.semanticSearch !== false && (meaning.progress || meaning.ready)) {
+      body.append(el('p', {
+        class: 'set-note set-status',
+        text: meaning.progress
+          ? L(`준비 중 · ${meaning.progress.done}/${meaning.progress.total}`, `Getting ready · ${meaning.progress.done}/${meaning.progress.total}`)
+          : L(`구절 ${meaning.passages}개를 알고 있어요`, `${meaning.passages} passages ready`),
+      }))
+    }
     body.append(note(L(
       '찾을 때 뜻이 비슷한 구절도 같이 보여줘요. 논문은 이 기기에서만 읽어요.',
       'Finds passages that mean what you typed, beside the exact matches. Everything stays on this device.',
@@ -316,31 +388,9 @@ export function showSettings(actions: SettingsActions, section?: SettingsSection
       '`//`를 치면 분수가 되는 것처럼, 짧게 친 말을 LaTeX로 바꿔요.',
       'Expands short triggers into LaTeX as you type, like // into a fraction.',
     )))
+  }
 
-    body.append(el('div', { class: 'set-section', text: L('모양', 'Appearance') }))
-    body.append(choices(
-      L('화면 모드', 'Theme'),
-      [
-        ['system', L('시스템에 따라', 'System')],
-        ['light', L('밝게', 'Light')], ['dark', L('어둡게', 'Dark')],
-      ] as const,
-      store.settings.appearance,
-      (value) => actions.set({ appearance: value }),
-      'appearance',
-    ))
-    // The one thing that had no way in at all. It changes at once: the
-    // windows are made again where they stand, in the new words.
-    body.append(choices(
-      L('말', 'Language'),
-      [
-        ['system', L('시스템에 따라', 'System')],
-        ['ko', '한국어'], ['en', 'English'],
-      ] as const,
-      store.settings.language,
-      (value) => actions.set({ language: value }),
-      'language',
-    ))
-
+  const bibtexPage = () => {
     body.append(el('div', { class: 'set-section', text: 'BibTeX' }))
     body.append(choices(
       L('프리프린트 양식', 'Preprint Style'),
@@ -363,38 +413,81 @@ export function showSettings(actions: SettingsActions, section?: SettingsSection
       '제목의 대문자를 `{}`로 감싸서, 인용 양식이 «BERT»를 «bert»로 바꾸지 못하게 해요.',
       'Wraps capitals in a title in `{}`, so a citation style cannot turn BERT into bert.',
     )))
+  }
 
-    // Every key, to read: on Windows and Linux the window has no menu bar to
-    // read them off, so this list and the tooltips are where they are found.
-    const keys = el('div', { class: 'set-section', text: L('단축키', 'Shortcuts') })
-    keys.dataset.section = 'shortcuts'
-    body.append(keys)
+  const shortcutsPage = () => {
+    // Every key, and each one can be changed (`SettingsView.shortcutsSection`):
+    // a key belongs to one command, so giving it to a second takes it from
+    // the first, which is left with none until it is given one.
+    const using = shortcutOverrides()
+    const found = matchingShortcuts(keyQuery, capturedKey, platform)
+    if (found.length === 0) {
+      body.append(note(capturedKey
+        ? L(`${displayAccelerator(capturedKey, platform)}에는 아무것도 없어요.`, `Nothing is on ${displayAccelerator(capturedKey, platform)}.`)
+        : L('그런 키도, 그런 이름도 없어요.', 'Nothing is on that key, and nothing is called that.')))
+    }
     const groups: ShortcutGroup[] = ['library', 'reading', 'marking', 'panes', 'moving', 'app']
     for (const group of groups) {
+      const entries = found.filter((one) => one.group === group)
+      if (entries.length === 0) continue
       body.append(el('div', { class: 'set-subsection', text: groupTitle(group) }))
-      for (const entry of SHORTCUTS.filter((one) => one.group === group)) {
+      const card = el('div', { class: 'set-key-card' })
+      for (const entry of entries) {
         const row = el('div', { class: 'set-row set-key-row' })
-        row.append(
-          el('span', { class: 'set-label', text: entry.title() }),
-          el('span', { class: 'set-key', text: keyFor(entry.command, platform) }),
-        )
-        body.append(row)
+        const accelerator = acceleratorFor(entry, platform, using)
+        const recording = recordingCommand === entry.command
+        const recorder = el('button', {
+          type: 'button',
+          class: `set-key-recorder${recording ? ' recording' : ''}${accelerator ? '' : ' unset'}`,
+          'aria-pressed': String(recording),
+          text: recording ? L('키를 눌러주세요', 'Type a Shortcut') : accelerator ? displayAccelerator(accelerator, platform) : L('없음', 'None'),
+          title: L('눌러서 바꾸기 — 지우려면 Delete', 'Click to change. Press Delete to remove.'),
+        })
+        on(recorder, 'click', () => {
+          recordingCommand = recording ? null : entry.command
+          redraw()
+          if (recordingCommand) body.querySelector<HTMLButtonElement>('.set-key-recorder.recording')?.focus()
+        })
+        row.append(el('span', { class: 'set-label', text: entry.title() }), recorder)
+        card.append(row)
       }
+      body.append(card)
     }
+    if (!keyQuery && !capturedKey) {
+      const restore = el('button', { type: 'button', class: 'plain-button', text: L('기본값으로 복원', 'Restore Defaults') })
+      restore.disabled = Object.keys(using).length === 0
+      on(restore, 'click', () => {
+        recordingCommand = null
+        actions.set({ shortcuts: null })
+      })
+      body.append(el('div', { class: 'set-row set-buttons set-end' }, [restore]))
+    }
+  }
 
-    // About, as the Mac has it at the end of its settings: which version this
-    // is, what changed, and the two ways to say something back.
-    const about = el('div', { class: 'set-section', text: L('정보', 'About') })
-    about.dataset.section = 'about'
-    body.append(about)
-    const version = el('span', { class: 'set-path', text: '' })
-    body.append(el('div', { class: 'set-row' }, [
-      el('span', { class: 'set-label', text: 'Paper Time' }),
-      version,
-    ]))
-    void call('app:about').then((answer) => {
-      version.textContent = L(`버전 ${answer.version}`, `Version ${answer.version}`)
-    }).catch(() => undefined)
+  /** The showcase on the About page, so ←→ can turn it. */
+  let aboutShowcase: ReturnType<typeof showcase> | null = null
+  let version = ''
+
+  // About, as the Mac has it (`AboutView`): the few things worth showing,
+  // the version, the people who told us something, and the way to the rest.
+  const aboutPage = () => {
+    aboutShowcase = showcase()
+    const versionLine = el('p', { class: 'set-note rn-about-version', text: version ? L(`버전 ${version} · 베타`, `Version ${version} · Beta`) : '' })
+    if (!version) {
+      void call('app:about').then((answer) => {
+        version = answer.version
+        versionLine.textContent = L(`버전 ${version} · 베타`, `Version ${version} · Beta`)
+      }).catch(() => undefined)
+    }
+    body.append(el('div', { class: 'rn-about-head' }, [el('h3', { class: 'rn-about-name', text: 'Paper Time' }), versionLine]))
+    body.append(aboutShowcase.node)
+    body.append(el('div', { class: 'set-section', text: L('함께 만드는 중', 'Built Together') }))
+    const people = el('div', { class: 'rn-people' })
+    for (const person of contributors()) {
+      people.append(el('span', { class: 'rn-person', title: L(`보고 ${person.reports}번`, `${person.reports} report${person.reports === 1 ? '' : 's'}`), text: person.name }))
+    }
+    body.append(people)
+    body.append(note(L('알려 주신 분의 이름이 여기에 남아요.', 'The people who tell us something are named here.')))
     const links = el('div', { class: 'set-row set-links' })
     const link = (label: string, press: () => void) => {
       const button = el('button', { type: 'button', class: 'plain-button', text: label })
@@ -402,43 +495,137 @@ export function showSettings(actions: SettingsActions, section?: SettingsSection
       return button
     }
     links.append(
-      link(L('새로운 기능', "What's New"), () => void call('shell:openExternal', { url: PAGE_URL })),
-      link(L('함께 만드는 중', 'Built together'), () => void call('shell:openExternal', { url: TOGETHER_URL })),
       link(L('한마디 보내기…', 'Send Feedback…'), () => {
         close()
         actions.feedback()
       }),
+      // Shown, not marked as seen: that is for the sheet that comes by itself.
+      link(L('새로운 기능…', "What's New…"), () => showWhatsNew(version)),
+      link(L('모든 기능과 키…', 'All Features and Keys…'), () => showAllFeatures()),
     )
     body.append(links)
   }
 
-  draw()
+  const logPage = () => {
+    drawLog(body)
+  }
 
-  const title = el('h2', { class: 'fb-title', text: L('설정', 'Settings') })
+  const PAGES: { id: SettingsSection; title: () => string; icon: string; draw: () => void }[] = [
+    { id: 'library', title: () => L('라이브러리', 'Library'), icon: 'folder', draw: libraryPage },
+    { id: 'bibtex', title: () => 'BibTeX', icon: 'text.quote', draw: bibtexPage },
+    { id: 'reading', title: () => L('읽기', 'Reading'), icon: 'doc.text', draw: readingPage },
+    { id: 'shortcuts', title: () => L('단축키', 'Shortcuts'), icon: 'keyboard', draw: shortcutsPage },
+    { id: 'log', title: () => L('기록', 'Log'), icon: 'list.bullet.rectangle', draw: logPage },
+    { id: 'about', title: () => L('정보', 'About'), icon: 'info.circle', draw: aboutPage },
+  ]
+
+  /** The rail of pages — the Mac's seven, less the one this build has no
+   *  pipeline for yet. Rows of their own: the page you are on is lifted off
+   *  the ground rather than painted blue. */
+  const drawRail = () => {
+    clear(rail)
+    rail.append(el('h2', { class: 'fb-title set-rail-title', text: L('설정', 'Settings') }))
+    for (const one of PAGES) {
+      const row = el('button', { type: 'button', class: 'set-rail-row', 'aria-current': String(one.id === page), html: icon(one.icon) })
+      row.append(el('span', { text: one.title() }))
+      on(row, 'click', () => {
+        if (page === one.id) return
+        page = one.id
+        recordingCommand = null
+        drawRail()
+        drawPage()
+        body.scrollTop = 0
+      })
+      rail.append(row)
+    }
+  }
+
+  const drawPage = () => {
+    clear(top)
+    top.style.display = page === 'shortcuts' ? '' : 'none'
+    if (page === 'shortcuts') top.append(keySearch)
+    clear(body)
+    PAGES.find((one) => one.id === page)?.draw()
+  }
+
+  /** Redrawn after every change, because a choice that does not light up
+   *  reads as a press that did not land. */
+  const draw = () => drawPage()
+
+  // ---- the frame: the rail, and the page beside it
+  const rail = el('nav', { class: 'set-rail' })
+  const top = el('div', { class: 'set-top' })
+  const keySearchField = el('input', {
+    type: 'search', class: 'set-key-search-field', spellcheck: 'false',
+    placeholder: L('이름으로, 또는 키를 눌러서', 'Search by name, or press the keys'),
+  }) as HTMLInputElement
+  const keySearch = el('div', { class: 'set-key-search', html: icon('magnifyingglass') }, [keySearchField])
+  keySearch.append(el('span', {
+    class: 'set-key-search-hint', html: icon('keyboard'),
+    title: L('칸을 누른 다음 키 조합을 누르면, 그 키를 쓰는 기능이 나와요.', 'Click the field, then press a combination to find what owns it.'),
+  }))
+  on(keySearchField, 'input', () => {
+    keyQuery = keySearchField.value
+    capturedKey = null
+    drawPage()
+    keySearchField.focus()
+  })
+  // While the field has focus it catches key combinations instead of
+  // letting them run — the only way to ask «what is on Ctrl+K?» from a
+  // window where Ctrl+K does something.
+  on(keySearchField, 'keydown', (event: KeyboardEvent) => {
+    event.stopPropagation()
+    if (event.key === 'Escape') {
+      if (keySearchField.value || capturedKey) {
+        event.preventDefault()
+        keySearchField.value = ''
+        keyQuery = ''
+        capturedKey = null
+        drawPage()
+        keySearchField.focus()
+      }
+      return
+    }
+    const pressed = acceleratorFromEvent(event, platform)
+    if (!pressed) return
+    event.preventDefault()
+    capturedKey = pressed
+    keyQuery = ''
+    keySearchField.value = displayAccelerator(pressed, platform)
+    drawPage()
+    keySearchField.focus()
+  })
+
+  const pageArea = el('div', { class: 'set-page' }, [top, body])
   const foot = el('div', { class: 'set-foot' })
   const done = el('button', { class: 'filled-button', text: L('완료', 'Done') })
   on(done, 'click', close)
   foot.append(el('span', { class: 'fb-spacer' }), done)
+  pageArea.append(foot)
 
-  sheet.append(title, body, foot)
+  sheet.classList.add('set-paged')
+  sheet.append(rail, pageArea)
+  drawRail()
+  drawPage()
   on(backdrop, 'click', (event: MouseEvent) => {
     if (event.target === backdrop) close()
   })
-  document.addEventListener('keydown', onKey)
+  document.addEventListener('keydown', onKey, true)
   done.focus()
-  if (section) {
-    // Opened for one part of itself — «About Paper Time» from the ⋯ menu.
-    body.querySelector(`[data-section="${section}"]`)?.scrollIntoView({ block: 'start' })
-  }
 
   /** Redrawn in place: a choice that does not light up reads as a press
    *  that did not land — but the page stays where it was scrolled to. */
   const redraw = () => {
     // A sheet already closed is not drawn again.
     if (!open || !backdrop.isConnected) return
-    const top = body.scrollTop
+    const scrolled = body.scrollTop
     draw()
-    body.scrollTop = top
+    body.scrollTop = scrolled
   }
+  // The index's progress, under «Search by Meaning», as it goes.
+  const stopWatching = onMeaningStatus(() => {
+    if (page === 'reading') redraw()
+  })
+  closers.push(stopWatching)
   return { redraw, close }
 }

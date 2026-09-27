@@ -45,6 +45,10 @@ export const platform = host.platform
 setPathPlatform(platform)
 /** The paper this window is for, when it is a window for one paper. */
 export const soloPaperID: string | null = host.paper ?? null
+// The page speaks the window's language: hyphenation, quotes and a screen
+// reader follow `lang`, and it was «ko» whatever the window said.
+if (typeof document !== 'undefined') document.documentElement.lang = host.korean ? 'ko' : 'en'
+
 export const flags = { split: Boolean(host.flags?.split), probe: Boolean(host.flags?.probe) }
 
 // Before anything draws: the main process already decided, and every string

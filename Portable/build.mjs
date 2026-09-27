@@ -94,6 +94,16 @@ const targets = [
     target: 'chrome120',
     splitting: false,
   },
+  // The frame the website's demonstrations are shown in (About, What's New):
+  // one script before `demos.js` and one after, plain scripts like it.
+  ...['demoHost', 'demoMount'].map((name) => ({
+    ...common,
+    entryPoints: [path.join(root, `src/renderer/${name}.ts`)],
+    outfile: path.join(out, `renderer/${name}.js`),
+    platform: 'browser',
+    format: 'iife',
+    target: 'chrome120',
+  })),
   {
     ...common,
     entryPoints: [path.join(root, 'src/renderer/pdf.worker.entry.ts')],
@@ -121,6 +131,12 @@ async function copyStatic() {
   await mkdir(path.join(out, 'renderer'), { recursive: true })
   await cp(path.join(root, 'src/renderer/index.html'), path.join(out, 'renderer/index.html'))
   await cp(path.join(root, 'src/renderer/style.css'), path.join(out, 'renderer/style.css'))
+  // The landing page's demonstrations, as they are published: one set of
+  // demos, not a second that would drift from it.
+  await cp(path.join(root, 'src/renderer/demos.html'), path.join(out, 'renderer/demos.html'))
+  await cp(path.join(root, 'src/renderer/demoHost.css'), path.join(out, 'renderer/demoHost.css'))
+  await mkdir(path.join(out, 'renderer/demos'), { recursive: true })
+  for (const file of ['demos.js', 'style.css']) await cp(path.join(root, '../Website', file), path.join(out, 'renderer/demos', file))
   const fonts = path.join(root, 'assets/fonts')
   if (existsSync(fonts)) await cp(fonts, path.join(out, 'renderer/fonts'), { recursive: true })
   // Latex Suite's snippets are inside the renderer bundle (esbuild's JSON

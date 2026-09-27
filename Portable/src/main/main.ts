@@ -7,6 +7,7 @@
  * everywhere by construction: one Chromium, one stylesheet, one bundled
  * typeface, which is the point of porting this way rather than three times.
  */
+import { parseShortcutOverrides, setShortcutOverrides } from '../shared/shortcuts.js'
 import { BrowserWindow, app, nativeTheme, systemPreferences } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -206,6 +207,10 @@ const context: Context = {
     installMenu()
     windows.recreate()
   },
+  shortcutsChanged: () => {
+    setShortcutOverrides(parseShortcutOverrides(settings().shortcuts))
+    installMenu()
+  },
   notesChanged: (saved, removed) => {
     if (saved) {
       const source = noteSource(saved)
@@ -305,6 +310,7 @@ app.whenReady().then(async () => {
   }
   wantsKorean = resolveKorean(probe.language() ?? settings().language, app.getLocale())
   setKorean(wantsKorean)
+  setShortcutOverrides(parseShortcutOverrides(settings().shortcuts))
   markRunning(probe.isRun)
   windows.createMain()
   installMenu()
