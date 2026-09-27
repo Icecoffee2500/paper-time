@@ -1,0 +1,30 @@
+/** The words inside the papers, and search by meaning. */
+import type { Context, Handlers } from './context.js'
+
+export function textHandlers(ctx: Context): Partial<Handlers> {
+  const { text } = ctx
+
+  return {
+    // The window says which papers, in which order, and under which titles;
+    // this process knows where their files are.
+    'text:warm': ({ ids }) => text.warm(ids),
+    'text:search': ({ token, query, ids, titles, limit }, sender) => {
+      if (sender) text.search(sender.webContents, token, query, ids, titles, limit)
+    },
+    'text:cancel': ({ token }, sender) => {
+      if (sender) text.cancel(sender.webContents, token)
+    },
+    /** For a probe: what the service has read, and what it cost. */
+    'text:stats': () => text.stats(),
+
+    // Search by meaning. The window says what was typed and which places its
+    // exact search already shows; the answer is passages, best first.
+    'semantic:search': ({ query, k, shown }) => ctx.semantic().search(query, k ?? 8, shown ?? []),
+    'semantic:status': () => ctx.semantic().status(),
+    /** For a probe: builds now and waits, then says what the worker has. */
+    'semantic:build': async () => {
+      await ctx.semantic().build()
+      return { status: ctx.semantic().status(), stats: await ctx.semantic().stats(), unread: ctx.semantic().unread }
+    },
+  }
+}

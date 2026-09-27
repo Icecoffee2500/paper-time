@@ -162,7 +162,7 @@ const sidebar = buildSidebar({
       symbolName: 'folder',
       sortIndex: store.collections.length,
     }]
-    await call('collections:save', { collections })
+    await call('collections:save', { collections, root: importDestination() })
     await reload()
   },
   clearSearch: () => clearSearchResults(),
@@ -660,7 +660,8 @@ function readerFor(id: string, pane: boolean): Reader {
       const paper = store.papers.find((p) => p.id === id)
       if (!paper || paper.meta.guessedKind || paper.meta.kind) return
       paper.meta.guessedKind = kind
-      void call('paper:meta', { id, patch: { guessedKind: kind } })
+      // Unstamped: a guess is not the reader editing the paper.
+      void call('paper:meta', { id, patch: { guessedKind: kind }, stamp: false })
       changed('papers', 'inspector')
     },
   }, { pane })

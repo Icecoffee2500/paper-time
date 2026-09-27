@@ -11,6 +11,7 @@
  * is atomic on every filesystem this app will meet, so a library folder is
  * never left holding half a record because a laptop lid closed mid-save.
  */
+import { noteOwnWrite } from './ownWrites.js'
 import { isInside, pathKey, samePath } from '../shared/paths.js'
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
@@ -153,7 +154,12 @@ export async function writeJSON(file: string, value: unknown): Promise<void> {
   const temporary = `${file}.${process.pid}.${writeCounter}.tmp`
   try {
     await fsp.writeFile(temporary, text, 'utf8')
+    // The file, and the folder it lands in: a record folder made for a new
+    // paper is reported as a change to the folder above it.
+    noteOwnWrite(file)
+    noteOwnWrite(path.dirname(file))
     await fsp.rename(temporary, file)
+    noteOwnWrite(file)
   } catch (error) {
     await fsp.rm(temporary, { force: true })
     throw error
@@ -402,9 +408,16 @@ export class Library {
     return (await this.paper(id)) ?? row
   }
 
-  async saveMeta(meta: PaperMeta): Promise<void> {
-    meta.updatedAt = new Date()
-    meta.updatedBy = deviceIdentity
+  /**
+   * Writes the record. `stamp: false` leaves `updatedAt`/`updatedBy` as they
+   * were — a repair, or the app's own guess, is not the reader editing the
+   * paper and must not make this machine the last to have changed it.
+   */
+  async saveMeta(meta: PaperMeta, options: { stamp?: boolean } = {}): Promise<void> {
+    if (options.stamp !== false) {
+      meta.updatedAt = new Date()
+      meta.updatedBy = deviceIdentity
+    }
     await writeJSON(L.metaPath(this.root, meta.id), meta.encode())
   }
 
@@ -436,8 +449,10 @@ export class Library {
    * duplicated, and a file whose bytes match a paper already here is not
    * imported twice — the same two rules the Mac importer follows.
    */
-  async importPDF(source: string, pageCount: number): Promise<PaperRow | null> {
-    const digest = await sha256(source)
+  async importPDF(source: string, pageCount: number, known: { digest?: string } = {}): Promise<PaperRow | null> {
+    // The caller may have read the file already — the folder sync reads it
+    // whole to see whether it has all arrived — and need not read it again.
+    const digest = known.digest ?? await sha256(source)
     // The records this pass could read. When the folder did not answer in
     // full, the check below for "this paper is already here" is short by
     // however many records were late, so a paper whose own record is late can
@@ -520,7 +535,9 @@ export class Library {
       // only ever lists `.pdf`, so a `.part` left by a crash stays invisible.
       const landing = path.join(this.root, name)
       await fsp.copyFile(source, landing + '.part')
+      noteOwnWrite(landing)
       await fsp.rename(landing + '.part', landing)
+      noteOwnWrite(landing)
       relative = name
     }
     const stat = await fsp.stat(path.join(this.root, relative))
@@ -727,6 +744,10 @@ export class Library {
       appleInk: await listing(L.inkDir(this.root, id), '.drawing'),
     }
   }
+}
+
+export function sha256Bytes(bytes: Uint8Array): string {
+  return crypto.createHash('sha256').update(bytes).digest('hex')
 }
 
 export async function sha256(file: string): Promise<string> {

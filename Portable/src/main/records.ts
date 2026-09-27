@@ -1,0 +1,77 @@
+/**
+ * Writing a paper's record — `meta.json` and `state.json` — one change at a
+ * time per paper.
+ *
+ * Two patches to one paper used to race: each read the record, applied its
+ * change and wrote, and the second write carried the first change away.
+ * The star pressed while the rating was being saved, the status changed
+ * twice quickly. Every write to a paper's record now waits for the one
+ * before it, and the merge with what arrived from another machine happens
+ * inside the wait.
+ */
+import { PaperMeta, PaperState } from '../shared/model.js'
+import type { Library } from './library.js'
+
+export type Patch = Record<string, unknown>
+
+export class Records {
+  private readonly chains = new Map<string, Promise<unknown>>()
+
+  /** Runs `work` after everything queued for this paper. */
+  queue<T>(id: string, work: () => Promise<T>): Promise<T> {
+    const before = this.chains.get(id) ?? Promise.resolve()
+    const next = before.then(work, work)
+    this.chains.set(id, next)
+    void next.finally(() => {
+      if (this.chains.get(id) === next) this.chains.delete(id)
+    })
+    return next
+  }
+
+  /**
+   * Reading state. `null` takes a field off — a rating taken back to none —
+   * and the Mac's record has no key for a nil Optional, so none is written.
+   * A patch crosses the bridge as JSON, so its dates arrive as strings.
+   */
+  state(owner: Library, id: string, patch: Patch): Promise<Record<string, unknown> | null> {
+    return this.queue(id, async () => {
+      const row = await owner.paper(id)
+      if (!row) return null
+      const state = new PaperState(row.state ?? {})
+      const cleared = withoutNulls(patch)
+      Object.assign(state, cleared, {
+        lastOpenedAt: cleared.lastOpenedAt ? new Date(String(cleared.lastOpenedAt)) : state.lastOpenedAt,
+      })
+      const saved = await owner.saveState(id, state)
+      return saved.encode()
+    })
+  }
+
+  /**
+   * The record. `stamp: false` writes without `updatedAt`/`updatedBy` — for
+   * the app's own guess about a paper it only opened, which is not the
+   * reader editing it and must not make this machine the last to have
+   * changed it. A guess is written only where the record has neither an
+   * answer nor a guess already: two windows guessing at once, or a Mac that
+   * guessed first, are not overruled.
+   */
+  meta(owner: Library, id: string, patch: Patch, options: { stamp?: boolean } = {}): Promise<Record<string, unknown> | null> {
+    return this.queue(id, async () => {
+      const row = await owner.paper(id)
+      if (!row) return null
+      const meta = new PaperMeta(row.meta)
+      const cleared = withoutNulls(patch)
+      if (options.stamp === false) {
+        if ('guessedKind' in cleared && (meta.kind || meta.guessedKind)) return meta.encode()
+      }
+      Object.assign(meta, cleared)
+      await owner.saveMeta(meta, options)
+      return meta.encode()
+    })
+  }
+}
+
+/** `null` in a patch means «take it off»; JSON cannot carry `undefined`. */
+export function withoutNulls(patch: Patch): Patch {
+  return Object.fromEntries(Object.entries(patch).map(([key, value]) => [key, value === null ? undefined : value]))
+}
