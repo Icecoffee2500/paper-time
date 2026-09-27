@@ -234,6 +234,22 @@ export async function renamePaper(id: string, name: string): Promise<string | nu
   return null
 }
 
+/** «Re-run Metadata»: these papers looked up again, the spinner in their
+ *  rows while it runs. */
+export async function rerunMetadata(ids: string[]) {
+  await call('metadata:resolve', { ids })
+}
+
+/** «Resolve Missing Metadata»: every paper not yet confirmed, one after
+ *  another. Said once, so a press on a library with nothing left to find
+ *  does not look like a press that did nothing. */
+export async function resolveMissingMetadata() {
+  const count = await call('metadata:resolvePending')
+  toast(count === 0
+    ? L('채울 서지가 없어요.', 'Every record is already confirmed.')
+    : L(`논문 ${count}편의 서지를 찾고 있어요.`, `Looking up ${count} paper${count === 1 ? '' : 's'}.`))
+}
+
 export async function copyKey(id: string) {
   const entry = findPaper(id)
   if (!entry) return
@@ -384,6 +400,9 @@ export function paperMenu(id: string, anchor: Element) {
     // export would give it.
     { label: L('BibTeX 키 복사', 'Copy BibTeX Key'), icon: 'doc.on.doc', action: () => void copyKey(id) },
     { label: L('폴더에서 보기', 'Show in Folder'), icon: 'folder', action: () => void call('paper:reveal', { id }) },
+    // Looked up again, whatever the record says now — except a record
+    // somebody typed in, which the lookup never writes over.
+    { label: L('서지 다시 찾기', 'Re-run Metadata'), icon: 'arrow.triangle.2.circlepath', action: () => void rerunMetadata([id]) },
     { separator: true },
     { label: L('휴지통에 넣기', 'Move to Trash'), icon: 'trash', danger: true, action: () => void trashPaper(id) },
   ])

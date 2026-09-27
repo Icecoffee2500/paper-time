@@ -194,6 +194,17 @@ const SHAPES = {
   'arrow.clockwise': `
     <path d="M13.2 8a5.2 5.2 0 1 1-1.6-3.75"/>
     <path d="M13.4 2.4v3.1h-3.1"/>`,
+  // A closed book with lines on its cover: a record of where a paper was published.
+  'text.book.closed': `
+    <path d="M4.2 2.6h7.2a1 1 0 0 1 1 1v9.8H5.2a1.4 1.4 0 0 1-1.4-1.4V4a1.4 1.4 0 0 1 1.4-1.4z"/>
+    <path d="M3.8 12a1.4 1.4 0 0 1 1.4-1.4h7.2"/>
+    <path d="M6.6 5.4h3.8M6.6 7.4h3"/>`,
+  // Two arrows chasing round: look this up again.
+  'arrow.triangle.2.circlepath': `
+    <path d="M3.1 7.1A5 5 0 0 1 12 5.2"/>
+    <path d="M12.4 2.7v2.8H9.6"/>
+    <path d="M12.9 8.9A5 5 0 0 1 4 10.8"/>
+    <path d="M3.6 13.3v-2.8h2.8"/>`,
   'square.and.arrow.up': `
     <path d="M8 2.4v7.2"/>
     <path d="M5.3 5 8 2.3 10.7 5"/>

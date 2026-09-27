@@ -162,6 +162,7 @@ export function buildMenu({ send, chooseLibrary }: MenuActions, state: MenuState
     {
       label: L('라이브러리(&L)', '&Library'),
       submenu: [
+        item('resolveMetadata'),
         item('refreshFolder'),
         separator,
         // Both halves: another folder to read beside this one, and a

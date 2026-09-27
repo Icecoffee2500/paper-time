@@ -12,7 +12,7 @@
  * which asks the process that can read inside the app's archive.
  */
 import { parentPort } from 'node:worker_threads'
-import { countPages, extractPages } from './textExtract.js'
+import { countPages, extractPages, extractSignals } from './textExtract.js'
 import { foldText } from '../shared/textFold.js'
 
 type Incoming =
@@ -20,6 +20,8 @@ type Incoming =
   /** Only how many pages pdf.js finds — the appender's last check before
    *  it puts a file in a paper's place. */
   | { type: 'pages'; job: number; bytes: ArrayBuffer }
+  /** What the paper says about itself, for its record (`DocumentSignals`). */
+  | { type: 'signals'; job: number; bytes: ArrayBuffer }
   | { type: 'asset'; request: number; data: Uint8Array | null }
 
 const port = parentPort!
@@ -42,6 +44,14 @@ port.on('message', (message: Incoming) => {
   }
   void (async () => {
     try {
+      if (message.type === 'signals') {
+        const signals = await extractSignals(new Uint8Array(message.bytes), {
+          cmap: (name) => asset('cmap', name),
+          font: (name) => asset('font', name),
+        })
+        port.postMessage({ type: 'signals', job: message.job, signals })
+        return
+      }
       if (message.type === 'pages') {
         port.postMessage({ type: 'pages', job: message.job, pages: await countPages(new Uint8Array(message.bytes)) })
         return

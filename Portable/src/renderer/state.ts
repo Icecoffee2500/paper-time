@@ -71,7 +71,7 @@ export interface Paper {
  */
 export const WINDOW_SETTINGS = [
   'libraryRoot', 'panes', 'columns', 'inspectorTab', 'sort', 'appearance', 'language', 'pageTint',
-  'pageTintColor', 'pageLayout', 'selectedPaperID', 'latexShortcuts', 'semanticSearch', 'listSubtitle',
+  'pageTintColor', 'pageLayout', 'selectedPaperID', 'latexShortcuts', 'semanticSearch', 'resolveMetadataOnImport', 'metadataContactEmail', 'listSubtitle',
   'bibtexProtectCase', 'bibtexPreprintStyle', 'bibtexIncludeUnverified', 'sketchStyle', 'inkPresets', 'shortcuts', 'seenReleaseNotesVersion',
 ] as const satisfies readonly (keyof AppSettings)[]
 
@@ -160,6 +160,8 @@ export interface Store {
   selectionLead: string | null
   /** «Add n PDFs» under way: how many are left, or null. */
   adopting: number | null
+  /** The papers being looked up at the registrars now (`metadata:resolving`). */
+  resolving: Set<string>
   /**
    * The papers kept open this session, in the order they were kept.
    *
@@ -248,6 +250,7 @@ export const store: Store = {
   selectionAnchor: null,
   selectionLead: null,
   adopting: null,
+  resolving: new Set(),
   openPaperIDs: [],
   pinnedPaperIDs: [],
   split: null,
@@ -265,6 +268,8 @@ export const store: Store = {
     selectedPaperID: null,
     latexShortcuts: true,
     semanticSearch: true,
+    resolveMetadataOnImport: true,
+    metadataContactEmail: '',
     listSubtitle: 'authors,year,venue',
     bibtexProtectCase: true,
     bibtexPreprintStyle: 'eprint',

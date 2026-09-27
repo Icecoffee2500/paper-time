@@ -20,6 +20,7 @@
  * shelf before it is a citation.
  */
 export type { DocumentKind } from './model.js'
+import { identifiersAreEmpty, scanIdentifiers } from './metadata/identifiers.js'
 import type { DocumentKind } from './model.js'
 
 /** A paper and a book are cited; a document and a term's slides are not. */
@@ -42,10 +43,11 @@ export interface DocumentGuess {
   reason: GuessReason
 }
 
-/** A DOI or an arXiv identifier printed in the text. Nobody prints one on a
- *  car manual, so this is close to proof. */
+/** A DOI, an arXiv identifier or a PubMed ID printed in the text — the
+ *  Mac's `IdentifierScanner`, which the guess asks. Nobody prints one on a car
+ *  manual, so this is close to proof. */
 export function hasIdentifier(text: string): boolean {
-  return /\b10\.\d{4,9}\/[-._;()/:A-Z0-9]+/i.test(text) || /arxiv\s*:\s*\d{4}\.\d{4,5}/i.test(text)
+  return !identifiersAreEmpty(scanIdentifiers(text))
 }
 
 /** An abstract, where a paper puts one: near the top of the first page. */

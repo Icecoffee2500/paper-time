@@ -105,21 +105,14 @@ function readerFor(id: string, pane: boolean): Reader {
     title: () => findPaper(id)?.meta.displayTitle ?? '',
     pageChanged: (index) => recordPosition(id, index),
     fileName: () => fileNameOf(findPaper(id)),
-    guessed: (kind) => {
-      // Only ever a guess, and only when nobody has one: the answer belongs
-      // to the reader and is given in the inspector.
-      const entry = findPaper(id)
-      if (!entry || entry.meta.guessedKind || entry.meta.kind) return
-      // Unstamped: a guess is not the reader editing the paper.
-      void call('paper:meta', { id, patch: { guessedKind: kind }, stamp: false }).then((meta) => {
-        if (!meta) return
-        patchPaper(id, { meta })
-        changed('papers', 'inspector')
-      })
-    },
   }, { pane, layout: store.settings.pageLayout })
   readers.set(id, reader)
   void loadInto(reader, id)
+  // A paper nobody has guessed at — one from before guesses were made on
+  // arrival — is guessed at now, by the main process, the way every new one
+  // is (`metadata/queue.ts`): read off the file, nothing looked up.
+  const entry = findPaper(id)
+  if (entry && !entry.meta.kind && !entry.meta.guessedKind) void call('metadata:guess', { ids: [id] })
   return reader
 }
 

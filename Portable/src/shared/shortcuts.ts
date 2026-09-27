@@ -34,6 +34,7 @@ export const SHORTCUTS: Shortcut[] = [
   { command: 'addPapers', group: 'library', title: () => L('논문 더하기', 'Add Papers'), mac: 'CmdOrCtrl+O' },
   { command: 'exportBibTeX', group: 'library', title: () => L('BibTeX 내보내기', 'Export BibTeX'), mac: 'CmdOrCtrl+Shift+E' },
   { command: 'copyCitationKey', group: 'library', title: () => L('인용 키 복사', 'Copy Citation Key'), mac: 'CmdOrCtrl+Shift+K' },
+  { command: 'resolveMetadata', group: 'library', title: () => L('빠진 서지 채우기', 'Resolve Missing Metadata'), mac: 'CmdOrCtrl+Shift+R' },
   { command: 'refreshFolder', group: 'library', title: () => L('지금 맞추기', 'Sync Now'), mac: 'CmdOrCtrl+R' },
 
   { command: 'searchEverything', group: 'reading', title: () => L('전부 찾기', 'Search Everything'), mac: 'CmdOrCtrl+K' },

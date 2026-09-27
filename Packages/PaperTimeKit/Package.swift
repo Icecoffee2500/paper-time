@@ -29,6 +29,13 @@ let package = Package(
             dependencies: ["InkEngine", "PDFReader", "PDFUpdate"],
             path: "Sources/Tools/papertime-pdfcheck"
         ),
+        // What the Mac's metadata pipeline answers, for Portable's port to be
+        // held to: `Scripts/metadata-fixtures.sh`.
+        .executableTarget(
+            name: "papertime-metadata-fixtures",
+            dependencies: ["PaperCore", "MetadataPipeline", "Bibliography"],
+            path: "Sources/Tools/papertime-metadata-fixtures"
+        ),
         .executableTarget(
             name: "papertime-eval",
             dependencies: ["PaperCore", "MetadataPipeline", "Bibliography"],

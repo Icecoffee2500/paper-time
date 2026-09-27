@@ -72,12 +72,13 @@ const WORDS = (): RankWords => ({
   action: L('동작', 'Action'),
 })
 
-/** What this build can do from the palette. The Mac's other two — resolving
- *  metadata, importing another library — are not in this build, and a row
- *  that does nothing is worse than no row. */
+/** What this build can do from the palette, in the Mac's order. The Mac's
+ *  «Import Existing Library…» is not in this build, and a row that does
+ *  nothing is worse than no row. */
 const ACTIONS = (): { name: ActionName; title: string; icon: IconName }[] => [
   { name: 'addPDFs', title: L('PDF 더하기…', 'Add PDFs…'), icon: 'plus' },
   { name: 'exportBibTeX', title: L('BibTeX 내보내기…', 'Export BibTeX…'), icon: 'square.and.arrow.up' },
+  { name: 'resolveMetadata', title: L('빠진 서지 채우기', 'Resolve Missing Metadata'), icon: 'arrow.triangle.2.circlepath' },
   { name: 'refresh', title: L('라이브러리 다시 읽기', 'Refresh Library'), icon: 'arrow.clockwise' },
   { name: 'settings', title: L('설정…', 'Settings…'), icon: 'gear' },
 ]

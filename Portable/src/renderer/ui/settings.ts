@@ -52,7 +52,7 @@ export interface SettingsActions {
 }
 
 /** Where the sheet opens: at the top, or at one of its sections. */
-export type SettingsSection = 'library' | 'bibtex' | 'reading' | 'shortcuts' | 'log' | 'about'
+export type SettingsSection = 'library' | 'metadata' | 'bibtex' | 'reading' | 'shortcuts' | 'log' | 'about'
 
 
 let open = false
@@ -390,6 +390,42 @@ export function showSettings(actions: SettingsActions, section?: SettingsSection
     )))
   }
 
+  // The Mac's Metadata page: whether papers are looked up as they arrive,
+  // how titles are read on this computer, and the address the registrars
+  // are told.
+  const metadataPage = () => {
+    body.append(el('div', { class: 'set-section', text: L('서지', 'Metadata') }))
+    body.append(toggle(
+      L('들여올 때 서지 채우기', 'Resolve Metadata on Import'),
+      store.settings.resolveMetadataOnImport !== false,
+      (value) => actions.set({ resolveMetadataOnImport: value }),
+    ))
+    // The Mac's line about its on-device model, which this build does not
+    // have — so it says what it does instead.
+    const reads = el('p', { class: 'set-note set-note-icon', html: icon('info.circle') })
+    reads.append(el('span', { text: L(
+      '제목은 논문 첫 쪽의 글자 배치로 읽어요.',
+      "Paper Time reads titles from the layout of a paper's first page.",
+    ) }))
+    body.append(reads)
+    const contact = el('label', { class: 'set-row' })
+    contact.append(el('span', { class: 'set-label', text: L('연락 이메일', 'Contact Email') }))
+    const field = el('input', {
+      type: 'email', class: 'set-field', spellcheck: 'false', autocomplete: 'email',
+      placeholder: L('선택 사항', 'optional'), 'aria-label': L('연락 이메일', 'Contact Email'),
+    }) as HTMLInputElement
+    field.value = store.settings.metadataContactEmail ?? ''
+    // Written when the field is left, not on every key: a half-typed
+    // address is not one to send anybody.
+    on(field, 'change', () => actions.set({ metadataContactEmail: field.value.trim() }))
+    contact.append(field)
+    body.append(contact)
+    body.append(note(L(
+      'Crossref와 OpenAlex는 연락처를 밝힌 요청에 더 빨리 답해줘요. 비워 둬도 돼요. 대신 논문 여러 편을 한꺼번에 채울 때 느려요. 주소는 이 두 곳에만 보내요.',
+      'Crossref and OpenAlex answer faster when a request carries a contact address. This can stay empty; lookups slow down when many papers resolve at once. Paper Time sends the address to those two services and nowhere else.',
+    )))
+  }
+
   const bibtexPage = () => {
     body.append(el('div', { class: 'set-section', text: 'BibTeX' }))
     body.append(choices(
@@ -512,6 +548,7 @@ export function showSettings(actions: SettingsActions, section?: SettingsSection
 
   const PAGES: { id: SettingsSection; title: () => string; icon: string; draw: () => void }[] = [
     { id: 'library', title: () => L('라이브러리', 'Library'), icon: 'folder', draw: libraryPage },
+    { id: 'metadata', title: () => L('서지', 'Metadata'), icon: 'text.book.closed', draw: metadataPage },
     { id: 'bibtex', title: () => 'BibTeX', icon: 'text.quote', draw: bibtexPage },
     { id: 'reading', title: () => L('읽기', 'Reading'), icon: 'doc.text', draw: readingPage },
     { id: 'shortcuts', title: () => L('단축키', 'Shortcuts'), icon: 'keyboard', draw: shortcutsPage },
@@ -519,8 +556,7 @@ export function showSettings(actions: SettingsActions, section?: SettingsSection
     { id: 'about', title: () => L('정보', 'About'), icon: 'info.circle', draw: aboutPage },
   ]
 
-  /** The rail of pages — the Mac's seven, less the one this build has no
-   *  pipeline for yet. Rows of their own: the page you are on is lifted off
+  /** The rail of pages — the Mac's seven. Rows of their own: the page you are on is lifted off
    *  the ground rather than painted blue. */
   const drawRail = () => {
     clear(rail)

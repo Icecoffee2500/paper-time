@@ -165,8 +165,17 @@ public enum DocumentSignalsExtractor {
     /// called it a manual. At most a dozen pages are read, so a five-hundred
     /// page book costs the same as a ten-page paper.
     static func hasReferenceSection(in document: PDFDocument) -> Bool {
-        let count = document.pageCount
-        guard count > 0 else { return false }
+        for index in referencePageIndices(count: document.pageCount) {
+            let text = (document.page(at: index)?.string ?? "").lowercased()
+            if Self.referenceHeadings.contains(where: { text.contains($0) }) { return true }
+        }
+        return false
+    }
+
+    /// The pages read for a reference list, last first — every page of a
+    /// paper, and the end plus a dozen samples of anything longer.
+    static func referencePageIndices(count: Int) -> [Int] {
+        guard count > 0 else { return [] }
         var indices: [Int]
         if count <= 40 {
             // A paper is short enough to read all of, and its bibliography
@@ -178,11 +187,7 @@ public enum DocumentSignalsExtractor {
             let step = max(1, count / 12)
             indices += stride(from: 0, to: count, by: step).prefix(12)
         }
-        for index in Set(indices).sorted(by: >) {
-            let text = (document.page(at: index)?.string ?? "").lowercased()
-            if Self.referenceHeadings.contains(where: { text.contains($0) }) { return true }
-        }
-        return false
+        return Set(indices).sorted(by: >)
     }
 
     static let referenceHeadings = [
@@ -287,6 +292,13 @@ public enum DocumentSignalsExtractor {
             guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
             runs.append((font.pointSize, range))
         }
+        return largestFontText(runs: runs, fullText: fullText)
+    }
+
+    /// The same, from the page's font runs (size, and where in the page's
+    /// text they are) — kept apart from PDFKit so another reader of the page
+    /// can be held to the same answer.
+    static func largestFontText(runs: [(size: CGFloat, range: NSRange)], fullText: String) -> String? {
         guard !runs.isEmpty else { return nil }
 
         // Runs are bucketed with a tolerance because a title's second line is

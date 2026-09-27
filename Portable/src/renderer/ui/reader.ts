@@ -57,7 +57,7 @@ import {
   type PageShape,
 } from '../../shared/readerMath.js'
 import { PageView, type PageLink, type PageOwner } from './pageView.js'
-import { DocumentText, guessDocumentKind, type Found } from './readerText.js'
+import { DocumentText, type Found } from './readerText.js'
 import { DocumentHistory, scrollFor, type DocumentPlace } from './readerHistory.js'
 import { MarkBar, type SelectionPart } from './markBar.js'
 import type { MenuEntry } from './menu.js'
@@ -88,10 +88,6 @@ export interface ReaderActions {
   activated?: () => void
   /** The × in a pane's title strip: take the pane out and close the paper. */
   close?: () => void
-  /** What this document looks like, once its text can be read. Only asked
-   *  when nobody has guessed yet; the answer to "paper or document?" is the
-   *  reader's and is never set from here. */
-  guessed?: (kind: DocumentKind) => void
   /** The paper's own file name, which is half of what says it belongs to a
    *  course: a deck's first page often says only the week's title, while the
    *  file on disk says lecture06.pdf. */
@@ -483,7 +479,6 @@ export class Reader implements PageOwner {
       // Behind the first screenful: every page's own size, and the drawings.
       void this.fetchShapes(generation)
       void this.loadDrawings(id, generation)
-      void this.guessKind(generation, id, document)
     } catch (error) {
       if (generation !== this.generation) return
       this.opened(error, bytes, why)
@@ -572,13 +567,6 @@ export class Reader implements PageOwner {
       this.notice(prompt.notice, prompt.node)
       prompt.focus()
     })
-  }
-
-  /** What this document looks like, the first time it is opened. */
-  private async guessKind(generation: number, id: string, document: PDFDocumentProxy) {
-    if (!this.actions.guessed) return
-    const kind = await guessDocumentKind(id, document, this.actions.fileName?.() ?? '', () => generation === this.generation)
-    if (kind && generation === this.generation) this.actions.guessed(kind)
   }
 
   close() {
