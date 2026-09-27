@@ -114,6 +114,11 @@ export function installKeys() {
         event.preventDefault()
         return reader.turnPage(-1)
       }
+      // The space bar the way every reader has it: forward, and back with Shift.
+      if (event.key === ' ') {
+        event.preventDefault()
+        return reader.turnPage(event.shiftKey ? -1 : 1)
+      }
     }
   })
 }

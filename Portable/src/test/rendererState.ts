@@ -92,6 +92,7 @@ export async function rendererStateSuite(test: Test, suite: (name: string) => vo
     dock('B', 'right')
     assert.deepEqual(panePapers(), ['A', 'B'])
     assert.ok(isOpenPaper('A') && isOpenPaper('B'), 'every paper in the arrangement is kept')
+    assert.ok(isPinned('A') && isPinned('B'), 'and pinned: put beside another by hand')
     dock('C', 'bottomRight')
     assert.equal(panePapers().length, 3)
     undock('C')

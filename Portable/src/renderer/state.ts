@@ -571,7 +571,8 @@ export function dock(id: string, zone: DockZone) {
   const base: SplitArrangement = store.split
     ?? (current ? { left: { top: current } } : { left: { top: id } })
   const arrangement = splitDock(base, id, zone)
-  for (const entry of splitPapers(arrangement)) keepOpen(entry)
+  // Put beside another by hand, a paper is pinned — the Mac's `dock`.
+  for (const entry of splitPapers(arrangement)) keepOpen(entry, true)
   store.split = splitPapers(arrangement).length > 1 ? arrangement : null
   if (current === null) store.selectedID = id
 }

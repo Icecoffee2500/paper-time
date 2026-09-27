@@ -25,7 +25,10 @@ export interface WindowBounds {
  * (`structure`). The writer never rewrites a file to get around any of them.
  */
 /** Why marks are not in the file: the file refuses them, or (`io`) it could not be written just now. */
-export type KeptReason = 'encrypted' | 'permissions' | 'structure' | 'io'
+export type KeptReason = 'encrypted' | 'permissions' | 'structure' | 'unconfirmed' | 'io'
+
+/** Where the file stands with what was made here: waiting to be written, being written, or written. */
+export type SaveState = 'pending' | 'saving' | 'idle'
 
 export interface WindowState {
   maximized: boolean
@@ -75,7 +78,7 @@ export interface Requests {
   /** Every drawn page's shapes and strokes — this machine's sidecar, or the file's copy. */
   'drawing:loadAll': {
     args: { id: string }
-    result: { pages: Record<number, { elements: unknown[]; strokes: unknown[] }>; unreadable: number[] }
+    result: { pages: Record<number, { elements: unknown[]; strokes: unknown[] }>; unreadable: number[]; foreignInk: boolean }
   }
   /** Every page's marks: the file, overruled by every device's journal. */
   'marks:load': { args: { id: string }; result: Record<number, Mark[]> }
@@ -212,6 +215,7 @@ export interface Events {
   'paper:changed': { id: string; layers: string[] }
   'paper:saved': { id: string }
   'paper:kept': { id: string; reason: KeptReason | null }
+  'paper:saveState': { id: string; state: SaveState }
   'notes:changed': { id: string }
   'window:state': WindowState
   'theme:changed': boolean

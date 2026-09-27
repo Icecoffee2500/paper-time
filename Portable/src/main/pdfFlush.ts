@@ -91,6 +91,7 @@ export class PDFFlusher {
   /** A change to write into the file: starts the tries afresh. */
   schedule(id: string) {
     this.attempts.delete(id)
+    this.hooks.send('paper:saveState', { id, state: 'pending' })
     this.later(id, this.delays.write)
   }
 
@@ -98,6 +99,7 @@ export class PDFFlusher {
     clearTimeout(this.pending.get(id))
     this.pending.set(id, setTimeout(() => {
       this.pending.delete(id)
+      this.hooks.send('paper:saveState', { id, state: 'saving' })
       this.flush(id).then(
         (result) => this.after(id, result),
         (error) => this.after(id, { error: String((error as Error)?.message ?? error) }),
@@ -108,6 +110,7 @@ export class PDFFlusher {
   private after(id: string, result: FlushResult) {
     if (!('error' in result) && !('retry' in result)) {
       this.attempts.delete(id)
+      this.hooks.send('paper:saveState', { id, state: 'idle' })
       return
     }
     const attempt = (this.attempts.get(id) ?? 0) + 1
@@ -115,6 +118,7 @@ export class PDFFlusher {
       this.attempts.delete(id)
       console.error(`pdf write - ${id} gave up after ${this.delays.retry.length} tries:`, 'error' in result ? result.error : result.retry)
       this.hooks.send('paper:kept', { id, reason: 'io' })
+      this.hooks.send('paper:saveState', { id, state: 'idle' })
       return
     }
     this.attempts.set(id, attempt)

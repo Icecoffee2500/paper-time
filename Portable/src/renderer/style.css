@@ -782,7 +782,8 @@ body[data-platform='darwin'] .window-buttons {
   flex-direction: column;
   align-items: center;
   gap: 14px;
-  padding: 14px 0 20px;
+  /* Room at the foot for the footer that floats over it. */
+  padding: 14px 0 44px;
 }
 
 /* A book: the spread's two pages facing across a gutter (`BOOK_GUTTER`). */
@@ -791,6 +792,16 @@ body[data-platform='darwin'] .window-buttons {
   justify-content: center;
   align-items: flex-start;
   gap: 24px;
+}
+
+/* A book on Paper White is one white field, as a book open on a desk is —
+   not two cards on grey. */
+.reader-panel[data-rendering='plain'] .reader-scroll:has(.reader-pages[data-layout='book']) {
+  background: #fff;
+}
+
+.reader-panel[data-rendering='plain'] .reader-pages[data-layout='book'] .page {
+  box-shadow: none;
 }
 
 .page {
@@ -948,7 +959,13 @@ body[data-platform='darwin'] .window-buttons {
 }
 
 .reader-footer {
-  flex: 0 0 auto;
+  /* Glass floating over the foot of the page, as the Mac's status bar is —
+     not a bordered strip of its own. */
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 26;
   height: 30px;
   display: flex;
   align-items: center;
@@ -957,7 +974,80 @@ body[data-platform='darwin'] .window-buttons {
   padding: 0 14px;
   font-size: 11.5px;
   color: var(--text-secondary);
-  border-top: 1px solid var(--separator);
+  background: color-mix(in srgb, var(--panel) 78%, transparent);
+  backdrop-filter: blur(20px) saturate(1.5);
+}
+
+.reader-footer:empty {
+  display: none;
+}
+
+.reader-position {
+  font-variant-numeric: tabular-nums;
+}
+
+/* How far through a book the spread is — the Mac's bookmark. */
+.reader-progress {
+  width: 140px;
+  height: 4px;
+  appearance: none;
+  border: 0;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--text-secondary) 18%, transparent);
+  overflow: hidden;
+}
+
+.reader-progress::-webkit-progress-bar {
+  background: transparent;
+}
+
+.reader-progress::-webkit-progress-value {
+  background: color-mix(in srgb, var(--text-secondary) 60%, transparent);
+  border-radius: 2px;
+}
+
+.reader-saving {
+  width: 12px;
+  height: 12px;
+}
+
+/* The zoom, for a moment over the page. */
+.reader-zoom {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 5px 12px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  background: color-mix(in srgb, var(--panel) 90%, transparent);
+  backdrop-filter: blur(20px) saturate(1.5);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.08), 0 4px 16px rgba(0, 0, 0, 0.14);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-move) var(--ease);
+}
+
+.reader-zoom[data-on='true'] {
+  opacity: 1;
+}
+
+/* A passage a note quotes, lit for a moment where the jump landed. */
+.page .passage-flash {
+  position: absolute;
+  z-index: 6;
+  border-radius: 4px;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 55%, transparent);
+  animation: passage-flash 1.4s var(--ease) forwards;
+}
+
+@keyframes passage-flash {
+  0%, 55% { opacity: 1; }
+  100% { opacity: 0; }
 }
 
 .reader-footer-end {

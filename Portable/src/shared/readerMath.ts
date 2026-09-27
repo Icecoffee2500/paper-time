@@ -90,6 +90,24 @@ export function devicePixels(ratio: number | undefined): number {
 
 export type PageLayout = 'continuous' | 'single' | 'book'
 
+/**
+ * The scale that fits a page to the reading area: the column's width — the
+ * honest default, since «actual size» on a screen is a fiction — and for a
+ * book the spread, two pages and the gutter, fitted to the height as well.
+ */
+export function fitScale(
+  page: { width: number; height: number },
+  area: { width: number; height: number },
+  layout: PageLayout,
+  gutter: number,
+  margin = 40,
+): number {
+  const across = layout === 'book' ? 2 : 1
+  const byWidth = Math.max(area.width - margin - (across - 1) * gutter, 200) / (page.width * across)
+  if (layout !== 'book') return byWidth
+  return Math.min(byWidth, Math.max(area.height - margin, 200) / page.height)
+}
+
 /** The first page of what shows with a page: itself, or its spread's left page. */
 export function spreadStart(layout: PageLayout, index: number): number {
   return layout === 'book' ? index - (index % 2) : index

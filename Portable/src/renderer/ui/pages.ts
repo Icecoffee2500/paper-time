@@ -56,7 +56,16 @@ export function closePages() {
 
 export function togglePages(host: HTMLElement, actions: PagesActions) {
   if (current) return closePages()
+  // One popup over the page at a time.
+  closeOthers?.()
   showPages(host, actions)
+}
+
+/** What else stands over the page, closed when this opens. */
+let closeOthers: (() => void) | null = null
+
+export function whenPagesOpen(close: () => void) {
+  closeOthers = close
 }
 
 const THUMB_WIDTH = 132
@@ -88,7 +97,7 @@ export function showPages(host: HTMLElement, actions: PagesActions) {
     grid,
   )
 
-  let mode: 'headings' | 'pages' = 'pages'
+  let mode: 'headings' | 'pages' = 'headings'
   const show = (next: 'headings' | 'pages') => {
     mode = next
     headingsTab.setAttribute('aria-selected', String(mode === 'headings'))
@@ -106,7 +115,7 @@ export function showPages(host: HTMLElement, actions: PagesActions) {
   on(pagesTab, 'click', () => show('pages'))
 
   if (count === 0) {
-    grid.append(el('div', { class: 'open-papers-empty', text: L('열린 문서가 없어요.', 'Nothing is open.') }))
+    grid.append(el('div', { class: 'open-papers-empty', text: L('쪽이 없어요.', 'No pages.') }))
   }
 
   const cells: { cell: HTMLElement; index: number; drawn: boolean }[] = []
@@ -116,9 +125,11 @@ export function showPages(host: HTMLElement, actions: PagesActions) {
       box,
       el('span', { class: 'pages-number', text: String(index + 1) }),
     ])
+    // It stays open, as the Mac's does: the page chosen is ringed, and the
+    // next one is a press away.
     on(cell, 'click', () => {
       actions.go(index)
-      closePages()
+      for (const other of grid.querySelectorAll('.pages-cell')) other.setAttribute('data-current', String(other === cell))
     })
     grid.append(cell)
     cells.push({ cell: box, index, drawn: false })
@@ -139,10 +150,20 @@ export function showPages(host: HTMLElement, actions: PagesActions) {
   for (const { cell } of cells) watcher.observe(cell)
 
   host.append(node)
+  // Escape is this popup's, and goes no further — it used to reach the
+  // window's keys too, which put the pen away as well.
   const onKey = (event: KeyboardEvent) => {
-    if (event.key === 'Escape') { event.preventDefault(); closePages() }
+    if (event.key !== 'Escape') return
+    event.preventDefault()
+    event.stopPropagation()
+    closePages()
   }
   window.addEventListener('keydown', onKey, true)
+  // A press anywhere else puts it away.
+  const onPress = (event: MouseEvent) => {
+    if (!node.contains(event.target as Node)) closePages()
+  }
+  setTimeout(() => document.addEventListener('mousedown', onPress, true), 0)
 
   const mine = {
     node,
@@ -150,6 +171,7 @@ export function showPages(host: HTMLElement, actions: PagesActions) {
       actions.cancel?.()
       watcher.disconnect()
       window.removeEventListener('keydown', onKey, true)
+      document.removeEventListener('mousedown', onPress, true)
       node.remove()
     },
   }
@@ -157,16 +179,20 @@ export function showPages(host: HTMLElement, actions: PagesActions) {
 
   // The headings, once the outline is read; with none, this paper is read by
   // sight and the popup stays on its pages.
+  // In the Contents tab from the start, saying it is reading — it used to
+  // open on the pages and flip to the headings once they came.
   headingsTab.disabled = true
-  list.append(el('div', { class: 'open-papers-empty', text: L('차례를 읽는 중…', 'Reading the contents…') }))
-  show('pages')
+  list.append(el('div', { class: 'open-papers-empty', text: L('논문에서 제목을 읽고 있어요…', 'Reading the paper for its headings…') }))
+  show('headings')
   void (actions.outline?.() ?? Promise.resolve([])).then((entries) => {
     if (current !== mine) return
     clear(list)
     if (entries.length === 0) {
       // Said where it can be read: the tooltip of a disabled tab never shows.
-      headingsTab.title = L('이 PDF에는 차례가 없어요', 'This PDF has no table of contents')
-      list.append(el('div', { class: 'open-papers-empty', text: L('이 PDF에는 차례가 없어요.', 'This PDF has no table of contents.') }))
+      headingsTab.title = L('이 PDF에서 제목을 찾지 못했어요.', 'No headings found in this PDF.')
+      list.append(el('div', { class: 'open-papers-empty', text: L('이 PDF에서 제목을 찾지 못했어요.', 'No headings found in this PDF.') }))
+      // Nothing to list: the pages are the way in.
+      show('pages')
       return
     }
     const here = currentHeading(entries, actions.currentPage())
@@ -182,7 +208,7 @@ export function showPages(host: HTMLElement, actions: PagesActions) {
       if (entry.depth === 0) row.classList.add('top')
       on(row, 'click', () => {
         actions.goToHeading?.(entry)
-        closePages()
+        for (const other of list.querySelectorAll('.contents-row')) other.setAttribute('data-current', String(other === row))
       })
       list.append(row)
     }

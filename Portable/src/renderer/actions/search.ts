@@ -2,7 +2,8 @@
  * Search Everything — the palette (`ui/search.ts`), what its rows do — and
  * Find in Document.
  */
-import { changed, paper as findPaper, setShelf } from '../state.js'
+import { changed, paper as findPaper, setShelf, store } from '../state.js'
+import { togglePane } from '../layout.js'
 import { findBar, focused, readers } from '../pageArea.js'
 import { showPaper } from './openPapers.js'
 import { openNote } from './notes.js'
@@ -56,6 +57,9 @@ export async function openPassage(hit: TextHit, query: string) {
 }
 
 export function openFind() {
+  // The bar goes over the paper, so the paper has to be showing: with its
+  // pane hidden the bar was put on a reader out of the window.
+  if (!store.settings.panes.reader) togglePane('reader')
   const reader = focused()
   if (!reader || !reader.document) {
     toast(L('먼저 논문을 열어주세요.', 'Open a paper first.'))

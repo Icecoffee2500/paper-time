@@ -20,7 +20,7 @@ import { freshReaderState, store, type ReaderState } from '../state.js'
 import { PAPER_DRAG_TYPE } from '../../shared/split.js'
 import { openDocument, releaseTextCaches, type Opening, type PDFDocumentProxy, type PDFPageProxy } from '../pdf.js'
 import { headBytes, headLine, rightsHandler, type ByteTrouble, type PDFLock } from '../../shared/pdfLock.js'
-import type { KeptReason } from '../../shared/api.js'
+import type { KeptReason, SaveState } from '../../shared/api.js'
 import type { DocumentKind } from '../../shared/documentKind.js'
 import { SketchElement } from '../../shared/sketch.js'
 import { InkStroke } from '../../shared/ink.js'
@@ -44,6 +44,7 @@ import {
   classifyOpenError,
   destinationTop,
   devicePixels,
+  fitScale,
   flattenOutline,
   formatError,
   isOpenableLink,
@@ -103,6 +104,10 @@ export interface ReaderActions {
   markShown?: (id: string) => void
   /** A link was followed, or Back walked the paper: the arrows may change. */
   historyChanged?: () => void
+  /** The page being read changed — to be remembered for the next open. */
+  pageChanged?: (index: number) => void
+  /** The paper's title, for «Opening …» while it loads. */
+  title?: () => string
 }
 
 /** A place in a paper: how far down, and down how much. */
@@ -157,6 +162,15 @@ export class Reader implements PageOwner {
    * error: nothing was lost, and nothing needs doing.
    */
   private kept: KeptReason | null = null
+  /** What the file is doing with what was made here, and whether another
+   *  app's pen is on it — the footer's other end. */
+  private saveState: SaveState = 'idle'
+  private foreignInk = false
+  /** A wheel's travel at the edge of a turned page, until it is decisive. */
+  private wheelTravel = 0
+  private wheelAt = 0
+  private zoomBadge: HTMLElement | null = null
+  private zoomBadgeTimer = 0
   private text: DocumentText | null = null
   private readonly history = new DocumentHistory()
   private readonly bar: MarkBar
@@ -218,9 +232,12 @@ export class Reader implements PageOwner {
     }, { passive: true } as never)
     on(this.scroll, 'wheel', (event: WheelEvent) => {
       // Ctrl or ⌘ with the wheel is zoom everywhere else; it should be here.
-      if (!(event.ctrlKey || event.metaKey)) return
-      event.preventDefault()
-      this.zoomBy(event.deltaY < 0 ? 1.1 : 1 / 1.1, { soon: true })
+      if (event.ctrlKey || event.metaKey) {
+        event.preventDefault()
+        this.zoomBy(event.deltaY < 0 ? 1.1 : 1 / 1.1, { soon: true })
+        return
+      }
+      this.wheelTurn(event)
     })
     // The title is the handle in a pane: dragged to another zone, the pane
     // moves. Bound once — `update` redraws the strip on every change.
@@ -397,10 +414,17 @@ export class Reader implements PageOwner {
 
   // --------------------------------------------------------------- opening
 
-  async open(id: string, bytes: Uint8Array, why?: Reason) {
+  async open(id: string, bytes: Uint8Array, why?: Reason, startAt = 0) {
     const generation = ++this.generation
     this.close()
     this.paperID = id
+    // Something to look at while it loads, as the Mac says it — a blank page
+    // reads as a paper that failed.
+    const title = this.actions.title?.() ?? ''
+    this.notice({
+      title: title ? L(`${title} 여는 중`, `Opening ${title}`) : L('여는 중이에요', 'Opening'),
+      body: '',
+    }, el('span', { class: 'spinner' }))
     try {
       const opening = openDocument(bytes, (wrong) => this.askPassword(generation, wrong))
       this.opening = opening
@@ -426,6 +450,8 @@ export class Reader implements PageOwner {
       clear(this.pagesBox)
       for (const page of this.pages) this.pagesBox.append(page.root)
       this.relayout()
+      // Where it was being read, as the Mac reopens it (`restoreReadingPosition`).
+      if (startAt > 0 && startAt < this.pages.length) this.goToPage(startAt)
       this.watchVisibility()
       this.update()
       // Behind the first screenful: every page's own size, and the drawings.
@@ -465,7 +491,7 @@ export class Reader implements PageOwner {
     if (why?.trouble) {
       return this.showTrouble(why.trouble, why.size ?? bytes.length, why.again, message, headBytes(bytes), headLine(bytes))
     }
-    this.notice(damagedNotice(message), why?.again ? troubleButtons({ reveal: this.actions.reveal, again: why.again }) : undefined)
+    this.notice(damagedNotice(message), troubleButtons({ reveal: this.actions.reveal, again: why?.again }))
   }
 
   /** Every page's own size, a batch at a time behind the first screen. */
@@ -496,7 +522,9 @@ export class Reader implements PageOwner {
   /** A file whose key is held by a rights service, not by the reader. */
   showLocked(lock: PDFLock) {
     if (lock.kind !== 'rights') return
-    this.notice(lockedNotice(lock.handler))
+    // The next thing to try is the reader the company allows, and it is
+    // reached from the folder.
+    this.notice(lockedNotice(lock.handler), troubleButtons({ reveal: this.actions.reveal }))
   }
 
   private notice(notice: Notice, extra?: HTMLElement) {
@@ -546,6 +574,8 @@ export class Reader implements PageOwner {
     this.text = null
     this.paperID = null
     this.kept = null
+    this.saveState = 'idle'
+    this.foreignInk = false
     this.state.pageCount = 0
     this.state.currentPage = 0
     this.showingPassage = false
@@ -613,13 +643,16 @@ export class Reader implements PageOwner {
     if (!first) return 1
     const [x0, y0, x1, y1] = first.shape.view
     const turned = first.shape.rotate % 180 !== 0
-    const width = (turned ? y1 - y0 : x1 - x0) * (first.shape.userUnit || 1)
+    const unit = first.shape.userUnit || 1
     // A book fills the window with two pages across it and the gutter
-    // between them, as the Mac's spread does — not two pages fitted to its
-    // height and floating small in the middle.
-    const across = this.layout === 'book' ? 2 : 1
-    const available = Math.max(this.scroll.clientWidth - 40 - (across - 1) * BOOK_GUTTER, 200)
-    return available / (width * across)
+    // between them, as the Mac's spread does — and fits the height too: a
+    // spread fitted to the width alone ran off the foot of a wide window.
+    return fitScale(
+      { width: (turned ? y1 - y0 : x1 - x0) * unit, height: (turned ? x1 - x0 : y1 - y0) * unit },
+      { width: this.scroll.clientWidth, height: this.scroll.clientHeight },
+      this.layout,
+      BOOK_GUTTER,
+    )
   }
 
   /**
@@ -693,9 +726,64 @@ export class Reader implements PageOwner {
   /** Turns to the page wanted, when pages are turned; a scroll shows them all. */
   private ensureShowing(pageIndex: number) {
     if (!this.turnsPages || shownPages(this.layout, this.state.currentPage, this.pages.length)?.includes(pageIndex)) return
-    this.state.currentPage = pageIndex
+    this.setCurrentPage(pageIndex)
     this.applyLayout()
+  }
+
+  /** The page being read: said in the footer, and remembered for next time. */
+  private setCurrentPage(index: number) {
+    if (index === this.state.currentPage) return
+    this.state.currentPage = index
     this.updateFooter()
+    this.actions.pageChanged?.(index)
+  }
+
+  /** Goes to a page, at its top — with pages turned, turns to it. */
+  goToPage(index: number) {
+    const page = this.pages[index]
+    if (!page) return
+    if (this.turnsPages) {
+      this.setCurrentPage(index)
+      this.applyLayout()
+      return
+    }
+    this.scroll.scrollTop = Math.max(0, page.root.offsetTop + this.pagesBox.offsetTop - 14)
+    this.setCurrentPage(index)
+  }
+
+  /**
+   * The wheel, where pages are turned. A book's spread is fitted and does not
+   * scroll, so the wheel turns it; one page scrolls until its edge, and past
+   * the edge the wheel turns — it used to stop dead there. Accumulated until
+   * decisive, with the Mac's thresholds: 60 points of a trackpad, three
+   * notches of a wheel (`turnPage(with:in:)`).
+   */
+  private wheelTurn(event: WheelEvent) {
+    if (!this.turnsPages || this.state.drawing) return
+    const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY
+    if (delta === 0) return
+    const atBottom = this.scroll.scrollTop + this.scroll.clientHeight >= this.scroll.scrollHeight - 1
+    const atTop = this.scroll.scrollTop <= 0
+    const pastEdge = this.layout === 'book' || (delta > 0 ? atBottom : atTop)
+    if (!pastEdge) {
+      this.wheelTravel = 0
+      return
+    }
+    event.preventDefault()
+    const now = performance.now()
+    if (now - this.wheelAt > 400 || Math.sign(delta) !== Math.sign(this.wheelTravel)) this.wheelTravel = 0
+    this.wheelAt = now
+    // A line is about 40 pixels; a mouse notch is a hundred or three lines.
+    const pixels = event.deltaMode === 1 ? delta * 40 : event.deltaMode === 2 ? delta * this.scroll.clientHeight : delta
+    this.wheelTravel += pixels
+    const threshold = event.deltaMode === 0 && Math.abs(event.deltaY) < 50 ? 60 : 3 * 40
+    if (Math.abs(this.wheelTravel) < threshold) return
+    const by = this.wheelTravel > 0 ? 1 : -1
+    this.wheelTravel = 0
+    this.turnPage(by)
+    // One page turned onto shows its top when it was turned forward, its
+    // foot when back — where the wheel was going.
+    if (this.layout === 'single') this.scroll.scrollTop = by > 0 ? 0 : this.scroll.scrollHeight
   }
 
   /** Waits for the browser to lay out a page just shown, so what is measured
@@ -708,35 +796,66 @@ export class Reader implements PageOwner {
   turnPage(by: number) {
     const next = turnedTo(this.layout, this.state.currentPage, by, this.pages.length)
     if (next === null) return
-    this.state.currentPage = next
+    this.setCurrentPage(next)
     if (!this.turnsPages) {
       this.scrollToPage(next)
       return
     }
     this.applyLayout()
-    this.updateFooter()
   }
 
   setLayout(layout: PageLayout) {
     if (layout === this.layout) return
+    // The page being read stays the page being read: a paper switched to a
+    // book used to open its spread at the front.
+    const page = this.state.currentPage
     this.layout = layout
     // Laid out again: a book is two pages across the column, so its pages
     // are drawn smaller than the others are.
     this.relayout()
+    this.goToPage(page)
     this.updateFooter()
   }
 
   zoomBy(factor: number, options: { soon?: boolean } = {}) {
-    this.state.zoom = Math.max(0.35, Math.min(this.state.zoom * factor, 6))
+    this.state.zoom = this.clampedZoom(this.state.zoom * factor)
     if (options.soon) this.relayoutSoon()
     else this.relayout()
     this.update()
+    this.showZoom()
   }
 
   setZoom(zoom: number) {
-    this.state.zoom = zoom
+    this.state.zoom = this.clampedZoom(zoom)
     this.relayout()
     this.update()
+    this.showZoom()
+  }
+
+  /** Actual size: a point of the page as a point of the screen — 96 pixels
+   *  to the inch against the page's 72 — not the fit to the column. */
+  actualSize() {
+    this.setZoom((96 / 72) / this.baseScale())
+  }
+
+  /** The Mac's limits, on the page's own scale rather than on the fit:
+   *  a tenth of actual size to eight times. */
+  private clampedZoom(zoom: number): number {
+    const base = this.baseScale()
+    return Math.min(Math.max(zoom, 0.1 / base), 8 / base)
+  }
+
+  /** The zoom, said for a moment over the page — the footer no longer
+   *  carries it. */
+  private showZoom() {
+    if (!this.zoomBadge) {
+      this.zoomBadge = el('div', { class: 'reader-zoom' })
+      this.overlayHost.append(this.zoomBadge)
+    }
+    this.zoomBadge.textContent = `${Math.round(this.state.zoom * this.baseScale() * 72 / 96 * 100)}%`
+    this.zoomBadge.dataset.on = 'true'
+    clearTimeout(this.zoomBadgeTimer)
+    this.zoomBadgeTimer = window.setTimeout(() => { if (this.zoomBadge) this.zoomBadge.dataset.on = 'false' }, 1600)
   }
 
   /**
@@ -761,11 +880,7 @@ export class Reader implements PageOwner {
     // is showing; the page is whatever was turned to.
     if (this.turnsPages || this.pages.length === 0) return
     const middle = this.scroll.scrollTop + this.scroll.clientHeight / 2 - this.pagesBox.offsetTop
-    const current = pageAtOffset(this.pageTops(), middle)
-    if (current !== this.state.currentPage) {
-      this.state.currentPage = current
-      this.updateFooter()
-    }
+    this.setCurrentPage(pageAtOffset(this.pageTops(), middle))
   }
 
   // ------------------------------------------------------------- drawings
@@ -797,6 +912,10 @@ export class Reader implements PageOwner {
     }
     // The Marks tab lists what just arrived.
     this.actions.marksChanged?.()
+    if (drawings.foreignInk !== this.foreignInk) {
+      this.foreignInk = drawings.foreignInk
+      this.updateFooter()
+    }
     if (drawings.unreadable.length > 0) {
       const pages = drawings.unreadable.map((index) => index + 1).join(', ')
       this.actions.toast(L(
@@ -1148,6 +1267,28 @@ export class Reader implements PageOwner {
   }
 
   /**
+   * A passage a note quotes: its page, with room above it — the Mac pads the
+   * jump so the line is not against the top edge — and the passage lit for a
+   * moment so the eye finds it (`flashRect`).
+   */
+  async jumpToPassage(pageIndex: number, rect: { x: number; y: number; width: number; height: number }) {
+    const page = this.pages[pageIndex]
+    if (!page) return
+    await this.jumpTo(pageIndex, rect.y + rect.height + 24)
+    const a = page.toView(rect.x, rect.y + rect.height)
+    const b = page.toView(rect.x + rect.width, rect.y)
+    const flash = el('div', { class: 'passage-flash' })
+    Object.assign(flash.style, {
+      left: `${Math.min(a.x, b.x) - 3}px`,
+      top: `${Math.min(a.y, b.y) - 3}px`,
+      width: `${Math.abs(b.x - a.x) + 6}px`,
+      height: `${Math.abs(b.y - a.y) + 6}px`,
+    })
+    page.root.append(flash)
+    setTimeout(() => flash.remove(), 1400)
+  }
+
+  /**
    * Where a destination points — a link's, or a heading of the outline: its
    * page, and how far down it in the page's own coordinates when it says.
    */
@@ -1250,11 +1391,20 @@ export class Reader implements PageOwner {
       count,
       left,
       right: this.layout === 'book' ? Math.min(left + 1, count) : left,
+      book: this.layout === 'book',
       turns: this.turnsPages,
-      zoom: this.state.zoom,
       kept: this.kept,
+      saveState: this.saveState,
+      foreignInk: this.foreignInk,
       turn: (by) => this.turnPage(by),
     })
+  }
+
+  /** What the file is doing with what was made here (`paper:saveState`). */
+  noteSaveState(state: SaveState) {
+    if (state === this.saveState) return
+    this.saveState = state
+    this.updateFooter()
   }
 
   /**
