@@ -180,6 +180,9 @@ export interface Requests {
   /** The notes' folder in the desktop's file manager: the chosen one, or the
    *  app's own while the chosen one is away. */
   'notes:reveal': { args: void; result: void }
+  /** The chosen folder, back while the app is open: the notes that fell back
+   *  meanwhile go across now (`NotesModel.comeBack`); null when nothing moved. */
+  'notes:comeBack': { args: void; result: { moved: number; kept: number; notesFolder: NotesFolderDTO } | null }
   /** For a probe: builds now and waits. */
   'semantic:build': { args: void; result: { status: SemanticStatusDTO; stats: unknown; unread: string[] } }
 }
@@ -221,6 +224,8 @@ export interface NotesFolderDTO {
   away: boolean
   /** Folders a move left notes in, because a name was taken where they were going. */
   leftBehind: string[]
+  /** What the last move made without being asked did — at launch, or when the chosen folder came back. */
+  lastMove?: { moved: number; kept: number } | null
 }
 
 export interface SemanticStatusDTO {

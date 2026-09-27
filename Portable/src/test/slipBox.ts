@@ -209,6 +209,17 @@ export async function slipBoxSuite(test: Test, suite: (name: string) => void) {
       assert.deepEqual(store.info().leftBehind, [app])
       // Never made again where it used to be.
       assert.equal(fs.existsSync(chosen), false)
+      // Plugged back in while the app is open: carried across at once, not
+      // at the next launch — and read from there.
+      fs.mkdirSync(chosen, { recursive: true })
+      assert.deepEqual(await store.comeBack(), { moved: 1, kept: 0 })
+      assert.deepEqual(files(chosen), ['202609081620.md'])
+      assert.deepEqual(files(app), [])
+      assert.equal(store.info().away, false)
+      assert.deepEqual(store.info().lastMove, { moved: 1, kept: 0 })
+      assert.equal(await store.comeBack(), null, 'nothing left to carry')
+      const read = await store.load()
+      assert.deepEqual(read.map((one) => [one.id, one.box]), [['202609081620', chosen]])
     } finally {
       fs.rmSync(base, { recursive: true, force: true })
     }

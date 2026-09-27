@@ -64,6 +64,16 @@ export function showMenu(anchor: Element, entries: MenuEntry[], align: 'left' | 
   focusItem(menu, 0)
 }
 
+/** A menu where the pointer was pressed — a row's right click, which is
+ *  about the row under the pointer, not about the row's left edge. */
+export function showMenuAt(point: { x: number; y: number }, entries: MenuEntry[]) {
+  const anchor = document.createElement('div')
+  Object.assign(anchor.style, { position: 'fixed', left: `${point.x}px`, top: `${point.y}px`, width: '0', height: '0' })
+  document.body.append(anchor)
+  showMenu(anchor, entries)
+  anchor.remove()
+}
+
 export function closeMenu() {
   if (!open) return
   const { scrim, menus, restore } = open

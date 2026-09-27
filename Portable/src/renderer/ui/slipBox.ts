@@ -12,11 +12,12 @@
 import { clear, el, on } from '../dom.js'
 import { icon } from '../icons.js'
 import { L } from '../../shared/lang.js'
-import { zettelDisplayTitle } from '../../shared/zettel.js'
+import { zettelDisplayTitle, zettelPreviewBody } from '../../shared/zettel.js'
+import { fullTitle } from '../../shared/model.js'
 import { changed, noteByID, store, type Note, type Paper } from '../state.js'
 import { addToMap, createNote, deleteNote, drafts, maps, noteTagCounts, visibleNotes } from '../notesModel.js'
 import { editorHost, noteRow, type NoteEditorActions } from './noteEditor.js'
-import { showMenu, type MenuEntry } from './toolbar.js'
+import { showMenu, showMenuAt, type MenuEntry } from './toolbar.js'
 
 export interface SlipBoxActions extends NoteEditorActions {
   /** The paper a group is named after, or null when the library no longer has it. */
@@ -33,15 +34,29 @@ const host = editorHost()
 
 /** Opens a note beside the list; null puts the editor away. */
 export function openNoteInSlipBox(id: string | null) {
+  const hadPaper = store.slipBox.paperID !== null
   store.slipBox.openID = id
   store.slipBox.paperID = null
   if (id === null) host.drop()
+  if (hadPaper) changed('shelf')
   changed('notes', 'slipBox')
+}
+
+/**
+ * Back from a passage followed out of a note: the list where the note was
+ * beside the paper, the note in the page area again (`slipBoxPaper`'s
+ * «‹ Notes», and Escape).
+ */
+export function backToNotes(): boolean {
+  if (store.slipBox.paperID === null) return false
+  store.slipBox.paperID = null
+  changed('shelf', 'slipBox')
+  return true
 }
 
 export const slipBoxEditor = () => host.current()
 
-export function buildSlipBox(actions: SlipBoxActions): { node: HTMLElement; detail: HTMLElement; update: () => void } {
+export function buildSlipBox(actions: SlipBoxActions): { node: HTMLElement; detail: HTMLElement; side: HTMLElement; update: () => void } {
   // ---- the list column
   const node = el('div', { class: 'panel slipbox' })
   const header = el('div', { class: 'panel-header slipbox-head' })
@@ -79,6 +94,21 @@ export function buildSlipBox(actions: SlipBoxActions): { node: HTMLElement; deta
   // ---- the page area's half: the note that is open, or an invitation
   const detail = el('div', { class: 'panel slipbox-detail' })
 
+  // ---- a passage followed out of the note: the paper takes the page area
+  // and the note stands where the list was, so the quotation and its page
+  // are side by side — with the way back to the list above it. (The Mac
+  // puts the paper in the list's column and keeps the note; here the
+  // readers live in the page area, and the note is what fits a column.)
+  const side = el('div', { class: 'panel slipbox-side' })
+  const sideHead = el('div', { class: 'panel-header slipbox-side-head' })
+  const back = el('button', { class: 'plain-button note-back', title: L('노트 목록으로 (Esc)', 'Back to Notes (Esc)'), html: icon('chevron.left') })
+  back.append(el('span', { text: L('노트', 'Notes') }))
+  on(back, 'click', () => backToNotes())
+  const sideTitle = el('span', { class: 'slipbox-side-title' })
+  sideHead.append(back, sideTitle)
+  const sideBody = el('div', { class: 'panel-body slipbox-side-body' })
+  side.append(sideHead, sideBody)
+
   const groups = (): NoteGroup[] => {
     const visible = visibleNotes()
     const found: NoteGroup[] = []
@@ -99,7 +129,7 @@ export function buildSlipBox(actions: SlipBoxActions): { node: HTMLElement; deta
         continue
       }
       index.set(key, found.length)
-      found.push({ id: key, title: paper?.meta.displayTitle ?? L('따로 쓴 노트', 'Notes of my own'), notes: [note] })
+      found.push({ id: key, title: paper ? fullTitle(paper.meta) : L('따로 쓴 노트', 'Notes of my own'), notes: [note] })
     }
     const special = new Set(['maps', 'drafts'])
     return [
@@ -126,9 +156,15 @@ export function buildSlipBox(actions: SlipBoxActions): { node: HTMLElement; deta
     return entries
   }
 
+  let drawnTags = ''
   function drawTags() {
-    clear(tags)
     const counts = noteTagCounts()
+    // The same chips, not drawn again: while a note is typed the tags almost
+    // never change, and a row of new buttons under the pointer flickers.
+    const key = JSON.stringify([counts, store.slipBox.tag])
+    if (key === drawnTags) return
+    drawnTags = key
+    clear(tags)
     tags.style.display = counts.length > 0 ? '' : 'none'
     for (const { tag, count } of counts) {
       const isOn = store.slipBox.tag === tag
@@ -144,11 +180,25 @@ export function buildSlipBox(actions: SlipBoxActions): { node: HTMLElement; deta
     }
   }
 
+  /** The notes in the order the list shows them — what ↑ and ↓ walk. */
+  let order: string[] = []
+  let drawnList = ''
+
   function drawList() {
-    clear(body)
     if (search.value !== store.slipBox.query) search.value = store.slipBox.query
     clearSearch.style.display = store.slipBox.query ? '' : 'none'
     const grouped = groups()
+    order = grouped.flatMap((group) => group.notes.map((note) => note.id))
+    // Drawn again only when what it shows changed — every keystroke in the
+    // open note used to clear the list and send it back to its top — and at
+    // the same scroll when it is.
+    const key = JSON.stringify([store.notes.length === 0, store.slipBox.openID,
+      grouped.map((group) => [group.title, group.notes.map((note) => [note.id, zettelDisplayTitle(note), zettelPreviewBody(note), note.created.getTime(), note.body.includes('#') ? note.body.match(/#[^\s#]+/g)?.slice(0, 3) : null])])])
+    if (key === drawnList) return
+    drawnList = key
+    const scrolled = body.scrollTop
+    clear(body)
+    restoreScroll(scrolled)
     if (grouped.length === 0) {
       const none = store.notes.length === 0
       body.append(el('div', { class: 'empty' }, [
@@ -170,15 +220,49 @@ export function buildSlipBox(actions: SlipBoxActions): { node: HTMLElement; deta
       ]))
       for (const note of group.notes) {
         const row = noteRow(note, { selected: store.slipBox.openID === note.id })
-        on(row, 'click', () => openNoteInSlipBox(note.id))
+        on(row, 'click', () => {
+          openNoteInSlipBox(note.id)
+          body.focus({ preventScroll: true })
+        })
         on(row, 'contextmenu', (event: MouseEvent) => {
           event.preventDefault()
-          showMenu(row, rowMenu(note))
+          showMenuAt({ x: event.clientX, y: event.clientY }, rowMenu(note))
         })
         body.append(row)
       }
     }
+    restoreScroll(scrolled)
   }
+
+  function restoreScroll(top: number) {
+    if (body.scrollTop !== top) body.scrollTop = top
+  }
+
+  // The list takes the keyboard as the Mac's `List(selection:)` does: ↑↓
+  // open the note above or below, Home and End the first and the last.
+  body.setAttribute('role', 'listbox')
+  body.setAttribute('tabindex', '0')
+  body.setAttribute('aria-label', L('노트', 'Notes'))
+  on(body, 'keydown', (event: KeyboardEvent) => {
+    if (event.metaKey || event.ctrlKey || event.altKey || order.length === 0) return
+    const at = store.slipBox.openID ? order.indexOf(store.slipBox.openID) : -1
+    let next: number | null = null
+    if (event.key === 'ArrowDown') next = at < 0 ? 0 : Math.min(order.length - 1, at + 1)
+    else if (event.key === 'ArrowUp') next = at < 0 ? order.length - 1 : Math.max(0, at - 1)
+    else if (event.key === 'Home') next = 0
+    else if (event.key === 'End') next = order.length - 1
+    else if (event.key === 'Enter' && at >= 0) {
+      event.preventDefault()
+      event.stopPropagation()
+      host.current()?.area.focus()
+      return
+    }
+    if (next === null) return
+    event.preventDefault()
+    event.stopPropagation()
+    if (next !== at) openNoteInSlipBox(order[next])
+    requestAnimationFrame(() => body.querySelector(`[data-note="${CSS.escape(order[next!])}"]`)?.scrollIntoView({ block: 'nearest' }))
+  })
 
   function drawDetail() {
     const id = store.slipBox.openID
@@ -195,9 +279,12 @@ export function buildSlipBox(actions: SlipBoxActions): { node: HTMLElement; deta
       return
     }
     const editor = host.show(note.id, actions)
-    if (editor.node.parentElement !== detail) {
-      clear(detail)
-      detail.append(editor.node)
+    // Beside a followed paper the note stands in the list's column.
+    const into = store.slipBox.paperID !== null ? sideBody : detail
+    if (store.slipBox.paperID !== null) sideTitle.textContent = zettelDisplayTitle(note)
+    if (editor.node.parentElement !== into) {
+      clear(into)
+      into.append(editor.node)
     }
   }
 
@@ -210,5 +297,5 @@ export function buildSlipBox(actions: SlipBoxActions): { node: HTMLElement; deta
   }
 
   update()
-  return { node, detail, update }
+  return { node, detail, side, update }
 }

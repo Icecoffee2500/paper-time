@@ -55,11 +55,14 @@ struct PaperNotesView: View {
             guard !Task.isCancelled else { return }
             refreshEchoes()
         }
-        // Command-L with no note open carries on with the last one written
-        // about this paper, or starts one.
+        // Command-L with no note open carries on with the one last written
+        // in about this paper, or starts one. (`.first` was the oldest: the
+        // list is in the order the notes were made.) Portable picks the
+        // same note — `latestNoteForPaper`.
         .onChange(of: link.pendingNoteAnchor) { _, anchor in
             guard anchor != nil, link.openNoteID == nil else { return }
-            link.openNoteID = notes.notes(forPaper: paperID).first?.id ?? notes.create(paperID: paperID).id
+            link.openNoteID = notes.notes(forPaper: paperID).max(by: { $0.modified < $1.modified })?.id
+                ?? notes.create(paperID: paperID).id
         }
         // Following a link from inside another note.
         .onChange(of: notes.requestedNoteID) { _, id in

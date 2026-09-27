@@ -78,6 +78,13 @@ export function notesHandlers(ctx: Context): Partial<Handlers> {
       if (isFolder(target)) await (await import('electron')).shell.openPath(target)
     },
 
+    'notes:comeBack': async () => {
+      const moved = await notes().comeBack()
+      if (!moved || (moved.moved === 0 && moved.kept === 0)) return null
+      windows.send('library:changed')
+      return { ...moved, notesFolder: notes().info() }
+    },
+
     'notes:useAppFolder': async () => {
       if (!ctx.isProbe) update({ notesFolder: null })
       const moved = await notes().relocate(null)

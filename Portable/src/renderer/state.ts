@@ -137,7 +137,8 @@ export interface Store {
   /** Where the notes about no paper live. */
   notesFolder: NotesFolderDTO | null
   /** The note open in the inspector's Notes tab, or null for the list. */
-  noteOpenID: string | null
+  /** The note open in the Notes tab, per paper: side by side, each pane's tab keeps its own (`ReaderLink.openNoteID`). */
+  noteOpenByPaper: Map<string, string>
   /** The slip-box shelf: the note open beside the list, the search and the
    *  tag narrowing it, and the paper shown instead after a link was followed. */
   slipBox: { openID: string | null; query: string; tag: string | null; paperID: string | null }
@@ -236,7 +237,7 @@ export const store: Store = {
   refused: [],
   notes: [],
   notesFolder: null,
-  noteOpenID: null,
+  noteOpenByPaper: new Map(),
   slipBox: { openID: null, query: '', tag: null, paperID: null },
   shelf: { kind: 'all' },
   selectedID: null,
@@ -459,8 +460,17 @@ export function noteByID(id: string): Note | undefined {
 }
 
 /** The notes written while reading one paper, newest first. */
+/** The notes written about one paper, in the order they were written — the
+ *  Notes tab's order on both builds (`NotesModel.notes(forPaper:)`). */
 export function notesForPaper(paperID: string): Note[] {
-  return store.notes.filter((note) => note.paperID === paperID).reverse()
+  return store.notes.filter((note) => note.paperID === paperID)
+}
+
+/** The note last written in about a paper — the one ⌘L carries on with. */
+export function latestNoteForPaper(paperID: string): Note | undefined {
+  let latest: Note | undefined
+  for (const note of notesForPaper(paperID)) if (!latest || note.modified.getTime() > latest.modified.getTime()) latest = note
+  return latest
 }
 
 export function adopt(snapshot: LibrarySnapshot) {

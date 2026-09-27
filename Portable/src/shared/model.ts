@@ -109,6 +109,11 @@ export function fullName(name: CSLName): string {
   return [name.given, surname(name)].filter(Boolean).join(' ').trim()
 }
 
+/** How the slip-box names a paper: the CSL full title, else what the list shows (`csl.fullTitle ?? displayTitle`). */
+export function fullTitle(meta: { csl?: CSLItem; displayTitle: string }): string {
+  return cslFullTitle(meta.csl) ?? meta.displayTitle
+}
+
 /** `CSLItem.fullTitle`: a subtitle alone when there is no title, and no
  *  second colon after a title that already ends in one. */
 export function cslFullTitle(item: CSLItem | undefined): string | undefined {

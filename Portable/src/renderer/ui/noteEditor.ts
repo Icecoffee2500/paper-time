@@ -23,7 +23,10 @@ import { isCommand, platform } from '../bridge.js'
 import { anchorAt } from '../../shared/noteQuote.js'
 import { zettelDisplayTitle, zettelPreviewBody, zettelTags } from '../../shared/zettel.js'
 import { noteByID, type Note } from '../state.js'
-import { deleteNote, flushNote, linkedFrom, linksOut, updateNote } from '../notesModel.js'
+import { deleteNote, flushNote, linkedFrom, linksOrTagsChanged, linksOut, updateNote } from '../notesModel.js'
+import { indentEdit, returnEdit, type LineEdit } from '../../shared/noteBlocks.js'
+import { keyFor } from '../../shared/shortcuts.js'
+import { attachWikiLinkPopover, type WikiLinkPopover } from './wikiLinkPopover.js'
 import { attachLatexSuite, type LatexSuiteField } from './latexSuiteInput.js'
 import { attachMathPreview, type MathPreview } from './mathPreview.js'
 import { showMenu } from './toolbar.js'
@@ -45,10 +48,16 @@ export interface NoteEditor {
   refresh(): void
   /** Writes the note out and lets go of the fields. */
   detach(): void
+  /** The formula card and the `[[` card, for a probe. */
+  report(): { math: string; links: { showing: boolean; rows: string[]; selected: number } }
 }
 
 /** Ctrl on Windows and Linux, ⌘ on a Mac: the key that follows a link. */
-const COMMAND = platform === 'darwin' ? '⌘' : 'Ctrl'
+const CLICK_KEY = platform === 'darwin' ? '⌘' : 'Ctrl'
+
+/** The note whose editor says how to follow a link — the first one this
+ *  session opened with a link in it, and no other: said once, it is known. */
+let hintedNote: string | null = null
 
 /** The `[[id|label]]` a character of a note sits in, read back into the id, or null. */
 export function wikiLinkAt(text: string, index: number): string | null {
@@ -99,8 +108,8 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
     class: 'note-area',
     spellcheck: 'false',
     placeholder: L(
-      `생각 하나를, 내 말로.\n\n[[ 로 다른 노트에 잇고, #태그 로 묶어요. ${COMMAND}+L은 고른 구절로 가는 링크를 놓아요.`,
-      `One thought, in your own words.\n\n[[ links to another note. #tag files it. ${COMMAND}+L drops a link to the passage you selected.`,
+      `생각 하나를, 내 말로.\n\n[[ 로 다른 노트에 잇고, #태그 로 묶어요. ${keyFor('linkToNote', platform)}은 고른 구절로 가는 링크를 놓아요.`,
+      `One thought, in your own words.\n\n[[ links to another note. #tag files it. ${keyFor('linkToNote', platform)} drops a link to the passage you selected.`,
     ),
   }) as HTMLTextAreaElement
   const field = el('div', { class: 'note-field' }, [area])
@@ -115,6 +124,7 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
   let loadedBody = ''
   let latex: LatexSuiteField | null = null
   let preview: MathPreview | null = null
+  let links: WikiLinkPopover | null = null
 
   const current = (): Note | undefined => noteByID(id)
 
@@ -122,10 +132,15 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
     const note = current()
     if (!note) return
     if (note.title === title.value && note.body === area.value) return
+    const moved = linksOrTagsChanged(note, { body: area.value })
     updateNote({ ...note, title: title.value, body: area.value })
     loadedTitle = title.value
     loadedBody = area.value
-    drawTags(note.body !== area.value)
+    if (moved) {
+      drawTags(true)
+      drawConnections()
+    }
+    drawHint()
   }
 
   const drawTags = (bodyChanged: boolean) => {
@@ -164,25 +179,35 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
   const drawHint = () => {
     const hasAnchor = /\]\(papertime:\/\/anchor/.test(area.value)
     const hasLink = area.value.includes('[[')
-    hint.textContent = hasAnchor || hasLink
-      ? L(`인용 끝의 쪽 링크나 [[링크]]를 ${COMMAND}-클릭하면 그 자리로 가요.`, `${COMMAND}-click a page link or a [[link]] to go there.`)
+    if ((hasAnchor || hasLink) && hintedNote === null) hintedNote = id
+    hint.textContent = (hasAnchor || hasLink) && hintedNote === id
+      ? L(`인용 끝의 쪽 링크나 [[링크]]를 ${CLICK_KEY}-클릭하면 그 자리로 가요.`, `${CLICK_KEY}-click a page link or a [[link]] to go there.`)
       : ''
     hint.style.display = hint.textContent ? '' : 'none'
   }
 
-  /** Typing: the note follows a moment after; the store, the tags and the hint now. */
-  let timer: ReturnType<typeof setTimeout> | null = null
-  const typed = () => {
-    if (timer) clearTimeout(timer)
-    timer = setTimeout(save, 200)
-  }
-  on(area, 'input', typed)
-  on(title, 'input', typed)
+  // Typing: the store follows at once — the links, the tags, a Ctrl-click
+  // on a link, ⌘N — and only the disk waits for the pause
+  // (`ZettelEditorView.save()`; `updateNote` holds the write 600 ms).
+  on(area, 'input', save)
+  on(title, 'input', save)
   on(area, 'blur', save)
   on(title, 'blur', save)
   // The window's own keys — a letter picks a drawing tool — must not see
-  // what is typed here.
-  on(area, 'keydown', (event: KeyboardEvent) => event.stopPropagation())
+  // what is typed here. Return and Tab carry a list on, after Latex Suite
+  // (a capture listener) has had its say about them.
+  on(area, 'keydown', (event: KeyboardEvent) => {
+    event.stopPropagation()
+    if (event.defaultPrevented || event.isComposing || event.metaKey || event.ctrlKey || event.altKey) return
+    if (area.selectionStart !== area.selectionEnd) return
+    const caret = area.selectionStart
+    const edit = event.key === 'Enter' && !event.shiftKey ? returnEdit(area.value, caret)
+      : event.key === 'Tab' ? indentEdit(area.value, caret, event.shiftKey ? -1 : 1)
+      : null
+    if (!edit) return
+    event.preventDefault()
+    applyEdit(edit)
+  })
   on(title, 'keydown', (event: KeyboardEvent) => {
     event.stopPropagation()
     if (event.key === 'Enter') {
@@ -210,6 +235,19 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
     }
   })
 
+  /** An edit into the field as one step of its undo, the way typing is. */
+  function applyEdit(edit: LineEdit) {
+    area.setSelectionRange(edit.from, edit.to)
+    const done = edit.insert.length > 0
+      ? document.execCommand('insertText', false, edit.insert)
+      : edit.to > edit.from ? document.execCommand('delete', false) : true
+    if (!done) {
+      area.value = area.value.slice(0, edit.from) + edit.insert + area.value.slice(edit.to)
+      area.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertReplacementText', data: edit.insert }))
+    }
+    area.setSelectionRange(edit.caret, edit.caret)
+  }
+
   function refresh() {
     const note = current()
     if (!note) return
@@ -228,11 +266,11 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
   }
 
   function detach() {
-    if (timer) clearTimeout(timer)
     save()
     void flushNote(id)
     latex?.detach()
     preview?.detach()
+    links?.detach()
   }
 
   const note = current()
@@ -248,9 +286,10 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
   // equation — and shown set, under the line, while the caret is inside it.
   latex = attachLatexSuite(area)
   preview = attachMathPreview(area)
-  ;(window as unknown as { __mathPreview?: () => string }).__mathPreview = () => preview?.report() ?? ''
+  links = attachWikiLinkPopover(area, id, applyEdit)
 
-  return { id, node, area, refresh, detach }
+  const report = () => ({ math: preview?.report() ?? '', links: links?.report() ?? { showing: false, rows: [], selected: 0 } })
+  return { id, node, area, refresh, detach, report }
 }
 
 /**

@@ -43,7 +43,7 @@ import {
   closePaper, extendSelection, goBack, goForward, keepPaper, openAnchor, pickPaper, selectAllPapers, showPaper, stepPaper,
   stepPaperTo,
 } from './actions/openPapers.js'
-import { openAnchorFromSlipBox, openNote } from './actions/notes.js'
+import { openAnchorFromSlipBox, openNote, openNoteFromSearch } from './actions/notes.js'
 import { openPassage, openSearch } from './actions/search.js'
 import { clearSearchResults, installListSearch, scanListText } from './listSearch.js'
 import { installTheme, openSettings, saveSettings, setInspectorTab } from './settingsController.js'
@@ -52,6 +52,7 @@ import { applyUndo, installKeys, pickTool } from './keys.js'
 import { installMainEvents } from './commands.js'
 import { installDockDrop, installFileDrop } from './dockDrop.js'
 import { installRejectionNotice } from './notices.js'
+import { onNoteWriteFailed } from './notesModel.js'
 import { installSheetModality } from './ui/sheet.js'
 import { installProbeSurface } from './probe.js'
 import { showMoreMenu } from './moreMenu.js'
@@ -104,7 +105,7 @@ shell.paperList = buildPaperList({
   adoptLoose: () => void adoptLoose(),
   refresh: () => void reload(),
   openPassage: (hit, byMeaning) => void openPassage(hit, byMeaning ? '' : store.searchQuery),
-  openNote: (id) => void openNote(id),
+  openNote: (id, words) => openNoteFromSearch(id, words),
   step: (by) => stepPaper(by),
 })
 
@@ -255,8 +256,14 @@ subscribe((keys) => {
   }
   if (keys.has('notes') || keys.has('slipBox') || keys.has('papers')) {
     if (onNotesShelf) {
+      // A note typed into changes the list and nothing in the page area:
+      // the readers are asked again only when the slip-box itself moved.
+      // (`reconcileReaders` updated the slip-box a second time.)
+      if (keys.has('slipBox') || keys.has('papers')) {
+        syncListSlot()
+        reconcileReaders()
+      }
       shell.slipBox.update()
-      reconcileReaders()
     }
     if (keys.has('notes') && store.settings.inspectorTab === 'note') shell.inspector.update()
     if (keys.has('notes')) shell.sidebar.update()
@@ -306,6 +313,12 @@ window.addEventListener('focus', () => {
 // ------------------------------------------------------------------- start
 
 installRejectionNotice()
+// A note the disk would not take stays in hand and is written with the next
+// change; said once, in the app's voice (`NotesModel.write`).
+onNoteWriteFailed((id, reason) => {
+  console.error('note write -', id, reason)
+  toast(L('노트를 저장하지 못했어요. 저장할 수 있을 때까지 여기 있어요.', "Paper Time couldn't save the note. It stays here until it can."))
+})
 installSheetModality()
 installTheme()
 installKeys()

@@ -233,7 +233,7 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
     rows.push({ key: 'open', kind: 'row', shelf: { kind: 'open' }, icon: 'rectangle.on.rectangle', label: L('열린 문서', 'Open Documents'), count: store.openPaperIDs.length })
 
     rows.push({ key: 'sec:slipbox', kind: 'section', label: L('슬립박스', 'Slip-Box') })
-    rows.push({ key: 'notes', kind: 'row', shelf: { kind: 'notes' }, icon: 'note', label: L('노트', 'Notes'), count: counts.notes })
+    rows.push({ key: 'notes', kind: 'row', shelf: { kind: 'notes' }, icon: 'tray.full', label: L('노트', 'Notes'), count: counts.notes })
 
     rows.push({ key: 'sec:collections', kind: 'section', label: L('컬렉션', 'Collections') })
     for (const collection of store.collections) {
