@@ -48,6 +48,7 @@ import { applyUndo, installKeys, pickTool } from './keys.js'
 import { installMainEvents } from './commands.js'
 import { installDockDrop, installFileDrop } from './dockDrop.js'
 import { installRejectionNotice } from './notices.js'
+import { installSheetModality } from './ui/sheet.js'
 import { installProbeSurface } from './probe.js'
 import { showMoreMenu } from './moreMenu.js'
 import { L } from '../shared/lang.js'
@@ -244,11 +245,35 @@ subscribe((keys) => {
   }
   if (keys.has('reader')) focused()?.update()
   shell.toolbar.update()
+  tellMenu()
+})
+
+/** What the menu bar should say for this window — sent when it changes. */
+let menuSaid = ''
+
+function tellMenu() {
+  const state = {
+    panes: { ...store.settings.panes },
+    focus: store.focus.on,
+    hasPaper: Boolean(store.selectedID && focused()),
+    layout: store.settings.pageLayout,
+  }
+  const said = JSON.stringify(state)
+  if (said === menuSaid) return
+  menuSaid = said
+  void call('menu:state', state).catch(() => undefined)
+}
+
+// Coming to the front, this window speaks for the menu bar again.
+window.addEventListener('focus', () => {
+  menuSaid = ''
+  tellMenu()
 })
 
 // ------------------------------------------------------------------- start
 
 installRejectionNotice()
+installSheetModality()
 installTheme()
 installKeys()
 installDockDrop()

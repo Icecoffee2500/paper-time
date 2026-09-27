@@ -52,6 +52,9 @@ import { commandsSuite } from './commands.js'
 import { readerSuite } from './reader.js'
 import { sketchGeometrySuite } from './sketchGeometry.js'
 import { sketchCommandsSuite } from './sketchCommands.js'
+import { focusSuite } from './focus.js'
+import { voiceSuite } from './voice.js'
+import { tokensSuite } from './tokens.js'
 import { PaperMeta, PaperState } from '../shared/model.js'
 import { entryFor, formatEntry, protectTitle } from '../shared/bibtex.js'
 import { escapeLaTeX } from '../shared/latexTable.js'
@@ -423,6 +426,9 @@ async function main() {
   await readerSuite(test, suite)
   await sketchGeometrySuite(test, suite)
   await sketchCommandsSuite(test, suite)
+  await focusSuite(test, suite)
+  await voiceSuite(test, suite)
+  await tokensSuite(test, suite)
 
   // --------------------------------------------------------------------- ink
   suite('Handwriting')

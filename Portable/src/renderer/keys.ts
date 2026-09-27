@@ -13,6 +13,8 @@ import { findBar, focused, readers } from './pageArea.js'
 import { closeWindowOrPane, showOpenPapersPopup } from './actions/openPapers.js'
 import { closeOpenPapers, isOpenPapersShowing } from './ui/openPapers.js'
 import { closePalette, isPaletteOpen } from './ui/search.js'
+import { closeMenu, isMenuOpen } from './ui/menu.js'
+import { isSheetKey, isSheetOpen } from './ui/sheet.js'
 import { resetSketchInput, undoStack, type SketchInputEditing } from './ui/sketchInput.js'
 import { sketchEditor } from './ui/sketchEditing.js'
 
@@ -49,6 +51,17 @@ export function installKeys() {
   undoStack.paperOf = () => store.selectedID
 
   on(window, 'keydown', (event: KeyboardEvent) => {
+    // An open menu has the keyboard; Escape puts it away first of all.
+    if (isMenuOpen()) {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        closeMenu()
+      }
+      return
+    }
+    // A sheet over the window is modal: nothing under it hears a key — even
+    // the Escape that has just closed it.
+    if (isSheetOpen() || isSheetKey(event)) return
     const typing = isTyping(event.target)
     const reader = focused()
     const drawing = readerState().drawing

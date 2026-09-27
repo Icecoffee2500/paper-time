@@ -6,14 +6,16 @@
  */
 import { clear, el, on } from './dom.js'
 import { changed, store, type Pane } from './state.js'
+import { enterFocus, leaveFocus, restingPanes, showPane, togglePaneState, type PaneState } from '../shared/paneModel.js'
 import { shell, solo } from './shell.js'
 import { keepingPlaces, pageArea, relayoutReaders } from './pageArea.js'
 import { saveSettings } from './settingsController.js'
 
 type Column = 'sidebar' | 'paperList' | 'inspector'
 
-/** The narrowest a column can be dragged, and the room the page keeps. */
-const COLUMN_MIN = 180
+/** The narrowest each column can be dragged — the Mac's floors — and the
+ *  room the page keeps. */
+const COLUMN_MIN: Record<Column, number> = { sidebar: 200, paperList: 240, inspector: 280 }
 const READER_MIN = 300
 
 /** Which panes were on screen last time, so only a new one is seen arriving. */
@@ -41,7 +43,12 @@ export function layoutPanes() {
   const visible = store.settings.panes
   const pieces: { pane: Pane; node: HTMLElement; width?: number; resizes?: 'leading' | 'trailing' }[] = []
   if (visible.sidebar) pieces.push({ pane: 'sidebar', node: shell.sidebar.node, width: store.settings.columns.sidebar })
-  if (visible.paperList) pieces.push({ pane: 'paperList', node: shell.listSlot, width: store.settings.columns.paperList })
+  // With the paper hidden the list is what is being read: it fills the
+  // window, as the Mac's does, rather than standing at its width beside
+  // nothing.
+  if (visible.paperList) {
+    pieces.push({ pane: 'paperList', node: shell.listSlot, width: visible.reader ? store.settings.columns.paperList : undefined })
+  }
   if (visible.reader) pieces.push({ pane: 'reader', node: pageArea })
   if (visible.inspector) {
     pieces.push({ pane: 'inspector', node: shell.inspector.node, width: store.settings.columns.inspector, resizes: 'trailing' })
@@ -94,7 +101,7 @@ export function widestColumn(pane: Column, windowWidth: number): number {
     .filter((one) => one !== pane && visible[one])
     .reduce((sum, one) => sum + store.settings.columns[one], 0)
   const room = windowWidth - others - (visible.reader ? READER_MIN : 0)
-  return Math.max(COLUMN_MIN, room)
+  return Math.max(COLUMN_MIN[pane], room)
 }
 
 function divider(pane: Column, inverted: boolean): HTMLElement {
@@ -121,7 +128,7 @@ function divider(pane: Column, inverted: boolean): HTMLElement {
     }
     const move = (moved: PointerEvent) => {
       const travel = inverted ? startX - moved.clientX : moved.clientX - startX
-      store.settings.columns[pane] = Math.min(Math.max(startWidth + travel, COLUMN_MIN), widest)
+      store.settings.columns[pane] = Math.min(Math.max(startWidth + travel, COLUMN_MIN[pane]), widest)
       if (!frame) frame = requestAnimationFrame(settle)
     }
     const up = () => {
@@ -139,7 +146,9 @@ function divider(pane: Column, inverted: boolean): HTMLElement {
 }
 
 function relayoutPanes() {
-  saveSettings({ panes: store.settings.panes })
+  // The window as it is out of focus: a restart comes back to that, not to a
+  // window with every column shut.
+  saveSettings({ panes: restingPanes(paneState()) })
   keepingPlaces(() => {
     layoutPanes()
     shell.toolbar.update()
@@ -148,42 +157,38 @@ function relayoutPanes() {
   changed('settings')
 }
 
-/** A pane on or off. By hand in focus mode, that ends focus mode: the way
- *  back would undo what was just chosen. */
-export function togglePane(pane: Pane) {
-  if (solo) return
-  store.focusBefore = null
-  store.settings.panes = { ...store.settings.panes, [pane]: !store.settings.panes[pane] }
+function paneState(): PaneState {
+  return { panes: store.settings.panes, focus: store.focus }
+}
+
+function applyPaneState(next: PaneState) {
+  store.settings.panes = { ...next.panes }
+  store.focus = next.focus
   relayoutPanes()
 }
 
-/** Shows a pane that is hidden — the pen bringing the inspector, a note
- *  opening in it. Not in focus mode, which hid it on purpose. */
+/** A column on or off, by the Mac's rules (`togglePaneState`). */
+export function togglePane(pane: Pane) {
+  if (solo) return
+  applyPaneState(togglePaneState(paneState(), pane))
+}
+
+/** Shows a pane that is hidden — the pen bringing the Tools tab, a note
+ *  opening in the inspector — in focus mode too, as the Mac does. */
 export function revealPane(pane: Pane) {
-  if (solo || store.settings.panes[pane] || store.focusBefore) return
-  store.settings.panes = { ...store.settings.panes, [pane]: true }
-  relayoutPanes()
+  if (solo || store.settings.panes[pane]) return
+  applyPaneState(showPane(paneState(), pane))
 }
 
 /**
- * The paper and nothing else — and the way back.
- *
- * What it hid has to be remembered, or leaving focus mode means putting three
- * columns back by hand. Leaving restores exactly what was open on the way in.
+ * The paper and nothing else — and the way back. What it hid is remembered,
+ * or leaving focus mode means putting three columns back by hand.
  */
-/** Focus mode on or off, from wherever it is. */
 export function setFocusMode(on: boolean) {
-  if (on !== Boolean(store.focusBefore)) toggleFocus()
+  if (solo || on === store.focus.on) return
+  applyPaneState(on ? enterFocus(paneState()) : leaveFocus(paneState()))
 }
 
 export function toggleFocus() {
-  if (solo) return
-  if (store.focusBefore) {
-    store.settings.panes = { ...store.focusBefore }
-    store.focusBefore = null
-  } else {
-    store.focusBefore = { ...store.settings.panes }
-    store.settings.panes = { sidebar: false, paperList: false, reader: true, inspector: false }
-  }
-  relayoutPanes()
+  setFocusMode(!store.focus.on)
 }

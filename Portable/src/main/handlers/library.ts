@@ -23,9 +23,14 @@ export function libraryHandlers(ctx: Context): Partial<Handlers> {
     // of its own and the window must be told about that one.
     'settings:get': () => ({ ...settings(), libraryRoot: libraries.first?.root ?? settings().libraryRoot }),
 
-    'settings:set': (asked) => {
+    'settings:set': (asked, sender) => {
       const patch = acceptedPatch(asked as Record<string, unknown>)
+      const before = settings().language
       const next = update(patch)
+      // The other windows follow what this one chose — a tint, a layout —
+      // rather than keeping what they had until they are opened again.
+      windows.sendExcept(sender, 'settings:changed', patch)
+      if ('language' in patch && next.language !== before) ctx.languageChanged()
       // The switch for search by meaning: off ends the worker and what it was
       // doing; on starts the build the way a library read would.
       if ('semanticSearch' in patch) {
@@ -63,7 +68,7 @@ export function libraryHandlers(ctx: Context): Partial<Handlers> {
       // that library. Anything else — every other shelf, a folder inside a
       // library — goes to the first one.
       const destination = libraries.destination(root)
-      if (!destination) return { error: 'No library is open.' }
+      if (!destination) return { error: say('열린 라이브러리가 없어요.', 'No library is open.') }
       let chosen = paths
       if (!chosen || chosen.length === 0) {
         const result = await dialog.showOpenDialog(owner(sender), {
@@ -91,7 +96,7 @@ export function libraryHandlers(ctx: Context): Partial<Handlers> {
     },
 
     'library:adoptLoose': async (_args, sender) => {
-      if (!libraries.first) return { error: 'No library is open.' }
+      if (!libraries.first) return { error: say('열린 라이브러리가 없어요.', 'No library is open.') }
       // Each folder takes in its own: adopting a PDF must never move it to
       // another folder. One file at a time, and a file that will not be read
       // does not take the rest of the folder with it: this loop used to throw

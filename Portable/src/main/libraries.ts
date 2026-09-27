@@ -172,7 +172,7 @@ export class LibrarySet {
       await this.opening.catch(() => undefined)
       this.opening = null
     }
-    if (!this.first) return { error: 'No library is open.' }
+    if (!this.first) return { error: say('열린 라이브러리가 없어요.', 'No library is open.') }
     try {
       const folders = await this.readAll()
       const rows: LibrarySnapshot['papers'] = []

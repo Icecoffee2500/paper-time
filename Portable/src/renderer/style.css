@@ -41,8 +41,9 @@
   --radius-bar: 12px;
   --radius-popover: 14px;
   --radius-panel: 22px;
-  /* The window's four panes float on the ground at the bar's radius. */
-  --panel-radius: var(--radius-bar);
+  /* The window's four panes float on the ground at the panel's radius —
+     the Mac's `Corner.panel`. */
+  --panel-radius: var(--radius-panel);
   /* The rack: its buttons sit this far inside its edge. */
   --rack-inset: 5px;
 
@@ -350,6 +351,26 @@ body[data-platform='darwin'] .window-buttons {
   color: #fff;
 }
 
+/* Linux draws its own: GNOME's round buttons, not Windows' strip. */
+body[data-platform='linux'] .window-buttons {
+  gap: 10px;
+  margin-right: 0;
+  align-items: center;
+}
+
+body[data-platform='linux'] .window-buttons button {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--text) 9%, transparent);
+}
+
+body[data-platform='linux'] .window-buttons button:hover,
+body[data-platform='linux'] .window-buttons button.close:hover {
+  background: color-mix(in srgb, var(--text) 16%, transparent);
+  color: var(--text);
+}
+
 /* -------------------------------------------------------------------- panes */
 
 .panes {
@@ -358,6 +379,12 @@ body[data-platform='darwin'] .window-buttons {
   align-items: stretch;
   padding: 0 var(--margin) var(--margin);
   min-height: 0;
+}
+
+/* The source list sits on the window's ground, as the Mac's does. */
+.panel.sidebar-column {
+  background: transparent;
+  box-shadow: none;
 }
 
 .panel {
@@ -450,10 +477,6 @@ body[data-platform='darwin'] .window-buttons {
     --ease: ease-out;
   }
 
-  * {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-  }
 }
 
 .sidebar-section {
@@ -484,13 +507,25 @@ body[data-platform='darwin'] .window-buttons {
 }
 
 .row[aria-selected='true'] {
-  background: var(--accent-soft);
-  color: var(--accent-text);
+  /* A source list selects with the accent itself, as the Mac's does — and
+     greys when the window is not the one in front. */
+  background: var(--accent);
+  color: #fff;
   font-weight: 500;
 }
 
-.row[aria-selected='true'] .row-icon {
-  color: var(--accent);
+.row[aria-selected='true'] .row-icon,
+.row[aria-selected='true'] .row-count {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+body[data-window-focused='false'] .row[aria-selected='true'] {
+  background: color-mix(in srgb, var(--text) 14%, transparent);
+  color: var(--text);
+}
+
+body[data-window-focused='false'] .row[aria-selected='true'] .row-icon {
+  color: var(--text-secondary);
 }
 
 .row-icon {
@@ -557,7 +592,9 @@ body[data-platform='darwin'] .window-buttons {
 /* On the row you are on, the row is already wearing the pale accent; the
    chip steps up so it is still a chip. */
 .row[aria-selected='true'] .folder-name {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.45);
+  color: #fff;
 }
 
 /* --------------------------------------------------------------- paper list */
@@ -1980,7 +2017,7 @@ body[data-platform='darwin'] .window-buttons {
 /* The menu that hangs off ⋯, and the pop-ups in the inspector. */
 .menu {
   position: fixed;
-  z-index: 100;
+  z-index: 120;
   min-width: 200px;
   /* Never taller than the window: a small window scrolls the menu rather
      than cutting its last rows off. (A submenu is fixed to the window, so
@@ -1995,7 +2032,10 @@ body[data-platform='darwin'] .window-buttons {
      so the eye knows where it came from. A surface, so it takes a surface's
      time. */
   transform-origin: top left;
-  animation: menu-in var(--motion-surface) var(--ease);
+  /* A menu answers a hand, so it arrives at a control's speed, not a
+     surface's. */
+  animation: menu-in var(--motion-tap) var(--ease);
+  outline: none;
 }
 
 @keyframes menu-in {
@@ -2017,9 +2057,25 @@ body[data-platform='darwin'] .window-buttons {
   transition: background-color var(--motion-tap) var(--ease);
 }
 
-.menu button:hover {
+.menu button:hover,
+.menu button:focus-visible,
+.menu button:focus {
   background: var(--accent);
   color: #fff;
+  outline: none;
+}
+
+/* A command's key, at the row's end — where the Mac's menu bar puts it. */
+.menu .menu-key {
+  margin-left: 18px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.menu button:hover .menu-key,
+.menu button:focus .menu-key {
+  color: rgba(255, 255, 255, 0.85);
 }
 
 /* A command that cannot be given now: there, so it can be found, and grey. */
@@ -2052,7 +2108,7 @@ body[data-platform='darwin'] .window-buttons {
 .scrim {
   position: fixed;
   inset: 0;
-  z-index: 99;
+  z-index: 119;
 }
 
 /*
@@ -2404,18 +2460,46 @@ body[data-platform='darwin'] .window-buttons {
 }
 
 .toast {
+  /* Glass, over everything — the sheets included — and it arrives and goes
+     rather than blinking. The layers: menus 100, sheets 110, the menu over a
+     sheet 120, this 130. */
   position: fixed;
   bottom: 18px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 120;
+  z-index: 130;
   padding: 8px 15px;
   border-radius: 99px;
-  background: rgba(28, 28, 30, 0.94);
-  color: #fff;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  backdrop-filter: blur(20px) saturate(1.5);
+  color: var(--text);
   font-size: 12.5px;
-  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.1), 0 6px 22px rgba(0, 0, 0, 0.18);
   pointer-events: none;
+  animation: toast-in var(--motion-move) var(--ease);
+  transition: opacity var(--motion-move) var(--ease);
+}
+
+.toast[data-leaving='true'] {
+  opacity: 0;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+}
+
+/* Every control a keyboard can reach says so when it is reached by one. */
+button:focus-visible,
+[role='tab']:focus-visible,
+[role='menuitem']:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: 1px;
 }
 
 /* The bar over a selection: five colours and an underline, and nothing else. */
@@ -2507,7 +2591,7 @@ body[data-platform='darwin'] .window-buttons {
    then the row this becomes on the public list — shown before the send, not
    after it. */
 .sheet-backdrop {
-  position: fixed; inset: 0; z-index: 900;
+  position: fixed; inset: 0; z-index: 110;
   background: rgba(0, 0, 0, 0.32);
   display: grid; place-items: center;
   -webkit-app-region: no-drag;

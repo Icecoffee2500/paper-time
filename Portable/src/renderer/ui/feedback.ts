@@ -17,7 +17,7 @@
 import { SketchColor, SketchElement, SketchStyle, point } from '../../shared/sketch.js'
 import { drawElements } from '../../shared/sketchRender.js'
 import { L } from '../../shared/lang.js'
-import { call, isCommand } from '../bridge.js'
+import { call, isCommand, platform } from '../bridge.js'
 import { el, on } from '../dom.js'
 
 type Kind = 'bug' | 'wish'
@@ -407,11 +407,14 @@ export async function showFeedback() {
 }
 
 /**
- * ⌥⌘/ on a Mac, Ctrl+Alt+/ elsewhere — next to the ? on every layout, and
+ * ⌥⌘/ on a Mac, Ctrl+Shift+/ elsewhere (Ctrl+Alt is AltGr on European keyboards) — next to the ? on every layout, and
  * taken by nothing else. Registered here so the shell needs to know nothing.
  */
 on(document, 'keydown', (event: KeyboardEvent) => {
-  if (event.key === '/' && event.altKey && isCommand(event)) {
+  // By the key's code: Shift turns «/» into «?».
+  const slash = event.code === 'Slash' || event.key === '/' || event.key === '?'
+  const held = platform === 'darwin' ? event.altKey : event.shiftKey && !event.altKey
+  if (slash && held && isCommand(event)) {
     event.preventDefault()
     void showFeedback()
   }
