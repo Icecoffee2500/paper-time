@@ -130,7 +130,8 @@ export function confidenceRank(confidence: string | undefined): number {
   }
 }
 
-export type Confidence = 'unparsed' | 'low' | 'medium' | 'high' | 'verified' | 'manual' | 'needsReview'
+/** `MetadataConfidence`: the four a record can be. */
+export type Confidence = 'unparsed' | 'needsReview' | 'verified' | 'manual'
 
 export interface FileInfo {
   relativePath: string
@@ -195,14 +196,16 @@ export class PaperMeta {
     return new PaperMeta({
       schema: SCHEMA,
       id,
-      csl: { id: '', type: 'other', author: [], editor: [] },
+      // `CSLType.other` is written «document» — «other» is not a CSL type,
+      // and the Mac read it as unknown and wrote the record over.
+      csl: { id: '', type: 'document', author: [], editor: [] },
       bibKey: '',
       confidence: 'unparsed',
       identifiers: {},
       // `fetchedAt` is not optional on the Mac: a record without it fails to
       // decode, and the Mac drops the paper rather than showing it. Written
       // the same way the Mac writes it.
-      provenance: { source: 'heuristic', fetchedAt: isoTimestamp(now) },
+      provenance: { detail: 'awaiting resolution', fetchedAt: isoTimestamp(now), source: 'heuristic' },
       candidates: [],
       file: { ...file },
       tagIDs: [],

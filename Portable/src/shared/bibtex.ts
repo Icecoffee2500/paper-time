@@ -8,6 +8,7 @@
  * from the Swift source (see `tools/generate-latex-table.mjs`).
  */
 import { escapeLaTeX } from './latexTable.js'
+import { assignKeys, makeKey } from './citationKey.js'
 import { cslFullTitle, cslYear, fullName, surname, type CSLItem, type CSLName, type PaperMeta } from './model.js'
 
 export type EntryType =
@@ -275,15 +276,10 @@ function order(name: string): number {
   return index === -1 ? FIELD_ORDER.length : index
 }
 
-/** A key for a record that never got one: surname, year, first title word. */
+/** A key for a record that never got one — the Mac's `CitationKey.make`,
+ *  with the file's name to fall back on. */
 function fallbackKey(meta: PaperMeta): string {
-  const first = (meta.csl.author ?? [])[0]
-  const family = (first ? surname(first) : '') ?? ''
-  const year = cslYear(meta.csl) ?? ''
-  const word = (meta.csl.title ?? '').split(/\s+/).find((w) => w.length > 3) ?? ''
-  const slug = (text: string) =>
-    text.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]/g, '').toLowerCase()
-  return `${slug(family)}${year}${slug(word)}` || meta.id.slice(0, 8).toLowerCase()
+  return makeKey(meta.csl, meta.file.originalName || 'untitled')
 }
 
 /**
@@ -305,16 +301,28 @@ export function formatEntry(entry: ReturnType<typeof entryFor>): string {
   return `${lines.join('\n')}\n`
 }
 
+/**
+ * A whole `.bib`, the Mac's `makeBibTeX`: every paper given a key — its own
+ * kept, new ones minted and made unique, so no two entries share one — and
+ * the entries sorted by key, so exporting the same library twice writes the
+ * same file.
+ */
 export function formatBibliography(
   metas: PaperMeta[],
   options: ExportOptions = DEFAULT_EXPORT,
   generatedAt = new Date(),
 ): string {
+  const keys = assignKeys(metas.map((meta) => ({ id: meta.id, item: meta.csl, preferred: meta.bibKey || null })))
+  const sorted = [...metas].sort((a, b) => {
+    const left = keys.get(a.id) ?? ''
+    const right = keys.get(b.id) ?? ''
+    return left < right ? -1 : left > right ? 1 : 0
+  })
   const stamp = generatedAt.toISOString().slice(0, 10)
   const header = options.includeHeader === false ? '' :
     `% Exported by Paper Time on ${stamp}\n` +
     `% ${metas.length} reference${metas.length === 1 ? '' : 's'}\n\n`
-  return header + metas.map((meta) => formatEntry(entryFor(meta, options))).join('\n')
+  return header + sorted.map((meta) => formatEntry(entryFor(meta, options, keys.get(meta.id) ?? meta.bibKey))).join('\n')
 }
 
 export { fullName }

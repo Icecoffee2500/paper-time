@@ -1,0 +1,1086 @@
+{
+  "assigned" : [
+    {
+      "items" : [
+        {
+          "csl" : {
+            "author" : [
+              {
+                "family" : "Smith"
+              }
+            ],
+            "editor" : [
+
+            ],
+            "id" : "",
+            "issued" : {
+              "date-parts" : [
+                [
+                  2020
+                ]
+              ]
+            },
+            "title" : "Deep Nets",
+            "type" : "article-journal"
+          }
+        },
+        {
+          "csl" : {
+            "author" : [
+              {
+                "family" : "Smith"
+              }
+            ],
+            "editor" : [
+
+            ],
+            "id" : "",
+            "issued" : {
+              "date-parts" : [
+                [
+                  2020
+                ]
+              ]
+            },
+            "title" : "Deep Nets",
+            "type" : "article-journal"
+          }
+        },
+        {
+          "csl" : {
+            "author" : [
+              {
+                "family" : "Smith"
+              }
+            ],
+            "editor" : [
+
+            ],
+            "id" : "",
+            "issued" : {
+              "date-parts" : [
+                [
+                  2020
+                ]
+              ]
+            },
+            "title" : "Deep Nets",
+            "type" : "article-journal"
+          }
+        }
+      ],
+      "keys" : [
+        "smith2020deep",
+        "smith2020deepa",
+        "smith2020deepb"
+      ]
+    },
+    {
+      "items" : [
+        {
+          "csl" : {
+            "author" : [
+              {
+                "family" : "Smith"
+              }
+            ],
+            "editor" : [
+
+            ],
+            "id" : "",
+            "issued" : {
+              "date-parts" : [
+                [
+                  2020
+                ]
+              ]
+            },
+            "title" : "Deep Nets",
+            "type" : "article-journal"
+          }
+        },
+        {
+          "csl" : {
+            "author" : [
+              {
+                "family" : "Smith"
+              }
+            ],
+            "editor" : [
+
+            ],
+            "id" : "",
+            "issued" : {
+              "date-parts" : [
+                [
+                  2020
+                ]
+              ]
+            },
+            "title" : "Deep Nets",
+            "type" : "article-journal"
+          },
+          "preferred" : "smith2020deep"
+        },
+        {
+          "csl" : {
+            "author" : [
+              {
+                "family" : "Smith"
+              }
+            ],
+            "editor" : [
+
+            ],
+            "id" : "",
+            "issued" : {
+              "date-parts" : [
+                [
+                  2020
+                ]
+              ]
+            },
+            "title" : "Deep Nets",
+            "type" : "article-journal"
+          },
+          "preferred" : "smith2020deep"
+        }
+      ],
+      "keys" : [
+        "smith2020deepa",
+        "smith2020deep",
+        "smith2020deepb"
+      ]
+    },
+    {
+      "items" : [
+        {
+          "csl" : {
+            "author" : [
+              {
+                "family" : "Smith"
+              }
+            ],
+            "editor" : [
+
+            ],
+            "id" : "",
+            "issued" : {
+              "date-parts" : [
+                [
+                  2020
+                ]
+              ]
+            },
+            "title" : "Deep Nets",
+            "type" : "article-journal"
+          },
+          "preferred" : "Smith 2020: Deep!"
+        },
+        {
+          "csl" : {
+            "author" : [
+
+            ],
+            "editor" : [
+
+            ],
+            "id" : "",
+            "type" : "document"
+          }
+        }
+      ],
+      "keys" : [
+        "Smith2020:Deep",
+        "untitled"
+      ]
+    }
+  ],
+  "entries" : [
+    {
+      "csl" : {
+        "DOI" : "10.5555\/3295222.3295349",
+        "author" : [
+          {
+            "family" : "Vaswani",
+            "given" : "Ashish"
+          },
+          {
+            "family" : "Shazeer",
+            "given" : "Noam"
+          }
+        ],
+        "container-title" : "Advances in Neural Information Processing Systems",
+        "container-title-short" : "NeurIPS",
+        "editor" : [
+
+        ],
+        "id" : "",
+        "issued" : {
+          "date-parts" : [
+            [
+              2017,
+              12
+            ]
+          ]
+        },
+        "page" : "5998-6008",
+        "title" : "Attention Is All You Need",
+        "type" : "article-journal",
+        "volume" : "30"
+      },
+      "identifiers" : {
+        "doi" : "10.5555\/3295222.3295349"
+      },
+      "key" : "vaswani2017attention",
+      "name" : "journal",
+      "options" : "default",
+      "text" : "@article{vaswani2017attention,\n  author  = {Vaswani, Ashish and Shazeer, Noam},\n  title   = {Attention Is All You Need},\n  journal = {Advances in Neural Information Processing Systems},\n  year    = {2017},\n  month   = {dec},\n  volume  = {30},\n  pages   = {5998--6008},\n  doi     = {10.5555\/3295222.3295349},\n  url     = {https:\/\/doi.org\/10.5555\/3295222.3295349}\n}\n"
+    },
+    {
+      "csl" : {
+        "DOI" : "10.5555\/3295222.3295349",
+        "author" : [
+          {
+            "family" : "Vaswani",
+            "given" : "Ashish"
+          },
+          {
+            "family" : "Shazeer",
+            "given" : "Noam"
+          }
+        ],
+        "container-title" : "Advances in Neural Information Processing Systems",
+        "container-title-short" : "NeurIPS",
+        "editor" : [
+
+        ],
+        "id" : "",
+        "issued" : {
+          "date-parts" : [
+            [
+              2017,
+              12
+            ]
+          ]
+        },
+        "page" : "5998-6008",
+        "title" : "Attention Is All You Need",
+        "type" : "article-journal",
+        "volume" : "30"
+      },
+      "identifiers" : {
+        "doi" : "10.5555\/3295222.3295349"
+      },
+      "key" : "vaswani2017attention",
+      "name" : "journal",
+      "options" : "plain",
+      "text" : "@article{vaswani2017attention,\n  author  = {Vaswani, Ashish and Shazeer, Noam},\n  title   = {Attention Is All You Need},\n  journal = {NeurIPS},\n  year    = {2017},\n  month   = {dec},\n  volume  = {30},\n  pages   = {5998--6008},\n  doi     = {10.5555\/3295222.3295349}\n}\n"
+    },
+    {
+      "csl" : {
+        "author" : [
+          {
+            "family" : "Andrychowicz",
+            "given" : "Marcin"
+          }
+        ],
+        "container-title" : "NIPS",
+        "editor" : [
+
+        ],
+        "id" : "",
+        "issued" : {
+          "date-parts" : [
+            [
+              2016
+            ]
+          ]
+        },
+        "title" : "Learning to Learn by Gradient Descent by Gradient Descent",
+        "type" : "paper-conference"
+      },
+      "identifiers" : {
+
+      },
+      "key" : "andrychowicz2016learn",
+      "name" : "stop words",
+      "options" : "default",
+      "text" : "@inproceedings{andrychowicz2016learn,\n  author    = {Andrychowicz, Marcin},\n  title     = {Learning to Learn by Gradient Descent by Gradient Descent},\n  booktitle = {{NIPS}},\n  year      = {2016}\n}\n"
+    },
+    {
+      "csl" : {
+        "author" : [
+          {
+            "family" : "Andrychowicz",
+            "given" : "Marcin"
+          }
+        ],
+        "container-title" : "NIPS",
+        "editor" : [
+
+        ],
+        "id" : "",
+        "issued" : {
+          "date-parts" : [
+            [
+              2016
+            ]
+          ]
+        },
+        "title" : "Learning to Learn by Gradient Descent by Gradient Descent",
+        "type" : "paper-conference"
+      },
+      "identifiers" : {
+
+      },
+      "key" : "andrychowicz2016learn",
+      "name" : "stop words",
+      "options" : "plain",
+      "text" : "@inproceedings{andrychowicz2016learn,\n  author    = {Andrychowicz, Marcin},\n  title     = {Learning to Learn by Gradient Descent by Gradient Descent},\n  booktitle = {NIPS},\n  year      = {2016}\n}\n"
+    },
+    {
+      "csl" : {
+        "author" : [
+          {
+            "family" : "Beethoven",
+            "given" : "Ludwig",
+            "non-dropping-particle" : "van"
+          }
+        ],
+        "edition" : "2",
+        "editor" : [
+
+        ],
+        "id" : "",
+        "issued" : {
+          "date-parts" : [
+            [
+              1905
+            ]
+          ]
+        },
+        "publisher" : "Müller & Söhne",
+        "publisher-place" : "Wien",
+        "title" : "Über die Wärme",
+        "type" : "book"
+      },
+      "identifiers" : {
+
+      },
+      "key" : "vanbeethoven1905uber",
+      "name" : "accents and particles",
+      "options" : "default",
+      "text" : "@book{vanbeethoven1905uber,\n  author    = {van Beethoven, Ludwig},\n  title     = {{\\\"U}ber die W{\\\"a}rme},\n  year      = {1905},\n  publisher = {M{\\\"u}ller \\& S{\\\"o}hne},\n  address   = {Wien},\n  edition   = {2}\n}\n"
+    },
+    {
+      "csl" : {
+        "author" : [
+          {
+            "family" : "Beethoven",
+            "given" : "Ludwig",
+            "non-dropping-particle" : "van"
+          }
+        ],
+        "edition" : "2",
+        "editor" : [
+
+        ],
+        "id" : "",
+        "issued" : {
+          "date-parts" : [
+            [
+              1905
+            ]
+          ]
+        },
+        "publisher" : "Müller & Söhne",
+        "publisher-place" : "Wien",
+        "title" : "Über die Wärme",
+        "type" : "book"
+      },
+      "identifiers" : {
+
+      },
+      "key" : "vanbeethoven1905uber",
+      "name" : "accents and particles",
+      "options" : "plain",
+      "text" : "@book{vanbeethoven1905uber,\n  author    = {van Beethoven, Ludwig},\n  title     = {{\\\"U}ber die W{\\\"a}rme},\n  year      = {1905},\n  publisher = {M{\\\"u}ller \\& S{\\\"o}hne},\n  address   = {Wien},\n  edition   = {2}\n}\n"
+    },
+    {
+      "csl" : {
+        "author" : [
+          {
+            "literal" : "OpenAI"
+          }
+        ],
+        "editor" : [
+
+        ],
+        "id" : "",
+        "issued" : {
+          "date-parts" : [
+            [
+              2023
+            ]
+          ]
+        },
+        "number" : "TR-1",
+        "publisher" : "OpenAI",
+        "title" : "GPT-4 Technical Report",
+        "type" : "report"
+      },
+      "identifiers" : {
+
+      },
+      "key" : "openai2023gpt",
+      "name" : "an institution",
+      "options" : "default",
+      "text" : "@techreport{openai2023gpt,\n  author      = {{OpenAI}},\n  title       = {{GPT-4} Technical Report},\n  year        = {2023},\n  number      = {TR-1},\n  institution = {OpenAI}\n}\n"
+    },
+    {
+      "csl" : {
+        "author" : [
+          {
+            "literal" : "OpenAI"
+          }
+        ],
+        "editor" : [
+
+        ],
+        "id" : "",
+        "issued" : {
+          "date-parts" : [
+            [
+              2023
+            ]
+          ]
+        },
+        "number" : "TR-1",
+        "publisher" : "OpenAI",
+        "title" : "GPT-4 Technical Report",
+        "type" : "report"
+      },
+      "identifiers" : {
+
+      },
+      "key" : "openai2023gpt",
+      "name" : "an institution",
+      "options" : "plain",
+      "text" : "@techreport{openai2023gpt,\n  author      = {{OpenAI}},\n  title       = {GPT-4 Technical Report},\n  year        = {2023},\n  number      = {TR-1},\n  institution = {OpenAI}\n}\n"
+    },
+    {
+      "csl" : {
+        "URL" : "https:\/\/nlp.seas.harvard.edu\/annotated-transformer\/",
+        "author" : [
+
+        ],
+        "editor" : [
+
+        ],
+        "id" : "",
+        "title" : "The Annotated Transformer",
+        "type" : "webpage"
+      },
+      "identifiers" : {
+
+      },
+      "key" : "annotated",
+      "name" : "no author",
+      "options" : "default",
+      "text" : "@online{annotated,\n  title = {The Annotated Transformer},\n  url   = {https:\/\/nlp.seas.harvard.edu\/annotated-transformer\/}\n}\n"
+    },
+    {
+      "csl" : {
+        "URL" : "https:\/\/nlp.seas.harvard.edu\/annotated-transformer\/",
+        "author" : [
+
+        ],
+        "editor" : [
+
+        ],
+        "id" : "",
+        "title" : "The Annotated Transformer",
+        "type" : "webpage"
+      },
+      "identifiers" : {
+
+      },
+      "key" : "annotated",
+      "name" : "no author",
+      "options" : "plain",
+      "text" : "@online{annotated,\n  title = {The Annotated Transformer}\n}\n"
+    },
+    {
+      "csl" : {
+        "author" : [
+
+        ],
+        "editor" : [
+
+        ],
+        "id" : "",
+        "type" : "document"
+      },
+      "identifiers" : {
+
+      },
+      "key" : "somefile1pdf",
+      "name" : "nothing at all",
+      "options" : "default",
+      "text" : "@misc{somefile1pdf}\n"
+    },
+    {
+      "csl" : {
+        "author" : [
+
+        ],
+        "editor" : [
+
+        ],
+        "id" : "",
+        "type" : "document"
+      },
+      "identifiers" : {
+
+      },
+      "key" : "somefile1pdf",
+      "name" : "nothing at all",
+      "options" : "plain",
+      "text" : "@misc{somefile1pdf}\n"
+    },
+    {
+      "csl" : {
+        "author" : [
+          {
+            "family" : "Chi",
+            "given" : "Cheng"
+          }
+        ],
+        "editor" : [
+
+        ],
+        "id" : "",
+        "issued" : {
+          "date-parts" : [
+            [
+              2023
+            ]
+          ]
+        },
+        "subtitle" : "Visuomotor Policy Learning via Action Diffusion",
+        "title" : "Diffusion Policy:",
+        "type" : "article-journal"
+      },
+      "identifiers" : {
+
+      },
+      "key" : "chi2023diffusion",
+      "name" : "subtitle",
+      "options" : "default",
+      "text" : "@article{chi2023diffusion,\n  author = {Chi, Cheng},\n  title  = {Diffusion Policy: Visuomotor Policy Learning via Action Diffusion},\n  year   = {2023}\n}\n"
+    },
+    {
+      "csl" : {
+        "author" : [
+          {
+            "family" : "Chi",
+            "given" : "Cheng"
+          }
+        ],
+        "editor" : [
+
+        ],
+        "id" : "",
+        "issued" : {
+          "date-parts" : [
+            [
+              2023
+            ]
+          ]
+        },
+        "subtitle" : "Visuomotor Policy Learning via Action Diffusion",
+        "title" : "Diffusion Policy:",
+        "type" : "article-journal"
+      },
+      "identifiers" : {
+
+      },
+      "key" : "chi2023diffusion",
+      "name" : "subtitle",
+      "options" : "plain",
+      "text" : "@article{chi2023diffusion,\n  author = {Chi, Cheng},\n  title  = {Diffusion Policy: Visuomotor Policy Learning via Action Diffusion},\n  year   = {2023}\n}\n"
+    },
+    {
+      "csl" : {
+        "author" : [
+          {
+            "family" : "Smola",
+            "given" : "Alex"
+          }
+        ],
+        "collection-title" : "Adaptive Computation",
+        "container-title" : "Learning with Kernels",
+        "editor" : [
+          {
+            "family" : "Schölkopf",
+            "given" : "Bernhard"
+          }
+        ],
+        "id" : "",
+        "issued" : {
+          "date-parts" : [
+            [
+              2002
+            ]
+          ]
+        },
+        "page" : "1–42",
+        "title" : "Kernel Methods",
+        "type" : "chapter"
+      },
+      "identifiers" : {
+
+      },
+      "key" : "smola2002kernel",
+      "name" : "a chapter",
+      "options" : "default",
+      "text" : "@incollection{smola2002kernel,\n  author    = {Smola, Alex},\n  editor    = {Sch{\\\"o}lkopf, Bernhard},\n  title     = {Kernel Methods},\n  booktitle = {Learning with Kernels},\n  series    = {Adaptive Computation},\n  year      = {2002},\n  pages     = {1--42}\n}\n"
+    },
+    {
+      "csl" : {
+        "author" : [
+          {
+            "family" : "Smola",
+            "given" : "Alex"
+          }
+        ],
+        "collection-title" : "Adaptive Computation",
+        "container-title" : "Learning with Kernels",
+        "editor" : [
+          {
+            "family" : "Schölkopf",
+            "given" : "Bernhard"
+          }
+        ],
+        "id" : "",
+        "issued" : {
+          "date-parts" : [
+            [
+              2002
+            ]
+          ]
+        },
+        "page" : "1–42",
+        "title" : "Kernel Methods",
+        "type" : "chapter"
+      },
+      "identifiers" : {
+
+      },
+      "key" : "smola2002kernel",
+      "name" : "a chapter",
+      "options" : "plain",
+      "text" : "@incollection{smola2002kernel,\n  author    = {Smola, Alex},\n  editor    = {Sch{\\\"o}lkopf, Bernhard},\n  title     = {Kernel Methods},\n  booktitle = {Learning with Kernels},\n  series    = {Adaptive Computation},\n  year      = {2002},\n  pages     = {1--42}\n}\n"
+    },
+    {
+      "csl" : {
+        "author" : [
+          {
+            "family" : "Kim",
+            "given" : "Minsu"
+          }
+        ],
+        "editor" : [
+
+        ],
+        "genre" : "Master's thesis",
+        "id" : "",
+        "issued" : {
+          "date-parts" : [
+            [
+              2021
+            ]
+          ]
+        },
+        "publisher" : "KAIST",
+        "title" : "On Graphs",
+        "type" : "thesis"
+      },
+      "identifiers" : {
+
+      },
+      "key" : "kim2021graphs",
+      "name" : "a thesis",
+      "options" : "default",
+      "text" : "@mastersthesis{kim2021graphs,\n  author = {Kim, Minsu},\n  title  = {On Graphs},\n  year   = {2021},\n  school = {KAIST}\n}\n"
+    },
+    {
+      "csl" : {
+        "author" : [
+          {
+            "family" : "Kim",
+            "given" : "Minsu"
+          }
+        ],
+        "editor" : [
+
+        ],
+        "genre" : "Master's thesis",
+        "id" : "",
+        "issued" : {
+          "date-parts" : [
+            [
+              2021
+            ]
+          ]
+        },
+        "publisher" : "KAIST",
+        "title" : "On Graphs",
+        "type" : "thesis"
+      },
+      "identifiers" : {
+
+      },
+      "key" : "kim2021graphs",
+      "name" : "a thesis",
+      "options" : "plain",
+      "text" : "@mastersthesis{kim2021graphs,\n  author = {Kim, Minsu},\n  title  = {On Graphs},\n  year   = {2021},\n  school = {KAIST}\n}\n"
+    },
+    {
+      "csl" : {
+        "author" : [
+          {
+            "family" : "Chen",
+            "given" : "Yi"
+          }
+        ],
+        "editor" : [
+
+        ],
+        "id" : "",
+        "issued" : {
+          "date-parts" : [
+            [
+              2024,
+              3
+            ]
+          ]
+        },
+        "note" : "arXiv:2403.18293 [cs.RO]",
+        "title" : "Diffusion Policy",
+        "type" : "manuscript"
+      },
+      "identifiers" : {
+        "arxiv" : "2403.18293",
+        "doi" : "10.48550\/arxiv.2403.18293"
+      },
+      "key" : "chen2024diffusion",
+      "name" : "a preprint",
+      "options" : "default",
+      "text" : "@misc{chen2024diffusion,\n  author        = {Chen, Yi},\n  title         = {Diffusion Policy},\n  year          = {2024},\n  month         = {mar},\n  eprint        = {2403.18293},\n  archivePrefix = {arXiv},\n  primaryClass  = {cs.RO},\n  doi           = {10.48550\/arxiv.2403.18293},\n  url           = {https:\/\/doi.org\/10.48550\/arxiv.2403.18293},\n  note          = {arXiv:2403.18293 [cs.RO]}\n}\n"
+    },
+    {
+      "csl" : {
+        "author" : [
+          {
+            "family" : "Chen",
+            "given" : "Yi"
+          }
+        ],
+        "editor" : [
+
+        ],
+        "id" : "",
+        "issued" : {
+          "date-parts" : [
+            [
+              2024,
+              3
+            ]
+          ]
+        },
+        "note" : "arXiv:2403.18293 [cs.RO]",
+        "title" : "Diffusion Policy",
+        "type" : "manuscript"
+      },
+      "identifiers" : {
+        "arxiv" : "2403.18293",
+        "doi" : "10.48550\/arxiv.2403.18293"
+      },
+      "key" : "chen2024diffusion",
+      "name" : "a preprint",
+      "options" : "plain",
+      "text" : "@article{chen2024diffusion,\n  author  = {Chen, Yi},\n  title   = {Diffusion Policy},\n  journal = {arXiv preprint arXiv:2403.18293},\n  year    = {2024},\n  month   = {mar},\n  doi     = {10.48550\/arxiv.2403.18293},\n  note    = {arXiv:2403.18293 [cs.RO]}\n}\n"
+    }
+  ],
+  "keys" : [
+    {
+      "csl" : {
+        "DOI" : "10.5555\/3295222.3295349",
+        "author" : [
+          {
+            "family" : "Vaswani",
+            "given" : "Ashish"
+          },
+          {
+            "family" : "Shazeer",
+            "given" : "Noam"
+          }
+        ],
+        "container-title" : "Advances in Neural Information Processing Systems",
+        "container-title-short" : "NeurIPS",
+        "editor" : [
+
+        ],
+        "id" : "",
+        "issued" : {
+          "date-parts" : [
+            [
+              2017,
+              12
+            ]
+          ]
+        },
+        "page" : "5998-6008",
+        "title" : "Attention Is All You Need",
+        "type" : "article-journal",
+        "volume" : "30"
+      },
+      "fileName" : "attention.pdf",
+      "key" : "vaswani2017attention",
+      "name" : "journal"
+    },
+    {
+      "csl" : {
+        "author" : [
+          {
+            "family" : "Andrychowicz",
+            "given" : "Marcin"
+          }
+        ],
+        "container-title" : "NIPS",
+        "editor" : [
+
+        ],
+        "id" : "",
+        "issued" : {
+          "date-parts" : [
+            [
+              2016
+            ]
+          ]
+        },
+        "title" : "Learning to Learn by Gradient Descent by Gradient Descent",
+        "type" : "paper-conference"
+      },
+      "fileName" : "l2l.pdf",
+      "key" : "andrychowicz2016learn",
+      "name" : "stop words"
+    },
+    {
+      "csl" : {
+        "author" : [
+          {
+            "family" : "Beethoven",
+            "given" : "Ludwig",
+            "non-dropping-particle" : "van"
+          }
+        ],
+        "edition" : "2",
+        "editor" : [
+
+        ],
+        "id" : "",
+        "issued" : {
+          "date-parts" : [
+            [
+              1905
+            ]
+          ]
+        },
+        "publisher" : "Müller & Söhne",
+        "publisher-place" : "Wien",
+        "title" : "Über die Wärme",
+        "type" : "book"
+      },
+      "fileName" : "waerme.pdf",
+      "key" : "vanbeethoven1905uber",
+      "name" : "accents and particles"
+    },
+    {
+      "csl" : {
+        "author" : [
+          {
+            "literal" : "OpenAI"
+          }
+        ],
+        "editor" : [
+
+        ],
+        "id" : "",
+        "issued" : {
+          "date-parts" : [
+            [
+              2023
+            ]
+          ]
+        },
+        "number" : "TR-1",
+        "publisher" : "OpenAI",
+        "title" : "GPT-4 Technical Report",
+        "type" : "report"
+      },
+      "fileName" : "gpt4.pdf",
+      "key" : "openai2023gpt",
+      "name" : "an institution"
+    },
+    {
+      "csl" : {
+        "URL" : "https:\/\/nlp.seas.harvard.edu\/annotated-transformer\/",
+        "author" : [
+
+        ],
+        "editor" : [
+
+        ],
+        "id" : "",
+        "title" : "The Annotated Transformer",
+        "type" : "webpage"
+      },
+      "fileName" : "annotated.pdf",
+      "key" : "annotated",
+      "name" : "no author"
+    },
+    {
+      "csl" : {
+        "author" : [
+
+        ],
+        "editor" : [
+
+        ],
+        "id" : "",
+        "type" : "document"
+      },
+      "fileName" : "Some File (1).pdf",
+      "key" : "somefile1pdf",
+      "name" : "nothing at all"
+    },
+    {
+      "csl" : {
+        "author" : [
+          {
+            "family" : "Chi",
+            "given" : "Cheng"
+          }
+        ],
+        "editor" : [
+
+        ],
+        "id" : "",
+        "issued" : {
+          "date-parts" : [
+            [
+              2023
+            ]
+          ]
+        },
+        "subtitle" : "Visuomotor Policy Learning via Action Diffusion",
+        "title" : "Diffusion Policy:",
+        "type" : "article-journal"
+      },
+      "fileName" : "dp.pdf",
+      "key" : "chi2023diffusion",
+      "name" : "subtitle"
+    },
+    {
+      "csl" : {
+        "author" : [
+          {
+            "family" : "Smola",
+            "given" : "Alex"
+          }
+        ],
+        "collection-title" : "Adaptive Computation",
+        "container-title" : "Learning with Kernels",
+        "editor" : [
+          {
+            "family" : "Schölkopf",
+            "given" : "Bernhard"
+          }
+        ],
+        "id" : "",
+        "issued" : {
+          "date-parts" : [
+            [
+              2002
+            ]
+          ]
+        },
+        "page" : "1–42",
+        "title" : "Kernel Methods",
+        "type" : "chapter"
+      },
+      "fileName" : "kernels.pdf",
+      "key" : "smola2002kernel",
+      "name" : "a chapter"
+    },
+    {
+      "csl" : {
+        "author" : [
+          {
+            "family" : "Kim",
+            "given" : "Minsu"
+          }
+        ],
+        "editor" : [
+
+        ],
+        "genre" : "Master's thesis",
+        "id" : "",
+        "issued" : {
+          "date-parts" : [
+            [
+              2021
+            ]
+          ]
+        },
+        "publisher" : "KAIST",
+        "title" : "On Graphs",
+        "type" : "thesis"
+      },
+      "fileName" : "thesis.pdf",
+      "key" : "kim2021graphs",
+      "name" : "a thesis"
+    },
+    {
+      "csl" : {
+        "author" : [
+          {
+            "family" : "Chen",
+            "given" : "Yi"
+          }
+        ],
+        "editor" : [
+
+        ],
+        "id" : "",
+        "issued" : {
+          "date-parts" : [
+            [
+              2024,
+              3
+            ]
+          ]
+        },
+        "note" : "arXiv:2403.18293 [cs.RO]",
+        "title" : "Diffusion Policy",
+        "type" : "manuscript"
+      },
+      "fileName" : "2403.18293v1.pdf",
+      "key" : "chen2024diffusion",
+      "name" : "a preprint"
+    }
+  ]
+}
