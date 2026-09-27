@@ -1,0 +1,316 @@
+{
+ "markdown": "# Entropy and forgetting\nPlain words with **bold**, *italic* and `code` in them.\n## A heading two\n### Third level\n- a bullet\n  - nested bullet\n1. first\n12) twelfth\n- [ ] to do\n- [x] done\n> typed aside with *emphasis*\n> second line\n> the model forgets [p. 4](papertime://anchor?p=3&x=145.00&y=95.00&w=366.00&h=12.00)\n>### Section on the page\n\nA link to [[202609280047|Entropy note]] and [[202609280048]] here.\nAn inline $x^2$ formula, and a passage [p. 2](papertime://anchor?p=1&x=10.00&y=20.00&w=30.00&h=12.00).\n$$\n\\int_0^1 f(x)\\,dx\n$$\n[a quoted \\] label](papertime://anchor?p=0&x=1.00&y=2.00&w=3.00&h=4.00)\n> [whole quoted line](papertime://anchor?p=5&x=1.00&y=2.00&w=3.00&h=4.00)\nLast line with $$a+b$$ inline display.",
+ "length": 406,
+ "runs": [
+  {
+   "location": 0,
+   "marks": "—",
+   "text": "​"
+  },
+  {
+   "location": 1,
+   "marks": "—",
+   "text": "Entropy and forgetting"
+  },
+  {
+   "location": 23,
+   "marks": "—",
+   "text": "\n"
+  },
+  {
+   "location": 24,
+   "marks": "—",
+   "text": "Plain words with "
+  },
+  {
+   "location": 41,
+   "marks": "—",
+   "text": "bold"
+  },
+  {
+   "location": 45,
+   "marks": "—",
+   "text": ", "
+  },
+  {
+   "location": 47,
+   "marks": "italic",
+   "text": "italic"
+  },
+  {
+   "location": 53,
+   "marks": "—",
+   "text": " and "
+  },
+  {
+   "location": 58,
+   "marks": "—",
+   "text": "code"
+  },
+  {
+   "location": 62,
+   "marks": "—",
+   "text": " in them.\n"
+  },
+  {
+   "location": 72,
+   "marks": "—",
+   "text": "​"
+  },
+  {
+   "location": 73,
+   "marks": "—",
+   "text": "A heading two"
+  },
+  {
+   "location": 86,
+   "marks": "—",
+   "text": "\n"
+  },
+  {
+   "location": 87,
+   "marks": "—",
+   "text": "​"
+  },
+  {
+   "location": 88,
+   "marks": "—",
+   "text": "Third level"
+  },
+  {
+   "location": 99,
+   "marks": "—",
+   "text": "\n"
+  },
+  {
+   "location": 100,
+   "marks": "indent 24",
+   "text": "•\t"
+  },
+  {
+   "location": 102,
+   "marks": "indent 24",
+   "text": "a bullet\n"
+  },
+  {
+   "location": 111,
+   "marks": "indent 48",
+   "text": "•\t"
+  },
+  {
+   "location": 113,
+   "marks": "indent 48",
+   "text": "nested bullet\n"
+  },
+  {
+   "location": 127,
+   "marks": "indent 24",
+   "text": "1.\t"
+  },
+  {
+   "location": 130,
+   "marks": "indent 24",
+   "text": "first\n"
+  },
+  {
+   "location": 136,
+   "marks": "indent 24",
+   "text": "12.\t"
+  },
+  {
+   "location": 140,
+   "marks": "indent 24",
+   "text": "twelfth\n"
+  },
+  {
+   "location": 148,
+   "marks": "indent 24",
+   "text": "☐\t"
+  },
+  {
+   "location": 150,
+   "marks": "indent 24",
+   "text": "to do\n"
+  },
+  {
+   "location": 156,
+   "marks": "indent 24",
+   "text": "☑\t"
+  },
+  {
+   "location": 158,
+   "marks": "indent 24",
+   "text": "done"
+  },
+  {
+   "location": 162,
+   "marks": "indent 24",
+   "text": "\n"
+  },
+  {
+   "location": 163,
+   "marks": "QUOTE+indent 20",
+   "text": "​"
+  },
+  {
+   "location": 164,
+   "marks": "QUOTE+italic+indent 20",
+   "text": "typed aside with "
+  },
+  {
+   "location": 181,
+   "marks": "italic+indent 20",
+   "text": "emphasis"
+  },
+  {
+   "location": 189,
+   "marks": "indent 20",
+   "text": "\n"
+  },
+  {
+   "location": 190,
+   "marks": "QUOTE+indent 20",
+   "text": "​"
+  },
+  {
+   "location": 191,
+   "marks": "QUOTE+italic+indent 20",
+   "text": "second line"
+  },
+  {
+   "location": 202,
+   "marks": "indent 20",
+   "text": "\n"
+  },
+  {
+   "location": 203,
+   "marks": "QUOTE+indent 20",
+   "text": "​"
+  },
+  {
+   "location": 204,
+   "marks": "QUOTE+italic+indent 20",
+   "text": "the model forgets "
+  },
+  {
+   "location": 222,
+   "marks": "PASSAGE+indent 20",
+   "text": "p. 4"
+  },
+  {
+   "location": 226,
+   "marks": "indent 20",
+   "text": "\n"
+  },
+  {
+   "location": 227,
+   "marks": "QUOTE+indent 20",
+   "text": "​"
+  },
+  {
+   "location": 228,
+   "marks": "QUOTE+indent 20",
+   "text": "Section on the page"
+  },
+  {
+   "location": 247,
+   "marks": "indent 20",
+   "text": "\n"
+  },
+  {
+   "location": 248,
+   "marks": "—",
+   "text": "\nA link to "
+  },
+  {
+   "location": 259,
+   "marks": "LINK",
+   "text": "Entropy note"
+  },
+  {
+   "location": 271,
+   "marks": "—",
+   "text": " and "
+  },
+  {
+   "location": 276,
+   "marks": "LINK",
+   "text": "202609280048"
+  },
+  {
+   "location": 288,
+   "marks": "—",
+   "text": " here.\nAn inline "
+  },
+  {
+   "location": 305,
+   "marks": "—",
+   "text": "￼"
+  },
+  {
+   "location": 306,
+   "marks": "—",
+   "text": " formula, and a passage "
+  },
+  {
+   "location": 330,
+   "marks": "PASSAGE",
+   "text": "p. 2"
+  },
+  {
+   "location": 334,
+   "marks": "—",
+   "text": ".\n"
+  },
+  {
+   "location": 336,
+   "marks": "—",
+   "text": "￼"
+  },
+  {
+   "location": 337,
+   "marks": "—",
+   "text": "\n"
+  },
+  {
+   "location": 338,
+   "marks": "PASSAGE",
+   "text": "a quoted ] label"
+  },
+  {
+   "location": 354,
+   "marks": "—",
+   "text": "\n"
+  },
+  {
+   "location": 355,
+   "marks": "QUOTE+indent 20",
+   "text": "​"
+  },
+  {
+   "location": 356,
+   "marks": "QUOTE+PASSAGE+italic+indent 20",
+   "text": "whole quoted line"
+  },
+  {
+   "location": 373,
+   "marks": "indent 20",
+   "text": "\n"
+  },
+  {
+   "location": 374,
+   "marks": "—",
+   "text": "Last line with "
+  },
+  {
+   "location": 389,
+   "marks": "—",
+   "text": "￼"
+  },
+  {
+   "location": 390,
+   "marks": "—",
+   "text": " inline display."
+  }
+ ]
+}

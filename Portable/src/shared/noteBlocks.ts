@@ -24,6 +24,9 @@ export interface Block {
   marker: string
   content: string
   indent: number
+  /** A quoted line that was a section title on the page: its level. The
+   *  «###» is part of the marker, hidden with the «>». */
+  quoteHeading?: number
 }
 
 /** ICU's `\s` — the Mac's patterns are written with it. */
@@ -61,11 +64,13 @@ export function blockOf(line: string): Block {
     // A quotation can hold the section it was taken from; the «###» is part
     // of the marker.
     const heading = HEADING.exec(content)
+    let quoteHeading: number | undefined
     if (heading) {
       marker += heading[0]
+      quoteHeading = heading[1].length
       content = content.slice(heading[0].length)
     }
-    return { type: { kind: 'quote' }, marker, content, indent }
+    return { type: { kind: 'quote' }, marker, content, indent, ...(quoteHeading ? { quoteHeading } : {}) }
   }
   return plain
 }
