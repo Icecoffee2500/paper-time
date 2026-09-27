@@ -76,9 +76,6 @@ export function drawingHandlers(ctx: Context): Partial<Handlers> {
       }
       const out: Record<number, MarkupRecord[]> = {}
       for (const [pageIndex, marks] of pages) out[pageIndex] = marks
-      // Held here as the window has them, so the next save can tell what the
-      // window changed.
-      flush.marksInMemory.set(id, out)
       // An encrypted file carries none of what was made on it here, and the
       // window says so the moment the paper opens — not only after the next
       // save is turned away, which after a restart may be never.
@@ -89,14 +86,13 @@ export function drawingHandlers(ctx: Context): Partial<Handlers> {
       return out
     },
 
-    'marks:save': ({ id, pageIndex, marks }) => inOrder(`${id}:${pageIndex}:marks`, async () => {
+    'marks:save': ({ id, pageIndex, marks, before, elsewhere }) => inOrder(`${id}:${pageIndex}:marks`, async () => {
       const holder = await libraries.ownerOf(id)
       if (!holder) return
-      const pages = flush.marksInMemory.get(id) ?? {}
-      const before = pages[pageIndex] ?? []
-      pages[pageIndex] = marks
-      flush.marksInMemory.set(id, pages)
-      await journals.record(id, holder.root, pageIndex, before, marks, pages)
+      // The window's own change, as the window saw it. A copy held here went
+      // stale the moment another device wrote the page, and was empty when
+      // the paper opened before its file was there.
+      await journals.recordChange(id, holder.root, pageIndex, before ?? [], marks, new Set((elsewhere ?? []).map((one) => one.toUpperCase())))
       flush.touched(id).marks.add(pageIndex)
       flush.schedule(id)
     }),

@@ -47,6 +47,69 @@ export interface Mark {
    * machine to the moment this one happened to touch it.
    */
   createdAt?: string
+  /**
+   * A mark another reader made — Preview's, Acrobat's — named by where it is
+   * (`derivedMarkID`) rather than by an identifier of ours. It can be
+   * recoloured, noted and removed all the same; the first change takes it
+   * into this app's care, as the Mac's `TextMarkupWriter.adopt` does.
+   */
+  foreign?: boolean
+}
+
+/**
+ * Which of the five a colour is nearest — `MarkupColor.nearest`. A grey or a
+ * black is nobody's colour and is called yellow, on both builds; every place
+ * that names a colour asks here, so the editor rings the swatch the journal
+ * writes.
+ */
+export function nearestColorName(rgb: [number, number, number]): string {
+  const [red, green, blue] = rgb
+  if (Math.max(red, green, blue) - Math.min(red, green, blue) <= 0.18) return 'yellow'
+  let best = 'yellow'
+  let closest = Infinity
+  for (const [name, value] of Object.entries(MARK_COLORS)) {
+    const distance = (value[0] - red) ** 2 + (value[1] - green) ** 2 + (value[2] - blue) ** 2
+    if (distance < closest) {
+      closest = distance
+      best = name
+    }
+  }
+  return best
+}
+
+/** A colour moved toward grey `toward` (1 white, 0 black) — `Tone.blended`. */
+export function blended(rgb: [number, number, number], toward: number, by: number): [number, number, number] {
+  return rgb.map((value) => value + (toward - value) * by) as [number, number, number]
+}
+
+/**
+ * How one line of a mark is drawn, in page units — the Mac's `RoundedMarks`,
+ * number for number, so one file looks the same on both desktops: a band
+ * blended a third of the way to white (more under the pointer, with a thin
+ * edge), its corners at 0.3 of the height to at most 3.5 points; a line
+ * deepened toward black, 0.085 of the height thick (0.13 under the pointer)
+ * and never under a point, at the foot of the words or through their middle.
+ */
+export function markLine(kind: MarkKind, color: [number, number, number], rect: Rect, hovered = false):
+  | { band: Rect; radius: number; fill: [number, number, number]; edge: [number, number, number] | null }
+  | { from: { x: number; y: number }; to: { x: number; y: number }; width: number; ink: [number, number, number] } {
+  if (kind === 'highlight') {
+    return {
+      band: rect,
+      radius: Math.min(rect.height * 0.3, 3.5),
+      fill: blended(color, 1, hovered ? 0.55 : 0.35),
+      edge: hovered ? blended(color, 0, 0.15) : null,
+    }
+  }
+  const width = Math.max(1, rect.height * (hovered ? 0.13 : 0.085))
+  // Page space: y grows upward, so the foot of the words is the rectangle's y.
+  const y = kind === 'underline' ? rect.y + width / 2 : rect.y + rect.height / 2
+  return {
+    from: { x: rect.x + width / 2, y },
+    to: { x: rect.x + rect.width - width / 2, y },
+    width,
+    ink: hovered ? color : blended(color, 0, 0.3),
+  }
 }
 
 export function quadToRect(quad: number[]): Rect {

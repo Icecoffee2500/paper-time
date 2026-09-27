@@ -496,7 +496,7 @@ export async function pdfUpdateSuite(test: Test, suite: (name: string) => void) 
       const file = chain(bytes)
       assert.ok(file.sections.length >= 2, 'the Mac left at least one revision')
       const marks = await readMarks(bytes)
-      assert.ok([...marks.values()].some((page) => page.some((m) => !m.id.startsWith('foreign-'))), 'the Mac\'s marks read back')
+      assert.ok([...marks.values()].some((page) => page.some((m) => !m.foreign)), 'the Mac\'s marks read back')
       const { issues, appended } = await protocol(bytes)
       assert.deepEqual(issues, [])
       assert.ok(appended[1] === 0 && appended[3] === 0)
@@ -513,7 +513,7 @@ export async function pdfUpdateSuite(test: Test, suite: (name: string) => void) 
     const bytes = await fsp.readFile(macCompacted)
     assert.equal(chain(bytes).sections.length, 2, 'the history is one update on the base')
     const marks = await readMarks(bytes)
-    const own = (marks.get(0) ?? []).filter((m) => !m.id.startsWith('foreign-'))
+    const own = (marks.get(0) ?? []).filter((m) => !m.foreign)
     assert.deepEqual(own.map((m) => `${m.kind}:${m.id}`).sort(), [
       'highlight:C3A6D2E0-5B1F-4E7A-9C2D-1F0E8B7A6D5C',
       'underline:7D4B9F21-3C8E-4A6D-B1F5-2E9C0A7D4B31',
@@ -522,14 +522,13 @@ export async function pdfUpdateSuite(test: Test, suite: (name: string) => void) 
     assert.equal(highlight.quads.length, 2, 'one highlight of two lines, whatever PDFKit cut it into')
     assert.equal(highlight.comment, 'why here? — 여기가 왜')
     assert.ok(!own.find((m) => m.kind === 'underline')!.comment, 'the underline still has no comment')
-    assert.equal((marks.get(0) ?? []).filter((m) => m.id.startsWith('foreign-')).length, 1, 'the colleague\'s highlight is still theirs')
+    assert.equal((marks.get(0) ?? []).filter((m) => m.foreign).length, 1, 'the colleague\'s highlight is still theirs')
     const drawings = await readDrawings(bytes)
     assert.equal(drawings.get(0)?.elements.length, 2)
     assert.equal(drawings.get(0)?.strokes.length, 1)
-    // The screen copy hides ours and keeps the colleague's.
+    // The screen copy hides every mark: the window draws them all.
     const shown = await readMarks(await stripOwnedForDisplay(bytes))
-    assert.equal((shown.get(0) ?? []).filter((m) => !m.id.startsWith('foreign-')).length, 0)
-    assert.equal((shown.get(0) ?? []).filter((m) => m.id.startsWith('foreign-')).length, 1)
+    assert.equal((shown.get(0) ?? []).length, 0)
     // Saving what was read back: the first save respells the Mac's
     // annotations in this build's own words, the second has nothing to say.
     const page: PageDrawing = { pageIndex: 0, elements: drawings.get(0)!.elements, strokes: drawings.get(0)!.strokes, marks: own, managesMarks: true }
@@ -537,7 +536,7 @@ export async function pdfUpdateSuite(test: Test, suite: (name: string) => void) 
     const twice = await writeDrawingsDetailed(once.bytes, [page])
     assert.ok(!twice.changed, 'the second save has nothing to write')
     const after = await readMarks(twice.bytes)
-    assert.equal((after.get(0) ?? []).filter((m) => !m.id.startsWith('foreign-')).length, 2)
+    assert.equal((after.get(0) ?? []).filter((m) => !m.foreign).length, 2)
     assert.equal((await readDrawings(twice.bytes)).get(0)?.strokes.length, 1)
   })
 

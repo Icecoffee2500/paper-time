@@ -42,6 +42,7 @@ import {
   type PDFObj,
   type PDFRef,
 } from './pdfupdate/syntax.js'
+import { derivedMarkID } from '../shared/markIds.js'
 import { SketchColor, SketchElement, type Point, type Rect } from '../shared/sketch.js'
 import { InkStroke, INK_OWNER } from '../shared/ink.js'
 import { containerKind, namesEncryption, rightsHandler, type PDFLock } from '../shared/pdfLock.js'
@@ -567,29 +568,6 @@ function buildInk(stroke: InkStroke): Built {
  */
 export type MarkupRecord = Mark
 
-/** The five the Mac offers, in `MarkupColor`. */
-export const MARKUP_COLORS: Record<string, [number, number, number]> = {
-  yellow: [1.0, 0.84, 0.25],
-  green: [0.45, 0.83, 0.51],
-  blue: [0.42, 0.71, 0.98],
-  pink: [0.99, 0.56, 0.66],
-  purple: [0.75, 0.6, 0.96],
-}
-
-export function nearestMarkupColor(rgb: [number, number, number]): string {
-  let best = 'yellow'
-  let closest = Infinity
-  for (const [name, value] of Object.entries(MARKUP_COLORS)) {
-    const distance =
-      (value[0] - rgb[0]) ** 2 + (value[1] - rgb[1]) ** 2 + (value[2] - rgb[2]) ** 2
-    if (distance < closest) {
-      closest = distance
-      best = name
-    }
-  }
-  return best
-}
-
 function buildMarkup(mark: MarkupRecord): Built {
   const xs = mark.quads.flatMap((q) => [q[0], q[2], q[4], q[6]])
   const ys = mark.quads.flatMap((q) => [q[1], q[3], q[5], q[7]])
@@ -715,6 +693,13 @@ export interface PageDrawing {
   elements: SketchElement[]
   strokes: InkStroke[]
   marks?: MarkupRecord[]
+  /**
+   * Whether `marks` names every foreign mark the page should keep — read from
+   * this very file and reconciled with the journals — so one it leaves out
+   * was removed and comes out of the file. False (the default) never takes
+   * another reader's mark out.
+   */
+  foreignComplete?: boolean
   /**
    * Whether this call owns the page's shapes. True unless said otherwise:
    * the shapes in the file are rebuilt from `elements`, so an empty list
@@ -850,6 +835,8 @@ function planPage(
   const add: Built[] = []
   const sketches = new Map<string, { indices: number[]; payload: string | null; subtype: string | null }>()
   const marks = new Map<string, { indices: number[]; mark: MarkupRecord }>()
+  /** Another reader's markups on the page, by the identifier both builds give them. */
+  const foreign = new Map<string, number[]>()
   const inks = new Map<string, number[]>()
   existing.dicts.forEach((dict, index) => {
     if (!dict) return
@@ -870,6 +857,9 @@ function planPage(
     } else if (layers.ink && isInk(dict)) {
       const key = fingerprint(obj.dict(dict), file)
       inks.set(key, [...(inks.get(key) ?? []), index])
+    } else if (layers.marks && !isManagedMark(dict) && markupShape(dict)) {
+      const id = foreignMarkID(dict, page.pageIndex, markupShape(dict)!.quads)
+      foreign.set(id, [...(foreign.get(id) ?? []), index])
     } else if (layers.marks && isManagedMark(dict)) {
       const id = textValue(dict, KEY_MARKUP_ID)!.toUpperCase()
       const shape = markupShape(dict)!
@@ -937,13 +927,31 @@ function planPage(
     for (const mark of page.marks ?? []) {
       if (mark.quads.length === 0) continue
       const id = mark.id.toUpperCase()
+      // Another reader's mark, still as it made it: left exactly as it is.
+      if (mark.foreign) {
+        foreign.delete(id)
+        continue
+      }
       const group = marks.get(id)
       marks.delete(id)
+      // Another reader's mark changed here: taken into this app's care — the
+      // original goes and ours, under the same identifier, takes its place
+      // (the Mac's `adopt`, which writes `/PTMarkupID` into it).
+      const adopted = foreign.get(id)
+      if (adopted) {
+        foreign.delete(id)
+        remove.push(...adopted)
+      }
       if (group && sameMark(group.mark, mark)) continue
       if (group) remove.push(...group.indices)
       add.push(buildMarkup(mark))
     }
     for (const group of marks.values()) remove.push(...group.indices)
+    // A foreign mark the marks no longer hold was taken off by somebody —
+    // here or on the Mac, whose journal named it by the same identifier.
+    // Only on a page whose marks were handed over whole (`foreign` carries
+    // every foreign mark the file had, so none is lost by being unlisted).
+    if (page.foreignComplete) for (const indices of foreign.values()) remove.push(...indices)
   }
   return { remove: [...new Set(remove)].sort((a, b) => a - b), add }
 }
@@ -1189,7 +1197,7 @@ export async function readMarks(bytes: Uint8Array, options: WriteOptions = {}): 
       if (!shape) return
       const color = colorOf(dict)
       const own = textValue(dict, KEY_MARKUP_ID)
-      const id = own ? own.toUpperCase() : `foreign-${pageIndex}-${index}`
+      const id = own ? own.toUpperCase() : foreignMarkID(dict, pageIndex, shape.quads)
       const known = byID.get(id)
       if (known) {
         known.quads.push(...shape.quads)
@@ -1208,6 +1216,7 @@ export async function readMarks(bytes: Uint8Array, options: WriteOptions = {}): 
         text: comment && contents === comment ? '' : contents,
       }
       if (comment) mark.comment = comment
+      if (!own) mark.foreign = true
       byID.set(id, mark)
       marks.push(mark)
     })
@@ -1218,7 +1227,28 @@ export async function readMarks(bytes: Uint8Array, options: WriteOptions = {}): 
 
 /** True for a mark this app made, as opposed to one that was already there. */
 export function isOurMark(mark: MarkupRecord): boolean {
-  return !mark.id.startsWith('foreign-')
+  return !mark.foreign
+}
+
+/**
+ * The identifier another reader's markup goes by on both builds: its
+ * subtype, page and rectangle (`derivedMarkID`). The rectangle is the
+ * annotation's `/Rect` as PDFKit's `bounds` reads it, or the lines' own box
+ * when there is none.
+ */
+function foreignMarkID(dict: PDFDict, pageIndex: number, quads: number[][]): string {
+  const subtype = nameOf(dict.get('Subtype')) ?? '?'
+  const numbers = (arrayOf(dict.get('Rect')) ?? []).map(numberOf).filter((v): v is number => v !== undefined)
+  let box: { x: number; y: number; width: number; height: number }
+  if (numbers.length === 4) {
+    const [x1, y1, x2, y2] = numbers
+    box = { x: Math.min(x1, x2), y: Math.min(y1, y2), width: Math.abs(x2 - x1), height: Math.abs(y2 - y1) }
+  } else {
+    const xs = quads.flatMap((q) => [q[0], q[2], q[4], q[6]])
+    const ys = quads.flatMap((q) => [q[1], q[3], q[5], q[7]])
+    box = { x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) }
+  }
+  return derivedMarkID(subtype, pageIndex, box)
 }
 
 /**
@@ -1319,7 +1349,10 @@ export async function stripOwnedForDisplay(bytes: Uint8Array, options: WriteOpti
     for (let index = 0; index < opened.pages.length; index += 1) {
       const existing = opened.annots(index)
       const owned: number[] = []
-      existing.dicts.forEach((dict, k) => { if (dict && isReplaced(dict, everything)) owned.push(k) })
+      // Every text markup, another reader's too: the window draws them all
+      // (the Mac's `RoundedMarks` hides every one), so a foreign highlight
+      // recoloured here shows its new colour and not both.
+      existing.dicts.forEach((dict, k) => { if (dict && (isReplaced(dict, everything) || markupShape(dict))) owned.push(k) })
       if (owned.length > 0) edits.push({ index, removed: owned, added: [] })
     }
     if (edits.length === 0) return bytes
@@ -1352,7 +1385,11 @@ async function stripWithPDFLib(bytes: Uint8Array, layers: Layers): Promise<Uint8
     for (let index = 0; index < resolved.size(); index += 1) {
       const entry = resolved.get(index)
       const dict = entry instanceof LibRef ? context.lookup(entry) : entry
-      if (dict instanceof LibDict && isReplaced(fromLibDict(dict, context), layers)) owned.push(index)
+      if (!(dict instanceof LibDict)) continue
+      const subtype = String(dict.get(PDFName.of('Subtype')) ?? '').replace(/^\//, '')
+      const quads = dict.get(PDFName.of('QuadPoints'))
+      const markup = Boolean(MARKUP_KINDS[subtype]) && quads instanceof PDFArray && quads.size() >= 8
+      if (markup || isReplaced(fromLibDict(dict, context), layers)) owned.push(index)
     }
     for (const index of owned.reverse()) resolved.remove(index)
     removed += owned.length

@@ -1340,7 +1340,11 @@ body[data-window-focused='false'] .paper-row[aria-selected='true'] {
    then one row a mark — the Mac's `MarkupListView`. */
 .mark-filters {
   display: flex;
-  flex-wrap: wrap;
+  /* One row that scrolls, never two: the Mac lays the chips in one
+     horizontal scroll view. */
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
   gap: 6px;
   padding: 12px 14px 10px;
   border-bottom: 1px solid var(--separator);
@@ -1398,6 +1402,9 @@ body[data-window-focused='false'] .paper-row[aria-selected='true'] {
 .mark-comment-field {
   flex: 1 1 auto;
   min-width: 0;
+  resize: none;
+  line-height: 19px;
+  font-family: inherit;
   padding: 4px 8px;
   border: 1px solid var(--separator);
   border-radius: var(--radius-control);
@@ -2742,11 +2749,35 @@ textarea:focus-visible {
 }
 
 .mark-swatch {
+  position: relative;
   width: 19px;
   height: 19px;
-  border-radius: calc(var(--radius-bar) - 5px);
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+  transition: transform var(--motion-tap) var(--ease), height var(--motion-tap) var(--ease), margin var(--motion-tap) var(--ease);
 }
+/* What a colour will do, drawn on it (`MarkupBarView.swatch(for:kind:)`):
+   a dot for a highlight, a dot over a bar for an underline, a dot with a
+   bar through it for a strikethrough. */
+.mark-swatch[data-kind='underline'],
+.mark-swatch[data-kind='strikethrough'] {
+  height: 15px;
+  margin: 2px 0;
+}
+.mark-swatch[data-kind='underline']::after,
+.mark-swatch[data-kind='strikethrough']::after {
+  content: '';
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  height: 2px;
+  border-radius: 1px;
+}
+.mark-swatch[data-kind='underline']::after { bottom: -4px; background: inherit; }
+.mark-swatch[data-kind='strikethrough']::after { top: calc(50% - 1px); background: var(--text); }
+/* The armed kind says so in the accent. */
+.mark-action.mark-arm[aria-pressed='true'] { color: var(--accent-text); background: var(--accent-soft); }
+.mark-action.danger { color: var(--danger); }
 
 .mark-swatch:hover {
   transform: scale(1.12);
@@ -2775,12 +2806,36 @@ textarea:focus-visible {
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1), 0 0 0 2px var(--panel), 0 0 0 3.5px var(--accent);
 }
 
-/* Over a link in the paper, the pointer is a hand (`Reader.showOverLink`). */
-.reader-scroll.over-link .page .text-layer { cursor: pointer; }
+/* Over a link in the paper, the pointer is a hand (`Reader.showOverLink`),
+   and over a mark, which a press opens (`MarkHover`). */
+.reader-scroll.over-link .page .text-layer,
+.reader-scroll.over-mark .page .text-layer { cursor: pointer; }
 
 /* A note written in the bar, about a passage or on a mark. */
+/* Writing a note: the passage, quiet, then the field, then Cancel and Save
+   (`NoteComposerView`). */
+.mark-bar[data-mode='compose'] {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: 320px;
+  padding: 12px 14px;
+  border-radius: var(--radius-popover);
+}
+.mark-note-quote {
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.mark-note-buttons { display: flex; gap: 8px; align-items: center; }
+.mark-note-buttons .filled-button,
+.mark-note-buttons .plain-button { padding: 4px 12px; font-size: 12px; }
 .mark-note-field {
-  width: 220px;
+  width: 100%;
   height: 22px;
   padding: 2px 7px;
   border: 1px solid var(--separator);
@@ -2790,15 +2845,7 @@ textarea:focus-visible {
   outline: none;
 }
 .mark-note-field:focus { border-color: var(--accent); }
-.mark-note-save {
-  height: 22px;
-  padding: 0 9px;
-  border-radius: calc(var(--radius-bar) - 5px);
-  background: var(--accent);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 500;
-}
+
 
 .mark-action:hover {
   background: var(--hover);

@@ -24,7 +24,7 @@ import { FindBar } from './ui/findBar.js'
 import { refreshOpenPapers } from './ui/openPapers.js'
 import { closePages } from './ui/pages.js'
 import { sketchEditor } from './ui/sketchEditing.js'
-import { toast } from './ui/toolbar.js'
+import { showMenu, toast } from './ui/toolbar.js'
 import { couldNot } from './notices.js'
 import { closePaper } from './actions/openPapers.js'
 import { saveSettings } from './settingsController.js'
@@ -84,6 +84,7 @@ function readerFor(id: string, pane: boolean): Reader {
     marksChanged: () => { if (store.selectedID === id) changed('marks') },
     historyChanged: () => changed('history'),
     markShown: (markID) => shell.inspector.showMark(markID),
+    menu: (anchor, entries) => showMenu(anchor, entries),
     activated: () => {
       // A press in a pane makes it the one in use: the pane in focus, and a
       // paper kept open.

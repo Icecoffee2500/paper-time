@@ -90,7 +90,10 @@ export interface Requests {
   }
   /** Every page's marks: the file, overruled by every device's journal. */
   'marks:load': { args: { id: string }; result: Record<number, Mark[]> }
-  'marks:save': { args: { id: string; pageIndex: number; marks: Mark[] }; result: void }
+  /** One page's marks as the window now has them, `before` as it had them —
+   *  the window's own change, which is what goes into the journal — and the
+   *  identifiers still on its other pages, which a move is not a removal of. */
+  'marks:save': { args: { id: string; pageIndex: number; marks: Mark[]; before: Mark[]; elsewhere: string[] }; result: void }
   'drawing:flush': {
     args: { id: string }
     /** `kept`: nothing went into the file, and everything stays in Paper Time. */

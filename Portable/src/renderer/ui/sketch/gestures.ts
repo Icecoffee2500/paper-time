@@ -780,6 +780,9 @@ export function attachSketchInput(
         elements = elements.filter((element) => !gone.has(element.id))
         touched = true
       }
+      // A highlight or an underline under the eraser comes off too, as on
+      // the Mac — a step of its own, «Erase Mark», back with ⌘Z.
+      if (page.marks.length > 0) reader.eraseMarkAt(page, sample)
     }
     if (!touched) return
     page.strokes = strokes

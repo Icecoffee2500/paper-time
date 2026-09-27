@@ -103,6 +103,8 @@ export class PageView {
   elements: SketchElement[] = []
   strokes: InkStroke[] = []
   marks: Mark[] = []
+  /** The mark under the pointer, drawn lighter with an edge. */
+  hoveredMarkID: string | null = null
   /** Mid-gesture elements the input surface is drawing itself. */
   hidden = new Set<string>()
   /** Pen strokes being moved, likewise left to the surface. */
@@ -543,7 +545,7 @@ export class PageView {
     // most papers are never marked.
     if (this.marks.length > 0) {
       const marks = this.surface(this.markCanvas)
-      if (marks) drawMarks(this.marks, marks)
+      if (marks) drawMarks(this.marks, marks, this.hoveredMarkID)
     } else if (this.markCanvas.width !== 0) {
       this.markCanvas.width = 0
       this.markCanvas.height = 0

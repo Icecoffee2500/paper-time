@@ -53,13 +53,6 @@ export interface FlushHooks {
 
 export class PDFFlusher {
   /**
-   * Every page's marks for the papers that are open, as the window has them.
-   * Read when the paper opens and replaced page by page as the window saves,
-   * so that each save can be told apart from what came before it — which is
-   * what goes into the journal. The file itself is written from the journals.
-   */
-  readonly marksInMemory = new Map<string, Record<number, MarkupRecord[]>>()
-  /**
    * The pages whose layers this run has saved, per paper. A page is this
    * build's to rewrite for a layer when it has a sidecar here — or when it
    * was saved here and has none any more. What a page must never be is
@@ -171,7 +164,6 @@ export class PDFFlusher {
     clearTimeout(this.pending.get(id))
     this.pending.delete(id)
     this.attempts.delete(id)
-    this.marksInMemory.delete(id)
     this.touchedPages.delete(id)
   }
 
@@ -224,9 +216,12 @@ export class PDFFlusher {
           pageIndex,
           elements: managesSketch ? ((await owner.loadSketch(id, pageIndex)) ?? []).map(SketchElement.from) : [],
           strokes: managesInk ? ((await owner.loadInk(id, pageIndex)) ?? []).map(InkStroke.from) : [],
-          // Only the marks this app made are ours to rewrite; one that was in
-          // the file when it arrived stays where it is, untouched.
-          marks: (wanted.get(pageIndex) ?? []).filter(isOurMark),
+          // Every mark, another reader's too: one left as it came stays
+          // untouched, one changed here is taken into this app's care, and
+          // one removed (here or on the Mac, by the identifier both derive)
+          // comes out — the list is this file's own marks, reconciled.
+          marks: wanted.get(pageIndex) ?? [],
+          foreignComplete: true,
           managesSketch,
           managesInk,
           managesMarks: markPages.has(pageIndex),

@@ -30,6 +30,9 @@ export interface Snapshot {
   /** The paper the step was taken in. An undo is put back into that paper or
    *  not at all — never into whichever paper happens to be open by then. */
   paperID?: string
+  /** What the step did, as the Mac names it — «Highlight», «Erase Mark» —
+   *  said when it is undone. */
+  name?: string
   /** The other pages this same step changed, when it changed more than one. */
   also?: Snapshot[]
 }
@@ -114,8 +117,9 @@ export function snapshot(pageIndex: number, elements: SketchElement[], strokes: 
 }
 
 /** A page's marks as a step of their own (see `Snapshot.marks`). */
-export function marksSnapshot(pageIndex: number, marks: Mark[], paperID?: string): Snapshot {
+export function marksSnapshot(pageIndex: number, marks: Mark[], paperID?: string, name?: string): Snapshot {
   return {
+    ...(name ? { name } : {}),
     pageIndex,
     elements: [],
     strokes: [],
