@@ -46,6 +46,10 @@ export interface Settings {
   /** The pen's and the highlighter's own colours and widths, and their two
    *  options — the Mac's `InkPresets`, as JSON (`shared/inkPresets.ts`). */
   inkPresets: string | null
+  /** The keys somebody changed, by command, as JSON (`shared/shortcuts.ts`). */
+  shortcuts: string | null
+  /** The version whose What's New was seen — the sheet comes once per version (`seenReleaseNotesVersion`). */
+  seenReleaseNotesVersion: string | null
 }
 
 export const DEFAULTS: Settings = {
@@ -72,6 +76,8 @@ export const DEFAULTS: Settings = {
   notesFolder: null,
   sketchStyle: null,
   inkPresets: null,
+  shortcuts: null,
+  seenReleaseNotesVersion: null,
 }
 
 /** What the file says, over the defaults, each group merged key by key. */

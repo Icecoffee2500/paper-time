@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <!-- The same demonstrations the landing page shows (`Website/demos.js`),
+         in a frame of their own: their styles and globals stay theirs, and
+         like the rest of the window they reach no network. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:;"
+    />
+    <link rel="stylesheet" href="demos/style.css" />
+    <link rel="stylesheet" href="demoHost.css" />
+  </head>
+  <body data-page="docs">
+    <div id="demo" class="doc-demo"></div>
+    <script src="demoHost.js"></script>
+    <script src="demos/demos.js"></script>
+    <script src="demoMount.js"></script>
+  </body>
+</html>

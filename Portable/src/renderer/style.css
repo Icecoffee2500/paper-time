@@ -4167,3 +4167,76 @@ textarea.memo {
   overflow: hidden;
 }
 .palette-progress > span { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+
+/* ═════════════════════ settings as pages (WR20) ═════════════════════════
+   The Mac's pages beside a rail: the page you are on is lifted off the
+   ground rather than painted blue (`SettingsView`). */
+.set-sheet.set-paged { width: 820px; height: min(640px, calc(100vh - 48px)); flex-direction: row; }
+.set-rail { flex: 0 0 176px; display: flex; flex-direction: column; gap: 2px; padding: 14px 10px; background: var(--ground, color-mix(in srgb, var(--text) 4%, var(--panel))); }
+.set-rail-title { padding: 0 10px 8px; margin: 0; }
+.set-rail-row { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; text-align: left; color: var(--text); font-size: 13px; }
+.set-rail-row svg { width: 15px; height: 15px; color: var(--text-secondary); }
+.set-rail-row[aria-current="true"] { background: var(--panel); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); }
+.set-rail-row[aria-current="true"] svg { color: var(--accent); }
+.set-page { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.set-page .set-body { flex: 1 1 auto; }
+.set-top { padding: 14px 20px 0; }
+.set-key-search { display: flex; align-items: center; gap: 7px; padding: 6px 10px; border-radius: 999px; background: color-mix(in srgb, var(--text) 6%, transparent); }
+.set-key-search svg { width: 14px; height: 14px; color: var(--text-tertiary); flex: none; }
+.set-key-search-field { flex: 1 1 auto; border: none; outline: none; background: transparent; color: var(--text); font: inherit; font-size: 13px; }
+.set-key-search:focus-within .set-key-search-hint svg { color: var(--accent); }
+.set-key-card { display: flex; flex-direction: column; gap: 2px; padding: 4px 10px; border-radius: 10px; background: color-mix(in srgb, var(--text) 3%, transparent); }
+.set-key-recorder { min-width: 92px; padding: 3px 9px; border-radius: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; text-align: center; color: var(--text); background: color-mix(in srgb, var(--text) 7%, transparent); }
+.set-key-recorder.unset { color: var(--text-tertiary); font-family: inherit; }
+.set-key-recorder.recording { color: var(--accent); box-shadow: 0 0 0 1.5px var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); font-family: inherit; }
+.set-end { justify-content: flex-end; }
+.set-status { color: var(--accent-text, var(--accent)); }
+
+/* The Log: releases newest first, each line a keyword that opens. */
+.rn-release { padding: 14px 0 6px; border-bottom: 1px solid var(--separator); }
+.rn-release-head { display: flex; align-items: baseline; gap: 8px; }
+.rn-version { font-size: 15px; font-weight: 650; }
+.rn-date { color: var(--text-secondary); font-size: 12px; }
+.rn-counts { display: inline-flex; gap: 8px; color: var(--text-tertiary); font-size: 12px; }
+.rn-count { display: inline-flex; align-items: center; gap: 2px; }
+.rn-count svg { width: 11px; height: 11px; }
+.rn-note { margin: 4px 0 8px; color: var(--text-secondary); font-size: 13px; }
+.rn-entry-head { display: flex; align-items: center; gap: 7px; width: 100%; padding: 4px 0; text-align: left; color: var(--text); font-size: 13px; }
+.rn-entry-head svg { width: 11px; height: 11px; color: var(--text-tertiary); flex: none; }
+.rn-entry.featured .rn-entry-title { font-weight: 600; }
+.rn-entry-detail { margin: 0 0 8px 18px; color: var(--text-secondary); font-size: 12.5px; line-height: 1.5; }
+.rn-key { padding: 0 5px; border-radius: 4px; font-size: 11px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--text-secondary); background: color-mix(in srgb, var(--text) 7%, transparent); }
+.rn-device { padding: 0 6px; border-radius: 999px; font-size: 10.5px; color: var(--text-secondary); box-shadow: inset 0 0 0 1px var(--separator); }
+
+/* The showcase: one page at a time, arrows either side, dots under. */
+.rn-showcase { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 8px 0 4px; }
+.rn-row { display: flex; align-items: center; gap: 8px; width: 100%; }
+.rn-arrow { flex: none; width: 28px; height: 28px; border-radius: 999px; color: var(--text-secondary); }
+.rn-arrow:not(:disabled):hover { background: color-mix(in srgb, var(--text) 5.5%, transparent); }
+.rn-arrow:disabled { opacity: 0.3; }
+.rn-arrow svg { width: 14px; height: 14px; }
+.rn-card { flex: 1 1 auto; min-width: 0; border-radius: 16px; padding: 14px; background: color-mix(in srgb, var(--text) 5%, transparent); }
+.rn-stage { min-height: 240px; display: flex; }
+.rn-demo { width: 100%; height: 340px; border: none; border-radius: 12px; background: transparent; }
+.rn-stage-empty { flex: 1; display: grid; place-items: center; color: var(--text-tertiary); }
+.rn-stage-empty svg { width: 44px; height: 44px; }
+.rn-words { display: grid; margin-top: 12px; }
+.rn-page { grid-area: 1 / 1; visibility: hidden; }
+.rn-page.shown { visibility: visible; }
+.rn-page-title { margin: 0 0 4px; font-size: 15px; }
+.rn-page.tier-one .rn-page-title { color: var(--accent-text, var(--accent)); }
+.rn-page-detail { margin: 0; color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
+.rn-dots { display: flex; gap: 6px; }
+.rn-dot { width: 7px; height: 7px; padding: 0; border-radius: 999px; background: color-mix(in srgb, var(--text) 18%, transparent); }
+.rn-dot[aria-current="true"] { background: var(--text-secondary); }
+.rn-about-head { text-align: center; padding-top: 10px; }
+.rn-about-name { margin: 0; font-size: 20px; }
+.rn-about-version { margin: 2px 0 0; }
+.rn-people { display: flex; flex-wrap: wrap; gap: 6px; }
+.rn-person { padding: 3px 10px; border-radius: 999px; font-size: 12px; background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent-text, var(--accent)); }
+.rn-whats-new { width: 720px; }
+.rn-features { width: 620px; }
+.rn-sheet-body { padding: 4px 20px 16px; overflow-y: auto; }
+.rn-group { display: flex; align-items: center; gap: 6px; }
+.rn-group svg { width: 13px; height: 13px; }
+.rn-feature-head { display: flex; align-items: center; gap: 8px; padding-top: 6px; font-size: 13px; }

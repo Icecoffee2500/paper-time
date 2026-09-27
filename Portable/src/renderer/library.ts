@@ -10,6 +10,8 @@
  * often enough — the watcher and a star, a menu and a probe — and whichever
  * answered last won, older or not.
  */
+import { showWhatsNew } from './ui/releaseNotes.js'
+import { parseShortcutOverrides, setShortcutOverrides } from '../shared/shortcuts.js'
 import { inkPresetsFrom } from '../shared/inkPresets.js'
 import { call, flags, soloPaperID } from './bridge.js'
 import {
@@ -27,7 +29,7 @@ import {
 import { adoptNotes } from './notesModel.js'
 import { readers, reconcileReaders } from './pageArea.js'
 import { dockPaper, showPaper } from './actions/openPapers.js'
-import { applyTheme } from './settingsController.js'
+import { applyTheme, saveSettings } from './settingsController.js'
 import { layoutPanes } from './layout.js'
 import { shell, solo } from './shell.js'
 import { askForName } from './ui/ask.js'
@@ -108,6 +110,11 @@ export function reload(): Promise<void> {
     })
   }
   return readingAgain
+}
+
+/** Whether the folders are being read now — Sync Now is greyed meanwhile, as on the Mac (`isScanning`). */
+export function isReading(): boolean {
+  return reading !== null
 }
 
 /** How many times the library has been read, for a probe to count. */
@@ -242,6 +249,7 @@ export async function start() {
     }
   }
   store.sketch.presets = inkPresetsFrom(saved.inkPresets)
+  setShortcutOverrides(parseShortcutOverrides(saved.shortcuts))
   applyTheme()
   layoutPanes()
   shell.toolbar.update()
@@ -297,4 +305,22 @@ export async function start() {
     const second = shelfPapers().find((entry) => entry.id !== store.selectedID)
     if (second) dockPaper(second.id, 'right')
   }
+  void offerWhatsNew()
+}
+
+/**
+ * What's New, once per version, after the library is up (`AppModel`'s
+ * `seenReleaseNotesVersion`). A probe never gets it by itself — it would
+ * stand over whatever the probe came to look at — and one that asks for it
+ * (`--papertime-whats-new=1`) sees it without the version being marked.
+ */
+async function offerWhatsNew() {
+  const about = await call('app:about').catch(() => null)
+  if (!about) return
+  if (about.whatsNew) return showWhatsNew(about.version)
+  if (flags.probe || store.settings.seenReleaseNotesVersion === about.version) return
+  showWhatsNew(about.version, () => {
+    store.settings.seenReleaseNotesVersion = about.version
+    saveSettings({ seenReleaseNotesVersion: about.version })
+  })
 }

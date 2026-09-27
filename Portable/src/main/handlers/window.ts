@@ -1,4 +1,5 @@
 /** The window's frame, the outside world, the report sheet, About. */
+import { probeArgument } from '../probe.js'
 import { fontFamilies } from '../fonts.js'
 import { app, clipboard, shell, systemPreferences } from 'electron'
 import { isOpenableLink } from '../../shared/readerMath.js'
@@ -106,6 +107,6 @@ export function windowHandlers(ctx: Context): Partial<Handlers> {
     'feedback:send': (report) => sendFeedback({ ...report, context: feedbackContext() }),
 
     // What the About section says: which version this is.
-    'app:about': () => ({ version: app.getVersion() }),
+    'app:about': () => ({ version: app.getVersion(), whatsNew: probeArgument('whats-new') === '1' }),
   }
 }

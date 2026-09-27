@@ -67,6 +67,7 @@ export function libraryHandlers(ctx: Context): Partial<Handlers> {
       // rather than keeping what they had until they are opened again.
       windows.sendExcept(sender, 'settings:changed', patch)
       if ('language' in patch && next.language !== before) ctx.languageChanged()
+      if ('shortcuts' in patch) ctx.shortcutsChanged()
       // The switch for search by meaning: off ends the worker and what it was
       // doing; on starts the build the way a library read would.
       if ('semanticSearch' in patch) {

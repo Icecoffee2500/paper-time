@@ -6,7 +6,8 @@
  * at all while somebody is typing; then the command keys and the page turns. Menu items reach `commands.ts` from the main
  * process; these catch the keys a desktop hands the page first.
  */
-import { isCommand } from './bridge.js'
+import { isCommand, platform } from './bridge.js'
+import { eventIs } from '../shared/shortcuts.js'
 import { on } from './dom.js'
 import { changed, readerState, setSketchTool, store, type SketchTool } from './state.js'
 import { findBar, focused, readers } from './pageArea.js'
@@ -109,12 +110,12 @@ export function installKeys() {
       // ⇧⌘O: the open papers, over the page. ⌘W: the pane in focus, or the
       // window. Both are menu items too; these catch the key where a desktop
       // hands it to the page first.
-      if (event.shiftKey && key === 'o') {
+      if (eventIs('openPapers', event, platform)) {
         event.preventDefault()
         showOpenPapersPopup()
         return
       }
-      if (key === 'w' && !event.shiftKey && !event.altKey) {
+      if (eventIs('closeWindow', event, platform)) {
         event.preventDefault()
         closeWindowOrPane()
         return

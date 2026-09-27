@@ -46,6 +46,8 @@ export interface Context {
   menuStateChanged: (state: MenuState) => void
   /** The reader chose another language: the menu and the windows are made again in it. */
   languageChanged: () => void
+  /** The keys changed: the menu is built again with them. */
+  shortcutsChanged: () => void
   /** The slip-box's note sources changed: search by meaning catches up. */
   notesChanged: (saved: { id: string; title: string; body: string; paperID: string | null } | null, removed?: string) => void
 }

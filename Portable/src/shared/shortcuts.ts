@@ -86,9 +86,163 @@ export function groupTitle(group: ShortcutGroup): string {
   }
 }
 
-/** The accelerator a desktop uses for a command. */
-export function acceleratorFor(entry: Shortcut, platform: string): string {
+/** The accelerator a command has out of the box. */
+export function defaultAcceleratorFor(entry: Shortcut, platform: string): string {
   return platform === 'darwin' ? entry.mac : (entry.other ?? entry.mac)
+}
+
+// MARK: - The keys a person chose
+
+/**
+ * The keys somebody changed, by command — the Mac's `paneShortcuts`. An
+ * empty string is a command left with no key (its key was given to another).
+ * Kept here, not passed around, so every menu, tooltip and list that reads a
+ * key reads the chosen one; each process sets it from the settings.
+ */
+export type ShortcutOverrides = Record<string, string>
+
+let overrides: ShortcutOverrides = {}
+
+export function setShortcutOverrides(next: ShortcutOverrides) {
+  overrides = { ...next }
+}
+
+export function shortcutOverrides(): ShortcutOverrides {
+  return { ...overrides }
+}
+
+/** The settings' `shortcuts` (JSON), read back: only known commands and strings. */
+export function parseShortcutOverrides(raw: unknown): ShortcutOverrides {
+  let value = raw
+  if (typeof raw === 'string') {
+    try {
+      value = JSON.parse(raw)
+    } catch {
+      return {}
+    }
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const out: ShortcutOverrides = {}
+  for (const [command, accelerator] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof accelerator === 'string' && shortcut(command)) out[command] = accelerator
+  }
+  return out
+}
+
+/** The accelerator a desktop uses for a command: the one chosen, or the one it came with. */
+export function acceleratorFor(entry: Shortcut, platform: string, using: ShortcutOverrides = overrides): string {
+  const chosen = using[entry.command]
+  return chosen !== undefined ? chosen : defaultAcceleratorFor(entry, platform)
+}
+
+/** Whether a command has a key at all — one taken away to another command has none. */
+export function hasShortcut(command: string, platform: string, using: ShortcutOverrides = overrides): boolean {
+  const entry = shortcut(command)
+  return Boolean(entry && acceleratorFor(entry, platform, using))
+}
+
+/** Two accelerators for the same keys: the modifiers in any order and any spelling. */
+export function sameAccelerator(a: string, b: string, platform: string): boolean {
+  const key = (accelerator: string) => {
+    if (!accelerator) return ''
+    const parts = accelerator.split('+')
+    const last = parts.pop() || 'Plus'
+    const mods = parts.map((part) => {
+      const name = part.toLowerCase()
+      if (name === 'cmdorctrl' || name === 'commandorcontrol') return platform === 'darwin' ? 'cmd' : 'ctrl'
+      if (name === 'command' || name === 'cmd' || name === 'super' || name === 'meta') return 'cmd'
+      if (name === 'control') return 'ctrl'
+      if (name === 'option') return 'alt'
+      return name
+    })
+    return `${[...new Set(mods)].sort().join('+')}|${last.toLowerCase()}`
+  }
+  return key(a) !== '' && key(a) === key(b)
+}
+
+/**
+ * The overrides with a key given to a command — taken away from any other
+ * command that had it, which is left with none (`AppModel.setShortcut`: a
+ * key belongs to one command). Back to its own key is no override at all.
+ */
+export function assignShortcut(using: ShortcutOverrides, command: string, accelerator: string, platform: string): ShortcutOverrides {
+  const entry = shortcut(command)
+  if (!entry) return using
+  const next: ShortcutOverrides = { ...using }
+  if (accelerator) {
+    for (const other of SHORTCUTS) {
+      if (other.command === command) continue
+      if (sameAccelerator(acceleratorFor(other, platform, next), accelerator, platform)) next[other.command] = ''
+    }
+  }
+  if (accelerator && sameAccelerator(accelerator, defaultAcceleratorFor(entry, platform), platform)) delete next[command]
+  else next[command] = accelerator
+  return next
+}
+
+const CODE_KEYS: Record<string, string> = {
+  BracketLeft: '[', BracketRight: ']', Backslash: '\\', Comma: ',', Period: '.', Slash: '/', Minus: '-',
+  Equal: '=', Semicolon: ';', Quote: "'", Backquote: '`', Space: 'Space', Enter: 'Enter', NumpadEnter: 'Enter',
+  Tab: 'Tab', Backspace: 'Backspace', Delete: 'Delete', Escape: 'Escape', Home: 'Home', End: 'End',
+  PageUp: 'PageUp', PageDown: 'PageDown', ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right',
+  NumpadAdd: 'Plus', NumpadSubtract: '-',
+}
+
+/**
+ * The accelerator a key press spells — `CmdOrCtrl+Shift+K` — by the key's
+ * place on the keyboard (`code`), so ⇧ does not turn `K` into «K» or `1`
+ * into «!». Null for a press of modifiers alone, and for a plain key with no
+ * modifier (a letter alone would take the letter away from every field),
+ * but for the function keys.
+ */
+export function acceleratorFromEvent(
+  event: { key: string; code?: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean },
+  platform: string,
+): string | null {
+  const code = event.code ?? ''
+  let key = ''
+  if (/^Key[A-Z]$/.test(code)) key = code.slice(3)
+  else if (/^Digit[0-9]$/.test(code)) key = code.slice(5)
+  else if (/^Numpad[0-9]$/.test(code)) key = code.slice(6)
+  else if (/^F([1-9]|1[0-9]|2[0-4])$/.test(code)) key = code
+  else if (CODE_KEYS[code]) key = CODE_KEYS[code]
+  else if (event.key.length === 1 && !/\s/.test(event.key)) key = event.key.toUpperCase()
+  if (!key || ['Shift', 'Control', 'Alt', 'Meta'].includes(event.key)) return null
+  const mods: string[] = []
+  const mac = platform === 'darwin'
+  if (mac ? event.metaKey : event.ctrlKey) mods.push('CmdOrCtrl')
+  if (mac && event.ctrlKey) mods.push('Ctrl')
+  if (event.altKey) mods.push('Alt')
+  if (event.shiftKey) mods.push('Shift')
+  const functionKey = /^F\d+$/.test(key)
+  if (mods.length === 0 && !functionKey) return null
+  // Shift alone with a letter types a capital: not a shortcut either.
+  if (mods.length === 1 && mods[0] === 'Shift' && !functionKey) return null
+  return [...mods, key === '+' ? 'Plus' : key].join('+')
+}
+
+/** Whether a key press is the key a command has now — for the keys the window catches itself. */
+export function eventIs(
+  command: string,
+  event: { key: string; code?: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean },
+  platform: string,
+): boolean {
+  const entry = shortcut(command)
+  const pressed = acceleratorFromEvent(event, platform)
+  return Boolean(entry && pressed && sameAccelerator(acceleratorFor(entry, platform), pressed, platform))
+}
+
+/**
+ * The commands a search on the Shortcuts page finds: by name in either
+ * language's words, or — when a key was pressed in the field — the one
+ * command on that key (`shortcutSearchBar`).
+ */
+export function matchingShortcuts(query: string, pressed: string | null, platform: string): Shortcut[] {
+  if (pressed) return SHORTCUTS.filter((entry) => sameAccelerator(acceleratorFor(entry, platform), pressed, platform))
+  const terms = query.trim().toLowerCase()
+  if (!terms) return SHORTCUTS
+  return SHORTCUTS.filter((entry) => entry.title().toLowerCase().includes(terms) || entry.command.toLowerCase().includes(terms)
+    || displayAccelerator(acceleratorFor(entry, platform), platform).toLowerCase().includes(terms))
 }
 
 export function shortcut(command: string): Shortcut | undefined {
@@ -104,6 +258,7 @@ const KEY_NAMES: Record<string, string> = {
  * order ⌃⌥⇧⌘ the Mac always uses, and `Ctrl+Shift+E` elsewhere.
  */
 export function displayAccelerator(accelerator: string, platform: string): string {
+  if (!accelerator) return ''
   const parts = accelerator.split('+')
   // `CmdOrCtrl++` would split into an empty key; `Plus` is how it is written.
   const key = parts.pop() ?? ''

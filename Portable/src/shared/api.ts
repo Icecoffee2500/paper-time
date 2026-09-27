@@ -122,7 +122,8 @@ export interface Requests {
   'collections:save': { args: { collections: unknown[]; root?: string }; result: null }
   /** The sheet's «Save…»: the text it previewed, where the person says. */
   'bibtex:save': { args: { text: string }; result: { path: string } | { cancelled: true } }
-  'app:about': { args: void; result: { version: string } }
+  /** The version, and whether a probe asked for What's New (`--papertime-whats-new=1`, never marked seen). */
+  'app:about': { args: void; result: { version: string; whatsNew?: boolean } }
   /** The words inside the papers: read ahead, search (answers come as events), stop, and — for a probe — what it cost. */
   'text:warm': { args: { ids: string[] }; result: void }
   'text:warm-cancel': { args: void; result: void }

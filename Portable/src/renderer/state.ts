@@ -72,7 +72,7 @@ export interface Paper {
 export const WINDOW_SETTINGS = [
   'libraryRoot', 'panes', 'columns', 'inspectorTab', 'sort', 'appearance', 'language', 'pageTint',
   'pageTintColor', 'pageLayout', 'selectedPaperID', 'latexShortcuts', 'semanticSearch', 'listSubtitle',
-  'bibtexProtectCase', 'bibtexPreprintStyle', 'bibtexIncludeUnverified', 'sketchStyle', 'inkPresets',
+  'bibtexProtectCase', 'bibtexPreprintStyle', 'bibtexIncludeUnverified', 'sketchStyle', 'inkPresets', 'shortcuts', 'seenReleaseNotesVersion',
 ] as const satisfies readonly (keyof AppSettings)[]
 
 export type Settings = Pick<AppSettings, (typeof WINDOW_SETTINGS)[number]>
@@ -271,6 +271,8 @@ export const store: Store = {
     bibtexIncludeUnverified: false,
     sketchStyle: null,
     inkPresets: null,
+    shortcuts: null,
+    seenReleaseNotesVersion: null,
   },
   windowState: { maximized: false, fullScreen: false, focused: true },
   trail: [],
