@@ -16,6 +16,7 @@
  * column and twice the pixels of the screen, a few hundred megabytes of
  * canvases nobody would see again.
  */
+import type { PageCharacter } from '../../shared/mathReader/reader.js'
 import type { Box, TextRun } from '../../shared/strokeSnap.js'
 import { clear, el } from '../dom.js'
 import { TextLayer, type PDFPageProxy } from '../pdf.js'
@@ -474,6 +475,38 @@ export class PageView {
       width: (line.right - line.left) / box.width,
       height: (line.bottom - line.top) / box.height,
     }))
+  }
+
+  /**
+   * The page's characters where a selection is, each with its box in the
+   * page's own coordinates and its place in `layerText()` — what the Mac asks
+   * PDFKit for (`page.characterBounds`), for the glyphs MathReader cannot
+   * read on its own and the words it borrows the spelling of.
+   */
+  characterBoxes(reach: Box): PageCharacter[] {
+    const out: PageCharacter[] = []
+    const range = document.createRange()
+    const toPage = (rect: DOMRect): Box => {
+      const a = this.toPageFromClient(rect.left, rect.top)
+      const b = this.toPageFromClient(rect.right, rect.bottom)
+      return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(b.x - a.x), height: Math.abs(b.y - a.y) }
+    }
+    const within = (r: Box) => r.x < reach.x + reach.width && r.x + r.width > reach.x && r.y < reach.y + reach.height && r.y + r.height > reach.y
+    for (let index = 0; index < this.textDivs.length; index += 1) {
+      const div = this.textDivs[index]
+      const node = div.firstChild
+      if (!node || !div.isConnected || !within(toPage(div.getBoundingClientRect()))) continue
+      const text = this.textItems[index]?.str ?? ''
+      let offset = 0
+      for (const character of text) {
+        range.setStart(node, offset)
+        range.setEnd(node, offset + character.length)
+        const rect = range.getBoundingClientRect()
+        if (rect.width > 0 && rect.height > 0) out.push({ index: this.textStarts[index] + offset, rect: toPage(rect), character })
+        offset += character.length
+      }
+    }
+    return out
   }
 
   /**

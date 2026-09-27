@@ -13,6 +13,8 @@ import { openEditor as openNoteEditor, openNoteInTab } from '../ui/notesTab.js'
 import { toast } from '../ui/toolbar.js'
 import { L } from '../../shared/lang.js'
 import { passageText, quotationSource } from '../../shared/noteQuote.js'
+import { latex, structured } from '../../shared/mathReader/reader.js'
+import { copyText } from '../ui/clipboard.js'
 
 /** The inspector, open on the Notes tab of the paper in front. */
 export function showNoteTab() {
@@ -97,15 +99,20 @@ function saidInMainWindow() {
  * with a link back to its page, and the note comes forward — the Markdown
  * the Mac writes, so either build's editor reads it as its own.
  */
-export function linkSelectionToNote() {
+export async function linkSelectionToNote() {
   const reader = focused()
   const anchor = reader?.selectionAnchor()
   if (!reader || !anchor || !store.selectedID) {
     toast(L('먼저 글을 골라주세요.', 'Select some text first.'))
     return
   }
+  // The page's shape, kept — a section title as a title, a displayed
+  // equation on its own line with its number, the bold lead-in still bold —
+  // read the way the Mac reads it (`MathReader.structured`); the words alone
+  // when the page could not be read that way.
+  const shaped = structured(await reader.selectionForMath().catch(() => []))
   const block = quotationSource(
-    { pageIndex: anchor.pageIndex, rect: anchor.rect, quotedText: passageText(anchor.text) },
+    { pageIndex: anchor.pageIndex, rect: anchor.rect, quotedText: shaped.length > 0 ? shaped.join('\n') : passageText(anchor.text) },
     (page) => L(`${page}쪽`, `p. ${page}`),
   )
   showNoteTab()
@@ -117,6 +124,23 @@ export function linkSelectionToNote() {
   }
   if (!shell.inspector.insertIntoNote(block)) return
   reader.hideMarkBar()
+}
+
+/**
+ * Ultracopy: the selection copied with its formulas as LaTeX, read off what
+ * the page draws (`MathReader.latex`) — so a formula survives the trip into
+ * a note or a paper instead of arriving as «p» with its subscript missing.
+ */
+export async function ultracopySelection() {
+  const reader = focused()
+  const pages = reader ? await reader.selectionForMath().catch(() => []) : []
+  if (!reader || pages.length === 0) {
+    toast(L('먼저 글을 골라주세요.', 'Select some text first.'))
+    return
+  }
+  const text = latex(pages)
+  if (!text) return
+  if (await copyText(text)) toast(L('수식까지 복사했어요.', 'Copied with formulas.'))
 }
 
 /**

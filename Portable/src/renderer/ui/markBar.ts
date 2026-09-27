@@ -46,6 +46,8 @@ export interface MarkBarHost {
   removeMark: (pageIndex: number, id: string) => void
   markClientBox: (page: PageView, mark: Mark) => DOMRect | null
   toast: (message: string) => void
+  /** Ultracopy: the selection with its formulas as LaTeX. */
+  ultracopy?: () => void
   markShown?: (id: string) => void
 }
 
@@ -249,6 +251,10 @@ export class MarkBar {
     bar.append(el('span', { class: 'mark-divider' }))
     bar.append(this.button('mark-action', L('노트 더하기', 'Add Note'), icon('square.and.pencil'), () => this.compose()))
     bar.append(this.button('mark-action', L('복사', 'Copy'), icon('doc.on.doc'), () => void this.copySelection()))
+    if (this.host.ultracopy) {
+      const ultracopy = this.host.ultracopy
+      bar.append(this.button('mark-action', withKey(L('Ultracopy — 수식은 LaTeX로 복사', 'Ultracopy — copy with formulas as LaTeX'), 'ultracopy', platform), icon('function'), () => ultracopy()))
+    }
   }
 
   /** What a right-click on a selection offers (`MarkupCapablePDFView.menu(for:)`). */
@@ -267,6 +273,7 @@ export class MarkBar {
       { label: L('노트 더하기…', 'Add Note…'), icon: 'square.and.pencil', action: () => this.compose() },
       { separator: true },
       { label: L('복사', 'Copy'), icon: 'doc.on.doc', action: () => void this.copySelection() },
+      ...(this.host.ultracopy ? [{ label: 'Ultracopy', icon: 'function', key: 'ultracopy', action: () => this.host.ultracopy?.() }] : []),
     ]
   }
 

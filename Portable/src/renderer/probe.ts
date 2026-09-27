@@ -6,6 +6,7 @@
  * Put up only in a probe run — a window somebody reads in has no use for a
  * handle on its store.
  */
+import { latex as mathLatex, structured as mathStructured } from '../shared/mathReader/reader.js'
 import { layoutPanes } from './layout.js'
 import { flags } from './bridge.js'
 import { store } from './state.js'
@@ -72,6 +73,14 @@ export function installProbeSurface() {
       split: () => store.split,
       trail: () => ({ trail: [...store.trail], index: store.trailIndex }),
       readings: () => readings,
+    },
+    // What Ultracopy and ⌘L would make of the selection — read, not copied:
+    // a probe never writes the person's clipboard.
+    __papertimeMath: {
+      read: async () => {
+        const pages = (await focused()?.selectionForMath()) ?? []
+        return { pages: pages.length, glyphs: pages.map((page) => page.glyphs.length), latex: mathLatex(pages), structured: mathStructured(pages) }
+      },
     },
     // The slip-box as the window holds it, and the ways into a note.
     __papertimeNotes: {

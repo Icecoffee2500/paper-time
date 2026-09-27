@@ -448,7 +448,7 @@ enum MathReader {
     @MainActor
     private static func characters(of page: PDFPage) -> [PageCharacter] {
         let key = ObjectIdentifier(page)
-        if let known = characterBoxes[key] { return known }
+        if let known = characterBoxes[key], known.page === page { return known.value }
         let text = Array(page.string ?? "")
         let offset = page.bounds(for: .cropBox).origin
         var result: [PageCharacter] = []
@@ -460,14 +460,21 @@ enum MathReader {
                                         character: text[index]))
         }
         if characterBoxes.count > 12 { characterBoxes.removeAll() }
-        characterBoxes[key] = result
+        characterBoxes[key] = (page, result)
         return result
     }
 
     /// Asking PDFKit where each character sits means asking it once per
     /// character, which is most of the cost of a copy. A page is asked once.
     @MainActor
-    private static var characterBoxes: [ObjectIdentifier: [PageCharacter]] = [:]
+    ///
+    /// Each entry holds the page it answers for. An `ObjectIdentifier` is an
+    /// address, and a page that has gone away leaves its address to the next
+    /// one allocated there — a page of the next paper opened — which then
+    /// read the old paper's layout: quoting a VAE equation off a page of
+    /// another paper entirely. Holding the page keeps the address its own,
+    /// and the check says so.
+    private static var characterBoxes: [ObjectIdentifier: (page: PDFPage, value: [PageCharacter])] = [:]
 
     /// What PDFKit read at each point of the page, for the glyphs this cannot
     /// read on its own: ligatures, a font with an encoding of its own making,
@@ -1091,34 +1098,34 @@ enum MathReader {
     }
 
     @MainActor
-    private static var layouts: [ObjectIdentifier: Layout] = [:]
+    private static var layouts: [ObjectIdentifier: (page: PDFPage, value: Layout)] = [:]
 
     @MainActor
     private static func layout(of page: PDFPage, scanned: PDFContentScanner) -> Layout {
         let key = ObjectIdentifier(page)
-        if let known = layouts[key] { return known }
+        if let known = layouts[key], known.page === page { return known.value }
         let grouped = blocks(of: rows(of: scanned.glyphs), body: size(of: scanned.glyphs))
         let laid = Layout(blocks: grouped.map {
             Layout.Block(rows: $0, isFormula: $0.count > 1 || isDisplayRow($0[0]))
         })
         if layouts.count > 12 { layouts.removeAll() }
-        layouts[key] = laid
+        layouts[key] = (page, laid)
         return laid
     }
 
     /// Reading a page costs something, and a selection usually covers one page
     /// several times over, so each page is read once.
     @MainActor
-    private static var scans: [ObjectIdentifier: PDFContentScanner] = [:]
+    private static var scans: [ObjectIdentifier: (page: PDFPage, value: PDFContentScanner)] = [:]
 
     @MainActor
     private static func scan(_ page: PDFPage) -> PDFContentScanner? {
         let key = ObjectIdentifier(page)
-        if let scanned = scans[key] { return scanned }
+        if let scanned = scans[key], scanned.page === page { return scanned.value }
         guard let reference = page.pageRef else { return nil }
         let scanned = PDFContentScanner.scan(page: reference)
         if scans.count > 12 { scans.removeAll(); layouts.removeAll(); characterBoxes.removeAll() }
-        scans[key] = scanned
+        scans[key] = (page, scanned)
         return scanned
     }
 

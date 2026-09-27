@@ -1,4 +1,6 @@
 /** One paper: its bytes, its record, its name, its own window. */
+import fsp from 'node:fs/promises'
+import { MathScanner } from '../mathScanner.js'
 import { shell } from 'electron'
 import path from 'node:path'
 import { diagnose, headBytes, headLine } from '../../shared/pdfLock.js'
@@ -6,10 +8,35 @@ import { rightsLock, stripOwnedForDisplay } from '../pdfwrite.js'
 import { readWhole } from '../pdfBytes.js'
 import type { Context, Handlers } from './context.js'
 
+
+/** The scanned papers, by id, with what the file was when it was read. */
+const scanners = new Map<string, { stamp: string; scanner: MathScanner }>()
+
 export function paperHandlers(ctx: Context): Partial<Handlers> {
   const { libraries, records, windows } = ctx
 
   return {
+    // The page as the Mac's scanner reads it, for the mathematics in a
+    // selection. The scanner keeps what it read while the file is the same.
+    'math:page': async ({ id, pageIndex }) => {
+      try {
+        const row = await (await libraries.ownerOf(id))?.paper(id)
+        if (!row?.file || !row.exists) return null
+        const stat = await fsp.stat(row.file)
+        const stamp = `${row.file}|${stat.size}|${stat.mtimeMs}`
+        let kept = scanners.get(id)
+        if (!kept || kept.stamp !== stamp) {
+          kept = { stamp, scanner: new MathScanner(new Uint8Array(await readWhole(row.file))) }
+          scanners.set(id, kept)
+          // A few papers at a time: a page's glyphs are what a selection asks about.
+          while (scanners.size > 4) scanners.delete(scanners.keys().next().value!)
+        }
+        return kept.scanner.page(pageIndex)
+      } catch {
+        return null
+      }
+    },
+
     'paper:bytes': async ({ id }) => {
       // Nothing in here throws. A rejected request reaches the window as an
       // unhandled rejection, which is a blank page with nothing said on it —
