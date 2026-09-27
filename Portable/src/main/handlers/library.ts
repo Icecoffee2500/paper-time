@@ -13,6 +13,7 @@ import { folderRefusal } from '../libraries.js'
 import { samePath } from '../../shared/paths.js'
 import { collectionsByFolder } from '../vocabulary.js'
 import { isFile, pageCount } from './shared.js'
+import { isFolder, recentLibraries, suggestedFolders } from '../suggestions.js'
 import type { Context, Handlers } from './context.js'
 
 export function libraryHandlers(ctx: Context): Partial<Handlers> {
@@ -36,9 +37,10 @@ export function libraryHandlers(ctx: Context): Partial<Handlers> {
       const all = await Promise.all(libraries.all().map(async (one) => ({ one, files: await one.looseFiles() })))
       let remaining = all.reduce((sum, { files }) => sum + files.length, 0)
       for (const { one, files } of all) {
+        const papers = (await one.read()).papers
         for (const file of files) {
           try {
-            await one.importPDF(file, await pageCount(ctx.pageCounter, file))
+            await one.importPDF(file, await pageCount(ctx.pageCounter, file), { papers })
           } catch {
             refused.push(path.basename(file))
           }
@@ -55,7 +57,7 @@ export function libraryHandlers(ctx: Context): Partial<Handlers> {
   return {
     // The effective root, not the remembered one: a probe run opens a folder
     // of its own and the window must be told about that one.
-    'settings:get': () => ({ ...settings(), libraryRoot: libraries.first?.root ?? settings().libraryRoot }),
+    'settings:get': () => ({ ...settings(), libraryRoot: libraries.first?.root ?? (ctx.isProbe ? ctx.probeLibrary : settings().libraryRoot) }),
 
     'settings:set': (asked, sender) => {
       const patch = acceptedPatch(asked as Record<string, unknown>)
@@ -94,7 +96,27 @@ export function libraryHandlers(ctx: Context): Partial<Handlers> {
       return ctx.openLibrary(root)
     },
 
-    'library:reload': () => ctx.snapshot(),
+    'library:reload': async () => {
+      // A library chosen before and not there now is a wait, not an error:
+      // the window says which folder, and offers to try again or choose
+      // another (the Mac's `LibraryUnavailableView`).
+      // A probe's own folder, never the person's.
+      const saved = ctx.isProbe ? ctx.probeLibrary : settings().libraryRoot
+      if (!libraries.first && saved && !isFolder(saved)) {
+        return {
+          error: say(
+            '라이브러리 폴더에 닿지 못했어요. 외장 디스크나 클라우드 드라이브라면 아직 연결되지 않았을 수 있어요.',
+            "Paper Time can't reach its library folder. If it's on an external disk or a cloud drive, it may not be connected yet.",
+          ),
+          unavailable: saved,
+        }
+      }
+      return ctx.snapshot()
+    },
+
+    'path:isFolder': ({ path: target }) => typeof target === 'string' && isFolder(target),
+
+    'library:suggestions': () => ({ suggested: suggestedFolders(), recent: recentLibraries(libraries.roots) }),
 
     'library:import': async ({ paths, root }, sender) => {
       // Into the folder being looked at, as on the Mac (`importDestination`):
@@ -119,14 +141,24 @@ export function libraryHandlers(ctx: Context): Partial<Handlers> {
       const pdfs = chosen.filter((file) => /\.pdf$/i.test(file) && isFile(file))
       // Through the folder sync's queue: it is reading the folder this
       // writes into, and two passes over one file are two records for it.
+      // One file that will not be read does not take the rest down with it,
+      // and the folder is read once for the whole batch.
+      const report = { added: 0, duplicates: 0, refused: [] as string[] }
       await sync.run(async () => {
+        const papers = (await destination.read()).papers
         for (const file of pdfs) {
-          await destination.importPDF(file, await pageCount(ctx.pageCounter, file))
+          try {
+            const { outcome } = await destination.importPDF(file, await pageCount(ctx.pageCounter, file), { papers })
+            if (outcome === 'imported') report.added += 1
+            else if (outcome === 'duplicate') report.duplicates += 1
+          } catch {
+            report.refused.push(path.basename(file))
+          }
         }
       })
       const snapshot = await ctx.snapshot()
       windows.sendExcept(sender, 'library:changed')
-      return snapshot
+      return 'error' in snapshot ? snapshot : { ...snapshot, imported: report }
     },
 
     'library:adoptLoose': (_args, sender) => {

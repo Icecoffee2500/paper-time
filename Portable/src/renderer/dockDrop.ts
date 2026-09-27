@@ -2,11 +2,12 @@
  * Dropping onto the window: a paper onto a half or a quarter of the page
  * area, and PDFs from the desktop into the library.
  */
-import { droppedPaths } from './bridge.js'
+import { call, droppedPaths } from './bridge.js'
 import { on } from './dom.js'
 import { dockZone, pageArea } from './pageArea.js'
 import { dockPaper } from './actions/openPapers.js'
-import { addPapers } from './library.js'
+import { addLibraryFolder, addPapers, openLibraryAt } from './library.js'
+import { store } from './state.js'
 import { closeOpenPapers } from './ui/openPapers.js'
 import { toast } from './ui/toolbar.js'
 import { L } from '../shared/lang.js'
@@ -82,6 +83,24 @@ export function installFileDrop() {
     event.preventDefault()
     const dropped = droppedPaths(event.dataTransfer?.files)
     const files = dropped.filter((path) => path.toLowerCase().endsWith('.pdf'))
+    if (files.length === 0 && dropped.length > 0) {
+      // A folder dropped on the window is a library: the first one, when
+      // there is none yet, or one more beside the ones open — the Mac takes
+      // a folder dropped on its icon the same way.
+      void (async () => {
+        const folders: string[] = []
+        for (const one of dropped) if (await call('path:isFolder', { path: one })) folders.push(one)
+        if (folders.length === 0) {
+          toast(L('PDF나 폴더만 더할 수 있어요.', 'Only PDFs and folders can be added to the library.'))
+          return
+        }
+        for (const folder of folders) {
+          if (!store.root) await openLibraryAt(folder)
+          else await addLibraryFolder(folder)
+        }
+      })()
+      return
+    }
     if (files.length === 0) {
       // Something was dropped and none of it was a paper: say so rather than
       // let the window look broken. A drop that carried nothing at all — a

@@ -36,6 +36,8 @@ export interface Context {
   pageCounter: PageCounter
   /** Whether this run is a probe, which reads a folder of its own and remembers nothing. */
   isProbe: boolean
+  /** The folder a probe was told to open, or null. */
+  probeLibrary: string | null
   /** Reads the folders and says what is in them; `refused` is one press of «add the loose PDFs». */
   snapshot: (refused?: string[]) => Promise<LibrarySnapshot | { error: string }>
   /** Opens the first folder (and the ones remembered beside it) and re-arms the watchers. */

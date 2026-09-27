@@ -4,7 +4,7 @@
  */
 import { call } from './bridge.js'
 import { paper as findPaper, store } from './state.js'
-import { chooseLibrary, reload } from './library.js'
+import { reload } from './library.js'
 import { kindEntries } from './actions/paper.js'
 import { runCommand } from './commands.js'
 import { openSettings, setLayout, setSettings, setSort } from './settingsController.js'
@@ -20,7 +20,8 @@ export function showMoreMenu(anchor: Element) {
     // The Mac's word for the same errand: fetch what the folders have and
     // tell the papers to look at their files again.
     { label: L('지금 맞추기', 'Sync Now'), icon: 'arrow.clockwise', action: () => void reload() },
-    { label: L('라이브러리 폴더 고르기…', 'Choose Library Folder…'), icon: 'folder', action: () => void chooseLibrary() },
+    // No «Choose Library Folder…» here, as on the Mac: it is in the Library
+    // menu, the settings sheet and the first-run screen.
     { separator: true },
     // A picker is a submenu, as the Mac's pickers in a menu are: the whole
     // list of choices inline made this menu taller than a small window.

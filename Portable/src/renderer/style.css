@@ -3804,3 +3804,100 @@ body[data-solo='true'] .reader-header button {
 
 .slipbox-tag-count { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .slipbox-tag[aria-pressed='true'] .slipbox-tag-count { color: rgba(255, 255, 255, .75); }
+
+/* ═══════════════════ the first-run and unavailable screens ═════════════════
+   The whole window, centred: the Mac's LibrarySetupView and
+   LibraryUnavailableView. */
+.setup-screen {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-y: auto;
+  padding: 40px 16px;
+}
+.setup-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  max-width: 460px;
+  width: 100%;
+  text-align: center;
+}
+.setup-hero svg { width: 56px; height: 56px; color: var(--accent); }
+.setup-hero.muted svg { color: var(--text-tertiary); }
+.setup-card h1 { margin: 0; font-size: 22px; font-weight: 700; color: var(--text); }
+.setup-lede { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--text-secondary); }
+.setup-foot { margin: 0; font-size: 11.5px; color: var(--text-secondary); }
+.setup-path {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  user-select: text;
+  overflow-wrap: anywhere;
+}
+.setup-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.setup-choose { padding: 8px 20px; font-size: 14px; border-radius: 999px; }
+.setup-suggestions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+}
+.setup-suggestions:empty { display: none; }
+.setup-heading { font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-top: 4px; }
+.setup-folder {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--hover);
+  text-align: left;
+  transition: background-color var(--motion-tap) var(--ease), transform var(--motion-tap) var(--ease);
+}
+.setup-folder:hover { background: var(--pressed); }
+.setup-folder:active { transform: scale(0.98); }
+.setup-folder-icon svg { width: 17px; height: 17px; color: var(--text-secondary); display: block; }
+.setup-folder-lines { display: flex; flex-direction: column; min-width: 0; }
+.setup-folder-name { font-size: 13px; color: var(--text); }
+.setup-folder-caption {
+  font-size: 11px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A path under a settings row, to read and copy. */
+.set-mono { font-family: var(--mono); font-size: 11px; user-select: text; overflow-wrap: anywhere; }
+.set-buttons { gap: 8px; flex-wrap: wrap; justify-content: flex-start; }
+.set-provider { display: inline-flex; align-items: center; gap: 6px; }
+.set-provider svg, .set-warning svg { width: 14px; height: 14px; display: block; }
+.set-warning { display: inline-flex; margin-right: 5px; color: var(--shelf-favorites); vertical-align: -2px; }
+
+/* How to use the exported file in Overleaf, folded. */
+.export-overleaf { margin-top: 10px; font-size: 12.5px; color: var(--text); }
+.export-overleaf summary { cursor: default; color: var(--text-secondary); font-weight: 500; }
+.export-overleaf ol { margin: 8px 0 4px; padding-left: 20px; line-height: 1.55; }
+.export-overleaf .fine { margin: 4px 0 0; font-size: 11.5px; color: var(--text-secondary); }
+
+/* What a report carries, folded, and the line promising what it does not. */
+.fb-details { margin: 10px 0 4px; font-size: 12.5px; }
+.fb-details summary { color: var(--text-secondary); cursor: default; }
+.fb-rows { display: grid; grid-template-columns: 150px 1fr; gap: 4px 8px; margin-top: 8px; font-size: 11.5px; }
+.fb-row-label { color: var(--text-secondary); }
+.fb-row-value { color: var(--text); user-select: text; overflow-wrap: anywhere; }
+.fb-promise { margin: 8px 0 0; font-size: 11.5px; font-weight: 500; }
+.fb-crash {
+  margin: 0 20px 8px;
+  padding: 10px 12px;
+  border-radius: calc(var(--radius-popover) - 4px);
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+  font-size: 12.5px;
+  line-height: 1.45;
+}

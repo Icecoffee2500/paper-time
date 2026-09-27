@@ -70,7 +70,7 @@ export interface Paper {
 export const WINDOW_SETTINGS = [
   'libraryRoot', 'panes', 'columns', 'inspectorTab', 'sort', 'appearance', 'language', 'pageTint',
   'pageTintColor', 'pageLayout', 'selectedPaperID', 'latexShortcuts', 'semanticSearch', 'listSubtitle',
-  'bibtexProtectCase', 'sketchStyle',
+  'bibtexProtectCase', 'bibtexPreprintStyle', 'bibtexIncludeUnverified', 'sketchStyle',
 ] as const satisfies readonly (keyof AppSettings)[]
 
 export type Settings = Pick<AppSettings, (typeof WINDOW_SETTINGS)[number]>
@@ -116,6 +116,9 @@ export interface Store {
   /** Records in the folders this read could not get at, one sentence each. */
   unreadable: string[]
   root: string | null
+  /** The library in the settings that is not there now, and why — the
+   *  window shows it by name instead of the columns. */
+  unavailable: { root: string; message: string } | null
   /** Every folder being read, the first one first. */
   roots: string[]
   papers: Paper[]
@@ -223,6 +226,7 @@ export const store: Store = {
   error: null,
   unreadable: [],
   root: null,
+  unavailable: null,
   roots: [],
   papers: [],
   collections: [],
@@ -258,6 +262,8 @@ export const store: Store = {
     semanticSearch: true,
     listSubtitle: 'authors,year,venue',
     bibtexProtectCase: true,
+    bibtexPreprintStyle: 'eprint',
+    bibtexIncludeUnverified: false,
     sketchStyle: null,
   },
   windowState: { maximized: false, fullScreen: false, focused: true },
@@ -467,6 +473,7 @@ export function adopt(snapshot: LibrarySnapshot) {
   store.refused = snapshot.refused ?? []
   store.ready = true
   store.error = null
+  store.unavailable = null
 }
 
 function toPaper(row: PaperRowDTO): Paper {

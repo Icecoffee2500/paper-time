@@ -53,7 +53,14 @@ export interface Requests {
   'library:choose': { args: void; result: string | null }
   /** `refused`: the folder was not opened — nothing changed, and `error` says why in the app's voice. */
   'library:open': { args: { root: string }; result: LibrarySnapshot | { error: string; refused?: true } }
-  'library:reload': { args: void; result: LibrarySnapshot | { error: string } }
+  /** `unavailable`: the folder in the settings is not there — a disk not
+   *  plugged in, a cloud drive not mounted yet — and which folder it was. */
+  'library:reload': { args: void; result: LibrarySnapshot | { error: string; unavailable?: string } }
+  /** Folders this machine already syncs, for the first-run screen, and the
+   *  libraries opened before that are still there. */
+  /** Whether a dropped path is a folder — one to open as a library. */
+  'path:isFolder': { args: { path: string }; result: boolean }
+  'library:suggestions': { args: void; result: { suggested: { path: string; provider: string }[]; recent: string[] } }
   /** No paths: the desktop's picker. `root`: the library to add them to. */
   'library:import': { args: { paths?: string[]; root?: string }; result: LibrarySnapshot | { error: string } }
   /** No root: the desktop's picker. */
@@ -129,6 +136,9 @@ export interface Requests {
   'theme:accent': { args: void; result: string | null }
   /** The window's own page, as a PNG data URL, for the report sheet. */
   'feedback:capture': { args: void; result: string | null }
+  /** Exactly what a report carries beside its words, as rows the sheet
+   *  lists — and whether the last run ended in a crash. */
+  'feedback:diagnostics': { args: void; result: { rows: [string, string][]; crashed: boolean } }
   'feedback:send': {
     args: {
       kind: 'bug' | 'wish'
@@ -159,6 +169,12 @@ export interface Requests {
   'notes:chooseFolder': { args: void; result: { moved: number; kept: number; notesFolder: NotesFolderDTO } | { error: string } | null }
   /** The way back: the loose notes return to the app's own folder. */
   'notes:useAppFolder': { args: void; result: { moved: number; kept: number; notesFolder: NotesFolderDTO } }
+  /** The chosen folder looked for again — a disk plugged back in — and the
+   *  notes written meanwhile carried into it; null while it is still away. */
+  'notes:reconnect': { args: void; result: { moved: number; kept: number; notesFolder: NotesFolderDTO } | null }
+  /** The notes' folder in the desktop's file manager: the chosen one, or the
+   *  app's own while the chosen one is away. */
+  'notes:reveal': { args: void; result: void }
   /** For a probe: builds now and waits. */
   'semantic:build': { args: void; result: { status: SemanticStatusDTO; stats: unknown; unread: string[] } }
 }
@@ -268,6 +284,9 @@ export interface PaperRowDTO {
 }
 
 export interface LibrarySnapshot {
+  /** What an «Add PDFs» did, when this snapshot answers one: new papers,
+   *  PDFs the library already had, and the files that would not be read. */
+  imported?: { added: number; duplicates: number; refused: string[] }
   root: string
   /** Every folder being read, the first one first. */
   roots: string[]

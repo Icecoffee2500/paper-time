@@ -361,8 +361,32 @@ export async function showFeedback() {
     return out.toDataURL('image/png')
   }
 
+  // Exactly what goes with the words, folded — the Mac's «함께 보내는 것»:
+  // the same rows the main process sends, and the promise under them.
+  const details = el('details', { class: 'fb-details' })
+  const crash = el('div', { class: 'fb-crash', hidden: '' })
+  void call('feedback:diagnostics').then(({ rows, crashed }) => {
+    const list = el('div', { class: 'fb-rows' })
+    for (const [label, value] of rows) {
+      list.append(el('span', { class: 'fb-row-label', text: label }), el('span', { class: 'fb-row-value', text: value }))
+    }
+    details.append(
+      el('summary', { text: L(`함께 보내는 것 ${rows.length}가지`, `What gets sent with this — ${rows.length} things`) }),
+      list,
+      el('p', { class: 'fb-promise', text: L('논문 제목도, 파일 경로도, 쓰신 글도 보내지 않아요.', 'No paper titles, no file paths, nothing you wrote.') }),
+    )
+    if (crashed) {
+      crash.hidden = false
+      crash.textContent = L(
+        '지난번에 앱이 갑자기 닫혔어요. 그때 뭘 하고 있었는지 한 줄만 알려주시면 고칠 수 있어요.',
+        'Paper Time quit unexpectedly last time. One line about what you were doing is enough to fix it.',
+      )
+    }
+  }).catch(() => undefined)
+
   sheet.append(
     el('h2', { class: 'fb-title', text: L('어떤 일이 있었나요?', 'What happened?') }),
+    crash,
     kinds,
     el('div', { class: 'fb-scroll' }, [
       shotRow,
@@ -382,6 +406,7 @@ export async function showFeedback() {
           'The name goes on the list. The address is used only to write back, and never appears there.',
         ),
       }),
+      details,
       el('p', { class: 'fb-hint', text: L('보내면 이렇게 올라가요', 'This is the row it becomes') }),
       preview,
     ]),

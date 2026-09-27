@@ -83,12 +83,26 @@ export function fullName(name: CSLName): string {
   return [name.given, surname(name)].filter(Boolean).join(' ').trim()
 }
 
+/** `CSLItem.fullTitle`: a subtitle alone when there is no title, and no
+ *  second colon after a title that already ends in one. */
 export function cslFullTitle(item: CSLItem | undefined): string | undefined {
-  if (!item?.title) return undefined
-  return item.subtitle ? `${item.title}: ${item.subtitle}` : item.title
+  if (!item) return undefined
+  if (!item.title) return item.subtitle || undefined
+  if (!item.subtitle) return item.title
+  return item.title.endsWith(':') ? `${item.title} ${item.subtitle}` : `${item.title}: ${item.subtitle}`
 }
 
 // MARK: - meta.json
+
+/** How sure a record is, ranked (`MetadataConfidence.sortRank`). */
+export function confidenceRank(confidence: string | undefined): number {
+  switch (confidence) {
+    case 'manual': return 3
+    case 'verified': return 2
+    case 'needsReview': return 1
+    default: return 0
+  }
+}
 
 export type Confidence = 'unparsed' | 'low' | 'medium' | 'high' | 'verified' | 'manual' | 'needsReview'
 
@@ -194,6 +208,21 @@ export class PaperMeta {
       updatedAt: isoTimestamp(this.updatedAt),
       updatedBy: this.updatedBy,
     }
+  }
+
+  /**
+   * Two versions of one `meta.json` written on two devices at once —
+   * `PaperMeta.resolve`: a hand-edited record beats an automatic one whatever
+   * the clock says, then the surer record, then the newer write, which wins
+   * outright (a tag it took off stays off).
+   */
+  static resolve(local: PaperMeta, remote: PaperMeta): PaperMeta {
+    if (local.confidence === 'manual' && remote.confidence !== 'manual') return local
+    if (remote.confidence === 'manual' && local.confidence !== 'manual') return remote
+    const left = confidenceRank(local.confidence)
+    const right = confidenceRank(remote.confidence)
+    if (left !== right) return left > right ? local : remote
+    return local.updatedAt.getTime() >= remote.updatedAt.getTime() ? local : remote
   }
 
   /** What the app treats this as: the answer, then the guess, then a paper. */

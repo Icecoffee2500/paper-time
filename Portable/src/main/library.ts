@@ -168,6 +168,9 @@ export async function writeJSON(file: string, value: unknown): Promise<void> {
 
 // MARK: - The library
 
+/** What became of one PDF asked for (`Library.importPDF`). */
+export type ImportOutcome = 'imported' | 'duplicate' | 'claimed'
+
 export class Library {
   constructor(public root: string) {}
 
@@ -413,12 +416,28 @@ export class Library {
    * were — a repair, or the app's own guess, is not the reader editing the
    * paper and must not make this machine the last to have changed it.
    */
-  async saveMeta(meta: PaperMeta, options: { stamp?: boolean } = {}): Promise<void> {
+  /**
+   * Writes the record. `baseline` is the version the change started from:
+   * when the file on disk is still that, this is written as it is; when
+   * another device wrote it in between, the two are resolved the Mac's way
+   * (`save(meta:in:baseline:)` → `PaperMeta.resolve`) — so a lookup finishing
+   * on one machine never writes over a title somebody corrected on another.
+   * Returns what was written.
+   */
+  async saveMeta(meta: PaperMeta, options: { stamp?: boolean; baseline?: Record<string, unknown> } = {}): Promise<PaperMeta> {
     if (options.stamp !== false) {
       meta.updatedAt = new Date()
       meta.updatedBy = deviceIdentity
     }
-    await writeJSON(L.metaPath(this.root, meta.id), meta.encode())
+    let written = meta
+    if (options.baseline) {
+      const onDisk = await readJSON(L.metaPath(this.root, meta.id)) as Record<string, unknown> | null
+      if (onDisk && JSON.stringify(onDisk) !== JSON.stringify(options.baseline)) {
+        written = PaperMeta.resolve(meta, new PaperMeta(onDisk))
+      }
+    }
+    await writeJSON(L.metaPath(this.root, written.id), written.encode())
+    return written
   }
 
   /**
@@ -449,7 +468,15 @@ export class Library {
    * duplicated, and a file whose bytes match a paper already here is not
    * imported twice — the same two rules the Mac importer follows.
    */
-  async importPDF(source: string, pageCount: number, known: { digest?: string } = {}): Promise<PaperRow | null> {
+  /**
+   * What became of one PDF asked for: a new record, the record that already
+   * speaks for that file (`claimed`), or one already holding the same bytes
+   * from outside (`duplicate`) — the count a drop of twenty files reports.
+   * `known.papers` is the batch's own list of records, read once and kept up
+   * to date as it goes: two hundred PDFs used to read the folder two hundred
+   * times, on a cloud drive.
+   */
+  async importPDF(source: string, pageCount: number, known: { digest?: string; papers?: PaperRow[] } = {}): Promise<{ row: PaperRow | null; outcome: ImportOutcome }> {
     // The caller may have read the file already — the folder sync reads it
     // whole to see whether it has all arrived — and need not read it again.
     const digest = known.digest ?? await sha256(source)
@@ -465,7 +492,7 @@ export class Library {
     // Refusing here would mean one record nobody can read stops a folder
     // accepting any paper at all, for as long as it stays unreadable — and a
     // duplicate row is something you can see and throw away.
-    const existing = (await this.read()).papers
+    const existing = known.papers ?? (await this.read()).papers
     // Folded as the disk folds names: `d:\papers\x.pdf` is inside `D:\Papers`.
     const inside = isInside(path.resolve(source), path.resolve(this.root))
 
@@ -480,7 +507,7 @@ export class Library {
     const asRecorded = (row: PaperRow) =>
       String((row.meta.file as RawRecord)?.relativePath ?? '').split('\\').join('/')
     const claiming = here === null ? undefined : existing.find((row) => samePath(asRecorded(row), here))
-    if (claiming) return claiming
+    if (claiming) return { row: claiming, outcome: 'claimed' }
 
     const already = existing.find(
       (row) => String((row.meta.file as RawRecord)?.importDigest ?? '') === digest,
@@ -497,7 +524,7 @@ export class Library {
     // it does is the one thing that is refused. The folder holds two copies;
     // the list shows two papers. The Mac has the same rule in
     // `importDocument`.
-    if (already?.exists && !inside) return already
+    if (already?.exists && !inside) return { row: already, outcome: 'duplicate' }
     if (already && !already.exists) {
       // The same bytes, and the record that holds them has lost its file. The
       // reader adding it again is answering the question the row is asking, so
@@ -518,7 +545,7 @@ export class Library {
       // reserve `claim` keeps for a spelling only this desktop can hold does
       // not apply.
       await this.saveMeta(new PaperMeta(already.meta))
-      return (await this.paper(already.id)) ?? already
+      return { row: (await this.paper(already.id)) ?? already, outcome: 'claimed' }
     }
 
     let relative: string
@@ -555,7 +582,9 @@ export class Library {
     )
     await writeJSON(L.metaPath(this.root, id), meta.encode())
     await writeJSON(L.statePath(this.root, id), new PaperState({}).encode())
-    return this.paper(id)
+    const row = await this.paper(id)
+    if (row && known.papers) known.papers.push(row)
+    return { row, outcome: 'imported' }
   }
 
   /**

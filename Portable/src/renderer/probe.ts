@@ -6,6 +6,7 @@
  * Put up only in a probe run — a window somebody reads in has no use for a
  * handle on its store.
  */
+import { layoutPanes } from './layout.js'
 import { flags } from './bridge.js'
 import { store } from './state.js'
 import { findBar, focused } from './pageArea.js'
@@ -59,6 +60,12 @@ export function installProbeSurface() {
       })),
       selected: () => store.selectedID,
       selection: () => [...store.selection],
+      // The first-run screen, for a picture of it: a probe always has a library.
+      showSetup: () => {
+        store.root = null
+        store.ready = true
+        layoutPanes()
+      },
       adopting: () => store.adopting,
       open: () => [...store.openPaperIDs],
       pinned: () => [...store.pinnedPaperIDs],

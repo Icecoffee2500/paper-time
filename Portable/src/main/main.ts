@@ -18,6 +18,8 @@ import { DEFAULT_MENU_STATE, buildMenu } from './menu.js'
 import type { MenuState } from '../shared/api.js'
 import { NotesStore } from './slipBox.js'
 import { captureAndQuit, runProbe } from './probe.js'
+import { markCleanExit, markRunning, noteAction } from './feedback.js'
+import { runLibraryProbes } from './probeReports.js'
 import { probe } from './probeMode.js'
 import { Windows } from './windows.js'
 import { LibrarySet } from './libraries.js'
@@ -59,7 +61,11 @@ let menuState: MenuState = DEFAULT_MENU_STATE
 /** The menu bar, in the language the app speaks now, for the window in front. */
 function installMenu() {
   buildMenu({
-    send: windows.sendToFocused.bind(windows),
+    // A command from the menu bar, by name, for a report's «last few actions».
+    send: (event: string, payload?: unknown) => {
+      if (event === 'menu' && typeof payload === 'string') noteAction(payload)
+      windows.sendToFocused(event, payload)
+    },
     chooseLibrary: async () => {
       const chosen = await handlers['library:choose'](undefined, windows.main)
       if (typeof chosen === 'string') send('library:opened', await openLibrary(chosen))
@@ -184,6 +190,7 @@ async function openLibrary(root: string): Promise<LibrarySnapshot | { error: str
 const context: Context = {
   libraries, sync, flush, journals, records, text, semantic, notes, windows, pageCounter,
   isProbe: probe.hasLibrary,
+  probeLibrary: probe.argument('library') ?? null,
   snapshot: (refused) => libraries.snapshot(refused),
   openLibrary,
   menuStateChanged: (state) => {
@@ -298,6 +305,7 @@ app.whenReady().then(async () => {
   }
   wantsKorean = resolveKorean(probe.language() ?? settings().language, app.getLocale())
   setKorean(wantsKorean)
+  markRunning(probe.isRun)
   windows.createMain()
   installMenu()
   // `--papertime-library=<path>` opens a folder without disturbing whichever
@@ -332,8 +340,15 @@ app.whenReady().then(async () => {
     else if (shot && windows.main) void captureAndQuit(windows.main, shot)
     else if (semanticProbe) app.quit()
   }
-  if (semanticProbe) void runSemanticProbe().then(then)
-  else then()
+  // `--papertime-add-folder=`, `--papertime-adopt-loose=1`,
+  // `--papertime-folders=1`: the library's errands, said the Mac's way.
+  const reports = probe.hasLibrary
+    ? runLibraryProbes({ argument: probe.argument, libraries, notes, handlers }).catch((error) => log(`probe: ${String(error)}`))
+    : Promise.resolve()
+  void reports.then(() => {
+    if (semanticProbe) void runSemanticProbe().then(then)
+    else then()
+  })
 })
 
 async function runSemanticProbe() {
@@ -389,6 +404,7 @@ app.on('before-quit', (event) => {
 
 // The text service goes with the app, whatever it was in the middle of.
 app.on('will-quit', () => {
+  markCleanExit(probe.isRun)
   sync.stop()
   text.end()
   pageCounter.end()

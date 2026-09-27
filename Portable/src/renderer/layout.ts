@@ -33,6 +33,15 @@ export function syncListSlot() {
 export function layoutPanes() {
   const panes = shell.panes
   clear(panes)
+  // No library yet, or the one chosen is not there: the whole window says
+  // so, not the list column between empty panels.
+  if (!solo && store.ready && (!store.root || store.unavailable)) {
+    if (store.unavailable) shell.setup.showUnavailable(store.unavailable.root, store.unavailable.message)
+    else shell.setup.showSetup()
+    panes.append(shell.setup.node)
+    panesShown = new Set()
+    return
+  }
   syncListSlot()
   if (solo) {
     // One paper, and nothing else: the reader fills the window.

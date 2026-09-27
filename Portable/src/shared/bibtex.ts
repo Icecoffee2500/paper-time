@@ -8,7 +8,7 @@
  * from the Swift source (see `tools/generate-latex-table.mjs`).
  */
 import { escapeLaTeX } from './latexTable.js'
-import { cslYear, fullName, surname, type CSLItem, type CSLName, type PaperMeta } from './model.js'
+import { cslFullTitle, cslYear, fullName, surname, type CSLItem, type CSLName, type PaperMeta } from './model.js'
 
 export type EntryType =
   | 'article' | 'inproceedings' | 'incollection' | 'inbook' | 'book'
@@ -30,17 +30,47 @@ const FIELD_ORDER = [
   'url', 'urldate', 'language', 'note', 'keywords', 'abstract', 'file',
 ]
 
+/** How a paper that exists only as an arXiv preprint is written
+ *  (`BibTeXExportOptions.PreprintStyle`). */
+export type PreprintStyle = 'eprint' | 'arxivPreprintArticle'
+
+/** `BibTeXExportOptions`, with the Mac's defaults. */
 export interface ExportOptions {
+  /** `@misc` with eprint fields (biblatex), or `@article` whose journal is
+   *  «arXiv preprint arXiv:…» (every plain style). */
+  preprintStyle: PreprintStyle
   /** Brace words whose capitals a style would otherwise flatten. */
   protectCase: boolean
+  /** The journal's short name, when the record has one. */
+  abbreviateJournals: boolean
   includeAbstract: boolean
   includeFile: boolean
+  includeURL: boolean
+  /** The `% Exported by Paper Time on …` lines at the top. */
+  includeHeader: boolean
 }
 
 export const DEFAULT_EXPORT: ExportOptions = {
+  preprintStyle: 'eprint',
   protectCase: true,
+  abbreviateJournals: false,
   includeAbstract: false,
   includeFile: false,
+  includeURL: true,
+  includeHeader: true,
+}
+
+/** The identifiers a record carries beside its CSL (`Identifiers`). */
+export interface Identifiers {
+  doi?: string
+  arxiv?: string
+  isbn?: string
+}
+
+export function identifiersOf(meta: PaperMeta): Identifiers {
+  const raw = (meta.raw.identifiers ?? {}) as Record<string, unknown>
+  const text = (value: unknown) => (typeof value === 'string' && value.trim() ? value : undefined)
+  return { doi: text(raw.doi), arxiv: text(raw.arxiv), isbn: text(raw.isbn) }
 }
 
 function entryType(item: CSLItem): EntryType {
@@ -134,61 +164,104 @@ export interface Field {
   value: string
 }
 
-export function entryFor(meta: PaperMeta, options: ExportOptions = DEFAULT_EXPORT): {
+export function entryFor(meta: PaperMeta, options: ExportOptions = DEFAULT_EXPORT, key?: string): {
   type: EntryType
   key: string
   fields: Field[]
 } {
-  const item = meta.csl
-  const type = entryType(item)
+  // `BibTeXWriter.entry(for:key:identifiers:options:)`, line for line.
+  options = { ...DEFAULT_EXPORT, ...options }
+  const item = meta.csl as CSLItem & Record<string, unknown>
+  const identifiers = identifiersOf(meta)
+  const isPreprint = item.type === 'manuscript' && Boolean(identifiers.arxiv)
+  const usesPreprintArticle = isPreprint && options.preprintStyle === 'arxivPreprintArticle'
+  let type = entryType(item)
+  if (usesPreprintArticle) type = 'article'
   const fields: Field[] = []
   const put = (name: string, value: string | undefined) => {
     if (!value || !value.trim()) return
     fields.push({ name, value })
   }
+  const text = (name: string) => (typeof item[name] === 'string' ? item[name] as string : undefined)
 
   put('author', nameList(item.author))
   put('editor', nameList(item.editor))
-  const title = item.subtitle ? `${item.title}: ${item.subtitle}` : item.title
-  put('title', titleValue(title, options))
+  put('title', titleValue(cslFullTitle(item), options))
 
-  const container = titleValue(item['container-title'], options)
+  const container = options.abbreviateJournals && text('container-title-short')
+    ? text('container-title-short')
+    : (text('container-title') ?? text('event-title'))
   switch (type) {
     case 'inproceedings':
     case 'incollection':
     case 'inbook':
-      put('booktitle', container)
+      put('booktitle', titleValue(container, options))
       break
     case 'article':
-      put('journal', container)
+      if (usesPreprintArticle) put('journal', `arXiv preprint arXiv:${identifiers.arxiv}`)
+      else put('journal', titleValue(container, options))
       break
     default:
-      if (container) put('series', container)
       break
   }
+  put('series', titleValue(text('collection-title'), options))
 
   const year = cslYear(item)
   if (year) put('year', String(year))
   const month = item.issued?.['date-parts']?.[0]?.[1]
-  if (month) put('month', MONTHS[month - 1])
+  if (month && month >= 1 && month <= 12) put('month', MONTHS[month - 1])
+  put('volume', text('volume'))
+  // CSL keeps issue and report number apart; BibTeX overloads `number`.
+  put('number', type === 'article' ? text('issue') : (text('number') ?? text('issue')))
+  put('pages', pageRange(text('page')))
 
-  put('volume', item.volume)
-  put('number', item.issue)
-  put('pages', item.page?.replace(/[–—]/g, '--'))
-  put('publisher', escapeIf(item.publisher))
   if (type === 'phdthesis' || type === 'mastersthesis') put('school', escapeIf(item.publisher))
-  if (type === 'techreport') put('institution', escapeIf(item.publisher))
-  put('doi', item.DOI)
+  else if (type === 'techreport') put('institution', escapeIf(item.publisher))
+  else put('publisher', escapeIf(item.publisher))
+  put('address', escapeIf(text('publisher-place')))
+  put('edition', text('edition'))
+
+  if (isPreprint && options.preprintStyle === 'eprint' && identifiers.arxiv) {
+    put('eprint', identifiers.arxiv)
+    put('archivePrefix', 'arXiv')
+    put('primaryClass', primaryClass(item.note))
+  }
+
+  put('doi', identifiers.doi ?? item.DOI)
   put('issn', item.ISSN)
-  put('isbn', item.ISBN)
-  put('url', item.URL)
+  put('isbn', item.ISBN ?? identifiers.isbn)
+  if (options.includeURL) {
+    const doi = identifiers.doi
+    put('url', item.URL ?? (doi ? `https://doi.org/${doi}` : undefined))
+  }
   put('language', item.language)
   put('note', escapeIf(item.note))
   if (options.includeAbstract) put('abstract', escapeIf(item.abstract))
   if (options.includeFile) put('file', meta.file.relativePath)
 
-  fields.sort((a, b) => order(a.name) - order(b.name))
-  return { type, key: meta.bibKey || fallbackKey(meta), fields }
+  // Stable: the Mac breaks a tie by name, which never happens with one
+  // field of each name.
+  fields.sort((a, b) => order(a.name) - order(b.name) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+  return { type, key: key ?? (meta.bibKey || fallbackKey(meta)), fields }
+}
+
+/** An en-dash range, as BibTeX wants one (`pageRange`). */
+function pageRange(raw: string | undefined): string | undefined {
+  if (!raw) return undefined
+  const normalised = raw.replace(/–/g, '-').replace(/—/g, '-').replace(/ /g, '')
+  const parts = normalised.split('-').filter(Boolean)
+  if (parts.length < 2) return normalised
+  return `${parts[0]}--${parts[parts.length - 1]}`
+}
+
+/** «cs.CV» from the note the arXiv mapper writes. */
+function primaryClass(note: string | undefined): string | undefined {
+  if (!note) return undefined
+  const open = note.indexOf('[')
+  const close = note.indexOf(']')
+  if (open < 0 || close < 0 || open >= close) return undefined
+  const value = note.slice(open + 1, close)
+  return value || undefined
 }
 
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
@@ -238,7 +311,7 @@ export function formatBibliography(
   generatedAt = new Date(),
 ): string {
   const stamp = generatedAt.toISOString().slice(0, 10)
-  const header =
+  const header = options.includeHeader === false ? '' :
     `% Exported by Paper Time on ${stamp}\n` +
     `% ${metas.length} reference${metas.length === 1 ? '' : 's'}\n\n`
   return header + metas.map((meta) => formatEntry(entryFor(meta, options))).join('\n')
