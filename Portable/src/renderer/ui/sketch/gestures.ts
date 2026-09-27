@@ -35,6 +35,8 @@ import {
 } from '../../../shared/sketch.js'
 import { SketchTree, adopted, copied, nextFrameName, pruned, sameElements } from '../../../shared/sketchTree.js'
 import { InkStroke, nibWidth, resample, type InkPoint } from '../../../shared/ink.js'
+import { highlighterColor, highlighterColorName, highlighterWidth, penColor, penWidth } from '../../../shared/inkPresets.js'
+import { snapStroke } from '../../../shared/strokeSnap.js'
 import { drawElement, drawElements, drawInkStroke, fittedRect, fontSpec, pathOf } from '../../../shared/sketchRender.js'
 import { BOX_HANDLES, constrained, handlePoint, resized, strokeTouches, type Handle } from '../../../shared/sketchGeometry.js'
 import { L } from '../../../shared/lang.js'
@@ -43,6 +45,9 @@ import { SketchSnap, type SnapAxis, type SnapGuide } from '../../../shared/sketc
 import type { PageView, Reader } from '../reader.js'
 import { snapshot } from '../sketchUndo.js'
 import { sketchEditor, sketchSelectionChanged } from '../sketchEditing.js'
+import { showMenuAt } from '../menu.js'
+import { shortcutText } from '../../../shared/shortcuts.js'
+import { platform } from '../../bridge.js'
 import { makeEditing } from './commands.js'
 import { beginTextEditing, endTextEditing } from './textEditor.js'
 import {
@@ -88,6 +93,43 @@ const ACCENT = '47, 110, 240'
  *  colour for the same lines. */
 const GUIDE = 'rgb(255, 59, 48)'
 
+
+
+/** A 20-point ring, white outside and black in, its hotspot at the centre. */
+const ERASER_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><circle cx="10" cy="10" r="8.5" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="1.5"/><circle cx="10" cy="10" r="7.5" fill="none" stroke="rgba(0,0,0,0.8)" stroke-width="1"/></svg>',
+)}") 10 10, crosshair`
+
+/** The pen's or the highlighter's width, from their own presets (`InkPresets`). */
+function inkWidth(tool: 'pen' | 'marker'): number {
+  return tool === 'marker' ? highlighterWidth(store.sketch.presets) : penWidth(store.sketch.presets)
+}
+
+/** The pen's or the highlighter's colour — not the next shape's. */
+function inkColour(tool: 'pen' | 'marker') {
+  return tool === 'marker' ? highlighterColor(store.sketch.presets) : penColor(store.sketch.presets)
+}
+
+/**
+ * A highlighter stroke put on the words it covers, as a highlight or an
+ * underline, when it is over words; true when it became a mark and the ink
+ * is not wanted.
+ */
+function fitStroke(reader: Reader, page: PageView, points: InkPoint[]): boolean {
+  if (points.length === 0) return false
+  let left = Infinity, right = -Infinity, bottom = Infinity, top = -Infinity
+  for (const point of points) {
+    const half = point.w / 2
+    left = Math.min(left, point.x - half)
+    right = Math.max(right, point.x + half)
+    bottom = Math.min(bottom, point.y - half)
+    top = Math.max(top, point.y + half)
+  }
+  const { lines, runs } = page.textGeometry()
+  const snapped = snapStroke({ x: left, y: bottom, width: right - left, height: top - bottom }, lines, runs)
+  if (!snapped) return false
+  return reader.markFromStroke(page, snapped.kind, snapped.boxes, snapped.text, highlighterColorName(store.sketch.presets))
+}
 
 export function attachSketchInput(
   page: PageView,
@@ -226,8 +268,7 @@ export function attachSketchInput(
       case 'pen':
       case 'highlighter': {
         const kind = tool === 'highlighter' ? 'marker' : 'pen'
-        const base = kind === 'marker' ? Math.max(store.sketch.style.width * 5, 10) : store.sketch.style.width
-        drag = { kind: 'stroke', tool: kind, points: [{ ...point, w: nibWidth(base, event.pressure, kind) }] }
+        drag = { kind: 'stroke', tool: kind, points: [{ ...point, w: nibWidth(inkWidth(kind), event.pressure, kind) }] }
         break
       }
       case 'eraser':
@@ -409,8 +450,7 @@ export function attachSketchInput(
       case 'stroke': {
         const last = drag.points[drag.points.length - 1]
         if (Math.hypot(point.x - last.x, point.y - last.y) < 0.6 / scale()) return
-        const base = drag.tool === 'marker' ? Math.max(store.sketch.style.width * 5, 10) : store.sketch.style.width
-        drag.points.push({ ...point, w: nibWidth(base, event.pressure, drag.tool) })
+        drag.points.push({ ...point, w: nibWidth(inkWidth(drag.tool), event.pressure, drag.tool) })
         break
       }
       case 'erase':
@@ -578,9 +618,10 @@ export function attachSketchInput(
       case 'stroke': {
         const points = resample(finished.points)
         if (points.length === 1) points.push({ ...points[0], x: points[0].x + 0.2 })
-        const colour = finished.tool === 'marker'
-          ? (store.sketch.style.fill ?? SketchColor.paleYellow).withAlpha(1)
-          : store.sketch.style.stroke
+        // A highlighter over words is a highlight fitted to them, or an
+        // underline under them — the marks' own undo has it (`StrokeSnapper`).
+        if (finished.tool === 'marker' && store.sketch.presets.fitsToText && fitStroke(reader, page, points)) break
+        const colour = inkColour(finished.tool)
         applyBoth(reader, host, page, page.elements, [...page.strokes, new InkStroke(points, colour, finished.tool)], page.elements, page.strokes)
         break
       }
@@ -782,7 +823,7 @@ export function attachSketchInput(
       }
       // A highlight or an underline under the eraser comes off too, as on
       // the Mac — a step of its own, «Erase Mark», back with ⌘Z.
-      if (page.marks.length > 0) reader.eraseMarkAt(page, sample)
+      if (page.marks.length > 0 && store.sketch.presets.eraserErasesMarks) reader.eraseMarkAt(page, sample)
     }
     if (!touched) return
     page.strokes = strokes
@@ -842,6 +883,22 @@ export function attachSketchInput(
   function drawWorking(context: CanvasRenderingContext2D) {
     const landing = moveTarget ?? page
     const size = landing.viewport?.scale ?? 1
+    // Over another page, the frame it would land in is lit there too — that
+    // page's own surface knows nothing of this drag (`landingFrame`).
+    if (landing !== page) {
+      const frameID = landingFrame()
+      const frame = frameID ? landing.elements.find((element) => element.id === frameID) : undefined
+      if (frame) {
+        const box = frame.rect
+        context.save()
+        context.strokeStyle = `rgba(${ACCENT}, 0.95)`
+        context.lineWidth = 2 / size
+        context.strokeRect(box.x, box.y, box.width, box.height)
+        context.fillStyle = `rgba(${ACCENT}, 0.05)`
+        context.fillRect(box.x, box.y, box.width, box.height)
+        context.restore()
+      }
+    }
     drawElements(working, context, { fillAlphaScale: 0.7 })
     if (workingStrokes) for (const stroke of workingStrokes) drawInkStroke(stroke, context)
     context.save()
@@ -957,9 +1014,7 @@ export function attachSketchInput(
         break
       }
       case 'stroke': {
-        const colour = drag.tool === 'marker'
-          ? (store.sketch.style.fill ?? SketchColor.paleYellow).withAlpha(1)
-          : store.sketch.style.stroke
+        const colour = inkColour(drag.tool)
         drawInkStroke(new InkStroke(drag.points, colour, drag.tool), context)
         break
       }
@@ -1092,28 +1147,53 @@ export function attachSketchInput(
     context.restore()
   }
 
-  function cursorFor(point: Point): string {
+  /** The Mac's cursors: the arrow for Select — over handles and shapes too
+   *  (`SketchInputView.cursor(for:)`) — the I-beam for text, a ring the size
+   *  of its reach for the eraser, the crosshair for the rest. */
+  function cursorFor(_point: Point): string {
     switch (store.sketch.tool) {
-      case 'select': break
+      case 'select': return 'default'
       case 'text': return 'text'
+      case 'eraser': return ERASER_CURSOR
       default: return 'crosshair'
     }
-    const current = ownSelection()
-    if (current && current.ids.length === 1 && current.strokeIDs.length === 0) {
-      const now = tree()
-      const chosen = now.get(current.ids[0])
-      const handle = chosen ? handleAt(point, chosen, now) : null
-      if (handle) {
-        switch (handle) {
-          case 'topLeft': case 'bottomRight': return 'nwse-resize'
-          case 'topRight': case 'bottomLeft': return 'nesw-resize'
-          case 'top': case 'bottom': return 'ns-resize'
-          case 'left': case 'right': return 'ew-resize'
-          default: return 'grab'
-        }
-      }
+  }
+
+  /**
+   * The surface's own menu, about what is under the pointer — chosen first
+   * if it was not already (`SketchInputView.rightMouseDown`, `menu(for:)`):
+   * nine things, each on only when the selection allows it.
+   */
+  function showSurfaceMenu(event: MouseEvent) {
+    event.preventDefault()
+    if (store.sketch.tool === 'select') {
+      const hit = selectableAt(pointOf(event))
+      const current = ownSelection()
+      if (hit && !(current?.ids.includes(hit))) select([hit])
     }
-    return selectableAt(point) !== null || strokeAt(point) !== null ? 'move' : 'default'
+    const editing = sketchEditor.current
+    if (!editing) return
+    const elements = editing.selectedElements()
+    const strokes = editing.selectedStrokeCount()
+    const has = elements.length > 0 || strokes > 0
+    const any = elements.length > 0
+    const one = elements.length === 1 && strokes === 0 ? elements[0] : null
+    const frame = one && one.kind === 'frame' ? one : null
+    const containers = elements.some((element) => element.isContainer)
+    showMenuAt({ x: event.clientX, y: event.clientY }, [
+      { label: L('글 고치기', 'Edit Text'), action: () => editing.editSelectedText(), disabled: !one || one.isContainer || one.isConnector },
+      { separator: true },
+      { label: L('묶기', 'Group Selection'), keyText: shortcutText('⌘G', platform), action: () => editing.groupSelection(), disabled: !any },
+      { label: L('묶음 풀기', 'Ungroup'), keyText: shortcutText('⇧⌘G', platform), action: () => editing.ungroupSelection(), disabled: !containers },
+      { label: L('프레임으로 감싸기', 'Frame Selection'), keyText: shortcutText('⌥⌘G', platform), action: () => editing.frameSelection(), disabled: !has },
+      { label: frame?.layout ? L('오토 레이아웃 빼기', 'Remove Auto Layout') : L('오토 레이아웃 넣기', 'Add Auto Layout'), keyText: shortcutText('⇧A', platform), action: () => editing.toggleAutoLayout(), disabled: !any },
+      { separator: true },
+      { label: L('복제', 'Duplicate'), keyText: shortcutText('⌘D', platform), action: () => editing.duplicateSelection(), disabled: !any },
+      { label: L('맨 앞으로', 'Bring to Front'), keyText: shortcutText('⇧⌘]', platform), action: () => editing.bringSelectionToFront(), disabled: !any },
+      { label: L('맨 뒤로', 'Send to Back'), keyText: shortcutText('⇧⌘[', platform), action: () => editing.sendSelectionToBack(), disabled: !any },
+      { separator: true },
+      { label: L('지우기', 'Delete'), keyText: shortcutText('⌫', platform), danger: true, action: () => editing.deleteSelection(), disabled: !has },
+    ])
   }
 
   // ---------------------------------------------------------------- wiring
@@ -1126,7 +1206,7 @@ export function attachSketchInput(
   on(surface, 'pointermove', onPointerMove, { signal } as never)
   on(surface, 'pointerup', onPointerUp, { signal } as never)
   on(surface, 'pointercancel', onPointerCancel, { signal } as never)
-  on(surface, 'contextmenu', (event: MouseEvent) => event.preventDefault(), { signal } as never)
+  on(surface, 'contextmenu', showSurfaceMenu, { signal } as never)
 
   return {
     detach() {

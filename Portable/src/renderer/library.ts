@@ -10,6 +10,7 @@
  * often enough — the watcher and a star, a menu and a probe — and whichever
  * answered last won, older or not.
  */
+import { inkPresetsFrom } from '../shared/inkPresets.js'
 import { call, flags, soloPaperID } from './bridge.js'
 import {
   adopt,
@@ -240,6 +241,7 @@ export async function start() {
       // A style this build cannot read: the default one.
     }
   }
+  store.sketch.presets = inkPresetsFrom(saved.inkPresets)
   applyTheme()
   layoutPanes()
   shell.toolbar.update()

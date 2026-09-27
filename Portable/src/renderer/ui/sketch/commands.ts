@@ -2,7 +2,7 @@
  * What the drawing panel, the rack and the keys ask of the page's editor —
  * `SketchEditing`, and the keys on top of it. One editor per reader.
  */
-import { isCommand } from '../../bridge.js'
+import { call, isCommand } from '../../bridge.js'
 import { setSketchTool, store, type SketchTool } from '../../state.js'
 import {
   SketchElement,
@@ -66,6 +66,44 @@ export interface SketchInputEditing extends SketchEditing {
 const editors = new WeakMap<Reader, SketchInputEditing>()
 
 
+
+/**
+ * The drawing on the clipboard, read again whenever the window comes to the
+ * front: copied in another window it can be pasted here, and anything copied
+ * since in any app means there is no drawing to paste.
+ */
+
+/** The elements with a style change on the chosen ones — a group's change goes to what is in it. */
+function restyled(before: SketchElement[], ids: string[], change: (style: SketchStyle) => void): SketchElement[] {
+  const tree = new SketchTree(before)
+  const targets = new Set(ids)
+  for (const id of ids) if (tree.get(id)?.kind === 'group') for (const inner of tree.descendantIDs(id)) targets.add(inner)
+  return before.map((element) => {
+    if (!targets.has(element.id) || element.kind === 'group') return element
+    const changed = element.copy()
+    change(changed.style)
+    return changed
+  })
+}
+
+export function watchSketchClipboard() {
+  const read = () => {
+    void call('clipboard:readSketch').then((raw) => {
+      if (!raw) {
+        session.clipboard = null
+        return
+      }
+      try {
+        session.clipboard = JSON.parse(raw) as typeof session.clipboard
+      } catch {
+        session.clipboard = null
+      }
+    }).catch(() => undefined)
+  }
+  window.addEventListener('focus', read)
+  read()
+}
+
 export function makeEditing(reader: Reader, host: SketchInputHost): SketchInputEditing {
   const cached = editors.get(reader)
   if (cached) return cached
@@ -100,10 +138,22 @@ export function makeEditing(reader: Reader, host: SketchInputHost): SketchInputE
       return page ? pageRectOf(page) : null
     },
 
+    previewStyle(change) {
+      const page = selectedPage(reader)
+      const current = selection()
+      if (!page || !current || current.ids.length === 0) return
+      if (!session.stylePreview || session.stylePreview.pageIndex !== page.index) session.stylePreview = { pageIndex: page.index, before: page.elements }
+      page.elements = restyled(session.stylePreview.before, current.ids, change)
+      page.redraw()
+    },
+
     applyStyle(change) {
       const page = selectedPage(reader)
       const current = selection()
       if (!page || !current || current.ids.length === 0) return
+      // A colour dragged and then let go is one step, from where it began.
+      if (session.stylePreview?.pageIndex === page.index) page.elements = session.stylePreview.before
+      session.stylePreview = null
       const before = page.elements
       // A group has no look of its own; restyling it restyles what is in
       // it. A frame has one, and keeps its children as they are.
@@ -486,9 +536,12 @@ export function makeEditing(reader: Reader, host: SketchInputHost): SketchInputE
         strokes: strokes.map((stroke) => stroke.encode()),
         fromPage: page.index,
       }
-      // So the same copy can land in a note, or anywhere else.
+      // So the same copy can land in a note, or anywhere else — and in the
+      // other windows, through the main process.
       const words = copies.map((element) => element.text).filter((text) => text.length > 0).join('\n')
-      if (words.length > 0) void copyText(words)
+      void call('clipboard:writeSketch', { clipping: JSON.stringify(session.clipboard), text: words }).catch(() => {
+        if (words.length > 0) void copyText(words)
+      })
       return true
     },
 

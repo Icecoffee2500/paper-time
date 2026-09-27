@@ -10,6 +10,7 @@ import { on } from './dom.js'
 import { changed, store, type InspectorTab, type Settings } from './state.js'
 import { shell, solo } from './shell.js'
 import { SketchStyle } from '../shared/sketch.js'
+import { inkPresetsFrom } from '../shared/inkPresets.js'
 import { readers } from './pageArea.js'
 import { showSettings, type SettingsSection } from './ui/settings.js'
 import { showFeedback } from './ui/feedback.js'
@@ -73,7 +74,7 @@ export function setSettings(patch: Partial<Settings>, options: { live?: boolean 
 
 /** What another window chose, followed here without writing it again. The
  *  columns, the paper showing and the tab are each window's own. */
-const SHARED = new Set<string>(['appearance', 'language', 'pageTint', 'pageTintColor', 'pageLayout', 'latexShortcuts', 'semanticSearch', 'listSubtitle', 'bibtexProtectCase', 'bibtexPreprintStyle', 'bibtexIncludeUnverified', 'sort', 'sketchStyle'])
+const SHARED = new Set<string>(['appearance', 'language', 'pageTint', 'pageTintColor', 'pageLayout', 'latexShortcuts', 'semanticSearch', 'listSubtitle', 'bibtexProtectCase', 'bibtexPreprintStyle', 'bibtexIncludeUnverified', 'sort', 'sketchStyle', 'inkPresets'])
 
 export function adoptSettings(patch: Record<string, unknown>) {
   const taken: Record<string, unknown> = {}
@@ -93,6 +94,7 @@ export function adoptSettings(patch: Record<string, unknown>) {
       // Kept as it was.
     }
   }
+  if ('inkPresets' in taken) store.sketch.presets = inkPresetsFrom(taken.inkPresets)
   changed('settings', 'papers')
   openSheet?.redraw()
 }

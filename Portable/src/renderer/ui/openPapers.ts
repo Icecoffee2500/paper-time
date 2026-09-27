@@ -12,7 +12,8 @@ import { closePages, whenPagesOpen } from './pages.js'
 import { icon } from '../icons.js'
 import { clear, el, on } from '../dom.js'
 import { isOpenPaper, store, type Paper, paper as findPaper } from '../state.js'
-import { isCommand } from '../bridge.js'
+import { isCommand, platform } from '../bridge.js'
+import { shortcutText } from '../../shared/shortcuts.js'
 import { L } from '../../shared/lang.js'
 import { PAPER_DRAG_TYPE } from '../../shared/split.js'
 
@@ -97,7 +98,9 @@ export function showOpenPapers(host: HTMLElement, actions: OpenPapersActions) {
     ])
     const windowButton = el('button', {
       class: 'icon-button',
-      title: L('새 창으로 열기 (⌘클릭, ⌘↩)', 'Open in New Window (⌘-click, ⌘↩)'),
+      title: platform === 'darwin'
+        ? L('새 창으로 열기 (⌘클릭, ⌘↩)', 'Open in New Window (⌘-click, ⌘↩)')
+        : L('새 창으로 열기 (Ctrl+클릭, Ctrl+Enter)', 'Open in New Window (Ctrl-click, Ctrl+Enter)'),
       html: icon('macwindow.badge.plus'),
     })
     on(windowButton, 'click', (event: MouseEvent) => {
@@ -106,7 +109,7 @@ export function showOpenPapers(host: HTMLElement, actions: OpenPapersActions) {
     })
     const closeButton = el('button', {
       class: 'icon-button',
-      title: L('닫기 (⌫)', 'Close (⌫)'),
+      title: L(`닫기 (${shortcutText('⌫', platform)})`, `Close (${shortcutText('⌫', platform)})`),
       html: icon('xmark'),
     })
     on(closeButton, 'click', (event: MouseEvent) => {

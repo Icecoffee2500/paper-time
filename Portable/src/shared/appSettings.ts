@@ -43,6 +43,9 @@ export interface Settings {
   /** The style the next shape is drawn in, as the element file writes a
    *  style (JSON) — the Mac keeps it across launches (`SketchState`). */
   sketchStyle: string | null
+  /** The pen's and the highlighter's own colours and widths, and their two
+   *  options — the Mac's `InkPresets`, as JSON (`shared/inkPresets.ts`). */
+  inkPresets: string | null
 }
 
 export const DEFAULTS: Settings = {
@@ -68,6 +71,7 @@ export const DEFAULTS: Settings = {
   bibtexIncludeUnverified: false,
   notesFolder: null,
   sketchStyle: null,
+  inkPresets: null,
 }
 
 /** What the file says, over the defaults, each group merged key by key. */

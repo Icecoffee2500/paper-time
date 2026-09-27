@@ -22,6 +22,8 @@ export interface SketchEditing {
   pageBox(): Rect | null
   /** Changes the style of everything selected, as one undo step. Also the default for the next shape. */
   applyStyle(change: (style: SketchStyle) => void): void
+  /** The same change, shown and not kept — a colour well being dragged; the next `applyStyle` keeps it as one step. */
+  previewStyle(change: (style: SketchStyle) => void): void
   /** Changes the selected elements themselves — name, layout, clips, textSizing — as one undo step. */
   editSelection(change: (element: SketchElement) => void): void
   deleteSelection(): void

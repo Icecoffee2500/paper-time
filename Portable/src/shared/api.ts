@@ -83,6 +83,14 @@ export interface Requests {
   'paper:provenance': { args: { id: string }; result: 'pristine' | 'appended' | 'rewritten' | 'unknown' }
   /** What is on the clipboard, for «Paste Names». */
   'clipboard:read': { args: void; result: string }
+  /** A drawing copied: kept by the main process for every window, and the
+   *  system clipboard given its words (or emptied), as the Mac's pasteboard
+   *  takes a private type and plain text. */
+  /** The font families this machine has, as the desktop lists them (`NSFontManager`); empty where it cannot say. */
+  'fonts:list': { args: void; result: string[] }
+  'clipboard:writeSketch': { args: { clipping: string; text: string }; result: void }
+  /** The drawing on the clipboard, if what is on the system clipboard is still what went with it. */
+  'clipboard:readSketch': { args: void; result: string | null }
   'paper:reveal': { args: { id: string }; result: void }
   'sketch:load': { args: { id: string; pageIndex: number }; result: unknown[] | null }
   'sketch:save': { args: { id: string; pageIndex: number; elements: unknown[] }; result: void }

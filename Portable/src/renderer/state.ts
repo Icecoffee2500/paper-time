@@ -6,6 +6,7 @@
  * the whole renderer readable, and keeps the Windows build and the Linux build
  * from differing by way of somebody's runtime.
  */
+import { defaultInkPresets, type InkPresets } from '../shared/inkPresets.js'
 import type { Settings as AppSettings } from '../shared/appSettings.js'
 import { findPath, isInside, isUnder, pathKey, samePath, slashed } from '../shared/paths.js'
 import type { LibrarySnapshot, NoteDTO, NotesFolderDTO, PaperRowDTO } from '../shared/api.js'
@@ -71,7 +72,7 @@ export interface Paper {
 export const WINDOW_SETTINGS = [
   'libraryRoot', 'panes', 'columns', 'inspectorTab', 'sort', 'appearance', 'language', 'pageTint',
   'pageTintColor', 'pageLayout', 'selectedPaperID', 'latexShortcuts', 'semanticSearch', 'listSubtitle',
-  'bibtexProtectCase', 'bibtexPreprintStyle', 'bibtexIncludeUnverified', 'sketchStyle',
+  'bibtexProtectCase', 'bibtexPreprintStyle', 'bibtexIncludeUnverified', 'sketchStyle', 'inkPresets',
 ] as const satisfies readonly (keyof AppSettings)[]
 
 export type Settings = Pick<AppSettings, (typeof WINDOW_SETTINGS)[number]>
@@ -203,6 +204,8 @@ export interface Store {
     /** The pen-group tool last used — pen, highlighter or eraser. */
     lastInk: SketchTool
     style: SketchStyle
+    /** The pen's and the highlighter's own — not the next shape's. */
+    presets: InkPresets
     /** Which page's elements are selected, and which of them. */
     selection: { pageIndex: number; ids: string[]; strokeIDs: number[] } | null
   }
@@ -267,6 +270,7 @@ export const store: Store = {
     bibtexPreprintStyle: 'eprint',
     bibtexIncludeUnverified: false,
     sketchStyle: null,
+    inkPresets: null,
   },
   windowState: { maximized: false, fullScreen: false, focused: true },
   trail: [],
@@ -277,7 +281,7 @@ export const store: Store = {
   searchScanning: false,
   searchMeanings: [],
   focus: { on: false, before: { paperList: true, inspector: true } },
-  sketch: { tool: 'select', lastShape: 'rectangle', lastInk: 'pen', style: new SketchStyle(), selection: null },
+  sketch: { tool: 'select', lastShape: 'rectangle', lastInk: 'pen', style: new SketchStyle(), presets: defaultInkPresets(), selection: null },
 }
 
 /**

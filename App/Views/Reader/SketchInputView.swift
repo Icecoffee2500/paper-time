@@ -598,7 +598,9 @@ final class SketchInputView: NSView, SketchEditing {
 
         // Across pages. The elements keep their ids — it is the same box,
         // on the next page — and lose any parent left behind.
-        let sourceAfter = elementsBefore.filter { !moving.contains($0.id) } + duplicates
+        // A group whose last child left for the other page goes with it, as
+        // it does when the child is deleted — and as Portable's move does.
+        let sourceAfter = pruned(elementsBefore.filter { !moving.contains($0.id) } + duplicates)
         let targetBefore = elements(on: target.index)
         var landing = working
         for i in landing.indices where landing[i].parent.map({ !moving.contains($0) }) ?? false {
