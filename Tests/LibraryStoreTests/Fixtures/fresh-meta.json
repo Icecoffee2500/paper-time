@@ -1,0 +1,43 @@
+{
+  "addedAt" : "2026-09-21T14:13:20Z",
+  "bibKey" : "",
+  "candidates" : [
+
+  ],
+  "collectionIDs" : [
+
+  ],
+  "confidence" : "unparsed",
+  "csl" : {
+    "author" : [
+
+    ],
+    "editor" : [
+
+    ],
+    "id" : "",
+    "type" : "document"
+  },
+  "file" : {
+    "byteSize" : 2215244,
+    "importDigest" : "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+    "originalName" : "Attention Is All You Need.pdf",
+    "pageCount" : 15,
+    "relativePath" : "week 1/Attention Is All You Need.pdf"
+  },
+  "id" : "3F2504E0-4F89-41D3-9A0C-0305E82C3301",
+  "identifiers" : {
+
+  },
+  "provenance" : {
+    "detail" : "awaiting resolution",
+    "fetchedAt" : "2026-09-21T14:13:20Z",
+    "source" : "heuristic"
+  },
+  "schema" : 1,
+  "tagIDs" : [
+
+  ],
+  "updatedAt" : "2026-09-21T14:13:20Z",
+  "updatedBy" : "Mac-TEST"
+}

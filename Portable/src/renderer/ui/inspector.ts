@@ -269,7 +269,7 @@ function draftYear(paper: Paper, dirtied: () => void): HTMLElement {
 function draftType(paper: Paper, label: string, types: string[], dirtied: (redraw?: boolean) => void): HTMLElement {
   const csl = draftFor(paper)
   const select = el('select', { class: 'field-select' }) as HTMLSelectElement
-  const current = typeof csl.type === 'string' ? csl.type : 'other'
+  const current = typeof csl.type === 'string' ? csl.type : 'document'
   for (const type of types.includes(current) ? types : [current, ...types]) {
     const option = el('option', { value: type, text: typeName(type) }) as HTMLOptionElement
     option.selected = type === current
@@ -283,9 +283,9 @@ function draftType(paper: Paper, label: string, types: string[], dirtied: (redra
 }
 
 /** Every CSL type the Mac's picker offers, in its words. */
-const PAPER_TYPES = ['article-journal', 'paper-conference', 'book', 'chapter', 'thesis', 'report', 'dataset', 'software', 'webpage', 'patent', 'speech', 'manuscript', 'other']
+const PAPER_TYPES = ['article-journal', 'paper-conference', 'book', 'chapter', 'thesis', 'report', 'dataset', 'software', 'webpage', 'patent', 'speech', 'manuscript', 'document']
 /** The kinds a document can be: the list minus the half only a paper is. */
-const DOCUMENT_TYPES = ['report', 'book', 'chapter', 'manuscript', 'webpage', 'speech', 'dataset', 'software', 'patent', 'other']
+const DOCUMENT_TYPES = ['report', 'book', 'chapter', 'manuscript', 'webpage', 'speech', 'dataset', 'software', 'patent', 'document']
 
 function typeName(type: string): string {
   switch (type) {

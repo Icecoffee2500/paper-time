@@ -80,7 +80,7 @@ export class Records {
 }
 
 const KINDS = ['paper', 'book', 'lecture', 'document']
-const CONFIDENCES = ['unparsed', 'needsReview', 'verified', 'manual', 'low', 'medium', 'high']
+const CONFIDENCES = ['unparsed', 'needsReview', 'verified', 'manual']
 
 /**
  * The fields of a record the window may change, each of the kind it must be.

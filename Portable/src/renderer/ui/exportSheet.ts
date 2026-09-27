@@ -16,7 +16,7 @@ import { clear, el, on } from '../dom.js'
 import { L } from '../../shared/lang.js'
 import { store, type Paper } from '../state.js'
 import { isCitable, isLookedUp } from '../../shared/documentKind.js'
-import { DEFAULT_EXPORT, entryFor, formatBibliography, type ExportOptions } from '../../shared/bibtex.js'
+import { DEFAULT_EXPORT, formatBibliography, type ExportOptions } from '../../shared/bibtex.js'
 import { inCollection } from '../../shared/smartRule.js'
 
 export type ExportScope = 'selected' | 'view' | 'library' | 'collection'
@@ -100,9 +100,7 @@ export function showExportSheet(input: ExportSheetInput) {
   const text = () => {
     const metas = chosen().map((entry) => entry.meta)
     if (metas.length === 0) return ''
-    const keyed = metas.map((meta) => ({ meta, key: entryFor(meta, options).key }))
-    keyed.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
-    return formatBibliography(keyed.map((one) => one.meta), options)
+    return formatBibliography(metas, options)
   }
 
   const draw = () => {
