@@ -9,7 +9,7 @@
  */
 import { icon, type IconName } from '../icons.js'
 import { el, on, place, clear } from '../dom.js'
-import { canGoBack, canGoForward, store, type InspectorTab, type Pane } from '../state.js'
+import { canGoBack, canGoForward, readerState, store, type InspectorTab, type Pane } from '../state.js'
 import { platform } from '../bridge.js'
 import { L } from '../../shared/lang.js'
 import { withKey } from '../../shared/shortcuts.js'
@@ -153,8 +153,8 @@ export function buildToolbar(actions: ToolbarActions): { node: HTMLElement; upda
     tip(inspectorButton, paneTip('inspector', L('정보 패널', 'Inspector')))
     // Back walks the paper's own history first — a followed link — and then
     // the papers, as on the Mac.
-    backButton.toggleAttribute('disabled', !(canGoBack() || store.reader.canGoBack))
-    forwardButton.toggleAttribute('disabled', !(canGoForward() || store.reader.canGoForward))
+    backButton.toggleAttribute('disabled', !(canGoBack() || readerState().canGoBack))
+    forwardButton.toggleAttribute('disabled', !(canGoForward() || readerState().canGoForward))
     for (const [tab, b] of Object.entries(tabButtons)) {
       b.setAttribute('aria-selected', String(store.settings.inspectorTab === tab))
     }
@@ -269,12 +269,30 @@ export function closeMenu() {
   openMenu = null
 }
 
+let toastShowing: { node: HTMLElement; text: string; timer: number } | null = null
+
+/**
+ * A sentence at the bottom of the window for a moment. The same sentence
+ * again keeps it up longer rather than making it blink; another replaces it.
+ * Each used to bring its own timer, so the third of three quick toasts was
+ * taken down by the first one's.
+ */
 export function toast(message: string) {
-  const existing = document.querySelector('.toast')
-  if (existing) existing.remove()
-  const node = el('div', { class: 'toast', text: message })
-  document.body.append(node)
-  setTimeout(() => node.remove(), 2400)
+  if (toastShowing && toastShowing.text !== message) {
+    toastShowing.node.remove()
+    toastShowing = null
+  }
+  if (!toastShowing) {
+    const node = el('div', { class: 'toast', text: message })
+    document.body.append(node)
+    toastShowing = { node, text: message, timer: 0 }
+  }
+  const showing = toastShowing
+  clearTimeout(showing.timer)
+  showing.timer = window.setTimeout(() => {
+    showing.node.remove()
+    if (toastShowing === showing) toastShowing = null
+  }, 2400)
 }
 
 export { clear }

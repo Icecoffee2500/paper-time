@@ -209,7 +209,10 @@ export interface Events {
   'window:state': WindowState
   'theme:changed': boolean
   'menu': string
+  'menu:feedback': void
   'error': unknown
+  'semantic:progress': unknown
+  'semantic:ready': unknown
   'text:warmed': unknown
   'text:hits': unknown
   'text:done': unknown

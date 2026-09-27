@@ -1,5 +1,5 @@
 import { setKorean } from '../shared/lang.js'
-import type { RequestArgs, RequestName, RequestResult } from '../shared/api.js'
+import type { Events, RequestArgs, RequestName, RequestResult } from '../shared/api.js'
 import { setPathPlatform } from '../shared/paths.js'
 
 /** The typed side of the one channel the window is given. */
@@ -12,25 +12,46 @@ declare global {
       korean: boolean
       /** Set when this window shows one paper on its own. */
       paper: string | null
-      flags: { split: boolean }
+      flags: { split: boolean; probe: boolean }
       /** Where a dropped file is on disk, or '' when it has no path. */
       pathForFile: (file: File) => string
     }
   }
 }
 
-export const platform = window.papertime.platform
+/**
+ * The preload's door — or, where there is no window (the tests run the
+ * store and the notes model under Node), a door that answers nothing until a
+ * test hands it an `invoke` of its own (`setInvoke`).
+ */
+const host: Window['papertime'] = (globalThis as { window?: Window }).window?.papertime ?? {
+  invoke: () => Promise.reject(new Error('No window to ask.')),
+  on: () => () => undefined,
+  platform: typeof process !== 'undefined' ? process.platform : 'linux',
+  korean: false,
+  paper: null,
+  flags: { split: false, probe: false },
+  pathForFile: () => '',
+}
+let invoke = host.invoke
+
+/** For a test: answers requests in place of the main process. */
+export function setInvoke(answer: (name: string, args?: unknown) => Promise<unknown>) {
+  invoke = answer
+}
+
+export const platform = host.platform
 // Which disks tell case apart: `shared/paths.ts` cannot ask `process` here.
 setPathPlatform(platform)
 /** The paper this window is for, when it is a window for one paper. */
-export const soloPaperID: string | null = window.papertime.paper ?? null
-export const flags = window.papertime.flags ?? { split: false }
+export const soloPaperID: string | null = host.paper ?? null
+export const flags = { split: Boolean(host.flags?.split), probe: Boolean(host.flags?.probe) }
 
 // Before anything draws: the main process already decided, and every string
 // below this line reads the answer — and so does the document, which said
 // `lang="ko"` in any language (hyphenation, the screen reader's voice).
-setKorean(window.papertime.korean)
-document.documentElement.lang = window.papertime.korean ? 'ko' : 'en'
+setKorean(host.korean)
+if (typeof document !== 'undefined') document.documentElement.lang = host.korean ? 'ko' : 'en'
 
 /** A request the main process answered by throwing, with which one it was. */
 export class BridgeError extends Error {
@@ -49,7 +70,7 @@ export function call<K extends RequestName>(
   name: K,
   ...args: RequestArgs<K> extends void ? [] : [RequestArgs<K>]
 ): Promise<RequestResult<K>> {
-  return (window.papertime.invoke(name, args[0]) as Promise<RequestResult<K>>).catch((error: unknown) => {
+  return (invoke(name, args[0]) as Promise<RequestResult<K>>).catch((error: unknown) => {
     // Electron wraps the main process's message in its own sentence about
     // the channel; what is left is `<request>: <why>`, logged here once.
     const message = String((error as Error)?.message ?? error)
@@ -59,14 +80,17 @@ export function call<K extends RequestName>(
   })
 }
 
-export function onEvent(handler: (event: string, payload: unknown) => void) {
-  return window.papertime.on(handler)
+export type EventName = keyof Events
+
+/** What the main process says unasked, typed by `Events` in `shared/api.ts`. */
+export function onEvent(handler: <E extends EventName>(event: E, payload: Events[E]) => void) {
+  return host.on(handler as (event: string, payload: unknown) => void)
 }
 
 /** The paths behind dropped files, in the order they were dropped. */
 export function droppedPaths(list: FileList | null | undefined): string[] {
   return [...(list ?? [])]
-    .map((file) => window.papertime.pathForFile?.(file) ?? '')
+    .map((file) => host.pathForFile?.(file) ?? '')
     .filter((path) => path.length > 0)
 }
 

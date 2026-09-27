@@ -54,6 +54,7 @@ export function paperHandlers(ctx: Context): Partial<Handlers> {
       const holder = await libraries.ownerOf(id)
       if (!holder) return null
       const saved = await records.meta(holder, id, patch, { stamp })
+      if (saved && ('tagIDs' in patch || 'collectionIDs' in patch)) await libraries.wear(holder, saved)
       windows.sendExcept(sender, 'paper:changed', { id, layers: ['record'] })
       return saved
     },

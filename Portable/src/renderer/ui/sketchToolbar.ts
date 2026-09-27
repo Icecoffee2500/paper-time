@@ -17,7 +17,7 @@
  */
 import { figmaIcon, icon } from '../icons.js'
 import { clear, el, on, place } from '../dom.js'
-import { INK_TOOLS, SHAPE_TOOLS, store, type SketchTool } from '../state.js'
+import { INK_TOOLS, SHAPE_TOOLS, readerState, store, type SketchTool } from '../state.js'
 import { L } from '../../shared/lang.js'
 
 // The labels are getters so they are read when a button is built, not when
@@ -108,8 +108,9 @@ export function buildSketchRack(actions: SketchRackActions): { node: HTMLElement
 
   function update() {
     clear(node)
-    node.style.display = store.reader.drawing ? '' : 'none'
-    if (!store.reader.drawing) return
+    const drawing = readerState().drawing
+    node.style.display = drawing ? '' : 'none'
+    if (!drawing) return
     const chosen = store.sketch.tool
     node.append(
       toolButton('select'),

@@ -546,7 +546,7 @@ function makeEditing(reader: Reader, host: SketchInputHost): SketchInputEditing 
     },
 
     selectAllOnPage() {
-      const page = reader.pages[store.reader.currentPage]
+      const page = reader.pages[reader.state.currentPage]
       if (!page) return
       entered = null
       const roots = new SketchTree(page.elements).roots
@@ -725,7 +725,7 @@ function makeEditing(reader: Reader, host: SketchInputHost): SketchInputEditing 
      *  drawing keeps its coordinates; back onto the page it came from it is
      *  nudged, so the copy does not hide the original. */
     pasteSketch() {
-      const page = reader.pages[store.reader.currentPage]
+      const page = reader.pages[reader.state.currentPage]
       if (!clipboard || !page) return
       const shift = clipboard.fromPage === page.index ? { x: 12, y: -12 } : { x: 0, y: 0 }
       const source = clipboard.elements.map(SketchElement.from)
@@ -745,7 +745,7 @@ function makeEditing(reader: Reader, host: SketchInputHost): SketchInputEditing 
     handleKey(event: KeyboardEvent): boolean {
       const target = event.target as HTMLElement | null
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return false
-      if (!store.reader.drawing) return false
+      if (!reader.state.drawing) return false
       const command = event.metaKey || event.ctrlKey
       const key = event.key
       const lower = key.toLowerCase()

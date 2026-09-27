@@ -160,6 +160,7 @@ export class Windows {
         additionalArguments: [
           ...(this.options.chromeOverride ? [`--papertime-chrome=${this.options.chromeOverride}`] : []),
           `--papertime-lang=${this.options.korean() ? 'ko' : 'en'}`,
+          ...(probe.isRun ? ['--papertime-probe-run=1'] : []),
           ...extraArguments,
         ],
       },
