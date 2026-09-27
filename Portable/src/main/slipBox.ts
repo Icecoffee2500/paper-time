@@ -13,6 +13,7 @@
  * note written here is that note there, and a folder carried across is not
  * rewritten by the other build the first time it looks at it.
  */
+import { noteOwnWrite } from './ownWrites.js'
 import { samePath } from '../shared/paths.js'
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
@@ -114,7 +115,9 @@ export class SlipBoxFolder {
     const temporary = `${file}.${process.pid}.tmp`
     try {
       await fsp.writeFile(temporary, zettelText(note), 'utf8')
+      noteOwnWrite(file)
       await fsp.rename(temporary, file)
+      noteOwnWrite(file)
     } catch (error) {
       await fsp.rm(temporary, { force: true })
       throw error

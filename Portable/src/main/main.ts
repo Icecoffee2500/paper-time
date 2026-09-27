@@ -1,97 +1,104 @@
 /**
- * The process that owns the files, the window and the menu.
+ * The launch script: composes the modules that own the files, the windows
+ * and the menu, and answers the app's lifecycle.
  *
- * Everything platform-specific in this app lives in this file and in
- * `menu.ts`: the window's chrome, where its buttons sit, and what the menu bar
- * is called. The window's contents are the same everywhere by construction —
- * one Chromium, one stylesheet, one bundled typeface — which is the point of
- * porting this way rather than three times.
+ * Everything platform-specific lives in this process — `windows.ts` for the
+ * frame, `menu.ts` for the bar — and the window's contents are the same
+ * everywhere by construction: one Chromium, one stylesheet, one bundled
+ * typeface, which is the point of porting this way rather than three times.
  */
-import {
-  BrowserWindow, app, dialog, ipcMain, nativeTheme, screen, shell, utilityProcess,
-  type UtilityProcess, type WebContents,
-} from 'electron'
-import crypto from 'node:crypto'
+import { BrowserWindow, app, nativeTheme } from 'electron'
 import fs from 'node:fs'
-import fsp from 'node:fs/promises'
 import path from 'node:path'
-import { Worker } from 'node:worker_threads'
-import { CHANNEL, type LibrarySnapshot, type NoteDTO, type RequestArgs, type RequestName, type RequestResult } from '../shared/api.js'
-import { Library, claimedBy, deviceIdentity, readJSON, writeJSON } from './library.js'
-import * as L from './layout.js'
-import { PaperMeta, PaperState, type Collection, type Tag } from '../shared/model.js'
-import { DEFAULT_EXPORT, formatBibliography } from '../shared/bibtex.js'
-import { SketchElement } from '../shared/sketch.js'
-import { InkStroke } from '../shared/ink.js'
-import {
-  WriteRefused,
-  isOurMark,
-  keptReason,
-  readDrawings,
-  readMarks,
-  rightsLock,
-  stripOwnedForDisplay,
-  writeDrawingsDetailed,
-  writeRefusal,
-  type KeptReason,
-  type MarkupRecord,
-  type PageDrawing,
-} from './pdfwrite.js'
-import {
-  freshJournal,
-  merged,
-  reconcile,
-  recordChanges,
-  upgradeLegacy,
-  type Held,
-  type Journal,
-} from '../shared/markJournal.js'
-import { isoTimestamp } from '../shared/coding.js'
-import { diagnose, headBytes, headLine, looksWhole, type ByteTrouble } from '../shared/pdfLock.js'
-import { flushSettings, holdInMemory, rememberLibrary, settings, update } from './settings.js'
-import { acceptedPatch, type Settings } from '../shared/appSettings.js'
-import { isUnder, samePath } from '../shared/paths.js'
-import { providerOf } from '../shared/cloudProvider.js'
-// `L` is the layout module in this file, so the two-language helper comes
-// in under a name of its own.
-import { L as say, resolveKorean, setKorean } from '../shared/lang.js'
-import { buildMenu } from './menu.js'
-import { watchLibrary } from './watcher.js'
-import { NotesStore } from './slipBox.js'
+import type { LibrarySnapshot, NoteDTO } from '../shared/api.js'
+import { resolveKorean, setKorean } from '../shared/lang.js'
 import { zettelDisplayTitle } from '../shared/zettel.js'
-import { captureAndQuit, probeArgument, runProbe } from './probe.js'
-import { capture as captureWindow, send as sendFeedback } from './feedback.js'
-import type { ServiceReply, ServiceStats } from './textService.js'
-import type { TextSource } from './textIndex.js'
+import { flushSettings, holdInMemory, settings } from './settings.js'
+import { buildMenu } from './menu.js'
+import { NotesStore } from './slipBox.js'
+import { captureAndQuit, runProbe } from './probe.js'
+import { probe } from './probeMode.js'
+import { Windows } from './windows.js'
+import { LibrarySet } from './libraries.js'
+import { FolderSync } from './folderSync.js'
+import { Journals } from './journal.js'
+import { PDFFlusher, sweepTemporaries } from './pdfFlush.js'
+import { PageCounter } from './pdfBytes.js'
+import { Records } from './records.js'
+import { TextBridge } from './textBridge.js'
 import { SemanticSearch, type NoteSource } from './semantic.js'
+import type { TextSource } from './textIndex.js'
+import { registerIPC } from './ipc.js'
+import type { Context, Handlers } from './handlers/context.js'
+import { libraryHandlers } from './handlers/library.js'
+import { paperHandlers } from './handlers/paper.js'
+import { drawingHandlers } from './handlers/drawing.js'
+import { notesHandlers } from './handlers/notes.js'
+import { windowHandlers } from './handlers/window.js'
+import { textHandlers } from './handlers/text.js'
+import { pageCount } from './handlers/shared.js'
 
 const isMac = process.platform === 'darwin'
-/** See `--papertime-chrome` in `preload.ts`. */
-const chromeOverride = probeArgument('chrome')
+
+// Nor write anything into their settings: a probe that opens a paper or picks
+// an inspector tab is not the person choosing one.
+if (probe.isRun) holdInMemory()
+
 /**
  * Decided here, once, and handed to the window as an argument: the menu is
  * built in this process and the interface in the other, and the two must not
- * answer the question separately and disagree. Settled at `whenReady` because
- * neither the locale nor the settings file is readable before that.
+ * answer the question separately and disagree. Settled at `whenReady`
+ * because neither the locale nor the settings file is readable before that.
  */
 let wantsKorean = false
 
-/** `--papertime-split=1`: the first two papers side by side, for a probe. */
-const wantsSplit = probeArgument('split') === '1'
+// MARK: - The modules
 
-let window: BrowserWindow | null = null
-let library: Library | null = null
-/**
- * The folders opened beside the first one.
- *
- * Every folder is a library in its own right — its own `.papertime` beside
- * its own PDFs — and they are read together into one list. The first one
- * holds the slip-box, the tags and the collections, because those are about
- * the whole library rather than about a folder.
- */
-let extraLibraries: Library[] = []
+const windows = new Windows({
+  chromeOverride: probe.argument('chrome'),
+  korean: () => wantsKorean,
+  split: probe.argument('split') === '1',
+})
+const send = windows.send.bind(windows)
+const log = (line: string) => process.stderr.write(`${line}\n`)
 
-const allLibraries = (): Library[] => (library ? [library, ...extraLibraries] : [])
+/** Every paper with a file to read, from the last read of the folders. */
+let textSources = new Map<string, TextSource>()
+/** The slip-box's notes, for search by meaning, by note. */
+const noteSources = new Map<string, NoteSource>()
+
+const text = new TextBridge({
+  directory: () => probe.textCacheDirectory(),
+  sources: () => [...textSources.values()],
+  roots: () => libraries.roots,
+  send,
+  onWarmed: () => semantic().schedule(2000),
+})
+
+const semanticProbe = probe.argument('semantic-index') === '1' || probe.argument('semantic-query') != null
+let semanticSearch: SemanticSearch | null = null
+
+/** Search by meaning, made the first time anything asks about it. */
+function semantic(): SemanticSearch {
+  if (semanticSearch) return semanticSearch
+  semanticSearch = new SemanticSearch(probe.semanticCacheDirectory(), {
+    sources: () => [...textSources.values()],
+    notes: () => [...noteSources.values()],
+    texts: (ids) => text.texts(ids),
+    enabled: () => settings().semanticSearch !== false,
+    send,
+    log: (line) => {
+      if (semanticProbe || probe.isRun) log(line)
+    },
+  })
+  return semanticSearch
+}
+
+/** Every note with words in it, as the index takes it — the Mac's `semanticSources`. */
+function noteSource(note: Pick<NoteDTO, 'id' | 'title' | 'body' | 'paperID'>): NoteSource | null {
+  if (note.title.trim().length === 0 && note.body.trim().length === 0) return null
+  return { id: note.id, paperID: note.paperID, markdown: note.body, title: zettelDisplayTitle(note as NoteDTO) }
+}
 
 /**
  * The slip-box's boxes: one per folder, plus the loose one. Made when a
@@ -102,12 +109,10 @@ const allLibraries = (): Library[] => (library ? [library, ...extraLibraries] : 
 let notesStore: NotesStore | null = null
 
 function openNotes(root: string): NotesStore {
-  const appFolder = isProbeLibrary()
-    ? `${root.replace(/[\\/]+$/, '')}-loose-notes`
-    : path.join(app.getPath('userData'), 'Notes')
+  const appFolder = probe.hasLibrary ? probe.looseNotesFolder(root) : path.join(app.getPath('userData'), 'Notes')
   // `--papertime-notes-chosen=<path>` stands in for the stored choice, so
   // the way a launch finds the chosen folder can be run without one.
-  const chosen = isProbeLibrary() ? probeArgument('notes-chosen') : settings().notesFolder
+  const chosen = probe.hasLibrary ? probe.argument('notes-chosen') : settings().notesFolder
   const store = new NotesStore(appFolder, chosen)
   notesStore = store
   // Whatever fell back into the app's folder while the chosen one was away
@@ -116,1801 +121,77 @@ function openNotes(root: string): NotesStore {
   return store
 }
 
-const notes = (): NotesStore => notesStore ?? openNotes(library?.root ?? app.getPath('temp'))
+const notes = (): NotesStore => notesStore ?? openNotes(libraries.first?.root ?? app.getPath('temp'))
 
-/** True when this run was told which folder to open, so it is a probe. */
-const isProbeLibrary = () => probeArgument('library') != null
-
-/**
- * True for any run that is only being looked at: one given a folder, a list of
- * steps, or a picture to take.
- *
- * Such a run must never come in front of what the person at this machine is
- * doing. `BrowserWindow.show()` on a Mac **activates the app** — the window
- * rises over their work and takes the keyboard — which is the thing the Mac
- * build's `Scripts/probe.sh` exists to prevent, and this build had no guard
- * against it at all.
- */
-const isProbeRun = () => ['library', 'probe', 'shot'].some((name) => probeArgument(name) != null)
-
-// Nor write anything into their settings: a probe that opens a paper or picks
-// an inspector tab is not the person choosing one.
-if (isProbeRun()) holdInMemory()
-
-/**
- * A place no display covers: right of the rightmost one, level with the
- * highest. The union of every display rather than the primary one, because a
- * second monitor to the left or above has real pixels at negative coordinates.
- * The window draws and can be captured there like anywhere else; nobody sees it.
- */
-function offscreen(width: number): { x: number; y: number } {
-  const displays = screen.getAllDisplays().map((one) => one.bounds)
-  const right = Math.max(...displays.map((one) => one.x + one.width))
-  const top = Math.min(...displays.map((one) => one.y))
-  return { x: right + Math.max(width, 400), y: top }
-}
-
-/** Which folders were open beside the first — unless this run is a probe. */
-function rememberExtras() {
-  if (isProbeLibrary()) return
-  update({ extraRoots: extraLibraries.map((one) => one.root) })
-}
-
-/** Which folder holds a paper, filled in as the list is read. */
-const ownerByID = new Map<string, Library>()
-
-/** The folder that holds a paper, and so the one that writes it. */
-async function ownerOf(id: string): Promise<Library | null> {
-  const known = ownerByID.get(id)
-  if (known) return known
-  for (const one of allLibraries()) {
-    if (await one.paper(id)) {
-      ownerByID.set(id, one)
-      return one
-    }
-  }
-  // No folder has it. Not the first folder: a sidecar written there for a
-  // paper it does not hold is a ghost record folder nothing reads back.
-  return null
-}
-let stopWatching: (() => void) | null = null
-
-/** What every window should hear: the library changed, the theme changed. */
-function send(event: string, payload?: unknown) {
-  for (const target of BrowserWindow.getAllWindows()) {
-    if (!target.isDestroyed()) target.webContents.send(CHANNEL.event, event, payload)
-  }
-}
-
-/** A menu command goes to the window it was meant for — the one in front. */
-function sendToFocused(event: string, payload?: unknown) {
-  const target = BrowserWindow.getFocusedWindow() ?? window
-  target?.webContents.send(CHANNEL.event, event, payload)
-}
-
-function sendTo(target: BrowserWindow | null, event: string, payload?: unknown) {
-  if (target && !target.isDestroyed()) target.webContents.send(CHANNEL.event, event, payload)
-}
-
-// MARK: - The window
-
-/** `--ground` in style.css, light and dark. */
-const GROUND = { light: '#e9eaec', dark: '#202024' }
-
-function launchGround(): string {
-  const appearance = settings().appearance
-  const dark = appearance === 'dark' || (appearance === 'system' && nativeTheme.shouldUseDarkColors)
-  return dark ? GROUND.dark : GROUND.light
-}
-
-/**
- * The saved place, when a display still shows it. A window saved on a
- * monitor that has since been unplugged opened off every screen, with no
- * way to drag it back; its size is kept and the desktop picks the place.
- */
-function onAScreen(saved: WindowShape): WindowShape {
-  const width = Number.isFinite(saved.width) ? Math.max(720, Math.round(saved.width)) : 1440
-  const height = Number.isFinite(saved.height) ? Math.max(480, Math.round(saved.height)) : 900
-  const shape: WindowShape = { width, height }
-  if (!Number.isFinite(saved.x) || !Number.isFinite(saved.y)) return shape
-  const x = Math.round(saved.x!)
-  const y = Math.round(saved.y!)
-  // Enough of the title bar to take hold of: 120 × 40 points on some display.
-  const visible = screen.getAllDisplays().some(({ workArea: area }) =>
-    x + width - 120 >= area.x && x + 120 <= area.x + area.width &&
-    y + 40 >= area.y && y <= area.y + area.height - 40)
-  if (!visible) return shape
-  const area = screen.getDisplayMatching({ x, y, width, height }).workArea
-  return { x, y, width: Math.min(width, area.width), height: Math.min(height, area.height) }
-}
-
-interface WindowShape {
-  width: number
-  height: number
-  x?: number
-  y?: number
-}
-
-/**
- * One window, the library's or a paper's own. Both are the same page with
- * the same chrome; a paper's window is told which paper it is for and shows
- * that paper's reader and nothing else.
- */
-function makeWindow(shape: WindowShape, extraArguments: string[] = []): BrowserWindow {
-  const made = new BrowserWindow({
-    width: shape.width,
-    height: shape.height,
-    x: shape.x,
-    y: shape.y,
-    minWidth: 720,
-    minHeight: 480,
-    show: false,
-    title: 'Paper Time',
-    // The toolbar is the app's, not the system's, so the frame goes. On a Mac
-    // the traffic lights stay where a Mac user reaches for them; on Windows
-    // and Linux the window's own buttons are drawn in the toolbar's right end,
-    // where those desktops put them. Everything between the two ends is the
-    // same pixel for pixel.
-    frame: false,
-    titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
-    trafficLightPosition: isMac ? { x: 14, y: 16 } : undefined,
-    // The page's own ground (`--ground` in style.css), from the appearance
-    // the reader chose, so the window does not flash another colour first.
-    backgroundColor: launchGround(),
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false,
-      spellcheck: true,
-      // A probe's window sits outside every display, where Chromium counts it
-      // as hidden and slows its timers and frames to a crawl — which would
-      // make every timing a probe takes a timing of the throttle. Only then.
-      backgroundThrottling: !isProbeRun(),
-      // The renderer gets its own argv; the app's is not passed down, so the
-      // one flag the window needs is handed over explicitly.
-      additionalArguments: [
-        ...(chromeOverride ? [`--papertime-chrome=${chromeOverride}`] : []),
-        `--papertime-lang=${wantsKorean ? 'ko' : 'en'}`,
-        ...extraArguments,
-      ],
-    },
-  })
-
-  made.loadFile(path.join(__dirname, '../renderer/index.html'))
-  made.once('ready-to-show', () => {
-    if (!isProbeRun()) return made.show()
-    // Outside every display, shown without activating anything.
-    const { width, height } = made.getBounds()
-    made.setBounds({ ...offscreen(width), width, height })
-    made.showInactive()
-  })
-  for (const event of ['maximize', 'unmaximize', 'enter-full-screen', 'leave-full-screen', 'focus', 'blur']) {
-    made.on(event as 'maximize', () => sendTo(made, 'window:state', windowState(made)))
-  }
-
-  // A page in the reader must never navigate the app away from itself, and a
-  // link in a paper belongs in the user's browser, not inside this window.
-  made.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:/.test(url)) shell.openExternal(url)
-    return { action: 'deny' }
-  })
-  made.webContents.on('will-navigate', (event, url) => {
-    if (!url.startsWith('file://')) event.preventDefault()
-  })
-  return made
-}
-
-function createWindow() {
-  const saved = settings().window
-  window = makeWindow(onAScreen(saved), wantsSplit ? ['--papertime-split=1'] : [])
-  // A probe keeps its own window where nobody is, and so neither fills the
-  // screen nor writes that place into the settings of whoever uses this copy.
-  if (saved.maximized && !isProbeRun()) window.maximize()
-
-  const remember = () => {
-    if (!window || window.isDestroyed() || isProbeRun()) return
-    const bounds = window.getBounds()
-    // The frame a maximised window had before, not the whole screen.
-    const kept = window.isMaximized() ? { ...settings().window, maximized: true } : { ...bounds, maximized: false }
-    update({ window: kept }, { soon: true })
-  }
-  window.on('resize', remember)
-  window.on('move', remember)
-  window.on('closed', () => {
-    window = null
-  })
-}
-
-/**
- * A window of its own for one paper, the way a browser tab torn off becomes
- * a window. Put with its top-left corner near the point when there is one —
- * where a drag ended — and beside the main window otherwise.
- */
-function createPaperWindow(id: string, at?: { x: number; y: number }) {
-  const shape: WindowShape = { width: 900, height: 760 }
-  if (at) {
-    shape.x = Math.round(at.x - 40)
-    shape.y = Math.round(at.y - 20)
-  } else if (window && !window.isDestroyed()) {
-    const bounds = window.getBounds()
-    shape.x = bounds.x + 60
-    shape.y = bounds.y + 60
-  }
-  const made = makeWindow(shape, [`--papertime-paper=${id}`])
-  paperWindows.add(made)
-  made.on('closed', () => paperWindows.delete(made))
-  return made
-}
-
-const paperWindows = new Set<BrowserWindow>()
-
-function windowState(target: BrowserWindow | null = window) {
-  const live = target && !target.isDestroyed() ? target : null
-  return {
-    maximized: live?.isMaximized() ?? false,
-    fullScreen: live?.isFullScreen() ?? false,
-    focused: live?.isFocused() ?? true,
-  }
-}
-
-/** Every window of ours, in screen points. */
-function allBounds() {
-  return BrowserWindow.getAllWindows()
-    .filter((target) => !target.isDestroyed() && target.isVisible())
-    .map((target) => target.getBounds())
-}
-
-// MARK: - The library
-
-const isFile = (file: string) => {
-  try {
-    return fs.statSync(file).isFile()
-  } catch {
-    return false
-  }
-}
-
-/**
- * Why a folder the window names is not one to open as a library, or null.
- * The window is a page: what it sends is checked here before anything is
- * written into a folder — a library writes its `.papertime` inside, and the
- * top of a drive or a whole home folder is not somewhere to do that.
- */
-function folderRefusal(root: string | undefined): string | null {
-  const no = say('이 폴더는 라이브러리로 열 수 없어요.', "Paper Time can't open that folder as a library.")
-  if (!root || typeof root !== 'string' || !path.isAbsolute(root)) return no
-  try {
-    if (!fs.statSync(root).isDirectory()) return no
-  } catch {
-    return say('폴더를 찾지 못했어요.', "Paper Time couldn't find that folder.")
-  }
-  const resolved = path.resolve(root)
-  if (samePath(resolved, path.parse(resolved).root) || samePath(resolved, app.getPath('home'))) return no
-  return null
-}
-
-/**
- * Reads the library and says what is in it.
- *
- * `refused` belongs to one press of "add the loose PDFs" and is given here by
- * that handler alone. It was module state for a while, which meant every later
- * snapshot carried it — the note stayed on screen after a reload, after the
- * folder was disconnected, in a window that had nothing to do with it, and
- * there was nothing that would clear it.
- */
-async function snapshot(refused: string[] = []): Promise<LibrarySnapshot | { error: string }> {
-  if (!library) return { error: 'No library is open.' }
-  try {
-    const rows: LibrarySnapshot['papers'] = []
-    let loose = 0
-    const unreadableRecords: string[] = []
-    // Built fresh and swapped in once the read is whole: cleared up front,
-    // every save that arrived during a slow read found no owner.
-    const owners = new Map<string, Library>()
-    // Every folder at once, and each folder's loose PDFs worked out from the
-    // records just read rather than by reading them all again. One of the
-    // folders is often on a cloud drive that has to wake up, and it used to
-    // hold up the ones on this machine.
-    const folders = allLibraries()
-    const read = await Promise.all(folders.map(async (one) => {
-      const { papers, trouble } = await one.read()
-      // A PDF whose record would not be read is not a loose PDF. It is a paper
-      // whose record is late, and offering it takes the same paper in a second
-      // time: another identifier, none of its marks, both rows on the shelf.
-      // The count waits for a folder that answers in full, and the window says
-      // how many records it is waiting on.
-      const free = trouble.length > 0 ? [] : await one.unclaimedFiles(claimedBy(papers))
-      return { one, papers, loose: free.length, trouble }
-    }))
-    const readable = new Map<string, TextSource>()
-    for (const folder of read) {
-      unreadableRecords.push(...folder.trouble)
-      for (const row of folder.papers) {
-        owners.set(row.id, folder.one)
-        // What the text index reads, kept here so a search never has to ask
-        // the folders where a paper's file is.
-        if (row.file && row.exists) {
-          readable.set(row.id, { id: row.id, file: row.file, title: new PaperMeta(row.meta).displayTitle })
-        }
-        rows.push({
-          id: row.id,
-          meta: row.meta,
-          state: row.state,
-          exists: row.exists,
-          // Which folder it came from: the sidebar groups by this, and
-          // nothing else needs to know.
-          root: folder.one.root,
-        })
-      }
-      loose += folder.loose
-    }
-    ownerByID.clear()
-    for (const [id, one] of owners) ownerByID.set(id, one)
-    textSources = readable
-    // The slip-box, read with the folders: the notes about these papers live
-    // beside them, and the ones about no paper in the loose box. Search by
-    // meaning reads the notes beside the papers' pages.
+const libraries = new LibrarySet({
+  remembers: () => !probe.hasLibrary,
+  notes: async (folders, folderOfPaper) => {
     const box = notes()
-    box.setFolders(folders.map((one) => one.root), (paperID) => ownerByID.get(paperID)?.root ?? null)
-    const noteRows = await box.load()
-    noteSources = noteSourcesFrom(noteRows)
-    textSourcesSent = false
+    box.setFolders(folders, folderOfPaper)
+    const rows = await box.load()
+    noteSources.clear()
+    for (const row of rows) {
+      const source = noteSource(row)
+      if (source) noteSources.set(row.id, source)
+    }
+    return { notes: rows, notesFolder: box.info() }
+  },
+  onRead: (sources) => {
+    textSources = sources
+    text.sourcesChanged()
     // The papers may have changed; search by meaning catches up once things
     // are quiet. Same papers as last time costs a comparison and nothing sent.
     semantic().schedule(5000)
-    await settleVocabulary(rows)
-    const { tags, collections } = await vocabulary()
-    return {
-      root: library.root,
-      roots: allLibraries().map((one) => one.root),
-      manifest: { ...(await library.manifest()), tags },
-      collections: { ...(await library.collections()), collections },
-      papers: rows,
-      looseCount: loose,
-      // Records the folders hold and this pass could not read. A count and the
-      // names, rather than a silence: one record arriving half written used to
-      // take every paper with it and leave a window with nothing to say.
-      unreadable: unreadableRecords,
-      // …and the ones this press of that button could not take in.
-      refused,
-      notes: noteRows,
-      notesFolder: box.info(),
-    }
-  } catch (error) {
-    return { error: String((error as Error).message ?? error) }
-  }
-}
+  },
+})
 
-/**
- * Every folder's tags and collections, merged into the one list the window
- * shows.
- *
- * A tag and a collection are names the reader gave a shelf, and they are kept
- * in the folder whose papers wear them rather than in one folder for all of
- * them — so a folder carried to another machine arrives with its papers still
- * tagged and still filed. A name two folders use is written in both under the
- * same identifier and shows once here.
- */
-async function vocabulary(): Promise<{ tags: Tag[]; collections: Collection[] }> {
-  const tags: Tag[] = []
-  const seenTags = new Set<string>()
-  const collections: Collection[] = []
-  const seenCollections = new Set<string>()
-  for (const one of allLibraries()) {
-    for (const tag of (await one.manifest()).tags ?? []) {
-      if (seenTags.has(tag.id)) continue
-      seenTags.add(tag.id)
-      tags.push(tag)
-    }
-    for (const collection of (await one.collections()).collections ?? []) {
-      if (seenCollections.has(collection.id)) continue
-      seenCollections.add(collection.id)
-      collections.push(collection)
-    }
-  }
-  // The name breaks a tie, as on the Mac: every folder numbers its own
-  // collections from nought.
-  collections.sort((a, b) =>
-    (a.sortIndex ?? 0) - (b.sortIndex ?? 0) || a.name.localeCompare(b.name))
-  return { tags, collections }
-}
+const pageCounter = new PageCounter()
+const journals = new Journals()
+const flush = new PDFFlusher({ ownerOf: (id) => libraries.ownerOf(id), journals, pageCounter, send, log })
+const records = new Records()
+const sync = new FolderSync({
+  libraries: () => libraries.all(),
+  looseNotes: () => notesStore?.info().loose ?? null,
+  pageCounter,
+  send,
+  log,
+})
 
-/**
- * Writes into each folder the tags and collections its own papers wear.
- *
- * A library that was one folder kept all of it in that folder, and a tag put
- * on a paper while its folder was away was written where the paper was not.
- * Both are mended by the same pass, which runs on every read and writes
- * nothing at all once every folder has what it needs.
- */
-async function settleVocabulary(rows: LibrarySnapshot['papers']): Promise<void> {
-  const libraries = allLibraries()
-  if (libraries.length < 2) return
-  const { tags, collections } = await vocabulary()
-  for (const one of libraries) {
-    const mine = rows.filter((row) => row.root === one.root)
-    if (mine.length === 0) continue
-    const wanted = (key: 'tagIDs' | 'collectionIDs') =>
-      new Set(mine.flatMap((row) => (row.meta[key] as string[] | undefined) ?? []))
-
-    const manifest = await one.manifest()
-    const has = new Set((manifest.tags ?? []).map((tag) => tag.id))
-    const missingTags = tags.filter((tag) => wanted('tagIDs').has(tag.id) && !has.has(tag.id))
-    if (missingTags.length > 0) {
-      await one.saveManifest({ ...manifest, tags: [...(manifest.tags ?? []), ...missingTags] })
-    }
-
-    const set = await one.collections()
-    const holds = new Set((set.collections ?? []).map((entry) => entry.id))
-    const missing = collections.filter(
-      (entry) => wanted('collectionIDs').has(entry.id) && !holds.has(entry.id),
-    )
-    if (missing.length > 0) {
-      await one.saveCollections([...(set.collections ?? []), ...missing])
-    }
-  }
-}
-
-async function openLibrary(root: string) {
-  stopWatching?.()
-  library = await Library.open(root)
-  if (!isProbeLibrary()) rememberLibrary(root)
+/** Opens a folder as the library — the launch's, or one chosen — and re-arms the watchers. */
+async function openLibrary(root: string): Promise<LibrarySnapshot | { error: string }> {
+  sync.stop()
+  await libraries.open(root)
   openNotes(root)
-  // All of them at once, and in the order they were remembered whatever
-  // order they answer in: that order is the sidebar's list of libraries, and
-  // a folder on a cloud drive that has to wake up should not hold up a folder
-  // on this machine.
-  const extras = (settings().extraRoots ?? []).filter((extra) => !samePath(extra, root))
-  extraLibraries = (await Promise.all(extras.map(async (extra) => {
-    // A folder on a disk that is not plugged in is not an error worth
-    // stopping the library for; it comes back when the disk does.
-    try { return await Library.open(extra) } catch { return null }
-  }))).filter((one): one is Library => one !== null)
-  startWatchingFolders()
-  return snapshot()
+  sync.start()
+  return libraries.snapshot()
 }
 
-let extraWatchers: (() => void)[] = []
-
-/** One watcher per folder: a PDF dropped into any of them is a paper here. */
-function startWatchingFolders() {
-  stopWatching?.()
-  for (const stop of extraWatchers) stop()
-  extraWatchers = []
-  const roots = allLibraries().map((one) => one.root)
-  stopWatching = roots[0] ? watchLibrary(roots[0], () => void folderDidChange()) : null
-  for (const root of roots.slice(1)) {
-    extraWatchers.push(watchLibrary(root, () => void folderDidChange()))
-  }
-  // And the loose notes' folder, which may be in a cloud drive too: a note
-  // the Mac wrote there arrives as a file appearing.
-  const loose = notesStore?.info().loose
-  if (loose && !roots.some((root) => isUnder(loose, root))) {
-    extraWatchers.push(watchLibrary(loose, () => void folderDidChange()))
-  }
-}
-
-/**
- * One settling at a time, and every fire gets its own.
- *
- * The watcher fires in bursts and adopting writes records, which fires it
- * again: two passes running together would write two records for one file,
- * and a pass that simply dropped the fires arriving while it ran would miss
- * the paper that landed a moment after it looked. So they queue.
- */
-let settling: Promise<void> | null = null
-
-/**
- * Brings the library back in line with the folder.
- *
- * A PDF that appears in a library folder is a paper in that library — that
- * is what choosing a folder means — so it is taken in rather than left
- * behind a button. The Mac has done this since it had folders
- * (`LibraryModel.folderDidChange`), and this side did not: a paper
- * downloaded into the folder on Windows became `+1` on the count of a button
- * beside a list of a hundred and sixty rows, which is the same as not
- * appearing at all. Two builds reading one folder have to agree about what
- * arriving in it means.
- *
- * Nothing is moved, renamed or rewritten: the file stays where it landed and
- * only the record beside it is new. Each folder takes in its own.
- *
- * Papers that were sitting in the folder when it was first opened are a
- * different matter and still wait to be offered, because the user has not yet
- * said that folder full of PDFs is their library — so nothing is taken in
- * while the library is empty.
- */
-function folderDidChange(): Promise<void> {
-  settling = (settling ?? Promise.resolve()).then(settleFolder)
-  return settling
-}
-
-async function settleFolder(): Promise<void> {
-  try {
-    const read = await Promise.all(allLibraries().map(async (one) => {
-      const { papers, trouble } = await one.read()
-      // Taking a PDF in on the app's own account is only safe when every
-      // record answered, because the check for one already here is a check
-      // against the records. Nothing is lost by waiting: this runs again on
-      // the next change to the folder, and on every reload.
-      const unclaimed = trouble.length > 0 ? [] : await one.unclaimedFiles(claimedBy(papers))
-      return { one, papers, unclaimed }
-    }))
-    const empty = read.every((folder) => folder.papers.length === 0)
-    if (!empty) {
-      for (const folder of read) {
-        for (const file of folder.unclaimed) {
-          // A file still coming down the cloud drive is not a paper yet.
-          // Reading it is what makes Windows fetch a placeholder, so this
-          // both waits for it and pulls it; what is still short after that
-          // is left for the next time the folder settles.
-          if (!looksWhole(await readWhole(file))) continue
-          await folder.one.importPDF(file, await pageCount(file))
-        }
-      }
+const context: Context = {
+  libraries, sync, flush, journals, records, text, semantic, notes, windows, pageCounter,
+  isProbe: probe.hasLibrary,
+  snapshot: (refused) => libraries.snapshot(refused),
+  openLibrary,
+  notesChanged: (saved, removed) => {
+    if (saved) {
+      const source = noteSource(saved)
+      if (source) noteSources.set(saved.id, source)
+      else noteSources.delete(saved.id)
     }
-  } catch {
-    // A folder that cannot be read right now — a disk unplugged, a cloud
-    // drive asleep — is not a reason to stop telling the window.
-  }
-  send('library:changed')
-}
-
-// MARK: - The words inside the papers
-
-/** Every paper with a file to read, from the last read of the folders. */
-let textSources = new Map<string, TextSource>()
-/** The slip-box's notes, for search by meaning, by note. */
-let noteSources = new Map<string, NoteSource>()
-
-/** Every note with words in it, as the index takes it — the Mac's `semanticSources`. */
-function noteSourcesFrom(rows: NoteDTO[]): Map<string, NoteSource> {
-  const found = new Map<string, NoteSource>()
-  for (const note of rows) {
-    if (note.title.trim().length === 0 && note.body.trim().length === 0) continue
-    found.set(note.id, { id: note.id, paperID: note.paperID, markdown: note.body, title: zettelDisplayTitle(note) })
-  }
-  return found
-}
-/** Whether the text service has been told about this list yet. */
-let textSourcesSent = false
-let textService: UtilityProcess | null = null
-/**
- * Which window asked for which search, so its answers go back to it. Every
- * window numbers its own searches from one, so the service is given numbers
- * of this process's own and each is mapped back on the way out.
- */
-const textSearches = new Map<number, { target: WebContents; token: number }>()
-const textTokens = new Map<string, number>()
-let textTokenCount = 0
-const textStatsWaiting: ((stats: ServiceStats | null) => void)[] = []
-/** Pages asked of the text service for search by meaning, by request number. */
-const textTextsWaiting = new Map<number, {
-  resolve: (reply: { papers: { id: string; pages: string[] }[]; unread: string[]; ms: number }) => void
-  reject: (error: Error) => void
-}>()
-let textTextsCount = 0
-
-/**
- * Where the text is kept: the app's own folder, never the library's.
- *
- * A probe keeps a folder of its own. It reads a test library, and its
- * clean-up — which takes out the text of papers that are gone — would
- * otherwise judge the person's own cache by the probe's library and empty it.
- */
-function textCacheDirectory(): string {
-  const chosen = probeArgument('text-cache')
-  if (chosen) return chosen
-  if (isProbeRun()) return path.join(app.getPath('temp'), 'Paper Time probe', 'Text')
-  return path.join(app.getPath('userData'), 'Text')
-}
-
-/**
- * Where the vectors are kept: beside the text, under the same rule. One
- * store for the app rather than one per folder — it keys by passage text,
- * and a paper in two folders shares its vectors.
- */
-function semanticCacheDirectory(): string {
-  const chosen = probeArgument('semantic-cache')
-  if (chosen) return chosen
-  if (isProbeRun()) return path.join(app.getPath('temp'), 'Paper Time probe', 'Semantic')
-  return path.join(app.getPath('userData'), 'Semantic')
-}
-
-const semanticProbe = probeArgument('semantic-index') === '1' || probeArgument('semantic-query') != null
-
-let semanticSearch: SemanticSearch | null = null
-
-/** Search by meaning, made the first time anything asks about it. */
-function semantic(): SemanticSearch {
-  if (semanticSearch) return semanticSearch
-  semanticSearch = new SemanticSearch(semanticCacheDirectory(), {
-    sources: () => [...textSources.values()],
-    notes: () => [...noteSources.values()],
-    texts: (ids) => new Promise((resolve, reject) => {
-      const token = (textTextsCount += 1)
-      textTextsWaiting.set(token, { resolve, reject })
-      textsWithSources().postMessage({ type: 'texts', token, ids })
-    }),
-    enabled: () => settings().semanticSearch !== false,
-    send,
-    log: (line) => {
-      if (semanticProbe || isProbeRun()) process.stderr.write(`${line}\n`)
-    },
-  })
-  return semanticSearch
-}
-
-/** The files pdf.js may ask for, by name — nothing with a path in it. */
-const ASSET_NAME = /^[A-Za-z0-9][A-Za-z0-9_.+-]*$/
-
-async function textAsset(kind: 'cmap' | 'font', name: string): Promise<Uint8Array | null> {
-  // The name comes out of a PDF, which anybody can write. Only a bare file
-  // name, only from the two folders the window loads the same files from.
-  if (!ASSET_NAME.test(name) || name.includes('..')) return null
-  const file = kind === 'cmap'
-    ? path.join(__dirname, '../renderer/cmaps', `${name}.bcmap`)
-    : path.join(__dirname, '../renderer/standard_fonts', name)
-  try {
-    return new Uint8Array(await fsp.readFile(file))
-  } catch {
-    return null
-  }
-}
-
-/**
- * The text service, started the first time a search needs it.
- *
- * Never at launch: most sessions never search the text at all, and the ones
- * that do start when the palette opens. It ends itself when nobody has asked
- * for ten minutes, and starts again the next time.
- */
-function texts(): UtilityProcess {
-  if (textService) return textService
-  // From the copy the packager leaves outside the archive (see `asarUnpack`
-  // in electron-builder.yml): the service starts threads from a file, and a
-  // file inside the archive is not one a thread can be started from.
-  const script = path.join(__dirname, 'textService.js')
-  const unpacked = script.replace(/app\.asar(?=[\\/])/, 'app.asar.unpacked')
-  const child = utilityProcess.fork(unpacked !== script && fs.existsSync(unpacked) ? unpacked : script, [], {
-    serviceName: 'Paper Time Text',
-  })
-  child.postMessage({ type: 'configure', directory: textCacheDirectory() })
-  textSourcesSent = false
-  child.on('message', (message: ServiceReply) => {
-    switch (message.type) {
-      case 'hits':
-      case 'done': {
-        const asked = textSearches.get(message.token)
-        if (!asked) break
-        if (message.type === 'done') {
-          textSearches.delete(message.token)
-          textTokens.delete(`${asked.target.id}:${asked.token}`)
-        }
-        if (!asked.target.isDestroyed()) {
-          asked.target.send(CHANNEL.event, `text:${message.type}`, { ...message, token: asked.token })
-        }
-        break
-      }
-      case 'warmed':
-        send('text:warmed', message)
-        // The pages are in hand now; search by meaning catches up shortly.
-        semantic().schedule(2000)
-        break
-      case 'texts': {
-        const asked = textTextsWaiting.get(message.token)
-        if (!asked) break
-        textTextsWaiting.delete(message.token)
-        asked.resolve({ papers: message.papers, unread: message.unread, ms: message.ms })
-        break
-      }
-      case 'asset':
-        void textAsset(message.kind, message.name).then((data) => {
-          child.postMessage({ type: 'asset', request: message.request, data })
-        })
-        break
-      case 'stats':
-        for (const waiting of textStatsWaiting.splice(0)) waiting(message.stats)
-        break
-    }
-  })
-  child.on('exit', () => {
-    if (textService === child) textService = null
-    // Searches in flight end with the process, and the window is told so
-    // rather than left waiting for answers that will not come.
-    for (const { target, token } of textSearches.values()) {
-      if (!target.isDestroyed()) target.send(CHANNEL.event, 'text:done', { token, searched: 0, found: 0, ms: 0 })
-    }
-    textSearches.clear()
-    textTokens.clear()
-    for (const waiting of textStatsWaiting.splice(0)) waiting(null)
-    for (const waiting of textTextsWaiting.values()) waiting.reject(new Error('the text service ended'))
-    textTextsWaiting.clear()
-  })
-  textService = child
-  return child
-}
-
-/** The service, with the latest list of papers it may be asked about. */
-function textsWithSources(): UtilityProcess {
-  const service = texts()
-  if (!textSourcesSent) {
-    service.postMessage({
-      type: 'sources',
-      sources: [...textSources.values()],
-      roots: allLibraries().map((one) => one.root),
-    })
-    textSourcesSent = true
-  }
-  return service
-}
-
-// MARK: - Requests
-
-/** A request, with the window that made it — dialogs hang off that one. */
-/**
- * Every request the window can make, answered with the shape `shared/api.ts`
- * says — a handler missing, renamed or answering something else fails the
- * build rather than a click.
- */
-type Handlers = {
-  [K in RequestName]: (args: RequestArgs<K>, sender: BrowserWindow | null) => RequestResult<K> | Promise<RequestResult<K>>
-}
-
-/**
- * The file, read until all of it is there.
- *
- * `fs.promises.readFile` resolves with a short buffer and throws nothing —
- * measured, 32 MB back from a 96 MB file with no error — and on a cloud
- * folder that is the ordinary way to meet a paper that is still coming down.
- * The Mac has `FileOperations.ensureDownloaded` for this. Node has no
- * cloud-filter API at all, and what makes Windows and Google Drive fetch a
- * placeholder is reading it, so reading again is the whole of the remedy.
- *
- * Bounded, and only for the troubles that reading again can cure. A file
- * somebody is still writing would otherwise hold this open for ever, and a
- * container or a sign-in page will read the same however many times it is
- * asked. A whole file costs one read and no wait.
- */
-const READ_AGAIN: ReadonlySet<ByteTrouble> = new Set(['cut', 'placeholder', 'empty'] as ByteTrouble[])
-
-async function readWhole(file: string): Promise<Uint8Array> {
-  let bytes = await fsp.readFile(file)
-  for (let attempt = 1; attempt < 6; attempt += 1) {
-    if (looksWhole(bytes)) break
-    const trouble = diagnose(bytes)
-    if (!trouble || !READ_AGAIN.has(trouble)) break
-    await new Promise((resolve) => setTimeout(resolve, 250))
-    bytes = await fsp.readFile(file)
-  }
-  return bytes
+    if (removed) noteSources.delete(removed)
+    semantic().scheduleNotes(5000)
+  },
 }
 
 const handlers: Handlers = {
-  // The effective root, not the remembered one: a probe run opens a folder
-  // of its own and the window must be told about that one.
-  'settings:get': () => ({ ...settings(), libraryRoot: library?.root ?? settings().libraryRoot }),
-  'settings:set': ((asked: Partial<Settings>) => {
-    const patch = acceptedPatch(asked as Record<string, unknown>)
-    const next = update(patch)
-    // The switch for search by meaning: off ends the worker and what it was
-    // doing; on starts the build the way a library read would.
-    if ('semanticSearch' in patch) {
-      if (next.semanticSearch === false) semantic().stop()
-      else semantic().schedule(500)
-    }
-    return next
-  }),
-
-  'library:choose': async (_args: void, sender: BrowserWindow | null) => {
-    const result = await dialog.showOpenDialog(sender ?? window!, {
-      title: 'Choose your library folder',
-      message: 'Pick the folder your papers live in — a cloud folder works, and is how a library follows you between machines.',
-      properties: ['openDirectory', 'createDirectory'],
-      buttonLabel: 'Use This Folder',
-    })
-    if (result.canceled || result.filePaths.length === 0) return null
-    return result.filePaths[0]
-  },
-
-  'library:open': (async ({ root }: { root: string }) => {
-    const refusal = folderRefusal(root)
-    if (refusal) return { error: refusal, refused: true as const }
-    return openLibrary(root)
-  }),
-  'library:reload': async () => snapshot(),
-
-  'library:import': (async ({ paths, root }: { paths?: string[]; root?: string }, sender: BrowserWindow | null) => {
-    if (!library) return { error: 'No library is open.' }
-    // Into the folder being looked at, as on the Mac (`importDestination`):
-    // a paper added while one library's own shelf is showing belongs to that
-    // library. Anything else — every other shelf, a folder inside a library —
-    // goes to the first one.
-    const destination = allLibraries().find((one) => samePath(one.root, root)) ?? library
-    let chosen = paths
-    if (!chosen || chosen.length === 0) {
-      const result = await dialog.showOpenDialog(sender ?? window!, {
-        title: 'Add PDFs',
-        message: 'Choose PDFs to add to the library',
-        filters: [{ name: 'PDF', extensions: ['pdf'] }],
-        properties: ['openFile', 'multiSelections'],
-      })
-      if (result.canceled) return snapshot()
-      chosen = result.filePaths
-    }
-    // PDFs only, and ones that are there: a drop carries whatever was
-    // dragged, and the window's list is not a promise about the disk.
-    const pdfs = chosen.filter((file) => /\.pdf$/i.test(file) && isFile(file))
-    for (const file of pdfs) {
-      await destination.importPDF(file, await pageCount(file))
-    }
-    return snapshot()
-  }),
-
-  'library:adoptLoose': async () => {
-    if (!library) return { error: 'No library is open.' }
-    // Each folder takes in its own: adopting a PDF must never move it to
-    // another folder.
-    //
-    // One file at a time, and a file that will not be read does not take the
-    // rest of the folder with it: this loop used to throw on the first
-    // unreadable PDF, so two hundred good papers waited behind one bad one and
-    // the window was told nothing at all.
-    const refused: string[] = []
-    for (const one of allLibraries()) {
-      for (const file of await one.looseFiles()) {
-        try {
-          await one.importPDF(file, await pageCount(file))
-        } catch {
-          refused.push(path.basename(file))
-        }
-      }
-    }
-    return snapshot(refused)
-  },
-
-  // Another folder, read beside the ones already open. Nothing is copied or
-  // moved: it keeps its own `.papertime`, so disconnecting leaves it exactly
-  // as it was.
-  'library:addFolder': (async ({ root }: { root?: string }, sender: BrowserWindow | null) => {
-    let chosen = root
-    if (!chosen) {
-      const result = await dialog.showOpenDialog(sender ?? window!, {
-        title: 'Add a folder',
-        message: 'Choose another folder to read beside this one. Its papers join the same list, and nothing is moved.',
-        properties: ['openDirectory', 'createDirectory'],
-        buttonLabel: 'Open This Folder Too',
-      })
-      if (result.canceled || result.filePaths.length === 0) return snapshot()
-      chosen = result.filePaths[0]
-    }
-    if (!library) return snapshot()
-    const refusal = folderRefusal(chosen)
-    if (refusal) return { error: refusal, refused: true as const }
-    // Already being read, or inside or around one that is: two libraries over
-    // the same files would show every paper twice and write each record from
-    // two places.
-    const overlapping = allLibraries().find((one) => isUnder(chosen!, one.root) || isUnder(one.root, chosen!))
-    if (overlapping) {
-      if (samePath(overlapping.root, chosen)) return snapshot()
-      return {
-        error: say(
-          '이미 연 라이브러리 안에 있거나 그것을 품은 폴더예요.',
-          'That folder is inside a library that is already open, or holds one.',
-        ),
-        refused: true as const,
-      }
-    }
-    extraLibraries.push(await Library.open(chosen))
-    rememberExtras()
-    startWatchingFolders()
-    return snapshot()
-  }),
-
-  /** Stops reading a folder. Its files and its records stay where they are. */
-  'library:removeFolder': (async ({ root }: { root: string }) => {
-    extraLibraries = extraLibraries.filter((one) => !samePath(one.root, root))
-    rememberExtras()
-    startWatchingFolders()
-    return snapshot()
-  }),
-
-  'library:trash': (async ({ id }: { id: string }) => {
-    await (await ownerOf(id))?.trashPaper(id)
-    return snapshot()
-  }),
-
-  'paper:bytes': (async ({ id }: { id: string }) => {
-    // Nothing in here throws. A rejected request reaches the window as an
-    // unhandled rejection, which is a blank page with nothing said on it —
-    // which is where the whole of this began.
-    try {
-      const row = await (await ownerOf(id))?.paper(id)
-      if (!row?.file || !row.exists) return { error: 'The PDF for this paper is not in the folder.' }
-      const bytes = await readWhole(row.file)
-      const trouble = diagnose(bytes)
-      const lock = await rightsLock(bytes)
-      if (lock) return { locked: lock }
-      // The diagnosis is never a door. pdf.js reads more than anything here
-      // does — it opens a paper with four kilobytes of a filter's banner glued
-      // to the front, and one whose last kilobytes are gone — so the bytes
-      // always go to it, and what was found only chooses the sentence if it
-      // fails. Refusing them was a regression the moment it was written:
-      // papers that opened before it stopped opening.
-      const about = { trouble, size: bytes.length, head: headBytes(bytes), line: headLine(bytes) }
-      try {
-        return { data: await stripOwnedForDisplay(bytes), ...about }
-      } catch (error) {
-        // Our own annotations could not be taken out, which is no reason to
-        // refuse the file — pdf.js parses more than pdf-lib does. It is handed
-        // the bytes as they are, ours included. The trouble goes through
-        // exactly as diagnosed: a whole file that pdf-lib choked on is not a
-        // file that is still arriving, and calling it one told somebody that
-        // 1.6 MB of a 1.6 MB file had turned up.
-        console.error('paper:bytes - reading the annotations failed, showing the file as it is:', error)
-        return { data: bytes, ...about }
-      }
-    } catch (error) {
-      console.error('paper:bytes -', error)
-      return { error: 'The PDF for this paper could not be read.' }
-    }
-  }),
-
-  'paper:state': (async ({ id, patch }: { id: string; patch: Record<string, unknown> }) => {
-    const owner = await ownerOf(id)
-    if (!owner) return null
-    const row = await owner.paper(id)
-    const state = new PaperState(row?.state ?? {})
-    // `null` takes a field off — a rating taken back to none — and the Mac's
-    // record has no key for a nil Optional, so none is written.
-    for (const [key, value] of Object.entries(patch)) if (value === null) patch[key] = undefined
-    // A patch crosses the bridge as JSON, so its dates arrive as strings.
-    Object.assign(state, patch, {
-      lastOpenedAt: patch.lastOpenedAt ? new Date(String(patch.lastOpenedAt)) : state.lastOpenedAt,
-    })
-    const saved = await owner.saveState(id, state)
-    return saved.encode()
-  }),
-
-  'paper:meta': (async ({ id, patch }: { id: string; patch: Record<string, unknown> }) => {
-    const owner = await ownerOf(id)
-    if (!owner) return null
-    const row = await owner.paper(id)
-    if (!row) return null
-    const meta = new PaperMeta(row.meta)
-    // `null` in a patch means «take it off» — a supplement detached from its
-    // paper. JSON cannot carry `undefined`, and the Mac's record has no key at
-    // all for a nil Optional, so none is written here either.
-    const cleared = Object.fromEntries(Object.entries(patch).map(([key, value]) => [key, value === null ? undefined : value]))
-    Object.assign(meta, cleared)
-    await owner.saveMeta(meta)
-    return meta.encode()
-  }),
-
-  // Renaming the file, from the inspector. The reader may have it open: the
-  // window is told, and re-reads the paper from its new name.
-  'paper:rename': (async ({ id, name }: { id: string; name: string }) => {
-    const owner = await ownerOf(id)
-    if (!owner) return { error: 'missing' }
-    const result = await owner.rename(id, name)
-    if ('error' in result) return result
-    send('library:changed')
-    return { name: result.file ? path.basename(result.file) : name }
-  }),
-
-  // A library's folder in the desktop's own file manager, from its row's
-  // menu. Only a folder the library is reading: the window does not get to
-  // open arbitrary paths.
-  'library:revealFolder': (async ({ root }: { root: string }) => {
-    if (!allLibraries().some((one) => samePath(one.root, root))) return
-    await shell.openPath(root)
-  }),
-
-  'paper:reveal': (async ({ id }: { id: string }) => {
-    const row = await (await ownerOf(id))?.paper(id)
-    if (row?.file) shell.showItemInFolder(row.file)
-  }),
-
-  'sketch:load': (async ({ id, pageIndex }: { id: string; pageIndex: number }) =>
-    (await ownerOf(id))?.loadSketch(id, pageIndex) ?? null),
-
-  'sketch:save': (async ({ id, pageIndex, elements }: { id: string; pageIndex: number; elements: unknown[] }) => {
-    await (await ownerOf(id))?.saveSketch(id, pageIndex, elements)
-    touched(id).sketch.add(pageIndex)
-    schedulePDFWrite(id)
-  }),
-
-  'ink:load': (async ({ id, pageIndex }: { id: string; pageIndex: number }) =>
-    (await ownerOf(id))?.loadInk(id, pageIndex) ?? null),
-
-  'ink:save': (async ({ id, pageIndex, strokes }: { id: string; pageIndex: number; strokes: unknown[] }) => {
-    // Into the folder that holds the paper, as every other sidecar is. This
-    // wrote into the first folder, so a stroke on a paper from a second one
-    // was saved where nothing reads it back: gone when the paper reopened,
-    // and missing from the file too — the file is written from the owner's
-    // sidecars, and an empty page's worth of ink took the old strokes out.
-    const owner = await ownerOf(id)
-    if (!owner) return
-    await owner.saveInk(id, pageIndex, strokes)
-    await supersedeAppleInk(owner, id, pageIndex)
-    touched(id).ink.add(pageIndex)
-    schedulePDFWrite(id)
-  }),
-
-  'marks:load': (async ({ id }: { id: string }) => {
-    const owner = await ownerOf(id)
-    const row = await owner?.paper(id)
-    if (!owner || !row?.file || !row.exists) return {}
-    const bytes = await fsp.readFile(row.file)
-    const found = await readMarks(bytes)
-    // This machine's journal from before 0.9.9 said only when each mark was
-    // made, which the Mac reads as "taken away". Brought up to date from the
-    // file the first time the paper is opened here.
-    const own = await ownJournal(id, owner.root)
-    if (upgradeLegacy(own.journal, found)) {
-      own.journal.updated = isoTimestamp(new Date())
-      await keepOwnJournal(id, owner.root, own)
-    }
-    // What the file holds, overruled by what every device's journal says: a
-    // mark made on a Mac a second ago, or one this machine could not put into
-    // an encrypted file, is a mark all the same.
-    const { pages, dirty } = reconcile(found, merged(await journalsFor(id, owner.root)))
-    // A mark only a journal holds — made on a Mac, or here before a quit
-    // that did not wait — goes into the file now, not at the next change.
-    if (dirty.size > 0) {
-      for (const pageIndex of dirty) touched(id).marks.add(pageIndex)
-      schedulePDFWrite(id)
-    }
-    const out: Record<number, MarkupRecord[]> = {}
-    for (const [pageIndex, marks] of pages) out[pageIndex] = marks
-    // Held here as the window has them, so the next save can tell what the
-    // window changed.
-    marksInMemory.set(id, out)
-    // An encrypted file carries none of what was made on it here, and the
-    // window says so the moment the paper opens — not only after the next
-    // save is turned away, which after a restart may be never.
-    const refused = await writeRefusal(bytes)
-    if (refused && await holdsAnything(owner, id, pages)) {
-      send('paper:kept', { id, reason: refused })
-    }
-    return out
-  }),
-
-  'marks:save': (async ({ id, pageIndex, marks }: { id: string; pageIndex: number; marks: MarkupRecord[] }) => {
-    const pages = marksInMemory.get(id) ?? {}
-    const before = pages[pageIndex] ?? []
-    pages[pageIndex] = marks
-    marksInMemory.set(id, pages)
-    await recordInJournal(id, pageIndex, before, marks, pages)
-    touched(id).marks.add(pageIndex)
-    schedulePDFWrite(id)
-  }),
-
-  'drawing:pages': (async ({ id }: { id: string }) =>
-    (await ownerOf(id))?.annotatedPages(id) ?? { sketch: [], ink: [], appleInk: [] }),
-
-  'drawing:adoptFromFile': (async ({ id }: { id: string }) => adoptFromFile(id)),
-
-  'drawing:flush': (async ({ id }: { id: string }) => {
-    const result = await flushToPDF(id)
-    if ('retry' in result) {
-      writeLater(id, FLUSH_RETRY[0])
-      return { written: 0 }
-    }
-    return result
-  }),
-
-  // The sheet's «Save…»: the text it previewed, where the person says.
-  'bibtex:save': (async ({ text }: { text: string }, sender: BrowserWindow | null) => {
-    const result = await dialog.showSaveDialog(sender ?? window!, {
-      title: say('BibTeX 내보내기', 'Export BibTeX'),
-      defaultPath: 'references.bib',
-      filters: [{ name: 'BibTeX', extensions: ['bib'] }],
-    })
-    if (result.canceled || !result.filePath) return { cancelled: true }
-    await fsp.writeFile(result.filePath, text, 'utf8')
-    return { path: result.filePath }
-  }),
-
-  // The window sends the whole list; it is put back folder by folder. Each
-  // folder keeps the collections it already had, and a new one goes into the
-  // first — the folder a paper added now would go into.
-  'collections:save': (async ({ collections }: { collections: unknown[] }) => {
-    const all = collections as Collection[]
-    const libraries = allLibraries()
-    if (libraries.length === 0) return null
-    const known = new Set<string>()
-    const held: { one: (typeof libraries)[number]; ids: Set<string> }[] = []
-    for (const one of libraries) {
-      const ids = new Set(((await one.collections()).collections ?? []).map((entry) => entry.id))
-      for (const id of ids) known.add(id)
-      held.push({ one, ids })
-    }
-    for (const [index, { one, ids }] of held.entries()) {
-      const mine = all.filter((entry) => ids.has(entry.id) || (index === 0 && !known.has(entry.id)))
-      if (mine.length === 0 && ids.size === 0) continue
-      await one.saveCollections(mine)
-    }
-    return null
-  }),
-
-  'window:minimize': (_args: void, sender: BrowserWindow | null) => (sender ?? window)?.minimize(),
-  'window:toggleMaximize': (_args: void, sender: BrowserWindow | null) => {
-    const target = sender ?? window
-    if (target?.isMaximized()) target.unmaximize()
-    else target?.maximize()
-  },
-  'window:close': (_args: void, sender: BrowserWindow | null) => (sender ?? window)?.close(),
-  'window:state': (_args: void, sender: BrowserWindow | null) => windowState(sender ?? window),
-  'window:bounds': () => allBounds(),
-  'paper:openWindow': (({ id, x, y }: { id: string; x?: number; y?: number }) => {
-    createPaperWindow(id, typeof x === 'number' && typeof y === 'number' ? { x, y } : undefined)
-  }),
-  // The app speaks to the outside world here and nowhere else, and only
-  // because somebody pressed 보내기.
-  'feedback:capture': (_args: void, sender: BrowserWindow | null) => captureWindow(sender ?? window),
-  'feedback:send': ((report: {
-    kind: 'bug' | 'wish'
-    body: string
-    name: string
-    reply?: string | null
-    shot?: string | null
-  }) =>
-    sendFeedback({
-      ...report,
-      context: {
-        window: window && !window.isDestroyed()
-          ? `${window.getBounds().width}×${window.getBounds().height}`
-          : undefined,
-        layout: settings().pageLayout,
-        paperCount: ownerByID.size,
-        libraryCloud: library ? providerOf(library.root) !== 'local' : undefined,
-        recent: [],
-      },
-    })),
-
-  // What the About section says: which version this is.
-  'app:about': () => ({ version: app.getVersion() }),
-
-  'shell:openExternal': (({ url }: { url: string }) => {
-    if (/^https?:/.test(url)) shell.openExternal(url)
-  }),
-
-  // The words inside the papers. The window says which papers, in which
-  // order, and under which titles; this process knows where their files are.
-  'text:warm': (({ ids }: { ids: string[] }) => {
-    textsWithSources().postMessage({ type: 'warm', ids })
-  }),
-  'text:search': (({ token, query, ids, titles, limit }: {
-    token: number; query: string; ids: string[]; titles: Record<string, string>; limit?: number
-  }, sender: BrowserWindow | null) => {
-    if (!sender) return
-    const global = (textTokenCount += 1)
-    textSearches.set(global, { target: sender.webContents, token })
-    textTokens.set(`${sender.webContents.id}:${token}`, global)
-    textsWithSources().postMessage({ type: 'search', token: global, query, ids, titles, limit })
-  }),
-  'text:cancel': (({ token }: { token: number }, sender: BrowserWindow | null) => {
-    const global = sender ? textTokens.get(`${sender.webContents.id}:${token}`) : undefined
-    if (global !== undefined) textService?.postMessage({ type: 'cancel', token: global })
-  }),
-  /** For a probe: what the service has read, and what it cost. */
-  'text:stats': () => new Promise<ServiceStats | null>((resolve) => {
-    if (!textService) return resolve(null)
-    textStatsWaiting.push(resolve)
-    textService.postMessage({ type: 'stats' })
-  }),
-
-  // Search by meaning. The window says what was typed and which places its
-  // exact search already shows; the answer is passages, best first.
-  'semantic:search': (({ query, k, shown }: { query: string; k?: number; shown?: string[] }) =>
-    semantic().search(query, k ?? 8, shown ?? [])),
-  'semantic:status': () => semantic().status(),
-  /** For a probe: builds now and waits, then says what the worker has. */
-  'semantic:build': async () => {
-    await semantic().build()
-    return { status: semantic().status(), stats: await semantic().stats(), unread: semantic().unread }
-  },
-
-  // MARK: The slip-box
-
-  'notes:load': async () => ({ notes: await notes().load(), notesFolder: notes().info() }),
-
-  'notes:save': (async ({ note }: { note: NoteDTO }) => {
-    const saved = await notes().save(note)
-    // Back into search by meaning once the typing has settled; each
-    // keystroke pushes that back.
-    const source = noteSourcesFrom([saved]).get(saved.id)
-    if (source) noteSources.set(saved.id, source)
-    else noteSources.delete(saved.id)
-    semantic().scheduleNotes(5000)
-    return saved
-  }),
-
-  'notes:delete': (async ({ id }: { id: string }) => {
-    await notes().delete(id)
-    noteSources.delete(id)
-    semantic().scheduleNotes(5000)
-  }),
-
-  /**
-   * A folder for the notes about no paper, and the notes moved into it — the
-   * Mac's «Loose Notes» in the settings. Not a library's own records: a
-   * second box over the same files would move every note about a paper out
-   * of it. The choice is remembered before anything moves, so a move stopped
-   * halfway is finished by the next launch.
-   */
-  'notes:chooseFolder': (async (_args: void, sender: BrowserWindow | null) => {
-    const result = await dialog.showOpenDialog(sender ?? window!, {
-      title: say('논문 없는 노트를 둘 폴더', 'A folder for notes that are not about a paper'),
-      message: say(
-        '논문 없는 노트를 둘 폴더를 골라주세요. 지금 있는 노트도 그리로 옮겨요.',
-        "Choose a folder for notes that aren't about a paper. The ones you have move there too.",
-      ),
-      properties: ['openDirectory', 'createDirectory'],
-      buttonLabel: say('여기에 두기', 'Keep Notes Here'),
-    })
-    if (result.canceled || result.filePaths.length === 0) return null
-    const chosen = result.filePaths[0]
-    if (chosen.split(/[\\/]/).includes(L.SUPPORT_DIR)) {
-      return { error: say('이 폴더에는 라이브러리의 기록이 있어요. 다른 폴더를 골라주세요.', 'That folder holds a library\'s records. Choose another one.') }
-    }
-    if (path.resolve(chosen) === path.resolve(notes().info().appFolder)) return { error: say('그 폴더는 이미 앱의 노트 폴더예요.', "That is already the app's own notes folder.") }
-    if (!isProbeLibrary()) update({ notesFolder: chosen })
-    const moved = await notes().relocate(chosen)
-    startWatchingFolders()
-    send('library:changed')
-    return { ...moved, notesFolder: notes().info() }
-  }),
-
-  'notes:useAppFolder': (async () => {
-    if (!isProbeLibrary()) update({ notesFolder: null })
-    const moved = await notes().relocate(null)
-    startWatchingFolders()
-    send('library:changed')
-    return { ...moved, notesFolder: notes().info() }
-  }),
-}
-
-ipcMain.handle(CHANNEL.invoke, async (event, name: string, args: unknown) => {
-  if (!Object.hasOwn(handlers, name)) throw new Error(`Unknown request: ${name}`)
-  const handler = handlers[name as RequestName] as (args: unknown, sender: BrowserWindow | null) => unknown
-  try {
-    return await handler(args, BrowserWindow.fromWebContents(event.sender))
-  } catch (error) {
-    // Said here, with the request's name, and passed on so the window's
-    // caller hears it too: Electron's own rethrow carried neither.
-    const id = args && typeof args === 'object' && 'id' in args ? ` (${String((args as { id: unknown }).id)})` : ''
-    console.error(`${name}${id} -`, error)
-    throw new Error(`${name}: ${(error as Error)?.message ?? String(error)}`)
-  }
-})
-
-// MARK: - The file, written behind the reader
-
-/**
- * How long after the last stroke the PDF itself is rewritten.
- *
- * The sidecar is saved the moment a gesture ends, so nothing is ever at risk.
- * Rewriting a twenty-megabyte file on every stroke, though, is how an app
- * starts stuttering under a pen — the same reason the Mac waits 1.5 seconds
- * before reconciling marks into the file.
- */
-const PDF_WRITE_DELAY = 1500
-const pending = new Map<string, NodeJS.Timeout>()
-
-/**
- * Every page's marks for the papers that are open, as the window has them.
- *
- * Read when the paper opens and replaced page by page as the window saves, so
- * that each save can be told apart from what came before it — which is what
- * goes into the journal. The file itself is written from the journals, not
- * from here: see `writePDF`.
- */
-const marksInMemory = new Map<string, Record<number, MarkupRecord[]>>()
-
-/**
- * The pages whose layers this run has saved, per paper.
- *
- * A page is this build's to rewrite for a layer when it has a sidecar here —
- * or when it was saved here and has none any more, because the last stroke on
- * it was rubbed out and an empty sidecar is removed. What a page must never be
- * is rewritten because it merely has something in the file: a page drawn on a
- * Mac carries the Mac's strokes in the PDF and in its `.drawing`, and in no
- * sidecar of this build's, and treating "no sidecar" as "no strokes" rubbed
- * them out of the file the first time this machine saved anything else.
- * Kept for the run; a page saved once stays this build's to write.
- */
-const touchedPages = new Map<string, { sketch: Set<number>; ink: Set<number>; marks: Set<number> }>()
-
-function touched(id: string) {
-  let pages = touchedPages.get(id)
-  if (!pages) {
-    pages = { sketch: new Set(), ink: new Set(), marks: new Set() }
-    touchedPages.set(id, pages)
-  }
-  return pages
-}
-
-/**
- * A save the file did not take is tried again — after 1.5, 5 and 15 seconds —
- * and then the reader says the marks are in Paper Time and not in the file,
- * until the next change tries once more. A file held by another program
- * (Windows Defender, a sync client, Acrobat) is the usual reason, and it
- * lets go within seconds. Before, the error went nowhere, and a file changed
- * underneath each save was tried again every 1.5 seconds for ever.
- */
-const FLUSH_RETRY = [1500, 5000, 15000]
-const flushAttempts = new Map<string, number>()
-
-/** A change to write into the file: starts the tries afresh. */
-function schedulePDFWrite(id: string) {
-  flushAttempts.delete(id)
-  writeLater(id, PDF_WRITE_DELAY)
-}
-
-function writeLater(id: string, delay: number) {
-  clearTimeout(pending.get(id))
-  pending.set(id, setTimeout(() => {
-    pending.delete(id)
-    flushToPDF(id).then(
-      (result) => afterFlush(id, result),
-      (error) => afterFlush(id, { error: String((error as Error)?.message ?? error) }),
-    )
-  }, delay))
-}
-
-function afterFlush(id: string, result: FlushResult) {
-  if (!('error' in result) && !('retry' in result)) {
-    flushAttempts.delete(id)
-    return
-  }
-  const attempt = (flushAttempts.get(id) ?? 0) + 1
-  if (attempt > FLUSH_RETRY.length) {
-    flushAttempts.delete(id)
-    console.error(`pdf write - ${id} gave up after ${FLUSH_RETRY.length} tries:`, 'error' in result ? result.error : result.retry)
-    send('paper:kept', { id, reason: 'io' })
-    return
-  }
-  flushAttempts.set(id, attempt)
-  writeLater(id, FLUSH_RETRY[attempt - 1])
-}
-
-/** One write at a time per paper: two would read the same file and race. */
-const flushing = new Map<string, Promise<unknown>>()
-
-/** `retry`: the file changed under the save, which goes again on top of it. */
-type FlushResult = { written: number } | { kept: KeptReason } | { error: string } | { retry: 'moved' }
-
-function flushToPDF(id: string): Promise<FlushResult> {
-  const before = flushing.get(id) ?? Promise.resolve()
-  const next = before.then(() => writePDF(id), () => writePDF(id))
-  flushing.set(id, next)
-  void next.finally(() => {
-    if (flushing.get(id) === next) flushing.delete(id)
-  })
-  return next
-}
-
-async function writePDF(id: string): Promise<FlushResult> {
-  // The folder the paper is in, and every sidecar and journal from there:
-  // the file, its drawings and its marks all live in one folder.
-  const owner = await ownerOf(id)
-  if (!owner) return { error: 'No library is open.' }
-  const row = await owner.paper(id)
-  if (!row?.file || !row.exists) return { error: 'The PDF is not where the record says it is.' }
-  let wanted = new Map<number, MarkupRecord[]>()
-  try {
-    const pages = await owner.annotatedPages(id)
-    const saved = touched(id)
-    const was = await fsp.stat(row.file)
-    const current = await fsp.readFile(row.file)
-    // The marks the file should hold: what it holds now, overruled by every
-    // device's journal — this machine's changes are in its own by now, and a
-    // Mac that marked the page a second ago is in its. `DocumentSession`
-    // writes the file the same way, to agree with all of them.
-    const reconciled = reconcile(await readMarks(current), merged(await journalsFor(id, owner.root)))
-    wanted = reconciled.pages
-    const dirty = reconciled.dirty
-    const sketchPages = new Set([...pages.sketch, ...saved.sketch])
-    const inkPages = new Set([...pages.ink, ...saved.ink])
-    const markPages = new Set([...saved.marks, ...dirty])
-    const indices = [...new Set([...sketchPages, ...inkPages, ...markPages])].sort((a, b) => a - b)
-    const drawings: PageDrawing[] = []
-    for (const pageIndex of indices) {
-      const managesSketch = sketchPages.has(pageIndex)
-      const managesInk = inkPages.has(pageIndex)
-      drawings.push({
-        pageIndex,
-        elements: managesSketch ? ((await owner.loadSketch(id, pageIndex)) ?? []).map(SketchElement.from) : [],
-        strokes: managesInk ? ((await owner.loadInk(id, pageIndex)) ?? []).map(InkStroke.from) : [],
-        // Only the marks this app made are ours to rewrite; one that was in
-        // the file when it arrived stays where it is, untouched.
-        marks: (wanted.get(pageIndex) ?? []).filter(isOurMark),
-        managesSketch,
-        managesInk,
-        managesMarks: markPages.has(pageIndex),
-      })
-    }
-    if (drawings.length === 0) return { written: 0 }
-    const written = await writeDrawingsDetailed(current, drawings)
-    // Nothing to change is nothing to write: the same bytes come back.
-    if (written.changed) {
-      // The base for compaction, the way the Mac records it: the file as it
-      // is just before the first update goes onto it, once.
-      await recordBaseIfAbsent(owner.root, id, current)
-      const placed = await appendVerified(row.file, was, current, written.bytes, written.pages)
-      if (placed === 'moved') {
-        // Somebody else wrote the file between the read and the write — the
-        // Mac through the cloud, most likely. Theirs stands; this save goes
-        // again on top of it (`afterFlush`, three times at most).
-        return { retry: 'moved' }
-      }
-      if (written.stats) {
-        const s = written.stats
-        process.stderr.write(`pdf append: ${path.basename(row.file)} +${s.bytesAfter - s.bytesBefore} B, xref=${s.xrefKind}, pages=${s.pagesChanged}, added=${s.annotationsAdded}, removed=${s.annotationsRemoved}, freed=${s.objectsFreed}, ${s.ms} ms\n`)
-      }
-    }
-    send('paper:saved', { id })
-    return { written: drawings.length }
-  } catch (error) {
-    if (error instanceof WriteRefused) {
-      // Not a failure, and not said as one. Everything is where it was put —
-      // the shapes and the strokes in their sidecars, the marks in the
-      // journal — and the window says that the file is not where they are.
-      // Once the last of them is taken away there is nothing left to say it
-      // about, and the line goes.
-      const reason = keptReason(error.reason)
-      process.stderr.write(`pdf append refused: ${path.basename(row.file)}: ${error.message}\n`)
-      const held = await holdsAnything(owner, id, wanted)
-      send('paper:kept', { id, reason: held ? reason : null })
-      return { kept: reason }
-    }
-    return { error: String((error as Error).message ?? error) }
-  }
-}
-
-/**
- * `.papertime/papers/<id>/pdf/base.json`: the length and digest of the file
- * before anything was ever appended to it — what compaction on the Mac
- * rebases onto (`PDFBase`). Written once, never changed; the same bytes the
- * Mac writes, so either build can have been first.
- */
-async function recordBaseIfAbsent(root: string, id: string, bytes: Uint8Array) {
-  const file = path.join(L.paperDir(root, id), 'pdf', 'base.json')
-  if (fs.existsSync(file)) return
-  const digest = crypto.createHash('sha256').update(bytes).digest('hex')
-  await writeJSON(file, { digest, length: bytes.length })
-}
-
-/**
- * Puts the appended file in the original's place — and only when it is what
- * it claims to be.
- *
- * The paper is the one thing in this library that cannot be regenerated, so
- * nothing replaces it that has not been read back and checked: the file on
- * disk is still the one that was read (size and time), the temporary file
- * begins with the very bytes that were read (length and a digest of the
- * prefix), and pdf.js opens it with the page count our own reader found. A
- * check that fails leaves the original untouched and the marks in the
- * journal. Temporary file beside the original, then rename over it.
- */
-async function appendVerified(file: string, was: fs.Stats, original: Uint8Array, result: Uint8Array, pages: number): Promise<'placed' | 'moved'> {
-  const temporary = `${file}.${process.pid}.tmp`
-  try {
-    await fsp.writeFile(temporary, result)
-    const back = await fsp.readFile(temporary)
-    if (back.length !== result.length || back.length < original.length) throw new WriteRefused('verification', 'the temporary file is not the right length')
-    const wanted = crypto.createHash('sha256').update(original).digest('hex')
-    const got = crypto.createHash('sha256').update(back.subarray(0, original.length)).digest('hex')
-    if (wanted !== got) throw new WriteRefused('verification', 'the result does not begin with the original bytes')
-    const counted = await pageCountWithPDFJS(back)
-    if (counted !== pages) throw new WriteRefused('verification', `pdf.js reads ${counted} pages, the file says ${pages}`)
-    const now = await fsp.stat(file)
-    if (now.size !== was.size || now.mtimeMs !== was.mtimeMs) {
-      await fsp.rm(temporary, { force: true })
-      return 'moved'
-    }
-    await renameHeld(temporary, file)
-    return 'placed'
-  } catch (error) {
-    await fsp.rm(temporary, { force: true })
-    throw error
-  }
-}
-
-/**
- * A rename over a file another program has open. On Windows that fails —
- * EPERM, EBUSY, EACCES — while an antivirus scans the file it just saw
- * change, a sync client uploads it, or a reader shows it, and each of them
- * lets go within moments. Tried a few times before the save is given back
- * to `afterFlush`.
- */
-async function renameHeld(from: string, to: string) {
-  const waits = [100, 300, 1000, 2000]
-  for (let attempt = 0; ; attempt += 1) {
-    try {
-      await fsp.rename(from, to)
-      return
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code
-      if (attempt >= waits.length || !['EPERM', 'EBUSY', 'EACCES'].includes(code ?? '')) throw error
-      await new Promise((resolve) => setTimeout(resolve, waits[attempt]))
-    }
-  }
-}
-
-/**
- * How many pages pdf.js reads in these bytes — the reader the window uses,
- * asked on a thread of its own so the process that owns the windows never
- * loads a document. The text service's worker script already knows how to
- * be that thread; it is started here for this one answer and let go.
- */
-function pageCountWithPDFJS(bytes: Uint8Array): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const script = path.join(__dirname, 'textWorker.js')
-    const unpacked = script.replace(/app\.asar(?=[\\/])/, 'app.asar.unpacked')
-    const worker = new Worker(unpacked !== script && fs.existsSync(unpacked) ? unpacked : script)
-    const done = (settle: () => void) => {
-      settle()
-      void worker.terminate()
-    }
-    worker.on('message', (message: { type: string; pages?: number; error?: string }) => {
-      if (message.type === 'pages') done(() => resolve(message.pages ?? -1))
-      else if (message.type === 'failed') done(() => reject(new WriteRefused('verification', `pdf.js: ${message.error ?? 'cannot open the result'}`)))
-    })
-    worker.on('error', (error) => done(() => reject(error)))
-    // A copy of its own: a Buffer's `.buffer` is Node's shared pool.
-    const owned = new Uint8Array(bytes).buffer
-    worker.postMessage({ type: 'pages', job: 1, bytes: owned }, [owned])
-  })
-}
-
-/**
- * Whether anything this build made is on the paper — a mark, a shape, a
- * stroke — for the line that says the file does not carry it.
- */
-async function holdsAnything(owner: Library, id: string, marks: Map<number, MarkupRecord[]>): Promise<boolean> {
-  for (const list of marks.values()) if (list.some(isOurMark)) return true
-  const drawn = await owner.annotatedPages(id)
-  return drawn.sketch.length > 0 || drawn.ink.length > 0
-}
-
-/**
- * Builds sidecars for a paper whose drawing is only in the PDF.
- *
- * That is what a paper annotated on a Mac looks like the first time it is
- * opened here: the shapes are in the file, carrying their own JSON in
- * `/PTSketch`, and the pen's strokes are ordinary ink annotations. Both come
- * across; what does not is the pressure in the Mac's `.drawing`, which no
- * format but PencilKit's own can hold.
- */
-async function adoptFromFile(id: string) {
-  // The folder that holds the paper: asked of the first folder, a paper from
-  // a second one was never found, and its Mac drawings never came across.
-  const owner = await ownerOf(id)
-  if (!owner) return { pages: {}, unreadable: [] as number[] }
-  const row = await owner.paper(id)
-  if (!row?.file || !row.exists) return { pages: {}, unreadable: [] as number[] }
-  const found = await readDrawings(await fsp.readFile(row.file))
-  const pages: Record<number, { elements: unknown[]; strokes: unknown[] }> = {}
-  for (const [pageIndex, drawing] of found) {
-    // Shapes are lossless in the file — the annotation carries the element's
-    // own JSON — so a sidecar built from it is exactly the sidecar the Mac
-    // had, and worth writing.
-    if (!(await owner.loadSketch(id, pageIndex)) && drawing.elements.length > 0) {
-      await owner.saveSketch(id, pageIndex, drawing.elements.map((e) => e.encode()))
-    }
-    // Ink is not. The strokes in the file have one width each, where the
-    // Mac's `.drawing` still holds the pressure at every point. They are
-    // handed to the window to *show* — a reader must see the handwriting on
-    // the page — but no sidecar is written for them, because writing one
-    // would be this machine claiming a page it has not been asked to touch.
-    pages[pageIndex] = {
-      elements: drawing.elements.map((e) => e.encode()),
-      strokes: drawing.strokes.map((s) => s.encode()),
-    }
-  }
-
-  // A page whose handwriting exists only as PencilKit's own file, which no
-  // format outside Apple's frameworks can read. Rather than quietly showing a
-  // page with the writing missing, the window is told which pages they are.
-  const unreadable: number[] = []
-  const pageList = await owner.annotatedPages(id)
-  for (const pageIndex of pageList.appleInk) {
-    if (await owner.loadInk(id, pageIndex)) continue
-    if ((found.get(pageIndex)?.strokes.length ?? 0) > 0) continue
-    unreadable.push(pageIndex)
-  }
-  return { pages, unreadable }
-}
-
-/**
- * Moves the Mac's PencilKit sidecar aside once this machine has drawn on that
- * page.
- *
- * Both sidecars would otherwise claim the same page and the two machines would
- * show different things: the Mac reads its `.drawing` in preference to the
- * file, so it would keep showing the page as it was before the pen touched it
- * here. Renamed rather than deleted — the pressure in it is the user's work,
- * and nothing in this app deletes that. With the `.drawing` out of the way the
- * Mac falls back to the ink in the PDF, which is what both sides now agree on.
- */
-async function supersedeAppleInk(owner: Library, id: string, pageIndex: number) {
-  const file = L.appleInkPath(owner.root, id, pageIndex)
-  if (!fs.existsSync(file)) return
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-')
-  await fsp.rename(file, `${file}.superseded-${stamp}`)
-}
-
-// MARK: - The marks journal
-
-/** What the Mac's `DeviceIdentity.platformName` is for this machine. */
-const PLATFORM_NAME = process.platform === 'win32' ? 'Windows' : process.platform === 'linux' ? 'Linux' : 'Mac'
-
-/**
- * This device's journal for each paper, held here once read.
- *
- * Held, not re-read, because it is the one journal nobody else writes, and
- * because a save must not depend on the file coming back: `loaded` is false
- * when the copy on disk would not be read — still arriving down a cloud
- * drive, or damaged — and a journal that was not read is never written over.
- * What is recorded meanwhile is kept here, merged in once it can be read.
- */
-const ownJournals = new Map<string, { journal: Journal; loaded: boolean }>()
-
-/**
- * One read at a time per paper: two marks made before the first read came
- * back each read the file, and the second `set` replaced the first's copy —
- * with the first mark in it gone.
- */
-const journalReads = new Map<string, Promise<{ journal: Journal; loaded: boolean }>>()
-
-function ownJournal(id: string, root: string): Promise<{ journal: Journal; loaded: boolean }> {
-  const known = ownJournals.get(id)
-  if (known?.loaded) return Promise.resolve(known)
-  const reading = journalReads.get(id)
-  if (reading) return reading
-  const next = readOwnJournal(id, root).finally(() => journalReads.delete(id))
-  journalReads.set(id, next)
-  return next
-}
-
-async function readOwnJournal(id: string, root: string) {
-  const known = ownJournals.get(id)
-  const file = L.marksPath(root, id, deviceIdentity)
-  try {
-    const disk = asJournal(await readJSON(file)) ?? freshJournal(deviceIdentity, PLATFORM_NAME)
-    for (const [key, entry] of Object.entries(known?.journal.entries ?? {})) {
-      const there = disk.entries[key]
-      if (!there || Date.parse(there.at) < Date.parse(entry.at)) disk.entries[key] = entry
-    }
-    const own = { journal: disk, loaded: true }
-    ownJournals.set(id, own)
-    return own
-  } catch (error) {
-    console.error("marks journal - this device's journal could not be read, and is not written over:", error)
-    if (known) return known
-    const own = { journal: freshJournal(deviceIdentity, PLATFORM_NAME), loaded: false }
-    ownJournals.set(id, own)
-    return own
-  }
-}
-
-/**
- * Writes this device's journal 200 ms after the last change to it, as the
- * Mac does — a stroke of the highlighter across a paragraph is several saves,
- * and the journal is a file in a synced folder. What is held here is what
- * the next PDF write reads, so nothing waits on the disk; `flushJournals`
- * writes whatever is still waiting at quit.
- */
-const journalWrites = new Map<string, { timer: NodeJS.Timeout; write: () => Promise<void> }>()
-
-async function keepOwnJournal(id: string, root: string, own: { journal: Journal; loaded: boolean }) {
-  if (!own.loaded) return
-  const waiting = journalWrites.get(id)
-  if (waiting) clearTimeout(waiting.timer)
-  const write = async () => {
-    journalWrites.delete(id)
-    own.journal.device = deviceIdentity
-    own.journal.name = PLATFORM_NAME
-    try {
-      await writeJSON(L.marksPath(root, id, deviceIdentity), own.journal)
-    } catch (error) {
-      console.error(`marks journal - ${id} could not be written:`, error)
-    }
-  }
-  journalWrites.set(id, { timer: setTimeout(() => void write(), 200), write })
-}
-
-async function flushJournals() {
-  const waiting = [...journalWrites.values()]
-  for (const one of waiting) clearTimeout(one.timer)
-  await Promise.allSettled(waiting.map((one) => one.write()))
-}
-
-/** A record read from disk, if it has a journal's shape. */
-function asJournal(raw: unknown): Journal | null {
-  if (!raw || typeof raw !== 'object') return null
-  const journal = raw as Journal
-  if (!journal.entries || typeof journal.entries !== 'object') journal.entries = {}
-  return journal
-}
-
-/**
- * Every device's journal for a paper: the others as their files have them,
- * this one as it is held here. A journal that will not be read is left out —
- * it is somebody's, and it is late, and the file already holds what it said
- * the last time that device wrote it.
- */
-async function journalsFor(id: string, root: string): Promise<Held[]> {
-  const out: Held[] = []
-  let names: string[] = []
-  try {
-    names = await fsp.readdir(L.marksDir(root, id))
-  } catch {
-    names = []
-  }
-  for (const name of names) {
-    if (!name.endsWith('.json')) continue
-    try {
-      const journal = asJournal(await readJSON(path.join(L.marksDir(root, id), name)))
-      if (!journal) continue
-      const device = typeof journal.device === 'string' ? journal.device : name.slice(0, -'.json'.length)
-      if (device === deviceIdentity) continue
-      out.push({ device, journal })
-    } catch {
-      continue
-    }
-  }
-  const own = await ownJournal(id, root)
-  out.push({ device: deviceIdentity, journal: own.journal })
-  return out
-}
-
-/**
- * Records in this device's journal what one save of a page changed.
- *
- * The journal is the fast path between machines: the PDF is the durable
- * record and is rewritten a second or so later, but a small file naming what
- * this device just did lands in the synced folder at once. It is also where a
- * mark stays when the PDF cannot take it. The Mac writes the same shape — a
- * `MarkupDescriptor` for a mark made or changed, nothing for one taken away —
- * and reconciles from it.
- */
-async function recordInJournal(
-  id: string,
-  pageIndex: number,
-  before: MarkupRecord[],
-  after: MarkupRecord[],
-  pages: Record<number, MarkupRecord[]>,
-) {
-  const owner = await ownerOf(id)
-  if (!owner) return
-  const own = await ownJournal(id, owner.root)
-  const elsewhere = new Set<string>()
-  for (const [index, marks] of Object.entries(pages)) {
-    if (Number(index) === pageIndex) continue
-    for (const mark of marks) elsewhere.add(mark.id.toUpperCase())
-  }
-  if (!recordChanges(own.journal, pageIndex, before, after, new Date(), elsewhere)) return
-  await keepOwnJournal(id, owner.root, own)
-}
-
-/** How many pages a PDF has, read without rendering it. */
-async function pageCount(file: string): Promise<number> {
-  try {
-    const { PDFDocument } = await import('pdf-lib')
-    const document = await PDFDocument.load(await fsp.readFile(file), {
-      ignoreEncryption: true,
-      updateMetadata: false,
-    })
-    return document.getPageCount()
-  } catch {
-    return 0
-  }
-}
+  ...libraryHandlers(context),
+  ...paperHandlers(context),
+  ...drawingHandlers(context),
+  ...notesHandlers(context),
+  ...windowHandlers(context),
+  ...textHandlers(context),
+} as Handlers
+
+registerIPC(handlers)
 
 // MARK: - Launch
 
@@ -1920,12 +201,10 @@ async function pageCount(file: string): Promise<number> {
 if (process.platform === 'win32') app.setAppUserModelId('com.imtaeheon.PaperTime')
 
 /**
- * Wayland, when the session is Wayland.
- *
- * Electron still defaults to X11 through XWayland, which on a fractional-scale
- * display means a blurred window and a pen whose coordinates are a scale
- * factor out — on a drawing app, the second one is fatal. The hint uses
- * Wayland where the session offers it and falls back to X11 where it does not.
+ * Wayland, when the session is Wayland. Electron still defaults to X11
+ * through XWayland, which on a fractional-scale display means a blurred
+ * window and a pen whose coordinates are a scale factor out — on a drawing
+ * app, the second one is fatal.
  */
 if (process.platform === 'linux' && !app.commandLine.hasSwitch('ozone-platform-hint')) {
   app.commandLine.appendSwitch('ozone-platform-hint', 'auto')
@@ -1937,11 +216,10 @@ if (process.platform === 'linux' && !app.commandLine.hasSwitch('ozone-platform-h
  * processes on one `settings.json` and one library each wrote over the
  * other. A probe is not the reader's copy and takes no lock.
  */
-const holdsTheLock = isProbeRun() || app.requestSingleInstanceLock()
-if (!holdsTheLock) app.exit(0)
+if (!probe.isRun && !app.requestSingleInstanceLock()) app.exit(0)
 
 app.on('second-instance', (_event, argv) => {
-  const target = window && !window.isDestroyed() ? window : BrowserWindow.getAllWindows()[0]
+  const target = windows.main && !windows.main.isDestroyed() ? windows.main : BrowserWindow.getAllWindows()[0]
   if (target) {
     if (target.isMinimized()) target.restore()
     target.show()
@@ -1957,14 +235,17 @@ function pdfsIn(argv: string[]): string[] {
 
 /** PDFs handed to the app from outside, into the first library. */
 async function openFiles(files: string[]) {
-  if (!library || files.length === 0) return
-  for (const file of files) {
-    try {
-      await library.importPDF(file, await pageCount(file))
-    } catch (error) {
-      console.error(`open file - ${file} could not be added:`, error)
+  const first = libraries.first
+  if (!first || files.length === 0) return
+  await sync.run(async () => {
+    for (const file of files) {
+      try {
+        await first.importPDF(file, await pageCount(pageCounter, file))
+      } catch (error) {
+        console.error(`open file - ${file} could not be added:`, error)
+      }
     }
-  }
+  })
   send('library:changed')
 }
 
@@ -1976,96 +257,81 @@ process.on('unhandledRejection', (reason) => console.error('unhandled rejection 
 app.whenReady().then(async () => {
   // A probe is told which folder to open. One that is not — only steps or a
   // picture — would open the reader's own library and notes, and write them.
-  if (isProbeRun() && !isProbeLibrary()) {
-    process.stderr.write('probe: refusing to run without --papertime-library=<folder>\n')
+  if (probe.isRun && !probe.hasLibrary) {
+    log('probe: refusing to run without --papertime-library=<folder>')
     app.exit(2)
     return
   }
   // No Dock icon and no menu bar for a probe: an accessory app does not become
   // the active app by being launched, and its windows do not bounce the Dock.
-  if (isMac && isProbeRun()) {
+  if (isMac && probe.isRun) {
     app.setActivationPolicy('accessory')
     app.dock?.hide()
   }
   wantsKorean = resolveKorean(settings().language, app.getLocale())
   setKorean(wantsKorean)
-  createWindow()
+  windows.createMain()
   buildMenu({
-    send: sendToFocused,
+    send: windows.sendToFocused.bind(windows),
     chooseLibrary: async () => {
-      const chosen = await handlers['library:choose'](undefined as never, window)
-      if (typeof chosen === 'string') {
-        await openLibrary(chosen)
-        send('library:opened', await snapshot())
-      }
+      const chosen = await handlers['library:choose'](undefined, windows.main)
+      if (typeof chosen === 'string') send('library:opened', await openLibrary(chosen))
     },
   })
   // `--papertime-library=<path>` opens a folder without disturbing whichever
   // one the user last had open — the same isolation the Mac build uses so a
-  // test never touches a real library.
-  const root = probeArgument('library') ?? settings().libraryRoot
-  if (root && fs.existsSync(root)) try {
-    if (isProbeLibrary()) {
-      // A probe opens its own folder and remembers nothing — not the folder,
-      // and not the ones beside it, which belong to whoever uses this copy.
-      library = await Library.open(root)
-      extraLibraries = []
-      openNotes(root)
-      startWatchingFolders()
-    } else {
-      // Through the same door a chosen folder goes through, so the folders
-      // opened beside it come back too. They did not, for a while: the
-      // library was opened here and the extras only in `openLibrary`, so
-      // every launch forgot them.
-      await openLibrary(root)
+  // test never touches a real library. The window's first `library:reload`
+  // waits for this open (`LibrarySet.opening`).
+  const root = probe.argument('library') ?? settings().libraryRoot
+  if (root && fs.existsSync(root)) {
+    try {
+      send('library:opened', await openLibrary(root))
+      void sweepTemporaries([...textSources.values()].map((one) => one.file))
+      if (!probe.isRun) await openFiles(pdfsIn(process.argv.slice(app.isPackaged ? 0 : 1)))
+    } catch (error) {
+      console.error('launch - the library could not be opened:', error)
+      send('library:opened', { error: String((error as Error)?.message ?? error) })
     }
-    send('library:opened', await snapshot())
-    void sweepTemporaries()
-    if (!isProbeRun()) await openFiles(pdfsIn(process.argv.slice(app.isPackaged ? 0 : 1)))
-  } catch (error) {
-    console.error('launch - the library could not be opened:', error)
-    send('library:opened', { error: String((error as Error)?.message ?? error) })
   }
   nativeTheme.on('updated', () => send('theme:changed', nativeTheme.shouldUseDarkColors))
+  app.on('web-contents-created', (_event, contents) => contents.on('destroyed', () => text.forgetWindow(contents)))
 
-  const probe = probeArgument('probe')
-  const shot = probeArgument('shot')
+  const steps = probe.argument('probe')
+  const shot = probe.argument('shot')
   // `--papertime-semantic-index=1` builds the index for the probe library
-  // now and says what it cost; `--papertime-semantic-query=<text>` asks it,
-  // twice, so the second line shows the cost once the model is warm. Both
-  // print to stderr. Then the probe's own steps, if any; otherwise quit.
-  if (semanticProbe) void runSemanticProbe().then(() => {
-    if (probe && window) void runProbe(window, probe)
-    else if (shot && window) void captureAndQuit(window, shot)
-    else app.quit()
-  })
-  else if (probe && window) void runProbe(window, probe)
-  else if (shot && window) void captureAndQuit(window, shot)
+  // now and says what it cost; `--papertime-semantic-query=<text>` asks it.
+  // Then the probe's own steps, if any; otherwise quit.
+  const then = () => {
+    if (steps && windows.main) void runProbe(windows.main, steps)
+    else if (shot && windows.main) void captureAndQuit(windows.main, shot)
+    else if (semanticProbe) app.quit()
+  }
+  if (semanticProbe) void runSemanticProbe().then(then)
+  else then()
 })
 
 async function runSemanticProbe() {
-  const out = (line: string) => process.stderr.write(`${line}\n`)
-  if (!library) return out('semantic: no library')
+  if (!libraries.first) return log('semantic: no library')
   await semantic().build()
   const stats = await semantic().stats()
   const status = semantic().status()
-  out(`semantic: status enabled=${status.enabled} ready=${status.ready} passages=${status.passages} notes=${status.notes} notePassages=${status.notePassages}` +
+  log(`semantic: status enabled=${status.enabled} ready=${status.ready} passages=${status.passages} notes=${status.notes} notePassages=${status.notePassages}` +
     (stats ? ` · worker loaded=${stats.loaded} loadMs=${stats.loadMs === null ? '-' : Math.round(stats.loadMs)} vectors=${stats.vectors} rss=${stats.rssMB} MB` : ''))
-  const query = probeArgument('semantic-query')
+  const query = probe.argument('semantic-query')
   if (!query) return
   for (const round of [1, 2]) {
     const t0 = performance.now()
     const answer = await semantic().search(query, 8)
     const fromNotes = answer.hits.filter((hit) => hit.note).length
-    out(`semantic: “${query}” → ${answer.hits.length} passages (${fromNotes} from notes) in ${(performance.now() - t0).toFixed(1)} ms (worker ${answer.ms.toFixed(1)} ms)${round === 2 ? ' · asked again' : ''}`)
+    log(`semantic: “${query}” → ${answer.hits.length} passages (${fromNotes} from notes) in ${(performance.now() - t0).toFixed(1)} ms (worker ${answer.ms.toFixed(1)} ms)${round === 2 ? ' · asked again' : ''}`)
     if (round === 2) break
     answer.hits.forEach((hit, i) => {
       if (hit.note) {
-        out(`semantic:   ${i + 1}. ${hit.score.toFixed(3)}  NOTE ${hit.note.id} “${hit.note.title.slice(0, 40)}” @${hit.passage.location}+${hit.passage.length} | ${hit.snippet.slice(0, 90)}`)
+        log(`semantic:   ${i + 1}. ${hit.score.toFixed(3)}  NOTE ${hit.note.id} “${hit.note.title.slice(0, 40)}” @${hit.passage.location}+${hit.passage.length} | ${hit.snippet.slice(0, 90)}`)
         return
       }
       const title = textSources.get(hit.passage.paperID)?.title ?? hit.passage.paperID
-      out(`semantic:   ${i + 1}. ${hit.score.toFixed(3)}  ${title.slice(0, 40)} · p${hit.passage.pageIndex + 1} @${hit.passage.location}+${hit.passage.length} | ${hit.snippet.slice(0, 90)}`)
+      log(`semantic:   ${i + 1}. ${hit.score.toFixed(3)}  ${title.slice(0, 40)} · p${hit.passage.pageIndex + 1} @${hit.passage.location}+${hit.passage.length} | ${hit.snippet.slice(0, 90)}`)
     })
   }
 }
@@ -2075,12 +341,10 @@ app.on('window-all-closed', () => {
 })
 
 /**
- * Nothing is left half done at quit: the PDF writes still waiting (the 1.5 s
- * after the last mark) are done now, the ones running are waited for, and
- * the journals and settings still held are written — ten seconds at most,
- * then the app goes whatever is left. Before, a mark made in the last second
- * reached the journal and not the file, and a write cut off in the middle
- * left its temporary copy in the cloud folder.
+ * Nothing is left half done at quit: the PDF writes still waiting are done
+ * now, the ones running are waited for, and the journals and settings still
+ * held are written — ten seconds at most, then the app goes whatever is
+ * left.
  */
 let drained = false
 let draining = false
@@ -2090,66 +354,23 @@ app.on('before-quit', (event) => {
   event.preventDefault()
   if (draining) return
   draining = true
-  void drain().finally(() => {
+  void Promise.allSettled([flush.drain(), journals.flush()]).finally(() => {
+    flushSettings()
     drained = true
     app.quit()
   })
 })
 
-async function drain() {
-  flushSettings()
-  const waiting = [...pending.keys()]
-  for (const id of waiting) clearTimeout(pending.get(id))
-  pending.clear()
-  const work = Promise.allSettled([
-    ...waiting.map((id) => flushToPDF(id)),
-    ...flushing.values(),
-    flushJournals(),
-  ])
-  await Promise.race([work, new Promise((resolve) => setTimeout(resolve, 10_000))])
-}
-
-/**
- * A temporary copy a write left beside a paper when it was cut off — a crash,
- * a power cut, a quit that did not wait — is removed when the library opens:
- * `<paper>.pdf.<pid>.tmp` and older than ten minutes, so no write running now
- * loses its file. Only the folders that hold papers are read, once each.
- */
-async function sweepTemporaries() {
-  const folders = new Set<string>()
-  for (const one of allLibraries()) {
-    for (const row of (await one.read().catch(() => ({ papers: [] }))).papers) {
-      if (row.file) folders.add(path.dirname(row.file))
-    }
-  }
-  const old = Date.now() - 10 * 60_000
-  for (const folder of folders) {
-    let names: string[] = []
-    try {
-      names = await fsp.readdir(folder)
-    } catch {
-      continue
-    }
-    for (const name of names) {
-      if (!/\.pdf\.\d+(\.\d+)?\.tmp$/i.test(name)) continue
-      const file = path.join(folder, name)
-      try {
-        if ((await fsp.stat(file)).mtimeMs < old) await fsp.rm(file, { force: true })
-      } catch {
-        // Gone already, or not ours to remove.
-      }
-    }
-  }
-}
-
 // The text service goes with the app, whatever it was in the middle of.
 app.on('will-quit', () => {
-  textService?.kill()
+  sync.stop()
+  text.end()
+  pageCounter.end()
   semanticSearch?.end()
 })
 
 app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) createWindow()
+  if (BrowserWindow.getAllWindows().length === 0) windows.createMain()
 })
 
 /** Papers dropped on the app's icon, or opened from a file manager. */
@@ -2157,5 +378,3 @@ app.on('open-file', (event, file) => {
   event.preventDefault()
   void openFiles([file])
 })
-
-export { deviceIdentity, readJSON, writeJSON }

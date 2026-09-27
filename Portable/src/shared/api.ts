@@ -55,7 +55,8 @@ export interface Requests {
   'paper:bytes': { args: { id: string }; result: PaperBytesDTO }
   /** `null` in a patch takes the key off. Answers with the record as written. */
   'paper:state': { args: { id: string; patch: Record<string, unknown> }; result: Record<string, unknown> | null }
-  'paper:meta': { args: { id: string; patch: Record<string, unknown> }; result: Record<string, unknown> | null }
+  /** `stamp: false`: written without `updatedAt`/`updatedBy` — the app's own guess, not the reader's edit. */
+  'paper:meta': { args: { id: string; patch: Record<string, unknown>; stamp?: boolean }; result: Record<string, unknown> | null }
   'paper:rename': {
     args: { id: string; name: string }
     result: { name: string } | { error: 'empty' | 'notAName' | 'taken' | 'missing' }
@@ -79,7 +80,8 @@ export interface Requests {
     /** `kept`: nothing went into the file, and everything stays in Paper Time. */
     result: { written: number } | { kept: KeptReason } | { error: string }
   }
-  'collections:save': { args: { collections: unknown[] }; result: null }
+  /** `root`: the library a new collection goes into — the one being looked at. */
+  'collections:save': { args: { collections: unknown[]; root?: string }; result: null }
   /** The sheet's «Save…»: the text it previewed, where the person says. */
   'bibtex:save': { args: { text: string }; result: { path: string } | { cancelled: true } }
   'app:about': { args: void; result: { version: string } }
@@ -188,6 +190,30 @@ export interface SemanticStatusDTO {
 export type RequestName = keyof Requests
 export type RequestArgs<K extends RequestName> = Requests[K]['args']
 export type RequestResult<K extends RequestName> = Requests[K]['result']
+
+/**
+ * What the main process tells every window, unasked.
+ *
+ * `library:changed` — the folders changed and the window should read again.
+ * `paper:changed` — one paper's record or sidecars changed (another window,
+ * or another machine through the cloud); `layers` says which.
+ * `notes:changed` — a note was written or removed in another window.
+ */
+export interface Events {
+  'library:changed': void
+  'library:opened': LibrarySnapshot | { error: string }
+  'paper:changed': { id: string; layers: string[] }
+  'paper:saved': { id: string }
+  'paper:kept': { id: string; reason: KeptReason | null }
+  'notes:changed': { id: string }
+  'window:state': WindowState
+  'theme:changed': boolean
+  'menu': string
+  'error': unknown
+  'text:warmed': unknown
+  'text:hits': unknown
+  'text:done': unknown
+}
 
 /** What `paper:bytes` answers. */
 export interface PaperBytesDTO {
