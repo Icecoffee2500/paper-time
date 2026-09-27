@@ -30,6 +30,9 @@
     "typescript": "^5.7.2"
   },
   "dependencies": {
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.13",
     "mathjax-full": "^3.2.2",
     "onnxruntime-web": "1.30.0",
     "pdf-lib": "^1.17.1",

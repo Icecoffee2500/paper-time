@@ -59,6 +59,10 @@ const SHAPES = {
     <circle cx="8" cy="8" r="1.05" fill="currentColor" stroke="none"/>
     <circle cx="12.6" cy="8" r="1.05" fill="currentColor" stroke="none"/>`,
 
+  // </>: the Markdown as it is written.
+  'chevron.left.forwardslash.chevron.right': `
+    <path d="M5.2 4.6 2 8l3.2 3.4M10.8 4.6 14 8l-3.2 3.4M9.1 3.4 6.9 12.6"/>`,
+
   // ---------------------------------------------------------- library rows
   // A tray: where every paper lands.
   'tray.full': `

@@ -254,7 +254,7 @@ export function buildSlipBox(actions: SlipBoxActions): { node: HTMLElement; deta
     else if (event.key === 'Enter' && at >= 0) {
       event.preventDefault()
       event.stopPropagation()
-      host.current()?.area.focus()
+      host.current()?.focus()
       return
     }
     if (next === null) return

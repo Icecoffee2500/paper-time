@@ -11,7 +11,6 @@ import { createNote, visibleNotes } from '../notesModel.js'
 import { openNoteInSlipBox, slipBoxEditor } from '../ui/slipBox.js'
 import { openEditor as openNoteEditor, openNoteInTab } from '../ui/notesTab.js'
 import { toast } from '../ui/toolbar.js'
-import { revealWords } from '../ui/noteEditor.js'
 import { L } from '../../shared/lang.js'
 import { passageText, quotationSource } from '../../shared/noteQuote.js'
 
@@ -71,8 +70,7 @@ export function openNoteFromSearch(id: string, words?: string) {
   revealNoteInSlipBox(id)
   if (!words) return
   requestAnimationFrame(() => {
-    const area = slipBoxEditor()?.area
-    if (area) revealWords(area, words)
+    slipBoxEditor()?.reveal(words)
   })
 }
 
@@ -86,7 +84,7 @@ export function newNote() {
   if (solo) return saidInMainWindow()
   const paperID = store.selectedID && findPaper(store.selectedID) ? store.selectedID : null
   revealNoteInSlipBox(createNote(paperID).id)
-  requestAnimationFrame(() => slipBoxEditor()?.area.focus())
+  requestAnimationFrame(() => slipBoxEditor()?.focus())
 }
 
 /** A window for one paper has no slip-box: the note is for the main window. */

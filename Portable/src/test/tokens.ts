@@ -33,7 +33,7 @@ export async function tokensSuite(test: Test, suite: (name: string) => void) {
   })
 
   await test('what loops or holds keeps its own time, and nothing else does', () => {
-    const held = new Set(['spin', 'passage-flash', 'mark-row-flash'])
+    const held = new Set(['spin', 'passage-flash', 'mark-row-flash', 'nm-flash'])
     const literal = [...css.matchAll(/animation:\s*([\w-]+)\s+([^;]*);/g)]
       .filter((match) => /\b\d*\.?\d+m?s\b/.test(match[2].replace(/var\([^)]*\)/g, '')) && !held.has(match[1]))
       .map((match) => match[0])

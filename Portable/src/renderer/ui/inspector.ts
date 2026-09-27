@@ -16,7 +16,7 @@ import { L, prefersKorean } from '../../shared/lang.js'
 import { buildAuthorEditor } from './authorEditor.js'
 import { type DocumentKind } from '../../shared/documentKind.js'
 import { buildSketchInspector } from './sketchInspector.js'
-import { renderNotesTab } from './notesTab.js'
+import { openEditor as openNoteEditor, renderNotesTab } from './notesTab.js'
 import { quotationInsertion } from '../../shared/noteQuote.js'
 import { cssColor, type Mark } from '../../shared/marks.js'
 import type { MenuEntry } from './toolbar.js'
@@ -133,28 +133,19 @@ export function buildInspector(actions: InspectorActions): InspectorPanel {
     }
   }
 
-  const noteArea = () => body.querySelector<HTMLTextAreaElement>('.note-area')
-
   function focusNote(): boolean {
-    const area = noteArea()
-    if (!area) return false
-    area.focus()
-    area.setSelectionRange(area.value.length, area.value.length)
-    area.scrollTop = area.scrollHeight
+    const editor = openNoteEditor()
+    if (!editor) return false
+    editor.focus()
     return true
   }
 
+  /** Where the caret was left — the end, in a note just opened — as one step
+   *  of the note's undo: Command-Z takes the quotation back out. */
   function insertIntoNote(block: string): boolean {
-    const area = noteArea()
-    if (!area) return false
-    // Where the caret was left — the end, in a note just opened.
-    const caret = area.selectionStart ?? area.value.length
-    const { insert } = quotationInsertion(area.value, caret, block)
-    area.focus()
-    area.setSelectionRange(caret, caret)
-    // The one way into a textarea that keeps its undo: Command-Z takes the
-    // quotation back out, as it would anything typed.
-    document.execCommand('insertText', false, insert)
+    const editor = openNoteEditor()
+    if (!editor) return false
+    editor.insert(block)
     return true
   }
 

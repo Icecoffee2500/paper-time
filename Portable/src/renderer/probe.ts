@@ -86,6 +86,30 @@ export function installProbeSurface() {
       /** Each editor's formula card and `[[` card. */
       tabEditorReport: () => openNoteEditor()?.report() ?? null,
       slipBoxEditorReport: () => slipBoxEditor()?.report() ?? null,
+      /** The slip-box editor's text replaced, and the caret put somewhere — no keys typed. */
+      setSlipBoxText: (text: string, caret?: number) => {
+        const view = slipBoxEditor()?.view
+        if (!view) return false
+        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text }, selection: { anchor: caret ?? text.length } })
+        return true
+      },
+      /** The Notes tab's editor's text replaced. */
+      setTabText: (text: string, caret?: number) => {
+        const view = openNoteEditor()?.view
+        if (!view) return false
+        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text }, selection: { anchor: caret ?? text.length } })
+        return true
+      },
+      /** The slip-box editor's text and caret, and how its lines are drawn. */
+      slipBoxState: () => {
+        const view = slipBoxEditor()?.view
+        if (!view) return null
+        return {
+          text: view.state.doc.toString(),
+          caret: view.state.selection.main.head,
+          lines: [...view.contentDOM.querySelectorAll('.cm-line')].map((line) => `${line.className.replace('cm-line', '').trim()} | ${line.textContent}`),
+        }
+      },
       /** A note from a search, at the words it was found by (`--papertime-note-reveal`). */
       reveal: (id: string, words: string) => openNoteFromSearch(id, words),
       /** Where the open note is shown beside a followed paper, and the way back. */
