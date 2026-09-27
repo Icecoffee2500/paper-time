@@ -300,8 +300,8 @@ enum ReleaseNotes {
             version: "0.9.11",
             date: Text2("2026년 9월", "September 2026"),
             note: Text2(
-                "맥에서 쓴 노트가 윈도우·리눅스에도 보여요.",
-                "Notes written on the Mac now show on Windows and Linux."
+                "윈도우·리눅스가 맥과 같은 방식으로 일해요. 서지를 찾고, 노트를 쓰는 동안 조판하고, 맥에서 쓴 노트가 보여요.",
+                "Windows and Linux now work the way the Mac does. They look up metadata, set notes as you type, and show the notes you wrote on the Mac."
             ),
             added: [
                 Entry(
@@ -311,8 +311,58 @@ enum ReleaseNotes {
                         "Windows and Linux now read and write the same note files as the Mac. A note about a paper lives in that paper's folder; a note about no paper in a folder of its own. The Notes tab lists the notes on the paper you are reading, and Notes in the sidebar opens the whole slip-box: search, tags, maps and drafts, and the [[links]] between notes. The files are the Mac's byte for byte, so a cloud folder never sees the two builds write over each other. What you typed in the old Notes tab is in the Info tab's Note field, as it was."
                     )
                 ),
+                Entry(
+                    Text2("윈도우·리눅스의 서지 찾기", "Metadata Lookup on Windows and Linux"),
+                    Text2(
+                        "윈도우·리눅스도 들여온 논문의 서지를 doi.org, Crossref, OpenAlex, arXiv에서 찾아요. 맥과 똑같이 찾고 똑같이 판단해서, 같은 논문이면 두 컴퓨터가 같은 기록을 써요. 책이나 일반 문서는 밖에 묻지 않아요. 찾는 동안 목록 줄에 진행 표시가 돌고, «빠진 서지 채우기»로 확인 안 된 논문을 한 번에 다시 찾을 수 있어요. 설정의 «서지»에서 끌 수 있어요.",
+                        "Windows and Linux now look up imported papers at doi.org, Crossref, OpenAlex and arXiv. They search and decide the way the Mac does, so the same paper gets the same record on both computers. Books and documents are never sent out. A row shows a spinner while its paper is looked up, and Resolve Missing Metadata looks up every paper not yet confirmed. Settings › Metadata turns it off."
+                    )
+                ),
+                Entry(
+                    Text2("윈도우·리눅스의 노트 조판", "Notes Set as You Type on Windows and Linux"),
+                    Text2(
+                        "윈도우·리눅스도 노트를 쓰는 동안 조판해요. 제목은 크게, 목록은 들여서, 인용은 세로줄과 함께, 수식은 조판된 채로 보여요. 논문의 구절은 칩이 되고, 누르면 그 자리로 가요. 커서가 있는 줄만 적은 그대로 보여요. 파일은 여전히 Markdown이에요.",
+                        "Notes on Windows and Linux are now set as you type: headings large, lists indented, quotations with their bar, formulas typeset. A passage from a paper becomes a chip that takes you back to it. Only the line with the cursor shows what you typed. The file is still Markdown."
+                    )
+                ),
+                Entry(
+                    Text2("윈도우·리눅스의 Ultracopy", "Ultracopy on Windows and Linux"),
+                    Text2(
+                        "윈도우·리눅스에서도 고른 글을 수식째 LaTeX로 복사해요(Ctrl+Shift+C). 노트에 구절을 넣으면 제목은 제목으로, 번호 붙은 수식은 제 줄에 들어가요. 맥과 같은 방식으로 쪽의 글자를 읽어요.",
+                        "Windows and Linux now copy a selection with its formulas as LaTeX (Ctrl+Shift+C). A passage linked into a note keeps its shape: a heading stays a heading, and a numbered equation sits on its own line. The page is read the same way the Mac reads it."
+                    )
+                ),
+                Entry(
+                    Text2("윈도우·리눅스의 설정과 단축키", "Settings and Shortcuts on Windows and Linux"),
+                    Text2(
+                        "윈도우·리눅스의 설정이 맥처럼 쪽으로 나뉘어요. 단축키는 원하는 키로 바꿀 수 있고, 누른 키로 찾을 수도 있어요. 새 버전을 처음 열면 새로운 기능을 한 번 보여줘요. 펜과 형광펜도 제 색과 굵기를 기억하고, 형광펜을 글자 위에 그으면 표시가 돼요.",
+                        "Settings on Windows and Linux are now pages, as on the Mac. You can change any shortcut, and find one by pressing its keys. A new version shows what's new the first time it opens. The pen and highlighter keep their own colors and widths, and a highlighter stroke over words becomes a mark."
+                    )
+                ),
             ],
-            fixed: []
+            fixed: [
+                Entry(
+                    Text2("다른 논문의 수식", "Formulas from Another Paper"),
+                    Text2(
+                        "논문을 여러 편 연 뒤 구절을 노트에 넣으면 가끔 다른 논문의 수식이 들어갔어요. 이제 늘 고른 쪽의 글자를 읽어요.",
+                        "After several papers had been open, linking a passage into a note could bring in a formula from a different paper. It now always reads the page you selected on."
+                    )
+                ),
+                Entry(
+                    Text2("⌘L이 이어 쓰는 노트", "The Note ⌘L Continues"),
+                    Text2(
+                        "노트가 열려 있지 않을 때 ⌘L이 그 논문의 가장 오래된 노트에 구절을 넣었어요. 이제 가장 최근에 고친 노트에 넣어요.",
+                        "With no note open, ⌘L added the passage to the paper's oldest note. It now adds it to the note you edited last."
+                    )
+                ),
+                Entry(
+                    Text2("옮긴 뒤 남던 빈 묶음", "Empty Groups Left Behind"),
+                    Text2(
+                        "그린 것을 다른 쪽으로 옮기면 비어 버린 묶음이 원래 쪽에 남았어요. 이제 함께 사라져요.",
+                        "Moving drawings to another page left their emptied group behind. It now goes with them."
+                    )
+                ),
+            ]
         ),
         Release(
             version: "0.9.10",
