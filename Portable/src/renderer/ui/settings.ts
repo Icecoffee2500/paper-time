@@ -334,7 +334,7 @@ export function showSettings(actions: SettingsActions, section?: SettingsSection
       el('span', { class: 'set-label', text: 'Paper Time' }),
       version,
     ]))
-    void call<{ version: string }>('app:about').then((answer) => {
+    void call('app:about').then((answer) => {
       version.textContent = L(`버전 ${answer.version}`, `Version ${answer.version}`)
     }).catch(() => undefined)
     const links = el('div', { class: 'set-row set-links' })

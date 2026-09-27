@@ -1,8 +1,10 @@
 /**
- * The settings file's shape and how a file on disk is read into it — apart
- * from `settings.ts` so the reading can be tested without Electron.
+ * What the app remembers between launches: its shape, its defaults, and how
+ * a file on disk is read into it. Here rather than beside `main/settings.ts`
+ * so the window reads the same type the file is written from, and so the
+ * reading can be tested without Electron.
  */
-import { DEFAULT_TINT_COLOR, pageTintFrom, tintColorFrom, type PageTint } from '../shared/pageTint.js'
+import { DEFAULT_TINT_COLOR, pageTintFrom, tintColorFrom, type PageTint } from './pageTint.js'
 
 export interface Settings {
   libraryRoot: string | null
@@ -12,7 +14,7 @@ export interface Settings {
   window: { width: number; height: number; x?: number; y?: number; maximized?: boolean }
   panes: { sidebar: boolean; paperList: boolean; reader: boolean; inspector: boolean }
   columns: { sidebar: number; paperList: number; inspector: number }
-  inspectorTab: 'details' | 'marks' | 'note'
+  inspectorTab: 'details' | 'marks' | 'note' | 'tools'
   sort: { field: 'title' | 'author' | 'year' | 'added' | 'opened'; ascending: boolean }
   /** 'system' follows the desktop; the other two are the reader's choice. */
   appearance: 'system' | 'light' | 'dark'
@@ -81,3 +83,40 @@ export function fromFile(raw: Partial<Settings>): Settings {
   }
 }
 
+
+/**
+ * A patch from the window, kept to the keys the file has and the kinds of
+ * value they hold — a window that sent `{ window: { width: NaN } }` used to
+ * write it, and the next launch opened a window of no size.
+ */
+export function acceptedPatch(patch: Record<string, unknown>): Partial<Settings> {
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(patch ?? {})) {
+    if (!(key in DEFAULTS)) continue
+    const known = (DEFAULTS as unknown as Record<string, unknown>)[key]
+    if (value === null) {
+      if (known === null) out[key] = null
+      continue
+    }
+    if (known === null) {
+      if (typeof value === 'string') out[key] = value
+      continue
+    }
+    if (Array.isArray(known)) {
+      if (Array.isArray(value)) out[key] = value.filter((one) => typeof one === 'string')
+      continue
+    }
+    if (typeof known === 'object') {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) continue
+      const group: Record<string, unknown> = {}
+      for (const [inner, one] of Object.entries(value)) {
+        if (typeof one === 'number' && !Number.isFinite(one)) continue
+        group[inner] = one
+      }
+      out[key] = group
+      continue
+    }
+    if (typeof value === typeof known) out[key] = value
+  }
+  return out as Partial<Settings>
+}

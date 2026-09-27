@@ -1,3 +1,9 @@
+import type { Mark } from './marks.js'
+import type { PDFLock, ByteTrouble } from './pdfLock.js'
+import type { Settings } from './appSettings.js'
+
+export type { Settings } from './appSettings.js'
+
 /** The names on the bridge between the window and the process that owns the
  *  files. Kept in one place so both ends refer to the same strings. */
 export const CHANNEL = {
@@ -29,17 +35,27 @@ export interface WindowState {
 
 /** What the window can ask the file-owning process to do. */
 export interface Requests {
-  'settings:get': { args: void; result: unknown }
-  'settings:set': { args: Record<string, unknown>; result: unknown }
+  /** The settings, with the library that is open now (a probe's own). */
+  'settings:get': { args: void; result: Settings }
+  /** Only the keys the file has, of the kinds they hold (`acceptedPatch`). */
+  'settings:set': { args: Partial<Settings>; result: Settings }
   'library:choose': { args: void; result: string | null }
-  'library:open': { args: { root: string }; result: LibrarySnapshot | { error: string } }
+  /** `refused`: the folder was not opened — nothing changed, and `error` says why in the app's voice. */
+  'library:open': { args: { root: string }; result: LibrarySnapshot | { error: string; refused?: true } }
   'library:reload': { args: void; result: LibrarySnapshot | { error: string } }
-  'library:import': { args: { paths?: string[] }; result: LibrarySnapshot | { error: string } }
+  /** No paths: the desktop's picker. `root`: the library to add them to. */
+  'library:import': { args: { paths?: string[]; root?: string }; result: LibrarySnapshot | { error: string } }
+  /** No root: the desktop's picker. */
+  'library:addFolder': { args: { root?: string }; result: LibrarySnapshot | { error: string; refused?: true } }
+  'library:removeFolder': { args: { root: string }; result: LibrarySnapshot | { error: string } }
+  'library:revealFolder': { args: { root: string }; result: void }
   'library:adoptLoose': { args: void; result: LibrarySnapshot | { error: string } }
-  'library:trash': { args: { id: string }; result: LibrarySnapshot }
-  'paper:bytes': { args: { id: string }; result: { data: Uint8Array } | { error: string } }
-  'paper:state': { args: { id: string; patch: Record<string, unknown> }; result: unknown }
-  'paper:meta': { args: { id: string; patch: Record<string, unknown> }; result: unknown }
+  'library:trash': { args: { id: string }; result: LibrarySnapshot | { error: string } }
+  /** The PDF's bytes, or why there are none to read. */
+  'paper:bytes': { args: { id: string }; result: PaperBytesDTO }
+  /** `null` in a patch takes the key off. Answers with the record as written. */
+  'paper:state': { args: { id: string; patch: Record<string, unknown> }; result: Record<string, unknown> | null }
+  'paper:meta': { args: { id: string; patch: Record<string, unknown> }; result: Record<string, unknown> | null }
   'paper:rename': {
     args: { id: string; name: string }
     result: { name: string } | { error: 'empty' | 'notAName' | 'taken' | 'missing' }
@@ -50,13 +66,31 @@ export interface Requests {
   'ink:load': { args: { id: string; pageIndex: number }; result: unknown[] | null }
   'ink:save': { args: { id: string; pageIndex: number; strokes: unknown[] }; result: void }
   'drawing:pages': { args: { id: string }; result: { sketch: number[]; ink: number[]; appleInk: number[] } }
-  'drawing:adoptFromFile': { args: { id: string }; result: Record<number, { elements: unknown[]; strokes: unknown[] }> }
+  /** What the file holds on pages this machine has no sidecar for, and which pages would not be read. */
+  'drawing:adoptFromFile': {
+    args: { id: string }
+    result: { pages: Record<number, { elements: unknown[]; strokes: unknown[] }>; unreadable: number[] }
+  }
+  /** Every page's marks: the file, overruled by every device's journal. */
+  'marks:load': { args: { id: string }; result: Record<number, Mark[]> }
+  'marks:save': { args: { id: string; pageIndex: number; marks: Mark[] }; result: void }
   'drawing:flush': {
     args: { id: string }
     /** `kept`: nothing went into the file, and everything stays in Paper Time. */
     result: { written: number } | { kept: KeptReason } | { error: string }
   }
-  'collections:save': { args: { collections: unknown[] }; result: unknown }
+  'collections:save': { args: { collections: unknown[] }; result: null }
+  /** The sheet's «Save…»: the text it previewed, where the person says. */
+  'bibtex:save': { args: { text: string }; result: { path: string } | { cancelled: true } }
+  'app:about': { args: void; result: { version: string } }
+  /** The words inside the papers: read ahead, search (answers come as events), stop, and — for a probe — what it cost. */
+  'text:warm': { args: { ids: string[] }; result: void }
+  'text:search': {
+    args: { token: number; query: string; ids: string[]; titles: Record<string, string>; limit?: number }
+    result: void
+  }
+  'text:cancel': { args: { token: number }; result: void }
+  'text:stats': { args: void; result: unknown }
   'window:minimize': { args: void; result: void }
   'window:toggleMaximize': { args: void; result: void }
   'window:close': { args: void; result: void }
@@ -152,6 +186,19 @@ export interface SemanticStatusDTO {
 }
 
 export type RequestName = keyof Requests
+export type RequestArgs<K extends RequestName> = Requests[K]['args']
+export type RequestResult<K extends RequestName> = Requests[K]['result']
+
+/** What `paper:bytes` answers. */
+export interface PaperBytesDTO {
+  data?: Uint8Array
+  error?: string
+  locked?: PDFLock
+  trouble?: ByteTrouble | null
+  size?: number
+  head?: string
+  line?: string | null
+}
 
 export interface PaperRowDTO {
   id: string

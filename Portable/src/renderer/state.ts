@@ -6,6 +6,8 @@
  * the whole renderer readable, and keeps the Windows build and the Linux build
  * from differing by way of somebody's runtime.
  */
+import type { Settings as AppSettings } from '../shared/appSettings.js'
+import { findPath, isInside, isUnder, pathKey, samePath, slashed } from '../shared/paths.js'
 import type { LibrarySnapshot, NoteDTO, NotesFolderDTO, PaperRowDTO } from '../shared/api.js'
 import type { Zettel } from '../shared/zettel.js'
 import type { TextHit } from '../main/textIndex.js'
@@ -56,32 +58,19 @@ export interface Paper {
   root?: string
 }
 
-export interface Settings {
-  libraryRoot: string | null
-  panes: Record<Pane, boolean>
-  columns: { sidebar: number; paperList: number; inspector: number }
-  inspectorTab: InspectorTab
-  sort: { field: 'title' | 'author' | 'year' | 'added' | 'opened'; ascending: boolean }
-  appearance: 'system' | 'light' | 'dark'
-  /** The words, when the desktop's own language is not what somebody wants. */
-  language: 'system' | 'ko' | 'en'
-  /** A ground for the page, and how the paper is drawn on it (`shared/pageTint.ts`). */
-  pageTint: PageTint
-  /** The custom tint's ground, `#rrggbb`. */
-  pageTintColor: string
-  pageLayout: 'single' | 'continuous' | 'book'
-  selectedPaperID: string | null
-  /** Latex Suite in the note and on the cards: `@a` into `\alpha`, `//` into a fraction. */
-  latexShortcuts: boolean
-  /** Search by meaning in the palette. On unless turned off. */
-  semanticSearch: boolean
-  /** What stands under a title in the list, in order — the Mac's
-   *  `listSubtitleFields`, the same comma-separated words. */
-  listSubtitle: string
-  /** Braces round the capitals of a title in the `.bib`, so a style cannot
-   *  lower-case «BERT». The Mac's «Protect Case in Titles». */
-  bibtexProtectCase: boolean
-}
+/**
+ * The settings the window reads and changes — the file's own type
+ * (`shared/appSettings.ts`), kept to the keys the window uses. Written out by
+ * hand here once, it drifted: the window stored an inspector tab the file's
+ * type did not have.
+ */
+export const WINDOW_SETTINGS = [
+  'libraryRoot', 'panes', 'columns', 'inspectorTab', 'sort', 'appearance', 'language', 'pageTint',
+  'pageTintColor', 'pageLayout', 'selectedPaperID', 'latexShortcuts', 'semanticSearch', 'listSubtitle',
+  'bibtexProtectCase',
+] as const satisfies readonly (keyof AppSettings)[]
+
+export type Settings = Pick<AppSettings, (typeof WINDOW_SETTINGS)[number]>
 
 /** What one reader — one pane — knows about the paper it shows. */
 export interface ReaderState {
@@ -268,7 +257,7 @@ export function subscribe(listener: Listener): () => void {
  * Every comparison is done with `/`, because a record says `/` on every
  * desktop while a root on Windows says `\`.
  */
-const slashed = (path: string) => path.replace(/\\/g, '/').replace(/\/+$/, '')
+export { slashed }
 
 /** The folder a paper's PDF sits in, or null when the record says nothing. */
 export function folderOf(entry: Paper): string | null {
@@ -282,9 +271,8 @@ export function folderOf(entry: Paper): string | null {
 /** Whether a paper sits at or under a folder — a term shows the term. */
 export function isUnderFolder(entry: Paper, folder: string): boolean {
   const here = folderOf(entry)
-  if (here === null) return slashed(entry.root ?? '') === slashed(folder)
-  const base = slashed(folder)
-  return here === base || here.startsWith(base + '/')
+  if (here === null) return samePath(entry.root ?? '', folder)
+  return isUnder(here, folder)
 }
 
 /** The folders one step inside this one that hold papers, and how many each
@@ -295,7 +283,8 @@ export function subfolders(folder: string): { path: string; name: string; count:
   for (const entry of store.papers) {
     if (entry.meta.parentID) continue
     const here = folderOf(entry)
-    if (here === null || !here.startsWith(base + '/')) continue
+    if (here === null || !isInside(here, base)) continue
+    // The same number of letters either way: only case is folded.
     const name = here.slice(base.length + 1).split('/')[0]
     if (!name) continue
     counts.set(name, (counts.get(name) ?? 0) + 1)
@@ -316,16 +305,17 @@ export function subfolders(folder: string): { path: string; name: string; count:
  */
 export function papersByFolder(papers: Paper[]): { label: string; papers: Paper[] }[] | null {
   if (store.shelf.kind !== 'kind') return null
-  const groups = new Map<string, Paper[]>()
+  const groups = new Map<string, { folder: string; papers: Paper[] }>()
   for (const entry of papers) {
     const here = folderOf(entry) ?? slashed(entry.root ?? '')
-    const found = groups.get(here)
-    if (found) found.push(entry)
-    else groups.set(here, [entry])
+    const key = pathKey(here)
+    const found = groups.get(key)
+    if (found) found.papers.push(entry)
+    else groups.set(key, { folder: here, papers: [entry] })
   }
   if (groups.size < 2) return null
-  return [...groups]
-    .map(([folder, found]) => ({ label: folderLabel(folder), papers: found }))
+  return [...groups.values()]
+    .map(({ folder, papers: found }) => ({ label: folderLabel(folder), papers: found }))
     .sort((a, b) => a.label.localeCompare(b.label))
 }
 
@@ -338,22 +328,30 @@ export function folderLabel(folder: string): string {
 /** The way down to this folder from its library root, root first. */
 export function folderTrail(folder: string): string[] {
   const base = slashed(folder)
-  const root = store.roots
-    .map(slashed)
-    .find((one) => base === one || base.startsWith(one + '/'))
+  // The root as the library row has it — `D:\Papers`, not `D:/Papers` — so
+  // the first step of the way down is that row, and lights it.
+  const root = store.roots.find((one) => isUnder(base, one))
   if (!root) return [folder]
-  const rest = base.slice(root.length).split('/').filter(Boolean)
+  const rest = base.slice(slashed(root).length).split('/').filter(Boolean)
   const trail = [root]
-  for (const part of rest) trail.push(`${trail[trail.length - 1]}/${part}`)
+  let at = slashed(root)
+  for (const part of rest) {
+    at = `${at}/${part}`
+    trail.push(at)
+  }
   return trail
 }
 
 /** Where pressing an open folder again goes, or null at a library root. */
 export function folderAbove(folder: string): string | null {
   const base = slashed(folder)
-  if (store.roots.map(slashed).includes(base)) return null
+  if (findPath(store.roots, base)) return null
   const cut = base.lastIndexOf('/')
-  return cut > 0 ? base.slice(0, cut) : null
+  if (cut <= 0) return null
+  const above = base.slice(0, cut)
+  // Up to the library itself: the root as it is stored, so the library row
+  // lights and a PDF added now goes into that library.
+  return findPath(store.roots, above) ?? above
 }
 
 export function changed(...keys: string[]) {

@@ -12,9 +12,9 @@ import { app } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import { pageTintFrom, tintColorFrom } from '../shared/pageTint.js'
-import { DEFAULTS, fromFile, type Settings } from './settingsFile.js'
+import { DEFAULTS, fromFile, type Settings } from '../shared/appSettings.js'
 
-export type { Settings } from './settingsFile.js'
+export type { Settings } from '../shared/appSettings.js'
 
 let cached: Settings | null = null
 
@@ -78,7 +78,14 @@ let writeTimer: NodeJS.Timeout | null = null
  * one used to rewrite the file on the main process's thread.
  */
 export function update(patch: Partial<Settings>, { soon = false }: { soon?: boolean } = {}): Settings {
-  const next = { ...settings(), ...patch }
+  const current = settings()
+  const next = { ...current, ...patch }
+  // A group — the window's frame, the panes, the columns, the sort — is
+  // merged key by key: a patch naming one of its keys used to replace the
+  // whole group, and the rest went back to nothing.
+  for (const key of ['window', 'panes', 'columns', 'sort'] as const) {
+    if (patch[key]) (next as Record<string, unknown>)[key] = { ...current[key], ...patch[key] }
+  }
   // What the window sends is kept to what the reader can draw.
   if ('pageTint' in patch) next.pageTint = pageTintFrom(patch.pageTint)
   if ('pageTintColor' in patch) next.pageTintColor = tintColorFrom(patch.pageTintColor)

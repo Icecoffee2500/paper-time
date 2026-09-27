@@ -7,7 +7,7 @@
  * A pane that is on says so with its colour and not with a filled square —
  * four filled squares in a row read as one block.
  */
-import { icon } from '../icons.js'
+import { icon, type IconName } from '../icons.js'
 import { el, on, place, clear } from '../dom.js'
 import { canGoBack, canGoForward, store, type InspectorTab, type Pane } from '../state.js'
 import { platform } from '../bridge.js'
@@ -129,7 +129,7 @@ export function buildToolbar(actions: ToolbarActions): { node: HTMLElement; upda
   // real traffic lights, which the frame draws for us.
   const windowButtons = el('div', { class: 'window-buttons' })
   if (platform !== 'darwin') {
-    const wb = (name: string, label: string, click: () => void, extra = '') => {
+    const wb = (name: IconName, label: string, click: () => void, extra = '') => {
       const b = el('button', { class: extra, title: label, 'aria-label': label, html: icon(name, 'width="11" height="11"') })
       on(b, 'click', click)
       return b
@@ -178,7 +178,7 @@ export function buildToolbar(actions: ToolbarActions): { node: HTMLElement; upda
 
 export interface MenuEntry {
   label?: string
-  icon?: string
+  icon?: IconName
   caption?: string
   separator?: boolean
   checked?: boolean

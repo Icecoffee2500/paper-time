@@ -16,7 +16,7 @@
  * the same note.
  */
 import { clear, el, on } from '../dom.js'
-import { icon } from '../icons.js'
+import { icon, type IconName } from '../icons.js'
 import { L } from '../../shared/lang.js'
 import { isCommand, platform } from '../bridge.js'
 import { anchorAt } from '../../shared/noteQuote.js'
@@ -134,7 +134,7 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
     tags.style.display = tags.childElementCount > 0 ? '' : 'none'
   }
 
-  const chip = (other: Note, glyph: string) => {
+  const chip = (other: Note, glyph: IconName) => {
     const button = el('button', { class: 'plain-button note-chip', html: icon(glyph) })
     button.append(el('span', { text: zettelDisplayTitle(other) }))
     on(button, 'click', () => {

@@ -81,7 +81,7 @@ async function write(id: string) {
   saveTimers.delete(id)
   const note = noteByID(id)
   if (!note) return
-  const saved = await call<NoteDTO>('notes:save', { note: noteDTO(note) })
+  const saved = await call('notes:save', { note: noteDTO(note) })
   const current = noteByID(id)
   if (current) current.box = saved.box
   // Still the same words: what is in hand has reached the disk. An empty

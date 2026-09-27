@@ -16,7 +16,7 @@
  * leaving the field, and a field being typed in is never rebuilt under the
  * hand: the rebuild waits until the field is left.
  */
-import { icon } from '../icons.js'
+import { icon, type IconName } from '../icons.js'
 import { clear, el, on } from '../dom.js'
 import { store, type SketchTool } from '../state.js'
 import {
@@ -66,7 +66,7 @@ const KIND_NAME = (): Record<Kind, string> => ({
   group: L('묶음', 'Group'),
 })
 
-const ALIGNMENTS: { alignment: SketchAlignment; icon: string; label: () => string }[] = [
+const ALIGNMENTS: { alignment: SketchAlignment; icon: IconName; label: () => string }[] = [
   { alignment: 'left', icon: 'align.horizontal.left', label: () => L('왼쪽 맞춤', 'Align Left') },
   { alignment: 'centerX', icon: 'align.horizontal.center', label: () => L('가로 가운데', 'Align Horizontal Centers') },
   { alignment: 'right', icon: 'align.horizontal.right', label: () => L('오른쪽 맞춤', 'Align Right') },
@@ -353,7 +353,7 @@ export function buildSketchInspector(host: SketchInspectorHost): { node: HTMLEle
     return el('label', { class: 'sk-check' }, [input, el('span', { text: label })])
   }
 
-  function smallButton(name: string, title: string, run: () => void): HTMLElement {
+  function smallButton(name: IconName, title: string, run: () => void): HTMLElement {
     const button = el('button', { class: 'sk-small', title, html: icon(name) })
     on(button, 'click', run)
     return button
@@ -443,7 +443,7 @@ export function buildSketchInspector(host: SketchInspectorHost): { node: HTMLEle
     return section(L('위치', 'Position'), [aligns, fields])
   }
 
-  function alignIcon(align: SketchLayout['align'], direction: SketchLayout['direction']): string {
+  function alignIcon(align: SketchLayout['align'], direction: SketchLayout['direction']): IconName {
     if (direction === 'vertical') {
       return { start: 'align.horizontal.left', center: 'align.horizontal.center', end: 'align.horizontal.right' }[align]
     }
@@ -707,7 +707,7 @@ export function buildSketchInspector(host: SketchInspectorHost): { node: HTMLEle
     const chosen = selected()
     const none = chosen.length === 0
     const containers = chosen.some((element) => element.isContainer)
-    const button = (name: string, title: string, run: () => void, disabled = false) => {
+    const button = (name: IconName, title: string, run: () => void, disabled = false) => {
       const node = el('button', { class: 'sk-action', title, html: icon(name) })
       node.disabled = disabled
       on(node, 'click', run)
