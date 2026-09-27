@@ -86,6 +86,27 @@ export interface ReaderState {
 
 export const freshReaderState = (): ReaderState => ({ pageCount: 0, currentPage: 0, zoom: 1, drawing: false })
 
+/**
+ * The reader in focus's own state, read where it lives.
+ *
+ * Every pane has a reader and every reader its state; the toolbar, the rack
+ * and the keys ask about the one in focus. This used to be a field the page
+ * area overwrote with a reference to that reader's object whenever the focus
+ * moved — an alias nobody knew was one — and a stale alias was a toolbar
+ * asking a disposed reader whether Back was possible.
+ */
+let focusedReaderState: () => ReaderState | null = () => null
+const NOTHING_OPEN: ReaderState = Object.freeze(freshReaderState()) as ReaderState
+
+export function readerState(): ReaderState {
+  return focusedReaderState() ?? NOTHING_OPEN
+}
+
+/** Where `readerState()` reads from: the page area, once there is one. */
+export function setFocusedReaderState(source: () => ReaderState | null) {
+  focusedReaderState = source
+}
+
 export interface Store {
   ready: boolean
   error: string | null
@@ -138,7 +159,6 @@ export interface Store {
   trailIndex: number
   /** Set while travelling, so the trail does not record its own footsteps. */
   travelling: boolean
-  search: { open: boolean; query: string }
   /**
    * The query behind the search shelf, kept apart from the shelf itself — as
    * the Mac keeps `searchQuery` apart from its scope. A search is somewhere
@@ -152,9 +172,12 @@ export interface Store {
   searchScanning: boolean
   /** And what says the same thing in other words — none until the index is built. */
   searchMeanings: TextHit[]
-  toast: string | null
-  /** The reader in focus. Each pane has one of these; this is the focused pane's. */
-  reader: ReaderState
+  /**
+   * The panes that were showing when focus mode hid them, to put back on the
+   * way out; null outside focus mode. Toggling a pane by hand ends it — the
+   * way back would otherwise undo what was just chosen.
+   */
+  focusBefore: Settings['panes'] | null
   sketch: {
     tool: SketchTool
     /** The shape tool last used — the one the rack's shapes button shows. */
@@ -223,17 +246,31 @@ export const store: Store = {
   trail: [],
   trailIndex: -1,
   travelling: false,
-  search: { open: false, query: '' },
   searchQuery: '',
   searchPassages: [],
   searchScanning: false,
   searchMeanings: [],
-  toast: null,
-  reader: freshReaderState(),
+  focusBefore: null,
   sketch: { tool: 'select', lastShape: 'rectangle', lastInk: 'pen', style: new SketchStyle(), selection: null },
 }
 
-type Listener = (changed: Set<string>) => void
+/**
+ * What can change, for the panes to decide whether they care. A name nobody
+ * listens for is a name the compiler no longer lets anyone emit.
+ *
+ * - `papers`: the library's rows, or a paper's record, or the open shelf.
+ * - `shelf`: which shelf is showing.
+ * - `selection`: the paper in focus.
+ * - `reader`: the reader in focus should redraw its chrome.
+ * - `history`: Back or Forward became possible or impossible.
+ * - `inspector`, `marks`, `notes`, `slipBox`, `sketch`, `settings`: their panes.
+ * - `searchResults`: the list's passages for the search shelf arrived.
+ */
+export type Change =
+  | 'papers' | 'shelf' | 'selection' | 'reader' | 'history'
+  | 'inspector' | 'marks' | 'notes' | 'slipBox' | 'sketch' | 'settings' | 'searchResults'
+
+type Listener = (changed: Set<Change>) => void
 const listeners = new Set<Listener>()
 
 export function subscribe(listener: Listener): () => void {
@@ -354,7 +391,7 @@ export function folderAbove(folder: string): string | null {
   return findPath(store.roots, above) ?? above
 }
 
-export function changed(...keys: string[]) {
+export function changed(...keys: Change[]) {
   const set = new Set(keys)
   for (const listener of listeners) listener(set)
 }
@@ -582,13 +619,82 @@ export function remember(id: string | null) {
   store.trailIndex = store.trail.length - 1
 }
 
-export const canGoBack = () => store.trailIndex > 0
-export const canGoForward = () => store.trailIndex < store.trail.length - 1
+/** The next step along the trail that would show something: not the paper
+ *  already showing — the step would do nothing, and Back would seem to stick
+ *  — and not one that has left the library. */
+function stepAlong(by: 1 | -1): number | null {
+  for (let at = store.trailIndex + by; at >= 0 && at < store.trail.length; at += by) {
+    const id = store.trail[at]
+    if (id !== store.selectedID && paper(id)) return at
+  }
+  return null
+}
 
-export function travel(to: number): string | null {
-  if (to < 0 || to >= store.trail.length) return null
-  store.trailIndex = to
-  return store.trail[to]
+export const canGoBack = () => stepAlong(-1) !== null
+export const canGoForward = () => stepAlong(1) !== null
+
+/** Walks the trail one showable step, and says which paper that is. */
+export function travelBy(by: 1 | -1): string | null {
+  const at = stepAlong(by)
+  if (at === null) return null
+  store.trailIndex = at
+  return store.trail[at]
+}
+
+// MARK: - Changing the store
+
+/**
+ * Chooses a shelf. The Notes shelf shows the slip-box, so a paper the
+ * slip-box put in the page area last time is let go of — by every way in.
+ */
+export function setShelf(shelf: Shelf) {
+  store.shelf = shelf
+  if (shelf.kind === 'notes') store.slipBox.paperID = null
+}
+
+/**
+ * One paper's record as the main process just wrote it, put in place without
+ * reading the library again. A star used to cost a read of every record in
+ * every folder, and the watcher read them all once more.
+ *
+ * The array is replaced, never changed in place: the indexes above are kept
+ * by the array they were made from.
+ */
+export function patchPaper(id: string, written: { meta?: Record<string, unknown> | null; state?: Record<string, unknown> | null }) {
+  const at = store.papers.findIndex((entry) => entry.id === id)
+  if (at < 0) return
+  const before = store.papers[at]
+  const next: Paper = {
+    ...before,
+    meta: written.meta ? new PaperMeta(written.meta as never) : before.meta,
+    state: written.state ? new PaperState(written.state as never) : before.state,
+  }
+  store.papers = [...store.papers.slice(0, at), next, ...store.papers.slice(at + 1)]
+}
+
+/**
+ * Lets go of every paper that has left the library: off the open shelf, out
+ * of the panes, off the trail, out of the page area the slip-box lent it.
+ * One place, run on every reading — three of the four ways a library is read
+ * again used to do part of this, and the fourth none of it.
+ */
+export function pruneToLibrary() {
+  const here = (id: string | null) => Boolean(id && paper(id))
+  if (store.openPaperIDs.some((id) => !here(id))) store.openPaperIDs = store.openPaperIDs.filter(here)
+  if (store.pinnedPaperIDs.some((id) => !here(id))) store.pinnedPaperIDs = store.pinnedPaperIDs.filter(here)
+  for (const id of panePapers()) if (!here(id)) undock(id)
+  if (store.selectedID && !here(store.selectedID)) store.selectedID = null
+  if (store.slipBox.paperID && !here(store.slipBox.paperID)) store.slipBox.paperID = null
+  if (store.trail.some((id) => !here(id))) {
+    const trail: string[] = []
+    let index = -1
+    store.trail.forEach((id, at) => {
+      if (here(id) && trail[trail.length - 1] !== id) trail.push(id)
+      if (at === store.trailIndex) index = trail.length - 1
+    })
+    store.trail = trail
+    store.trailIndex = trail.length === 0 ? -1 : Math.max(0, index)
+  }
 }
 
 // MARK: - Which papers a shelf holds

@@ -253,17 +253,55 @@ export class LibrarySet {
       perFolder,
       merged,
     )
-    for (const one of missing) {
-      const folder = folders.find((entry) => entry.library.root === one.root)
-      if (!folder) continue
-      if (one.tags.length > 0) {
-        await folder.library.saveManifest({ ...(await folder.library.manifest()), tags: [...folder.vocabulary.tags, ...one.tags] })
-      }
-      if (one.collections.length > 0) {
-        await folder.library.saveCollections([...folder.vocabulary.collections, ...one.collections])
-      }
-    }
+    await fillIn(missing, folders)
     return merged
+  }
+
+  /**
+   * A paper was just given tags or collections: its folder gets their
+   * definitions if only another folder had them. The window no longer reads
+   * the library again after a write, and that reading was where this used to
+   * happen — without it, a tag put on a paper in a second folder would be a
+   * name that folder cannot spell when it is carried to another machine.
+   */
+  async wear(owner: Library, meta: { tagIDs?: unknown; collectionIDs?: unknown }) {
+    if (this.all().length < 2) return
+    const tagIDs = Array.isArray(meta.tagIDs) ? meta.tagIDs as string[] : []
+    const collectionIDs = Array.isArray(meta.collectionIDs) ? meta.collectionIDs as string[] : []
+    if (tagIDs.length === 0 && collectionIDs.length === 0) return
+    const folders = await Promise.all(this.all().map(async (library) => {
+      const [manifest, collectionSet] = await Promise.all([library.manifest(), library.collections()])
+      return {
+        library,
+        vocabulary: {
+          root: library.root,
+          tags: (manifest.tags ?? []) as Tag[],
+          collections: (collectionSet.collections ?? []) as Collection[],
+        },
+      }
+    }))
+    const missing = missingVocabulary(
+      [{ root: owner.root, tagIDs, collectionIDs }],
+      folders.map((one) => one.vocabulary),
+    )
+    await fillIn(missing, folders)
+  }
+}
+
+/** Writes into each folder the definitions it was found to be missing. */
+async function fillIn(
+  missing: { root: string; tags: Tag[]; collections: Collection[] }[],
+  folders: { library: Library; vocabulary: { tags: Tag[]; collections: Collection[] } }[],
+) {
+  for (const one of missing) {
+    const folder = folders.find((entry) => entry.library.root === one.root)
+    if (!folder) continue
+    if (one.tags.length > 0) {
+      await folder.library.saveManifest({ ...(await folder.library.manifest()), tags: [...folder.vocabulary.tags, ...one.tags] })
+    }
+    if (one.collections.length > 0) {
+      await folder.library.saveCollections([...folder.vocabulary.collections, ...one.collections])
+    }
   }
 }
 

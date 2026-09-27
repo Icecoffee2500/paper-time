@@ -18,7 +18,7 @@
  */
 import { icon, type IconName } from '../icons.js'
 import { clear, el, on } from '../dom.js'
-import { store, type SketchTool } from '../state.js'
+import { readerState, store, type SketchTool } from '../state.js'
 import {
   SketchColor,
   STYLE_WIDTHS,
@@ -730,7 +730,7 @@ export function buildSketchInspector(host: SketchInspectorHost): { node: HTMLEle
 
   function render() {
     clear(node)
-    if (!store.reader.drawing) {
+    if (!readerState().drawing) {
       node.append(el('div', { class: 'empty' }, [
         el('span', { html: icon('pen') }),
         el('h2', { text: L('그리기', 'Drawing') }),

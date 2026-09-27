@@ -52,12 +52,18 @@ export function createNote(paperID: string | null, kind: ZettelKind = 'note'): N
   return note
 }
 
-/** One note, changed: kept in hand now, written a moment after the typing stops. */
+/**
+ * One note, changed: kept in hand now, written a moment after the typing stops.
+ *
+ * `store.notes` is replaced, never changed in place — like every list in the
+ * store, whoever holds the old array holds what was true when they looked.
+ */
 export function updateNote(note: Note) {
   const edited = { ...note, modified: new Date() }
   const at = store.notes.findIndex((one) => one.id === note.id)
-  if (at >= 0) store.notes[at] = edited
-  else store.notes = sorted([...store.notes, edited])
+  store.notes = at >= 0
+    ? [...store.notes.slice(0, at), edited, ...store.notes.slice(at + 1)]
+    : sorted([...store.notes, edited])
   unwritten.set(edited.id, edited)
   const waiting = saveTimers.get(edited.id)
   if (waiting) clearTimeout(waiting)
@@ -72,9 +78,14 @@ export async function flushNote(id: string) {
   saveTimers.delete(id)
   await write(id)
   // The editor lets go of a note by flushing it, and an empty note let go
-  // of is a note nobody wrote: the next reading may drop it, as it always has.
+  // of is a note nobody wrote: it leaves the box now, rather than standing
+  // in the list as an untitled row until the library is read again.
   const note = noteByID(id)
-  if (note && zettelIsEmpty(note)) unwritten.delete(id)
+  if (note && zettelIsEmpty(note)) {
+    unwritten.delete(id)
+    store.notes = store.notes.filter((one) => one.id !== id)
+    changed('notes')
+  }
 }
 
 async function write(id: string) {
@@ -82,8 +93,11 @@ async function write(id: string) {
   const note = noteByID(id)
   if (!note) return
   const saved = await call('notes:save', { note: noteDTO(note) })
-  const current = noteByID(id)
-  if (current) current.box = saved.box
+  // Which box it went into, on a new copy of the note — see `updateNote`.
+  const at = store.notes.findIndex((one) => one.id === id)
+  if (at >= 0 && store.notes[at].box !== saved.box) {
+    store.notes = [...store.notes.slice(0, at), { ...store.notes[at], box: saved.box }, ...store.notes.slice(at + 1)]
+  }
   // Still the same words: what is in hand has reached the disk. An empty
   // note stays in hand — its file went away, and it is still open.
   const held = unwritten.get(id)
