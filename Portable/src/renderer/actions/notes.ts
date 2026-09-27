@@ -11,6 +11,7 @@ import { createNote } from '../notesModel.js'
 import { openNoteInSlipBox, slipBoxEditor } from '../ui/slipBox.js'
 import { openEditor as openNoteEditor, openNoteInTab } from '../ui/notesTab.js'
 import { toast } from '../ui/toolbar.js'
+import { revealWords } from '../ui/noteEditor.js'
 import { L } from '../../shared/lang.js'
 import { passageText, quotationSource } from '../../shared/noteQuote.js'
 
@@ -53,6 +54,21 @@ export async function openNote(id: string) {
     return
   }
   revealNoteInSlipBox(id)
+}
+
+/**
+ * A note from Search Everything, where the Mac opens it: the slip-box, with
+ * the note beside the list, whichever paper it is about — and, for a passage
+ * found by meaning, at that passage.
+ */
+export function openNoteFromSearch(id: string, words?: string) {
+  if (!noteByID(id) || solo) return
+  revealNoteInSlipBox(id)
+  if (!words) return
+  requestAnimationFrame(() => {
+    const area = slipBoxEditor()?.area
+    if (area) revealWords(area, words)
+  })
 }
 
 /**

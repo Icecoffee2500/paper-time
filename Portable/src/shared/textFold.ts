@@ -581,7 +581,11 @@ export function snippetAround(text: string, location: number, length: number, ro
 
 /** `CharacterSet.whitespacesAndNewlines`: the Z categories, the tab, the line
  *  breaks and U+0085. */
-const WHITESPACE_AND_NEWLINES = /[\p{Z}\t\n\v\f\r\x85]+/u
+// Foundation's `.whitespacesAndNewlines`, spelled out: it is not «Z and the
+// line breaks» — U+200B is in it, and publisher PDFs set it between words,
+// so a snippet kept it here and lost it on the Mac, and the trim at twelve
+// graphemes then cut in a different place.
+const WHITESPACE_AND_NEWLINES = /[\t-\r \x85\xa0\u1680\u2000-\u200b\u2028\u2029\u202f\u205f\u3000]+/u
 
 /** Graphemes, for the few places that count them the way Swift does. */
 export function graphemes(text: string): string[] {

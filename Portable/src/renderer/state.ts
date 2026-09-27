@@ -14,7 +14,8 @@ import type { TextHit } from '../main/textIndex.js'
 import { needsReview, type DocumentKind } from '../shared/documentKind.js'
 import { authorKey, caseInsensitiveOrder, nameShown, sortingSurname, standardOrder } from '../shared/authorKey.js'
 import { foldTitle } from '../shared/textFold.js'
-import { paperHaystack, type SearchablePaper } from '../shared/searchRank.js'
+import { paperHaystack, prepare, type ActionName, type Prepared, type SearchablePaper } from '../shared/searchRank.js'
+import { zettelDisplayTitle, zettelIsEmpty, zettelPreview } from '../shared/zettel.js'
 import { PaperMeta, PaperState, type Collection, type Tag } from '../shared/model.js'
 import { SketchColor, SketchStyle } from '../shared/sketch.js'
 import { splitContains, splitDock, splitPapers, splitRemove, type DockZone, type SplitArrangement } from '../shared/split.js'
@@ -889,7 +890,11 @@ export function shelfPapers(): Paper[] {
       break
     }
     case 'search':
-      filtered = all.filter((entry) => matchesSearch(entry, store.searchQuery))
+      {
+        // Folded once for the shelf, not once a paper (`visibleCache`).
+        const folded = foldTitle(store.searchQuery.trim())
+        filtered = folded ? all.filter((entry) => haystackOf(entry).includes(folded)) : []
+      }
       break
   }
   return sorted(filtered)
@@ -1029,10 +1034,50 @@ export function matchesSearch(entry: Paper, query: string): boolean {
   return haystackOf(entry).includes(folded)
 }
 
+/**
+ * The library folded for the palette, kept while nothing it was made from
+ * has changed (`SearchIndex.Kept`) — every ⌘K folded every title and every
+ * note again, and each note looked its paper up in the whole library.
+ */
+let preparedKept: { from: unknown[]; prepared: Prepared } | null = null
+
+export function preparedSearch(actions: { name: ActionName; title: string }[]): Prepared {
+  const from: unknown[] = [store.papers, store.notes, store.collections, store.tags, actions.map((one) => one.title).join('\u0000')]
+  if (preparedKept && preparedKept.from.every((one, at) => one === from[at])) return preparedKept.prepared
+  const titles = new Map(store.papers.map((entry) => [entry.id, entry.meta.displayTitle]))
+  const prepared = prepare({
+    papers: store.papers.map(searchable),
+    // The slip-box's notes, named as their rows name them, each with the
+    // paper it was written against — as the Mac folds them.
+    notes: store.notes
+      .filter((note) => !zettelIsEmpty(note))
+      .map((note) => ({
+        id: note.id,
+        paperID: note.paperID,
+        title: zettelDisplayTitle(note),
+        preview: zettelPreview(note.body),
+        paperTitle: (note.paperID && titles.get(note.paperID)) || '',
+      })),
+    collections: store.collections.map((one) => ({ id: one.id, name: one.name, smart: Boolean(one.rule) })),
+    tags: store.tags.map((one) => ({ id: one.id, name: one.name })),
+    actions: actions.map(({ name, title }) => ({ name, title })),
+  })
+  preparedKept = { from, prepared }
+  return prepared
+}
+
 /** How many papers the search shelf holds, for the sidebar's count. */
+let counted: { papers: Paper[]; query: string; count: number } | null = null
+
+/** How many papers the search shelf holds, for its sidebar row — kept while
+ *  the library and the query are the same ones (`searchResultCount`). */
 export function searchCount(): number {
   if (!store.searchQuery) return 0
-  return store.papers.filter((entry) => !entry.meta.parentID && matchesSearch(entry, store.searchQuery)).length
+  if (counted && counted.papers === store.papers && counted.query === store.searchQuery) return counted.count
+  const folded = foldTitle(store.searchQuery.trim())
+  const count = folded ? store.papers.filter((entry) => !entry.meta.parentID && haystackOf(entry).includes(folded)).length : 0
+  counted = { papers: store.papers, query: store.searchQuery, count }
+  return count
 }
 
 /**

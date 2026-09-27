@@ -25,6 +25,8 @@ export type ServiceRequest =
   | { type: 'configure'; directory: string; width?: number }
   | { type: 'sources'; sources: TextSource[]; roots: string[] }
   | { type: 'warm'; ids: string[] }
+  /** The palette closed: reads under way finish and are kept; nothing new starts. */
+  | { type: 'warm-cancel' }
   | { type: 'search'; token: number; query: string; ids: string[]; titles: Record<string, string>; limit?: number }
   | { type: 'cancel'; token: number }
   /** The pages of these papers, for search by meaning: from memory or the
@@ -237,6 +239,8 @@ const sources = new Map<string, TextSource>()
 let roots: string[] = []
 const cancelled = new Set<number>()
 let warming = 0
+/** Whether this session has cleared out the text of papers that are gone. */
+let swept = false
 let warmMs: number | null = null
 let peakRss = 0
 
@@ -265,7 +269,9 @@ async function warm(ids: string[]) {
   warmMs = performance.now() - started
   // Every paper the library has, not only the ones asked for: a paper left
   // out of this warm-up because it is an attachment is still a paper.
-  const removed = await index.cleanup(new Set(sources.keys()), roots)
+  // Once a session, not on every open of the palette.
+  const removed = swept ? 0 : await index.cleanup(new Set(sources.keys()), roots)
+  swept = true
   watchMemory()
   post({ type: 'warmed', loaded: index.size, total: list.length, ms: warmMs, removed })
 }
@@ -346,6 +352,9 @@ port.on('message', ({ data: request }) => {
       break
     case 'warm':
       void warm(request.ids)
+      break
+    case 'warm-cancel':
+      warming += 1
       break
     case 'search':
       void search(request)

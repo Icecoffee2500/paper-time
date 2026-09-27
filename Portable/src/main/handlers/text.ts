@@ -7,7 +7,13 @@ export function textHandlers(ctx: Context): Partial<Handlers> {
   return {
     // The window says which papers, in which order, and under which titles;
     // this process knows where their files are.
-    'text:warm': ({ ids }) => text.warm(ids),
+    // And search by meaning catches up as the palette opens, as the Mac's
+    // does — not only when a warm-up finishes, which a second open can stop.
+    'text:warm': ({ ids }) => {
+      text.warm(ids)
+      ctx.semantic().schedule(2000)
+    },
+    'text:warm-cancel': () => text.stopWarming(),
     'text:search': ({ token, query, ids, titles, limit }, sender) => {
       if (sender) text.search(sender.webContents, token, query, ids, titles, limit)
     },

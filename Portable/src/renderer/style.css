@@ -4050,3 +4050,19 @@ textarea.memo {
 .choices.kind-choices button { display: block; text-align: center; line-height: 24px; }
 .author-byline { flex-direction: row; justify-content: flex-start; align-items: flex-start; }
 .author-byline .author-lines { align-items: flex-start; text-align: left; flex: 1 1 auto; }
+
+/* A passage found in a note glows for a moment where it is. */
+@keyframes note-revealed { from { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 40%, transparent); } }
+textarea.revealed { animation: note-revealed var(--motion-fade) var(--ease); }
+
+/* Why the palette offers a paper, in the accent; how far through, as a bar. */
+.palette-reason { margin-top: 2px; font-size: 11px; color: var(--accent-text); }
+.palette-progress {
+  flex: 0 0 64px;
+  height: 4px;
+  align-self: center;
+  border-radius: 2px;
+  background: var(--separator-strong);
+  overflow: hidden;
+}
+.palette-progress > span { display: block; height: 100%; background: var(--accent); border-radius: 2px; }

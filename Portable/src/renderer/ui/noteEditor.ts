@@ -304,3 +304,35 @@ export function noteRow(note: Note, options: { source?: string; selected?: boole
   }
   return row
 }
+
+/**
+ * Finds a passage in a note and shows it — a passage search by meaning found
+ * in a note (`NoteEditor`'s `reveal`): the first eight words of it, else
+ * five, else three, matched through whatever spaces the note has; selected,
+ * scrolled to, and made to glow for a moment. The index cuts the note's
+ * plain text, so an offset would miss in the Markdown; the words do not.
+ * True when it was found.
+ */
+export function revealWords(area: HTMLTextAreaElement, snippet: string): boolean {
+  const words = snippet.replace(/[…]/g, ' ').split(/\s+/).filter((word) => word.length > 0)
+  for (const take of [8, 5, 3]) {
+    if (words.length < take && take !== 3) continue
+    const wanted = words.slice(0, take)
+    if (wanted.length === 0) return false
+    const pattern = new RegExp(wanted.map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[\\s*_`>#-]+'), 'i')
+    const found = pattern.exec(area.value)
+    if (!found) continue
+    area.focus({ preventScroll: true })
+    area.setSelectionRange(found.index, found.index + found[0].length)
+    // The line it is on, into view: a textarea scrolls to its caret only
+    // when it is typed into.
+    const before = area.value.slice(0, found.index).split('\n').length - 1
+    const lineHeight = parseFloat(getComputedStyle(area).lineHeight) || 20
+    area.scrollTop = Math.max(0, before * lineHeight - area.clientHeight / 3)
+    area.classList.remove('revealed')
+    void area.offsetWidth
+    area.classList.add('revealed')
+    return true
+  }
+  return false
+}
