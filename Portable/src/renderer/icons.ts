@@ -10,7 +10,7 @@
  * Each entry is the inside of an `<svg>`; `icon()` wraps it.
  */
 
-const SHAPES: Record<string, string> = {
+const SHAPES = {
   // -------------------------------------------------------------- the panes
   // A window with a panel down one side: the divider, and two short rules
   // standing for the list inside it.
@@ -65,6 +65,27 @@ const SHAPES: Record<string, string> = {
     <path d="M2 9.6h2.8l1 1.7h4.4l1-1.7H14"/>
     <path d="M2 9.6V12a1.6 1.6 0 0 0 1.6 1.6h8.8A1.6 1.6 0 0 0 14 12V9.6"/>
     <path d="M4.3 6.6h7.4M5.4 3.8h5.2"/>`,
+  // The slip-box's empty tray: the same tray, nothing in it.
+  tray: `
+    <path d="M2 9.6h2.8l1 1.7h4.4l1-1.7H14"/>
+    <path d="M2 9.6V12a1.6 1.6 0 0 0 1.6 1.6h8.8A1.6 1.6 0 0 0 14 12V9.6l-1.9-5.3a1.4 1.4 0 0 0-1.3-.9H5.2a1.4 1.4 0 0 0-1.3.9Z"/>`,
+  // The ⋯ inside a ring: «more», on something that is already a button.
+  'ellipsis.circle': `
+    <circle cx="8" cy="8" r="5.9"/>
+    <circle cx="5.3" cy="8" r=".85" fill="currentColor" stroke="none"/>
+    <circle cx="8" cy="8" r=".85" fill="currentColor" stroke="none"/>
+    <circle cx="10.7" cy="8" r=".85" fill="currentColor" stroke="none"/>`,
+  // A map: three panels folded like a paper one — the slip-box's maps.
+  map: `
+    <path d="M2.2 4.2 6 2.6l4 1.6 3.8-1.6v9.2L10 13.4 6 11.8l-3.8 1.6Z"/>
+    <path d="M6 2.6v9.2M10 4.2v9.2"/>`,
+  // A page with lines on it — a draft.
+  'doc.text': `
+    <path d="M4 1.9h4.8l3.4 3.4v8.8a1.2 1.2 0 0 1-1.2 1.2H4a1.2 1.2 0 0 1-1.2-1.2V3.1A1.2 1.2 0 0 1 4 1.9Z"/>
+    <path d="M8.6 1.9v2.6a1.1 1.1 0 0 0 1.1 1.1h2.5"/>
+    <path d="M5.3 8.4h5.4M5.3 10.8h3.8"/>`,
+  // A hash: the page a passage is on.
+  number: `<path d="M6.2 2.6 5 13.4M11 2.6 9.8 13.4M2.9 5.8h10.6M2.5 10.2h10.6"/>`,
   circle: `<circle cx="8" cy="8" r="5.2"/>`,
   'circle.lefthalf.filled': `
     <circle cx="8" cy="8" r="5.2"/>
@@ -112,6 +133,9 @@ const SHAPES: Record<string, string> = {
     <path d="M5.2 5.6h5.6M5.2 8h3.6"/>`,
   folder: `
     <path d="M1.9 4.4a1.5 1.5 0 0 1 1.5-1.5h2.3l1.4 1.7h5.5a1.5 1.5 0 0 1 1.5 1.5v5.5a1.5 1.5 0 0 1-1.5 1.5H3.4a1.5 1.5 0 0 1-1.5-1.5Z"/>`,
+  // The folder that is open in the sidebar: the same folder, filled.
+  'folder.fill': `
+    <path d="M1.9 4.4a1.5 1.5 0 0 1 1.5-1.5h2.3l1.4 1.7h5.5a1.5 1.5 0 0 1 1.5 1.5v5.5a1.5 1.5 0 0 1-1.5 1.5H3.4a1.5 1.5 0 0 1-1.5-1.5Z" fill="currentColor"/>`,
   'plus.circle': `
     <circle cx="8" cy="8" r="5.6"/>
     <path d="M8 5.4v5.2M5.4 8h5.2"/>`,
@@ -398,7 +422,7 @@ const SHAPES: Record<string, string> = {
   'square.3.layers.3d.bottom.filled': `
     <path d="M2.6 5.3 8 2.6l5.4 2.7L8 8M2.6 8 8 10.7 13.4 8"/>
     <path d="m8 10.7 5.4-2.7v2.7L8 13.4l-5.4-2.7V8Z" fill="currentColor"/>`,
-}
+} satisfies Record<string, string>
 
 /**
  * The drawing tools, as Figma draws them: a 20-point box, a 1.6 stroke,
@@ -440,11 +464,12 @@ export function figmaIcon(name: string): string {
     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${shape}</svg>`
 }
 
-export type IconName = keyof typeof SHAPES | string
+/** An icon's name. A plain string so menus can be built from lists; `src/test/icons.ts` checks every name written in the source has a drawing. */
+export type IconName = string
 
 /** One icon as SVG markup, sized by CSS rather than by an attribute. */
 export function icon(name: IconName, extra = ''): string {
-  const shape = SHAPES[name]
+  const shape = (SHAPES as Record<string, string>)[name]
   if (!shape) return ''
   return `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"
     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${shape}</svg>`

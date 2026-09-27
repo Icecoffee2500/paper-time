@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { DEFAULTS, fromFile } from '../main/settingsFile.js'
+import { DEFAULTS, fromFile } from '../shared/appSettings.js'
 import { watchLibrary } from '../main/watcher.js'
 import { Library } from '../main/library.js'
 

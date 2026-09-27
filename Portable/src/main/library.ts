@@ -11,6 +11,7 @@
  * is atomic on every filesystem this app will meet, so a library folder is
  * never left holding half a record because a laptop lid closed mid-save.
  */
+import { isInside, pathKey, samePath } from '../shared/paths.js'
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
@@ -331,7 +332,9 @@ export class Library {
   /** Points a record at the file its digest found, in hand and on disk. */
   private async claim(row: PaperRow, file: string): Promise<void> {
     const was = String((row.meta.file as RawRecord).relativePath ?? '')
-    const relative = path.relative(this.root, file)
+    // `/` whatever this desktop's separator: a record that says `week 1\x.pdf`
+    // is a record the Mac, and `claimedBy`, cannot match to its file.
+    const relative = L.recordPath(this.root, file)
     row.meta = {
       ...row.meta,
       file: { ...(row.meta.file as RawRecord), relativePath: relative },
@@ -363,7 +366,7 @@ export class Library {
 
     let name = proposed.trim().replace(/^\.+/, '').trim()
     if (!name) return { error: 'empty' }
-    if (/[/\\:*?"<>|]/.test(name)) return { error: 'notAName' }
+    if (!isAName(name)) return { error: 'notAName' }
 
     const current = row.file
     const extension = path.extname(current)
@@ -377,7 +380,8 @@ export class Library {
     // On a disk that does not mind case — every Windows one, most Macs — the
     // destination of a rename that only changes a letter's case is this same
     // file, and the move is how the case is changed.
-    const caseOnly = destination.toLowerCase() === current.toLowerCase()
+    // On Linux the two are different files, and the other one is kept.
+    const caseOnly = samePath(destination, current)
     if (!caseOnly && fs.existsSync(destination)) return { error: 'taken' }
 
     await fsp.rename(current, destination)
@@ -447,7 +451,8 @@ export class Library {
     // accepting any paper at all, for as long as it stays unreadable — and a
     // duplicate row is something you can see and throw away.
     const existing = (await this.read()).papers
-    const inside = path.resolve(source).startsWith(path.resolve(this.root) + path.sep)
+    // Folded as the disk folds names: `d:\papers\x.pdf` is inside `D:\Papers`.
+    const inside = isInside(path.resolve(source), path.resolve(this.root))
 
     // A record already speaks for this very file: it is that paper, and asking
     // again is not asking for a second one. By path, not by bytes — once a
@@ -459,7 +464,7 @@ export class Library {
     // not match its own file is a second record for it.
     const asRecorded = (row: PaperRow) =>
       String((row.meta.file as RawRecord)?.relativePath ?? '').split('\\').join('/')
-    const claiming = here === null ? undefined : existing.find((row) => asRecorded(row) === here)
+    const claiming = here === null ? undefined : existing.find((row) => samePath(asRecorded(row), here))
     if (claiming) return claiming
 
     const already = existing.find(
@@ -566,8 +571,10 @@ export class Library {
    */
   async unclaimedFiles(claimed: Set<string>): Promise<string[]> {
     const found: string[] = []
+    // Keyed whichever way the names came: from `claimedBy`, or spelled as the records spell them.
+    const keys = new Set([...claimed].map(pathKey))
     for (const file of await this.documentFiles()) {
-      if (claimed.has(L.recordPath(this.root, file))) continue
+      if (keys.has(pathKey(L.recordPath(this.root, file)))) continue
       found.push(file)
     }
     return found
@@ -772,6 +779,23 @@ async function digestOfFile(file: string): Promise<string | null> {
  * yes, the repair is written, and the record travels: which is what the Mac
  * has always done.
  */
+/**
+ * Whether a file can be called this here. The Mac's rule everywhere — no `/`
+ * and no `:` — and on Windows its own as well: the characters it reserves,
+ * and the device names (`CON`, `NUL`, `COM1`…) that are not files whatever
+ * extension follows them. Linux took Windows's list, and refused `?` and `|`
+ * that the Mac and Linux both allow.
+ */
+export function isAName(name: string, platform: string = process.platform): boolean {
+  if (/[/:]/.test(name)) return false
+  if (platform !== 'win32') return true
+  // eslint-disable-next-line no-control-regex
+  if (/[\\*?"<>|\u0000-\u001f]/.test(name)) return false
+  // A name ending in a dot or a space is not one either, but the extension
+  // always follows what was typed here, so it cannot end that way.
+  return !/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i.test(name)
+}
+
 function nameIsPossibleHere(relative: string): boolean {
   if (process.platform !== 'win32') return true
   // eslint-disable-next-line no-control-regex
@@ -783,6 +807,9 @@ export function claimedBy(rows: PaperRow[]): Set<string> {
   return new Set(
     rows
       .map((row) => String((row.meta.file as RawRecord)?.relativePath ?? ''))
-      .filter(Boolean),
+      .filter(Boolean)
+      // One key per place: a record written with `\\` by an older build, or
+      // in another case, is still the record for that file.
+      .map(pathKey),
   )
 }

@@ -18,7 +18,7 @@
  * agree.
  */
 import { el, on } from '../dom.js'
-import { iconNode } from '../icons.js'
+import { iconNode, type IconName } from '../icons.js'
 import { L } from '../../shared/lang.js'
 import type { Reader } from './reader.js'
 
@@ -49,7 +49,7 @@ export class FindBar {
     }) as HTMLInputElement
     this.summary = el('span', { class: 'find-summary' })
     this.glass = el('span', { class: 'find-glass' })
-    const button = (icon: string, label: string, press: () => void) => {
+    const button = (icon: IconName, label: string, press: () => void) => {
       const made = el('button', { class: 'icon-button', title: label, 'aria-label': label }) as HTMLButtonElement
       const glyph = iconNode(icon)
       if (glyph) made.append(glyph)

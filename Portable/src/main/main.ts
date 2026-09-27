@@ -16,7 +16,7 @@ import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 import { Worker } from 'node:worker_threads'
-import { CHANNEL, type LibrarySnapshot, type NoteDTO } from '../shared/api.js'
+import { CHANNEL, type LibrarySnapshot, type NoteDTO, type RequestArgs, type RequestName, type RequestResult } from '../shared/api.js'
 import { Library, claimedBy, deviceIdentity, readJSON, writeJSON } from './library.js'
 import * as L from './layout.js'
 import { PaperMeta, PaperState, type Collection, type Tag } from '../shared/model.js'
@@ -49,6 +49,8 @@ import {
 import { isoTimestamp } from '../shared/coding.js'
 import { diagnose, headBytes, headLine, looksWhole, type ByteTrouble } from '../shared/pdfLock.js'
 import { flushSettings, holdInMemory, rememberLibrary, settings, update } from './settings.js'
+import { acceptedPatch, type Settings } from '../shared/appSettings.js'
+import { isUnder, samePath } from '../shared/paths.js'
 import { providerOf } from '../shared/cloudProvider.js'
 // `L` is the layout module in this file, so the two-language helper comes
 // in under a name of its own.
@@ -361,6 +363,33 @@ function allBounds() {
 
 // MARK: - The library
 
+const isFile = (file: string) => {
+  try {
+    return fs.statSync(file).isFile()
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Why a folder the window names is not one to open as a library, or null.
+ * The window is a page: what it sends is checked here before anything is
+ * written into a folder — a library writes its `.papertime` inside, and the
+ * top of a drive or a whole home folder is not somewhere to do that.
+ */
+function folderRefusal(root: string | undefined): string | null {
+  const no = say('이 폴더는 라이브러리로 열 수 없어요.', "Paper Time can't open that folder as a library.")
+  if (!root || typeof root !== 'string' || !path.isAbsolute(root)) return no
+  try {
+    if (!fs.statSync(root).isDirectory()) return no
+  } catch {
+    return say('폴더를 찾지 못했어요.', "Paper Time couldn't find that folder.")
+  }
+  const resolved = path.resolve(root)
+  if (samePath(resolved, path.parse(resolved).root) || samePath(resolved, app.getPath('home'))) return no
+  return null
+}
+
 /**
  * Reads the library and says what is in it.
  *
@@ -532,7 +561,7 @@ async function openLibrary(root: string) {
   // order they answer in: that order is the sidebar's list of libraries, and
   // a folder on a cloud drive that has to wake up should not hold up a folder
   // on this machine.
-  const extras = (settings().extraRoots ?? []).filter((extra) => extra !== root)
+  const extras = (settings().extraRoots ?? []).filter((extra) => !samePath(extra, root))
   extraLibraries = (await Promise.all(extras.map(async (extra) => {
     // A folder on a disk that is not plugged in is not an error worth
     // stopping the library for; it comes back when the disk does.
@@ -557,7 +586,7 @@ function startWatchingFolders() {
   // And the loose notes' folder, which may be in a cloud drive too: a note
   // the Mac wrote there arrives as a file appearing.
   const loose = notesStore?.info().loose
-  if (loose && !roots.some((root) => loose.startsWith(root))) {
+  if (loose && !roots.some((root) => isUnder(loose, root))) {
     extraWatchers.push(watchLibrary(loose, () => void folderDidChange()))
   }
 }
@@ -820,7 +849,14 @@ function textsWithSources(): UtilityProcess {
 // MARK: - Requests
 
 /** A request, with the window that made it — dialogs hang off that one. */
-type Handler = (args: never, sender: BrowserWindow | null) => unknown | Promise<unknown>
+/**
+ * Every request the window can make, answered with the shape `shared/api.ts`
+ * says — a handler missing, renamed or answering something else fails the
+ * build rather than a click.
+ */
+type Handlers = {
+  [K in RequestName]: (args: RequestArgs<K>, sender: BrowserWindow | null) => RequestResult<K> | Promise<RequestResult<K>>
+}
 
 /**
  * The file, read until all of it is there.
@@ -851,11 +887,12 @@ async function readWhole(file: string): Promise<Uint8Array> {
   return bytes
 }
 
-const handlers: Record<string, Handler> = {
+const handlers: Handlers = {
   // The effective root, not the remembered one: a probe run opens a folder
   // of its own and the window must be told about that one.
   'settings:get': () => ({ ...settings(), libraryRoot: library?.root ?? settings().libraryRoot }),
-  'settings:set': ((patch: Record<string, unknown>) => {
+  'settings:set': ((asked: Partial<Settings>) => {
+    const patch = acceptedPatch(asked as Record<string, unknown>)
     const next = update(patch)
     // The switch for search by meaning: off ends the worker and what it was
     // doing; on starts the build the way a library read would.
@@ -864,9 +901,9 @@ const handlers: Record<string, Handler> = {
       else semantic().schedule(500)
     }
     return next
-  }) as Handler,
+  }),
 
-  'library:choose': async (_args: never, sender: BrowserWindow | null) => {
+  'library:choose': async (_args: void, sender: BrowserWindow | null) => {
     const result = await dialog.showOpenDialog(sender ?? window!, {
       title: 'Choose your library folder',
       message: 'Pick the folder your papers live in — a cloud folder works, and is how a library follows you between machines.',
@@ -877,7 +914,11 @@ const handlers: Record<string, Handler> = {
     return result.filePaths[0]
   },
 
-  'library:open': (async ({ root }: { root: string }) => openLibrary(root)) as Handler,
+  'library:open': (async ({ root }: { root: string }) => {
+    const refusal = folderRefusal(root)
+    if (refusal) return { error: refusal, refused: true as const }
+    return openLibrary(root)
+  }),
   'library:reload': async () => snapshot(),
 
   'library:import': (async ({ paths, root }: { paths?: string[]; root?: string }, sender: BrowserWindow | null) => {
@@ -886,7 +927,7 @@ const handlers: Record<string, Handler> = {
     // a paper added while one library's own shelf is showing belongs to that
     // library. Anything else — every other shelf, a folder inside a library —
     // goes to the first one.
-    const destination = allLibraries().find((one) => one.root === root) ?? library
+    const destination = allLibraries().find((one) => samePath(one.root, root)) ?? library
     let chosen = paths
     if (!chosen || chosen.length === 0) {
       const result = await dialog.showOpenDialog(sender ?? window!, {
@@ -898,11 +939,14 @@ const handlers: Record<string, Handler> = {
       if (result.canceled) return snapshot()
       chosen = result.filePaths
     }
-    for (const file of chosen) {
+    // PDFs only, and ones that are there: a drop carries whatever was
+    // dragged, and the window's list is not a promise about the disk.
+    const pdfs = chosen.filter((file) => /\.pdf$/i.test(file) && isFile(file))
+    for (const file of pdfs) {
       await destination.importPDF(file, await pageCount(file))
     }
     return snapshot()
-  }) as Handler,
+  }),
 
   'library:adoptLoose': async () => {
     if (!library) return { error: 'No library is open.' }
@@ -941,26 +985,41 @@ const handlers: Record<string, Handler> = {
       if (result.canceled || result.filePaths.length === 0) return snapshot()
       chosen = result.filePaths[0]
     }
-    if (!library || chosen === library.root) return snapshot()
-    if (extraLibraries.some((one) => one.root === chosen)) return snapshot()
+    if (!library) return snapshot()
+    const refusal = folderRefusal(chosen)
+    if (refusal) return { error: refusal, refused: true as const }
+    // Already being read, or inside or around one that is: two libraries over
+    // the same files would show every paper twice and write each record from
+    // two places.
+    const overlapping = allLibraries().find((one) => isUnder(chosen!, one.root) || isUnder(one.root, chosen!))
+    if (overlapping) {
+      if (samePath(overlapping.root, chosen)) return snapshot()
+      return {
+        error: say(
+          '이미 연 라이브러리 안에 있거나 그것을 품은 폴더예요.',
+          'That folder is inside a library that is already open, or holds one.',
+        ),
+        refused: true as const,
+      }
+    }
     extraLibraries.push(await Library.open(chosen))
     rememberExtras()
     startWatchingFolders()
     return snapshot()
-  }) as Handler,
+  }),
 
   /** Stops reading a folder. Its files and its records stay where they are. */
   'library:removeFolder': (async ({ root }: { root: string }) => {
-    extraLibraries = extraLibraries.filter((one) => one.root !== root)
+    extraLibraries = extraLibraries.filter((one) => !samePath(one.root, root))
     rememberExtras()
     startWatchingFolders()
     return snapshot()
-  }) as Handler,
+  }),
 
   'library:trash': (async ({ id }: { id: string }) => {
     await (await ownerOf(id))?.trashPaper(id)
     return snapshot()
-  }) as Handler,
+  }),
 
   'paper:bytes': (async ({ id }: { id: string }) => {
     // Nothing in here throws. A rejected request reaches the window as an
@@ -996,7 +1055,7 @@ const handlers: Record<string, Handler> = {
       console.error('paper:bytes -', error)
       return { error: 'The PDF for this paper could not be read.' }
     }
-  }) as Handler,
+  }),
 
   'paper:state': (async ({ id, patch }: { id: string; patch: Record<string, unknown> }) => {
     const owner = await ownerOf(id)
@@ -1012,7 +1071,7 @@ const handlers: Record<string, Handler> = {
     })
     const saved = await owner.saveState(id, state)
     return saved.encode()
-  }) as Handler,
+  }),
 
   'paper:meta': (async ({ id, patch }: { id: string; patch: Record<string, unknown> }) => {
     const owner = await ownerOf(id)
@@ -1027,7 +1086,7 @@ const handlers: Record<string, Handler> = {
     Object.assign(meta, cleared)
     await owner.saveMeta(meta)
     return meta.encode()
-  }) as Handler,
+  }),
 
   // Renaming the file, from the inspector. The reader may have it open: the
   // window is told, and re-reads the paper from its new name.
@@ -1038,32 +1097,32 @@ const handlers: Record<string, Handler> = {
     if ('error' in result) return result
     send('library:changed')
     return { name: result.file ? path.basename(result.file) : name }
-  }) as Handler,
+  }),
 
   // A library's folder in the desktop's own file manager, from its row's
   // menu. Only a folder the library is reading: the window does not get to
   // open arbitrary paths.
   'library:revealFolder': (async ({ root }: { root: string }) => {
-    if (!allLibraries().some((one) => one.root === root)) return
+    if (!allLibraries().some((one) => samePath(one.root, root))) return
     await shell.openPath(root)
-  }) as Handler,
+  }),
 
   'paper:reveal': (async ({ id }: { id: string }) => {
     const row = await (await ownerOf(id))?.paper(id)
     if (row?.file) shell.showItemInFolder(row.file)
-  }) as Handler,
+  }),
 
   'sketch:load': (async ({ id, pageIndex }: { id: string; pageIndex: number }) =>
-    (await ownerOf(id))?.loadSketch(id, pageIndex) ?? null) as Handler,
+    (await ownerOf(id))?.loadSketch(id, pageIndex) ?? null),
 
   'sketch:save': (async ({ id, pageIndex, elements }: { id: string; pageIndex: number; elements: unknown[] }) => {
     await (await ownerOf(id))?.saveSketch(id, pageIndex, elements)
     touched(id).sketch.add(pageIndex)
     schedulePDFWrite(id)
-  }) as Handler,
+  }),
 
   'ink:load': (async ({ id, pageIndex }: { id: string; pageIndex: number }) =>
-    (await ownerOf(id))?.loadInk(id, pageIndex) ?? null) as Handler,
+    (await ownerOf(id))?.loadInk(id, pageIndex) ?? null),
 
   'ink:save': (async ({ id, pageIndex, strokes }: { id: string; pageIndex: number; strokes: unknown[] }) => {
     // Into the folder that holds the paper, as every other sidecar is. This
@@ -1077,7 +1136,7 @@ const handlers: Record<string, Handler> = {
     await supersedeAppleInk(owner, id, pageIndex)
     touched(id).ink.add(pageIndex)
     schedulePDFWrite(id)
-  }) as Handler,
+  }),
 
   'marks:load': (async ({ id }: { id: string }) => {
     const owner = await ownerOf(id)
@@ -1116,7 +1175,7 @@ const handlers: Record<string, Handler> = {
       send('paper:kept', { id, reason: refused })
     }
     return out
-  }) as Handler,
+  }),
 
   'marks:save': (async ({ id, pageIndex, marks }: { id: string; pageIndex: number; marks: MarkupRecord[] }) => {
     const pages = marksInMemory.get(id) ?? {}
@@ -1126,12 +1185,12 @@ const handlers: Record<string, Handler> = {
     await recordInJournal(id, pageIndex, before, marks, pages)
     touched(id).marks.add(pageIndex)
     schedulePDFWrite(id)
-  }) as Handler,
+  }),
 
   'drawing:pages': (async ({ id }: { id: string }) =>
-    (await ownerOf(id))?.annotatedPages(id) ?? { sketch: [], ink: [], appleInk: [] }) as Handler,
+    (await ownerOf(id))?.annotatedPages(id) ?? { sketch: [], ink: [], appleInk: [] }),
 
-  'drawing:adoptFromFile': (async ({ id }: { id: string }) => adoptFromFile(id)) as Handler,
+  'drawing:adoptFromFile': (async ({ id }: { id: string }) => adoptFromFile(id)),
 
   'drawing:flush': (async ({ id }: { id: string }) => {
     const result = await flushToPDF(id)
@@ -1140,45 +1199,7 @@ const handlers: Record<string, Handler> = {
       return { written: 0 }
     }
     return result
-  }) as Handler,
-
-  'bibtex:export': (async ({ ids, protectCase }: { ids?: string[]; protectCase?: boolean }, sender: BrowserWindow | null) => {
-    if (!library) return { error: 'No library is open.' }
-    // Every folder, not the first: a shelf holds papers from all of them, and
-    // reading one folder dropped the others' papers from the file without a
-    // word — the one thing an export must never do quietly.
-    const reads = await Promise.all(allLibraries().map((one) => one.read()))
-    const rows = reads.flatMap((read) => read.papers)
-    const trouble = reads.flatMap((read) => read.trouble)
-    const chosen = ids && ids.length > 0 ? rows.filter((row) => ids.includes(row.id)) : rows
-    if (chosen.length === 0) return { error: 'There is nothing to export.' }
-    // A list that is short by a paper is a list; a bibliography that is short
-    // by a paper is a file that looks complete with a citation missing from
-    // it, found by LaTeX weeks later. So the one place that will not carry on
-    // with a folder read in part is this one — unless every paper that was
-    // asked for is in hand, which is the ordinary case of exporting a
-    // selection out of a library whose late record is somewhere else.
-    if (trouble.length > 0 && chosen.length !== (ids?.length ?? -1)) {
-      return {
-        error: say(
-          `기록 ${trouble.length}개가 아직 안 와서 지금 내보내면 빠지는 논문이 있어요.`,
-          `${trouble.length} record${trouble.length === 1 ? '' : 's'} `
-            + `${trouble.length === 1 ? "hasn't" : "haven't"} arrived, so this export would be short.`,
-        ),
-      }
-    }
-    // The one export option this build has: Settings → BibTeX, as on the Mac.
-    const options = { ...DEFAULT_EXPORT, protectCase: protectCase ?? DEFAULT_EXPORT.protectCase }
-    const text = formatBibliography(chosen.map((row) => new PaperMeta(row.meta)), options)
-    const result = await dialog.showSaveDialog(sender ?? window!, {
-      title: 'Export BibTeX',
-      defaultPath: `${path.basename(library.root)}.bib`,
-      filters: [{ name: 'BibTeX', extensions: ['bib'] }],
-    })
-    if (result.canceled || !result.filePath) return { cancelled: true }
-    await fsp.writeFile(result.filePath, text, 'utf8')
-    return { written: chosen.length, path: result.filePath }
-  }) as Handler,
+  }),
 
   // The sheet's «Save…»: the text it previewed, where the person says.
   'bibtex:save': (async ({ text }: { text: string }, sender: BrowserWindow | null) => {
@@ -1190,7 +1211,7 @@ const handlers: Record<string, Handler> = {
     if (result.canceled || !result.filePath) return { cancelled: true }
     await fsp.writeFile(result.filePath, text, 'utf8')
     return { path: result.filePath }
-  }) as Handler,
+  }),
 
   // The window sends the whole list; it is put back folder by folder. Each
   // folder keeps the collections it already had, and a new one goes into the
@@ -1212,23 +1233,23 @@ const handlers: Record<string, Handler> = {
       await one.saveCollections(mine)
     }
     return null
-  }) as Handler,
+  }),
 
-  'window:minimize': (_args: never, sender: BrowserWindow | null) => (sender ?? window)?.minimize(),
-  'window:toggleMaximize': (_args: never, sender: BrowserWindow | null) => {
+  'window:minimize': (_args: void, sender: BrowserWindow | null) => (sender ?? window)?.minimize(),
+  'window:toggleMaximize': (_args: void, sender: BrowserWindow | null) => {
     const target = sender ?? window
     if (target?.isMaximized()) target.unmaximize()
     else target?.maximize()
   },
-  'window:close': (_args: never, sender: BrowserWindow | null) => (sender ?? window)?.close(),
-  'window:state': (_args: never, sender: BrowserWindow | null) => windowState(sender ?? window),
+  'window:close': (_args: void, sender: BrowserWindow | null) => (sender ?? window)?.close(),
+  'window:state': (_args: void, sender: BrowserWindow | null) => windowState(sender ?? window),
   'window:bounds': () => allBounds(),
   'paper:openWindow': (({ id, x, y }: { id: string; x?: number; y?: number }) => {
     createPaperWindow(id, typeof x === 'number' && typeof y === 'number' ? { x, y } : undefined)
-  }) as Handler,
+  }),
   // The app speaks to the outside world here and nowhere else, and only
   // because somebody pressed 보내기.
-  'feedback:capture': (_args: never, sender: BrowserWindow | null) => captureWindow(sender ?? window),
+  'feedback:capture': (_args: void, sender: BrowserWindow | null) => captureWindow(sender ?? window),
   'feedback:send': ((report: {
     kind: 'bug' | 'wish'
     body: string
@@ -1247,20 +1268,20 @@ const handlers: Record<string, Handler> = {
         libraryCloud: library ? providerOf(library.root) !== 'local' : undefined,
         recent: [],
       },
-    })) as Handler,
+    })),
 
   // What the About section says: which version this is.
   'app:about': () => ({ version: app.getVersion() }),
 
   'shell:openExternal': (({ url }: { url: string }) => {
     if (/^https?:/.test(url)) shell.openExternal(url)
-  }) as Handler,
+  }),
 
   // The words inside the papers. The window says which papers, in which
   // order, and under which titles; this process knows where their files are.
   'text:warm': (({ ids }: { ids: string[] }) => {
     textsWithSources().postMessage({ type: 'warm', ids })
-  }) as Handler,
+  }),
   'text:search': (({ token, query, ids, titles, limit }: {
     token: number; query: string; ids: string[]; titles: Record<string, string>; limit?: number
   }, sender: BrowserWindow | null) => {
@@ -1269,11 +1290,11 @@ const handlers: Record<string, Handler> = {
     textSearches.set(global, { target: sender.webContents, token })
     textTokens.set(`${sender.webContents.id}:${token}`, global)
     textsWithSources().postMessage({ type: 'search', token: global, query, ids, titles, limit })
-  }) as Handler,
+  }),
   'text:cancel': (({ token }: { token: number }, sender: BrowserWindow | null) => {
     const global = sender ? textTokens.get(`${sender.webContents.id}:${token}`) : undefined
     if (global !== undefined) textService?.postMessage({ type: 'cancel', token: global })
-  }) as Handler,
+  }),
   /** For a probe: what the service has read, and what it cost. */
   'text:stats': () => new Promise<ServiceStats | null>((resolve) => {
     if (!textService) return resolve(null)
@@ -1284,7 +1305,7 @@ const handlers: Record<string, Handler> = {
   // Search by meaning. The window says what was typed and which places its
   // exact search already shows; the answer is passages, best first.
   'semantic:search': (({ query, k, shown }: { query: string; k?: number; shown?: string[] }) =>
-    semantic().search(query, k ?? 8, shown ?? [])) as Handler,
+    semantic().search(query, k ?? 8, shown ?? [])),
   'semantic:status': () => semantic().status(),
   /** For a probe: builds now and waits, then says what the worker has. */
   'semantic:build': async () => {
@@ -1305,13 +1326,13 @@ const handlers: Record<string, Handler> = {
     else noteSources.delete(saved.id)
     semantic().scheduleNotes(5000)
     return saved
-  }) as Handler,
+  }),
 
   'notes:delete': (async ({ id }: { id: string }) => {
     await notes().delete(id)
     noteSources.delete(id)
     semantic().scheduleNotes(5000)
-  }) as Handler,
+  }),
 
   /**
    * A folder for the notes about no paper, and the notes moved into it — the
@@ -1320,7 +1341,7 @@ const handlers: Record<string, Handler> = {
    * of it. The choice is remembered before anything moves, so a move stopped
    * halfway is finished by the next launch.
    */
-  'notes:chooseFolder': (async (_args: never, sender: BrowserWindow | null) => {
+  'notes:chooseFolder': (async (_args: void, sender: BrowserWindow | null) => {
     const result = await dialog.showOpenDialog(sender ?? window!, {
       title: say('논문 없는 노트를 둘 폴더', 'A folder for notes that are not about a paper'),
       message: say(
@@ -1341,7 +1362,7 @@ const handlers: Record<string, Handler> = {
     startWatchingFolders()
     send('library:changed')
     return { ...moved, notesFolder: notes().info() }
-  }) as Handler,
+  }),
 
   'notes:useAppFolder': (async () => {
     if (!isProbeLibrary()) update({ notesFolder: null })
@@ -1349,14 +1370,14 @@ const handlers: Record<string, Handler> = {
     startWatchingFolders()
     send('library:changed')
     return { ...moved, notesFolder: notes().info() }
-  }) as Handler,
+  }),
 }
 
 ipcMain.handle(CHANNEL.invoke, async (event, name: string, args: unknown) => {
-  const handler = handlers[name]
-  if (!handler) throw new Error(`Unknown request: ${name}`)
+  if (!Object.hasOwn(handlers, name)) throw new Error(`Unknown request: ${name}`)
+  const handler = handlers[name as RequestName] as (args: unknown, sender: BrowserWindow | null) => unknown
   try {
-    return await handler(args as never, BrowserWindow.fromWebContents(event.sender))
+    return await handler(args, BrowserWindow.fromWebContents(event.sender))
   } catch (error) {
     // Said here, with the request's name, and passed on so the window's
     // caller hears it too: Electron's own rethrow carried neither.

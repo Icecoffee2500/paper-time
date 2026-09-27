@@ -6,7 +6,8 @@
  * tags, and the authors, which are not a list anyone maintains but a list the
  * library already contains.
  */
-import { iconNode } from '../icons.js'
+import { samePath } from '../../shared/paths.js'
+import { iconNode, type IconName } from '../icons.js'
 import { showMenu } from './toolbar.js'
 import { clear, el, on } from '../dom.js'
 import {
@@ -41,7 +42,7 @@ interface RowSpec {
   /** Identity across updates: the same row keeps the same node. */
   key: string
   kind: 'row' | 'section' | 'button'
-  icon?: string
+  icon?: IconName
   label: string
   count?: number
   chip?: boolean
@@ -54,7 +55,7 @@ interface RowSpec {
   /** A section that folds. The chevron turns and the rows under it go. */
   fold?: { open: boolean; press: () => void }
   /** Right-click, where a row has one. */
-  menu?: { label: string; icon?: string; action: () => void }[]
+  menu?: { label: string; icon?: IconName; action: () => void }[]
   /** A second, smaller line under the label — the query under «Search Results». */
   detail?: string
   /** An × in the row's corner that puts the row away. */
@@ -149,7 +150,9 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
     if (a.kind === 'tag' && b.kind === 'tag') return a.id === b.id
     if (a.kind === 'author' && b.kind === 'author') return a.name === b.name
     if (a.kind === 'status' && b.kind === 'status') return a.status === b.status
-    if (a.kind === 'folder' && b.kind === 'folder') return a.root === b.root
+    if (a.kind === 'folder' && b.kind === 'folder') return samePath(a.root, b.root)
+    // Each kind is its own shelf: comparing only `kind` lit all four rows.
+    if (a.kind === 'kind' && b.kind === 'kind') return a.of === b.of
     return true
   }
 

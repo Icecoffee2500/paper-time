@@ -61,7 +61,7 @@ import {
 import { sketchEditor } from './sketchEditing.js'
 import { marksSnapshot, pagesOf, type Snapshot } from './sketchUndo.js'
 import { installMathProvider, removeMathListener } from '../sketchMath.js'
-import { icon } from '../icons.js'
+import { icon, type IconName } from '../icons.js'
 import { L } from '../../shared/lang.js'
 import { NIGHT_FILTER, groundFor, renderingFor, type PageRendering } from '../../shared/pageTint.js'
 import { imageRects, isInkOnWhite, pixelRect, tones, type OperatorList, type PageRect } from '../../shared/pageImages.js'
@@ -1620,25 +1620,22 @@ export class Reader {
    * here for the first time.
    */
   private async loadDrawings(id: string) {
-    const adopted = await call<{
-      pages: Record<number, { elements: unknown[]; strokes: unknown[] }>
-      unreadable: number[]
-    }>('drawing:adoptFromFile', { id })
-    const known = await call<{ sketch: number[]; ink: number[] }>('drawing:pages', { id })
+    const adopted = await call('drawing:adoptFromFile', { id })
+    const known = await call('drawing:pages', { id })
     const indices = new Set<number>([
       ...known.sketch, ...known.ink, ...Object.keys(adopted.pages).map(Number),
     ])
     for (const index of indices) {
       const page = this.pages[index]
       if (!page) continue
-      const elements = await call<unknown[] | null>('sketch:load', { id, pageIndex: index })
-      const strokes = await call<unknown[] | null>('ink:load', { id, pageIndex: index })
+      const elements = await call('sketch:load', { id, pageIndex: index })
+      const strokes = await call('ink:load', { id, pageIndex: index })
       // This machine's sidecar first; what the file itself carries otherwise.
       page.elements = (elements ?? adopted.pages[index]?.elements ?? []).map(SketchElement.from)
       page.strokes = (strokes ?? adopted.pages[index]?.strokes ?? []).map(InkStroke.from)
       page.redraw()
     }
-    const marks = await call<Record<number, Mark[]>>('marks:load', { id })
+    const marks = await call('marks:load', { id })
     for (const [index, list] of Object.entries(marks)) {
       const page = this.pages[Number(index)]
       if (!page) continue
@@ -2469,7 +2466,7 @@ export class Reader {
     })
     this.footer.append(position)
     if (this.turnsPages) {
-      const turn = (label: string, by: number, disabled: boolean) => {
+      const turn = (label: IconName, by: number, disabled: boolean) => {
         const button = el('button', {
           class: 'icon-button',
           title: by < 0 ? L('이전 쪽', 'Previous page') : L('다음 쪽', 'Next page'),

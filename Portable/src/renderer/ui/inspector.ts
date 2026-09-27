@@ -8,7 +8,7 @@
  * than no guess. The tools tab is `sketchInspector.ts`, docked here rather
  * than floating over the page, and it comes forward when drawing begins.
  */
-import { icon } from '../icons.js'
+import { icon, type IconName } from '../icons.js'
 import { clear, el, on } from '../dom.js'
 import { store, type Paper } from '../state.js'
 import { fullName, type CSLName } from '../../shared/model.js'

@@ -23,7 +23,7 @@ const listeners = new Set<(status: SemanticStatusDTO) => void>()
 export function meaningStatus(): SemanticStatusDTO {
   if (!asked) {
     asked = true
-    void call<SemanticStatusDTO>('semantic:status').then(setStatus)
+    void call('semantic:status').then(setStatus)
   }
   return status
 }
@@ -44,7 +44,7 @@ export function onMeaningStatus(listener: (status: SemanticStatusDTO) => void): 
  * (`"paperID#page"`) already has, none at all while the index is not built.
  */
 export async function searchMeaning(query: string, shown: string[] = [], k = 8): Promise<{ hits: MeaningHit[]; ms: number; ready: boolean }> {
-  const answer = await call<{ hits: MeaningHit[]; ms: number; ready: boolean }>('semantic:search', { query, k, shown })
+  const answer = await call('semantic:search', { query, k, shown })
   if (!answer.ready && status.ready) setStatus({ ...status, ready: false })
   return answer
 }
@@ -96,6 +96,6 @@ export function handleMeaningEvent(event: string, payload: unknown): boolean {
     }
     const stop = onMeaningStatus(done)
     const timer = setTimeout(() => { stop(); resolve(status) }, ms)
-    void call<SemanticStatusDTO>('semantic:status').then((next) => { if (done(next)) clearTimeout(timer) })
+    void call('semantic:status').then((next) => { if (done(next)) clearTimeout(timer) })
   }),
 }

@@ -13,6 +13,7 @@
  * note written here is that note there, and a folder carried across is not
  * rewritten by the other build the first time it looks at it.
  */
+import { samePath } from '../shared/paths.js'
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
@@ -21,6 +22,25 @@ import { zettelFromText, zettelIsEmpty, zettelText, type Zettel } from '../share
 import type { NoteDTO, NotesFolderDTO } from '../shared/api.js'
 
 /** One place notes are kept: a library's box, or the loose one. */
+/**
+ * Whether two folders are one. By the spelling folded as the disk folds it,
+ * and then by the disk itself — the same device and file number — for the
+ * spellings that still differ (a link, `C:\Users\x` against a mapped
+ * drive). Taken for two folders, one «move» copied every note onto itself
+ * and then removed it: on Windows, choosing the folder the notes were
+ * already in, spelled with a different case, deleted them.
+ */
+export function sameFolder(a: string, b: string): boolean {
+  if (samePath(path.resolve(a), path.resolve(b))) return true
+  try {
+    const one = fs.statSync(a)
+    const other = fs.statSync(b)
+    return one.dev === other.dev && one.ino === other.ino && one.ino !== 0
+  } catch {
+    return false
+  }
+}
+
 export class SlipBoxFolder {
   /**
    * `id` tells boxes apart and is what a note remembers about where it came
@@ -116,7 +136,7 @@ export class SlipBoxFolder {
    * used to be, it is a second, empty folder the real one never sees.
    */
   async move(into: SlipBoxFolder): Promise<{ moved: number; kept: number }> {
-    if (path.resolve(this.directory) === path.resolve(into.directory)) return { moved: 0, kept: 0 }
+    if (sameFolder(this.directory, into.directory)) return { moved: 0, kept: 0 }
     const names = await this.files()
     if (names.length === 0) return { moved: 0, kept: 0 }
     if (!into.isReachable()) return { moved: 0, kept: names.length }
@@ -374,12 +394,12 @@ export class NotesStore {
     return this.run(async () => {
       const box = to ? new SlipBoxFolder(to, to, true) : this.appFolder
       this.chosenPath = to
-      if (path.resolve(box.directory) === path.resolve(this.loose.directory)) return { moved: 0, kept: 0 }
+      if (sameFolder(box.directory, this.loose.directory)) return { moved: 0, kept: 0 }
       const old = this.loose
       const first = await this.carry(old, box)
       this.loose = box
       let second = { moved: 0, kept: 0 }
-      if (box.id !== this.appFolder.id && old.id !== this.appFolder.id) {
+      if (!sameFolder(box.directory, this.appFolder.directory) && !sameFolder(old.directory, this.appFolder.directory)) {
         second = await this.carry(this.appFolder, box)
       }
       this.wentAway = false

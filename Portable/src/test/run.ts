@@ -44,6 +44,7 @@ import { paritySuite } from './parity.js'
 import { zettelSuite } from './zettel.js'
 import { slipBoxSuite } from './slipBox.js'
 import { safetySuite } from './safety.js'
+import { pathsSuite } from './paths.js'
 import { PaperMeta, PaperState } from '../shared/model.js'
 import { entryFor, formatEntry, protectTitle } from '../shared/bibtex.js'
 import { escapeLaTeX } from '../shared/latexTable.js'
@@ -407,6 +408,7 @@ async function main() {
   await zettelSuite(test, suite)
   await slipBoxSuite(test, suite)
   await safetySuite(test, suite)
+  await pathsSuite(test, suite)
 
   // --------------------------------------------------------------------- ink
   suite('Handwriting')

@@ -20,6 +20,7 @@
  *
  * Plain Node and nothing else, so the whole of it runs in a test.
  */
+import { samePath } from '../shared/paths.js'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 import { foldText, foldVersion, foldWithMap, snippetAround } from '../shared/textFold.js'
@@ -125,13 +126,13 @@ export class TextIndex {
   }
 
   isLoaded(source: TextSource): boolean {
-    return this.memory.get(source.id)?.file === source.file
+    return samePath(this.memory.get(source.id)?.file, source.file)
   }
 
   /** The paper's text: from memory, from the cache, or read from the file. */
   load(source: TextSource): Promise<PaperText | null> {
     const known = this.memory.get(source.id)
-    if (known && known.file === source.file) return Promise.resolve(known)
+    if (known && samePath(known.file, source.file)) return Promise.resolve(known)
     const pending = this.loading.get(source.id)
     if (pending) return pending
     const work = this.read(source).finally(() => this.loading.delete(source.id))
@@ -180,7 +181,7 @@ export class TextIndex {
       .map(async (source) => {
         const known = this.memory.get(source.id)!
         const stamp = await stampOf(source.file)
-        if (known.file === source.file && stamp && sameStamp(stamp, known)) return 0
+        if (samePath(known.file, source.file) && stamp && sameStamp(stamp, known)) return 0
         this.memory.delete(source.id)
         return 1
       })

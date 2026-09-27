@@ -14,7 +14,7 @@
  * three searches of the whole library nobody asked for.
  */
 import { clear, el, on } from '../dom.js'
-import { iconNode } from '../icons.js'
+import { iconNode, type IconName } from '../icons.js'
 import { L } from '../../shared/lang.js'
 import { graphemes } from '../../shared/textFold.js'
 import {
@@ -73,7 +73,7 @@ const WORDS = (): RankWords => ({
 /** What this build can do from the palette. The Mac's other two — resolving
  *  metadata, importing another library — are not in this build, and a row
  *  that does nothing is worse than no row. */
-const ACTIONS = (): { name: ActionName; title: string; icon: string }[] => [
+const ACTIONS = (): { name: ActionName; title: string; icon: IconName }[] => [
   { name: 'addPDFs', title: L('PDF 더하기…', 'Add PDFs…'), icon: 'plus' },
   { name: 'exportBibTeX', title: L('BibTeX 내보내기…', 'Export BibTeX…'), icon: 'square.and.arrow.up' },
   { name: 'refresh', title: L('라이브러리 다시 읽기', 'Refresh Library'), icon: 'arrow.clockwise' },
@@ -85,7 +85,7 @@ interface Row {
   group: Group
   title: string
   subtitle: string
-  icon: string
+  icon: IconName
   run: () => void
 }
 

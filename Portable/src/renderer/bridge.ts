@@ -1,4 +1,6 @@
 import { setKorean } from '../shared/lang.js'
+import type { RequestArgs, RequestName, RequestResult } from '../shared/api.js'
+import { setPathPlatform } from '../shared/paths.js'
 
 /** The typed side of the one channel the window is given. */
 declare global {
@@ -18,6 +20,8 @@ declare global {
 }
 
 export const platform = window.papertime.platform
+// Which disks tell case apart: `shared/paths.ts` cannot ask `process` here.
+setPathPlatform(platform)
 /** The paper this window is for, when it is a window for one paper. */
 export const soloPaperID: string | null = window.papertime.paper ?? null
 export const flags = window.papertime.flags ?? { split: false }
@@ -36,8 +40,16 @@ export class BridgeError extends Error {
   }
 }
 
-export function call<T = unknown>(name: string, args?: unknown): Promise<T> {
-  return (window.papertime.invoke(name, args) as Promise<T>).catch((error: unknown) => {
+/**
+ * One request to the process that owns the files, typed by `shared/api.ts`:
+ * the name picks the arguments and the answer, so a changed shape fails the
+ * build on both ends.
+ */
+export function call<K extends RequestName>(
+  name: K,
+  ...args: RequestArgs<K> extends void ? [] : [RequestArgs<K>]
+): Promise<RequestResult<K>> {
+  return (window.papertime.invoke(name, args[0]) as Promise<RequestResult<K>>).catch((error: unknown) => {
     // Electron wraps the main process's message in its own sentence about
     // the channel; what is left is `<request>: <why>`, logged here once.
     const message = String((error as Error)?.message ?? error)

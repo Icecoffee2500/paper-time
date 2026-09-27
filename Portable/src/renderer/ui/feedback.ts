@@ -98,7 +98,7 @@ export async function showFeedback() {
 
   // Taken before the sheet is built, so the sheet is not in its own picture.
   if (!draft.shotURL) {
-    draft.shotURL = await call<string | null>('feedback:capture')
+    draft.shotURL = await call('feedback:capture')
     if (draft.shotURL) {
       const image = new Image()
       image.src = draft.shotURL
@@ -319,7 +319,7 @@ export async function showFeedback() {
     status.textContent = L('보내는 중…', 'Sending…')
     localStorage.setItem('feedback.name', draft.name)
     localStorage.setItem('feedback.reply', draft.reply)
-    const answer = await call<{ ok: boolean; url?: string; kept?: string; error?: string }>('feedback:send', {
+    const answer = await call('feedback:send', {
       kind: draft.kind,
       body: draft.message.trim(),
       name: draft.name.trim() || L('익명', 'anonymous'),

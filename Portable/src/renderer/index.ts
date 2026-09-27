@@ -12,6 +12,7 @@
  * for one paper (`--papertime-paper=<id>`) is this same page showing only
  * that reader.
  */
+import { findPath, isUnder } from '../shared/paths.js'
 import { call, droppedPaths, flags, isCommand, onEvent, platform, soloPaperID } from './bridge.js'
 import { clear, el, on } from './dom.js'
 // Imported for its side effect: the sheet registers its own ⌥⌘/ so nothing
@@ -50,6 +51,7 @@ import {
   type Pane,
   type Shelf,
   type SketchTool,
+  WINDOW_SETTINGS,
 } from './state.js'
 import { buildToolbar, showMenu, toast, type MenuEntry } from './ui/toolbar.js'
 import { buildSidebar } from './ui/sidebar.js'
@@ -74,7 +76,7 @@ import { FindBar } from './ui/findBar.js'
 import { handleTextEvent, searchText, type TextHit } from './textSearch.js'
 import { asTextHit, handleMeaningEvent, meaningStatus, searchMeaning } from './meaningSearch.js'
 import { graphemes } from '../shared/textFold.js'
-import type { KeptReason, LibrarySnapshot, WindowBounds } from '../shared/api.js'
+import type { KeptReason, LibrarySnapshot, PaperBytesDTO, WindowBounds } from '../shared/api.js'
 import { expandedIDs } from '../shared/sketch.js'
 import {
   DOCK_ZONES,
@@ -110,8 +112,12 @@ const panes = el('div', { class: 'panes' })
 /** Another folder, read beside the ones already open. Also on the File menu. */
 function addLibraryFolder() {
   void (async () => {
-    const snapshot = await call<LibrarySnapshot>('library:addFolder', {})
-    if ('error' in snapshot) return
+    const snapshot = await call('library:addFolder', {})
+    if ('error' in snapshot) {
+      if ('refused' in snapshot) toast(snapshot.error)
+      else couldNot('finish', snapshot.error)
+      return
+    }
     adopt(snapshot)
     adoptNotes(snapshot.notes, snapshot.notesFolder)
     changed('papers', 'shelf', 'sidebar')
@@ -127,10 +133,11 @@ const sidebar = buildSidebar({
   addFolder: () => addLibraryFolder(),
   removeFolder: (root: string) => {
     void (async () => {
-      const snapshot = await call<LibrarySnapshot>('library:removeFolder', { root })
+      const snapshot = await call('library:removeFolder', { root })
       if ('error' in snapshot) return
       // Papers from that folder are gone: whatever was showing goes with them.
-      if (store.shelf.kind === 'folder' && store.shelf.root === root) store.shelf = { kind: 'all' }
+      // Inside it too: a subfolder of a library that is gone is a shelf of nothing.
+      if (store.shelf.kind === 'folder' && isUnder(store.shelf.root, root)) store.shelf = { kind: 'all' }
       adopt(snapshot)
       adoptNotes(snapshot.notes, snapshot.notesFolder)
       store.openPaperIDs = store.openPaperIDs.filter((id) => findPaper(id))
@@ -345,7 +352,7 @@ const paperList = buildPaperList({
   },
   addPapers: () => void addPapers(),
   adoptLoose: async () => {
-    const snapshot = await call<LibrarySnapshot>('library:adoptLoose')
+    const snapshot = await call('library:adoptLoose')
     if ('error' in snapshot) return couldNot('addPDFs', snapshot.error)
     adopt(snapshot)
     adoptNotes(snapshot.notes, snapshot.notesFolder)
@@ -666,15 +673,7 @@ async function loadInto(reader: Reader, id: string) {
   // Nothing in here may throw past this function: a rejected request reaching
   // the window as an unhandled rejection is a blank page with no sentence on
   // it, which is what a locked PDF used to look like.
-  let result: {
-    data?: Uint8Array
-    error?: string
-    locked?: PDFLock
-    trouble?: ByteTrouble
-    size?: number
-    head?: string
-    line?: string | null
-  }
+  let result: PaperBytesDTO
   try {
     result = await call('paper:bytes', { id })
   } catch (error) {
@@ -694,7 +693,7 @@ async function loadInto(reader: Reader, id: string) {
   }
   if (result.error || !result.data) return couldNot('readPDF', result.error ?? 'no bytes')
   await reader.open(id, new Uint8Array(result.data), {
-    trouble: result.trouble,
+    trouble: result.trouble ?? undefined,
     size: result.size,
     again: () => void loadInto(reader, id),
   })
@@ -915,7 +914,7 @@ function openInWindow(id: string, at?: { x: number; y: number }) {
 }
 
 async function insideOurWindows(x: number, y: number): Promise<boolean> {
-  const bounds = await call<WindowBounds[]>('window:bounds')
+  const bounds = await call('window:bounds')
   return bounds.some((b) => x >= b.x && x <= b.x + b.width && y >= b.y && y <= b.y + b.height)
 }
 
@@ -1266,9 +1265,10 @@ function couldNot(what: keyof typeof COULD_NOT, reason: unknown) {
 on(window, 'unhandledrejection', (event: PromiseRejectionEvent) => couldNot('finish', event.reason))
 
 async function chooseLibrary() {
-  const chosen = await call<string | null>('library:choose')
+  const chosen = await call('library:choose')
   if (!chosen) return
-  const snapshot = await call<LibrarySnapshot>('library:open', { root: chosen })
+  const snapshot = await call('library:open', { root: chosen })
+  if ('error' in snapshot && 'refused' in snapshot) return toast(snapshot.error)
   if ('error' in snapshot) {
     failed(String(snapshot.error))
     changed('papers', 'shelf')
@@ -1280,7 +1280,7 @@ async function chooseLibrary() {
 }
 
 async function addPapers() {
-  const snapshot = await call<LibrarySnapshot>('library:import', { root: importDestination() })
+  const snapshot = await call('library:import', { root: importDestination() })
   if ('error' in snapshot) return couldNot('addPDFs', snapshot.error)
   adopt(snapshot)
   adoptNotes(snapshot.notes, snapshot.notesFolder)
@@ -1294,12 +1294,11 @@ async function addPapers() {
  */
 function importDestination(): string | undefined {
   if (store.shelf.kind !== 'folder') return undefined
-  const root = (store.shelf as { root: string }).root
-  return store.roots.includes(root) ? root : undefined
+  return findPath(store.roots, (store.shelf as { root: string }).root)
 }
 
 async function reload() {
-  const snapshot = await call<LibrarySnapshot>('library:reload')
+  const snapshot = await call('library:reload')
   // A folder that would not answer used to end here without a word. The rows
   // already on screen stay where they are; the list says what happened and
   // offers to read again.
@@ -2056,7 +2055,7 @@ function openSettings(section?: SettingsSection) {
  * already there — stays where it was, and the toast says how many.
  */
 async function moveLooseNotes(request: 'notes:chooseFolder' | 'notes:useAppFolder') {
-  const result = await call<{ moved: number; kept: number } | { error: string } | null>(request)
+  const result = await call(request)
   if (!result) return
   if ('error' in result) return couldNot('moveNotes', result.error)
   const { moved, kept } = result
@@ -2159,8 +2158,8 @@ function runMenuCommand(command: string) {
           toast(L('BibTeX를 복사했어요', 'BibTeX copied'))
         },
         save: async (text) => {
-          const result = await call<{ path?: string; cancelled?: boolean }>('bibtex:save', { text })
-          if (result.cancelled || !result.path) return false
+          const result = await call('bibtex:save', { text })
+          if (!('path' in result)) return false
           toast(L('BibTeX를 저장했어요', 'BibTeX saved'))
           return true
         },
@@ -2206,7 +2205,7 @@ on(window, 'drop', async (event: DragEvent) => {
     if (dropped.length > 0) toast(L('PDF만 더할 수 있어요.', 'Only PDFs can be added to the library.'))
     return
   }
-  const snapshot = await call<LibrarySnapshot>('library:import', { paths: files, root: importDestination() })
+  const snapshot = await call('library:import', { paths: files, root: importDestination() })
   if ('error' in snapshot) return couldNot('addPDFs', snapshot.error)
   adopt(snapshot)
   adoptNotes(snapshot.notes, snapshot.notesFolder)
@@ -2233,15 +2232,16 @@ on(window, 'resize', () => relayoutReaders())
 // ------------------------------------------------------------------- start
 
 async function start() {
-  const saved = await call<typeof store.settings & { libraryRoot: string | null }>('settings:get')
-  Object.assign(store.settings, saved)
+  const saved = await call('settings:get')
+  // The keys the window keeps, not the window's size and the folder list besides.
+  for (const key of WINDOW_SETTINGS) (store.settings as Record<string, unknown>)[key] = saved[key]
   applyTheme()
   layoutPanes()
   toolbar.update()
   store.windowState = await call('window:state')
 
   if (saved.libraryRoot) {
-    const snapshot = await call<LibrarySnapshot>('library:reload')
+    const snapshot = await call('library:reload')
     if ('error' in snapshot) {
       // There is a folder in the settings and it would not be read. Saying so
       // is the whole of it: this used to fall through to a window whose list
