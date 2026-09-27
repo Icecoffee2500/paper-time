@@ -254,6 +254,8 @@ export async function start() {
   layoutPanes()
   shell.toolbar.update()
   store.windowState = await call('window:state')
+  // A window opened while papers are being looked up shows them turning.
+  store.resolving = new Set(await call('metadata:resolving').catch(() => []))
 
   if (!saved.libraryRoot) {
     // Nothing to read, and that is known: the first-run screen.

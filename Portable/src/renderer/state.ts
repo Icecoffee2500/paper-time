@@ -160,6 +160,8 @@ export interface Store {
   selectionLead: string | null
   /** «Add n PDFs» under way: how many are left, or null. */
   adopting: number | null
+  /** The papers being looked up at the registrars now (`metadata:resolving`). */
+  resolving: Set<string>
   /**
    * The papers kept open this session, in the order they were kept.
    *
@@ -248,6 +250,7 @@ export const store: Store = {
   selectionAnchor: null,
   selectionLead: null,
   adopting: null,
+  resolving: new Set(),
   openPaperIDs: [],
   pinnedPaperIDs: [],
   split: null,

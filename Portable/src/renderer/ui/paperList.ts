@@ -458,7 +458,7 @@ function paperRow(entry: Paper, actions: PaperListActions): BuiltRow {
   let drawnPin: string | null = null
   let drawnStar: string | null = null
   let drawnStatus: string | null = null
-  let drawnFlag: boolean | null = null
+  let drawnFlag: false | 'review' | 'resolving' | null = null
 
   function swap(holder: HTMLElement, name: string, drawn: string | null): string {
     if (drawn === name) return name
@@ -517,11 +517,20 @@ function paperRow(entry: Paper, actions: PaperListActions): BuiltRow {
     clip.title = L('보충 자료', 'Supplementary material')
     clip.setAttribute('aria-label', L(`보충 자료 ${supplements}개`, `${supplements} supplementary file${supplements === 1 ? '' : 's'}`))
 
-    const wants = needsReview(now.meta)
+    // While the paper is being looked up the triangle's place turns: the
+    // record may be about to answer the question the triangle asks.
+    const resolving = store.resolving.has(now.id)
+    const wants: false | 'review' | 'resolving' = resolving ? 'resolving' : needsReview(now.meta) ? 'review' : false
     if (wants !== drawnFlag) {
       drawnFlag = wants
       flag.replaceChildren()
-      if (wants) {
+      if (wants === 'resolving') {
+        flag.append(el('span', { class: 'spinner' }))
+        const said = L('서지를 찾는 중', 'Resolving metadata')
+        flag.removeAttribute('title')
+        flag.setAttribute('aria-label', said)
+        flag.setAttribute('role', 'img')
+      } else if (wants) {
         const glyph = iconNode('exclamationmark.triangle.fill')
         if (glyph) flag.append(glyph)
         const said = L('서지를 한번 봐주세요', 'Check this record')

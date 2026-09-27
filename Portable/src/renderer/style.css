@@ -2902,6 +2902,23 @@ textarea:focus-visible {
   padding: 3px 0;
 }
 .set-label { font-size: 13px; flex: 0 0 auto; min-width: 84px; }
+/* A line to type in, beside its name — the contact address. */
+.set-field {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: auto;
+  max-width: 260px;
+  background: var(--panel-soft);
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-control);
+  padding: 5px 7px;
+  font-size: 13px;
+  outline: none;
+}
+.set-note-icon { display: flex; gap: 6px; align-items: flex-start; }
+.set-note-icon svg { width: 13px; height: 13px; flex: 0 0 auto; margin-top: 1px; }
+.set-field::placeholder { color: var(--text-tertiary); }
+.set-field:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .set-seg { margin-left: auto; }
 .set-path {
   flex: 1 1 auto;

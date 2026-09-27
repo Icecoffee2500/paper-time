@@ -6,7 +6,8 @@
  * A probe never reaches the registrars unless it is told to:
  * `--papertime-lookup-replay=<responses.json[.gz]>` answers from recorded
  * responses (the Mac's, from `Scripts/metadata-fixtures.sh`) without waiting
- * out the pace, and `--papertime-lookup=1` asks the real ones. Without either,
+ * out the pace (`--papertime-lookup-replay-delay=<ms>` slows each answer),
+ * and `--papertime-lookup=1` asks the real ones. Without either,
  * a probe guesses at kinds and looks nothing up.
  */
 import fs from 'node:fs'
@@ -17,12 +18,16 @@ import { NetworkService, fetchSend, realClock, type Reply } from './network.js'
 
 let service: { email: string | undefined; network: NetworkService } | null = null
 
-export function lookupNetwork(options: { isProbe: boolean; replay: string | null; allowed: boolean; email: string | undefined }): Network | null {
+export function lookupNetwork(options: { isProbe: boolean; replay: string | null; replayDelay?: number; allowed: boolean; email: string | undefined }): Network | null {
   if (options.isProbe && options.replay) {
     if (service?.email === `replay:${options.replay}`) return service.network
     const raw = fs.readFileSync(options.replay)
     const responses = JSON.parse((options.replay.endsWith('.gz') ? zlib.gunzipSync(raw) : raw).toString('utf8')) as Record<string, Reply>
+    const delay = options.replayDelay ?? 0
     const network = new NetworkService(async (url) => {
+      // `--papertime-lookup-replay-delay=<ms>`: each answer as slow as asked,
+      // so a probe can see what the list shows while a lookup is under way.
+      if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay))
       const reply = responses[url]
       if (!reply || reply.status === 0) throw new NetworkFailure('offline')
       return reply

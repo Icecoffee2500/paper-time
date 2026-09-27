@@ -198,6 +198,7 @@ const metadata = new MetadataQueue({
   network: () => lookupNetwork({
     isProbe: probe.isRun,
     replay: probe.argument('lookup-replay') ?? null,
+    replayDelay: Number(probe.argument('lookup-replay-delay') ?? 0) || 0,
     allowed: probe.argument('lookup') === '1',
     email: settings().metadataContactEmail?.trim() || undefined,
   }),

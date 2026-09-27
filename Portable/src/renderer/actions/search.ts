@@ -33,6 +33,7 @@ export function openSearch(initial = '') {
       switch (action) {
         case 'addPDFs': void addPapers(); break
         case 'exportBibTeX': runCommand('exportBibTeX'); break
+        case 'resolveMetadata': runCommand('resolveMetadata'); break
         case 'refresh': void reload(); break
         case 'settings': openSettings(); break
       }

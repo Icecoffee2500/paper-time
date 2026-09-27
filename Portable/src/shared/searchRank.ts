@@ -200,7 +200,7 @@ export interface SearchableShelf {
   smart?: boolean
 }
 
-export type ActionName = 'addPDFs' | 'exportBibTeX' | 'refresh' | 'settings'
+export type ActionName = 'addPDFs' | 'exportBibTeX' | 'resolveMetadata' | 'refresh' | 'settings'
 
 export interface SearchableAction {
   name: ActionName

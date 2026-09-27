@@ -22,7 +22,7 @@ import {
   showPagesPopup,
   stepPaper,
 } from './actions/openPapers.js'
-import { copyKey } from './actions/paper.js'
+import { copyKey, resolveMissingMetadata } from './actions/paper.js'
 import { linkSelectionToNote, ultracopySelection, newNote } from './actions/notes.js'
 import { openFind, openSearch } from './actions/search.js'
 import { addLibraryFolder, addPapers, libraryOpened, reload } from './library.js'
@@ -43,6 +43,7 @@ export const COMMANDS = {
   settings: () => openSettings(),
   about: () => openSettings('about'),
   addPapers: () => void addPapers(),
+  resolveMetadata: () => void resolveMissingMetadata(),
   refreshFolder: () => void reload(),
   addFolder: () => void addLibraryFolder(),
   searchEverything: () => openSearch(),
@@ -138,6 +139,10 @@ export function installMainEvents() {
           store.adopting = (payload as { remaining: number }).remaining
           changed('papers')
         }
+        break
+      case 'metadata:resolving':
+        store.resolving = new Set((payload as { ids: string[] }).ids)
+        changed('papers')
         break
       case 'library:opened':
         libraryOpened(payload as never)
