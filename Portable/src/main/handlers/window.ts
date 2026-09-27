@@ -65,6 +65,8 @@ export function windowHandlers(ctx: Context): Partial<Handlers> {
       if (typeof text === 'string') clipboard.writeText(text)
     },
 
+    'clipboard:read': () => clipboard.readText(),
+
     // The app speaks to the outside world here and nowhere else, and only
     // because somebody pressed 보내기.
     'feedback:capture': (_args, sender) => captureWindow(target(sender)),

@@ -11,8 +11,9 @@
 import { icon, type IconName } from '../icons.js'
 import { clear, el, on } from '../dom.js'
 import { store, type Paper } from '../state.js'
-import { fullName, type CSLName } from '../../shared/model.js'
-import { L } from '../../shared/lang.js'
+import { cslFullTitle, cslYear, fullName, type CSLItem, type CSLName } from '../../shared/model.js'
+import { L, prefersKorean } from '../../shared/lang.js'
+import { buildAuthorEditor } from './authorEditor.js'
 import { type DocumentKind } from '../../shared/documentKind.js'
 import { buildSketchInspector } from './sketchInspector.js'
 import { renderNotesTab } from './notesTab.js'
@@ -36,6 +37,16 @@ export interface InspectorActions {
   open: (id: string) => void
   /** A supplement made a paper of its own again. */
   detach: (id: string) => void
+  /** One paper put under another, as supplementary material. */
+  attach: (child: string, parent: string) => void
+  /** The paper a supplement looks like it belongs to, or null. */
+  suggestedParent: (id: string) => string | null
+  /** A lookup's candidate taken as the record. */
+  acceptCandidate: (id: string, candidate: Candidate) => void
+  /** Where the file stands against the one imported. */
+  provenance: (id: string) => Promise<string>
+  /** What is on the clipboard — «Paste Names». */
+  paste: () => Promise<string>
   /** A quotation's page link followed: that paper, at that passage. */
   openAnchor: (place: { pageIndex: number; rect: { x: number; y: number; width: number; height: number }; paperID?: string }) => void
   /** A `[[link]]` in a note followed: that note, wherever it is shown. */
@@ -75,6 +86,18 @@ export function buildInspector(actions: InspectorActions): InspectorPanel {
   let shownPaperID: string | null = null
 
   function update() {
+    // A memo half typed is written before the form it is in goes.
+    if (shownPaperID !== store.selectedID) flushInspector()
+    // Nothing chosen is said on every tab, the Tools tab too (`RootView`).
+    if (!store.papers.some((entry) => entry.id === store.selectedID)) {
+      shownPaperID = store.selectedID
+      clear(body)
+      body.append(el('div', { class: 'empty' }, [
+        el('h2', { text: L('고른 논문이 없어요', 'No Paper Selected') }),
+        el('p', { text: L('논문을 고르면 서지를 보고 고칠 수 있어요.', 'Choose a paper to see its details.') }),
+      ]))
+      return
+    }
     if (store.settings.inspectorTab === 'tools') {
       if (tools.node.parentElement !== body) {
         clear(body)
@@ -104,7 +127,7 @@ export function buildInspector(actions: InspectorActions): InspectorPanel {
       return
     }
     switch (store.settings.inspectorTab) {
-      case 'details': details(body, paper, actions); break
+      case 'details': details(body, paper, actions, update); break
       case 'marks': marks(body, paper, actions, update); break
       case 'note': renderNotesTab(body, paper, { openAnchor: actions.openAnchor, openNote: actions.openNote }); break
     }
@@ -159,24 +182,59 @@ function field(label: string, value: Node | string): HTMLElement {
   ])
 }
 
-function editable(
-  label: string,
-  value: string,
-  commit: (next: string) => void,
-  options: { multiline?: boolean; placeholder?: string } = {},
-): HTMLElement {
+/** One of the form's sections, with its name over it — the Mac's grouped
+ *  `Form`, so the reader sees where the record ends and the file begins. */
+function section(title: string | null, ...nodes: Node[]): HTMLElement {
+  return el('div', { class: 'insp-section' }, [
+    ...(title ? [el('div', { class: 'insp-section-title', text: title })] : []),
+    ...nodes,
+  ])
+}
+
+// MARK: - The draft
+
+/**
+ * The record being edited, as the Mac's form holds it: a copy of the CSL
+ * that the fields write into, saved all at once with «Save» and thrown away
+ * with «Revert». Every field used to write the record as it lost focus, and
+ * each carried the whole CSL it was built with — so a second field, edited
+ * before the form was drawn again, put the first one back.
+ */
+let draft: { paperID: string; csl: Record<string, unknown> } | null = null
+/** The memo as typed, written when it is left or the paper goes. */
+let memo: { paperID: string; text: string; save: (text: string) => void } | null = null
+
+function draftFor(paper: Paper): Record<string, unknown> {
+  if (!draft || draft.paperID !== paper.id) draft = { paperID: paper.id, csl: structuredClone(paper.meta.csl) as Record<string, unknown> }
+  return draft.csl
+}
+
+function isDirty(paper: Paper): boolean {
+  return Boolean(draft && draft.paperID === paper.id && JSON.stringify(draft.csl) !== JSON.stringify(paper.meta.csl))
+}
+
+/** The memo written now — before the paper changes, or the window goes. */
+export function flushInspector() {
+  const pending = memo
+  if (!pending) return
+  memo = null
+  pending.save(pending.text)
+}
+
+/** A text field over the draft: an empty field takes the key off, as the
+ *  Mac's `stringBinding` does, rather than writing `""` into the record. */
+function draftText(paper: Paper, label: string, key: string, dirtied: () => void, options: { multiline?: boolean; placeholder?: string } = {}): HTMLElement {
+  const csl = draftFor(paper)
   const input = options.multiline
-    ? (el('textarea', { rows: '3' }) as HTMLTextAreaElement)
+    ? (el('textarea', { rows: '2', class: 'grow' }) as HTMLTextAreaElement)
     : (el('input', { type: 'text' }) as HTMLInputElement)
-  input.value = value
+  input.value = typeof csl[key] === 'string' ? csl[key] as string : ''
   if (options.placeholder) input.placeholder = options.placeholder
-  let last = value
-  const send = () => {
-    if (input.value === last) return
-    last = input.value
-    commit(input.value)
-  }
-  on(input, 'blur', send)
+  on(input, 'input', () => {
+    if (input.value) csl[key] = input.value
+    else delete csl[key]
+    dirtied()
+  })
   on(input, 'keydown', (event: KeyboardEvent) => {
     event.stopPropagation()
     if (event.key === 'Enter' && !options.multiline) {
@@ -184,19 +242,77 @@ function editable(
       input.blur()
     }
   })
-  return el('div', { class: 'field' }, [
-    el('div', { class: 'field-label', text: label }),
-    input,
-  ])
+  return el('div', { class: 'field' }, [el('div', { class: 'field-label', text: label }), input])
+}
+
+/** The year, which lives inside `issued`: digits kept, the rest let go —
+ *  «c. 2019» is 2019, not nothing (`yearBinding`). */
+function draftYear(paper: Paper, dirtied: () => void): HTMLElement {
+  const csl = draftFor(paper)
+  const input = el('input', { type: 'text', inputmode: 'numeric' }) as HTMLInputElement
+  const issued = csl.issued as { 'date-parts'?: number[][] } | undefined
+  input.value = issued?.['date-parts']?.[0]?.[0] ? String(issued['date-parts'][0][0]) : (paper.meta.year ? String(paper.meta.year) : '')
+  on(input, 'input', () => {
+    const digits = input.value.replace(/\D/g, '')
+    if (!digits) delete csl.issued
+    else csl.issued = { 'date-parts': [[Number(digits)]] }
+    dirtied()
+  })
+  on(input, 'keydown', (event: KeyboardEvent) => {
+    event.stopPropagation()
+    if (event.key === 'Enter') input.blur()
+  })
+  return el('div', { class: 'field' }, [el('div', { class: 'field-label', text: L('해', 'Year') }), input])
+}
+
+/** A picker over the draft's `type`. */
+function draftType(paper: Paper, label: string, types: string[], dirtied: (redraw?: boolean) => void): HTMLElement {
+  const csl = draftFor(paper)
+  const select = el('select', { class: 'field-select' }) as HTMLSelectElement
+  const current = typeof csl.type === 'string' ? csl.type : 'other'
+  for (const type of types.includes(current) ? types : [current, ...types]) {
+    const option = el('option', { value: type, text: typeName(type) }) as HTMLOptionElement
+    option.selected = type === current
+    select.append(option)
+  }
+  on(select, 'change', () => {
+    csl.type = select.value
+    dirtied(true)
+  })
+  return el('div', { class: 'field' }, [el('div', { class: 'field-label', text: label }), select])
+}
+
+/** Every CSL type the Mac's picker offers, in its words. */
+const PAPER_TYPES = ['article-journal', 'paper-conference', 'book', 'chapter', 'thesis', 'report', 'dataset', 'software', 'webpage', 'patent', 'speech', 'manuscript', 'other']
+/** The kinds a document can be: the list minus the half only a paper is. */
+const DOCUMENT_TYPES = ['report', 'book', 'chapter', 'manuscript', 'webpage', 'speech', 'dataset', 'software', 'patent', 'other']
+
+function typeName(type: string): string {
+  switch (type) {
+    case 'article-journal': return L('학술지 논문', 'Journal Article')
+    case 'paper-conference': return L('학회 논문', 'Conference Paper')
+    case 'book': return L('책', 'Book')
+    case 'chapter': return L('책의 장', 'Book Chapter')
+    case 'thesis': return L('학위 논문', 'Thesis')
+    case 'report': return L('보고서', 'Report')
+    case 'dataset': return L('데이터셋', 'Dataset')
+    case 'software': return L('소프트웨어', 'Software')
+    case 'webpage': return L('웹 페이지', 'Web Page')
+    case 'patent': return L('특허', 'Patent')
+    case 'speech': return L('발표', 'Speech')
+    case 'manuscript': return L('프리프린트 / 원고', 'Preprint / Manuscript')
+    default: return L('그 밖', 'Other')
+  }
 }
 
 /**
  * The name of the file, as a field.
  *
- * Typing here renames it on disk. The library is a folder of PDFs under the
- * names a person gave them, so a name you can read but have to leave the app
- * to fix is a name in the wrong place. Only the file moves: the record is
- * named after the paper's identifier, so marks, ink and notes stay put.
+ * Typing here renames it on disk, on Return or on leaving the field — a
+ * rename should not happen a letter at a time. Only the file moves: the
+ * record is named after the paper's identifier, so marks, ink and notes stay
+ * put. A name the disk refuses is said, and the field goes back to the name
+ * the file has.
  */
 function fileName(paper: Paper, actions: InspectorActions): HTMLElement {
   const shown = () => paper.meta.file.originalName
@@ -207,9 +323,18 @@ function fileName(paper: Paper, actions: InspectorActions): HTMLElement {
   const trouble = el('div', { class: 'field-error' })
   let last = input.value
   const send = async () => {
-    if (input.value === last) return
-    last = input.value
-    const message = await actions.rename(paper.id, input.value)
+    const wanted = input.value.trim()
+    if (wanted === last) {
+      input.value = last
+      return
+    }
+    last = wanted
+    let message: string | null
+    try {
+      message = await actions.rename(paper.id, wanted)
+    } catch {
+      message = L('이름을 바꾸지 못했어요.', 'The file kept its name.')
+    }
     trouble.textContent = message ?? ''
     if (message) {
       input.value = shown()
@@ -225,21 +350,23 @@ function fileName(paper: Paper, actions: InspectorActions): HTMLElement {
     }
   })
   return el('div', { class: 'field' }, [
-    el('div', { class: 'field-label', text: L('파일', 'File') }),
+    el('div', { class: 'field-label', text: L('이름', 'Name') }),
     input,
     trouble,
   ])
 }
 
-const CONFIDENCE_LABEL = (): Record<string, string> => ({
-  unparsed: L('아직 안 읽음', 'Not read yet'),
-  low: L('확신 낮음', 'Low confidence'),
-  medium: L('확신 보통', 'Medium confidence'),
-  high: L('확신 높음', 'High confidence'),
-  verified: L('등록기관에서 확인함', 'Verified against a registrar'),
-  manual: L('직접 고침', 'Edited by you'),
-  needsReview: L('살펴볼 것', 'Needs review'),
-})
+/** The Mac's four words for how sure a record is, as a badge. */
+function confidenceBadge(confidence: string): HTMLElement {
+  const [label, glyph] = confidence === 'verified' ? [L('확인됨', 'Confirmed'), 'checkmark.circle']
+    : confidence === 'needsReview' ? [L('살펴볼 것', 'Needs Review'), 'exclamationmark.triangle.fill']
+      : confidence === 'manual' ? [L('직접 고침', 'Edited by You'), 'person']
+        : [L('아직 모름', 'Unresolved'), 'circle']
+  return el('span', { class: 'insp-badge', 'data-confidence': confidence }, [
+    el('span', { html: icon(glyph as IconName) }),
+    el('span', { text: label }),
+  ])
+}
 
 /**
  * One question, asked once, with the app's own guess offered.
@@ -248,7 +375,7 @@ const CONFIDENCE_LABEL = (): Record<string, string> => ({
  * whether the record is looked up online at all — so it is asked plainly
  * rather than inferred and quietly acted on.
  */
-function kindQuestion(body: HTMLElement, paper: Paper, actions: InspectorActions) {
+function kindQuestion(paper: Paper, actions: InspectorActions): HTMLElement {
   const guess = paper.meta.guessedKind
   const hint = guess === 'paper'
     ? L('논문 같아요 — 안에 DOI나 참고문헌이 보여요. 맞으면 그대로 눌러주세요.',
@@ -264,9 +391,9 @@ function kindQuestion(body: HTMLElement, paper: Paper, actions: InspectorActions
         : guess === 'document'
           ? L('논문은 아닌 것 같아요. 일반 문서면 학술지 같은 칸은 숨길게요.',
               "It doesn't look like a paper. As a document, the journal fields go away.")
-          : L('고르면 아래 칸들이 그에 맞게 바뀌어요.', 'The fields below follow your answer.')
+          : L('고르면 이 칸들이 그에 맞게 바뀌어요.', 'The fields below follow your answer.')
 
-  const choices = el('div', { class: 'choices' })
+  const choices = el('div', { class: 'choices kind-choices' })
   for (const [value, label] of [
     ['paper', L('논문', 'A paper')],
     ['book', L('책', 'A book')],
@@ -277,171 +404,244 @@ function kindQuestion(body: HTMLElement, paper: Paper, actions: InspectorActions
     // with no way back is a trap, and the wrong button gets pressed.
     const button = el('button', {
       text: label,
+      title: label,
       'aria-pressed': String(paper.meta.effectiveKind === value),
     })
     on(button, 'click', () => actions.setKind(paper.id, value))
     choices.append(button)
   }
-
-  body.append(el('div', { class: 'field' }, [
-    el('div', { class: 'field-label', text: L('이 PDF는 무엇인가요?', 'What is this PDF?') }),
-    el('p', { class: 'hint', text: hint }),
+  return section(null,
+    el('div', { class: 'insp-question', text: L('이 PDF는 무엇인가요?', 'What is this PDF?') }),
     choices,
-  ]))
+    el('p', { class: 'insp-hint', text: hint }),
+  )
+}
+
+/** «Is this the right paper?» — the records a lookup offered for a paper
+ *  it was unsure of, each one press from being the record. */
+function candidatesSection(paper: Paper, actions: InspectorActions): HTMLElement | null {
+  const candidates = (paper.meta.raw.candidates ?? []) as Candidate[]
+  if (paper.meta.effectiveKind !== 'paper' || paper.meta.confidence !== 'needsReview' || candidates.length === 0) return null
+  const list = el('div', { class: 'candidate-list' })
+  for (const candidate of candidates) {
+    const csl = (candidate.csl ?? {}) as CSLItem
+    const venue = csl['container-title']
+    const year = cslYear(csl)
+    const button = el('button', { class: 'candidate' }, [
+      el('span', { class: 'candidate-title', text: cslFullTitle(csl) ?? L('제목 없음', 'Untitled') }),
+      ...((csl.author ?? []).length > 0 ? [el('span', { class: 'candidate-authors', text: (csl.author ?? []).map(fullName).join(', ') })] : []),
+      el('span', { class: 'candidate-where', text: [year ? String(year) : null, venue || null].filter(Boolean).join('  ') }),
+      ...(candidate.matchExplanation ? [el('span', { class: 'candidate-where', text: candidate.matchExplanation })] : []),
+      el('span', { class: 'candidate-score', text: L(`${Math.round((candidate.score ?? 0) * 100)}% 일치`, `${Math.round((candidate.score ?? 0) * 100)}% match`) }),
+    ])
+    on(button, 'click', () => actions.acceptCandidate(paper.id, candidate))
+    list.append(button)
+  }
+  return section(L('이 논문이 맞나요?', 'Is this the right paper?'), list)
+}
+
+/** What a lookup offered, as the Mac writes it into `candidates`. */
+export interface Candidate {
+  csl?: Record<string, unknown>
+  identifiers?: Record<string, unknown>
+  provenance?: { source?: string }
+  score?: number
+  matchExplanation?: string
 }
 
 /**
  * What a paper is attached to, or what is attached to it — the Mac's
- * «Belongs To» and «Supplementary Material». A supplement is on no shelf of
- * its own, so this and the row's paperclip are the ways to and from it.
+ * «Belongs To» and «Supplementary Material» — and, for a document that says
+ * it is supplementary, the paper it looks like it belongs to.
  */
-function supplements(body: HTMLElement, paper: Paper, actions: InspectorActions) {
+function supplements(paper: Paper, actions: InspectorActions): HTMLElement[] {
   const parentID = paper.meta.parentID
-  if (parentID) {
-    const parent = store.papers.find((entry) => entry.id === parentID)
-    const open = el('button', { class: 'plain-button supplement-link', html: icon('text.document') })
-    open.append(el('span', { text: parent?.meta.displayTitle ?? L('찾을 수 없는 논문', 'A paper that is not here') }))
-    on(open, 'click', () => actions.open(parentID))
+  const parent = parentID ? store.papers.find((entry) => entry.id === parentID) : undefined
+  if (parent) {
+    const open = el('button', { class: 'plain-button supplement-link', html: icon('doc.text') })
+    open.append(el('span', { text: parent.meta.displayTitle }))
+    on(open, 'click', () => actions.open(parent.id))
     const free = el('button', { class: 'plain-button', text: L('따로 논문으로 두기', 'Make a Paper of Its Own') })
     on(free, 'click', () => actions.detach(paper.id))
-    body.append(el('div', { class: 'field' }, [
-      el('div', { class: 'field-label', text: L('붙어 있는 논문', 'Belongs To') }),
-      el('div', { class: 'chip-row' }, [open]),
-      el('div', { class: 'chip-row', style: 'margin-top: 6px' }, [free]),
-    ]))
-    return
+    return [section(L('붙어 있는 논문', 'Belongs To'), el('div', { class: 'chip-row' }, [open]), el('div', { class: 'chip-row' }, [free]))]
   }
+  const out: HTMLElement[] = []
+  // By title, as the Mac lists them.
   const children = store.papers.filter((entry) => entry.meta.parentID === paper.id)
-  if (children.length === 0) return
-  const list = el('div', { class: 'supplement-list' })
-  for (const child of children) {
-    const open = el('button', { class: 'plain-button supplement-link', html: icon('doc') })
-    open.append(el('span', { text: child.meta.displayTitle }))
-    on(open, 'click', () => actions.open(child.id))
-    const detach = el('button', { class: 'plain-button', text: L('떼기', 'Detach') })
-    on(detach, 'click', () => actions.detach(child.id))
-    list.append(el('div', { class: 'supplement-row' }, [open, detach]))
+    .sort((a, b) => a.meta.displayTitle.localeCompare(b.meta.displayTitle))
+  if (children.length > 0) {
+    const list = el('div', { class: 'supplement-list' })
+    for (const child of children) {
+      const open = el('button', { class: 'plain-button supplement-link', html: icon('paperclip') })
+      open.append(el('span', { text: child.meta.displayTitle }))
+      on(open, 'click', () => actions.open(child.id))
+      const detach = el('button', { class: 'plain-button', text: L('떼기', 'Detach') })
+      on(detach, 'click', () => actions.detach(child.id))
+      list.append(el('div', { class: 'supplement-row' }, [open, detach]))
+    }
+    out.push(section(L('보충 자료', 'Supplementary Material'), list))
   }
-  body.append(el('div', { class: 'field' }, [
-    el('div', { class: 'field-label', text: L('보충 자료', 'Supplementary Material') }),
-    list,
-  ]))
+  const suggested = actions.suggestedParent(paper.id)
+  const offered = suggested ? store.papers.find((entry) => entry.id === suggested) : undefined
+  if (offered && children.length === 0) {
+    const attach = el('button', { class: 'filled-button', text: L('이 논문에 붙이기', 'Attach to This Paper') })
+    on(attach, 'click', () => actions.attach(paper.id, offered.id))
+    out.push(section(null,
+      el('div', { class: 'insp-question', text: L('보충 자료 같아 보여요.', 'This looks like supplementary material.') }),
+      el('p', { class: 'insp-hint', text: offered.meta.displayTitle }),
+      el('div', { class: 'chip-row' }, [attach]),
+    ))
+  }
+  return out
 }
 
-function details(body: HTMLElement, paper: Paper, actions: InspectorActions) {
+/** A read-only identifier with a copy button — the Mac's Identifiers rows. */
+function identifierRow(label: string, value: string | undefined, actions: InspectorActions): HTMLElement | null {
+  if (!value) return null
+  const copy = el('button', { class: 'icon-button', title: L(`${label} 복사`, `Copy ${label}`), 'aria-label': L(`${label} 복사`, `Copy ${label}`), html: icon('doc.on.doc') })
+  on(copy, 'click', () => actions.copyText(value))
+  return el('div', { class: 'identifier-row' }, [
+    el('span', { class: 'identifier-label', text: label }),
+    el('span', { class: 'identifier-value', text: value }),
+    copy,
+  ])
+}
+
+/** Where the record came from (`humanized(provenance.source)`). */
+function sourceName(source: string | undefined): string {
+  switch (source) {
+    case 'doiContentNegotiation': return L('DOI 콘텐츠 협상', 'DOI Content Negotiation')
+    case 'crossref': return 'Crossref'
+    case 'openAlex': return 'OpenAlex'
+    case 'arxiv': return 'arXiv'
+    case 'semanticScholar': return 'Semantic Scholar'
+    case 'pdfDocumentInfo': return L('PDF 문서 정보', 'PDF Document Info')
+    case 'onDeviceModel': return L('온디바이스 모델', 'On-Device Model')
+    case 'importedBibTeX': return L('BibTeX에서 들여옴', 'Imported BibTeX')
+    case 'importedRIS': return L('RIS에서 들여옴', 'Imported RIS')
+    case 'manual': return L('직접 적음', 'Entered by You')
+    default: return L('조판 규칙으로 읽음', 'Heuristic Extraction')
+  }
+}
+
+/** What the file says about its own history, asked once per paper shown. */
+const provenanceAsked = new Map<string, string>()
+
+function details(body: HTMLElement, paper: Paper, actions: InspectorActions, redraw: () => void) {
   const meta = paper.meta
   const kind = meta.effectiveKind
   const isPaper = kind === 'paper'
   const isBook = kind === 'book'
+  const csl = draftFor(paper)
 
-  // Asked once, when nobody has answered. Changing it afterwards is in the
-  // row's own menu: a form is no place for a switch that is never touched
-  // again.
-  if (meta.kindIsUnanswered) kindQuestion(body, paper, actions)
-  supplements(body, paper, actions)
-
-  // With no title written down the list shows the file's name; the field
-  // says so faintly rather than standing empty beside a name it is not.
-  body.append(editable(L('제목', 'Title'), meta.csl.title ?? '', (next) => {
-    actions.editMeta(paper.id, { csl: { ...meta.csl, title: next }, confidence: 'manual' })
-  }, { multiline: true, placeholder: meta.displayTitle }))
-  const cslText = (key: string) => String((meta.csl as Record<string, unknown>)[key] ?? '')
-  const cslField = (label: string, key: string) => editable(label, cslText(key), (next) => {
-    actions.editMeta(paper.id, { csl: { ...meta.csl, [key]: next || undefined }, confidence: 'manual' })
+  // Save and Revert light up as soon as the draft differs from the record.
+  const revert = el('button', { class: 'plain-button', text: L('되돌리기', 'Revert') }) as HTMLButtonElement
+  const save = el('button', { class: 'filled-button', text: L('저장', 'Save') }) as HTMLButtonElement
+  const dirtied = (rebuild = false) => {
+    const dirty = isDirty(paper)
+    revert.disabled = !dirty
+    save.disabled = !dirty
+    if (rebuild) redraw()
+  }
+  on(revert, 'click', () => {
+    draft = null
+    redraw()
   })
-  body.append(cslField(L('부제', 'Subtitle'), 'subtitle'))
+  on(save, 'click', () => {
+    if (!draft) return
+    const written = structuredClone(draft.csl)
+    draft = null
+    // `update(meta:)`: saved by hand is the reader's record — manual, and
+    // the candidates a lookup offered are let go.
+    actions.editMeta(paper.id, { csl: written, confidence: 'manual', candidates: [] })
+  })
 
-  const authors = el('div', { class: 'chip-row' })
-  for (const name of (meta.csl.author ?? []) as CSLName[]) {
-    const chip = el('button', { class: 'chip', text: fullName(name) })
-    on(chip, 'click', () => actions.openAuthor(name))
-    authors.append(chip)
-  }
-  if (authors.childElementCount > 0) {
-    body.append(el('div', { class: 'field' }, [
-      el('div', { class: 'field-label', text: isPaper ? L('저자', 'Authors') : isBook ? L('지은이', 'Written by') : L('쓴 사람', 'Written by') }),
-      authors,
-    ]))
-  }
+  // The header: what the paper is called, who wrote it, and how sure the
+  // record is.
+  body.append(section(null,
+    el('div', { class: 'insp-title', text: meta.displayTitle }),
+    ...(meta.displayAuthors ? [el('div', { class: 'insp-authors', text: meta.displayAuthors })] : []),
+    confidenceBadge(meta.confidence),
+  ))
 
-  // A manual has no journal, no volume and no DOI, so it is not asked for
-  // them. What it has instead is where it came from.
+  // Before anything else: what is this? Asked once, when nobody has
+  // answered; changing it later is in the ⋯ menu and the row's menu.
+  if (meta.kindIsUnanswered) body.append(kindQuestion(paper, actions))
+  const candidates = candidatesSection(paper, actions)
+  if (candidates) body.append(candidates)
+  body.append(...supplements(paper, actions))
+
+  const text = (label: string, key: string, options?: { multiline?: boolean; placeholder?: string }) =>
+    draftText(paper, label, key, dirtied, options)
+  const title = text(L('제목', 'Title'), 'title', { multiline: true, placeholder: meta.displayTitle })
   if (isPaper) {
-    body.append(editable(L('학술지·학회', 'Venue'), meta.csl['container-title'] ?? '', (next) => {
-      actions.editMeta(paper.id, { csl: { ...meta.csl, 'container-title': next }, confidence: 'manual' })
-    }))
-    // The Mac's paper form: where in the journal, as well as which journal.
-    const where = el('div', { class: 'field-row' }, [
-      cslField(L('권', 'Volume'), 'volume'),
-      cslField(L('호', 'Issue'), 'issue'),
-      cslField(L('쪽', 'Pages'), 'page'),
-    ])
-    body.append(where)
+    body.append(section(L('서지 정보', 'Details'),
+      title,
+      text(L('부제', 'Subtitle'), 'subtitle'),
+      draftYear(paper, dirtied),
+      text(L('학술지·학회', 'Venue'), 'container-title'),
+      el('div', { class: 'field-row' }, [text(L('권', 'Volume'), 'volume'), text(L('호', 'Issue'), 'issue'), text(L('쪽', 'Pages'), 'page')]),
+      text(L('출판사', 'Publisher'), 'publisher'),
+      text('DOI', 'DOI'),
+      text('URL', 'URL'),
+      draftType(paper, L('종류', 'Type'), PAPER_TYPES, dirtied),
+    ))
+  } else if (isBook) {
+    // A book has a publisher, a place, an edition, an ISBN — and none of
+    // the journal's furniture. A chapter wants the book it came out of.
+    const nodes: Node[] = [
+      title,
+      text(L('부제', 'Subtitle'), 'subtitle'),
+      text(L('출판사', 'Publisher'), 'publisher'),
+      text(L('펴낸 곳', 'Place'), 'publisher-place'),
+      text(L('판', 'Edition'), 'edition'),
+      draftYear(paper, dirtied),
+      text('ISBN', 'ISBN'),
+      text('URL', 'URL'),
+      draftType(paper, L('종류', 'Kind'), ['book', 'chapter'], dirtied),
+    ]
+    if (csl.type === 'chapter') nodes.push(text(L('실린 책', 'In the book'), 'container-title'), text(L('쪽', 'Pages'), 'page'))
+    body.append(section(L('책 정보', 'The book'), ...nodes))
   } else {
-    body.append(editable(isBook ? L('출판사', 'Publisher') : L('펴낸 곳', 'From'), meta.csl.publisher ?? '', (next) => {
-      actions.editMeta(paper.id, { csl: { ...meta.csl, publisher: next }, confidence: 'manual' })
-    }))
+    // A deck has a course and a year and nothing a journal would recognise.
+    body.append(section(L('문서 정보', 'Details'),
+      title,
+      text(L('부제', 'Subtitle'), 'subtitle'),
+      text(L('펴낸 곳', 'From'), 'publisher'),
+      draftYear(paper, dirtied),
+      text('URL', 'URL'),
+      draftType(paper, L('종류', 'Kind'), DOCUMENT_TYPES, dirtied),
+    ))
   }
 
-  // What a book has and a journal article does not. Put through the paper's
-  // form a book came back wearing a volume and an issue, which is how a
-  // textbook ends up cited as one page of a journal it was never in.
-  if (isBook) {
-    body.append(editable(L('펴낸 곳', 'Place'), (meta.csl['publisher-place'] as string) ?? '', (next) => {
-      actions.editMeta(paper.id, { csl: { ...meta.csl, 'publisher-place': next }, confidence: 'manual' })
-    }))
-    body.append(editable(L('판', 'Edition'), (meta.csl.edition as string) ?? '', (next) => {
-      actions.editMeta(paper.id, { csl: { ...meta.csl, edition: next }, confidence: 'manual' })
-    }))
-    body.append(editable('ISBN', (meta.csl.ISBN as string) ?? '', (next) => {
-      actions.editMeta(paper.id, { csl: { ...meta.csl, ISBN: next }, confidence: 'manual' })
-    }))
-  }
-
-  body.append(editable(L('해', 'Year'), meta.year ? String(meta.year) : '', (next) => {
-    const year = Number(next)
-    const issued = Number.isInteger(year) && year > 0 ? { 'date-parts': [[year]] } : undefined
-    actions.editMeta(paper.id, { csl: { ...meta.csl, issued }, confidence: 'manual' })
+  const authorTitle = isPaper ? L('저자', 'Authors') : isBook ? L('지은이', 'Written by')
+    : kind === 'lecture' ? L('만든 사람', 'Made by') : L('쓴 사람', 'Written by')
+  body.append(buildAuthorEditor({
+    title: authorTitle,
+    authors: (csl.author ?? []) as CSLName[],
+    changed: (authors) => {
+      if (authors.length > 0) csl.author = authors
+      else delete csl.author
+      dirtied()
+    },
+    paste: actions.paste,
+    openAuthor: actions.openAuthor,
   }))
+  body.append(section(null, el('div', { class: 'insp-save' }, [revert, el('span', { class: 'fb-spacer' }), save])))
+  dirtied()
 
-  // Written by hand as well as read: a DOI is what a registrar is asked
-  // with, and the Mac's form lets it be corrected.
-  if (isPaper) body.append(cslField('DOI', 'DOI'))
-  body.append(cslField('URL', 'URL'))
-  // A book is cited too — that is the whole reason it is not a document — so
-  // it keeps its key.
-  if (isPaper || isBook) {
-    body.append(editable(L('인용 키', 'Citation key'), meta.bibKey, (next) => {
-      actions.editMeta(paper.id, { bibKey: next })
-    }))
+  // Reading: straight through to the record, as the Mac's section is — a
+  // change made in the list shows here at once.
+  const status = el('select', { class: 'field-select' }) as HTMLSelectElement
+  for (const [value, label] of [['unread', L('안 읽음', 'Unread')], ['reading', L('읽는 중', 'Reading')], ['read', L('읽음', 'Read')]] as const) {
+    const option = el('option', { value, text: label }) as HTMLOptionElement
+    option.selected = paper.state.readingStatus === value
+    status.append(option)
   }
-
-  const status = el('div', { class: 'choices' })
-  for (const [value, label] of [
-    ['unread', L('안 읽음', 'Unread')],
-    ['reading', L('읽는 중', 'Reading')],
-    ['read', L('읽음', 'Read')],
-  ] as const) {
-    const button = el('button', {
-      text: label,
-      'aria-pressed': String(paper.state.readingStatus === value),
-    })
-    on(button, 'click', () => actions.editState(paper.id, { readingStatus: value }))
-    status.append(button)
-  }
-  body.append(el('div', { class: 'field' }, [
-    el('div', { class: 'field-label', text: L('읽기 상태', 'Reading') }),
-    status,
-  ]))
-
-  // The rest of the Mac's Reading section: the star, and a rating.
-  const favourite = el('button', {
-    class: 'plain-button field-toggle',
-    'aria-pressed': String(paper.state.isFavorite),
-    html: icon(paper.state.isFavorite ? 'star.fill' : 'star'),
-  })
-  favourite.append(el('span', { text: L('즐겨찾기', 'Favorite') }))
-  on(favourite, 'click', () => actions.editState(paper.id, { isFavorite: !paper.state.isFavorite }))
+  on(status, 'change', () => actions.editState(paper.id, { readingStatus: status.value }))
+  const favourite = el('input', { type: 'checkbox', class: 'set-check' }) as HTMLInputElement
+  favourite.checked = paper.state.isFavorite
+  on(favourite, 'change', () => actions.editState(paper.id, { isFavorite: favourite.checked }))
   const stars = el('div', { class: 'rating', role: 'group', 'aria-label': L('별점', 'Rating') })
   const rating = paper.state.rating ?? 0
   for (let value = 1; value <= 5; value += 1) {
@@ -455,36 +655,78 @@ function details(body: HTMLElement, paper: Paper, actions: InspectorActions) {
     on(star, 'click', () => actions.editState(paper.id, { rating: value === rating ? null : value }))
     stars.append(star)
   }
-  body.append(el('div', { class: 'field field-inline' }, [favourite, el('span', { class: 'toolbar-spacer' }), stars]))
-  // The Mac's memo, under the rating: one line on the paper's record. Not
-  // the slip-box — those are files of their own, in the Notes tab — and what
-  // this build's Notes tab held before it had a slip-box.
-  body.append(editable(L('메모', 'Note'), paper.state.summaryNote, (next) => {
-    actions.editState(paper.id, { summaryNote: next })
-  }, { multiline: true }))
-
-  // "Confidence" is about a registrar agreeing with us, and no registrar has
-  // an opinion about a manual.
-  if (isPaper) {
-    body.append(field(L('확신', 'Confidence'), CONFIDENCE_LABEL()[meta.confidence] ?? meta.confidence))
-  } else {
-    body.append(field(L('종류', 'Kind'), isBook ? L('책', 'Book') : L('일반 문서', 'Document')))
+  // The memo grows from three lines to eight and is written when it is left
+  // — or when the paper goes, or the window does (`flushInspector`).
+  const note = el('textarea', { class: 'grow memo', rows: '3', placeholder: L('메모', 'Note') }) as HTMLTextAreaElement
+  note.value = paper.state.summaryNote
+  const grow = () => {
+    note.rows = Math.min(8, Math.max(3, note.value.split('\n').length))
   }
-  body.append(fileName(paper, actions))
-  body.append(field(L('쪽', 'Pages'), String(meta.file.pageCount)))
-  body.append(field(L('더한 날', 'Added'), meta.addedAt.toLocaleDateString()))
+  grow()
+  const keep = (value: string) => {
+    if (value !== paper.state.summaryNote) actions.editState(paper.id, { summaryNote: value })
+  }
+  on(note, 'input', () => {
+    grow()
+    memo = { paperID: paper.id, text: note.value, save: keep }
+  })
+  on(note, 'blur', () => flushInspector())
+  on(note, 'keydown', (event: KeyboardEvent) => event.stopPropagation())
+  body.append(section(L('읽기', 'Reading'),
+    el('div', { class: 'insp-line' }, [el('span', { text: L('상태', 'Status') }), status]),
+    el('label', { class: 'insp-line' }, [el('span', { text: L('즐겨찾기', 'Favorite') }), favourite]),
+    el('div', { class: 'insp-line' }, [el('span', { text: L('별점', 'Rating') }), stars]),
+    note,
+  ))
 
-  const row = el('div', { class: 'field' })
+  if (isPaper) {
+    const ids = (meta.raw.identifiers ?? {}) as Record<string, string | undefined>
+    const rows = [
+      identifierRow('DOI', ids.doi, actions),
+      identifierRow('arXiv', ids.arxiv, actions),
+      identifierRow('PMID', ids.pmid, actions),
+      identifierRow(L('BibTeX 키', 'BibTeX Key'), meta.bibKey, actions),
+    ].filter((row): row is HTMLElement => row !== null)
+    if (rows.length > 0) body.append(section(L('식별자', 'Identifiers'), ...rows))
+  }
+
+  // The file: its name (typing renames it), its length, where it stands
+  // against the one imported, and the way to it.
+  const where = el('p', { class: 'insp-hint' })
+  const said = provenanceAsked.get(paper.id)
+  const describe = (answer: string) => {
+    where.textContent = answer === 'pristine' ? L('원본 그대로예요.', 'The file is as you imported it.')
+      : answer === 'appended' ? L('원본은 그대로 두고 표시만 뒤에 덧붙였어요.', 'The original is intact. Marks follow it.')
+        : answer === 'rewritten' ? L('다른 앱이 파일을 다시 썼어요. 글자가 원본과 다를 수 있어요.', 'Another app rewrote this file. Its text may differ from the original.')
+          : ''
+    where.hidden = !where.textContent
+  }
+  if (said) describe(said)
+  else {
+    where.hidden = true
+    void actions.provenance(paper.id).then((answer) => {
+      provenanceAsked.set(paper.id, answer)
+      describe(answer)
+    })
+  }
   const reveal = el('button', { class: 'plain-button', text: L('폴더에서 보기', 'Show in Folder') })
   on(reveal, 'click', () => actions.reveal(paper.id))
-  const chips = [reveal]
-  if (isPaper || isBook) {
-    const copy = el('button', { class: 'plain-button', text: L('인용 키 복사', 'Copy Citation Key') })
-    on(copy, 'click', () => actions.copyKey(paper.id))
-    chips.push(copy)
-  }
-  row.append(el('div', { class: 'chip-row' }, chips))
-  body.append(row, el('div', { style: 'height: 14px' }))
+  body.append(section(L('파일', 'File'),
+    fileName(paper, actions),
+    el('div', { class: 'insp-line' }, [el('span', { text: L('쪽', 'Pages') }), el('span', { class: 'insp-value', text: String(meta.file.pageCount) })]),
+    where,
+    el('div', { class: 'chip-row' }, [reveal]),
+  ))
+
+  const provenance = (meta.raw.provenance ?? {}) as { source?: string; fetchedAt?: string }
+  const fetched = provenance.fetchedAt ? new Date(provenance.fetchedAt) : null
+  const when = fetched && !Number.isNaN(fetched.getTime())
+    ? fetched.toLocaleString(prefersKorean() ? 'ko' : 'en', { dateStyle: 'medium', timeStyle: 'short' })
+    : null
+  body.append(el('div', { class: 'insp-footer' }, [
+    el('div', { text: L(`출처: ${sourceName(provenance.source)}`, `Source: ${sourceName(provenance.source)}`) }),
+    ...(when ? [el('div', { text: L(`${when}에 가져옴`, `Fetched ${when}`) })] : []),
+  ]))
 }
 
 /**

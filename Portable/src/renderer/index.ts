@@ -26,7 +26,7 @@ import { shell, solo } from './shell.js'
 import { buildToolbar, showMenu, toast } from './ui/toolbar.js'
 import { buildSidebar } from './ui/sidebar.js'
 import { buildPaperList } from './ui/paperList.js'
-import { buildInspector } from './ui/inspector.js'
+import { buildInspector, flushInspector } from './ui/inspector.js'
 import { buildSlipBox } from './ui/slipBox.js'
 import { buildSetup } from './ui/setup.js'
 import { buildSketchRack } from './ui/sketchToolbar.js'
@@ -36,8 +36,8 @@ import {
   addLibraryFolder, addPapers, adoptLoose, chooseLibrary, newCollection, openLibraryAt, reload, removeLibraryFolder, start,
 } from './library.js'
 import {
-  attach, attachmentsMenu, copyKey, detach, editMeta, editState, fileUnder, paperMenu, renamePaper, setKind,
-  statusMenu, toggleFavorite,
+  acceptCandidate, attach, attachmentsMenu, copyKey, detach, editMeta, editState, fileUnder, paperMenu, renamePaper, setKind,
+  statusMenu, suggestedParentFor, toggleFavorite,
 } from './actions/paper.js'
 import {
   closePaper, extendSelection, goBack, goForward, keepPaper, openAnchor, pickPaper, selectAllPapers, showPaper, stepPaper,
@@ -153,6 +153,11 @@ shell.inspector = buildInspector({
   openNote: (id) => void openNote(id),
   open: (id) => void showPaper(id),
   detach: (id) => void detach(id),
+  attach: (child, parent) => void attach(child, parent),
+  suggestedParent: (id) => suggestedParentFor(id),
+  acceptCandidate: (id, candidate) => void acceptCandidate(id, candidate),
+  provenance: (id) => call('paper:provenance', { id }),
+  paste: () => call('clipboard:read'),
   openAnchor: (place) => void openAnchor(place),
 })
 
@@ -310,7 +315,10 @@ installListSearch()
 installMainEvents()
 window.addEventListener('resize', () => relayoutReadersSoon())
 // Where each paper was left, written as the window goes.
-window.addEventListener('beforeunload', () => void flushPositions())
+window.addEventListener('beforeunload', () => {
+  flushInspector()
+  void flushPositions()
+})
 installProbeSurface()
 layoutPanes()
 void start()

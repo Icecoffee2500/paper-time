@@ -32,6 +32,9 @@ import { couldNot } from '../notices.js'
 import { L } from '../../shared/lang.js'
 import { isLookedUp, type DocumentKind } from '../../shared/documentKind.js'
 import { entryFor } from '../../shared/bibtex.js'
+import { makeKey } from '../../shared/citationKey.js'
+import { suggestedParent } from '../../shared/attachmentSearch.js'
+import { cslFullTitle, type CSLItem } from '../../shared/model.js'
 import { DOCK_ZONES, type DockZone } from '../../shared/split.js'
 
 type ReadingStatus = 'unread' | 'reading' | 'read'
@@ -66,7 +69,13 @@ export async function setKind(id: string, kind: DocumentKind) {
   // Nothing but a paper has a registrar to disagree with, so nothing else
   // stays on the shelf of things to look at.
   const patch: Record<string, unknown> = { kind }
-  if (!isLookedUp(kind)) patch.confidence = 'unparsed'
+  // The Mac's `setKind`: the candidates a lookup offered go, and a record
+  // left for review is no longer one — but a record somebody corrected or a
+  // registrar confirmed keeps its rank, which is what wins a merge.
+  if (!isLookedUp(kind)) {
+    patch.candidates = []
+    if (findPaper(id)?.meta.confidence === 'needsReview') patch.confidence = 'unparsed'
+  }
   // Nothing is cleared for course material or a document. A book clears the
   // journal's fields below because a book is exported and would print a
   // volume it never had; these two are not exported at all, so throwing away
@@ -209,11 +218,17 @@ const RENAME_TROUBLE = (): Record<string, string> => ({
     'A name cannot contain / \\ : * ? " < > or |.'),
   taken: L('같은 이름의 파일이 이미 있어요.', 'A file with that name is already there.'),
   missing: L('파일이 있던 자리에 없어요.', 'Paper Time cannot find the file.'),
+  busy: L('다른 앱이 파일을 쓰고 있어요. 닫고 다시 해보세요.', 'Another app is using the file. Close it and try again.'),
 })
 
 /** A new file name, or why not. The file moved, so the library is read again. */
 export async function renamePaper(id: string, name: string): Promise<string | null> {
-  const result = await call('paper:rename', { id, name })
+  let result: Awaited<ReturnType<typeof call<'paper:rename'>>>
+  try {
+    result = await call('paper:rename', { id, name })
+  } catch {
+    return L('이름을 바꾸지 못했어요.', 'The file kept its name.')
+  }
   if ('error' in result) return RENAME_TROUBLE()[result.error] ?? null
   await reload()
   return null
@@ -356,7 +371,7 @@ export function paperMenu(id: string, anchor: Element) {
       icon: 'paperclip',
       disabled: Boolean(entry.meta.parentID) || attachmentsOf(id).length > 0 || attachTargets(id).length === 0,
       action: () => showAttachSheet({
-        child: { id, title: entry.meta.displayTitle },
+        child: { id, title: entry.meta.displayTitle, fullTitle: cslFullTitle(entry.meta.csl), fileName: entry.meta.file.originalName },
         candidates: attachTargets(id),
         attach: (parent) => void attach(id, parent),
       }),
@@ -372,4 +387,39 @@ export function paperMenu(id: string, anchor: Element) {
     { separator: true },
     { label: L('휴지통에 넣기', 'Move to Trash'), icon: 'trash', danger: true, action: () => void trashPaper(id) },
   ])
+}
+
+/**
+ * The paper a supplement looks like it belongs to — only for a paper standing
+ * on its own whose name or title says it is supplementary
+ * (`LibraryModel.suggestedParent`).
+ */
+export function suggestedParentFor(id: string): string | null {
+  const entry = findPaper(id)
+  if (!entry || entry.meta.parentID || attachmentsOf(id).length > 0) return null
+  return suggestedParent(
+    { id, title: cslFullTitle(entry.meta.csl) ?? '', fileName: entry.meta.file.originalName },
+    attachTargets(id).map((one) => ({ id: one.id, title: one.title })),
+  )
+}
+
+/**
+ * One of a lookup's candidates taken as the record (`acceptCandidate`): its
+ * CSL and identifiers, confirmed by hand, the other candidates let go, and a
+ * key made from it.
+ */
+export async function acceptCandidate(id: string, candidate: { csl?: Record<string, unknown>; identifiers?: Record<string, unknown>; provenance?: { source?: string } }) {
+  const entry = findPaper(id)
+  if (!entry || !candidate.csl) return
+  const csl = { ...candidate.csl } as CSLItem
+  const bibKey = makeKey(csl, entry.meta.file.originalName)
+  csl.id = bibKey
+  await editMeta(id, {
+    csl,
+    identifiers: candidate.identifiers ?? {},
+    confidence: 'manual',
+    provenance: { source: candidate.provenance?.source ?? 'manual', fetchedAt: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'), detail: 'confirmed by you' },
+    candidates: [],
+    bibKey,
+  })
 }

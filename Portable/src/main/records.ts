@@ -64,6 +64,14 @@ export class Records {
       if (options.stamp === false) {
         if ('guessedKind' in cleared && (meta.kind || meta.guessedKind)) return meta.encode()
       }
+      // The fields this build carries raw — the lookup's candidates, the
+      // identifiers, where the record came from — go into the record as it
+      // is written; the typed ones onto the typed fields.
+      for (const key of ['candidates', 'identifiers', 'provenance']) {
+        if (!(key in cleared)) continue
+        meta.raw = { ...meta.raw, [key]: cleared[key] }
+        delete cleared[key]
+      }
       Object.assign(meta, cleared)
       const written = await owner.saveMeta(meta, { ...options, baseline: row.meta })
       return written.encode()
@@ -103,6 +111,13 @@ export function acceptedMetaPatch(patch: Patch): Patch {
         break
       case 'parentID':
         if (value === null || typeof value === 'string') out.parentID = value
+        break
+      case 'candidates':
+        if (Array.isArray(value)) out.candidates = value
+        break
+      case 'identifiers':
+      case 'provenance':
+        if (value && typeof value === 'object' && !Array.isArray(value)) out[key] = value
         break
     }
   }

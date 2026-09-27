@@ -78,6 +78,32 @@ export function surname(name: CSLName): string | undefined {
   return undefined
 }
 
+/** «Family, Given», «Family, Given, Jr.» or «Given Family» as a name —
+ *  `CSLName.parse`. */
+export function parseName(raw: string): CSLName {
+  const trimmed = raw.trim()
+  if (!trimmed) return {}
+  const comma = trimmed.indexOf(',')
+  if (comma >= 0) {
+    const family = trimmed.slice(0, comma).trim()
+    const rest = trimmed.slice(comma + 1).trim()
+    const cut = rest.indexOf(',')
+    const parts = cut >= 0 ? [rest.slice(0, cut).trim(), rest.slice(cut + 1).trim()] : [rest]
+    const name: CSLName = { family }
+    if (parts[0]) name.given = parts[0]
+    if (parts.length > 1) name.suffix = parts[1]
+    return name
+  }
+  const words = trimmed.split(' ').filter(Boolean)
+  if (words.length <= 1) return { family: trimmed }
+  return { family: words[words.length - 1], given: words.slice(0, -1).join(' ') }
+}
+
+/** A pasted author block as names: split on «;», «,» and « and » (`pasteNames`). */
+export function parseNames(text: string): CSLName[] {
+  return text.replace(/ and /gi, ';').split(/[;,]/).map((one) => one.trim()).filter(Boolean).map(parseName)
+}
+
 export function fullName(name: CSLName): string {
   if (name.literal && name.literal.trim()) return name.literal
   return [name.given, surname(name)].filter(Boolean).join(' ').trim()

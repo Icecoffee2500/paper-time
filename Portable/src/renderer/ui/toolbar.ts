@@ -95,7 +95,7 @@ export function buildToolbar(actions: ToolbarActions): { node: HTMLElement; upda
     actions.moreMenu(event.currentTarget as Element))
   const settingsButton = button('gear', withKey(L('설정', 'Settings'), 'settings', platform), actions.settings)
 
-  const tabs = el('div', { class: 'segmented', role: 'tablist' })
+  const tabs = el('div', { class: 'segmented', role: 'tablist', title: L('정보 패널에 보일 것', 'What the inspector shows'), 'aria-label': L('정보 패널에 보일 것', 'What the inspector shows') })
   const tabButtons: Record<string, HTMLElement> = {}
   // The four names are English whatever language the window is in, as they
   // are on the Mac: they are the panel's proper names, not sentences.

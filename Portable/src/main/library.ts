@@ -43,7 +43,7 @@ export const deviceIdentity = (() => {
 })()
 
 /** Why a name was refused. The window says it in the reader's language. */
-export type RenameFailure = 'empty' | 'notAName' | 'taken' | 'missing'
+export type RenameFailure = 'empty' | 'notAName' | 'taken' | 'missing' | 'busy'
 
 export interface PaperRow {
   id: string
@@ -393,7 +393,16 @@ export class Library {
     const caseOnly = samePath(destination, current)
     if (!caseOnly && fs.existsSync(destination)) return { error: 'taken' }
 
-    await fsp.rename(current, destination)
+    try {
+      await fsp.rename(current, destination)
+    } catch (error) {
+      // Windows says no while another program holds the file — Acrobat, a
+      // preview pane, a scan — and a cloud placeholder can too. Said, not
+      // thrown: thrown, the field kept a name the disk did not have.
+      const code = (error as NodeJS.ErrnoException).code
+      if (code === 'ENOENT') return { error: 'missing' }
+      return { error: 'busy' }
+    }
 
     const meta = new PaperMeta(row.meta)
     meta.file = {
@@ -715,6 +724,35 @@ export class Library {
     }
   }
 
+  /**
+   * Where the file stands against the one imported (`FileProvenance`):
+   * `pristine` when it is those bytes, `appended` when it begins with them —
+   * marks put after the original, as both builds write them — `rewritten`
+   * when another program wrote it out again, `unknown` when the record says
+   * too little. One read of the file, both digests from it; kept by size
+   * and modification time.
+   */
+  async provenanceOf(id: string): Promise<'pristine' | 'appended' | 'rewritten' | 'unknown'> {
+    const row = await this.paper(id)
+    const file = row?.file
+    const meta = row ? new PaperMeta(row.meta) : null
+    if (!file || !meta || !meta.file.importDigest || !(meta.file.byteSize > 0)) return 'unknown'
+    let stat: fs.Stats
+    try {
+      stat = await fsp.stat(file)
+    } catch {
+      return 'unknown'
+    }
+    const key = `${file}|${stat.size}|${stat.mtimeMs}|${meta.file.importDigest}|${meta.file.byteSize}`
+    const known = this.provenance.get(id)
+    if (known && known.key === key) return known.answer
+    const answer = await classifyFile(file, meta.file.importDigest, meta.file.byteSize)
+    this.provenance.set(id, { key, answer })
+    return answer
+  }
+
+  private readonly provenance = new Map<string, { key: string; answer: 'pristine' | 'appended' | 'rewritten' | 'unknown' }>()
+
   // MARK: - The drawing layer's sidecars
 
   async loadSketch(id: string, pageIndex: number): Promise<unknown[] | null> {
@@ -862,4 +900,32 @@ export function claimedBy(rows: PaperRow[]): Set<string> {
       // in another case, is still the record for that file.
       .map(pathKey),
   )
+}
+
+/** `FileProvenance.classify` over one read of the file. */
+export async function classifyFile(file: string, digest: string, byteSize: number): Promise<'pristine' | 'appended' | 'rewritten' | 'unknown'> {
+  const { createHash } = await import('node:crypto')
+  const whole = createHash('sha256')
+  let prefix: string | null = null
+  let seen = 0
+  try {
+    for await (const chunk of fs.createReadStream(file) as AsyncIterable<Buffer>) {
+      if (prefix === null && seen + chunk.length >= byteSize) {
+        const cut = byteSize - seen
+        whole.update(chunk.subarray(0, cut))
+        prefix = whole.copy().digest('hex')
+        whole.update(chunk.subarray(cut))
+      } else {
+        whole.update(chunk)
+      }
+      seen += chunk.length
+    }
+  } catch {
+    return 'unknown'
+  }
+  const all = whole.digest('hex')
+  const wanted = digest.toLowerCase()
+  if (seen === byteSize && all === wanted) return 'pristine'
+  if (seen > byteSize && prefix === wanted) return 'appended'
+  return 'rewritten'
 }

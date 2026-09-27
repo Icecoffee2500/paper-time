@@ -73,6 +73,8 @@ export function paperHandlers(ctx: Context): Partial<Handlers> {
       return { name: result.file ? path.basename(result.file) : name }
     },
 
+    'paper:provenance': async ({ id }) => (await (await libraries.ownerOf(id))?.provenanceOf(id)) ?? 'unknown',
+
     'paper:reveal': async ({ id }) => {
       const row = await (await libraries.ownerOf(id))?.paper(id)
       if (row?.file) shell.showItemInFolder(row.file)
