@@ -95,3 +95,60 @@ export function rankAttachments(candidates: AttachCandidate[], query: string): A
       : b.score - a.score))
     .map((one) => one.candidate)
 }
+
+// MARK: - Which paper a supplement belongs to (`SupplementDetector`)
+
+const MARKERS = [
+  'supplement', 'supplementary', 'supplemental',
+  'appendix', 'appendices',
+  'supp material', 'supp_material', 'supmat',
+]
+
+/** Whether the name or title reads as supplementary material. */
+export function looksLikeSupplement(fileName: string, title: string | undefined): boolean {
+  const haystack = [fileName, title ?? ''].map(foldTitle).join(' ')
+  return MARKERS.some((marker) => haystack.includes(foldTitle(marker)))
+}
+
+/**
+ * The paper a supplement most likely belongs to, or null unless one is a
+ * clear match — attaching a supplement to the wrong paper hides it where it
+ * will not be found. The supplementary words are taken out longest first
+ * («supplement» out of «supplementary» left «ary» behind).
+ */
+export function bestParent(fileName: string, title: string | undefined, candidates: { id: string; title: string }[]): string | null {
+  const stem = fileName.replace(/\.[^./\\]*$/, '')
+  let needle = foldTitle([stem, title ?? ''].join(' '))
+  for (const marker of [...MARKERS].sort((a, b) => b.length - a.length)) {
+    needle = needle.split(foldTitle(marker)).join(' ')
+  }
+  needle = needle.split(' ').filter(Boolean).join(' ')
+  if ([...needle].length < 10) return null
+  let best: { id: string; score: number } | null = null
+  let runnerUp = 0
+  for (const candidate of candidates) {
+    const score = jaroWinkler(needle, foldTitle(candidate.title))
+    if (score > (best?.score ?? 0)) {
+      runnerUp = best?.score ?? 0
+      best = { id: candidate.id, score }
+    } else if (score > runnerUp) {
+      runnerUp = score
+    }
+  }
+  if (!best || best.score < 0.82 || best.score - runnerUp < 0.04) return null
+  return best.id
+}
+
+/**
+ * The paper to offer first, only for a document that says it is
+ * supplementary (`AttachmentSearch.suggestion`): two papers whose titles
+ * begin with the same words are not a supplement and its paper, and a wrong
+ * answer under «Looks Like the One» is worse than none.
+ */
+export function suggestedParent(
+  child: { id: string; title: string; fileName: string },
+  candidates: { id: string; title: string }[],
+): string | null {
+  if (!looksLikeSupplement(child.fileName, child.title)) return null
+  return bestParent(child.fileName, child.title, candidates.filter((one) => one.id !== child.id))
+}

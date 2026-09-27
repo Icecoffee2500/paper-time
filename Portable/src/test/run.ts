@@ -58,6 +58,7 @@ import { tokensSuite } from './tokens.js'
 import { libraryListSuite } from './libraryList.js'
 import { marksSuite } from './marks.js'
 import { librarySuite } from './library.js'
+import { inspectorSuite } from './inspector.js'
 import { PaperMeta, PaperState } from '../shared/model.js'
 import { entryFor, formatEntry, protectTitle } from '../shared/bibtex.js'
 import { escapeLaTeX } from '../shared/latexTable.js'
@@ -433,6 +434,7 @@ async function main() {
   await libraryListSuite(test, suite)
   await marksSuite(test, suite)
   await librarySuite(test, suite)
+  await inspectorSuite(test, suite)
   await voiceSuite(test, suite)
   await tokensSuite(test, suite)
 

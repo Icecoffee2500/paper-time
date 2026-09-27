@@ -77,8 +77,12 @@ export interface Requests {
   'paper:meta': { args: { id: string; patch: Record<string, unknown>; stamp?: boolean }; result: Record<string, unknown> | null }
   'paper:rename': {
     args: { id: string; name: string }
-    result: { name: string } | { error: 'empty' | 'notAName' | 'taken' | 'missing' }
+    result: { name: string } | { error: 'empty' | 'notAName' | 'taken' | 'missing' | 'busy' }
   }
+  /** Where the file stands against the one imported (`FileProvenance`). */
+  'paper:provenance': { args: { id: string }; result: 'pristine' | 'appended' | 'rewritten' | 'unknown' }
+  /** What is on the clipboard, for «Paste Names». */
+  'clipboard:read': { args: void; result: string }
   'paper:reveal': { args: { id: string }; result: void }
   'sketch:load': { args: { id: string; pageIndex: number }; result: unknown[] | null }
   'sketch:save': { args: { id: string; pageIndex: number; elements: unknown[] }; result: void }

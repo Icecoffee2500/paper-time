@@ -10,11 +10,12 @@
 import { clear, el, on } from '../dom.js'
 import { iconNode } from '../icons.js'
 import { L } from '../../shared/lang.js'
-import { attachCandidate, rankAttachments, type AttachCandidate } from '../../shared/attachmentSearch.js'
+import { attachCandidate, rankAttachments, suggestedParent, type AttachCandidate } from '../../shared/attachmentSearch.js'
 
 export interface AttachSheetInput {
-  /** The paper being attached. */
-  child: { id: string; title: string }
+  /** The paper being attached: what it shows, and the full title and file
+   *  name the suggestion reads. */
+  child: { id: string; title: string; fullTitle?: string; fileName?: string }
   /** Every paper it could go under: standing on its own, and not itself. */
   candidates: { id: string; title: string; fileName: string }[]
   attach: (parentID: string) => void
@@ -34,7 +35,7 @@ export function showAttachSheet(input: AttachSheetInput) {
     el('div', { class: 'attach-title', text: L('어느 논문에 붙일까요?', 'Attach to Which Paper?') }),
     el('div', { class: 'attach-child' }, [
       ...(clip ? [clip] : []),
-      el('span', { text: input.child.title }),
+      el('span', { class: 'attach-child-title', text: input.child.title }),
     ]),
   ])
   const field = el('input', {
@@ -57,7 +58,13 @@ export function showAttachSheet(input: AttachSheetInput) {
   document.body.append(backdrop)
 
   let ranked: AttachCandidate[] = []
-  let chosen: string | null = null
+  // The paper it looks like it belongs to, for a document that says it is
+  // supplementary — chosen before anything is typed, under its own heading.
+  const suggested = suggestedParent(
+    { id: input.child.id, title: input.child.fullTitle ?? '', fileName: input.child.fileName ?? '' },
+    input.candidates,
+  )
+  let chosen: string | null = suggested
 
   const close = () => {
     backdrop.remove()
@@ -78,9 +85,10 @@ export function showAttachSheet(input: AttachSheetInput) {
   }
   const draw = () => {
     ranked = rankAttachments(shelf, field.value)
-    // The top hit once something is typed; before that nothing is chosen, so
-    // a Return pressed at once attaches nothing to the first paper A–Z.
-    chosen = field.value.trim() ? ranked[0]?.id ?? null : null
+    const typed = field.value.trim().length > 0
+    // The top hit once something is typed; before that the suggestion, or
+    // nothing — a Return pressed at once must not attach to the first A–Z.
+    chosen = typed ? ranked[0]?.id ?? null : suggested
     clear(list)
     if (ranked.length === 0) {
       // Not «no papers»: the library is full of them and none answers to this.
@@ -89,20 +97,30 @@ export function showAttachSheet(input: AttachSheetInput) {
         el('div', { text: L('제목의 다른 부분이나 파일 이름으로 찾아보세요.', 'Try another part of the title, or the file name.') }),
       ]))
     }
-    for (const candidate of ranked.slice(0, 200)) {
-      const row = el('div', { class: 'attach-row', role: 'option', 'data-id': candidate.id }, [
+    // Every paper: a list that stops somewhere cannot say that it did, and
+    // the one wanted is as likely to be at Z as at A.
+    const row = (candidate: AttachCandidate) => {
+      const node = el('div', { class: 'attach-row', role: 'option', 'data-id': candidate.id }, [
         el('div', { class: 'attach-row-title', text: candidate.title }),
         el('div', { class: 'attach-row-file', text: candidate.fileName }),
       ])
-      on(row, 'click', () => {
+      on(node, 'click', () => {
         chosen = candidate.id
         mark()
       })
-      on(row, 'dblclick', () => {
+      on(node, 'dblclick', () => {
         chosen = candidate.id
         take()
       })
-      list.append(row)
+      return node
+    }
+    const offered = !typed && suggested ? ranked.find((one) => one.id === suggested) : undefined
+    if (offered) {
+      list.append(el('div', { class: 'attach-heading', text: L('이 논문 같아요', 'Looks Like the One') }), row(offered))
+      list.append(el('div', { class: 'attach-heading', text: L('모든 논문', 'All Papers') }))
+      for (const candidate of ranked) if (candidate.id !== suggested) list.append(row(candidate))
+    } else {
+      for (const candidate of ranked) list.append(row(candidate))
     }
     mark()
   }
@@ -128,9 +146,8 @@ export function showAttachSheet(input: AttachSheetInput) {
   })
   on(cancel, 'click', close)
   on(confirm, 'click', take)
-  on(backdrop, 'mousedown', (event: MouseEvent) => {
-    if (event.target === backdrop) close()
-  })
+  // No closing on a press outside, as the Mac's sheet does not: a sheet
+  // chosen in by hand is left by Cancel or Escape.
   draw()
   field.focus()
 }
