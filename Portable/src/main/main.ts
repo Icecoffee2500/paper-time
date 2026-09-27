@@ -7,14 +7,15 @@
  * everywhere by construction: one Chromium, one stylesheet, one bundled
  * typeface, which is the point of porting this way rather than three times.
  */
-import { BrowserWindow, app, nativeTheme } from 'electron'
+import { BrowserWindow, app, nativeTheme, systemPreferences } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import type { LibrarySnapshot, NoteDTO } from '../shared/api.js'
 import { resolveKorean, setKorean } from '../shared/lang.js'
 import { zettelDisplayTitle } from '../shared/zettel.js'
 import { flushSettings, holdInMemory, settings } from './settings.js'
-import { buildMenu } from './menu.js'
+import { DEFAULT_MENU_STATE, buildMenu } from './menu.js'
+import type { MenuState } from '../shared/api.js'
 import { NotesStore } from './slipBox.js'
 import { captureAndQuit, runProbe } from './probe.js'
 import { probe } from './probeMode.js'
@@ -51,6 +52,20 @@ if (probe.isRun) holdInMemory()
  * because neither the locale nor the settings file is readable before that.
  */
 let wantsKorean = false
+
+/** What the window in front last said about itself. */
+let menuState: MenuState = DEFAULT_MENU_STATE
+
+/** The menu bar, in the language the app speaks now, for the window in front. */
+function installMenu() {
+  buildMenu({
+    send: windows.sendToFocused.bind(windows),
+    chooseLibrary: async () => {
+      const chosen = await handlers['library:choose'](undefined, windows.main)
+      if (typeof chosen === 'string') send('library:opened', await openLibrary(chosen))
+    },
+  }, menuState)
+}
 
 // MARK: - The modules
 
@@ -171,6 +186,19 @@ const context: Context = {
   isProbe: probe.hasLibrary,
   snapshot: (refused) => libraries.snapshot(refused),
   openLibrary,
+  menuStateChanged: (state) => {
+    if (JSON.stringify(state) === JSON.stringify(menuState)) return
+    menuState = state
+    installMenu()
+  },
+  languageChanged: () => {
+    // Said in the new language at once: the menu built again and every
+    // window made again where it stands. It used to wait for a restart.
+    wantsKorean = resolveKorean(settings().language, app.getLocale())
+    setKorean(wantsKorean)
+    installMenu()
+    windows.recreate()
+  },
   notesChanged: (saved, removed) => {
     if (saved) {
       const source = noteSource(saved)
@@ -271,13 +299,7 @@ app.whenReady().then(async () => {
   wantsKorean = resolveKorean(settings().language, app.getLocale())
   setKorean(wantsKorean)
   windows.createMain()
-  buildMenu({
-    send: windows.sendToFocused.bind(windows),
-    chooseLibrary: async () => {
-      const chosen = await handlers['library:choose'](undefined, windows.main)
-      if (typeof chosen === 'string') send('library:opened', await openLibrary(chosen))
-    },
-  })
+  installMenu()
   // `--papertime-library=<path>` opens a folder without disturbing whichever
   // one the user last had open — the same isolation the Mac build uses so a
   // test never touches a real library. The window's first `library:reload`
@@ -294,6 +316,10 @@ app.whenReady().then(async () => {
     }
   }
   nativeTheme.on('updated', () => send('theme:changed', nativeTheme.shouldUseDarkColors))
+  // The accent is the desktop's: when it changes there, the window follows.
+  if (process.platform === 'win32') {
+    systemPreferences.on('accent-color-changed', () => send('theme:changed', nativeTheme.shouldUseDarkColors))
+  }
   app.on('web-contents-created', (_event, contents) => contents.on('destroyed', () => text.forgetWindow(contents)))
 
   const steps = probe.argument('probe')

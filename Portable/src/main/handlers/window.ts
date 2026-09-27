@@ -1,5 +1,5 @@
 /** The window's frame, the outside world, the report sheet, About. */
-import { app, clipboard, shell } from 'electron'
+import { app, clipboard, shell, systemPreferences } from 'electron'
 import { isOpenableLink } from '../../shared/readerMath.js'
 import { providerOf } from '../../shared/cloudProvider.js'
 import { settings } from '../settings.js'
@@ -25,6 +25,23 @@ export function windowHandlers(ctx: Context): Partial<Handlers> {
     // whoever wrote the paper (`isOpenableLink`).
     'shell:openExternal': ({ url }) => {
       if (isOpenableLink(url)) void shell.openExternal(url)
+    },
+
+    'menu:state': (state, sender) => {
+      // The window in front speaks for the menu bar; one behind does not.
+      const focused = windows.focused
+      if (sender && focused && sender !== focused) return
+      ctx.menuStateChanged(state)
+    },
+
+    'theme:accent': () => {
+      if (process.platform !== 'darwin' && process.platform !== 'win32') return null
+      try {
+        const color = systemPreferences.getAccentColor()
+        return /^[0-9a-f]{6,8}$/i.test(color) ? `#${color.slice(0, 6)}` : null
+      } catch {
+        return null
+      }
     },
 
     'clipboard:write': ({ text }) => {

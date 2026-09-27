@@ -8,7 +8,7 @@
  * four filled squares in a row read as one block.
  */
 import { icon, type IconName } from '../icons.js'
-import { el, on, place, clear } from '../dom.js'
+import { el, on, clear } from '../dom.js'
 import { canGoBack, canGoForward, readerState, store, type InspectorTab, type Pane } from '../state.js'
 import { platform } from '../bridge.js'
 import { L } from '../../shared/lang.js'
@@ -145,7 +145,9 @@ export function buildToolbar(actions: ToolbarActions): { node: HTMLElement; upda
   function update() {
     sidebarButton.setAttribute('aria-pressed', String(store.settings.panes.sidebar))
     listButton.setAttribute('aria-pressed', String(store.settings.panes.paperList))
-    readerButton.setAttribute('aria-pressed', String(store.settings.panes.reader))
+    // In focus mode the paper is all there is; the button says focus is on
+    // by being off, and pressing it leaves focus.
+    readerButton.setAttribute('aria-pressed', String(store.settings.panes.reader && !store.focus.on))
     inspectorButton.setAttribute('aria-pressed', String(store.settings.panes.inspector))
     tip(sidebarButton, paneTip('sidebar', L('옆 목록', 'Sidebar')))
     tip(listButton, paneTip('paperList', L('논문 목록', 'Paper List')))
@@ -176,98 +178,7 @@ export function buildToolbar(actions: ToolbarActions): { node: HTMLElement; upda
   return { node, update }
 }
 
-export interface MenuEntry {
-  label?: string
-  icon?: IconName
-  caption?: string
-  separator?: boolean
-  checked?: boolean
-  /** Shown greyed and not pressable — the Mac's `.disabled`. */
-  disabled?: boolean
-  action?: () => void
-  /** A submenu, opened beside the item when the pointer rests on it. */
-  children?: MenuEntry[]
-}
-
-/** A pop-up menu, dismissed by anything else being clicked. */
-export function showMenu(anchor: Element, entries: MenuEntry[], align: 'left' | 'right' = 'left') {
-  closeMenu()
-  const scrim = el('div', { class: 'scrim' })
-  const menu = buildMenu(entries)
-  on(scrim, 'mousedown', closeMenu)
-  document.body.append(scrim)
-  place(menu, anchor, align)
-  openMenu = { scrim, menu }
-}
-
-function buildMenu(entries: MenuEntry[]): HTMLElement {
-  const menu = el('div', { class: 'menu', role: 'menu' })
-  let submenu: HTMLElement | null = null
-  const closeSubmenu = () => {
-    submenu?.remove()
-    submenu = null
-  }
-  for (const entry of entries) {
-    if (entry.separator) {
-      menu.append(el('div', { class: 'menu-separator' }))
-      continue
-    }
-    if (entry.caption) {
-      menu.append(el('div', { class: 'menu-caption', text: entry.caption }))
-      continue
-    }
-    const item = el('button', { role: 'menuitem' }, [
-      el('span', { html: entry.checked ? icon('checkmark') : icon(entry.icon ?? '') || spacer() }),
-      el('span', { class: 'menu-label', text: entry.label ?? '' }),
-    ])
-    if (entry.children) {
-      item.append(el('span', { class: 'menu-chevron', html: icon('chevron.right') }))
-      const open = () => {
-        if (submenu && submenu.dataset.for === entry.label) return
-        closeSubmenu()
-        submenu = buildMenu(entry.children ?? [])
-        submenu.dataset.for = entry.label ?? ''
-        submenu.classList.add('submenu')
-        menu.append(submenu)
-        const box = item.getBoundingClientRect()
-        const size = submenu.getBoundingClientRect()
-        let left = box.right + 2
-        if (left + size.width > window.innerWidth - 8) left = box.left - size.width - 2
-        let top = box.top - 5
-        if (top + size.height > window.innerHeight - 8) top = Math.max(8, window.innerHeight - size.height - 8)
-        submenu.style.left = `${left}px`
-        submenu.style.top = `${top}px`
-      }
-      on(item, 'mouseenter', open)
-      on(item, 'click', open)
-    } else {
-      on(item, 'mouseenter', closeSubmenu)
-      if (entry.disabled) {
-        item.setAttribute('disabled', '')
-      } else {
-        on(item, 'click', () => {
-          closeMenu()
-          entry.action?.()
-        })
-      }
-    }
-    menu.append(item)
-  }
-  return menu
-}
-
-function spacer() {
-  return '<svg viewBox="0 0 16 16" width="15" height="15"></svg>'
-}
-
-let openMenu: { scrim: HTMLElement; menu: HTMLElement } | null = null
-
-export function closeMenu() {
-  if (!openMenu) return
-  openMenu.scrim.remove()
-  openMenu.menu.remove()
-  openMenu = null
-}
+export { closeMenu, isMenuOpen, showMenu, type MenuEntry } from './menu.js'
 
 let toastShowing: { node: HTMLElement; text: string; timer: number } | null = null
 
@@ -289,10 +200,13 @@ export function toast(message: string) {
   }
   const showing = toastShowing
   clearTimeout(showing.timer)
+  delete showing.node.dataset.leaving
+  // The Mac's moment: a second and a half to read, then it fades.
   showing.timer = window.setTimeout(() => {
-    showing.node.remove()
+    showing.node.dataset.leaving = 'true'
     if (toastShowing === showing) toastShowing = null
-  }, 2400)
+    setTimeout(() => showing.node.remove(), 260)
+  }, 1600)
 }
 
 export { clear }

@@ -376,6 +376,8 @@ export function showSettings(actions: SettingsActions, section?: SettingsSection
   /** Redrawn in place: a choice that does not light up reads as a press
    *  that did not land — but the page stays where it was scrolled to. */
   const redraw = () => {
+    // A sheet already closed is not drawn again.
+    if (!open || !backdrop.isConnected) return
     const top = body.scrollTop
     draw()
     body.scrollTop = top

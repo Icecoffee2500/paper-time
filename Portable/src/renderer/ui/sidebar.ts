@@ -140,7 +140,9 @@ function shelfCounts(papers: Paper[]): ShelfCounts {
 }
 
 export function buildSidebar(actions: SidebarActions): { node: HTMLElement; update: () => void } {
-  const node = el('div', { class: 'panel' })
+  // On the ground, not a white card: the Mac's source list is part of the
+  // window's background.
+  const node = el('div', { class: 'panel sidebar-column' })
   const body = el('div', { class: 'panel-body' })
   node.append(body)
 

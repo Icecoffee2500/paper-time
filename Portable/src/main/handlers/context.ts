@@ -5,6 +5,7 @@
  * spreads them into one `Handlers`, which the compiler checks for
  * completeness against `shared/api.ts`.
  */
+import type { MenuState } from '../../shared/api.js'
 import type { BrowserWindow } from 'electron'
 import type { LibrarySnapshot, RequestArgs, RequestName, RequestResult } from '../../shared/api.js'
 import type { LibrarySet } from '../libraries.js'
@@ -39,6 +40,10 @@ export interface Context {
   snapshot: (refused?: string[]) => Promise<LibrarySnapshot | { error: string }>
   /** Opens the first folder (and the ones remembered beside it) and re-arms the watchers. */
   openLibrary: (root: string) => Promise<LibrarySnapshot | { error: string }>
+  /** The window in front says what it shows: the menu bar follows. */
+  menuStateChanged: (state: MenuState) => void
+  /** The reader chose another language: the menu and the windows are made again in it. */
+  languageChanged: () => void
   /** The slip-box's note sources changed: search by meaning catches up. */
   notesChanged: (saved: { id: string; title: string; body: string; paperID: string | null } | null, removed?: string) => void
 }

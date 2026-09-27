@@ -3,7 +3,7 @@
  *
  * SF Symbols are Apple's, licensed for use in apps on Apple's platforms and
  * nowhere else, so a Windows or Linux build cannot carry them. These are drawn
- * to the same rules the Mac's set follows — a 16-point grid, a 1.4 stroke,
+ * to the same rules the Mac's set follows — a 16-point grid, a 1.5 stroke,
  * round caps and joins, optical rather than geometric centres — so the toolbar
  * reads as the same toolbar rather than as a different app wearing its layout.
  *
@@ -471,7 +471,7 @@ export type IconName = string
 export function icon(name: IconName, extra = ''): string {
   const shape = (SHAPES as Record<string, string>)[name]
   if (!shape) return ''
-  return `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"
+  return `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"
     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${shape}</svg>`
 }
 

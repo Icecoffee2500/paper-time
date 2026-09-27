@@ -32,6 +32,8 @@ export interface WindowsOptions {
 export class Windows {
   main: BrowserWindow | null = null
   readonly papers = new Set<BrowserWindow>()
+  /** Which paper each paper window is for, to open it again. */
+  private readonly paperOf = new Map<BrowserWindow, string>()
 
   constructor(private readonly options: WindowsOptions) {}
 
@@ -103,8 +105,37 @@ export class Windows {
     }
     const made = this.make(shape, [`--papertime-paper=${id}`])
     this.papers.add(made)
-    made.on('closed', () => this.papers.delete(made))
+    this.paperOf.set(made, id)
+    made.on('closed', () => {
+      this.papers.delete(made)
+      this.paperOf.delete(made)
+    })
     return made
+  }
+
+  /**
+   * Every window made again, where it stands — the language changed, and
+   * a window takes its language when it is made. The new one is up before
+   * the old one goes, so the app is never without a window (and never
+   * quits on Windows for having none); the old page writes what it holds
+   * as it unloads.
+   */
+  recreate() {
+    const old = this.main
+    if (old && !old.isDestroyed()) {
+      const bounds = old.getBounds()
+      const maximized = old.isMaximized()
+      const made = this.createMain()
+      if (!maximized && !probe.isRun) made.setBounds(bounds)
+      old.close()
+    }
+    for (const [window, id] of [...this.paperOf]) {
+      if (window.isDestroyed()) continue
+      const bounds = window.getBounds()
+      const made = this.createPaper(id)
+      made.setBounds(bounds)
+      window.close()
+    }
   }
 
   state(target: BrowserWindow | null = this.main): WindowState {

@@ -48,7 +48,7 @@ export const DEFAULTS: Settings = {
   recentLibraries: [],
   window: { width: 1440, height: 900 },
   panes: { sidebar: true, paperList: true, reader: true, inspector: true },
-  columns: { sidebar: 240, paperList: 320, inspector: 320 },
+  columns: { sidebar: 232, paperList: 320, inspector: 360 },
   inspectorTab: 'details',
   sort: { field: 'added', ascending: false },
   appearance: 'system',

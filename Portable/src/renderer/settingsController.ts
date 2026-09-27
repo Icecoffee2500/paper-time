@@ -8,7 +8,8 @@
 import { call } from './bridge.js'
 import { on } from './dom.js'
 import { changed, store, type InspectorTab, type Settings } from './state.js'
-import { shell } from './shell.js'
+import { shell, solo } from './shell.js'
+import { SketchStyle } from '../shared/sketch.js'
 import { readers } from './pageArea.js'
 import { showSettings, type SettingsSection } from './ui/settings.js'
 import { showFeedback } from './ui/feedback.js'
@@ -27,6 +28,13 @@ let pendingTimer = 0
  * write back until the hand rests — a colour well being dragged, a divider.
  */
 export function saveSettings(patch: Partial<Settings>, options: { soon?: boolean } = {}) {
+  // A window for one paper has no library columns and is not the window the
+  // app reopens: what it shows is its own, not the settings'.
+  if (solo) {
+    const { selectedPaperID: _paper, panes: _panes, columns: _columns, inspectorTab: _tab, ...rest } = patch
+    patch = rest
+    if (Object.keys(patch).length === 0) return
+  }
   Object.assign(pending, structuredClone(patch))
   clearTimeout(pendingTimer)
   if (options.soon) pendingTimer = window.setTimeout(flushSettings, 300)
@@ -60,6 +68,32 @@ export function setSettings(patch: Partial<Settings>, options: { live?: boolean 
   if ('listSubtitle' in patch) shell.paperList.update()
   if (options.live) return
   changed('settings')
+  openSheet?.redraw()
+}
+
+/** What another window chose, followed here without writing it again. The
+ *  columns, the paper showing and the tab are each window's own. */
+const SHARED = new Set<string>(['appearance', 'language', 'pageTint', 'pageTintColor', 'pageLayout', 'latexShortcuts', 'semanticSearch', 'listSubtitle', 'bibtexProtectCase', 'sort', 'sketchStyle'])
+
+export function adoptSettings(patch: Record<string, unknown>) {
+  const taken: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(patch)) if (SHARED.has(key)) taken[key] = value
+  if (Object.keys(taken).length === 0) return
+  const layoutBefore = store.settings.pageLayout
+  Object.assign(store.settings, structuredClone(taken))
+  if ('appearance' in taken) applyTheme()
+  else if ('pageTint' in taken || 'pageTintColor' in taken) for (const reader of readers.values()) reader.applyTint()
+  if ('pageLayout' in taken && store.settings.pageLayout !== layoutBefore) {
+    for (const reader of readers.values()) reader.setLayout(store.settings.pageLayout)
+  }
+  if ('sketchStyle' in taken && typeof taken.sketchStyle === 'string') {
+    try {
+      store.sketch.style = SketchStyle.from(JSON.parse(taken.sketchStyle))
+    } catch {
+      // Kept as it was.
+    }
+  }
+  changed('settings', 'papers')
   openSheet?.redraw()
 }
 
@@ -100,7 +134,27 @@ export function applyTheme() {
   for (const reader of readers.values()) reader.applyTint()
 }
 
+/**
+ * The desktop's accent, as the Mac's window takes the system's: the fill of a
+ * chosen row, a pressed button, a focus ring. Linux has no one accent to ask
+ * for, and keeps the blue.
+ */
+export async function applyAccent() {
+  const accent = await call('theme:accent').catch(() => null)
+  const root = document.documentElement.style
+  if (!accent) {
+    root.removeProperty('--accent')
+    root.removeProperty('--accent-soft')
+    root.removeProperty('--accent-text')
+    return
+  }
+  root.setProperty('--accent', accent)
+  root.setProperty('--accent-soft', `color-mix(in srgb, ${accent} 16%, transparent)`)
+  root.setProperty('--accent-text', accent)
+}
+
 export function installTheme() {
+  void applyAccent()
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
     if (store.settings.appearance === 'system') applyTheme()
   })

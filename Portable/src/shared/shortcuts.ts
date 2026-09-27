@@ -67,18 +67,22 @@ export const SHORTCUTS: Shortcut[] = [
   { command: 'forward', group: 'moving', title: () => L('앞으로', 'Forward'), mac: 'CmdOrCtrl+Alt+]', other: 'Alt+Right' },
 
   { command: 'settings', group: 'app', title: () => L('설정', 'Settings'), mac: 'CmdOrCtrl+,' },
-  { command: 'feedback', group: 'app', title: () => L('한마디 보내기', 'Send Feedback'), mac: 'CmdOrCtrl+Alt+/' },
+  // Off the Mac not Ctrl+Alt: that is AltGr on most European keyboards, and
+  // AltGr+/ types a character there.
+  { command: 'feedback', group: 'app', title: () => L('한마디 보내기', 'Send Feedback'), mac: 'CmdOrCtrl+Alt+/', other: 'Ctrl+Shift+/' },
   { command: 'closeWindow', group: 'app', title: () => L('닫기', 'Close'), mac: 'CmdOrCtrl+W' },
 ]
 
+/** A group's heading — in English in both languages, as the Mac's list has
+ *  them: they are the menus' own names, not sentences. */
 export function groupTitle(group: ShortcutGroup): string {
   switch (group) {
-    case 'library': return L('라이브러리', 'Library')
-    case 'reading': return L('읽기', 'Reading')
-    case 'marking': return L('표시', 'Marking')
-    case 'panes': return L('창', 'Window')
-    case 'moving': return L('이동', 'Navigation')
-    case 'app': return L('앱', 'Application')
+    case 'library': return 'Library'
+    case 'reading': return 'Reading'
+    case 'marking': return 'Marking'
+    case 'panes': return 'Window'
+    case 'moving': return 'Navigation'
+    case 'app': return 'Application'
   }
 }
 

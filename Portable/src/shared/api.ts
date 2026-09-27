@@ -27,6 +27,14 @@ export interface WindowBounds {
 /** Why marks are not in the file: the file refuses them, or (`io`) it could not be written just now. */
 export type KeptReason = 'encrypted' | 'permissions' | 'structure' | 'unconfirmed' | 'io'
 
+/** What the menu bar reflects of the window in front. */
+export interface MenuState {
+  panes: { sidebar: boolean; paperList: boolean; reader: boolean; inspector: boolean }
+  focus: boolean
+  hasPaper: boolean
+  layout: 'continuous' | 'single' | 'book'
+}
+
 /** Where the file stands with what was made here: waiting to be written, being written, or written. */
 export type SaveState = 'pending' | 'saving' | 'idle'
 
@@ -112,6 +120,10 @@ export interface Requests {
   'shell:openExternal': { args: { url: string }; result: void }
   /** Words onto the clipboard, for when the page's own clipboard is refused. */
   'clipboard:write': { args: { text: string }; result: void }
+  /** What the window in front shows, for the menu bar's words and greyed items. */
+  'menu:state': { args: MenuState; result: void }
+  /** The desktop's accent colour as `#rrggbb`, where it has one (macOS, Windows). */
+  'theme:accent': { args: void; result: string | null }
   /** The window's own page, as a PNG data URL, for the report sheet. */
   'feedback:capture': { args: void; result: string | null }
   'feedback:send': {
@@ -216,6 +228,7 @@ export interface Events {
   'paper:saved': { id: string }
   'paper:kept': { id: string; reason: KeptReason | null }
   'paper:saveState': { id: string; state: SaveState }
+  'settings:changed': Record<string, unknown>
   'notes:changed': { id: string }
   'window:state': WindowState
   'theme:changed': boolean

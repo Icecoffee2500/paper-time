@@ -19,6 +19,7 @@ import { SketchColor, SketchStyle } from '../shared/sketch.js'
 import { splitContains, splitDock, splitPapers, splitRemove, type DockZone, type SplitArrangement } from '../shared/split.js'
 import { DEFAULT_TINT_COLOR, type PageTint } from '../shared/pageTint.js'
 import { inCollection } from '../shared/smartRule.js'
+import type { PaneState } from '../shared/paneModel.js'
 
 export type Pane = 'sidebar' | 'paperList' | 'reader' | 'inspector'
 export type InspectorTab = 'details' | 'marks' | 'note' | 'tools'
@@ -172,12 +173,8 @@ export interface Store {
   searchScanning: boolean
   /** And what says the same thing in other words — none until the index is built. */
   searchMeanings: TextHit[]
-  /**
-   * The panes that were showing when focus mode hid them, to put back on the
-   * way out; null outside focus mode. Toggling a pane by hand ends it — the
-   * way back would otherwise undo what was just chosen.
-   */
-  focusBefore: Settings['panes'] | null
+  /** Focus mode, and the list and inspector it hid (`shared/paneModel.ts`). */
+  focus: PaneState['focus']
   sketch: {
     tool: SketchTool
     /** The shape tool last used — the one the rack's shapes button shows. */
@@ -228,7 +225,7 @@ export const store: Store = {
   settings: {
     libraryRoot: null,
     panes: { sidebar: true, paperList: true, reader: true, inspector: true },
-    columns: { sidebar: 240, paperList: 320, inspector: 320 },
+    columns: { sidebar: 232, paperList: 320, inspector: 360 },
     inspectorTab: 'details',
     sort: { field: 'added', ascending: false },
     appearance: 'system',
@@ -251,7 +248,7 @@ export const store: Store = {
   searchPassages: [],
   searchScanning: false,
   searchMeanings: [],
-  focusBefore: null,
+  focus: { on: false, before: { paperList: true, inspector: true } },
   sketch: { tool: 'select', lastShape: 'rectangle', lastInk: 'pen', style: new SketchStyle(), selection: null },
 }
 

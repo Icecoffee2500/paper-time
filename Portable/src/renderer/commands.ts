@@ -26,7 +26,7 @@ import { copyKey } from './actions/paper.js'
 import { linkSelectionToNote, newNote } from './actions/notes.js'
 import { openFind, openSearch } from './actions/search.js'
 import { addLibraryFolder, addPapers, libraryOpened, reload } from './library.js'
-import { applyTheme, openSettings, setLayout } from './settingsController.js'
+import { adoptSettings, applyAccent, applyTheme, openSettings, setLayout } from './settingsController.js'
 import { toggleFocus, togglePane } from './layout.js'
 import { couldNot } from './notices.js'
 import { handleTextEvent } from './textSearch.js'
@@ -41,6 +41,7 @@ const selectFirst = () => toast(L('먼저 글을 골라주세요.', 'Select some
 
 export const COMMANDS = {
   settings: () => openSettings(),
+  about: () => openSettings('about'),
   addPapers: () => void addPapers(),
   refreshFolder: () => void reload(),
   addFolder: () => void addLibraryFolder(),
@@ -141,10 +142,16 @@ export function installMainEvents() {
       }
       case 'window:state':
         store.windowState = payload as typeof store.windowState
+        // A source list greys its selection when the window is behind another.
+        document.body.dataset.windowFocused = String(store.windowState.focused)
         shell.toolbar.update()
         break
       case 'theme:changed':
         if (store.settings.appearance === 'system') applyTheme()
+        void applyAccent()
+        break
+      case 'settings:changed':
+        adoptSettings(payload as Record<string, unknown>)
         break
       case 'paper:saveState': {
         const { id, state } = payload as { id: string; state: 'pending' | 'saving' | 'idle' }

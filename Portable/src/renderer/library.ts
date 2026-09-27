@@ -195,6 +195,9 @@ export async function start() {
   const saved = await call('settings:get')
   // The keys the window keeps, not the window's size and the folder list besides.
   for (const key of WINDOW_SETTINGS) (store.settings as Record<string, unknown>)[key] = saved[key]
+  // The Tools tab comes with the pen, not with the window: a window opened
+  // on it had a panel about a drawing nobody was making.
+  if (store.settings.inspectorTab === 'tools') store.settings.inspectorTab = 'details'
   // The next shape's style, as it was left.
   if (saved.sketchStyle) {
     try {
