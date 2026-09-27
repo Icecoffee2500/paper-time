@@ -71,7 +71,7 @@ export interface Paper {
  */
 export const WINDOW_SETTINGS = [
   'libraryRoot', 'panes', 'columns', 'inspectorTab', 'sort', 'appearance', 'language', 'pageTint',
-  'pageTintColor', 'pageLayout', 'selectedPaperID', 'latexShortcuts', 'semanticSearch', 'listSubtitle',
+  'pageTintColor', 'pageLayout', 'selectedPaperID', 'latexShortcuts', 'semanticSearch', 'resolveMetadataOnImport', 'metadataContactEmail', 'listSubtitle',
   'bibtexProtectCase', 'bibtexPreprintStyle', 'bibtexIncludeUnverified', 'sketchStyle', 'inkPresets', 'shortcuts', 'seenReleaseNotesVersion',
 ] as const satisfies readonly (keyof AppSettings)[]
 
@@ -265,6 +265,8 @@ export const store: Store = {
     selectedPaperID: null,
     latexShortcuts: true,
     semanticSearch: true,
+    resolveMetadataOnImport: true,
+    metadataContactEmail: '',
     listSubtitle: 'authors,year,venue',
     bibtexProtectCase: true,
     bibtexPreprintStyle: 'eprint',

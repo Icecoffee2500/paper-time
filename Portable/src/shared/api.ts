@@ -78,6 +78,14 @@ export interface Requests {
   'paper:state': { args: { id: string; patch: Record<string, unknown> }; result: Record<string, unknown> | null }
   /** `stamp: false`: written without `updatedAt`/`updatedBy` — the app's own guess, not the reader's edit. */
   'paper:meta': { args: { id: string; patch: Record<string, unknown>; stamp?: boolean }; result: Record<string, unknown> | null }
+  /** «Re-run Metadata»: these papers looked up again (never a record somebody edited by hand). */
+  'metadata:resolve': { args: { ids: string[] }; result: void }
+  /** What these papers look like — paper, book, lecture, document — read off the files, nothing looked up. */
+  'metadata:guess': { args: { ids: string[] }; result: void }
+  /** «Resolve Missing Metadata»: every paper not yet confirmed; how many were queued. */
+  'metadata:resolvePending': { args: void; result: number }
+  /** The papers being looked up now, for a window that just opened. */
+  'metadata:resolving': { args: void; result: string[] }
   'paper:rename': {
     args: { id: string; name: string }
     result: { name: string } | { error: 'empty' | 'notAName' | 'taken' | 'missing' | 'busy' }
@@ -269,6 +277,8 @@ export interface Events {
   'library:opened': LibrarySnapshot | { error: string }
   'paper:changed': { id: string; layers: string[] }
   'paper:saved': { id: string }
+  /** The papers being looked up now, gathered to one message a quarter second. */
+  'metadata:resolving': { ids: string[] }
   'paper:kept': { id: string; reason: KeptReason | null }
   'paper:saveState': { id: string; state: SaveState }
   'settings:changed': Record<string, unknown>

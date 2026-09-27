@@ -1,4 +1,6 @@
 /** One paper: its bytes, its record, its name, its own window. */
+import { PaperMeta } from '../../shared/model.js'
+import { isLookedUp } from '../../shared/documentKind.js'
 import fsp from 'node:fs/promises'
 import { MathScanner } from '../mathScanner.js'
 import { shell } from 'electron'
@@ -80,7 +82,15 @@ export function paperHandlers(ctx: Context): Partial<Handlers> {
     'paper:meta': async ({ id, patch, stamp }, sender) => {
       const holder = await libraries.ownerOf(id)
       if (!holder) return null
+      const before = patch.kind === 'paper' ? await holder.paper(id) : null
       const saved = await records.meta(holder, id, patch, { stamp })
+      // Called a paper, a document that was never looked up is looked up now
+      // (`setKind` on the Mac) — and only then: a paper already confirmed,
+      // or one somebody typed in, has nothing to ask about.
+      if (before && saved) {
+        const was = new PaperMeta(before.meta)
+        if (!isLookedUp(was.effectiveKind) && was.confidence === 'unparsed') ctx.metadata.rerun([id])
+      }
       if (saved && ('tagIDs' in patch || 'collectionIDs' in patch)) await libraries.wear(holder, saved)
       windows.sendExcept(sender, 'paper:changed', { id, layers: ['record'] })
       return saved
@@ -99,6 +109,11 @@ export function paperHandlers(ctx: Context): Partial<Handlers> {
       windows.send('library:changed')
       return { name: result.file ? path.basename(result.file) : name }
     },
+
+    'metadata:resolve': ({ ids }) => ctx.metadata.rerun(ids),
+    'metadata:guess': ({ ids }) => ctx.metadata.guess(ids),
+    'metadata:resolvePending': () => ctx.metadata.pending(),
+    'metadata:resolving': () => ctx.metadata.resolvingNow,
 
     'paper:provenance': async ({ id }) => (await (await libraries.ownerOf(id))?.provenanceOf(id)) ?? 'unknown',
 

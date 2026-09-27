@@ -41,6 +41,11 @@ import { notesHandlers } from './handlers/notes.js'
 import { windowHandlers } from './handlers/window.js'
 import { textHandlers } from './handlers/text.js'
 import { pageCount } from './handlers/shared.js'
+import { MetadataQueue } from './metadata/queue.js'
+import { lookupNetwork } from './metadata/wiring.js'
+import { importedPapers } from './library.js'
+import { readWhole } from './pdfBytes.js'
+import { PaperMeta } from '../shared/model.js'
 
 const isMac = process.platform === 'darwin'
 
@@ -179,6 +184,31 @@ const sync = new FolderSync({
   log,
 })
 
+// Papers looked up one after another as they arrive, and on request.
+const metadata = new MetadataQueue({
+  libraries,
+  records,
+  signals: async (file) => {
+    try {
+      return await pageCounter.signals(await readWhole(file))
+    } catch {
+      return null
+    }
+  },
+  network: () => lookupNetwork({
+    isProbe: probe.isRun,
+    replay: probe.argument('lookup-replay') ?? null,
+    allowed: probe.argument('lookup') === '1',
+    email: settings().metadataContactEmail?.trim() || undefined,
+  }),
+  contactEmail: () => settings().metadataContactEmail?.trim() || undefined,
+  onImport: () => settings().resolveMetadataOnImport !== false && probe.argument('no-lookup') !== '1',
+  resolving: (ids) => send('metadata:resolving', { ids }),
+  changed: (id) => send('paper:changed', { id, layers: ['record'] }),
+  log: probe.isRun ? log : undefined,
+})
+importedPapers.on('imported', (id: string) => metadata.arrived([id]))
+
 /** Opens a folder as the library — the launch's, or one chosen — and re-arms the watchers. */
 async function openLibrary(root: string): Promise<LibrarySnapshot | { error: string }> {
   sync.stop()
@@ -189,7 +219,7 @@ async function openLibrary(root: string): Promise<LibrarySnapshot | { error: str
 }
 
 const context: Context = {
-  libraries, sync, flush, journals, records, text, semantic, notes, windows, pageCounter,
+  libraries, sync, flush, journals, records, text, semantic, notes, windows, pageCounter, metadata,
   isProbe: probe.hasLibrary,
   probeLibrary: probe.argument('library') ?? null,
   snapshot: (refused) => libraries.snapshot(refused),
@@ -351,11 +381,29 @@ app.whenReady().then(async () => {
   const reports = probe.hasLibrary
     ? runLibraryProbes({ argument: probe.argument, libraries, notes, handlers }).catch((error) => log(`probe: ${String(error)}`))
     : Promise.resolve()
-  void reports.then(() => {
+  void reports.then(async () => {
+    if (probe.hasLibrary && probe.argument('resolve')) await runResolveProbe(probe.argument('resolve')!)
     if (semanticProbe) void runSemanticProbe().then(then)
     else then()
   })
 })
+
+/** `--papertime-resolve=<id|all|pending>`: looks the papers up (with the
+ *  replayed or permitted network only — see `metadata/wiring.ts`), waits,
+ *  and says what each record became. */
+async function runResolveProbe(which: string) {
+  const all = (await Promise.all(libraries.all().map(async (one) => (await one.read()).papers))).flat()
+  if (which === 'pending') await metadata.pending()
+  else metadata.rerun(which === 'all' ? all.map((row) => row.id) : which.split(','))
+  await metadata.drain()
+  for (const library of libraries.all()) {
+    for (const row of (await library.read()).papers) {
+      const meta = new PaperMeta(row.meta)
+      const provenance = meta.raw.provenance as { source?: string; detail?: string } | undefined
+      log(`resolve: ${meta.file.originalName} · ${meta.effectiveKind} · ${meta.confidence} · ${meta.bibKey} · “${meta.displayTitle.slice(0, 60)}” · ${provenance?.source}${provenance?.detail ? ` (${provenance.detail})` : ''} · candidates ${(meta.raw.candidates as unknown[] | undefined)?.length ?? 0}`)
+    }
+  }
+}
 
 async function runSemanticProbe() {
   if (!libraries.first) return log('semantic: no library')

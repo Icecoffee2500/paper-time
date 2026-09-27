@@ -5,6 +5,7 @@
  * spreads them into one `Handlers`, which the compiler checks for
  * completeness against `shared/api.ts`.
  */
+import type { MetadataQueue } from '../metadata/queue.js'
 import type { MenuState } from '../../shared/api.js'
 import type { BrowserWindow } from 'electron'
 import type { LibrarySnapshot, RequestArgs, RequestName, RequestResult } from '../../shared/api.js'
@@ -34,6 +35,8 @@ export interface Context {
   notes: () => NotesStore
   windows: Windows
   pageCounter: PageCounter
+  /** Papers looked up at the registrars, one after another (`metadata/queue.ts`). */
+  metadata: MetadataQueue
   /** Whether this run is a probe, which reads a folder of its own and remembers nothing. */
   isProbe: boolean
   /** The folder a probe was told to open, or null. */

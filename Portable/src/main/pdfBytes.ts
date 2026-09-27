@@ -7,6 +7,8 @@ import fsp from 'node:fs/promises'
 import path from 'node:path'
 import { Worker } from 'node:worker_threads'
 import { diagnose, looksWhole, type ByteTrouble } from '../shared/pdfLock.js'
+import type { DocumentSignals } from '../shared/metadata/signals.js'
+import { textAsset } from './textAssets.js'
 
 /**
  * The file, read until all of it is there.
@@ -60,19 +62,29 @@ export async function tailBytes(file: string, count = 2048): Promise<Uint8Array>
 export class PageCounter {
   private worker: Worker | null = null
   private jobs = 0
-  private readonly waiting = new Map<number, { resolve: (n: number) => void; reject: (e: Error) => void }>()
+  private readonly waiting = new Map<number, { resolve: (value: never) => void; reject: (e: Error) => void }>()
   private idle: NodeJS.Timeout | null = null
 
   constructor(private readonly script: string = workerScript(), private readonly idleMs = 30_000) {}
 
   count(bytes: Uint8Array): Promise<number> {
-    return new Promise((resolve, reject) => {
+    return this.ask<number>('pages', bytes)
+  }
+
+  /** What the paper says about itself (`DocumentSignals`), read on the same
+   *  thread — pdf.js, off the main process's thread. */
+  signals(bytes: Uint8Array): Promise<DocumentSignals> {
+    return this.ask<DocumentSignals>('signals', bytes)
+  }
+
+  private ask<T>(type: 'pages' | 'signals', bytes: Uint8Array): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
       const job = (this.jobs += 1)
-      this.waiting.set(job, { resolve, reject })
+      this.waiting.set(job, { resolve: resolve as (value: never) => void, reject })
       // A copy of its own: a Buffer's `.buffer` is Node's shared pool.
       const owned = new Uint8Array(bytes).buffer
       try {
-        this.start().postMessage({ type: 'pages', job, bytes: owned }, [owned])
+        this.start().postMessage({ type, job, bytes: owned }, [owned])
       } catch (error) {
         this.waiting.delete(job)
         reject(error as Error)
@@ -93,12 +105,21 @@ export class PageCounter {
   private start(): Worker {
     if (this.worker) return this.worker
     const worker = new Worker(this.script)
-    worker.on('message', (message: { type: string; job?: number; pages?: number; error?: string }) => {
+    worker.on('message', (message: {
+      type: string; job?: number; pages?: number; signals?: DocumentSignals; error?: string
+      request?: number; kind?: 'cmap' | 'font'; name?: string
+    }) => {
+      if (message.type === 'asset') {
+        // A character map or a standard font, for the signals' text.
+        void textAsset(message.kind!, message.name!).then((data) => worker.postMessage({ type: 'asset', request: message.request, data }))
+        return
+      }
       if (message.job === undefined) return
       const asked = this.waiting.get(message.job)
       if (!asked) return
       this.waiting.delete(message.job)
-      if (message.type === 'pages') asked.resolve(message.pages ?? -1)
+      if (message.type === 'pages') asked.resolve((message.pages ?? -1) as never)
+      else if (message.type === 'signals') asked.resolve(message.signals as never)
       else if (message.type === 'failed') asked.reject(new Error(`pdf.js: ${message.error ?? 'cannot open the file'}`))
     })
     const gone = (error?: Error) => {

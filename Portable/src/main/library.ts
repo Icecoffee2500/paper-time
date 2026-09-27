@@ -30,6 +30,12 @@ import {
   type RawRecord,
 } from '../shared/model.js'
 import * as L from './layout.js'
+import { EventEmitter } from 'node:events'
+
+/** Every paper that has just come into a library, whichever way it came
+ *  (added, adopted from the folder, dropped on the app, found by the
+ *  folder's watcher) — what the metadata queue listens to. */
+export const importedPapers = new EventEmitter()
 
 /**
  * This machine's name in a record's `updatedBy`, and the file name of its
@@ -593,6 +599,7 @@ export class Library {
     await writeJSON(L.statePath(this.root, id), new PaperState({}).encode())
     const row = await this.paper(id)
     if (row && known.papers) known.papers.push(row)
+    importedPapers.emit('imported', id)
     return { row, outcome: 'imported' }
   }
 

@@ -7,6 +7,7 @@
  * it: which window asked for which search, so its answers go back to it;
  * the pages search by meaning asks for; the assets pdf.js asks for.
  */
+import { textAsset } from './textAssets.js'
 import { utilityProcess, type UtilityProcess, type WebContents } from 'electron'
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
@@ -182,19 +183,3 @@ export class TextBridge {
   }
 }
 
-/** The files pdf.js may ask for, by name — nothing with a path in it. */
-const ASSET_NAME = /^[A-Za-z0-9][A-Za-z0-9_.+-]*$/
-
-async function textAsset(kind: 'cmap' | 'font', name: string): Promise<Uint8Array | null> {
-  // The name comes out of a PDF, which anybody can write. Only a bare file
-  // name, only from the two folders the window loads the same files from.
-  if (!ASSET_NAME.test(name) || name.includes('..')) return null
-  const file = kind === 'cmap'
-    ? path.join(__dirname, '../renderer/cmaps', `${name}.bcmap`)
-    : path.join(__dirname, '../renderer/standard_fonts', name)
-  try {
-    return new Uint8Array(await fsp.readFile(file))
-  } catch {
-    return null
-  }
-}

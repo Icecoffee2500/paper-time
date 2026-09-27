@@ -53,6 +53,7 @@ import { drawingToolsSuite } from './drawingTools.js'
 import { noteMarkdownSuite } from './noteMarkdown.js'
 import { shortcutsAndLogSuite } from './shortcutsAndLog.js'
 import { mathReaderSuite } from './mathReader.js'
+import { metadataSuite } from './metadata.js'
 import { commandsSuite } from './commands.js'
 import { readerSuite } from './reader.js'
 import { sketchGeometrySuite } from './sketchGeometry.js'
@@ -437,6 +438,7 @@ async function main() {
   await noteMarkdownSuite(test, suite)
   await shortcutsAndLogSuite(test, suite)
   await mathReaderSuite(test, suite)
+  await metadataSuite(test, suite)
   await commandsSuite(test, suite)
   await readerSuite(test, suite)
   await sketchGeometrySuite(test, suite)

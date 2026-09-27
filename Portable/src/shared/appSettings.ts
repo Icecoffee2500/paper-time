@@ -31,6 +31,10 @@ export interface Settings {
   latexShortcuts: boolean
   /** Search by meaning in the palette, and the index it needs. On unless turned off. */
   semanticSearch: boolean
+  /** Look papers up at doi.org, Crossref, OpenAlex and arXiv as they arrive — the Mac's `resolvesMetadataOnImport`. */
+  resolveMetadataOnImport: boolean
+  /** Sent to Crossref and OpenAlex, which answer faster when a request names a contact. Empty is none. */
+  metadataContactEmail: string
   /** What stands under a title in the list — the Mac's `listSubtitleFields`. */
   listSubtitle: string
   /** «Protect Case in Titles» for the `.bib`. On unless turned off. */
@@ -69,6 +73,8 @@ export const DEFAULTS: Settings = {
   selectedPaperID: null,
   latexShortcuts: true,
   semanticSearch: true,
+  resolveMetadataOnImport: true,
+  metadataContactEmail: '',
   listSubtitle: 'authors,year,venue',
   bibtexProtectCase: true,
   bibtexPreprintStyle: 'eprint',
