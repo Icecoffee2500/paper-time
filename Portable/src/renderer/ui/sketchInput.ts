@@ -271,8 +271,7 @@ function applyBoth(
 }
 
 function pageRectOf(page: PageView): Rect {
-  const view = page.proxy.getViewport({ scale: 1 })
-  const box = view.viewBox as number[]
+  const box = page.shape.view
   return { x: box[0], y: box[1], width: box[2] - box[0], height: box[3] - box[1] }
 }
 

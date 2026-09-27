@@ -50,6 +50,7 @@ export function installProbeSurface() {
       papers: () => store.papers.map((entry) => ({
         id: entry.id,
         title: entry.meta.displayTitle,
+        file: String(entry.meta.file?.relativePath ?? ''),
         favorite: entry.state.isFavorite,
         status: entry.state.readingStatus,
         kind: entry.meta.effectiveKind,

@@ -1,5 +1,6 @@
 /** The window's frame, the outside world, the report sheet, About. */
-import { app, shell } from 'electron'
+import { app, clipboard, shell } from 'electron'
+import { isOpenableLink } from '../../shared/readerMath.js'
 import { providerOf } from '../../shared/cloudProvider.js'
 import { settings } from '../settings.js'
 import { capture as captureWindow, send as sendFeedback } from '../feedback.js'
@@ -20,8 +21,14 @@ export function windowHandlers(ctx: Context): Partial<Handlers> {
     'window:state': (_args, sender) => windows.state(target(sender)),
     'window:bounds': () => windows.allBounds(),
 
+    // Only the web's two schemes and mail — a link in a paper is written by
+    // whoever wrote the paper (`isOpenableLink`).
     'shell:openExternal': ({ url }) => {
-      if (/^https?:/.test(url)) void shell.openExternal(url)
+      if (isOpenableLink(url)) void shell.openExternal(url)
+    },
+
+    'clipboard:write': ({ text }) => {
+      if (typeof text === 'string') clipboard.writeText(text)
     },
 
     // The app speaks to the outside world here and nowhere else, and only

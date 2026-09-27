@@ -8,6 +8,7 @@
  * once more. The library is read again only when its shape changes: a file
  * renamed, a paper thrown away, a collection made.
  */
+import { copyText } from '../ui/clipboard.js'
 import { call } from '../bridge.js'
 import {
   attachmentsOf,
@@ -199,8 +200,8 @@ export async function copyKey(id: string) {
   if (!entry) return
   // The key the exported file gives it — its own, or the one the export
   // makes up — and never its title, which no \cite{} would find.
-  await navigator.clipboard.writeText(entryFor(entry.meta).key)
-  toast(L('인용 키를 복사했어요', 'Citation key copied'))
+  const copied = await copyText(entryFor(entry.meta).key)
+  toast(copied ? L('인용 키를 복사했어요', 'Citation key copied') : L('복사하지 못했어요', "Paper Time couldn't copy that."))
 }
 
 /** Into the library's own Trash folder, asked first — nothing is deleted. */

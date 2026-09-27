@@ -91,6 +91,26 @@ export function drawingHandlers(ctx: Context): Partial<Handlers> {
 
     'drawing:adoptFromFile': ({ id }) => adoptFromFile(libraries.ownerOf.bind(libraries), id),
 
+    // Every drawn page in one answer: this machine's sidecars first, what
+    // the file carries otherwise. The window used to ask twice per page, one
+    // after another, and waited for all of it before the paper could show.
+    'drawing:loadAll': async ({ id }) => {
+      const adopted = await adoptFromFile(libraries.ownerOf.bind(libraries), id)
+      const holder = await libraries.ownerOf(id)
+      if (!holder) return { pages: {}, unreadable: [] }
+      const known = await holder.annotatedPages(id)
+      const indices = new Set<number>([...known.sketch, ...known.ink, ...Object.keys(adopted.pages).map(Number)])
+      const pages: Record<number, { elements: unknown[]; strokes: unknown[] }> = {}
+      await Promise.all([...indices].map(async (pageIndex) => {
+        const [elements, strokes] = await Promise.all([holder.loadSketch(id, pageIndex), holder.loadInk(id, pageIndex)])
+        pages[pageIndex] = {
+          elements: elements ?? adopted.pages[pageIndex]?.elements ?? [],
+          strokes: strokes ?? adopted.pages[pageIndex]?.strokes ?? [],
+        }
+      }))
+      return { pages, unreadable: adopted.unreadable }
+    },
+
     'drawing:flush': ({ id }) => flush.flushAsked(id),
   }
 }

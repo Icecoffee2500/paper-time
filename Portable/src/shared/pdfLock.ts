@@ -16,10 +16,23 @@
  * says the same six words to all of them — "Invalid PDF structure." — so the
  * telling apart has to happen here, before it is asked.
  */
+import { L } from './lang.js'
+
 export type PDFLock = { kind: 'password' } | { kind: 'rights'; handler: string }
 
 /** The handlers worth naming, in the order they are looked for. */
 export const KNOWN_HANDLERS = ['MicrosoftIRMServices', 'FoxitIRM', 'Adobe.PubSec', 'EBX_HANDLER']
+
+/** A handler as it is written in the file, said the way a person would —
+ *  or null for one nobody named, which the sentence then does without. */
+export function handlerDisplayName(handler: string): string | null {
+  return ({
+    MicrosoftIRMServices: L('Microsoft Purview(회사 IRM)', 'Microsoft Purview'),
+    FoxitIRM: 'Foxit IRM',
+    'Adobe.PubSec': L('인증서 보안', 'Certificate security'),
+    EBX_HANDLER: 'Adobe DRM',
+  } as Record<string, string>)[handler] ?? null
+}
 
 /**
  * What is wrong with the bytes themselves.

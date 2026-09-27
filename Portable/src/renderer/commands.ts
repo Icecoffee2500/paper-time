@@ -8,6 +8,7 @@
  * dead; `src/test/commands.ts` now reads the menu and the shortcut list and
  * fails when one of their names has no row.
  */
+import { copyText } from './ui/clipboard.js'
 import { call, onEvent } from './bridge.js'
 import { changed, shelfPapers, store } from './state.js'
 import { solo } from './shell.js'
@@ -95,8 +96,9 @@ function exportBibTeX() {
   showExportSheet({
     view: () => shelfPapers(),
     copy: (text) => {
-      void navigator.clipboard.writeText(text)
-      toast(L('BibTeX를 복사했어요', 'BibTeX copied'))
+      void copyText(text).then((copied) => toast(copied
+        ? L('BibTeX를 복사했어요', 'BibTeX copied')
+        : L('복사하지 못했어요', "Paper Time couldn't copy that.")))
     },
     save: async (text) => {
       const result = await call('bibtex:save', { text })

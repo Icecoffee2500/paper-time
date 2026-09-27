@@ -15,6 +15,7 @@
  * under the hand typing in it. A host keeps one editor and hands it back for
  * the same note.
  */
+import { copyText } from './clipboard.js'
 import { clear, el, on } from '../dom.js'
 import { icon, type IconName } from '../icons.js'
 import { L } from '../../shared/lang.js'
@@ -75,7 +76,7 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
     showMenu(more, [
       // The identifier is worth keeping and not worth staring at: it is what
       // another note links to, so it lives where you go when you want it.
-      { label: L(`식별자 복사 — ${id}`, `Copy Identifier — ${id}`), icon: 'number', action: () => void navigator.clipboard.writeText(id) },
+      { label: L(`식별자 복사 — ${id}`, `Copy Identifier — ${id}`), icon: 'number', action: () => void copyText(id) },
       { separator: true },
       {
         label: L('노트 지우기', 'Delete Note'),

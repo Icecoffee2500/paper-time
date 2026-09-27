@@ -19,7 +19,15 @@ export type { PDFDocumentProxy, PDFPageProxy }
 export class NeedsPassword extends Error {
   constructor(public readonly wrong: boolean) {
     super(wrong ? 'wrong password' : 'password needed')
+    this.name = 'NeedsPassword'
   }
+}
+
+/** A document being opened: its promise, and the way to stop it. */
+export interface Opening {
+  promise: Promise<PDFDocumentProxy>
+  /** Stops the load — a reader closed, or given another paper, before it ended. */
+  destroy: () => void
 }
 
 /**
@@ -28,10 +36,10 @@ export class NeedsPassword extends Error {
  *   promise pending for as long as nobody answers, which is how a locked
  *   paper used to sit on a blank page forever with no message at all.
  */
-export async function loadDocument(
+export function openDocument(
   data: Uint8Array,
   askPassword?: (wrong: boolean) => Promise<string | null>,
-): Promise<PDFDocumentProxy> {
+): Opening {
   const task = pdfjs.getDocument({
     // pdf.js takes ownership of the buffer it is handed, and the same bytes
     // are wanted again when the file is re-read after a save.
@@ -43,19 +51,42 @@ export async function loadDocument(
     isEvalSupported: false,
     disableAutoFetch: false,
   })
+  // A password nobody gave ends the load with its own error. Thrown inside
+  // `onPassword` it was swallowed by pdf.js, and the promise never settled.
+  let refuse: (error: Error) => void = () => undefined
+  const refused = new Promise<never>((_, reject) => { refuse = reject })
   task.onPassword = (supply: (password: string) => void, reason: number) => {
     // 1 is "needs one", 2 is "the one you gave is wrong".
     const wrong = reason === 2
     if (!askPassword) {
+      refuse(new NeedsPassword(wrong))
       void task.destroy()
-      throw new NeedsPassword(wrong)
+      return
     }
     void askPassword(wrong).then((password) => {
-      if (password === null) void task.destroy()
-      else supply(password)
+      if (password !== null) return supply(password)
+      refuse(new NeedsPassword(wrong))
+      void task.destroy()
     })
   }
-  return task.promise
+  return {
+    promise: Promise.race([task.promise as Promise<PDFDocumentProxy>, refused]),
+    destroy: () => void task.destroy(),
+  }
+}
+
+/** The same, for whoever wants only the document. */
+export function loadDocument(
+  data: Uint8Array,
+  askPassword?: (wrong: boolean) => Promise<string | null>,
+): Promise<PDFDocumentProxy> {
+  return openDocument(data, askPassword).promise
+}
+
+/** Lets go of what pdf.js's text layers keep between pages — once no reader
+ *  is left to use it. */
+export function releaseTextCaches() {
+  ;(TextLayer as unknown as { cleanup?: () => void }).cleanup?.()
 }
 
 export const { TextLayer, Util, OPS } = pdfjs
