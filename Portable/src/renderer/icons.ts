@@ -59,6 +59,9 @@ const SHAPES = {
     <circle cx="8" cy="8" r="1.05" fill="currentColor" stroke="none"/>
     <circle cx="12.6" cy="8" r="1.05" fill="currentColor" stroke="none"/>`,
 
+  // ƒ: Ultracopy, a copy that keeps the mathematics.
+  function: `
+    <path d="M10.6 3.2c-1.8-.5-2.8.4-3.1 2L6 12.2c-.3 1.4-1.3 1.9-2.8 1.4M4.6 7.2h5.2"/>`,
   // A fix, in the Log.
   wrench: `
     <path d="M10.6 2.4a3.2 3.2 0 0 0-3.9 4.2L2.6 10.7a1.4 1.4 0 0 0 2 2l4.1-4.1a3.2 3.2 0 0 0 4.2-3.9l-2 2-1.8-.3-.3-1.8Z"/>`,

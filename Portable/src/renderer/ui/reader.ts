@@ -67,6 +67,7 @@ import {
   damagedNotice, lockedNotice, noticeNode, openingNotice, passwordPrompt, troubleButtons, troubleNotice, type Notice,
 } from './readerNotices.js'
 import { thumbnails } from './pageThumbnails.js'
+import type { PageInput as MathPage } from '../../shared/mathReader/reader.js'
 
 export { PageView, type PageLink, type TextRange } from './pageView.js'
 
@@ -101,6 +102,8 @@ export interface ReaderActions {
   reveal?: () => void
   /** The highlights and underlines changed — the Marks tab lists them. */
   marksChanged?: () => void
+  /** Ultracopy from the selection bar or its menu. */
+  ultracopy?: () => void
   /** A mark on the page was clicked: the Marks tab brings its row forward. */
   markShown?: (id: string) => void
   /** A menu at a point — the right-click on a selection or a mark. */
@@ -223,6 +226,7 @@ export class Reader implements PageOwner {
       recolorMark: (pageIndex, id, colour) => this.recolorMark(pageIndex, id, colour),
       removeMark: (pageIndex, id) => this.removeMark(pageIndex, id),
       markClientBox,
+      ultracopy: () => this.actions.ultracopy?.(),
       toast: (message) => this.actions.toast(message),
       markShown: (id) => this.actions.markShown?.(id),
     })
@@ -1098,6 +1102,47 @@ export class Reader implements PageOwner {
     page.redraw()
     void this.saveMarks(page, before)
     this.actions.marksChanged?.()
+  }
+
+  /**
+   * The selection as the Mac's MathReader takes it, page by page: the page's
+   * glyphs and rules (read in the main process by the same scanner), the
+   * selection's lines, and the text layer's characters near them. Nothing
+   * when there is no selection; a page the scanner could not read comes with
+   * no glyphs, and the reader falls back to the selection's words.
+   */
+  async selectionForMath(): Promise<MathPage[]> {
+    const parts = this.selectionParts()
+    const id = this.paperID
+    if (!id || parts.length === 0) return []
+    const pages: MathPage[] = []
+    for (const part of parts) {
+      const scanned = await call('math:page', { id, pageIndex: part.page.index }).catch(() => null)
+      const lineBoxes = part.quads.map((quad) => {
+        const xs = [quad[0], quad[2], quad[4], quad[6]]
+        const ys = [quad[1], quad[3], quad[5], quad[7]]
+        const x = Math.min(...xs)
+        const y = Math.min(...ys)
+        // A point wider either side, as the Mac's line boxes are.
+        return { x: x - 1, y, width: Math.max(...xs) - x + 2, height: Math.max(...ys) - y }
+      })
+      const reachBox = lineBoxes.reduce((all, one) => ({
+        x: Math.min(all.x, one.x), y: Math.min(all.y, one.y),
+        width: Math.max(all.x + all.width, one.x + one.width) - Math.min(all.x, one.x),
+        height: Math.max(all.y + all.height, one.y + one.height) - Math.min(all.y, one.y),
+      }))
+      const reach = { x: reachBox.x - 40, y: reachBox.y - 40, width: reachBox.width + 80, height: reachBox.height + 80 }
+      pages.push({
+        glyphs: scanned?.glyphs ?? [],
+        rules: scanned?.rules ?? [],
+        lineBoxes,
+        characters: part.page.characterBoxes(reach),
+        pageText: part.page.layerText() ?? '',
+        selectionString: part.text,
+        cropBox: scanned?.cropBox ?? { x: 0, y: 0, width: 612, height: 792 },
+      })
+    }
+    return pages
   }
 
   /** The passage selected on this reader's pages, as a note cites it. */

@@ -3773,6 +3773,10 @@ body[data-solo='true'] .reader-header button {
 
 /* Formulas, set by MathJax at the body's size. */
 .nm-math svg { vertical-align: middle; }
+/* A formula wider than the note is set smaller to fit, as the Mac sets it
+   (`MathTypesetter.image(maxWidth:)`) — never cut off at the pane's edge. */
+.nm-math-display, .nm-math-block { max-width: 100%; }
+.nm-math-display svg, .nm-math-block svg { max-width: 100%; height: auto; }
 .nm-math-display { display: inline-block; }
 .nm-math-block { display: block; text-align: center; padding: 6px 0 11px; }
 .nm-math-raw { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14.7px; color: var(--text-secondary); }

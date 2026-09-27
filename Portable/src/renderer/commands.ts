@@ -23,7 +23,7 @@ import {
   stepPaper,
 } from './actions/openPapers.js'
 import { copyKey } from './actions/paper.js'
-import { linkSelectionToNote, newNote } from './actions/notes.js'
+import { linkSelectionToNote, ultracopySelection, newNote } from './actions/notes.js'
 import { openFind, openSearch } from './actions/search.js'
 import { addLibraryFolder, addPapers, libraryOpened, reload } from './library.js'
 import { adoptSettings, applyAccent, applyTheme, openSettings, setLayout } from './settingsController.js'
@@ -77,7 +77,8 @@ export const COMMANDS = {
   openInNewWindow: () => { if (store.selectedID && !solo) openInWindow(store.selectedID) },
   closeWindow: () => closeWindowOrPane(),
   newNote: () => newNote(),
-  linkToNote: () => linkSelectionToNote(),
+  ultracopy: () => void ultracopySelection(),
+  linkToNote: () => void linkSelectionToNote(),
   nextPage: () => focused()?.turnPage(1),
   previousPage: () => focused()?.turnPage(-1),
   nextPaper: () => stepPaper(1),

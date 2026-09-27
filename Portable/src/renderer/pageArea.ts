@@ -6,6 +6,7 @@
  * reader whose paper leaves the page area is taken down, canvases and all.
  * Everything that changes what is in the page area ends in `reconcileReaders`.
  */
+import { ultracopySelection } from './actions/notes.js'
 import { call } from './bridge.js'
 import { clear, el } from './dom.js'
 import {
@@ -82,6 +83,7 @@ function readerFor(id: string, pane: boolean): Reader {
     toast,
     // The Marks tab follows the page, and a mark clicked there is found in it.
     marksChanged: () => { if (store.selectedID === id) changed('marks') },
+    ultracopy: () => void ultracopySelection(),
     historyChanged: () => changed('history'),
     markShown: (markID) => shell.inspector.showMark(markID),
     menu: (anchor, entries) => showMenu(anchor, entries),

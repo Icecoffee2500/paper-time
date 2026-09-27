@@ -38,6 +38,8 @@ export const SHORTCUTS: Shortcut[] = [
 
   { command: 'searchEverything', group: 'reading', title: () => L('전부 찾기', 'Search Everything'), mac: 'CmdOrCtrl+K' },
   { command: 'findInDocument', group: 'reading', title: () => L('이 논문에서 찾기', 'Find in Document'), mac: 'CmdOrCtrl+F' },
+  // The name is the feature's own, in both languages, as on the Mac.
+  { command: 'ultracopy', group: 'reading', title: () => 'Ultracopy', mac: 'CmdOrCtrl+Shift+C' },
   { command: 'linkToNote', group: 'reading', title: () => L('고른 곳을 노트로', 'Link Selection to Note'), mac: 'CmdOrCtrl+L' },
   { command: 'layoutContinuous', group: 'reading', title: () => L('이어서 보기', 'Continuous Layout'), mac: 'CmdOrCtrl+1' },
   { command: 'layoutSinglePage', group: 'reading', title: () => L('한 쪽씩 보기', 'Single Page Layout'), mac: 'CmdOrCtrl+2' },
