@@ -18,11 +18,12 @@ import { iconNode, type IconName } from '../icons.js'
 import { L } from '../../shared/lang.js'
 import { graphemes } from '../../shared/textFold.js'
 import {
-  prepare, rank,
+  rank,
   type ActionName, type Prepared, type RankedResult, type RankWords,
 } from '../../shared/searchRank.js'
-import { zettelDisplayTitle, zettelIsEmpty, zettelPreview } from '../../shared/zettel.js'
-import { searchable, store, textSources } from '../state.js'
+import { notesForPaper, preparedSearch, store, textSources } from '../state.js'
+import { call } from '../bridge.js'
+import { suggestionGroups } from '../../shared/searchSuggestions.js'
 import { passageSubtitle, searchText, warmText, type TextHit } from '../textSearch.js'
 import { asTextHit, meaningFooter, meaningStatus, noteSubtitle, onMeaningStatus, searchMeaning, type MeaningHit } from '../meaningSearch.js'
 import { placeKey } from '../../shared/semantic/results.js'
@@ -30,8 +31,9 @@ import { placeKey } from '../../shared/semantic/results.js'
 export interface PaletteActions {
   openPaper: (id: string) => void
   openPassage: (hit: TextHit, query: string) => void
-  /** A note of the slip-box, by its id: its paper with the Notes tab in front, or the slip-box. */
-  openNote: (noteID: string) => void
+  /** A note of the slip-box, by its id — in the slip-box, as the Mac opens
+   *  it — and the words of a passage to find in it. */
+  openNote: (noteID: string, words?: string) => void
   openCollection: (id: string) => void
   openTag: (id: string) => void
   /** The search shelf, with this query — «Show All Results». */
@@ -87,6 +89,12 @@ interface Row {
   subtitle: string
   icon: IconName
   run: () => void
+  /** An offer's heading, when nothing is typed — Continue, Revisit. */
+  section?: string
+  /** Why it is offered, in the accent (`SearchResult.Reason`). */
+  reason?: string
+  /** How far through, for Continue. */
+  progress?: number
 }
 
 /** How many rows the palette shows before it would need a scroll bar. */
@@ -106,6 +114,7 @@ export interface QueryTiming {
 }
 
 let current: {
+  focus: () => void
   close: () => void
   setQuery: (text: string) => void
   activate: (index: number) => void
@@ -124,7 +133,13 @@ export function closePalette() {
 }
 
 export function openPalette(actions: PaletteActions, initial = '') {
-  if (current) return closePalette()
+  // ⌘K again brings the field back rather than taking the palette away —
+  // the Mac's only opens.
+  if (current) {
+    current.focus()
+    if (initial) current.setQuery(initial)
+    return
+  }
 
   const input = el('input', {
     type: 'text',
@@ -132,6 +147,20 @@ export function openPalette(actions: PaletteActions, initial = '') {
     placeholder: L('Paper Time 찾기', 'Paper Time Search'),
     'aria-label': L('Paper Time 찾기', 'Paper Time Search'),
   }) as HTMLInputElement
+  // With nothing typed the palette offers where to go next, and says so in
+  // its placeholder.
+  const offered = suggestionGroups(store.papers.map((entry) => ({
+    id: entry.id,
+    title: entry.meta.displayTitle,
+    authors: entry.meta.displayAuthors,
+    pageCount: entry.meta.file.pageCount,
+    lastPageIndex: entry.state.lastPageIndex ?? 0,
+    lastOpenedAt: entry.state.lastOpenedAt ?? null,
+    readingStatus: entry.state.readingStatus,
+    addedAt: entry.meta.addedAt,
+    parentID: entry.meta.parentID,
+  })), (id) => notesForPaper(id).length)
+  if (offered.length > 0) input.placeholder = L('찾기 — 또는 읽던 자리로', 'Search — or pick up where you left off')
   const glass = iconNode('magnifyingglass')
   const field = el('div', { class: 'palette-field' }, glass ? [glass, input] : [input])
   const list = el('div', { class: 'palette-results', role: 'listbox' })
@@ -142,23 +171,7 @@ export function openPalette(actions: PaletteActions, initial = '') {
   // library as it was when it opened; a paper added while it is open shows up
   // the next time.
   const actionList = ACTIONS()
-  const prepared: Prepared = prepare({
-    papers: store.papers.map(searchable),
-    // The slip-box's notes, named as their rows name them, each with the
-    // paper it was written against — as the Mac folds them.
-    notes: store.notes
-      .filter((note) => !zettelIsEmpty(note))
-      .map((note) => ({
-        id: note.id,
-        paperID: note.paperID,
-        title: zettelDisplayTitle(note),
-        preview: zettelPreview(note.body),
-        paperTitle: (note.paperID && store.papers.find((entry) => entry.id === note.paperID)?.meta.displayTitle) || '',
-      })),
-    collections: store.collections.map((one) => ({ id: one.id, name: one.name, smart: Boolean(one.rule) })),
-    tags: store.tags.map((one) => ({ id: one.id, name: one.name })),
-    actions: actionList.map(({ name, title }) => ({ name, title })),
-  })
+  const prepared: Prepared = preparedSearch(actionList)
   const words = WORDS()
 
   let typed: RankedResult[] = []
@@ -179,8 +192,12 @@ export function openPalette(actions: PaletteActions, initial = '') {
         return { group: 'showAll', title: result.title, subtitle: result.subtitle, icon: 'line.3.horizontal.decrease.circle', run: () => actions.showAll(kind.query) }
       case 'paper':
         return { group: 'paper', title: result.title, subtitle: result.subtitle, icon: 'text.page', run: () => actions.openPaper(kind.id) }
-      case 'note':
-        return { group: 'note', title: result.title, subtitle: result.subtitle, icon: 'note', run: () => actions.openNote(kind.id) }
+      case 'note': {
+        // A note says what kind it is — a note, a map, a draft — with its icon.
+        const note = store.notes.find((one) => one.id === kind.id)
+        const icon: IconName = note?.kind === 'map' ? 'map' : note?.kind === 'draft' ? 'doc.text' : 'note'
+        return { group: 'note', title: result.title, subtitle: result.subtitle, icon, run: () => actions.openNote(kind.id) }
+      }
       case 'collection': {
         const smart = store.collections.find((one) => one.id === kind.id)?.rule
         return { group: 'collection', title: result.title, subtitle: result.subtitle, icon: smart ? 'folder.badge.gearshape' : 'folder', run: () => actions.openCollection(kind.id) }
@@ -223,21 +240,31 @@ export function openPalette(actions: PaletteActions, initial = '') {
         group: 'meaning',
         title: text.snippet,
         subtitle: noteSubtitle(text),
-        icon: 'note',
-        run: () => actions.openNote(noteID),
+        icon: 'sparkles',
+        // Opened at the passage, not at the note's top.
+        run: () => actions.openNote(noteID, text.snippet),
       }
     }
     return {
       group: 'meaning',
       title: text.snippet,
       subtitle: passageSubtitle(text),
-      icon: 'text.magnifyingglass',
+      icon: 'sparkles',
       run: () => actions.openPassage(text, ''),
     }
   }
 
   const build = () => {
     const query = input.value.trim()
+    if (!query && offered.length > 0) {
+      rows = offered.flatMap((group) => group.rows.map((one): Row => ({
+        group: 'paper', section: group.title, title: one.title, subtitle: one.subtitle, icon: one.icon,
+        reason: one.reason, progress: one.progress, run: () => actions.openPaper(one.id),
+      })))
+      if (highlighted >= rows.length) highlighted = 0
+      draw()
+      return
+    }
     const room = scanning || passages.length > 0 ? SHOWN - 4 : SHOWN
     const flat = [
       ...typed.slice(0, room).map(rowFor),
@@ -252,10 +279,13 @@ export function openPalette(actions: PaletteActions, initial = '') {
   const draw = () => {
     clear(list)
     let index = 0
-    for (const group of GROUPS) {
-      const members = rows.filter((row) => row.group === group)
+    // The offers under their own headings; results under the groups'.
+    const sections: { title: string; members: Row[] }[] = rows.some((row) => row.section)
+      ? [...new Set(rows.map((row) => row.section ?? ''))].map((title) => ({ title, members: rows.filter((row) => row.section === title) }))
+      : GROUPS.map((group) => ({ title: groupTitle(group), members: rows.filter((row) => row.group === group) }))
+    for (const { title, members } of sections) {
       if (members.length === 0) continue
-      list.append(el('div', { class: 'palette-group', text: groupTitle(group) }))
+      list.append(el('div', { class: 'palette-group', text: title }))
       for (const row of members) {
         const at = index
         const icon = iconNode(row.icon)
@@ -268,7 +298,11 @@ export function openPalette(actions: PaletteActions, initial = '') {
           el('div', { class: 'palette-main' }, [
             el('div', { class: 'palette-title', text: row.title }),
             ...(row.subtitle ? [el('div', { class: 'palette-subtitle', text: row.subtitle })] : []),
+            ...(row.reason ? [el('div', { class: 'palette-reason', text: row.reason })] : []),
           ]),
+          ...(row.progress !== undefined
+            ? [el('span', { class: 'palette-progress' }, [el('span', { style: `width: ${Math.round(row.progress * 100)}%` })])]
+            : []),
         ])
         on(node, 'mousemove', () => {
           if (highlighted === at) return
@@ -421,6 +455,9 @@ export function openPalette(actions: PaletteActions, initial = '') {
     if (meaningTimer) clearTimeout(meaningTimer)
     stopWatchingMeaning()
     clearTimeout(warming)
+    // A warm-up the palette started stops with it: reads under way finish
+    // and are kept, nothing new starts (the Mac cancels on `onDisappear`).
+    if (warmed) void call('text:warm-cancel').catch(() => undefined)
     scrim.remove()
     box.remove()
     current = null
@@ -431,9 +468,14 @@ export function openPalette(actions: PaletteActions, initial = '') {
   // Reading the library starts a moment after the palette opens rather than
   // with it: sixty PDFs is real work, and starting it in the same instant as
   // the palette made the palette wait for it.
-  const warming = setTimeout(() => warmText(textSources()), 700)
+  let warmed = false
+  const warming = setTimeout(() => {
+    warmed = true
+    warmText(textSources())
+  }, 700)
 
   current = {
+    focus: () => input.focus(),
     close,
     setQuery: (text: string) => {
       input.value = text

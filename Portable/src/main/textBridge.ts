@@ -49,6 +49,11 @@ export class TextBridge {
     this.sourcesSent = false
   }
 
+  /** Stops a warm-up the palette asked for, when the palette goes. */
+  stopWarming() {
+    this.withSources().postMessage({ type: 'warm-cancel' })
+  }
+
   warm(ids: string[]) {
     this.withSources().postMessage({ type: 'warm', ids })
   }

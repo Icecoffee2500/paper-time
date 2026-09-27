@@ -82,28 +82,46 @@ function jaro(left: string[], right: string[]): number {
 
 const FUZZY_THRESHOLD = 0.82
 
-/** A field folded for matching, with the graphemes the fuzzy match walks. */
+/** A field folded for matching: its words, split once, and its length in
+ *  characters, as the similarity measures it (`SearchRanking.Folded`). */
 export interface FoldedField {
   text: string
+  words: string[]
+  length: number
   /** Worked out the first time a query needs the fuzzy match, then kept. */
   graphemes?: string[]
 }
 
 export function foldedField(raw: string): FoldedField {
-  return { text: foldTitle(raw) }
+  const text = foldTitle(raw)
+  return { text, words: text.split(' ').filter(Boolean), length: graphemes(text).length }
+}
+
+/**
+ * Whether two strings of these lengths could ever be similar enough: at a
+ * shorter-to-longer ratio of 0.09 or less Jaro–Winkler is at most 0.818,
+ * under the threshold — every note against a word (`couldBeNearMiss`).
+ */
+export function couldBeNearMiss(left: number, right: number): boolean {
+  const shorter = Math.min(left, right)
+  const longer = Math.max(left, right)
+  if (longer === 0) return true
+  return shorter / longer > 0.09
 }
 
 /**
  * Prefix match on the whole string, then prefix match on any word, then
- * substring anywhere, then a fuzzy fallback for typos.
+ * substring anywhere, then a fuzzy fallback for typos — skipped where it
+ * cannot count, which was most of what a keystroke cost.
  */
 export function matchScore(query: FoldedField, field: FoldedField): number | null {
   const text = field.text
   if (text.length === 0) return null
   const needle = query.text
   if (text.startsWith(needle)) return 1
-  if (text.split(' ').some((word) => word.length > 0 && word.startsWith(needle))) return 0.9
+  if (field.words.some((word) => word.startsWith(needle))) return 0.9
   if (text.includes(needle)) return 0.75
+  if (!couldBeNearMiss(query.length, field.length)) return null
   query.graphemes ??= graphemes(needle)
   field.graphemes ??= graphemes(text)
   const similarity = jaroWinkler(query.graphemes, field.graphemes)
@@ -285,7 +303,7 @@ const collator = new Intl.Collator(undefined, { sensitivity: 'accent' })
 export function rank(query: string, prepared: Prepared, words: RankWords, now = Date.now()): RankedResult[] {
   const trimmed = query.trim()
   if (!trimmed) return []
-  const folded: FoldedField = { text: foldTitle(trimmed) }
+  const folded: FoldedField = foldedField(trimmed)
   if (!folded.text) return []
   const results: RankedResult[] = []
 

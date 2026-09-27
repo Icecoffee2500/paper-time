@@ -15,9 +15,11 @@ import os from 'node:os'
 import path from 'node:path'
 import { foldText, foldTitle, foldWithMap, snippetAround } from '../shared/textFold.js'
 import {
-  displayName, jaroWinkler, matchScore, noteTitle, paperHaystack, prepare, rank,
+  couldBeNearMiss, displayName, jaroWinkler, foldedField, matchScore, noteTitle, paperHaystack, prepare, rank,
   type RankWords, type SearchablePaper,
 } from '../shared/searchRank.js'
+import { ago, suggestionGroups, type SuggestedPaper } from '../shared/searchSuggestions.js'
+import { prefersKorean, setKorean } from '../shared/lang.js'
 import { TextIndex, type ReadText, type TextSource } from '../main/textIndex.js'
 import { extractPages } from '../main/textExtract.js'
 
@@ -128,6 +130,14 @@ export async function searchSuite(test: Test, suite: (name: string) => void) {
     assert.ok(!snippet.includes('  '))
   })
 
+  await test('the snippet drops zero-width spaces between words, as Foundation does', () => {
+    const text = `${'x '.repeat(50)}the\u200bdefinition of catastrophic forgetting\u200b is given ${'y '.repeat(50)}`
+    const at = text.indexOf('catastrophic')
+    const snippet = snippetAround(text, at, 'catastrophic forgetting'.length)
+    assert.ok(!snippet.includes('\u200b'))
+    assert.ok(snippet.includes('the definition of catastrophic forgetting is'))
+  })
+
   suite('Ranking the palette the way the Mac does')
 
   await test(`Jaro–Winkler gives the Mac's number for ${fixture.jaroWinkler.length} pairs`, () => {
@@ -137,8 +147,8 @@ export async function searchSuite(test: Test, suite: (name: string) => void) {
   })
 
   await test('the ladder: a title prefix, then a word, then anywhere, then a typo', () => {
-    const q = (text: string) => ({ text: foldTitle(text) })
-    const f = (text: string) => ({ text: foldTitle(text) })
+    const q = (text: string) => foldedField(text)
+    const f = (text: string) => foldedField(text)
     assert.equal(matchScore(q('unlearning'), f('Unlearning in the Wild')), 1)
     assert.equal(matchScore(q('unlearning'), f('Representation Unlearning: Forgetting')), 0.9)
     assert.equal(matchScore(q('learning'), f('Representation Unlearning')), 0.75)
@@ -221,6 +231,58 @@ export async function searchSuite(test: Test, suite: (name: string) => void) {
     assert.ok(paperHaystack(entry).includes(foldTitle('LeCun Yann')))
     assert.equal(displayName({ given: 'Ludwig', family: 'Beethoven', 'non-dropping-particle': 'van' }), 'Ludwig van Beethoven')
     assert.equal(displayName({ literal: 'The ACL Committee' }), 'The ACL Committee')
+  })
+
+  await test('a near miss is never skipped where it could have counted', () => {
+    const alphabet = 'abcdefghijklmnopqrstuvwxyz'
+    const make = (length: number) => Array.from({ length }, (_, index) => alphabet[index % 26]).join('')
+    let skipped = 0
+    for (let short = 1; short <= 40; short += 1) {
+      for (let long = short; long <= 120; long += 1) {
+        const similarity = jaroWinkler([...make(short)], [...make(long)])
+        if (similarity > 0.82) assert.ok(couldBeNearMiss(short, long), `${short} vs ${long}: ${similarity}`)
+        if (!couldBeNearMiss(short, long)) skipped += 1
+      }
+    }
+    assert.ok(skipped > 0)
+    assert.equal(matchScore(foldedField('trnsformer'), foldedField(`transformer ${'z'.repeat(200)}`)), null)
+  })
+
+  suite('What the palette offers before anything is typed')
+
+  await test('Continue, Revisit and New this week, each paper once', () => {
+    const now = new Date('2026-09-28T12:00:00Z')
+    const day = 86_400_000
+    const paper = (id: string, extra: Partial<SuggestedPaper>): SuggestedPaper => ({
+      id, title: id, authors: 'A', pageCount: 10, lastPageIndex: 0, lastOpenedAt: null,
+      readingStatus: 'unread', addedAt: new Date(now.getTime() - 100 * day), ...extra,
+    })
+    const groups = suggestionGroups([
+      paper('half', { lastPageIndex: 4, lastOpenedAt: new Date(now.getTime() - 2 * day), readingStatus: 'reading' }),
+      paper('done', { lastPageIndex: 9, lastOpenedAt: new Date(now.getTime() - 1 * day), readingStatus: 'read' }),
+      paper('noted', { lastOpenedAt: new Date(now.getTime() - 10 * day), readingStatus: 'read' }),
+      paper('old', { lastOpenedAt: new Date(now.getTime() - 200 * day) }),
+      paper('new', { addedAt: new Date(now.getTime() - 2 * day) }),
+      paper('supplement', { addedAt: new Date(now.getTime() - 1 * day), parentID: 'half' }),
+    ], (id) => (id === 'noted' || id === 'old' || id === 'half' ? 3 : 0), now)
+    assert.deepEqual(groups.map((group) => group.rows.map((row) => row.id)), [['half'], ['noted'], ['new']])
+    assert.equal(groups[0].rows[0].progress, 0.5)
+    assert.equal(groups[0].rows[0].icon, 'book.pages')
+    assert.deepEqual(suggestionGroups([], () => 0, now), [])
+  })
+
+  await test('ago counts days, then weeks, then months', () => {
+    const now = new Date('2026-09-28T12:00:00Z')
+    const back = (days: number) => ago(new Date(now.getTime() - days * 86_400_000), now)
+    const was = prefersKorean()
+    setKorean(false)
+    try {
+      assert.deepEqual([0, 1, 5, 20, 90].map(back), ['today', 'yesterday', '5 days ago', '2 weeks ago', '3 months ago'])
+      setKorean(true)
+      assert.deepEqual([0, 1, 5, 20, 90].map(back), ['오늘', '어제', '5일 전', '2주 전', '3달 전'])
+    } finally {
+      setKorean(was)
+    }
   })
 
   suite('The text index')
@@ -306,6 +368,29 @@ export async function searchSuite(test: Test, suite: (name: string) => void) {
     assert.equal(reads, 1)
   })
 
+  await test('a file that has only grown keeps its text — a highlight appends, it does not rewrite', async () => {
+    const grown = path.join(folder, 'grown.pdf')
+    await fsp.copyFile(file, grown)
+    const first = new TextIndex({ directory: cache, extract })
+    await first.load({ id: 'GROWN', file: grown, title: 'Grown' })
+    const before = first.counts.extracted
+    // An incremental update: every earlier byte where it was, more after.
+    await fsp.appendFile(grown, '\n% an update\n%%EOF\n')
+    const later = new TextIndex({ directory: cache, extract })
+    await later.load({ id: 'GROWN', file: grown, title: 'Grown' })
+    assert.equal(later.counts.extracted, 0, 'read from the cache, not from the file')
+    assert.equal(later.counts.fromCache, 1)
+    assert.equal(await first.revalidate([{ id: 'GROWN', file: grown, title: 'Grown' }]), 0, 'still good in memory too')
+    assert.equal(first.counts.extracted, before)
+    // Written over, it is read again.
+    await fsp.writeFile(grown, (await fsp.readFile(file)).subarray(0, 200))
+    const rewritten = new TextIndex({ directory: cache, extract })
+    await rewritten.load({ id: 'GROWN', file: grown, title: 'Grown' })
+    assert.equal(rewritten.counts.fromCache, 0)
+    await fsp.rm(grown, { force: true })
+    await fsp.rm(path.join(cache, 'GROWN.json'), { force: true })
+  })
+
   await test('what is kept for a paper that is gone is taken out, and nothing else', async () => {
     const index = new TextIndex({ directory: cache, extract })
     // A paper in another folder that is only disconnected: its file is there.
@@ -323,8 +408,14 @@ export async function searchSuite(test: Test, suite: (name: string) => void) {
     await fsp.copyFile(file, left)
     await index.load({ id: 'LEFT', file: left, title: 'Left' })
 
+    // A file gone from outside the open folders may be on a disk that is not
+    // plugged in: its text is kept for a month, as the Mac keeps it.
+    assert.equal(await index.cleanup(new Set(['PAPER-1']), [path.join(folder, 'a-folder-that-is-not-open')]), 0)
+    assert.ok(fs.existsSync(path.join(cache, 'DOOMED.json')))
+    const old = new Date(Date.now() - 31 * 24 * 3600_000)
+    await fsp.utimes(path.join(cache, 'DOOMED.json'), old, old)
     const removed = await index.cleanup(new Set(['PAPER-1']), [path.join(folder, 'a-folder-that-is-not-open')])
-    assert.equal(removed, 1, 'only the paper whose file is gone, while its folder is not open')
+    assert.equal(removed, 1, 'only the paper whose file has been gone a month, while its folder is not open')
     assert.ok(fs.existsSync(path.join(cache, 'OTHER.json')))
     assert.ok(fs.existsSync(path.join(cache, 'LEFT.json')))
     assert.ok(!fs.existsSync(path.join(cache, 'DOOMED.json')))

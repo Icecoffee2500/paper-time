@@ -70,6 +70,11 @@ interface PaperText extends ReadText {
   file: string
   size: number
   mtimeMs: number
+  /** How long the file was when the text was read, and the fingerprint of
+   *  its first and last 64 KB then (`PaperText.Stamp`). */
+  extent: number
+  head: string
+  tail: string
 }
 
 interface Stamp {
@@ -77,8 +82,58 @@ interface Stamp {
   mtimeMs: number
 }
 
-/** Bumped when the file's shape changes. */
-const CACHE_VERSION = 1
+/** Bumped when the file's shape changes. 2: the grew-only fingerprint. */
+const CACHE_VERSION = 2
+
+const SPAN = 64 * 1024
+
+/** FNV-1a, 64-bit, as a hex string — `PaperText.hash`. */
+function fnv(bytes: Uint8Array): string {
+  let value = 0xcbf29ce484222325n
+  for (const byte of bytes) {
+    value ^= BigInt(byte)
+    value = (value * 0x100000001b3n) & 0xffffffffffffffffn
+  }
+  return value.toString(16).padStart(16, '0')
+}
+
+/**
+ * The fingerprint of the first `extent` bytes of a file: its first 64 KB and
+ * the 64 KB that end at `extent` — two reads, never the whole file; on a
+ * cloud folder every byte read is a byte fetched (`PaperText.fingerprint`).
+ */
+export async function fingerprint(file: string, extent: number): Promise<{ head: string; tail: string } | null> {
+  if (extent < 0) return null
+  let handle: fsp.FileHandle | null = null
+  try {
+    handle = await fsp.open(file, 'r')
+    const headLength = Math.min(SPAN, extent)
+    const head = Buffer.alloc(headLength)
+    const first = await handle.read(head, 0, headLength, 0)
+    const tailStart = Math.max(0, extent - SPAN)
+    const tail = Buffer.alloc(extent - tailStart)
+    const last = await handle.read(tail, 0, tail.length, tailStart)
+    if (first.bytesRead !== headLength || last.bytesRead !== tail.length) return null
+    return { head: fnv(head), tail: fnv(tail) }
+  } catch {
+    return null
+  } finally {
+    await handle?.close().catch(() => {})
+  }
+}
+
+/**
+ * Whether text read from a file is still the file's text: the same size and
+ * time, or — what every highlight now does — a file that has only grown and
+ * still begins with exactly the bytes it had (`PaperTextIndex.kept`). Without
+ * this a single highlight sent the paper back to pdf.js on the next search.
+ */
+async function stillHolds(file: string, now: Stamp, known: { size: number; mtimeMs: number; extent: number; head: string; tail: string }): Promise<boolean> {
+  if (sameStamp(now, known)) return true
+  if (now.size <= known.extent || !known.head) return false
+  const print = await fingerprint(file, known.extent)
+  return print !== null && print.head === known.head && print.tail === known.tail
+}
 
 /**
  * The same file, as far as a stat can say. A second of slack on the time, as
@@ -159,7 +214,11 @@ export class TextIndex {
       this.counts.refused += 1
       return null
     }
-    const entry: PaperText = { file: source.file, size: stamp.size, mtimeMs: stamp.mtimeMs, ...read }
+    const print = await fingerprint(source.file, stamp.size)
+    const entry: PaperText = {
+      file: source.file, size: stamp.size, mtimeMs: stamp.mtimeMs,
+      extent: stamp.size, head: print?.head ?? '', tail: print?.tail ?? '', ...read,
+    }
     this.memory.set(source.id, entry)
     this.counts.extracted += 1
     // Written down only if the file is still the one that was read: a paper
@@ -181,7 +240,15 @@ export class TextIndex {
       .map(async (source) => {
         const known = this.memory.get(source.id)!
         const stamp = await stampOf(source.file)
-        if (samePath(known.file, source.file) && stamp && sameStamp(stamp, known)) return 0
+        if (samePath(known.file, source.file) && stamp && await stillHolds(source.file, stamp, known)) {
+          // Grown only: the same text, under the file's new size and time.
+          if (!sameStamp(stamp, known)) {
+            known.size = stamp.size
+            known.mtimeMs = stamp.mtimeMs
+            void this.writeCache(source.id, known)
+          }
+          return 0
+        }
         this.memory.delete(source.id)
         return 1
       })
@@ -309,16 +376,26 @@ export class TextIndex {
     try {
       const header = JSON.parse(raw.slice(0, cut)) as {
         version?: number; fold?: string; file?: string; size?: number; mtimeMs?: number
+        extent?: number; head?: string; tail?: string
       }
       if (header.version !== CACHE_VERSION || header.fold !== foldVersion()) return null
-      if (header.file !== source.file) return null
+      // The same file however the path is spelt: `C:\Papers` and `c:/papers`.
+      if (!samePath(header.file, source.file)) return null
       if (typeof header.size !== 'number' || typeof header.mtimeMs !== 'number') return null
-      if (!sameStamp(stamp, { size: header.size, mtimeMs: header.mtimeMs })) return null
+      const known = {
+        size: header.size, mtimeMs: header.mtimeMs,
+        extent: typeof header.extent === 'number' ? header.extent : header.size,
+        head: header.head ?? '', tail: header.tail ?? '',
+      }
+      if (!(await stillHolds(source.file, stamp, known))) return null
       const body = JSON.parse(raw.slice(cut + 1)) as ReadText
       if (!Array.isArray(body.pages) || !Array.isArray(body.folded) || body.pages.length !== body.folded.length) {
         return null
       }
-      return { file: source.file, size: stamp.size, mtimeMs: stamp.mtimeMs, pages: body.pages, folded: body.folded }
+      const entry: PaperText = { file: source.file, ...known, size: stamp.size, mtimeMs: stamp.mtimeMs, pages: body.pages, folded: body.folded }
+      // Grown only: the header says so, so the next open need not look again.
+      if (!sameStamp(stamp, { size: header.size, mtimeMs: header.mtimeMs })) void this.writeCache(source.id, entry)
+      return entry
     } catch {
       return null
     }
@@ -327,6 +404,7 @@ export class TextIndex {
   private async writeCache(id: string, entry: PaperText) {
     const header = {
       version: CACHE_VERSION, fold: foldVersion(), id, file: entry.file, size: entry.size, mtimeMs: entry.mtimeMs,
+      extent: entry.extent, head: entry.head, tail: entry.tail,
     }
     const target = this.fileFor(id)
     const temporary = `${target}.${process.pid}.tmp`
@@ -379,7 +457,15 @@ export class TextIndex {
       if (live.has(id)) continue
       const file = await headerFile(full)
       if (file === null) continue
-      if (file === undefined || inside(file) || (await stampOf(file)) === null) {
+      // A file that is gone from outside the open folders — a disk not
+      // plugged in, a share that is off — keeps its text for a month, as the
+      // Mac keeps it; only then is it let go.
+      const stale = async () => {
+        if ((await stampOf(file!)) !== null) return false
+        const kept = await fsp.stat(full).catch(() => null)
+        return !kept || Date.now() - kept.mtimeMs > 30 * 24 * 3600_000
+      }
+      if (file === undefined || inside(file) || await stale()) {
         await fsp.rm(full, { force: true })
         this.memory.delete(id)
         removed += 1

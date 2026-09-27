@@ -117,6 +117,7 @@ export interface Requests {
   'app:about': { args: void; result: { version: string } }
   /** The words inside the papers: read ahead, search (answers come as events), stop, and — for a probe — what it cost. */
   'text:warm': { args: { ids: string[] }; result: void }
+  'text:warm-cancel': { args: void; result: void }
   'text:search': {
     args: { token: number; query: string; ids: string[]; titles: Record<string, string>; limit?: number }
     result: void

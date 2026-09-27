@@ -6,7 +6,7 @@ import { changed, paper as findPaper, setShelf, store } from '../state.js'
 import { togglePane } from '../layout.js'
 import { findBar, focused, readers } from '../pageArea.js'
 import { showPaper } from './openPapers.js'
-import { openNote } from './notes.js'
+import { openNoteFromSearch } from './notes.js'
 import { showSearchResults } from '../listSearch.js'
 import { addPapers, reload } from '../library.js'
 import { openSettings } from '../settingsController.js'
@@ -25,7 +25,7 @@ export function openSearch(initial = '') {
   openPalette({
     openPaper: (id) => void showPaper(id),
     openPassage: (hit, query) => void openPassage(hit, query),
-    openNote: (id) => void openNote(id),
+    openNote: (id, words) => openNoteFromSearch(id, words),
     openCollection: (id) => shelf({ kind: 'collection', id }),
     openTag: (id) => shelf({ kind: 'tag', id }),
     showAll: (query) => showSearchResults(query),
