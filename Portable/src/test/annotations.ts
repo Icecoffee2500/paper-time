@@ -299,7 +299,7 @@ export async function annotationSuite(test: Test, suite: (name: string) => void)
       const { bytes, counts } = await paper(shape)
       const before = await listing(bytes)
       // As `writePDF` calls it: the page's marks of ours, and the new one.
-      const ours = ((await readMarks(bytes)).get(0) ?? []).filter((mark) => !mark.id.startsWith('foreign-'))
+      const ours = ((await readMarks(bytes)).get(0) ?? []).filter((mark) => !mark.foreign)
       const written = await writeDrawings(bytes, [{
         pageIndex: 0, elements: [], strokes: [], marks: [...ours, portableMark()],
         managesMarks: true, managesSketch: false, managesInk: false,
@@ -329,7 +329,7 @@ export async function annotationSuite(test: Test, suite: (name: string) => void)
     assert.equal(mac.quads.length, 3, 'three lines, one mark')
     assert.equal(mac.comment, '왜 여기서?')
     assert.equal(mac.text, '', 'the comment is not the quoted text')
-    assert.equal(page.filter((mark) => mark.id.startsWith('foreign-')).length, 1, 'and the colleague\'s')
+    assert.equal(page.filter((mark) => mark.foreign).length, 1, 'and the colleague\'s')
     assert.equal(page.length, 2, 'the note is not a highlight')
     assert.equal(drawings.get(0)?.elements.length, 1)
     assert.equal(drawings.get(0)?.strokes.length, 1)
@@ -338,7 +338,7 @@ export async function annotationSuite(test: Test, suite: (name: string) => void)
   await test('rewriting the Mac\'s marks keeps them, with their comment', async () => {
     const { bytes } = await paper('object')
     const marks = (await readMarks(bytes)).get(0) ?? []
-    const ours = marks.filter((mark) => !mark.id.startsWith('foreign-'))
+    const ours = marks.filter((mark) => !mark.foreign)
     const written = await writeDrawings(bytes, [{
       pageIndex: 0, elements: [], strokes: [], marks: [...ours, portableMark()],
       managesMarks: true, managesSketch: false, managesInk: false,
@@ -360,7 +360,7 @@ export async function annotationSuite(test: Test, suite: (name: string) => void)
   await test('only a mark that changed is written again', async () => {
     const { bytes, counts } = await paper('object')
     const before = await listing(bytes)
-    const ours = ((await readMarks(bytes)).get(0) ?? []).filter((mark) => !mark.id.startsWith('foreign-'))
+    const ours = ((await readMarks(bytes)).get(0) ?? []).filter((mark) => !mark.foreign)
     // Nothing changed: nothing written, the same bytes back.
     const same = await writeDrawings(bytes, [{
       pageIndex: 0, elements: [], strokes: [], marks: ours,
@@ -462,12 +462,14 @@ export async function annotationSuite(test: Test, suite: (name: string) => void)
     const { bytes, counts } = await paper('object')
     const shown = await stripOwnedForDisplay(bytes)
     const after = await listing(shown)
-    // Taken out: the Mac's three highlight lines, its shape, its stroke.
-    assert.equal(after[0].entries.length, counts[0] - 5)
+    // Taken out: the Mac's three highlight lines, its shape, its stroke —
+    // and the colleague's highlight, which the window draws itself now, as
+    // the Mac's `RoundedMarks` does every mark.
+    assert.equal(after[0].entries.length, counts[0] - 6)
     assert.deepEqual(
       [...new Set(after[0].subtypes)].sort(),
-      ['/Highlight', '/Link', '/Popup', '/Text'],
-      'links, the colleague\'s highlight and the Mac\'s note stay for pdf.js to draw',
+      ['/Link', '/Popup', '/Text'],
+      'links and the Mac\'s note stay for pdf.js to draw',
     )
   })
 
@@ -489,7 +491,7 @@ export async function annotationSuite(test: Test, suite: (name: string) => void)
     const { bytes, links } = await macIncremental()
     const before = await listing(bytes)
     assert.ok(before[0].indirect, 'the update made the list an object of its own')
-    const ours = ((await readMarks(bytes)).get(0) ?? []).filter((mark) => !mark.id.startsWith('foreign-'))
+    const ours = ((await readMarks(bytes)).get(0) ?? []).filter((mark) => !mark.foreign)
     const written = await writeDrawings(bytes, [{
       pageIndex: 0, elements: [], strokes: [], marks: [...ours, portableMark()],
       managesMarks: true, managesSketch: false, managesInk: false,
@@ -509,7 +511,7 @@ export async function annotationSuite(test: Test, suite: (name: string) => void)
       const bytes = new Uint8Array(fs.readFileSync(real))
       const before = await listing(bytes)
       const page = Math.max(0, before.findIndex((one) => one.entries.length > 0))
-      const ours = ((await readMarks(bytes)).get(page) ?? []).filter((mark) => !mark.id.startsWith('foreign-'))
+      const ours = ((await readMarks(bytes)).get(page) ?? []).filter((mark) => !mark.foreign)
       const written = await writeDrawings(bytes, [{
         pageIndex: page, elements: [], strokes: [], marks: [...ours, portableMark()],
         managesMarks: true, managesSketch: false, managesInk: false,

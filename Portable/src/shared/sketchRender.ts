@@ -692,7 +692,7 @@ export function elementBounds(elements: SketchElement[]): Rect | null {
 
 // MARK: - Marks
 
-import { cssColor, quadToRect, type Mark } from './marks.js'
+import { cssColor, markLine, quadToRect, type Mark } from './marks.js'
 
 /**
  * Highlights and underlines, drawn the way the Mac's overlay draws them.
@@ -703,34 +703,38 @@ import { cssColor, quadToRect, type Mark } from './marks.js'
  * instead of a filled table cell. An underline sits just under the baseline
  * with round caps, at a weight that follows the text size.
  */
-export function drawMarks(marks: Mark[], ctx: Ctx) {
+export function drawMarks(marks: Mark[], ctx: Ctx, hoveredID: string | null = null) {
   for (const mark of marks) {
+    const hovered = mark.id === hoveredID
     ctx.save()
     if (mark.kind === 'highlight') {
+      // Overlapping bands darken one another as they would on paper; the
+      // layer itself is multiplied onto the page by the browser.
       ctx.globalCompositeOperation = 'multiply'
-      ctx.fillStyle = cssColor(mark.color, 1)
-      for (const quad of mark.quads) {
-        const rect = quadToRect(quad)
-        if (rect.width <= 0 || rect.height <= 0) continue
-        const radius = Math.min(rect.height / 2, rect.width / 2)
+    }
+    ctx.lineCap = 'round'
+    for (const quad of mark.quads) {
+      const rect = quadToRect(quad)
+      if (rect.width <= 0 || (mark.kind === 'highlight' && rect.height <= 0)) continue
+      const line = markLine(mark.kind, mark.color, rect, hovered)
+      if ('band' in line) {
         ctx.beginPath()
-        ctx.roundRect(rect.x, rect.y, rect.width, rect.height, radius)
+        ctx.roundRect(line.band.x, line.band.y, line.band.width, line.band.height, line.radius)
+        ctx.fillStyle = cssColor(line.fill, 1)
         ctx.fill()
-      }
-    } else {
-      ctx.strokeStyle = cssColor(mark.color, 1)
-      ctx.lineCap = 'round'
-      for (const quad of mark.quads) {
-        const rect = quadToRect(quad)
-        if (rect.width <= 0) continue
-        const weight = Math.max(rect.height * 0.08, 0.9)
-        ctx.lineWidth = weight
-        const y = mark.kind === 'strikethrough'
-          ? rect.y + rect.height * 0.42
-          : rect.y + rect.height * 0.08
+        if (line.edge) {
+          ctx.globalCompositeOperation = 'source-over'
+          ctx.strokeStyle = cssColor(line.edge, 1)
+          ctx.lineWidth = 0.9
+          ctx.stroke()
+          ctx.globalCompositeOperation = 'multiply'
+        }
+      } else {
+        ctx.strokeStyle = cssColor(line.ink, 1)
+        ctx.lineWidth = line.width
         ctx.beginPath()
-        ctx.moveTo(rect.x + weight / 2, y)
-        ctx.lineTo(rect.x + rect.width - weight / 2, y)
+        ctx.moveTo(line.from.x, line.from.y)
+        ctx.lineTo(line.to.x, line.to.y)
         ctx.stroke()
       }
     }

@@ -144,8 +144,11 @@ export function installMainEvents() {
       case 'paper:changed': {
         // Another window wrote this paper's record: read it with the rest.
         // Its sidecars — marks, ink, drawings — are the reader's (WR10).
-        const { layers } = payload as { id: string; layers: string[] }
+        const { id, layers } = payload as { id: string; layers: string[] }
         if (layers.includes('record')) void reload()
+        // Another device's marks arrived — its journal, or the PDF it wrote —
+        // and the open paper takes them without being opened again.
+        if (layers.includes('marks') || layers.includes('pdf')) void readers.get(id)?.reloadMarks()
         break
       }
       case 'window:state':

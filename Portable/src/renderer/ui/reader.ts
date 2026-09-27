@@ -60,6 +60,7 @@ import { PageView, type PageLink, type PageOwner } from './pageView.js'
 import { DocumentText, guessDocumentKind, type Found } from './readerText.js'
 import { DocumentHistory, scrollFor, type DocumentPlace } from './readerHistory.js'
 import { MarkBar, type SelectionPart } from './markBar.js'
+import type { MenuEntry } from './menu.js'
 import { markAt, markClientBox, marksInReadingOrder, selectionAnchor, selectionParts } from './readerMarks.js'
 import { fillFooter, fillHeader } from './readerChrome.js'
 import {
@@ -102,6 +103,8 @@ export interface ReaderActions {
   marksChanged?: () => void
   /** A mark on the page was clicked: the Marks tab brings its row forward. */
   markShown?: (id: string) => void
+  /** A menu at a point — the right-click on a selection or a mark. */
+  menu?: (anchor: Element, entries: MenuEntry[]) => void
   /** A link was followed, or Back walked the paper: the arrows may change. */
   historyChanged?: () => void
   /** The page being read changed — to be remembered for the next open. */
@@ -285,9 +288,23 @@ export class Reader implements PageOwner {
           return
         }
         const mark = markAt(page.marks, point)
-        if (mark && !mark.id.startsWith('foreign-')) this.bar.showMark(page, mark)
+        if (mark) this.bar.showMark(page, mark)
         else this.bar.hideMark()
       })
+    })
+    // A right-click on a mark offers its colour and its removal; on a
+    // selection, the marks and a note (`MarkupCapablePDFView.menu(for:)`).
+    on(this.pagesBox, 'contextmenu', (event: MouseEvent) => {
+      if (this.state.drawing) return
+      const page = this.pageAtClient(event.clientX, event.clientY)
+      const point = page?.pointOnPage(event.clientX, event.clientY)
+      const mark = page && point ? markAt(page.marks, point) : null
+      const selection = window.getSelection()
+      const selected = selection && !selection.isCollapsed && this.selectionParts().length > 0
+      if (!mark && !selected) return
+      event.preventDefault()
+      const anchor = { getBoundingClientRect: () => new DOMRect(event.clientX, event.clientY, 0, 0) } as Element
+      this.actions.menu?.(anchor, mark && page ? this.bar.markMenu(page, mark) : this.bar.selectionMenu())
     })
     // Over a link the pointer says so, and a URL shows where it goes.
     on(this.pagesBox, 'mousemove', (event: MouseEvent) => {
@@ -299,7 +316,10 @@ export class Reader implements PageOwner {
         void this.updateHover()
       })
     })
-    on(this.pagesBox, 'mouseleave', () => this.showOverLink(null))
+    on(this.pagesBox, 'mouseleave', () => {
+      this.showOverLink(null)
+      this.hoverMark(null, null)
+    })
     // A formula's picture arrives after the card was drawn; the page is
     // drawn again when it does.
     installMathProvider(this.onMathReady)
@@ -330,6 +350,7 @@ export class Reader implements PageOwner {
     this.hoverFrame = 0
     for (const waiting of this.waiting.splice(0)) waiting(false)
     document.removeEventListener('selectionchange', this.onSelectionChange)
+    this.bar.dispose()
     removeMathListener(this.onMathReady)
     this.node.remove()
     living -= 1
@@ -398,9 +419,10 @@ export class Reader implements PageOwner {
       if (!page) continue
       if (part.marks) {
         // A step of the marks touches the marks and nothing else.
+        const before = page.marks
         page.marks = marksSnapshot(part.pageIndex, part.marks).marks ?? []
         page.redraw()
-        void this.saveMarks(page)
+        void this.saveMarks(page, before)
         this.bar.hideMark()
         this.actions.marksChanged?.()
         continue
@@ -661,6 +683,10 @@ export class Reader implements PageOwner {
    * paper somewhere else — the pixel it had been at, at the new size.
    */
   relayout() {
+    // What the bar stood over has moved under it: it goes, the way the Mac's
+    // does on a scale change — a note being written stays.
+    this.bar.hideMark()
+    if (!this.bar.isComposing) this.bar.hide()
     const anchor = this.anchor()
     const scale = this.baseScale() * this.state.zoom
     for (const page of this.pages) {
@@ -910,6 +936,7 @@ export class Reader implements PageOwner {
       page.marks = list
       page.redraw()
     }
+    this.marksLoaded = true
     // The Marks tab lists what just arrived.
     this.actions.marksChanged?.()
     if (drawings.foreignInk !== this.foreignInk) {
@@ -942,10 +969,42 @@ export class Reader implements PageOwner {
     }
   }
 
-  async saveMarks(page: PageView) {
+  /** Whether the marks have been read — the Marks tab says «opening» until then. */
+  marksLoaded = false
+
+  /**
+   * Marks another device made while the paper is open: its journal arrived
+   * in the folder, and the pages take what it says (`reloadFromDisk` →
+   * `reconcile`). A page whose note is being written is left for now.
+   */
+  async reloadMarks() {
+    const id = this.paperID
+    if (!id || !this.marksLoaded) return
+    const generation = this.generation
+    const marks = await call('marks:load', { id })
+    if (generation !== this.generation || id !== this.paperID) return
+    let changedAny = false
+    this.pages.forEach((page, index) => {
+      const next = marks[index] ?? []
+      if (JSON.stringify(next) === JSON.stringify(page.marks)) return
+      if (this.bar.isComposing) return
+      page.marks = next
+      page.redraw()
+      changedAny = true
+    })
+    if (changedAny) {
+      this.bar.hideMark()
+      this.actions.marksChanged?.()
+    }
+  }
+
+  async saveMarks(page: PageView, before: Mark[]) {
     if (!this.paperID) return
+    // The other pages' marks, so a mark moved off this page is not taken
+    // for one removed.
+    const elsewhere = this.pages.filter((other) => other !== page).flatMap((other) => other.marks.map((mark) => mark.id))
     try {
-      await call('marks:save', { id: this.paperID, pageIndex: page.index, marks: page.marks })
+      await call('marks:save', { id: this.paperID, pageIndex: page.index, marks: page.marks, before, elsewhere })
     } catch {
       this.actions.toast(L('표시를 저장하지 못했어요.', "Paper Time couldn't save the mark."))
     }
@@ -1007,10 +1066,12 @@ export class Reader implements PageOwner {
 
   private addMarks(parts: SelectionPart[], kind: MarkKind, colorName: string, comment?: string) {
     const color = [...(MARK_COLORS[colorName] ?? MARK_COLORS.yellow)] as [number, number, number]
+    const name = comment ? L('노트 더하기', 'Add Note')
+      : kind === 'highlight' ? L('형광펜', 'Highlight') : kind === 'underline' ? L('밑줄', 'Underline') : L('취소선', 'Strikethrough')
     for (const { page, quads, text } of parts) {
       const mark: Mark = { id: makeUUID(), kind, quads, color, text }
       if (comment) mark.comment = comment
-      this.changeMarks(page, [...page.marks, mark])
+      this.changeMarks(page, [...page.marks, mark], name)
     }
   }
 
@@ -1019,12 +1080,13 @@ export class Reader implements PageOwner {
    * journal (and the file after it), put on the undo stack — so ⌘Z takes a
    * highlight back, or brings a removed one back, as it does on the Mac.
    */
-  private changeMarks(page: PageView, next: Mark[]) {
+  private changeMarks(page: PageView, next: Mark[], name?: string) {
     const paperID = this.paperID ?? undefined
-    undoStack.record(marksSnapshot(page.index, page.marks, paperID), marksSnapshot(page.index, next, paperID))
+    const before = page.marks
+    undoStack.record(marksSnapshot(page.index, before, paperID, name), marksSnapshot(page.index, next, paperID, name))
     page.marks = next
     page.redraw()
-    void this.saveMarks(page)
+    void this.saveMarks(page, before)
     this.actions.marksChanged?.()
   }
 
@@ -1039,11 +1101,34 @@ export class Reader implements PageOwner {
   }
 
   /** Takes a mark off its page — the Marks tab's Delete, the editor's trash. */
-  removeMark(pageIndex: number, id: string) {
+  removeMark(pageIndex: number, id: string, name = L('표시 지우기', 'Delete Mark')) {
     const page = this.pages[pageIndex]
     if (!page || !page.marks.some((mark) => mark.id === id)) return
-    this.changeMarks(page, page.marks.filter((mark) => mark.id !== id))
+    this.changeMarks(page, page.marks.filter((mark) => mark.id !== id), name)
     this.bar.hideMark()
+  }
+
+  /** The pen's eraser over a mark takes it off, as the Mac's does — one
+   *  step back with ⌘Z («Erase Mark»). */
+  eraseMarkAt(page: PageView, point: { x: number; y: number }): boolean {
+    const mark = markAt(page.marks, point)
+    if (!mark) return false
+    this.removeMark(page.index, mark.id, L('표시 지우기', 'Erase Mark'))
+    return true
+  }
+
+  /** The mark under the pointer draws lighter with an edge, and the pointer
+   *  is a hand — the Mac's `MarkHover`. */
+  private hoverMark(page: PageView | null, point: { x: number; y: number } | null) {
+    const mark = page && point ? markAt(page.marks, point) : null
+    const id = mark?.id ?? null
+    for (const other of this.near) {
+      const wanted = other === page ? id : null
+      if (other.hoveredMarkID === wanted) continue
+      other.hoveredMarkID = wanted
+      other.redraw()
+    }
+    this.scroll.classList.toggle('over-mark', Boolean(mark))
   }
 
   /** What the reader wrote about a mark: an empty note takes it away. */
@@ -1057,7 +1142,7 @@ export class Reader implements PageOwner {
       if (trimmed) next.comment = trimmed
       else delete next.comment
       return next
-    }))
+    }), L('노트', 'Note'))
   }
 
   /** A mark in another of the five colours. */
@@ -1066,7 +1151,7 @@ export class Reader implements PageOwner {
     const color = MARK_COLORS[colorName]
     if (!page || !color) return
     this.changeMarks(page, page.marks.map((mark) =>
-      (mark.id === id ? { ...mark, color: [...color] as [number, number, number] } : mark)))
+      (mark.id === id ? { ...mark, color: [...color] as [number, number, number] } : mark)), L('표시 색', 'Mark Colour'))
   }
 
   /**
@@ -1182,9 +1267,14 @@ export class Reader implements PageOwner {
     if (!at) return
     const page = this.pageContaining(at.target)
     const point = page?.pointOnPage(at.x, at.y)
-    if (!page || !point) return this.showOverLink(null)
+    if (!page || !point) {
+      this.hoverMark(null, null)
+      return this.showOverLink(null)
+    }
     await page.pageLinks()
-    this.showOverLink(page.linkAt(point))
+    const link = page.linkAt(point)
+    this.showOverLink(link)
+    this.hoverMark(link ? null : page, link ? null : point)
   }
 
   private showOverLink(link: PageLink | null) {

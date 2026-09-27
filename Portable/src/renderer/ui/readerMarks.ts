@@ -20,14 +20,15 @@ import type { SelectionPart } from './markBar.js'
 export function selectionParts(inside: HTMLElement, pageAt: (x: number, y: number) => PageView | null): SelectionPart[] {
   const selection = window.getSelection()
   if (!selection || selection.isCollapsed || selection.rangeCount === 0) return []
-  const text = selection.toString()
   const byPage = new Map<PageView, DOMRect[]>()
+  const ranges: Range[] = []
   for (let index = 0; index < selection.rangeCount; index += 1) {
     const range = selection.getRangeAt(index)
     const common = range.commonAncestorContainer instanceof Element
       ? range.commonAncestorContainer
       : range.commonAncestorContainer.parentElement
     if (!common || !inside.contains(common)) continue
+    ranges.push(range)
     // The boxes as the text layer gives them. With `--scale-factor` set, a
     // run's box is its em box: measured, the words sit from a tenth of the
     // way down it to seven tenths, and the line below clears it altogether
@@ -58,7 +59,9 @@ export function selectionParts(inside: HTMLElement, pageAt: (x: number, y: numbe
         height: Math.abs(bottomRight.y - topLeft.y),
       })
     })
-    if (quads.length > 0) parts.push({ page, quads, text })
+    // Each page's own words — the part of the selection inside that page —
+    // not the whole selection twice (`textByPage`).
+    if (quads.length > 0) parts.push({ page, quads, text: textOnPage(ranges, page.root) })
   }
   return parts.sort((a, b) => a.page.index - b.page.index)
 }
@@ -139,4 +142,22 @@ export function markClientBox(page: PageView, mark: Mark): DOMRect | null {
   const left = Math.min(...xs)
   const top = Math.min(...ys)
   return new DOMRect(left, top, Math.max(...xs) - left, Math.max(...ys) - top)
+}
+
+/** The words of the selection that lie inside one page. */
+export function textOnPage(ranges: Range[], root: HTMLElement): string {
+  const words: string[] = []
+  for (const range of ranges) {
+    const part = range.cloneRange()
+    const box = document.createRange()
+    box.selectNodeContents(root)
+    // Clamped to the page: a range that starts before it begins at its top,
+    // one that runs past it ends at its foot.
+    if (part.compareBoundaryPoints(Range.START_TO_START, box) < 0) part.setStart(box.startContainer, box.startOffset)
+    if (part.compareBoundaryPoints(Range.END_TO_END, box) > 0) part.setEnd(box.endContainer, box.endOffset)
+    if (part.compareBoundaryPoints(Range.START_TO_END, part) < 0 || part.collapsed) continue
+    const said = part.toString()
+    if (said.trim()) words.push(said)
+  }
+  return words.join(' ').trim()
 }

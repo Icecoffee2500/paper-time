@@ -56,10 +56,11 @@ import { focusSuite } from './focus.js'
 import { voiceSuite } from './voice.js'
 import { tokensSuite } from './tokens.js'
 import { libraryListSuite } from './libraryList.js'
+import { marksSuite } from './marks.js'
 import { PaperMeta, PaperState } from '../shared/model.js'
 import { entryFor, formatEntry, protectTitle } from '../shared/bibtex.js'
 import { escapeLaTeX } from '../shared/latexTable.js'
-import { readDrawings, writeDrawings, stripOwnedForDisplay } from '../main/pdfwrite.js'
+import { readDrawings, readMarks, writeDrawings, stripOwnedForDisplay } from '../main/pdfwrite.js'
 import { Library, RecordUnreadable, readJSON } from '../main/library.js'
 import { providerIcon, providerOf } from '../shared/cloudProvider.js'
 import { linesFromRuns, type RunBox } from '../shared/textLines.js'
@@ -429,6 +430,7 @@ async function main() {
   await sketchCommandsSuite(test, suite)
   await focusSuite(test, suite)
   await libraryListSuite(test, suite)
+  await marksSuite(test, suite)
   await voiceSuite(test, suite)
   await tokensSuite(test, suite)
 
@@ -604,7 +606,10 @@ async function main() {
       const written = await writeDrawings(original, [{ pageIndex: 0, elements, strokes: [] }])
       const shown = await stripOwnedForDisplay(written)
       assert.equal((await readDrawings(shown)).size, 0)
-      assert.equal(await countAnnotations(shown, 0), await countAnnotations(original, 0))
+      // Every text markup goes too, anyone's: the window draws them all.
+      const markups = [...((await readMarks(original)).get(0) ?? [])].reduce((sum, mark) => sum + (mark.foreign ? 1 : 0), 0)
+      assert.ok(await countAnnotations(shown, 0) <= await countAnnotations(original, 0) - markups)
+      assert.equal(((await readMarks(shown)).get(0) ?? []).length, 0)
     })
 
     await test('a stroke keeps its shape through the file', async () => {

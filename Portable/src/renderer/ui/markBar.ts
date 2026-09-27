@@ -17,7 +17,8 @@ import { icon } from '../icons.js'
 import { platform } from '../bridge.js'
 import { L } from '../../shared/lang.js'
 import { withKey } from '../../shared/shortcuts.js'
-import { MARK_COLORS, MARK_COLOR_NAMES, cssColor, type Mark, type MarkKind } from '../../shared/marks.js'
+import { MARK_COLORS, MARK_COLOR_NAMES, cssColor, nearestColorName, type Mark, type MarkKind } from '../../shared/marks.js'
+import type { MenuEntry } from './menu.js'
 import { copyText } from './clipboard.js'
 import type { PageView } from './pageView.js'
 
@@ -49,7 +50,7 @@ export interface MarkBarHost {
 }
 
 /** One of the five mark colours, said in the window's language. */
-function colourWord(name: string): string {
+export function colourWord(name: string): string {
   return ({
     yellow: L('노랑', 'yellow'),
     green: L('초록', 'green'),
@@ -59,20 +60,10 @@ function colourWord(name: string): string {
   } as Record<string, string>)[name] ?? name
 }
 
-/** Which of the five a mark's colour is nearest — the one its editor rings. */
-export function nearestColourName(rgb: [number, number, number]): string {
-  let best = MARK_COLOR_NAMES[0]
-  let closest = Infinity
-  for (const name of MARK_COLOR_NAMES) {
-    const [r, g, b] = MARK_COLORS[name]
-    const distance = (r - rgb[0]) ** 2 + (g - rgb[1]) ** 2 + (b - rgb[2]) ** 2
-    if (distance < closest) {
-      closest = distance
-      best = name
-    }
-  }
-  return best
-}
+/** How long the selection has to rest before the bar comes — the Mac's
+ *  220 ms (`scheduleMarkupPanel`): a bar chasing the pointer letter by letter
+ *  flickered, and landed under the pointer at the release. */
+const SETTLE_MS = 220
 
 export class MarkBar {
   private node: HTMLElement | null = null
@@ -82,8 +73,37 @@ export class MarkBar {
   private editing: { pageIndex: number; id: string } | null = null
   /** Where what the bar is about is on screen now. */
   private anchor: (() => DOMRect | null) | null = null
+  /** The kind a colour applies: a highlight, unless Underline or
+   *  Strikethrough was pressed first (`MarkupBarView.arm`). */
+  private armed: MarkKind = 'highlight'
+  private settle = 0
+  /** A button is down over the pages: the selection is still being made. */
+  private pressing = false
 
-  constructor(private readonly host: MarkBarHost) {}
+  private readonly listening = new AbortController()
+
+  constructor(private readonly host: MarkBarHost) {
+    const signal = this.listening.signal
+    host.node.addEventListener('pointerdown', (event: PointerEvent) => {
+      if (this.node?.contains(event.target as Node)) return
+      this.pressing = true
+    }, { signal })
+    window.addEventListener('pointerup', () => {
+      if (!this.pressing) return
+      this.pressing = false
+      this.selectionChanged()
+    }, { signal })
+    // The window went behind another: the bar goes with its focus, as the
+    // Mac's panel does on `didResignKey` — unless a note is being written.
+    window.addEventListener('blur', () => this.hide(), { signal })
+  }
+
+  /** The reader is gone for good. */
+  dispose() {
+    this.listening.abort()
+    clearTimeout(this.settle)
+    this.reset()
+  }
 
   /** Whether the bar is up over a selection or a mark — Escape's first step. */
   get showing(): boolean {
@@ -144,9 +164,26 @@ export class MarkBar {
     else this.hide()
   }
 
-  /** The selection changed: the bar follows it, or goes. */
+  /** The selection changed: the bar follows it once it rests, or goes. */
   selectionChanged() {
     // The note being written keeps the bar where it is.
+    if (this.composing) return
+    clearTimeout(this.settle)
+    const selection = window.getSelection()
+    if (!selection || selection.isCollapsed) {
+      if (!this.editing) this.hide()
+      return
+    }
+    // While the drag is still going, nothing: the bar arrives at the words
+    // the hand let go of.
+    if (this.pressing) {
+      if (this.node?.dataset.mode === 'selection') this.hide()
+      return
+    }
+    this.settle = window.setTimeout(() => this.showForSelection(), SETTLE_MS)
+  }
+
+  private showForSelection() {
     if (this.composing) return
     const selection = window.getSelection()
     if (!selection || selection.isCollapsed || selection.rangeCount === 0 || this.host.drawing()) {
@@ -170,30 +207,86 @@ export class MarkBar {
     this.place(rect)
   }
 
+  /**
+   * The Mac's bar over a selection: five colours that apply the armed kind,
+   * Underline and Strikethrough that arm it — a green underline is two
+   * presses, and the armed button and the swatches say which is coming —
+   * then a note and a copy. Built each time it shows, so its words are in
+   * the language of now.
+   */
   private fillSelection() {
     const bar = this.bar()
-    if (bar.dataset.mode === 'selection') return
     bar.dataset.mode = 'selection'
     clear(bar)
+    const swatches: HTMLElement[] = []
     for (const name of MARK_COLOR_NAMES) {
       const colour = colourWord(name)
-      bar.append(this.swatch(name, L(`${colour} 형광펜`, `Highlight in ${colour}`), () => {
-        this.host.markSelection('highlight', name)
+      const swatch = this.swatch(name, colour, () => {
+        this.host.markSelection(this.armed, name)
         this.hide()
-      }))
+      })
+      swatch.dataset.kind = this.armed
+      swatches.push(swatch)
+      bar.append(swatch)
     }
     bar.append(el('span', { class: 'mark-divider' }))
-    bar.append(this.button('mark-action', withKey(L('밑줄', 'Underline'), 'underline', platform), icon('underline'), () => {
-      this.host.markSelection('underline', 'yellow')
-      this.hide()
-    }))
-    bar.append(this.button('mark-action', L('취소선', 'Strikethrough'), icon('strikethrough'), () => {
-      this.host.markSelection('strikethrough', 'yellow')
-      this.hide()
-    }))
+    const arming: HTMLElement[] = []
+    const arm = (kind: MarkKind) => {
+      this.armed = this.armed === kind ? 'highlight' : kind
+      for (const button of arming) button.setAttribute('aria-pressed', String(button.dataset.kind === this.armed))
+      for (const swatch of swatches) swatch.dataset.kind = this.armed
+    }
+    for (const [kind, label, glyph, key] of [
+      ['underline', L('밑줄', 'Underline'), 'underline', 'underline'],
+      ['strikethrough', L('취소선', 'Strikethrough'), 'strikethrough', null],
+    ] as const) {
+      const button = this.button('mark-action mark-arm', key ? withKey(label, key, platform) : label, icon(glyph), () => arm(kind))
+      button.dataset.kind = kind
+      button.setAttribute('aria-pressed', String(this.armed === kind))
+      arming.push(button)
+      bar.append(button)
+    }
     bar.append(el('span', { class: 'mark-divider' }))
-    bar.append(this.button('mark-action', L('이 구절에 노트 달기', 'Add a note about this passage'), icon('square.and.pencil'), () => this.compose()))
+    bar.append(this.button('mark-action', L('노트 더하기', 'Add Note'), icon('square.and.pencil'), () => this.compose()))
     bar.append(this.button('mark-action', L('복사', 'Copy'), icon('doc.on.doc'), () => void this.copySelection()))
+  }
+
+  /** What a right-click on a selection offers (`MarkupCapablePDFView.menu(for:)`). */
+  selectionMenu(): MenuEntry[] {
+    return [
+      {
+        label: L('형광펜', 'Highlight'),
+        icon: 'highlighter',
+        children: MARK_COLOR_NAMES.map((name) => ({
+          label: colourWord(name),
+          action: () => void this.host.markSelection('highlight', name),
+        })),
+      },
+      { label: L('밑줄', 'Underline'), icon: 'underline', action: () => void this.host.markSelection('underline', 'yellow') },
+      { label: L('취소선', 'Strikethrough'), icon: 'strikethrough', action: () => void this.host.markSelection('strikethrough', 'yellow') },
+      { label: L('노트 더하기…', 'Add Note…'), icon: 'square.and.pencil', action: () => this.compose() },
+      { separator: true },
+      { label: L('복사', 'Copy'), icon: 'doc.on.doc', action: () => void this.copySelection() },
+    ]
+  }
+
+  /** What a right-click on a mark offers: its colour, and taking it off. */
+  markMenu(page: PageView, mark: Mark): MenuEntry[] {
+    const current = nearestColorName(mark.color)
+    return [
+      {
+        label: L('표시 색', 'Mark Colour'),
+        icon: 'circle.lefthalf.filled',
+        children: MARK_COLOR_NAMES.map((name) => ({
+          label: colourWord(name),
+          checked: name === current,
+          action: () => this.host.recolorMark(page.index, mark.id, name),
+        })),
+      },
+      { label: L('노트…', 'Note…'), icon: 'square.and.pencil', action: () => this.compose({ pageIndex: page.index, id: mark.id }) },
+      { separator: true },
+      { label: L('표시 지우기', 'Remove Mark'), icon: 'trash', danger: true, action: () => this.host.removeMark(page.index, mark.id) },
+    ]
   }
 
   /** Copies the selected words as they are, and says so — once it is true. */
@@ -230,6 +323,9 @@ export class MarkBar {
     const bar = this.bar()
     bar.dataset.mode = 'compose'
     clear(bar)
+    // The Mac's composer: the passage, quietly, over the field — so the note
+    // is written looking at what it is about — then Cancel and Save.
+    const quoted = (target ? mark?.text : parts.map((part) => part.text).join(' ')) ?? ''
     const input = el('input', {
       type: 'text',
       class: 'mark-note-field',
@@ -238,7 +334,8 @@ export class MarkBar {
       spellcheck: 'true',
     }) as HTMLInputElement
     input.value = mark?.comment ?? ''
-    const save = el('button', { class: 'mark-note-save', text: L('저장', 'Save') })
+    const cancel = el('button', { class: 'plain-button mark-note-cancel', text: L('취소', 'Cancel') })
+    const save = el('button', { class: 'filled-button mark-note-save', text: L('저장', 'Save') })
     const finish = (keep: boolean) => {
       if (!this.composing) return
       this.composing = null
@@ -262,10 +359,13 @@ export class MarkBar {
         finish(false)
       }
     })
-    on(input, 'blur', () => finish(input.value.trim().length > 0 || Boolean(target)))
-    on(save, 'mousedown', (event: MouseEvent) => event.preventDefault())
+    // Clicking away keeps what was typed, and throws away nothing typed.
+    on(input, 'blur', () => finish(input.value.trim().length > 0 && input.value.trim() !== (mark?.comment ?? '')))
+    for (const button of [cancel, save]) on(button, 'mousedown', (event: MouseEvent) => event.preventDefault())
     on(save, 'click', () => finish(true))
-    bar.append(input, save)
+    on(cancel, 'click', () => finish(false))
+    if (quoted.trim()) bar.append(el('div', { class: 'mark-note-quote', text: quoted.trim() }))
+    bar.append(input, el('div', { class: 'mark-note-buttons' }, [el('span', { class: 'fb-spacer' }), cancel, save]))
     this.composing = { finish }
     this.place(rect)
     input.focus()
@@ -273,9 +373,8 @@ export class MarkBar {
 
   /** The controls for a mark already on the page, over it. */
   showMark(page: PageView, mark: Mark) {
-    // A mark another app made is shown and left alone: this build writes
-    // only its own marks back to the file, so an edit here would not stay.
-    if (mark.id.startsWith('foreign-')) return
+    // Another reader's mark too: the first change takes it into this app's
+    // care, under the identifier both builds derive for it.
     const anchor = () => this.host.markClientBox(page, mark)
     const rect = anchor()
     if (!rect) return
@@ -284,7 +383,7 @@ export class MarkBar {
     const bar = this.bar()
     bar.dataset.mode = 'mark'
     clear(bar)
-    const current = nearestColourName(mark.color)
+    const current = nearestColorName(mark.color)
     for (const name of MARK_COLOR_NAMES) {
       const colour = colourWord(name)
       bar.append(this.swatch(name, L(`색 바꾸기: ${colour}`, `Change to ${colour}`), () => {
@@ -292,14 +391,10 @@ export class MarkBar {
         this.hideMark()
       }, name === current))
     }
+    // Five colours and a red trash, the Mac's editor: a note on a mark is
+    // written from its row in the Marks tab, or its right-click menu.
     bar.append(el('span', { class: 'mark-divider' }))
-    bar.append(this.button(
-      'mark-action',
-      mark.comment ? L('노트 고치기', 'Edit Note') : L('노트 달기', 'Add Note'),
-      icon('square.and.pencil'),
-      () => this.compose({ pageIndex: page.index, id: mark.id }),
-    ))
-    bar.append(this.button('mark-action', L('표시 지우기', 'Remove Mark'), icon('trash'), () => this.host.removeMark(page.index, mark.id)))
+    bar.append(this.button('mark-action danger', L('표시 지우기', 'Remove Mark'), icon('trash'), () => this.host.removeMark(page.index, mark.id)))
     this.editing = { pageIndex: page.index, id: mark.id }
     this.place(rect)
     this.host.markShown?.(mark.id)
@@ -313,6 +408,8 @@ export class MarkBar {
 
   hide() {
     if (this.composing) return
+    clearTimeout(this.settle)
+    this.armed = 'highlight'
     if (this.node) {
       this.node.style.display = 'none'
       delete this.node.dataset.mode

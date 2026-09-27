@@ -17,6 +17,8 @@ import { closeMenu, isMenuOpen } from './ui/menu.js'
 import { isSheetKey, isSheetOpen } from './ui/sheet.js'
 import { resetSketchInput, undoStack, type SketchInputEditing } from './ui/sketchInput.js'
 import { sketchEditor } from './ui/sketchEditing.js'
+import { toast } from './ui/toolbar.js'
+import { L } from '../shared/lang.js'
 
 export function pickTool(tool: SketchTool) {
   setSketchTool(tool)
@@ -36,6 +38,12 @@ export function applyUndo(redo: boolean) {
   if (!target) return
   // A step may cover two pages — a selection carried from one to the other.
   target.restore(snapshot)
+  // A step of the marks leaves the drawing's selection alone; it is not
+  // about the drawing at all.
+  if (snapshot.marks) {
+    if (snapshot.name) toast(redo ? L(`다시 하기: ${snapshot.name}`, `Redo ${snapshot.name}`) : L(`되돌리기: ${snapshot.name}`, `Undo ${snapshot.name}`))
+    return
+  }
   store.sketch.selection = null
   changed('sketch')
 }

@@ -168,6 +168,22 @@ export class Journals {
     return true
   }
 
+  /** The same, with the other pages' identifiers given by the window. */
+  async recordChange(
+    id: string,
+    root: string,
+    pageIndex: number,
+    before: MarkupRecord[],
+    after: MarkupRecord[],
+    elsewhere: Set<string>,
+    now = new Date(),
+  ): Promise<boolean> {
+    const own = await this.own(id, root)
+    if (!recordChanges(own.journal, pageIndex, before, after, now, elsewhere)) return false
+    this.keep(id, root, own)
+    return true
+  }
+
   /** Writes now whatever is waiting. */
   async flush(): Promise<void> {
     const waiting = [...this.writes.values()]

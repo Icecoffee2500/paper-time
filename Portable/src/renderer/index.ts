@@ -131,7 +131,16 @@ shell.inspector = buildInspector({
     // The style the next shape gets, kept for the next launch.
     saveSettings({ sketchStyle: JSON.stringify(store.sketch.style.encode()) }, { soon: true })
   },
-  marks: () => focused()?.marksList() ?? [],
+  marks: () => {
+    const reader = focused()
+    if (!reader) return []
+    return reader.marksLoaded ? reader.marksList() : null
+  },
+  showMarksTab: () => {
+    // The Mac's `revealedMarkID`: the inspector shows, on its Marks tab.
+    setInspectorTab('marks')
+    revealPane('inspector')
+  },
   revealMark: (pageIndex, id) => void focused()?.revealMark(pageIndex, id),
   removeMark: (pageIndex, id) => focused()?.removeMark(pageIndex, id),
   commentMark: (pageIndex, id, comment) => focused()?.setMarkComment(pageIndex, id, comment),

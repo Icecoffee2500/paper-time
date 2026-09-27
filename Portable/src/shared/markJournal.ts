@@ -18,7 +18,7 @@
  * removal is written as the Mac writes one.
  */
 import { isoTimestamp } from './coding.js'
-import { MARK_COLORS, quadToRect, rectToQuad, type Mark, type MarkKind } from './marks.js'
+import { MARK_COLORS, nearestColorName, quadToRect, rectToQuad, type Mark, type MarkKind } from './marks.js'
 
 /** `MarkupDescriptor` as Swift's `JSONEncoder` writes it through `JSONCoding`. */
 export interface Descriptor {
@@ -72,20 +72,7 @@ export interface Word {
  * `MarkupColor.nearest`: the named colour closest to a colour — grey and
  * black, which are near none of them, take the default.
  */
-export function nearestColorName(rgb: [number, number, number]): string {
-  const [red, green, blue] = rgb
-  if (Math.max(red, green, blue) - Math.min(red, green, blue) <= 0.18) return 'yellow'
-  let best = 'yellow'
-  let closest = Infinity
-  for (const [name, value] of Object.entries(MARK_COLORS)) {
-    const distance = (value[0] - red) ** 2 + (value[1] - green) ** 2 + (value[2] - blue) ** 2
-    if (distance < closest) {
-      closest = distance
-      best = name
-    }
-  }
-  return best
-}
+export { nearestColorName }
 
 /** A mark as the Mac describes it. */
 export function describe(mark: Mark, pageIndex: number, createdAt: string): Descriptor {
@@ -185,7 +172,7 @@ export function merged(journals: Held[]): Map<string, Word> {
 export function upgradeLegacy(journal: Journal, file: Map<number, Mark[]>): boolean {
   const inFile = new Map<string, { mark: Mark; pageIndex: number }>()
   for (const [pageIndex, marks] of file) {
-    for (const mark of marks) if (!mark.id.startsWith('foreign-')) inFile.set(mark.id.toUpperCase(), { mark, pageIndex })
+    for (const mark of marks) if (!mark.foreign) inFile.set(mark.id.toUpperCase(), { mark, pageIndex })
   }
   let changed = false
   for (const [key, entry] of Object.entries(journal.entries ?? {})) {
@@ -262,7 +249,11 @@ export function reconcile(
       const list = pages.get(pageIndex) ?? []
       const at = list.findIndex((mark) => mark.id.toUpperCase() === id)
       if (at >= 0 && sameMark(list[at], wanted)) {
-        list[at] = { ...list[at], createdAt: descriptor.createdAt }
+        // The file's record, with the words the journal knows: a commented
+        // mark carries its note in `/Contents`, not its quotation, and a
+        // record read back from the file alone would journal an empty
+        // quotation over the Mac's the next time it changed here.
+        list[at] = { ...list[at], createdAt: descriptor.createdAt, text: list[at].text || descriptor.quotedText || '' }
         continue
       }
     }
@@ -305,8 +296,11 @@ export function recordChanges(
   elsewhere: Set<string> = new Set(),
 ): boolean {
   const at = isoTimestamp(now)
-  const ours = (marks: Mark[]) =>
-    new Map(marks.filter((mark) => !mark.id.startsWith('foreign-')).map((mark) => [mark.id.toUpperCase(), mark]))
+  // Every mark with an identifier the other build computes the same way —
+  // ours, and another reader's named by where it is. A foreign mark left
+  // alone is never described (`unchanged` below); one changed here is, under
+  // the identifier the Mac derives for it, which is how the Mac finds it.
+  const ours = (marks: Mark[]) => new Map(marks.map((mark) => [mark.id.toUpperCase(), mark]))
   const was = ours(before)
   const is = ours(after)
   let changed = false
@@ -316,6 +310,8 @@ export function recordChanges(
     // alone is not this device's to describe: the Mac's own description of
     // it knows the quoted text, which a file with a comment does not carry.
     if (previous && unchanged(previous, mark)) continue
+    // A foreign mark seen for the first time is not a change.
+    if (!previous && mark.foreign) continue
     journal.entries[id] = { at, descriptor: describe(mark, pageIndex, at) }
     changed = true
   }

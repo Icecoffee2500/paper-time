@@ -41,7 +41,10 @@ export interface InspectorActions {
   /** A `[[link]]` in a note followed: that note, wherever it is shown. */
   openNote: (id: string) => void
   /** The marks of the paper in front, in reading order — the Marks tab. */
-  marks: () => { pageIndex: number; mark: Mark }[]
+  /** Every mark in reading order, or null while the paper is still opening. */
+  marks: () => { pageIndex: number; mark: Mark }[] | null
+  /** The inspector, showing, on its Marks tab. */
+  showMarksTab: () => void
   revealMark: (pageIndex: number, id: string) => void
   removeMark: (pageIndex: number, id: string) => void
   commentMark: (pageIndex: number, id: string, comment: string) => void
@@ -132,8 +135,17 @@ export function buildInspector(actions: InspectorActions): InspectorPanel {
     return true
   }
 
+  /** A mark clicked on the page: the Marks tab comes forward with its row
+   *  pulsing — shown whatever the filter was, as `reveal(inList:)` does. */
   function showMark(id: string) {
-    if (store.settings.inspectorTab === 'marks') flashMarkRow(body, id)
+    if (store.settings.inspectorTab !== 'marks') {
+      actions.showMarksTab()
+    }
+    if (!body.querySelector(`.mark-row[data-mark="${CSS.escape(id)}"]`) && markFilter !== 'all') {
+      markFilter = 'all'
+      update()
+    }
+    flashMarkRow(body, id)
   }
 
   update()
@@ -513,7 +525,17 @@ function markKindName(mark: Mark): string {
 }
 
 function marks(body: HTMLElement, paper: Paper, actions: InspectorActions, redraw: () => void) {
-  const items = actions.marks()
+  const loaded = actions.marks()
+  if (loaded === null) {
+    // The marks are read with the paper; until then the tab says so rather
+    // than calling a well-marked paper unmarked.
+    body.append(el('div', { class: 'empty' }, [
+      el('span', { class: 'spinner' }),
+      el('h2', { text: L('논문을 여는 중', 'Opening the Paper') }),
+    ]))
+    return
+  }
+  const items = loaded
   const chips = el('div', { class: 'mark-filters' })
   for (const [value, label] of markFilters()) {
     const count = items.filter((item) => markMatches(value, item.mark)).length
@@ -570,39 +592,56 @@ function marks(body: HTMLElement, paper: Paper, actions: InspectorActions, redra
     on(row, 'keydown', (event: KeyboardEvent) => {
       if (event.key === 'Enter') actions.revealMark(pageIndex, mark.id)
     })
-    const foreign = mark.id.startsWith('foreign-')
     on(row, 'contextmenu', (event: MouseEvent) => {
       event.preventDefault()
+      // Another reader's mark too: the first change takes it into this app's
+      // care, as the Mac's does.
       actions.markMenu(row, [
-        ...(foreign ? [] : [{
+        {
           label: mark.comment ? L('노트 고치기…', 'Edit Note…') : L('노트 더하기…', 'Add Note…'),
           icon: 'square.and.pencil',
           action: () => {
             editingMark = mark.id
             redraw()
           },
-        }]),
-        { label: L('글 복사', 'Copy Text'), icon: 'doc.on.doc', action: () => actions.copyText(mark.text || mark.comment || '') },
-        ...(foreign ? [] : [
-          { separator: true },
-          { label: L('지우기', 'Delete'), icon: 'trash', action: () => actions.removeMark(pageIndex, mark.id) },
-        ]),
+        },
+        // The words it marks, and only those: copying the note under «Copy
+        // Text» put the wrong thing on the clipboard.
+        { label: L('글 복사', 'Copy Text'), icon: 'doc.on.doc', disabled: !mark.text, action: () => actions.copyText(mark.text) },
+        { separator: true },
+        { label: L('지우기', 'Delete'), icon: 'trash', danger: true, action: () => actions.removeMark(pageIndex, mark.id) },
       ])
     })
     if (editingMark === mark.id) {
-      const input = el('input', { type: 'text', class: 'mark-comment-field', placeholder: L('노트', 'Note') }) as HTMLInputElement
+      // A field that grows to four lines (`TextField(axis: .vertical)`):
+      // Return keeps the note, ⇧Return starts a new line.
+      const input = el('textarea', { class: 'mark-comment-field', rows: '1', placeholder: L('노트', 'Note') }) as HTMLTextAreaElement
       input.value = mark.comment ?? ''
+      const grow = () => {
+        input.style.height = 'auto'
+        input.style.height = `${Math.min(input.scrollHeight, 4 * 19 + 10)}px`
+      }
+      on(input, 'input', grow)
+      requestAnimationFrame(grow)
       const done = el('button', { class: 'filled-button mark-comment-done', text: L('끝', 'Done') })
+      // Out of the field first: the tab does not redraw under a field that
+      // has the keyboard, so the row stayed open with the old words in it.
       const commit = () => {
         if (editingMark !== mark.id) return
         editingMark = null
+        input.blur()
         actions.commentMark(pageIndex, mark.id, input.value)
+        redraw()
       }
       on(input, 'keydown', (event: KeyboardEvent) => {
         event.stopPropagation()
-        if (event.key === 'Enter') commit()
+        if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+          event.preventDefault()
+          commit()
+        }
         if (event.key === 'Escape') {
           editingMark = null
+          input.blur()
           redraw()
         }
       })
