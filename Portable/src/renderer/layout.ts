@@ -23,7 +23,9 @@ let panesShown = new Set<Pane>()
 
 /** The list column: the papers, or on the Notes shelf the slip-box. */
 export function syncListSlot() {
-  const wanted = store.shelf.kind === 'notes' && !solo ? shell.slipBox.node : shell.paperList.node
+  const notes = store.shelf.kind === 'notes' && !solo
+  // A passage followed out of a note: the note beside its paper, where the list was.
+  const wanted = notes ? (store.slipBox.paperID !== null ? shell.slipBox.side : shell.slipBox.node) : shell.paperList.node
   if (wanted.parentElement !== shell.listSlot) {
     clear(shell.listSlot)
     shell.listSlot.append(wanted)

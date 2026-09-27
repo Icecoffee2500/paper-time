@@ -12,6 +12,7 @@
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
+import { renameHeld } from './renameHeld.js'
 import path from 'node:path'
 import type { KeptReason } from '../shared/api.js'
 import { merged, reconcile } from '../shared/markJournal.js'
@@ -323,30 +324,6 @@ export async function recordBaseIfAbsent(root: string, id: string, bytes: Uint8A
 }
 
 /**
- * A rename over a file another program has open. On Windows that fails —
- * EPERM, EBUSY, EACCES — while an antivirus scans the file it just saw
- * change, a sync client uploads it, or a reader shows it, and each of them
- * lets go within moments. Tried a few times before the save is given back.
- */
-export async function renameHeld(
-  from: string,
-  to: string,
-  rename: (from: string, to: string) => Promise<void> = (a, b) => fsp.rename(a, b),
-  waits: number[] = [100, 300, 1000, 2000],
-) {
-  for (let attempt = 0; ; attempt += 1) {
-    try {
-      await rename(from, to)
-      return
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code
-      if (attempt >= waits.length || !['EPERM', 'EBUSY', 'EACCES'].includes(code ?? '')) throw error
-      await new Promise((resolve) => setTimeout(resolve, waits[attempt]))
-    }
-  }
-}
-
-/**
  * Whether anything this build made is on the paper — a mark, a shape, a
  * stroke — for the line that says the file does not carry it.
  */
@@ -387,3 +364,5 @@ export async function sweepTemporaries(files: string[], olderThanMs = 10 * 60_00
   }
   return removed
 }
+
+export { renameHeld }

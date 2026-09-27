@@ -17,6 +17,7 @@ import { closeMenu, isMenuOpen } from './ui/menu.js'
 import { isSheetKey, isSheetOpen } from './ui/sheet.js'
 import { resetSketchInput, undoStack, type SketchInputEditing } from './ui/sketchInput.js'
 import { sketchEditor } from './ui/sketchEditing.js'
+import { backToNotes } from './ui/slipBox.js'
 import { toast } from './ui/toolbar.js'
 import { L } from '../shared/lang.js'
 
@@ -83,6 +84,8 @@ export function installKeys() {
       if (findBar.isOpen) return findBar.close()
       if (isOpenPapersShowing()) return closeOpenPapers()
       if (reader?.markBarShowing) return reader.hideMarkBar()
+      // A passage followed out of a note: Escape is the «‹ Notes» above it.
+      if (!drawing && store.shelf.kind === 'notes' && backToNotes()) return
     }
 
     // While the pen is out the page's own editor has the Mac's whole key map

@@ -13,6 +13,7 @@
  * note written here is that note there, and a folder carried across is not
  * rewritten by the other build the first time it looks at it.
  */
+import { renameHeld } from './renameHeld.js'
 import { noteOwnWrite } from './ownWrites.js'
 import { samePath } from '../shared/paths.js'
 import fs from 'node:fs'
@@ -116,7 +117,9 @@ export class SlipBoxFolder {
     try {
       await fsp.writeFile(temporary, zettelText(note), 'utf8')
       noteOwnWrite(file)
-      await fsp.rename(temporary, file)
+      // On Windows a note a sync client or the indexer is holding refuses
+      // the rename for a moment; it is tried again before the save fails.
+      await renameHeld(temporary, file)
       noteOwnWrite(file)
     } catch (error) {
       await fsp.rm(temporary, { force: true })
@@ -278,7 +281,8 @@ export class NotesStore {
   }
 
   /** Every note, each with the box it is in, settled into the right boxes. */
-  load(): Promise<NoteDTO[]> {
+  async load(): Promise<NoteDTO[]> {
+    await this.comeBack().catch(() => null)
     return this.run(async () => {
       const reading = this.boxes()
       const read = await Promise.all(reading.map((box) => box.loadNotes()))
@@ -410,11 +414,33 @@ export class NotesStore {
     })
   }
 
+  /**
+   * The chosen folder is back — a disk plugged in again, a drive signed back
+   * in to — while the app is open: the notes that fell back into the app's
+   * own folder go across now, not at the next launch (`NotesModel.comeBack`).
+   * Asked when the settings are shown and before every reading.
+   */
+  comeBack(): Promise<{ moved: number; kept: number } | null> {
+    if (!this.loose.chosen || !this.loose.isReachable()) return Promise.resolve(null)
+    if (!this.wentAway && !this.leftBehind.some((one) => one.id === this.appFolder.id)) return Promise.resolve(null)
+    return this.run(async () => {
+      const result = await this.carry(this.appFolder, this.loose)
+      this.wentAway = false
+      if (result.moved > 0 || result.kept > 0) this.lastMove = result
+      return result
+    })
+  }
+
+  /** What the last move made without being asked did, for the settings. */
+  private lastMove: { moved: number; kept: number } | null = null
+
   /** Carries into the chosen folder whatever is in the app's own: the notes written while the chosen one could not be reached. */
   catchUp(): Promise<{ moved: number; kept: number }> {
     return this.run(async () => {
       if (this.loose.id === this.appFolder.id) return { moved: 0, kept: 0 }
-      return this.carry(this.appFolder, this.loose)
+      const result = await this.carry(this.appFolder, this.loose)
+      if (result.moved > 0 || result.kept > 0) this.lastMove = result
+      return result
     })
   }
 
@@ -438,6 +464,7 @@ export class NotesStore {
       appFolder: this.appFolder.directory,
       away: this.chosenPath !== null && !this.loose.chosen || this.wentAway,
       leftBehind: this.leftBehind.filter((one) => one.id !== this.loose.id).map((one) => one.directory),
+      lastMove: this.lastMove,
     }
   }
 }

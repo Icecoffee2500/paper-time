@@ -9,9 +9,9 @@
  * it would vanish from under the hand typing it — so those are kept here
  * across a reading (`unwritten`), the way the Mac keeps them.
  */
-import type { NoteDTO, NotesFolderDTO } from '../shared/api.js'
+import type { NoteDTO, NotesFolderDTO, RequestResult } from '../shared/api.js'
 import {
-  makeZettelID, trimWhitespaceAndNewlines, zettelDisplayTitle, zettelIsEmpty, zettelLinks, zettelTags, type ZettelKind,
+  makeZettelID, trimWhitespace, trimWhitespaceAndNewlines, zettelDisplayTitle, zettelIsEmpty, zettelLinks, zettelTags, type ZettelKind,
 } from '../shared/zettel.js'
 import { call } from './bridge.js'
 import { changed, noteByID, noteDTO, noteFromDTO, store, type Note } from './state.js'
@@ -20,6 +20,89 @@ import { changed, noteByID, noteDTO, noteFromDTO, store, type Note } from './sta
 const unwritten = new Map<string, Note>()
 const saveTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const SAVE_AFTER_MS = 600
+
+/** Told once per note when a write fails — the window says so; the note stays in hand. */
+let writeFailed: (id: string, reason: unknown) => void = () => {}
+const failedOnce = new Set<string>()
+export function onNoteWriteFailed(report: (id: string, reason: unknown) => void) {
+  writeFailed = report
+}
+
+// MARK: - Indexes
+
+/**
+ * Who links to whom and how many notes wear each tag, kept rather than read
+ * off every note on every draw (`NotesModel.backlinks`, `tagCounts`): a note
+ * being typed changes its words many times a second and its links and tags
+ * almost never.
+ */
+let indexedFor: Note[] | null = null
+const linksOf = new Map<string, string[]>()
+const tagsOf = new Map<string, string[]>()
+let backlinks = new Map<string, Set<string>>()
+let tagCounts = new Map<string, number>()
+
+function rebuildIndexes() {
+  linksOf.clear()
+  tagsOf.clear()
+  backlinks = new Map()
+  tagCounts = new Map()
+  for (const note of store.notes) {
+    const links = zettelLinks(note.body)
+    const tags = zettelTags(note.body)
+    linksOf.set(note.id, links)
+    tagsOf.set(note.id, tags)
+    for (const target of links) {
+      let from = backlinks.get(target)
+      if (!from) backlinks.set(target, (from = new Set()))
+      from.add(note.id)
+    }
+    for (const tag of new Set(tags)) tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1)
+  }
+  indexedFor = store.notes
+}
+
+/** The indexes, current for `store.notes` — rebuilt only when the box itself was replaced from outside. */
+function indexes() {
+  if (indexedFor !== store.notes) rebuildIndexes()
+  return { backlinks, tagCounts }
+}
+
+/** One note's words changed: its links and tags follow only if they did. */
+function reindex(before: Note | undefined, after: Note) {
+  const current = indexedFor
+  if (!current) return
+  const links = zettelLinks(after.body)
+  const tags = zettelTags(after.body)
+  const oldLinks = linksOf.get(after.id) ?? (before ? zettelLinks(before.body) : [])
+  const oldTags = tagsOf.get(after.id) ?? (before ? zettelTags(before.body) : [])
+  const same = (a: string[], b: string[]) => a.length === b.length && a.every((one, index) => one === b[index])
+  if (!same(links, oldLinks)) {
+    for (const target of oldLinks) backlinks.get(target)?.delete(after.id)
+    for (const target of links) {
+      let from = backlinks.get(target)
+      if (!from) backlinks.set(target, (from = new Set()))
+      from.add(after.id)
+    }
+    linksOf.set(after.id, links)
+  }
+  if (!same(tags, oldTags)) {
+    for (const tag of new Set(oldTags)) {
+      const left = (tagCounts.get(tag) ?? 1) - 1
+      if (left > 0) tagCounts.set(tag, left)
+      else tagCounts.delete(tag)
+    }
+    for (const tag of new Set(tags)) tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1)
+    tagsOf.set(after.id, tags)
+  }
+}
+
+/** Whether a change of one note moved its links or its tags — what the lists beside it draw from. */
+export function linksOrTagsChanged(before: Pick<Note, 'body'>, after: Pick<Note, 'body'>): boolean {
+  const a = zettelLinks(before.body), b = zettelLinks(after.body)
+  const c = zettelTags(before.body), d = zettelTags(after.body)
+  return a.join('\u0000') !== b.join('\u0000') || c.join('\u0000') !== d.join('\u0000')
+}
 
 /** In the order they were written, and staying there. */
 function sorted(notes: Note[]): Note[] {
@@ -61,9 +144,17 @@ export function createNote(paperID: string | null, kind: ZettelKind = 'note'): N
 export function updateNote(note: Note) {
   const edited = { ...note, modified: new Date() }
   const at = store.notes.findIndex((one) => one.id === note.id)
+  const before = at >= 0 ? store.notes[at] : undefined
+  const indexed = indexedFor === store.notes
   store.notes = at >= 0
     ? [...store.notes.slice(0, at), edited, ...store.notes.slice(at + 1)]
     : sorted([...store.notes, edited])
+  // The same box with one note changed: the indexes move with it rather
+  // than being read again off every note.
+  if (indexed) {
+    indexedFor = store.notes
+    reindex(before, edited)
+  }
   unwritten.set(edited.id, edited)
   const waiting = saveTimers.get(edited.id)
   if (waiting) clearTimeout(waiting)
@@ -92,7 +183,19 @@ async function write(id: string) {
   saveTimers.delete(id)
   const note = noteByID(id)
   if (!note) return
-  const saved = await call('notes:save', { note: noteDTO(note) })
+  let saved: RequestResult<'notes:save'>
+  try {
+    saved = await call('notes:save', { note: noteDTO(note) })
+  } catch (reason) {
+    // Kept in hand (`unwritten`), and written with the next change or the
+    // next reading — said once per note, not once a keystroke.
+    if (!failedOnce.has(id)) {
+      failedOnce.add(id)
+      writeFailed(id, reason)
+    }
+    return
+  }
+  failedOnce.delete(id)
   // Which box it went into, on a new copy of the note — see `updateNote`.
   const at = store.notes.findIndex((one) => one.id === id)
   if (at >= 0 && store.notes[at].box !== saved.box) {
@@ -110,9 +213,9 @@ export function deleteNote(id: string) {
   saveTimers.delete(id)
   unwritten.delete(id)
   store.notes = store.notes.filter((one) => one.id !== id)
-  if (store.noteOpenID === id) store.noteOpenID = null
+  for (const [paperID, open] of store.noteOpenByPaper) if (open === id) store.noteOpenByPaper.delete(paperID)
   if (store.slipBox.openID === id) store.slipBox.openID = null
-  void call('notes:delete', { id })
+  void call('notes:delete', { id }).catch((reason: unknown) => writeFailed(id, reason))
   changed('notes')
 }
 
@@ -132,7 +235,10 @@ export function addToMap(id: string, mapID: string) {
 export function visibleNotes(): Note[] {
   let result = store.notes
   const tag = store.slipBox.tag
-  if (tag) result = result.filter((note) => zettelTags(note.body).includes(tag))
+  if (tag) {
+    indexes()
+    result = result.filter((note) => (tagsOf.get(note.id) ?? zettelTags(note.body)).includes(tag))
+  }
   const terms = trimWhitespaceAndNewlines(store.slipBox.query).toLowerCase()
   if (!terms) return result
   return result.filter((note) =>
@@ -143,20 +249,32 @@ export function visibleNotes(): Note[] {
 
 /** How many notes wear each tag, most worn first. */
 export function noteTagCounts(): { tag: string; count: number }[] {
-  const counts = new Map<string, number>()
-  for (const note of store.notes) {
-    for (const tag of zettelTags(note.body)) counts.set(tag, (counts.get(tag) ?? 0) + 1)
-  }
-  return [...counts]
+  return [...indexes().tagCounts]
     .map(([tag, count]) => ({ tag, count }))
     .sort((a, b) => (a.count === b.count ? (a.tag < b.tag ? -1 : 1) : b.count - a.count))
 }
 
 /** The notes pointing at this one, newest first. */
 export function linkedFrom(id: string): Note[] {
-  return store.notes
-    .filter((note) => note.id !== id && zettelLinks(note.body).includes(id))
+  return [...(indexes().backlinks.get(id) ?? [])]
+    .filter((from) => from !== id)
+    .map(noteByID)
+    .filter((one): one is Note => Boolean(one))
     .sort((a, b) => b.modified.getTime() - a.modified.getTime())
+}
+
+/**
+ * The notes a `[[` could link to — the title or the identifier holds what is
+ * typed after it — eight at most, never the note being written
+ * (`NotesModel.suggestions(matching:excluding:)`).
+ */
+export function noteSuggestions(text: string, excluding: string | null): Note[] {
+  const terms = trimWhitespace(text).toLowerCase()
+  const candidates = store.notes.filter((note) => note.id !== excluding)
+  if (!terms) return candidates.slice(0, 8)
+  return candidates
+    .filter((note) => zettelDisplayTitle(note).toLowerCase().includes(terms) || note.id.includes(terms))
+    .slice(0, 8)
 }
 
 /** The notes this one points at, in the order they are mentioned. */

@@ -171,6 +171,14 @@ let openSheet: { redraw: () => void; close: () => void } | undefined
  * `Ctrl+,`, which until now went nowhere at all.
  */
 export function openSettings(section?: SettingsSection) {
+  // A folder that came back while the app was open is caught up the moment
+  // somebody looks (`NotesModel.comeBack`, asked when the settings show).
+  void call('notes:comeBack').then((result) => {
+    if (!result) return
+    lastNotesMove = { moved: result.moved, kept: result.kept, keptIn: result.notesFolder.leftBehind[0] ?? null }
+    store.notesFolder = result.notesFolder
+    openSheet?.redraw()
+  }).catch(() => undefined)
   const sheet = showSettings({
     set: (patch, options) => setSettings(patch as Partial<Settings>, options),
     // The same errand as the ⋯ menu's. `library:choose` only asks which
@@ -181,7 +189,7 @@ export function openSettings(section?: SettingsSection) {
     useAppNotesFolder: () => void moveLooseNotes('notes:useAppFolder'),
     reconnectNotesFolder: () => void moveLooseNotes('notes:reconnect'),
     revealNotesFolder: () => void call('notes:reveal'),
-    lastNotesMove: () => lastNotesMove,
+    lastNotesMove: () => lastNotesMove ?? (store.notesFolder?.lastMove ? { ...store.notesFolder.lastMove, keptIn: store.notesFolder.leftBehind[0] ?? null } : null),
     feedback: () => void showFeedback(),
   }, section)
   if (sheet) openSheet = sheet

@@ -337,10 +337,11 @@ export function attachLatexSuite(area: HTMLTextAreaElement, enabled: () => boole
   }
 
   const onSelectionChange = () => {
-    if (!area.isConnected) {
-      detach()
-      return
-    }
+    // A field taken out of the window is often coming back: the Notes tab
+    // keeps its editor while another tab shows, and letting go here left the
+    // note with `@a`, `//` and Tab dead when it did. Whoever drops the editor
+    // detaches it.
+    if (!area.isConnected) return
     if (!applying && document.activeElement === area) sync()
   }
 

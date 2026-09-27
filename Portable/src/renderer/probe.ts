@@ -11,13 +11,13 @@ import { flags } from './bridge.js'
 import { store } from './state.js'
 import { findBar, focused } from './pageArea.js'
 import { showPaper } from './actions/openPapers.js'
-import { openNote } from './actions/notes.js'
+import { openNote, openNoteFromSearch } from './actions/notes.js'
 import { openFind, openPassage } from './actions/search.js'
 import { showSearchResults } from './listSearch.js'
 import { readings } from './library.js'
 import { setSettings } from './settingsController.js'
 import { createNote } from './notesModel.js'
-import { openNoteInSlipBox, slipBoxEditor } from './ui/slipBox.js'
+import { backToNotes, openNoteInSlipBox, slipBoxEditor } from './ui/slipBox.js'
 import { openEditor as openNoteEditor, openNoteInTab } from './ui/notesTab.js'
 import { sketchEditor, sketchSelectionChanged } from './ui/sketchEditing.js'
 import type { TextHit } from './textSearch.js'
@@ -83,6 +83,14 @@ export function installProbeSurface() {
       openInTab: (id: string) => openNoteInTab(id),
       tabEditor: () => openNoteEditor()?.id ?? null,
       slipBoxEditor: () => slipBoxEditor()?.id ?? null,
+      /** Each editor's formula card and `[[` card. */
+      tabEditorReport: () => openNoteEditor()?.report() ?? null,
+      slipBoxEditorReport: () => slipBoxEditor()?.report() ?? null,
+      /** A note from a search, at the words it was found by (`--papertime-note-reveal`). */
+      reveal: (id: string, words: string) => openNoteFromSearch(id, words),
+      /** Where the open note is shown beside a followed paper, and the way back. */
+      slipBoxPaper: () => store.slipBox.paperID,
+      back: () => backToNotes(),
       shelf: () => store.shelf.kind,
     },
   }

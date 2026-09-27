@@ -178,7 +178,7 @@ export function buildToolbar(actions: ToolbarActions): { node: HTMLElement; upda
   return { node, update }
 }
 
-export { closeMenu, isMenuOpen, showMenu, type MenuEntry } from './menu.js'
+export { closeMenu, isMenuOpen, showMenu, showMenuAt, type MenuEntry } from './menu.js'
 
 let toastShowing: { node: HTMLElement; text: string; timer: number } | null = null
 

@@ -3647,7 +3647,8 @@ body[data-solo='true'] .reader-header button {
   display: flex;
   flex-direction: column;
   min-height: 100%;
-  padding: 8px 14px 14px;
+  /* The Mac's 22pt text inset, here as in the slip-box. */
+  padding: 8px 22px 14px;
 }
 
 .slipbox-detail {
@@ -3679,7 +3680,8 @@ body[data-solo='true'] .reader-header button {
 
 .note-title {
   width: 100%;
-  font-size: 18px;
+  /* `.title2` semibold. */
+  font-size: 17px;
   font-weight: 600;
   line-height: 1.3;
   color: var(--text);
@@ -3712,9 +3714,11 @@ body[data-solo='true'] .reader-header button {
   background: transparent;
   border: none;
   outline: none;
-  padding: 4px 0;
+  padding: 6px 0;
   font-family: inherit;
-  font-size: 13.5px;
+  /* A point larger than the controls, as the Mac sets a note
+     (`NoteTypography.baseSize` 16, line spacing 4.5). */
+  font-size: 16px;
   line-height: 1.55;
   color: var(--text);
 }
@@ -3727,7 +3731,48 @@ body[data-solo='true'] .reader-header button {
   margin-top: 14px;
   padding-top: 12px;
   border-top: 1px solid var(--separator);
+  /* A well-linked note does not push its own words up and away (190pt). */
+  max-height: 190px;
+  overflow-y: auto;
+  scrollbar-width: none;
 }
+
+.note-connections::-webkit-scrollbar { display: none; }
+
+/* The notes a [[ could link to, under the caret (`WikiLinkPopover`). */
+.wiki-popover {
+  position: fixed;
+  z-index: 125;
+  overflow-y: auto;
+  padding: 5px;
+  border-radius: var(--radius-popover);
+  background: var(--panel);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.1), 0 8px 28px rgba(0, 0, 0, 0.2);
+  transform-origin: top left;
+  animation: menu-in var(--motion-tap) var(--ease);
+}
+
+.wiki-popover-row {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 44px;
+  padding: 0 9px;
+  border-radius: calc(var(--radius-popover) - 5px);
+  cursor: default;
+}
+
+.wiki-popover-row[aria-selected="true"] { background: var(--accent); color: #fff; }
+.wiki-popover-title { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wiki-popover-id { font-size: 11px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.wiki-popover-row[aria-selected="true"] .wiki-popover-id { color: rgba(255, 255, 255, .8); }
+
+/* A note beside the paper a passage in it was followed to. */
+.slipbox-side { display: flex; flex-direction: column; }
+.slipbox-side-head { display: flex; align-items: center; gap: 8px; }
+.slipbox-side-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); }
+.slipbox-side-body { overflow-y: auto; }
+.slipbox-body:focus-visible { outline: none; }
 
 .note-connections-head {
   margin: 8px 0 4px;

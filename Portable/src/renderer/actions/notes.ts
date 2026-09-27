@@ -1,13 +1,13 @@
 /**
  * The ways into a note: from the palette, a search row, a link, ⌘N and ⌘L.
  */
-import { changed, noteByID, notesForPaper, paper as findPaper, setShelf, store } from '../state.js'
+import { changed, latestNoteForPaper, noteByID, paper as findPaper, setShelf, store } from '../state.js'
 import { shell, solo } from '../shell.js'
 import { focused, reconcileReaders } from '../pageArea.js'
 import { openAnchor, showPaper } from './openPapers.js'
 import { setInspectorTab } from '../settingsController.js'
 import { togglePane } from '../layout.js'
-import { createNote } from '../notesModel.js'
+import { createNote, visibleNotes } from '../notesModel.js'
 import { openNoteInSlipBox, slipBoxEditor } from '../ui/slipBox.js'
 import { openEditor as openNoteEditor, openNoteInTab } from '../ui/notesTab.js'
 import { toast } from '../ui/toolbar.js'
@@ -24,13 +24,16 @@ export function showNoteTab() {
 }
 
 /**
- * A note in the slip-box, beside the list — found: the search and the tag
- * that narrow the list are let go of, or a note just made could be one the
- * list is hiding.
+ * A note in the slip-box, beside the list. The search and the tag narrowing
+ * the list are kept, as the Mac keeps them (`SlipBoxDetail`) — unless they
+ * hide the very note being opened, which would stand in the editor with no
+ * row lit.
  */
 export function revealNoteInSlipBox(id: string) {
-  store.slipBox.query = ''
-  store.slipBox.tag = null
+  if (!visibleNotes().some((note) => note.id === id)) {
+    store.slipBox.query = ''
+    store.slipBox.tag = null
+  }
   setShelf({ kind: 'notes' })
   changed('shelf')
   openNoteInSlipBox(id)
@@ -43,7 +46,8 @@ export function revealNoteInSlipBox(id: string) {
  */
 export async function openNote(id: string) {
   const note = noteByID(id)
-  if (!note || solo) return
+  if (!note) return
+  if (solo) return saidInMainWindow()
   const paper = note.paperID ? findPaper(note.paperID) : undefined
   // Inside the slip-box a link stays in the slip-box, as on the Mac: the
   // note opens beside the list, whichever paper it is about.
@@ -62,7 +66,8 @@ export async function openNote(id: string) {
  * found by meaning, at that passage.
  */
 export function openNoteFromSearch(id: string, words?: string) {
-  if (!noteByID(id) || solo) return
+  if (!noteByID(id)) return
+  if (solo) return saidInMainWindow()
   revealNoteInSlipBox(id)
   if (!words) return
   requestAnimationFrame(() => {
@@ -72,20 +77,21 @@ export function openNoteFromSearch(id: string, words?: string) {
 }
 
 /**
- * Command-N: a new note on the paper being read, open in the Notes tab with
- * the caret in it — or, with no paper open or the slip-box showing, a note
- * of your own in the slip-box, as the Mac's ⌘N writes one.
+ * Command-N: a new note in the slip-box, with the caret in it — about the
+ * paper chosen, if one is, so it is filed under that paper (`RootView`'s
+ * `.paperTimeNewNote`: `scope = .notes` and a note about `selectedPaperID`).
+ * The Notes tab's «New Note» is the way to write one beside the page.
  */
 export function newNote() {
-  if (solo) return
-  if (store.selectedID && findPaper(store.selectedID) && store.shelf.kind !== 'notes') {
-    showNoteTab()
-    openNoteInTab(createNote(store.selectedID).id)
-    shell.inspector.focusNote()
-    return
-  }
-  revealNoteInSlipBox(createNote(null).id)
-  slipBoxEditor()?.area.focus()
+  if (solo) return saidInMainWindow()
+  const paperID = store.selectedID && findPaper(store.selectedID) ? store.selectedID : null
+  revealNoteInSlipBox(createNote(paperID).id)
+  requestAnimationFrame(() => slipBoxEditor()?.area.focus())
+}
+
+/** A window for one paper has no slip-box: the note is for the main window. */
+function saidInMainWindow() {
+  toast(L('노트는 메인 창에서 열 수 있어요.', 'Notes open in the main window.'))
 }
 
 /**
@@ -105,10 +111,10 @@ export function linkSelectionToNote() {
     (page) => L(`${page}쪽`, `p. ${page}`),
   )
   showNoteTab()
-  // With no note open, the last one written about this paper carries on —
-  // or a new one starts, as on the Mac.
+  // With no note open, the one last written in about this paper carries on
+  // — or a new one starts (`PaperNotesView`, both builds).
   if (!openNoteEditor()) {
-    const latest = notesForPaper(store.selectedID)[0]
+    const latest = latestNoteForPaper(store.selectedID)
     openNoteInTab(latest ? latest.id : createNote(store.selectedID).id)
   }
   if (!shell.inspector.insertIntoNote(block)) return
@@ -129,6 +135,8 @@ export async function openAnchorFromSlipBox(place: { pageIndex: number; rect: { 
     return
   }
   store.slipBox.paperID = target
+  // The note goes where the list was, and the paper takes the page area.
+  changed('shelf')
   if (store.selectedID !== target) await showPaper(target)
   else {
     reconcileReaders()

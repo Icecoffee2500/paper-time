@@ -466,7 +466,8 @@ public final class NotesModel {
     /// text and the editor shows the Markdown.
     public var reveal: String?
 
-    /// The notes written while reading one paper, newest first.
+    /// The notes written while reading one paper, in the order they were
+    /// written — the Notes tab's order on both builds.
     public func notes(forPaper paperID: UUID) -> [Zettel] {
         notes.filter { $0.paperID == paperID }
     }

@@ -48,6 +48,7 @@ import { pathsSuite } from './paths.js'
 import { mainModulesSuite } from './mainModules.js'
 import { rendererStateSuite } from './rendererState.js'
 import { notesModelSuite } from './notesModel.js'
+import { noteBlocksSuite } from './noteBlocks.js'
 import { commandsSuite } from './commands.js'
 import { readerSuite } from './reader.js'
 import { sketchGeometrySuite } from './sketchGeometry.js'
@@ -427,6 +428,7 @@ async function main() {
   await mainModulesSuite(test, suite)
   await rendererStateSuite(test, suite)
   await notesModelSuite(test, suite)
+  await noteBlocksSuite(test, suite)
   await commandsSuite(test, suite)
   await readerSuite(test, suite)
   await sketchGeometrySuite(test, suite)
