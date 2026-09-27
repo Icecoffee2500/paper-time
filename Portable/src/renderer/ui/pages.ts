@@ -39,6 +39,8 @@ export interface PagesActions {
   outline?: () => Promise<OutlineEntry[]>
   /** Go to a heading. */
   goToHeading?: (entry: OutlineEntry) => void
+  /** The grid closed: the thumbnails still waiting are not wanted. */
+  cancel?: () => void
 }
 
 let current: { node: HTMLElement; dispose: () => void } | null = null
@@ -145,6 +147,7 @@ export function showPages(host: HTMLElement, actions: PagesActions) {
   const mine = {
     node,
     dispose: () => {
+      actions.cancel?.()
       watcher.disconnect()
       window.removeEventListener('keydown', onKey, true)
       node.remove()
@@ -161,7 +164,9 @@ export function showPages(host: HTMLElement, actions: PagesActions) {
     if (current !== mine) return
     clear(list)
     if (entries.length === 0) {
+      // Said where it can be read: the tooltip of a disabled tab never shows.
       headingsTab.title = L('이 PDF에는 차례가 없어요', 'This PDF has no table of contents')
+      list.append(el('div', { class: 'open-papers-empty', text: L('이 PDF에는 차례가 없어요.', 'This PDF has no table of contents.') }))
       return
     }
     const here = currentHeading(entries, actions.currentPage())

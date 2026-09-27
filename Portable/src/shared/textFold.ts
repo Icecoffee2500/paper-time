@@ -508,6 +508,27 @@ function decode(units: Uint16Array, size: number): string {
  * `TextNormalization.foldedTitle`: case and accents folded (not width), then
  * only letters, marks and digits kept, every run of anything else one space.
  */
+/**
+ * Every place a folded needle occurs in a text, as ranges of the original —
+ * the find bar's count and the palette's passage are ranges of the same
+ * thing. A range is never empty: a needle that folds onto a mark that
+ * vanishes still covers the letter it stands on.
+ */
+export function occurrences(text: string, folded: Folded, needle: string): { start: number; end: number }[] {
+  const out: { start: number; end: number }[] = []
+  if (!needle) return out
+  for (let from = 0; ;) {
+    const at = folded.text.indexOf(needle, from)
+    if (at < 0) break
+    const start = folded.map[at]
+    const after = at + needle.length
+    const end = after < folded.map.length ? folded.map[after] : text.length
+    out.push({ start, end: Math.max(end, start + 1) })
+    from = at + Math.max(needle.length, 1)
+  }
+  return out
+}
+
 export function foldTitle(raw: string): string {
   // The whole string at once, as `String.folding` has it — not a grapheme at
   // a time, which is what the text fold does; the two part at a mark after a

@@ -25,6 +25,7 @@ import { focused, pageArea, readers, reconcileReaders } from '../pageArea.js'
 import { saveSettings } from '../settingsController.js'
 import { toggleOpenPapers } from '../ui/openPapers.js'
 import { togglePages } from '../ui/pages.js'
+import { thumbnails } from '../ui/pageThumbnails.js'
 import { splitContains, splitPapers, type DockZone, type SplitArrangement } from '../../shared/split.js'
 
 /**
@@ -191,7 +192,7 @@ export function showPagesPopup() {
   const reader = focused()
   if (!reader) return
   togglePages(pageArea, {
-    pageCount: () => reader.pages_count,
+    pageCount: () => reader.pages.length,
     // Counted from nought already; the «− 1» that was here ringed the page
     // before the one being read.
     currentPage: () => reader.state.currentPage,
@@ -201,6 +202,7 @@ export function showPagesPopup() {
     go: (index) => void reader.jumpTo(index, null),
     outline: () => reader.outline(),
     goToHeading: (entry) => { if (entry.pageIndex !== null) void reader.jumpTo(entry.pageIndex, entry.top) },
+    cancel: () => thumbnails.cancel(),
   })
 }
 

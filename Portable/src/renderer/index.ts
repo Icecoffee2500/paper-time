@@ -15,6 +15,7 @@
  * `commands.ts` (the menu and the main process's events), `dockDrop.ts`,
  * `listSearch.ts`, `probe.ts`.
  */
+import { copyText } from './ui/clipboard.js'
 import { call, platform } from './bridge.js'
 import { el } from './dom.js'
 // Imported for its side effect: the sheet registers its own ⌥⌘/ so nothing
@@ -29,7 +30,7 @@ import { buildInspector } from './ui/inspector.js'
 import { buildSlipBox } from './ui/slipBox.js'
 import { buildSketchRack } from './ui/sketchToolbar.js'
 import { refreshOpenPapers } from './ui/openPapers.js'
-import { focused, pageArea, reconcileReaders, relayoutReaders } from './pageArea.js'
+import { focused, reconcileReaders, relayoutReadersSoon } from './pageArea.js'
 import {
   addLibraryFolder, addPapers, adoptLoose, chooseLibrary, newCollection, reload, removeLibraryFolder, start,
 } from './library.js'
@@ -120,8 +121,7 @@ shell.inspector = buildInspector({
   commentMark: (pageIndex, id, comment) => focused()?.setMarkComment(pageIndex, id, comment),
   copyText: (text) => {
     if (!text) return
-    void navigator.clipboard.writeText(text)
-    toast(L('복사했어요', 'Copied'))
+    void copyText(text).then((copied) => toast(copied ? L('복사했어요', 'Copied') : L('복사하지 못했어요', "Paper Time couldn't copy that.")))
   },
   markMenu: (anchor, entries) => showMenu(anchor, entries),
   openNote: (id) => void openNote(id),
@@ -235,7 +235,7 @@ installDockDrop()
 installFileDrop()
 installListSearch()
 installMainEvents()
-window.addEventListener('resize', () => relayoutReaders())
+window.addEventListener('resize', () => relayoutReadersSoon())
 installProbeSurface()
 layoutPanes()
 void start()

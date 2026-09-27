@@ -141,7 +141,12 @@ export class FindBar {
     const mine = (this.generation += 1)
     this.searching = true
     this.update()
-    const found = await reader.findAll(query)
+    let found: Awaited<ReturnType<Reader['findAll']>> = []
+    try {
+      found = await reader.findAll(query)
+    } catch (error) {
+      console.error('find -', error)
+    }
     // A newer keystroke, or a closed bar, owns the result now.
     if (mine !== this.generation || reader !== this.reader) return
     this.matches = found

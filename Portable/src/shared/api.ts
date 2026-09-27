@@ -72,6 +72,11 @@ export interface Requests {
     args: { id: string }
     result: { pages: Record<number, { elements: unknown[]; strokes: unknown[] }>; unreadable: number[] }
   }
+  /** Every drawn page's shapes and strokes — this machine's sidecar, or the file's copy. */
+  'drawing:loadAll': {
+    args: { id: string }
+    result: { pages: Record<number, { elements: unknown[]; strokes: unknown[] }>; unreadable: number[] }
+  }
   /** Every page's marks: the file, overruled by every device's journal. */
   'marks:load': { args: { id: string }; result: Record<number, Mark[]> }
   'marks:save': { args: { id: string; pageIndex: number; marks: Mark[] }; result: void }
@@ -102,6 +107,8 @@ export interface Requests {
   /** A window of its own for one paper, put at the point when there is one. */
   'paper:openWindow': { args: { id: string; x?: number; y?: number }; result: void }
   'shell:openExternal': { args: { url: string }; result: void }
+  /** Words onto the clipboard, for when the page's own clipboard is refused. */
+  'clipboard:write': { args: { text: string }; result: void }
   /** The window's own page, as a PNG data URL, for the report sheet. */
   'feedback:capture': { args: void; result: string | null }
   'feedback:send': {

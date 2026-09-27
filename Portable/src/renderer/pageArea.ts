@@ -111,7 +111,7 @@ function readerFor(id: string, pane: boolean): Reader {
         changed('papers', 'inspector')
       })
     },
-  }, { pane })
+  }, { pane, layout: store.settings.pageLayout })
   readers.set(id, reader)
   void loadInto(reader, id)
   return reader
@@ -147,14 +147,6 @@ async function loadInto(reader: Reader, id: string) {
   })
   reader.setDrawing(reader.state.drawing)
   reader.update()
-  // Now that there are pages to scroll: a paper whose reader was rebuilt
-  // around it — closing the pane beside it, putting it beside another — goes
-  // back to where it was being read rather than to page one.
-  const place = inheritedPlaces.get(id)
-  if (place) {
-    inheritedPlaces.delete(id)
-    reader.returnTo(place)
-  }
   if (focused() === reader) focusChanged()
 }
 
@@ -165,10 +157,6 @@ let showing = ''
 /** Where each paper was being read when the slip-box took the page area. */
 let placesBeforeNotes: Map<string, ReaderPlace> | null = null
 
-const inheritedDrawing = new Map<string, boolean>()
-
-/** Where a paper was being read, across a rebuild of its reader. */
-const inheritedPlaces = new Map<string, ReaderPlace>()
 
 /**
  * Makes the readers match the arrangement: one per paper in the page area,
@@ -183,33 +171,27 @@ export function reconcileReaders() {
   const wanted = panePapers()
   const split = store.split
   const previous = focused()
+  const previousID = store.selectedID
   const shape = [split ? JSON.stringify(split) : 'one', ...wanted].join(' ')
-  // A reader keeps its pen state across a change of arrangement — but one
-  // built for a pane and one built for the whole area differ in chrome, so
-  // the readers are rebuilt when the arrangement appears or goes.
+  // A paper leaving the page area takes its reader with it. One that stays
+  // keeps its reader — and its document, its pen and its place — whether it
+  // goes into a pane or out of one: a reader in a pane differs only in its
+  // strip, and it used to be torn down and the PDF read again for that.
   for (const [id, reader] of [...readers]) {
-    if (!wanted.includes(id) || reader.isPane !== Boolean(split)) {
-      const drawing = reader.state.drawing
-      const place = reader.place()
-      reader.dispose()
-      readers.delete(id)
-      if (wanted.includes(id)) {
-        inheritedDrawing.set(id, drawing)
-        // A reader built for a pane and one built for the whole area are
-        // different objects, so this paper's place cannot simply be restored
-        // at the end — it is handed to the reader that replaces this one, and
-        // taken up once that one has the pages to scroll.
-        if (place.top > 0) inheritedPlaces.set(id, place)
-      }
+    if (wanted.includes(id)) {
+      reader.setPane(Boolean(split))
+      continue
     }
+    if (findBar.isFor(reader)) findBar.close()
+    reader.dispose()
+    readers.delete(id)
   }
+  // A paper that takes the place of the one in focus keeps the pen as it was.
+  const previousGone = previous !== null && !readers.has(previousID ?? '')
   for (const id of wanted) {
+    const fresh = !readers.has(id)
     const reader = readerFor(id, Boolean(split))
-    const drawing = inheritedDrawing.get(id) ?? (previous && !readers.has(previous.paperID ?? '') ? previous.state.drawing : undefined)
-    if (drawing !== undefined) {
-      reader.state.drawing = drawing
-      inheritedDrawing.delete(id)
-    }
+    if (fresh && previousGone) reader.state.drawing = previous!.state.drawing
   }
 
   // Nothing to rebuild if the page area is already showing this. Taking a
@@ -293,6 +275,12 @@ export function keepingPlaces(rebuild: () => void) {
 
 export function relayoutReaders() {
   for (const reader of readers.values()) reader.relayout()
+}
+
+/** The same at the next frame — for a window being resized, which sends a
+ *  stream of events and can only be drawn once a frame. */
+export function relayoutReadersSoon() {
+  for (const reader of readers.values()) reader.relayoutSoon()
 }
 
 function columnIDs(split: SplitArrangement, side: 'left' | 'right'): string[] {
