@@ -203,4 +203,23 @@ export async function sketchCommandsSuite(test: Test, suite: (name: string) => v
     assert.deepEqual(store.sketch.selection?.ids, [group])
     assert.equal(session.entered, null)
   })
+
+  await test('a colour dragged through the well is shown, then kept as one step from where it began', () => {
+    const { page, editor } = rig()
+    const a = rect(0, 0)
+    page.elements = [a]
+    select([a.id])
+    const before = page.elements
+    editor.previewStyle((style) => { style.stroke = SketchColor.red })
+    editor.previewStyle((style) => { style.stroke = SketchColor.blue })
+    assert.ok(page.elements[0].style.stroke.matches(SketchColor.blue), 'the page follows the hand')
+    assert.equal(undoStack.canUndo, false, 'nothing kept yet')
+    editor.applyStyle((style) => { style.stroke = SketchColor.green })
+    assert.ok(page.elements[0].style.stroke.matches(SketchColor.green))
+    const back = undoStack.undo()
+    assert.ok(back, 'one step to undo')
+    assert.equal(undoStack.canUndo, false, 'and only one')
+    assert.ok(back.elements[0].style.stroke.matches(before[0].style.stroke), 'back to the colour before the drag')
+  })
+
 }

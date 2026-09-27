@@ -1,4 +1,5 @@
 /** The window's frame, the outside world, the report sheet, About. */
+import { fontFamilies } from '../fonts.js'
 import { app, clipboard, shell, systemPreferences } from 'electron'
 import { isOpenableLink } from '../../shared/readerMath.js'
 import { providerOf } from '../../shared/cloudProvider.js'
@@ -21,6 +22,10 @@ function feedbackContextFor(ctx: Context): FeedbackContext {
     recent: recentActions(),
   }
 }
+
+
+/** The last drawing copied in any window, with the words that went to the system clipboard with it. */
+let sketchClipping: { clipping: string; text: string; formats: string } | null = null
 
 export function windowHandlers(ctx: Context): Partial<Handlers> {
   const { windows, libraries } = ctx
@@ -66,6 +71,27 @@ export function windowHandlers(ctx: Context): Partial<Handlers> {
     },
 
     'clipboard:read': () => clipboard.readText(),
+
+    'fonts:list': () => fontFamilies(),
+
+    // The drawing on the clipboard. Not a custom format — `writeBuffer`
+    // clears the text on some desktops and is not read back on others — but
+    // the clipping kept here with the words that went out with it: anything
+    // copied since, in any app, changes the words, and the drawing is gone
+    // from the clipboard as it would be on the Mac.
+    'clipboard:writeSketch': ({ clipping, text }) => {
+      if (typeof clipping !== 'string' || typeof text !== 'string') return
+      clipboard.writeText(text)
+      sketchClipping = { clipping, text, formats: clipboard.availableFormats().join(',') }
+    },
+
+    'clipboard:readSketch': () => {
+      if (!sketchClipping) return null
+      // The words, and the kinds of thing on the clipboard: a picture copied
+      // since has no words either.
+      const same = clipboard.readText() === sketchClipping.text && clipboard.availableFormats().join(',') === sketchClipping.formats
+      return same ? sketchClipping.clipping : null
+    },
 
     // The app speaks to the outside world here and nowhere else, and only
     // because somebody pressed 보내기.

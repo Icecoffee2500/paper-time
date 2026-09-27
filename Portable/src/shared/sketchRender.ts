@@ -370,8 +370,50 @@ export function drawElements(elements: SketchElement[], ctx: Ctx, options: Rende
 }
 
 export function drawElement(element: SketchElement, ctx: Ctx, options: RenderOptions = {}) {
+  if (element.style.opacity < 0.999 && element.kind !== 'group' && drawAsLayer(element, ctx, options)) return
   ctx.save()
   if (element.style.opacity < 0.999) ctx.globalAlpha = element.style.opacity
+  drawElementBody(element, ctx, options)
+  ctx.restore()
+}
+
+/**
+ * A translucent element drawn whole and then made translucent — the Mac's
+ * transparency layer (`SketchRenderer`): fill, edge and words blended as
+ * one, so where the edge crosses the fill it is not darker, and a label on
+ * a wash does not show the wash through it. Drawn at full strength onto a
+ * canvas of its own the size of its box on screen, then put down at its
+ * opacity. False where there is no such canvas to draw on.
+ */
+function drawAsLayer(element: SketchElement, ctx: Ctx, options: RenderOptions): boolean {
+  if (typeof OffscreenCanvas === 'undefined' || typeof ctx.getTransform !== 'function') return false
+  const transform = ctx.getTransform()
+  const box = element.rect
+  // Room for the edge, the arrowheads and a card's words past its box.
+  const pad = element.style.width * 2 + 12
+  const corners = [
+    [box.x - pad, box.y - pad], [box.x + box.width + pad, box.y - pad],
+    [box.x - pad, box.y + box.height + pad], [box.x + box.width + pad, box.y + box.height + pad],
+  ].map(([x, y]) => transform.transformPoint(new DOMPoint(x, y)))
+  const left = Math.floor(Math.min(...corners.map((point) => point.x)))
+  const top = Math.floor(Math.min(...corners.map((point) => point.y)))
+  const width = Math.ceil(Math.max(...corners.map((point) => point.x))) - left
+  const height = Math.ceil(Math.max(...corners.map((point) => point.y))) - top
+  if (!(width > 0 && height > 0) || width * height > 16_000_000) return false
+  const layer = new OffscreenCanvas(width, height)
+  const inner = layer.getContext('2d')
+  if (!inner) return false
+  inner.setTransform(new DOMMatrix([1, 0, 0, 1, -left, -top]).multiply(transform))
+  drawElementBody(element, inner, options)
+  ctx.save()
+  ctx.setTransform(1, 0, 0, 1, 0, 0)
+  ctx.globalAlpha *= element.style.opacity
+  ctx.drawImage(layer, left, top)
+  ctx.restore()
+  return true
+}
+
+function drawElementBody(element: SketchElement, ctx: Ctx, options: RenderOptions) {
   switch (element.kind) {
     case 'rectangle':
     case 'ellipse':
@@ -389,7 +431,6 @@ export function drawElement(element: SketchElement, ctx: Ctx, options: RenderOpt
       // Nothing of its own: a group is its children.
       break
   }
-  ctx.restore()
 }
 
 /** The outline of a box or an oval, or the curve of a connector. */

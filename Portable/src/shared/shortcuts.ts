@@ -135,3 +135,31 @@ export function withKey(label: string, command: string, platform: string): strin
   const key = keyFor(command, platform)
   return key ? `${label} (${key})` : label
 }
+
+/**
+ * A key written the Mac's way — `⇧⌘G`, `⌫` — the way this desktop writes
+ * it: the same on a Mac, `Ctrl+Shift+G` and `Delete` elsewhere. For the
+ * drawing's keys, which are the page's own and not in the list above, so a
+ * tooltip on Windows does not name keys the keyboard does not have.
+ */
+export function shortcutText(glyphs: string, platform: string): string {
+  if (platform === 'darwin') return glyphs
+  const words: string[] = []
+  let rest = glyphs
+  const has = (glyph: string) => {
+    if (!rest.includes(glyph)) return false
+    rest = rest.replace(glyph, '')
+    return true
+  }
+  const control = has('⌃')
+  const alt = has('⌥')
+  const shift = has('⇧')
+  const command = has('⌘')
+  if (command || control) words.push('Ctrl')
+  if (alt) words.push('Alt')
+  if (shift) words.push('Shift')
+  const names: Record<string, string> = { '⌫': 'Delete', '↩': 'Enter', '⎋': 'Esc', '⇥': 'Tab' }
+  words.push(names[rest] ?? rest.toUpperCase())
+  return words.join('+')
+}
+

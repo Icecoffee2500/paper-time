@@ -24,7 +24,7 @@ import type { KeptReason, SaveState } from '../../shared/api.js'
 import type { DocumentKind } from '../../shared/documentKind.js'
 import { SketchElement } from '../../shared/sketch.js'
 import { InkStroke } from '../../shared/ink.js'
-import { MARK_COLORS, type Mark, type MarkKind } from '../../shared/marks.js'
+import { MARK_COLORS, type Mark, type MarkKind, rectToQuad } from '../../shared/marks.js'
 import { makeUUID } from '../../shared/coding.js'
 import { call } from '../bridge.js'
 import {
@@ -1073,6 +1073,16 @@ export class Reader implements PageOwner {
       if (comment) mark.comment = comment
       this.changeMarks(page, [...page.marks, mark], name)
     }
+  }
+
+  /** A highlighter stroke fitted to the words it covered (`StrokeSnapper`):
+   *  a mark like any other, on the marks' undo. */
+  markFromStroke(page: PageView, kind: 'highlight' | 'underline', boxes: { x: number; y: number; width: number; height: number }[], text: string, colorName: string): boolean {
+    if (boxes.length === 0) return false
+    const color = [...(MARK_COLORS[colorName] ?? MARK_COLORS.yellow)] as [number, number, number]
+    const mark: Mark = { id: makeUUID(), kind, quads: boxes.map(rectToQuad), color, text }
+    this.changeMarks(page, [...page.marks, mark], kind === 'highlight' ? L('형광펜', 'Highlight') : L('밑줄', 'Underline'))
+    return true
   }
 
   /**

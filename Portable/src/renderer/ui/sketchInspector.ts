@@ -16,6 +16,10 @@
  * leaving the field, and a field being typed in is never rebuilt under the
  * hand: the rebuild waits until the field is left.
  */
+import { shortcutText } from '../../shared/shortcuts.js'
+import { platform, call } from '../bridge.js'
+import { MARK_COLORS } from '../../shared/marks.js'
+import { MARKUP_COLOR_NAMES, PEN_COLORS, PEN_COLOR_NAMES, highlighterColorName, penColorName, type InkPresets, type MarkupColorName, type PenColorName } from '../../shared/inkPresets.js'
 import { icon, type IconName } from '../icons.js'
 import { clear, el, on } from '../dom.js'
 import { readerState, store, type SketchTool } from '../state.js'
@@ -133,6 +137,15 @@ function fontFamilies(): string[] {
   families = CURATED_FAMILIES.filter(fontExists).sort((a, b) => a.localeCompare(b))
   if (!familiesLoading) {
     familiesLoading = true
+    const adopt = (names: string[]) => {
+      if (names.length === 0) return
+      const all = new Set(families ?? [])
+      for (const name of names) if (name && !name.startsWith('.')) all.add(name)
+      families = [...all].sort((a, b) => a.localeCompare(b))
+      for (const listener of familyListeners) listener()
+    }
+    // What the desktop lists (`fonts:list`), then what the browser may add.
+    void call('fonts:list').then(adopt).catch(() => undefined)
     const query = (window as unknown as { queryLocalFonts?: () => Promise<{ family: string }[]> }).queryLocalFonts
     if (typeof query === 'function') {
       query.call(window).then((fonts) => {
@@ -147,6 +160,18 @@ function fontFamilies(): string[] {
   }
   return families
 }
+
+/** A width's name, thinnest first. */
+const widthLabel = (index: number) => [L('가는 선', 'Thin line'), L('보통 선', 'Regular line'), L('굵은 선', 'Bold line')][index] ?? ''
+
+const penColorLabel = (name: PenColorName) => ({
+  black: L('검정', 'Black'), blue: L('파랑', 'Blue'), red: L('빨강', 'Red'), green: L('초록', 'Green'),
+  purple: L('보라', 'Purple'), orange: L('주황', 'Orange'), grey: L('회색', 'Grey'),
+})[name]
+
+const markupColorLabel = (name: MarkupColorName) => ({
+  yellow: L('노랑', 'Yellow'), green: L('초록', 'Green'), blue: L('파랑', 'Blue'), pink: L('분홍', 'Pink'), purple: L('보라', 'Purple'),
+})[name]
 
 // MARK: - The panel
 
@@ -194,6 +219,12 @@ export function buildSketchInspector(host: SketchInspectorHost): { node: HTMLEle
     if (current && hasSelection()) current.applyStyle(edit)
     host.changed()
     update()
+  }
+
+  /** A change shown on the selection and not yet kept — nothing when nothing is chosen. */
+  function previewChange(edit: (style: SketchStyle) => void) {
+    const current = editor()
+    if (current && hasSelection()) current.previewStyle(edit)
   }
 
   function edit(changeElement: (element: SketchElement) => void) {
@@ -311,9 +342,15 @@ export function buildSketchInspector(host: SketchInspectorHost): { node: HTMLEle
   }
 
   /** A swatch that opens the colour picker, the hex beside it, and — for a fill — how much of it shows. */
-  function colorRow(color: SketchColor, alpha: boolean, set: (next: SketchColor) => void): HTMLElement {
+  function colorRow(color: SketchColor, alpha: boolean, set: (next: SketchColor) => void, preview?: (next: SketchColor) => void): HTMLElement {
     const well = el('input', { type: 'color', class: 'sk-well', 'aria-label': L('색', 'Colour') }) as HTMLInputElement
     well.value = `#${hexOf(color).toLowerCase()}`
+    // The page follows the well while it is dragged, and the panel is not
+    // drawn again under the pointer (`ColorPicker`); letting go keeps it.
+    on(well, 'input', () => {
+      const next = colorFromHex(well.value, color.alpha)
+      if (next) preview?.(next)
+    })
     on(well, 'change', () => {
       const next = colorFromHex(well.value, color.alpha)
       if (next) set(next)
@@ -564,7 +601,7 @@ export function buildSketchInspector(host: SketchInspectorHost): { node: HTMLEle
       ? smallButton('plus', L('채우기 더하기', 'Add fill'), () => change((s) => { s.fill = SketchColor.paleYellow }))
       : smallButton('minus', L('채우기 빼기', 'Remove fill'), () => change((s) => { s.fill = null }))
     const pieces: (Node | null)[] = []
-    if (style.fill) pieces.push(colorRow(style.fill, true, (color) => change((s) => { s.fill = color })))
+    if (style.fill) pieces.push(colorRow(style.fill, true, (color) => change((s) => { s.fill = color }), (color) => previewChange((s) => { s.fill = color })))
     pieces.push(row([
       option(style.fill === null, L('채우기 없음', 'No fill'), icon('slash.circle'), () => change((s) => { s.fill = null })),
       ...SketchColor.fills.map((fill) =>
@@ -596,7 +633,7 @@ export function buildSketchInspector(host: SketchInspectorHost): { node: HTMLEle
       : smallButton(on ? 'minus' : 'plus', on ? L('외곽선 빼기', 'Remove stroke') : L('외곽선 더하기', 'Add stroke'), () => setStroke(!on))
     const pieces: (Node | null)[] = []
     if (on) {
-      pieces.push(colorRow(style.stroke, false, (color) => change((s) => { s.stroke = color })))
+      pieces.push(colorRow(style.stroke, false, (color) => change((s) => { s.stroke = color }), (color) => previewChange((s) => { s.stroke = color })))
       pieces.push(row(SketchColor.strokes.map((color) =>
         dot(color, color.matches(style.stroke), hexOf(color), () => change((s) => { s.stroke = color }))), 'sk-swatches'))
       pieces.push(row([
@@ -671,31 +708,45 @@ export function buildSketchInspector(host: SketchInspectorHost): { node: HTMLEle
   }
 
   /** The pen's, the highlighter's and the eraser's own controls. */
+  /** The pen's own colours and widths — not the next shape's (`InkPresets`). */
+  function preset(edit: (presets: InkPresets) => void) {
+    edit(store.sketch.presets)
+    host.changed()
+    update()
+  }
+
   function inkSection(ink: 'pen' | 'highlighter' | 'eraser'): HTMLElement {
-    const style = store.sketch.style
+    const presets = store.sketch.presets
     const pieces: (Node | null)[] = []
-    const widths = (sample: (width: number) => string) => row(STYLE_WIDTHS.map((width, index) =>
-      option(Math.abs(style.width - width) < 0.01,
-        [L('가는 선', 'Thin line'), L('보통 선', 'Regular line'), L('굵은 선', 'Bold line')][index],
-        sample(width), () => change((s) => { s.width = width }))), 'sk-tight')
+    const swatch = (rgb: readonly number[]) => new SketchColor(rgb[0], rgb[1], rgb[2], 1)
     switch (ink) {
-      case 'pen':
+      case 'pen': {
+        const chosen = penColorName(presets)
         pieces.push(caption(L('색', 'Colour')))
-        pieces.push(row(SketchColor.strokes.map((color) =>
-          dot(color, color.matches(style.stroke), hexOf(color), () => change((s) => { s.stroke = color }))), 'sk-swatches'))
+        pieces.push(row(PEN_COLOR_NAMES.map((name) =>
+          dot(swatch(PEN_COLORS[name]), name === chosen, penColorLabel(name), () => preset((p) => { p.penColors[p.penColorIndex] = name }))), 'sk-swatches'))
         pieces.push(caption(L('굵기', 'Width')))
-        pieces.push(widths((width) =>
-          `<span class="sk-pen-dot" style="width:${3 + width * 1.6}px;height:${3 + width * 1.6}px"></span>`))
+        pieces.push(row(presets.penWidths.map((width, index) =>
+          option(presets.penWidthIndex === index, widthLabel(index),
+            `<span class="sk-pen-dot" style="width:${3 + width * 1.6}px;height:${3 + width * 1.6}px"></span>`,
+            () => preset((p) => { p.penWidthIndex = index }))), 'sk-tight'))
         break
-      case 'highlighter':
+      }
+      case 'highlighter': {
+        const chosen = highlighterColorName(presets)
         pieces.push(caption(L('색', 'Colour')))
-        pieces.push(row(SketchColor.fills.map((fill) =>
-          dot(fill.flattenedOnWhite, Boolean(style.fill && style.fill.matches(fill)), hexOf(fill), () => change((s) => { s.fill = fill }))), 'sk-swatches'))
+        pieces.push(row(MARKUP_COLOR_NAMES.map((name) =>
+          dot(swatch(MARK_COLORS[name]), name === chosen, markupColorLabel(name), () => preset((p) => { p.highlighterColors[p.highlighterColorIndex] = name }))), 'sk-swatches'))
         pieces.push(caption(L('굵기', 'Width')))
-        pieces.push(widths((width) =>
-          `<span class="sk-marker-bar" style="height:${3 + width * 1.4}px"></span>`))
+        pieces.push(row(presets.highlighterWidths.map((width, index) =>
+          option(presets.highlighterWidthIndex === index, widthLabel(index),
+            `<span class="sk-marker-bar" style="height:${3 + width * 0.35}px"></span>`,
+            () => preset((p) => { p.highlighterWidthIndex = index }))), 'sk-tight'))
+        pieces.push(checkbox(L('글자에 맞추기', 'Fit to Text'), presets.fitsToText, (on) => preset((p) => { p.fitsToText = on })))
         break
+      }
       case 'eraser':
+        pieces.push(checkbox(L('하이라이트도 지우기', 'Erase Highlights Too'), presets.eraserErasesMarks, (on) => preset((p) => { p.eraserErasesMarks = on })))
         pieces.push(el('p', { class: 'sk-note', text: L('지우개는 선과 모양을 통째로 지워요.', 'The eraser removes a stroke or shape whole.') }))
         break
     }
@@ -703,6 +754,7 @@ export function buildSketchInspector(host: SketchInspectorHost): { node: HTMLEle
   }
 
   function actions(): HTMLElement {
+    const k = (glyphs: string) => shortcutText(glyphs, platform)
     const current = editor()
     const chosen = selected()
     const none = chosen.length === 0
@@ -714,15 +766,15 @@ export function buildSketchInspector(host: SketchInspectorHost): { node: HTMLEle
       return node
     }
     return el('div', { class: 'sk-actions' }, [
-      button('rectangle.3.group', L('묶기 (⌘G)', 'Group (⌘G)'), () => current?.groupSelection(), none),
-      button('rectangle.3.group.bubble', L('묶음 풀기 (⇧⌘G)', 'Ungroup (⇧⌘G)'), () => current?.ungroupSelection(), !containers),
-      button('number.square', L('프레임으로 감싸기 (⌥⌘G)', 'Frame Selection (⌥⌘G)'), () => current?.frameSelection()),
-      button('rectangle.split.3x1', L('오토 레이아웃 (⇧A)', 'Auto Layout (⇧A)'), () => current?.toggleAutoLayout(), none),
+      button('rectangle.3.group', L(`묶기 (${k('⌘G')})`, `Group (${k('⌘G')})`), () => current?.groupSelection(), none),
+      button('rectangle.3.group.bubble', L(`묶음 풀기 (${k('⇧⌘G')})`, `Ungroup (${k('⇧⌘G')})`), () => current?.ungroupSelection(), !containers),
+      button('number.square', L(`프레임으로 감싸기 (${k('⌥⌘G')})`, `Frame Selection (${k('⌥⌘G')})`), () => current?.frameSelection()),
+      button('rectangle.split.3x1', L(`오토 레이아웃 (${k('⇧A')})`, `Auto Layout (${k('⇧A')})`), () => current?.toggleAutoLayout(), none),
       el('span', { class: 'sk-spacer' }),
-      button('plus.square.on.square', L('복제 (⌘D)', 'Duplicate (⌘D)'), () => current?.duplicateSelection(), none),
-      button('square.3.layers.3d.top.filled', L('맨 앞으로 (⇧⌘])', 'Bring to Front (⇧⌘])'), () => current?.bringSelectionToFront(), none),
-      button('square.3.layers.3d.bottom.filled', L('맨 뒤로 (⇧⌘[)', 'Send to Back (⇧⌘[)'), () => current?.sendSelectionToBack(), none),
-      button('trash', L('지우기 (⌫)', 'Delete (⌫)'), () => current?.deleteSelection()),
+      button('plus.square.on.square', L(`복제 (${k('⌘D')})`, `Duplicate (${k('⌘D')})`), () => current?.duplicateSelection(), none),
+      button('square.3.layers.3d.top.filled', L(`맨 앞으로 (${k('⇧⌘]')})`, `Bring to Front (${k('⇧⌘]')})`), () => current?.bringSelectionToFront(), none),
+      button('square.3.layers.3d.bottom.filled', L(`맨 뒤로 (${k('⇧⌘[')})`, `Send to Back (${k('⇧⌘[')})`), () => current?.sendSelectionToBack(), none),
+      button('trash', L(`지우기 (${k('⌫')})`, `Delete (${k('⌫')})`), () => current?.deleteSelection()),
     ])
   }
 
@@ -730,14 +782,8 @@ export function buildSketchInspector(host: SketchInspectorHost): { node: HTMLEle
 
   function render() {
     clear(node)
-    if (!readerState().drawing) {
-      node.append(el('div', { class: 'empty' }, [
-        el('span', { html: icon('pen') }),
-        el('h2', { text: L('그리기', 'Drawing') }),
-        el('p', { text: L('펜을 들면 여기서 도구와 모양을 고쳐요.', 'Pick up the pen to edit the tools and shapes here.') }),
-      ]))
-      return
-    }
+    // The same panel with the pen down as with it up, as the Mac mounts its
+    // inspector whatever the mode: the tool's header, and what it can edit.
     const about = kinds()
     const selectionOn = hasSelection()
     const ink = inkTool(store.sketch.tool)

@@ -24,6 +24,8 @@ export interface MenuEntry {
   children?: MenuEntry[]
   /** The shortcut list's command, whose key stands at the row's end. */
   key?: string
+  /** A key written out, for the page's own keys that are not in the list. */
+  keyText?: string
   /** Red, for the one item that takes something away — the Mac's `.destructive`. */
   danger?: boolean
   /** A second, quieter line under the label: a supplement's file name. */
@@ -161,7 +163,7 @@ function buildMenu(entries: MenuEntry[], depth: number): HTMLElement {
         openSubmenu(item, { children: more }, true)
       })
     }
-    const key = entry.key ? keyFor(entry.key, platform) : ''
+    const key = entry.keyText ?? (entry.key ? keyFor(entry.key, platform) : '')
     if (key) item.append(el('span', { class: 'menu-key', text: key }))
     if (entry.children) {
       item.setAttribute('aria-haspopup', 'menu')

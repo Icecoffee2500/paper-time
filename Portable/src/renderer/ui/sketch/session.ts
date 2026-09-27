@@ -60,12 +60,16 @@ export const session: {
    *  the field back over its card after the card changed. */
   endTextEditing?: () => void
   placeEditor?: () => void
+  /** A colour still moving under the hand: the page shows it, and what the
+   *  page held before it is what the one undo step goes back to. */
+  stylePreview: { pageIndex: number; before: SketchElement[] } | null
 } = {
   entered: null,
   clipboard: null,
   editing: null,
   latexField: null,
   lastTool: store.sketch.tool,
+  stylePreview: null,
 }
 
 /** Which reader each editor is for — asked by the tool watch. */

@@ -52,6 +52,7 @@ import { applyUndo, installKeys, pickTool } from './keys.js'
 import { installMainEvents } from './commands.js'
 import { installDockDrop, installFileDrop } from './dockDrop.js'
 import { installRejectionNotice } from './notices.js'
+import { watchSketchClipboard } from './ui/sketch/commands.js'
 import { onNoteWriteFailed } from './notesModel.js'
 import { installSheetModality } from './ui/sheet.js'
 import { installProbeSurface } from './probe.js'
@@ -131,7 +132,7 @@ shell.inspector = buildInspector({
   sketchChanged: () => {
     changed('sketch')
     // The style the next shape gets, kept for the next launch.
-    saveSettings({ sketchStyle: JSON.stringify(store.sketch.style.encode()) }, { soon: true })
+    saveSettings({ sketchStyle: JSON.stringify(store.sketch.style.encode()), inkPresets: JSON.stringify(store.sketch.presets) }, { soon: true })
   },
   marks: () => {
     const reader = focused()
@@ -313,6 +314,7 @@ window.addEventListener('focus', () => {
 // ------------------------------------------------------------------- start
 
 installRejectionNotice()
+watchSketchClipboard()
 // A note the disk would not take stays in hand and is written with the next
 // change; said once, in the app's voice (`NotesModel.write`).
 onNoteWriteFailed((id, reason) => {

@@ -16,6 +16,7 @@
  * column and twice the pixels of the screen, a few hundred megabytes of
  * canvases nobody would see again.
  */
+import type { Box, TextRun } from '../../shared/strokeSnap.js'
 import { clear, el } from '../dom.js'
 import { TextLayer, type PDFPageProxy } from '../pdf.js'
 import { SketchElement } from '../../shared/sketch.js'
@@ -473,6 +474,32 @@ export class PageView {
       width: (line.right - line.left) / box.width,
       height: (line.bottom - line.top) / box.height,
     }))
+  }
+
+  /**
+   * The page's words as the text layer sets them — its lines and its runs,
+   * in the page's own coordinates — for a highlighter stroke to be fitted to
+   * (`strokeSnap.ts`). Empty while the text layer is not drawn.
+   */
+  textGeometry(): { lines: Box[]; runs: TextRun[] } {
+    const rects: DOMRect[] = []
+    const runs: TextRun[] = []
+    const toPage = (rect: DOMRect): Box => {
+      const a = this.toPageFromClient(rect.left, rect.top)
+      const b = this.toPageFromClient(rect.right, rect.bottom)
+      return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(b.x - a.x), height: Math.abs(b.y - a.y) }
+    }
+    for (let index = 0; index < this.textDivs.length; index += 1) {
+      const div = this.textDivs[index]
+      const text = this.textItems[index]?.str ?? ''
+      if (!div.isConnected || !text.trim()) continue
+      const rect = div.getBoundingClientRect()
+      if (rect.width <= 0.5 || rect.height <= 0.5) continue
+      rects.push(rect)
+      runs.push({ box: toPage(rect), text })
+    }
+    const lines = linesFromRuns(rects).map((line) => toPage(new DOMRect(line.left, line.top, line.right - line.left, line.bottom - line.top)))
+    return { lines, runs }
   }
 
   /** Puts the found places' boxes on the page, or takes them away. A page
