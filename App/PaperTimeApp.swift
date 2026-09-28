@@ -45,6 +45,8 @@ struct PaperTimeApp: App {
         LatexSuiteTypingProbe.runIfAsked()
         // Types into a formula and photographs the card that sets it.
         MathPreviewProbe.runIfAsked()
+        // Types into a long note and says whether the view jumped.
+        NoteScrollProbe.runIfAsked()
         #endif
     }
 

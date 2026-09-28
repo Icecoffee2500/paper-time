@@ -310,11 +310,14 @@ struct NoteEditor: NSViewRepresentable {
             }
             lastKnownWidth = room(in: textView)
             let caret = caretSource.map { rendered.displayIndex(forSource: $0) }
+            // Whether the caret was in sight before: typing keeps it there,
+            // and a note scrolled away from the caret by hand stays put.
+            let caretWasShown = caretIsShown(in: textView)
             setContents(rendered.text, in: textView)
             if let caret {
-                textView.setSelectedRange(
-                    NSRange(location: min(max(caret, 0), textView.string.utf16.count), length: 0)
-                )
+                let range = NSRange(location: min(max(caret, 0), textView.string.utf16.count), length: 0)
+                textView.setSelectedRange(range)
+                if caretWasShown { textView.scrollRangeToVisible(range) }
             }
             textView.typingAttributes = showsRawText
                 ? NoteMarkdown.rawAttributes : NoteMarkdown.bodyAttributes
@@ -349,7 +352,17 @@ struct NoteEditor: NSViewRepresentable {
         /// again. Only a real change counts — dragging a divider sends this
         /// many times a second.
         func widthChanged(_ textView: NoteTextView) {
-            guard !isRestyling, !showsRawText else { return }
+            guard !isRestyling else { return }
+            // A new width throws away every measured line, and TextKit 2 then
+            // guesses the height of all but the ones on screen — a note of
+            // 29,000 pt opened as 16,981, and the first Return in its middle
+            // moved the view 280 pt. So the note is measured whole once the
+            // width has settled, with the line at the top kept at the top.
+            if let width = room(in: textView), width != lastMeasuredWidth {
+                lastMeasuredWidth = width
+                measureWhole(textView)
+            }
+            guard !showsRawText else { return }
             let now = room(in: textView)
             guard let now, let before = lastKnownWidth else {
                 lastKnownWidth = now
@@ -376,15 +389,150 @@ struct NoteEditor: NSViewRepresentable {
         /// Replaces what is on screen, through the content storage's own
         /// transaction: the text view is backed by TextKit 2, which lays out
         /// nothing when its storage is changed behind its back.
+        ///
+        /// Only the lines that came out differently are replaced. TextKit 2
+        /// lays out only what is on screen and *guesses* the height of the
+        /// rest; replacing the whole storage threw every measured line away,
+        /// so each Return, each line joined, set the note on guesses — its
+        /// height went 2298 → 2010 → 1826 → 1940 pt over five keys, and the
+        /// view jumped by as much (705 pt on one Return), putting the caret
+        /// out of sight while somebody typed. Laying the whole note out again
+        /// instead cured it but cost 55 ms a Return on a note of 30,000
+        /// characters. Replacing the changed lines keeps every other line's
+        /// measured height, and the replaced ones are measured at once.
+        /// The first time (an empty view) is the whole note, measured whole
+        /// once the view has its width.
         func setContents(_ attributed: NSAttributedString, in textView: NSTextView) {
-            if let content = textView.textLayoutManager?.textContentManager as? NSTextContentStorage {
-                content.performEditingTransaction {
-                    content.textStorage?.setAttributedString(attributed)
-                }
-            } else {
+            guard let content = textView.textLayoutManager?.textContentManager as? NSTextContentStorage,
+                  let storage = content.textStorage, let layout = textView.textLayoutManager
+            else {
                 textView.textStorage?.setAttributedString(attributed)
+                textView.needsDisplay = true
+                return
+            }
+            let clip = textView.enclosingScrollView?.contentView
+            let change = Self.changedLines(from: storage, to: attributed)
+            guard let change else { return }
+            // What stood above the top of the view before, so a line that
+            // changed height up there does not move what is being read.
+            let top = clip?.bounds.origin.y ?? 0
+            let oldFrame = frame(of: change.old, in: layout, content: content)
+            let heightBefore = textView.frame.height
+            let wasFirst = storage.length == 0
+            content.performEditingTransaction {
+                storage.replaceCharacters(in: change.old, with: attributed.attributedSubstring(from: change.new))
+            }
+            Trace.time("note: lay out the lines that changed") {
+                if wasFirst {
+                    // Measured whole once it has a width (`widthChanged`);
+                    // laid out now, at no width, it would be measured twice.
+                    if room(in: textView) != nil { layout.ensureLayout(for: layout.documentRange) }
+                } else if let range = textRange(change.new, content: content) {
+                    layout.ensureLayout(for: range)
+                }
+                layout.textViewportLayoutController.layoutViewport()
+            }
+            if let clip, let oldFrame, oldFrame.maxY <= top, !wasFirst {
+                let moved = textView.frame.height - heightBefore
+                if moved != 0 {
+                    clip.scroll(to: NSPoint(x: clip.bounds.origin.x, y: max(0, top + moved)))
+                    textView.enclosingScrollView?.reflectScrolledClipView(clip)
+                }
             }
             textView.needsDisplay = true
+        }
+
+        /// The lines to replace, in the note on screen and in the new one:
+        /// everything between the first line that differs and the last.
+        /// Nil when nothing differs.
+        static func changedLines(from old: NSAttributedString, to new: NSAttributedString) -> (old: NSRange, new: NSRange)? {
+            let oldText = old.string as NSString, newText = new.string as NSString
+            // From the front, line by line, while the lines are the same —
+            // their words and how they are set.
+            var head = 0
+            while head < oldText.length, head < newText.length {
+                let a = oldText.paragraphRange(for: NSRange(location: head, length: 0))
+                let b = newText.paragraphRange(for: NSRange(location: head, length: 0))
+                guard a == b, old.attributedSubstring(from: a).isEqual(to: new.attributedSubstring(from: b)) else { break }
+                head = NSMaxRange(a)
+            }
+            // From the back, the same, never past the front.
+            var oldEnd = oldText.length, newEnd = newText.length
+            while oldEnd > head, newEnd > head {
+                let a = oldText.paragraphRange(for: NSRange(location: oldEnd - 1, length: 0))
+                let b = newText.paragraphRange(for: NSRange(location: newEnd - 1, length: 0))
+                guard a.length == b.length, a.location >= head, b.location >= head,
+                      old.attributedSubstring(from: a).isEqual(to: new.attributedSubstring(from: b)) else { break }
+                oldEnd = a.location
+                newEnd = b.location
+            }
+            let oldRange = NSRange(location: head, length: oldEnd - head)
+            let newRange = NSRange(location: head, length: newEnd - head)
+            if oldRange.length == 0, newRange.length == 0 { return nil }
+            return (oldRange, newRange)
+        }
+
+        private func textRange(_ range: NSRange, content: NSTextContentStorage) -> NSTextRange? {
+            guard let start = content.location(content.documentRange.location, offsetBy: range.location),
+                  let end = content.location(start, offsetBy: range.length) else { return nil }
+            return NSTextRange(location: start, end: end)
+        }
+
+        /// Where these lines are drawn now, if they are laid out.
+        private func frame(of range: NSRange, in layout: NSTextLayoutManager, content: NSTextContentStorage) -> CGRect? {
+            guard let text = textRange(range, content: content) else { return nil }
+            var frame: CGRect?
+            layout.enumerateTextLayoutFragments(from: text.location, options: [.ensuresLayout]) { fragment in
+                frame = frame.map { $0.union(fragment.layoutFragmentFrame) } ?? fragment.layoutFragmentFrame
+                return fragment.rangeInElement.endLocation.compare(text.endLocation) == .orderedAscending
+            }
+            return frame
+        }
+
+        /// The width the note was last measured whole at.
+        private var lastMeasuredWidth: CGFloat?
+
+        /// Lays out every line, keeping the line at the top of the view where
+        /// it is on screen.
+        func measureWhole(_ textView: NSTextView) {
+            guard let layout = textView.textLayoutManager,
+                  let clip = textView.enclosingScrollView?.contentView else { return }
+            let top = clip.bounds.origin.y - textView.textContainerOrigin.y
+            var anchor: (location: NSTextLocation, offset: CGFloat)?
+            layout.enumerateTextLayoutFragments(from: layout.documentRange.location, options: []) { fragment in
+                let frame = fragment.layoutFragmentFrame
+                if frame.maxY > top {
+                    anchor = (fragment.rangeInElement.location, top - frame.minY)
+                    return false
+                }
+                return true
+            }
+            Trace.time("note: measure the whole note") {
+                layout.ensureLayout(for: layout.documentRange)
+                layout.textViewportLayoutController.layoutViewport()
+            }
+            guard let anchor, let fragment = layout.textLayoutFragment(for: anchor.location) else { return }
+            let y = fragment.layoutFragmentFrame.minY + anchor.offset + textView.textContainerOrigin.y
+            let highest = max(0, textView.frame.height - clip.bounds.height)
+            clip.scroll(to: NSPoint(x: clip.bounds.origin.x, y: min(max(0, y), highest)))
+            textView.enclosingScrollView?.reflectScrolledClipView(clip)
+        }
+
+        /// Whether the caret's line is inside the part of the note on screen.
+        func caretIsShown(in textView: NSTextView) -> Bool {
+            guard let clip = textView.enclosingScrollView?.contentView,
+                  let layout = textView.textLayoutManager, let content = layout.textContentManager,
+                  let location = content.location(content.documentRange.location, offsetBy: textView.selectedRange().location)
+            else { return true }
+            var frame: CGRect?
+            layout.enumerateTextSegments(in: NSTextRange(location: location), type: .selection, options: []) { _, rect, _, _ in
+                frame = rect
+                return false
+            }
+            guard let frame else { return true }
+            let line = frame.offsetBy(dx: textView.textContainerOrigin.x, dy: textView.textContainerOrigin.y)
+            let visible = clip.bounds
+            return line.maxY >= visible.minY && line.minY <= visible.maxY
         }
 
         // MARK: Links
