@@ -94,6 +94,32 @@ else
   open -g -j -n -a "$PWD/$APP" --stderr "$LOG" --stdout "$LOG" --args "$@" -ApplePersistenceIgnoreState YES
 fi
 
+# And the copy that started must be the one asked for. Launch Services opens
+# a bundle by its id when it will not open the path — an app on a disk image
+# mounted with -nobrowse is one — and the other bundle with that id is the
+# person's own, in /Applications: on 2026-09-28 their installed copy ran as a
+# probe, with a test library, for fourteen seconds, and wrote the probe's
+# sample name into their settings. So the process is found by its library
+# argument and its executable compared with the bundle asked for; anything
+# else is stopped at once.
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  PROBE_PID="$(pgrep -f -- "--papertime-library=$LIBRARY" | head -1)"
+  [ -n "$PROBE_PID" ] && break
+  sleep 0.5
+done
+if [ -n "$PROBE_PID" ]; then
+  RAN="$(ps -o comm= -p "$PROBE_PID" 2>/dev/null)"
+  case "$RAN" in
+    "$MINE"/*|"$MINE_REAL"/*) ;;
+    *)
+      kill "$PROBE_PID" 2>/dev/null || true
+      echo "!! Launch Services started $RAN, not $MINE — stopped it" >&2
+      echo "!! copy the bundle to a real folder (not a -nobrowse disk image) and run it from there" >&2
+      exit 70
+      ;;
+  esac
+fi
+
 # Watched the whole way, not only at the ends. Comparing before with after says
 # nothing about the middle, and "did my window ever come forward" is the one
 # question this script exists to answer.
