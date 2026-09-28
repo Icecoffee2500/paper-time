@@ -482,10 +482,31 @@ enum NoteMarkdown {
             start = end + 1
         }
 
+        let tables = Set(NoteTable.blocks(in: source).map { NSStringRange($0) })
         for (lineRange, block) in zip(lineRanges, blocks) {
             let revealed = caret.map {
                 $0 >= lineRange.location && $0 <= lineRange.location + lineRange.length
             } ?? false
+            #if os(macOS)
+            // A table, drawn as a grid while the caret is elsewhere; with the
+            // caret in it, its lines as they are written.
+            if !revealed, tables.contains(NSStringRange(lineRange)),
+               let table = NoteTable.parse(text.substring(with: lineRange)),
+               let grid = tablePiece(table, source: text.substring(with: lineRange), style: block.paragraphStyle) {
+                append(grid, source: lineRange)
+                let newline = lineRange.location + lineRange.length
+                if newline < text.length {
+                    append(
+                        NSAttributedString(string: "\n", attributes: [
+                            .font: bodyFont, .foregroundColor: NoteColor.labelColor,
+                            .paragraphStyle: block.paragraphStyle,
+                        ]),
+                        source: NSRange(location: newline, length: 1)
+                    )
+                }
+                continue
+            }
+            #endif
             let style = block.paragraphStyle
             let markerLength = (block.marker as NSString).length
 
@@ -817,7 +838,11 @@ enum NoteMarkdown {
     /// caret anywhere in it shows the whole block as it is written.
     static func lines(of text: NSString, joiningMathBlocksIn source: String) -> [NSRange] {
         var ranges = lines(of: text)
-        for block in NoteMath.blocks(in: source).reversed() {
+        // A table's lines too, and for the same reason: it is one thing
+        // written over several lines (`NoteTable`).
+        let joined = (NoteMath.blocks(in: source) + NoteTable.blocks(in: source))
+            .sorted { $0.location < $1.location }
+        for block in joined.reversed() {
             guard let first = ranges.firstIndex(where: { $0.location == block.location }),
                   let last = ranges.firstIndex(where: {
                       $0.location + $0.length == block.location + block.length
@@ -1001,7 +1026,45 @@ enum NoteMarkdown {
         return piece
     }
 
+    /// An `NSRange` that can go in a set.
+    private struct NSStringRange: Hashable {
+        let location: Int
+        let length: Int
+        init(_ range: NSRange) { location = range.location; length = range.length }
+    }
+
     #if os(macOS)
+    private nonisolated(unsafe) static var tableCache: [String: NSImage] = [:]
+
+    /// A table as a picture of itself: a header set in bold on a faint
+    /// ground, hairlines between the cells, the whole in a rounded frame.
+    /// The source rides along, so copying it gives the Markdown back.
+    private static func tablePiece(_ table: NoteTable.Table, source: String, style: NSParagraphStyle) -> NSAttributedString? {
+        let room = max(160, ((available ?? 520) - 4) / 8 * 8).rounded(.down)
+        let appearance = current ?? NSApp?.effectiveAppearance ?? NSAppearance.currentDrawing()
+        let key = "\(room)|\(appearance.name.rawValue)|\(source)"
+        let image: NSImage
+        if let cached = tableCache[key] {
+            image = cached
+        } else {
+            guard let drawn = NoteTableDrawing.image(table, width: room, appearance: appearance) else { return nil }
+            if tableCache.count > 200 { tableCache.removeAll() }
+            tableCache[key] = drawn
+            image = drawn
+        }
+        let attachment = NSTextAttachment()
+        attachment.image = image
+        attachment.bounds = CGRect(x: 0, y: -6, width: image.size.width, height: image.size.height)
+        let piece = NSMutableAttributedString(attachment: attachment)
+        piece.addAttributes([
+            .paperTimeSource: source,
+            .font: NoteTypography.body(),
+            .foregroundColor: NoteColor.labelColor,
+            .paragraphStyle: style,
+        ], range: NSRange(location: 0, length: piece.length))
+        return piece
+    }
+
     /// Formulas are drawn once and kept as images. The attachment around an
     /// image is made fresh every time: one attachment shared between two text
     /// storages is one attachment too few for TextKit.

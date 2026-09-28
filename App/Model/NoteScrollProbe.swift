@@ -83,6 +83,20 @@ enum NoteScrollProbe {
             ?? "a,b,c,Enter,Enter,d,e,f,Enter,g,Backspace,Backspace,Backspace,Backspace,Backspace,Enter,Enter,Enter,h")
             .split(separator: ",").map(String.init)
         for key in keys {
+            // `Paste:<file>`: that file's HTML (or, for a .txt, its text) on a
+            // pasteboard of the probe's own, pasted where the caret is.
+            if let file = key.stripPrefix("Paste:") {
+                let board = NSPasteboard(name: NSPasteboard.Name("PaperTimeProbe-\(ProcessInfo.processInfo.processIdentifier)"))
+                board.clearContents()
+                let contents = (try? String(contentsOfFile: file, encoding: .utf8)) ?? ""
+                board.setString(contents, forType: file.hasSuffix(".txt") ? .string : .html)
+                let pasted = text.pasteTable(from: board)
+                board.releaseGlobally()
+                try? await Task.sleep(for: .milliseconds(300))
+                say("note scroll: pasted table \(pasted); the note now reads:\n\(note.markdown.suffix(600))")
+                report(key)
+                continue
+            }
             _ = await LatexSuiteTypingProbe.press(key, in: text, window: window)
             if key.hasPrefix("Caret:") { text.scrollRangeToVisible(text.selectedRange()) }
             await LatexSuiteTypingProbe.endOfEvent(window)

@@ -732,6 +732,52 @@ final class NoteTextView: LatexSuiteTextView {
         insertText("", replacementRange: selectedRange())
     }
 
+    // MARK: Pasting
+
+    /// A table pasted from ChatGPT or Obsidian arrives as HTML, and as its
+    /// words one cell to a line — pasted as it was, that is what the note
+    /// got. Here it becomes the Markdown table it stands for (`NoteTable`),
+    /// on lines of its own, and the note draws it as a grid. Rows of
+    /// tab-separated cells — a spreadsheet's — do the same. Anything else
+    /// pastes as before.
+    override func paste(_ sender: Any?) {
+        guard pasteTable(from: .general) else { return super.paste(sender) }
+    }
+
+    /// Pastes the table on this pasteboard; false when there is none. A probe
+    /// hands it a pasteboard of its own, never the one people copy to.
+    @discardableResult
+    func pasteTable(from pasteboard: NSPasteboard) -> Bool {
+        guard let table = Self.pastedTable(from: pasteboard) else { return false }
+        let text = string as NSString
+        let range = selectedRange()
+        // A blank line on either side: a table is read until the first line
+        // without a bar, so one pasted under another would join it.
+        let newline: unichar = 10
+        let before = range.location > 0 ? text.character(at: range.location - 1) : newline
+        let beforeThat = range.location > 1 ? text.character(at: range.location - 2) : newline
+        let atEnd = NSMaxRange(range) >= text.length
+        let after = atEnd ? newline : text.character(at: NSMaxRange(range))
+        let lead = range.location == 0 ? "" : before != newline ? "\n\n" : beforeThat != newline ? "\n" : ""
+        let tail = atEnd ? "\n" : after != newline ? "\n\n" : "\n"
+        let block = lead + table + tail
+        breakUndoCoalescing()
+        insertText(block, replacementRange: range)
+        breakUndoCoalescing()
+        return true
+    }
+
+    /// What a paste would put in the note as a table, if it is one.
+    static func pastedTable(from pasteboard: NSPasteboard) -> String? {
+        if let html = pasteboard.string(forType: .html), let markdown = NoteTable.fromHTML(html) {
+            return markdown
+        }
+        if let plain = pasteboard.string(forType: .string), let markdown = NoteTable.fromTabSeparated(plain) {
+            return markdown
+        }
+        return nil
+    }
+
     private func writeMarkdownToPasteboard() -> Bool {
         let range = selectedRange()
         guard range.length > 0 else { return false }
