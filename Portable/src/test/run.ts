@@ -43,6 +43,7 @@ import { pageTintSuite } from './pageTint.js'
 import { paritySuite } from './parity.js'
 import { zettelSuite } from './zettel.js'
 import { updatesSuite } from './updates.js'
+import { noteTableSuite } from './noteTable.js'
 import { slipBoxSuite } from './slipBox.js'
 import { safetySuite } from './safety.js'
 import { pathsSuite } from './paths.js'
@@ -429,6 +430,7 @@ async function main() {
   await paritySuite(test, suite)
   await zettelSuite(test, suite)
   await updatesSuite(test, suite)
+  await noteTableSuite(test, suite)
   await slipBoxSuite(test, suite)
   await safetySuite(test, suite)
   await pathsSuite(test, suite)

@@ -1,0 +1,315 @@
+{
+  "notes" : [
+    {
+      "blocks" : [
+        [
+          8,
+          82
+        ]
+      ],
+      "markdown" : [
+        "| Year | Factor (Z) |\n| --- | ---: |\n| 2023 | 5% |\n| 2024 | 7\\|8% |"
+      ],
+      "tables" : [
+        {
+          "alignments" : [
+            "none",
+            "right"
+          ],
+          "header" : [
+            "Year",
+            "Factor (Z)"
+          ],
+          "rows" : [
+            [
+              "2023",
+              "5%"
+            ],
+            [
+              "2024",
+              "7|8%"
+            ]
+          ]
+        }
+      ],
+      "text" : "Before\n\n| Year | Factor (Z) |\n| ---- | ---------: |\n| 2023 | 5% |\n| 2024 | 7\\|8% |\nAfter"
+    },
+    {
+      "blocks" : [
+        [
+          0,
+          34
+        ],
+        [
+          36,
+          55
+        ]
+      ],
+      "markdown" : [
+        "| a | b |\n| :--- | :---: |\n| 1 | 2 |\n| 3 |  |",
+        "| c |\n| --- |\n| 4 |"
+      ],
+      "tables" : [
+        {
+          "alignments" : [
+            "left",
+            "center"
+          ],
+          "header" : [
+            "a",
+            "b"
+          ],
+          "rows" : [
+            [
+              "1",
+              "2"
+            ],
+            [
+              "3",
+              ""
+            ]
+          ]
+        },
+        {
+          "alignments" : [
+            "none"
+          ],
+          "header" : [
+            "c"
+          ],
+          "rows" : [
+            [
+              "4"
+            ]
+          ]
+        }
+      ],
+      "text" : "| a | b |\n|:-|:-:|\n| 1 | 2 |\n| 3 |\n\n| c |\n| --- |\n| 4 |"
+    },
+    {
+      "blocks" : [
+        [
+          0,
+          21
+        ]
+      ],
+      "markdown" : [
+        "| a | b |\n| --- | --- |\n| 1 | 2 |"
+      ],
+      "tables" : [
+        {
+          "alignments" : [
+            "none",
+            "none"
+          ],
+          "header" : [
+            "a",
+            "b"
+          ],
+          "rows" : [
+            [
+              "1",
+              "2"
+            ]
+          ]
+        }
+      ],
+      "text" : "a | b\n--- | ---\n1 | 2"
+    },
+    {
+      "blocks" : [
+
+      ],
+      "markdown" : [
+
+      ],
+      "tables" : [
+
+      ],
+      "text" : "| a | b |\n| --- |\n| 1 | 2 |"
+    },
+    {
+      "blocks" : [
+
+      ],
+      "markdown" : [
+
+      ],
+      "tables" : [
+
+      ],
+      "text" : "no table | here\njust words"
+    },
+    {
+      "blocks" : [
+        [
+          0,
+          46
+        ]
+      ],
+      "markdown" : [
+        "| 한글 | 표 |\n| --- | --- |\n| 셀 `code` | **굵게** |"
+      ],
+      "tables" : [
+        {
+          "alignments" : [
+            "none",
+            "none"
+          ],
+          "header" : [
+            "한글",
+            "표"
+          ],
+          "rows" : [
+            [
+              "셀 `code`",
+              "**굵게**"
+            ]
+          ]
+        }
+      ],
+      "text" : "| 한글 | 표 |\n| --- | --- |\n| 셀 `code` | **굵게** |\n\ntext"
+    },
+    {
+      "blocks" : [
+        [
+          0,
+          7
+        ]
+      ],
+      "markdown" : [
+        "| x |\n| --- |"
+      ],
+      "tables" : [
+        {
+          "alignments" : [
+            "none"
+          ],
+          "header" : [
+            "x"
+          ],
+          "rows" : [
+
+          ]
+        }
+      ],
+      "text" : "|x|\n|-|\n"
+    },
+    {
+      "blocks" : [
+        [
+          0,
+          53
+        ]
+      ],
+      "markdown" : [
+        "| indented | table |\n| --- | --- |\n| yes | no |"
+      ],
+      "tables" : [
+        {
+          "alignments" : [
+            "none",
+            "none"
+          ],
+          "header" : [
+            "indented",
+            "table"
+          ],
+          "rows" : [
+            [
+              "yes",
+              "no"
+            ]
+          ]
+        }
+      ],
+      "text" : "  | indented | table |\n  | --- | --- |\n  | yes | no |"
+    },
+    {
+      "blocks" : [
+        [
+          0,
+          40
+        ]
+      ],
+      "markdown" : [
+        "| a\\\\ | b\\| |\n| --- | --- |\n| \\x | \\\\ |"
+      ],
+      "tables" : [
+        {
+          "alignments" : [
+            "none",
+            "none"
+          ],
+          "header" : [
+            "a\\\\",
+            "b|"
+          ],
+          "rows" : [
+            [
+              "\\x",
+              "\\\\"
+            ]
+          ]
+        }
+      ],
+      "text" : "| a\\\\ | b\\| |\n| --- | --- |\n| \\x | \\\\| |"
+    }
+  ],
+  "pastes" : [
+    {
+      "html" : "<meta charset=\"utf-8\"><h3>5. 보조 테이블</h3><h4><code>engine_info</code></h4><table><thead><tr><th>column</th><th>type</th><th>의미 추정</th></tr></thead><tbody><tr><td><code>ENGTYPE</code></td><td><code>VARCHAR</code></td><td>원 엔진 타입 문자열</td></tr><tr><td>types</td><td>VARCHAR</td><td>엔진 분류. 예: <code>SSD</code></td></tr></tbody></table>",
+      "markdown" : "### 5. 보조 테이블\n#### engine_info\n\n| column | type | 의미 추정 |\n| --- | --- | --- |\n| ENGTYPE | VARCHAR | 원 엔진 타입 문자열 |\n| types | VARCHAR | 엔진 분류. 예: SSD |"
+    },
+    {
+      "html" : "<p>Here is the table:</p>\n<table>\n  <tr><th>Model</th><th>Params</th></tr>\n  <tr><td>GPT&#8209;4</td><td>&gt; 1T &amp; more</td></tr>\n  <tr><td>A | B</td><td>line<br>two</td></tr>\n</table>\n<p>That&#39;s all &mdash; <b>done</b>.</p>",
+      "markdown" : "Here is the table:\n\n| Model | Params |\n| --- | --- |\n| GPT‑4 | > 1T & more |\n| A \\| B | line two |\n\nThat's all — done."
+    },
+    {
+      "html" : "<table><tr><td>only</td></tr></table>",
+      "markdown" : "| only |\n| --- |"
+    },
+    {
+      "html" : "<table><tr><td>a</td><td>b</td><td>c</td></tr><tr><td>1</td></tr></table>",
+      "markdown" : "| a | b | c |\n| --- | --- | --- |\n| 1 |  |  |"
+    },
+    {
+      "html" : "<!-- x --><style>td{}</style><table><tr><td>styled</td><td>&#x1F600;</td></tr><tr><td>&nbsp;x&nbsp;</td><td>&unknown;</td></tr></table>",
+      "markdown" : "| styled | 😀 |\n| --- | --- |\n| x | &unknown; |"
+    },
+    {
+      "html" : "<ul><li>one</li><li>two</li></ul><table><tr><td>h</td></tr><tr><td>r</td></tr></table>",
+      "markdown" : "- one\n- two\n\n| h |\n| --- |\n| r |"
+    },
+    {
+      "html" : "<p>no table here</p>"
+    },
+    {
+      "html" : "<table><tr><td><table><tr><td>inner</td></tr></table></td><td>outer</td></tr><tr><td>x</td><td>y</td></tr></table>",
+      "markdown" : "| inner | outer |\n| --- | --- |\n| x | y |"
+    }
+  ],
+  "rows" : [
+    {
+      "markdown" : "| Year | Reduction Factor (Z) |\n| --- | --- |\n| 2023 | 5% |\n| 2024 | 7% |",
+      "text" : "Year\tReduction Factor (Z)\n2023\t5%\n2024\t7%\n"
+    },
+    {
+      "markdown" : "| a | b |\n| --- | --- |\n| 1 | 2 |",
+      "text" : "a\tb\r\n1\t2"
+    },
+    {
+      "text" : "one line\tonly"
+    },
+    {
+      "text" : "a\tb\n1\t2\t3"
+    },
+    {
+      "text" : "a\n1"
+    },
+    {
+      "markdown" : "| a | b |\n| --- | --- |\n| 1 | 2 |",
+      "text" : "  a \t b \n\n 1\t2 "
+    }
+  ]
+}

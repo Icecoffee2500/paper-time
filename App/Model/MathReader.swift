@@ -68,8 +68,25 @@ enum MathReader {
         var scale: CGFloat = 1
     }
 
+    /// How many formulas the last reading left out because the file does not
+    /// say what their glyphs are — so the one who asked can be told.
+    nonisolated(unsafe) static var skippedFormulas = 0
+
+    /// What to tell somebody when the last reading left formulas out, or
+    /// nil when it did not.
+    static func leftOutSentence(copied: Bool = false) -> String? {
+        let count = skippedFormulas
+        guard count > 0 else { return nil }
+        return copied
+            ? L("수식 \(count)개는 빼고 복사했어요. 파일에 그 기호가 무엇인지 적혀 있지 않아요.",
+                "Copied without \(count == 1 ? "one formula" : "\(count) formulas"). The file doesn't say what \(count == 1 ? "its" : "their") symbols are.")
+            : L("수식 \(count)개는 빼고 넣었어요. 파일에 그 기호가 무엇인지 적혀 있지 않아요.",
+                "Linked without \(count == 1 ? "one formula" : "\(count) formulas"). The file doesn't say what \(count == 1 ? "its" : "their") symbols are.")
+    }
+
     @MainActor
     static func pieces(from selection: PDFSelection) -> [Piece] {
+        skippedFormulas = 0
         var pieces: [Piece] = []
         for (number, page) in selection.pages.enumerated() {
             let pageCharacters = characters(of: page)
@@ -161,6 +178,15 @@ enum MathReader {
                     }
                 }
                 guard !all.isEmpty else { continue }
+                // A formula whose glyphs mostly say nothing about what they
+                // are — a Word equation in a subset font with no cmap and a
+                // ToUnicode of zeros — is left out rather than written down
+                // as braces and carets with nothing in them.
+                let unread = all.filter { MathTranscriber.spelling(of: $0).isEmpty }.count
+                if unread * 4 > all.count {
+                    skippedFormulas += 1
+                    continue
+                }
 
                 let bounds = all.dropFirst().reduce(all[0].rect) { $0.union($1.rect) }
                 var body = MathTranscriber.latex(
@@ -262,7 +288,7 @@ enum MathReader {
             index = latex.index(after: index)
         }
         flush()
-        return out
+        return MathTranscriber.joiningText(out)
     }
 
     /// Whether a row is a section title, and how loud a one.
@@ -277,7 +303,11 @@ enum MathReader {
         // A title is short and does not end in a full stop; the first line of
         // a paragraph set in a larger face is neither.
         let trimmed = text.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.hasSuffix("."), !trimmed.hasSuffix(","), trimmed.count < 90
+        guard !trimmed.hasSuffix("."), !trimmed.hasSuffix(","), trimmed.count < 90,
+              // A line that is a formula with its number is an equation,
+              // however large its symbols are set; a title with a symbol in
+              // it ("Intractability of posterior of $A$") is still a title.
+              !(trimmed.contains("$") && wordsOutsideFormulas(trimmed) < 2)
         else { return .prose }
         // Either it is set larger than the body, or it is a line of its own,
         // set entirely in bold, that stops well short of the column: that is
@@ -287,6 +317,17 @@ enum MathReader {
         if scale >= 1.12 { return .heading(level: scale >= 1.45 ? 2 : scale >= 1.22 ? 3 : 4) }
         if bold, short, scale >= 1.0 { return .heading(level: 4) }
         return .prose
+    }
+
+    /// How many words of letters a line has outside its `$…$`.
+    private static func wordsOutsideFormulas(_ text: String) -> Int {
+        var outside = ""
+        var inMath = false
+        for character in text {
+            if character == "$" { inMath.toggle(); outside.append(" "); continue }
+            if !inMath { outside.append(character) }
+        }
+        return outside.split(whereSeparator: { !$0.isLetter }).filter { $0.count >= 2 }.count
     }
 
     /// The row, read as `read` reads it, with its bold words wrapped.
@@ -910,14 +951,22 @@ enum MathReader {
         }
         var pieces: [(isMath: Bool, text: String)] = []
         for word in words(in: row, body: context.bodySize) {
-            if word.contains(where: MathTranscriber.isMathFont) {
+            if word.contains(where: MathTranscriber.isMathFont)
+                || MathTranscriber.hasWordSubscript(word, body: context.bodySize) {
+                // Left out when most of it cannot be read (see `pieces`).
+                let unread = word.filter { MathTranscriber.spelling(of: $0).isEmpty }.count
+                if unread * 4 > word.count {
+                    skippedFormulas += 1
+                    continue
+                }
                 let latex = MathTranscriber.latex(glyphs: word, rules: rules, context: context)
                 if !latex.isEmpty { pieces.append((true, latex)) }
                 continue
             }
             let spelled = word.map(MathTranscriber.spelling(of:))
             if spelled.contains(where: \.isEmpty),
-               let borrowed = spelling(of: word, from: characters, text: text) {
+               let borrowed = spelling(of: word, from: characters, text: text),
+               agrees(borrowed, with: spelled) {
                 pieces.append((false, borrowed))
             } else {
                 pieces.append((false, composed(spelled.joined())))
@@ -1029,14 +1078,46 @@ enum MathReader {
         in row: [PDFContentScanner.Glyph], body: CGFloat
     ) -> [[PDFContentScanner.Glyph]] {
         var words: [[PDFContentScanner.Glyph]] = []
+        var spaced = false
         for glyph in row {
-            if let last = words.last?.last, !isGap(between: last, and: glyph, body: body) {
+            // Word and every "Save as PDF" draw their spaces as glyphs, so
+            // nothing between two words is a gap: a whole justified line came
+            // back as one word, and one subscript in it made the line a
+            // formula. TeX draws no spaces, so this changes nothing there.
+            if isSpace(glyph) {
+                spaced = true
+                continue
+            }
+            if let last = words.last?.last, !spaced, !isGap(between: last, and: glyph, body: body) {
                 words[words.count - 1].append(glyph)
             } else {
                 words.append([glyph])
             }
+            spaced = false
         }
         return words
+    }
+
+    /// A glyph that draws a space (`MathTranscriber.isSpace`).
+    static func isSpace(_ glyph: PDFContentScanner.Glyph) -> Bool {
+        MathTranscriber.isSpace(glyph)
+    }
+
+    /// Whether a word borrowed from PDFKit spells the letters this could read
+    /// on its own, in their order. PDFKit's text and its character boxes do
+    /// not always agree — on a page of an MDPI paper made in Word every box
+    /// was paired with a letter from a line earlier — and a borrowed word
+    /// that disagrees with the glyphs is from somewhere else: "um value be-"
+    /// arrived in a note for "The reduction factor".
+    private static func agrees(_ borrowed: String, with spelled: [String]) -> Bool {
+        let known = spelled.joined().filter { $0.isLetter || $0.isNumber }
+        guard !known.isEmpty else { return true }
+        var remaining = Substring(borrowed.filter { $0.isLetter || $0.isNumber })
+        for character in known {
+            guard let at = remaining.firstIndex(of: character) else { return false }
+            remaining = remaining[remaining.index(after: at)...]
+        }
+        return true
     }
 
     /// What PDFKit says the word is: the characters its glyphs sit on, in the

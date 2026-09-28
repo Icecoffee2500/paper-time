@@ -106,6 +106,12 @@ final class PDFContentScanner {
         /// nonsymbolic one draws text and means the encoding it declares. TeX
         /// writes both, and the difference decides how a byte is read.
         var isSymbolic = true
+        /// How many bytes of a string make one glyph: one for the simple
+        /// fonts TeX writes, two for a composite (Type0) font with an
+        /// Identity CMap — what Word and every "Save as PDF" write. Reading
+        /// those a byte at a time split every glyph in two, and a formula
+        /// from an MDPI paper came out as "$)/(385DCCCiHE WVV U)u!ull…".
+        var bytesPerCode = 1
     }
 
     // MARK: - Scanning
@@ -302,8 +308,10 @@ final class PDFContentScanner {
     private func show(_ string: CGPDFStringRef) {
         guard let bytes = CGPDFStringGetBytePtr(string) else { return }
         let length = CGPDFStringGetLength(string)
-        for index in 0..<length {
-            let code = Int(bytes[index])
+        let step = currentFont?.bytesPerCode ?? 1
+        for index in stride(from: 0, to: length - (step - 1), by: step) {
+            var code = 0
+            for byte in 0..<step { code = code << 8 | Int(bytes[index + byte]) }
             let width = (currentFont?.widths[code] ?? currentFont?.defaultWidth ?? 500) / 1000
 
             let placement = CGAffineTransform(a: fontSize * horizontalScale, b: 0, c: 0,
@@ -313,20 +321,37 @@ final class PDFContentScanner {
             let origin = CGPoint(x: placement.tx, y: placement.ty)
             let scale = sqrt(abs(placement.a * placement.d - placement.b * placement.c))
 
+            // A zero in a composite font's ToUnicode says the file does not
+            // know what the glyph is — Word writes one for every letter of an
+            // equation it set in Cambria Math. (TeX writes zeros for symbols
+            // it reads from their code, and those keep the zero: the code is
+            // how they are read.)
+            var meaning = currentFont?.toUnicode[code]
+            if step > 1, meaning?.unicodeScalars.allSatisfy({ $0.value == 0 }) == true { meaning = nil }
             glyphs.append(Glyph(
-                code: code,
+                // A composite font's code is a glyph number and never a
+                // character code; -1 keeps anything from reading it as one
+                // (the Cambria Math of a Word equation otherwise spelled its
+                // glyphs "( )*+$,-#", ASCII for their numbers).
+                code: step > 1 ? -1 : code,
                 fontName: currentFont?.name ?? "",
-                unicode: currentFont?.toUnicode[code]
+                unicode: meaning
                     ?? currentFont.flatMap { Self.decode(code, with: $0.baseEncoding) },
                 glyphName: currentFont?.glyphNames[code],
-                isSymbolic: currentFont?.isSymbolic ?? true,
+                // A composite font's codes are glyph numbers, never letters
+                // of a standard encoding, so what it means is only what its
+                // ToUnicode says — and a glyph that is not symbolic is read
+                // that way first. Taken as a standard encoding, a figure's
+                // Arial came out "6WHS" for "Step".
+                isSymbolic: step > 1 ? false : currentFont?.isSymbolic ?? true,
                 size: scale,
                 origin: origin,
                 width: width * scale
             ))
 
             var advance = width * fontSize + charSpacing
-            if code == 32 { advance += wordSpacing }
+            // Word spacing is for the single byte 32 only (ISO 32000 §9.3.3).
+            if code == 32, step == 1 { advance += wordSpacing }
             textMatrix = CGAffineTransform(translationX: advance * horizontalScale, y: 0)
                 .concatenating(textMatrix)
         }
@@ -366,8 +391,36 @@ final class PDFContentScanner {
                     font.widths[Int(firstChar) + index] = width
                 }
             }
+            // A composite font: two bytes a glyph, and its widths and its
+            // descriptor are on the one font it descends to.
+            var subtype: UnsafePointer<Int8>?
+            var descendant: CGPDFDictionaryRef?
+            if CGPDFDictionaryGetName(dictionary, "Subtype", &subtype), let subtype,
+               String(cString: subtype) == "Type0" {
+                var encodingName: UnsafePointer<Int8>?
+                let cmap = CGPDFDictionaryGetName(dictionary, "Encoding", &encodingName)
+                    ? encodingName.map { String(cString: $0) } : nil
+                // The Identity CMaps and the UCS-2/UTF-16 ones are two bytes
+                // throughout; a font with any other CMap is two bytes too in
+                // every paper seen, and one byte would be wrong for all of them.
+                font.bytesPerCode = 2
+                _ = cmap
+                var descendants: CGPDFArrayRef?
+                if CGPDFDictionaryGetArray(dictionary, "DescendantFonts", &descendants), let descendants {
+                    CGPDFArrayGetDictionary(descendants, 0, &descendant)
+                }
+                if let descendant {
+                    var defaultWidth: CGPDFReal = 1000
+                    CGPDFDictionaryGetNumber(descendant, "DW", &defaultWidth)
+                    font.defaultWidth = defaultWidth
+                    var widths: CGPDFArrayRef?
+                    if CGPDFDictionaryGetArray(descendant, "W", &widths), let widths {
+                        font.widths = Self.parseCIDWidths(widths)
+                    }
+                }
+            }
             var descriptorDictionary: CGPDFDictionaryRef?
-            if CGPDFDictionaryGetDictionary(dictionary, "FontDescriptor", &descriptorDictionary),
+            if CGPDFDictionaryGetDictionary(descendant ?? dictionary, "FontDescriptor", &descriptorDictionary),
                let descriptorDictionary {
                 var flags: CGPDFInteger = 0
                 CGPDFDictionaryGetInteger(descriptorDictionary, "Flags", &flags)
@@ -407,6 +460,35 @@ final class PDFContentScanner {
             return true
         }, nil)
         fonts = loaded
+    }
+
+    /// A composite font's `/W`: `c [w₁ w₂ …]` gives widths from `c` on, and
+    /// `c₁ c₂ w` gives one width to the whole run.
+    private static func parseCIDWidths(_ array: CGPDFArrayRef) -> [Int: CGFloat] {
+        var widths: [Int: CGFloat] = [:]
+        var index = 0
+        let count = CGPDFArrayGetCount(array)
+        while index < count {
+            var first: CGPDFInteger = 0
+            guard CGPDFArrayGetInteger(array, index, &first) else { index += 1; continue }
+            var run: CGPDFArrayRef?
+            if index + 1 < count, CGPDFArrayGetArray(array, index + 1, &run), let run {
+                for offset in 0..<CGPDFArrayGetCount(run) {
+                    var width: CGPDFReal = 0
+                    if CGPDFArrayGetNumber(run, offset, &width) { widths[Int(first) + offset] = width }
+                }
+                index += 2
+                continue
+            }
+            var last: CGPDFInteger = 0
+            var width: CGPDFReal = 0
+            if index + 2 < count, CGPDFArrayGetInteger(array, index + 1, &last),
+               CGPDFArrayGetNumber(array, index + 2, &width), last >= first, last - first < 65_536 {
+                for code in Int(first)...Int(last) { widths[code] = width }
+            }
+            index += 3
+        }
+        return widths
     }
 
     /// The `Differences` array: a starting code, then the names of the glyphs
@@ -508,16 +590,18 @@ final class PDFContentScanner {
         else { return [:] }
 
         var table: [Int: String] = [:]
+        // The value is UTF-16, four hex digits a unit — so a letter outside
+        // the first plane is two of them (𝒒 is D835 DC92).
         func character(_ hex: String) -> String? {
-            var scalars = ""
+            var units: [UInt16] = []
             var index = hex.startIndex
             while let end = hex.index(index, offsetBy: 4, limitedBy: hex.endIndex) {
-                guard let value = UInt32(hex[index..<end], radix: 16),
-                      let scalar = Unicode.Scalar(value) else { return nil }
-                scalars.append(Character(scalar))
+                guard let value = UInt16(hex[index..<end], radix: 16) else { return nil }
+                units.append(value)
                 index = end
             }
-            return scalars.isEmpty ? nil : scalars
+            guard !units.isEmpty else { return nil }
+            return String(utf16CodeUnits: units, count: units.count)
         }
 
         let charPattern = try! NSRegularExpression(pattern: "<([0-9A-Fa-f]+)>\\s*<([0-9A-Fa-f]+)>")
