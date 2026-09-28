@@ -1528,14 +1528,31 @@ function mountHero() {
 
    `feedback.json` is written at release time as the answer when the API is
    rate-limited or unreachable, exactly as the download counts are. */
+const FEEDBACK_REPO = "Icecoffee2500/paper-time";
 const FEEDBACK_LABEL = "feedback";
+/* Whose repository it is. An issue they opened by hand is not somebody
+   thanking them. */
+const FEEDBACK_OWNER = "Icecoffee2500";
+/* What an empty name field sent before 0.9.14: the sheet filled in the word
+   for "anonymous" in the language it was showing. A person who chose not to
+   be named is not a person called «익명». */
+const UNNAMED = new Set(["", "익명", "anonymous"]);
+
+/* The name somebody chose in the app, or null. The worker writes it into the
+   issue as a comment, so it shows in the source and not in the rendered
+   issue; anything a reader opened on GitHub themselves is theirs. */
+function nameOf(issue) {
+  const found = /<!--\s*credit:\s*(.*?)\s*-->/.exec(issue.body || "");
+  if (found) {
+    const name = found[1].replace(/\s+/g, " ").trim();
+    return UNNAMED.has(name.toLowerCase()) ? null : name;
+  }
+  const login = issue.user && issue.user.login;
+  return login && login !== FEEDBACK_OWNER ? "@" + login : null;
+}
 
 function creditOf(issue) {
-  const found = /<!--\s*credit:\s*([^>]*?)\s*-->/.exec(issue.body || "");
-  const name = found && found[1].trim();
-  if (name) return name;
-  if (issue.user && issue.user.login) return "@" + issue.user.login;
-  return L("익명", "anonymous");
+  return nameOf(issue) || L("익명", "anonymous");
 }
 
 function boardRow(issue) {
@@ -1544,7 +1561,7 @@ function boardRow(issue) {
   const where = done
     ? (version ? L(version + "에서 고침", "fixed in " + version) : L("고침", "fixed"))
     : L("기다리는 중", "open");
-  return el("a", { href: issue.html_url, target: "_blank", rel: "noopener" },
+  return el("a", { class: "row", href: issue.html_url, target: "_blank", rel: "noopener" },
     el("span", { class: "st " + (done ? "done" : "open") }, done ? "✓" : "○"),
     el("span", { class: "ttl" }, issue.title),
     el("span", { class: "meta" }, where),
@@ -1554,7 +1571,6 @@ function boardRow(issue) {
 function paintBoard(issues) {
   const board = document.getElementById("together-board");
   const tally = document.getElementById("together-tally");
-  const credits = document.getElementById("credits");
   if (!board) return;
 
   if (!issues.length) {
@@ -1584,43 +1600,153 @@ function paintBoard(issues) {
       el("div", {}, el("span", { class: "n" }, String(issues.length - closed)),
         el("span", { class: "k" }, L("보는 중", "in hand"))));
   }
+}
 
-  if (credits) {
-    const counts = new Map();
-    for (const issue of issues) {
-      const who = creditOf(issue);
-      counts.set(who, (counts.get(who) || 0) + 1);
-    }
-    const names = [...counts.entries()].sort((a, b) => b[1] - a[1]);
-    credits.replaceChildren(
-      el("span", { class: "name", style: "background:transparent;padding-left:0" },
-        L("고마워요 —", "Thank you —")),
-      ...names.map(([who, n]) =>
-        el("span", { class: "name" }, n > 1 ? who + " ×" + n : who)));
+/* The acknowledgments: everybody who left a name, in the order they first
+   wrote — so the first person to say something stays first, and whoever
+   comes next lands at the end, in the blank. `just` is the issue the sheet
+   in the app sent a moment ago, when the page was opened from it. */
+function paintThanks(issues, just) {
+  const sheet = document.getElementById("thanks");
+  const names = document.getElementById("thanks-names");
+  if (!sheet || !names) return;
+
+  const people = new Map();
+  let unnamed = 0;
+  let justName = null;
+  let justFound = false;
+  for (const issue of issues.slice().sort((a, b) => (a.number || 0) - (b.number || 0))) {
+    const name = nameOf(issue);
+    if (issue.number === just) { justFound = true; justName = name; }
+    if (!name) { unnamed += 1; continue; }
+    const key = name.toLocaleLowerCase();
+    const person = people.get(key) || { name, count: 0, said: [] };
+    person.count += 1;
+    if (person.said.length < 3 && issue.title) person.said.push(issue.title);
+    people.set(key, person);
   }
+  const list = [...people.values()];
+
+  const lead = document.getElementById("thanks-lead");
+  if (lead) {
+    lead.textContent = list.length
+      ? L("고친 것마다 먼저 알려 준 사람이 있어요.", "Every fix began with someone who said something.")
+      : L("아직 이름을 남긴 사람이 없어요. 첫 번째 이름이 되어 주세요.", "No names here yet. The first one could be yours.");
+  }
+
+  /* One after another, but the whole line in under two seconds however long
+     it grows: a wall of thanks that takes a minute to arrive is a wait. The
+     first waits for the band to finish rising into place. */
+  const step = Math.min(150, 1700 / Math.max(list.length, 1));
+  const first = 640;
+  const justKey = justName && justName.toLocaleLowerCase();
+  let order = 0;
+  const nodes = list.map((person) => {
+    const isJust = justKey && person.name.toLocaleLowerCase() === justKey;
+    const node = el("span", {
+      class: "thanks-name" + (isJust ? " just" : ""),
+      title: L(person.count + "번 알려 줬어요 · ", person.count + (person.count === 1 ? " report · " : " reports · "))
+        + person.said.join(" · "),
+    }, person.name);
+    const at = isJust ? list.length : order++;
+    node.style.transitionDelay = Math.round(first + at * step + (isJust ? 260 : 0)) + "ms";
+    return node;
+  });
+  const blank = el("span", { class: "thanks-name thanks-blank", "aria-hidden": "true" },
+    el("span", { class: "caret" }), el("span", { class: "ph" }, L("닉네임", "your name")));
+  names.replaceChildren(...nodes, blank);
+
+  const quiet = document.getElementById("thanks-quiet");
+  if (quiet) {
+    quiet.hidden = unnamed === 0;
+    quiet.textContent = L(
+      `이름을 남기지 않은 ${unnamed}명에게도 고마워요.`,
+      `And ${unnamed} more who left no name. Thank you.`);
+  }
+
+  const said = document.getElementById("thanks-just");
+  if (said) {
+    said.hidden = !just;
+    if (just) {
+      said.textContent = !justFound
+        ? L("방금 보낸 한마디 잘 받았어요. 이름은 곧 여기 올라와요.", "Got it. Your name shows up here shortly.")
+        : justName
+          ? L("방금 보낸 한마디 잘 받았어요. 이제 이 이름들 사이에 있어요.", "Got it. Your name is on the page now.")
+          : L("방금 보낸 한마디 잘 받았어요. 이름이 없어도 빠짐없이 읽어요.", "Got it. Every report gets read, named or not.");
+    }
+  }
+
+  const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (just) {
+    sheet.scrollIntoView({ block: "center", behavior: reduced ? "auto" : "smooth" });
+  }
+  if (reduced || !("IntersectionObserver" in window)) {
+    sheet.classList.add("lit");
+    return;
+  }
+  const watch = new IntersectionObserver((entries) => {
+    if (!entries.some((entry) => entry.isIntersecting)) return;
+    sheet.classList.add("lit");
+    watch.disconnect();
+  }, { threshold: 0.35 });
+  watch.observe(sheet);
+}
+
+/* `?thanks=<issue>` — the sheet in the app opens the page this way after a
+   send. Read once and taken back out of the address, so a reload or a
+   copied link is the ordinary page again. */
+function justSent() {
+  let number = null;
+  try {
+    const url = new URL(location.href);
+    const value = Number(url.searchParams.get("thanks"));
+    if (Number.isInteger(value) && value > 0) number = value;
+    if (url.searchParams.has("thanks")) {
+      url.searchParams.delete("thanks");
+      history.replaceState(null, "", url.pathname + url.search + url.hash);
+    }
+  } catch (e) {}
+  return number;
 }
 
 async function mountTogether() {
   if (!document.getElementById("together-board")) return;
+  const just = justSent();
+  const headers = { Accept: "application/vnd.github+json" };
+  let issues = null;
   try {
     const response = await fetch(
-      "https://api.github.com/repos/Icecoffee2500/paper-time/issues" +
+      "https://api.github.com/repos/" + FEEDBACK_REPO + "/issues" +
         "?state=all&labels=" + FEEDBACK_LABEL + "&per_page=100",
-      { headers: { Accept: "application/vnd.github+json" } });
+      { headers });
     if (!response.ok) throw new Error(String(response.status));
-    const issues = (await response.json()).filter((i) => !i.pull_request);
-    paintBoard(issues);
-    return;
+    issues = (await response.json()).filter((i) => !i.pull_request);
   } catch (e) {
     /* Rate-limited, offline, or the repository moved. Fall back to what the
        last release wrote down rather than showing an error nobody can act on. */
+    try {
+      const snapshot = await fetch("feedback.json").then((r) => (r.ok ? r.json() : null));
+      issues = (snapshot && snapshot.issues) || [];
+    } catch (e2) {
+      issues = [];
+    }
   }
-  try {
-    const snapshot = await fetch("feedback.json").then((r) => (r.ok ? r.json() : null));
-    paintBoard((snapshot && snapshot.issues) || []);
-  } catch (e) {
-    paintBoard([]);
+  /* Sent a moment ago, the list the browser kept from a minute back may not
+     have it yet. The one issue, asked for by number, always does. */
+  if (just && !issues.some((i) => i.number === just)) {
+    try {
+      const response = await fetch(
+        "https://api.github.com/repos/" + FEEDBACK_REPO + "/issues/" + just,
+        { headers, cache: "no-store" });
+      if (response.ok) {
+        const issue = await response.json();
+        const labelled = (issue.labels || []).some((l) => (l && l.name) === FEEDBACK_LABEL);
+        if (!issue.pull_request && labelled) issues = [issue, ...issues];
+      }
+    } catch (e) {}
   }
+  paintBoard(issues);
+  paintThanks(issues, just);
 }
 
 function mountDialogs() {
