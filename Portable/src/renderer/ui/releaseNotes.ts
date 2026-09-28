@@ -22,7 +22,7 @@ interface Highlight { symbol: string; title: Text2; detail: Text2; tier: string;
 interface Feature { title: Text2; detail: Text2; action?: string }
 interface Group { title: Text2; symbol: string; features: Feature[] }
 
-const data = notes as unknown as { releases: Release[]; highlights: Highlight[]; groups: Group[]; contributors: { name: string; reports: number }[] }
+const data = notes as unknown as { releases: Release[]; highlights: Highlight[]; groups: Group[]; contributors: { name: string; reports: number }[]; unnamedReports: number }
 
 /** Keys named in the Mac's words — «⌘K», «⇧⌘L» — as this desktop names them. */
 export function onThisDesktop(text: string): string {
@@ -249,7 +249,12 @@ export function showAllFeatures() {
   })
 }
 
-/** The people who told us something (`Contributors.all`). */
+/** The people who told us something and left a name, first sender first (`Contributors.all`). */
 export function contributors(): { name: string; reports: number }[] {
   return data.contributors
+}
+
+/** Reports sent without a name (`Contributors.unnamedReports`) — reports, not people. */
+export function unnamedReports(): number {
+  return data.unnamedReports ?? 0
 }

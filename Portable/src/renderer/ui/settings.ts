@@ -27,9 +27,10 @@ import { providerIcon, providerName, providerOf } from '../../shared/cloudProvid
 import { store } from '../state.js'
 import { PAGE_TINTS, tintColorFrom, tintLabel } from '../../shared/pageTint.js'
 import { call, platform } from '../bridge.js'
-import { acceleratorFor, acceleratorFromEvent, assignShortcut, displayAccelerator, groupTitle, matchingShortcuts, shortcutOverrides, type ShortcutGroup } from '../../shared/shortcuts.js'
+import { acceleratorFor, acceleratorFromEvent, assignShortcut, displayAccelerator, groupTitle, keyFor, matchingShortcuts, shortcutOverrides, type ShortcutGroup } from '../../shared/shortcuts.js'
 import { meaningStatus, onMeaningStatus } from '../meaningSearch.js'
-import { contributors, drawLog, showAllFeatures, showWhatsNew, showcase } from './releaseNotes.js'
+import { contributors, drawLog, showAllFeatures, showWhatsNew, showcase, unnamedReports } from './releaseNotes.js'
+import { TOGETHER_URL } from '../../shared/feedbackName.js'
 import { updateState, watchUpdates } from './updateNotice.js'
 import { SUBTITLE_FIELDS, encodeSubtitle, parseSubtitle, subtitleName, toggledSubtitle } from '../../shared/subtitle.js'
 
@@ -518,13 +519,30 @@ export function showSettings(actions: SettingsActions, section?: SettingsSection
     }
     body.append(el('div', { class: 'rn-about-head' }, [el('h3', { class: 'rn-about-name', text: 'Paper Time' }), versionLine]))
     body.append(aboutShowcase.node)
+    // Drawn the way the page's acknowledgments draw them: each name in the
+    // highlighter, first sender first, the blank for whoever is next at the end.
     body.append(el('div', { class: 'set-section', text: L('함께 만드는 중', 'Built Together') }))
+    const named = contributors()
+    const unnamed = unnamedReports()
+    const total = named.reduce((sum, person) => sum + person.reports, 0) + unnamed
+    const key = keyFor('feedback', platform)
+    body.append(note(total
+      ? L(`고친 것마다 먼저 알려 준 사람이 있어요. 지금까지 ${total}가지가 왔어요.`, `Every fix began with someone who said something. ${total} reports so far.`)
+      : L(`아직 아무도 한마디를 보내지 않았어요. ${key}를 누르면 화면이 이미 찍힌 채로 창이 열려요.`, `Nobody has sent anything yet. Press ${key} and the sheet opens with the screenshot already taken.`)))
     const people = el('div', { class: 'rn-people' })
-    for (const person of contributors()) {
-      people.append(el('span', { class: 'rn-person', title: L(`보고 ${person.reports}번`, `${person.reports} report${person.reports === 1 ? '' : 's'}`), text: person.name }))
+    for (const person of named) {
+      people.append(el('span', { class: 'rn-person', title: L(`${person.reports}번 알려 줬어요`, person.reports === 1 ? '1 report' : `${person.reports} reports`), text: person.name }))
     }
+    people.append(el('span', { class: 'rn-person-blank' }, [el('span', { class: 'fb-caret' }), el('span', { text: L('닉네임', 'your name') })]))
     body.append(people)
-    body.append(note(L('알려 주신 분의 이름이 여기에 남아요.', 'The people who tell us something are named here.')))
+    if (unnamed) {
+      body.append(note(L(`이름 없이 보내 준 ${unnamed}가지에도 고마워요.`,
+        unnamed === 1 ? 'And 1 report sent without a name. Thank you for it too.' : `And ${unnamed} reports sent without a name. Thank you for those too.`)))
+    }
+    body.append(note(L(
+      '닉네임을 적어 보내면 배포 페이지에 곧바로 그 이름이 남아요. 다음 버전부터는 이 자리에도요.',
+      'Leave a name when you send one, and it goes on the download page right away — and here, from the next version.',
+    )))
     const links = el('div', { class: 'set-row set-links' })
     const link = (label: string, press: () => void) => {
       const button = el('button', { type: 'button', class: 'plain-button', text: label })
@@ -536,6 +554,7 @@ export function showSettings(actions: SettingsActions, section?: SettingsSection
         close()
         actions.feedback()
       }),
+      link(L('배포 페이지에서 보기', 'See the Page'), () => void call('shell:openExternal', { url: TOGETHER_URL })),
       // Shown, not marked as seen: that is for the sheet that comes by itself.
       link(L('새로운 기능…', "What's New…"), () => showWhatsNew(version)),
       link(L('모든 기능과 키…', 'All Features and Keys…'), () => showAllFeatures()),

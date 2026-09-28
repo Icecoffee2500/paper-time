@@ -114,8 +114,7 @@ struct PaperTimeCommands: Commands {
                 model.askForFeedback()
             }
             Divider()
-            Link(L("함께 만드는 중", "Built together"),
-                 destination: URL(string: "https://icecoffee2500.github.io/paper-time/#together")!)
+            Link(L("함께 만드는 중", "Built together"), destination: Feedback.togetherPage)
         }
 
         CommandGroup(after: .toolbar) {

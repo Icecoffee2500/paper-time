@@ -22,7 +22,8 @@ struct SettingsView: View {
     @State private var showsReleaseNotes = false
     @State private var showsFeatureLog = false
     #if os(macOS)
-    @State private var pane: Pane = .library
+    /// `--papertime-settings-pane=About` opens the probe's copy on that page.
+    @State private var pane: Pane = Pane(rawValue: Boot.setting("PAPERTIME_SETTINGS_PANE") ?? "") ?? .library
     #endif
     /// What the shortcuts page is being searched for.
     @State private var shortcutQuery = ""

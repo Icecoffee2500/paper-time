@@ -3909,10 +3909,25 @@ private struct FeedbackDemo: View {
                     Text(sent ? L("보고 있어요", "in hand") : L("기다리는 중", "open"))
                         .font(scale.small)
                         .foregroundStyle(.secondary)
+                    Text("— \(L("김연구", "Sam"))")
+                        .font(scale.small)
+                        .foregroundStyle(.tertiary)
                 }
                 .font(scale.body)
                 .padding(7)
                 .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: scale.corner))
+
+                // And the name, in the page's acknowledgments.
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(L("감사의 글", "Acknowledgments"))
+                        .font(scale.small.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                    HighlightedName(name: L("김연구", "Sam"), font: scale.body.weight(.semibold))
+                    Text(L("닉네임은 이렇게 남아요", "The name goes here"))
+                        .font(scale.small)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
 
             Button(sent ? L("고마워요", "Thank you") : L("보내기", "Send")) {
@@ -3946,6 +3961,19 @@ private struct TogetherDemo: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: scale.gap) {
+            // The page's acknowledgments: every name in the highlighter,
+            // first sender first, and the blank for whoever is next.
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L("감사의 글", "Acknowledgments"))
+                    .font(scale.small.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                HStack(alignment: .firstTextBaseline, spacing: scale.isFull ? 12 : 8) {
+                    HighlightedName(name: "@hyun", font: scale.body.weight(.semibold))
+                    HighlightedName(name: L("김연구", "Sam"), font: scale.body.weight(.semibold))
+                    ThanksBlank(font: scale.body)
+                }
+            }
+
             HStack(spacing: scale.isFull ? 22 : 14) {
                 tally("\(rows.count)", L("제보", "reported"))
                 tally("\(rows.filter(\.done).count)", L("고쳤어요", "fixed"))
@@ -3973,8 +4001,8 @@ private struct TogetherDemo: View {
             }
             .clipShape(RoundedRectangle(cornerRadius: scale.corner, style: .continuous))
 
-            Text(L("눌러서 고쳐진 셈 쳐 보세요 — 실제로는 GitHub에서 그 항목이 닫히면 체크가 돼요.",
-                   "Tap one to mark it done — in the real list, the check is the issue being closed on GitHub."))
+            Text(L("눌러서 고친 셈 쳐 보세요 — 실제로는 GitHub에서 그 항목이 닫히면 체크가 돼요. 닉네임을 적어 보내면 빈칸이 그 이름이 돼요.",
+                   "Tap one to mark it done — in the real list, the check is the issue being closed on GitHub. Leave a name, and the blank becomes yours."))
                 .font(scale.small)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

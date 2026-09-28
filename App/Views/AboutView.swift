@@ -59,7 +59,7 @@ struct AboutView: View {
             Text(L("함께 만들고 있어요", "Built together"))
                 .font(.headline)
 
-            if Contributors.all.isEmpty {
+            if Contributors.total == 0 {
                 Text(L(
                     "아직 아무도 한마디를 보내지 않았어요. \(app.shortcut(for: .feedback).display)를 누르면 화면이 이미 찍힌 채로 창이 열려요.",
                     "Nobody has sent anything yet. Press \(app.shortcut(for: .feedback).display) and the sheet opens with the screenshot already taken."
@@ -69,18 +69,41 @@ struct AboutView: View {
                 .fixedSize(horizontal: false, vertical: true)
             } else {
                 Text(L(
-                    "\(Contributors.all.count)명이 \(Contributors.total)가지를 알려줬고, 그 덕분에 고쳐진 것들이 이 버전에 들어 있어요.",
-                    "\(Contributors.all.count) people sent \(Contributors.total) reports. What they found is in this version."
+                    "고친 것마다 먼저 알려 준 사람이 있어요. 지금까지 \(Contributors.total)가지가 왔어요.",
+                    "Every fix began with someone who said something. \(Contributors.total) reports so far."
                 ))
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-
-                FlowingNames(people: Contributors.all)
             }
 
-            Button(L("한마디 보내기…", "Send Feedback…")) { app.askForFeedback() }
-                .padding(.top, 2)
+            FlowingNames(people: Contributors.all)
+
+            if Contributors.unnamedReports > 0 {
+                Text(L(
+                    "이름 없이 보내 준 \(Contributors.unnamedReports)가지에도 고마워요.",
+                    Contributors.unnamedReports == 1
+                        ? "And 1 report sent without a name. Thank you for it too."
+                        : "And \(Contributors.unnamedReports) reports sent without a name. Thank you for those too."
+                ))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            Text(L(
+                "닉네임을 적어 보내면 배포 페이지에 곧바로 그 이름이 남아요. 다음 버전부터는 이 자리에도요.",
+                "Leave a name when you send one, and it goes on the download page right away — and here, from the next version."
+            ))
+            .font(.caption)
+            .foregroundStyle(.tertiary)
+            .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 12) {
+                Button(L("한마디 보내기…", "Send Feedback…")) { app.askForFeedback() }
+                Link(L("배포 페이지에서 보기", "See the Page"), destination: Feedback.togetherPage)
+                    .font(.callout)
+            }
+            .padding(.top, 2)
         }
     }
 
@@ -356,19 +379,19 @@ private struct AboutHeader: View {
 
 
 /// The names, wrapped like words rather than listed like rows: a wall, not a
-/// table. Somebody who sent two things is shown as having sent two.
+/// table — and drawn the way the page's acknowledgments draw them, each in
+/// the highlighter, first sender first, with the blank for whoever is next
+/// at the end.
 private struct FlowingNames: View {
     let people: [Contributor]
 
     var body: some View {
-        FlowLayout(spacing: 6) {
+        FlowLayout(spacing: 10) {
             ForEach(people) { person in
-                Text(person.reports > 1 ? "\(person.name) ×\(person.reports)" : person.name)
-                    .font(.caption)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 4)
-                    .background(.quaternary.opacity(0.5), in: Capsule())
+                HighlightedName(name: person.name, font: .body.weight(.semibold))
+                    .help(L("\(person.reports)번 알려 줬어요", person.reports == 1 ? "1 report" : "\(person.reports) reports"))
             }
+            ThanksBlank(font: .body)
         }
     }
 }

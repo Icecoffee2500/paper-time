@@ -164,5 +164,7 @@ export function readReleaseNotes(releaseSwift, contributorsSwift) {
     }),
   }))
   const contributors = staticLet(contributorsSwift, 'all').map((call) => ({ name: arg(call, 'name'), reports: arg(call, 'reports') }))
-  return { releases, highlights, groups, contributors }
+  const unnamedReports = staticLet(contributorsSwift, 'unnamedReports')
+  if (!Number.isInteger(unnamedReports)) throw new Error(`unnamedReports is not a count: ${JSON.stringify(unnamedReports)}`)
+  return { releases, highlights, groups, contributors, unnamedReports }
 }
