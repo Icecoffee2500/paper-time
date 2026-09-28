@@ -1659,9 +1659,12 @@ function paintThanks(issues, just) {
   const quiet = document.getElementById("thanks-quiet");
   if (quiet) {
     quiet.hidden = unnamed === 0;
+    /* Counted as reports, not people: two sent without a name may be one
+       person, and this list does not guess. */
     quiet.textContent = L(
-      `이름을 남기지 않은 ${unnamed}명에게도 고마워요.`,
-      `And ${unnamed} more who left no name. Thank you.`);
+      `이름 없이 보내 준 ${unnamed}가지에도 고마워요.`,
+      unnamed === 1 ? "And 1 report sent without a name. Thank you for it too."
+        : `And ${unnamed} reports sent without a name. Thank you for those too.`);
   }
 
   const said = document.getElementById("thanks-just");
