@@ -40,8 +40,48 @@ enum MathTranscriber {
     /// The LaTeX for a set of glyphs that have already been chosen.
     static func latex(glyphs: [Glyph], rules: [Rule], context: Context? = nil) -> String {
         guard !glyphs.isEmpty else { return "" }
-        return transcribe(glyphs.sorted { $0.origin.x < $1.origin.x },
-                          rules: rules, context: context)
+        return joiningText(transcribe(glyphs.sorted { $0.origin.x < $1.origin.x },
+                                      rules: rules, context: context))
+    }
+
+    /// Whether a word holds a subscript the way Word sets one: a glyph much
+    /// smaller than the one it touches, on that glyph's baseline (see
+    /// `scripts`). Such a word is mathematics even in the text face —
+    /// "VT (Vi)" is `V_T (V_i)`.
+    /// A glyph that draws a space — Word draws them; TeX does not. Asked of
+    /// what the glyph spells, not of its Unicode: TeX's symbol font keeps its
+    /// left arrow at code 32, which a declared encoding reads as a space.
+    static func isSpace(_ glyph: Glyph) -> Bool {
+        let spelled = token(for: glyph)
+        return !spelled.isEmpty && spelled.allSatisfy(\.isWhitespace)
+    }
+
+    static func hasWordSubscript(_ word: [Glyph], body: CGFloat) -> Bool {
+        guard word.count >= 2 else { return false }
+        for (index, glyph) in word.enumerated().dropFirst() {
+            let before = word[index - 1]
+            if glyph.size <= body * 0.72, before.size >= body * 0.92,
+               abs(glyph.origin.y - before.origin.y) <= body * 0.03,
+               glyph.rect.minX - before.rect.maxX < body * 0.12,
+               !spelling(of: glyph).isEmpty {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// Words set upright in a formula come out one `\text{}` each; a person
+    /// writes the phrase as one — `\text{Fuel Oil Consumption}`.
+    static func joiningText(_ latex: String) -> String {
+        guard latex.contains("\\text{") else { return latex }
+        var result = latex
+        while let range = result.range(of: #"\\text\{([^{}]*)\}\s+\\text\{"#, options: .regularExpression) {
+            let piece = String(result[range])
+            guard let close = piece.firstIndex(of: "}") else { break }
+            let inner = piece[piece.index(piece.startIndex, offsetBy: 6)..<close]
+            result.replaceSubrange(range, with: "\\text{\(inner) ")
+        }
+        return result
     }
 
     /// One glyph as plain text — what it spells, with no formula around it.
@@ -390,9 +430,25 @@ enum MathTranscriber {
             // the line: a script's own script — the "(l)" of "q_{\phi(z^{(l)})}"
             // — climbs back up to within a hair of the baseline it hangs from,
             // and stopping there cuts the subscript in half.
-            guard glyph.size < body * 0.92 else { break }
+            guard glyph.size < body * 0.92, !isSpace(glyph) else { break }
             let offset = glyph.origin.y - baseline
-            if end == start, abs(offset) <= body * 0.12 { break }
+            // Word sets a subscript small and leaves it *on* the line —
+            // "CO₂(Vᵢ)" in an MDPI paper is a 6 pt "2" and "i" at the 9.96 pt
+            // text's own baseline. TeX never does that: its scripts are
+            // always well off the line. So a glyph much smaller than the one
+            // it touches, on that glyph's baseline, is its subscript.
+            if end == start, abs(offset) <= body * 0.12 {
+                let touching = glyph.rect.minX - glyphs[start - 1].rect.maxX < body * 0.12
+                guard glyph.size <= body * 0.72, abs(offset) <= body * 0.03, touching,
+                      glyphs[start - 1].size >= body * 0.92 else { break }
+                var run = start
+                while run < glyphs.count, !consumed.contains(run), glyphs[run].size <= body * 0.72,
+                      abs(glyphs[run].origin.y - baseline) <= body * 0.03,
+                      run == start || glyphs[run].rect.minX - glyphs[run - 1].rect.maxX < body * 0.12 {
+                    run += 1
+                }
+                return (run, [], Array(glyphs[start..<run]))
+            }
             if end > start,
                glyph.rect.minX - glyphs[end - 1].rect.maxX > body * 0.25 { break }
             let deeper = glyph.size < primary * 0.92

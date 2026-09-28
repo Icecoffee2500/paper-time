@@ -16,7 +16,7 @@ import {
 } from './geometry.js'
 import { isExtension, rectOf, type Glyph, type Rule } from './glyph.js'
 import * as TeX from './texGlyphNames.js'
-import { isMathFont, isOperatorName, latexOf, setFallback, spelling as spell, type Context } from './transcriber.js'
+import { hasWordSubscript, isMathFont, isOperatorName, isSpace, joiningText, latexOf, setFallback, spelling as spell, type Context } from './transcriber.js'
 import { trimWhitespace, trimWhitespaceAndNewlines } from '../zettel.js'
 
 /** One character as the page's text has it, where it sits. `index` is into `pageText`. */
@@ -81,7 +81,13 @@ export function latex(pages: PageInput[]): string {
 
 interface Block { rows: Glyph[][]; isFormula: boolean }
 
+/** How many formulas the last reading left out because the file does not
+ *  say what their glyphs are (the Mac's `skippedFormulas`). */
+let skippedFormulas = 0
+export function leftOutFormulas(): number { return skippedFormulas }
+
 export function pieces(pages: PageInput[]): Piece[] {
+  skippedFormulas = 0
   const out: Piece[] = []
   pages.forEach((page, number) => {
     setFallback(characterLookup(page.characters))
@@ -143,6 +149,13 @@ export function pieces(pages: PageInput[]): Piece[] {
           }
         }
         if (all.length === 0) continue
+        // Mostly glyphs nothing can read — a Word equation with no cmap and a
+        // ToUnicode of zeros — is left out, not written as empty braces.
+        const unread = all.filter((g) => spell(g) === '').length
+        if (unread * 4 > all.length) {
+          skippedFormulas += 1
+          continue
+        }
         const bounds = extent(all)
         let body = latexOf([...all].sort((a, b) => a.x - b.x), rules.filter((rule) => intersects(insetBy(bounds, -2, -2), rule.rect)))
         if (tag !== null) body += tag
@@ -228,12 +241,23 @@ function upright(latexText: string): string {
     index += 1
   }
   flush()
-  return out
+  return joiningText(out)
+}
+
+function wordsOutsideFormulas(text: string): number {
+  let outside = ''
+  let inMath = false
+  for (const character of text) {
+    if (character === '$') { inMath = !inMath; outside += ' '; continue }
+    if (!inMath) outside += character
+  }
+  return outside.split(/[^\p{L}]/u).filter((word) => count(word) >= 2).length
 }
 
 function heading(scale: number, glyphs: Glyph[], text: string, short: boolean): PieceKind {
   const trimmed = trimWhitespace(text)
   if (trimmed.endsWith('.') || trimmed.endsWith(',') || !(count(trimmed) < 90)) return 'prose'
+  if (trimmed.includes('$') && wordsOutsideFormulas(trimmed) < 2) return 'prose'
   const bold = glyphs.length > 0 && glyphs.every(isBold)
   if (scale >= 1.12) return { heading: scale >= 1.45 ? 2 : scale >= 1.22 ? 3 : 4 }
   if (bold && short && scale >= 1.0) return { heading: 4 }
@@ -585,13 +609,19 @@ function read(row: Glyph[], rules: Rule[], characters: PageCharacter[], text: st
   const near = characters.filter((c) => maxY(c.rect) > minY(band) && minY(c.rect) < maxY(band))
   const parts: { isMath: boolean; text: string }[] = []
   for (const word of words(row, ctx.bodySize)) {
-    if (word.some(isMathFont)) {
+    if (word.some(isMathFont) || hasWordSubscript(word, ctx.bodySize)) {
+      const unread = word.filter((g) => spell(g) === '').length
+      if (unread * 4 > word.length) {
+        skippedFormulas += 1
+        continue
+      }
       const l = latexOf(word, rules, ctx)
       if (l !== '') parts.push({ isMath: true, text: l })
       continue
     }
     const spelled = word.map(spell)
-    const borrowed = spelled.some((s) => s === '') ? spellingFrom(word, near, text) : null
+    const found = spelled.some((s) => s === '') ? spellingFrom(word, near, text) : null
+    const borrowed = found !== null && agrees(found, spelled) ? found : null
     if (borrowed !== null) parts.push({ isMath: false, text: borrowed })
     else parts.push({ isMath: false, text: composed(spelled.join('')) })
   }
@@ -666,13 +696,36 @@ function composed(text: string): string {
 
 function words(row: Glyph[], body: number): Glyph[][] {
   const out: Glyph[][] = []
+  // Word draws its spaces as glyphs, so nothing between two words is a gap.
+  let spaced = false
   for (const glyph of row) {
+    if (isSpace(glyph)) {
+      spaced = true
+      continue
+    }
     const lastWord = out[out.length - 1]
     const lastGlyph = lastWord?.[lastWord.length - 1]
-    if (lastGlyph && !isGap(lastGlyph, glyph, body)) lastWord.push(glyph)
+    if (lastGlyph && !spaced && !isGap(lastGlyph, glyph, body)) lastWord.push(glyph)
     else out.push([glyph])
+    spaced = false
   }
   return out
+}
+
+/** Whether a word borrowed from PDFKit's text spells the letters the glyphs
+ *  could read, in order — the text and its boxes do not always agree. */
+function agrees(borrowed: string, spelled: string[]): boolean {
+  const keep = (text: string) => [...text].filter((c) => /[\p{L}\p{N}]/u.test(c))
+  const known = keep(spelled.join(''))
+  if (known.length === 0) return true
+  const remaining = keep(borrowed)
+  let at = 0
+  for (const character of known) {
+    const found = remaining.indexOf(character, at)
+    if (found < 0) return false
+    at = found + 1
+  }
+  return true
 }
 
 function spellingFrom(word: Glyph[], characters: PageCharacter[], text: string): string | null {

@@ -28,7 +28,39 @@ export function latexIn(glyphs: Glyph[], rules: Rule[], region: Rect): string {
 
 export function latexOf(glyphs: Glyph[], rules: Rule[], context: Context | null = null): string {
   if (glyphs.length === 0) return ''
-  return transcribe([...glyphs].sort((a, b) => a.x - b.x), rules, context)
+  return joiningText(transcribe([...glyphs].sort((a, b) => a.x - b.x), rules, context))
+}
+
+/** One `\text{}` for a phrase set upright, not one a word — `\text{Fuel Oil Consumption}`. */
+export function joiningText(latex: string): string {
+  if (!latex.includes('\\text{')) return latex
+  let result = latex
+  for (;;) {
+    const match = /\\text\{([^{}]*)\}\s+\\text\{/.exec(result)
+    if (!match) return result
+    result = result.slice(0, match.index) + `\\text{${match[1]} ` + result.slice(match.index + match[0].length)
+  }
+}
+
+/** A glyph that draws a space — Word draws them; TeX does not. Asked of what
+ *  it spells: TeX's symbol font keeps its left arrow at code 32. */
+export function isSpace(glyph: Glyph): boolean {
+  const spelled = token(glyph)
+  return spelled !== '' && [...spelled].every((c) => /^\p{White_Space}$/u.test(c))
+}
+
+/** Whether a word holds a subscript the way Word sets one: a glyph much
+ *  smaller than the one it touches, on that glyph's baseline. */
+export function hasWordSubscript(word: Glyph[], body: number): boolean {
+  for (let index = 1; index < word.length; index += 1) {
+    const glyph = word[index]
+    const before = word[index - 1]
+    if (glyph.size <= body * 0.72 && before.size >= body * 0.92
+      && Math.abs(glyph.y - before.y) <= body * 0.03
+      && minX(rectOf(glyph)) - maxX(rectOf(before)) < body * 0.12
+      && spelling(glyph) !== '') return true
+  }
+  return false
 }
 
 export function spelling(glyph: Glyph): string {
@@ -307,9 +339,20 @@ function scripts(start: number, glyphs: Glyph[], baseline: number, body: number,
   let side: boolean | null = null
   while (end < glyphs.length && !consumed.has(end)) {
     const glyph = glyphs[end]
-    if (!(glyph.size < body * 0.92)) break
+    if (!(glyph.size < body * 0.92) || isSpace(glyph)) break
     const offset = glyph.y - baseline
-    if (end === start && Math.abs(offset) <= body * 0.12) break
+    if (end === start && Math.abs(offset) <= body * 0.12) {
+      // Word's subscript: much smaller, on the line, touching (the Mac's `scripts`).
+      const touching = minX(rectOf(glyph)) - maxX(rectOf(glyphs[start - 1])) < body * 0.12
+      if (!(glyph.size <= body * 0.72 && Math.abs(offset) <= body * 0.03 && touching && glyphs[start - 1].size >= body * 0.92)) break
+      let run = start
+      while (run < glyphs.length && !consumed.has(run) && glyphs[run].size <= body * 0.72
+        && Math.abs(glyphs[run].y - baseline) <= body * 0.03
+        && (run === start || minX(rectOf(glyphs[run])) - maxX(rectOf(glyphs[run - 1])) < body * 0.12)) {
+        run += 1
+      }
+      return { end: run, raised: [], lowered: glyphs.slice(start, run) }
+    }
     if (end > start && minX(rectOf(glyph)) - maxX(rectOf(glyphs[end - 1])) > body * 0.25) break
     const deeper = glyph.size < primary * 0.92
     const raisedHere: boolean = deeper ? (side ?? (offset > 0)) : offset > 0

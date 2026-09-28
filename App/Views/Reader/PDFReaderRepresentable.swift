@@ -1488,7 +1488,11 @@ final class ReaderCoordinator: NSObject {
         guard !text.isEmpty else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
-        onToast(asLaTeX ? "Copied with formulas" : "Copied")
+        if asLaTeX, let left = MathReader.leftOutSentence(copied: true) {
+            onToast(left)
+        } else {
+            onToast(asLaTeX ? L("수식까지 복사했어요.", "Copied with formulas.") : L("복사했어요.", "Copied."))
+        }
     }
 
     /// Records a markup so Command-Z takes it back.

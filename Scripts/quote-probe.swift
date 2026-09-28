@@ -34,7 +34,17 @@ struct QuoteProbe {
         } else {
             rect = box
         }
-        guard let selection = page.selection(for: rect) else {
+        // `--drag x1 y1 x2 y2`: the selection a mouse drag makes, from one
+        // point to another — read by character index, not by area, which is
+        // where a PDF whose text and geometry disagree gives itself away.
+        var dragged: PDFSelection?
+        if let at = arguments.firstIndex(of: "--drag"), arguments.count >= at + 5 {
+            let values = arguments[(at + 1)...(at + 4)].compactMap(Double.init)
+            if values.count == 4 {
+                dragged = page.selection(from: CGPoint(x: values[0], y: values[1]), to: CGPoint(x: values[2], y: values[3]))
+            }
+        }
+        guard let selection = dragged ?? page.selection(for: rect) else {
             print("nothing selected")
             exit(3)
         }

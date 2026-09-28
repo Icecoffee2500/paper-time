@@ -13,7 +13,7 @@ import { openEditor as openNoteEditor, openNoteInTab } from '../ui/notesTab.js'
 import { toast } from '../ui/toolbar.js'
 import { L } from '../../shared/lang.js'
 import { passageText, quotationSource } from '../../shared/noteQuote.js'
-import { latex, structured } from '../../shared/mathReader/reader.js'
+import { latex, leftOutFormulas, structured } from '../../shared/mathReader/reader.js'
 import { copyText } from '../ui/clipboard.js'
 
 /** The inspector, open on the Notes tab of the paper in front. */
@@ -124,6 +124,20 @@ export async function linkSelectionToNote() {
   }
   if (!shell.inspector.insertIntoNote(block)) return
   reader.hideMarkBar()
+  const left = leftOutSentence(false)
+  if (left) toast(left)
+}
+
+/** What to say when the last reading left formulas out — the file does not
+ *  say what their symbols are (the Mac's `MathReader.leftOutSentence`). */
+function leftOutSentence(copied: boolean): string | null {
+  const count = leftOutFormulas()
+  if (count === 0) return null
+  const which = count === 1 ? 'one formula' : `${count} formulas`
+  const whose = count === 1 ? 'its' : 'their'
+  return copied
+    ? L(`수식 ${count}개는 빼고 복사했어요. 파일에 그 기호가 무엇인지 적혀 있지 않아요.`, `Copied without ${which}. The file doesn't say what ${whose} symbols are.`)
+    : L(`수식 ${count}개는 빼고 넣었어요. 파일에 그 기호가 무엇인지 적혀 있지 않아요.`, `Linked without ${which}. The file doesn't say what ${whose} symbols are.`)
 }
 
 /**
@@ -140,7 +154,7 @@ export async function ultracopySelection() {
   }
   const text = latex(pages)
   if (!text) return
-  if (await copyText(text)) toast(L('수식까지 복사했어요.', 'Copied with formulas.'))
+  if (await copyText(text)) toast(leftOutSentence(true) ?? L('수식까지 복사했어요.', 'Copied with formulas.'))
 }
 
 /**
