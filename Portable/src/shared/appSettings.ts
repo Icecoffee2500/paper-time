@@ -54,6 +54,10 @@ export interface Settings {
   shortcuts: string | null
   /** The version whose What's New was seen — the sheet comes once per version (`seenReleaseNotesVersion`). */
   seenReleaseNotesVersion: string | null
+  /** Look for a new version once a day at the page (`shared/updates.ts`). On unless turned off. */
+  checkForUpdates: boolean
+  /** «Skip This Version»: not announced again until a newer one. */
+  skippedUpdateVersion: string | null
 }
 
 export const DEFAULTS: Settings = {
@@ -84,6 +88,8 @@ export const DEFAULTS: Settings = {
   inkPresets: null,
   shortcuts: null,
   seenReleaseNotesVersion: null,
+  checkForUpdates: true,
+  skippedUpdateVersion: null,
 }
 
 /** What the file says, over the defaults, each group merged key by key. */

@@ -51,6 +51,16 @@
 	<false/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
+	<key>SUAutomaticallyUpdate</key>
+	<false/>
+	<key>SUEnableAutomaticChecks</key>
+	<false/>
+	<key>SUEnableInstallerLauncherService</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://icecoffee2500.github.io/paper-time/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>ZDlj4EL5cmnpF1VR5e4WaqVC6Dlf1tjPCCMWUUEJA4c=</string>
 	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>UILaunchScreen</key>

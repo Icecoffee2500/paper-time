@@ -28,6 +28,15 @@ struct PaperTimeCommands: Commands {
     }
 
     var body: some Commands {
+        #if os(macOS)
+        // Under About, where every Mac app keeps it.
+        CommandGroup(after: .appInfo) {
+            Button(L("업데이트 확인…", "Check for Updates…")) {
+                Task { await UpdateCenter.shared.check(atLaunch: false, userInitiated: true) }
+            }
+        }
+        #endif
+
         CommandGroup(replacing: .newItem) {
             command(L("논문 더하기…", "Add Papers…"), .addPapers, post: .paperTimeAddPapers)
                 .disabled(model.library == nil)

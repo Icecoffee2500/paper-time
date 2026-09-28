@@ -81,12 +81,36 @@ else
     --notes "${NOTE:-Paper Time $TAG. 설치 방법과 이전 버전은 배포 페이지에.}"
 fi
 
+# Windows updates itself from this release (Portable/src/main/updates.ts):
+# electron-updater reads `latest.yml` from the release's own download folder
+# and fetches the file it names. electron-builder writes the name with
+# hyphens and GitHub stores the upload with dots for its spaces, so the file
+# is rewritten to the name GitHub actually gave the installer.
+if [ -f "Portable/dist/latest.yml" ] && grep -q "version: $TAG\$" "Portable/dist/latest.yml"; then
+  EXE="$(gh release view "$TAG" --json assets -q '.assets[].name' | grep -E '\.exe$' | head -1)"
+  if [ -n "$EXE" ]; then
+    YML="$(mktemp -d)/latest.yml"
+    sed -E "s|^(  - url: \| path: \|path: ).*\.exe$|\1$EXE|" "Portable/dist/latest.yml" > "$YML"
+    grep -q "$EXE" "$YML" && gh release upload "$TAG" "$YML" --clobber && echo "  latest.yml → $EXE"
+  fi
+else
+  echo "  (no latest.yml for $TAG in Portable/dist — Windows copies will offer the page instead)"
+fi
+
+# The Mac updates itself from the page's appcast (Sparkle): the disk image,
+# its length and its EdDSA signature by the key only this Mac holds
+# (Scripts/sparkle-key.sh). Without the key there is no appcast, and the
+# Mac's notice offers the disk image instead.
+SIGNATURE="$(Scripts/sparkle-key.sh sign "$DMG" 2>/dev/null || true)"
+[ -n "$SIGNATURE" ] || echo "  (no update key in the keychain — the appcast is not rewritten)"
+
 # The page reads this and nothing else: one entry per version, newest first,
 # with every platform's file under it.
-python3 - "$REPO" "$TAG" "$NOTE" "$NOTE_EN" <<'PY'
+python3 - "$REPO" "$TAG" "$NOTE" "$NOTE_EN" "$SIGNATURE" "$(stat -f %z "$DMG")" <<'PY'
 import json, subprocess, sys, pathlib
+from xml.sax.saxutils import escape
 
-repo, tag, note, note_en = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+repo, tag, note, note_en, signature, dmg_length = sys.argv[1:7]
 
 raw = subprocess.run(
     ["gh", "api", "repos/" + repo + "/releases", "--paginate"],
@@ -186,6 +210,18 @@ for item in json.loads(raw):
         "note_en": note_en if item["tag_name"] == tag and note_en else None,
     })
 
+# What changed in each version, for the app's own update notice: the entry
+# in ReleaseNotes.swift, as the Portable build already carries it.
+log = json.loads(pathlib.Path("Portable/src/shared/releaseNotes.json").read_text())
+by_version = {entry["version"]: entry for entry in log.get("releases", [])}
+for entry in releases:
+    known = by_version.get(entry["version"])
+    if not known:
+        continue
+    def items(key):
+        return [{"title": one["title"], "detail": one.get("detail")} for one in known.get(key) or []]
+    entry["notes"] = {"note": known.get("note"), "added": items("added"), "fixed": items("fixed")}
+
 # Newest first, by version number rather than by the day it was pushed.
 def key(entry):
     return [int(part) if part.isdigit() else 0
@@ -210,6 +246,28 @@ if page.exists():
 
 page.write_text(json.dumps({"repo": repo, "releases": releases},
                            indent=2, ensure_ascii=False) + "\n")
+
+# The Mac's appcast: the newest version only, which is all Sparkle needs.
+mine = next((r for r in releases if r["version"] == tag), None)
+if signature and mine and mine.get("asset"):
+    date = subprocess.run(["date", "-u", "+%a, %d %b %Y %H:%M:%S +0000"], capture_output=True, text=True).stdout.strip()
+    pathlib.Path("Website/appcast.xml").write_text(f"""<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>Paper Time</title>
+    <link>https://github.com/{escape(repo)}/releases</link>
+    <item>
+      <title>Paper Time {escape(tag)}</title>
+      <pubDate>{date}</pubDate>
+      <sparkle:version>{escape(tag)}</sparkle:version>
+      <sparkle:shortVersionString>{escape(tag)}</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <enclosure url="{escape(mine["asset"])}" length="{dmg_length}" type="application/octet-stream" sparkle:edSignature="{escape(signature)}"/>
+    </item>
+  </channel>
+</rss>
+""")
+    print("Website/appcast.xml - " + tag)
 print("Website/releases.json - " + str(len(releases)) + " version(s), "
       + str(sum(len(b) for r in releases for b in r["builds"].values())) + " file(s)")
 PY
@@ -252,4 +310,4 @@ find build -maxdepth 6 -name "Paper Time.app" -prune -exec rm -rf {} + 2>/dev/nu
 
 echo "published $TAG to $REPO"
 echo "the page: https://$(echo "$REPO" | cut -d/ -f1 | tr "A-Z" "a-z").github.io/$(echo "$REPO" | cut -d/ -f2)/"
-echo "commit Website/releases.json here too, so the source keeps the list"
+echo "commit Website/releases.json and Website/appcast.xml here too, so the source keeps them"

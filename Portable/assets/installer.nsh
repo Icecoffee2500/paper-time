@@ -271,10 +271,14 @@
   ClearErrors
 
   ; electron-builder leaves a copy of this installer — about 250 MB — in
-  ; %LOCALAPPDATA%\paper-time-updater for electron-updater, which Paper Time
-  ; does not use. Nothing reads it, and it stayed even after an uninstall,
-  ; taking room on C: that the next install needs. (If electron-updater ever
-  ; comes in, this has to go: it is the cache that update diffs against.)
+  ; %LOCALAPPDATA%\paper-time-updater for electron-updater's differential
+  ; downloads. Paper Time's updater (0.9.12 on) downloads the whole installer
+  ; instead (disableDifferentialDownload in src/main/updates.ts), so nothing
+  ; reads this copy, and it stayed even after an uninstall, taking room on C:
+  ; that the next install needs. Only this one file goes: the updater's own
+  ; downloads are in the same folder's `pending`, and the app clears that
+  ; itself once the new version is running. RMDir without /r leaves a folder
+  ; that is not empty.
   ${If} $installMode == "all"
     SetShellVarContext current
   ${EndIf}

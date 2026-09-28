@@ -4261,3 +4261,74 @@ textarea.memo {
 .rn-group { display: flex; align-items: center; gap: 6px; }
 .rn-group svg { width: 13px; height: 13px; }
 .rn-feature-head { display: flex; align-items: center; gap: 8px; padding-top: 6px; font-size: 13px; }
+
+/* ------------------------------------------------------------ Updates */
+/* A new version (`ui/updateNotice.ts`, the Mac's `UpdateBar`/`UpdateSheet`).
+   The line is the toast's glass, but it stays and it has buttons. */
+.update-bar {
+  position: fixed;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 105;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 8px 7px 14px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  backdrop-filter: blur(20px) saturate(1.5);
+  color: var(--text);
+  font-size: 13px;
+  white-space: nowrap;
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.1), 0 6px 22px rgba(0, 0, 0, 0.18);
+  animation: toast-in var(--motion-surface) var(--ease);
+}
+.update-icon, .update-head-icon { display: inline-flex; color: var(--accent); }
+.update-icon svg { width: 17px; height: 17px; }
+.update-title { font-weight: 600; }
+.update-link {
+  border: 0; background: none; padding: 0; font: inherit; cursor: pointer;
+  color: var(--accent);
+}
+.update-link.secondary { color: var(--text-secondary); }
+.update-link:hover { text-decoration: underline; }
+.update-status { color: var(--text-secondary); font-size: 12.5px; }
+.update-close {
+  display: inline-grid; place-items: center;
+  width: 22px; height: 22px; border: 0; border-radius: 99px; padding: 0;
+  background: transparent; color: var(--text-secondary); cursor: pointer;
+  transition: background-color var(--motion-tap) var(--ease);
+}
+.update-close:hover { background: var(--panel-soft); }
+.update-close svg { width: 12px; height: 12px; }
+.filled-button.small { padding: 4px 12px; font-size: 12.5px; }
+
+.update-sheet { width: 560px; }
+.update-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 22px 24px 14px;
+  border-bottom: 1px solid var(--separator);
+}
+.update-head-icon svg { width: 32px; height: 32px; }
+.update-head-title { margin: 0; font-size: 19px; font-weight: 700; letter-spacing: -0.01em; }
+.update-head-sub { margin: 2px 0 0; color: var(--text-secondary); font-size: 13px; }
+.update-body {
+  flex: 1 1 auto; overflow-y: auto;
+  max-height: 380px; min-height: 140px;
+  padding: 16px 24px;
+  display: flex; flex-direction: column; gap: 20px;
+}
+.update-step-version { margin: 0 0 6px; font-size: 14px; font-weight: 650; }
+.update-note { margin: 0 0 10px; font-size: 13.5px; line-height: 1.55; }
+.update-note.secondary { color: var(--text-secondary); }
+.update-list-title {
+  display: flex; align-items: center; gap: 6px;
+  margin: 10px 0 6px; color: var(--text-secondary);
+  font-size: 12.5px; font-weight: 650;
+}
+.update-list-title svg { width: 15px; height: 15px; }
+.update-item { margin: 0 0 8px 21px; }
+.update-item-title { font-size: 13px; font-weight: 600; }
+.update-item-detail { margin: 2px 0 0; color: var(--text-secondary); font-size: 12.5px; line-height: 1.5; }
+.update-foot { gap: 10px; }

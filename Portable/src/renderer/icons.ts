@@ -174,6 +174,10 @@ const SHAPES = {
   'sparkles': `
     <path d="M8 2.2c.35 2.6 1.3 3.55 3.9 3.9-2.6.35-3.55 1.3-3.9 3.9-.35-2.6-1.3-3.55-3.9-3.9 2.6-.35 3.55-1.3 3.9-3.9Z"/>
     <path d="M12.4 10.2c.15 1.1.55 1.5 1.65 1.65-1.1.15-1.5.55-1.65 1.65-.15-1.1-.55-1.5-1.65-1.65 1.1-.15 1.5-.55 1.65-1.65Z"/>`,
+  // A new version: the Mac's `arrow.down.circle.fill`, drawn as a line.
+  'arrow.down.circle': `
+    <circle cx="8" cy="8" r="5.6"/>
+    <path d="M8 5v5.6M5.7 8.4 8 10.7l2.3-2.3"/>`,
   'plus.circle': `
     <circle cx="8" cy="8" r="5.6"/>
     <path d="M8 5.4v5.2M5.4 8h5.2"/>`,

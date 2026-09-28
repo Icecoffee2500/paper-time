@@ -6,6 +6,7 @@
  * completeness against `shared/api.ts`.
  */
 import type { MetadataQueue } from '../metadata/queue.js'
+import type { Updates } from '../updates.js'
 import type { MenuState } from '../../shared/api.js'
 import type { BrowserWindow } from 'electron'
 import type { LibrarySnapshot, RequestArgs, RequestName, RequestResult } from '../../shared/api.js'
@@ -37,6 +38,8 @@ export interface Context {
   pageCounter: PageCounter
   /** Papers looked up at the registrars, one after another (`metadata/queue.ts`). */
   metadata: MetadataQueue
+  /** Whether there is a newer version, and installing it on Windows (`updates.ts`). */
+  updates: Updates
   /** Whether this run is a probe, which reads a folder of its own and remembers nothing. */
   isProbe: boolean
   /** The folder a probe was told to open, or null. */
