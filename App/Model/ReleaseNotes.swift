@@ -297,6 +297,46 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.9.13",
+            date: Text2("2026년 9월", "September 2026"),
+            note: Text2(
+                "노트가 치는 동안 흔들리지 않아요. Word로 만든 논문의 수식과 구절도 제대로 읽고, 붙여 넣은 표는 표로 남아요.",
+                "Notes stay still while you type. Formulas and passages from papers made in Word read correctly, and a pasted table stays a table."
+            ),
+            added: [
+                Entry(
+                    Text2("노트의 표", "Tables in Notes"),
+                    Text2(
+                        "ChatGPT나 Obsidian에서 복사한 표를 노트에 붙여 넣으면 Markdown 표가 돼요. 커서가 밖에 있으면 격자로 보이고, 표를 누르면 적은 그대로 고칠 수 있어요. 스프레드시트에서 복사한 칸도 표가 돼요.",
+                        "A table copied from ChatGPT or Obsidian becomes a Markdown table when you paste it into a note. It shows as a grid while the cursor is elsewhere; click it to edit what's written. Cells copied from a spreadsheet become a table too."
+                    )
+                ),
+            ],
+            fixed: [
+                Entry(
+                    Text2("치는 동안 흔들리던 노트", "Notes Jumping as You Type"),
+                    Text2(
+                        "엔터를 치거나 줄을 지우면 노트가 위아래로 튀어서, 치던 줄이 화면 밖으로 나갔어요. 이제 노트가 길어도 제자리에 있어요.",
+                        "Pressing Return or deleting a line made the note jump, pushing the line you were typing out of view. It now stays put, however long the note."
+                    )
+                ),
+                Entry(
+                    Text2("Word로 만든 논문의 수식", "Formulas in Papers Made in Word"),
+                    Text2(
+                        "MDPI처럼 Word로 만든 논문에서 Ultracopy가 수식 대신 알아볼 수 없는 글자를 복사했어요. 이제 CO₂(Vᵢ)처럼 아래첨자까지 읽어요. 파일에 기호가 적혀 있지 않은 수식은 빼고, 뺐다고 알려줘요.",
+                        "In papers made in Word, such as MDPI's, Ultracopy copied unreadable characters instead of formulas. It now reads them, subscripts and all, like CO₂(Vᵢ). A formula whose symbols the file doesn't record is left out, and you're told."
+                    )
+                ),
+                Entry(
+                    Text2("다른 줄을 가져오던 ⌘L", "⌘L Quoting the Wrong Line"),
+                    Text2(
+                        "Word로 만든 논문에서 ⌘L이 고른 글 대신 윗줄의 글을 노트에 넣었어요. 이제 고른 글을 넣어요.",
+                        "In papers made in Word, ⌘L put text from the line above into the note instead of what you selected. It now quotes your selection."
+                    )
+                ),
+            ]
+        ),
+        Release(
             version: "0.9.12",
             date: Text2("2026년 9월", "September 2026"),
             note: Text2(
