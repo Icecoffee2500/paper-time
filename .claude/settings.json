@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git push:*)",
+      "Bash(Scripts/publish-release.sh:*)",
+      "Bash(Scripts/publish-page.sh:*)"
+    ]
+  }
+}

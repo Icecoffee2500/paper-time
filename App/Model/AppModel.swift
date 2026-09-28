@@ -263,6 +263,9 @@ public final class AppModel {
     }
 
     public func markReleaseNotesSeen() {
+        // A probe shares the defaults of the copy people use; the version it
+        // was built as (0.9.50 in an update test) is not one anybody has seen.
+        guard Boot.setting("PAPERTIME_LIBRARY") == nil else { return }
         seenVersion = ReleaseNotes.version
     }
 

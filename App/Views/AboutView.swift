@@ -88,6 +88,11 @@ struct AboutView: View {
         VStack(alignment: .leading, spacing: 12) {
             Divider().opacity(0.5)
 
+            #if os(macOS)
+            UpdateSettings()
+                .padding(.bottom, 4)
+            #endif
+
             HStack(spacing: 10) {
                 Button(ReleaseNotes.string("환영 화면 다시 보기…", "What's New…")) {
                     showsReleaseNotes = true

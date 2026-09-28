@@ -14,6 +14,12 @@ struct RootView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.scenePhase) private var scenePhase
 
+    #if os(macOS)
+    private var wantsUpdateSheet: Bool {
+        UpdateCenter.shared.showsSheet && !app.showsReleaseNotes && !app.showsFeedback
+    }
+    #endif
+
     var body: some View {
         Group {
             switch app.phase {
@@ -56,6 +62,13 @@ struct RootView: View {
             // empty window is an introduction to nothing.
             app.showReleaseNotesIfNew()
             #if os(macOS)
+            UpdateCenter.shared.start {
+                #if canImport(Sparkle)
+                SparkleInstaller.make()
+                #else
+                nil
+                #endif
+            }
             FeedbackProbe.runIfAsked(app: app)
             WindowProbe.runIfAsked(app: app)
             #endif
@@ -63,6 +76,23 @@ struct RootView: View {
         .sheet(isPresented: Bindable(app).showsFeedback) {
             FeedbackView()
         }
+        #if os(macOS)
+        // A new version: after the welcome for this one, never on top of it.
+        // Read here, in the body, so SwiftUI watches it — a binding's getter
+        // runs later, where nothing is being observed.
+        .sheet(isPresented: Binding(
+            get: { [wants = wantsUpdateSheet] in wants },
+            set: { if !$0 { UpdateCenter.shared.showsSheet = false } }
+        )) {
+            UpdateSheet(center: .shared)
+        }
+        .overlay(alignment: .bottom) {
+            if UpdateCenter.shared.showsBar {
+                UpdateBar(center: .shared).padding(.bottom, 14)
+            }
+        }
+        .animation(Motion.surface, value: UpdateCenter.shared.showsBar)
+        #endif
         .sheet(isPresented: Bindable(app).showsReleaseNotes) {
             // A probe that opens this sheet to look at it must not put the
             // version down as seen — the person using this Mac has not seen
