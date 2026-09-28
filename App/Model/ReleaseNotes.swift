@@ -297,6 +297,26 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.9.14",
+            date: Text2("2026년 9월", "September 2026"),
+            note: Text2(
+                "한마디를 보낼 때 닉네임을 적으면, 배포 페이지의 «함께 만드는 중»에 그 이름이 남아요.",
+                "Leave a name when you send feedback, and it goes on the download page with everyone else building Paper Time."
+            ),
+            added: [
+                Entry(
+                    Text2("함께 만든 사람들의 이름", "Names on the Download Page"),
+                    Text2(
+                        "한마디를 보낼 때 닉네임을 적으면, 배포 페이지의 «함께 만드는 중»에 논문의 감사의 글처럼 그 이름이 남아요. 이름마다 형광펜이 그어지고, 먼저 알려 준 사람이 앞에 서요. 보낸 뒤 «보러 가기»를 누르면 방금 남은 이름을 바로 볼 수 있어요.",
+                        "Leave a name when you send feedback, and it joins the Acknowledgments on the download page — every name highlighted, the first to write in first. After you send, See It opens the page at your name."
+                    ),
+                    action: .feedback,
+                    demo: .together
+                ),
+            ],
+            fixed: []
+        ),
+        Release(
             version: "0.9.13",
             date: Text2("2026년 9월", "September 2026"),
             note: Text2(

@@ -49,13 +49,23 @@ for chunk in re.findall(r'\[.*?\]\s*(?=\[|\Z)', raw, re.S) or [raw]:
         pass
 issues = [i for i in issues if isinstance(i, dict) and "pull_request" not in i]
 
+# Whose repository it is: an issue they opened by hand is not somebody
+# thanking them.
+OWNER = "Icecoffee2500"
+# What an empty name field sent before 0.9.14 — the word for "anonymous" in
+# the language the sheet was showing. Not a person called «익명».
+UNNAMED = {"", "익명", "anonymous"}
+
 def credit(issue):
-    """The name the reporter chose, written into the body by the worker."""
+    """The name the reporter chose, written into the body by the worker, or
+    None. The same rule the page's `nameOf` uses, so the app's About and the
+    page thank the same people."""
     found = re.search(r"<!--\s*credit:\s*(.*?)\s*-->", issue.get("body") or "")
-    if found and found.group(1).strip():
-        return found.group(1).strip()
+    if found:
+        name = " ".join(found.group(1).split())
+        return None if name.lower() in UNNAMED else name
     user = (issue.get("user") or {}).get("login")
-    return f"@{user}" if user else "anonymous"
+    return f"@{user}" if user and user != OWNER else None
 
 rows = []
 for issue in issues:
@@ -69,20 +79,31 @@ for issue in issues:
         "milestone": {"title": milestone.get("title")} if milestone.get("title") else None,
         # Only the credit line travels, never the body: a report can hold a
         # screenshot and a person's words, and this file is committed.
-        "body": f"<!-- credit: {credit(issue)} -->",
+        "body": f"<!-- credit: {credit(issue) or 'anonymous'} -->",
     })
 rows.sort(key=lambda r: r["number"] or 0, reverse=True)
 
-counts = {}
-for issue in issues:
+# First sender first, as the page sets them: whoever said something first
+# stays first, and the next name lands at the end. Issue numbers are the
+# order things arrived in.
+people = {}
+unnamed = 0
+for issue in sorted(issues, key=lambda i: i.get("number") or 0):
     who = credit(issue)
-    counts[who] = counts.get(who, 0) + 1
-names = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0].lower()))
+    if who is None:
+        unnamed += 1
+        continue
+    key = who.casefold()
+    if key not in people:
+        people[key] = [who, 0]
+    people[key][1] += 1
+names = [(name, count) for name, count in people.values()]
 
 pathlib.Path("Website/feedback.json").write_text(
     json.dumps({
         "issues": rows,
         "contributors": [{"name": n, "count": c} for n, c in names],
+        "unnamed": unnamed,
     }, ensure_ascii=False, indent=2) + "\n",
     encoding="utf-8",
 )
@@ -113,14 +134,19 @@ public struct Contributor: Sendable, Hashable, Identifiable {{
 }}
 
 public enum Contributors {{
+    /// Everybody who left a name, first sender first.
     public static let all: [Contributor] = [
 {lines}
     ]
 
-    public static var total: Int {{ all.reduce(0) {{ $0 + $1.reports }} }}
+    /// Reports sent without a name — counted as reports, not people: two of
+    /// them may be one person.
+    public static let unnamedReports: Int = {unnamed}
+
+    public static var total: Int {{ all.reduce(0) {{ $0 + $1.reports }} + unnamedReports }}
 }}
 ''', encoding="utf-8")
 
 fixed = sum(1 for i in issues if i.get("state") == "closed")
-print(f"feedback-sync: {len(issues)} reports, {fixed} fixed, {len(names)} people")
+print(f"feedback-sync: {len(issues)} reports, {fixed} fixed, {len(names)} named, {unnamed} without a name")
 PY

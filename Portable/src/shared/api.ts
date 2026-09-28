@@ -177,7 +177,8 @@ export interface Requests {
       reply?: string | null
       shot?: string | null
     }
-    result: { ok: boolean; url?: string; kept?: string; error?: string }
+    /** `number` is the issue's, for the page to find the name by. */
+    result: { ok: boolean; url?: string; number?: number; kept?: string; error?: string }
   }
   /**
    * Search by meaning: the passages closest to what was typed, best first —

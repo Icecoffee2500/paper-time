@@ -17,6 +17,7 @@
 import { SketchColor, SketchElement, SketchStyle, point } from '../../shared/sketch.js'
 import { drawElements } from '../../shared/sketchRender.js'
 import { L } from '../../shared/lang.js'
+import { nickname, thanksURL } from '../../shared/feedbackName.js'
 import { call, isCommand, platform } from '../bridge.js'
 import { el, on } from '../dom.js'
 
@@ -268,7 +269,13 @@ export async function showFeedback() {
   body.value = draft.message
 
   // ── who ──────────────────────────────────────────────────────────────────
-  const name = el('input', { class: 'fb-input', placeholder: L('익명', 'anonymous') }) as HTMLInputElement
+  // The name is asked for, not offered: it is what the page thanks. A report
+  // with no name is read the same, but whoever sent it never finds themselves
+  // on the page — and that is most of the reason anybody sends a second one.
+  const name = el('input', {
+    class: 'fb-input fb-name',
+    placeholder: L('배포 페이지에 남을 이름', 'A nickname works'),
+  }) as HTMLInputElement
   name.value = draft.name
   const reply = el('input', {
     class: 'fb-input',
@@ -287,6 +294,22 @@ export async function showFeedback() {
     previewWho,
   ])
 
+  // And the page's acknowledgments, where the name goes: the name in the
+  // highlighter, as the page draws it — or, with no name yet, the blank the
+  // page keeps for whoever is next.
+  const thanksName = el('span', { class: 'fb-thanks-name' })
+  const thanksBlank = el('span', { class: 'fb-thanks-blank' }, [
+    el('span', { class: 'fb-caret' }),
+    el('span', { text: L('닉네임', 'your name') }),
+  ])
+  const thanksSay = el('span', { class: 'fb-thanks-say' })
+  const thanks = el('div', { class: 'fb-thanks' }, [
+    el('span', { class: 'fb-thanks-head', text: L('감사의 글', 'Acknowledgments') }),
+    thanksName,
+    thanksBlank,
+    thanksSay,
+  ])
+
   const refresh = () => {
     draft.message = body.value
     draft.name = name.value
@@ -298,7 +321,14 @@ export async function showFeedback() {
         : first
       : L('여기 쓴 첫 줄이 제목이 돼요', 'Your first line becomes the title')
     previewTitle.classList.toggle('dim', !first)
-    previewWho.textContent = `— ${draft.name.trim() || L('익명', 'anonymous')}`
+    const credit = nickname(draft.name)
+    previewWho.textContent = `— ${credit || L('익명', 'anonymous')}`
+    thanksName.textContent = credit
+    thanksName.hidden = !credit
+    thanksBlank.hidden = !!credit
+    thanksSay.textContent = credit
+      ? L('이 이름으로 남아요.', 'This is how it appears.')
+      : L('닉네임을 적으면 이 빈칸이 그 이름이 돼요.', 'Leave a name and it fills this blank.')
     sendButton.disabled = draft.message.trim().length < 3
   }
   on(body, 'input', refresh)
@@ -322,12 +352,19 @@ export async function showFeedback() {
     const answer = await call('feedback:send', {
       kind: draft.kind,
       body: draft.message.trim(),
-      name: draft.name.trim() || L('익명', 'anonymous'),
+      // Empty when there is none; the worker writes it down as nobody.
+      name: nickname(draft.name),
       reply: draft.reply.trim() || null,
       shot: draft.includesShot ? flatten() : null,
     })
     if (answer.ok) {
-      status.textContent = L('고마워요. 목록에 올렸어요.', "Thanks. It's on the list.")
+      status.textContent = nickname(draft.name)
+        ? L('고마워요. 배포 페이지에 이름을 올렸어요.', 'Thank you. Your name is on the download page.')
+        : L('고마워요. 배포 페이지의 목록에 올렸어요.', "Thank you. It's on the list.")
+      const see = el('button', { type: 'button', class: 'fb-see', text: L('보러 가기', 'See It') })
+      const page = thanksURL(answer.number)
+      on(see, 'click', () => void call('shell:openExternal', { url: page }))
+      status.after(see)
       draft.message = ''
       draft.marks = []
       draft.shot = null
@@ -394,21 +431,26 @@ export async function showFeedback() {
       shotHint,
       body,
       el('div', { class: 'fb-who' }, [
-        el('span', { class: 'fb-label', text: L('이름', 'Name') }),
+        el('span', { class: 'fb-label', text: L('닉네임', 'Name') }),
         name,
         el('span', { class: 'fb-label', text: L('답장', 'Reply') }),
         reply,
       ]),
       el('p', {
-        class: 'fb-hint',
+        class: 'fb-hint fb-ask',
         text: L(
-          '적은 이름으로 기록에 올라가요. 메일은 답장할 때만 쓰고, 공개 목록에는 올라가지 않아요.',
-          'The name goes on the list. The address is used only to write back, and never appears there.',
+          '닉네임을 꼭 적어주세요. Paper Time을 같이 만든 사람으로 배포 페이지의 «함께 만드는 중»에 이름이 남아요.',
+          'Leave a name. It goes on the download page, with everyone else building Paper Time.',
         ),
+      }),
+      el('p', {
+        class: 'fb-hint',
+        text: L('메일은 답장할 때만 써요. 어디에도 올리지 않아요.', 'The address is only for writing back. It never appears on the page.'),
       }),
       details,
       el('p', { class: 'fb-hint', text: L('보내면 이렇게 올라가요', 'This is the row it becomes') }),
       preview,
+      thanks,
     ]),
     el('div', { class: 'fb-foot' }, [status, el('span', { class: 'fb-spacer' }), cancel, sendButton]),
   )

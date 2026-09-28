@@ -1,6 +1,7 @@
 import Foundation
 import InkEngine
 import Observation
+import PaperCore
 import SwiftUI
 #if os(macOS)
 import AppKit
@@ -34,6 +35,17 @@ public enum Feedback {
         let raw = Boot.setting("PAPERTIME_FEEDBACK_URL")
             ?? "https://paper-time-feedback.icecoffee2500.workers.dev/report"
         return URL(string: raw) ?? URL(string: "https://example.invalid")!
+    }
+
+    /// «함께 만드는 중» on the download page, where the names are.
+    public static let togetherPage = URL(string: "https://icecoffee2500.github.io/paper-time/#together")!
+
+    /// The same place, opened right after a send: the page reads the issue by
+    /// number, draws that name last in the pen's full colour and says it
+    /// arrived. The number is public already — it is the issue's.
+    public static func thanksPage(for issue: Int?) -> URL {
+        guard let issue else { return togetherPage }
+        return URL(string: "https://icecoffee2500.github.io/paper-time/?thanks=\(issue)#together") ?? togetherPage
     }
 
     // MARK: - The last few things that happened
@@ -197,7 +209,9 @@ public final class FeedbackDraft {
     public enum State: Equatable {
         case writing
         case sending
-        case sent(String)
+        /// On the page: `page` opens it where this report's name is, and
+        /// `named` says whether there is a name there to see.
+        case sent(page: URL, named: Bool)
         /// Kept on the machine instead, because the send did not go through.
         case kept(URL)
         case failed(String)
@@ -248,9 +262,11 @@ public final class FeedbackDraft {
         return first.count > 60 ? String(first.prefix(59)) + "…" : first
     }
 
+    /// What goes on the page, or empty.
+    public var nickname: String { FeedbackNickname.clean(name) }
+
     public var creditName: String {
-        let trimmed = name.trimmingCharacters(in: .whitespaces)
-        return trimmed.isEmpty ? L("익명", "anonymous") : trimmed
+        nickname.isEmpty ? L("익명", "anonymous") : nickname
     }
 }
 
@@ -287,6 +303,7 @@ public enum FeedbackSender {
 
     struct Answer: Decodable {
         var ok: Bool?
+        var number: Int?
         var url: String?
         var error: String?
     }
@@ -298,7 +315,8 @@ public enum FeedbackSender {
         let payload = Payload(
             kind: draft.kind.rawValue,
             body: draft.message.trimmingCharacters(in: .whitespacesAndNewlines),
-            name: draft.creditName,
+            // Empty when there is none; the worker writes it down as nobody.
+            name: draft.nickname,
             reply: draft.reply.trimmingCharacters(in: .whitespaces).isEmpty ? nil : draft.reply,
             app: .init(version: d.version, build: d.build, platform: d.platform, arch: d.arch, lang: d.lang),
             context: .init(
@@ -320,7 +338,7 @@ public enum FeedbackSender {
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
             let answer = try? JSONDecoder().decode(Answer.self, from: data)
             if code == 200, answer?.ok == true {
-                draft.state = .sent(answer?.url ?? "")
+                draft.state = .sent(page: Feedback.thanksPage(for: answer?.number), named: !draft.nickname.isEmpty)
                 return
             }
             if code == 429 {
@@ -354,10 +372,15 @@ public enum FeedbackSender {
 #if os(macOS)
 /// Looking at the report sheet without a hand on the keyboard.
 ///
-/// `--papertime-feedback-shot=<path in the container>` opens it, fills it the
+/// `--papertime-feedback-shot=<path in the container>` draws it, fills it the
 /// way somebody would, draws a mark or two with the app's own pen, writes the
-/// window to a PNG and quits. No event is posted to the system: the sheet is
-/// opened by setting the flag the menu item sets, which is the same door.
+/// window to a PNG and quits. No event is posted to the system.
+///
+/// The sheet's view is drawn in a window of the probe's own, on no display
+/// (`WindowProbe.ownWindow`), not presented on the main window: a launch can
+/// open that one where a display is — hidden, so unseen, but a sheet on it
+/// can only be photographed by showing the app, and on 2026-09-28 unhiding it
+/// for exactly that put the window on somebody's screen for seconds, twice.
 @MainActor
 public enum FeedbackProbe {
     public static func runIfAsked(app: AppModel) {
@@ -369,18 +392,41 @@ public enum FeedbackProbe {
         Task { @MainActor in
             func say(_ text: String) { FileHandle.standardError.write(Data((text + "\n").utf8)) }
             try? await Task.sleep(for: .seconds(2))
-            app.askForFeedback()
-            // Long enough for the sheet's own task to have taken the picture.
+            let draft = app.feedbackDraft
+            // What the sheet's own task takes when the key is pressed — the
+            // window behind it — taken here from the main window whether or
+            // not it can be seen, which the sheet's `keyWindow` cannot.
+            if let main = NSApp.windows.first(where: { !$0.isSheet && $0.canBecomeKey }),
+               let view = main.contentView, view.bounds.width > 1,
+               let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+                view.cacheDisplay(in: view.bounds, to: rep)
+                draft.shot = rep.cgImage
+            }
+            draft.diagnostics = FeedbackDiagnostics.collect(app: app)
+
+            let window = WindowProbe.ownWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 724), styleMask: [.borderless])
+            guard !WindowProbe.isOnAScreen(window) else {
+                return say("feedback probe: refused — its window would be on a display")
+            }
+            window.contentView = NSHostingView(rootView: FeedbackView().environment(app))
+            window.orderFront(nil)
+            window.displayIfNeeded()
+            if WindowProbe.isOnAScreen(window) {
+                window.orderOut(nil)
+                return say("feedback probe: the window landed on a display at \(window.frame) — put away")
+            }
             try? await Task.sleep(for: .seconds(1.2))
 
-            let draft = app.feedbackDraft
             if Boot.isSet("PAPERTIME_FEEDBACK_FILL") {
                 draft.message = Language.prefersKorean
                     ? "표가 있는 쪽에서 스크롤하면 가끔 멈춰요."
                     : "Scrolling stalls on pages that have a table."
-                draft.name = Language.prefersKorean ? "김연구" : "Sam"
+                // `--papertime-feedback-name=<name>`, `-` for none: the
+                // sheet with a name and the sheet asking for one.
+                let named = Boot.setting("PAPERTIME_FEEDBACK_NAME")
+                draft.name = named.map { $0 == "-" ? "" : $0 } ?? (Language.prefersKorean ? "김연구" : "Sam")
                 draft.reply = "someone@example.com"
-                draft.showsDetails = true
+                draft.showsDetails = !Boot.isSet("PAPERTIME_FEEDBACK_SCROLL")
                 if let shot = draft.shot {
                     let width = CGFloat(shot.width)
                     let height = CGFloat(shot.height)
@@ -405,20 +451,46 @@ public enum FeedbackProbe {
                 }
             }
 
+            // `--papertime-feedback-sent=1`: the footer as it is after a
+            // send, without sending — a probe never opens an issue.
+            if Boot.isSet("PAPERTIME_FEEDBACK_SENT") {
+                draft.state = .sent(page: Feedback.thanksPage(for: 7), named: !draft.nickname.isEmpty)
+            }
+
             try? await Task.sleep(for: .seconds(1.2))
-            // The sheet is its own window; the picture wanted is that one.
-            let windows = NSApp.windows.filter(\.isVisible)
-            let sheet = windows.first(where: { $0.isSheet }) ?? windows.last
-            guard let content = sheet?.contentView,
-                  let rep = content.bitmapImageRepForCachingDisplay(in: content.bounds)
+            guard let content = window.contentView else { return say("feedback probe: no window") }
+            // `--papertime-feedback-scroll=1`: the bottom of the sheet — the
+            // name, and the row and the acknowledgment it becomes — which a
+            // picture of the top leaves under the fold.
+            if Boot.isSet("PAPERTIME_FEEDBACK_SCROLL"), let scroll = firstScrollView(in: content),
+               let document = scroll.documentView {
+                let clip = scroll.contentView
+                let bottom = document.isFlipped ? max(0, document.bounds.height - clip.bounds.height) : 0
+                clip.scroll(to: NSPoint(x: 0, y: bottom))
+                scroll.reflectScrolledClipView(clip)
+                content.layoutSubtreeIfNeeded()
+                try? await Task.sleep(for: .seconds(0.4))
+                say("feedback probe: scrolled to \(Int(bottom)) of \(Int(document.bounds.height))")
+            }
+            say("feedback probe: name \"\(draft.nickname)\" credit \"\(draft.creditName)\" state \(draft.state)")
+            guard let rep = content.bitmapImageRepForCachingDisplay(in: content.bounds)
             else { return say("feedback probe: no window") }
             content.cacheDisplay(in: content.bounds, to: rep)
             if let png = rep.representation(using: .png, properties: [:]) {
                 try? png.write(to: URL(fileURLWithPath: path))
                 say("feedback probe: wrote \(path); \(draft.marks.count) marks, \(draft.diagnostics.rows.count) diagnostic rows")
             }
+            window.orderOut(nil)
             if Boot.isSet("PAPERTIME_FEEDBACK_QUIT") { NSApp.terminate(nil) }
         }
+    }
+
+    private static func firstScrollView(in view: NSView) -> NSScrollView? {
+        if let scroll = view as? NSScrollView { return scroll }
+        for child in view.subviews {
+            if let found = firstScrollView(in: child) { return found }
+        }
+        return nil
     }
 }
 #endif
@@ -807,9 +879,22 @@ public enum WindowProbe {
             return say("click: no row \(wanted) — the table has \(table.numberOfRows)")
         }
         if NSApp.isHidden {
+            // Nothing of the app may be on a display when it is unhidden. A
+            // launch can open its own window where a display is — hidden, so
+            // unseen until the line below — and on 2026-09-28 unhiding for
+            // the report sheet's picture put exactly that window on somebody's
+            // screen. So the table's window must be off every display, and
+            // any other that is not is put away first; and nothing is ordered
+            // front afterwards, because AppKit pulls a titled window that is
+            // ordered front back onto a screen.
+            guard !WindowProbe.isOnAScreen(window) else {
+                return say("click: refused — the window is on a display at \(window.frame)")
+            }
+            for other in NSApp.windows where other !== window && WindowProbe.isOnAScreen(other) {
+                other.orderOut(nil)
+            }
             NSApp.unhideWithoutActivation()
             try? await Task.sleep(for: .milliseconds(300))
-            _ = offscreen(say: { _ in })
         }
         table.scrollRowToVisible(wanted)
         window.displayIfNeeded()

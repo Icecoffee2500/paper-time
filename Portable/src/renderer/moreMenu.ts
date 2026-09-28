@@ -12,8 +12,7 @@ import { showFeedback } from './ui/feedback.js'
 import { showMenu, type MenuEntry } from './ui/toolbar.js'
 import { L } from '../shared/lang.js'
 import { PAGE_TINTS, tintLabel } from '../shared/pageTint.js'
-
-const TOGETHER_URL = 'https://icecoffee2500.github.io/paper-time/#together'
+import { TOGETHER_URL } from '../shared/feedbackName.js'
 
 export function showMoreMenu(anchor: Element) {
   showMenu(anchor, [
