@@ -11,8 +11,10 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
-    MARKETING_VERSION: "0.9.11"
-    CURRENT_PROJECT_VERSION: "1"
+    MARKETING_VERSION: "0.9.12"
+    # The same as the version people see. Sparkle compares CFBundleVersion,
+    # and a build number that was "1" in every release would never be newer.
+    CURRENT_PROJECT_VERSION: $(MARKETING_VERSION)
     CODE_SIGN_STYLE: Automatic
     SWIFT_EMIT_LOC_STRINGS: YES
     ENABLE_USER_SCRIPT_SANDBOXING: YES
@@ -28,6 +30,12 @@ configFiles:
 packages:
   PaperTimeKit:
     path: Packages/PaperTimeKit
+  # Updates on the Mac: Sparkle downloads, checks the EdDSA signature and
+  # swaps the app in place. Paper Time draws its own notice and drives Sparkle
+  # through a user driver of its own (App/Model/SparkleInstaller.swift).
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: 2.10.0
 
 targets:
   PaperTime:
@@ -54,6 +62,9 @@ targets:
       # package's resource bundle, which Xcode copies into the app.
       - package: PaperTimeKit
         product: Semantic
+      - package: Sparkle
+        product: Sparkle
+        destinationFilters: [macOS]
     info:
       path: App/Resources/Info.plist
       properties:
@@ -61,6 +72,15 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         ITSAppUsesNonExemptEncryption: false
+        # Updates (macOS; iOS ignores these). The feed is the page's own; the
+        # key is the public half of Scripts/sparkle-key.sh's. Sparkle never
+        # checks on its own schedule — UpdateCenter decides when to look and
+        # draws the notice — and the sandbox needs the installer service.
+        SUFeedURL: https://icecoffee2500.github.io/paper-time/appcast.xml
+        SUPublicEDKey: ZDlj4EL5cmnpF1VR5e4WaqVC6Dlf1tjPCCMWUUEJA4c=
+        SUEnableInstallerLauncherService: true
+        SUEnableAutomaticChecks: false
+        SUAutomaticallyUpdate: false
         LSSupportsOpeningDocumentsInPlace: true
         UIFileSharingEnabled: true
         UILaunchScreen: {}
@@ -95,6 +115,11 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.imtaeheon.PaperTime
+        # A Mac app keeps its frameworks in Contents/Frameworks, next to
+        # MacOS/ rather than inside it — the multiplatform default is the iOS
+        # layout, and with Sparkle (the first embedded framework) dyld looked
+        # in Contents/MacOS/Frameworks and refused to start the app.
+        LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]: $(inherited) @executable_path/../Frameworks
         # The sandbox keys are macOS-only. Applying them to an iOS build makes
         # signing with a free Apple ID fail for no reason: iOS apps are always
         # sandboxed and need no entitlement for the document picker or network.

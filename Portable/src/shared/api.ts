@@ -1,3 +1,4 @@
+import type { UpdateState } from './updates.js'
 import type { Mark } from './marks.js'
 import type { Glyph, Rule } from './mathReader/glyph.js'
 import type { PDFLock, ByteTrouble } from './pdfLock.js'
@@ -135,6 +136,10 @@ export interface Requests {
   'bibtex:save': { args: { text: string }; result: { path: string } | { cancelled: true } }
   /** The version, and whether a probe asked for What's New (`--papertime-whats-new=1`, never marked seen). */
   'app:about': { args: void; result: { version: string; whatsNew?: boolean } }
+  /** A newer version: what the notice shows, a look now (Settings' «Check Now»), and its buttons (`main/updates.ts`). */
+  'update:state': { args: void; result: UpdateState }
+  'update:check': { args: { userInitiated: boolean }; result: void }
+  'update:act': { args: { action: 'install' | 'later' | 'skip' | 'hideBar' | 'showChanges' | 'closeSheet' }; result: void }
   /** The words inside the papers: read ahead, search (answers come as events), stop, and — for a probe — what it cost. */
   'text:warm': { args: { ids: string[] }; result: void }
   'text:warm-cancel': { args: void; result: void }
@@ -279,6 +284,8 @@ export interface Events {
   'paper:saved': { id: string }
   /** The papers being looked up now, gathered to one message a quarter second. */
   'metadata:resolving': { ids: string[] }
+  /** The update notice changed (`main/updates.ts`). */
+  'update:state': UpdateState
   'paper:kept': { id: string; reason: KeptReason | null }
   'paper:saveState': { id: string; state: SaveState }
   'settings:changed': Record<string, unknown>

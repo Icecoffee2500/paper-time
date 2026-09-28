@@ -46,6 +46,7 @@ import { lookupNetwork } from './metadata/wiring.js'
 import { importedPapers } from './library.js'
 import { readWhole } from './pdfBytes.js'
 import { PaperMeta } from '../shared/model.js'
+import { Updates } from './updates.js'
 
 const isMac = process.platform === 'darwin'
 
@@ -210,6 +211,9 @@ const metadata = new MetadataQueue({
 })
 importedPapers.on('imported', (id: string) => metadata.arrived([id]))
 
+// A newer version, said in every window.
+const updates = new Updates((state) => send('update:state', state), log)
+
 /** Opens a folder as the library — the launch's, or one chosen — and re-arms the watchers. */
 async function openLibrary(root: string): Promise<LibrarySnapshot | { error: string }> {
   sync.stop()
@@ -220,7 +224,7 @@ async function openLibrary(root: string): Promise<LibrarySnapshot | { error: str
 }
 
 const context: Context = {
-  libraries, sync, flush, journals, records, text, semantic, notes, windows, pageCounter, metadata,
+  libraries, sync, flush, journals, records, text, semantic, notes, windows, pageCounter, metadata, updates,
   isProbe: probe.hasLibrary,
   probeLibrary: probe.argument('library') ?? null,
   snapshot: (refused) => libraries.snapshot(refused),
@@ -345,6 +349,7 @@ app.whenReady().then(async () => {
   markRunning(probe.isRun)
   windows.createMain()
   installMenu()
+  updates.start()
   // `--papertime-library=<path>` opens a folder without disturbing whichever
   // one the user last had open — the same isolation the Mac build uses so a
   // test never touches a real library. The window's first `library:reload`

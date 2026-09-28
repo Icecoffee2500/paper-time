@@ -80,7 +80,7 @@ export function setSettings(patch: Partial<Settings>, options: { live?: boolean 
 
 /** What another window chose, followed here without writing it again. The
  *  columns, the paper showing and the tab are each window's own. */
-const SHARED = new Set<string>(['appearance', 'language', 'pageTint', 'pageTintColor', 'pageLayout', 'latexShortcuts', 'semanticSearch', 'resolveMetadataOnImport', 'metadataContactEmail', 'listSubtitle', 'bibtexProtectCase', 'bibtexPreprintStyle', 'bibtexIncludeUnverified', 'sort', 'sketchStyle', 'inkPresets', 'shortcuts'])
+const SHARED = new Set<string>(['appearance', 'language', 'pageTint', 'pageTintColor', 'pageLayout', 'latexShortcuts', 'semanticSearch', 'resolveMetadataOnImport', 'metadataContactEmail', 'listSubtitle', 'bibtexProtectCase', 'bibtexPreprintStyle', 'bibtexIncludeUnverified', 'sort', 'sketchStyle', 'inkPresets', 'shortcuts', 'checkForUpdates'])
 
 export function adoptSettings(patch: Record<string, unknown>) {
   const taken: Record<string, unknown> = {}

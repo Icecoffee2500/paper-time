@@ -30,6 +30,7 @@ import { call, platform } from '../bridge.js'
 import { acceleratorFor, acceleratorFromEvent, assignShortcut, displayAccelerator, groupTitle, matchingShortcuts, shortcutOverrides, type ShortcutGroup } from '../../shared/shortcuts.js'
 import { meaningStatus, onMeaningStatus } from '../meaningSearch.js'
 import { contributors, drawLog, showAllFeatures, showWhatsNew, showcase } from './releaseNotes.js'
+import { updateState, watchUpdates } from './updateNotice.js'
 import { SUBTITLE_FIELDS, encodeSubtitle, parseSubtitle, subtitleName, toggledSubtitle } from '../../shared/subtitle.js'
 
 export interface SettingsActions {
@@ -540,6 +541,28 @@ export function showSettings(actions: SettingsActions, section?: SettingsSection
       link(L('모든 기능과 키…', 'All Features and Keys…'), () => showAllFeatures()),
     )
     body.append(links)
+
+    // A new version (`main/updates.ts`), the Mac's `UpdateSettings`.
+    body.append(el('div', { class: 'set-section', text: L('업데이트', 'Updates') }))
+    body.append(toggle(L('새 버전 확인', 'Check for Updates'), store.settings.checkForUpdates !== false, (value) => actions.set({ checkForUpdates: value })))
+    body.append(note(L(
+      '하루에 한 번 배포 페이지에 새 버전이 있는지 물어봐요. 논문이나 노트에 대한 것은 아무것도 보내지 않아요.',
+      'Once a day, Paper Time asks the download page for a new version. It sends nothing about your papers or notes.',
+    )))
+    const checkRow = el('div', { class: 'set-row set-links' })
+    const checkNow = el('button', { type: 'button', class: 'plain-button', text: L('지금 확인', 'Check Now') })
+    const said = el('span', { class: 'set-note update-said' })
+    on(checkNow, 'click', () => void call('update:check', { userInitiated: true }))
+    checkRow.append(checkNow, said)
+    body.append(checkRow)
+    const stop = watchUpdates((update) => {
+      if (!said.isConnected && update !== updateState()) return stop()
+      checkNow.disabled = update.checking
+      said.textContent = update.checking ? L('확인하는 중…', 'Checking…')
+        : update.lastCheckFailed ? L('확인하지 못했어요. 인터넷 연결을 확인해 주세요.', "Couldn't check. Check your internet connection.")
+          : update.offer ? L(`${update.offer.version} 버전이 나왔어요.`, `Paper Time ${update.offer.version} is available.`)
+            : update.lastCheck ? L('최신 버전이에요.', 'You have the latest version.') : ''
+    })
   }
 
   const logPage = () => {

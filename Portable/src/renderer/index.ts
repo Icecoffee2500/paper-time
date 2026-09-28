@@ -15,6 +15,7 @@
  * `commands.ts` (the menu and the main process's events), `dockDrop.ts`,
  * `listSearch.ts`, `probe.ts`.
  */
+import { installUpdateNotice } from './ui/updateNotice.js'
 import { copyText } from './ui/clipboard.js'
 import { call, platform } from './bridge.js'
 import { el } from './dom.js'
@@ -314,6 +315,7 @@ window.addEventListener('focus', () => {
 // ------------------------------------------------------------------- start
 
 installRejectionNotice()
+installUpdateNotice()
 watchSketchClipboard()
 // A note the disk would not take stays in hand and is written with the next
 // change; said once, in the app's voice (`NotesModel.write`).
