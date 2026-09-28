@@ -33,7 +33,7 @@
   document.documentElement.lang = lang;
 })();
 </script>
-<link rel="stylesheet" href="style.css?v=0.9.3">
+<link rel="stylesheet" href="style.css?v=0.9.14">
 </head>
 <body>
 
@@ -458,15 +458,27 @@
         click it and GitHub opens at that spot. None of this is decoration.</p>
     </div>
 
+    <!-- The people, before what they said. Set as a paper's acknowledgments,
+         because the people reading this page write papers: each name the app
+         sent gets the app's highlighter, drawn across it as it comes into
+         view, and the last place is left blank for whoever is next.
+         Filled by demos.js (`paintThanks`); what is here is the page with
+         nobody in it yet. -->
+    <figure class="thanks" id="thanks">
+      <figcaption class="thanks-head"><span data-l="ko">감사의 글</span><span data-l="en">Acknowledgments</span></figcaption>
+      <p class="thanks-lead" id="thanks-lead"><span data-l="ko">고친 것마다 먼저 알려 준 사람이 있어요.</span><span data-l="en">Every fix began with someone who said something.</span></p>
+      <p class="thanks-names" id="thanks-names"></p>
+      <p class="thanks-quiet" id="thanks-quiet" hidden></p>
+      <p class="thanks-just" id="thanks-just" role="status" hidden></p>
+    </figure>
+
     <div class="tally-row" id="together-tally"></div>
     <div class="board" id="together-board"><p class="hint" data-l="ko">불러오는 중…</p><p class="hint" data-l="en">Loading…</p></div>
 
-    <div class="credits" id="credits"></div>
-
-    <p class="ask" data-l="ko">앱에서 <b class="key">⌥⌘/</b>를 눌러보세요. 화면은 이미 찍어뒀어요.
-      위에 바로 그려도 돼요. 이름을 적으면 이 목록에 그 이름으로 올라가요.</p>
-    <p class="ask" data-l="en">Press <b class="key">⌥⌘/</b> in the app. The screenshot is already here.
-      Draw on it. Leave a name and it appears on this list.</p>
+    <p class="ask" data-l="ko">앱에서 <b class="key">⌥⌘/</b>를 눌러보세요. 윈도우와 리눅스는 <b class="key">Ctrl+Shift+/</b>예요.
+      화면은 이미 찍어뒀어요. 닉네임을 적어 보내면 위의 빈칸이 그 이름이 돼요.</p>
+    <p class="ask" data-l="en">Press <b class="key">⌥⌘/</b> in the app, or <b class="key">Ctrl+Shift+/</b> on Windows and Linux.
+      The screenshot is already there. Leave a name, and the blank above becomes yours.</p>
   </div>
 </section>
 
@@ -654,6 +666,6 @@
   </div>
 </dialog>
 
-<script src="demos.js?v=0.9.3"></script>
+<script src="demos.js?v=0.9.14"></script>
 </body>
 </html>

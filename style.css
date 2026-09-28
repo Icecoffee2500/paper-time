@@ -549,10 +549,143 @@ code { font: .92em var(--mono); background: var(--panel-2); padding: .1em .35em;
 .row .st { flex: 0 0 auto; font-size: 13px; }
 .row .ttl { flex: 1; min-width: 0; }
 .row .who { color: var(--ink-3); font-size: 13px; white-space: nowrap; }
-.tally-row { display: flex; gap: 22px; justify-content: center; margin-bottom: 26px; flex-wrap: wrap; }
+/* Each row is the issue itself, and a link to it. They were bare links in
+   the accent until 0.9.14 — nobody had written in yet, so nobody saw. */
+.board .row { color: var(--ink); background: var(--page-2); flex-wrap: wrap; row-gap: 2px; }
+.board a.row:hover { text-decoration: none; background: color-mix(in srgb, var(--ink) 6%, var(--page-2)); }
+.row .st.done { color: var(--green); }
+.row .st.open { color: var(--ink-3); }
+.row .meta { color: var(--ink-3); font-size: 13px; white-space: nowrap; }
+@media (max-width: 520px) {
+  .row .ttl { flex-basis: calc(100% - 26px); }
+  .row .meta { margin-left: 25px; }
+}
+.tally-row { display: flex; gap: 30px; justify-content: center; margin-bottom: 26px; flex-wrap: wrap; }
+.tally-row > div { text-align: center; }
 .tally-row .k { font-size: 13px; color: var(--ink-3); }
-.tally-row .v { font-size: 30px; font-weight: 600; letter-spacing: -.02em; display: block; }
-.credits { text-align: center; color: var(--ink-3); font-size: 13.5px; margin-top: 22px; }
+.tally-row .n { font-size: 30px; font-weight: 600; letter-spacing: -.02em; display: block; line-height: 1.15; }
+
+/* The people, set as a paper's acknowledgments — the one page of a thesis
+   everybody reads. Each name somebody left in the app wears the app's
+   highlighter, and the highlighter is drawn across it as the page comes into
+   view, one name after another, first sender first; the last place is an
+   empty highlight with a caret in it, waiting for whoever is next. The only
+   motion on it is the gesture the app is about. */
+.thanks {
+  max-width: 780px;
+  margin: 0 auto clamp(40px, 6vh, 64px);
+  padding: clamp(30px, 4.6vw, 54px) clamp(22px, 5.4vw, 64px) clamp(32px, 4.6vw, 52px);
+  background: var(--panel);
+  border-radius: var(--panel-r);
+  box-shadow: var(--shadow-1);
+  text-align: center;
+}
+.thanks-head {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+html[lang="ko"] .thanks-head { letter-spacing: .2em; font-size: 12.5px; }
+.thanks-lead {
+  margin: 14px auto 0;
+  max-width: 520px;
+  font-size: clamp(16px, 1.45vw, 19px);
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.thanks-names {
+  margin: clamp(22px, 3.2vw, 34px) 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: baseline;
+  gap: .3em .75em;
+  font-size: clamp(24px, 3.3vw, 36px);
+  font-weight: 600;
+  letter-spacing: -.02em;
+  line-height: 1.4;
+}
+/* Fitted to the words, low on them, the way the app lays a highlight: the
+   same band the page's `.mark` is, drawn by growing its width. */
+.thanks-name {
+  padding: 0 .12em;
+  border-radius: 3px;
+  background-image: linear-gradient(var(--mark-soft), var(--mark-soft));
+  background-repeat: no-repeat;
+  background-position: 0 88%;
+  background-size: 0% 42%;
+  transition: background-size .6s cubic-bezier(.2, .7, .3, 1);
+  overflow-wrap: anywhere;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  cursor: default;
+}
+.thanks.lit .thanks-name { background-size: 100% 42%; }
+/* The name that was sent a moment ago — reached from the sheet in the app —
+   is drawn last and in the full colour of the pen. */
+.thanks-name.just { background-image: linear-gradient(var(--mark), var(--mark)); }
+
+/* The next one: a blank to fill in, the way a form leaves one — a line in
+   the pen's colour, a caret at its start, and the word for what goes there.
+   Not an outlined highlight: a dashed box low on the words ran through them
+   like a strikethrough. */
+.thanks-blank {
+  position: relative;
+  display: inline-flex;
+  align-items: baseline;
+  gap: .08em;
+  min-width: 4.2em;
+  padding: 0 .16em;
+  background: none;
+  color: var(--ink-3);
+  font-weight: 500;
+}
+.thanks-blank::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: .06em;
+  border-bottom: 2px dashed color-mix(in srgb, var(--mark) 55%, var(--ink-3));
+}
+.thanks-blank .caret {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 2px;
+  height: .92em;
+  border-radius: 1px;
+  background: var(--accent);
+  animation: thanks-caret 1.1s steps(1, end) infinite;
+}
+.thanks-blank .ph { opacity: .45; }
+@keyframes thanks-caret { 50% { opacity: 0; } }
+
+.thanks-quiet {
+  margin: clamp(18px, 2.6vw, 26px) auto 0;
+  font-size: 15px;
+  color: var(--ink-3);
+}
+.thanks-just {
+  margin: 18px auto 0;
+  display: inline-block;
+  padding: 7px 14px;
+  border-radius: 980px;
+  font-size: 14.5px;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--mark) 26%, transparent);
+}
+.thanks-quiet[hidden], .thanks-just[hidden] { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .thanks-name { transition: none; background-size: 100% 42%; }
+  .thanks-blank .caret { animation: none; }
+}
+@media (max-width: 520px) {
+  .thanks-names { gap: .25em .6em; }
+  .thanks-quiet { font-size: 14px; }
+}
 .ask { max-width: 620px; margin: 30px auto 0; text-align: center; color: var(--ink-2); font-size: 15.5px; }
 
 /* ───────────────────────────────  footer  ─────────────────────────────── */
