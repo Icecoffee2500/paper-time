@@ -220,11 +220,18 @@ public final class FeedbackDraft {
     public var kind: Feedback.Kind = .bug
     public var message = ""
     public var name: String {
-        didSet { UserDefaults.standard.set(name, forKey: "feedback.name") }
+        didSet { if !Self.isProbe { UserDefaults.standard.set(name, forKey: "feedback.name") } }
     }
     public var reply: String {
-        didSet { UserDefaults.standard.set(reply, forKey: "feedback.reply") }
+        didSet { if !Self.isProbe { UserDefaults.standard.set(reply, forKey: "feedback.reply") } }
     }
+
+    /// A probe shares the installed copy's settings — one sandbox per bundle
+    /// id — so what it types into the sheet would become the name and the
+    /// address somebody's next report goes out with. «김연구» and
+    /// «someone@example.com» did, until 2026-09-28. A probe neither reads the
+    /// two nor writes them.
+    private static var isProbe: Bool { Boot.isSet("PAPERTIME_LIBRARY") }
     public var includesShot = true
     public var showsDetails = false
     public var state: State = .writing
@@ -241,8 +248,8 @@ public final class FeedbackDraft {
     )
 
     public init() {
-        name = UserDefaults.standard.string(forKey: "feedback.name") ?? ""
-        reply = UserDefaults.standard.string(forKey: "feedback.reply") ?? ""
+        name = Self.isProbe ? "" : UserDefaults.standard.string(forKey: "feedback.name") ?? ""
+        reply = Self.isProbe ? "" : UserDefaults.standard.string(forKey: "feedback.reply") ?? ""
     }
 
     public var canSend: Bool {
