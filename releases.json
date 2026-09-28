@@ -2,11 +2,119 @@
   "repo": "Icecoffee2500/paper-time",
   "releases": [
     {
+      "version": "0.9.14",
+      "date": "2026-09-28T11:12:30Z",
+      "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.14/Paper.Time.0.9.14.dmg",
+      "size": 52732724,
+      "downloads": 0,
+      "builds": {
+        "mac": [
+          {
+            "label": "디스크 이미지",
+            "label_en": "Disk image",
+            "arch": "Apple Silicon",
+            "arch_en": "Apple Silicon",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.14/Paper.Time.0.9.14.dmg",
+            "size": 52732724,
+            "downloads": 0
+          }
+        ],
+        "windows": [
+          {
+            "label": "설치본",
+            "label_en": "Installer",
+            "arch": "64비트 · ARM",
+            "arch_en": "64-bit and ARM",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.14/Paper.Time.Setup.0.9.14.exe",
+            "size": 265611763,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "64비트",
+            "arch_en": "64-bit",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.14/Paper.Time-0.9.14-win.zip",
+            "size": 162930949,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.14/Paper.Time-0.9.14-arm64-win.zip",
+            "size": 167878629,
+            "downloads": 0
+          }
+        ],
+        "linux": [
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.14/Paper.Time-0.9.14-x86_64.AppImage",
+            "size": 160456349,
+            "downloads": 0
+          },
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.14/Paper.Time-0.9.14-arm64.AppImage",
+            "size": 160842842,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.14/paper-time-0.9.14.tar.gz",
+            "size": 154059953,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.14/paper-time-0.9.14-arm64.tar.gz",
+            "size": 158556313,
+            "downloads": 0
+          }
+        ]
+      },
+      "note": "한마디를 보낼 때 닉네임을 적으면, 배포 페이지의 «함께 만드는 중»에 그 이름이 남아요.",
+      "note_en": "Leave a name when you send feedback, and it goes on the download page with everyone else building Paper Time.",
+      "notes": {
+        "note": {
+          "ko": "한마디를 보낼 때 닉네임을 적으면, 배포 페이지의 «함께 만드는 중»에 그 이름이 남아요.",
+          "en": "Leave a name when you send feedback, and it goes on the download page with everyone else building Paper Time."
+        },
+        "added": [
+          {
+            "title": {
+              "ko": "함께 만든 사람들의 이름",
+              "en": "Names on the Download Page"
+            },
+            "detail": {
+              "ko": "한마디를 보낼 때 닉네임을 적으면, 배포 페이지의 «함께 만드는 중»에 논문의 감사의 글처럼 그 이름이 남아요. 이름마다 형광펜이 그어지고, 먼저 알려 준 사람이 앞에 서요. 보낸 뒤 «보러 가기»를 누르면 방금 남은 이름을 바로 볼 수 있어요.",
+              "en": "Leave a name when you send feedback, and it joins the Acknowledgments on the download page — every name highlighted, the first to write in first. After you send, See It opens the page at your name."
+            }
+          }
+        ],
+        "fixed": []
+      }
+    },
+    {
       "version": "0.9.13",
       "date": "2026-09-28T08:14:03Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.13/Paper.Time.0.9.13.dmg",
       "size": 52703231,
-      "downloads": 0,
+      "downloads": 1,
       "builds": {
         "mac": [
           {
@@ -16,7 +124,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.13/Paper.Time.0.9.13.dmg",
             "size": 52703231,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "windows": [
