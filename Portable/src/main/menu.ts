@@ -19,6 +19,7 @@ import { Menu, app, shell, type MenuItemConstructorOptions } from 'electron'
 import { L } from '../shared/lang.js'
 import { acceleratorFor, shortcut } from '../shared/shortcuts.js'
 import type { MenuState } from '../shared/api.js'
+import { TOGETHER_URL } from '../shared/feedbackName.js'
 
 const isMac = process.platform === 'darwin'
 
@@ -196,7 +197,7 @@ export function buildMenu({ send, chooseLibrary }: MenuActions, state: MenuState
         {
           label: L('함께 만드는 중', 'Built together'),
           click: () => {
-            void shell.openExternal('https://icecoffee2500.github.io/paper-time/#together')
+            void shell.openExternal(TOGETHER_URL)
           },
         },
       ],

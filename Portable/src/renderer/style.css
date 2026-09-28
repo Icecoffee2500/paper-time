@@ -3130,7 +3130,42 @@ textarea:focus-visible {
   background: var(--panel-soft);
   border: 1px solid var(--separator-strong); border-radius: var(--radius-control);
 }
-.fb-who .fb-input:first-of-type { max-width: 150px; }
+.fb-who .fb-input:first-of-type { max-width: 190px; }
+.fb-hint.fb-ask { color: var(--text-secondary); }
+/* The page's acknowledgments, one row of it: the name in the reader's first
+   highlighter colour, laid low on the words as the page lays it — or the
+   blank the page keeps for whoever is next. The caret does not blink here:
+   the name field above has a real one. */
+.fb-thanks {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 9px 12px; border-radius: var(--radius-control); background: var(--panel-soft);
+  font-size: 13.5px; white-space: nowrap; overflow: hidden;
+}
+.fb-thanks [hidden] { display: none !important; }
+.fb-thanks-head {
+  flex: 0 0 auto; font-size: 10.5px; font-weight: 600; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--text-tertiary);
+}
+.fb-thanks-name {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  font-weight: 650; padding: 0 3px; border-radius: 2px;
+  background: linear-gradient(transparent 52%, rgba(255, 214, 64, 0.5) 52%, rgba(255, 214, 64, 0.5) 94%, transparent 94%);
+}
+.fb-thanks-blank {
+  position: relative; flex: 0 0 auto; display: inline-flex; align-items: baseline; gap: 2px;
+  min-width: 64px; padding: 0 3px 1px; color: var(--text-tertiary);
+}
+.fb-thanks-blank::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0;
+  border-bottom: 1.5px dashed rgba(219, 179, 51, 0.9);
+}
+.fb-caret { width: 1.5px; height: 13px; align-self: center; border-radius: 1px; background: var(--accent); }
+.fb-thanks-say { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 12px; color: var(--text-secondary); }
+.fb-see {
+  border: 0; background: transparent; padding: 0 2px; cursor: pointer;
+  font: inherit; font-size: 13px; color: var(--accent-text, var(--accent));
+}
+.fb-see:hover { text-decoration: underline; }
 .fb-preview {
   display: flex; align-items: baseline; gap: 10px;
   padding: 10px 12px; border-radius: var(--radius-control); background: var(--panel-soft);
@@ -4254,7 +4289,22 @@ textarea.memo {
 .rn-about-name { margin: 0; font-size: 20px; }
 .rn-about-version { margin: 2px 0 0; }
 .rn-people { display: flex; flex-wrap: wrap; gap: 6px; }
-.rn-person { padding: 3px 10px; border-radius: 999px; font-size: 12px; background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent-text, var(--accent)); }
+/* The names the way the page's acknowledgments set them: in the reader's
+   first highlighter colour, low on the words, the blank for whoever is next
+   last. They were accent capsules until 0.9.14. */
+.rn-people { align-items: baseline; gap: 6px 12px; }
+.rn-person {
+  padding: 0 3px; border-radius: 2px; font-size: 14px; font-weight: 650; color: var(--text);
+  background: linear-gradient(transparent 52%, rgba(255, 214, 64, 0.5) 52%, rgba(255, 214, 64, 0.5) 94%, transparent 94%);
+}
+.rn-person-blank {
+  position: relative; display: inline-flex; align-items: baseline; gap: 2px;
+  min-width: 64px; padding: 0 3px 1px; font-size: 14px; color: var(--text-tertiary);
+}
+.rn-person-blank::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0;
+  border-bottom: 1.5px dashed rgba(219, 179, 51, 0.9);
+}
 .rn-whats-new { width: 720px; }
 .rn-features { width: 620px; }
 .rn-sheet-body { padding: 4px 20px 16px; overflow-y: auto; }

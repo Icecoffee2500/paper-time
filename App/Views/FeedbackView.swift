@@ -190,22 +190,32 @@ struct FeedbackView: View {
 
     // MARK: - Who
 
+    /// The name is asked for, not offered: it is what the page thanks. A
+    /// report with no name is read the same, but the person who sent it
+    /// never finds themselves on the page, and that is most of the reason
+    /// anybody sends a second one.
     private var whoSection: some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 10) {
-                Text(L("이름", "Name")).font(.subheadline)
-                TextField(L("익명", "anonymous"), text: Bindable(draft).name)
+                Text(L("닉네임", "Name")).font(.subheadline)
+                TextField(L("배포 페이지에 남을 이름", "A nickname works"), text: Bindable(draft).name)
                     .textFieldStyle(.roundedBorder)
-                    .frame(maxWidth: 150)
+                    .frame(maxWidth: 190)
                 Text(L("답장", "Reply")).font(.subheadline)
                 TextField(L("메일 (안 적어도 돼요)", "Email, optional"), text: Bindable(draft).reply)
                     .textFieldStyle(.roundedBorder)
             }
             Text(L(
-                "적은 이름으로 기록에 올라가요. 메일은 답장할 때만 쓰고, 공개 목록에는 올라가지 않아요.",
-                "The name goes on the list. The address is used only to write back, and never appears there."
+                "닉네임을 꼭 적어주세요. Paper Time을 같이 만든 사람으로 배포 페이지의 «함께 만드는 중»에 이름이 남아요.",
+                "Leave a name. It goes on the download page, with everyone else building Paper Time."
             ))
             .font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            Text(L(
+                "메일은 답장할 때만 써요. 어디에도 올리지 않아요.",
+                "The address is only for writing back. It never appears on the page."
+            ))
+            .font(.caption).foregroundStyle(.tertiary)
             .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -262,7 +272,37 @@ struct FeedbackView: View {
             .font(.callout)
             .padding(11)
             .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: Corner.row))
+            thanksPreview
         }
+    }
+
+    /// And the page's acknowledgments, where the name goes: the name in the
+    /// app's highlighter, as the page draws it — or, with no name yet, the
+    /// blank the page keeps for whoever is next.
+    private var thanksPreview: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(L("감사의 글", "Acknowledgments"))
+                .font(.caption2.weight(.semibold))
+                .tracking(1.2)
+                .foregroundStyle(.tertiary)
+            if draft.nickname.isEmpty {
+                ThanksBlank()
+                Text(L("닉네임을 적으면 이 빈칸이 그 이름이 돼요.", "Leave a name and it fills this blank."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                HighlightedName(name: draft.nickname)
+                Text(L("이 이름으로 남아요.", "This is how it appears."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .lineLimit(1)
+        .padding(.horizontal, 11)
+        .padding(.vertical, 9)
+        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: Corner.row))
+        .animation(Motion.move, value: draft.nickname.isEmpty)
     }
 
     // MARK: - Footer
@@ -270,12 +310,15 @@ struct FeedbackView: View {
     private var footer: some View {
         HStack {
             switch draft.state {
-            case let .sent(url):
-                Label(L("고마워요. 목록에 올렸어요.", "Thanks. It's on the list."), systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(.green).font(.callout)
-                if !url.isEmpty, let link = URL(string: url) {
-                    Link(L("보기", "See it"), destination: link).font(.callout)
-                }
+            case let .sent(page, named):
+                Label(
+                    named
+                        ? L("고마워요. 배포 페이지에 이름을 올렸어요.", "Thank you. Your name is on the download page.")
+                        : L("고마워요. 배포 페이지의 목록에 올렸어요.", "Thank you. It's on the list."),
+                    systemImage: "checkmark.circle.fill"
+                )
+                .foregroundStyle(.green).font(.callout)
+                Link(L("보러 가기", "See It"), destination: page).font(.callout)
             case let .kept(folder):
                 Label(
                     L("지금은 못 보냈어요. 바탕화면에 저장해뒀어요.",
@@ -311,6 +354,67 @@ struct FeedbackView: View {
         }
         .padding(16)
     }
+}
+
+// MARK: - A name, as the page thanks it
+
+/// A name in the app's highlighter — the page's acknowledgments draw every
+/// name this way, so the sheet and About show it the same.
+struct HighlightedName: View {
+    let name: String
+    var font: Font = .callout.weight(.semibold)
+
+    var body: some View {
+        Text(name)
+            .font(font)
+            .padding(.horizontal, 3)
+            .background(alignment: .bottom) {
+                GeometryReader { box in
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .fill(ThanksInk.highlight)
+                        .frame(height: box.size.height * 0.46)
+                        .frame(maxHeight: .infinity, alignment: .bottom)
+                        .offset(y: -box.size.height * 0.06)
+                }
+            }
+    }
+}
+
+/// The place kept for whoever is next: a caret, the word for what goes
+/// there, and a dashed line to write it on.
+struct ThanksBlank: View {
+    var font: Font = .callout
+
+    var body: some View {
+        HStack(spacing: 2) {
+            RoundedRectangle(cornerRadius: 1).fill(Color.accentColor).frame(width: 1.5, height: 13)
+            Text(L("닉네임", "your name")).font(font).foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 3)
+        .padding(.bottom, 2)
+        .frame(minWidth: 64, alignment: .leading)
+        .overlay(alignment: .bottom) {
+            Line()
+                .stroke(ThanksInk.line, style: StrokeStyle(lineWidth: 1.5, dash: [3, 2.5]))
+                .frame(height: 1.5)
+        }
+    }
+
+    private struct Line: Shape {
+        func path(in rect: CGRect) -> Path {
+            Path { path in
+                path.move(to: CGPoint(x: rect.minX, y: rect.midY))
+                path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
+            }
+        }
+    }
+}
+
+/// The highlighter's yellow — the reader's first highlight colour, laid the
+/// way `MarkOverlayView` lays it: toward white, so the words stay black.
+enum ThanksInk {
+    static let highlight = Color(red: 1.0, green: 0.84, blue: 0.25).opacity(0.5)
+    static let line = Color(red: 0.86, green: 0.70, blue: 0.20).opacity(0.9)
 }
 
 // MARK: - The three tools

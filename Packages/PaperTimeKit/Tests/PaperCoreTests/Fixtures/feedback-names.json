@@ -1,0 +1,93 @@
+{
+  "cases" : [
+    {
+      "clean" : "",
+      "raw" : ""
+    },
+    {
+      "clean" : "",
+      "raw" : "   "
+    },
+    {
+      "clean" : "새벽세시",
+      "raw" : " 새벽세시 "
+    },
+    {
+      "clean" : "곰돌이 연구원",
+      "raw" : "곰돌이   연구원"
+    },
+    {
+      "clean" : "줄 바꿈",
+      "raw" : "줄\n바꿈"
+    },
+    {
+      "clean" : "a b",
+      "raw" : "a\r\nb"
+    },
+    {
+      "clean" : "탭 이름",
+      "raw" : "탭\t이름"
+    },
+    {
+      "clean" : "a b",
+      "raw" : "a　b"
+    },
+    {
+      "clean" : "zero width",
+      "raw" : "​zero width"
+    },
+    {
+      "clean" : "﻿keeps the BOM",
+      "raw" : "﻿keeps the BOM"
+    },
+    {
+      "clean" : "b민지/b",
+      "raw" : "<b>민지</b>"
+    },
+    {
+      "clean" : "-",
+      "raw" : "-->"
+    },
+    {
+      "clean" : "a-b",
+      "raw" : "a---b"
+    },
+    {
+      "clean" : "익명",
+      "raw" : "익명"
+    },
+    {
+      "clean" : "anonymous",
+      "raw" : "anonymous"
+    },
+    {
+      "clean" : "논문 읽는 고양이 🐈",
+      "raw" : "논문 읽는 고양이 🐈"
+    },
+    {
+      "clean" : "👨‍👩‍👧 가족",
+      "raw" : "👨‍👩‍👧 가족"
+    },
+    {
+      "clean" : "Ünïcödé Émile",
+      "raw" : "Ünïcödé Émile"
+    },
+    {
+      "clean" : "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가",
+      "raw" : "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가"
+    },
+    {
+      "clean" : "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "raw" : "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbb"
+    },
+    {
+      "clean" : "👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽",
+      "raw" : "👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽"
+    },
+    {
+      "clean" : "\\(not interpolation) \"quoted\"",
+      "raw" : "\\(not interpolation) \"quoted\""
+    }
+  ],
+  "limit" : 40
+}

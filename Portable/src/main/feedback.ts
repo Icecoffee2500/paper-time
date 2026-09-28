@@ -146,7 +146,7 @@ export async function capture(window: BrowserWindow | null): Promise<string | nu
   }
 }
 
-export async function send(report: FeedbackReport): Promise<{ ok: boolean; url?: string; kept?: string; error?: string }> {
+export async function send(report: FeedbackReport): Promise<{ ok: boolean; url?: string; number?: number; kept?: string; error?: string }> {
   const payload = { ...report, app: diagnostics() }
   try {
     const response = await fetch(ENDPOINT, {
@@ -164,8 +164,8 @@ export async function send(report: FeedbackReport): Promise<{ ok: boolean; url?:
         ),
       }
     }
-    const answer = (await response.json()) as { ok?: boolean; url?: string }
-    if (response.ok && answer.ok) return { ok: true, url: answer.url }
+    const answer = (await response.json()) as { ok?: boolean; url?: string; number?: number }
+    if (response.ok && answer.ok) return { ok: true, url: answer.url, number: answer.number }
   } catch {
     // Offline, or the worker is down. Fall through and keep it.
   }
@@ -191,7 +191,7 @@ function keep(report: FeedbackReport): string | null {
     const lines = [
       report.body,
       '',
-      `— ${report.name}`,
+      `— ${report.name || L('익명', 'anonymous')}`,
       report.reply ? report.reply : '',
       '',
       `version: ${info.version}`,
