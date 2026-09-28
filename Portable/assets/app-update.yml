@@ -1,0 +1,4 @@
+# Read by electron-updater on Windows (see electron-builder.yml, win).
+provider: generic
+url: https://github.com/Icecoffee2500/paper-time/releases/latest/download
+updaterCacheDirName: paper-time-updater

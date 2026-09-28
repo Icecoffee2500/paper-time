@@ -36,6 +36,14 @@ asarUnpack:
 # ---------------------------------------------------------------- Windows
 win:
   icon: assets/icons/icon.ico
+  # What electron-updater reads for its cache folder (src/main/updates.ts).
+  # Written here rather than by a `publish:` block: electron-builder writes
+  # its own only for some targets, and a copy without it cannot update.
+  # The app names the exact release it wants at run time; publish-release.sh
+  # uploads that release's `latest.yml` beside the installer.
+  extraResources:
+    - from: assets/app-update.yml
+      to: app-update.yml
   target:
     # The installer most people will use…
     - target: nsis

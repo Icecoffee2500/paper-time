@@ -108,5 +108,9 @@ export function windowHandlers(ctx: Context): Partial<Handlers> {
 
     // What the About section says: which version this is.
     'app:about': () => ({ version: app.getVersion(), whatsNew: probeArgument('whats-new') === '1' }),
+
+    'update:state': () => ctx.updates.current,
+    'update:check': ({ userInitiated }) => ctx.updates.check({ atLaunch: false, userInitiated }),
+    'update:act': ({ action }) => ctx.updates.act(action),
   }
 }

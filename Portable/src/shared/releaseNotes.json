@@ -1,6 +1,47 @@
 {
  "releases": [
   {
+   "version": "0.9.12",
+   "date": {
+    "ko": "2026년 9월",
+    "en": "September 2026"
+   },
+   "note": {
+    "ko": "새 버전이 나오면 앱이 알려줘요. 맥과 윈도우는 누르면 설치까지 해요.",
+    "en": "Paper Time now tells you when a new version is out. On the Mac and on Windows, one click installs it."
+   },
+   "added": [
+    {
+     "title": {
+      "ko": "새 버전 알림",
+      "en": "Update Notices"
+     },
+     "detail": {
+      "ko": "앱을 켤 때, 그리고 하루에 한 번 배포 페이지에 새 버전이 있는지 물어봐요. 켤 때 찾으면 무엇이 바뀌었는지 보여주고, 쓰는 중에 찾으면 창 아래에 한 줄로 알려요. 그 줄의 «무엇이 바뀌었나요»를 누르면 같은 내용을 볼 수 있어요. 버전 하나를 건너뛸 수도 있고, 설정의 «정보»에서 끌 수도 있어요.",
+      "en": "Paper Time asks the download page for a new version when it opens and once a day. Found at launch, it shows what changed. Found while you work, it says so in one line at the bottom of the window, and What's New shows the rest. You can skip a version, or turn checking off in Settings › About."
+     },
+     "devices": [
+      "mac"
+     ]
+    },
+    {
+     "title": {
+      "ko": "누르면 설치",
+      "en": "One-Click Updates"
+     },
+     "detail": {
+      "ko": "맥과 윈도우는 새 버전을 뒤에서 미리 받아 둬요. «지금 설치»를 누르면 설치하고 다시 켜요. «나중에»를 누르면 다음에 앱을 끌 때 설치해요. 받은 파일은 서명을 확인한 뒤에만 설치해요. 리눅스에서는 버튼이 배포 페이지를 열어요.",
+      "en": "On the Mac and on Windows, the new version downloads in the background. Install Now installs it and opens the app again. Later installs it the next time you quit. The download is checked against its signature before anything is installed. On Linux, the button opens the download page."
+     },
+     "devices": [
+      "mac"
+     ]
+    }
+   ],
+   "removed": [],
+   "fixed": []
+  },
+  {
    "version": "0.9.11",
    "date": {
     "ko": "2026년 9월",
