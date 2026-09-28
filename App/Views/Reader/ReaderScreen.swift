@@ -201,6 +201,7 @@ struct ReaderScreen: View {
             }
         }
         .animation(Motion.move, value: link.isFinding)
+        .onChange(of: link.toastRequest) { _, message in sayRequested(message) }
         .safeAreaInset(edge: .bottom) { statusBar(session) }
         .onChange(of: currentPageIndex, initial: true) { _, index in
             library.recordReadingPosition(index, for: paper.id)
@@ -418,6 +419,13 @@ struct ReaderScreen: View {
         selectionFrame = .zero
         noteSelection = nil
         noteDraft = ""
+    }
+
+    /// A line asked for through the link (`ReaderLink.toastRequest`).
+    private func sayRequested(_ message: String?) {
+        guard let message else { return }
+        show(toast: message)
+        link.toastRequest = nil
     }
 
     private func show(toast message: String) {

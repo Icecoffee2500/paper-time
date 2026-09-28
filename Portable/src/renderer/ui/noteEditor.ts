@@ -16,6 +16,7 @@
  * under the hand typing in it. A host keeps one editor and hands it back for
  * the same note.
  */
+import { fromHTML, fromTabSeparated } from '../../shared/noteTable.js'
 import { copyText } from './clipboard.js'
 import { clear, el, on } from '../dom.js'
 import { icon, type IconName } from '../icons.js'
@@ -294,6 +295,26 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
           blur: () => {
             save()
             return false
+          },
+          // A table from ChatGPT or Obsidian arrives as HTML — pasted as it
+          // was, a line a cell — or as tab-separated rows; either becomes the
+          // Markdown table it is, on lines of its own (`shared/noteTable.ts`).
+          paste: (event, target) => {
+            const data = event.clipboardData
+            const table = fromHTML(data?.getData('text/html') ?? '') ?? fromTabSeparated(data?.getData('text/plain') ?? '')
+            if (!table) return false
+            event.preventDefault()
+            const { from, to } = target.state.selection.main
+            const text = target.state.doc.toString()
+            const before = from > 0 ? text[from - 1] : '\n'
+            const beforeThat = from > 1 ? text[from - 2] : '\n'
+            const atEnd = to >= text.length
+            const after = atEnd ? '\n' : text[to]
+            const lead = from === 0 ? '' : before !== '\n' ? '\n\n' : beforeThat !== '\n' ? '\n' : ''
+            const tail = atEnd ? '\n' : after !== '\n' ? '\n\n' : '\n'
+            const insert = lead + table + tail
+            target.dispatch({ changes: { from, to, insert }, selection: { anchor: from + insert.length }, scrollIntoView: true, userEvent: 'input.paste' })
+            return true
           },
         }),
       ],

@@ -110,13 +110,19 @@ final class ReaderLink {
         else { return nil }
         let index = session.document.index(for: page)
         guard index != NSNotFound else { return nil }
+        let quoted = MathReader.structured(from: selection).joined(separator: "\n")
+        if let left = MathReader.leftOutSentence() { toastRequest = left }
         return NoteAnchor(
             pageIndex: index,
             rect: selection.bounds(for: page),
-            quotedText: MathReader.structured(from: selection).joined(separator: "\n"),
+            quotedText: quoted,
             paperID: sessionPaperID
         )
     }
+
+    /// A line for the reader to say over the page, once — set by something
+    /// that is not a view, and cleared by the view that says it.
+    var toastRequest: String?
 
     init() {}
 }

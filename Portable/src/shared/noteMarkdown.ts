@@ -13,6 +13,7 @@
  */
 import { blockOf, type Block } from './noteBlocks.js'
 import { lineRanges, mathBlocks, type TextSpan } from './noteMath.js'
+import { tableBlocks } from './noteTable.js'
 import { parseAnchorURL } from './noteQuote.js'
 
 /** What stands in for a heading's or a quotation's marker: nothing to see. */
@@ -46,7 +47,9 @@ export interface PlannedLine {
 /** The lines, a `$$` that opens on one line and closes on another read as one. */
 export function noteLines(source: string): TextSpan[] {
   const ranges = lineRanges(source)
-  for (const block of mathBlocks(source).reverse()) {
+  // A table's lines too, for the same reason: one thing over several lines.
+  const joined = [...mathBlocks(source), ...tableBlocks(source)].sort((a, b) => a.from - b.from)
+  for (const block of joined.reverse()) {
     const first = ranges.findIndex((one) => one.from === block.from)
     const last = ranges.findIndex((one) => one.to === block.to)
     if (first < 0 || last < first) continue

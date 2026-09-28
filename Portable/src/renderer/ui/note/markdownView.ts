@@ -14,6 +14,7 @@
 import { RangeSetBuilder, StateEffect, StateField, type EditorState, type Extension, type Range } from '@codemirror/state'
 import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemirror/view'
 import { planNote, type InlineToken, type PlannedLine } from '../../../shared/noteMarkdown.js'
+import { parseTable, tableBlocks, type Table } from '../../../shared/noteTable.js'
 import { typeset } from '../../sketchMath.js'
 
 /** Shows the Markdown as it is written — «Show Markdown» (`showsRawText`). */
@@ -54,6 +55,48 @@ class MathWidget extends WidgetType {
     return node
   }
   override ignoreEvent() { return false }
+}
+
+/** A table, drawn while the caret is elsewhere (the Mac's `NoteTableDrawing`).
+ *  A press puts the caret in it, and its lines show as they are written. */
+class TableWidget extends WidgetType {
+  constructor(readonly table: Table, readonly source: string) { super() }
+  override eq(other: TableWidget) { return other.source === this.source }
+  toDOM(view: EditorView) {
+    const frame = document.createElement('div')
+    frame.className = 'nm-table'
+    const grid = document.createElement('table')
+    const plain = (cell: string) => cell.replaceAll('**', '').replaceAll('__', '').replaceAll('`', '')
+    const align = (index: number) => {
+      const one = this.table.alignments[index]
+      return one === 'center' ? 'center' : one === 'right' ? 'right' : 'left'
+    }
+    const head = grid.createTHead().insertRow()
+    this.table.header.forEach((cell, index) => {
+      const th = document.createElement('th')
+      th.textContent = plain(cell)
+      th.style.textAlign = align(index)
+      head.append(th)
+    })
+    const body = grid.createTBody()
+    for (const row of this.table.rows) {
+      const tr = body.insertRow()
+      row.forEach((cell, index) => {
+        const td = tr.insertCell()
+        td.textContent = plain(cell)
+        td.style.textAlign = align(index)
+      })
+    }
+    frame.append(grid)
+    frame.addEventListener('mousedown', (event) => {
+      event.preventDefault()
+      const at = view.posAtDOM(frame)
+      view.dispatch({ selection: { anchor: at } })
+      view.focus()
+    })
+    return frame
+  }
+  override ignoreEvent() { return true }
 }
 
 const hidden = Decoration.replace({})
@@ -136,7 +179,17 @@ export function noteDecorations(state: EditorState): DecorationSet {
   // on it is then drawn as written and its pieces are left alone.
   const plan = planNote(source, null).map((line) => ({ ...line, revealed: heads.some((head) => head >= line.from && head <= line.to) }))
   const ranges: Range<Decoration>[] = []
+  const tables = new Set(tableBlocks(source).map((one) => `${one.from}:${one.to}`))
   plan.forEach((line) => {
+    // A table off the caret is a grid, and nothing else is drawn over it.
+    if (!line.revealed && tables.has(`${line.from}:${line.to}`)) {
+      const text = source.slice(line.from, line.to)
+      const table = parseTable(text)
+      if (table) {
+        ranges.push(Decoration.replace({ widget: new TableWidget(table, text), block: true }).range(line.from, line.to))
+        return
+      }
+    }
     const pieces = line.revealed ? [] : line.tokens
     // Every document line the block covers carries its look: a `$$` block is several.
     const first = state.doc.lineAt(line.from)

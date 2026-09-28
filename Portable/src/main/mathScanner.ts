@@ -9,7 +9,7 @@
  *
  * CoreGraphics' own habits are kept, because the Mac's answers came from
  * them: only the page's content streams are read (no form XObjects), codes
- * are one byte, `q`/`Q` keep only the CTM, a `B` strokes and does not fill
+ * are one byte — two for a composite (Type0) font —, `q`/`Q` keep only the CTM, a `B` strokes and does not fill
  * (the later callback replaced the earlier), and a rectangle waits for the
  * next fill however many `n`s come between.
  */
@@ -28,6 +28,9 @@ interface Font {
   glyphNames: Map<number, string>
   baseEncoding: string | null
   isSymbolic: boolean
+  /** One byte a glyph for a simple font; two for a composite (Type0) one —
+   *  what Word and every "Save as PDF" write (the Mac's `bytesPerCode`). */
+  bytesPerCode: number
 }
 
 export interface ScannedPage {
@@ -118,23 +121,31 @@ function scan(file: PDFFile, page: PDFDict): ScannedPage {
     textMatrix = lineMatrix
   }
   const show = (bytes: Uint8Array) => {
-    for (const code of bytes) {
+    const step = currentFont?.bytesPerCode ?? 1
+    for (let index = 0; index + step <= bytes.length; index += step) {
+      let code = 0
+      for (let byte = 0; byte < step; byte += 1) code = (code << 8) | bytes[index + byte]
       const width = (currentFont?.widths.get(code) ?? currentFont?.defaultWidth ?? 500) / 1000
       const placement = concat(concat([fontSize * horizontalScale, 0, 0, fontSize, 0, rise], textMatrix), ctm)
       const scale = Math.sqrt(Math.abs(placement[0] * placement[3] - placement[1] * placement[2]))
+      // A zero in a composite font's ToUnicode says the file does not know
+      // the glyph; its code is a glyph number, never a character code.
+      let meaning = currentFont?.toUnicode.get(code)
+      if (step > 1 && meaning !== undefined && [...meaning].every((c) => c.codePointAt(0) === 0)) meaning = undefined
       glyphs.push({
-        code,
+        code: step > 1 ? -1 : code,
         fontName: currentFont?.name ?? '',
-        unicode: currentFont?.toUnicode.get(code) ?? (currentFont ? decodeByte(code, currentFont.baseEncoding) : null),
+        unicode: meaning ?? (currentFont ? decodeByte(code, currentFont.baseEncoding) : null),
         glyphName: currentFont?.glyphNames.get(code) ?? null,
-        isSymbolic: currentFont?.isSymbolic ?? true,
+        isSymbolic: step > 1 ? false : currentFont?.isSymbolic ?? true,
         size: scale,
         x: placement[4],
         y: placement[5],
         width: width * scale,
       })
       let advance = width * fontSize + charSpacing
-      if (code === 32) advance += wordSpacing
+      // Word spacing is for the single byte 32 only (ISO 32000 §9.3.3).
+      if (code === 32 && step === 1) advance += wordSpacing
       textMatrix = concat(translate(advance * horizontalScale, 0), textMatrix)
     }
   }
@@ -266,7 +277,7 @@ function loadFonts(file: PDFFile, page: PDFDict): Map<string, Font> {
   for (const [key, value] of fontDictionary.pairs) {
     const dictionary = dictOf(file.resolve(value))
     if (!dictionary) continue
-    const font: Font = { name: '', widths: new Map(), defaultWidth: 500, toUnicode: new Map(), glyphNames: new Map(), baseEncoding: null, isSymbolic: true }
+    const font: Font = { name: '', widths: new Map(), defaultWidth: 500, toUnicode: new Map(), glyphNames: new Map(), baseEncoding: null, isSymbolic: true, bytesPerCode: 1 }
     const baseFont = nameOf(file.resolve(dictionary.get('BaseFont')))
     if (baseFont !== undefined) font.name = baseFont
     const firstChar = intOf(file.resolve(dictionary.get('FirstChar'))) ?? 0
@@ -275,7 +286,20 @@ function loadFonts(file: PDFFile, page: PDFDict): Map<string, Font> {
       const width = numberOf(file.resolve(one))
       if (width !== undefined) font.widths.set(firstChar + index, width)
     })
-    const descriptor = dictOf(file.resolve(dictionary.get('FontDescriptor')))
+    // A composite font: two bytes a glyph, and its widths and its
+    // descriptor are on the one font it descends to.
+    let descendant: PDFDict | undefined
+    if (nameOf(file.resolve(dictionary.get('Subtype'))) === 'Type0') {
+      font.bytesPerCode = 2
+      const descendants = arrayOf(file.resolve(dictionary.get('DescendantFonts')))
+      descendant = descendants && descendants[0] ? dictOf(file.resolve(descendants[0])) : undefined
+      if (descendant) {
+        font.defaultWidth = numberOf(file.resolve(descendant.get('DW'))) ?? 1000
+        const cidWidths = arrayOf(file.resolve(descendant.get('W')))
+        if (cidWidths) font.widths = parseCIDWidths(file, cidWidths)
+      }
+    }
+    const descriptor = dictOf(file.resolve((descendant ?? dictionary).get('FontDescriptor')))
     if (descriptor) {
       const flags = intOf(file.resolve(descriptor.get('Flags'))) ?? 0
       font.isSymbolic = (flags & 4) !== 0
@@ -298,6 +322,32 @@ function loadFonts(file: PDFFile, page: PDFDict): Map<string, Font> {
     fonts.set(key, font)
   }
   return fonts
+}
+
+/** A composite font's `/W`: `c [w₁ w₂ …]` from `c` on, or `c₁ c₂ w` for a run. */
+function parseCIDWidths(file: PDFFile, array: PDFObj[]): Map<number, number> {
+  const widths = new Map<number, number>()
+  let index = 0
+  while (index < array.length) {
+    const first = intOf(file.resolve(array[index]))
+    if (first === undefined) { index += 1; continue }
+    const run = index + 1 < array.length ? arrayOf(file.resolve(array[index + 1])) : undefined
+    if (run) {
+      run.forEach((one, offset) => {
+        const width = numberOf(file.resolve(one))
+        if (width !== undefined) widths.set(first + offset, width)
+      })
+      index += 2
+      continue
+    }
+    const last = index + 1 < array.length ? intOf(file.resolve(array[index + 1])) : undefined
+    const width = index + 2 < array.length ? numberOf(file.resolve(array[index + 2])) : undefined
+    if (last !== undefined && width !== undefined && last >= first && last - first < 65_536) {
+      for (let code = first; code <= last; code += 1) widths.set(code, width)
+    }
+    index += 3
+  }
+  return widths
 }
 
 function parseDifferences(file: PDFFile, encoding: PDFDict): Map<number, string> {
@@ -332,14 +382,15 @@ function builtInEncoding(file: PDFFile, descriptor: PDFDict | undefined): Map<nu
   return names
 }
 
+/** UTF-16, four hex digits a unit — a letter outside the first plane is two (𝒒 is D835 DC92). */
 function hexCharacters(hex: string): string | null {
-  let out = ''
+  const units: number[] = []
   for (let index = 0; index + 4 <= hex.length; index += 4) {
     const value = parseInt(hex.slice(index, index + 4), 16)
-    if (Number.isNaN(value) || (value >= 0xd800 && value <= 0xdfff)) return null
-    out += String.fromCodePoint(value)
+    if (Number.isNaN(value)) return null
+    units.push(value)
   }
-  return out === '' ? null : out
+  return units.length === 0 ? null : String.fromCharCode(...units)
 }
 
 function parseToUnicode(text: string): Map<number, string> {

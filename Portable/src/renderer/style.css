@@ -4332,3 +4332,16 @@ textarea.memo {
 .update-item-title { font-size: 13px; font-weight: 600; }
 .update-item-detail { margin: 2px 0 0; color: var(--text-secondary); font-size: 12.5px; line-height: 1.5; }
 .update-foot { gap: 10px; }
+
+/* A note's table, drawn while the caret is elsewhere (`TableWidget`, the Mac's
+   `NoteTableDrawing`): bold header on a faint ground, hairlines, a rounded frame. */
+.nm-table { margin: 4px 0 6px; max-width: 100%; overflow-x: auto; cursor: text; }
+.nm-table table {
+  border-collapse: separate; border-spacing: 0;
+  border: 1px solid var(--separator-strong); border-radius: calc(var(--radius-control) - 2px);
+  overflow: hidden; font-size: inherit; line-height: 1.45;
+}
+.nm-table th, .nm-table td { padding: 5px 9px; vertical-align: top; }
+.nm-table th { font-weight: 650; background: color-mix(in srgb, var(--text) 5%, transparent); }
+.nm-table th + th, .nm-table td + td { border-left: 1px solid var(--separator-strong); }
+.nm-table tr + tr td, .nm-table tbody tr:first-child td { border-top: 1px solid var(--separator-strong); }
