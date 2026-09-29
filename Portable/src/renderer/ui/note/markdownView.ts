@@ -15,7 +15,8 @@ import { RangeSetBuilder, StateEffect, StateField, type EditorState, type Extens
 import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemirror/view'
 import { planNote, type InlineToken, type PlannedLine } from '../../../shared/noteMarkdown.js'
 import { parseTable, tableBlocks, type Table } from '../../../shared/noteTable.js'
-import { typeset } from '../../sketchMath.js'
+import { typesetNumbered, typesetter } from '../../sketchMath.js'
+import { numberFormulas, signature, type Numbered } from '../../../shared/mathJax.js'
 
 /** Shows the Markdown as it is written — «Show Markdown» (`showsRawText`). */
 export const setRaw = StateEffect.define<boolean>()
@@ -39,12 +40,25 @@ class MarkerWidget extends WidgetType {
 }
 
 class MathWidget extends WidgetType {
-  constructor(readonly latex: string, readonly display: boolean, readonly block: boolean, readonly source: string) { super() }
-  override eq(other: MathWidget) { return other.latex === this.latex && other.display === this.display && other.block === this.block }
-  toDOM() {
+  constructor(
+    readonly latex: string, readonly display: boolean, readonly block: boolean, readonly source: string,
+    /** Its place in the note's numbering (`numberFormulas`). */
+    readonly counted: Numbered,
+    /** One displayed formula and nothing else on its line: set across all of it. */
+    readonly alone: boolean,
+  ) { super() }
+  override eq(other: MathWidget) {
+    return other.latex === this.latex && other.display === this.display && other.block === this.block
+      && other.alone === this.alone && other.counted.start === this.counted.start
+      && signature(other.counted.known) === signature(this.counted.known)
+  }
+  toDOM(view: EditorView) {
     const node = document.createElement(this.block ? 'div' : 'span')
     node.className = this.block ? 'nm-math nm-math-block' : this.display ? 'nm-math nm-math-display' : 'nm-math'
-    const markup = typeset(this.latex, this.display)
+    if (this.alone && !this.block) node.classList.add('nm-math-alone')
+    // The room a `multline` spreads over: the line's.
+    const room = view.contentDOM.clientWidth || undefined
+    const markup = typesetNumbered(this.latex, this.display, this.counted.start, this.counted.known, room)?.svg ?? null
     // A formula that does not set is shown as it is written, quietly — never
     // an error box in the middle of somebody's sentence.
     if (markup) node.innerHTML = markup
@@ -124,8 +138,27 @@ function lineClasses(line: PlannedLine): string {
   return classes.join(' ')
 }
 
+const uncounted: Numbered = { start: 0, known: {} }
+
+/**
+ * The note's formulas counted from its top, by where each is in the source:
+ * an `equation` takes the next number wherever the caret is, so every
+ * formula is counted — the one being typed too — before any is drawn
+ * (`NoteMarkdown.numbered`).
+ */
+function numbering(source: string, plan: readonly PlannedLine[]): Map<number, Numbered> {
+  const counted = new Map<number, Numbered>()
+  // Nothing takes a number or refers to one without one of these.
+  if (!source.includes('\\begin') && !source.includes('\\label') && !source.includes('\\ref')) return counted
+  const formulas = plan.flatMap((line) => line.tokens.filter((token) => token.kind === 'math'))
+  if (!formulas.length) return counted
+  const steps = numberFormulas(formulas as { latex: string; display: boolean }[], typesetter().set)
+  formulas.forEach((token, index) => counted.set(token.from, steps[index]))
+  return counted
+}
+
 /** The pieces of a line other than its marker: what is hidden, what is marked, what is replaced. */
-function tokenRanges(token: InlineToken, source: string, line: PlannedLine, out: Range<Decoration>[]) {
+function tokenRanges(token: InlineToken, source: string, line: PlannedLine, out: Range<Decoration>[], counted: Map<number, Numbered>) {
   const { from, to } = token
   switch (token.kind) {
     case 'anchor': {
@@ -158,9 +191,13 @@ function tokenRanges(token: InlineToken, source: string, line: PlannedLine, out:
     case 'math': {
       const text = source.slice(from, to)
       const block = text.includes('\n')
-      out.push(Decoration.replace({ widget: new MathWidget(token.latex, token.display, block, text), block }).range(from, to))
+      const widget = new MathWidget(token.latex, token.display, block, text, counted.get(from) ?? uncounted, line.alone)
+      out.push(Decoration.replace({ widget, block }).range(from, to))
       return
     }
+    case 'dollar':
+      out.push(hidden.range(from, from + 1))
+      return
     case 'emphasis': {
       const width = token.bold ? 2 : 1
       out.push(hidden.range(from, from + width))
@@ -179,6 +216,7 @@ export function noteDecorations(state: EditorState): DecorationSet {
   // on it is then drawn as written and its pieces are left alone.
   const plan = planNote(source, null).map((line) => ({ ...line, revealed: heads.some((head) => head >= line.from && head <= line.to) }))
   const ranges: Range<Decoration>[] = []
+  const counted = numbering(source, plan)
   const tables = new Set(tableBlocks(source).map((one) => `${one.from}:${one.to}`))
   plan.forEach((line) => {
     // A table off the caret is a grid, and nothing else is drawn over it.
@@ -194,7 +232,7 @@ export function noteDecorations(state: EditorState): DecorationSet {
     // Every document line the block covers carries its look: a `$$` block is several.
     const first = state.doc.lineAt(line.from)
     const last = state.doc.lineAt(line.to)
-    const classes = lineClasses(line)
+    const classes = lineClasses(line) + (line.alone && !line.revealed ? ' nm-display-line' : '')
     for (let number = first.number; number <= last.number; number += 1) {
       ranges.push(Decoration.line({ class: classes }).range(state.doc.line(number).from))
     }
@@ -213,7 +251,7 @@ export function noteDecorations(state: EditorState): DecorationSet {
       if (block.type.kind === 'quote' && !block.quoteHeading) ranges.push(Decoration.mark({ class: line.quoteEdge?.anchored ? 'nm-quote-words nm-anchored' : 'nm-quote-words' }).range(line.markerEnd, line.to))
       if (block.type.kind === 'task' && block.type.done) ranges.push(Decoration.mark({ class: 'nm-done' }).range(line.markerEnd, line.to))
     }
-    if (!line.revealed) for (const token of pieces) tokenRanges(token, source, line, ranges)
+    if (!line.revealed) for (const token of pieces) tokenRanges(token, source, line, ranges, counted)
   })
   return Decoration.set(ranges, true)
 }

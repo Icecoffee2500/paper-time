@@ -1,6 +1,6 @@
 {
- "markdown": "# Entropy and forgetting\nPlain words with **bold**, *italic* and `code` in them.\n## A heading two\n### Third level\n- a bullet\n  - nested bullet\n1. first\n12) twelfth\n- [ ] to do\n- [x] done\n> typed aside with *emphasis*\n> second line\n> the model forgets [p. 4](papertime://anchor?p=3&x=145.00&y=95.00&w=366.00&h=12.00)\n>### Section on the page\n\nA link to [[202609280047|Entropy note]] and [[202609280048]] here.\nAn inline $x^2$ formula, and a passage [p. 2](papertime://anchor?p=1&x=10.00&y=20.00&w=30.00&h=12.00).\n$$\n\\int_0^1 f(x)\\,dx\n$$\n[a quoted \\] label](papertime://anchor?p=0&x=1.00&y=2.00&w=3.00&h=4.00)\n> [whole quoted line](papertime://anchor?p=5&x=1.00&y=2.00&w=3.00&h=4.00)\nLast line with $$a+b$$ inline display.",
- "length": 406,
+ "markdown": "# Entropy and forgetting\nPlain words with **bold**, *italic* and `code` in them.\n## A heading two\n### Third level\n- a bullet\n  - nested bullet\n1. first\n12) twelfth\n- [ ] to do\n- [x] done\n> typed aside with *emphasis*\n> second line\n> the model forgets [p. 4](papertime://anchor?p=3&x=145.00&y=95.00&w=366.00&h=12.00)\n>### Section on the page\n\nA link to [[202609280047|Entropy note]] and [[202609280048]] here.\nAn inline $x^2$ formula, and a passage [p. 2](papertime://anchor?p=1&x=10.00&y=20.00&w=30.00&h=12.00).\n$$\n\\int_0^1 f(x)\\,dx\n$$\n[a quoted \\] label](papertime://anchor?p=0&x=1.00&y=2.00&w=3.00&h=4.00)\n> [whole quoted line](papertime://anchor?p=5&x=1.00&y=2.00&w=3.00&h=4.00)\nLast line with $$a+b$$ inline display.\n\\begin{align}\na &= b \\label{eq:a} \\\\\nc &= d\n\\end{align}\nBy \\eqref{eq:a}, the \\(x\\) and \\[y\\] cost \\$5.\n> \\begin{equation} E = mc^2 \\tag{3} \\end{equation}\n- $$z$$\n  \\[ w \\]  ",
+ "length": 448,
  "runs": [
   {
    "location": 0,
@@ -264,12 +264,12 @@
   },
   {
    "location": 336,
-   "marks": "—",
+   "marks": "center",
    "text": "￼"
   },
   {
    "location": 337,
-   "marks": "—",
+   "marks": "center",
    "text": "\n"
   },
   {
@@ -310,7 +310,107 @@
   {
    "location": 390,
    "marks": "—",
-   "text": " inline display."
+   "text": " inline display.\n"
+  },
+  {
+   "location": 407,
+   "marks": "center",
+   "text": "￼"
+  },
+  {
+   "location": 408,
+   "marks": "center",
+   "text": "\n"
+  },
+  {
+   "location": 409,
+   "marks": "—",
+   "text": "By "
+  },
+  {
+   "location": 412,
+   "marks": "—",
+   "text": "￼"
+  },
+  {
+   "location": 413,
+   "marks": "—",
+   "text": ", the "
+  },
+  {
+   "location": 419,
+   "marks": "—",
+   "text": "￼"
+  },
+  {
+   "location": 420,
+   "marks": "—",
+   "text": " and "
+  },
+  {
+   "location": 425,
+   "marks": "—",
+   "text": "￼"
+  },
+  {
+   "location": 426,
+   "marks": "—",
+   "text": " cost "
+  },
+  {
+   "location": 432,
+   "marks": "—",
+   "text": "$"
+  },
+  {
+   "location": 433,
+   "marks": "—",
+   "text": "5.\n"
+  },
+  {
+   "location": 436,
+   "marks": "QUOTE+indent 20+center",
+   "text": "​"
+  },
+  {
+   "location": 437,
+   "marks": "indent 20+center",
+   "text": "￼"
+  },
+  {
+   "location": 438,
+   "marks": "indent 20+center",
+   "text": "\n"
+  },
+  {
+   "location": 439,
+   "marks": "indent 24",
+   "text": "•\t"
+  },
+  {
+   "location": 441,
+   "marks": "indent 24",
+   "text": "￼"
+  },
+  {
+   "location": 442,
+   "marks": "indent 24",
+   "text": "\n"
+  },
+  {
+   "location": 443,
+   "marks": "center",
+   "text": "  "
+  },
+  {
+   "location": 445,
+   "marks": "center",
+   "text": "￼"
+  },
+  {
+   "location": 446,
+   "marks": "center",
+   "text": "  "
   }
  ]
 }

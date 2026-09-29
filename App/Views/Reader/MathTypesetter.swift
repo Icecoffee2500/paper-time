@@ -19,16 +19,34 @@ enum MathTypesetter {
     /// not fit is broken across lines at its relations, the way a paper breaks
     /// one; if it still does not fit — a single long fraction, say — it is set
     /// smaller. Nothing is ever cut off.
+    ///
+    /// MathJax sets it when it is there (`MathJaxEngine`) — the engine the
+    /// Portable build sets with, and the one that knows amsmath: `align`,
+    /// `cases`, the matrices, numbers and `\eqref`. `start` and `known` are a
+    /// numbered formula's place in its note (`MathJaxEngine.number`), and
+    /// `fillsWidth` gives a formula with numbers the whole of `maxWidth`, the
+    /// numbers at its right-hand edge as a paper sets them. A formula MathJax
+    /// cannot set is nil, and the note shows it as it was typed. The Mac's own
+    /// typesetter below sets whatever it can when MathJax is not there.
     static func image(
         latex: String,
         display: Bool,
         pointSize: CGFloat,
         color: NSColor,
         maxWidth: CGFloat? = nil,
-        scale: CGFloat = NSScreen.main?.backingScaleFactor ?? 2
+        scale: CGFloat = NSScreen.main?.backingScaleFactor ?? 2,
+        start: Int = 0,
+        known: [String: String] = [:],
+        fillsWidth: Bool = false
     ) -> (image: NSImage, descent: CGFloat)? {
         let source = latex.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !source.isEmpty else { return nil }
+
+        if MathJaxEngine.shared.isAvailable {
+            return mathJaxImage(source, display: display, pointSize: pointSize, color: color,
+                                maxWidth: maxWidth, scale: scale, start: start, known: known,
+                                fillsWidth: fillsWidth)
+        }
 
         var parser = Parser(source: source)
         let node = parser.parseSequence(until: nil)
@@ -77,6 +95,45 @@ enum MathTypesetter {
         if squeeze < 1 { context.scaleBy(x: squeeze, y: squeeze) }
         box.draw(at: CGPoint(x: 1 / squeeze, y: box.descent + 1 / squeeze), in: context)
         context.restoreGState()
+        guard let made = context.makeImage() else { return nil }
+        return (NSImage(cgImage: made, size: size), descent)
+    }
+
+    /// A formula as MathJax set it, drawn at the resolution it will be shown
+    /// at. One wider than its room is drawn smaller to fit — MathJax does not
+    /// break a line — and nothing is cut off.
+    private static func mathJaxImage(
+        _ source: String, display: Bool, pointSize: CGFloat, color: NSColor, maxWidth: CGFloat?,
+        scale: CGFloat, start: Int, known: [String: String], fillsWidth: Bool
+    ) -> (image: NSImage, descent: CGFloat)? {
+        // The picture has a point of room on every side, as the one below has.
+        let room = maxWidth.map { max(1, $0 - 2) }
+        // MathJax's pixels: an `ex` is eight of them, and 0.442 of an em.
+        let pixels = room.map { $0 * MathSVG.emPixels / pointSize }
+        guard let formula = MathJaxEngine.shared.set(source, display: display, start: start,
+                                                     known: known, width: pixels),
+              let svg = MathSVG(markup: formula.svg, pointSize: pointSize,
+                                width: fillsWidth ? room : nil)
+        else { return nil }
+        let squeeze = room.map { min(1, $0 / max(svg.size.width, 1)) } ?? 1
+        let size = NSSize(
+            width: ceil(svg.size.width * squeeze) + 2,
+            height: ceil(svg.size.height * squeeze) + 2
+        )
+        let descent = svg.descent * squeeze + 1
+        let bitmap = CGSize(width: max(1, ceil(size.width * scale)), height: max(1, ceil(size.height * scale)))
+        guard let context = CGContext(
+            data: nil,
+            width: Int(bitmap.width),
+            height: Int(bitmap.height),
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        context.scaleBy(x: scale, y: scale)
+        if squeeze < 1 { context.scaleBy(x: squeeze, y: squeeze) }
+        svg.draw(in: context, at: CGPoint(x: 1 / squeeze, y: 1 / squeeze), color: color.cgColor)
         guard let made = context.makeImage() else { return nil }
         return (NSImage(cgImage: made, size: size), descent)
     }

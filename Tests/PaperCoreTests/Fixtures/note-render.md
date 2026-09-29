@@ -21,3 +21,11 @@ $$
 [a quoted \] label](papertime://anchor?p=0&x=1.00&y=2.00&w=3.00&h=4.00)
 > [whole quoted line](papertime://anchor?p=5&x=1.00&y=2.00&w=3.00&h=4.00)
 Last line with $$a+b$$ inline display.
+\begin{align}
+a &= b \label{eq:a} \\
+c &= d
+\end{align}
+By \eqref{eq:a}, the \(x\) and \[y\] cost \$5.
+> \begin{equation} E = mc^2 \tag{3} \end{equation}
+- $$z$$
+  \[ w \]  

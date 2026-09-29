@@ -25,7 +25,7 @@ for line in open(log, encoding='utf-8'):
     if m:
         length = int(m.group(1))
         continue
-    m = re.match(r'^\s*(\d+) (\S*indent \d+|\S+)', line)
+    m = re.match(r'^\s*(\d+) (\S*indent \d+(?:\+\S+)?|\S+)', line)
     if not m:
         continue
     marks = m.group(2)
