@@ -1573,6 +1573,22 @@ function grid(start: number, glyphs: Glyph[], rules: Rule[], body: number, consu
     }
     fractions = fractions.filter((_, index) => !misplaced.has(index))
   }
+  // What follows the cases on the line the brace stands on — the "∀i ∈
+  // [0, |θ|]" after \end{cases} — is the formula's and no case: it stands
+  // right of all of them, where no case reaches.
+  if (close === null && levels.length >= 3) {
+    const lettered = new Set(full)
+    for (const level of [...levels]) {
+      if (!(Math.abs(level + largest * 0.25 - midY(reach)) < largest * 0.3)) continue
+      const beside = content.filter((at) => lettered.has(at) && Math.abs(glyphs[at].y - level) < largest * 0.45)
+      const cases = full.filter((at) => Math.abs(glyphs[at].y - level) >= largest * 0.45)
+      const first = minOf(beside.map((at) => minX(rectOf(glyphs[at]))))
+      const last = maxOf(cases.map((at) => maxX(rectOf(glyphs[at]))))
+      if (first === undefined || last === undefined || !(first > last + largest * 0.5)) continue
+      content = content.filter((at) => !(minX(rectOf(glyphs[at])) >= first - 0.5))
+      levels = levels.filter((one) => one !== level)
+    }
+  }
   content = content.filter((other) => !(isPunctuation(other)
     && !levels.some((level) => Math.abs(level - glyphs[other].y) < largest * 0.45)))
   if (levels.length < 2) return null

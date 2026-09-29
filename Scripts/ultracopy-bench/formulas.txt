@@ -165,3 +165,6 @@ y = Wx + b
 @display C_k = \begin{cases} \rho^{n^k_{[s+1,t]}} & x = 1, \\ \rho^{n^{i+1}_{[s,t]}} & x = 2, \end{cases}, => C_k = \begin{cases} \rho^{n^k_{[s+1,t]}} & x = 1, \\ \rho^{n^{i+1}_{[s,t]}} & x = 2, \end{cases}
 # \vdots and \ddots are three full stops each.
 @display E = \begin{pmatrix} 0 & \cdots & 0 \\ \vdots & \ddots & \vdots \\ 1 & \cdots & 1 \end{pmatrix}
+# What follows the cases on the brace's own line is no case (Selective
+# Synaptic Dampening, equations 2 to 4).
+@display \theta_i = \begin{cases} 0, & \text{if } x > 0 \\ \theta_i, & \text{if } x = 0 \end{cases} \quad \forall i \in [0, n]

@@ -900,6 +900,12 @@ function sizeOf(glyphs: Glyph[]): number {
  */
 function isDisplayRow(row: Glyph[]): boolean {
   if (row.length === 0) return false
+  // Cases folded into the row their brace stands on: the "if" of each case is
+  // a word of a sentence and still the formula's, which a brace nothing
+  // closes, two lines tall, says — and the words of two cases folded
+  // together, "iiff", say nothing. A tall pair round a fraction in a sentence
+  // is still the sentence's.
+  if (tallFences(row, context(row).bodySize).some((fence) => !fence.closed)) return true
   if (containsProse(row)) return false
   const standing = row.filter((one) => one.size >= context(row).bodySize * 0.92 && !extension(one) && !isDelimiter(one)).map((one) => one.y)
   const top = maxOf(standing)

@@ -1114,6 +1114,13 @@ enum MathReader {
     /// whether it carries something a sentence never does.
     private static func isDisplayRow(_ row: [PDFContentScanner.Glyph]) -> Bool {
         guard !row.isEmpty else { return false }
+        // Cases folded into the row their brace stands on: the "if" of each
+        // case is a word of a sentence and still the formula's, which a brace
+        // two lines tall holding them says — and the words of two cases
+        // folded together, "iiff", say nothing.
+        // Only a brace nothing closes: a tall pair round a fraction in a
+        // sentence is still the sentence's.
+        if tallFences(in: row, body: context(of: row).bodySize).contains(where: { !$0.closed }) { return true }
         // Words settle it first. A sentence can hold a sum without being a
         // formula — a paper is full of lines like "is the sum over the
         // marginal likelihoods" — and a line that says "is:" before the

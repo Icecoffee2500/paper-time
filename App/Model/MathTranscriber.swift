@@ -1718,6 +1718,21 @@ enum MathTranscriber {
             }
             for index in misplaced.reversed() { fractions.remove(at: index) }
         }
+        // What follows the cases on the line the brace stands on — the
+        // "∀i ∈ [0, |θ|]" after \end{cases} — is the formula's and no case:
+        // it stands right of all of them, where no case reaches.
+        if close == nil, levels.count >= 3 {
+            let lettered = Set(full)
+            for level in levels where abs(level + largest * 0.25 - reach.midY) < largest * 0.3 {
+                let beside = content.filter { lettered.contains($0) && abs(glyphs[$0].origin.y - level) < largest * 0.45 }
+                let cases = full.filter { abs(glyphs[$0].origin.y - level) >= largest * 0.45 }
+                guard let first = beside.map({ glyphs[$0].rect.minX }).min(),
+                      let last = cases.map({ glyphs[$0].rect.maxX }).max(),
+                      first > last + largest * 0.5 else { continue }
+                content.removeAll { glyphs[$0].rect.minX >= first - 0.5 }
+                levels.removeAll { $0 == level }
+            }
+        }
         content.removeAll { other in
             isPunctuation(other) && !levels.contains { abs($0 - glyphs[other].origin.y) < largest * 0.45 }
         }
