@@ -782,7 +782,17 @@ enum MathTranscriber {
         // numerator of a fraction in a sentence.
         let smallest = body <= line * 0.62
         var side: Bool?
-        while end < glyphs.count, !consumed.contains(end) {
+        // The glyph before this one in the script, a stepped-over mark aside.
+        var previous = start - 1
+        while end < glyphs.count {
+            // A combining mark already read into the accent it makes can
+            // stand among the scripts — OpenType fonts set the hat of ŝ
+            // after the subscript of ŝ_{y_j} — and it is stepped over; the
+            // script goes on past it. Anything else read already ends it.
+            if consumed.contains(end) {
+                if end > start, glyphs[end].width < 0.01 { end += 1; continue }
+                break
+            }
             let glyph = glyphs[end]
             let offset = glyph.origin.y - baseline
             // Base level is always full size, so anything still small is still
@@ -818,11 +828,12 @@ enum MathTranscriber {
                 return (run, [], Array(glyphs[start..<run]))
             }
             if end > start,
-               glyph.rect.minX - glyphs[end - 1].rect.maxX > body * 0.25 { break }
+               glyph.rect.minX - glyphs[previous].rect.maxX > body * 0.25 { break }
             let deeper = glyph.size < primary * 0.92
             let raisedHere = deeper ? (side ?? (offset > 0)) : offset > 0
             if !deeper { side = raisedHere }
             if raisedHere { raised.append(glyph) } else { lowered.append(glyph) }
+            previous = end
             end += 1
         }
         return end > start ? (end, raised, lowered) : nil
@@ -916,7 +927,10 @@ enum MathTranscriber {
             || upper.hasSuffix("-BD") || upper.contains("-MEDI") || upper.hasSuffix("-B")
             || upper.hasSuffix("BOLD") || upper.hasSuffix("-BOL") || upper.hasPrefix("CMB10")
             || upper.hasPrefix("RTXB") || upper.hasPrefix("RPXB") {
-            return "\\mathbf"
+            // A bold italic text face is what \boldsymbol draws a letter with
+            // in the Times, Palatino and Utopia papers: \mathbf is upright.
+            let italic = upper.contains("ITAL") || upper.contains("OBLIQUE") || upper.hasSuffix("-BI")
+            return italic ? "\\boldsymbol" : "\\mathbf"
         }
         return nil
     }
@@ -1101,16 +1115,18 @@ enum MathTranscriber {
             // Whatever full-size thing comes next is where the limits stop, in
             // both arrangements.
             var stop = CGFloat.greatestFiniteMagnitude
+            // Another sign with limits of its own right after this one: the
+            // limits stacked under the two run into each other — "i=1" and
+            // "j∈Bᵢ" under ∑∑ are one row of small glyphs — and are parted
+            // halfway between the signs. Limits set beside a sign, in a
+            // sentence, run on towards the next one and are not cut; nor are
+            // an integral's, which sit off its tail.
+            var cut: CGFloat?
             for next in (position + 1)..<glyphs.count
             where !consumed.contains(next) && glyphs[next].size >= body * 0.95 {
                 stop = glyphs[next].rect.minX
-                // Another sign with limits of its own right after this one:
-                // the limits under the two run into each other — "i=1" and
-                // "j∈Bᵢ" under ∑∑ are one row of small glyphs — and are
-                // parted halfway between the signs. An integral's limits sit
-                // off its tail, and the next sign after it does not share them.
                 if isBigOperator(glyphs[next]), !token(for: glyphs[next]).contains("int") {
-                    stop = (sign.rect.maxX + glyphs[next].rect.minX) / 2
+                    cut = (sign.rect.maxX + glyphs[next].rect.minX) / 2
                 }
                 break
             }
@@ -1128,6 +1144,7 @@ enum MathTranscriber {
                     // An integral's lower limit tucks in under its tail.
                     let beside = span.minX >= sign.rect.midX
                         && span.minX - sign.rect.maxX < body * 0.5
+                    if stacked, let cut { return run.filter { glyphs[$0].rect.midX < cut } }
                     if stacked || beside { return run }
                 }
                 return []

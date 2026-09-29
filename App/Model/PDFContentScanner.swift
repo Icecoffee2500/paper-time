@@ -114,6 +114,9 @@ final class PDFContentScanner {
         /// a "\Big(" really is drawn about one and four fifths of an em tall.
         private static func reach(of name: String?) -> CGFloat {
             guard let name else { return 1 }
+            // newtx names its display-size signs by their code point with
+            // ".dsp" after it — "uni222B.dsp" is the displayed ∫.
+            if name.hasSuffix(".dsp") { return 1.5 }
             // "summationdisplay.1" is the display sum from a second font, and
             // newtx names its pieces "parenlefttpA".
             var glyphName = name.firstIndex(of: ".").map { String(name[..<$0]) } ?? name

@@ -805,20 +805,28 @@ enum MathReader {
                     && abs(rule.rect.midY - baselines[row]) < body * 1.2
             }
         }
-        for row in rows.indices where !prose[row] {
-            // The rows right over and right under it in its own column.
-            let under = rows.indices.filter { baselines[$0] < baselines[row] && overlap($0, row) }
+        // The rows right over and right under each one in its own column.
+        let unders = rows.indices.map { row in
+            rows.indices.filter { baselines[$0] < baselines[row] && overlap($0, row) }
                 .max { baselines[$0] < baselines[$1] }
-            let over = rows.indices.filter { baselines[$0] > baselines[row] && overlap($0, row) }
+        }
+        let overs = rows.indices.map { row in
+            rows.indices.filter { baselines[$0] > baselines[row] && overlap($0, row) }
                 .min { baselines[$0] < baselines[$1] }
-            if let below = under, !prose[below],
+        }
+        // How far a row is from the row on its far side — a row of limits
+        // belongs to the nearer of the two lines it stands between.
+        func gap(below row: Int) -> CGFloat? { unders[row].map { baselines[row] - baselines[$0] } }
+        func gap(above row: Int) -> CGFloat? { overs[row].map { baselines[$0] - baselines[row] } }
+        for row in rows.indices where !prose[row] {
+            if let below = unders[row], !prose[below],
                linked(rows[row], rows[below], baselines: (baselines[row], baselines[below]),
-                      body: body, rules: rules) {
+                      body: body, rules: rules, farther: (gap(above: row), gap(below: below))) {
                 join(row, below)
             }
-            if let above = over, !prose[above],
+            if let above = overs[row], !prose[above],
                linked(rows[above], rows[row], baselines: (baselines[above], baselines[row]),
-                      body: body, rules: rules) {
+                      body: body, rules: rules, farther: (gap(above: above), gap(below: row))) {
                 join(above, row)
             }
             // The lines of a matrix or of cases, held by one pair of tall
@@ -933,20 +941,25 @@ enum MathReader {
     }
 
     /// Whether two rows, one right over the other, are parts of one formula.
+    /// `farther` is how far each of the two rows is from the row on its
+    /// other side — over the upper one, under the lower one — when there is one.
     private static func linked(
         _ above: [PDFContentScanner.Glyph], _ below: [PDFContentScanner.Glyph],
         baselines: (above: CGFloat, below: CGFloat), body: CGFloat,
-        rules: [PDFContentScanner.Rule]
+        rules: [PDFContentScanner.Rule], farther: (above: CGFloat?, below: CGFloat?) = (nil, nil)
     ) -> Bool {
         let distance = baselines.above - baselines.below
         // Closer than a line: nothing but a formula stacks rows that tight.
         if distance < body { return true }
         let top = extent(of: above), bottom = extent(of: below)
         // A fraction bar with one row on each side of it — as wide as what it
-        // divides, which a table's rule between two rows of cells is not.
+        // divides, which a table's rule between two rows of cells is not, and
+        // next to both: a numerator stands on its bar and a denominator hangs
+        // from it. A bar two lines under a row is the next line's fraction.
         let reach = top.union(bottom)
         if distance < body * 4.5, rules.contains(where: { rule in
             rule.rect.midY > baselines.below && rule.rect.midY < baselines.above
+                && baselines.above - rule.rect.midY < body * 2 && rule.rect.midY - baselines.below < body * 2
                 && rule.rect.width > 1 && rule.rect.height < rule.rect.width
                 && rule.rect.minX > reach.minX - 4 && rule.rect.maxX < reach.maxX + 4
                 && above.contains { $0.rect.midX > rule.rect.minX - 1 && $0.rect.midX < rule.rect.maxX + 1 }
@@ -962,7 +975,11 @@ enum MathReader {
                 guard glyph.isExtension || MathTranscriber.isBigOperator(glyph) else { return false }
                 let ink = glyph.rect
                 let across = ink.maxX > span.minX - body * 0.6 && ink.minX < span.maxX + body * 0.6
+                // Standing over what is in it means reaching it: a sign on
+                // one displayed line is over the whole of the next one, and
+                // is not a part of it for that.
                 let overlaps = ink.maxX > span.minX && ink.minX < span.maxX
+                    && ink.minY < span.maxY + body * 0.3 && ink.maxY > span.minY - body * 0.3
                 return (across && ink.minY < baseline && ink.maxY > baseline) || overlaps
             }
         }
@@ -1004,6 +1021,13 @@ enum MathReader {
             guard distance < body * 1.5 else { return false }
             return other.contains { $0.rect.maxX > span.minX && $0.rect.minX < span.maxX }
         }
+        // A row of limits between two lines is the nearer line's: the J over
+        // a sum on the second line of an align is closer to that sum than to
+        // the line above, however it lines up with it.
+        if let beyond = farther.above, beyond < distance, isLimits(above, over: below),
+           !isLimits(below, over: above) { return false }
+        if let beyond = farther.below, beyond < distance, isLimits(below, over: above),
+           !isLimits(above, over: below) { return false }
         return isLimits(above, over: below) || isLimits(below, over: above)
     }
 
