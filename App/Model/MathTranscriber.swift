@@ -1339,6 +1339,55 @@ enum MathTranscriber {
     /// not a superscript and a subscript, which are less than a line apart
     /// and small — and a line breaks into cells where TeX put a column's
     /// space, an em or more, which nothing inside a cell is spaced by.
+    /// Whether a glyph is one piece of a bracket built up tall: ⎛ ⎜ ⎝ and
+    /// their kind in OpenType, "parenlefttp" and "parenleftex" in TeX's
+    /// extension fonts, "parenlefttpA" in newtx's. A whole bracket — a "("
+    /// of any size — is none.
+    static func isPiece(_ glyph: Glyph) -> Bool {
+        if isSilentPiece(glyph) { return true }
+        if let unicode = glyph.unicode, unicode.unicodeScalars.count == 1,
+           let scalar = unicode.unicodeScalars.first, (0x239B...0x23B3).contains(scalar.value) { return true }
+        guard var name = glyph.glyphName else { return false }
+        if let dot = name.firstIndex(of: ".") { name = String(name[..<dot]) }
+        if TeXGlyphNames.isDecoration(name) { return true }
+        if ["tpA", "btA", "exA", "midA"].contains(where: { name.hasSuffix($0) }) { name.removeLast() }
+        let bracket = ["paren", "bracket", "brace", "floor", "ceiling", "angle", "bar", "vextend"]
+            .contains { name.hasPrefix($0) }
+        return bracket && ["tp", "bt", "ex", "mid"].contains { name.hasSuffix($0) }
+    }
+
+    /// The pieces of one bracket, grown out from one of them through the
+    /// ones above and below it: the bracket's box, and which glyphs it took.
+    /// `candidates` stand where it does and spell what it spells, or nothing.
+    ///
+    /// Two ways a glyph is the same bracket. A bracket's own segments are set
+    /// closer than a line — a tall bar is one glyph repeated, 0.3 to 0.6 of
+    /// a size apart — and two brackets on two lines are a line apart at
+    /// least. And a named piece (`isPiece`) belongs to its neighbours two
+    /// lines away, as far as TeX sets a bracket's top from its bottom.
+    /// Joining everything at the same place took the "(" of one line and the
+    /// "(" of a line further down the page for one bracket as tall as the
+    /// lines between them, and those lines for its matrix. A piece's box is
+    /// not its ink — newtx's and OpenType's pieces are drawn from their point
+    /// up by more than a size — so nearness is between their points.
+    static func stack(from start: Int, in glyphs: [Glyph], candidates: [Int]) -> (box: CGRect, members: [Int]) {
+        var box = glyphs[start].rect
+        var members = [start]
+        let size = glyphs[start].size
+        var grew = true
+        while grew {
+            grew = false
+            for other in candidates where !members.contains(other) {
+                let distance = members.map { abs(glyphs[$0].origin.y - glyphs[other].origin.y) }.min() ?? .infinity
+                guard distance < size * 0.8 || (isPiece(glyphs[other]) && distance < size * 2.2) else { continue }
+                box = box.union(glyphs[other].rect)
+                members.append(other)
+                grew = true
+            }
+        }
+        return (box, members)
+    }
+
     private struct Grid {
         var environment: String
         var cells: [[[Int]]]
@@ -1377,7 +1426,10 @@ enum MathTranscriber {
                         || token(for: glyphs[other]) == opener || token(for: glyphs[other]) == kind.close)
             }
         }
-        let frame = pieces(at: open.origin.x) + (close.map { pieces(at: glyphs[$0].origin.x) } ?? [])
+        // Only this bracket's own pieces: another bracket at the same place
+        // on another line is not this one (`stack`).
+        let frame = stack(from: start, in: glyphs, candidates: pieces(at: open.origin.x)).members
+            + (close.map { stack(from: $0, in: glyphs, candidates: pieces(at: glyphs[$0].origin.x)).members } ?? [])
         var reach = frame.map { glyphs[$0].rect }.reduce(open.rect) { $0.union($1) }
         // One OpenType glyph, of a size the file does not give: as tall as
         // two lines either side of it, when it is one of its larger sizes.

@@ -860,23 +860,28 @@ enum MathReader {
     static func tallFences(in glyphs: [PDFContentScanner.Glyph], body: CGFloat) -> [CGRect] {
         struct Side { var token: String; var box: CGRect }
         var sides: [Side] = []
-        var seen: [CGFloat] = []
-        for glyph in glyphs {
+        // A bracket's pieces are one bracket, met once.
+        var taken = Set<Int>()
+        for (index, glyph) in glyphs.enumerated() where !taken.contains(index) {
             let spelled = MathTranscriber.spelling(of: glyph)
             guard let token = MathTranscriber.opening(glyph) ?? MathTranscriber.closing(glyph)
                 ?? TeXGlyphNames.fence(glyph.glyphName)
                 ?? (["|", "\\|", "\\mid"].contains(spelled) ? spelled : nil) else { continue }
             let x = glyph.origin.x
-            guard !seen.contains(where: { abs($0 - x) < glyph.size * 0.2 }) else { continue }
-            seen.append(x)
-            let pieces = glyphs.filter {
-                abs($0.origin.x - x) < glyph.size * 0.2
-                    && (MathTranscriber.opening($0) == token || MathTranscriber.closing($0) == token
-                        || TeXGlyphNames.fence($0.glyphName) == token
-                        || MathTranscriber.spelling(of: $0) == token || MathTranscriber.spelling(of: $0).isEmpty)
+            let column = glyphs.indices.filter {
+                abs(glyphs[$0].origin.x - x) < glyph.size * 0.2
+                    && (MathTranscriber.opening(glyphs[$0]) == token || MathTranscriber.closing(glyphs[$0]) == token
+                        || TeXGlyphNames.fence(glyphs[$0].glyphName) == token
+                        || MathTranscriber.spelling(of: glyphs[$0]) == token
+                        || MathTranscriber.spelling(of: glyphs[$0]).isEmpty)
             }
-            var box = pieces.reduce(glyph.rect) { $0.union($1.rect) }
-            if pieces.count == 1, MathTranscriber.isTallVariant(glyph, among: glyphs, body: body) {
+            // This bracket's own pieces, not every bracket at the same place
+            // down the page: taken as one, two of them made a bracket as tall
+            // as the lines between them, and those lines its matrix.
+            let stacked = MathTranscriber.stack(from: index, in: glyphs, candidates: column)
+            taken.formUnion(stacked.members)
+            var box = stacked.box
+            if stacked.members.count == 1, MathTranscriber.isTallVariant(glyph, among: glyphs, body: body) {
                 box = CGRect(x: glyph.rect.minX, y: glyph.origin.y - body * 2.2,
                              width: glyph.rect.width, height: body * 4.4)
             }
