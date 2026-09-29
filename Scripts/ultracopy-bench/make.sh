@@ -80,7 +80,7 @@ while IFS='|' read -r name engine size preamble; do
     cp "$WORK/$name.pdf" "$OUT/$name.pdf"
     errors=$(grep -c '^!' "$WORK/$name.log" 2>/dev/null || true)
     echo "$name: $(grep -c . <<< "$FORMULAS") formulas, $errors TeX errors"
-    [ "$errors" != "0" ] && grep -A2 '^!' "$WORK/$name.log" | head -12 | sed 's/^/    /'
+    if [ "$errors" != "0" ]; then grep -A2 '^!' "$WORK/$name.log" | head -12 | sed 's/^/    /'; fi
   else
     echo "$name: no PDF — see below"
     tail -20 "$WORK/$name.log" 2>/dev/null | sed 's/^/    /'

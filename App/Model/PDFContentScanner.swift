@@ -50,6 +50,29 @@ final class PDFContentScanner {
         /// Euler's extension font also keeps its arrows and its ∞, which are
         /// set on the line like any other glyph.
         var isExtension: Bool {
+            Self.remembered(fontName, glyphName) { Self.extensionFont(fontName: $0, glyphName: $1) }
+        }
+
+        /// The answer for a font and a glyph name, kept: `rect` asks it of
+        /// every glyph every time a formula is looked at, and working it out
+        /// is a split, an upper-casing and a dozen prefixes.
+        private struct Name: Hashable { var font: String; var glyph: String? }
+        nonisolated(unsafe) private static var known: [Name: Bool] = [:]
+        private static let lock = NSLock()
+
+        private static func remembered(_ font: String, _ glyph: String?, _ work: (String, String?) -> Bool) -> Bool {
+            let key = Name(font: font, glyph: glyph)
+            lock.lock()
+            if let value = known[key] { lock.unlock(); return value }
+            lock.unlock()
+            let value = work(font, glyph)
+            lock.lock()
+            known[key] = value
+            lock.unlock()
+            return value
+        }
+
+        private static func extensionFont(fontName: String, glyphName: String?) -> Bool {
             let family = (fontName.split(separator: "+").last.map(String.init) ?? fontName).uppercased()
             if Self.extensionFamilies.contains(where: { family.hasPrefix($0) }) {
                 guard let name = glyphName else { return true }
@@ -91,6 +114,9 @@ final class PDFContentScanner {
         /// a "\Big(" really is drawn about one and four fifths of an em tall.
         private static func reach(of name: String?) -> CGFloat {
             guard let name else { return 1 }
+            // newtx names its display-size signs by their code point with
+            // ".dsp" after it — "uni222B.dsp" is the displayed ∫.
+            if name.hasSuffix(".dsp") { return 1.5 }
             // "summationdisplay.1" is the display sum from a second font, and
             // newtx names its pieces "parenlefttpA".
             var glyphName = name.firstIndex(of: ".").map { String(name[..<$0]) } ?? name
@@ -102,8 +128,18 @@ final class PDFContentScanner {
             if glyphName.hasPrefix("paren") || glyphName.hasPrefix("bracket") {
                 if glyphName.hasSuffix("tp") || glyphName.hasSuffix("bt") { return 1.8 }
             }
-            if glyphName.hasPrefix("brace"), glyphName.hasSuffix("tp") || glyphName.hasSuffix("bt")
-                || glyphName.hasSuffix("mid") { return 0.9 }
+            if glyphName.hasPrefix("brace"), glyphName.hasSuffix("tp") || glyphName.hasSuffix("bt") { return 0.9 }
+            // The middle of a brace is its point and the stretch either side
+            // of it; the pieces that fill between are short — a brace's a
+            // third of an em, a bracket's and a bar's three fifths. Boxed a
+            // whole em, the filler after a brace's middle stood 9 points
+            // clear of it, and one brace was taken for two.
+            if glyphName.hasPrefix("brace"), glyphName.hasSuffix("mid") { return 1.8 }
+            if glyphName == "braceex" { return 0.3 }
+            if glyphName.hasSuffix("ex"),
+               ["paren", "bracket", "arrowvert", "Arrowvert", "vextend"].contains(where: { glyphName.hasPrefix($0) }) {
+                return 0.6
+            }
             if glyphName.hasSuffix("Bigg") { return 3.0 }
             if glyphName.hasSuffix("bigg") { return 2.4 }
             if glyphName.hasSuffix("Big") { return 1.8 }
