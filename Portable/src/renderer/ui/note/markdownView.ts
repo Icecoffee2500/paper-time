@@ -56,19 +56,53 @@ class MathWidget extends WidgetType {
     const node = document.createElement(this.block ? 'div' : 'span')
     node.className = this.block ? 'nm-math nm-math-block' : this.display ? 'nm-math nm-math-display' : 'nm-math'
     if (this.alone && !this.block) node.classList.add('nm-math-alone')
-    // The room a `multline` spreads over: the line's.
-    const room = view.contentDOM.clientWidth || undefined
+    // The room a `multline` spreads over, and a numbered formula's numbers
+    // stand at the end of: the line's, in MathJax's pixels (an `ex` is eight).
+    const room = view.contentDOM.clientWidth ? view.contentDOM.clientWidth * 8 / exPixels(view.contentDOM) : undefined
     const markup = typesetNumbered(this.latex, this.display, this.counted.start, this.counted.known, room)?.svg ?? null
     // A formula that does not set is shown as it is written, quietly — never
     // an error box in the middle of somebody's sentence.
-    if (markup) node.innerHTML = markup
-    else {
+    if (markup) {
+      node.innerHTML = markup
+      const svg = node.querySelector('svg')
+      if (svg && svg.getAttribute('width') === '100%' && !svg.hasAttribute('viewBox')) fitNumbered(svg, room)
+    } else {
       node.classList.add('nm-math-raw')
       node.textContent = this.source
     }
     return node
   }
   override ignoreEvent() { return false }
+}
+
+/** How many pixels an `ex` of the note's text is, which MathJax's sizes are in. */
+let measuredEx = 0
+function exPixels(inside: HTMLElement): number {
+  if (measuredEx > 0) return measuredEx
+  const probe = document.createElement('div')
+  probe.style.cssText = 'position:absolute;visibility:hidden;height:10ex;width:0'
+  inside.append(probe)
+  measuredEx = probe.getBoundingClientRect().height / 10 || 8
+  probe.remove()
+  return measuredEx
+}
+
+/**
+ * A formula with numbers comes from MathJax laid out for a page as wide as
+ * it likes and never narrower than itself (a `min-width`) — and a `min-width`
+ * wins over the note's `max-width`, so a numbered line wider than the note
+ * pushed the note off the right-hand edge, numbers and all. It is given the
+ * note's width instead, as the Mac gives it (`MathSVG`): the numbers at the
+ * right-hand edge, and a formula wider than the note set smaller to fit.
+ */
+function fitNumbered(svg: SVGSVGElement, room: number | undefined) {
+  const style = svg.getAttribute('style') ?? ''
+  const least = parseFloat(/min-width:\s*(-?[\d.]+)ex/.exec(style)?.[1] ?? '0') * 8
+  const high = parseFloat(svg.getAttribute('height') ?? '0') * 8
+  const wide = Math.max(least, room ?? 0)
+  if (!(wide > 0) || !(high > 0)) return
+  svg.setAttribute('viewBox', `0 0 ${wide} ${high}`)
+  svg.setAttribute('style', style.replace(/min-width:\s*[^;]*;?/, ''))
 }
 
 /** A table, drawn while the caret is elsewhere (the Mac's `NoteTableDrawing`).

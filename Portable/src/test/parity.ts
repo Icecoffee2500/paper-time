@@ -105,6 +105,14 @@ export async function paritySuite(test: Test, suite: (name: string) => void) {
     assert.equal(source, '> we minimise\n> $$L = \\sum_i x_i$$\n> [p. 4](papertime://anchor?p=3&x=145.00&y=95.00&w=366.50&h=12.00)\n')
   })
 
+  await test('a numbered equation or align from Ultracopy takes a line of its own too', () => {
+    const numbered = 'so \\begin{equation} E = mc^2\\tag{3} \\end{equation} and \\begin{align} a &= b \\tag{1} \\\\ c &= d \\tag{2} \\end{align}'
+    const source = quotationSource({ ...anchor, quotedText: numbered }, (page) => `p. ${page}`)
+    assert.equal(source, '> so\n> \\begin{equation} E = mc^2\\tag{3} \\end{equation}\n> and\n'
+      + '> \\begin{align} a &= b \\tag{1} \\\\ c &= d \\tag{2} \\end{align}\n'
+      + '> [p. 4](papertime://anchor?p=3&x=145.00&y=95.00&w=366.50&h=12.00)\n')
+  })
+
   await test('no words: the first seven, or the page', () => {
     assert.equal(anchorLabel({ ...anchor, quotedText: 'one two three four five six seven eight' }), 'one two three four five six seven…')
     assert.equal(anchorLabel({ ...anchor, quotedText: '' }), 'p. 4')
