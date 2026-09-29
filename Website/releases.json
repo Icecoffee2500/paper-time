@@ -2,11 +2,130 @@
   "repo": "Icecoffee2500/paper-time",
   "releases": [
     {
+      "version": "0.9.15",
+      "date": "2026-09-29T17:00:53Z",
+      "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.15/Paper.Time.0.9.15.dmg",
+      "size": 53728640,
+      "downloads": 0,
+      "builds": {
+        "mac": [
+          {
+            "label": "디스크 이미지",
+            "label_en": "Disk image",
+            "arch": "Apple Silicon",
+            "arch_en": "Apple Silicon",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.15/Paper.Time.0.9.15.dmg",
+            "size": 53728640,
+            "downloads": 0
+          }
+        ],
+        "windows": [
+          {
+            "label": "설치본",
+            "label_en": "Installer",
+            "arch": "64비트 · ARM",
+            "arch_en": "64-bit and ARM",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.15/Paper.Time.Setup.0.9.15.exe",
+            "size": 265687992,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "64비트",
+            "arch_en": "64-bit",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.15/Paper.Time-0.9.15-win.zip",
+            "size": 162980879,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.15/Paper.Time-0.9.15-arm64-win.zip",
+            "size": 167928558,
+            "downloads": 0
+          }
+        ],
+        "linux": [
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.15/Paper.Time-0.9.15-x86_64.AppImage",
+            "size": 160501176,
+            "downloads": 0
+          },
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.15/Paper.Time-0.9.15-arm64.AppImage",
+            "size": 160887666,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.15/paper-time-0.9.15.tar.gz",
+            "size": 154106993,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.15/paper-time-0.9.15-arm64.tar.gz",
+            "size": 158604171,
+            "downloads": 0
+          }
+        ]
+      },
+      "note": "노트가 수식을 Overleaf처럼 조판해요 — align, cases, 행렬, 식 번호와 \\eqref까지요. Ultracopy는 첨자와 행렬, 여러 줄 수식을 제대로 읽어요.",
+      "note_en": "Notes set LaTeX the way Overleaf does — align, cases, matrices, equation numbers and \\eqref. Ultracopy reads scripts, matrices and multi-line formulas correctly.",
+      "notes": {
+        "note": {
+          "ko": "노트가 수식을 Overleaf처럼 조판해요 — align, cases, 행렬, 식 번호와 \\eqref까지요. Ultracopy는 첨자와 행렬, 여러 줄 수식을 제대로 읽어요.",
+          "en": "Notes set LaTeX the way Overleaf does — align, cases, matrices, equation numbers and \\eqref. Ultracopy reads scripts, matrices and multi-line formulas correctly."
+        },
+        "added": [
+          {
+            "title": {
+              "ko": "노트의 LaTeX 환경",
+              "en": "LaTeX Environments in Notes"
+            },
+            "detail": {
+              "ko": "노트에 \\begin{align}…\\end{align}을 논문의 원고처럼 적으면 노트가 그대로 조판해요. cases, pmatrix 같은 행렬, gather, multline, \\[…\\]와 \\(…\\)도 돼요. 번호는 노트 맨 위부터 세서 오른쪽 끝에 서고, \\label을 붙인 식은 글 속의 \\eqref{…}가 그 번호로 가리켜요. \\$는 수식이 아니라 달러예요. 윈도우·리눅스도 똑같이 보여요.",
+              "en": "Write \\begin{align}…\\end{align} in a note the way a paper's source does, and the note sets it. cases, the matrices, gather, multline, \\[…\\] and \\(…\\) work too. Numbers count from the top of the note and stand at the right edge, and \\eqref{…} in a sentence points to the formula you labeled. \\$ is a dollar sign, not math. Windows and Linux show the same."
+            }
+          }
+        ],
+        "fixed": [
+          {
+            "title": {
+              "ko": "Ultracopy의 첨자와 구조",
+              "en": "Scripts and Structure in Ultracopy"
+            },
+            "detail": {
+              "ko": "Ultracopy가 아래첨자와 위첨자를 자주 놓쳤어요. 이제 첨자는 물론 분수, 근호, 합과 적분의 위아래, 악센트, 여러 줄에 걸쳐 정렬된 수식까지 읽어요. 줄마다 분수가 든 cases와 ⋮·⋱가 든 행렬도 제 모양대로 옮겨요. 번호가 붙은 식은 Overleaf에서 그대로 컴파일되는 equation이나 align으로 복사해요. 조판 방식 열아홉 가지로 만든 수식 5,035개 중 5,033개를 맞게 읽어요.",
+              "en": "Ultracopy often missed subscripts and superscripts. It now reads them, and fractions, radicals, limits on sums and integrals, accents, and formulas aligned over several lines. Cases with a fraction on every line and matrices with ⋮ and ⋱ keep their shape. A numbered formula is copied as an equation or align that compiles in Overleaf. Of 5,035 test formulas set nineteen ways, it reads 5,033 right."
+            }
+          }
+        ]
+      }
+    },
+    {
       "version": "0.9.14",
       "date": "2026-09-28T11:12:30Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.14/Paper.Time.0.9.14.dmg",
       "size": 52732724,
-      "downloads": 0,
+      "downloads": 3,
       "builds": {
         "mac": [
           {
@@ -16,7 +135,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.14/Paper.Time.0.9.14.dmg",
             "size": 52732724,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "windows": [
@@ -27,7 +146,7 @@
             "arch_en": "64-bit and ARM",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.14/Paper.Time.Setup.0.9.14.exe",
             "size": 265611763,
-            "downloads": 0
+            "downloads": 2
           },
           {
             "label": "압축본 — 설치 없이",
