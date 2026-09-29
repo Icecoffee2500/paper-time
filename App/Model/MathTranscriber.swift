@@ -58,7 +58,7 @@ enum MathTranscriber {
     static func latex(glyphs: [Glyph], rules: [Rule], context: Context? = nil) -> String {
         guard !glyphs.isEmpty else { return "" }
         let sorted = byX(joiningEllipses(glyphs))
-        let result = joiningText(transcribe(sorted, rules: rules, context: context))
+        let result = mergingScripts(joiningText(transcribe(sorted, rules: rules, context: context)))
         observer?(sorted, context, result)
         return result
     }
@@ -126,6 +126,104 @@ enum MathTranscriber {
             .sorted { $0.element.origin.x != $1.element.origin.x
                 ? $0.element.origin.x < $1.element.origin.x : $0.offset < $1.offset }
             .map(\.element)
+    }
+
+    /// No base carries two superscripts or two subscripts: `x^a_b^c` is one
+    /// script read in two pieces round the other — the "−" and the "1" of
+    /// G_t^{-1} either side of the t — and LaTeX refuses it outright ("Double
+    /// superscript"), so Overleaf and a note show nothing. The pieces of each
+    /// side are one script, in the order they were read: x^{ac}_b. A chain
+    /// with no side twice is left exactly as it was written.
+    static func mergingScripts(_ latex: String) -> String {
+        guard latex.contains("^") || latex.contains("_") else { return latex }
+        let characters = Array(latex)
+        func isLetter(_ character: Character) -> Bool { character.isASCII && character.isLetter }
+        // Where the argument of a script that starts at `start` ends: a group,
+        // a command with the groups it takes, or one character.
+        func argumentEnd(from start: Int) -> Int {
+            guard start < characters.count else { return start }
+            var at = start
+            if characters[at] == "{" {
+                var depth = 0
+                while at < characters.count {
+                    if characters[at] == "\\" { at += 2; continue }
+                    if characters[at] == "{" { depth += 1 }
+                    if characters[at] == "}" {
+                        depth -= 1
+                        if depth == 0 { return at + 1 }
+                    }
+                    at += 1
+                }
+                return characters.count
+            }
+            if characters[at] == "\\" {
+                at += 1
+                if at < characters.count, isLetter(characters[at]) {
+                    while at < characters.count, isLetter(characters[at]) { at += 1 }
+                    while at < characters.count, characters[at] == "{" { at = argumentEnd(from: at) }
+                } else {
+                    at += 1
+                }
+                return min(at, characters.count)
+            }
+            return at + 1
+        }
+        var result = ""
+        var index = 0
+        while index < characters.count {
+            let character = characters[index]
+            if character == "\\" {
+                let end = min(index + 2, characters.count)
+                result += String(characters[index..<end])
+                index = end
+                continue
+            }
+            guard character == "^" || character == "_" else {
+                result.append(character)
+                index += 1
+                continue
+            }
+            var pieces: [(marker: Character, content: String)] = []
+            var at = index
+            while true {
+                var look = at
+                while look < characters.count, characters[look] == " " { look += 1 }
+                guard look < characters.count, characters[look] == "^" || characters[look] == "_" else { break }
+                var start = look + 1
+                while start < characters.count, characters[start] == " " { start += 1 }
+                let end = argumentEnd(from: start)
+                guard end > start else { break }
+                var content = String(characters[start..<end])
+                if characters[start] == "{", characters[end - 1] == "}" {
+                    content = String(content.dropFirst().dropLast())
+                }
+                pieces.append((characters[look], content))
+                at = end
+            }
+            guard !pieces.isEmpty else {
+                result.append(character)
+                index += 1
+                continue
+            }
+            let sides = pieces.map(\.marker)
+            if Set(sides).count == sides.count {
+                result += String(characters[index..<at])
+            } else {
+                var order: [Character] = []
+                var merged: [Character: String] = [:]
+                for piece in pieces {
+                    if let known = merged[piece.marker] {
+                        merged[piece.marker] = join([known, piece.content])
+                    } else {
+                        order.append(piece.marker)
+                        merged[piece.marker] = piece.content
+                    }
+                }
+                for marker in order { result += "\(marker){\(merged[marker] ?? "")}" }
+            }
+            index = at
+        }
+        return result
     }
 
     /// A glyph that draws a space — Word draws them; TeX does not. Asked of
@@ -565,8 +663,12 @@ enum MathTranscriber {
             }
 
             // An accent and what it covers: one letter, or — a wide accent —
-            // all of them.
-            if let mark = accented[index] {
+            // all of them. One in a script is the script's, and read with
+            // it: the Ŵ under the F of F^i_{\hat{W}} came back as F\hat{W}i.
+            if let mark = accented[index],
+               !(base.map { base in mark.covered.allSatisfy { glyphs[$0].size < base.size * 0.92 } } ?? false)
+                   || scripts(from: index, in: glyphs, baseline: base?.baseline ?? baseline,
+                              body: base?.size ?? body, line: line, consumed: consumed) == nil {
                 consumed.formUnion(mark.covered)
                 var inside = mark.covered.count == 1
                     ? mathToken(for: glyphs[mark.covered[0]])
@@ -590,8 +692,20 @@ enum MathTranscriber {
             // before anything is read as a bracket, because the "(" of an
             // "x^{(i)}" is a superscript first and a bracket second.
             if let base, !tokens.isEmpty,
-               let script = scripts(from: index, in: glyphs, baseline: base.baseline,
+               var script = scripts(from: index, in: glyphs, baseline: base.baseline,
                                     body: base.size, line: line, consumed: consumed) {
+                // An accent on a letter of the script is the script's: its
+                // mark, read already, goes where the letter went.
+                for accent in accented.values where !accent.covered.isEmpty
+                    && accent.covered.allSatisfy({ (index..<script.end).contains($0) }) {
+                    let letter = glyphs[accent.covered[0]]
+                    let isLetter = { (glyph: Glyph) in glyph.origin == letter.origin && glyph.code == letter.code }
+                    if script.lowered.contains(where: isLetter) {
+                        script.lowered.append(glyphs[accent.mark])
+                    } else if script.raised.contains(where: isLetter) {
+                        script.raised.append(glyphs[accent.mark])
+                    }
+                }
                 var token = ""
                 // A prime is raised like a superscript and written like a
                 // mark: "t'" and never "t^{'}".
@@ -850,8 +964,13 @@ enum MathTranscriber {
         // numerator of a fraction in a sentence.
         let smallest = body <= line * 0.62
         var side: Bool?
-        // The glyph before this one in the script, a stepped-over mark aside.
-        var previous = start - 1
+        // How far right the script has reached — both its sides, a stepped-
+        // over mark aside. The subscript of G_t^{-1} starts where the
+        // superscript does and ends before it; measured from the t, the 1
+        // stood off on its own and was a script of its own: G^-_t^1.
+        var reached = -CGFloat.greatestFiniteMagnitude
+        // The glyphs at the run's own size, each with the side it went to.
+        var held: [(glyph: Glyph, raised: Bool)] = []
         while end < glyphs.count {
             // A combining mark already read into the accent it makes can
             // stand among the scripts — OpenType fonts set the hat of ŝ
@@ -895,13 +1014,24 @@ enum MathTranscriber {
                 }
                 return (run, [], Array(glyphs[start..<run]))
             }
-            if end > start,
-               glyph.rect.minX - glyphs[previous].rect.maxX > body * 0.25 { break }
+            if end > start, glyph.rect.minX - reached > body * 0.25 { break }
             let deeper = glyph.size < primary * 0.92
-            let raisedHere = deeper ? (side ?? (offset > 0)) : offset > 0
-            if !deeper { side = raisedHere }
+            // A script of a script goes with the script it hangs from — the
+            // one ending just before it, at about its height: the l of
+            // F^i_{W^l} is the W's, though the i was read after the W.
+            let host = deeper ? held.filter { $0.glyph.rect.maxX <= glyph.rect.minX + glyph.size * 0.5 }
+                .min(by: { one, other in
+                    let a = max(0, glyph.rect.minX - one.glyph.rect.maxX) + abs(glyph.origin.y - one.glyph.origin.y)
+                    let b = max(0, glyph.rect.minX - other.glyph.rect.maxX) + abs(glyph.origin.y - other.glyph.origin.y)
+                    return a < b
+                }) : nil
+            let raisedHere = deeper ? (host?.raised ?? side ?? (offset > 0)) : offset > 0
+            if !deeper {
+                side = raisedHere
+                held.append((glyph, raisedHere))
+            }
             if raisedHere { raised.append(glyph) } else { lowered.append(glyph) }
-            previous = end
+            reached = max(reached, glyph.rect.maxX)
             end += 1
         }
         return end > start ? (end, raised, lowered) : nil
@@ -1414,6 +1544,8 @@ enum MathTranscriber {
     private struct Accent {
         var command: String
         var covered: [Int]
+        /// The mark itself.
+        var mark: Int
     }
 
     /// The accents, keyed by the first glyph each covers.
@@ -1441,7 +1573,10 @@ enum MathTranscriber {
                         && accentName(of: glyph) == nil && !isSpace(glyph)
                         && glyph.size >= mark.size * 0.9
                         && abs(glyph.origin.y - mark.origin.y) < max(glyph.size, 1) * 0.35
-                        && glyph.rect.maxX <= mark.origin.x + mark.size * 0.1
+                        // A wide letter runs on past its accent: OpenType
+                        // puts the hat of a W at its top, short of its end.
+                        && glyph.rect.minX < mark.origin.x
+                        && glyph.rect.maxX <= mark.origin.x + max(mark.size * 0.1, glyph.width * 0.5)
                         && glyph.rect.maxX > mark.origin.x - mark.size * 0.6
                 }
                 covered = before.max { glyphs[$0].rect.maxX < glyphs[$1].rect.maxX }.map { [$0] } ?? []
@@ -1468,7 +1603,7 @@ enum MathTranscriber {
             let written = !wide ? command
                 : command == "\\tilde" ? "\\widetilde" : command == "\\hat" ? "\\widehat" : command
             consumed.insert(index)
-            found[first] = Accent(command: written, covered: covered)
+            found[first] = Accent(command: written, covered: covered, mark: index)
         }
         return found
     }
