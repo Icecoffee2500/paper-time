@@ -24,13 +24,22 @@ enum TeXGlyphNames {
         guard let resolved = resolve(
             name: name, code: code, fontName: fontName, unicode: unicode, isSymbolic: isSymbolic
         ) else { return nil }
-        // Computer Modern's symbol font holds no upright letters: the only
-        // Latin alphabet in it is the calligraphic one. An encoding written
-        // for text calls that glyph "N", and it is drawn as a script N, so
-        // that is what it has to be written down as.
+        // A font that holds one alphabet, and not the plain one, draws every
+        // letter in that alphabet: Computer Modern's symbol font has no
+        // upright letters, only the calligraphic ones, so an encoding written
+        // for text that calls a glyph "N" names a script N. Euler script,
+        // Euler Fraktur, Ralph Smith's script and the double-struck fonts are
+        // the same, each in its own alphabet.
         if resolved.count == 1, resolved.first?.isLetter == true,
-           isCalligraphic(fontName: fontName) {
-            return "\\mathcal{\(resolved)}"
+           let style = letterStyle(fontName: fontName) {
+            return "\(style){\(resolved)}"
+        }
+        // Word's Cambria Math, and any font that says what its glyphs mean,
+        // writes a formula's letters as the Mathematical Alphanumeric Symbols
+        // — "𝑎", not "a". LaTeX cannot take those as they are.
+        let scalars = resolved.unicodeScalars.map(\.value)
+        if scalars.contains(where: { mathAlphanumeric($0) != nil }) {
+            return latex(scalars: scalars) ?? resolved
         }
         return resolved
     }
@@ -38,27 +47,456 @@ enum TeXGlyphNames {
     private static func resolve(
         name: String?, code: Int, fontName: String, unicode: String?, isSymbolic: Bool
     ) -> String? {
-        if let name, let command = byName[name] { return command }
+        // The AMS symbol fonts, and the tx and px fonts made after them, give
+        // their own meaning to names other fonts use: "star" is ⋆ in the
+        // maths italic and ★ in msam, "similar" is ∼ in the symbol font and
+        // the thicker one in msbm.
+        if let name, let table = amsTable(fontName: fontName),
+           let command = table[name] ?? table[stripped(name)] { return command }
+        if let name, let command = byName[name] ?? byName[stripped(name)] { return command }
         if let name, name.count == 1 { return name }
+        // "u1D437", "uni2260": the glyph named after its code point, which is
+        // how the newtx, newpx and Libertine maths fonts name every letter —
+        // a font whose alphabet is the Mathematical Alphanumeric Symbols has
+        // no "D", only "u1D437". Read as a code it was "5)" for f_θ.
+        if let name, let scalars = unicodeName(name) {
+            return latex(scalars: scalars)
+        }
         if !isSymbolic, let unicode, !unicode.isEmpty { return unicode }
         if let command = standardEncoding(code: code, fontName: fontName) { return command }
         if let unicode, !unicode.isEmpty { return unicode }
+        // A font this knows nothing about, which says nothing about itself:
+        // its codes may at least be ASCII. (Asked last — the AMS fonts are
+        // symbolic and say what their glyphs are, and read as ASCII their
+        // "less than or equal" was a 6.)
+        return asciiIfPrintable(code)
+    }
+
+    /// The AMS fonts' own names, for the fonts that use them.
+    static func amsTable(fontName: String) -> [String: String]? {
+        let family = (fontName.split(separator: "+").last.map(String.init) ?? fontName).uppercased()
+        if ["MSAM", "TXSYA", "PXSYA"].contains(where: { family.hasPrefix($0) }) { return msam }
+        if ["MSBM", "TXSYB", "PXSYB", "TXSYM", "PXSYM"].contains(where: { family.hasPrefix($0) }) {
+            return msbm
+        }
+        if ["TXSYC", "PXSYC"].contains(where: { family.hasPrefix($0) }) { return txsyc }
         return nil
     }
 
-    private static func isCalligraphic(fontName: String) -> Bool {
+    static let msam: [String: String] = [
+        "squaredot": "\\boxdot", "squareplus": "\\boxplus", "squaremultiply": "\\boxtimes",
+        "square": "\\square", "squaresolid": "\\blacksquare", "diamond": "\\lozenge",
+        "diamondsolid": "\\blacklozenge", "clockwise": "\\circlearrowright",
+        "anticlockwise": "\\circlearrowleft", "harpoonleftright": "\\rightleftharpoons",
+        "harpoonrightleft": "\\leftrightharpoons", "squareminus": "\\boxminus",
+        "forces": "\\Vdash", "forcesbar": "\\Vvdash", "satisfies": "\\vDash",
+        "dblarrowheadright": "\\twoheadrightarrow", "dblarrowheadleft": "\\twoheadleftarrow",
+        "dblarrowleft": "\\leftleftarrows", "dblarrowright": "\\rightrightarrows",
+        "dblarrowup": "\\upuparrows", "dblarrowdwn": "\\downdownarrows",
+        "harpoonupright": "\\upharpoonright", "harpoondownright": "\\downharpoonright",
+        "harpoonupleft": "\\upharpoonleft", "harpoondownleft": "\\downharpoonleft",
+        "arrowtailright": "\\rightarrowtail", "arrowtailleft": "\\leftarrowtail",
+        "arrowparrleftright": "\\leftrightarrows", "arrowparrrightleft": "\\rightleftarrows",
+        "shiftleft": "\\Lsh", "shiftright": "\\Rsh", "squiggleright": "\\rightsquigarrow",
+        "squiggleleftright": "\\leftrightsquigarrow", "curlyleft": "\\looparrowleft",
+        "curlyright": "\\looparrowright", "circleequal": "\\circeq",
+        "followsorequal": "\\succsim", "greaterorsimilar": "\\gtrsim",
+        "greaterorapproxeql": "\\gtrapprox", "multimap": "\\multimap",
+        "therefore": "\\therefore", "because": "\\because", "equalsdots": "\\doteqdot",
+        "defines": "\\triangleq", "precedesorequal": "\\precsim",
+        "lessorsimilar": "\\lesssim", "lessorapproxeql": "\\lessapprox",
+        "equalorless": "\\eqslantless", "equalorgreater": "\\eqslantgtr",
+        "equalorprecedes": "\\curlyeqprec", "equalorfollows": "\\curlyeqsucc",
+        "precedesorcurly": "\\preccurlyeq", "lessdblequal": "\\leqq",
+        "lessorequalslant": "\\leqslant", "lessorgreater": "\\lessgtr",
+        "primereverse": "\\backprime", "equaldotrightleft": "\\risingdotseq",
+        "equaldotleftright": "\\fallingdotseq", "followsorcurly": "\\succcurlyeq",
+        "greaterdblequal": "\\geqq", "greaterorequalslant": "\\geqslant",
+        "greaterorless": "\\gtrless", "squareimage": "\\sqsubset",
+        "squareoriginal": "\\sqsupset", "triangleright": "\\vartriangleright",
+        "triangleleft": "\\vartriangleleft", "trianglerightequal": "\\trianglerighteq",
+        "triangleleftequal": "\\trianglelefteq", "star": "\\bigstar", "between": "\\between",
+        "triangledownsld": "\\blacktriangledown", "trianglerightsld": "\\blacktriangleright",
+        "triangleleftsld": "\\blacktriangleleft", "triangle": "\\vartriangle",
+        "trianglesolid": "\\blacktriangle", "triangleinv": "\\triangledown",
+        "ringinequal": "\\eqcirc", "lessequalgreater": "\\lesseqgtr",
+        "greaterlessequal": "\\gtreqless", "lessdbleqlgreater": "\\lesseqqgtr",
+        "greaterdbleqlless": "\\gtreqqless", "Yen": "\\yen", "arrowtripleright": "\\Rrightarrow",
+        "arrowtripleleft": "\\Lleftarrow", "check": "\\checkmark", "orunderscore": "\\veebar",
+        "nand": "\\barwedge", "perpcorrespond": "\\doublebarwedge", "angle": "\\angle",
+        "measuredangle": "\\measuredangle", "sphericalangle": "\\sphericalangle",
+        "proportional": "\\varpropto", "smile": "\\smallsmile", "frown": "\\smallfrown",
+        "subsetdbl": "\\Subset", "supersetdbl": "\\Supset", "uniondbl": "\\Cup",
+        "intersectiondbl": "\\Cap", "uprise": "\\curlywedge", "downfall": "\\curlyvee",
+        "multiopenleft": "\\leftthreetimes", "multiopenright": "\\rightthreetimes",
+        "subsetdblequal": "\\subseteqq", "supersetdblequal": "\\supseteqq",
+        "difference": "\\bumpeq", "geomequivalent": "\\Bumpeq", "muchless": "\\lll",
+        "muchgreater": "\\ggg", "rightanglenw": "\\ulcorner", "rightanglene": "\\urcorner",
+        "circleR": "\\circledR", "circleS": "\\circledS", "fork": "\\pitchfork",
+        "dotplus": "\\dotplus", "revsimilar": "\\backsim", "revasymptequal": "\\backsimeq",
+        "rightanglesw": "\\llcorner", "rightanglese": "\\lrcorner", "maltesecross": "\\maltese",
+        "complement": "\\complement", "intercal": "\\intercal", "circlering": "\\circledcirc",
+        "circleasterisk": "\\circledast", "circleminus": "\\circleddash",
+    ]
+
+    static let msbm: [String: String] = [
+        "lessornotequal": "\\lneq", "greaterornotequal": "\\gneq", "notlessequal": "\\nleq",
+        "notgreaterequal": "\\ngeq", "notless": "\\nless", "notgreater": "\\ngtr",
+        "notprecedes": "\\nprec", "notfollows": "\\nsucc", "lessornotdbleql": "\\lneqq",
+        "greaterornotdbleql": "\\gneqq", "notlessorslnteql": "\\nleqslant",
+        "notgreaterorslnteql": "\\ngeqslant", "lessnotequal": "\\lvertneqq",
+        "greaternotequal": "\\gvertneqq", "notprecedesoreql": "\\npreceq",
+        "notfollowsoreql": "\\nsucceq", "precedeornoteqvlnt": "\\precnsim",
+        "followornoteqvlnt": "\\succnsim", "lessornotsimilar": "\\lnsim",
+        "greaterornotsimilar": "\\gnsim", "notlessdblequal": "\\nleqq",
+        "notgreaterdblequal": "\\ngeqq", "precedenotslnteql": "\\precneqq",
+        "follownotslnteql": "\\succneqq", "precedenotdbleqv": "\\precnapprox",
+        "follownotdbleqv": "\\succnapprox", "lessnotdblequal": "\\lnapprox",
+        "greaternotdblequal": "\\gnapprox", "notsimilar": "\\nsim", "notapproxequal": "\\ncong",
+        "upslope": "\\diagup", "downslope": "\\diagdown", "notsubsetoreql": "\\varsubsetneq",
+        "notsupersetoreql": "\\varsupsetneq", "notsubsetordbleql": "\\nsubseteqq",
+        "notsupersetordbleql": "\\nsupseteqq", "subsetornotdbleql": "\\subsetneqq",
+        "supersetornotdbleql": "\\supsetneqq", "subsetornoteql": "\\varsubsetneqq",
+        "supersetornoteql": "\\varsupsetneqq", "subsetnoteql": "\\subsetneq",
+        "supersetnoteql": "\\supsetneq", "notsubseteql": "\\nsubseteq",
+        "notsuperseteql": "\\nsupseteq", "notparallel": "\\nparallel", "notbar": "\\nmid",
+        "notshortbar": "\\nshortmid", "notshortparallel": "\\nshortparallel",
+        "notturnstile": "\\nvdash", "notforces": "\\nVdash", "notsatisfies": "\\nvDash",
+        "notforcesextra": "\\nVDash", "nottriangeqlright": "\\ntrianglerighteq",
+        "nottriangeqlleft": "\\ntrianglelefteq", "nottriangleleft": "\\ntriangleleft",
+        "nottriangleright": "\\ntriangleright", "notarrowleft": "\\nleftarrow",
+        "notarrowright": "\\nrightarrow", "notdblarrowleft": "\\nLeftarrow",
+        "notdblarrowright": "\\nRightarrow", "notdblarrowboth": "\\nLeftrightarrow",
+        "notarrowboth": "\\nleftrightarrow", "dividemultiply": "\\divideontimes",
+        "emptyset": "\\varnothing", "notexistential": "\\nexists", "Finv": "\\Finv",
+        "Gmir": "\\Game", "Omegainv": "\\mho", "eth": "\\eth", "equalorsimilar": "\\eqsim",
+        "beth": "\\beth", "gimel": "\\gimel", "daleth": "\\daleth", "lessdot": "\\lessdot",
+        "greaterdot": "\\gtrdot", "multicloseleft": "\\ltimes", "multicloseright": "\\rtimes",
+        "barshort": "\\shortmid", "parallelshort": "\\shortparallel",
+        "integerdivide": "\\smallsetminus", "similar": "\\thicksim",
+        "approxequal": "\\thickapprox", "approxorequal": "\\approxeq",
+        "followsorequal": "\\succapprox", "precedesorequal": "\\precapprox",
+        "archleftdown": "\\curvearrowleft", "archrightdown": "\\curvearrowright",
+        "Digamma": "\\digamma", "kappa": "\\varkappa", "k": "\\Bbbk",
+        "planckover2pi": "\\hslash", "planckover2pi1": "\\hbar", "epsiloninv": "\\backepsilon",
+    ]
+
+    /// txfonts' and pxfonts' extra symbols, the negated relations among them.
+    static let txsyc: [String: String] = [
+        "nequal": "\\neq", "nelement": "\\notin", "nowner": "\\not\\ni", "nsimilar": "\\nsim",
+        "napproxequal": "\\not\\approx", "nequivalence": "\\not\\equiv",
+        "nequivasymptotic": "\\not\\asymp", "npropersubset": "\\not\\subset",
+        "npropersuperset": "\\not\\supset", "nlessmuch": "\\not\\ll", "ngreatermuch": "\\not\\gg",
+        "nsimilarequal": "\\not\\simeq", "nparallel": "\\nparallel", "nparallel1": "\\nparallel",
+        "parallel": "\\parallel", "parallel1": "\\parallel", "doteq": "\\doteq",
+        "simequal": "\\simeq", "colonequal": "\\coloneqq", "equalcolon": "\\eqqcolon",
+        "mapsfrom": "\\mapsfrom", "Mapsto": "\\Mapsto", "Mapsfrom": "\\Mapsfrom",
+        "leadsto": "\\leadsto", "Diamond": "\\Diamond", "Diamondsolid": "\\Diamondblack",
+        "medcircle": "\\medcirc", "medbullet": "\\medbullet", "lbag": "\\lbag", "rbag": "\\rbag",
+        "notsubsetdbl": "\\not\\Subset", "notsupersetdbl": "\\not\\Supset",
+        "nsubsetsqequal": "\\not\\sqsubseteq", "nsupersetsqequal": "\\not\\sqsupseteq",
+    ]
+
+
+    /// The command that sets every letter of a font that draws one alphabet
+    /// other than the plain one, or nil for a font whose letters are letters.
+    ///
+    /// Each was looked at, not guessed: the letters of `txsym` and `txsyb`
+    /// are ℝ, ℕ, 𝔼, ℙ and 𝕊 in LeJEPA and RelTR, the letters of `txsys` and
+    /// Latin Modern's `LMMathSymbols` are 𝒪, 𝒢, 𝒜 and 𝒩 in RelTR and in
+    /// "EWC: Nuts and Bolts", exactly as Computer Modern's CMSY draws them.
+    static func letterStyle(fontName: String) -> String? {
         let family = (fontName.split(separator: "+").last.map(String.init) ?? fontName).uppercased()
-        return family.hasPrefix("CMSY") || family.hasPrefix("CMBSY")
+        // The tx and px fonts first, where one prefix covers several fonts
+        // that each draw a different alphabet.
+        for prefix in ["TXSY", "PXSY", "NTXSY", "NPXSY"] where family.hasPrefix(prefix) {
+            let rest = family.dropFirst(prefix.count)
+            if rest.hasPrefix("M") || rest.hasPrefix("B") { return "\\mathbb" }
+            if rest.isEmpty || rest.hasPrefix("S") { return "\\mathcal" }
+            return nil
+        }
+        if family.hasPrefix("TXBSY") || family.hasPrefix("PXBSY") { return "\\mathcal" }
+        // txfonts and pxfonts keep their Fraktur in txmia and pxmia, newtx
+        // and newpx in txmiaX and pxmiaX.
+        if family.hasPrefix("TXMIA") || family.hasPrefix("PXMIA") { return "\\mathfrak" }
+        // Fourier's and mathpazo's alphabets are fonts of their own.
+        if family.hasPrefix("FOURIER-MATH-CAL") { return "\\mathcal" }
+        if family.hasPrefix("FOURIER-MATH-BLACKBOARD") || family.hasPrefix("PAZOMATHBLACKBOARD") {
+            return "\\mathbb"
+        }
+        if family.hasPrefix("CMSY") || family.hasPrefix("CMBSY") || family.hasPrefix("EUSM")
+            || family.hasPrefix("EUSB") || family.hasPrefix("LMMATHSYMBOLS") { return "\\mathcal" }
+        if family.hasPrefix("EUFM") || family.hasPrefix("EUFB") { return "\\mathfrak" }
+        if family.hasPrefix("RSFS") { return "\\mathscr" }
+        if family.hasPrefix("BBOLD") || family.hasPrefix("DSROM") || family.hasPrefix("DSSS")
+            || family.hasPrefix("MSBM") || family.hasPrefix("BBM") || family.contains("STBB") {
+            return "\\mathbb"
+        }
+        return nil
+    }
+
+    // MARK: - Names that are code points
+
+    /// The code points a glyph name spells, when it is one of the names the
+    /// Adobe Glyph List reserves for that: "uniXXXX" (four hex digits, several
+    /// in a row for a ligature) or "uXXXX" to "uXXXXXX". Anything after a
+    /// full stop is a variant suffix and is dropped.
+    static func unicodeName(_ name: String) -> [UInt32]? {
+        var body = Substring(name)
+        if let dot = body.firstIndex(of: ".") { body = body[..<dot] }
+        if body.hasPrefix("uni") {
+            let hex = body.dropFirst(3)
+            guard !hex.isEmpty, hex.count % 4 == 0, hex.allSatisfy(\.isHexDigit) else { return nil }
+            var scalars: [UInt32] = []
+            var index = hex.startIndex
+            while index < hex.endIndex {
+                let next = hex.index(index, offsetBy: 4)
+                guard let value = UInt32(hex[index..<next], radix: 16) else { return nil }
+                scalars.append(value)
+                index = next
+            }
+            return scalars
+        }
+        if body.hasPrefix("u") {
+            let hex = body.dropFirst(1)
+            guard (4...6).contains(hex.count), hex.allSatisfy(\.isHexDigit),
+                  let value = UInt32(hex, radix: 16) else { return nil }
+            return [value]
+        }
+        return nil
+    }
+
+    /// What a run of code points is in LaTeX: a styled letter from the
+    /// Mathematical Alphanumeric Symbols written with its style, a symbol
+    /// written as its command, anything else as the character itself.
+    static func latex(scalars: [UInt32]) -> String? {
+        var out = ""
+        for value in scalars {
+            // The script small l is \\ell — STIX draws its \\ell from there —
+            // and LaTeX has no script lower case to write it with otherwise.
+            if value == 0x1D4C1 { out += "\\ell"; continue }
+            if let (base, style) = mathAlphanumeric(value) {
+                out += styled(base, style)
+            } else if let scalar = Unicode.Scalar(value) {
+                let character = String(Character(scalar))
+                out += unicodeCommands[character] ?? character
+            } else {
+                return nil
+            }
+        }
+        return out.isEmpty ? nil : out
+    }
+
+    /// How a letter is set in a formula. Plain italic is what a variable is,
+    /// and needs no command; every other style is one.
+    enum MathStyle {
+        case italic, upright, bold, boldItalic, script, boldScript, fraktur, boldFraktur,
+             doubleStruck, sans, sansBold, sansItalic, sansBoldItalic, mono
+    }
+
+    /// The letter with its style written round it.
+    static func styled(_ base: String, _ style: MathStyle) -> String {
+        let greek = base.hasPrefix("\\")
+        switch style {
+        case .italic: return base
+        case .upright: return greek ? base : "\\mathrm{\(base)}"
+        case .bold: return greek ? "\\boldsymbol{\(base)}" : "\\mathbf{\(base)}"
+        case .boldItalic: return "\\boldsymbol{\(base)}"
+        case .script: return "\\mathcal{\(base)}"
+        case .boldScript: return "\\boldsymbol{\\mathcal{\(base)}}"
+        case .fraktur: return "\\mathfrak{\(base)}"
+        case .boldFraktur: return "\\boldsymbol{\\mathfrak{\(base)}}"
+        case .doubleStruck: return "\\mathbb{\(base)}"
+        case .sans, .sansItalic: return "\\mathsf{\(base)}"
+        case .sansBold, .sansBoldItalic: return "\\boldsymbol{\\mathsf{\(base)}}"
+        case .mono: return "\\mathtt{\(base)}"
+        }
+    }
+
+    /// A letter or digit from the Mathematical Alphanumeric Symbols block
+    /// (U+1D400–U+1D7FF), or one of the letters Unicode had already placed
+    /// among the Letterlike Symbols before that block was made: which
+    /// letter, and in which style.
+    static func mathAlphanumeric(_ value: UInt32) -> (base: String, style: MathStyle)? {
+        if let known = letterlike[value] { return known }
+        guard value >= 0x1D400, value <= 0x1D7FF else { return nil }
+        // Thirteen Latin alphabets of fifty-two, in Unicode's order.
+        let latin: [(UInt32, MathStyle)] = [
+            (0x1D400, .bold), (0x1D434, .italic), (0x1D468, .boldItalic), (0x1D49C, .script),
+            (0x1D4D0, .boldScript), (0x1D504, .fraktur), (0x1D538, .doubleStruck),
+            (0x1D56C, .boldFraktur), (0x1D5A0, .sans), (0x1D5D4, .sansBold), (0x1D608, .sansItalic),
+            (0x1D63C, .sansBoldItalic), (0x1D670, .mono),
+        ]
+        for (start, style) in latin where value >= start && value < start + 52 {
+            let offset = value - start
+            let letter = offset < 26 ? 65 + offset : 97 + offset - 26
+            return (String(UnicodeScalar(UInt8(letter))), style)
+        }
+        if value == 0x1D6A4 { return ("\\imath", .italic) }
+        if value == 0x1D6A5 { return ("\\jmath", .italic) }
+        // Five Greek alphabets of fifty-eight: the capitals with ϴ, nabla,
+        // the smalls with final sigma, then partial and the six variants.
+        let greek: [(UInt32, MathStyle)] = [
+            (0x1D6A8, .bold), (0x1D6E2, .italic), (0x1D71C, .boldItalic),
+            (0x1D756, .sansBold), (0x1D790, .sansBoldItalic),
+        ]
+        for (start, style) in greek where value >= start && value < start + 58 {
+            return (greekLetters[Int(value - start)], style)
+        }
+        if value == 0x1D7CA || value == 0x1D7CB { return ("\\digamma", .bold) }
+        // Five rows of digits.
+        let digits: [(UInt32, MathStyle)] = [
+            (0x1D7CE, .bold), (0x1D7D8, .doubleStruck), (0x1D7E2, .sans), (0x1D7EC, .sansBold),
+            (0x1D7F6, .mono),
+        ]
+        for (start, style) in digits where value >= start && value < start + 10 {
+            return (String(value - start), style)
+        }
+        return nil
+    }
+
+    /// The fifty-eight of one Greek alphabet, as LaTeX writes them: a
+    /// capital that looks like a Latin letter is that letter.
+    private static let greekLetters: [String] = [
+        "A", "B", "\\Gamma", "\\Delta", "E", "Z", "H", "\\Theta", "I", "K", "\\Lambda", "M", "N",
+        "\\Xi", "O", "\\Pi", "P", "\\varTheta", "\\Sigma", "T", "\\Upsilon", "\\Phi", "X",
+        "\\Psi", "\\Omega", "\\nabla",
+        "\\alpha", "\\beta", "\\gamma", "\\delta", "\\varepsilon", "\\zeta", "\\eta",
+        "\\theta", "\\iota", "\\kappa", "\\lambda", "\\mu", "\\nu", "\\xi", "o", "\\pi",
+        "\\rho", "\\varsigma", "\\sigma", "\\tau", "\\upsilon", "\\varphi", "\\chi",
+        "\\psi", "\\omega", "\\partial", "\\epsilon", "\\vartheta", "\\varkappa", "\\phi",
+        "\\varrho", "\\varpi",
+    ]
+
+    /// The letters set among the Letterlike Symbols.
+    private static let letterlike: [UInt32: (base: String, style: MathStyle)] = [
+        0x2102: ("C", .doubleStruck), 0x210B: ("H", .script), 0x210C: ("H", .fraktur),
+        0x210D: ("H", .doubleStruck), 0x210E: ("h", .italic), 0x2110: ("I", .script),
+        0x2111: ("I", .fraktur), 0x2112: ("L", .script), 0x2115: ("N", .doubleStruck),
+        0x2119: ("P", .doubleStruck), 0x211A: ("Q", .doubleStruck), 0x211B: ("R", .script),
+        0x211C: ("R", .fraktur), 0x211D: ("R", .doubleStruck), 0x2124: ("Z", .doubleStruck),
+        0x2128: ("Z", .fraktur), 0x212C: ("B", .script), 0x212D: ("C", .fraktur),
+        0x212F: ("e", .script), 0x2130: ("E", .script), 0x2131: ("F", .script),
+        0x2133: ("M", .script), 0x2134: ("o", .script),
+    ]
+
+    /// The characters a formula spells with a command. Asked of what a maths
+    /// font drew, and of a glyph named by its code point.
+    static let unicodeCommands: [String: String] = [
+        // Greek. Unicode's ε and φ are the shapes TeX calls \varepsilon and
+        // \varphi; its ϵ and ϕ are \epsilon and \phi.
+        "α": "\\alpha", "β": "\\beta", "γ": "\\gamma", "δ": "\\delta", "ε": "\\varepsilon",
+        "ϵ": "\\epsilon", "ζ": "\\zeta", "η": "\\eta", "θ": "\\theta", "ϑ": "\\vartheta",
+        "ι": "\\iota", "κ": "\\kappa", "ϰ": "\\varkappa", "λ": "\\lambda", "μ": "\\mu",
+        "µ": "\\mu", "ν": "\\nu", "ξ": "\\xi", "π": "\\pi", "ϖ": "\\varpi", "ρ": "\\rho",
+        "ϱ": "\\varrho", "σ": "\\sigma", "ς": "\\varsigma", "τ": "\\tau", "υ": "\\upsilon",
+        "φ": "\\varphi", "ϕ": "\\phi", "χ": "\\chi", "ψ": "\\psi", "ω": "\\omega",
+        "Γ": "\\Gamma", "Δ": "\\Delta", "∆": "\\Delta", "Θ": "\\Theta", "ϴ": "\\varTheta",
+        "Λ": "\\Lambda", "Ξ": "\\Xi", "Π": "\\Pi", "Σ": "\\Sigma", "Υ": "\\Upsilon",
+        "Φ": "\\Phi", "Ψ": "\\Psi", "Ω": "\\Omega", "ϝ": "\\digamma",
+        // Operators and relations.
+        "·": "\\cdot", "⋅": "\\cdot", "∙": "\\bullet", "•": "\\bullet", "×": "\\times",
+        "÷": "\\div", "±": "\\pm", "∓": "\\mp", "−": "-", "∗": "\\ast", "⋆": "\\star",
+        "★": "\\bigstar", "∘": "\\circ", "◦": "\\circ", "⊕": "\\oplus", "⊖": "\\ominus",
+        "⊗": "\\otimes", "⊘": "\\oslash", "⊙": "\\odot", "⊚": "\\circledcirc",
+        "⊛": "\\circledast", "⊞": "\\boxplus", "⊟": "\\boxminus", "⊠": "\\boxtimes",
+        "⊡": "\\boxdot", "⋄": "\\diamond", "◇": "\\diamond", "△": "\\triangle",
+        "▽": "\\triangledown", "∖": "\\setminus", "∧": "\\wedge", "∨": "\\vee",
+        "¬": "\\neg", "∪": "\\cup", "∩": "\\cap", "⊔": "\\sqcup", "⊓": "\\sqcap",
+        "⊎": "\\uplus", "≀": "\\wr", "†": "\\dagger", "‡": "\\ddagger", "⋈": "\\bowtie",
+        "≠": "\\neq", "≤": "\\leq", "≥": "\\geq", "⩽": "\\leqslant",
+        "⩾": "\\geqslant", "≦": "\\leqq", "≧": "\\geqq", "≪": "\\ll", "≫": "\\gg",
+        "≲": "\\lesssim", "≳": "\\gtrsim", "≈": "\\approx", "≉": "\\not\\approx",
+        "≃": "\\simeq", "≅": "\\cong", "≡": "\\equiv", "≢": "\\not\\equiv", "∼": "\\sim",
+        "≁": "\\nsim", "≍": "\\asymp", "≐": "\\doteq", "≜": "\\triangleq",
+        "≔": ":=", "∝": "\\propto", "≺": "\\prec", "≻": "\\succ", "≼": "\\preceq",
+        "≽": "\\succeq", "⊂": "\\subset", "⊃": "\\supset", "⊆": "\\subseteq",
+        "⊇": "\\supseteq", "⊊": "\\subsetneq", "⊋": "\\supsetneq", "⊄": "\\not\\subset",
+        "⊏": "\\sqsubset", "⊐": "\\sqsupset", "⊑": "\\sqsubseteq", "⊒": "\\sqsupseteq",
+        "∈": "\\in", "∉": "\\notin", "∋": "\\ni", "∌": "\\not\\ni", "⊥": "\\perp",
+        "⟂": "\\perp", "⊤": "\\top", "⊢": "\\vdash", "⊣": "\\dashv", "⊨": "\\models",
+        "⊩": "\\Vdash", "∣": "\\mid", "∤": "\\nmid", "∥": "\\parallel", "‖": "\\|",
+        "∦": "\\nparallel", "∠": "\\angle", "∡": "\\measuredangle", "∴": "\\therefore",
+        "∵": "\\because", "∀": "\\forall", "∃": "\\exists", "∄": "\\nexists",
+        "∅": "\\emptyset", "∞": "\\infty", "∂": "\\partial", "∇": "\\nabla", "√": "\\sqrt",
+        "∛": "\\sqrt[3]", "∫": "\\int", "∬": "\\iint", "∭": "\\iiint", "∮": "\\oint",
+        "∑": "\\sum", "∏": "\\prod", "∐": "\\coprod", "⋃": "\\bigcup", "⋂": "\\bigcap",
+        "⋀": "\\bigwedge", "⋁": "\\bigvee", "⨁": "\\bigoplus", "⨂": "\\bigotimes",
+        "⨀": "\\bigodot", "⨆": "\\bigsqcup",
+        // Arrows.
+        "→": "\\rightarrow", "←": "\\leftarrow", "↔": "\\leftrightarrow", "⇒": "\\Rightarrow",
+        "⇐": "\\Leftarrow", "⇔": "\\Leftrightarrow", "↦": "\\mapsto", "↑": "\\uparrow",
+        "↓": "\\downarrow", "⇑": "\\Uparrow", "⇓": "\\Downarrow", "↕": "\\updownarrow",
+        "↗": "\\nearrow", "↘": "\\searrow", "↖": "\\nwarrow", "↙": "\\swarrow",
+        "⟶": "\\longrightarrow", "⟵": "\\longleftarrow", "⟷": "\\longleftrightarrow",
+        "⟹": "\\Longrightarrow", "⟸": "\\Longleftarrow", "⟺": "\\Longleftrightarrow",
+        "⟼": "\\longmapsto", "↩": "\\hookleftarrow", "↪": "\\hookrightarrow",
+        "⇀": "\\rightharpoonup", "↼": "\\leftharpoonup", "⇌": "\\rightleftharpoons",
+        "⇝": "\\rightsquigarrow", "↝": "\\rightsquigarrow",
+        // Delimiters, dots and the rest.
+        "⟨": "\\langle", "⟩": "\\rangle", "〈": "\\langle", "〉": "\\rangle",
+        "∶": ":", "∕": "/", "⧵": "\\setminus", "⌠": "\\int", "⌡": "", "⎮": "", "⎛": "(", "⎜": "", "⎝": "", "⎞": ")", "⎟": "", "⎠": "",
+        "⎡": "[", "⎢": "", "⎣": "", "⎤": "]", "⎥": "", "⎦": "", "⎧": "\\{", "⎨": "", "⎩": "",
+        "⎪": "", "⎫": "\\}", "⎬": "", "⎭": "", "⌊": "\\lfloor", "⌋": "\\rfloor", "⌈": "\\lceil", "⌉": "\\rceil",
+        "{": "\\{", "}": "\\}", "#": "\\#", "%": "\\%", "&": "\\&", "_": "\\_",
+        "′": "'", "″": "''", "‴": "'''", "…": "\\ldots", "⋯": "\\cdots", "⋮": "\\vdots",
+        "⋱": "\\ddots", "ℓ": "\\ell", "ℏ": "\\hbar", "℘": "\\wp", "ℜ": "\\Re", "ℑ": "\\Im",
+        "ℵ": "\\aleph", "°": "^\\circ", "□": "\\square", "■": "\\blacksquare",
+        "♢": "\\diamondsuit", "♣": "\\clubsuit", "♡": "\\heartsuit", "♠": "\\spadesuit",
+        "§": "\\S", "¶": "\\P", "✓": "\\checkmark", "✗": "\\times", "∎": "\\blacksquare",
+        // Invisible operators and the odd spaces, which draw nothing.
+        "\u{2061}": "", "\u{2062}": "", "\u{2063}": "", "\u{2064}": "", "\u{00A0}": " ",
+        "\u{2009}": " ", "\u{200A}": " ", "\u{202F}": " ", "\u{2005}": " ", "\u{2006}": " ",
+    ]
+
+    /// A glyph that is a piece of a drawing rather than a symbol — the tips
+    /// and middle of a horizontal brace, the shaft of a tall arrow — and so
+    /// spells nothing, without being unreadable.
+    static func isDecoration(_ name: String?) -> Bool {
+        guard let name else { return false }
+        return name.hasPrefix("braceh") || name.hasPrefix("braceex") || name.hasPrefix("bracketleftex")
+            || name.hasPrefix("bracketrightex") || name.hasPrefix("parenleftex")
+            || name.hasPrefix("parenrightex") || name.hasPrefix("arrowvertex")
+            || name.hasPrefix("arrowdblvertex") || name.hasPrefix("radicalvertex")
+            || name == "bracerightmid" || name == "braceleftmid" || name == "braceleftbt"
+            || name == "bracerightbt" || name == "bracelefttp" || name == "bracerighttp"
     }
 
     /// True when this glyph is a large operator that takes limits above and
     /// below rather than beside.
+    ///
+    /// The extension fonts name each size of one — "uniontext",
+    /// "uniondisplay", "summationdisplay.1" — and the symbol fonts name the
+    /// small binary operator after the same thing: CMSY's "union" is ∪, which
+    /// takes no limits. So a name is a big operator when it has a size on it,
+    /// or is one of the few that exist only as operators.
     static func isBigOperator(_ name: String?) -> Bool {
         guard let name else { return false }
-        return name.hasPrefix("summation") || name.hasPrefix("product")
-            || name.hasPrefix("integral") || name.hasPrefix("union")
-            || name.hasPrefix("intersection") || name.hasPrefix("coproduct")
-            || name.hasPrefix("logicaland") || name.hasPrefix("logicalor")
+        let stem = stripped(name)
+        for size in ["text", "display"] where stem.hasSuffix(size) {
+            return bigOperatorStems.contains(String(stem.dropLast(size.count)))
+        }
+        return ["summation", "product", "integral", "coproduct", "contintegral"].contains(stem)
+    }
+
+    private static let bigOperatorStems: Set<String> = [
+        "summation", "product", "integral", "union", "intersection", "coproduct", "logicaland",
+        "logicalor", "circleplus", "circlemultiply", "circledot", "unionmulti", "unionsq",
+        "contintegral",
+    ]
+
+    /// A glyph name with its variant suffix taken off: "summationdisplay.1"
+    /// is the same sign as "summationdisplay", drawn from a second font.
+    static func stripped(_ name: String) -> String {
+        guard let dot = name.firstIndex(of: "."), dot != name.startIndex else { return name }
+        return String(name[..<dot])
+    }
+
+    /// An accent that grows to cover what is under it: \widehat, \widetilde.
+    static func isWideAccent(_ name: String?) -> Bool {
+        guard let name else { return false }
+        let stem = stripped(name)
+        return stem.hasPrefix("hatwide") || stem.hasPrefix("tildewide")
     }
 
     static func openingDelimiter(_ name: String?) -> String? {
@@ -86,19 +524,32 @@ enum TeXGlyphNames {
     /// A bar that fences rather than opens or closes: | and ‖.
     static func fence(_ name: String?) -> String? {
         guard let name else { return nil }
-        if name.hasPrefix("vextenddouble") || name == "bardbl" { return "\\|" }
-        if name.hasPrefix("vextendsingle") || name == "bar" { return "|" }
+        if name.hasPrefix("vextenddouble") || name == "bardbl" || name.hasPrefix("bardblex") { return "\\|" }
+        // newtx builds a tall bar from "barex" pieces.
+        if name.hasPrefix("vextendsingle") || name == "bar" || name.hasPrefix("barex") { return "|" }
         return nil
     }
 
+    /// The accent a glyph is, by its name: the marks TeX's roman font draws
+    /// for \\hat, \\bar and the rest, and the maths italic's arrow for \\vec.
+    /// (An arrow from the symbol font is an arrow: the "→" of n\\to\\infty
+    /// sat close enough to its "n" to be read as \\vec{n}.)
     static func accent(_ name: String?) -> String? {
         guard let name else { return nil }
-        switch name {
+        switch stripped(name) {
         case "circumflex", "hatwide", "hatwider", "hatwidest": return "\\hat"
         case "tilde", "tildewide", "tildewider", "tildewidest": return "\\tilde"
         case "macron": return "\\bar"
-        case "dotaccent": return "\\dot"
-        case "vector", "arrowright": return "\\vec"
+        case "dotaccent", "dotacc": return "\\dot"
+        case "dieresis", "ddotacc": return "\\ddot"
+        case "dddotacc": return "\\dddot"
+        case "ddddotacc": return "\\ddddot"
+        case "caron": return "\\check"
+        case "breve": return "\\breve"
+        case "acute": return "\\acute"
+        case "grave": return "\\grave"
+        case "ring": return "\\mathring"
+        case "vector", "vec": return "\\vec"
         default: return nil
         }
     }
@@ -114,6 +565,9 @@ enum TeXGlyphNames {
                      "varphi", "chi", "psi", "omega", "Gamma", "Delta", "Theta", "Lambda", "Xi",
                      "Pi", "Sigma", "Upsilon", "Phi", "Psi", "Omega"]
         for name in greek { table[name] = "\\\(name)" }
+        // The fonts call the ε "epsilon" and the ϵ "epsilon1" — Unicode's
+        // U+03B5 is the ε — and in LaTeX the ε is \\varepsilon.
+        table["epsilon"] = "\\varepsilon"
 
         // Computer Modern's symbol font names every glyph it draws, and the
         // name is the command that drew it. A subset font re-encodes itself
@@ -180,8 +634,21 @@ enum TeXGlyphNames {
             "productdisplay": "\\prod", "producttext": "\\prod",
             "integraldisplay": "\\int", "integraltext": "\\int",
             "uniondisplay": "\\bigcup", "intersectiondisplay": "\\bigcap",
-            "coproductdisplay": "\\coprod",
+            "uniontext": "\\bigcup", "intersectiontext": "\\bigcap",
+            "coproductdisplay": "\\coprod", "coproducttext": "\\coprod",
+            "logicalandtext": "\\bigwedge", "logicalanddisplay": "\\bigwedge",
+            "logicalortext": "\\bigvee", "logicalordisplay": "\\bigvee",
+            "circleplustext": "\\bigoplus", "circleplusdisplay": "\\bigoplus",
+            "circlemultiplytext": "\\bigotimes", "circlemultiplydisplay": "\\bigotimes",
+            "circledottext": "\\bigodot", "circledotdisplay": "\\bigodot",
+            "unionmultitext": "\\biguplus", "unionmultidisplay": "\\biguplus",
+            "unionsqtext": "\\bigsqcup", "unionsqdisplay": "\\bigsqcup",
+            "contintegraltext": "\\oint", "contintegraldisplay": "\\oint",
+            "summation": "\\sum", "product": "\\prod", "integral": "\\int",
+            "coproduct": "\\coprod",
             "radical": "\\sqrt", "radicalbig": "\\sqrt", "radicalBig": "\\sqrt",
+            "radicalbigg": "\\sqrt", "radicalBigg": "\\sqrt", "radicalbt": "\\sqrt",
+            "radicallow": "\\sqrt", "radicalmid": "\\sqrt",
             "partialdiff": "\\partial", "partial": "\\partial", "infinity": "\\infty",
             "gradient": "\\nabla", "nabla": "\\nabla", "emptyset": "\\emptyset",
             "element": "\\in", "notelement": "\\notin", "owner": "\\ni",
@@ -224,6 +691,17 @@ enum TeXGlyphNames {
             "fi": "fi", "fl": "fl", "ff": "ff", "ffi": "ffi", "ffl": "ffl",
             "ampersand": "\\&", "numbersign": "\\#", "dollar": "\\$",
             "underscore": "\\_", "asciitilde": "\\sim", "at": "@",
+            // MathTime and the AMS fonts.
+            "Delta1": "\\Delta", "Omega1": "\\Omega", "omega1": "\\varpi", "kappa1": "\\varkappa",
+            "notsubset": "\\not\\subset",
+            "lessequalslant": "\\leqslant", "greaterequalslant": "\\geqslant",
+            "lessorsimilar": "\\lesssim", "greaterorsimilar": "\\gtrsim",
+            "definequal": "\\triangleq", "colonequal": ":=", "hbar": "\\hbar", "planckover2pi": "\\hbar",
+            "square": "\\square", "blacksquare": "\\blacksquare", "checkmark": "\\checkmark",
+            "vector": "\\vec", "therefore": "\\therefore", "because": "\\because",
+            "arrowlongright": "\\longrightarrow", "arrowlongleft": "\\longleftarrow",
+            "arrowdbllongright": "\\Longrightarrow", "arrowlongboth": "\\longleftrightarrow",
+            "mapstolong": "\\longmapsto",
         ]
         for (name, command) in direct { table[name] = command }
 
@@ -256,7 +734,7 @@ enum TeXGlyphNames {
             || upper.hasPrefix("CMTT") || upper.hasPrefix("SF") || upper.hasPrefix("CMSS") {
             return roman[code] ?? asciiIfPrintable(code)
         }
-        return asciiIfPrintable(code)
+        return nil
     }
 
     private static func asciiIfPrintable(_ code: Int) -> String? {
