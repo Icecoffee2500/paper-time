@@ -19,6 +19,8 @@ import { Opened } from './pdfupdate/writer.js'
 import { IDENTITY, applyPoint, applyRect, concat, type Matrix, type Rect } from '../shared/mathReader/geometry.js'
 import type { Glyph, Rule } from '../shared/mathReader/glyph.js'
 import { decodeByte } from '../shared/mathReader/texGlyphNames.js'
+import { italicEvidence, type ItalicEvidence } from '../shared/mathReader/reader.js'
+import { isLetter, isWhitespace } from '../shared/metadata/chars.js'
 
 interface Font {
   name: string
@@ -70,6 +72,33 @@ export class MathScanner {
     }
     this.scanned.set(index, result)
     return result
+  }
+
+  private evidence = new Map<number, ItalicEvidence>()
+
+  /**
+   * What the paper's first ten pages but this one say about where it keeps
+   * its variables, or-ed together — the half of the Mac's
+   * `variablesInTextItalic(for:scanned:)` that is not the page itself (a
+   * page that draws maths italic letters says no whatever the rest say).
+   * The Mac asks these pages while one page is being read, so a glyph of
+   * theirs that spells nothing borrows from that page's text; here there is
+   * no text, and it spells nothing.
+   */
+  italicElsewhere(pageIndex: number): ItalicEvidence {
+    let ownLetters = false
+    let evidence = false
+    for (let index = 0; index < Math.min(this.pages.length, 10); index += 1) {
+      if (index === pageIndex) continue
+      let seen = this.evidence.get(index)
+      if (seen === undefined) {
+        seen = italicEvidence(this.page(index)?.glyphs ?? [])
+        this.evidence.set(index, seen)
+      }
+      ownLetters = ownLetters || seen.ownLetters
+      evidence = evidence || seen.evidence
+    }
+    return { ownLetters, evidence }
   }
 }
 
@@ -305,7 +334,7 @@ function loadFonts(file: PDFFile, page: PDFDict): Map<string, Font> {
       font.isSymbolic = (flags & 4) !== 0
     }
     const toUnicode = decoded(file, dictionary.get('ToUnicode'))
-    if (toUnicode) font.toUnicode = parseToUnicode(latin1(toUnicode))
+    if (toUnicode) font.toUnicode = toUnicodeTable(latin1(toUnicode))
     const encoding = file.resolve(dictionary.get('Encoding'))
     if (encoding.t === 'dict') {
       font.glyphNames = parseDifferences(file, encoding.v)
@@ -382,38 +411,125 @@ function builtInEncoding(file: PDFFile, descriptor: PDFDict | undefined): Map<nu
   return names
 }
 
-/** UTF-16, four hex digits a unit — a letter outside the first plane is two (𝒒 is D835 DC92). */
-function hexCharacters(hex: string): string | null {
-  const units: number[] = []
-  for (let index = 0; index + 4 <= hex.length; index += 4) {
-    const value = parseInt(hex.slice(index, index + 4), 16)
-    if (Number.isNaN(value)) return null
-    units.push(value)
-  }
-  return units.length === 0 ? null : String.fromCharCode(...units)
+/** Swift's `Int(text, radix: 16)` and `UInt16(text, radix: 16)`: a sign may
+ *  lead, every digit must be one, and the value must fit. */
+function hexValue(text: string, max: number): number | null {
+  const match = /^([+-]?)([0-9A-Fa-f]+)$/.exec(text)
+  if (!match) return null
+  const value = parseInt(match[2], 16)
+  if (match[1] === '-') return value === 0 ? 0 : null
+  return value <= max ? value : null
 }
 
-function parseToUnicode(text: string): Map<number, string> {
+/**
+ * A ToUnicode CMap's `bfchar` and `bfrange` sections, read the way ISO 32000
+ * §9.10.3 writes them (`PDFContentScanner.toUnicodeTable`). Every value is
+ * UTF-16, four hex digits a unit — so a letter outside the first plane is two
+ * of them (𝒒 is D835 DC92). A range either gives the first value and counts
+ * up from it, the *last unit* counting — `<04F6> <04F9> <D835DC34>` is 𝐴 to
+ * 𝐷 — or gives one value per code in an array.
+ */
+export function toUnicodeTable(text: string): Map<number, string> {
   const table = new Map<number, string>()
-  for (const section of text.split('beginbfchar').slice(1)) {
-    const body = section.split('endbfchar')[0] ?? ''
-    for (const match of body.matchAll(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/g)) {
-      const code = parseInt(match[1], 16)
-      const value = hexCharacters(match[2])
-      if (value !== null && Number.isFinite(code)) table.set(code, value)
+  const units = (hex: string): number[] | null => {
+    const out: number[] = []
+    for (let index = 0; index + 4 <= hex.length; index += 4) {
+      const value = hexValue(hex.slice(index, index + 4), 0xffff)
+      if (value === null) return null
+      out.push(value)
+    }
+    // Two digits is one byte: a single-byte value, which a few writers use
+    // for plain ASCII.
+    if (out.length === 0 && hex.length === 2) {
+      const value = hexValue(hex, 0xffff)
+      if (value !== null) out.push(value)
+    }
+    return out.length === 0 ? null : out
+  }
+  // `String(utf16CodeUnits:count:)`.
+  const string = (value: number[]) => String.fromCharCode(...value)
+
+  // The CMap as a list of hex strings, brackets and words. The text is one
+  // byte a character (Latin-1), so a Character is a code unit — "\r\n" is
+  // one, and neither half is anything a token starts with.
+  type Token = { k: 'hex'; v: string } | { k: 'open' } | { k: 'close' } | { k: 'word'; v: string }
+  const tokens: Token[] = []
+  let index = 0
+  while (index < text.length) {
+    const character = text[index]
+    if (character === '<') {
+      const close = text.indexOf('>', index + 1)
+      if (close < 0) break
+      tokens.push({ k: 'hex', v: [...text.slice(index + 1, close)].filter((one) => !isWhitespace(one)).join('') })
+      index = close + 1
+    } else if (character === '[') {
+      tokens.push({ k: 'open' })
+      index += 1
+    } else if (character === ']') {
+      tokens.push({ k: 'close' })
+      index += 1
+    } else if (isLetter(character)) {
+      const from = index
+      while (index < text.length && isLetter(text[index])) index += 1
+      tokens.push({ k: 'word', v: text.slice(from, index) })
+    } else {
+      index += 1
     }
   }
-  for (const section of text.split('beginbfrange').slice(1)) {
-    const body = section.split('endbfrange')[0] ?? ''
-    for (const match of body.matchAll(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/g)) {
-      const low = parseInt(match[1], 16)
-      const high = parseInt(match[2], 16)
-      const start = parseInt(match[3], 16)
-      if (!Number.isFinite(low) || !Number.isFinite(high) || !Number.isFinite(start) || start > 0xffffffff) continue
-      for (let offset = 0; offset <= Math.max(high - low, 0); offset += 1) {
-        const scalar = start + offset
-        if (scalar > 0x10ffff || (scalar >= 0xd800 && scalar <= 0xdfff)) continue
-        table.set(low + offset, String.fromCodePoint(scalar))
+
+  let position = 0
+  const hex = (): string | null => {
+    const token = tokens[position]
+    if (token === undefined || token.k !== 'hex') return null
+    position += 1
+    return token.v
+  }
+  while (position < tokens.length) {
+    const token = tokens[position]
+    if (token.k !== 'word') { position += 1; continue }
+    position += 1
+    if (token.v === 'beginbfchar') {
+      while (position < tokens.length) {
+        if (tokens[position].k === 'word') break
+        const codeHex = hex()
+        const valueHex = codeHex !== null ? hex() : null
+        if (codeHex === null || valueHex === null) { position += 1; continue }
+        const code = hexValue(codeHex, Number.MAX_SAFE_INTEGER)
+        const value = units(valueHex)
+        if (code !== null && value !== null) table.set(code, string(value))
+      }
+    } else if (token.v === 'beginbfrange') {
+      while (position < tokens.length) {
+        if (tokens[position].k === 'word') break
+        const lowHex = hex()
+        const highHex = lowHex !== null ? hex() : null
+        const low = highHex !== null ? hexValue(lowHex!, Number.MAX_SAFE_INTEGER) : null
+        const high = low !== null ? hexValue(highHex!, Number.MAX_SAFE_INTEGER) : null
+        if (low === null || high === null || !(high >= low) || !(high - low < 65536)) { position += 1; continue }
+        if (position < tokens.length && tokens[position].k === 'open') {
+          position += 1
+          let code = low
+          while (position < tokens.length) {
+            if (tokens[position].k === 'close') { position += 1; break }
+            const valueHex = hex()
+            if (valueHex !== null) {
+              const value = code <= high ? units(valueHex) : null
+              if (value !== null) table.set(code, string(value))
+              code += 1
+            } else {
+              position += 1
+            }
+          }
+        } else {
+          const startHex = hex()
+          const value = startHex !== null ? units(startHex) : null
+          if (value !== null) {
+            for (let code = low; code <= high; code += 1) {
+              table.set(code, string(value))
+              value[value.length - 1] = (value[value.length - 1] + 1) & 0xffff
+            }
+          }
+        }
       }
     }
   }

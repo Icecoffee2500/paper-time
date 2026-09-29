@@ -11,6 +11,8 @@
  * a quotation written here has to be a quotation the Mac's editor sets as
  * one, with its page chip, and follows back to the page.
  */
+import { displayFormulas, isDisplayLine } from './noteMath.js'
+import { trimWhitespace, trimWhitespaceAndNewlines } from './zettel.js'
 
 export interface NoteAnchor {
   pageIndex: number
@@ -80,18 +82,22 @@ export function escapeLabel(text: string): string {
   return text.replace(/[\\[\]]/g, (character) => `\\${character}`)
 }
 
-/** A line of the passage, broken where a displayed formula wants a line of its own. */
+/**
+ * A line of the passage, broken where a displayed formula wants a line of its
+ * own — a `$$…$$`, and a numbered `equation` or `align`, which is how
+ * Ultracopy writes one.
+ */
 export function quotationLines(text: string): string[] {
   const lines: string[] = []
   const add = (piece: string) => {
-    const trimmed = piece.trim()
+    const trimmed = trimWhitespace(piece)
     if (trimmed) lines.push(trimmed)
   }
   let index = 0
-  for (const match of text.matchAll(/\$\$[^$]+\$\$/g)) {
-    add(text.slice(index, match.index))
-    add(match[0])
-    index = (match.index ?? 0) + match[0].length
+  for (const range of displayFormulas(text)) {
+    add(text.slice(index, range.from))
+    add(text.slice(range.from, range.to))
+    index = range.to
   }
   add(text.slice(index))
   return lines.length === 0 ? [text] : lines
@@ -103,15 +109,15 @@ export function quotationLines(text: string): string[] {
  * `pageWord` says «4쪽» or «p. 4», in the window's language, as the Mac does.
  */
 export function quotationSource(anchor: NoteAnchor, pageWord: (page: number) => string): string {
-  const text = anchor.quotedText.trim()
+  const text = trimWhitespaceAndNewlines(anchor.quotedText)
   const quoted = text ? text : anchorLabel(anchor)
   const lines = quoted.split('\n').flatMap((line) => {
-    const trimmed = line.trim()
+    const trimmed = trimWhitespace(line)
     return trimmed ? quotationLines(trimmed) : ['']
   })
   const citation = `[${escapeLabel(pageWord(anchor.pageIndex + 1))}](${anchorURL(anchor)})`
   const last = lines[lines.length - 1]
-  if (last !== undefined && !last.startsWith('$$') && !last.startsWith('#')) {
+  if (last !== undefined && !isDisplayLine(last) && !last.startsWith('#')) {
     lines[lines.length - 1] = `${last} ${citation}`
   } else {
     lines.push(citation)

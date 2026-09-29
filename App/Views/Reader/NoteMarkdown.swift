@@ -67,6 +67,12 @@ enum NoteMarkdown {
     /// pass resolves to the light appearance — dark notes got black
     /// formulas. `nil` is the application's.
     private nonisolated(unsafe) static var current: NoteAppearance?
+    #if os(macOS)
+    /// Where each formula of the note being set starts counting, and the
+    /// labels it refers to, by where the formula is in the source — worked
+    /// out for the whole note before any line is set (`numbered`).
+    private nonisolated(unsafe) static var numbering: [Int: MathJaxEngine.Numbered] = [:]
+    #endif
 
     // MARK: - Reading the source back
 
@@ -249,6 +255,9 @@ enum NoteMarkdown {
             if let style = attributes[.paragraphStyle] as? NSParagraphStyle, style.headIndent > 0 {
                 marks.append("indent \(Int(style.headIndent))")
             }
+            if let style = attributes[.paragraphStyle] as? NSParagraphStyle, style.alignment == .center {
+                marks.append("center")
+            }
             print(String(format: "%5d %-14@ %@", range.location,
                          marks.isEmpty ? "—" : marks.joined(separator: "+") as NSString,
                          String(text.prefix(60)) as NSString))
@@ -337,7 +346,7 @@ enum NoteMarkdown {
         // page set close after the last word is a mark, and a mark is looked
         // at rather than read. A displayed formula keeps its own line, so
         // there the page goes under it.
-        if let last = lines.last, !last.hasPrefix("$$"), !last.hasPrefix("#") {
+        if let last = lines.last, !NoteMath.isDisplay(last), !last.hasPrefix("#") {
             lines[lines.count - 1] = last + " " + citation
         } else {
             lines.append(citation)
@@ -353,8 +362,9 @@ enum NoteMarkdown {
     /// mathematics in `$…$` — the same reading UltraCopy puts on the
     /// clipboard, so a formula quoted into a note is a formula and not the
     /// prose PDFKit would have made of it. A `$$…$$` was set on a line of its
-    /// own in the paper, and putting it back on one keeps the quotation
-    /// looking like what was quoted.
+    /// own in the paper — and so was a numbered `equation` or `align`, which
+    /// is how UltraCopy writes one — and putting it back on one keeps the
+    /// quotation looking like what was quoted.
     static func quotationLines(of text: String) -> [String] {
         let whole = text as NSString
         var lines: [String] = []
@@ -363,21 +373,14 @@ enum NoteMarkdown {
             let trimmed = piece.trimmingCharacters(in: .whitespaces)
             if !trimmed.isEmpty { lines.append(trimmed) }
         }
-        for match in displayMathPattern.matches(
-            in: text, range: NSRange(location: 0, length: whole.length)
-        ) {
-            add(whole.substring(with: NSRange(location: index,
-                                              length: match.range.location - index)))
-            add(whole.substring(with: match.range))
-            index = match.range.location + match.range.length
+        for range in NoteMath.displays(in: text) {
+            add(whole.substring(with: NSRange(location: index, length: range.location - index)))
+            add(whole.substring(with: range))
+            index = range.location + range.length
         }
         add(whole.substring(from: index))
         return lines.isEmpty ? [text] : lines
     }
-
-    private static let displayMathPattern = try! NSRegularExpression(
-        pattern: #"\$\$[^$]+\$\$"#
-    )
 
     /// Brackets and backslashes in a label would end the link early, so they
     /// travel escaped — which is what any Markdown reader expects of them.
@@ -482,6 +485,10 @@ enum NoteMarkdown {
             start = end + 1
         }
 
+        #if os(macOS)
+        numbering = numbered(lineRanges, blocks, source: source)
+        #endif
+
         let tables = Set(NoteTable.blocks(in: source).map { NSStringRange($0) })
         for (lineRange, block) in zip(lineRanges, blocks) {
             let revealed = caret.map {
@@ -507,8 +514,12 @@ enum NoteMarkdown {
                 continue
             }
             #endif
-            let style = block.paragraphStyle
             let markerLength = (block.marker as NSString).length
+            // A formula set on a line of its own is set as a paper sets one:
+            // in the middle of the line, and one with numbers across all of
+            // it, the numbers at the right-hand edge.
+            let alone = !revealed && standsAlone(block)
+            let style = alone ? centered(block.paragraphStyle) : block.paragraphStyle
 
             if markerLength > 0 {
                 let shown = revealed ? block.marker : block.shownMarker
@@ -563,7 +574,8 @@ enum NoteMarkdown {
                     )
                 }
                 append(
-                    piece(for: token, block: block, style: style),
+                    piece(for: token, block: block, style: style,
+                          at: contentStart + token.range.location, alone: alone),
                     source: NSRange(location: contentStart + token.range.location,
                                     length: token.range.length)
                 )
@@ -862,6 +874,9 @@ enum NoteMarkdown {
         /// all: the run has to stand for exactly those characters.
         case math(latex: String, display: Bool, source: String)
         case emphasis(text: String, bold: Bool, italic: Bool, mono: Bool, source: String)
+        /// `\$`: a dollar, written so it does not open a formula — shown as
+        /// the dollar it is, as LaTeX and every Markdown reader show it.
+        case dollar
     }
 
     private struct Token {
@@ -875,21 +890,42 @@ enum NoteMarkdown {
     private static let wikiPattern = try! NSRegularExpression(
         pattern: #"\[\[([^\]|\n]+)(?:\|([^\]\n]*))?\]\]"#
     )
-    private static let mathPattern = try! NSRegularExpression(
-        pattern: #"(\$\$)([^$]+)(\$\$)|(\$)([^$\n]+)(\$)"#
-    )
+    private static let dollarPattern = try! NSRegularExpression(pattern: #"\\\$"#)
     private static let emphasisPattern = try! NSRegularExpression(
         pattern: #"(\*\*)([^*\n]+)(\*\*)|(\*)([^*\n]+)(\*)|(`)([^`\n]+)(`)"#
     )
 
     /// Whether a line could hold any of the four things that are set
     /// differently — a link, a note link, a formula, or emphasis. All four
-    /// begin with one of these characters.
+    /// begin with one of these characters: a formula with `$` or, written as
+    /// LaTeX writes it, with a backslash.
     private static func holdsMarkup(_ line: String) -> Bool {
         // Over the bytes, not through `NSString.character(at:)` — that is a
         // message send per character, and there are thirty thousand of them
         // in a note worth worrying about.
-        line.utf8.contains { $0 == 0x5B || $0 == 0x24 || $0 == 0x2A || $0 == 0x60 }
+        line.utf8.contains { $0 == 0x5B || $0 == 0x24 || $0 == 0x2A || $0 == 0x60 || $0 == 0x5C }
+    }
+
+    /// Whether a line is one displayed formula and nothing else — the way a
+    /// paper sets one, on a line of its own. A list item or a heading keeps
+    /// its own shape whatever it holds.
+    static func standsAlone(_ block: Block) -> Bool {
+        switch block.kind {
+        case .plain, .quote: break
+        default: return false
+        }
+        let content = block.content as NSString
+        guard holdsMarkup(block.content), let token = nextToken(in: content, from: 0),
+              case .math(_, true, _) = token.kind else { return false }
+        let before = content.substring(to: token.range.location)
+        let after = content.substring(from: token.range.location + token.range.length)
+        return before.allSatisfy(\.isWhitespace) && after.allSatisfy(\.isWhitespace)
+    }
+
+    private static func centered(_ style: NSParagraphStyle) -> NSParagraphStyle {
+        let copy = (style.mutableCopy() as? NSMutableParagraphStyle) ?? NSMutableParagraphStyle()
+        copy.alignment = .center
+        return copy
     }
 
     private static func nextToken(in line: NSString, from index: Int) -> Token? {
@@ -923,16 +959,16 @@ enum NoteMarkdown {
                 ? target : line.substring(with: match.range(at: 2))
             consider(Token(range: match.range, kind: .noteLink(id: target, title: shown)))
         }
-        if let match = mathPattern.firstMatch(in: line as String, range: range) {
-            let display = match.range(at: 2).location != NSNotFound
-            let body = display ? match.range(at: 2) : match.range(at: 5)
-            if body.location != NSNotFound {
-                consider(Token(range: match.range, kind: .math(
-                    latex: line.substring(with: body)
-                        .trimmingCharacters(in: .whitespacesAndNewlines),
-                    display: display, source: line.substring(with: match.range)
-                )))
-            }
+        // One with nothing in it is still a formula — it is shown as it was
+        // typed, and the line is read on after it.
+        if let formula = NoteMath.firstFormula(in: line, range: range) {
+            consider(Token(range: formula.range, kind: .math(
+                latex: formula.latex, display: formula.display,
+                source: line.substring(with: formula.range)
+            )))
+        }
+        if let match = dollarPattern.firstMatch(in: line as String, range: range) {
+            consider(Token(range: match.range, kind: .dollar))
         }
         if let match = emphasisPattern.firstMatch(in: line as String, range: range) {
             let groups = [(2, true, false, false), (5, false, true, false), (8, false, false, true)]
@@ -950,7 +986,7 @@ enum NoteMarkdown {
     }
 
     private static func piece(
-        for token: Token, block: Block, style: NSParagraphStyle
+        for token: Token, block: Block, style: NSParagraphStyle, at location: Int, alone: Bool
     ) -> NSAttributedString {
         switch token.kind {
         case .anchorLink(let label, let url):
@@ -988,9 +1024,10 @@ enum NoteMarkdown {
 
         case .math(let latex, let display, let source):
             #if os(macOS)
+            let counted = numbering[location] ?? MathJaxEngine.Numbered(start: 0, known: [:])
             if let piece = mathPiece(latex: latex, display: display, source: source,
                                      size: NoteTypography.baseSize, style: style,
-                                     width: available) {
+                                     width: available, numbered: counted, fillsWidth: alone) {
                 return piece
             }
             #endif
@@ -1011,6 +1048,9 @@ enum NoteMarkdown {
             ]
             if mono { attributes[.backgroundColor] = NoteColor.quaternaryLabelColor }
             return atomic(text, source: source, attributes: attributes, style: style)
+
+        case .dollar:
+            return atomic("$", source: "\\$", attributes: block.attributes(style: style), style: style)
         }
     }
 
@@ -1034,6 +1074,35 @@ enum NoteMarkdown {
     }
 
     #if os(macOS)
+    /// The note's formulas counted from the top: an `equation` takes the next
+    /// number wherever the caret is, so every formula is counted — the one
+    /// being typed too — before any is set.
+    private static func numbered(
+        _ lineRanges: [NSRange], _ blocks: [Block], source: String
+    ) -> [Int: MathJaxEngine.Numbered] {
+        // Nothing takes a number or refers to one without one of these.
+        guard source.contains("\\begin") || source.contains("\\label") || source.contains("\\ref")
+        else { return [:] }
+        var formulas: [(location: Int, latex: String, display: Bool)] = []
+        for (lineRange, block) in zip(lineRanges, blocks) where holdsMarkup(block.content) {
+            let content = block.content as NSString
+            let start = lineRange.location + (block.marker as NSString).length
+            var index = 0
+            while index < content.length, let token = nextToken(in: content, from: index) {
+                if case .math(let latex, let display, _) = token.kind {
+                    formulas.append((start + token.range.location, latex, display))
+                }
+                index = token.range.location + token.range.length
+            }
+        }
+        guard !formulas.isEmpty,
+              let steps = MathJaxEngine.shared.number(formulas.map { ($0.latex, $0.display) })
+        else { return [:] }
+        var result: [Int: MathJaxEngine.Numbered] = [:]
+        for (formula, step) in zip(formulas, steps) { result[formula.location] = step }
+        return result
+    }
+
     private nonisolated(unsafe) static var tableCache: [String: NSImage] = [:]
 
     /// A table as a picture of itself: a header set in bold on a faint
@@ -1072,13 +1141,17 @@ enum NoteMarkdown {
 
     private static func mathPiece(
         latex: String, display: Bool, source: String, size: CGFloat, style: NSParagraphStyle,
-        width: CGFloat?
+        width: CGFloat?, numbered: MathJaxEngine.Numbered, fillsWidth: Bool
     ) -> NSAttributedString? {
         // Rounded, so nudging the pane by a point does not redraw every
-        // formula in the note.
-        let room = width.map { max(80, ($0 / 8).rounded(.down) * 8) }
+        // formula in the note. A quotation or a list item sets its lines in
+        // from the edge, and its formulas have that much less room.
+        let indent = max(style.headIndent, style.firstLineHeadIndent)
+        let room = width.map { max(80, (($0 - indent) / 8).rounded(.down) * 8) }
         let appearance = current ?? NSApp?.effectiveAppearance ?? NSAppearance.currentDrawing()
-        let key = "\(display ? "D" : "I")|\(size)|\(room ?? 0)|\(appearance.name.rawValue)|\(latex)"
+        let labels = numbered.known.keys.sorted().map { "\($0)=\(numbered.known[$0] ?? "")" }.joined(separator: ",")
+        let key = "\(display ? "D" : "I")|\(fillsWidth ? "F" : "")|\(size)|\(room ?? 0)|"
+            + "\(appearance.name.rawValue)|\(numbered.start)|\(labels)|\(latex)"
         let drawn: (image: NSImage, descent: CGFloat)
         if let cached = mathCache[key] {
             drawn = cached
@@ -1091,9 +1164,13 @@ enum NoteMarkdown {
                 latex: latex, display: display,
                 pointSize: NoteTypography.mathSize(forBody: size) * (display ? 1.12 : 1),
                 color: ink,
-                maxWidth: room
+                maxWidth: room,
+                start: numbered.start, known: numbered.known, fillsWidth: fillsWidth
             ) else { return nil }
-            if mathCache.count > 400 { mathCache.removeAll() }
+            // A note holds its formulas at once, so the cache has room for a
+            // long one: emptied at a thousand rather than four hundred, which
+            // a note of five hundred formulas emptied on every keystroke.
+            if mathCache.count > 1000 { mathCache.removeAll() }
             mathCache[key] = made
             drawn = made
         }

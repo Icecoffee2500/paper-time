@@ -4,12 +4,52 @@
  * desktop.
  */
 import assert from 'node:assert/strict'
-import { mathBlocks, mathSpanAt } from '../shared/noteMath.js'
+import fs from 'node:fs'
+import path from 'node:path'
+import { displayFormulas, firstFormula, isDisplayLine, mathBlocks, mathSpanAt, type MathSpan } from '../shared/noteMath.js'
 
 type Test = (name: string, body: () => void | Promise<void>) => Promise<void>
 
+interface FixtureSpan { from: number; to: number; latex: string; display: boolean; isBlock: boolean }
+interface Fixture {
+  notes: {
+    text: string
+    blocks: number[][]
+    lines: { from: number; to: number; formulas: FixtureSpan[]; displays: number[][]; isDisplay: boolean }[]
+    spans: (FixtureSpan | null)[]
+  }[]
+}
+
+const flat = (span: MathSpan | null): FixtureSpan | null => span
+  ? { from: span.range.from, to: span.range.to, latex: span.latex, display: span.display, isBlock: span.isBlock }
+  : null
+
 export async function noteMathSuite(test: Test, suite: (name: string) => void) {
   suite('Where the mathematics is in a note')
+
+  // The Mac's own answers (`Scripts/note-math-fixture.swift`).
+  const file = path.join(process.cwd(), '..', 'Packages/PaperTimeKit/Tests/PaperCoreTests/Fixtures', 'note-math.json')
+  const fixture = JSON.parse(fs.readFileSync(file, 'utf8')) as Fixture
+  await test(`${fixture.notes.length} notes: the same formulas, blocks and spans as the Mac`, () => {
+    for (const note of fixture.notes) {
+      assert.deepEqual(mathBlocks(note.text).map((one) => [one.from, one.to]), note.blocks, note.text)
+      for (const line of note.lines) {
+        const text = note.text.slice(line.from, line.to)
+        const found: FixtureSpan[] = []
+        let index = 0
+        for (let one = firstFormula(text, index); one && index < text.length; one = firstFormula(text, index)) {
+          found.push(flat(one)!)
+          index = one.range.from + Math.max(one.range.to - one.range.from, 1)
+        }
+        assert.deepEqual(found, line.formulas, text)
+        assert.deepEqual(displayFormulas(text).map((one) => [one.from, one.to]), line.displays, text)
+        assert.equal(isDisplayLine(text), line.isDisplay, text)
+      }
+      note.spans.forEach((expected, caret) => {
+        assert.deepEqual(flat(mathSpanAt(note.text, caret)), expected, `${JSON.stringify(note.text)} at ${caret}`)
+      })
+    }
+  })
 
   const range = (text: string, piece: string) => {
     const from = text.indexOf(piece)

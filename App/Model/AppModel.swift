@@ -827,6 +827,11 @@ public final class AppModel {
 
     private func open(_ location: LibraryLocation) async {
         Trace.mark("opening the library")
+        #if os(macOS)
+        // MathJax takes a tenth of a second to load: while the library opens,
+        // not when the first note with a formula in it does.
+        MathJaxEngine.shared.prewarm()
+        #endif
         let store = LibraryStore(location: location)
         do {
             let manifest = try await Trace.time("library: bootstrap") { try await store.bootstrap() }

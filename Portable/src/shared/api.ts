@@ -72,8 +72,8 @@ export interface Requests {
   'library:adoptLoose': { args: void; result: LibrarySnapshot | { error: string } }
   'library:trash': { args: { id: string }; result: LibrarySnapshot | { error: string } }
   /** The PDF's bytes, or why there are none to read. */
-  /** One page's glyphs and rules as the Mac's scanner reads them (`MathScanner`) — Ultracopy and ⌘L read the mathematics from them. Null when the file cannot be read. */
-  'math:page': { args: { id: string; pageIndex: number }; result: { glyphs: Glyph[]; rules: Rule[]; cropBox: { x: number; y: number; width: number; height: number } } | null }
+  /** One page's glyphs and rules as the Mac's scanner reads them (`MathScanner`), and what the paper's other first pages say about where it keeps its variables — Ultracopy and ⌘L read the mathematics from them. Null when the file cannot be read. */
+  'math:page': { args: { id: string; pageIndex: number }; result: { glyphs: Glyph[]; rules: Rule[]; cropBox: { x: number; y: number; width: number; height: number }; italicElsewhere: { ownLetters: boolean; evidence: boolean } } | null }
   'paper:bytes': { args: { id: string }; result: PaperBytesDTO }
   /** `null` in a patch takes the key off. Answers with the record as written. */
   'paper:state': { args: { id: string; patch: Record<string, unknown> }; result: Record<string, unknown> | null }

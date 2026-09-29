@@ -1,6 +1,50 @@
 {
  "releases": [
   {
+   "version": "0.9.15",
+   "date": {
+    "ko": "2026년 9월",
+    "en": "September 2026"
+   },
+   "note": {
+    "ko": "노트가 수식을 Overleaf처럼 조판해요 — align, cases, 행렬, 식 번호와 \\eqref까지요. Ultracopy는 첨자와 행렬, 여러 줄 수식을 제대로 읽어요.",
+    "en": "Notes set LaTeX the way Overleaf does — align, cases, matrices, equation numbers and \\eqref. Ultracopy reads scripts, matrices and multi-line formulas correctly."
+   },
+   "added": [
+    {
+     "title": {
+      "ko": "노트의 LaTeX 환경",
+      "en": "LaTeX Environments in Notes"
+     },
+     "detail": {
+      "ko": "노트에 \\begin{align}…\\end{align}을 논문의 원고처럼 적으면 노트가 그대로 조판해요. cases, pmatrix 같은 행렬, gather, multline, \\[…\\]와 \\(…\\)도 돼요. 번호는 노트 맨 위부터 세서 오른쪽 끝에 서고, \\label을 붙인 식은 글 속의 \\eqref{…}가 그 번호로 가리켜요. \\$는 수식이 아니라 달러예요. 윈도우·리눅스도 똑같이 보여요.",
+      "en": "Write \\begin{align}…\\end{align} in a note the way a paper's source does, and the note sets it. cases, the matrices, gather, multline, \\[…\\] and \\(…\\) work too. Numbers count from the top of the note and stand at the right edge, and \\eqref{…} in a sentence points to the formula you labeled. \\$ is a dollar sign, not math. Windows and Linux show the same."
+     },
+     "demo": "noteEnvironments",
+     "devices": [
+      "mac"
+     ]
+    }
+   ],
+   "removed": [],
+   "fixed": [
+    {
+     "title": {
+      "ko": "Ultracopy의 첨자와 구조",
+      "en": "Scripts and Structure in Ultracopy"
+     },
+     "detail": {
+      "ko": "Ultracopy가 아래첨자와 위첨자를 자주 놓쳤어요. 이제 첨자는 물론 분수, 근호, 합과 적분의 위아래, 악센트, 여러 줄에 걸쳐 정렬된 수식까지 읽어요. 줄마다 분수가 든 cases와 ⋮·⋱가 든 행렬도 제 모양대로 옮겨요. 번호가 붙은 식은 Overleaf에서 그대로 컴파일되는 equation이나 align으로 복사해요. 조판 방식 열아홉 가지로 만든 수식 5,035개 중 5,033개를 맞게 읽어요.",
+      "en": "Ultracopy often missed subscripts and superscripts. It now reads them, and fractions, radicals, limits on sums and integrals, accents, and formulas aligned over several lines. Cases with a fraction on every line and matrices with ⋮ and ⋱ keep their shape. A numbered formula is copied as an equation or align that compiles in Overleaf. Of 5,035 test formulas set nineteen ways, it reads 5,033 right."
+     },
+     "action": "ultracopy",
+     "devices": [
+      "mac"
+     ]
+    }
+   ]
+  },
+  {
    "version": "0.9.14",
    "date": {
     "ko": "2026년 9월",
@@ -3359,6 +3403,16 @@
      "detail": {
       "ko": "쓰는 대로 조판된다. $x^2$는 수식이 되고, 저장되는 것은 여전히 원문이다.",
       "en": "Both are set as you write them. $x^2$ becomes mathematics; the source is still what is saved."
+     }
+    },
+    {
+     "title": {
+      "ko": "LaTeX 환경과 식 번호",
+      "en": "LaTeX environments and numbers"
+     },
+     "detail": {
+      "ko": "\\begin{align}, cases, 행렬, \\[…\\]를 논문 원고처럼 적어요. 번호는 노트 맨 위부터 세고, \\eqref{…}가 \\label을 붙인 식을 가리켜요.",
+      "en": "Write \\begin{align}, cases, the matrices and \\[…\\] as a paper's source does. Numbers count from the top of the note, and \\eqref{…} points to a labeled formula."
      }
     },
     {

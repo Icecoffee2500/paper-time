@@ -12,7 +12,7 @@
  * set, and the line under the hand is the one being edited.
  */
 import { blockOf, type Block } from './noteBlocks.js'
-import { lineRanges, mathBlocks, type TextSpan } from './noteMath.js'
+import { firstFormula, lineRanges, mathBlocks, type TextSpan } from './noteMath.js'
 import { tableBlocks } from './noteTable.js'
 import { parseAnchorURL } from './noteQuote.js'
 
@@ -24,6 +24,8 @@ export type InlineToken =
   | { kind: 'note'; from: number; to: number; id: string; title: string }
   | { kind: 'math'; from: number; to: number; latex: string; display: boolean }
   | { kind: 'emphasis'; from: number; to: number; text: string; bold: boolean; italic: boolean; mono: boolean }
+  /** `\$`: a dollar written so it does not open a formula, shown as the dollar it is. */
+  | { kind: 'dollar'; from: number; to: number }
 
 /** Which ends of a quotation a line owns, and whether it came off a page. */
 export interface QuoteEdge { opens: boolean; closes: boolean; anchored: boolean }
@@ -42,6 +44,10 @@ export interface PlannedLine {
   shownMarker: string
   /** The inline pieces, in source coordinates; none on a revealed line. */
   tokens: InlineToken[]
+  /** One displayed formula and nothing else — set as a paper sets one: in the
+   *  middle of the line, and one with numbers across all of it
+   *  (`NoteMarkdown.standsAlone`). Not while the line is being edited. */
+  alone: boolean
 }
 
 /** The lines, a `$$` that opens on one line and closes on another read as one. */
@@ -98,20 +104,37 @@ export function planNote(source: string, caret: number | null = null): PlannedLi
     const tokens = revealed || !holdsMarkup(block.content)
       ? []
       : inlineTokens(block.content).map((token) => ({ ...token, from: token.from + markerEnd, to: token.to + markerEnd }))
-    return { from: range.from, to: range.to, block, quoteEdge: edges[index], revealed, markerEnd, shownMarker: shownMarker(block), tokens }
+    return {
+      from: range.from, to: range.to, block, quoteEdge: edges[index], revealed, markerEnd,
+      shownMarker: shownMarker(block), tokens, alone: !revealed && standsAlone(block),
+    }
   })
+}
+
+/**
+ * Whether a line is one displayed formula and nothing else. A list item or a
+ * heading keeps its own shape whatever it holds.
+ */
+export function standsAlone(block: Block): boolean {
+  if (block.type.kind !== 'plain' && block.type.kind !== 'quote') return false
+  if (!holdsMarkup(block.content)) return false
+  const first = inlineTokens(block.content)[0]
+  if (!first || first.kind !== 'math' || !first.display) return false
+  const blank = /^\p{White_Space}*$/u
+  return blank.test(block.content.slice(0, first.from)) && blank.test(block.content.slice(first.to))
 }
 
 // MARK: - Inline
 
 const LINK = /\[((?:\\.|[^\\\]\n]|\](?!\())*)\]\((papertime:\/\/[^)\s]+)\)/g
 const WIKI = /\[\[([^\]|\n]+)(?:\|([^\]\n]*))?\]\]/g
-const MATH = /(\$\$)([^$]+)(\$\$)|(\$)([^$\n]+)(\$)/g
+const DOLLAR = /\\\$/g
 const EMPHASIS = /(\*\*)([^*\n]+)(\*\*)|(\*)([^*\n]+)(\*)|(`)([^`\n]+)(`)/g
 
-/** Whether a line could hold a link, a note link, a formula or emphasis — they all begin with one of four characters. */
+/** Whether a line could hold a link, a note link, a formula or emphasis — they all begin with one of five
+ *  characters: a formula with `$` or, written as LaTeX writes it, with a backslash. */
 export function holdsMarkup(line: string): boolean {
-  return /[[$*`]/.test(line)
+  return /[[$*`\\]/.test(line)
 }
 
 function firstFrom(pattern: RegExp, text: string, from: number): RegExpExecArray | null {
@@ -136,9 +159,6 @@ export function unescapeLabel(text: string): string {
   return escaped ? `${out}\\` : out
 }
 
-/** Foundation's `.whitespacesAndNewlines`, for the LaTeX of a formula. */
-const SPACE = '[\\u0009-\\u000d \\u0085\\u00a0\\u1680\\u2000-\\u200b\\u2028\\u2029\\u202f\\u205f\\u3000]'
-const TRIM = new RegExp(`^${SPACE}+|${SPACE}+$`, 'g')
 
 /**
  * The inline pieces of one line's content, in order — `nextToken`: the
@@ -162,12 +182,11 @@ export function inlineTokens(content: string): InlineToken[] {
     }
     const wiki = firstFrom(WIKI, content, index)
     if (wiki) consider({ kind: 'note', from: wiki.index, to: wiki.index + wiki[0].length, id: wiki[1], title: wiki[2] ?? wiki[1] })
-    const math = firstFrom(MATH, content, index)
-    if (math) {
-      const display = math[2] !== undefined
-      const body = display ? math[2] : math[5]
-      if (body !== undefined) consider({ kind: 'math', from: math.index, to: math.index + math[0].length, latex: body.replace(TRIM, ''), display })
-    }
+    // One with nothing in it is still a formula — shown as it was typed, and the line is read on after it.
+    const math = firstFormula(content, index)
+    if (math) consider({ kind: 'math', from: math.range.from, to: math.range.to, latex: math.latex, display: math.display })
+    const dollar = firstFrom(DOLLAR, content, index)
+    if (dollar) consider({ kind: 'dollar', from: dollar.index, to: dollar.index + 2 })
     const emphasis = firstFrom(EMPHASIS, content, index)
     if (emphasis) {
       const groups: [number, boolean, boolean, boolean][] = [[2, true, false, false], [5, false, true, false], [8, false, false, true]]
@@ -208,7 +227,7 @@ export function headIndent(block: Block): number {
 
 /**
  * The note as `NoteMarkdown.dump` prints it: runs of shown text, each with
- * the marks the dump names (QUOTE, PASSAGE, LINK, italic, indent N), runs of
+ * the marks the dump names (QUOTE, PASSAGE, LINK, italic, indent N, center), runs of
  * the same marks joined. A formula is one object replacement character.
  */
 export function displayRuns(source: string): DisplayRun[] {
@@ -225,7 +244,8 @@ export function displayRuns(source: string): DisplayRun[] {
     const { block } = line
     const quote = block.type.kind === 'quote'
     const indent = headIndent(block)
-    const withIndent = (marks: string[]) => (indent > 0 ? [...marks, `indent ${indent}`] : marks)
+    // A formula on a line of its own is set in the middle of the line (`standsAlone`).
+    const withIndent = (marks: string[]) => [...marks, ...(indent > 0 ? [`indent ${indent}`] : []), ...(line.alone ? ['center'] : [])]
     if (block.marker.length > 0) put(line.shownMarker, withIndent(quote ? ['QUOTE'] : []))
     const contentItalic = quote && block.quoteHeading === undefined
     const plain = (text: string) => put(text, withIndent([...(quote ? ['QUOTE'] : []), ...(contentItalic ? ['italic'] : [])]))
@@ -245,6 +265,9 @@ export function displayRuns(source: string): DisplayRun[] {
           break
         case 'math':
           put('\ufffc', withIndent([]))
+          break
+        case 'dollar':
+          plain('$')
           break
         case 'emphasis': {
           const quoted = quote && block.quoteHeading === undefined
