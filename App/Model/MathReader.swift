@@ -783,16 +783,20 @@ enum MathReader {
         // up to the bracket — with an odd number of cases, through it, into
         // the middle case. A bracket's pieces fall into the rows of their
         // own heights, none of them into that one.
+        // A brace nothing closes holds the lines that begin beside it: in the
+        // left column of a page, the lines of the right one stood beside it
+        // too, as far along as it reaches.
         func held(_ row: Int) -> Int? {
             fences.indices.first { index in
-                let fence = fences[index]
+                let fence = fences[index].region
                 guard fence.minY < baselines[row], fence.maxY > baselines[row] else { return false }
                 let inside = extents[row].minX > fence.minX - 1 && extents[row].maxX < fence.maxX + 1
+                    && (fences[index].closed || extents[row].minX < fence.minX + body * 2)
                 let standing = rows[row].contains { glyph in
                     (MathTranscriber.isDelimiter(glyph) || MathTranscriber.spelling(of: glyph).isEmpty)
                         && (abs(glyph.rect.maxX - fence.minX) < 1.5 || abs(glyph.rect.minX - fence.maxX) < 1.5)
                 }
-                let centred = extents[row].minX < fence.maxX && extents[row].maxX > fence.minX - body * 2
+                let centred = extents[row].minX < fence.minX && extents[row].maxX > fence.minX - body * 2
                     && abs(fence.midY - (baselines[row] + body * 0.25)) < body * 0.3
                 return inside || standing || centred
             }
@@ -898,7 +902,15 @@ enum MathReader {
     /// same place — ⎛ ⎜ ⎝ in OpenType, "tp", "ex" and "bt" in TeX's fonts —
     /// or one OpenType glyph whose height the file does not say, standing off
     /// the line of what it holds, taken as two lines either side of it.
-    static func tallFences(in glyphs: [PDFContentScanner.Glyph], body: CGFloat) -> [CGRect] {
+    struct Fence {
+        /// What the bracket holds.
+        var region: CGRect
+        /// Whether a bracket closes it; a brace of cases holds what begins
+        /// beside it, as far along as that runs.
+        var closed: Bool
+    }
+
+    static func tallFences(in glyphs: [PDFContentScanner.Glyph], body: CGFloat) -> [Fence] {
         struct Side { var token: String; var box: CGRect }
         var sides: [Side] = []
         // A bracket's pieces are one bracket, met once.
@@ -932,7 +944,7 @@ enum MathReader {
         let pairs: [String: String] = [
             "(": ")", "[": "]", "\\{": "\\}", "|": "|", "\\|": "\\|", "\\mid": "\\mid",
         ]
-        var result: [CGRect] = []
+        var result: [Fence] = []
         var used = Set<Int>()
         for (index, left) in sides.enumerated().sorted(by: { $0.element.box.minX < $1.element.box.minX })
         where !used.contains(index) {
@@ -962,13 +974,14 @@ enum MathReader {
             let inside = glyphs.filter {
                 region.contains(CGPoint(x: $0.rect.midX, y: $0.origin.y)) && !MathTranscriber.isDelimiter($0)
                     && !MathTranscriber.spelling(of: $0).isEmpty && !MathTranscriber.isBigOperator($0)
+                    && (right != nil || $0.rect.minX < region.minX + body * 3)
             }
             let largest = inside.map(\.size).max() ?? 0
             let heights = inside.filter { $0.size >= largest * 0.9 }.map(\.origin.y)
             guard let top = heights.max(), let bottom = heights.min(), top - bottom >= body * 0.9 else { continue }
             used.insert(index)
             if let right { used.insert(right) }
-            result.append(region)
+            result.append(Fence(region: region, closed: right != nil))
         }
         return result
     }
