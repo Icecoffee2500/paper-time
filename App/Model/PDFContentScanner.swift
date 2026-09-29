@@ -38,10 +38,43 @@ final class PDFContentScanner {
         /// on the line at 526.79 is placed at 534.26, which is nearer the line
         /// of prose above it. Everything that reasons about where a glyph sits
         /// has to know this, or the formula ends up in the wrong paragraph.
+        ///
+        /// Every TeX extension font is built this way, not only Computer
+        /// Modern's: Latin Modern's, the tx and px fonts', Euler's, Fourier's,
+        /// MathTime's and esint's. Reading only CMEX as one put the limits of
+        /// a displayed sum set in Times on the line above.
+        ///
+        /// The symbol fonts' radical sign is drawn the same way — its point is
+        /// at the top, by the rule it holds up — and so it counts as one.
+        ///
+        /// Euler's extension font also keeps its arrows and its ∞, which are
+        /// set on the line like any other glyph.
         var isExtension: Bool {
-            let family = fontName.split(separator: "+").last.map(String.init) ?? fontName
-            return family.uppercased().hasPrefix("CMEX")
+            let family = (fontName.split(separator: "+").last.map(String.init) ?? fontName).uppercased()
+            if Self.extensionFamilies.contains(where: { family.hasPrefix($0) }) {
+                guard let name = glyphName else { return true }
+                if name == "infinity" { return false }
+                // newtx's own pieces for a bracket built up tall — "tpA",
+                // "exA", "btA" — stand on their point, as ordinary glyphs do.
+                if ["tpA", "exA", "btA", "midA"].contains(where: { name.hasSuffix($0) }) { return false }
+                if name.hasPrefix("arrow"), !name.hasSuffix("half"), !name.hasSuffix("vertex"),
+                   !name.hasSuffix("tp"), !name.hasSuffix("bt") { return false }
+                return true
+            }
+            guard let name = glyphName, name.hasPrefix("radical"), !name.hasPrefix("radicalvertex")
+            else { return false }
+            return Self.symbolFamilies.contains { family.hasPrefix($0) }
         }
+
+        private static let symbolFamilies = [
+            "CMSY", "CMBSY", "LMMATHSYMBOLS", "TXSY", "PXSY", "NEWTXSY", "NEWPXSY", "MTSY",
+            "EUSM", "EUSB", "FOURIER-MATH-SYMBOLS",
+        ]
+
+        private static let extensionFamilies = [
+            "CMEX", "LMMATHEXTENSION", "TXEX", "PXEX", "EUEX", "FOURIER-MATH-EXTENSION",
+            "MTEX", "MT2EX", "ESINT",
+        ]
 
         /// Where the ink is.
         var rect: CGRect {
@@ -56,8 +89,21 @@ final class PDFContentScanner {
         /// The font's names say which size was asked for — TeX's \big, \Big,
         /// \bigg, \Bigg and the display variants of the big operators — and
         /// a "\Big(" really is drawn about one and four fifths of an em tall.
-        private static func reach(of glyphName: String?) -> CGFloat {
-            guard let glyphName else { return 1 }
+        private static func reach(of name: String?) -> CGFloat {
+            guard let name else { return 1 }
+            // "summationdisplay.1" is the display sum from a second font, and
+            // newtx names its pieces "parenlefttpA".
+            var glyphName = name.firstIndex(of: ".").map { String(name[..<$0]) } ?? name
+            if glyphName.hasSuffix("A"),
+               ["tpA", "btA", "exA", "midA"].contains(where: { glyphName.hasSuffix($0) }) {
+                glyphName.removeLast()
+            }
+            // The top and bottom pieces of a bracket built up for a matrix.
+            if glyphName.hasPrefix("paren") || glyphName.hasPrefix("bracket") {
+                if glyphName.hasSuffix("tp") || glyphName.hasSuffix("bt") { return 1.8 }
+            }
+            if glyphName.hasPrefix("brace"), glyphName.hasSuffix("tp") || glyphName.hasSuffix("bt")
+                || glyphName.hasSuffix("mid") { return 0.9 }
             if glyphName.hasSuffix("Bigg") { return 3.0 }
             if glyphName.hasSuffix("bigg") { return 2.4 }
             if glyphName.hasSuffix("Big") { return 1.8 }
@@ -589,49 +635,105 @@ final class PDFContentScanner {
               let text = String(data: data, encoding: .isoLatin1)
         else { return [:] }
 
+        return toUnicodeTable(text)
+    }
+
+    /// A ToUnicode CMap's `bfchar` and `bfrange` sections, read the way ISO
+    /// 32000 §9.10.3 writes them.
+    ///
+    /// Every value is UTF-16, four hex digits a unit — so a letter outside
+    /// the first plane is two of them (𝒒 is D835 DC92). A range either gives
+    /// the first value and counts up from it, the *last unit* counting — so
+    /// `<04F6> <04F9> <D835DC34>` is 𝐴 to 𝐷 — or gives one value per code in
+    /// an array. XeTeX writes the italic alphabet of a maths font as ranges
+    /// like that one; reading the first value as one 32-bit number made
+    /// every letter of every formula it set mean nothing.
+    static func toUnicodeTable(_ text: String) -> [Int: String] {
         var table: [Int: String] = [:]
-        // The value is UTF-16, four hex digits a unit — so a letter outside
-        // the first plane is two of them (𝒒 is D835 DC92).
-        func character(_ hex: String) -> String? {
-            var units: [UInt16] = []
+        func units(_ hex: Substring) -> [UInt16]? {
+            var out: [UInt16] = []
             var index = hex.startIndex
-            while let end = hex.index(index, offsetBy: 4, limitedBy: hex.endIndex) {
+            while let end = hex.index(index, offsetBy: 4, limitedBy: hex.endIndex), index < end {
                 guard let value = UInt16(hex[index..<end], radix: 16) else { return nil }
-                units.append(value)
+                out.append(value)
                 index = end
             }
-            guard !units.isEmpty else { return nil }
-            return String(utf16CodeUnits: units, count: units.count)
+            // Two digits is one byte: a single-byte value, which a few
+            // writers use for plain ASCII.
+            if out.isEmpty, hex.count == 2, let value = UInt16(hex, radix: 16) { out = [value] }
+            return out.isEmpty ? nil : out
+        }
+        func string(_ units: [UInt16]) -> String {
+            String(utf16CodeUnits: units, count: units.count)
         }
 
-        let charPattern = try! NSRegularExpression(pattern: "<([0-9A-Fa-f]+)>\\s*<([0-9A-Fa-f]+)>")
-        for section in text.components(separatedBy: "beginbfchar").dropFirst() {
-            let body = section.components(separatedBy: "endbfchar").first ?? ""
-            for match in charPattern.matches(in: body, range: NSRange(body.startIndex..., in: body)) {
-                guard let codeRange = Range(match.range(at: 1), in: body),
-                      let valueRange = Range(match.range(at: 2), in: body),
-                      let code = Int(body[codeRange], radix: 16),
-                      let value = character(String(body[valueRange]))
-                else { continue }
-                table[code] = value
+        // The CMap as a list of hex strings, brackets and words.
+        enum Token { case hex(Substring), open, close, word(Substring) }
+        var tokens: [Token] = []
+        var index = text.startIndex
+        while index < text.endIndex {
+            let character = text[index]
+            if character == "<" {
+                let from = text.index(after: index)
+                guard let close = text[from...].firstIndex(of: ">") else { break }
+                let hex = text[from..<close].filter { !$0.isWhitespace }
+                tokens.append(.hex(Substring(hex)))
+                index = text.index(after: close)
+            } else if character == "[" {
+                tokens.append(.open); index = text.index(after: index)
+            } else if character == "]" {
+                tokens.append(.close); index = text.index(after: index)
+            } else if character.isLetter {
+                let from = index
+                while index < text.endIndex, text[index].isLetter { index = text.index(after: index) }
+                tokens.append(.word(text[from..<index]))
+            } else {
+                index = text.index(after: index)
             }
         }
-        let rangePattern = try! NSRegularExpression(
-            pattern: "<([0-9A-Fa-f]+)>\\s*<([0-9A-Fa-f]+)>\\s*<([0-9A-Fa-f]+)>"
-        )
-        for section in text.components(separatedBy: "beginbfrange").dropFirst() {
-            let body = section.components(separatedBy: "endbfrange").first ?? ""
-            for match in rangePattern.matches(in: body, range: NSRange(body.startIndex..., in: body)) {
-                guard let lowRange = Range(match.range(at: 1), in: body),
-                      let highRange = Range(match.range(at: 2), in: body),
-                      let startRange = Range(match.range(at: 3), in: body),
-                      let low = Int(body[lowRange], radix: 16),
-                      let high = Int(body[highRange], radix: 16),
-                      let start = UInt32(body[startRange], radix: 16)
-                else { continue }
-                for offset in 0...(max(high - low, 0)) {
-                    guard let scalar = Unicode.Scalar(start + UInt32(offset)) else { continue }
-                    table[low + offset] = String(Character(scalar))
+
+        var position = 0
+        func hex() -> Substring? {
+            guard position < tokens.count, case .hex(let value) = tokens[position] else { return nil }
+            position += 1
+            return value
+        }
+        while position < tokens.count {
+            guard case .word(let word) = tokens[position] else { position += 1; continue }
+            position += 1
+            if word == "beginbfchar" {
+                while position < tokens.count {
+                    if case .word = tokens[position] { break }
+                    guard let codeHex = hex(), let valueHex = hex() else { position += 1; continue }
+                    if let code = Int(codeHex, radix: 16), let value = units(valueHex) {
+                        table[code] = string(value)
+                    }
+                }
+            } else if word == "beginbfrange" {
+                while position < tokens.count {
+                    if case .word = tokens[position] { break }
+                    guard let lowHex = hex(), let highHex = hex(),
+                          let low = Int(lowHex, radix: 16), let high = Int(highHex, radix: 16),
+                          high >= low, high - low < 65536
+                    else { position += 1; continue }
+                    if position < tokens.count, case .open = tokens[position] {
+                        position += 1
+                        var code = low
+                        while position < tokens.count {
+                            if case .close = tokens[position] { position += 1; break }
+                            if let valueHex = hex() {
+                                if code <= high, let value = units(valueHex) { table[code] = string(value) }
+                                code += 1
+                            } else {
+                                position += 1
+                            }
+                        }
+                    } else if let startHex = hex(), var value = units(startHex) {
+                        for code in low...high {
+                            table[code] = string(value)
+                            value[value.count - 1] &+= 1
+                        }
+                    }
                 }
             }
         }

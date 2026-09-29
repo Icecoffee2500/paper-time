@@ -1,0 +1,150 @@
+# What Ultracopy is held to: formulas a paper writes, one per line, in the
+# LaTeX an author types. `make.sh` sets each inline and displayed, in every
+# font setup, one page each; `ultracopy-bench.swift` reads the pages back and
+# compares what it reads with this, structurally (`x_{i}` is `x_i`, `x_{ij}`
+# is not `x_ij`). A line of the form `source => expected` says what a reading
+# of the page can be asked for when it cannot be the source itself: readings
+# separated by ` || `, `=` for the source, `-` for nothing, and `setup: …` for
+# a reading allowed in the setups named only — where the page draws something
+# else: mathptmx has no bold maths, unicode-math's \boldsymbol draws the
+# plain letter, and TeX Gyre Termes Math sets \binom's halves as far apart as
+# the lines of a two-line pmatrix, which then draws the same.
+#
+# Scripts
+x_i
+x^2
+x_i^2
+x_{ij}
+x_{i,j}
+x_{i+1}
+x_{n-1}^{(k)}
+\theta^{(t)}
+\theta^{(t+1)} = \theta^{(t)} - \eta \nabla_\theta \mathcal{L}
+W_{\ell}^{\top}
+A^{-1}
+A^\top B
+e^{-x^2/2}
+2^{n-1}
+2^{2^n}
+x_{i_j}
+x_{i_{j_k}}
+a_{n+1} = a_n + d
+\alpha_t \beta_{t-1}
+X_i^j
+\sigma_k^2
+h_t = \tanh(W_h h_{t-1} + W_x x_t + b)
+\hat{y}_i
+\bar{x}_n
+\tilde{\mu}_k
+\vec{v}
+\dot{x}
+x'
+f''(x)
+y_i'
+p_\theta(x|z)
+q_\phi(z|x)
+\mathbb{E}_{x\sim p(x)}[\log p_\theta(x)]
+\mathcal{L}_{\text{KL}}
+\mathcal{L}_{\mathrm{rec}} + \lambda \mathcal{L}_{\mathrm{reg}}
+D_{\mathrm{KL}}(q \| p)
+\mathcal{N}(\mu, \sigma^2)
+\mathcal{N}(0, I)
+\|x\|_2^2
+\|\mathbf{w}\|_1
+\mathbf{x}^\top \mathbf{W} \mathbf{y}
+\boldsymbol{\mu}_k => = || mathptmx,lm-otf,lm-xe,stix2-otf,termes-otf,libertinus-otf: \mu_k
+\boldsymbol{\Sigma}^{-1} => = || mathptmx,lm-otf,lm-xe,stix2-otf,termes-otf,libertinus-otf: \Sigma^{-1}
+\mathbb{R}^{n\times m}
+x \in \mathbb{R}^d
+\mathbb{N}, \mathbb{Z}, \mathbb{Q}, \mathbb{C}
+\mathfrak{g}
+\mathscr{L}
+\mathsf{T} => \mathsf{T} || -
+\mathtt{x} => \mathtt{x} || -
+\mathrm{d}x
+# Big operators and names
+\sum_{i=1}^{n} x_i
+\sum_{i=1}^{n} i = \frac{n(n+1)}{2}
+\prod_{k=1}^{K} p_k
+\int_0^1 f(x)\,dx
+\int_{-\infty}^{\infty} e^{-x^2} dx = \sqrt{\pi}
+\lim_{n\to\infty} a_n
+\max_{\theta} J(\theta)
+\min_{w \in W} \|w\|
+\arg\min_{w} L(w)
+\sum_{i} \sum_{j} a_{ij}
+\bigcup_{i=1}^{n} A_i
+\sup_{x \in X} f(x)
+\log_2 n
+\exp(-\lambda t)
+\sin^2\theta + \cos^2\theta = 1
+# Fractions and roots
+\frac{a}{b}
+\frac{\partial L}{\partial w}
+\frac{1}{1+e^{-x}}
+\frac{x_i - \mu}{\sigma}
+\frac{\frac{a}{b}}{c}
+\sqrt{x^2+y^2}
+\sqrt[3]{x}
+\binom{n}{k} => = || termes-otf: \begin{pmatrix} n \\ k \end{pmatrix}
+# Delimiters and sets
+\{x \in \mathbb{R} : x > 0\}
+\{x_i\}_{i=1}^N
+\lfloor x \rfloor
+\lceil n/2 \rceil
+\langle u, v \rangle
+|x - y|
+\left( \frac{a}{b} \right)^2
+\Big[ x \Big]
+# Relations and symbols
+f: X \to Y
+\forall \epsilon > 0, \exists \delta > 0 => = || mathptmx: \forall \varepsilon > 0, \exists \delta > 0
+a \leq b, c \geq d, e \neq f
+x \approx y \equiv z \sim w \propto v
+A \subseteq B \cup C \cap D
+A \setminus B
+x \notin S
+a \pm b \mp c \times d \div e
+f \circ g
+u \otimes v \oplus w
+p \Rightarrow q \Leftrightarrow r
+x \leftarrow x + 1
+\infty
+\ell_1
+\aleph_0
+\partial_t u = \Delta u
+\varepsilon, \epsilon, \varphi, \phi, \vartheta => = || mathptmx: \varepsilon, \varepsilon, \varphi, \phi, \vartheta
+\Gamma, \Delta, \Theta, \Lambda, \Sigma, \Phi, \Psi, \Omega
+x_1, \ldots, x_n
+x_1 + \cdots + x_n
+O(n \log n)
+\mathrm{softmax}(z)_i = \frac{e^{z_i}}{\sum_j e^{z_j}}
+\text{if } x > 0 => \text{if } x > 0 || x > 0
+\operatorname{diag}(x)
+\det(A) \neq 0
+\mathrm{Tr}(A^\top A)
+\overline{AB}
+\widehat{xyz}
+\nabla_\theta J(\theta) = \mathbb{E}[\nabla_\theta \log \pi_\theta(a|s)]
+\sigma(\cdot)
+\Pr[X = x]
+\delta_{ij}
+P(A \mid B) = \frac{P(B \mid A) P(A)}{P(B)}
+y = Wx + b
+\min_{G}\max_{D} V(D,G)
+\mathbb{E}_{z \sim q_\phi(z|x)}[\log p_\theta(x|z)] - D_{\mathrm{KL}}(q_\phi(z|x) \| p(z))
+# Environments — set on their own lines only (`@display`): a matrix or a
+# system of cases in the middle of a sentence is not what papers write.
+@display \begin{pmatrix} a & b \\ c & d \end{pmatrix}
+@display \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix}
+@display \begin{vmatrix} a & b \\ c & d \end{vmatrix}
+@display \begin{pmatrix} x_1 \\ x_2 \\ x_3 \end{pmatrix}
+@display A = \begin{bmatrix} a_{11} & a_{12} & a_{13} \\ a_{21} & a_{22} & a_{23} \end{bmatrix}
+@display \Sigma = \begin{pmatrix} \sigma_1^2 & 0 \\ 0 & \sigma_2^2 \end{pmatrix}
+@display f(x) = \begin{cases} x & \text{if } x \geq 0 \\ -x & \text{otherwise} \end{cases}
+@display |x| = \begin{cases} x, & x \geq 0 \\ -x, & x < 0 \end{cases}
+@display \mathbf{1}[y = k] = \begin{cases} 1 & y = k \\ 0 & y \neq k \end{cases}
+@display \begin{aligned} a &= b + c \\ d &= e - f \end{aligned}
+@display \begin{aligned} \mathcal{L}(\theta) &= \mathbb{E}[\log p_\theta(x|z)] \\ &\leq \log p_\theta(x) \end{aligned}
+@display \begin{aligned} f(x) &= (x+1)^2 \\ &= x^2 + 2x + 1 \end{aligned}
+@display \begin{array}{cc} a & b \\ c & d \end{array} => \begin{matrix} a & b \\ c & d \end{matrix}
