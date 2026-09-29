@@ -1128,6 +1128,7 @@ export class Reader implements PageOwner {
         pageText: part.page.layerText() ?? '',
         selectionString: part.text,
         cropBox: scanned?.cropBox ?? { x: 0, y: 0, width: 612, height: 792 },
+        italicElsewhere: scanned?.italicElsewhere ?? null,
       })
     }
     return pages
