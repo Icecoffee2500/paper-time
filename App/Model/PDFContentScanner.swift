@@ -128,8 +128,18 @@ final class PDFContentScanner {
             if glyphName.hasPrefix("paren") || glyphName.hasPrefix("bracket") {
                 if glyphName.hasSuffix("tp") || glyphName.hasSuffix("bt") { return 1.8 }
             }
-            if glyphName.hasPrefix("brace"), glyphName.hasSuffix("tp") || glyphName.hasSuffix("bt")
-                || glyphName.hasSuffix("mid") { return 0.9 }
+            if glyphName.hasPrefix("brace"), glyphName.hasSuffix("tp") || glyphName.hasSuffix("bt") { return 0.9 }
+            // The middle of a brace is its point and the stretch either side
+            // of it; the pieces that fill between are short — a brace's a
+            // third of an em, a bracket's and a bar's three fifths. Boxed a
+            // whole em, the filler after a brace's middle stood 9 points
+            // clear of it, and one brace was taken for two.
+            if glyphName.hasPrefix("brace"), glyphName.hasSuffix("mid") { return 1.8 }
+            if glyphName == "braceex" { return 0.3 }
+            if glyphName.hasSuffix("ex"),
+               ["paren", "bracket", "arrowvert", "Arrowvert", "vextend"].contains(where: { glyphName.hasPrefix($0) }) {
+                return 0.6
+            }
             if glyphName.hasSuffix("Bigg") { return 3.0 }
             if glyphName.hasSuffix("bigg") { return 2.4 }
             if glyphName.hasSuffix("Big") { return 1.8 }

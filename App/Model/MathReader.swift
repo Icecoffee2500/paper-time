@@ -356,9 +356,17 @@ enum MathReader {
             next += 1
         }
         guard lines.count >= 2 else { return nil }
-        let written = lines.map { line in
-            line.cells.map { MathTranscriber.latex(glyphs: $0.glyphs, rules: rules) }.joined(separator: " & ")
-        }
+        let cells = lines.map { line in line.cells.map { MathTranscriber.latex(glyphs: $0.glyphs, rules: rules) } }
+        // What lines up in cells and is not a matrix: a table of results —
+        // many columns, most cells a measured number ("93.2 ± 0.3") — and an
+        // algorithm, whose lines begin with their numbers ("4:"). Both came
+        // back as one \begin{matrix}; each line is its own formula.
+        let all = cells.flatMap { $0 }
+        let measured = all.filter { $0.range(of: #"[0-9]\.[0-9]"#, options: .regularExpression) != nil }.count
+        guard lines[0].cells.count <= 6, measured * 2 <= all.count,
+              !cells.allSatisfy({ $0.first?.range(of: #"^[0-9]+:$"#, options: .regularExpression) != nil })
+        else { return nil }
+        let written = cells.map { $0.joined(separator: " & ") }
         let latex = "\\begin{matrix} " + written.joined(separator: " \\\\ ") + " \\end{matrix}"
         let bounds = lines.flatMap { $0.cells.map(\.span) }.dropFirst()
             .reduce(lines[0].cells[0].span) { $0.union($1) }
@@ -769,7 +777,12 @@ enum MathReader {
         let fences = tallFences(in: rows.flatMap { $0 }, body: body)
         // A pair of tall brackets holds the rows between them — the whole of
         // each — and the row they stand on; the line of an align above it,
-        // passing across the brackets, is not held.
+        // passing across the brackets, is not held. The row they stand on is
+        // the one they are centred on: TeX centres a \left–\right pair on
+        // the axis of its line, and the line of the formula's left side runs
+        // up to the bracket — with an odd number of cases, through it, into
+        // the middle case. A bracket's pieces fall into the rows of their
+        // own heights, none of them into that one.
         func held(_ row: Int) -> Int? {
             fences.indices.first { index in
                 let fence = fences[index]
@@ -779,7 +792,9 @@ enum MathReader {
                     (MathTranscriber.isDelimiter(glyph) || MathTranscriber.spelling(of: glyph).isEmpty)
                         && (abs(glyph.rect.maxX - fence.minX) < 1.5 || abs(glyph.rect.minX - fence.maxX) < 1.5)
                 }
-                return inside || standing
+                let centred = extents[row].minX < fence.maxX && extents[row].maxX > fence.minX - body * 2
+                    && abs(fence.midY - (baselines[row] + body * 0.25)) < body * 0.3
+                return inside || standing || centred
             }
         }
         let prose = rows.indices.map { row in containsProse(rows[row]) && held(row) == nil }
@@ -816,15 +831,33 @@ enum MathReader {
         }
         // How far a row is from the row on its far side — a row of limits
         // belongs to the nearer of the two lines it stands between.
-        func gap(below row: Int) -> CGFloat? { unders[row].map { baselines[row] - baselines[$0] } }
-        func gap(above row: Int) -> CGFloat? { overs[row].map { baselines[$0] - baselines[row] } }
+        // A line of prose is not a line a row of limits could belong to.
+        func gap(below row: Int) -> CGFloat? {
+            unders[row].flatMap { prose[$0] ? nil : baselines[row] - baselines[$0] }
+        }
+        func gap(above row: Int) -> CGFloat? {
+            overs[row].flatMap { prose[$0] ? nil : baselines[$0] - baselines[row] }
+        }
+        // Two rows of scripts one over the other, each the limits of its own
+        // line: under the sums of one line of a derivation and over the sums
+        // of the next, the two rows stand closer than a line and joined the
+        // lines — every glyph of both came back twice over, interleaved.
+        func small(_ index: Int) -> Bool { rows[index].allSatisfy { $0.size < body * 0.8 } }
+        func apart(_ upper: Int, _ lower: Int) -> Bool {
+            guard small(upper), small(lower), let top = overs[upper], let bottom = unders[lower],
+                  !prose[top], !prose[bottom] else { return false }
+            return linked(rows[top], rows[upper], baselines: (baselines[top], baselines[upper]),
+                          body: body, rules: rules)
+                && linked(rows[lower], rows[bottom], baselines: (baselines[lower], baselines[bottom]),
+                          body: body, rules: rules)
+        }
         for row in rows.indices where !prose[row] {
-            if let below = unders[row], !prose[below],
+            if let below = unders[row], !prose[below], !apart(row, below),
                linked(rows[row], rows[below], baselines: (baselines[row], baselines[below]),
                       body: body, rules: rules, farther: (gap(above: row), gap(below: below))) {
                 join(row, below)
             }
-            if let above = overs[row], !prose[above],
+            if let above = overs[row], !prose[above], !apart(above, row),
                linked(rows[above], rows[row], baselines: (baselines[above], baselines[row]),
                       body: body, rules: rules, farther: (gap(above: above), gap(below: row))) {
                 join(above, row)
@@ -955,17 +988,32 @@ enum MathReader {
         // A fraction bar with one row on each side of it — as wide as what it
         // divides, which a table's rule between two rows of cells is not, and
         // next to both: a numerator stands on its bar and a denominator hangs
-        // from it. A bar two lines under a row is the next line's fraction.
+        // from it. A bar two lines under a row is the next line's fraction —
+        // and the limits under a sum on one line of a derivation stood two
+        // sizes over the next line's first fraction, and joined the lines.
         let reach = top.union(bottom)
         if distance < body * 4.5, rules.contains(where: { rule in
             rule.rect.midY > baselines.below && rule.rect.midY < baselines.above
-                && baselines.above - rule.rect.midY < body * 2 && rule.rect.midY - baselines.below < body * 2
+                && baselines.above - rule.rect.midY < body * 1.6 && rule.rect.midY - baselines.below < body * 2
                 && rule.rect.width > 1 && rule.rect.height < rule.rect.width
                 && rule.rect.minX > reach.minX - 4 && rule.rect.maxX < reach.maxX + 4
                 && above.contains { $0.rect.midX > rule.rect.minX - 1 && $0.rect.midX < rule.rect.maxX + 1 }
                 && below.contains { $0.rect.midX > rule.rect.minX - 1 && $0.rect.midX < rule.rect.maxX + 1 }
         }) { return true }
         guard distance < body * 2 else { return false }
+        // The pieces of one tall sign are one sign: STIX sets a displayed ∫
+        // as its top half on one row and its bottom half, with the lower
+        // limit beside it, on the next.
+        func sign(_ glyph: PDFContentScanner.Glyph) -> Bool {
+            MathTranscriber.isPiece(glyph) || MathTranscriber.isBigOperator(glyph)
+        }
+        if above.contains(where: { upper in
+            sign(upper) && below.contains { lower in
+                sign(lower) && (MathTranscriber.isPiece(upper) || MathTranscriber.isPiece(lower))
+                    && abs(upper.origin.x - lower.origin.x) < upper.size * 0.2
+                    && abs(upper.rect.minY - lower.rect.maxY) < upper.size * 0.35
+            }
+        }) { return true }
         // A sign that grows — a big operator, a tall bracket — reaching down
         // past the other row's baseline, or standing over what is in it.
         func reaches(_ row: [PDFContentScanner.Glyph], to other: [PDFContentScanner.Glyph],
@@ -975,11 +1023,12 @@ enum MathReader {
                 guard glyph.isExtension || MathTranscriber.isBigOperator(glyph) else { return false }
                 let ink = glyph.rect
                 let across = ink.maxX > span.minX - body * 0.6 && ink.minX < span.maxX + body * 0.6
-                // Standing over what is in it means reaching it: a sign on
-                // one displayed line is over the whole of the next one, and
-                // is not a part of it for that.
+                // Standing over what is in it means reaching into it: a sign
+                // on one displayed line is over the whole of the next one,
+                // and the \big brackets of two lines set tight come within a
+                // point of each other — neither makes them one formula.
                 let overlaps = ink.maxX > span.minX && ink.minX < span.maxX
-                    && ink.minY < span.maxY + body * 0.3 && ink.maxY > span.minY - body * 0.3
+                    && ink.minY < span.maxY - body * 0.2 && ink.maxY > span.minY + body * 0.2
                 return (across && ink.minY < baseline && ink.maxY > baseline) || overlaps
             }
         }
@@ -999,6 +1048,14 @@ enum MathReader {
             let closes = row.filter { MathTranscriber.closing($0) != nil && $0.rect.minX >= span.maxX - 1 }
             guard let open = opens.max(by: { $0.rect.maxX < $1.rect.maxX }),
                   let close = closes.min(by: { $0.rect.minX < $1.rect.minX }) else { return false }
+            // One pair, and a tall one: the two halves of \binom are set at
+            // one size and one height, taller than a letter. The "(" of one
+            // formula and the ")" of its number are not a pair, and between
+            // them stood the whole of the formula above.
+            let tall = { (glyph: PDFContentScanner.Glyph) in
+                glyph.rect.height >= body * 1.1 || MathTranscriber.isTallVariant(glyph, among: row, body: body)
+            }
+            guard tall(open), tall(close), abs(open.origin.y - close.origin.y) < body * 0.3 else { return false }
             return span.minX - open.rect.maxX < body * 0.6 && close.rect.minX - span.maxX < body * 0.6
         }
         if encloses(above, below) || encloses(below, above) { return true }
@@ -1208,13 +1265,47 @@ enum MathReader {
         // A big operator, or a piece of a tall delimiter, hangs from a point
         // above its own ink, so where it was *placed* is not the line it was
         // set on. It joins the row whose baseline runs through it.
+        // A piece no row runs through — the top of a brace over two cases —
+        // joins the piece it stands on: the nearest row was the line of prose
+        // over the display, and the brace lost its top, and with it the
+        // height of what it holds.
+        var hung: [(glyph: PDFContentScanner.Glyph, row: Int)] = []
+        var waiting: [PDFContentScanner.Glyph] = []
         for glyph in glyphs.filter({ $0.isExtension && !(MathTranscriber.isRadical($0) && placed($0)) }) {
             let ink = glyph.rect
             let through = rows.indices.filter {
                 rows[$0].baseline > ink.minY - 1 && rows[$0].baseline < ink.maxY + 1
             }
-            let candidates = through.isEmpty ? Array(rows.indices) : through
-            if let nearest = candidates.min(by: {
+            if let nearest = through.min(by: {
+                abs(rows[$0].baseline - ink.midY) < abs(rows[$1].baseline - ink.midY)
+            }) {
+                rows[nearest].glyphs.append(glyph)
+                hung.append((glyph, nearest))
+            } else {
+                waiting.append(glyph)
+            }
+        }
+        func standsOn(_ glyph: PDFContentScanner.Glyph) -> Int? {
+            hung.first { other in
+                abs(other.glyph.origin.x - glyph.origin.x) < glyph.size * 0.2
+                    && other.glyph.rect.maxY > glyph.rect.minY - glyph.size * 0.3
+                    && other.glyph.rect.minY < glyph.rect.maxY + glyph.size * 0.3
+            }?.row
+        }
+        var progress = true
+        while progress, !waiting.isEmpty {
+            progress = false
+            for (index, glyph) in waiting.enumerated().reversed() {
+                guard let row = standsOn(glyph) else { continue }
+                rows[row].glyphs.append(glyph)
+                hung.append((glyph, row))
+                waiting.remove(at: index)
+                progress = true
+            }
+        }
+        for glyph in waiting {
+            let ink = glyph.rect
+            if let nearest = rows.indices.min(by: {
                 abs(rows[$0].baseline - ink.midY) < abs(rows[$1].baseline - ink.midY)
             }) {
                 rows[nearest].glyphs.append(glyph)
