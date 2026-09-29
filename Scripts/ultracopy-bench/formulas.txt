@@ -168,3 +168,11 @@ y = Wx + b
 # What follows the cases on the brace's own line is no case (Selective
 # Synaptic Dampening, equations 2 to 4).
 @display \theta_i = \begin{cases} 0, & \text{if } x > 0 \\ \theta_i, & \text{if } x = 0 \end{cases} \quad \forall i \in [0, n]
+# Scripts that start together and end apart, a script's script after the
+# wider of two, an accent under a script, and a fraction in an exponent with
+# a subscript beside it (Leveraging Machine Unlearning p18–19, Unlearning
+# during Learning p14).
+\mathbf{G}_t^{-1}
+F^i_{W^l}(x)
+F^i_{\hat{W}}(x)
+\omega_k^{-\frac{1}{2}}

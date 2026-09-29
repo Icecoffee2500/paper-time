@@ -50,7 +50,109 @@ export function latexIn(glyphs: Glyph[], rules: Rule[], region: Rect): string {
 /** The LaTeX for a set of glyphs that have already been chosen. */
 export function latexOf(glyphs: Glyph[], rules: Rule[], context: Context | null = null): string {
   if (glyphs.length === 0) return ''
-  return joiningText(transcribe(byX(joiningEllipses(glyphs)), rules, context))
+  return mergingScripts(joiningText(transcribe(byX(joiningEllipses(glyphs)), rules, context)))
+}
+
+/**
+ * No base carries two superscripts or two subscripts: `x^a_b^c` is one
+ * script read in two pieces round the other — the "−" and the "1" of G_t^{-1}
+ * either side of the t — and LaTeX refuses it outright ("Double
+ * superscript"), so Overleaf and a note show nothing. The pieces of each side
+ * are one script, in the order they were read: x^{ac}_b. A chain with no side
+ * twice is left exactly as it was written.
+ */
+export function mergingScripts(latex: string): string {
+  if (!latex.includes('^') && !latex.includes('_')) return latex
+  const characters = chars(latex)
+  const isAsciiLetter = (character: string) => /^[A-Za-z]$/.test(character)
+  // Where the argument of a script that starts at `start` ends: a group, a
+  // command with the groups it takes, or one character.
+  const argumentEnd = (start: number): number => {
+    if (start >= characters.length) return start
+    let at = start
+    if (characters[at] === '{') {
+      let depth = 0
+      while (at < characters.length) {
+        if (characters[at] === '\\') {
+          at += 2
+          continue
+        }
+        if (characters[at] === '{') depth += 1
+        if (characters[at] === '}') {
+          depth -= 1
+          if (depth === 0) return at + 1
+        }
+        at += 1
+      }
+      return characters.length
+    }
+    if (characters[at] === '\\') {
+      at += 1
+      if (at < characters.length && isAsciiLetter(characters[at])) {
+        while (at < characters.length && isAsciiLetter(characters[at])) at += 1
+        while (at < characters.length && characters[at] === '{') at = argumentEnd(at)
+      } else {
+        at += 1
+      }
+      return Math.min(at, characters.length)
+    }
+    return at + 1
+  }
+  let result = ''
+  let index = 0
+  while (index < characters.length) {
+    const character = characters[index]
+    if (character === '\\') {
+      const end = Math.min(index + 2, characters.length)
+      result += characters.slice(index, end).join('')
+      index = end
+      continue
+    }
+    if (character !== '^' && character !== '_') {
+      result += character
+      index += 1
+      continue
+    }
+    const pieces: { marker: string; content: string }[] = []
+    let at = index
+    for (;;) {
+      let look = at
+      while (look < characters.length && characters[look] === ' ') look += 1
+      if (!(look < characters.length && (characters[look] === '^' || characters[look] === '_'))) break
+      let start = look + 1
+      while (start < characters.length && characters[start] === ' ') start += 1
+      const end = argumentEnd(start)
+      if (!(end > start)) break
+      const content = characters[start] === '{' && characters[end - 1] === '}'
+        ? characters.slice(start + 1, end - 1).join('') : characters.slice(start, end).join('')
+      pieces.push({ marker: characters[look], content })
+      at = end
+    }
+    if (pieces.length === 0) {
+      result += character
+      index += 1
+      continue
+    }
+    const sides = pieces.map((one) => one.marker)
+    if (new Set(sides).size === sides.length) {
+      result += characters.slice(index, at).join('')
+    } else {
+      const order: string[] = []
+      const merged = new Map<string, string>()
+      for (const piece of pieces) {
+        const known = merged.get(piece.marker)
+        if (known !== undefined) {
+          merged.set(piece.marker, join([known, piece.content]))
+        } else {
+          order.push(piece.marker)
+          merged.set(piece.marker, piece.content)
+        }
+      }
+      for (const marker of order) result += `${marker}{${merged.get(marker) ?? ''}}`
+    }
+    index = at
+  }
+  return result
 }
 
 /**
@@ -504,8 +606,11 @@ function transcribe(glyphs: Glyph[], rules: Rule[], context: Context | null = nu
     }
 
     // An accent and what it covers: one letter, or — a wide accent — all of them.
+    // One accent in a script is the script's, and read with it: the Ŵ under
+    // the F of F^i_{\hat{W}} came back as F\hat{W}i.
     const mark = accented.get(index)
-    if (mark !== undefined) {
+    if (mark !== undefined && (!(base !== null && mark.covered.every((at) => glyphs[at].size < base!.size * 0.92))
+      || scripts(index, glyphs, base?.baseline ?? baseline, base?.size ?? body, line, consumed) === null)) {
       for (const member of mark.covered) consumed.add(member)
       let inside = mark.covered.length === 1
         ? mathToken(glyphs[mark.covered[0]])
@@ -529,6 +634,15 @@ function transcribe(glyphs: Glyph[], rules: Rule[], context: Context | null = nu
     if (base !== null && tokens.length > 0) {
       const script = scripts(index, glyphs, base.baseline, base.size, line, consumed)
       if (script !== null) {
+        // An accent on a letter of the script is the script's: its mark, read
+        // already, goes where the letter went.
+        for (const accent of accented.values()) {
+          if (accent.covered.length === 0 || !accent.covered.every((at) => at >= index && at < script.end)) continue
+          const letter = glyphs[accent.covered[0]]
+          const isLetter = (glyph: Glyph) => glyph.x === letter.x && glyph.y === letter.y && glyph.code === letter.code
+          if (script.lowered.some(isLetter)) script.lowered.push(glyphs[accent.mark])
+          else if (script.raised.some(isLetter)) script.raised.push(glyphs[accent.mark])
+        }
         let t = ''
         // A prime is raised like a superscript and written like a mark.
         const marks = primes(script.raised)
@@ -778,8 +892,12 @@ function scripts(start: number, glyphs: Glyph[], baseline: number, body: number,
   // as small as the one it hangs from, and only its place says what it is.
   const smallest = body <= line * 0.62
   let side: boolean | null = null
-  // The glyph before this one in the script, a stepped-over mark aside.
-  let previous = start - 1
+  // How far right the script has reached — both its sides, a stepped-over
+  // mark aside: the subscript of G_t^{-1} starts where the superscript does
+  // and ends before it.
+  let reached = -MAX
+  // The glyphs at the run's own size, each with the side it went to.
+  const held: { glyph: Glyph; raised: boolean }[] = []
   while (end < glyphs.length) {
     // A combining mark already read into the accent it makes can stand among
     // the scripts — OpenType fonts set the hat of ŝ after the subscript of
@@ -810,13 +928,24 @@ function scripts(start: number, glyphs: Glyph[], baseline: number, body: number,
       }
       return { end: run, raised: [], lowered: glyphs.slice(start, run) }
     }
-    if (end > start && minX(rectOf(glyph)) - maxX(rectOf(glyphs[previous])) > body * 0.25) break
+    if (end > start && minX(rectOf(glyph)) - reached > body * 0.25) break
     const deeper = glyph.size < primary * 0.92
-    const raisedHere: boolean = deeper ? (side ?? (offset > 0)) : offset > 0
-    if (!deeper) side = raisedHere
+    // A script of a script goes with the script it hangs from — the one
+    // ending just before it, at about its height: the l of F^i_{W^l} is the
+    // W's, though the i was read after the W.
+    const g = rectOf(glyph)
+    const distance = (one: { glyph: Glyph }) => Math.max(0, minX(g) - maxX(rectOf(one.glyph))) + Math.abs(glyph.y - one.glyph.y)
+    const host = deeper
+      ? minBy(held.filter((one) => maxX(rectOf(one.glyph)) <= minX(g) + glyph.size * 0.5), (a, b) => distance(a) < distance(b))
+      : undefined
+    const raisedHere: boolean = deeper ? (host?.raised ?? side ?? (offset > 0)) : offset > 0
+    if (!deeper) {
+      side = raisedHere
+      held.push({ glyph, raised: raisedHere })
+    }
     if (raisedHere) raised.push(glyph)
     else lowered.push(glyph)
-    previous = end
+    reached = Math.max(reached, maxX(g))
     end += 1
   }
   return end > start ? { end, raised, lowered } : null
@@ -1276,7 +1405,7 @@ function overlines(rules: Rule[], glyphs: Glyph[], body: number, bars: Bar[], ro
 }
 
 /** An accent and the glyphs under it. */
-interface Accent { command: string; covered: number[] }
+interface Accent { command: string; covered: number[]; mark: number }
 
 /**
  * The accents, keyed by the first glyph each covers. TeX does not lift an
@@ -1302,7 +1431,10 @@ function accents(glyphs: Glyph[], owned: Map<number, number>, consumed: Set<numb
           && accentName(glyph) === null && !isSpace(glyph)
           && glyph.size >= mark.size * 0.9
           && Math.abs(glyph.y - mark.y) < Math.max(glyph.size, 1) * 0.35
-          && maxX(g) <= mark.x + mark.size * 0.1
+          // A wide letter runs on past its accent: OpenType puts the hat of a
+          // W at its top, short of its end.
+          && minX(g) < mark.x
+          && maxX(g) <= mark.x + Math.max(mark.size * 0.1, glyph.width * 0.5)
           && maxX(g) > mark.x - mark.size * 0.6
       })
       const nearest = maxBy(before, (a, b) => maxX(rectOf(glyphs[a])) < maxX(rectOf(glyphs[b])))
@@ -1329,7 +1461,7 @@ function accents(glyphs: Glyph[], owned: Map<number, number>, consumed: Set<numb
     const written = !wide ? command
       : command === '\\tilde' ? '\\widetilde' : command === '\\hat' ? '\\widehat' : command
     consumed.add(index)
-    found.set(first, { command: written, covered })
+    found.set(first, { command: written, covered, mark: index })
   })
   return found
 }
