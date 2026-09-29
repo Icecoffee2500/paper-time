@@ -61,6 +61,7 @@ struct FeatureDemoView: View {
             case .latexShortcuts: LatexShortcutsDemo(scale: scale)
             case .meaning: MeaningDemo(scale: scale)
             case .mathPreview: MathPreviewDemo(scale: scale)
+            case .noteEnvironments: NoteEnvironmentsDemo(scale: scale)
             case .nightPage: NightPageDemo(scale: scale)
             }
         }
@@ -4187,7 +4188,7 @@ private struct MathPreviewDemo: View {
     private static let formula = #"\bar{x} = \frac{1}{n}\sum_{i=1}^{n} x_i"#
     private static let after = ReleaseNotes.string(" 이에요", " here")
     /// Where the typing may stop, so each stop sets something whole.
-    private static let stops = [8, 21, 30, formula.count]
+    private static let stops = [8, 21, 31, formula.count]
 
     init(scale: DemoScale, typed: Int? = nil) {
         self.scale = scale
@@ -4315,6 +4316,107 @@ private struct MathPreviewDemo: View {
                 .strokeBorder(.separator, lineWidth: 0.5)
         )
         .animation(Motion.tap, value: typed)
+    }
+}
+
+
+// MARK: - LaTeX environments in a note
+
+/// A formula written in a note the way a paper's source writes it — an
+/// `align` with a label, and a sentence that refers to it — and the same
+/// lines as the note sets them: lined up at the relation, a number at the end
+/// of each, the reference turned into its number. Nothing stands between the
+/// two but the caret leaving the lines, so the demo is the two, switched.
+private struct NoteEnvironmentsDemo: View {
+    let scale: DemoScale
+    @State private var shown = true
+
+    private static let formula = [
+        #"\begin{align}"#,
+        #"\log p(x) &\geq \mathbb{E}_{q}[\log p(x \mid z)] - D_{\mathrm{KL}}(q \,\|\, p) \label{eq:elbo} \\"#,
+        #"&= \mathcal{L}(\theta, \phi; x)"#,
+        #"\end{align}"#,
+    ]
+    private static let before = ReleaseNotes.string("식 ", "By ")
+    private static let reference = #"\eqref{eq:elbo}"#
+    private static let after = ReleaseNotes.string("의 오른쪽이 ELBO예요.", ", the right side is the ELBO.")
+
+    var body: some View {
+        let full = scale.isFull
+        return VStack(alignment: .leading, spacing: scale.gap) {
+            Paper(scale: scale) {
+                GeometryReader { room in
+                    Group {
+                        if shown { setNote(width: room.size.width) } else { written }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                }
+                .frame(height: full ? 86 : 56)
+            }
+            HStack(spacing: full ? 10 : 6) {
+                Picker("", selection: $shown.animation(Motion.move)) {
+                    Text(ReleaseNotes.string("적은 그대로", "As Written")).tag(false)
+                    Text(ReleaseNotes.string("노트에서", "In the Note")).tag(true)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(maxWidth: full ? 220 : 170)
+                Spacer(minLength: 0)
+                Text(ReleaseNotes.string("번호는 노트 맨 위부터 세요", "Numbered from the top of the note"))
+                    .font(scale.small)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    private var lineSize: CGFloat { scale.isFull ? 12.5 : 9 }
+
+    /// The lines as the editor shows them with the caret on them.
+    private var written: some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 3 : 2) {
+            ForEach(Array(Self.formula.enumerated()), id: \.offset) { _, line in
+                Text(line)
+                    .font(.system(size: lineSize, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+            }
+            (Text(Self.before)
+             + Text(Self.reference).font(.system(size: lineSize, design: .monospaced)).foregroundColor(.secondary)
+             + Text(Self.after))
+                .font(.system(size: scale.isFull ? 13.5 : 10))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .padding(.top, scale.isFull ? 5 : 3)
+        }
+    }
+
+    /// The same lines, set by the typesetter the notes use.
+    @ViewBuilder
+    private func setNote(width: CGFloat) -> some View {
+        let size: CGFloat = scale.isFull ? 14.5 : 10
+        #if os(macOS)
+        VStack(alignment: .leading, spacing: scale.isFull ? 6 : 3) {
+            if let made = MathTypesetter.image(
+                latex: Self.formula.joined(separator: "\n"), display: true, pointSize: size,
+                color: .labelColor, maxWidth: width, fillsWidth: true
+            ) {
+                Image(nsImage: made.image)
+            }
+            let number = MathTypesetter.image(
+                latex: Self.reference, display: false, pointSize: size * 0.95, color: .labelColor,
+                known: ["eq:elbo": "1"]
+            )
+            (Text(Self.before)
+             + (number.map { Text(Image(nsImage: $0.image)).baselineOffset(-$0.descent) } ?? Text("(1)"))
+             + Text(Self.after))
+                .font(.system(size: scale.isFull ? 13.5 : 10))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+        }
+        #else
+        Text(Self.formula.joined(separator: " ")).font(.system(size: lineSize, design: .monospaced))
+        #endif
     }
 }
 

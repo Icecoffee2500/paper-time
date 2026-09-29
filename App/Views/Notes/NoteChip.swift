@@ -119,12 +119,20 @@ final class NoteLayoutFragment: NSTextLayoutFragment {
         // edge and make its two-word last line look like a different thing
         // from the line above it.
         let room = textLayoutManager?.textContainer?.size.width ?? 0
-        let reach = room > 0 && room < 10_000 ? room - box.minX : box.width
+        // A formula set in the middle of its line begins where the middle
+        // puts it, and the rule stays where the quotation's words begin.
+        var shift: CGFloat = 0
+        if let style = text.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle,
+           style.alignment == .center {
+            let padding = textLayoutManager?.textContainer?.lineFragmentPadding ?? 0
+            shift = max(0, box.minX - padding - style.firstLineHeadIndent)
+        }
+        let reach = room > 0 && room < 10_000 ? room - (box.minX - shift) : box.width
         // The fragment already begins where its words do — a paragraph set
         // in by twenty points has a box that starts twenty points in — so
         // the rule is placed from the fragment's own left edge and not from
         // the indent, which would put it under the first letter.
-        return (edge, CGRect(x: -NoteQuoteBar.gap, y: 0,
+        return (edge, CGRect(x: -NoteQuoteBar.gap - shift, y: 0,
                              width: max(reach, box.width) + NoteQuoteBar.gap,
                              height: box.height))
     }

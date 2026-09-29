@@ -297,6 +297,34 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.9.15",
+            date: Text2("2026년 9월", "September 2026"),
+            note: Text2(
+                "노트가 수식을 Overleaf처럼 조판해요 — align, cases, 행렬, 식 번호와 \\eqref까지요. Ultracopy는 첨자와 행렬, 여러 줄 수식을 제대로 읽어요.",
+                "Notes set LaTeX the way Overleaf does — align, cases, matrices, equation numbers and \\eqref. Ultracopy reads scripts, matrices and multi-line formulas correctly."
+            ),
+            added: [
+                Entry(
+                    Text2("노트의 LaTeX 환경", "LaTeX Environments in Notes"),
+                    Text2(
+                        "노트에 \\begin{align}…\\end{align}을 논문의 원고처럼 적으면 노트가 그대로 조판해요. cases, pmatrix 같은 행렬, gather, multline, \\[…\\]와 \\(…\\)도 돼요. 번호는 노트 맨 위부터 세서 오른쪽 끝에 서고, \\label을 붙인 식은 글 속의 \\eqref{…}가 그 번호로 가리켜요. \\$는 수식이 아니라 달러예요. 윈도우·리눅스도 똑같이 보여요.",
+                        "Write \\begin{align}…\\end{align} in a note the way a paper's source does, and the note sets it. cases, the matrices, gather, multline, \\[…\\] and \\(…\\) work too. Numbers count from the top of the note and stand at the right edge, and \\eqref{…} in a sentence points to the formula you labeled. \\$ is a dollar sign, not math. Windows and Linux show the same."
+                    ),
+                    demo: .noteEnvironments
+                ),
+            ],
+            fixed: [
+                Entry(
+                    Text2("Ultracopy의 첨자와 구조", "Scripts and Structure in Ultracopy"),
+                    Text2(
+                        "Ultracopy가 아래첨자와 위첨자를 자주 놓쳤어요. 이제 첨자는 물론 분수, 근호, 합과 적분의 위아래, 행렬과 cases, 악센트, 여러 줄에 걸쳐 정렬된 수식까지 읽어요. 번호가 붙은 식은 Overleaf에서 그대로 컴파일되는 equation이나 align으로 복사해요. 조판 방식 열아홉 가지로 만든 수식 4,731개 중 4,729개를 맞게 읽어요.",
+                        "Ultracopy often missed subscripts and superscripts. It now reads them, and fractions, radicals, limits on sums and integrals, matrices and cases, accents, and formulas aligned over several lines. A numbered formula is copied as an equation or align that compiles in Overleaf. Of 4,731 test formulas set nineteen ways, it reads 4,729 right."
+                    ),
+                    action: .ultracopy
+                ),
+            ]
+        ),
+        Release(
             version: "0.9.14",
             date: Text2("2026년 9월", "September 2026"),
             note: Text2(
@@ -1817,6 +1845,8 @@ enum ReleaseNotes {
                     Text2("읽는 쪽과 낱말을 나누는 다른 논문의 노트가 Notes 탭 맨 위에 올라온다. 노트 아래에는 아직 잇지 않은 울림이 모인다.", "Notes from other papers that share the page's words rise to the top of the Notes tab; under a note, the echoes not yet linked are gathered.")),
             Feature(Text2("Markdown과 LaTeX", "Markdown and LaTeX"),
                     Text2("쓰는 대로 조판된다. $x^2$는 수식이 되고, 저장되는 것은 여전히 원문이다.", "Both are set as you write them. $x^2$ becomes mathematics; the source is still what is saved.")),
+            Feature(Text2("LaTeX 환경과 식 번호", "LaTeX environments and numbers"),
+                    Text2("\\begin{align}, cases, 행렬, \\[…\\]를 논문 원고처럼 적어요. 번호는 노트 맨 위부터 세고, \\eqref{…}가 \\label을 붙인 식을 가리켜요.", "Write \\begin{align}, cases, the matrices and \\[…\\] as a paper's source does. Numbers count from the top of the note, and \\eqref{…} points to a labeled formula.")),
             Feature(Text2("LaTeX 단축 입력", "LaTeX Shortcuts"),
                     Text2("Obsidian의 Latex Suite와 같아요. 수식 안에서 //는 분수, x1은 x_{1}, sr은 제곱이 되고 Tab은 다음 칸으로 가요. 글 카드에서도 돼요.", "The same as Latex Suite in Obsidian: inside math, // is a fraction, x1 is x_{1}, sr a square, and Tab moves to the next field. Text cards too.")),
             Feature(Text2("원문 보기", "Raw"),
@@ -2077,6 +2107,10 @@ enum ReleaseNotes {
         /// A note line with the caret inside `$…$`, and under it the card
         /// that shows the formula set as it is typed.
         case mathPreview
+        /// An `align` with a label and a sentence that refers to it, as
+        /// written and as the note sets them — numbers at the right-hand
+        /// edge, the reference turned into its number.
+        case noteEnvironments
 
         var id: String { rawValue }
     }

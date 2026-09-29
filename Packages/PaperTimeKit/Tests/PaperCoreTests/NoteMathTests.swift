@@ -40,6 +40,71 @@ struct NoteMathTests {
         #expect(NoteMath.blocks(in: text).count == 2)
     }
 
+    @Test func anEnvironmentOnItsOwnLinesIsOneBlock() {
+        let text = "before\n\\begin{align}\na &= b \\\\\nc &= d\n\\end{align}\nafter"
+        #expect(NoteMath.blocks(in: text) == [range(text, of: "\\begin{align}\na &= b \\\\\nc &= d\n\\end{align}")])
+        // Starred, indented, and holding another environment.
+        let nested = "  \\begin{equation*}\n\\begin{split}\na &= b\n\\end{split}\n\\end{equation*}"
+        #expect(NoteMath.blocks(in: nested) == [NSRange(location: 0, length: (nested as NSString).length)])
+    }
+
+    @Test func anEnvironmentOnOneLineIsNotABlock() {
+        #expect(NoteMath.blocks(in: "\\begin{align} a &= b \\end{align}").isEmpty)
+        // Not a mathematics environment: left to be prose.
+        #expect(NoteMath.blocks(in: "\\begin{itemize}\n\\item a\n\\end{itemize}").isEmpty)
+        // Closed by its own end only.
+        #expect(NoteMath.blocks(in: "\\begin{align}\na\n\\end{aligned}").isEmpty)
+    }
+
+    @Test func squareBracketsOnTheirOwnLinesAreOneBlock() {
+        let text = "\\[\n\\sum_i x_i\n\\]\nafter"
+        #expect(NoteMath.blocks(in: text) == [range(text, of: "\\[\n\\sum_i x_i\n\\]")])
+        #expect(NoteMath.blocks(in: "\\[ x \\]").isEmpty)
+    }
+
+    // MARK: Formulas in a line
+
+    private func formulas(_ line: String) -> [NoteMath.Span] {
+        let text = line as NSString
+        var found: [NoteMath.Span] = []
+        var index = 0
+        while index < text.length,
+              let one = NoteMath.firstFormula(in: text, range: NSRange(location: index, length: text.length - index)) {
+            found.append(one)
+            index = one.range.location + one.range.length
+        }
+        return found
+    }
+
+    @Test func everyWayLaTeXWritesAFormula() {
+        let found = formulas("a $x$ b \\(y\\) c $$z$$ d \\[w\\] e \\begin{pmatrix} 1 \\end{pmatrix}")
+        #expect(found.map(\.latex) == ["x", "y", "z", "w", "\\begin{pmatrix} 1 \\end{pmatrix}"])
+        #expect(found.map(\.display) == [false, false, true, true, true])
+    }
+
+    @Test func latexsOwnNamesForTheDelimitersAreThoseDelimiters() {
+        let found = formulas("\\begin{math} a \\end{math} and \\begin{displaymath} b \\end{displaymath}")
+        #expect(found.map(\.latex) == ["a", "b"])
+        #expect(found.map(\.display) == [false, true])
+    }
+
+    @Test func anEnvironmentEndsAtItsOwnEnd() {
+        let found = formulas("\\begin{equation} \\begin{aligned} a &= b \\end{aligned} \\end{equation} x")
+        #expect(found.map(\.latex) == ["\\begin{equation} \\begin{aligned} a &= b \\end{aligned} \\end{equation}"])
+        #expect(formulas("\\begin{align*} a \\end{align}").isEmpty)
+        #expect(formulas("\\begin{tabular} a \\end{tabular}").isEmpty)
+    }
+
+    @Test func displayedLinesAreKnown() {
+        #expect(NoteMath.isDisplay("  $$x$$ "))
+        #expect(NoteMath.isDisplay("\\begin{align} a &= b \\tag{1} \\end{align}"))
+        #expect(NoteMath.isDisplay("\\[x\\]"))
+        #expect(!NoteMath.isDisplay("$x$"))
+        #expect(!NoteMath.isDisplay("so $$x$$"))
+        let text = "Then \\begin{equation} E = mc^2 \\tag{3} \\end{equation} holds."
+        #expect(NoteMath.displays(in: text) == [range(text, of: "\\begin{equation} E = mc^2 \\tag{3} \\end{equation}")])
+    }
+
     // MARK: The span under the caret
 
     @Test func aCaretInsideInlineMathFindsIt() {
@@ -82,6 +147,20 @@ struct NoteMathTests {
     @Test func anEmptyFormulaHasNoSpan() {
         // `mk` leaves `$|$`: nothing to set until something is typed.
         #expect(NoteMath.span(at: 1, in: "$$") == nil)
+    }
+
+    @Test func aCaretInsideAnEnvironmentFindsTheWholeEnvironment() {
+        let text = "p\n\\begin{align}\na &= b\n\\end{align}\nq"
+        let caret = range(text, of: "&=").location
+        let span = NoteMath.span(at: caret, in: text)
+        #expect(span == NoteMath.Span(range: range(text, of: "\\begin{align}\na &= b\n\\end{align}"),
+                                      latex: "\\begin{align}\na &= b\n\\end{align}", display: true, isBlock: true))
+        // On the \\begin itself: not yet inside.
+        #expect(NoteMath.span(at: range(text, of: "\\begin").location + 2, in: text) == nil)
+        let line = "so \\(a+b\\) and \\begin{cases} x \\end{cases}"
+        #expect(NoteMath.span(at: range(line, of: "a+b").location + 1, in: line)?.latex == "a+b")
+        #expect(NoteMath.span(at: range(line, of: " x ").location + 1, in: line)?.latex
+                == "\\begin{cases} x \\end{cases}")
     }
 
     @Test func offsetsAreUTF16() {

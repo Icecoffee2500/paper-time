@@ -3831,6 +3831,11 @@ body[data-solo='true'] .reader-header button {
 .nm-math-display svg, .nm-math-block svg { max-width: 100%; height: auto; }
 .nm-math-display { display: inline-block; }
 .nm-math-block { display: block; text-align: center; padding: 6px 0 11px; }
+/* A formula on a line of its own is set as a paper sets one: in the middle
+   of the line, and one with numbers across all of it, the numbers at the
+   right-hand edge (`NoteMarkdown.standsAlone`). */
+.nm-display-line { text-align: center; }
+.nm-math-alone { display: inline-block; width: 100%; text-align: center; }
 .nm-math-raw { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14.7px; color: var(--text-secondary); }
 
 /* A passage found by meaning, for a moment. */
