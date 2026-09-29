@@ -349,6 +349,8 @@
     <p data-l="en">Select and press <span class="key">⇧⌘C</span>. <b>The words come out as words and the mathematics as LaTeX</b> — Markdown you can paste and use.</p>
     <p data-l="ko">제목은 제목으로, 문단은 한 문단으로 이어져요. 줄 끝에서 끊긴 단어는 붙고요.</p>
     <p data-l="en">Headings stay headings, a paragraph comes out as one paragraph, and a word broken across a line is put back together.</p>
+    <p data-l="ko">첨자와 분수, 행렬, 여러 줄에 걸친 수식도 읽어요. 번호가 붙은 식은 Overleaf에서 그대로 컴파일되는 <code>equation</code>이나 <code>align</code>으로 나와요.</p>
+    <p data-l="en">Scripts, fractions, matrices and formulas aligned over several lines come through too, and a numbered formula comes out as an <code>equation</code> or <code>align</code> that compiles in Overleaf.</p>
     <div class="doc-demo" id="d-ultracopy"></div>
     <p class="caption" data-l="ko">«복사»를 눌러 무엇이 나오는지 보세요.</p>
     <p class="caption" data-l="en">Press copy and see what comes out.</p>
@@ -378,12 +380,14 @@
     <ul class="points" data-l="ko">
       <li><span class="key">⌘N</span>이 새 노트예요.</li>
       <li>논문을 읽는 중이면 <span class="key">⌘L</span>로 고른 구절을 바로 노트에 넣을 수 있어요.</li>
-      <li><code>#태그</code>를 쓰면 태그가 되고, <code>$…$</code>는 수식으로 조판돼요.</li>
+      <li><code>#태그</code>를 쓰면 태그가 되고, <code>$…$</code>는 수식이 돼요.</li>
+      <li><code>\begin{align}</code>, <code>cases</code>, 행렬, <code>\[…\]</code>도 논문 원고처럼 적으면 돼요. 식 번호는 노트 맨 위부터 세고, <code>\eqref{…}</code>가 <code>\label</code>을 붙인 식을 가리켜요.</li>
     </ul>
     <ul class="points" data-l="en">
       <li><span class="key">⌘N</span> makes a new one.</li>
       <li>While reading, <span class="key">⌘L</span> drops the selected passage straight into a note.</li>
       <li><code>#tag</code> makes a tag; <code>$…$</code> is set as mathematics.</li>
+      <li><code>\begin{align}</code>, <code>cases</code>, the matrices and <code>\[…\]</code> work as they do in a paper's source. Numbers count from the top of the note, and <code>\eqref{…}</code> points to a labeled formula.</li>
     </ul>
   </article>
 
