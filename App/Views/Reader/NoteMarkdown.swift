@@ -1167,7 +1167,10 @@ enum NoteMarkdown {
                 maxWidth: room,
                 start: numbered.start, known: numbered.known, fillsWidth: fillsWidth
             ) else { return nil }
-            if mathCache.count > 400 { mathCache.removeAll() }
+            // A note holds its formulas at once, so the cache has room for a
+            // long one: emptied at a thousand rather than four hundred, which
+            // a note of five hundred formulas emptied on every keystroke.
+            if mathCache.count > 1000 { mathCache.removeAll() }
             mathCache[key] = made
             drawn = made
         }

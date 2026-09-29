@@ -177,10 +177,16 @@ final class MathJaxEngine: @unchecked Sendable {
             try? String(contentsOf: file(for: key), encoding: .utf8)
         }
 
+        /// Written behind the note, not while it waits: the first opening of
+        /// a note of two hundred formulas is two hundred files.
+        private let writer = DispatchQueue(label: "com.imtaeheon.PaperTime.mathjax.shelf", qos: .utility)
+
         func write(_ key: String, _ value: String) {
             let url = file(for: key)
-            try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try? Data(value.utf8).write(to: url, options: .atomic)
+            writer.async {
+                try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try? Data(value.utf8).write(to: url, options: .atomic)
+            }
         }
     }
 

@@ -69,7 +69,7 @@ export const TEX_OPTIONS = {
   ignoreDuplicateLabels: true,
 } as const
 
-const cacheLimit = 600
+const cacheLimit = 2000
 
 /**
  * A setter. `fontCache` is `none` on the Mac, whose drawing of the SVG reads
