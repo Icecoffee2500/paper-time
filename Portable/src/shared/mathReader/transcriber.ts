@@ -669,6 +669,13 @@ function transcribe(glyphs: Glyph[], rules: Rule[], context: Context | null = nu
       const rows = table.cells.map((row, level) => row.map((cell) => (cell.length === 0 ? '' : transcribe(
         part(cell), rules, { bodySize: body, baseline: table.baselines[level] }, line))).join(' & '))
       tokens.push(`\\begin{${table.environment}} ` + rows.join(' \\\\ ') + ` \\end{${table.environment}}`)
+      // What the formula goes on with after the cases stands a \quad off, as
+      // the page set it: "∀i ∈ [0, |θ|]" ran into the last case.
+      const edge = maxOf([...table.members].map((at) => maxX(rectOf(glyphs[at])))) ?? maxX(rectOf(glyphs[index]))
+      const next = minBy(indices(glyphs.length).filter((at) => !consumed.has(at) && minX(rectOf(glyphs[at])) >= edge - 0.5),
+        (a, b) => minX(rectOf(glyphs[a])) < minX(rectOf(glyphs[b])))
+      if (next !== undefined && minX(rectOf(glyphs[next])) - edge >= body * 0.8
+        && token(glyphs[next]) !== '' && ![',', '.', ';'].includes(token(glyphs[next]))) tokens.push('\\quad')
       base = { size: body, baseline, index: table.close ?? index }
       index += 1
       continue

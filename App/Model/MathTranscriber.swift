@@ -736,6 +736,16 @@ enum MathTranscriber {
                 }
                 tokens.append("\\begin{\(grid.environment)} " + rows.joined(separator: " \\\\ ")
                               + " \\end{\(grid.environment)}")
+                // What the formula goes on with after the cases stands a
+                // \quad off, as the page set it: "∀i ∈ [0, |θ|]" ran into the
+                // last case.
+                let edge = grid.members.map { glyphs[$0].rect.maxX }.max() ?? glyph.rect.maxX
+                if let next = glyphs.indices.filter({ !consumed.contains($0) && glyphs[$0].rect.minX >= edge - 0.5 })
+                    .min(by: { glyphs[$0].rect.minX < glyphs[$1].rect.minX }),
+                   glyphs[next].rect.minX - edge >= body * 0.8,
+                   !token(for: glyphs[next]).isEmpty, ![",", ".", ";"].contains(token(for: glyphs[next])) {
+                    tokens.append("\\quad")
+                }
                 base = Base(size: body, baseline: baseline, index: grid.close ?? index)
                 index += 1
                 continue
