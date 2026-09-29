@@ -148,3 +148,20 @@ y = Wx + b
 @display \begin{aligned} \mathcal{L}(\theta) &= \mathbb{E}[\log p_\theta(x|z)] \\ &\leq \log p_\theta(x) \end{aligned}
 @display \begin{aligned} f(x) &= (x+1)^2 \\ &= x^2 + 2x + 1 \end{aligned}
 @display \begin{array}{cc} a & b \\ c & d \end{array} => \begin{matrix} a & b \\ c & d \end{matrix}
+# Found reading whole pages: the limits of two sums side by side run into
+# one row (I-JEPA), and a bold letter under an accent.
+\frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{\boldsymbol{s}}_{y_j} - \boldsymbol{s}_{y_j}\|_2^2 => = || mathptmx: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2 || termes-otf: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2 || stix2-otf: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2 || libertinus-otf: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2 || lm-otf: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2 || lm-xe: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2
+# The upper limit of the second line's sum stands under the first line's
+# parentheses (VAE, page 10): still two lines of one aligned formula.
+@display \begin{aligned} \int q(z) \log p(z)\, dz &= \int \mathcal{N}(z; \mu, \sigma^2) \log \mathcal{N}(z; 0, I)\, dz \\ &= -\frac{J}{2}\log(2\pi) - \frac{1}{2}\sum_{j=1}^J (\mu_j^2 + \sigma_j^2) \end{aligned}
+# Systems of cases as papers set them (Fading to Grow, The Forgetting
+# Retention): three cases with the left side on the middle one, a fraction in
+# every case — its bar under the case above — a displayed fraction whose
+# numerator and denominator are as large as the case, and the comma after the
+# brace, halfway between two cases (a selection of the one line gives the
+# comma back to the sentence).
+@display r(x) = \begin{cases} 0 & \text{if } x = y \\ \log\frac{1-\alpha}{\alpha} & \text{if } y = x_0 \\ \log\frac{\alpha}{1-\alpha} & \text{otherwise} \end{cases}
+@display C = \begin{cases} \dfrac{\mu+\lambda}{\mu-\nu}\hat{\kappa} & x = 1 \\ \dfrac{\mu}{\nu}\hat{\rho} & x = 2 \end{cases}
+@display C_k = \begin{cases} \rho^{n^k_{[s+1,t]}} & x = 1, \\ \rho^{n^{i+1}_{[s,t]}} & x = 2, \end{cases}, => C_k = \begin{cases} \rho^{n^k_{[s+1,t]}} & x = 1, \\ \rho^{n^{i+1}_{[s,t]}} & x = 2, \end{cases}
+# \vdots and \ddots are three full stops each.
+@display E = \begin{pmatrix} 0 & \cdots & 0 \\ \vdots & \ddots & \vdots \\ 1 & \cdots & 1 \end{pmatrix}

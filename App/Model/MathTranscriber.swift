@@ -57,10 +57,66 @@ enum MathTranscriber {
     /// The LaTeX for a set of glyphs that have already been chosen.
     static func latex(glyphs: [Glyph], rules: [Rule], context: Context? = nil) -> String {
         guard !glyphs.isEmpty else { return "" }
-        let sorted = byX(glyphs)
+        let sorted = byX(joiningEllipses(glyphs))
         let result = joiningText(transcribe(sorted, rules: rules, context: context))
         observer?(sorted, context, result)
         return result
+    }
+
+    /// Three full stops drawn up a line or down a diagonal, as the one sign
+    /// they make. TeX builds \vdots and \ddots of three full stops, a glyph
+    /// each, and sets nothing else that way; an OpenType font draws either as
+    /// one glyph, and here the three become that one. It stands where TeX
+    /// stands the sign — on the line of the lowest dot, which is the line's
+    /// own for \vdots and a point under it for \ddots — so the row of ⋮ ⋱ ⋮
+    /// in a matrix is one row of the matrix, not three rows too close to be
+    /// any, and not three dots in the rows round it.
+    static func joiningEllipses(_ glyphs: [Glyph]) -> [Glyph] {
+        let dots = glyphs.indices.filter { token(for: glyphs[$0]) == "." }
+        guard dots.count >= 3 else { return glyphs }
+        var used = Set<Int>()
+        var made: [Glyph] = []
+        func next(after one: Int, by step: CGVector?, vertical: Bool) -> Int? {
+            let from = glyphs[one]
+            let size = from.size
+            return dots.filter { other in
+                guard !used.contains(other), other != one, abs(glyphs[other].size - size) < 0.5 else { return false }
+                let dx = glyphs[other].origin.x - from.origin.x
+                let dy = glyphs[other].origin.y - from.origin.y
+                if let step {
+                    return abs(dx - step.dx) < size * 0.1 && abs(dy - step.dy) < size * 0.1
+                }
+                return vertical
+                    ? abs(dx) < size * 0.15 && dy > size * 0.25 && dy < size * 0.6
+                    : dx > size * 0.2 && dx < size * 0.7 && -dy > size * 0.15 && -dy < size * 0.45
+            }.min { abs(glyphs[$0].origin.x - from.origin.x) + abs(glyphs[$0].origin.y - from.origin.y)
+                < abs(glyphs[$1].origin.x - from.origin.x) + abs(glyphs[$1].origin.y - from.origin.y) }
+        }
+        for first in dots.sorted(by: { glyphs[$0].origin.y < glyphs[$1].origin.y }) where !used.contains(first) {
+            for vertical in [true, false] {
+                guard let second = next(after: first, by: nil, vertical: vertical) else { continue }
+                let step = CGVector(dx: glyphs[second].origin.x - glyphs[first].origin.x,
+                                    dy: glyphs[second].origin.y - glyphs[first].origin.y)
+                guard let third = next(after: second, by: step, vertical: vertical) else { continue }
+                var sign = glyphs[first]
+                sign.code = -1
+                if vertical {
+                    sign.unicode = "\u{22EE}"
+                    sign.glyphName = "ellipsisvertical"
+                } else {
+                    let last = glyphs[third]
+                    sign.unicode = "\u{22F1}"
+                    sign.glyphName = "ellipsisdiagonal"
+                    sign.origin.y = last.origin.y - last.size * 0.1
+                    sign.width = last.origin.x + last.width - sign.origin.x
+                }
+                made.append(sign)
+                used.formUnion([first, second, third])
+                break
+            }
+        }
+        guard !made.isEmpty else { return glyphs }
+        return glyphs.indices.filter { !used.contains($0) }.map { glyphs[$0] } + made
     }
 
     /// Glyphs in reading order: left to right, and two at the same place in
@@ -103,11 +159,19 @@ enum MathTranscriber {
     static func joiningText(_ latex: String) -> String {
         guard latex.contains("\\text{") else { return latex }
         var result = latex
-        while let range = result.range(of: #"\\text\{([^{}]*)\}\s+\\text\{"#, options: .regularExpression) {
+        while let range = result.range(of: #"\\text\{([^{}]*)\}\s*\\text\{"#, options: .regularExpression) {
             let piece = String(result[range])
             guard let close = piece.firstIndex(of: "}") else { break }
-            let inner = piece[piece.index(piece.startIndex, offsetBy: 6)..<close]
-            result.replaceSubrange(range, with: "\\text{\(inner) ")
+            var inner = String(piece[piece.index(piece.startIndex, offsetBy: 6)..<close])
+            // Apart on the page is a space between them, and one is enough.
+            var spaced = piece[piece.index(after: close)...].first?.isWhitespace == true || inner.hasSuffix(" ")
+            while inner.hasSuffix(" ") { inner.removeLast() }
+            var end = range.upperBound
+            while end < result.endIndex, result[end] == " " {
+                spaced = true
+                end = result.index(after: end)
+            }
+            result.replaceSubrange(range.lowerBound..<end, with: "\\text{" + inner + (spaced ? " " : ""))
         }
         return result
     }
@@ -124,9 +188,47 @@ enum MathTranscriber {
     /// Cambria Math. A paper set in any of these had every formula in its
     /// prose read as words until each family was known here.
     static func isMathFont(_ glyph: Glyph) -> Bool {
-        let family = Self.family(of: glyph)
-        if family.contains("MATH") { return true }
-        return mathFamilies.contains { family.hasPrefix($0) }
+        remembered(\.mathFonts, glyph.fontName) {
+            let family = Self.family(of: glyph)
+            if family.contains("MATH") { return true }
+            return mathFamilies.contains { family.hasPrefix($0) }
+        }
+    }
+
+    /// What was worked out from a font's or a glyph's name, kept: reading a
+    /// page asks the same few dozen names the same questions some hundred
+    /// thousand times — split the subset tag off, upper-case, look up — and
+    /// that was most of the time a page took.
+    private struct Memo {
+        var families: [String: String] = [:]
+        var mathFonts: [String: Bool] = [:]
+        var tokens: [TokenKey: String] = [:]
+        var silent: [TokenKey: Bool] = [:]
+    }
+
+    private struct TokenKey: Hashable {
+        var fontName: String
+        var glyphName: String?
+        var code: Int
+        var unicode: String?
+        var isSymbolic: Bool
+        var wideSigma: Bool
+    }
+
+    nonisolated(unsafe) private static var memo = Memo()
+    private static let memoLock = NSLock()
+
+    private static func remembered<Value>(
+        _ table: WritableKeyPath<Memo, [String: Value]>, _ key: String, _ work: () -> Value
+    ) -> Value {
+        memoLock.lock()
+        if let known = memo[keyPath: table][key] { memoLock.unlock(); return known }
+        memoLock.unlock()
+        let value = work()
+        memoLock.lock()
+        memo[keyPath: table][key] = value
+        memoLock.unlock()
+        return value
     }
 
     /// The first letters of the maths fonts' names, uppercased. A prefix
@@ -153,7 +255,9 @@ enum MathTranscriber {
     ]
 
     static func family(of glyph: Glyph) -> String {
-        (glyph.fontName.split(separator: "+").last.map(String.init) ?? glyph.fontName).uppercased()
+        remembered(\.families, glyph.fontName) {
+            (glyph.fontName.split(separator: "+").last.map(String.init) ?? glyph.fontName).uppercased()
+        }
     }
 
     // MARK: - What a glyph is
@@ -201,7 +305,11 @@ enum MathTranscriber {
     /// bracket of a line — LM Math's "(" is 0.39 em and its two-line one
     /// 0.60; its "[" 0.28 and 0.53.
     static func isTallVariant(_ bracket: Glyph, among glyphs: [Glyph], body: CGFloat) -> Bool {
-        guard !bracket.isExtension, isUnicodeMathFont(family(of: bracket)) else { return false }
+        // A larger size is drawn at the size of the line; a bracket in a
+        // script is a script's own — the [s,t] under the n of an exponent,
+        // with the exponent's own exponent over it, is not a matrix.
+        guard !bracket.isExtension, bracket.size >= body * 0.9,
+              isUnicodeMathFont(family(of: bracket)) else { return false }
         let spelled = token(for: bracket)
         let wide: [String: CGFloat] = [
             "(": 0.5, ")": 0.5, "[": 0.45, "]": 0.45, "\\{": 0.62, "\\}": 0.62,
@@ -460,10 +568,15 @@ enum MathTranscriber {
             // all of them.
             if let mark = accented[index] {
                 consumed.formUnion(mark.covered)
-                let inside = mark.covered.count == 1
+                var inside = mark.covered.count == 1
                     ? mathToken(for: glyphs[mark.covered[0]])
                     : transcribe(part(mark.covered), rules: rules,
                                  context: Context(bodySize: body, baseline: baseline), line: line)
+                // One letter under the mark keeps its weight: ŝ in bold is
+                // \hat{\boldsymbol{s}}, not \hat{s}.
+                if mark.covered.count == 1, let bold = boldCommand(for: glyphs[mark.covered[0]]), !inside.isEmpty {
+                    inside = "\(bold){\(inside)}"
+                }
                 tokens.append("\(mark.command){\(inside)}")
                 let last = mark.covered.max() ?? index
                 base = Base(size: glyphs[last].size, baseline: glyphs[last].origin.y, index: last)
@@ -737,7 +850,17 @@ enum MathTranscriber {
         // numerator of a fraction in a sentence.
         let smallest = body <= line * 0.62
         var side: Bool?
-        while end < glyphs.count, !consumed.contains(end) {
+        // The glyph before this one in the script, a stepped-over mark aside.
+        var previous = start - 1
+        while end < glyphs.count {
+            // A combining mark already read into the accent it makes can
+            // stand among the scripts — OpenType fonts set the hat of ŝ
+            // after the subscript of ŝ_{y_j} — and it is stepped over; the
+            // script goes on past it. Anything else read already ends it.
+            if consumed.contains(end) {
+                if end > start, glyphs[end].width < 0.01 { end += 1; continue }
+                break
+            }
             let glyph = glyphs[end]
             let offset = glyph.origin.y - baseline
             // Base level is always full size, so anything still small is still
@@ -773,11 +896,12 @@ enum MathTranscriber {
                 return (run, [], Array(glyphs[start..<run]))
             }
             if end > start,
-               glyph.rect.minX - glyphs[end - 1].rect.maxX > body * 0.25 { break }
+               glyph.rect.minX - glyphs[previous].rect.maxX > body * 0.25 { break }
             let deeper = glyph.size < primary * 0.92
             let raisedHere = deeper ? (side ?? (offset > 0)) : offset > 0
             if !deeper { side = raisedHere }
             if raisedHere { raised.append(glyph) } else { lowered.append(glyph) }
+            previous = end
             end += 1
         }
         return end > start ? (end, raised, lowered) : nil
@@ -871,7 +995,10 @@ enum MathTranscriber {
             || upper.hasSuffix("-BD") || upper.contains("-MEDI") || upper.hasSuffix("-B")
             || upper.hasSuffix("BOLD") || upper.hasSuffix("-BOL") || upper.hasPrefix("CMB10")
             || upper.hasPrefix("RTXB") || upper.hasPrefix("RPXB") {
-            return "\\mathbf"
+            // A bold italic text face is what \boldsymbol draws a letter with
+            // in the Times, Palatino and Utopia papers: \mathbf is upright.
+            let italic = upper.contains("ITAL") || upper.contains("OBLIQUE") || upper.hasSuffix("-BI")
+            return italic ? "\\boldsymbol" : "\\mathbf"
         }
         return nil
     }
@@ -915,12 +1042,63 @@ enum MathTranscriber {
             end += 2
         }
         let letters = glyphs[start..<end].map { token(for: $0) }.joined()
-        if hyphenated { return (end, "\\text{\(letters)}") }
-        if style == "\\mathrm", let names = names(in: letters), !names.isEmpty {
+        if style == "\\mathrm", !hyphenated, let names = names(in: letters), !names.isEmpty {
             return (end, names.map { twoWordNames[$0] ?? "\\" + $0 }.joined())
+        }
+        // A word of the sentence's in a formula — "if", "otherwise", "and"
+        // in a system of cases — stands a word's space from the letter or the
+        // digit next to it, which \mathrm{if}x takes away: "ifx". The space
+        // goes inside \text{}, where TeX keeps it.
+        let spaced = letters.count >= 2 && (style == "\\mathrm" || hyphenated)
+            ? wordSpaces(around: start..<end, in: glyphs) : (before: false, after: false)
+        if hyphenated || spaced.before || spaced.after {
+            return (end, "\\text{" + (spaced.before ? " " : "") + letters + (spaced.after ? " " : "") + "}")
         }
         return (end, "\(style){\(letters)}")
     }
+
+    /// Whether a word in a formula has a word's space before it and after it,
+    /// from an ordinary symbol on its line — a relation or an operator brings
+    /// its own space, which is the formula's and not a sentence's.
+    private static func wordSpaces(around run: Range<Int>, in glyphs: [Glyph]) -> (before: Bool, after: Bool) {
+        let first = glyphs[run.lowerBound], last = glyphs[run.upperBound - 1]
+        let size = first.size
+        func ordinary(_ glyph: Glyph) -> Bool {
+            let spelled = mathToken(for: glyph)
+            guard !spelled.isEmpty, !isBigOperator(glyph) else { return false }
+            return !spacedSymbols.contains(spelled)
+        }
+        // Whatever stands across the line beside it: a script, and a bracket
+        // drawn from an extension font, whose point is not on the line.
+        func onLine(_ glyph: Glyph) -> Bool {
+            glyph.rect.maxY > first.origin.y - size * 0.25 && glyph.rect.minY < first.origin.y + size * 0.75
+        }
+        let previous = glyphs[..<run.lowerBound].filter { onLine($0) && $0.rect.maxX <= first.rect.minX + 0.5 }
+            .max { $0.rect.maxX < $1.rect.maxX }
+        let next = glyphs[run.upperBound...].filter { onLine($0) && $0.rect.minX >= last.rect.maxX - 0.5 }
+            .min { $0.rect.minX < $1.rect.minX }
+        // Inside a bracket is no place for a space; a bracket's own margin
+        // is not one — [\mathrm{Bias}[ stood a sixth of an em from both.
+        let before = previous.map {
+            ordinary($0) && opening($0) == nil && first.rect.minX - $0.rect.maxX >= size * 0.2
+        } ?? false
+        let after = next.map {
+            ordinary($0) && closing($0) == nil && $0.rect.minX - last.rect.maxX >= size * 0.2
+        } ?? false
+        return (before, after)
+    }
+
+    /// The symbols TeX spaces for themselves: relations, the binary
+    /// operators, and punctuation.
+    private static let spacedSymbols: Set<String> = [
+        "=", "<", ">", "+", "-", ",", ";", ":", ".", "|", "\\mid", "\\leq", "\\geq", "\\neq", "\\le", "\\ge",
+        "\\ne", "\\in", "\\notin", "\\ni", "\\subset", "\\subseteq", "\\supset", "\\supseteq", "\\times",
+        "\\cdot", "\\pm", "\\mp", "\\to", "\\rightarrow", "\\leftarrow", "\\Rightarrow", "\\Leftarrow",
+        "\\Leftrightarrow", "\\leftrightarrow", "\\mapsto", "\\approx", "\\sim", "\\simeq", "\\equiv",
+        "\\propto", "\\cong", "\\ll", "\\gg", "\\prec", "\\succ", "\\preceq", "\\succeq", "\\cup", "\\cap",
+        "\\setminus", "\\wedge", "\\vee", "\\oplus", "\\otimes", "\\circ", "\\ast", "\\star", "\\div",
+        "\\coloneqq", "\\triangleq", "\\iff", "\\implies", "\\lor", "\\land",
+    ]
 
     // MARK: - Structures
 
@@ -1056,9 +1234,19 @@ enum MathTranscriber {
             // Whatever full-size thing comes next is where the limits stop, in
             // both arrangements.
             var stop = CGFloat.greatestFiniteMagnitude
+            // Another sign with limits of its own right after this one: the
+            // limits stacked under the two run into each other — "i=1" and
+            // "j∈Bᵢ" under ∑∑ are one row of small glyphs — and are parted
+            // halfway between the signs. Limits set beside a sign, in a
+            // sentence, run on towards the next one and are not cut; nor are
+            // an integral's, which sit off its tail.
+            var cut: CGFloat?
             for next in (position + 1)..<glyphs.count
             where !consumed.contains(next) && glyphs[next].size >= body * 0.95 {
                 stop = glyphs[next].rect.minX
+                if isBigOperator(glyphs[next]), !token(for: glyphs[next]).contains("int") {
+                    cut = (sign.rect.maxX + glyphs[next].rect.minX) / 2
+                }
                 break
             }
             let candidates = glyphs.indices.filter { other in
@@ -1075,6 +1263,7 @@ enum MathTranscriber {
                     // An integral's lower limit tucks in under its tail.
                     let beside = span.minX >= sign.rect.midX
                         && span.minX - sign.rect.maxX < body * 0.5
+                    if stacked, let cut { return run.filter { glyphs[$0].rect.midX < cut } }
                     if stacked || beside { return run }
                 }
                 return []
@@ -1339,6 +1528,66 @@ enum MathTranscriber {
     /// not a superscript and a subscript, which are less than a line apart
     /// and small — and a line breaks into cells where TeX put a column's
     /// space, an em or more, which nothing inside a cell is spaced by.
+    /// Whether a glyph is one piece of a sign built up tall: ⎛ ⎜ ⎝ and their
+    /// kind in OpenType, the halves of a ∫ (⌠ ⌡), "parenlefttp" and
+    /// "parenleftex" in TeX's extension fonts, "parenlefttpA" in newtx's. A
+    /// whole bracket — a "(" of any size — is none.
+    static func isPiece(_ glyph: Glyph) -> Bool {
+        if isSilentPiece(glyph) { return true }
+        if let unicode = glyph.unicode, unicode.unicodeScalars.count == 1,
+           let scalar = unicode.unicodeScalars.first,
+           (0x239B...0x23B3).contains(scalar.value) || (0x2320...0x2321).contains(scalar.value) { return true }
+        guard var name = glyph.glyphName else { return false }
+        if let dot = name.firstIndex(of: ".") { name = String(name[..<dot]) }
+        if TeXGlyphNames.isDecoration(name) { return true }
+        if ["tpA", "btA", "exA", "midA"].contains(where: { name.hasSuffix($0) }) { name.removeLast() }
+        let bracket = ["paren", "bracket", "brace", "floor", "ceiling", "angle", "bar", "vextend"]
+            .contains { name.hasPrefix($0) }
+        return bracket && ["tp", "bt", "ex", "mid"].contains { name.hasSuffix($0) }
+    }
+
+    /// The pieces of one bracket, grown out from one of them through the
+    /// ones above and below it: the bracket's box, and which glyphs it took.
+    /// `candidates` stand where it does and spell what it spells, or nothing.
+    ///
+    /// Two ways a glyph is the same bracket. A bracket's own segments are set
+    /// closer than a line — a tall bar is one glyph repeated, 0.3 to 0.6 of
+    /// a size apart — and two brackets on two lines are a line apart at
+    /// least. And a named piece (`isPiece`) belongs to its neighbours two
+    /// lines away, as far as TeX sets a bracket's top from its bottom.
+    /// Joining everything at the same place took the "(" of one line and the
+    /// "(" of a line further down the page for one bracket as tall as the
+    /// lines between them, and those lines for its matrix. A piece's box is
+    /// not its ink — newtx's and OpenType's pieces are drawn from their point
+    /// up by more than a size — so nearness is between their points.
+    static func stack(from start: Int, in glyphs: [Glyph], candidates: [Int]) -> (box: CGRect, members: [Int]) {
+        var box = glyphs[start].rect
+        var members = [start]
+        let size = glyphs[start].size
+        var grew = true
+        while grew {
+            grew = false
+            for other in candidates where !members.contains(other) {
+                let distance = members.map { abs(glyphs[$0].origin.y - glyphs[other].origin.y) }.min() ?? .infinity
+                guard distance < size * 0.8 || (isPiece(glyphs[other]) && distance < size * 2.2) else { continue }
+                // An extension font's pieces are boxed as they are drawn, and
+                // one bracket's pieces touch — a filler's height apart at most,
+                // should the filler be missed: the bottom of the brace of one
+                // system of cases stood 17 points over the top of the next
+                // one's, with 8 points of paper between their ink.
+                if glyphs[other].isExtension, members.allSatisfy({ glyphs[$0].isExtension }),
+                   !members.contains(where: { member in
+                       let one = glyphs[member].rect, two = glyphs[other].rect
+                       return max(one.minY, two.minY) - min(one.maxY, two.maxY) < size * 0.65
+                   }) { continue }
+                box = box.union(glyphs[other].rect)
+                members.append(other)
+                grew = true
+            }
+        }
+        return (box, members)
+    }
+
     private struct Grid {
         var environment: String
         var cells: [[[Int]]]
@@ -1377,7 +1626,10 @@ enum MathTranscriber {
                         || token(for: glyphs[other]) == opener || token(for: glyphs[other]) == kind.close)
             }
         }
-        let frame = pieces(at: open.origin.x) + (close.map { pieces(at: glyphs[$0].origin.x) } ?? [])
+        // Only this bracket's own pieces: another bracket at the same place
+        // on another line is not this one (`stack`).
+        let frame = stack(from: start, in: glyphs, candidates: pieces(at: open.origin.x)).members
+            + (close.map { stack(from: $0, in: glyphs, candidates: pieces(at: glyphs[$0].origin.x)).members } ?? [])
         var reach = frame.map { glyphs[$0].rect }.reduce(open.rect) { $0.union($1) }
         // One OpenType glyph, of a size the file does not give: as tall as
         // two lines either side of it, when it is one of its larger sizes.
@@ -1391,7 +1643,7 @@ enum MathTranscriber {
         if close == nil, opener != "\\{" { return nil }
         // Between the brackets, and as high as they reach — a little lower,
         // since the last line's descenders and subscripts hang below them.
-        let content = glyphs.indices.filter { other in
+        var content = glyphs.indices.filter { other in
             let glyph = glyphs[other]
             return other != start && !consumed.contains(other) && !frame.contains(other)
                 && glyph.rect.minX >= open.rect.maxX - 0.5 && glyph.rect.maxX <= right
@@ -1406,33 +1658,174 @@ enum MathTranscriber {
         guard reach.height >= largest * 1.7 else { return nil }
         // The lines, by where the glyphs at the content's own size sit. A
         // radical hangs from where it stands, so where it stands is not a line.
-        var levels: [CGFloat] = []
-        for other in content.sorted(by: { glyphs[$0].origin.y > glyphs[$1].origin.y })
-        where glyphs[other].size >= largest * 0.8 && !isBigOperator(glyphs[other])
-            && !isRadical(glyphs[other]) && !glyphs[other].isExtension {
-            let height = glyphs[other].origin.y
-            if let last = levels.last, last - height < largest * 0.45 { continue }
-            levels.append(height)
+        // A script is four fifths of its line in some OpenType fonts (LeJEPA's
+        // 7.27 points on 8.97): the ∂² over a fraction between bars was a line.
+        // The comma after \end{cases} is no line of theirs: it stands on the
+        // line the brace does, halfway between two cases.
+        func isPunctuation(_ other: Int) -> Bool { [",", ".", ";"].contains(token(for: glyphs[other])) }
+        let full = content.filter {
+            glyphs[$0].size >= largest * 0.85 && !isBigOperator(glyphs[$0])
+                && !isRadical(glyphs[$0]) && !glyphs[$0].isExtension && !isPunctuation($0)
+        }
+        func lines(at heights: [CGFloat]) -> [CGFloat] {
+            var result: [CGFloat] = []
+            for height in heights.sorted(by: >) {
+                if let last = result.last, last - height < largest * 0.45 { continue }
+                result.append(height)
+            }
+            return result
+        }
+        var levels = lines(at: full.map { glyphs[$0].origin.y })
+        // A displayed fraction in a line — a \dfrac, or cases set in display
+        // style — has a numerator and a denominator as large as the line,
+        // over and under its bar, and they are that line's, not two more: the
+        // line stands on the bar's axis, a quarter of a size under it. Each
+        // case of such a system read as three lines, too close to be any.
+        // A bar whose line would stand where no line is, too near one to be
+        // another, is not a fraction's — an \overline under the line above.
+        let bars = rules.filter { rule in
+            rule.rect.width > 1 && rule.rect.height < rule.rect.width
+                && rule.rect.minX > open.rect.maxX - 1 && rule.rect.maxX < right + 1
+                && rule.rect.midY > reach.minY - body && rule.rect.midY < reach.maxY
+        }
+        func over(_ bar: Rule, _ other: Int) -> Bool {
+            let glyph = glyphs[other]
+            return glyph.rect.midX > bar.rect.minX - 1 && glyph.rect.midX < bar.rect.maxX + 1
+                && glyph.origin.y > bar.rect.midY && glyph.origin.y - bar.rect.midY < largest * 0.75
+        }
+        func under(_ bar: Rule, _ other: Int) -> Bool {
+            let glyph = glyphs[other]
+            return glyph.rect.midX > bar.rect.minX - 1 && glyph.rect.midX < bar.rect.maxX + 1
+                && glyph.origin.y < bar.rect.midY && bar.rect.midY - glyph.origin.y < largest * 1.3
+        }
+        var fractions: [(axis: CGFloat, bar: Rule, members: [Int])] = bars.compactMap { bar in
+            let members = full.filter { over(bar, $0) || under(bar, $0) }
+            guard members.contains(where: { over(bar, $0) }), members.contains(where: { under(bar, $0) })
+            else { return nil }
+            return (bar.rect.midY - largest * 0.25, bar, members)
+        }
+        while !fractions.isEmpty {
+            let taken = Set(fractions.flatMap(\.members))
+            let rest = lines(at: full.filter { !taken.contains($0) }.map { glyphs[$0].origin.y })
+            let misplaced = fractions.indices.filter { index in
+                let axis = fractions[index].axis
+                return !rest.contains { abs($0 - axis) < largest * 0.45 }
+                    && rest.contains { abs($0 - axis) < largest * 0.9 }
+            }
+            if misplaced.isEmpty {
+                levels = lines(at: rest + fractions.map(\.axis))
+                break
+            }
+            for index in misplaced.reversed() { fractions.remove(at: index) }
+        }
+        content.removeAll { other in
+            isPunctuation(other) && !levels.contains { abs($0 - glyphs[other].origin.y) < largest * 0.45 }
         }
         guard levels.count >= 2 else { return nil }
         for (upper, lower) in zip(levels, levels.dropFirst()) where upper - lower < largest * 0.9 {
             return nil
         }
         // A bar between two of the lines makes them a fraction's numerator
-        // and denominator, whatever brackets stand round them.
+        // and denominator, whatever brackets stand round them. A fraction in
+        // a line has its bar on that line's axis, a quarter of a size over
+        // its baseline — under the line above, but no numerator of it: every
+        // fraction in the lower case of a system of cases read the two cases
+        // as one line, their glyphs interleaved.
+        // A fraction inside the numerator or the denominator of a line's own
+        // is that fraction's, however high it stands.
         let span = extent(content.map { glyphs[$0] })
+        func onAxis(_ rule: Rule) -> Bool {
+            levels.contains { rule.rect.midY > $0 && rule.rect.midY - $0 < largest * 0.45 }
+        }
+        let axial = bars.filter(onAxis)
         if rules.contains(where: { rule in
             rule.rect.width > 1 && rule.rect.height < rule.rect.width
                 && rule.rect.maxX > span.minX && rule.rect.minX < span.maxX
                 && rule.rect.midY < levels[0] && rule.rect.midY > levels[levels.count - 1]
                 && rule.rect.minX > open.rect.minX - 1 && rule.rect.maxX < right + 1
+                && !onAxis(rule) && !isVinculum(rule, in: glyphs)
+                && !axial.contains { bar in
+                    rule.rect.minX > bar.rect.minX - 1 && rule.rect.maxX < bar.rect.maxX + 1
+                        && abs(rule.rect.midY - bar.rect.midY) < largest * 0.9
+                }
         }) { return nil }
-        var rows: [[Int]] = Array(repeating: [], count: levels.count)
+        // The glyphs of a line's own fractions go with the line: within the
+        // bar's width, over it as far as a numerator stands and under it as
+        // far as a denominator hangs — from the bar or from a fraction inside
+        // it — and to the nearest such bar, measured so. Between two cases
+        // the denominator of the upper case's fraction and the numerator of
+        // the lower one's are the same height: a λ over an N in the lower
+        // numerator went up to the case above, and the μ of the upper
+        // denominator down to the case below. A displayed fraction — as large
+        // as its line — stands further off both ways than a text one.
+        var placed: [Int: CGFloat] = [:]
+        let displayed = Set(fractions.map { $0.bar.rect.midY })
         for other in content {
-            let height = glyphs[other].origin.y
-            let nearest = levels.indices.min { abs(levels[$0] - height) < abs(levels[$1] - height) } ?? 0
-            rows[nearest].append(other)
+            let glyph = glyphs[other]
+            let x = glyph.rect.midX, y = glyph.origin.y
+            var best: (level: CGFloat, distance: CGFloat)?
+            var runnerUp = CGFloat.infinity
+            for bar in axial where x > bar.rect.minX - 1 && x < bar.rect.maxX + 1 {
+                guard let level = levels.first(where: { bar.rect.midY > $0 && bar.rect.midY - $0 < largest * 0.45 })
+                else { continue }
+                let reach = displayed.contains(bar.rect.midY) ? (up: 0.9, down: 1.3) : (up: 0.6, down: 0.8)
+                let inner = rules.filter { rule in
+                    rule.rect.width > 1 && rule.rect.height < rule.rect.width
+                        && rule.rect.minX > bar.rect.minX - 1 && rule.rect.maxX < bar.rect.maxX + 1
+                        && abs(rule.rect.midY - bar.rect.midY) < largest * 0.9
+                }
+                var distance = CGFloat.infinity
+                for rule in inner where x > rule.rect.minX - 1 && x < rule.rect.maxX + 1 {
+                    let apart = y > rule.rect.midY
+                        ? (y - rule.rect.midY) / (largest * reach.up) : (rule.rect.midY - y) / (largest * reach.down)
+                    distance = min(distance, apart)
+                }
+                guard distance <= 1 else { continue }
+                if let known = best, known.level == level {
+                    best = (level, min(known.distance, distance))
+                } else if distance < best?.distance ?? .infinity {
+                    runnerUp = best?.distance ?? .infinity
+                    best = (level, distance)
+                } else {
+                    runnerUp = min(runnerUp, distance)
+                }
+            }
+            // As far from one fraction as from the other — the subscript of
+            // an α in the upper denominator, over the λ of the lower
+            // numerator — is for the glyph it hangs from to say.
+            if let best, runnerUp - best.distance > 0.2 { placed[other] = best.level }
         }
+        // Each glyph goes to the line nearest it — or, a script about as near
+        // one line as the other, to the line of the glyph it hangs from. The
+        // superscript of a superscript stands as high over its own line as
+        // under the line above when the lines are close: the k of n^k in the
+        // exponent of a lower case was 8.34 points from the upper case and
+        // 8.37 from its own, and went up.
+        var lineOf: [Int: Int] = [:]
+        func line(of other: Int, depth: Int = 0) -> Int {
+            if let known = lineOf[other] { return known }
+            let glyph = glyphs[other]
+            // A sign drawn from an extension font hangs from its top: a tall
+            // radical or \Big parenthesis of the lower case stood where the
+            // upper case is. Its middle is on its line's axis.
+            let height = placed[other] ?? (glyph.isExtension ? glyph.rect.midY - largest * 0.25 : glyph.origin.y)
+            let order = levels.indices.sorted { abs(levels[$0] - height) < abs(levels[$1] - height) }
+            var answer = order.first ?? 0
+            if placed[other] == nil, glyph.size < largest * 0.85, order.count > 1, depth < 8,
+               abs(levels[order[1]] - height) - abs(levels[order[0]] - height) < largest * 0.3,
+               let anchor = content.filter({ candidate in
+                   let rect = glyphs[candidate].rect
+                   return candidate != other && rect.minX < glyph.rect.minX
+                       && rect.maxX < glyph.rect.minX + glyph.size * 0.3
+                       && glyph.rect.minX - rect.maxX < largest
+               }).min(by: { abs(glyphs[$0].origin.y - glyph.origin.y) < abs(glyphs[$1].origin.y - glyph.origin.y) }) {
+                answer = line(of: anchor, depth: depth + 1)
+            }
+            lineOf[other] = answer
+            return answer
+        }
+        var rows: [[Int]] = Array(repeating: [], count: levels.count)
+        for other in content { rows[line(of: other)].append(other) }
         // A line's cells, where a column's space cuts it.
         var cells: [[(members: [Int], span: CGRect)]] = rows.map { row in
             var result: [(members: [Int], span: CGRect)] = []
@@ -1533,7 +1926,42 @@ enum MathTranscriber {
     }
 
     private static func token(for glyph: Glyph) -> String {
+        let key = TokenKey(fontName: glyph.fontName, glyphName: glyph.glyphName, code: glyph.code,
+                           unicode: glyph.unicode, isSymbolic: glyph.isSymbolic,
+                           wideSigma: glyph.unicode == "\u{1D70D}" && glyph.width > glyph.size * 0.52)
+        memoLock.lock()
+        let known = memo.tokens[key]
+        let quiet = memo.silent[key]
+        memoLock.unlock()
+        let spelled: String
+        let silent: Bool
+        if let known, let quiet {
+            spelled = known
+            silent = quiet
+        } else {
+            spelled = named(glyph)
+            // A piece of a tall sign spells nothing whatever the page's text
+            // says is there: PDFKit read a brace's filler as a full stop, and
+            // the brace lost the piece that held it together.
+            silent = isPiece(glyph)
+            memoLock.lock()
+            memo.tokens[key] = spelled
+            memo.silent[key] = silent
+            memoLock.unlock()
+        }
+        // What the page's own text says is asked for last, and not kept: it
+        // is about where the glyph is, not what it is.
+        return spelled.isEmpty && !silent ? fallback?(glyph) ?? "" : spelled
+    }
+
+    /// What a glyph spells by its font and its name alone.
+    private static func named(_ glyph: Glyph) -> String {
         if isSilentPiece(glyph) { return "" }
+        // A piece of a drawing — the tips and the middle of a horizontal
+        // brace, the shaft of a tall arrow — spells nothing: txexs's tips
+        // of an \underbrace sit at the codes of "|", "{" and "z", and came
+        // back as those.
+        if TeXGlyphNames.isDecoration(glyph.glyphName) { return "" }
         // STIX Two Math, set by LuaTeX, labels the script-size σ as the final
         // sigma ς. The ς is the narrower of the two by far.
         if glyph.unicode == "\u{1D70D}", glyph.width > glyph.size * 0.52,
@@ -1552,7 +1980,7 @@ enum MathTranscriber {
             if isMathFont(glyph), let command = TeXGlyphNames.unicodeCommands[latex] { return command }
             return latex
         }
-        return fallback?(glyph) ?? ""
+        return ""
     }
 
     /// Whether a glyph is one this cannot read at all: it spells nothing, and
