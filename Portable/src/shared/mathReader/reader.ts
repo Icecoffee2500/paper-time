@@ -21,7 +21,7 @@ import * as TeX from './texGlyphNames.js'
 import {
   closing, family, hasWordSubscript, isAccent, isBigOperator, isDelimiter, isItalicLetter, isMathFont, isOperatorName,
   isRadical, isSpace, isTallVariant, isUnreadable, isUprightLetter, italicVariables, joiningText, latexOf, maxBy, minBy,
-  opening, ordinarySize, setFallback, setVariablesInTextItalic, sortedBy, spelling as spell, stack, type Context,
+  isPiece, opening, ordinarySize, setFallback, setVariablesInTextItalic, sortedBy, spelling as spell, stack, type Context,
 } from './transcriber.js'
 import { canon, chars, count, firstChar, isLetter, isNumber, isWhitespace, lastChar, trimSet } from './swiftText.js'
 import { trimWhitespace, trimWhitespaceAndNewlines } from '../zettel.js'
@@ -338,7 +338,16 @@ function matrixRun(start: number, reached: Reached[], rules: Rule[]): Run | null
     next += 1
   }
   if (lines.length < 2) return null
-  const written = lines.map((line) => line.cells.map((cell) => latexOf(cell.glyphs, rules)).join(' & '))
+  const cells = lines.map((line) => line.cells.map((cell) => latexOf(cell.glyphs, rules)))
+  // What lines up in cells and is not a matrix: a table of results — many
+  // columns, most cells a measured number ("93.2 ± 0.3") — and an algorithm,
+  // whose lines begin with their numbers ("4:"). Both came back as one
+  // \begin{matrix}; each line is its own formula.
+  const all = cells.flat()
+  const measured = all.filter((cell) => /[0-9]\.[0-9]/.test(cell)).length
+  if (!(lines[0].cells.length <= 6 && measured * 2 <= all.length
+    && !cells.every((line) => line.length > 0 && /^[0-9]+:$/.test(line[0])))) return null
+  const written = cells.map((line) => line.join(' & '))
   const text = '\\begin{matrix} ' + written.join(' \\\\ ') + ' \\end{matrix}'
   const spans = lines.flatMap((line) => line.cells.map((cell) => cell.span))
   const bounds = spans.slice(1).reduce((box, one) => union(box, one), lines[0].cells[0].span)
@@ -605,14 +614,21 @@ function blocks(rows: Glyph[][], body: number, rules: Rule[]): Glyph[][][] {
   // The lines of cases hold words and are still the formula's.
   const fences = tallFences(rows.flat(), body)
   // A pair of tall brackets holds the rows between them, and the row they
-  // stand on; the line of an align passing across them is not held.
+  // stand on — the one they are centred on, whose left side runs up to them;
+  // the line of an align passing across them is not held. A brace nothing
+  // closes holds the lines that begin beside it: the other column's lines
+  // stood beside it too.
   const held = (row: number): number | null => {
-    const found = fences.findIndex((fence) => {
+    const found = fences.findIndex((one) => {
+      const fence = one.region
       if (!(minY(fence) < baselines[row] && maxY(fence) > baselines[row])) return false
       const inside = minX(extents[row]) > minX(fence) - 1 && maxX(extents[row]) < maxX(fence) + 1
+        && (one.closed || minX(extents[row]) < minX(fence) + body * 2)
       const standing = rows[row].some((glyph) => (isDelimiter(glyph) || spell(glyph) === '')
         && (Math.abs(maxX(rectOf(glyph)) - minX(fence)) < 1.5 || Math.abs(minX(rectOf(glyph)) - maxX(fence)) < 1.5))
-      return inside || standing
+      const centred = minX(extents[row]) < minX(fence) && maxX(extents[row]) > minX(fence) - body * 2
+        && Math.abs(midY(fence) - (baselines[row] + body * 0.25)) < body * 0.3
+      return inside || standing || centred
     })
     return found >= 0 ? found : null
   }
@@ -636,17 +652,44 @@ function blocks(rows: Glyph[][], body: number, rules: Rule[]): Glyph[][][] {
   const barBeside = (row: number) => rules.some((rule) => rule.rect.width > 1 && rule.rect.height < rule.rect.width
     && minX(rule.rect) > minX(extents[row]) - 4 && maxX(rule.rect) < maxX(extents[row]) + 4
     && Math.abs(midY(rule.rect) - baselines[row]) < body * 1.2)
+  // The rows right over and right under each one in its own column.
+  const unders = indices(rows.length).map((row) => maxBy(
+    indices(rows.length).filter((at) => baselines[at] < baselines[row] && overlap(at, row)),
+    (a, b) => baselines[a] < baselines[b]))
+  const overs = indices(rows.length).map((row) => minBy(
+    indices(rows.length).filter((at) => baselines[at] > baselines[row] && overlap(at, row)),
+    (a, b) => baselines[a] < baselines[b]))
+  // How far a row is from the row on its far side — a row of limits belongs
+  // to the nearer of the two lines it stands between; a line of prose is not
+  // one it could belong to.
+  const gapBelow = (row: number): number | null => {
+    const under = unders[row]
+    return under === undefined || prose[under] ? null : baselines[row] - baselines[under]
+  }
+  const gapAbove = (row: number): number | null => {
+    const over = overs[row]
+    return over === undefined || prose[over] ? null : baselines[over] - baselines[row]
+  }
+  // Two rows of scripts one over the other, each the limits of its own line,
+  // stand closer than a line and are not one formula.
+  const small = (index: number) => rows[index].every((one) => one.size < body * 0.8)
+  const apart = (upper: number, lower: number) => {
+    const top = overs[upper]
+    const bottom = unders[lower]
+    if (!small(upper) || !small(lower) || top === undefined || bottom === undefined || prose[top] || prose[bottom]) return false
+    return linked(rows[top], rows[upper], baselines[top], baselines[upper], body, rules)
+      && linked(rows[lower], rows[bottom], baselines[lower], baselines[bottom], body, rules)
+  }
   for (let row = 0; row < rows.length; row += 1) {
     if (prose[row]) continue
-    // The rows right over and right under it in its own column.
-    const under = maxBy(indices(rows.length).filter((at) => baselines[at] < baselines[row] && overlap(at, row)),
-      (a, b) => baselines[a] < baselines[b])
-    const over = minBy(indices(rows.length).filter((at) => baselines[at] > baselines[row] && overlap(at, row)),
-      (a, b) => baselines[a] < baselines[b])
-    if (under !== undefined && !prose[under]
-      && linked(rows[row], rows[under], baselines[row], baselines[under], body, rules)) joinRows(row, under)
-    if (over !== undefined && !prose[over]
-      && linked(rows[over], rows[row], baselines[over], baselines[row], body, rules)) joinRows(over, row)
+    const under = unders[row]
+    const over = overs[row]
+    if (under !== undefined && !prose[under] && !apart(row, under)
+      && linked(rows[row], rows[under], baselines[row], baselines[under], body, rules,
+        { above: gapAbove(row), below: gapBelow(under) })) joinRows(row, under)
+    if (over !== undefined && !prose[over] && !apart(over, row)
+      && linked(rows[over], rows[row], baselines[over], baselines[row], body, rules,
+        { above: gapAbove(over), below: gapBelow(row) })) joinRows(over, row)
     // The lines of a matrix or of cases, held by one pair of tall brackets.
     const fence = heldBy[row]
     if (fence !== null) {
@@ -685,7 +728,15 @@ const PAIRS: Record<string, string> = { '(': ')', '[': ']', '\\{': '\\}', '|': '
  * at one place, or one OpenType glyph standing off the line of what it
  * holds, taken as two lines either side of it.
  */
-export function tallFences(glyphs: Glyph[], body: number): Rect[] {
+export interface Fence {
+  /** What the bracket holds. */
+  region: Rect
+  /** Whether a bracket closes it; a brace of cases holds what begins beside
+   *  it, as far along as that runs. */
+  closed: boolean
+}
+
+export function tallFences(glyphs: Glyph[], body: number): Fence[] {
   const sides: { token: string; box: Rect }[] = []
   // A bracket's pieces are one bracket, met once.
   const taken = new Set<number>()
@@ -711,7 +762,7 @@ export function tallFences(glyphs: Glyph[], body: number): Rect[] {
     if (!(box.height >= body * 1.8)) return
     sides.push({ token, box })
   })
-  const result: Rect[] = []
+  const result: Fence[] = []
   const used = new Set<number>()
   const order = sortedBy(indices(sides.length), (a, b) => minX(sides[a].box) < minX(sides[b].box))
   for (const index of order) {
@@ -739,7 +790,7 @@ export function tallFences(glyphs: Glyph[], body: number): Rect[] {
     // It holds two lines or more: what is inside, at its own full size,
     // stands a line apart. A tall bracket round one line holds one.
     const inside = glyphs.filter((one) => containsPoint(region, { x: midX(rectOf(one)), y: one.y }) && !isDelimiter(one)
-      && spell(one) !== '' && !isBigOperator(one))
+      && spell(one) !== '' && !isBigOperator(one) && (right !== undefined || minX(rectOf(one)) < minX(region) + body * 3))
     const largest = maxOf(inside.map((one) => one.size)) ?? 0
     const heights = inside.filter((one) => one.size >= largest * 0.9).map((one) => one.y)
     const top = maxOf(heights)
@@ -747,29 +798,43 @@ export function tallFences(glyphs: Glyph[], body: number): Rect[] {
     if (top === undefined || bottom === undefined || !(top - bottom >= body * 0.9)) continue
     used.add(index)
     if (right !== undefined) used.add(right)
-    result.push(region)
+    result.push({ region, closed: right !== undefined })
   }
   return result
 }
 
-/** Whether two rows, one right over the other, are parts of one formula. */
-function linked(above: Glyph[], below: Glyph[], aboveBaseline: number, belowBaseline: number, body: number, rules: Rule[]): boolean {
+/** Whether two rows, one right over the other, are parts of one formula.
+ *  `farther` is how far each of the two rows is from the row on its other
+ *  side — over the upper one, under the lower one — when there is one. */
+function linked(
+  above: Glyph[], below: Glyph[], aboveBaseline: number, belowBaseline: number, body: number, rules: Rule[],
+  farther: { above: number | null; below: number | null } = { above: null, below: null },
+): boolean {
   const distance = aboveBaseline - belowBaseline
   // Closer than a line: nothing but a formula stacks rows that tight.
   if (distance < body) return true
   const top = extent(above)
   const bottom = extent(below)
   // A fraction bar with one row on each side of it — as wide as what it
-  // divides, which a table's rule between rows of cells is not.
+  // divides, which a table's rule between rows of cells is not, and next to
+  // both: a numerator stands on its bar and a denominator hangs from it.
   const reach = union(top, bottom)
   const across = (glyph: Glyph, rule: Rule) => midX(rectOf(glyph)) > minX(rule.rect) - 1 && midX(rectOf(glyph)) < maxX(rule.rect) + 1
   if (distance < body * 4.5 && rules.some((rule) => midY(rule.rect) > belowBaseline && midY(rule.rect) < aboveBaseline
+    && aboveBaseline - midY(rule.rect) < body * 1.6 && midY(rule.rect) - belowBaseline < body * 2
     && rule.rect.width > 1 && rule.rect.height < rule.rect.width
     && minX(rule.rect) > minX(reach) - 4 && maxX(rule.rect) < maxX(reach) + 4
     && above.some((one) => across(one, rule)) && below.some((one) => across(one, rule)))) return true
   if (!(distance < body * 2)) return false
+  // The pieces of one tall sign are one sign: STIX sets a displayed ∫ as its
+  // top half on one row and its bottom half on the next.
+  const sign = (glyph: Glyph) => isPiece(glyph) || isBigOperator(glyph)
+  if (above.some((upper) => sign(upper) && below.some((lower) => sign(lower) && (isPiece(upper) || isPiece(lower))
+    && Math.abs(upper.x - lower.x) < upper.size * 0.2
+    && Math.abs(minY(rectOf(upper)) - maxY(rectOf(lower))) < upper.size * 0.35))) return true
   // A sign that grows reaching down past the other row's baseline, or
-  // standing over what is in it.
+  // standing into what is in it — the \big brackets of two lines set tight
+  // come within a point of each other and are not one formula for that.
   const reaches = (row: Glyph[], other: Glyph[], baseline: number) => {
     const span = extent(other)
     return row.some((glyph) => {
@@ -777,11 +842,13 @@ function linked(above: Glyph[], below: Glyph[], aboveBaseline: number, belowBase
       const ink = rectOf(glyph)
       const wide = maxX(ink) > minX(span) - body * 0.6 && minX(ink) < maxX(span) + body * 0.6
       const overlaps = maxX(ink) > minX(span) && minX(ink) < maxX(span)
+        && minY(ink) < maxY(span) - body * 0.2 && maxY(ink) > minY(span) + body * 0.2
       return (wide && minY(ink) < baseline && maxY(ink) > baseline) || overlaps
     })
   }
   if (reaches(above, below, belowBaseline) || reaches(below, above, aboveBaseline)) return true
-  // A pair of brackets in one row round what is in the other.
+  // A pair of brackets in one row round what is in the other: one pair, and
+  // a tall one, set at one height — the halves of \binom.
   const encloses = (row: Glyph[], other: Glyph[]) => {
     const held = other.filter((one) => spell(one) !== '' && !isDelimiter(one))
     if (held.length === 0) return false
@@ -791,6 +858,8 @@ function linked(above: Glyph[], below: Glyph[], aboveBaseline: number, belowBase
     const open = maxBy(opens, (a, b) => maxX(rectOf(a)) < maxX(rectOf(b)))
     const close = minBy(closes, (a, b) => minX(rectOf(a)) < minX(rectOf(b)))
     if (open === undefined || close === undefined) return false
+    const tall = (glyph: Glyph) => rectOf(glyph).height >= body * 1.1 || isTallVariant(glyph, row, body)
+    if (!(tall(open) && tall(close) && Math.abs(open.y - close.y) < body * 0.3)) return false
     return minX(span) - maxX(rectOf(open)) < body * 0.6 && minX(rectOf(close)) - maxX(span) < body * 0.6
   }
   if (encloses(above, below) || encloses(below, above)) return true
@@ -801,16 +870,19 @@ function linked(above: Glyph[], below: Glyph[], aboveBaseline: number, belowBase
   const isLimits = (row: Glyph[], other: Glyph[]) => {
     if (!row.every((one) => one.size < body * 0.8)) return false
     const span = extent(row)
-    const sign = other.some((glyph) => {
+    const signed = other.some((glyph) => {
       if (!isBigOperator(glyph)) return false
       const g = rectOf(glyph)
       return (maxX(g) > minX(span) && minX(g) < maxX(span))
         || (minX(span) > midX(g) && minX(span) - maxX(g) < body * 0.6)
     })
-    if (sign) return true
+    if (signed) return true
     if (!(distance < body * 1.5)) return false
     return other.some((glyph) => maxX(rectOf(glyph)) > minX(span) && minX(rectOf(glyph)) < maxX(span))
   }
+  // A row of limits between two lines is the nearer line's.
+  if (farther.above !== null && farther.above < distance && isLimits(above, below) && !isLimits(below, above)) return false
+  if (farther.below !== null && farther.below < distance && isLimits(below, above) && !isLimits(above, below)) return false
   return isLimits(above, below) || isLimits(below, above)
 }
 
@@ -946,12 +1018,42 @@ function rowsOf(glyphs: Glyph[], rules: Rule[] = []): Glyph[][] {
   }
 
   // A big operator, or a piece of a tall delimiter, hangs from a point above
-  // its own ink: it joins the row whose baseline runs through it.
+  // its own ink: it joins the row whose baseline runs through it. A piece no
+  // row runs through — the top of a brace over two cases — joins the piece
+  // it stands on: the nearest row was the line of prose over the display.
+  const hung: { glyph: Glyph; row: number }[] = []
+  let waiting: Glyph[] = []
   for (const glyph of glyphs.filter((one) => extension(one) && !(isRadical(one) && placed(one)))) {
     const ink = rectOf(glyph)
     const through = indices(laid.length).filter((row) => laid[row].baseline > minY(ink) - 1 && laid[row].baseline < maxY(ink) + 1)
-    const candidates = through.length === 0 ? indices(laid.length) : through
-    const nearest = minBy(candidates, (a, b) => Math.abs(laid[a].baseline - midY(ink)) < Math.abs(laid[b].baseline - midY(ink)))
+    const nearest = minBy(through, (a, b) => Math.abs(laid[a].baseline - midY(ink)) < Math.abs(laid[b].baseline - midY(ink)))
+    if (nearest !== undefined) {
+      laid[nearest].glyphs.push(glyph)
+      hung.push({ glyph, row: nearest })
+    } else {
+      waiting.push(glyph)
+    }
+  }
+  const standsOn = (glyph: Glyph): number | undefined => hung.find((other) =>
+    Math.abs(other.glyph.x - glyph.x) < glyph.size * 0.2
+      && maxY(rectOf(other.glyph)) > minY(rectOf(glyph)) - glyph.size * 0.3
+      && minY(rectOf(other.glyph)) < maxY(rectOf(glyph)) + glyph.size * 0.3)?.row
+  let progress = true
+  while (progress && waiting.length > 0) {
+    progress = false
+    for (let index = waiting.length - 1; index >= 0; index -= 1) {
+      const glyph = waiting[index]
+      const row = standsOn(glyph)
+      if (row === undefined) continue
+      laid[row].glyphs.push(glyph)
+      hung.push({ glyph, row })
+      waiting = waiting.slice(0, index).concat(waiting.slice(index + 1))
+      progress = true
+    }
+  }
+  for (const glyph of waiting) {
+    const ink = rectOf(glyph)
+    const nearest = minBy(indices(laid.length), (a, b) => Math.abs(laid[a].baseline - midY(ink)) < Math.abs(laid[b].baseline - midY(ink)))
     if (nearest !== undefined) laid[nearest].glyphs.push(glyph)
     else laid.push({ baseline: midY(ink), glyphs: [glyph] })
   }

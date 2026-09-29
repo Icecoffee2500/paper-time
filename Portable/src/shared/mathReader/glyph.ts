@@ -77,6 +77,9 @@ export function isExtension(glyph: Glyph): boolean {
  *  bottom pieces of a bracket built up for a matrix. */
 function reach(name: string | null): number {
   if (name === null) return 1
+  // newtx names its display-size signs by their code point with ".dsp"
+  // after it — "uni222B.dsp" is the displayed ∫.
+  if (name.endsWith('.dsp')) return 1.5
   // "summationdisplay.1" is the display sum from a second font, and newtx
   // names its pieces "parenlefttpA".
   const dot = name.indexOf('.')
@@ -85,8 +88,14 @@ function reach(name: string | null): number {
   if (glyphName.startsWith('paren') || glyphName.startsWith('bracket')) {
     if (glyphName.endsWith('tp') || glyphName.endsWith('bt')) return 1.8
   }
-  if (glyphName.startsWith('brace')
-    && (glyphName.endsWith('tp') || glyphName.endsWith('bt') || glyphName.endsWith('mid'))) return 0.9
+  if (glyphName.startsWith('brace') && (glyphName.endsWith('tp') || glyphName.endsWith('bt'))) return 0.9
+  // The middle of a brace is its point and the stretch either side of it;
+  // the pieces that fill between are short — a brace's a third of an em, a
+  // bracket's and a bar's three fifths.
+  if (glyphName.startsWith('brace') && glyphName.endsWith('mid')) return 1.8
+  if (glyphName === 'braceex') return 0.3
+  if (glyphName.endsWith('ex')
+    && ['paren', 'bracket', 'arrowvert', 'Arrowvert', 'vextend'].some((prefix) => glyphName.startsWith(prefix))) return 0.6
   if (glyphName.endsWith('Bigg')) return 3.0
   if (glyphName.endsWith('bigg')) return 2.4
   if (glyphName.endsWith('Big')) return 1.8
