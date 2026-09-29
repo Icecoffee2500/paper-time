@@ -19,7 +19,9 @@ export function paperHandlers(ctx: Context): Partial<Handlers> {
 
   return {
     // The page as the Mac's scanner reads it, for the mathematics in a
-    // selection. The scanner keeps what it read while the file is the same.
+    // selection, with what the paper's first pages say about its variables
+    // (the Mac asks them too). The scanner keeps what it read while the file
+    // is the same.
     'math:page': async ({ id, pageIndex }) => {
       try {
         const row = await (await libraries.ownerOf(id))?.paper(id)
@@ -33,7 +35,8 @@ export function paperHandlers(ctx: Context): Partial<Handlers> {
           // A few papers at a time: a page's glyphs are what a selection asks about.
           while (scanners.size > 4) scanners.delete(scanners.keys().next().value!)
         }
-        return kept.scanner.page(pageIndex)
+        const page = kept.scanner.page(pageIndex)
+        return page ? { ...page, italicElsewhere: kept.scanner.italicElsewhere(pageIndex) } : null
       } catch {
         return null
       }

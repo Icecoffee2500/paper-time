@@ -8,6 +8,7 @@
  * - `intersection` of boxes that only touch is a box of zero width, not null;
  *   of boxes apart, null.
  * - `insetBy` past nothing is null. `union` with null is the other.
+ * - `contains` a point is half-open like `intersects`.
  */
 
 export interface Rect { x: number; y: number; width: number; height: number }
@@ -58,6 +59,13 @@ function overlaps(a0: number, a1: number, b0: number, b1: number): boolean {
 export function intersects(a: Rect, b: Rect): boolean {
   if (isNull(a) || isNull(b)) return false
   return overlaps(a.x, maxX(a), b.x, maxX(b)) && overlaps(a.y, maxY(a), b.y, maxY(b))
+}
+
+/** `CGRect.contains(CGPoint)`: half-open too — a point on the far edge is
+ *  outside, and a box of no width holds nothing. */
+export function containsPoint(r: Rect, p: Point): boolean {
+  if (isNull(r)) return false
+  return p.x >= minX(r) && p.x < maxX(r) && p.y >= minY(r) && p.y < maxY(r)
 }
 
 export function insetBy(r: Rect, dx: number, dy: number): Rect {
