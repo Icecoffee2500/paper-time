@@ -50,6 +50,29 @@ final class PDFContentScanner {
         /// Euler's extension font also keeps its arrows and its ∞, which are
         /// set on the line like any other glyph.
         var isExtension: Bool {
+            Self.remembered(fontName, glyphName) { Self.extensionFont(fontName: $0, glyphName: $1) }
+        }
+
+        /// The answer for a font and a glyph name, kept: `rect` asks it of
+        /// every glyph every time a formula is looked at, and working it out
+        /// is a split, an upper-casing and a dozen prefixes.
+        private struct Name: Hashable { var font: String; var glyph: String? }
+        nonisolated(unsafe) private static var known: [Name: Bool] = [:]
+        private static let lock = NSLock()
+
+        private static func remembered(_ font: String, _ glyph: String?, _ work: (String, String?) -> Bool) -> Bool {
+            let key = Name(font: font, glyph: glyph)
+            lock.lock()
+            if let value = known[key] { lock.unlock(); return value }
+            lock.unlock()
+            let value = work(font, glyph)
+            lock.lock()
+            known[key] = value
+            lock.unlock()
+            return value
+        }
+
+        private static func extensionFont(fontName: String, glyphName: String?) -> Bool {
             let family = (fontName.split(separator: "+").last.map(String.init) ?? fontName).uppercased()
             if Self.extensionFamilies.contains(where: { family.hasPrefix($0) }) {
                 guard let name = glyphName else { return true }

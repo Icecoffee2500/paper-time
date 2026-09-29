@@ -985,17 +985,24 @@ enum MathReader {
             return span.minX - open.rect.maxX < body * 0.6 && close.rect.minX - span.maxX < body * 0.6
         }
         if encloses(above, below) || encloses(below, above) { return true }
-        // A row of limits — nothing in it at full size — over or under
-        // something in the other, or beside a big operator in it: the limits
-        // of a displayed integral sit off its top and bottom corners.
+        // A row of limits — nothing in it at full size — over or under a big
+        // operator in the other, or beside one: the limits of a displayed
+        // integral sit off its top and bottom corners. Over or under anything
+        // else — \lim, \underset, an \underbrace — a limit sits close, a line
+        // and a half at most: further, it is the limit of the formula on its
+        // other side, which a displayed sum's J over a line's "log N(z; 0, I)"
+        // was, and the two displayed lines came back as one.
         func isLimits(_ row: [PDFContentScanner.Glyph], over other: [PDFContentScanner.Glyph]) -> Bool {
             guard row.allSatisfy({ $0.size < body * 0.8 }) else { return false }
             let span = extent(of: row)
-            return other.contains { glyph in
-                if glyph.rect.maxX > span.minX && glyph.rect.minX < span.maxX { return true }
-                return MathTranscriber.isBigOperator(glyph)
-                    && span.minX > glyph.rect.midX && span.minX - glyph.rect.maxX < body * 0.6
+            let sign = other.contains { glyph in
+                guard MathTranscriber.isBigOperator(glyph) else { return false }
+                return (glyph.rect.maxX > span.minX && glyph.rect.minX < span.maxX)
+                    || (span.minX > glyph.rect.midX && span.minX - glyph.rect.maxX < body * 0.6)
             }
+            if sign { return true }
+            guard distance < body * 1.5 else { return false }
+            return other.contains { $0.rect.maxX > span.minX && $0.rect.minX < span.maxX }
         }
         return isLimits(above, over: below) || isLimits(below, over: above)
     }

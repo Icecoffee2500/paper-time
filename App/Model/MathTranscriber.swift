@@ -124,9 +124,47 @@ enum MathTranscriber {
     /// Cambria Math. A paper set in any of these had every formula in its
     /// prose read as words until each family was known here.
     static func isMathFont(_ glyph: Glyph) -> Bool {
-        let family = Self.family(of: glyph)
-        if family.contains("MATH") { return true }
-        return mathFamilies.contains { family.hasPrefix($0) }
+        remembered(\.mathFonts, glyph.fontName) {
+            let family = Self.family(of: glyph)
+            if family.contains("MATH") { return true }
+            return mathFamilies.contains { family.hasPrefix($0) }
+        }
+    }
+
+    /// What was worked out from a font's or a glyph's name, kept: reading a
+    /// page asks the same few dozen names the same questions some hundred
+    /// thousand times — split the subset tag off, upper-case, look up — and
+    /// that was most of the time a page took.
+    private struct Memo {
+        var families: [String: String] = [:]
+        var mathFonts: [String: Bool] = [:]
+        var tokens: [TokenKey: String] = [:]
+        var silent: [TokenKey: Bool] = [:]
+    }
+
+    private struct TokenKey: Hashable {
+        var fontName: String
+        var glyphName: String?
+        var code: Int
+        var unicode: String?
+        var isSymbolic: Bool
+        var wideSigma: Bool
+    }
+
+    nonisolated(unsafe) private static var memo = Memo()
+    private static let memoLock = NSLock()
+
+    private static func remembered<Value>(
+        _ table: WritableKeyPath<Memo, [String: Value]>, _ key: String, _ work: () -> Value
+    ) -> Value {
+        memoLock.lock()
+        if let known = memo[keyPath: table][key] { memoLock.unlock(); return known }
+        memoLock.unlock()
+        let value = work()
+        memoLock.lock()
+        memo[keyPath: table][key] = value
+        memoLock.unlock()
+        return value
     }
 
     /// The first letters of the maths fonts' names, uppercased. A prefix
@@ -153,7 +191,9 @@ enum MathTranscriber {
     ]
 
     static func family(of glyph: Glyph) -> String {
-        (glyph.fontName.split(separator: "+").last.map(String.init) ?? glyph.fontName).uppercased()
+        remembered(\.families, glyph.fontName) {
+            (glyph.fontName.split(separator: "+").last.map(String.init) ?? glyph.fontName).uppercased()
+        }
     }
 
     // MARK: - What a glyph is
@@ -460,10 +500,15 @@ enum MathTranscriber {
             // all of them.
             if let mark = accented[index] {
                 consumed.formUnion(mark.covered)
-                let inside = mark.covered.count == 1
+                var inside = mark.covered.count == 1
                     ? mathToken(for: glyphs[mark.covered[0]])
                     : transcribe(part(mark.covered), rules: rules,
                                  context: Context(bodySize: body, baseline: baseline), line: line)
+                // One letter under the mark keeps its weight: ŝ in bold is
+                // \hat{\boldsymbol{s}}, not \hat{s}.
+                if mark.covered.count == 1, let bold = boldCommand(for: glyphs[mark.covered[0]]), !inside.isEmpty {
+                    inside = "\(bold){\(inside)}"
+                }
                 tokens.append("\(mark.command){\(inside)}")
                 let last = mark.covered.max() ?? index
                 base = Base(size: glyphs[last].size, baseline: glyphs[last].origin.y, index: last)
@@ -1059,6 +1104,14 @@ enum MathTranscriber {
             for next in (position + 1)..<glyphs.count
             where !consumed.contains(next) && glyphs[next].size >= body * 0.95 {
                 stop = glyphs[next].rect.minX
+                // Another sign with limits of its own right after this one:
+                // the limits under the two run into each other — "i=1" and
+                // "j∈Bᵢ" under ∑∑ are one row of small glyphs — and are
+                // parted halfway between the signs. An integral's limits sit
+                // off its tail, and the next sign after it does not share them.
+                if isBigOperator(glyphs[next]), !token(for: glyphs[next]).contains("int") {
+                    stop = (sign.rect.maxX + glyphs[next].rect.minX) / 2
+                }
                 break
             }
             let candidates = glyphs.indices.filter { other in
@@ -1585,6 +1638,33 @@ enum MathTranscriber {
     }
 
     private static func token(for glyph: Glyph) -> String {
+        let key = TokenKey(fontName: glyph.fontName, glyphName: glyph.glyphName, code: glyph.code,
+                           unicode: glyph.unicode, isSymbolic: glyph.isSymbolic,
+                           wideSigma: glyph.unicode == "\u{1D70D}" && glyph.width > glyph.size * 0.52)
+        memoLock.lock()
+        let known = memo.tokens[key]
+        let quiet = memo.silent[key]
+        memoLock.unlock()
+        let spelled: String
+        let silent: Bool
+        if let known, let quiet {
+            spelled = known
+            silent = quiet
+        } else {
+            spelled = named(glyph)
+            silent = isSilentPiece(glyph)
+            memoLock.lock()
+            memo.tokens[key] = spelled
+            memo.silent[key] = silent
+            memoLock.unlock()
+        }
+        // What the page's own text says is asked for last, and not kept: it
+        // is about where the glyph is, not what it is.
+        return spelled.isEmpty && !silent ? fallback?(glyph) ?? "" : spelled
+    }
+
+    /// What a glyph spells by its font and its name alone.
+    private static func named(_ glyph: Glyph) -> String {
         if isSilentPiece(glyph) { return "" }
         // STIX Two Math, set by LuaTeX, labels the script-size σ as the final
         // sigma ς. The ς is the narrower of the two by far.
@@ -1604,7 +1684,7 @@ enum MathTranscriber {
             if isMathFont(glyph), let command = TeXGlyphNames.unicodeCommands[latex] { return command }
             return latex
         }
-        return fallback?(glyph) ?? ""
+        return ""
     }
 
     /// Whether a glyph is one this cannot read at all: it spells nothing, and
