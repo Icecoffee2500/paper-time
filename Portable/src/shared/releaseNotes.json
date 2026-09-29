@@ -34,8 +34,8 @@
       "en": "Scripts and Structure in Ultracopy"
      },
      "detail": {
-      "ko": "Ultracopy가 아래첨자와 위첨자를 자주 놓쳤어요. 이제 첨자는 물론 분수, 근호, 합과 적분의 위아래, 악센트, 여러 줄에 걸쳐 정렬된 수식까지 읽어요. 줄마다 분수가 든 cases와 ⋮·⋱가 든 행렬도 제 모양대로 옮겨요. 번호가 붙은 식은 Overleaf에서 그대로 컴파일되는 equation이나 align으로 복사해요. 조판 방식 열아홉 가지로 만든 수식 4,883개 중 4,881개를 맞게 읽어요.",
-      "en": "Ultracopy often missed subscripts and superscripts. It now reads them, and fractions, radicals, limits on sums and integrals, accents, and formulas aligned over several lines. Cases with a fraction on every line and matrices with ⋮ and ⋱ keep their shape. A numbered formula is copied as an equation or align that compiles in Overleaf. Of 4,883 test formulas set nineteen ways, it reads 4,881 right."
+      "ko": "Ultracopy가 아래첨자와 위첨자를 자주 놓쳤어요. 이제 첨자는 물론 분수, 근호, 합과 적분의 위아래, 악센트, 여러 줄에 걸쳐 정렬된 수식까지 읽어요. 줄마다 분수가 든 cases와 ⋮·⋱가 든 행렬도 제 모양대로 옮겨요. 번호가 붙은 식은 Overleaf에서 그대로 컴파일되는 equation이나 align으로 복사해요. 조판 방식 열아홉 가지로 만든 수식 5,035개 중 5,033개를 맞게 읽어요.",
+      "en": "Ultracopy often missed subscripts and superscripts. It now reads them, and fractions, radicals, limits on sums and integrals, accents, and formulas aligned over several lines. Cases with a fraction on every line and matrices with ⋮ and ⋱ keep their shape. A numbered formula is copied as an equation or align that compiles in Overleaf. Of 5,035 test formulas set nineteen ways, it reads 5,033 right."
      },
      "action": "ultracopy",
      "devices": [
