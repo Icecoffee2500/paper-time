@@ -106,12 +106,35 @@ export class Updates {
     const next: Partial<UpdateState> = { ...base, offer }
     if (isNew) {
       if (!this.installer) this.installer = makeInstaller(this)
-      Object.assign(next, { stage: this.installer ? 'preparing' : 'manual', progress: null, wantsInstall: false, installs: this.installer != null })
+      Object.assign(next, {
+        stage: this.installer ? 'preparing' : 'manual', progress: null, received: null, total: null,
+        wantsInstall: false, installs: this.installer != null,
+      })
     }
-    if (userInitiated || atLaunch) Object.assign(next, { showsSheet: true, showsBar: false })
+    // Never the sheet again once the install has begun.
+    if ((userInitiated || atLaunch) && this.state.stage !== 'installing') Object.assign(next, { showsSheet: true, showsBar: false })
     else if (isNew) next.showsBar = true
     this.change(next, 'check')
     if (isNew) this.installer?.prepare(offer.version)
+    if (isNew && probe.isRun) this.pretend(probe.argument('update-stage'))
+  }
+
+  /**
+   * For a probe (`--papertime-update-stage=`): the notice held at one stage,
+   * as if this desktop installed updates, to see what each looks like —
+   * `downloading:<bytes>/<total>`, `ready` or `installing`. Nothing is
+   * downloaded and nothing installs.
+   */
+  private pretend(stage: string | null | undefined) {
+    if (!stage) return
+    const [name, value = ''] = stage.split(':')
+    if (name === 'downloading') {
+      const [received, total] = value.split('/').map(Number)
+      this.change({ installs: true, stage: 'preparing' }, 'pretend')
+      this.progress(Number.isFinite(received) ? received : 0, Number.isFinite(total) && total > 0 ? total : null)
+    } else if (name === 'ready' || name === 'installing') {
+      this.change({ installs: true, stage: name, progress: 1 }, 'pretend')
+    }
   }
 
   // MARK: What the notice's buttons do
@@ -149,8 +172,11 @@ export class Updates {
 
   // MARK: What the installer reports
 
-  progress(fraction: number | null) {
-    if (this.state.stage !== 'manual') this.change({ stage: 'downloading', progress: fraction }, 'progress')
+  /** The bytes so far and the whole, once the server has said it. */
+  progress(received: number | null, total: number | null) {
+    if (this.state.stage === 'manual') return
+    const fraction = received != null && total ? Math.min(1, received / total) : null
+    this.change({ stage: 'downloading', progress: fraction, received, total }, 'progress')
   }
 
   ready() {
@@ -181,10 +207,14 @@ async function read(feed: string): Promise<unknown> {
 
 /**
  * electron-updater, on an installed Windows copy only. The release's own
- * `latest.yml` says which file and its SHA-512; the installer runs silently
- * (`/S`) and starts the app again. Nothing is downloaded differentially —
- * that would need the 250 MB installer copy the installer script clears
- * away (assets/installer.nsh).
+ * `latest.yml` says which file and its SHA-512. Install Now runs the
+ * installer with its window — the page with the progress bar, nothing to
+ * answer (assets/installer.nsh skips the questions an update has answers
+ * to, and opens the app at the end) — because a silent one (`/S`) left
+ * the screen empty for as long as it took, which cannot be told apart from
+ * a crash. Later still installs silently, on the way out. Nothing is
+ * downloaded differentially — that would need the 250 MB installer copy
+ * the installer script clears away.
  */
 function makeInstaller(center: Updates): Installer | null {
   if (process.platform !== 'win32' || !app.isPackaged || probe.isRun) return null
@@ -204,16 +234,16 @@ function makeInstaller(center: Updates): Installer | null {
       updater.disableDifferentialDownload = true
       updater.allowDowngrade = false
       updater.logger = null
-      updater.on('download-progress', (info) => center.progress(info.total ? info.transferred / info.total : null))
+      updater.on('download-progress', (info) => center.progress(info.transferred ?? null, info.total || null))
       updater.on('update-downloaded', () => center.ready())
       updater.on('error', (error) => center.failed(String(error?.message ?? error)))
       updater.on('update-not-available', () => center.failed('not in latest.yml'))
-      center.progress(null)
+      center.progress(null, null)
       updater.checkForUpdates().catch((error) => center.failed(String(error?.message ?? error)))
     },
     install() {
-      // Silent, and the app comes back when it is done.
-      updater?.quitAndInstall(true, true)
+      // With its window, and the app comes back when it is done.
+      updater?.quitAndInstall(false, true)
     },
     cancel() {
       if (updater) updater.autoInstallOnAppQuit = false

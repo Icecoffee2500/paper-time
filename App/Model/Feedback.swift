@@ -588,7 +588,12 @@ public enum WindowProbe {
             // A sheet is a window of its own, hung off the one it covers, and
             // photographing the parent gets the page behind it. Whatever is in
             // front is what was asked for.
-            guard let base = settings ?? NSApp.keyWindow
+            // A window with a sheet on it first: a run started hidden can have
+            // two windows, and the one that is key is not always the one the
+            // sheet went to.
+            guard let base = settings
+                ?? NSApp.windows.first(where: { $0.attachedSheet != nil })
+                ?? NSApp.keyWindow
                 ?? NSApp.windows.first(where: \.isVisible)
                 ?? offscreen(say: say)
             else { return say("window probe: no window") }
