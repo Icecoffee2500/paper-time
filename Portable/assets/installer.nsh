@@ -9,11 +9,20 @@
 ; them never uses is an error in that one.
 ;
 ; The hooks, in the order they run:
-;   installer    .onVerifyInstDir      the folder page, on every change
+;   installer    customInstallMode     before the page that asks who it is for
+;                .onVerifyInstDir      the folder page, on every change
 ;                customUnInstallCheck  just after the previous version's
 ;                                      uninstaller, before the first file
 ;                customInstall         the end of the install section
+;                customFinishPage      the last page
 ;   uninstaller  customRemoveFiles     removing the installed files
+;
+; An update started by Install Now in the app (0.9.16 on) runs with its
+; window — `--updated`, without /S — so the progress page is on the screen
+; for as long as the install takes: a silent one left the screen empty,
+; which cannot be told apart from a crash. The two page hooks keep that run
+; to the progress page alone: nothing to answer, and the app opens at the
+; end. An update that goes in when the app quits (Later) is still silent.
 ;
 ; Why an upgrade stopped on two files
 ;
@@ -183,6 +192,60 @@
       Abort
     FunctionEnd
   !endif
+!macroend
+
+; The page that asks who Paper Time is for (multiUserUi.nsh) comes up on
+; every run that is not silent, an update's too. An update goes where the
+; running copy is: the mode of the installation already there, the one a
+; silent update takes (installer.nsi elevates for a per-machine one). The
+; page's pre-function then skips it — or, for a per-machine install without
+; administrator rights, asks for them first. Inserted into that function in
+; both compilations; the uninstaller asks as it always did.
+!macro customInstallMode
+  !ifndef BUILD_UNINSTALLER
+    ${if} ${isUpdated}
+      ${if} $hasPerMachineInstallation == "1"
+        StrCpy $isForceMachineInstall "1"
+      ${else}
+        StrCpy $isForceCurrentInstall "1"
+      ${endif}
+    ${endif}
+  !endif
+!macroend
+
+; The last page. After an update's progress the app opens again by itself:
+; the finish page and its «Run Paper Time» box are for a first install. This
+; is electron-builder's finish page (assistedInstaller.nsh) with one thing
+; added — on an update, start the app the way a silent update does
+; (installSection.nsh, doStartApp) and skip the page, which ends the
+; installer, since it is the last. MUI moves on to it by itself when the
+; files are in (SetAutoClose, Finish.nsh), so nobody clicks Next.
+!macro customFinishPage
+  !ifndef HIDE_RUN_AFTER_FINISH
+    Function StartApp
+      ${if} ${isUpdated}
+        StrCpy $1 "--updated"
+      ${else}
+        StrCpy $1 ""
+      ${endif}
+      ${StdUtils.ExecShellAsUser} $0 "$launchLink" "open" "$1"
+    FunctionEnd
+
+    !define MUI_FINISHPAGE_RUN
+    !define MUI_FINISHPAGE_RUN_FUNCTION "StartApp"
+  !endif
+
+  Function PaperTimeFinishPre
+    ${if} ${isUpdated}
+      ; Otherwise the app's window opens behind this one.
+      HideWindow
+      ${StdUtils.ExecShellAsUser} $0 "$launchLink" "open" "--updated"
+      Abort
+    ${endif}
+  FunctionEnd
+
+  !define MUI_PAGE_CUSTOMFUNCTION_PRE PaperTimeFinishPre
+  !insertmacro MUI_PAGE_FINISH
 !macroend
 
 ; Runs right after the previous version's uninstaller. Defining this hook

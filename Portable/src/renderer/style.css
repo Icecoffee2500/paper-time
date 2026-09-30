@@ -4386,7 +4386,44 @@ textarea.memo {
 .update-item { margin: 0 0 8px 21px; }
 .update-item-title { font-size: 13px; font-weight: 600; }
 .update-item-detail { margin: 2px 0 0; color: var(--text-secondary); font-size: 12.5px; line-height: 1.5; }
-.update-foot { gap: 10px; }
+.update-foot { flex-direction: column; align-items: stretch; gap: 14px; }
+.update-actions { display: flex; align-items: center; gap: 10px; }
+.update-status { font-variant-numeric: tabular-nums; }
+
+/* Where the update has got to: a title, the numbers, and a bar (the Mac's
+   linear ProgressView). Without a number yet a stripe crosses the track. */
+.update-progress { display: flex; flex-direction: column; gap: 6px; }
+.update-meter-head { display: flex; align-items: baseline; gap: 8px; }
+.update-meter-title { font-size: 13px; font-weight: 600; }
+.update-meter-detail {
+  margin-left: auto; color: var(--text-secondary);
+  font-size: 13px; font-variant-numeric: tabular-nums;
+}
+.update-meter {
+  position: relative; display: block; overflow: hidden;
+  height: 6px; border-radius: 3px;
+  background: var(--separator-strong);
+}
+.update-meter.small { flex: 0 0 90px; height: 5px; }
+.update-meter-fill {
+  display: block; height: 100%; width: 0;
+  border-radius: inherit; background: var(--accent);
+  transition: width var(--motion-move) var(--ease);
+}
+.update-meter.indeterminate .update-meter-fill {
+  width: 30%;
+  animation: update-meter-sweep 1.3s ease-in-out infinite;
+}
+@keyframes update-meter-sweep {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(360%); }
+}
+.update-meter-caption { margin: 0; color: var(--text-secondary); font-size: 12px; }
+.update-line { display: flex; align-items: flex-start; gap: 7px; color: var(--text-secondary); font-size: 13px; line-height: 1.45; }
+.update-line-icon { display: inline-flex; flex: 0 0 auto; margin-top: 1px; }
+.update-line-icon svg { width: 16px; height: 16px; }
+.update-line.done .update-line-icon { color: var(--shelf-read); }
+.update-line.warn .update-line-icon { color: var(--warning); }
 
 /* A note's table, drawn while the caret is elsewhere (`TableWidget`, the Mac's
    `NoteTableDrawing`): bold header on a faint ground, hairlines, a rounded frame. */

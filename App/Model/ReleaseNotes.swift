@@ -297,6 +297,31 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.9.16",
+            date: Text2("2026년 9월", "September 2026"),
+            note: Text2(
+                "업데이트가 어디까지 왔는지 막대와 숫자로 보여줘요. 이번 업데이트만은, 맥에서 «설치하는 중»이 끝나지 않으면 «나중에»를 누르고 Paper Time을 꺼 주세요. 끄면 설치가 끝나요.",
+                "Updates show their progress as they download and install. This time only: if a Mac stays at Installing, choose Later and quit Paper Time to finish."
+            ),
+            added: [],
+            fixed: [
+                Entry(
+                    Text2("업데이트의 진행 상황", "Update Progress"),
+                    Text2(
+                        "새 버전을 내려받는 동안 몇 MB 중 몇 MB를 받았는지 막대와 퍼센트로 보여줘요. 설치를 준비할 때도 막대가 움직여요. 윈도우는 설치 창을 띄워 진행 상황을 보여주고, 끝나면 Paper Time을 다시 열어요.",
+                        "While a new version downloads, a bar shows how much has come, in megabytes and percent. It keeps moving while the update gets ready to install. On Windows the installer shows its own progress, then opens Paper Time again."
+                    )
+                ),
+                Entry(
+                    Text2("맥의 «지금 설치»", "Install Now on the Mac"),
+                    Text2(
+                        "업데이트 창의 «지금 설치»를 누르면 «설치하는 중»에서 더 나아가지 않았어요. 그 창이 떠 있는 동안에는 Paper Time이 꺼지지 않아서, 설치 도우미가 앱이 꺼지기만 기다렸어요. 이제는 창을 먼저 닫고 앱을 꺼요. 다른 창 때문에 꺼지지 않으면 «다시 시도»를 보여줘요.",
+                        "Install Now in the update window stayed at Installing. Paper Time can't quit while that window is open, so the installer waited for a quit that never came. Now the window closes first, and if something else keeps Paper Time open, Try Again appears."
+                    )
+                ),
+            ]
+        ),
+        Release(
             version: "0.9.15",
             date: Text2("2026년 9월", "September 2026"),
             note: Text2(

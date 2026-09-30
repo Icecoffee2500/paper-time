@@ -11,7 +11,7 @@ import { call, onEvent } from '../bridge.js'
 import { clear, el, on } from '../dom.js'
 import { icon } from '../icons.js'
 import { L, prefersKorean } from '../../shared/lang.js'
-import { NO_UPDATE, type NoteItem, type Pair, type UpdateState } from '../../shared/updates.js'
+import { downloadText, NO_UPDATE, percentText, sizeText, type NoteItem, type Pair, type UpdateState } from '../../shared/updates.js'
 import { onThisDesktop } from './releaseNotes.js'
 
 let state: UpdateState = { ...NO_UPDATE }
@@ -92,6 +92,19 @@ function drawBar() {
     document.body.append(bar)
   }
   clear(bar)
+  const version = state.offer!.version
+  bar.append(
+    el('span', { class: 'update-icon', html: icon('arrow.down.circle') }),
+    el('span', { class: 'update-title', text: barTitle(version) }),
+  )
+  if (state.stage === 'installing') {
+    bar.append(el('span', { class: 'update-status', text: L('곧 설치 창이 열려요', 'The installer opens in a moment') }))
+    return
+  }
+  if (state.installs && (state.stage === 'preparing' || state.stage === 'downloading')) {
+    bar.append(track(state.progress, 'small'))
+    if (state.progress != null) bar.append(el('span', { class: 'update-status tabular', text: percentText(state.progress) }))
+  }
   const changes = el('button', { class: 'update-link', type: 'button', text: L('무엇이 바뀌었나요', "What's New") })
   on(changes, 'click', () => act('showChanges'))
   const primary = el('button', { class: 'filled-button small', type: 'button', text: primaryLabel() })
@@ -99,24 +112,83 @@ function drawBar() {
   on(primary, 'click', () => act('install'))
   const close = el('button', { class: 'update-close', type: 'button', title: L('닫기', 'Close'), 'aria-label': L('닫기', 'Close'), html: icon('xmark') })
   on(close, 'click', () => act('hideBar'))
-  bar.append(
-    el('span', { class: 'update-icon', html: icon('arrow.down.circle') }),
-    el('span', { class: 'update-title', text: L(`${state.offer!.version} 버전이 나왔어요`, `Paper Time ${state.offer!.version} is available`) }),
-    changes,
-    primary,
-    ...status(),
-    close,
-  )
+  bar.append(changes, primary, close)
 }
 
-/** How far the download has got, once somebody is waiting for it. */
-function status(): HTMLElement[] {
-  if (state.stage === 'installing') return [el('span', { class: 'update-status', text: L('설치하는 중', 'Installing') })]
-  if (state.wantsInstall) {
-    const percent = state.progress == null ? '' : ` ${Math.round(state.progress * 100)}%`
-    return [el('span', { class: 'update-status', text: L(`받는 중${percent}`, `Downloading${percent}`) })]
+/** What the line says: the version, and where the update has got to. */
+function barTitle(version: string): string {
+  if (!state.installs) return L(`${version} 버전이 나왔어요`, `Paper Time ${version} is available`)
+  switch (state.stage) {
+    case 'preparing':
+    case 'downloading':
+      return L(`${version} 버전을 내려받는 중`, `Downloading Paper Time ${version}`)
+    case 'ready':
+      return L(`${version} 버전을 설치할 준비가 됐어요`, `Paper Time ${version} is ready to install`)
+    case 'installing':
+      return L('설치하는 중', 'Installing')
+    default:
+      return L(`${version} 버전이 나왔어요`, `Paper Time ${version} is available`)
   }
-  return []
+}
+
+/**
+ * A bar and how far along it is — the Mac's linear `ProgressView`. With no
+ * number yet, a stripe moves across instead, so it never stands still.
+ */
+function track(fraction: number | null, size: 'small' | 'wide'): HTMLElement {
+  const fill = el('span', { class: 'update-meter-fill' })
+  if (fraction != null) fill.style.width = `${Math.round(Math.min(1, Math.max(0, fraction)) * 1000) / 10}%`
+  const bar = el('span', {
+    class: `update-meter ${size}${fraction == null ? ' indeterminate' : ''}`,
+    role: 'progressbar',
+    'aria-valuemin': '0',
+    'aria-valuemax': '100',
+  }, [fill])
+  if (fraction != null) bar.setAttribute('aria-valuenow', String(Math.floor(fraction * 100)))
+  return bar
+}
+
+/**
+ * Where the update has got to, in the sheet: what is happening, how far,
+ * and a bar that moves. It is there from the first byte, not only once
+ * Install Now is pressed — the download starts by itself.
+ */
+function progressBlock(): HTMLElement | null {
+  if (!state.installs) {
+    // Linux: nothing comes down here, and Download says where it goes.
+    return state.offer ? line('arrow.down.circle', L('받기를 누르면 배포 페이지가 열려요.', 'Download opens the download page.')) : null
+  }
+  switch (state.stage) {
+    case 'preparing':
+    case 'downloading': {
+      const detail = state.received == null ? null : state.total ? downloadText(state.received, state.total) : sizeText(state.received)
+      const block = meter(L('내려받는 중', 'Downloading'), detail, state.progress)
+      if (state.wantsInstall) block.append(el('p', { class: 'update-meter-caption', text: L('다 받으면 바로 설치 창이 열려요.', 'The installer opens as soon as it’s ready.') }))
+      return block
+    }
+    case 'ready':
+      return line('checkmark.circle', L(
+        '설치할 준비가 됐어요. 설치하면 Paper Time이 닫히고, 설치 창에서 진행 상황을 볼 수 있어요. 끝나면 다시 열려요.',
+        'Ready to install. Paper Time closes, the installer shows how far it has got, and Paper Time opens again.',
+      ))
+    case 'installing':
+      return meter(L('설치 프로그램을 여는 중', 'Opening the installer'), null, null)
+    case 'manual':
+      return line('exclamationmark.triangle', L('이 업데이트는 스스로 설치하지 못해요. 받아서 직접 설치해 주세요.', "This update can't install itself. Download it and install it yourself."))
+  }
+}
+
+function meter(title: string, detail: string | null, fraction: number | null): HTMLElement {
+  const head = el('div', { class: 'update-meter-head' }, [el('span', { class: 'update-meter-title', text: title })])
+  if (detail) head.append(el('span', { class: 'update-meter-detail', text: detail }))
+  return el('div', { class: 'update-progress' }, [head, track(fraction, 'wide')])
+}
+
+function line(symbol: 'checkmark.circle' | 'arrow.down.circle' | 'exclamationmark.triangle', text: string): HTMLElement {
+  return el('div', { class: `update-line ${symbol === 'checkmark.circle' ? 'done' : symbol === 'exclamationmark.triangle' ? 'warn' : ''}` }, [
+    el('span', { class: 'update-line-icon', html: icon(symbol) }),
+    el('span', { text }),
+  ])
 }
 
 // MARK: - The sheet
@@ -183,6 +255,8 @@ function drawFoot() {
   const primary = el('button', { class: 'filled-button', type: 'button', text: primaryLabel() })
   primary.disabled = busy()
   on(primary, 'click', () => act('install'))
-  foot.append(skip, el('span', { class: 'fb-spacer' }), ...status(), later, primary)
+  const progress = progressBlock()
+  if (progress) foot.append(progress)
+  foot.append(el('div', { class: 'update-actions' }, [skip, el('span', { class: 'fb-spacer' }), later, primary]))
   if (!foot.contains(document.activeElement)) queueMicrotask(() => primary.focus())
 }

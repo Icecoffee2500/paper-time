@@ -21,8 +21,14 @@ final class SparkleInstaller: NSObject, UpdateInstaller, SPUUserDriver, SPUUpdat
     private var updater: SPUUpdater?
     private var expected: String?
     private var readyReply: ((SPUUserUpdateChoice) -> Void)?
+    /// Sparkle's way to send the quit again, when the first one was turned
+    /// down.
+    private var retryQuit: (() -> Void)?
     private var expectedLength: UInt64 = 0
     private var received: UInt64 = 0
+    /// When the bar last moved: a chunk arrives every few milliseconds, and a
+    /// bar needs a few steps a second.
+    private var reported = Date.distantPast
     private let log = Boot.isSet("PAPERTIME_UPDATE_LOG")
 
     private var center: UpdateCenter { .shared }
@@ -68,8 +74,23 @@ final class SparkleInstaller: NSObject, UpdateInstaller, SPUUserDriver, SPUUpdat
         reply(.install)
     }
 
+    func retry() {
+        if let retryQuit {
+            self.retryQuit = nil
+            say("asking again to quit")
+            retryQuit()
+        } else {
+            // Sparkle never said the quit was turned down, so there is nothing
+            // to send again. The installer is waiting for the app to go, and
+            // puts the update in when it does.
+            say("quitting for the installer")
+            NSApp.terminate(nil)
+        }
+    }
+
     func cancel() {
         expected = nil
+        retryQuit = nil
         if let reply = readyReply {
             readyReply = nil
             reply(.skip)
@@ -120,7 +141,7 @@ final class SparkleInstaller: NSObject, UpdateInstaller, SPUUserDriver, SPUUpdat
             center.installerFailed()
             return
         }
-        center.installerProgress(nil)
+        center.installerDownloading(received: 0, total: nil)
         reply(.install)
     }
 
@@ -143,24 +164,53 @@ final class SparkleInstaller: NSObject, UpdateInstaller, SPUUserDriver, SPUUpdat
     func showDownloadInitiated(cancellation: @escaping () -> Void) {
         received = 0
         expectedLength = 0
-        center.installerProgress(nil)
+        reported = .distantPast
+        saidTenth = -1
+        center.installerDownloading(received: 0, total: nil)
     }
 
     func showDownloadDidReceiveExpectedContentLength(_ expectedContentLength: UInt64) {
         expectedLength = expectedContentLength
+        reportDownload()
     }
 
     func showDownloadDidReceiveData(ofLength length: UInt64) {
         received += length
-        center.installerProgress(expectedLength > 0 ? min(1, Double(received) / Double(expectedLength)) : nil)
+        let now = Date()
+        guard now.timeIntervalSince(reported) >= 0.1 || (expectedLength > 0 && received >= expectedLength) else { return }
+        reported = now
+        reportDownload()
+    }
+
+    private func reportDownload() {
+        center.installerDownloading(
+            received: Int64(clamping: received),
+            total: expectedLength > 0 ? Int64(clamping: expectedLength) : nil
+        )
+        if expectedLength > 0 { sayTenth("downloaded \(received) of \(expectedLength)", Double(received) / Double(expectedLength)) }
+    }
+
+    /// For a probe: one line a tenth of the way, not one a chunk.
+    private var saidTenth = -1
+    private func sayTenth(_ message: String, _ fraction: Double) {
+        let tenth = Int(fraction * 10)
+        guard log, tenth != saidTenth else { return }
+        saidTenth = tenth
+        say(message)
     }
 
     func showDownloadDidStartExtractingUpdate() {
         say("downloaded \(received) bytes; extracting")
-        center.installerProgress(1)
+        saidTenth = -1
+        center.installerUnpacking(0)
     }
 
-    func showExtractionReceivedProgress(_ progress: Double) {}
+    /// Mounting the disk image is the first tenth; copying the app out, file
+    /// by file, the rest (Sparkle's `SUDiskImageUnarchiver`).
+    func showExtractionReceivedProgress(_ progress: Double) {
+        center.installerUnpacking(progress)
+        sayTenth("unpacked \(Int(progress * 100))%", progress)
+    }
 
     func showReady(toInstallAndRelaunch reply: @escaping (SPUUserUpdateChoice) -> Void) {
         say("ready")
@@ -168,8 +218,12 @@ final class SparkleInstaller: NSObject, UpdateInstaller, SPUUserDriver, SPUUpdat
         center.installerReady()
     }
 
+    /// Sent once the quit has been asked for. `applicationTerminated` false is
+    /// not yet a refusal — the quit may be on its way — so the retry is kept,
+    /// and `UpdateCenter` offers it if the app is still here a moment later.
     func showInstallingUpdate(withApplicationTerminated applicationTerminated: Bool, retryTerminatingApplication: @escaping () -> Void) {
         say("installing (terminated: \(applicationTerminated))")
+        retryQuit = applicationTerminated ? nil : retryTerminatingApplication
         center.installerInstalling()
     }
 

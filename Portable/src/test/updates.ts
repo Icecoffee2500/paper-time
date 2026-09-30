@@ -4,7 +4,7 @@
  * sent to get it.
  */
 import assert from 'node:assert/strict'
-import { compareVersions, offerFrom, PAGE_URL, versionParts } from '../shared/updates.js'
+import { compareVersions, downloadText, offerFrom, PAGE_URL, percentText, sizeText, versionParts } from '../shared/updates.js'
 
 type Test = (name: string, body: () => void | Promise<void>) => Promise<void>
 
@@ -46,6 +46,27 @@ export async function updatesSuite(test: Test, suite: (name: string) => void) {
     assert.equal(offerFrom(feed, '0.9.11', 'win32')!.download, 'https://example.com/12.exe')
     assert.equal(offerFrom(feed, '0.9.11', 'darwin')!.download, 'https://example.com/12.dmg')
     assert.equal(offerFrom(feed, '0.9.11', 'linux')!.download, PAGE_URL)
+  })
+
+  await test('how far a download has got reads the way the Mac’s does', () => {
+    // The Mac's UpdateMeasure.size, case for case (it agrees with its
+    // ByteCountFormatter from a kilobyte up; below that, kilobytes, no words).
+    const sizes: [number, string][] = [
+      [0, '0 KB'], [499, '0 KB'], [500, '1 KB'], [999, '1 KB'], [1_000, '1 KB'], [1_500, '2 KB'],
+      [512_000, '512 KB'], [999_499, '999 KB'], [999_500, '1 MB'], [5_000_000, '5 MB'],
+      [17_400_000, '17.4 MB'], [17_450_000, '17.5 MB'], [53_728_640, '53.7 MB'], [99_950_000, '100 MB'],
+      [265_687_992, '265.7 MB'], [999_960_000, '1 GB'], [1_000_000_000, '1 GB'], [1_234_000_000, '1.23 GB'],
+      [1_200_000_000, '1.2 GB'], [1_205_000_000, '1.21 GB'], [1_050_000_000, '1.05 GB'],
+    ]
+    for (const [bytes, text] of sizes) assert.equal(sizeText(bytes), text, `${bytes}`)
+    assert.equal(downloadText(17_400_000, 53_728_640), '17.4 MB / 53.7 MB · 32%')
+    assert.equal(downloadText(5_000_000, null), '5 MB')
+    // Rounded down: 100% only once the last byte is in.
+    assert.equal(percentText(0.999), '99%')
+    assert.equal(downloadText(53_728_639, 53_728_640), '53.7 MB / 53.7 MB · 99%')
+    assert.equal(downloadText(53_728_640, 53_728_640), '53.7 MB / 53.7 MB · 100%')
+    assert.equal(percentText(1.4), '100%')
+    assert.equal(percentText(-0.2), '0%')
   })
 
   await test('a file that is not the page’s list offers nothing', () => {
