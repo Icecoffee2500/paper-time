@@ -8,7 +8,7 @@
  */
 import tables from './texTables.json'
 import { familyOf } from './glyph.js'
-import { canon, count, firstChar, isLetter, keyed } from './swiftText.js'
+import { canon, count, firstChar, isLetter, isNumber, keyed } from './swiftText.js'
 
 type Table = Record<string, string>
 const T = tables as unknown as {
@@ -42,10 +42,14 @@ export function latex(name: string | null, code: number, fontName: string, unico
   const resolved = resolve(name, code, fontName, unicode, isSymbolic)
   if (resolved === null) return null
   // A font that holds one alphabet, and not the plain one, draws every
-  // letter in that alphabet — CMSY's "N" is a script N.
-  if (count(resolved) === 1 && isLetter(firstChar(resolved) ?? '')) {
+  // letter in that alphabet — CMSY's "N" is a script N. A double-struck
+  // font's digits are double-struck too: bbm's 𝟙 is \mathbb{1}.
+  if (count(resolved) === 1) {
+    const character = firstChar(resolved) ?? ''
     const style = letterStyle(fontName)
-    if (style !== null) return `${style}{${resolved}}`
+    if (style !== null && (isLetter(character) || (isNumber(character) && style === '\\mathbb'))) {
+      return `${style}{${resolved}}`
+    }
   }
   // A font that says what its glyphs mean writes a formula's letters as the
   // Mathematical Alphanumeric Symbols — "𝑎", not "a" — which LaTeX cannot take.
@@ -263,8 +267,10 @@ export function closingDelimiter(name: string | null): string | null {
  *  bar, built from "barex" pieces). */
 export function fence(name: string | null): string | null {
   if (name === null) return null
-  if (name.startsWith('vextenddouble') || name === 'bardbl' || name.startsWith('bardblex')) return '\\|'
-  if (name.startsWith('vextendsingle') || name === 'bar' || name.startsWith('barex')) return '|'
+  // STIX builds a tall bar from "bar.x" pieces: the bar with its variant suffix.
+  const stem = stripped(name)
+  if (name.startsWith('vextenddouble') || stem === 'bardbl' || name.startsWith('bardblex')) return '\\|'
+  if (name.startsWith('vextendsingle') || stem === 'bar' || name.startsWith('barex')) return '|'
   return null
 }
 

@@ -50,7 +50,7 @@ export function latexIn(glyphs: Glyph[], rules: Rule[], region: Rect): string {
 /** The LaTeX for a set of glyphs that have already been chosen. */
 export function latexOf(glyphs: Glyph[], rules: Rule[], context: Context | null = null): string {
   if (glyphs.length === 0) return ''
-  return mergingScripts(joiningText(transcribe(byX(joiningEllipses(glyphs)), rules, context)))
+  return mergingScripts(joiningText(transcribe(byX(joiningArrows(joiningEllipses(glyphs))), rules, context)))
 }
 
 /**
@@ -212,6 +212,126 @@ export function joiningEllipses(glyphs: Glyph[]): Glyph[] {
   return indices(glyphs.length).filter((at) => !used.has(at)).map((at) => glyphs[at]).concat(made)
 }
 
+/**
+ * The arrows TeX builds out of pieces, as the one arrow each makes
+ * (`joiningArrows`). Computer Modern has no long arrows: \longrightarrow is
+ * a minus with the arrow pulled 3mu into it, \Longrightarrow an equals sign
+ * and ⇒, \iff ⇐ and ⇒, \mapsto the arrow with a zero-width bar at its tail,
+ * and \xrightarrow as many minuses as its label is long and the arrow on the
+ * end. An arrow stretched to hold a label is named "arrowxright" or
+ * "arrowxleft", so the label can be written the way it was set.
+ */
+type Piece = 'shaft' | 'doubleShaft' | 'right' | 'left' | 'doubleRight' | 'doubleLeft' | 'tail' | 'hookLeft' | 'hookRight' | 'bar'
+export function joiningArrows(glyphs: Glyph[]): Glyph[] {
+  const piece = (glyph: Glyph): Piece | null => {
+    const name = glyph.glyphName !== null ? TeX.stripped(glyph.glyphName) : null
+    if (name === 'hookleft') return 'hookLeft'
+    if (name === 'hookright') return 'hookRight'
+    // STIX's shaft piece, at the code of a comma; the tail of a \mapsto, at a 7 in Fourier.
+    if (name === 'horizontal') return 'shaft'
+    if (name === 'mapstochar' && glyph.width < glyph.size * 0.1) return 'tail'
+    switch (token(glyph)) {
+      case '-': case '\u2212': return 'shaft'
+      case '=': return 'doubleShaft'
+      case '\\rightarrow': return 'right'
+      case '\\leftarrow': return 'left'
+      case '\\Rightarrow': return 'doubleRight'
+      case '\\Leftarrow': return 'doubleLeft'
+      case '|': case '\\mid': return 'bar'
+      case '\\mapsto': return glyph.width < glyph.size * 0.1 ? 'tail' : null
+      default: return null
+    }
+  }
+  const pieces: [number, Piece][] = []
+  glyphs.forEach((glyph, index) => {
+    const kind = piece(glyph)
+    if (kind !== null) pieces.push([index, kind])
+  })
+  if (pieces.length < 2) return glyphs
+  const ordered = sortedBy(pieces, (a, b) => {
+    const one = minX(rectOf(glyphs[a[0]]))
+    const other = minX(rectOf(glyphs[b[0]]))
+    return one !== other ? one < other : a[0] < b[0]
+  })
+  const used = new Set<number>()
+  const made: Glyph[] = []
+  ordered.forEach((start, at) => {
+    if (used.has(start[0])) return
+    // The pieces that run into one another, on one line at one size; whatever
+    // else stands among them is stepped over, not taken.
+    const first = glyphs[start[0]]
+    const chain: [number, Piece][] = [start]
+    let reach = maxX(rectOf(first))
+    for (const next of ordered.slice(at + 1)) {
+      const glyph = glyphs[next[0]]
+      if (minX(rectOf(glyph)) > reach + first.size * 0.05) break
+      if (used.has(next[0]) || !(Math.abs(glyph.size - first.size) < first.size * 0.05)
+        || !(Math.abs(glyph.y - first.y) < first.size * 0.05)) continue
+      chain.push(next)
+      reach = Math.max(reach, maxX(rectOf(glyph)))
+    }
+    if (chain.length < 2) return
+    const kinds = chain.map((one) => one[1])
+    const boxes = chain.map((one) => rectOf(glyphs[one[0]]))
+    const left = minOf(boxes.map(minX)) ?? 0
+    const right = maxOf(boxes.map(maxX)) ?? 0
+    const has = (kind: Piece) => kinds.includes(kind)
+    const countOf = (kind: Piece) => kinds.filter((one) => one === kind).length
+    const head = (kind: Piece): Rect | null => {
+      const found = chain.find((one) => one[1] === kind)
+      return found ? rectOf(glyphs[found[0]]) : null
+    }
+    // A head stands at its end of the arrow.
+    const rightEnd = (kind: Piece) => { const box = head(kind); return box !== null && maxX(box) > right - 0.5 }
+    const leftEnd = (kind: Piece) => { const box = head(kind); return box !== null && minX(box) < left + 0.5 }
+    let arrow: string | null = null
+    let stretched = false
+    const single = kinds.every((one) => one === 'shaft' || one === 'right' || one === 'left' || one === 'tail')
+    const double = kinds.every((one) => one === 'doubleShaft' || one === 'doubleRight' || one === 'doubleLeft')
+    // \longrightarrow is one shaft and the arrow, 1.6 em in Computer Modern;
+    // anything else built of the two was stretched to hold a label.
+    const stretches = () => countOf('shaft') !== 1 || Math.abs((right - left) / glyphs[chain[0][0]].size - 1.6) > 0.15
+    const is = (...expected: Piece[]) => kinds.length === expected.length && kinds.every((one, at) => one === expected[at])
+    if (single && countOf('right') === 1 && countOf('left') === 0 && rightEnd('right')) {
+      if (has('tail')) {
+        arrow = has('shaft') ? '\u27FC' : '\u21A6'
+      } else if (has('shaft')) {
+        arrow = '\u27F6'
+        stretched = stretches()
+      }
+    } else if (single && countOf('left') === 1 && countOf('right') === 0 && !has('tail') && has('shaft') && leftEnd('left')) {
+      arrow = '\u27F5'
+      stretched = stretches()
+    } else if (single && countOf('left') === 1 && countOf('right') === 1 && !has('tail') && leftEnd('left') && rightEnd('right')) {
+      arrow = '\u27F7'
+    } else if (double && countOf('doubleRight') === 1 && countOf('doubleLeft') === 0 && has('doubleShaft') && rightEnd('doubleRight')) {
+      arrow = '\u27F9'
+    } else if (double && countOf('doubleLeft') === 1 && countOf('doubleRight') === 0 && has('doubleShaft') && leftEnd('doubleLeft')) {
+      arrow = '\u27F8'
+    } else if (double && countOf('doubleLeft') === 1 && countOf('doubleRight') === 1 && leftEnd('doubleLeft') && rightEnd('doubleRight')) {
+      arrow = '\u27FA'
+    } else if (is('hookLeft', 'right')) {
+      arrow = '\u21AA'
+    } else if (is('left', 'hookRight')) {
+      arrow = '\u21A9'
+    } else if (is('bar', 'doubleShaft') && minX(boxes[1]) < maxX(boxes[0]) - 0.3) {
+      arrow = '\u22A8'
+    }
+    if (arrow === null) return
+    const headKind: Piece = kinds.includes('right') ? 'right' : kinds.includes('left') ? 'left'
+      : kinds.includes('doubleRight') ? 'doubleRight' : kinds.includes('doubleLeft') ? 'doubleLeft' : kinds[0]
+    const from = glyphs[chain.find((one) => one[1] === headKind)![0]]
+    made.push({
+      ...from, code: -1, unicode: arrow,
+      glyphName: stretched ? (arrow === '\u27F6' ? 'arrowxright' : 'arrowxleft') : null,
+      x: left, width: right - left,
+    })
+    for (const one of chain) used.add(one[0])
+  })
+  if (made.length === 0) return glyphs
+  return indices(glyphs.length).filter((at) => !used.has(at)).map((at) => glyphs[at]).concat(made)
+}
+
 /** Glyphs in reading order: left to right, and two at the same place in the
  *  order they were drawn. */
 export function byX(glyphs: Glyph[]): Glyph[] {
@@ -300,6 +420,9 @@ const MATH_FAMILIES = [
   'CMMI', 'CMSY', 'CMEX', 'CMBSY', 'MSAM', 'MSBM', 'EUFM', 'EUFB', 'EUSM', 'EUSB',
   'EURM', 'EURB', 'EUEX', 'RSFS', 'BBOLD', 'DSROM', 'DSSS', 'STMARY', 'WASY', 'LASY',
   'ESINT', 'CALLIGRA',
+  // bbm, and any bitmap font the scanner saw draw double-struck letters
+  // (`DOUBLE_STRUCK_TYPE3`).
+  'BBM',
   'TXMI', 'TXSY', 'TXEX', 'TXBMI', 'TXBSY', 'PXMI', 'PXSY', 'PXEX', 'PXBMI', 'PXBSY',
   'NEWTXMI', 'NEWTXBMI', 'NEWTXSY', 'NEWPXMI', 'NEWPXBMI', 'NEWPXSY',
   'RTXMI', 'RTXBMI', 'RPXMI', 'RPXBMI', 'RTXR', 'RTXB', 'RPXR', 'RPXB',
@@ -508,11 +631,17 @@ function transcribe(glyphs: Glyph[], rules: Rule[], context: Context | null = nu
   const names = operatorNames(glyphs, body, baseline, owner, consumed)
   const ruled = overlines(rules, glyphs, body, bars, roots, owner, consumed)
   const accented = accents(glyphs, owner, consumed)
-  const struck = negations(glyphs, owner, consumed)
+  const strokes = new Map<number, number>()
+  const struck = negations(glyphs, owner, consumed, strokes)
+  // The strokes read already, which a script steps over.
+  const stepped = new Set(strokes.values())
+  const labelled = stackedLabels(glyphs, body, owner, new Set([...names.values()].flatMap((one) => one.letters)), consumed)
 
   const tokens: string[] = []
   let base: Base | null = null
   let index = 0
+  // The brackets built taller than \Bigg, to be paired at the end.
+  const built: Built[] = []
 
   const others = (rule: Rule) => rules.filter((one) => !sameRect(one.rect, rule.rect))
   const part = (members: number[]) => byX(members.map((member) => glyphs[member]))
@@ -554,9 +683,9 @@ function transcribe(glyphs: Glyph[], rules: Rule[], context: Context | null = nu
     const stacked = limits.get(index)
     if (stacked !== undefined) {
       let t = mathToken(glyph)
-      const below = group(stacked.below.map((member) => glyphs[member]), rules, line)
+      const below = limit(stacked.below.map((member) => glyphs[member]), rules, line)
       if (below !== null) t += '_' + below
-      const above = group(stacked.above.map((member) => glyphs[member]), rules, line)
+      const above = limit(stacked.above.map((member) => glyphs[member]), rules, line)
       if (above !== null) t += '^' + above
       tokens.push(t)
       base = { size: body, baseline, index }
@@ -582,13 +711,41 @@ function transcribe(glyphs: Glyph[], rules: Rule[], context: Context | null = nu
     const named = names.get(index)
     if (named !== undefined) {
       let t = named.command
-      const below = group(named.below.map((member) => glyphs[member]), rules, line)
+      const below = limit(named.below.map((member) => glyphs[member]), rules, line)
       if (below !== null) t += '_' + below
-      const above = group(named.above.map((member) => glyphs[member]), rules, line)
+      const above = limit(named.above.map((member) => glyphs[member]), rules, line)
       if (above !== null) t += '^' + above
       tokens.push(t)
       for (const member of named.letters) consumed.add(member)
       const last = named.letters.length > 0 ? named.letters[named.letters.length - 1] : index
+      base = { size: glyphs[last].size, baseline: glyphs[last].y, index: last }
+      index += 1
+      continue
+    }
+
+    // A sign with a label stacked on it: \overset{iid}{\sim}, and an arrow
+    // stretched to hold what is written over it.
+    const labels = labelled.get(index)
+    if (labels !== undefined) {
+      for (const member of labels.base) consumed.add(member)
+      const letters = labels.base.map((at) => token(glyphs[at])).join('')
+      const spelledNames = namesIn(letters)
+      const sign = labels.base.length === 1 ? mathToken(glyph)
+        : spelledNames !== null ? spelledNames.map((one) => twoWordName(one) ?? '\\' + one).join('') : `\\mathrm{${letters}}`
+      const over = labels.above.length === 0 ? '' : transcribe(part(labels.above), rules, null, line)
+      const under = labels.below.length === 0 ? '' : transcribe(part(labels.below), rules, null, line)
+      let written = sign
+      const arrow = glyph.glyphName
+      if (labels.base.length === 1 && (arrow === 'arrowxright' || arrow === 'arrowxleft')) {
+        // What an optional argument holds cannot have a "]" in it.
+        const optional = under === '' ? '' : under.includes(']') ? `[{${under}}]` : `[${under}]`
+        written = (arrow === 'arrowxright' ? '\\xrightarrow' : '\\xleftarrow') + optional + `{${over}}`
+      } else {
+        if (over !== '') written = `\\overset{${over}}{${written}}`
+        if (under !== '') written = `\\underset{${under}}{${written}}`
+      }
+      tokens.push(written)
+      const last = labels.base[labels.base.length - 1] ?? index
       base = { size: glyphs[last].size, baseline: glyphs[last].y, index: last }
       index += 1
       continue
@@ -610,7 +767,7 @@ function transcribe(glyphs: Glyph[], rules: Rule[], context: Context | null = nu
     // the F of F^i_{\hat{W}} came back as F\hat{W}i.
     const mark = accented.get(index)
     if (mark !== undefined && (!(base !== null && mark.covered.every((at) => glyphs[at].size < base!.size * 0.92))
-      || scripts(index, glyphs, base?.baseline ?? baseline, base?.size ?? body, line, consumed) === null)) {
+      || scripts(index, glyphs, base?.baseline ?? baseline, base?.size ?? body, line, consumed, stepped) === null)) {
       for (const member of mark.covered) consumed.add(member)
       let inside = mark.covered.length === 1
         ? mathToken(glyphs[mark.covered[0]])
@@ -632,7 +789,7 @@ function transcribe(glyphs: Glyph[], rules: Rule[], context: Context | null = nu
     // before it — "small" against that, not the whole formula. Asked before
     // anything is read as a bracket: the "(" of x^{(i)} is a superscript first.
     if (base !== null && tokens.length > 0) {
-      const script = scripts(index, glyphs, base.baseline, base.size, line, consumed)
+      const script = scripts(index, glyphs, base.baseline, base.size, line, consumed, stepped)
       if (script !== null) {
         // An accent on a letter of the script is the script's: its mark, read
         // already, goes where the letter went.
@@ -643,16 +800,27 @@ function transcribe(glyphs: Glyph[], rules: Rule[], context: Context | null = nu
           if (script.lowered.some(isLetter)) script.lowered.push(glyphs[accent.mark])
           else if (script.raised.some(isLetter)) script.raised.push(glyphs[accent.mark])
         }
+        // So does the stroke through a relation of the script: the ≠ of "j≠i"
+        // under \max in a sentence came back as "=".
+        for (let member = index; member < script.end; member += 1) {
+          const stroke = strokes.get(member)
+          if (stroke === undefined) continue
+          const relation = glyphs[member]
+          const isRelation = (glyph: Glyph) => glyph.x === relation.x && glyph.y === relation.y && glyph.code === relation.code
+          if (script.lowered.some(isRelation)) script.lowered.push(glyphs[stroke])
+          else if (script.raised.some(isRelation)) script.raised.push(glyphs[stroke])
+        }
         let t = ''
         // A prime is raised like a superscript and written like a mark.
         const marks = primes(script.raised)
         if (marks !== null) {
           t += marks
         } else {
-          const above = group(script.raised, rules, line)
+          const above = limit(script.raised, rules, line, true)
           if (above !== null) t += '^' + above
         }
-        const below = group(script.lowered, rules, line)
+        // A \substack is a script too, beside \max in a sentence.
+        const below = limit(script.lowered, rules, line, true)
         if (below !== null) t += '_' + below
         if (t !== '') tokens.push(t)
         for (let member = index; member < script.end; member += 1) consumed.add(member)
@@ -696,21 +864,31 @@ function transcribe(glyphs: Glyph[], rules: Rule[], context: Context | null = nu
 
     // A tall fence or delimiter is drawn as a stack of pieces: one symbol,
     // however many pieces it took to reach that height.
-    const fenced = TeX.fence(glyph.glyphName) ?? opening(glyph) ?? closing(glyph)
+    // A bar an OpenType font draws as a character, its | or its ∣, stacked
+    // into a tall one out of several of itself, is one too.
+    const stackedOn = (one: Glyph, other: Glyph) => extension(other) === extension(one)
+      && Math.abs(other.x - one.x) < one.size * 0.2 && Math.abs(other.y - one.y) > one.size * 0.2
+    const drawnBar = !struck.has(index) && index + 1 < glyphs.length && !consumed.has(index + 1)
+      && barToken(glyph) !== null && barToken(glyphs[index + 1]) === barToken(glyph) && stackedOn(glyph, glyphs[index + 1])
+    const kind = drawnBar ? barToken : (one: Glyph) => TeX.fence(one.glyphName) ?? opening(one) ?? closing(one)
+    const fenced = kind(glyph)
     if (fenced !== null) {
       let next = index + 1
       // The pieces stand one on another; two brackets side by side — the
       // "))" that closes two things at once — are two.
       while (next < glyphs.length && !consumed.has(next)
-        && ((TeX.fence(glyphs[next].glyphName) ?? opening(glyphs[next]) ?? closing(glyphs[next])) === fenced
-          || TeX.isDecoration(glyphs[next].glyphName))
-        && extension(glyphs[next]) === extension(glyph)
-        && Math.abs(glyphs[next].x - glyph.x) < glyph.size * 0.2
-        && Math.abs(glyphs[next].y - glyph.y) > glyph.size * 0.2) {
+        && (kind(glyphs[next]) === fenced || TeX.isDecoration(glyphs[next].glyphName))
+        && stackedOn(glyph, glyphs[next])) {
         consumed.add(next)
         next += 1
       }
-      tokens.push(fenced)
+      const sized = sizedDelimiter(fenced, glyph, glyphs.slice(index, next))
+      if (sized.built) {
+        const box = glyphs.slice(index + 1, next).reduce((all, one) => union(all, rectOf(one)), rectOf(glyph))
+        const bar = fenced === '|' || fenced === '\\|'
+        built.push({ token: tokens.length, fence: fenced, opens: bar || opening(glyph) !== null, middle: midY(box), height: box.height })
+      }
+      tokens.push(sized.text)
       // A bracket drawn from a point off the line — an extension font's, or
       // one of STIX's larger sizes — has its scripts measured from the
       // formula's own baseline.
@@ -756,6 +934,7 @@ function transcribe(glyphs: Glyph[], rules: Rule[], context: Context | null = nu
     }
     index += 1
   }
+  if (built.length > 0) pairingBuilt(tokens, built)
   return join(tokens)
 }
 
@@ -789,6 +968,70 @@ function group(glyphs: Glyph[], rules: Rule[], line: number): string | null {
   const inner = transcribe(byX(glyphs), rules, null, line)
   if (inner === '') return null
   return count(inner) > 1 ? `{${inner}}` : inner
+}
+
+/** A limit, braced as a script is — or, set in rows one under another, the
+ *  `\substack` it was written as. "i=s₁+1" over "i∉S≤t" under a product,
+ *  read left to right as one row, came back as "ii=∉sS…". */
+function limit(glyphs: Glyph[], rules: Rule[], line: number, asScript = false): string | null {
+  let rows = limitRows(glyphs, rules)
+  // A script is read as rows only when they look like a \substack's: short
+  // rows of two glyphs or more, centred on one another. Captions and the words
+  // of figures stand where scripts do when a page's lines run into each other.
+  if (asScript && rows.length > 1) {
+    const largest = Math.max(...glyphs.map((one) => one.size))
+    const spans = rows.map((row) => extent(row))
+    const widest = Math.max(...spans.map((span) => span.width))
+    let centred = true
+    for (let at = 1; at < spans.length; at += 1) {
+      if (!(Math.abs(midX(spans[at - 1]) - midX(spans[at])) < widest * 0.2 + 1)) centred = false
+    }
+    const stacked = rows.every((row) => row.filter((one) => token(one) !== '').length >= 2)
+      && widest <= largest * 12 && centred && !glyphs.some((one) => isBigOperator(one) || extension(one))
+    if (!stacked) rows = [glyphs]
+  }
+  if (rows.length < 2) return group(glyphs, rules, line)
+  const written = rows.map((row) => transcribe(byX(row), rules, null, line)).filter((one) => one !== '')
+  if (written.length < 2) return group(glyphs, rules, line)
+  return `{\\substack{${written.join(' \\\\ ')}}}`
+}
+
+/** The rows a limit was set in, top to bottom: the levels its largest glyphs
+ *  stand on, most of a line of script apart, and each glyph on the nearest.
+ *  A script inside a limit is a size down and makes no row; nor do a
+ *  fraction's numerator and denominator, which have the bar between them. */
+export function limitRows(glyphs: Glyph[], rules: Rule[]): Glyph[][] {
+  if (glyphs.length < 2) return [glyphs]
+  const largest = Math.max(...glyphs.map((one) => one.size))
+  // A glyph of an extension font is set from the top of its ink and has no
+  // baseline to make a row with.
+  const levels = glyphs.filter((one) => one.size >= largest * 0.95 && !isAccent(one) && !extension(one))
+    .map((one) => one.y).sort((a, b) => b - a)
+  const rows: number[] = []
+  for (const level of levels) {
+    if (rows.length === 0 || rows[rows.length - 1] - level >= largest * 0.6) rows.push(level)
+  }
+  if (rows.length < 2) return [glyphs]
+  // A line of script apart and no more: rows further off are no stack.
+  for (let at = 1; at < rows.length; at += 1) if (rows[at - 1] - rows[at] > largest * 1.6) return [glyphs]
+  const span = extent(glyphs)
+  if (rules.some((rule) => midY(rule.rect) < rows[0] && midY(rule.rect) > rows[rows.length - 1]
+    && maxX(rule.rect) > minX(span) && minX(rule.rect) < maxX(span))) return [glyphs]
+  const grouped: Glyph[][] = rows.map(() => [])
+  for (const glyph of glyphs) {
+    const level = extension(glyph) ? midY(rectOf(glyph)) : glyph.y
+    let nearest = 0
+    for (let at = 1; at < rows.length; at += 1) {
+      if (Math.abs(rows[at] - level) < Math.abs(rows[nearest] - level)) nearest = at
+    }
+    // A mark stands over its letter, and its row is the one under it.
+    if (isAccent(glyph)) {
+      const under = rows.findIndex((level) => level <= glyph.y + 0.5)
+      if (under >= 0) nearest = under
+    }
+    grouped[nearest].push(glyph)
+  }
+  return grouped
 }
 
 /** Joins tokens, putting a space only where LaTeX needs one: after a command
@@ -887,7 +1130,33 @@ export function size(glyphs: Glyph[]): number {
  * them one over the other, so they arrive interleaved and are told apart by
  * height.
  */
-function scripts(start: number, glyphs: Glyph[], baseline: number, body: number, line: number, consumed: Set<number>): { end: number; raised: Glyph[]; lowered: Glyph[] } | null {
+/** The ink of a glyph and the pieces stacked with it at its place — a bar or
+ *  a bracket built up tall. */
+function inkOfStack(index: number, glyphs: Glyph[]): Rect {
+  const glyph = glyphs[index]
+  const kind = (one: Glyph): string | null => barToken(one) ?? (extension(one) ? 'extension' : null)
+  const token = kind(glyph)
+  if (token === null) return rectOf(glyph)
+  let box = rectOf(glyph)
+  const taken = new Set<number>([index])
+  let grew = true
+  while (grew) {
+    grew = false
+    glyphs.forEach((one, other) => {
+      if (taken.has(other)) return
+      const r = rectOf(one)
+      if (Math.abs(one.x - glyph.x) < glyph.size * 0.2 && kind(one) === token
+        && maxY(r) > minY(box) - glyph.size * 0.3 && minY(r) < maxY(box) + glyph.size * 0.3) {
+        box = union(box, r)
+        taken.add(other)
+        grew = true
+      }
+    })
+  }
+  return box
+}
+
+function scripts(start: number, glyphs: Glyph[], baseline: number, body: number, line: number, consumed: Set<number>, stepped: Set<number> = new Set()): { end: number; raised: Glyph[]; lowered: Glyph[] } | null {
   if (start <= 0) return null
   let end = start
   const raised: Glyph[] = []
@@ -905,12 +1174,18 @@ function scripts(start: number, glyphs: Glyph[], baseline: number, body: number,
   let reached = -MAX
   // The glyphs at the run's own size, each with the side it went to.
   const held: { glyph: Glyph; raised: boolean }[] = []
+  // The brackets the script has opened, each as the one that closes it, and
+  // where the last one taken stands — its other pieces stand there.
+  const opened: string[] = []
+  let bracketX: number | null = null
   while (end < glyphs.length) {
     // A combining mark already read into the accent it makes can stand among
     // the scripts — OpenType fonts set the hat of ŝ after the subscript of
     // ŝ_{y_j} — and it is stepped over. Anything else read already ends it.
     if (consumed.has(end)) {
-      if (end > start && glyphs[end].width < 0.01) {
+      // So can the stroke through one of its relations, read already into
+      // the relation it negates.
+      if (end > start && (glyphs[end].width < 0.01 || stepped.has(end))) {
         end += 1
         continue
       }
@@ -920,13 +1195,79 @@ function scripts(start: number, glyphs: Glyph[], baseline: number, body: number,
     const offset = glyph.y - baseline
     const small = glyph.size < body * 0.92
     const asSmall = smallest && glyph.size <= body * 1.02 && Math.abs(offset) >= body * 0.2
-    // A sign drawn from an extension font is never a script.
-    if (!(small || asSmall) || isSpace(glyph) || extension(glyph)) break
+    // A sign drawn from an extension font is not a script as such: the brace
+    // of \left\{ smaller than the line is still the brace. Inside a script it
+    // is the script's — the ∑ in the exponent of e^{-∑…}, the √ and the \big|
+    // — when it stands well off the line, on the script's side.
+    const grows = extension(glyph) || isDelimiter(glyph) || barToken(glyph) !== null || isRadical(glyph)
+    // Where it stands: an extension font's glyph by its ink, and a bar built
+    // tall out of pieces by the ink of all of them; any other glyph by where
+    // it was set, since its box is only its size.
+    const centre = !grows ? 0 : extension(glyph) ? midY(inkOfStack(end, glyphs)) - baseline : glyph.y - baseline
+    // A sum or a radical in a script is set at the script's own size, as the −
+    // before the ∑ of e^{-∑…} is; one at the line's size after a superscript
+    // is the line's, whatever its ink is guessed to reach.
+    // Or at the line's size, where the fonts do not shrink — Latin Modern's
+    // and Fourier's ∑ in an exponent is its text size — with all of its ink
+    // off the line: one on the line reaches across it.
+    const ink = extension(glyph) ? inkOfStack(end, glyphs) : rectOf(glyph)
+    const clear = centre > 0 ? minY(ink) > baseline + body * 0.02 : maxY(ink) < baseline - body * 0.02
+    const sized = !(isBigOperator(glyph) || isRadical(glyph)) || glyph.size <= primary * 1.1
+      || (extension(glyph) && clear)
+    // A bracket or a bar is the script's only round some of it: what comes
+    // right after it is small and on the script's side, or it closes one the
+    // script opened — \big|r_{ij}\big| in an exponent. One after the script,
+    // round what is on the line — the ")" of (…g^t_u) — is the line's.
+    const bracket = grows && !(isBigOperator(glyph) || isRadical(glyph))
+    let opens: string | null = null
+    let closes = false
+    let holds = !bracket
+    if (bracket) {
+      const kind = barToken(glyph) ?? closing(glyph) ?? opening(glyph)
+      if (bracketX !== null && Math.abs(glyph.x - bracketX) < glyph.size * 0.2) {
+        holds = true
+      } else if (kind !== null && opened.length > 0 && opened[opened.length - 1] === kind) {
+        holds = true
+        closes = true
+      } else if (kind !== null && (barToken(glyph) !== null || opening(glyph) !== null)) {
+        let after = end + 1
+        while (after < glyphs.length && Math.abs(glyphs[after].x - glyph.x) < glyph.size * 0.2) after += 1
+        if (after < glyphs.length) {
+          const next = glyphs[after]
+          const lift = next.y - baseline
+          holds = next.size < body * 0.92 && Math.abs(lift) > body * 0.1 && (lift > 0) === (centre > 0)
+        }
+        // One at the line's size from an ordinary font stands on the script's
+        // own baseline, as the script's other glyphs do: an OpenType \big| in
+        // an exponent does. The ‖ of a line read a row too high for it stood a
+        // point and a half off the r it followed, and went into its superscript.
+        if (!extension(glyph) && !small
+          && !held.some((one) => !extension(one.glyph) && Math.abs(one.glyph.y - glyph.y) < body * 0.1)) {
+          holds = false
+        }
+        const pairs: Record<string, string> = {
+          '(': ')', '[': ']', '\\{': '\\}', '\\langle': '\\rangle', '\\lfloor': '\\rfloor', '\\lceil': '\\rceil',
+        }
+        opens = barToken(glyph) ?? pairs[kind] ?? kind
+      }
+    }
+    const inScript = grows && sized && holds && end > start && Math.abs(centre) > body * 0.3
+      && side !== null && side === (centre > 0)
+    if (!(((small || asSmall) && !extension(glyph)) || inScript) || isSpace(glyph)) break
+    if (inScript && bracket) {
+      if (closes) opened.pop()
+      else if (opens !== null) opened.push(opens)
+      bracketX = glyph.x
+    }
     // Word sets a subscript small and leaves it *on* the line; TeX's are
     // always off it, if by as little as a ninth of the body.
     if (end === start && Math.abs(offset) <= body * 0.03) {
       const touching = minX(rectOf(glyph)) - maxX(rectOf(glyphs[start - 1])) < body * 0.12
-      if (!(glyph.size <= body * 0.72 && touching && glyphs[start - 1].size >= body * 0.92)) break
+      // Word's subscripts follow a letter or a digit. What follows a bar on its
+      // line is what the bar holds.
+      const before = glyphs[start - 1]
+      const holds = isDelimiter(before) || barToken(before) !== null || isBigOperator(before)
+      if (!(glyph.size <= body * 0.72 && touching && !holds && glyphs[start - 1].size >= body * 0.92)) break
       let run = start
       while (run < glyphs.length && !consumed.has(run) && glyphs[run].size <= body * 0.72
         && Math.abs(glyphs[run].y - baseline) <= body * 0.03
@@ -935,7 +1276,8 @@ function scripts(start: number, glyphs: Glyph[], baseline: number, body: number,
       }
       return { end: run, raised: [], lowered: glyphs.slice(start, run) }
     }
-    if (end > start && minX(rectOf(glyph)) - reached > body * 0.25) break
+    // A sign in a script stands a thin space off what comes before it.
+    if (end > start && minX(rectOf(glyph)) - reached > body * (inScript ? 0.45 : 0.25)) break
     const deeper = glyph.size < primary * 0.92
     // A script of a script goes with the script it hangs from — the one
     // ending just before it, at about its height: the l of F^i_{W^l} is the
@@ -945,7 +1287,9 @@ function scripts(start: number, glyphs: Glyph[], baseline: number, body: number,
     const host = deeper
       ? minBy(held.filter((one) => maxX(rectOf(one.glyph)) <= minX(g) + glyph.size * 0.5), (a, b) => distance(a) < distance(b))
       : undefined
-    const raisedHere: boolean = deeper ? (host?.raised ?? side ?? (offset > 0)) : offset > 0
+    // A sign that grows is on the side its ink is: an extension font's hangs
+    // from a point at its top, above the line whatever side it is on.
+    const raisedHere: boolean = deeper ? (host?.raised ?? side ?? (offset > 0)) : inScript ? centre > 0 : offset > 0
     if (!deeper) {
       side = raisedHere
       held.push({ glyph, raised: raisedHere })
@@ -1108,10 +1452,20 @@ function wordSpaces(start: number, end: number, glyphs: Glyph[]): { before: bool
   // Whatever stands across the line beside it: a script, and a bracket drawn
   // from an extension font, whose point is not on the line.
   const onLine = (glyph: Glyph) => maxY(rectOf(glyph)) > first.y - size * 0.25 && minY(rectOf(glyph)) < first.y + size * 0.75
-  const previous = maxBy(glyphs.slice(0, start).filter((one) => onLine(one) && maxX(rectOf(one)) <= minX(rectOf(first)) + 0.5),
+  // A label stacked on the sign beside it is the sign's: the "iid" over the
+  // ∼ of "∼ Exp(1)" runs a little past the ∼, and measured from its "d" the
+  // word stood a word's space off — \text{ Exp}.
+  const beside = (candidates: Glyph[], nearest: (a: Glyph, b: Glyph) => boolean): Glyph | undefined => {
+    const found = maxBy(candidates, nearest)
+    if (found === undefined || found.size >= size * 0.92) return found
+    return candidates.find((full) => full.size >= size * 0.92
+      && Math.min(maxX(rectOf(full)), maxX(rectOf(found))) - Math.max(minX(rectOf(full)), minX(rectOf(found))) > found.width * 0.5
+      && Math.abs(full.y - found.y) > size * 0.35) ?? found
+  }
+  const previous = beside(glyphs.slice(0, start).filter((one) => onLine(one) && maxX(rectOf(one)) <= minX(rectOf(first)) + 0.5),
     (a, b) => maxX(rectOf(a)) < maxX(rectOf(b)))
-  const next = minBy(glyphs.slice(end).filter((one) => onLine(one) && minX(rectOf(one)) >= maxX(rectOf(last)) - 0.5),
-    (a, b) => minX(rectOf(a)) < minX(rectOf(b)))
+  const next = beside(glyphs.slice(end).filter((one) => onLine(one) && minX(rectOf(one)) >= maxX(rectOf(last)) - 0.5),
+    (a, b) => minX(rectOf(a)) > minX(rectOf(b)))
   // Inside a bracket is no place for a space; a bracket's own margin is not one.
   const before = previous !== undefined && ordinary(previous) && opening(previous) === null
     && minX(rectOf(first)) - maxX(rectOf(previous)) >= size * 0.2
@@ -1242,34 +1596,130 @@ function runs(members: number[], glyphs: Glyph[], gap: number): number[][] {
  * limit. Each operator takes, on each side, the run of small glyphs centred
  * on it or starting at its right edge; what one took, the next cannot.
  */
+/** Where the limits under two signs side by side part: at a gap in them that
+ *  nothing crosses, between the signs' middles, where what falls on each side
+ *  is best centred on its own sign — TeX centres each limit on its sign.
+ *  Halfway between the signs when there is no such gap. */
+function parting(run: number[], glyphs: Glyph[], sign: Glyph, partner: Glyph): number {
+  const left = midX(rectOf(sign))
+  const right = midX(rectOf(partner))
+  const boxes = run.map((at) => rectOf(glyphs[at]))
+  const miss = (part: Rect[], middle: number) => part.length === 0 ? 0
+    : Math.abs(midX(part.slice(1).reduce((box, one) => union(box, one), part[0])) - middle)
+  let best: { cut: number; miss: number } | null = null
+  for (const cut of boxes.map((box) => maxX(box))) {
+    if (!(cut > left && cut < right)) continue
+    if (boxes.some((box) => minX(box) < cut - 0.01 && maxX(box) > cut + 0.01)) continue
+    const total = miss(boxes.filter((box) => midX(box) < cut), left) + miss(boxes.filter((box) => midX(box) >= cut), right)
+    if (best === null || total < best.miss) best = { cut, miss: total }
+  }
+  return best !== null ? best.cut : (maxX(rectOf(sign)) + minX(rectOf(partner))) / 2
+}
+
 function operatorLimits(glyphs: Glyph[], body: number, baseline: number, owned: Map<number, number>, consumed: Set<number>): Map<number, { above: number[]; below: number[] }> {
   const limits = new Map<number, { above: number[]; below: number[] }>()
+  // A sign set inside a script — the ∑ in an exponent, smaller than the line
+  // and well off it — has its limits read with the script, round the
+  // script's own line.
+  // A script is set at seven tenths of its line; mathptmx's displayed ∫, a
+  // point smaller than the text, is still the line's.
+  const insideScript = (sign: Glyph) => {
+    const r = rectOf(sign)
+    const lift = midY(r) - baseline
+    // Or at the line's size in the fonts that do not shrink it, with all of
+    // its ink off the line.
+    const clear = extension(sign) && (lift > 0 ? minY(r) > baseline + body * 0.02 : maxY(r) < baseline - body * 0.02)
+    return (sign.size < body * 0.8 || clear) && Math.abs(lift) > body * 0.3
+  }
   glyphs.forEach((sign, position) => {
-    if (!(isBigOperator(sign) && !owned.has(position) && !consumed.has(position))) return
+    if (!(isBigOperator(sign) && !owned.has(position) && !consumed.has(position) && !insideScript(sign))) return
     // Whatever full-size thing comes next is where the limits stop.
     const s = rectOf(sign)
     let stop = MAX
     // Another sign with limits of its own right after this one: the limits
     // stacked under the two run into each other — "i=1" and "j∈Bᵢ" under ∑∑
-    // are one row of small glyphs — and are parted halfway between the signs.
-    // Limits set beside a sign, in a sentence, run on towards the next one and
-    // are not cut; nor are an integral's, which sit off its tail.
-    let cut: number | null = null
+    // are one row of small glyphs — and are parted between the signs, which
+    // takes seeing the other sign's limits as far as they go. Limits set
+    // beside a sign, in a sentence, run on towards the next one and are not
+    // cut; nor are an integral's, which sit off its tail.
+    // The other's go as far as the next full-size thing after it — or halfway
+    // to it, when that is a sign with limits too, whose own reach out under
+    // the other.
+    const takesLimits = (glyph: Glyph) => isBigOperator(glyph) && !token(glyph).includes('int')
+    let partner: Glyph | null = null
+    let reach = stop
     for (let next = position + 1; next < glyphs.length; next += 1) {
       if (consumed.has(next) || !(glyphs[next].size >= body * 0.95)) continue
-      stop = minX(rectOf(glyphs[next]))
-      if (isBigOperator(glyphs[next]) && !token(glyphs[next]).includes('int')) {
-        cut = (maxX(s) + minX(rectOf(glyphs[next]))) / 2
+      if (partner !== null) {
+        reach = takesLimits(glyphs[next])
+          ? (maxX(rectOf(partner)) + minX(rectOf(glyphs[next]))) / 2 : minX(rectOf(glyphs[next]))
+        break
       }
-      break
+      stop = minX(rectOf(glyphs[next]))
+      reach = stop
+      if (!takesLimits(glyphs[next])) break
+      partner = glyphs[next]
+      reach = MAX
     }
+    // A limit set wider than its sign (\smashoperator) goes on under what comes
+    // next, far off the line, as far as the next sign with limits: the "1"
+    // ending "τ=min S≤t+1" stood under the β after the sum.
+    let far = reach
+    if (partner === null) {
+      far = MAX
+      for (let next = position + 1; next < glyphs.length; next += 1) {
+        if (consumed.has(next) || !(glyphs[next].size >= body * 0.95) || !takesLimits(glyphs[next])) continue
+        far = minX(rectOf(glyphs[next]))
+        break
+      }
+    }
+    // The script of the glyph before the sign is that glyph's — the 3 of
+    // "C₃∑", which a limit reaching out under it took for its own: it starts
+    // where that glyph ends, within a script's reach of the line.
+    const before = glyphs.filter((one) => one.size >= body * 0.95 && !isBigOperator(one) && maxX(rectOf(one)) <= minX(s) + 1)
+    const scriptOfAnother = (glyph: Glyph) => Math.abs(glyph.y - baseline) < body * 0.6
+      && before.some((one) => Math.abs(minX(rectOf(glyph)) - maxX(rectOf(one))) < body * 0.12)
     const candidates = indices(glyphs.length).filter((other) => {
       const glyph = glyphs[other]
       const g = rectOf(glyph)
+      const offLine = Math.abs(glyph.y - baseline) > body * 0.75
       return other !== position && !consumed.has(other) && !owned.has(other)
-        && glyph.size < body * 0.95 && midX(g) < stop && !extension(glyph)
+        && glyph.size < body * 0.95 && !extension(glyph)
+        && (midX(g) < reach || (offLine && midX(g) < far))
         && maxX(g) > minX(s) - body * 3
+        && !scriptOfAnother(glyph)
     })
+    // What stands under the sign is what is centred on it. Another's limit
+    // that runs into this one's — the w∈W under the min of "arg min ∑" — is
+    // cut off at the space between them, when what is left is centred on the
+    // sign and the whole is not.
+    const centred = (run: number[]): number[] => {
+      if (run.length <= 1) return run
+      const boxes = run.map((at) => rectOf(glyphs[at]))
+      const miss = (part: number[]) => Math.abs(midX(extent(part.map((at) => glyphs[at]))) - midX(s))
+      const whole = miss(run)
+      if (!(whole > body * 0.3)) return run
+      // Points of clear space, a point wide or more, with glyphs on both sides.
+      const cuts = boxes.map((box) => maxX(box)).filter((cut) =>
+        boxes.some((box) => minX(box) >= cut + body * 0.1)
+        && !boxes.some((box) => minX(box) < cut + body * 0.1 && maxX(box) > cut + 0.01))
+      let best = run
+      let least = whole
+      const lefts: (number | null)[] = [null, ...cuts.filter((cut) => cut <= midX(s))]
+      const rights: (number | null)[] = [null, ...cuts.filter((cut) => cut >= midX(s))]
+      for (const left of lefts) {
+        for (const right of rights) {
+          const part = run.filter((at) => {
+            const box = rectOf(glyphs[at])
+            return (left === null || minX(box) > left) && (right === null || maxX(box) <= right + 0.01)
+          })
+          if (part.length === 0) continue
+          const missed = miss(part)
+          if (missed < least) { best = part; least = missed }
+        }
+      }
+      return least < whole * 0.5 ? best : run
+    }
     const take = (side: number[]) => {
       for (const run of runs(side, glyphs, body * 0.4)) {
         const span = extent(run.map((at) => glyphs[at]))
@@ -1277,16 +1727,36 @@ function operatorLimits(glyphs: Glyph[], body: number, baseline: number, owned: 
           && Math.abs(midX(span) - midX(s)) < Math.max(span.width, s.width) * 0.5 + 1
         // An integral's lower limit tucks in under its tail.
         const beside = minX(span) >= midX(s) && minX(span) - maxX(s) < body * 0.5
-        if (stackedHere && cut !== null) {
-          const parted = cut
-          return run.filter((at) => midX(rectOf(glyphs[at])) < parted)
+        if (stackedHere && partner !== null) {
+          const parted = parting(run, glyphs, sign, partner)
+          return centred(run.filter((at) => midX(rectOf(glyphs[at])) < parted))
         }
-        if (stackedHere || beside) return run
+        if (stackedHere) return centred(run)
+        if (beside) return run.filter((at) => midX(rectOf(glyphs[at])) < stop)
       }
       return [] as number[]
     }
+    // A \substack beside a sign, in a sentence, stands its first row within a
+    // point of the line — too near it to count as under it — over the row that
+    // does: what stands over the limit taken, under the line and a line of
+    // script from it, is that limit too.
+    const withRowsOver = (run: number[]): number[] => {
+      if (run.length === 0) return run
+      const largest = Math.max(...run.map((at) => glyphs[at].size))
+      const top = Math.max(...run.map((at) => glyphs[at].y))
+      const span = extent(run.map((at) => glyphs[at]))
+      return [...run, ...candidates.filter((other) => {
+        const glyph = glyphs[other]
+        const g = rectOf(glyph)
+        return !run.includes(other) && glyph.y > top && glyph.y < baseline
+          && glyph.y - top < largest * 1.6 && glyph.size <= largest * 1.05
+          && midX(g) < stop
+          && maxX(g) > minX(span) - largest * 0.3 && minX(g) < maxX(span) + largest * 0.3
+      })]
+    }
     const above = take(candidates.filter((at) => glyphs[at].y > baseline + body * 0.12))
-    const below = take(candidates.filter((at) => glyphs[at].y < baseline - body * 0.12))
+    let below = take(candidates.filter((at) => glyphs[at].y < baseline - body * 0.12))
+    if (below.length > 0 && minX(rectOf(glyphs[below[0]])) >= midX(s)) below = withRowsOver(below)
     for (const at of [...above, ...below]) consumed.add(at)
     limits.set(position, { above, below })
   })
@@ -1294,6 +1764,167 @@ function operatorLimits(glyphs: Glyph[], body: number, baseline: number, owned: 
 }
 
 /** A name set in roman that takes limits under it in a display, and them. */
+/** A label set right over or under a sign, and the sign (`Stacked`): what
+ *  \overset, \underset and \stackrel make, and an \xrightarrow's label. */
+interface Stacked { base: number[]; above: number[]; below: number[] }
+
+/** The letters written as commands, which carry accents and scripts but
+ *  never a label. */
+const LETTER_COMMANDS = new Set([
+  '\\alpha', '\\beta', '\\gamma', '\\delta', '\\epsilon', '\\varepsilon', '\\zeta', '\\eta',
+  '\\theta', '\\vartheta', '\\iota', '\\kappa', '\\varkappa', '\\lambda', '\\mu', '\\nu', '\\xi',
+  '\\pi', '\\varpi', '\\rho', '\\varrho', '\\sigma', '\\varsigma', '\\tau', '\\upsilon', '\\phi',
+  '\\varphi', '\\chi', '\\psi', '\\omega', '\\Gamma', '\\Delta', '\\Theta', '\\Lambda', '\\Xi',
+  '\\Pi', '\\Sigma', '\\Upsilon', '\\Phi', '\\Psi', '\\Omega', '\\ell', '\\imath', '\\jmath',
+  '\\hbar', '\\hslash', '\\partial', '\\nabla', '\\infty', '\\aleph', '\\wp', '\\Re', '\\Im',
+])
+
+/**
+ * The labels stacked on signs that are not operators with limits, keyed by
+ * the sign's first glyph (`stackedLabels`). Stacked is centred on the sign
+ * and off its line by more than a script is: read as scripts, the "ind" over
+ * the ∼ of "ℓ ∼ ℙ" came back as \ell^i\sim^{nd}.
+ */
+function stackedLabels(glyphs: Glyph[], body: number, owned: Map<number, number>, named: Set<number>, consumed: Set<number>): Map<number, Stacked> {
+  const found = new Map<number, Stacked>()
+  const free = (index: number) => !consumed.has(index) && !owned.has(index) && !named.has(index)
+  // What can carry a label: a sign at the line's size that is not a letter,
+  // a digit, a bracket or punctuation — or a word set upright.
+  const sign = (index: number) => {
+    const glyph = glyphs[index]
+    if (!free(index) || !(glyph.size >= body * 0.92) || extension(glyph)) return false
+    const spelled = mathToken(glyph)
+    if (spelled === '' || isBigOperator(glyph) || isDelimiter(glyph) || isAccent(glyph) || isRadical(glyph)
+      || [',', '.', ';', ':', '!', '?', "'"].includes(spelled)) return false
+    if (count(spelled) === 1) {
+      const character = chars(spelled)[0]
+      if (isLetter(character) || isNumber(character)) return false
+    }
+    return !(spelled.startsWith('\\math') || spelled.startsWith('\\boldsymbol') || LETTER_COMMANDS.has(spelled))
+  }
+  const uprightLetter = (index: number) => free(index) && glyphs[index].size >= body * 0.92
+    && isUprightLetter(glyphs[index]) && uprightStyle(glyphs[index]) === '\\mathrm'
+  const bases: number[][] = []
+  let index = 0
+  while (index < glyphs.length) {
+    if (sign(index)) { bases.push([index]); index += 1; continue }
+    if (!uprightLetter(index)) { index += 1; continue }
+    const word = [index]
+    let next = index + 1
+    while (next < glyphs.length) {
+      if (!free(next) || glyphs[next].size < body * 0.92) { next += 1; continue }
+      if (!uprightLetter(next)
+        || !(minX(rectOf(glyphs[next])) - maxX(rectOf(glyphs[word[word.length - 1]])) <= glyphs[next].size * 0.22)) break
+      word.push(next)
+      next += 1
+    }
+    if (word.length >= 2) bases.push(word)
+    index = word[word.length - 1] + 1
+  }
+  for (const base of bases) {
+    const span = extent(base.map((at) => glyphs[at]))
+    const first = glyphs[base[0]]
+    const size = first.size
+    const candidates = indices(glyphs.length).filter((other) => {
+      const glyph = glyphs[other]
+      return !base.includes(other) && free(other) && glyph.size < size * 0.92 && !extension(glyph)
+        && maxX(rectOf(glyph)) > minX(span) - body * 3 && minX(rectOf(glyph)) < maxX(span) + body * 3
+    })
+    const take = (side: number[]): number[] => {
+      for (const run of runs(side, glyphs, body * 0.4)) {
+        const label = extent(run.map((at) => glyphs[at]))
+        // Across the sign and centred on it; a script starts where its base ends.
+        const centred = minX(label) < maxX(span) && maxX(label) > minX(span)
+          && minX(label) < midX(span) && maxX(label) > midX(span)
+          && Math.abs(midX(label) - midX(span)) < Math.max(label.width, span.width) * 0.2 + size * 0.1
+        // A label says something: a stray prime or comma is not one.
+        const says = run.some((at) => !['', ',', '.', "'", ';', ':'].includes(mathToken(glyphs[at])))
+        // And it hangs from nothing: a run that starts where a larger glyph
+        // on its own level ends is that glyph's script.
+        const startAt = minBy(run, (a, b) => minX(rectOf(glyphs[a])) < minX(rectOf(glyphs[b])))
+        const hangs = startAt !== undefined && glyphs.some((glyph, other) => {
+          const lead = glyphs[startAt]
+          const gap = minX(rectOf(lead)) - maxX(rectOf(glyph))
+          return !run.includes(other) && !base.includes(other) && glyph.size > lead.size * 1.1
+            && Math.abs(glyph.y - lead.y) < glyph.size * 0.6 && gap > -glyph.size * 0.05 && gap < glyph.size * 0.12
+        })
+        if (centred && says && !hangs) return run
+      }
+      return []
+    }
+    const above = take(candidates.filter((at) => glyphs[at].y > first.y + size * 0.35))
+    const below = take(candidates.filter((at) => glyphs[at].y < first.y - size * 0.35))
+    // A word takes only what is under it: over a word is a line above.
+    if (below.length === 0 && !(above.length > 0 && base.length === 1)) continue
+    const kept = base.length === 1 ? above : []
+    for (const member of [...kept, ...below]) consumed.add(member)
+    found.set(base[0], { base, above: kept, below })
+  }
+  return found
+}
+
+/**
+ * A bracket at the size the page drew it (`sizedDelimiter`): TeX's \big,
+ * \Big, \bigg and \Bigg are glyphs of their own, named for their size, and a
+ * bar that tall is a stack of its pieces. Taller than \Bigg is a bracket
+ * built of pieces, which only \left and \right draw — marked, to be paired.
+ */
+export function sizedDelimiter(fence: string, glyph: Glyph, pieces: Glyph[]): { text: string; built: boolean } {
+  const name = glyph.glyphName !== null ? TeX.stripped(glyph.glyphName) : ''
+  let level = name.endsWith('Bigg') ? 4 : name.endsWith('bigg') ? 3 : name.endsWith('Big') ? 2 : name.endsWith('big') ? 1 : 0
+  const bar = fence === '|' || fence === '\\|'
+  if (level === 0 && pieces.length >= 2) {
+    if (!bar) return { text: fence, built: true }
+    // As tall as its pieces reach, and one piece more.
+    const heights = ascending(pieces.map((one) => one.y))
+    const steps = ascending(heights.slice(1).map((height, at) => height - heights[at]))
+    const tall = (heights[heights.length - 1] - heights[0] + steps[Math.floor(steps.length / 2)]) / glyph.size
+    if (!(tall < 3.3)) return { text: fence, built: true }
+    level = tall < 1.5 ? 1 : tall < 2.1 ? 2 : tall < 2.7 ? 3 : 4
+  }
+  if (level === 0) return { text: fence, built: false }
+  const command = ['\\big', '\\Big', '\\bigg', '\\Bigg'][level - 1]
+  if (bar) return { text: command + fence, built: false }
+  return { text: command + (opening(glyph) !== null ? 'l' : 'r') + fence, built: false }
+}
+
+/** The bar a glyph draws as a character, as a fence: `|` for | and ∣. */
+export function barToken(glyph: Glyph): string | null {
+  switch (token(glyph)) {
+    case '|': case '\\mid': case '\u2223': return '|'
+    case '\\|': case '\u2016': case '\u2225': return '\\|'
+    default: return null
+  }
+}
+
+interface Built { token: number; fence: string; opens: boolean; middle: number; height: number }
+
+/** Brackets built taller than \Bigg, as the pairs they are (`pairingBuilt`):
+ *  \left and \right, or \Bigg for one with no partner. */
+function pairingBuilt(tokens: string[], built: Built[]) {
+  const partners: Record<string, string> = {
+    '(': ')', '[': ']', '\\{': '\\}', '\\langle': '\\rangle', '\\lfloor': '\\rfloor', '\\lceil': '\\rceil', '|': '|', '\\|': '\\|',
+  }
+  const paired = new Set<number>()
+  built.forEach((one, position) => {
+    if (!one.opens || paired.has(position)) return
+    const partner = Object.prototype.hasOwnProperty.call(partners, one.fence) ? partners[one.fence] : undefined
+    if (partner === undefined) return
+    const match = built.findIndex((other, at) => at > position && !paired.has(at) && other.fence === partner
+      && (partner === one.fence || !other.opens) && Math.abs(other.middle - one.middle) < one.height * 0.15)
+    if (match < 0) return
+    paired.add(position)
+    paired.add(match)
+    tokens[one.token] = '\\left' + one.fence
+    tokens[built[match].token] = '\\right' + built[match].fence
+  })
+  built.forEach((one, position) => {
+    if (paired.has(position)) return
+    const bar = one.fence === '|' || one.fence === '\\|'
+    tokens[one.token] = '\\Bigg' + (bar ? '' : one.opens ? 'l' : 'r') + one.fence
+  })
+}
+
 interface Named { letters: number[]; command: string; below: number[]; above: number[] }
 
 /**
@@ -1475,7 +2106,7 @@ function accents(glyphs: Glyph[], owned: Map<number, number>, consumed: Set<numb
 
 /** Relations struck through — `\not` over `=`, a slash across `\in` —
  *  written as the one relation they make, keyed by the relation. */
-function negations(glyphs: Glyph[], owned: Map<number, number>, consumed: Set<number>): Map<number, string> {
+function negations(glyphs: Glyph[], owned: Map<number, number>, consumed: Set<number>, strokes: Map<number, number>): Map<number, string> {
   const found = new Map<number, string>()
   glyphs.forEach((stroke, index) => {
     if (consumed.has(index) || owned.has(index)) return
@@ -1499,6 +2130,7 @@ function negations(glyphs: Glyph[], owned: Map<number, number>, consumed: Set<nu
       const written = negated(mathToken(relation), drawn)
       if (written === null) continue
       found.set(other, written)
+      strokes.set(other, index)
       consumed.add(index)
       break
     }

@@ -24,11 +24,17 @@ enum MathReader {
     /// below — but it also says, line by line, exactly how much of each line
     /// it took, and that is enough to tell a line that was meant from the half
     /// of one the range spilled into.
+    ///
+    /// Laid out as the page is: a displayed formula on a line of its own —
+    /// its rows one a line when it has several — the sentence it sits in
+    /// going on on the next line, and a new paragraph after a blank one. It
+    /// used to be one line, and pasted anywhere the displays ran into the
+    /// words around them: "…normal, $$E_i…$$ $$\Sigma…$$ $$\tau…$$".
     @MainActor
     static func latex(from selection: PDFSelection) -> String {
         let read = pieces(from: selection)
         guard !read.isEmpty else { return selection.string ?? "" }
-        return join(read.map(\.plain))
+        return lines(of: read, markdown: false).joined(separator: "\n")
     }
 
     /// One thing the selection reached, in reading order, with what the page
@@ -146,10 +152,14 @@ enum MathReader {
                 let (block, glyphs) = reached[position]
                 position += 1
                 // Displayed formulas one under another that line up at a
-                // relation are the lines of one aligned formula.
+                // relation are the lines of one aligned formula; lines that
+                // break into cells at the same places are a matrix; lines
+                // that only start, or are centred, at the same place are an
+                // aligned or a gathered formula.
                 if block.isFormula,
                    let aligned = alignedRun(from: position - 1, in: reached, selected: selected, rules: rules)
-                    ?? matrixRun(from: position - 1, in: reached, rules: rules) {
+                    ?? matrixRun(from: position - 1, in: reached, rules: rules)
+                    ?? alignedRun(from: position - 1, in: reached, selected: selected, rules: rules, atRelation: false) {
                     position = aligned.end
                     let wrapped = displayed(aligned.latex)
                     pieces.append(Piece(
@@ -237,15 +247,24 @@ enum MathReader {
         "\\preceq", "\\succeq",
     ]
 
-    /// Displayed formulas one under another that line up — each has a
-    /// relation standing at the same place across the page — as the lines of
-    /// one `aligned`: what an `align` or an `aligned` sets, and what a person
-    /// copying it wants back, not two formulas that lost their alignment.
+    /// Displayed formulas one under another that line up, as the lines of
+    /// one formula — what an `align`, a `gather` or an `aligned` sets, and
+    /// what a person copying it wants back, not formulas that lost their
+    /// alignment.
+    ///
+    /// `atRelation`: lines that each have a relation standing at the same
+    /// place across the page, lined up there with `&`. Otherwise lines set
+    /// a line apart — a `\jot` between them, not the space round a display
+    /// — that start at the same place (`&` at the head of each line), end
+    /// at the same place, or are centred on one another (`gathered`). Three
+    /// lines of an `align*` that only begin together came back as three
+    /// `$$` of their own.
     private static func alignedRun(
         from start: Int,
         in reached: [(block: Layout.Block, glyphs: [PDFContentScanner.Glyph])],
         selected: (PDFContentScanner.Glyph) -> Bool,
-        rules: [PDFContentScanner.Rule]
+        rules: [PDFContentScanner.Rule],
+        atRelation: Bool = true
     ) -> (end: Int, latex: String, bounds: CGRect, baseline: CGFloat)? {
         struct Line {
             var glyphs: [PDFContentScanner.Glyph]
@@ -253,8 +272,10 @@ enum MathReader {
             var relations: [CGFloat]
             var baseline: CGFloat
             var bounds: CGRect
+            /// Where in `reached` the run goes on after this line.
+            var next: Int
         }
-        func line(_ block: Layout.Block, _ glyphs: [PDFContentScanner.Glyph]) -> Line? {
+        func line(_ block: Layout.Block, _ glyphs: [PDFContentScanner.Glyph], next: Int) -> Line? {
             guard block.isFormula, !glyphs.isEmpty else { return nil }
             var all = glyphs
             var tag: String?
@@ -271,49 +292,168 @@ enum MathReader {
             let standing = all.filter {
                 $0.size >= body * 0.92 && relations.contains(MathTranscriber.spelling(of: $0))
             }
-            guard let first = standing.first else { return nil }
-            let heights = standing.map(\.origin.y).sorted()
+            let baseline: CGFloat
+            if let first = standing.first {
+                let heights = standing.map(\.origin.y).sorted()
+                baseline = heights[heights.count / 2] == 0 ? first.origin.y : heights[heights.count / 2]
+            } else if atRelation {
+                return nil
+            } else {
+                baseline = context(of: all).baseline
+            }
             return Line(glyphs: all, tag: tag, relations: standing.map(\.rect.minX).sorted(),
-                        baseline: heights[heights.count / 2] == 0 ? first.origin.y : heights[heights.count / 2],
-                        bounds: extent(of: all))
+                        baseline: baseline, bounds: extent(of: all), next: next)
         }
-        guard let head = line(reached[start].block, reached[start].glyphs) else { return nil }
+        guard let head = line(reached[start].block, reached[start].glyphs, next: start + 1) else { return nil }
         var lines = [head]
+        // The number of an `equation` round an `aligned` with an even number
+        // of lines: centred on the whole, so between two of its lines, on a
+        // row of its own at the right — "(1)", read as a line of prose.
+        var shared: String?
         var next = start + 1
-        while next < reached.count, let candidate = line(reached[next].block, reached[next].glyphs) {
+        while next < reached.count {
             let previous = lines[lines.count - 1]
             let body = MathTranscriber.ordinarySize(of: previous.glyphs)
+            var after = next
+            var number: String?
+            if shared == nil, !reached[next].block.isFormula,
+               let found = standaloneNumber(reached[next].glyphs, rightOf: lines.map(\.bounds.maxX).max() ?? 0, body: body),
+               next + 1 < reached.count {
+                number = reached[next].glyphs.allSatisfy(selected) ? found : ""
+                after = next + 1
+            }
+            guard let candidate = line(reached[after].block, reached[after].glyphs, next: after + 1) else { break }
             let drop = previous.baseline - candidate.baseline
-            guard drop > body * 0.9, drop < body * 3.5,
+            // A line apart — or further, when the limits of the lines' sums
+            // fill what is between them: then the ink of one line comes
+            // within a \jot of the next's, and three lines of a derivation
+            // 3.5 lines apart came back as three formulas.
+            let gap = previous.bounds.minY - candidate.bounds.maxY
+            guard drop > body * 0.9, drop < body * 3.5 || (drop < body * 6 && gap < body * 0.9),
                   candidate.bounds.maxX > previous.bounds.minX, candidate.bounds.minX < previous.bounds.maxX
             else { break }
+            if let number {
+                let height = reached[next].glyphs[0].origin.y
+                guard height < previous.baseline, height > candidate.baseline else { break }
+                shared = number
+            }
             lines.append(candidate)
-            next += 1
+            next = after + 1
         }
         guard lines.count >= 2 else { return nil }
-        // Where they line up: the first of the first line's relations that
-        // every other line has a relation at too.
-        guard let column = lines[0].relations.first(where: { x in
-            lines.dropFirst().allSatisfy { line in line.relations.contains { abs($0 - x) < 1 } }
-        }) else { return nil }
-        let tags = lines.compactMap(\.tag)
+
+        // The most lines from the first that line up, and how.
+        enum Lining { case relation(CGFloat), left, right, centre }
+        func lining(_ run: ArraySlice<Line>) -> Lining? {
+            if atRelation {
+                // The first of the first line's relations that every other
+                // line has a relation at too.
+                return run.first!.relations.first(where: { x in
+                    run.dropFirst().allSatisfy { line in line.relations.contains { abs($0 - x) < 1 } }
+                }).map(Lining.relation)
+            }
+            // A line apart, not a display apart: a \jot and the line's own
+            // depth between the ink of one line and the next.
+            let tight = zip(run, run.dropFirst()).allSatisfy { upper, lower in
+                upper.bounds.minY - lower.bounds.maxY < MathTranscriber.ordinarySize(of: upper.glyphs) * 0.9
+            }
+            // A bar between two of them, across both, makes them a fraction.
+            let barred = zip(run, run.dropFirst()).contains { upper, lower in
+                rules.contains { rule in
+                    rule.rect.midY < upper.baseline && rule.rect.midY > lower.baseline
+                        && rule.rect.maxX > max(upper.bounds.minX, lower.bounds.minX)
+                        && rule.rect.minX < min(upper.bounds.maxX, lower.bounds.maxX)
+                }
+            }
+            // A table's rows are set a line apart and start together too; a
+            // row of cells an em or more apart, or of measured numbers —
+            // "93.2 ± 0.3" — is a table's, not a formula's line.
+            let tabular = run.contains { line in
+                let body = MathTranscriber.ordinarySize(of: line.glyphs)
+                let ordered = line.glyphs.sorted { $0.rect.minX < $1.rect.minX }
+                var reach = -CGFloat.greatestFiniteMagnitude
+                var gaps = 0
+                for glyph in ordered {
+                    if reach > -.greatestFiniteMagnitude, glyph.rect.minX - reach >= body * 0.8 { gaps += 1 }
+                    reach = max(reach, glyph.rect.maxX)
+                }
+                let measured = line.glyphs.filter { MathTranscriber.spelling(of: $0) == "\\pm" }.count
+                // Nor is a line that could not stand as a display on its own
+                // — a figure's labels stack a line apart too — a step of an
+                // algorithm, "7:", or an item of a list.
+                let spelled = ordered.map(MathTranscriber.spelling(of:))
+                let digits = spelled.prefix { $0.count == 1 && $0.first!.isNumber }.count
+                let numbered = digits > 0 && digits < spelled.count && spelled[digits] == ":"
+                let bulleted = spelled.first == "\\bullet" || spelled.first == "\u{2022}"
+                // Nor is a label in brackets on a line of its own — the
+                // "(ℓ₂-CL)" a long equation's name drops to under it.
+                let label = spelled.first == "(" && spelled.last == ")" && spelled.count <= 16
+                return gaps >= 3 || measured >= 2 || line.glyphs.count <= 3 || numbered || bulleted || label
+            }
+            guard tight, !barred, !tabular else { return nil }
+            func same(_ value: (Line) -> CGFloat, within slack: CGFloat) -> Bool {
+                let values = run.map(value)
+                return (values.max() ?? 0) - (values.min() ?? 0) < slack
+            }
+            if same({ $0.bounds.minX }, within: 1) { return .left }
+            if same({ $0.bounds.midX }, within: 1.5) { return .centre }
+            if same({ $0.bounds.maxX }, within: 1) { return .right }
+            return nil
+        }
+        var count = lines.count
+        var found: Lining?
+        while count >= 2 {
+            if let lined = lining(lines[..<count]) { found = lined; break }
+            count -= 1
+        }
+        guard let found else { return nil }
+        let run = Array(lines[..<count])
+        // A number between the lines belongs to the whole only if all of
+        // the lines it stood between are in the run.
+        let tags = run.compactMap(\.tag) + (count == lines.count ? [shared].compactMap { $0 }.filter { !$0.isEmpty } : [])
         var written: [String] = []
-        for line in lines {
+        for line in run {
             let nearby = rules.filter { line.bounds.insetBy(dx: -2, dy: -2).intersects($0.rect) }
-            let left = line.glyphs.filter { $0.rect.minX < column - 0.5 }
-            let right = line.glyphs.filter { $0.rect.minX >= column - 0.5 }
-            let before = left.isEmpty ? "" : MathTranscriber.latex(glyphs: left, rules: nearby)
-            var text = (before.isEmpty ? "" : before + " ") + "&" + MathTranscriber.latex(glyphs: right, rules: nearby)
+            var text: String
+            switch found {
+            case .relation(let column):
+                let left = line.glyphs.filter { $0.rect.minX < column - 0.5 }
+                let right = line.glyphs.filter { $0.rect.minX >= column - 0.5 }
+                let before = left.isEmpty ? "" : MathTranscriber.latex(glyphs: left, rules: nearby)
+                text = (before.isEmpty ? "" : before + " ") + "&" + MathTranscriber.latex(glyphs: right, rules: nearby)
+            case .left:
+                text = "&" + MathTranscriber.latex(glyphs: line.glyphs, rules: nearby)
+            case .right:
+                text = MathTranscriber.latex(glyphs: line.glyphs, rules: nearby) + " &"
+            case .centre:
+                text = MathTranscriber.latex(glyphs: line.glyphs, rules: nearby)
+            }
             if tags.count > 1, let tag = line.tag { text += " \\tag{\(tag)}" }
             written.append(text)
         }
         // One number for the whole is the aligned formula's; a number for
-        // each line takes `align`, which lets each line keep its own.
-        let environment = tags.count > 1 ? "align" : "aligned"
+        // each line takes `align` — or `gather` — which lets each line keep
+        // its own.
+        let centred: Bool
+        if case .centre = found { centred = true } else { centred = false }
+        let environment = tags.count > 1 ? (centred ? "gather" : "align") : (centred ? "gathered" : "aligned")
         var latex = "\\begin{\(environment)} " + written.joined(separator: " \\\\ ") + " \\end{\(environment)}"
         if tags.count == 1 { latex += "\\tag{\(tags[0])}" }
-        let bounds = lines.dropFirst().reduce(lines[0].bounds) { $0.union($1.bounds) }
-        return (next, latex, bounds, lines[0].baseline)
+        let bounds = run.dropFirst().reduce(run[0].bounds) { $0.union($1.bounds) }
+        return (run[run.count - 1].next, latex, bounds, run[0].baseline)
+    }
+
+    /// A row that is only an equation's number — "(1)", "(2a)" — set well to
+    /// the right of the lines it numbers, as its text.
+    private static func standaloneNumber(
+        _ glyphs: [PDFContentScanner.Glyph], rightOf edge: CGFloat, body: CGFloat
+    ) -> String? {
+        guard glyphs.count >= 3, glyphs.count <= 8,
+              let left = glyphs.map(\.rect.minX).min(), left > edge + body else { return nil }
+        let spelled = glyphs.sorted { $0.origin.x < $1.origin.x }.map(MathTranscriber.spelling(of:)).joined()
+        guard spelled.range(of: #"^\([0-9]+(\.[0-9]+)?[a-z]?\)$"#, options: .regularExpression) != nil
+        else { return nil }
+        return String(spelled.dropFirst().dropLast())
     }
 
     /// Displayed lines a line apart that break into cells at the same places
@@ -420,7 +560,7 @@ enum MathReader {
     /// is an `equation`, and lines that each keep a number are the `align`
     /// they already are.
     static func displayed(_ body: String) -> String {
-        if body.hasPrefix("\\begin{align}") { return body }
+        if body.hasPrefix("\\begin{align}") || body.hasPrefix("\\begin{gather}") { return body }
         if body.contains("\\tag{") { return "\\begin{equation} \(body) \\end{equation}" }
         return "$$\(body)$$"
     }
@@ -540,7 +680,16 @@ enum MathReader {
             let plain = (selection.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             return plain.isEmpty ? [] : [plain]
         }
+        return lines(of: read, markdown: true)
+    }
 
+    /// The pieces as the lines of a note — `markdown`: a title as a title,
+    /// bold as bold, a blank line round every display — or as the lines of
+    /// a clipboard, where a display breaks its sentence without ending its
+    /// paragraph: the words after it go on on the next line, unless the
+    /// page indented them, which is a new paragraph. A display of several
+    /// rows is written a row a line there (`spread`).
+    static func lines(of read: [Piece], markdown: Bool) -> [String] {
         // The column, as the selected rows drew it. A line that stops well
         // short of the right edge ended a paragraph; a line that starts in
         // from the left edge began one.
@@ -559,6 +708,10 @@ enum MathReader {
         var lines: [String] = []
         var paragraph = ""
         var previous: Piece?
+        // On a clipboard: that the last thing written was a display, so the
+        // next line of words either goes on with its sentence or, set in
+        // from the column's edge, begins a paragraph.
+        var afterDisplay = false
 
         func close() {
             let trimmed = paragraph.trimmingCharacters(in: .whitespaces)
@@ -569,23 +722,34 @@ enum MathReader {
             close()
             if lines.last != "" && !lines.isEmpty { lines.append("") }
         }
+        func display(_ text: String) {
+            if markdown {
+                breakHere()
+                lines.append(text)
+                lines.append("")
+            } else {
+                close()
+                lines.append(spread(text))
+                afterDisplay = true
+            }
+            previous = nil
+        }
 
         for piece in read {
+            let text = markdown ? piece.marked : piece.plain
             switch piece.kind {
             case .heading(let level):
                 breakHere()
-                lines.append(String(repeating: "#", count: level) + " " + piece.marked)
+                lines.append(markdown ? String(repeating: "#", count: level) + " " + text : text)
                 lines.append("")
                 previous = nil
+                afterDisplay = false
 
             case .display:
-                breakHere()
-                lines.append(piece.marked)
-                lines.append("")
-                previous = nil
+                display(text)
 
             case .inline:
-                paragraph += paragraph.isEmpty ? piece.marked : " " + piece.marked
+                paragraph += paragraph.isEmpty ? text : " " + text
 
             case .prose:
                 // A line that is all mathematics and an equation number is a
@@ -593,12 +757,16 @@ enum MathReader {
                 // "minimize" is a word, and the line it stands on is still an
                 // equation. This is the line that used to arrive in the
                 // middle of a sentence with its number stuck to it.
-                if let equation = displayedEquation(in: piece.marked) {
-                    breakHere()
-                    lines.append(equation)
-                    lines.append("")
-                    previous = nil
+                if let equation = displayedEquation(in: text) {
+                    display(equation)
                     continue
+                }
+                // After a display, TeX starts the sentence's next words at
+                // the column's edge and a new paragraph a paragraph's indent
+                // in from it.
+                if afterDisplay {
+                    afterDisplay = false
+                    if piece.left > left + 6 { lines.append("") }
                 }
                 // A paragraph ended if the line before it stopped short of the
                 // column, or this one is set in from its left edge.
@@ -609,12 +777,12 @@ enum MathReader {
                     if endedShort || spaced { breakHere() }
                 }
                 if paragraph.isEmpty {
-                    paragraph = piece.marked
+                    paragraph = text
                 } else if paragraph.hasSuffix("-") {
                     paragraph.removeLast()
-                    paragraph += piece.marked
+                    paragraph += text
                 } else {
-                    paragraph += " " + piece.marked
+                    paragraph += " " + text
                 }
                 previous = piece
             }
@@ -793,7 +961,8 @@ enum MathReader {
                 let inside = extents[row].minX > fence.minX - 1 && extents[row].maxX < fence.maxX + 1
                     && (fences[index].closed || extents[row].minX < fence.minX + body * 2)
                 let standing = rows[row].contains { glyph in
-                    (MathTranscriber.isDelimiter(glyph) || MathTranscriber.spelling(of: glyph).isEmpty)
+                    (MathTranscriber.isDelimiter(glyph) || MathTranscriber.barToken(glyph) != nil
+                        || MathTranscriber.spelling(of: glyph).isEmpty)
                         && (abs(glyph.rect.maxX - fence.minX) < 1.5 || abs(glyph.rect.minX - fence.maxX) < 1.5)
                 }
                 let centred = extents[row].minX < fence.minX && extents[row].maxX > fence.minX - body * 2
@@ -833,20 +1002,27 @@ enum MathReader {
             rows.indices.filter { baselines[$0] > baselines[row] && overlap($0, row) }
                 .min { baselines[$0] < baselines[$1] }
         }
-        // How far a row is from the row on its far side — a row of limits
-        // belongs to the nearer of the two lines it stands between.
+        func small(_ index: Int) -> Bool { rows[index].allSatisfy { $0.size < body * 0.8 } }
+        // How far a row is from the line on its far side — a row of limits
+        // belongs to the nearer of the two lines it stands between. The
+        // limits of the line beyond are no line: under the sums of one line
+        // of a derivation stood the upper limits of the next, nearer than
+        // either line, and the limits of both came back as lines of their own.
         // A line of prose is not a line a row of limits could belong to.
         func gap(below row: Int) -> CGFloat? {
-            unders[row].flatMap { prose[$0] ? nil : baselines[row] - baselines[$0] }
+            var under = unders[row]
+            while let next = under, small(next) { under = unders[next] }
+            return under.flatMap { prose[$0] ? nil : baselines[row] - baselines[$0] }
         }
         func gap(above row: Int) -> CGFloat? {
-            overs[row].flatMap { prose[$0] ? nil : baselines[$0] - baselines[row] }
+            var over = overs[row]
+            while let next = over, small(next) { over = overs[next] }
+            return over.flatMap { prose[$0] ? nil : baselines[$0] - baselines[row] }
         }
         // Two rows of scripts one over the other, each the limits of its own
         // line: under the sums of one line of a derivation and over the sums
         // of the next, the two rows stand closer than a line and joined the
         // lines — every glyph of both came back twice over, interleaved.
-        func small(_ index: Int) -> Bool { rows[index].allSatisfy { $0.size < body * 0.8 } }
         func apart(_ upper: Int, _ lower: Int) -> Bool {
             guard small(upper), small(lower), let top = overs[upper], let bottom = unders[lower],
                   !prose[top], !prose[bottom] else { return false }
@@ -1185,7 +1361,13 @@ enum MathReader {
     /// one word, but they are part of the formula, not a sentence around it.
     private static func containsProse(_ row: [PDFContentScanner.Glyph]) -> Bool {
         let body = context(of: row).bodySize
-        return words(in: row, body: body).contains { word in
+        let split = words(in: row, body: body)
+        return split.indices.contains { index in
+            let word = split[index]
+            // A name applied to what follows it — \mathrm{Laplace}\left(,
+            // \mathrm{Exp}(1) — stands a thin space from its bracket, where
+            // a word of a sentence stands a word's space off.
+            if appliesTo(word, next: index + 1 < split.count ? split[index + 1] : nil, body: body) { return false }
             // Only what is set at the line's own size can be a word of a
             // sentence. "teacher-forcing" written small under an L is a name
             // inside the formula, not prose around it — and reading it as
@@ -1197,6 +1379,37 @@ enum MathReader {
             guard spelled.filter({ $0.first?.isLetter == true }).count >= 2 else { return false }
             return !MathTranscriber.isOperatorName(spelled.joined())
         }
+    }
+
+    /// Whether a word is a name applied to what follows it: letters set
+    /// upright at the line's size, then a bracket right after them — in the
+    /// word, "Exp(1)", or opening the next one a thin space off, "Laplace"
+    /// before a \bigg( — which a word of a sentence is not: it stands a
+    /// word's space from anything after it.
+    static func appliesTo(
+        _ word: [PDFContentScanner.Glyph], next: [PDFContentScanner.Glyph]?, body: CGFloat
+    ) -> Bool {
+        let ordered = word.sorted { $0.rect.minX < $1.rect.minX }
+        let letters = ordered.prefix { $0.size >= body * 0.92 && MathTranscriber.isUprightLetter($0) }
+        // On one line: the letters of a label set on its side in a figure
+        // follow one another up the page, and are no name.
+        guard letters.count >= 2, let last = letters.last,
+              letters.allSatisfy({ abs($0.origin.y - last.origin.y) < last.size * 0.05 }) else { return false }
+        // The bracket, not a piece of it that happens to stand at the same
+        // place and spells nothing.
+        func opener(_ glyphs: ArraySlice<PDFContentScanner.Glyph>) -> PDFContentScanner.Glyph? {
+            guard let start = glyphs.map(\.rect.minX).min() else { return nil }
+            return glyphs.first { $0.rect.minX < start + 0.5 && MathTranscriber.opening($0) != nil }
+        }
+        if letters.count < ordered.count {
+            guard let after = opener(ordered[letters.count...]) else { return false }
+            return after.rect.minX - last.rect.maxX < body * 0.2
+        }
+        guard let next, let opener = opener(next[...]) else { return false }
+        // A bracket from an extension font — a \bigl( and up — carries a
+        // little room of its own before its ink: 2.5 points from the
+        // "Laplace" before it in Times, which is a Times word space.
+        return opener.rect.minX - last.rect.maxX < body * (opener.isExtension ? 0.3 : 0.2)
     }
 
     /// Glyphs grouped into the rows they were set on.
@@ -1226,6 +1439,11 @@ enum MathReader {
             return variant.hasPrefix("s") && variant.dropFirst().allSatisfy(\.isNumber)
         }
         var floating: [PDFContentScanner.Glyph] = []
+        // So do the pieces of a bar built tall out of several of one glyph —
+        // STIX's "bar.x", an OpenType font's | set one over another — each a
+        // full-size glyph on a line of its own making: five of them made five
+        // rows, and cut a fraction round them in two.
+        let pieces = barPieces(in: glyphs)
         // A radical sign is drawn from wherever its font puts its point — the
         // top of the sign, by the rule, in Computer Modern's symbol font and
         // often in the OpenType ones — and it belongs with what it covers,
@@ -1233,7 +1451,7 @@ enum MathReader {
         var radicals: [PDFContentScanner.Glyph] = []
         for glyph in glyphs.filter({ $0.size >= body * 0.9 && !$0.isExtension })
             .sorted(by: { $0.origin.y > $1.origin.y }) {
-            if floats(glyph) { floating.append(glyph); continue }
+            if floats(glyph) || pieces.contains(Place(glyph)) { floating.append(glyph); continue }
             if MathTranscriber.isRadical(glyph) { radicals.append(glyph); continue }
             if let index = rows.firstIndex(where: {
                 abs($0.baseline - glyph.origin.y) < body * 0.6
@@ -1268,14 +1486,32 @@ enum MathReader {
                 floating.append(sign)
             }
         }
-        for glyph in floating {
-            let span = glyph.rect.insetBy(dx: -body * 0.9, dy: 0)
-            let nearest = rows.indices
-                .filter { beside(span, rows[$0].glyphs, body: body) }
-                .min { abs(rows[$0].baseline - glyph.origin.y) < abs(rows[$1].baseline - glyph.origin.y) }
-            if let nearest, abs(rows[nearest].baseline - glyph.origin.y) < body * 1.3 {
-                rows[nearest].glyphs.append(glyph)
-            } else if let index = rows.firstIndex(where: { abs($0.baseline - glyph.origin.y) < body * 0.6 }) {
+        // Each goes beside the row it belongs to, and a sign placed can bring
+        // the next one to its row: the ∑ of "∑∏P", STIX's, stood too far from
+        // the P to be beside it until the ∏ was, and made a row of its own
+        // with its limits' baseline — too high for its lower limits to join.
+        var pending = floating
+        var placedOne = true
+        while placedOne {
+            placedOne = false
+            var at = 0
+            while at < pending.count {
+                let glyph = pending[at]
+                let span = glyph.rect.insetBy(dx: -body * 0.9, dy: 0)
+                let nearest = rows.indices
+                    .filter { beside(span, rows[$0].glyphs, body: body) }
+                    .min { abs(rows[$0].baseline - glyph.origin.y) < abs(rows[$1].baseline - glyph.origin.y) }
+                if let nearest, abs(rows[nearest].baseline - glyph.origin.y) < body * 1.3 {
+                    rows[nearest].glyphs.append(glyph)
+                    pending.remove(at: at)
+                    placedOne = true
+                } else {
+                    at += 1
+                }
+            }
+        }
+        for glyph in pending {
+            if let index = rows.firstIndex(where: { abs($0.baseline - glyph.origin.y) < body * 0.6 }) {
                 rows[index].glyphs.append(glyph)
             } else {
                 rows.append((glyph.origin.y, [glyph]))
@@ -1362,7 +1598,20 @@ enum MathReader {
         for (run, level) in unplaced {
             let span = extent(of: run)
             let middle = span.midX
+            // A limit is its sign's and nothing else's: the upper limits of a
+            // line of a derivation set tight stood under a point from the
+            // lower limits of the line above, and went to that line's row.
+            let sign = sign(of: span, at: level, in: rows, body: body)
+            // Whether the row holds a script this run stands a line of script
+            // under, over the same place.
+            func secondRow(in row: [PDFContentScanner.Glyph]) -> Bool {
+                row.contains { other in
+                    other.size < body * 0.9 && other.rect.maxX > span.minX && other.rect.minX < span.maxX
+                        && other.origin.y - level > other.size * 0.6 && other.origin.y - level < other.size * 1.6
+                }
+            }
             let stacked = rows.indices.filter { row in
+                if let sign, row != sign { return false }
                 let distance = abs(rows[row].baseline - level)
                 return (distance < body * 1.05 && rows[row].glyphs.contains {
                     $0.size < body * 0.9 && $0.rect.maxX > span.minX && $0.rect.minX < span.maxX
@@ -1374,6 +1623,13 @@ enum MathReader {
                             || glyph.isExtension)
                             && span.minX >= glyph.rect.maxX - 1 && span.minX - glyph.rect.maxX < body * 0.5
                     })
+                    // The second row of a \substack beside a sum in a
+                    // sentence, a line of script under the first.
+                    || (distance < body * 1.6 && level < rows[row].baseline && secondRow(in: rows[row].glyphs)
+                        && rows[row].glyphs.contains { glyph in
+                            MathTranscriber.isBigOperator(glyph)
+                                && span.minX >= glyph.rect.maxX - 1 && span.minX - glyph.rect.maxX < body * 1.5
+                        })
                     // Over a bar the row has something under, or under one it
                     // has something over: a numerator of a fraction inside a
                     // fraction, however far up the page it went.
@@ -1401,7 +1657,108 @@ enum MathReader {
 
         let laid = folded(rows.sorted { $0.baseline > $1.baseline }, body: body)
             .map { $0.glyphs.sorted { $0.origin.x < $1.origin.x } }
-        return split(laid, atGuttersOf: glyphs)
+        return gatheringBrackets(split(laid, atGuttersOf: glyphs))
+    }
+
+    /// A bracket built from pieces belongs on its formula's line.
+    ///
+    /// Each piece goes to the row its own ink runs through, and a line of
+    /// the other column can run through one: the top of the tall "(" round a
+    /// displayed sum stood level with a line of prose across the gutter and
+    /// went to it. Cut at the gutter, it was a line of its own — "() ()" —
+    /// and the bracket's foot, left below the formula's line without it,
+    /// was read as the subscript of the W before it. A row that holds
+    /// nothing but pieces of brackets gives each of them to the row the rest
+    /// of its bracket is in. Nothing else moves: the pieces of a brace are
+    /// meant to be spread over the rows of its cases.
+    private static func gatheringBrackets(_ rows: [[PDFContentScanner.Glyph]]) -> [[PDFContentScanner.Glyph]] {
+        func strays(_ row: [PDFContentScanner.Glyph]) -> Bool {
+            !row.isEmpty && row.allSatisfy(MathTranscriber.isPiece)
+        }
+        guard rows.contains(where: strays) else { return rows }
+        func touches(_ one: PDFContentScanner.Glyph, _ other: PDFContentScanner.Glyph) -> Bool {
+            MathTranscriber.isPiece(other) && abs(one.origin.x - other.origin.x) < one.size * 0.2
+                && other.rect.maxY > one.rect.minY - one.size * 0.3
+                && other.rect.minY < one.rect.maxY + one.size * 0.3
+        }
+        var rows = rows
+        var moved = true
+        while moved {
+            moved = false
+            for index in rows.indices where strays(rows[index]) {
+                var kept: [PDFContentScanner.Glyph] = []
+                for piece in rows[index] {
+                    // The nearest row, of those not made of pieces alone, that
+                    // holds another piece of its bracket.
+                    let home = rows.indices.filter { other in
+                        other != index && !strays(rows[other]) && rows[other].contains { touches(piece, $0) }
+                    }.min { one, other in
+                        func gap(_ row: Int) -> CGFloat {
+                            rows[row].filter { touches(piece, $0) }.map {
+                                max($0.rect.minY - piece.rect.maxY, piece.rect.minY - $0.rect.maxY, 0)
+                            }.min() ?? .greatestFiniteMagnitude
+                        }
+                        return gap(one) < gap(other)
+                    }
+                    if let home {
+                        rows[home].append(piece)
+                        rows[home].sort { $0.origin.x < $1.origin.x }
+                        moved = true
+                    } else {
+                        kept.append(piece)
+                    }
+                }
+                rows[index] = kept
+            }
+        }
+        return rows.filter { !$0.isEmpty }
+    }
+
+    /// The row whose big operator a run of small glyphs is a limit of:
+    /// centred over or under the sign, up to a line and a half over its row
+    /// or a line and a bit under.
+    private static func sign(
+        of span: CGRect, at level: CGFloat,
+        in rows: [(baseline: CGFloat, glyphs: [PDFContentScanner.Glyph])], body: CGFloat
+    ) -> Int? {
+        rows.indices.filter { row in
+            let lift = level - rows[row].baseline
+            guard (lift > 0 && lift < body * 1.6) || (lift < 0 && -lift < body * 1.4) else { return false }
+            return rows[row].glyphs.contains { glyph in
+                MathTranscriber.isBigOperator(glyph)
+                    && glyph.rect.maxX > span.minX && glyph.rect.minX < span.maxX
+                    && abs(span.midX - glyph.rect.midX) < max(span.width, glyph.rect.width) * 0.5 + 1
+            }
+        }.min { abs(rows[$0].baseline - level) < abs(rows[$1].baseline - level) }
+    }
+
+    /// Where a glyph stands, to the hundredth of a point.
+    private struct Place: Hashable {
+        var x: Int, y: Int
+        init(_ glyph: PDFContentScanner.Glyph) {
+            x = Int((glyph.origin.x * 100).rounded())
+            y = Int((glyph.origin.y * 100).rounded())
+        }
+    }
+
+    /// The pieces of bars built tall out of several of one bar glyph set
+    /// one over another at one place, closer than a line.
+    private static func barPieces(in glyphs: [PDFContentScanner.Glyph]) -> Set<Place> {
+        var columns: [Int: [PDFContentScanner.Glyph]] = [:]
+        for glyph in glyphs where !glyph.isExtension && MathTranscriber.barToken(glyph) != nil {
+            columns[Int((glyph.origin.x * 10).rounded()), default: []].append(glyph)
+        }
+        var found = Set<Place>()
+        for column in columns.values where column.count >= 2 {
+            let ordered = column.sorted { $0.origin.y < $1.origin.y }
+            for (lower, upper) in zip(ordered, ordered.dropFirst())
+            where upper.origin.y - lower.origin.y < upper.size * 0.8
+                && MathTranscriber.barToken(lower) == MathTranscriber.barToken(upper) {
+                found.insert(Place(lower))
+                found.insert(Place(upper))
+            }
+        }
+        return found
     }
 
     /// Small glyphs gathered into the runs they were set in: touching, at
@@ -1560,13 +1917,30 @@ enum MathReader {
             let row = rows[index]
             let span = extent(of: row.glyphs)
             let neighbours = [index - 1, index + 1].filter { rows.indices.contains($0) }
+            // A row of limits folds into its sign's line or into none: the
+            // upper limit of a derivation's third line, alone and a point
+            // from the lower limits of the second, fitted in beside them.
+            let limitOf = row.glyphs.allSatisfy { $0.size < body * 0.8 }
+                ? sign(of: span, at: row.baseline, in: rows, body: body) : nil
             let host = neighbours.filter { other in
+                if let limitOf, other != limitOf { return false }
                 let theirs = extent(of: rows[other].glyphs)
                 // Only a fragment folds, and only into a line it is part of.
+                // The pieces of a tall bracket stand where the bracket does,
+                // over and under the line's own: that is no second line.
+                let own = row.glyphs.filter {
+                    !MathTranscriber.isPiece($0) && MathTranscriber.barToken($0) == nil
+                        && !MathTranscriber.spelling(of: $0).isEmpty
+                }
+                // Measured from the row, or from where the line's own glyphs
+                // stand: the top of an OpenType bracket, drawn from a point
+                // off the line, can be what began the row.
+                let distance = min(abs(rows[other].baseline - row.baseline),
+                                   abs(context(of: rows[other].glyphs).baseline - row.baseline))
                 return span.width < theirs.width * 0.75
-                    && abs(rows[other].baseline - row.baseline) < body * 0.9
+                    && distance < body * 0.9
                     && beside(span, rows[other].glyphs, body: body)
-                    && !collides(row.glyphs, onOwnLine(rows[other], body: body))
+                    && !collides(own, onOwnLine(rows[other], body: body))
             }.min { abs(rows[$0].baseline - row.baseline) < abs(rows[$1].baseline - row.baseline) }
             guard let host else { index += 1; continue }
             rows[host].glyphs += row.glyphs
@@ -1645,7 +2019,21 @@ enum MathReader {
         let characters = characters.filter {
             $0.rect.maxY > band.minY && $0.rect.minY < band.maxY
         }
-        let words = keepingRadicands(words(in: row, body: context.bodySize), rules: rules)
+        var words = keepingRadicands(words(in: row, body: context.bodySize), rules: rules)
+        // A name set upright a thin space before the bracket of the formula
+        // it is applied to is the formula's: "Laplace $\bigl(E\bigr)$" is
+        // $\mathrm{Laplace}\bigl(E\bigr)$.
+        var joined = 0
+        while joined + 1 < words.count {
+            if !isFormula(words[joined], at: joined, in: words, context: context, rules: rules),
+               isFormula(words[joined + 1], at: joined + 1, in: words, context: context, rules: rules),
+               appliesTo(words[joined], next: words[joined + 1], body: context.bodySize) {
+                words[joined + 1] = words[joined] + words[joined + 1]
+                words.remove(at: joined)
+                continue
+            }
+            joined += 1
+        }
         var pieces: [Word] = []
         func prose(_ word: [PDFContentScanner.Glyph], tight: Bool = false) -> Word {
             let spelled = word.map(MathTranscriber.spelling(of:))
@@ -1738,6 +2126,16 @@ enum MathReader {
         let body = context.bodySize
         if word.contains(where: MathTranscriber.isMathFont)
             || MathTranscriber.hasWordSubscript(word, body: body) { return true }
+        // Something set small right over or under a glyph at the line's size
+        // is a formula whatever its face: a sentence never stacks its
+        // letters, and \overset{\text{def}}{=} is all roman — "a d=ef b".
+        if word.contains(where: { small in
+            small.size < body * 0.92 && word.contains { full in
+                full.size >= body * 0.92
+                    && min(small.rect.maxX, full.rect.maxX) - max(small.rect.minX, full.rect.minX) > small.width * 0.5
+                    && abs(small.origin.y - full.origin.y) > body * 0.35
+            }
+        }) { return true }
         // A name with a script on it — "log₂", "sin²" — is a formula whatever
         // face it is set in.
         let letters = word.filter { $0.size >= body * 0.92 }
@@ -1817,9 +2215,27 @@ enum MathReader {
                 return count + (["(", "["].contains(spelled) ? 1 : [")", "]"].contains(spelled) ? -1 : 0)
             }
         }
-        while core.count > 1, let last = core.last, textual(last, [".", ",", ";", ":"]) {
+        // Only at the line's size: the full stop of "a.s." over an arrow is
+        // the label's.
+        let largest = word.map(\.size).max() ?? 0
+        while core.count > 1, let last = core.last, textual(last, [".", ",", ";", ":"]),
+              last.size >= largest * 0.92 {
             trail.insert(last, at: 0)
             core = core.dropLast()
+        }
+        // The sentence's apostrophe and the letter after it, in the text
+        // face: "Yᵢ’s" is $Y_i$'s, not $Y_i'\mathrm{s}$ — a prime is the
+        // maths font's, and this is not one.
+        if let apostrophe = core.lastIndex(where: { textual($0, ["'", "\u{2019}"]) }),
+           apostrophe > core.startIndex, core[..<apostrophe].contains(where: MathTranscriber.isMathFont) {
+            let after = core[core.index(after: apostrophe)...]
+            if after.count <= 2, after.allSatisfy({ glyph in
+                !MathTranscriber.isMathFont(glyph) && MathTranscriber.spelling(of: glyph).allSatisfy(\.isLetter)
+                    && !MathTranscriber.spelling(of: glyph).isEmpty
+            }) {
+                trail = Array(core[apostrophe...]) + trail
+                core = core[..<apostrophe]
+            }
         }
         _ = balance
         return ([], Array(core), trail)
@@ -2300,9 +2716,15 @@ enum MathReader {
         // Rows stacked closer than a line are a formula's rows — when
         // something in them came from a maths font. Two short lines of a
         // reference list, all digits, stack the same way and are not.
+        // A row of nothing but the pieces of a tall bracket is the bracket's,
+        // not a row: the bottom of the \left( of a sentence's formula stood
+        // on a row of its own, and two rows made the sentence a display.
         let laid = Layout(blocks: grouped.map { rows in
-            let stacked = rows.count > 1 && rows.contains { $0.contains(where: isMathish) }
-            return Layout.Block(rows: rows, isFormula: stacked || isDisplayRow(rows[0]))
+            let own = rows.filter { row in
+                row.contains { !MathTranscriber.isPiece($0) && !MathTranscriber.spelling(of: $0).isEmpty }
+            }
+            let stacked = own.count > 1 && rows.contains { $0.contains(where: isMathish) }
+            return Layout.Block(rows: rows, isFormula: stacked || isDisplayRow(own.first ?? rows[0]))
         }, variablesInTextItalic: italic)
         if layouts.count > 12 { layouts.removeAll() }
         layouts[key] = (page, laid)
@@ -2325,21 +2747,78 @@ enum MathReader {
         return scanned
     }
 
-    /// Lines are joined the way a paragraph is, with words broken across a
-    /// line put back together.
-    private static func join(_ lines: [String]) -> String {
-        var result = ""
-        for (index, line) in lines.enumerated() {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if index == 0 {
-                result = trimmed
-            } else if result.hasSuffix("-") {
-                result.removeLast()
-                result += trimmed
-            } else {
-                result += " " + trimmed
-            }
+    /// The environments whose rows are lines of a display.
+    private static let lined: Set<String> = [
+        "aligned", "gathered", "alignedat", "split", "align", "align*", "gather", "gather*",
+        "alignat", "alignat*", "flalign", "flalign*", "multline", "multline*",
+    ]
+
+    /// A display of several rows written a row a line, the way it is typed:
+    /// `$$\begin{aligned}` on its first line, each row on one of its own,
+    /// `\end{aligned}$$` on the last — and an `equation` round it opened and
+    /// closed on lines of their own. A matrix or a system of cases inside a
+    /// row stays in its row, and a formula of one row is left on one line.
+    static func spread(_ display: String) -> String {
+        guard display.contains("\\\\") else { return display }
+        let characters = Array(display)
+        var out = ""
+        var stack: [String] = []
+        // Whether the display opens with its environment: then that one's
+        // rows are the display's lines, whatever it is.
+        let opening = display.hasPrefix("$$\\begin{") || display.hasPrefix("\\begin{")
+        var outermost = true
+        func trimEnd() { while out.last == " " { out.removeLast() } }
+        func skipSpaces(_ at: inout Int) { while at < characters.count, characters[at] == " " { at += 1 } }
+        func name(at start: Int) -> (name: String, end: Int)? {
+            guard start < characters.count, characters[start] == "{",
+                  let close = characters[start...].firstIndex(of: "}") else { return nil }
+            return (String(characters[(start + 1)..<close]), close + 1)
         }
-        return result
+        var at = 0
+        while at < characters.count {
+            let rest = characters.count - at
+            if rest >= 7, String(characters[at..<(at + 7)]) == "\\begin{", let found = name(at: at + 6) {
+                let breaks = lined.contains(found.name) || found.name.hasPrefix("equation")
+                    || (outermost && opening)
+                outermost = false
+                stack.append(breaks ? found.name : "")
+                out += String(characters[at..<found.end])
+                at = found.end
+                if breaks { out += "\n"; skipSpaces(&at) }
+                continue
+            }
+            if rest >= 5, String(characters[at..<(at + 5)]) == "\\end{", let found = name(at: at + 4) {
+                if let top = stack.popLast(), !top.isEmpty {
+                    trimEnd()
+                    if out.last != "\n" { out += "\n" }
+                }
+                out += String(characters[at..<found.end])
+                at = found.end
+                continue
+            }
+            if rest >= 2, characters[at] == "\\", characters[at + 1] == "\\" {
+                let breaks = stack.last.map { !$0.isEmpty } ?? false
+                if breaks { trimEnd() }
+                out += "\\\\"
+                at += 2
+                if breaks {
+                    out += "\n"
+                    skipSpaces(&at)
+                }
+                continue
+            }
+            if characters[at] == "\\", at + 1 < characters.count {
+                out.append(characters[at])
+                out.append(characters[at + 1])
+                at += 2
+                continue
+            }
+            if characters[at] == " ", out.last == "\n" { at += 1; continue }
+            if characters[at] == "\n" { at += 1; continue }
+            out.append(characters[at])
+            at += 1
+        }
+        return out.split(separator: "\n", omittingEmptySubsequences: false)
+            .map { $0.trimmingCharacters(in: .whitespaces) }.joined(separator: "\n")
     }
 }

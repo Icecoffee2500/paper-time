@@ -30,8 +30,11 @@ enum TeXGlyphNames {
         // for text that calls a glyph "N" names a script N. Euler script,
         // Euler Fraktur, Ralph Smith's script and the double-struck fonts are
         // the same, each in its own alphabet.
-        if resolved.count == 1, resolved.first?.isLetter == true,
-           let style = letterStyle(fontName: fontName) {
+        // A double-struck font's digits are double-struck too: bbm's 𝟙 is
+        // the indicator function, \mathbb{1}, and read plain it was a "1".
+        if resolved.count == 1, let character = resolved.first,
+           let style = letterStyle(fontName: fontName),
+           character.isLetter || (character.isNumber && style == "\\mathbb") {
             return "\(style){\(resolved)}"
         }
         // Word's Cambria Math, and any font that says what its glyphs mean,
@@ -524,9 +527,12 @@ enum TeXGlyphNames {
     /// A bar that fences rather than opens or closes: | and ‖.
     static func fence(_ name: String?) -> String? {
         guard let name else { return nil }
-        if name.hasPrefix("vextenddouble") || name == "bardbl" || name.hasPrefix("bardblex") { return "\\|" }
+        // STIX builds a tall bar from "bar.x" pieces: the bar with its
+        // variant suffix.
+        let stem = stripped(name)
+        if name.hasPrefix("vextenddouble") || stem == "bardbl" || name.hasPrefix("bardblex") { return "\\|" }
         // newtx builds a tall bar from "barex" pieces.
-        if name.hasPrefix("vextendsingle") || name == "bar" || name.hasPrefix("barex") { return "|" }
+        if name.hasPrefix("vextendsingle") || stem == "bar" || name.hasPrefix("barex") { return "|" }
         return nil
     }
 

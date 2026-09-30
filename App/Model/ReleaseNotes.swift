@@ -297,6 +297,73 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.9.17",
+            date: Text2("2026년 9월", "September 2026"),
+            note: Text2(
+                "Ultracopy가 수식을 논문에 적힌 모양 그대로 옮겨요. 기호 위의 글자, 괄호 크기, 여러 줄 수식의 정렬까지요. 복사한 글도 페이지처럼 줄을 바꿔요.",
+                "Ultracopy writes formulas the way the paper sets them: labels over signs, bracket sizes, and the alignment of multi-line formulas. The copied text breaks lines where the page does."
+            ),
+            added: [],
+            fixed: [
+                Entry(
+                    Text2("기호 위아래의 글자", "Labels Over and Under Signs"),
+                    Text2(
+                        "∼ 위의 iid처럼 기호 위나 아래에 쓴 글자를 \\overset과 \\underset으로 옮겨요. 전에는 앞 글자의 첨자로 읽어서 ℓ ∼를 \\ell^i\\sim^{nd}로 옮겼어요. 글자를 단 화살표는 \\xrightarrow로, 조각으로 그린 ⟶, ⟺, ↦는 기호 하나로 읽어요.",
+                        "A label over or under a sign, like iid over ∼, comes back as \\overset or \\underset. It used to be read as scripts, so ℓ ∼ became \\ell^i\\sim^{nd}. An arrow with a label is \\xrightarrow, and long arrows drawn in pieces, like ⟶ and ⟺, are one symbol."
+                    )
+                ),
+                Entry(
+                    Text2("여러 줄 수식", "Multi-Line Formulas"),
+                    Text2(
+                        "왼쪽 끝을 맞춘 줄들은 aligned 하나로, 가운데를 맞춘 줄들은 gathered 하나로 옮겨요. 줄마다 첨자 달린 ∑이 있어 줄 사이가 넓은 유도식도 aligned 하나로 옮겨요. 줄 사이 오른쪽에 선 식 번호는 그 수식 전체의 \\tag로 달아요.",
+                        "Lines that start together become one aligned formula, and centered lines one gathered formula. So do derivations whose lines stand apart to make room for the limits of their sums. An equation number set between the lines tags the whole formula."
+                    )
+                ),
+                Entry(
+                    Text2("합과 곱의 첨자", "Limits of Sums and Products"),
+                    Text2(
+                        "∏ 아래 두 줄로 쓴 첨자를 \\substack으로 옮겨요. 나란히 선 ∑∏는 첨자를 제 기호 밑에서만 가져가요. 줄 사이가 촘촘한 유도식에서도 ∑의 첨자는 제 줄에 붙어요. 전에는 두 줄이 섞여 ii=∉sS처럼 나오거나, 첨자만 따로 한 줄이 됐어요. arg min 아래의 w∈W처럼 옆 기호의 첨자는 ∑가 가져가지 않아요. 문장 속 \\max 첨자의 ≠도 이제 =로 바뀌지 않아요.",
+                        "Two rows of limits under a ∏ come back as \\substack. Signs side by side each take only the limits under them, and in a derivation set tight, the limits of each ∑ stay on its line. The two rows used to mix into ii=∉sS, or the limits came back as a line of their own. A ∑ no longer takes the limit of the name beside it, like the w∈W under arg min. A ≠ in the subscript of \\max in a sentence no longer turns into =."
+                    )
+                ),
+                Entry(
+                    Text2("지수 속의 ∑", "Sums in Exponents"),
+                    Text2(
+                        "e의 지수 안에 든 ∑와 √, \\big|도 지수의 일부로 옮겨요. 전에는 지수가 ∑ 앞에서 끝나서 e^-\\sum^{…}처럼 나왔어요.",
+                        "A ∑, √ or \\big| inside an exponent stays in the exponent. The exponent used to end at the ∑ and came out as e^-\\sum^{…}."
+                    )
+                ),
+                Entry(
+                    Text2("칠판 굵은 글씨", "Blackboard Bold"),
+                    Text2(
+                        "윤곽선 없이 그림으로 들어간 글꼴의 ℙ, 𝕀, 𝟙도 \\mathbb로 읽어요. 글자 모양을 보고 알아내요. 전에는 \\mathrm{P}로 읽었고, 그 뒤의 수식이 문장으로 흩어지기도 했어요.",
+                        "ℙ, 𝕀 and 𝟙 from a font stored as pictures come back as \\mathbb. Paper Time tells from the shapes of the letters. They used to come back as \\mathrm{P}, and sometimes broke up the formula after them."
+                    )
+                ),
+                Entry(
+                    Text2("괄호의 크기", "Bracket Sizes"),
+                    Text2(
+                        "\\biggl( 같은 큰 괄호와 조각을 쌓은 긴 막대를 페이지에 그려진 크기 그대로 옮겨요. STIX와 OpenType 글꼴의 긴 막대도 막대 하나로 읽어요. 두 단 논문에서 조각으로 그린 큰 괄호도 이제 괄호 하나로 읽어요. 전에는 윗조각이 옆 단의 줄로 떨어져 나가 «() ()»만 한 줄로 따로 나왔어요.",
+                        "Big brackets like \\biggl( and tall bars built from pieces keep the size the page draws them at. Tall bars in STIX and OpenType fonts are one bar too. In a two-column paper, a tall bracket drawn in pieces is one bracket. Its top used to go to the line across the gutter and come back on its own, as “() ()”."
+                    )
+                ),
+                Entry(
+                    Text2("식 속의 이름", "Names in Formulas"),
+                    Text2(
+                        "Laplace(…), Exp(1)처럼 괄호 바로 앞의 이름은 수식에 그대로 남아요. Yᵢ’s의 ’s는 문장으로 돌려보내요.",
+                        "A name right before its bracket, like Laplace(…) or Exp(1), stays in the formula. The ’s of Yᵢ’s goes back to the sentence."
+                    )
+                ),
+                Entry(
+                    Text2("Ultracopy의 줄 바꿈", "Line Breaks in Ultracopy"),
+                    Text2(
+                        "따로 선 수식은 제 줄에 오고, 여러 줄 수식은 한 줄에 한 행씩 와요. 새 문단은 빈 줄 뒤에서 시작해요. 전에는 전부 한 줄에 붙었어요.",
+                        "A displayed formula gets a line of its own, and a multi-line one gets a line per row. A new paragraph starts after a blank line. Everything used to arrive on one line."
+                    )
+                ),
+            ]
+        ),
+        Release(
             version: "0.9.16",
             date: Text2("2026년 9월", "September 2026"),
             note: Text2(

@@ -194,6 +194,13 @@ final class PDFContentScanner {
         /// those a byte at a time split every glyph in two, and a formula
         /// from an MDPI paper came out as "$)/(385DCCCiHE WVV U)u!ull…".
         var bytesPerCode = 1
+        /// What one unit of `widths` is in text space. A thousandth for
+        /// every font but a Type 3, whose `/FontMatrix` says it: pdfTeX's
+        /// bitmap fonts count in the pixels they were drawn at, 0.011 of an
+        /// em at 600 dpi for an 11-point font. Read as thousandths, its ℙ
+        /// was 0.78 points wide instead of 8.5, the "(" after it stood a
+        /// word's space off, and the formula it was in came back as prose.
+        var widthScale: CGFloat = 0.001
     }
 
     // MARK: - Scanning
@@ -394,7 +401,8 @@ final class PDFContentScanner {
         for index in stride(from: 0, to: length - (step - 1), by: step) {
             var code = 0
             for byte in 0..<step { code = code << 8 | Int(bytes[index + byte]) }
-            let width = (currentFont?.widths[code] ?? currentFont?.defaultWidth ?? 500) / 1000
+            let width = currentFont.flatMap { font in font.widths[code].map { $0 * font.widthScale } }
+                ?? (currentFont?.defaultWidth ?? 500) / 1000
 
             let placement = CGAffineTransform(a: fontSize * horizontalScale, b: 0, c: 0,
                                               d: fontSize, tx: 0, ty: rise)
@@ -477,8 +485,17 @@ final class PDFContentScanner {
             // descriptor are on the one font it descends to.
             var subtype: UnsafePointer<Int8>?
             var descendant: CGPDFDictionaryRef?
-            if CGPDFDictionaryGetName(dictionary, "Subtype", &subtype), let subtype,
-               String(cString: subtype) == "Type0" {
+            let kind = CGPDFDictionaryGetName(dictionary, "Subtype", &subtype)
+                ? subtype.map { String(cString: $0) } : nil
+            if kind == "Type3" {
+                var matrix: CGPDFArrayRef?
+                var scale: CGPDFReal = 0
+                if CGPDFDictionaryGetArray(dictionary, "FontMatrix", &matrix), let matrix,
+                   CGPDFArrayGetNumber(matrix, 0, &scale), scale > 0 {
+                    font.widthScale = scale
+                }
+            }
+            if kind == "Type0" {
                 var encodingName: UnsafePointer<Int8>?
                 let cmap = CGPDFDictionaryGetName(dictionary, "Encoding", &encodingName)
                     ? encodingName.map { String(cString: $0) } : nil
@@ -538,6 +555,10 @@ final class PDFContentScanner {
             if !builtIn.isEmpty {
                 font.glyphNames = builtIn.merging(font.glyphNames) { own, named in named }
             }
+            if kind == "Type3", font.name.isEmpty,
+               Self.drawsDoubleStruck(dictionary, names: font.glyphNames) {
+                font.name = Self.doubleStruckType3
+            }
             loaded[String(cString: key)] = font
             return true
         }, nil)
@@ -571,6 +592,178 @@ final class PDFContentScanner {
             index += 3
         }
         return widths
+    }
+
+    // MARK: - Type 3 bitmaps
+
+    /// The name given to a Type 3 font whose letters are double-struck, so
+    /// that the rest reads it as it reads any blackboard font: `\mathbb`.
+    static let doubleStruckType3 = "Type3+BBM"
+
+    /// Whether a Type 3 font draws double-struck letters.
+    ///
+    /// A font TeX has no outlines for — bbm, which draws `\mathbbm` — goes
+    /// into the PDF as pdfTeX's bitmap Type 3 font: no name, glyphs called
+    /// "a80", and for each one a picture at 600 dpi. So the picture is what
+    /// says what the letter is, and a double-struck letter says so plainly:
+    /// its stems are hollow, drawn as two lines closed at both ends, and that
+    /// is an enclosed hole the plain letter does not have — 𝕀 has one and I
+    /// none, ℙ two and P one. A font most of whose letters have more holes
+    /// than they should is double-struck. Read as it was, the ℙ of a paper's
+    /// ℙ_E came back as \mathrm{P}.
+    private static func drawsDoubleStruck(_ font: CGPDFDictionaryRef, names: [Int: String]) -> Bool {
+        var procedures: CGPDFDictionaryRef?
+        guard CGPDFDictionaryGetDictionary(font, "CharProcs", &procedures), let procedures else { return false }
+        var judged = 0, hollow = 0
+        for (code, name) in names {
+            guard let plain = plainHoles[code] else { continue }
+            var stream: CGPDFStreamRef?
+            guard CGPDFDictionaryGetStream(procedures, name, &stream), let stream else { continue }
+            var format = CGPDFDataFormat.raw
+            guard let data = CGPDFStreamCopyData(stream, &format) as Data?, format == .raw,
+                  let mask = ImageMask(inlineIn: [UInt8](data)) else { continue }
+            judged += 1
+            if mask.holes() > plain { hollow += 1 }
+        }
+        return judged > 0 && hollow * 3 >= judged * 2
+    }
+
+    /// How many holes each letter and digit has in a plain roman face — the
+    /// most it has, where faces differ: a two-storey g has two, an open 4
+    /// none, a slashed zero two.
+    static let plainHoles: [Int: Int] = {
+        var table: [Int: Int] = [:]
+        let upper: [Character: Int] = ["A": 1, "B": 2, "D": 1, "O": 1, "P": 1, "Q": 1, "R": 1]
+        let lower: [Character: Int] = ["a": 1, "b": 1, "d": 1, "e": 1, "g": 2, "o": 1, "p": 1, "q": 1]
+        let digits: [Character: Int] = ["0": 2, "4": 1, "6": 1, "8": 2, "9": 1]
+        for scalar in UnicodeScalar("A").value...UnicodeScalar("Z").value {
+            table[Int(scalar)] = upper[Character(UnicodeScalar(scalar)!)] ?? 0
+        }
+        for scalar in UnicodeScalar("a").value...UnicodeScalar("z").value {
+            table[Int(scalar)] = lower[Character(UnicodeScalar(scalar)!)] ?? 0
+        }
+        for scalar in UnicodeScalar("0").value...UnicodeScalar("9").value {
+            table[Int(scalar)] = digits[Character(UnicodeScalar(scalar)!)] ?? 0
+        }
+        return table
+    }()
+
+    /// A one-bit picture drawn as an inline image mask — how pdfTeX draws
+    /// each glyph of a bitmap font: `BI /W 62 /H 62 /IM true /BPC 1
+    /// /D [1 0] ID … EI`, the rows packed a bit a pixel, unfiltered.
+    struct ImageMask {
+        var width: Int
+        var height: Int
+        /// Row by row from the top: whether the pixel is painted.
+        var painted: [Bool]
+
+        init?(inlineIn bytes: [UInt8]) {
+            func isSpace(_ byte: UInt8) -> Bool { [0, 9, 10, 12, 13, 32].contains(byte) }
+            func isDelimiter(_ byte: UInt8) -> Bool { isSpace(byte) || "/[]<>()".utf8.contains(byte) }
+            // "BI", standing as a word of its own.
+            var at = 0
+            var begin: Int?
+            while at + 1 < bytes.count {
+                if bytes[at] == 0x42, bytes[at + 1] == 0x49, at == 0 || isSpace(bytes[at - 1]),
+                   at + 2 >= bytes.count || isDelimiter(bytes[at + 2]) {
+                    begin = at + 2
+                    break
+                }
+                at += 1
+            }
+            guard var index = begin else { return nil }
+            // The image's dictionary, as words, up to "ID".
+            var words: [String] = []
+            var data: Int?
+            while index < bytes.count {
+                let byte = bytes[index]
+                if isSpace(byte) { index += 1; continue }
+                // A bracket is a word of one character; anything else runs
+                // to the next delimiter — "/W" and "62" are two words.
+                var end = index + 1
+                if byte != UInt8(ascii: "["), byte != UInt8(ascii: "]") {
+                    while end < bytes.count, !isDelimiter(bytes[end]) { end += 1 }
+                }
+                let word = String(decoding: bytes[index..<end], as: UTF8.self)
+                if word == "ID" {
+                    // One white-space byte, and then the picture.
+                    data = end + 1
+                    break
+                }
+                words.append(word)
+                index = end
+            }
+            guard let data, words.count < 64 else { return nil }
+            func value(_ keys: String...) -> String? {
+                guard let at = words.firstIndex(where: { keys.contains($0) }), at + 1 < words.count else { return nil }
+                return words[at + 1]
+            }
+            // A filtered picture — compressed, or written in hex — is not
+            // what pdfTeX writes, and not worth decoding for this.
+            guard value("/F", "/Filter") == nil,
+                  value("/IM", "/ImageMask") == "true",
+                  value("/BPC", "/BitsPerComponent").map({ $0 == "1" }) ?? true,
+                  let width = value("/W", "/Width").flatMap(Int.init),
+                  let height = value("/H", "/Height").flatMap(Int.init),
+                  width > 0, height > 0, width * height <= 1_000_000
+            else { return nil }
+            // A mask paints its zeros, unless its decode array turns that
+            // round.
+            var inverted = false
+            if let at = words.firstIndex(where: { ["/D", "/Decode"].contains($0) }), at + 3 < words.count,
+               words[at + 1] == "[" {
+                inverted = words[at + 2] == "1" && words[at + 3] == "0"
+            }
+            let rowBytes = (width + 7) / 8
+            guard data + rowBytes * height <= bytes.count else { return nil }
+            var painted = [Bool](repeating: false, count: width * height)
+            for y in 0..<height {
+                for x in 0..<width {
+                    let bit = (bytes[data + y * rowBytes + x / 8] >> (7 - UInt8(x % 8))) & 1
+                    painted[y * width + x] = inverted ? bit == 1 : bit == 0
+                }
+            }
+            self.width = width
+            self.height = height
+            self.painted = painted
+        }
+
+        /// The enclosed holes in the picture: unpainted places no path from
+        /// the edge reaches, and big enough to be drawn rather than left by
+        /// the rasteriser — half a percent of the picture, three pixels at
+        /// the least.
+        func holes() -> Int {
+            // A pixel of paper all round, so the outside is one region.
+            let wide = width + 2, high = height + 2
+            var open = [Bool](repeating: true, count: wide * high)
+            for y in 0..<height {
+                for x in 0..<width where painted[y * width + x] { open[(y + 1) * wide + x + 1] = false }
+            }
+            var seen = [Bool](repeating: false, count: wide * high)
+            func fill(from start: Int) -> Int {
+                var stack = [start]
+                seen[start] = true
+                var size = 0
+                while let cell = stack.popLast() {
+                    size += 1
+                    let x = cell % wide, y = cell / wide
+                    for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
+                        let nx = x + dx, ny = y + dy
+                        guard nx >= 0, ny >= 0, nx < wide, ny < high else { continue }
+                        let next = ny * wide + nx
+                        if open[next], !seen[next] { seen[next] = true; stack.append(next) }
+                    }
+                }
+                return size
+            }
+            _ = fill(from: 0)
+            let smallest = max(3, width * height / 200)
+            var count = 0
+            for cell in 0..<(wide * high) where open[cell] && !seen[cell] {
+                if fill(from: cell) >= smallest { count += 1 }
+            }
+            return count
+        }
     }
 
     /// The `Differences` array: a starting code, then the names of the glyphs

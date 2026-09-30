@@ -33,7 +33,15 @@ interface Font {
   /** One byte a glyph for a simple font; two for a composite (Type0) one —
    *  what Word and every "Save as PDF" write (the Mac's `bytesPerCode`). */
   bytesPerCode: number
+  /** What one unit of `widths` is in text space: a thousandth, or a Type 3
+   *  font's `/FontMatrix` — pdfTeX's bitmap fonts count in pixels, 0.011 of
+   *  an em at 600 dpi (the Mac's `widthScale`). */
+  widthScale: number
 }
+
+/** The name given to a Type 3 font whose letters are double-struck, so the
+ *  rest reads it as any blackboard font: \mathbb (`doubleStruckType3`). */
+export const DOUBLE_STRUCK_TYPE3 = 'Type3+BBM'
 
 export interface ScannedPage {
   glyphs: Glyph[]
@@ -154,7 +162,8 @@ function scan(file: PDFFile, page: PDFDict): ScannedPage {
     for (let index = 0; index + step <= bytes.length; index += step) {
       let code = 0
       for (let byte = 0; byte < step; byte += 1) code = (code << 8) | bytes[index + byte]
-      const width = (currentFont?.widths.get(code) ?? currentFont?.defaultWidth ?? 500) / 1000
+      const known = currentFont?.widths.get(code)
+      const width = currentFont && known !== undefined ? known * currentFont.widthScale : (currentFont?.defaultWidth ?? 500) / 1000
       const placement = concat(concat([fontSize * horizontalScale, 0, 0, fontSize, 0, rise], textMatrix), ctm)
       const scale = Math.sqrt(Math.abs(placement[0] * placement[3] - placement[1] * placement[2]))
       // A zero in a composite font's ToUnicode says the file does not know
@@ -306,7 +315,7 @@ function loadFonts(file: PDFFile, page: PDFDict): Map<string, Font> {
   for (const [key, value] of fontDictionary.pairs) {
     const dictionary = dictOf(file.resolve(value))
     if (!dictionary) continue
-    const font: Font = { name: '', widths: new Map(), defaultWidth: 500, toUnicode: new Map(), glyphNames: new Map(), baseEncoding: null, isSymbolic: true, bytesPerCode: 1 }
+    const font: Font = { name: '', widths: new Map(), defaultWidth: 500, toUnicode: new Map(), glyphNames: new Map(), baseEncoding: null, isSymbolic: true, bytesPerCode: 1, widthScale: 0.001 }
     const baseFont = nameOf(file.resolve(dictionary.get('BaseFont')))
     if (baseFont !== undefined) font.name = baseFont
     const firstChar = intOf(file.resolve(dictionary.get('FirstChar'))) ?? 0
@@ -318,7 +327,13 @@ function loadFonts(file: PDFFile, page: PDFDict): Map<string, Font> {
     // A composite font: two bytes a glyph, and its widths and its
     // descriptor are on the one font it descends to.
     let descendant: PDFDict | undefined
-    if (nameOf(file.resolve(dictionary.get('Subtype'))) === 'Type0') {
+    const kind = nameOf(file.resolve(dictionary.get('Subtype')))
+    if (kind === 'Type3') {
+      const matrix = arrayOf(file.resolve(dictionary.get('FontMatrix')))
+      const scale = matrix && matrix.length > 0 ? numberOf(file.resolve(matrix[0])) : undefined
+      if (scale !== undefined && scale > 0) font.widthScale = scale
+    }
+    if (kind === 'Type0') {
       font.bytesPerCode = 2
       const descendants = arrayOf(file.resolve(dictionary.get('DescendantFonts')))
       descendant = descendants && descendants[0] ? dictOf(file.resolve(descendants[0])) : undefined
@@ -348,9 +363,153 @@ function loadFonts(file: PDFFile, page: PDFDict): Map<string, Font> {
       for (const [code, name] of font.glyphNames) merged.set(code, name)
       font.glyphNames = merged
     }
+    if (kind === 'Type3' && font.name === '' && drawsDoubleStruck(file, dictionary, font.glyphNames)) {
+      font.name = DOUBLE_STRUCK_TYPE3
+    }
     fonts.set(key, font)
   }
   return fonts
+}
+
+/**
+ * Whether a Type 3 font draws double-struck letters — the Mac's
+ * `drawsDoubleStruck`. bbm, which draws \mathbbm, has no outlines, so pdfTeX
+ * writes it as a bitmap Type 3 font with no name and glyphs called "a80";
+ * each glyph's picture says what it is: a double-struck letter's stems are
+ * hollow, an enclosed hole the plain letter does not have (𝕀 one, I none;
+ * ℙ two, P one). Most of its letters with more holes than they should have
+ * make the font double-struck.
+ */
+function drawsDoubleStruck(file: PDFFile, font: PDFDict, names: Map<number, string>): boolean {
+  const procedures = dictOf(file.resolve(font.get('CharProcs')))
+  if (!procedures) return false
+  let judged = 0
+  let hollow = 0
+  for (const [code, name] of names) {
+    const plain = PLAIN_HOLES.get(code)
+    if (plain === undefined) continue
+    const data = decoded(file, procedures.get(name))
+    const mask = data ? imageMask(data) : null
+    if (!mask) continue
+    judged += 1
+    if (holes(mask) > plain) hollow += 1
+  }
+  return judged > 0 && hollow * 3 >= judged * 2
+}
+
+/** How many holes each letter and digit has in a plain roman face — the
+ *  most it has where faces differ (`plainHoles`). */
+export const PLAIN_HOLES: Map<number, number> = (() => {
+  const table = new Map<number, number>()
+  const upper: Record<string, number> = { A: 1, B: 2, D: 1, O: 1, P: 1, Q: 1, R: 1 }
+  const lower: Record<string, number> = { a: 1, b: 1, d: 1, e: 1, g: 2, o: 1, p: 1, q: 1 }
+  const digits: Record<string, number> = { 0: 2, 4: 1, 6: 1, 8: 2, 9: 1 }
+  for (let code = 0x41; code <= 0x5a; code += 1) table.set(code, upper[String.fromCharCode(code)] ?? 0)
+  for (let code = 0x61; code <= 0x7a; code += 1) table.set(code, lower[String.fromCharCode(code)] ?? 0)
+  for (let code = 0x30; code <= 0x39; code += 1) table.set(code, digits[String.fromCharCode(code)] ?? 0)
+  return table
+})()
+
+export interface ImageMask { width: number; height: number; painted: boolean[] }
+
+/** A one-bit picture drawn as an unfiltered inline image mask — how pdfTeX
+ *  draws each glyph of a bitmap font (`ImageMask(inlineIn:)`). */
+export function imageMask(bytes: Uint8Array): ImageMask | null {
+  const isSpace = (byte: number) => byte === 0 || byte === 9 || byte === 10 || byte === 12 || byte === 13 || byte === 32
+  const isDelimiter = (byte: number) => isSpace(byte) || '/[]<>()'.includes(String.fromCharCode(byte))
+  let begin: number | null = null
+  for (let at = 0; at + 1 < bytes.length; at += 1) {
+    if (bytes[at] === 0x42 && bytes[at + 1] === 0x49 && (at === 0 || isSpace(bytes[at - 1]))
+      && (at + 2 >= bytes.length || isDelimiter(bytes[at + 2]))) {
+      begin = at + 2
+      break
+    }
+  }
+  if (begin === null) return null
+  const words: string[] = []
+  let data: number | null = null
+  let index = begin
+  while (index < bytes.length) {
+    const byte = bytes[index]
+    if (isSpace(byte)) { index += 1; continue }
+    // A bracket is a word of one character; anything else runs to the next
+    // delimiter — "/W" and "62" are two words.
+    let end = index + 1
+    if (byte !== 0x5b && byte !== 0x5d) while (end < bytes.length && !isDelimiter(bytes[end])) end += 1
+    const word = Buffer.from(bytes.subarray(index, end)).toString('utf8')
+    if (word === 'ID') {
+      // One white-space byte, and then the picture.
+      data = end + 1
+      break
+    }
+    words.push(word)
+    index = end
+  }
+  if (data === null || words.length >= 64) return null
+  const value = (...keys: string[]): string | null => {
+    const at = words.findIndex((word) => keys.includes(word))
+    return at >= 0 && at + 1 < words.length ? words[at + 1] : null
+  }
+  const whole = (text: string | null) => (text !== null && /^[+-]?\d+$/.test(text) ? Number(text) : null)
+  const width = whole(value('/W', '/Width'))
+  const height = whole(value('/H', '/Height'))
+  const depth = value('/BPC', '/BitsPerComponent')
+  if (value('/F', '/Filter') !== null || value('/IM', '/ImageMask') !== 'true' || (depth !== null && depth !== '1')
+    || width === null || height === null || width <= 0 || height <= 0 || width * height > 1_000_000) return null
+  // A mask paints its zeros, unless its decode array turns that round.
+  let inverted = false
+  const decode = words.findIndex((word) => word === '/D' || word === '/Decode')
+  if (decode >= 0 && decode + 3 < words.length && words[decode + 1] === '[') {
+    inverted = words[decode + 2] === '1' && words[decode + 3] === '0'
+  }
+  const rowBytes = Math.floor((width + 7) / 8)
+  if (data + rowBytes * height > bytes.length) return null
+  const painted: boolean[] = new Array(width * height).fill(false)
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const bit = (bytes[data + y * rowBytes + Math.floor(x / 8)] >> (7 - (x % 8))) & 1
+      painted[y * width + x] = inverted ? bit === 1 : bit === 0
+    }
+  }
+  return { width, height, painted }
+}
+
+/** The enclosed holes in a picture, half a percent of it or more — three
+ *  pixels at the least (`ImageMask.holes`). */
+export function holes(mask: ImageMask): number {
+  const wide = mask.width + 2
+  const high = mask.height + 2
+  const open: boolean[] = new Array(wide * high).fill(true)
+  for (let y = 0; y < mask.height; y += 1) {
+    for (let x = 0; x < mask.width; x += 1) if (mask.painted[y * mask.width + x]) open[(y + 1) * wide + x + 1] = false
+  }
+  const seen: boolean[] = new Array(wide * high).fill(false)
+  const fill = (start: number): number => {
+    const stack = [start]
+    seen[start] = true
+    let size = 0
+    while (stack.length > 0) {
+      const cell = stack.pop()!
+      size += 1
+      const x = cell % wide
+      const y = Math.floor(cell / wide)
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx
+        const ny = y + dy
+        if (nx < 0 || ny < 0 || nx >= wide || ny >= high) continue
+        const next = ny * wide + nx
+        if (open[next] && !seen[next]) { seen[next] = true; stack.push(next) }
+      }
+    }
+    return size
+  }
+  fill(0)
+  const smallest = Math.max(3, Math.floor((mask.width * mask.height) / 200))
+  let found = 0
+  for (let cell = 0; cell < wide * high; cell += 1) {
+    if (open[cell] && !seen[cell] && fill(cell) >= smallest) found += 1
+  }
+  return found
 }
 
 /** A composite font's `/W`: `c [w₁ w₂ …]` from `c` on, or `c₁ c₂ w` for a run. */
