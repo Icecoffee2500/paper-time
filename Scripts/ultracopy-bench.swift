@@ -203,7 +203,7 @@ enum Canon {
         "mid": "vertbar", "lVert": "|", "rVert": "|", "Vert": "|",
         "dots": "ldots", "dotsc": "ldots", "dotsb": "cdots",
         "land": "wedge", "lor": "vee", "lnot": "neg", "iff": "Longleftrightarrow",
-        "implies": "Longrightarrow", "colon": ":", "bm": "boldsymbol", "mathscr": "mathcal",
+        "implies": "Longrightarrow", "stackrel": "overset", "colon": ":", "bm": "boldsymbol", "mathscr": "mathcal",
         "dfrac": "frac", "tfrac": "frac", "dbinom": "binom", "tbinom": "binom", "backslash": "setminus",
         "varnothing": "emptyset", "intercal": "top", "lparen": "(", "rparen": ")",
         "mathbfit": "boldsymbol", "symbf": "mathbf", "symbfit": "boldsymbol", "mathup": "mathrm",
@@ -225,7 +225,7 @@ enum Canon {
     static let upright: Set<String> = ["mathrm", "text", "textrm", "textnormal", "operatorname", "mathup", "textup"]
     static let arity: [String: Int] = [
         "begin": 1, "end": 1,
-        "frac": 2, "binom": 2, "overset": 2, "underset": 2, "sqrt": 1, "hat": 1, "bar": 1, "tilde": 1,
+        "frac": 2, "binom": 2, "overset": 2, "underset": 2, "xrightarrow": 1, "xleftarrow": 1, "sqrt": 1, "hat": 1, "bar": 1, "tilde": 1,
         "vec": 1, "dot": 1, "ddot": 1, "dddot": 1, "mathring": 1, "check": 1, "acute": 1, "grave": 1, "breve": 1, "widehat": 1,
         "widetilde": 1, "overline": 1, "underline": 1, "mathbf": 1, "boldsymbol": 1, "mathcal": 1,
         "mathbb": 1, "mathfrak": 1, "mathsf": 1, "mathtt": 1, "mathit": 1, "tag": 1,
@@ -284,7 +284,11 @@ enum Canon {
             case .char(let character):
                 return [Item(base: String(character))]
             case .command(var name):
-                if Canon.dropped.contains(name) { return [] }
+                if Canon.dropped.contains(name) {
+                    // `\left.` draws nothing, and neither does its full stop.
+                    if name == "left" || name == "right", next() == .char(".") { at += 1 }
+                    return []
+                }
                 name = Canon.synonyms[name] ?? name
                 if name == "{" || name == "}" { return [Item(base: "\\" + name)] }
                 if name == "vertbar" { return [Item(base: "|")] }
@@ -298,7 +302,7 @@ enum Canon {
                     return [Item(base: "\\text{\(inner)}")]
                 }
                 var optional = ""
-                if name == "sqrt", next() == .char("[") {
+                if ["sqrt", "xrightarrow", "xleftarrow"].contains(name), next() == .char("[") {
                     at += 1
                     var inside: [Token] = []
                     while let token = next(), token != .char("]") { inside.append(token); at += 1 }
