@@ -2,11 +2,129 @@
   "repo": "Icecoffee2500/paper-time",
   "releases": [
     {
+      "version": "0.9.16",
+      "date": "2026-09-30T02:17:10Z",
+      "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.16/Paper.Time.0.9.16.dmg",
+      "size": 53839126,
+      "downloads": 0,
+      "builds": {
+        "mac": [
+          {
+            "label": "디스크 이미지",
+            "label_en": "Disk image",
+            "arch": "Apple Silicon",
+            "arch_en": "Apple Silicon",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.16/Paper.Time.0.9.16.dmg",
+            "size": 53839126,
+            "downloads": 0
+          }
+        ],
+        "windows": [
+          {
+            "label": "설치본",
+            "label_en": "Installer",
+            "arch": "64비트 · ARM",
+            "arch_en": "64-bit and ARM",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.16/Paper.Time.Setup.0.9.16.exe",
+            "size": 265691748,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "64비트",
+            "arch_en": "64-bit",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.16/Paper.Time-0.9.16-win.zip",
+            "size": 162982609,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.16/Paper.Time-0.9.16-arm64-win.zip",
+            "size": 167930286,
+            "downloads": 0
+          }
+        ],
+        "linux": [
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.16/Paper.Time-0.9.16-x86_64.AppImage",
+            "size": 160505291,
+            "downloads": 0
+          },
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.16/Paper.Time-0.9.16-arm64.AppImage",
+            "size": 160887699,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.16/paper-time-0.9.16.tar.gz",
+            "size": 154109461,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.16/paper-time-0.9.16-arm64.tar.gz",
+            "size": 158605815,
+            "downloads": 0
+          }
+        ]
+      },
+      "note": null,
+      "note_en": null,
+      "notes": {
+        "note": {
+          "ko": "업데이트가 어디까지 왔는지 막대와 숫자로 보여줘요. 이번 업데이트만은, 맥에서 «설치하는 중»이 끝나지 않으면 «나중에»를 누르고 Paper Time을 꺼 주세요. 끄면 설치가 끝나요.",
+          "en": "Updates show their progress as they download and install. This time only: if a Mac stays at Installing, choose Later and quit Paper Time to finish."
+        },
+        "added": [],
+        "fixed": [
+          {
+            "title": {
+              "ko": "업데이트의 진행 상황",
+              "en": "Update Progress"
+            },
+            "detail": {
+              "ko": "새 버전을 내려받는 동안 몇 MB 중 몇 MB를 받았는지 막대와 퍼센트로 보여줘요. 설치를 준비할 때도 막대가 움직여요. 윈도우는 설치 창을 띄워 진행 상황을 보여주고, 끝나면 Paper Time을 다시 열어요.",
+              "en": "While a new version downloads, a bar shows how much has come, in megabytes and percent. It keeps moving while the update gets ready to install. On Windows the installer shows its own progress, then opens Paper Time again."
+            }
+          },
+          {
+            "title": {
+              "ko": "맥의 «지금 설치»",
+              "en": "Install Now on the Mac"
+            },
+            "detail": {
+              "ko": "업데이트 창의 «지금 설치»를 누르면 «설치하는 중»에서 더 나아가지 않았어요. 그 창이 떠 있는 동안에는 Paper Time이 꺼지지 않아서, 설치 도우미가 앱이 꺼지기만 기다렸어요. 이제는 창을 먼저 닫고 앱을 꺼요. 다른 창 때문에 꺼지지 않으면 «다시 시도»를 보여줘요.",
+              "en": "Install Now in the update window stayed at Installing. Paper Time can't quit while that window is open, so the installer waited for a quit that never came. Now the window closes first, and if something else keeps Paper Time open, Try Again appears."
+            }
+          }
+        ]
+      }
+    },
+    {
       "version": "0.9.15",
       "date": "2026-09-29T17:00:53Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.15/Paper.Time.0.9.15.dmg",
       "size": 53728640,
-      "downloads": 0,
+      "downloads": 1,
       "builds": {
         "mac": [
           {
@@ -16,7 +134,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.15/Paper.Time.0.9.15.dmg",
             "size": 53728640,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "windows": [
