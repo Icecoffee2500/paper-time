@@ -83,6 +83,9 @@ export interface UpdateState {
   stage: 'preparing' | 'downloading' | 'ready' | 'installing' | 'manual'
   /** 0–1 once the size is known. */
   progress: number | null
+  /** The bytes come down so far, and the whole once the server has said it. */
+  received: number | null
+  total: number | null
   /** Install Now pressed before the download had finished. */
   wantsInstall: boolean
   showsSheet: boolean
@@ -97,6 +100,40 @@ export interface UpdateState {
 }
 
 export const NO_UPDATE: UpdateState = {
-  offer: null, stage: 'preparing', progress: null, wantsInstall: false, showsSheet: false, showsBar: false,
-  checking: false, lastCheck: null, lastCheckFailed: false, installs: false, current: '',
+  offer: null, stage: 'preparing', progress: null, received: null, total: null, wantsInstall: false,
+  showsSheet: false, showsBar: false, checking: false, lastCheck: null, lastCheckFailed: false, installs: false,
+  current: '',
+}
+
+/**
+ * A size in the Finder's units — decimal, whole kilobytes, a tenth of a
+ * megabyte, a hundredth of a gigabyte, a trailing zero dropped, and a size
+ * that rounds up to the next unit said in it — with no words («Zero KB»,
+ * «999 bytes»). The Mac's `UpdateMeasure.size`, which agrees with its
+ * `ByteCountFormatter` from a kilobyte up; the tests hold both to one list.
+ */
+export function sizeText(bytes: number): string {
+  const n = Math.max(0, Math.floor(bytes))
+  // Half up in whole numbers: 17,450,000 is 17.5 MB, not the 17.4 that
+  // 17.45 in floating point rounds to.
+  const kilobytes = Math.floor((n + 500) / 1_000)
+  if (kilobytes < 1_000) return `${kilobytes} KB`
+  const tenths = Math.floor((n + 50_000) / 100_000)
+  if (tenths < 10_000) return tenths % 10 === 0 ? `${tenths / 10} MB` : `${Math.floor(tenths / 10)}.${tenths % 10} MB`
+  const hundredths = Math.floor((n + 5_000_000) / 10_000_000)
+  const whole = Math.floor(hundredths / 100)
+  const part = hundredths % 100
+  if (part === 0) return `${whole} GB`
+  return part % 10 === 0 ? `${whole}.${part / 10} GB` : `${whole}.${String(part).padStart(2, '0')} GB`
+}
+
+/** Rounded down, so 100% is only ever said of something finished. */
+export function percentText(fraction: number): string {
+  return `${Math.min(100, Math.max(0, Math.floor(fraction * 100)))}%`
+}
+
+/** «17.4 MB / 53.7 MB · 32%», or what has come so far when the size is not known yet. */
+export function downloadText(received: number, total: number | null): string {
+  if (!total || total <= 0) return sizeText(received)
+  return `${sizeText(received)} / ${sizeText(total)} · ${percentText(received / total)}`
 }
