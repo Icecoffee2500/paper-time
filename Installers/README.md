@@ -1,7 +1,9 @@
 # 여기 있는 것
 
-배포하기 전에 **직접 설치해서 확인하는** 파일들이에요.
-`Scripts/build-installers.sh`가 지금 작업 중인 코드 그대로 구워서 여기 둬요.
+**최신 버전의 설치 파일**이에요. 맥, 윈도우, 리눅스가 다 있어요.
+
+- 배포가 끝나면 릴리스에 올라간 파일이 바이트까지 그대로 여기 남아요. 지난 버전은 배포 스크립트가 지워요.
+- 다음 버전을 배포하기 전에는 `Scripts/build-installers.sh`가 작업 중인 코드 그대로 구워서 여기 둬요. 직접 설치해서 확인해 보는 파일이에요.
 
 | 파일 | 어디에 |
 |---|---|
@@ -12,6 +14,7 @@
 | `Paper Time-<버전>-x86_64.AppImage` | 리눅스 — `chmod +x` 하고 실행 |
 | `Paper Time-<버전>-arm64.AppImage` | 리눅스 ARM |
 | `paper-time-<버전>.tar.gz` | 리눅스 — 풀어서 실행 |
+| `paper-time-<버전>-arm64.tar.gz` | 리눅스 ARM — 풀어서 실행 |
 
 이 폴더는 git에 들어가지 않아요. 몇백 MB짜리 빌드 결과물이고,
 남는 사본은 GitHub 릴리스 쪽이니까요.
@@ -29,5 +32,3 @@ Scripts/build-installers.sh portable  # 윈도우·리눅스만
 ```bash
 Scripts/publish-release.sh <버전> "한 줄" "one line"
 ```
-
-배포가 끝나면 방금 올린 버전만 남고 지난 버전은 지워져요 — 남는 사본은 릴리스 쪽이에요.

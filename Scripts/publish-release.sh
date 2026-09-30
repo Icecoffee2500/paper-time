@@ -280,6 +280,25 @@ Scripts/feedback-sync.sh || true
 # Onto gh-pages, by the script that does only that.
 Scripts/publish-page.sh "Paper Time $TAG on the page" >/dev/null
 
+# What went up is left in Installers/: that folder is where the latest
+# version is looked for, one file per desktop. The prune below only keeps
+# what is already there, and 0.9.15 was built straight into dist/ and
+# Portable/dist/ rather than by build-installers.sh — so it removed 0.9.14
+# and left the folder holding its README alone. The release's own bytes go
+# in, over whatever build-installers.sh left under the same name: an APFS
+# clone where the disk can make one (no second copy on disk), a plain copy
+# where it cannot.
+mkdir -p Installers
+placed=0
+while IFS= read -r file; do
+  if cp -c -p "$file" Installers/ 2>/dev/null || cp -p "$file" Installers/; then
+    placed=$((placed + 1))
+  else
+    echo "  (could not put $(basename "$file") in Installers/)"
+  fi
+done < "$ASSETS"
+echo "Installers - $placed file(s) of $TAG, as they went up"
+
 # Only the version that just went up stays on this disk. The release holds
 # the copies that matter — these are for installing and checking before that,
 # and a year of them is gigabytes of packages nobody will open again. Run
