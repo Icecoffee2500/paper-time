@@ -176,3 +176,42 @@ y = Wx + b
 F^i_{W^l}(x)
 F^i_{\hat{W}}(x)
 \omega_k^{-\frac{1}{2}}
+# A label stacked on a sign is \overset or \underset, not a script on the
+# glyph before it (2512.11732, page 7: the "i" of "ind" began before the ∼
+# and came back as \ell^i\sim^{nd}), and an arrow stretched round its label
+# is \xrightarrow.
+E_i|\xi_i = \ell \overset{ind}{\sim} P_E(E_i)
+X \stackrel{d}{=} Y
+a \overset{\text{def}}{=} b
+z \underset{n}{\sim} w
+x_n \xrightarrow{p} x
+y_n \xrightarrow[n\to\infty]{a.s.} y
+A \underset{n\to\infty}{\longrightarrow} B
+# Arrows TeX builds out of two glyphs, a shaft and a head.
+a \longrightarrow b \Longrightarrow c \longmapsto d \Longleftrightarrow e \mapsto f
+g \iff h \implies i \longleftarrow j
+# Brackets at the size the page draws them, the bar of a conditional
+# between them.
+\mathrm{Laplace}\left( E_{ij} \middle| \sqrt{\frac{\sigma_{\ell j}}{2}} \right)
+\Big( a \Big) \bigg[ x \bigg]
+\left. \frac{df}{dx} \right|_{x=0}
+# Lines that only start together are an aligned formula with & at the head
+# of each (2512.11732, page 7).
+@display \begin{aligned} &E_i|\xi_i = \ell \overset{iid}{\sim} N_p(0, \Sigma_{\ell i}) \\ &\tau_{ij} \overset{iid}{\sim} \mathrm{Exp}(1) \end{aligned}
+# \mathbbm: in the cm-bbm setup a bitmap Type 3 font with no name and glyphs
+# called "a80", whose pictures say they are double-struck (2512.11732: its ℙ
+# came back as \mathrm{P}, and 0.78 points wide).
+\mathbbm{P}(A \mid B) = \mathbbm{E}[\mathbbm{I}_A] => \mathbb{P}(A \mid B) = \mathbb{E}[\mathbb{I}_A]
+# Limits set as \substack, two rows under the sign, and the limits of signs
+# side by side, each parted off where it is centred on its own sign
+# (5308_The_Forgetting_Retention_, pages 17, 21 and 28: "ii=∉sS…").
+\prod_{\substack{i=s_1+1 \\ i\notin S_{\leq t}}}^{t} P_i
+\sum_{j=1}^{n}\prod_{\substack{i=s_j+1 \\ i\notin S_{\leq t}}}^{t} P_i
+\sum_{a=1}^{k}\sum_{s\in S_{a}}\prod_{\substack{r=s+1 \\ r\notin S_{\leq t}}}^{t} P_r
+\max_{\substack{i\in S \\ j\neq i}} w_{ij}
+# The lines of a derivation set tight: the limits under one line's sums
+# stand over the next line's, and each belongs to its own line (page 29).
+@display \begin{aligned} &= -\sum_{i=0}^{j-1} d_0(t_k) d_i(s) + \sum_{i=-1}^{j-1} d_0(t_k) d_{i+1}(s) \\ &= -\sum_{i=0}^{j-1} d_0(t_k) (d_i(s) - d_{i+1}(s)) \\ &= \sum_{i=0}^{j} d_0(t_k) \end{aligned}
+# A sum inside an exponent is the exponent's, and its limits are read round
+# the exponent's own line (2512.11732, eq. 3.2, came back as e^-\sum^{i:ξ=ℓ}).
+e^{-\sum_{i=1}^{n}\sum_{j=1}^{p}\sqrt{\frac{2}{\sigma_{j}}}\big|r_{ij}\big|}

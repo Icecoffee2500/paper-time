@@ -15,6 +15,7 @@ mkdir -p "$OUT"
 # name | engine | class options | preamble
 SETUPS=$(cat <<'LIST'
 cm|pdflatex|10pt|\usepackage{amssymb}\usepackage{mathrsfs}
+cm-bbm|pdflatex|10pt|\usepackage{amssymb}\usepackage{mathrsfs}\usepackage{bbm}
 lmodern|pdflatex|10pt|\usepackage{lmodern}\usepackage{amssymb}\usepackage{mathrsfs}
 times|pdflatex|10pt|\usepackage{times}\usepackage{amssymb}\usepackage{mathrsfs}
 times9|pdflatex|9pt|\usepackage{times}\usepackage{amssymb}\usepackage{mathrsfs}
@@ -55,6 +56,10 @@ while IFS='|' read -r name engine size preamble; do
     echo "\\documentclass[$size]{$class}"
     echo "\\usepackage{amsmath}"
     echo "$preamble"
+    # \mathbbm is bbm's, which has no outlines: pdfTeX draws it from bitmaps,
+    # as a Type 3 font with no name (the cm-bbm setup). Everywhere else it is
+    # the setup's own \mathbb.
+    echo "\\providecommand{\\mathbbm}{\\mathbb}"
     echo "\\usepackage[paperwidth=6.5in,paperheight=3in,margin=0.4in]{geometry}"
     echo "\\pagestyle{empty}\\setlength{\\parindent}{0pt}"
     echo "\\begin{document}"

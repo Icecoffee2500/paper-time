@@ -4,15 +4,19 @@
  * Mac's own `PDFContentScanner` and `MathReader`
  * (`Scripts/mathreader-fixtures.sh`), and the port is given the same glyphs,
  * rules, line boxes and characters and has to say the same thing — piece for
- * piece, line for line. Six are pages of corpus papers; the rest are the
- * bench's (`Scripts/ultracopy-bench/`): one formula a page, set nineteen ways,
- * held here one setup at a time.
+ * piece, line for line. Twenty are pages of papers; the rest are the
+ * bench's (`Scripts/ultracopy-bench/`): one formula a page, set twenty ways,
+ * held here one setup at a time. Ultracopy's LaTeX is compared too, and it is
+ * laid out as the page is: a display on a line of its own, its rows a line
+ * each.
  */
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import zlib from 'node:zlib'
-import { latex, leftOutFormulas, pieces, structured, type PageInput, type PieceKind } from '../shared/mathReader/reader.js'
+import { latex, leftOutFormulas, pieces, spread, structured, type PageInput, type PieceKind } from '../shared/mathReader/reader.js'
+import { latex as glyphLatex } from '../shared/mathReader/texGlyphNames.js'
+import { holes, imageMask, PLAIN_HOLES } from '../main/mathScanner.js'
 import type { Glyph } from '../shared/mathReader/glyph.js'
 import { MathScanner } from '../main/mathScanner.js'
 
@@ -121,11 +125,42 @@ export async function mathReaderSuite(test: Test, suite: (name: string) => void)
     setups.set(one.source.bench, [...(setups.get(one.source.bench) ?? []), one])
   }
   for (const one of corpus) {
-    await test(`${one.name}: the same pieces, Markdown and one-line LaTeX`, () => compare(one))
+    await test(`${one.name}: the same pieces, Markdown and Ultracopy's LaTeX`, () => compare(one))
   }
   for (const [setup, pages] of setups) {
-    await test(`the bench set in ${setup}, ${pages.length} pages: the same pieces, Markdown and one-line LaTeX`, () => every(pages, compare))
+    await test(`the bench set in ${setup}, ${pages.length} pages: the same pieces, Markdown and Ultracopy's LaTeX`, () => every(pages, compare))
   }
+
+  await test('a display of several rows is written a row a line; one row stays on one line', () => {
+    assert.equal(spread('$$a=b$$'), '$$a=b$$')
+    assert.equal(spread('$$\\begin{aligned} &a=b, \\\\ &c=d. \\end{aligned}$$'),
+      '$$\\begin{aligned}\n&a=b,\\\\\n&c=d.\n\\end{aligned}$$')
+    assert.equal(spread('\\begin{equation} \\begin{aligned} &u=v, \\\\ &w=t. \\end{aligned}\\tag{1} \\end{equation}'),
+      '\\begin{equation}\n\\begin{aligned}\n&u=v,\\\\\n&w=t.\n\\end{aligned}\\tag{1}\n\\end{equation}')
+    // A system of cases inside a row keeps its rows in that row.
+    assert.equal(spread('$$f=\\begin{cases} 1 & x \\\\ 0 & y \\end{cases}$$'), '$$f=\\begin{cases} 1 & x \\\\ 0 & y \\end{cases}$$')
+  })
+
+  await test('a bitmap letter with a hollow stem is double-struck; a plain one is not', () => {
+    // pdfTeX's picture of a glyph: an unfiltered image mask, one bit a pixel.
+    const picture = (rows: string[]) => {
+      const width = rows[0].length
+      const rowBytes = Math.ceil(width / 8)
+      const bits = new Uint8Array(rowBytes * rows.length)
+      rows.forEach((row, y) => [...row].forEach((pixel, x) => {
+        if (pixel === '#') bits[y * rowBytes + (x >> 3)] |= 0x80 >> (x & 7)
+      }))
+      const head = Buffer.from(`q ${width} 0 0 ${rows.length} 0 0 cm\nBI\n/W ${width}\n/H ${rows.length}\n/IM true\n/BPC 1\n/D [1 0]\nID `, 'latin1')
+      return new Uint8Array([...head, ...bits, ...Buffer.from('\nEI\nQ\n', 'latin1')])
+    }
+    const plainI = imageMask(picture(['##########', '...####...', '...####...', '...####...', '...####...', '...####...', '##########']))!
+    const hollowI = imageMask(picture(['##########', '..#....#..', '..#....#..', '..#....#..', '..#....#..', '..#....#..', '##########']))!
+    assert.equal(holes(plainI), PLAIN_HOLES.get(0x49))
+    assert.ok(holes(hollowI) > PLAIN_HOLES.get(0x49)!)
+    // A double-struck font's letters and digits both take \mathbb.
+    assert.equal(glyphLatex('a80', 80, 'Type3+BBM', null), '\\mathbb{P}')
+    assert.equal(glyphLatex('a49', 49, 'Type3+BBM', null), '\\mathbb{1}')
+  })
 
   // The scanner, against the Mac's reading of the same bytes — only where the
   // PDFs are on this machine (they never enter the repository): the corpus
