@@ -297,6 +297,60 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.9.18",
+            date: Text2("2026년 10월", "October 2026"),
+            note: Text2(
+                "노트가 Notion처럼 움직여요. 글머리표가 글을 쓰는 줄에서도 그대로 있고, ⌘B·⌘I로 굵게·기울임을 넣고, 고른 글 위에 괄호를 치면 감싸요. 노트를 PDF로 내보내요. Ultracopy는 벤치의 수식 6,060개를 모두 맞혀요.",
+                "Notes edit the way Notion's do: a bullet stays put on the line you are typing, ⌘B and ⌘I set bold and italic, and a bracket typed over a selection wraps it. A note exports as a PDF. Ultracopy reads all 6,060 formulas on its bench."
+            ),
+            added: [
+                Entry(
+                    Text2("PDF로 내보내기", "Export as PDF"),
+                    Text2(
+                        "노트의 ⋯ 메뉴에서 PDF로 내보내요. 제목, 글머리표, 인용, 수식, 표가 편집기에서 보이는 대로 A4 쪽에 실리고, 쪽마다 번호가 붙어요.",
+                        "The note's ⋯ menu exports it as a PDF: headings, bullets, quotations, formulas and tables as the editor shows them, on A4 pages with page numbers."
+                    )
+                ),
+                Entry(
+                    Text2("Notion처럼 쓰는 노트", "Notes That Edit Like Notion"),
+                    Text2(
+                        "글머리표가 글을 쓰는 줄에서도 그대로 보여요. 전에는 캐럿이 오면 «- »로 돌아갔어요. 안쪽 목록은 •, ◦, ▪와 1., a., i.로 깊이를 보여요. 빈 항목에서 Enter를 치면 한 단계 바깥으로 나오고, 항목 첫머리에서 Backspace를 치면 글로 돌아가요. «[] »를 치면 할 일이 돼요.",
+                        "A bullet stays a bullet on the line you are typing; it used to turn back into “- ” when the caret arrived. Nested lists show their depth with •, ◦, ▪ and 1., a., i. Return on an empty item steps out a level, Backspace at the start of an item turns it back into text, and “[] ” makes a to-do."
+                    )
+                ),
+                Entry(
+                    Text2("⌘B, ⌘I, ⌘E", "⌘B, ⌘I, ⌘E"),
+                    Text2(
+                        "고른 글을 굵게, 기울임, 코드로 바꿔요. 한 번 더 누르면 돌아와요. 고른 글 위에 (, [, \", *, $ 같은 글자를 치면 그 글자로 감싸요.",
+                        "Set the selection bold, italic or as code, and press again to take it off. Type (, [, \", * or $ over a selection to wrap it."
+                    )
+                ),
+            ],
+            fixed: [
+                Entry(
+                    Text2("모든 글꼴의 지수 속 ∑", "Sums in Exponents, in Every Font"),
+                    Text2(
+                        "STIX, Fourier, Palatino, Libertine, 9pt Times로 조판한 논문에서도 e의 지수 속 ∑와 \\big|를 지수 안에 남겨요. 전에는 지수가 \\big| 앞에서 끝났어요. 수식 162개를 글꼴 스무 가지로 조판한 벤치 6,060개를 모두 맞혀요.",
+                        "In papers set in STIX, Fourier, Palatino, Libertine and 9-point Times too, a ∑ or \\big| inside an exponent stays in the exponent. The exponent used to end before the \\big|. Ultracopy now reads all 6,060 readings on its bench of 162 formulas in twenty typesettings."
+                    )
+                ),
+                Entry(
+                    Text2("분수의 분모", "Denominators"),
+                    Text2(
+                        "분수 바로 뒤 ∑의 넓은 첨자가 분모로 들어가지 않아요. 전에는 1/N_t가 1/N_{tτ}로 나왔어요. 밑줄 괄호(\\underbrace)의 가로줄을 분수 막대로 읽지 않아요.",
+                        "A wide limit under the ∑ after a fraction no longer gets into the denominator; 1/N_t used to come back as 1/N_{tτ}. The rule of an \\underbrace is no longer read as a fraction bar."
+                    )
+                ),
+                Entry(
+                    Text2("그림과 캡션", "Figures and Captions"),
+                    Text2(
+                        "그림 속 글자가 캡션 줄에 섞여 들어오지 않아요. 전에는 «tion»과 «I(Z;X)»가 한 글자씩 번갈아 나왔어요. 넓은 \\widehat은 그 아래 글자를 모두 덮어요. 읽지 못한 글자가 빈 첨자 ^{}로 나오지 않아요.",
+                        "Words from a figure no longer get mixed into a caption's line; “tion” and “I(Z;X)” used to come out letter by letter. A wide \\widehat covers all the letters under it, and a glyph Paper Time cannot read no longer comes back as an empty ^{}."
+                    )
+                ),
+            ]
+        ),
+        Release(
             version: "0.9.17",
             date: Text2("2026년 9월", "September 2026"),
             note: Text2(
