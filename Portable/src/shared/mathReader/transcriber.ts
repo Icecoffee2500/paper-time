@@ -1090,13 +1090,23 @@ function endsInCommand(text: string): boolean {
  *  and whatever is over or under a fraction bar left out of the vote. */
 function baselineOf(glyphs: Glyph[], bodySize: number, bars: Bar[]): number {
   const barred = new Set(bars.flatMap((bar) => [...bar.over, ...bar.under]))
+  // A bar built up out of several of one glyph stands no piece on the line
+  // (the \big| of four "bar.x" pieces in a display).
+  const stackedBar = (glyph: Glyph) => {
+    const token = barToken(glyph)
+    if (token === null) return false
+    return glyphs.some((other) => (other.x !== glyph.x || other.y !== glyph.y) && barToken(other) === token
+      && Math.abs(other.x - glyph.x) < glyph.size * 0.2 && Math.abs(other.y - glyph.y) < glyph.size * 0.8)
+  }
   const voters = ascending(indices(glyphs.length).filter((index) => {
     const glyph = glyphs[index]
-    // Nor a bracket or a bar: set to the height of what it holds, it stands
-    // where that is tallest, not on the line — the two OpenType | glyphs
-    // stacked for the \big| round r_{ij} in an exponent outvoted the r.
+    // Nor a bracket or a bar set larger than the line: set to the height of
+    // what it holds, it stands where that is tallest — the two OpenType |
+    // glyphs stacked for the \big| round r_{ij} in an exponent outvoted the
+    // r. One at the line's size stands on the line, and votes: the "[" and
+    // "]" of a sub-subscript held its baseline against the scripts under it.
     return glyph.size >= bodySize * 0.92 && !extension(glyph) && !isBigOperator(glyph)
-      && !isRadical(glyph) && !isDelimiter(glyph) && !barred.has(index)
+      && !isRadical(glyph) && !(isDelimiter(glyph) && (glyph.size > bodySize * 1.1 || stackedBar(glyph))) && !barred.has(index)
   }).map((index) => glyphs[index].y))
   if (voters.length > 0) return voters[Math.floor(voters.length / 2)]
   if (bars.length > 0) return midY(bars[0].rule.rect) - bodySize * 0.25
@@ -1543,7 +1553,7 @@ function fractionBars(rules: Rule[], glyphs: Glyph[]): Bar[] {
   const bars: Bar[] = []
   const owned = new Set<number>()
   for (const rule of sortedBy(rules, (a, b) => a.rect.width > b.rect.width)) {
-    if (!(rule.rect.width > 1 && rule.rect.height < rule.rect.width && !isVinculumOf(rule, glyphs))) continue
+    if (!(rule.rect.width > 1 && rule.rect.height < rule.rect.width && !isVinculumOf(rule, glyphs) && !isBraceFill(rule, glyphs))) continue
     let inside = indices(glyphs.length).filter((at) => !owned.has(at) && spans(rule, glyphs[at]))
     const over = inside.filter((at) => glyphs[at].y > midY(rule.rect))
     let under = inside.filter((at) => glyphs[at].y <= midY(rule.rect))
@@ -1581,6 +1591,21 @@ function fractionBars(rules: Rule[], glyphs: Glyph[]): Bar[] {
     for (const at of inside) owned.add(at)
   }
   return bars
+}
+
+/** Whether a rule is the fill of an \underbrace or \overbrace: TeX draws the
+ *  brace as its tips and a rule between them (\downbracefill), and the rule
+ *  has the formula over it and the brace's label under — everything a
+ *  fraction bar has, and the formula came back divided by its own label. */
+function isBraceFill(rule: Rule, glyphs: Glyph[]): boolean {
+  const tips = glyphs.filter((one) => one.glyphName?.startsWith('bracehtip') === true)
+  if (tips.length === 0) return false
+  const slack = Math.max(2, rule.rect.height * 4)
+  return tips.some((tip) => {
+    const t = rectOf(tip)
+    return minY(t) < maxY(rule.rect) + slack && maxY(t) > minY(rule.rect) - slack
+      && (Math.abs(maxX(t) - minX(rule.rect)) < slack || Math.abs(minX(t) - maxX(rule.rect)) < slack)
+  })
 }
 
 /** Whether a rule is the roof of a radical: it starts where a radical sign

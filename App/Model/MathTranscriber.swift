@@ -1173,14 +1173,28 @@ enum MathTranscriber {
     /// else in it is on the maths axis, a quarter of an em under the bar.
     private static func baselineOf(_ glyphs: [Glyph], bodySize: CGFloat, bars: [Bar]) -> CGFloat {
         let barred = Set(bars.flatMap { $0.over + $0.under })
+        // A bar built up out of several of one glyph stands no piece on
+        // the line (the \big| of four "bar.x" pieces in a display).
+        func stackedBar(_ glyph: Glyph) -> Bool {
+            guard let token = barToken(glyph) else { return false }
+            return glyphs.contains { other in
+                other.origin != glyph.origin && barToken(other) == token
+                    && abs(other.origin.x - glyph.origin.x) < glyph.size * 0.2
+                    && abs(other.origin.y - glyph.origin.y) < glyph.size * 0.8
+            }
+        }
         let voters = glyphs.indices.filter { index in
             let glyph = glyphs[index]
-            // Nor a bracket or a bar: set to the height of what it holds,
-            // it stands where that is tallest, not on the line — the two
-            // OpenType | glyphs stacked for the \big| round r_{ij} in an
+            // Nor a bracket or a bar set larger than the line: set to the
+            // height of what it holds, it stands where that is tallest — the
+            // two OpenType | glyphs stacked for the \big| round r_{ij} in an
             // exponent outvoted the r, and the r became their superscript.
+            // One at the line's size stands on the line, and votes: the "["
+            // and "]" of a sub-subscript held its baseline against the
+            // scripts under it.
             return glyph.size >= bodySize * 0.92 && !glyph.isExtension && !isBigOperator(glyph)
-                && !isRadical(glyph) && !isDelimiter(glyph) && !barred.contains(index)
+                && !isRadical(glyph) && !(isDelimiter(glyph) && (glyph.size > bodySize * 1.1 || stackedBar(glyph)))
+                && !barred.contains(index)
         }.map { glyphs[$0].origin.y }.sorted()
         if !voters.isEmpty { return voters[voters.count / 2] }
         if let bar = bars.first { return bar.rule.rect.midY - bodySize * 0.25 }
@@ -1694,7 +1708,7 @@ enum MathTranscriber {
         var owned = Set<Int>()
         for rule in rules.sorted(by: { $0.rect.width > $1.rect.width })
         where rule.rect.width > 1 && rule.rect.height < rule.rect.width
-            && !isVinculum(rule, in: glyphs) {
+            && !isVinculum(rule, in: glyphs) && !isBraceFill(rule, in: glyphs) {
             var inside = glyphs.indices.filter { !owned.contains($0) && spans(rule, glyphs[$0]) }
             let over = inside.filter { glyphs[$0].origin.y > rule.rect.midY }
             var under = inside.filter { glyphs[$0].origin.y <= rule.rect.midY }
@@ -1737,6 +1751,21 @@ enum MathTranscriber {
             owned.formUnion(inside)
         }
         return bars
+    }
+
+    /// Whether a rule is the fill of an \underbrace or \overbrace: TeX
+    /// draws the brace as its tips and a rule between them (\downbracefill),
+    /// and the rule has the formula over it and the brace's label under —
+    /// everything a fraction bar has, and the formula came back divided by
+    /// its own label.
+    private static func isBraceFill(_ rule: Rule, in glyphs: [Glyph]) -> Bool {
+        let tips = glyphs.filter { $0.glyphName?.hasPrefix("bracehtip") == true }
+        guard !tips.isEmpty else { return false }
+        let slack = max(2, rule.rect.height * 4)
+        return tips.contains { tip in
+            tip.rect.minY < rule.rect.maxY + slack && tip.rect.maxY > rule.rect.minY - slack
+                && (abs(tip.rect.maxX - rule.rect.minX) < slack || abs(tip.rect.minX - rule.rect.maxX) < slack)
+        }
     }
 
     /// Whether a rule is the roof of a radical: it starts where a radical

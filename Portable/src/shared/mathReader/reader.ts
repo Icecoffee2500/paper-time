@@ -1226,7 +1226,12 @@ function barPieces(glyphs: Glyph[]): Set<string> {
   return found
 }
 
-function rowsOf(glyphs: Glyph[], rules: Rule[] = []): Glyph[][] {
+function rowsOf(given: Glyph[], rules: Rule[] = []): Glyph[][] {
+  // The tips of an \underbrace or \overbrace spell nothing and stand on no
+  // line: hung from the nearest line — the other column's, as it happened —
+  // they carried the brace's label there with them, and the label came back
+  // inside the formula as its subscripts.
+  const glyphs = given.filter((one) => !(one.glyphName?.startsWith('bracehtip') ?? false))
   if (glyphs.length === 0) return []
   const sizes = ascending(glyphs.map((one) => one.size))
   const body = sizes[Math.floor(sizes.length * 0.75)]
@@ -1398,13 +1403,19 @@ function rowsOf(glyphs: Glyph[], rules: Rule[] = []): Glyph[][] {
     const nearestRow = (y: number) => minBy(indices(laid.length), (a, b) => Math.abs(laid[a].baseline - y) < Math.abs(laid[b].baseline - y))!
     const places = new Set(stack.map(place))
     const votes = new Map<number, number>()
-    // A neighbour is near in height as well: the "end." of the sentence over
-    // a display stood right over the display's sum.
-    for (const glyph of glyphs) {
-      if (places.has(place(glyph)) || extension(glyph)) continue
+    // A neighbour is near in height as well — the "end." of the sentence over
+    // a display stood right over the display's sum — and only the nearest of
+    // them vote: the three letters under a \widetilde were outvoted by the
+    // line of prose under them.
+    const neighbours = glyphs.filter((glyph) => {
+      if (places.has(place(glyph)) || extension(glyph)) return false
       const g = rectOf(glyph)
-      if (!(maxX(g) > minX(ink) - body * 0.6 && minX(g) < maxX(ink) + body * 0.6
-        && Math.abs(glyph.y - midY(ink)) < body * 1.3)) continue
+      return maxX(g) > minX(ink) - body * 0.6 && minX(g) < maxX(ink) + body * 0.6
+        && Math.abs(glyph.y - midY(ink)) < body * 1.3
+    })
+    const closest = minOf(neighbours.map((glyph) => Math.abs(glyph.y - midY(ink)))) ?? 0
+    for (const glyph of neighbours) {
+      if (!(Math.abs(glyph.y - midY(ink)) <= closest + body * 0.3)) continue
       const row = nearestRow(glyph.y)
       votes.set(row, (votes.get(row) ?? 0) + 1)
     }
@@ -1427,9 +1438,20 @@ function rowsOf(glyphs: Glyph[], rules: Rule[] = []): Glyph[][] {
     }
     const letters = run.filter(lettered)
     if (letters.length < 2) return false
-    // (The line's own full-size words, not the scripts already hung from it:
-    // the second row of a \substack stands under the first.)
-    const own = onOwnLine(row, body).filter((one) => one.size >= body * 0.9 && lettered(one))
+    // The line's own words round the run — eight letters of the text face
+    // within two ems of it, which is a passage of prose and not a formula:
+    // the limits under \lim and \max, and a sub-subscript of a wide
+    // exponent, stand over the formula's own few letters and are its.
+    // Counted round the run, not along the row: before the columns are cut
+    // apart a row holds the other column's line too, and its prose let the
+    // limits under a \max be taken for a figure's. (Not the scripts already
+    // hung from the line: the second row of a \substack stands under the
+    // first.)
+    const span = extent(run)
+    const own = onOwnLine(row, body).filter((one) => one.size >= body * 0.9 && lettered(one) && !isMathFont(one)
+      && chars(spell(one)).every((c) => isLetter(c))
+      && maxX(rectOf(one)) > minX(span) - body * 2 && minX(rectOf(one)) < maxX(span) + body * 2)
+    if (own.length < 8) return false
     const over = letters.filter((glyph) => {
       const g = rectOf(glyph)
       return own.some((other) => {

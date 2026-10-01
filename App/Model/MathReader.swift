@@ -1419,8 +1419,13 @@ enum MathReader {
     /// to a row of its own, which is what stops "z_k" from being read as a "z"
     /// on one line and a "k" on the next.
     private static func rows(
-        of glyphs: [PDFContentScanner.Glyph], rules: [PDFContentScanner.Rule] = []
+        of given: [PDFContentScanner.Glyph], rules: [PDFContentScanner.Rule] = []
     ) -> [[PDFContentScanner.Glyph]] {
+        // The tips of an \underbrace or \overbrace spell nothing and stand
+        // on no line: hung from the nearest line — the other column's, as
+        // it happened — they carried the brace's label there with them,
+        // and the label came back inside the formula as its subscripts.
+        let glyphs = given.filter { !($0.glyphName?.hasPrefix("bracehtip") ?? false) }
         guard !glyphs.isEmpty else { return [] }
         let sizes = glyphs.map(\.size).sorted()
         let body = sizes[Int(Double(sizes.count) * 0.75)]
@@ -1631,11 +1636,17 @@ enum MathReader {
             }
             let places = Set(stack.map(Place.init))
             var votes: [Int: Int] = [:]
-            // A neighbour is near in height as well: the "end." of the
-            // sentence over a display stood right over the display's sum.
-            for glyph in glyphs where !places.contains(Place(glyph)) && !glyph.isExtension
-                && glyph.rect.maxX > ink.minX - body * 0.6 && glyph.rect.minX < ink.maxX + body * 0.6
-                && abs(glyph.origin.y - ink.midY) < body * 1.3 {
+            // A neighbour is near in height as well — the "end." of the
+            // sentence over a display stood right over the display's sum —
+            // and only the nearest of them vote: the three letters under a
+            // \widetilde were outvoted by the line of prose under them.
+            let neighbours = glyphs.filter { glyph in
+                !places.contains(Place(glyph)) && !glyph.isExtension
+                    && glyph.rect.maxX > ink.minX - body * 0.6 && glyph.rect.minX < ink.maxX + body * 0.6
+                    && abs(glyph.origin.y - ink.midY) < body * 1.3
+            }
+            let closest = neighbours.map { abs($0.origin.y - ink.midY) }.min() ?? 0
+            for glyph in neighbours where abs(glyph.origin.y - ink.midY) <= closest + body * 0.3 {
                 votes[nearestRow(to: glyph.origin.y), default: 0] += 1
             }
             let most = votes.values.max() ?? 0
@@ -1661,10 +1672,23 @@ enum MathReader {
             }
             let letters = run.filter(lettered)
             guard letters.count >= 2 else { return false }
-            // (The line's own full-size words, not the scripts already
-            // hung from it: the second row of a \substack stands under
-            // the first.)
-            let own = onOwnLine(row, body: body).filter { $0.size >= body * 0.9 && lettered($0) }
+            // The line's own words round the run — eight letters of the
+            // text face within two ems of it, which is a passage of prose
+            // and not a formula: the limits under \lim and \max, and a
+            // sub-subscript of a wide exponent, stand over the formula's
+            // own few letters and are its. Counted round the run, not along
+            // the row: before the columns are cut apart a row holds the
+            // other column's line too, and its prose let the limits under
+            // a \max be taken for a figure's. (Not the scripts already
+            // hung from the line: the second row of a \substack stands
+            // under the first.)
+            let span = extent(of: run)
+            let own = onOwnLine(row, body: body).filter { one in
+                one.size >= body * 0.9 && lettered(one) && !MathTranscriber.isMathFont(one)
+                    && MathTranscriber.spelling(of: one).allSatisfy(\.isLetter)
+                    && one.rect.maxX > span.minX - body * 2 && one.rect.minX < span.maxX + body * 2
+            }
+            guard own.count >= 8 else { return false }
             let over = letters.filter { glyph in
                 own.contains { other in
                     min(other.rect.maxX, glyph.rect.maxX) - max(other.rect.minX, glyph.rect.minX)
