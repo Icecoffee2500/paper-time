@@ -68,8 +68,40 @@ export function isExtension(glyph: Glyph): boolean {
       && !name.endsWith('tp') && !name.endsWith('bt')) return false
     return true
   }
+  // pdfTeX's STIX Two draws its big operators and its sized radicals —
+  // "uni2211", "uni2211.s1", "uni221A.s2" — from their top, as the extension
+  // fonts do: a text-size ∑ in a sentence is placed most of an em over the
+  // line. Its brackets and accents at their sizes are drawn from over their
+  // ink too, but how far over nobody can tell from the name, so those are
+  // placed by the reader. The OpenType STIX Two Math stands its glyphs on
+  // the line.
+  if (family === 'STIXTWOMATH' && name !== null) {
+    const stem = stemOf(name)
+    if (STIX_OPERATORS.has(stem)) return true
+    if (stem === 'uni221A' && sizeVariant(name) !== null) return true
+  }
   if (name === null || !name.startsWith('radical') || name.startsWith('radicalvertex')) return false
   return SYMBOL_FAMILIES.some((prefix) => family.startsWith(prefix))
+}
+
+/** STIX's big operators, by the code point in their names. */
+const STIX_OPERATORS = new Set([
+  'uni2211', 'uni220F', 'uni2210', 'uni222B', 'uni222C', 'uni222D', 'uni222E', 'uni222F',
+  'uni22C0', 'uni22C1', 'uni22C2', 'uni22C3', 'uni2A00', 'uni2A01', 'uni2A02', 'uni2A04', 'uni2A06',
+])
+
+function stemOf(name: string): string {
+  const dot = name.indexOf('.')
+  return dot >= 0 ? name.slice(0, dot) : name
+}
+
+/** The size a STIX variant name asks for: 1 for ".s1", 2 for ".s2". */
+export function sizeVariant(name: string): number | null {
+  const dot = name.lastIndexOf('.')
+  if (dot < 0) return null
+  const variant = name.slice(dot + 1)
+  if (!/^s\d+$/.test(variant)) return null
+  return Number(variant.slice(1))
 }
 
 /** How far below its reference point an extension glyph reaches, in ems: the
@@ -80,6 +112,14 @@ function reach(name: string | null): number {
   // newtx names its display-size signs by their code point with ".dsp"
   // after it — "uni222B.dsp" is the displayed ∫.
   if (name.endsWith('.dsp')) return 1.5
+  // STIX's sizes: ".s1" of a sign is its display size; a radical grows
+  // faster than a bracket.
+  const step = sizeVariant(name)
+  if (step !== null) {
+    const stem = stemOf(name)
+    if (STIX_OPERATORS.has(stem)) return 1.5
+    if (stem === 'uni221A') return [1.4, 2.3, 3.0, 3.8][Math.min(step, 4) - 1] + Math.max(step - 4, 0) * 0.8
+  }
   // "summationdisplay.1" is the display sum from a second font, and newtx
   // names its pieces "parenlefttpA".
   const dot = name.indexOf('.')

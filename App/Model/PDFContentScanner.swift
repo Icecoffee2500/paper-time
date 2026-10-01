@@ -84,9 +84,43 @@ final class PDFContentScanner {
                    !name.hasSuffix("tp"), !name.hasSuffix("bt") { return false }
                 return true
             }
+            // pdfTeX's STIX Two draws its big operators and its sized
+            // variants — "uni2211", "uni2211.s1", "uni221A.s2",
+            // "bracketleft.s8" — from their top, as the extension fonts
+            // do: a text-size ∑ in a sentence is placed most of an em over
+            // the line. The OpenType STIX Two Math ("STIXTwoMath-Regular")
+            // stands its glyphs on the line.
+            // Its brackets and accents at their sizes ("parenleft.s3",
+            // the wide hat) are drawn from a point over their ink too, but
+            // how far over nobody can tell from the name, so those are
+            // placed by the reader (`rows`' `floats`); a radical's reach is
+            // its rule's.
+            if family == "STIXTWOMATH", let name = glyphName {
+                let stem = Self.stem(of: name)
+                if Self.stixOperators.contains(stem) { return true }
+                if stem == "uni221A", Self.sizeVariant(of: name) != nil { return true }
+            }
             guard let name = glyphName, name.hasPrefix("radical"), !name.hasPrefix("radicalvertex")
             else { return false }
             return Self.symbolFamilies.contains { family.hasPrefix($0) }
+        }
+
+        /// STIX's big operators, by the code point in their names.
+        private static let stixOperators: Set<String> = [
+            "uni2211", "uni220F", "uni2210", "uni222B", "uni222C", "uni222D", "uni222E", "uni222F",
+            "uni22C0", "uni22C1", "uni22C2", "uni22C3", "uni2A00", "uni2A01", "uni2A02", "uni2A04", "uni2A06",
+        ]
+
+        private static func stem(of name: String) -> String {
+            name.firstIndex(of: ".").map { String(name[..<$0]) } ?? name
+        }
+
+        /// The size a STIX variant name asks for: 1 for ".s1", 2 for ".s2".
+        static func sizeVariant(of name: String) -> Int? {
+            guard let dot = name.lastIndex(of: ".") else { return nil }
+            let variant = name[name.index(after: dot)...]
+            guard variant.hasPrefix("s"), variant.count > 1, variant.dropFirst().allSatisfy(\.isNumber) else { return nil }
+            return Int(variant.dropFirst())
         }
 
         private static let symbolFamilies = [
@@ -117,6 +151,13 @@ final class PDFContentScanner {
             // newtx names its display-size signs by their code point with
             // ".dsp" after it — "uni222B.dsp" is the displayed ∫.
             if name.hasSuffix(".dsp") { return 1.5 }
+            // STIX's sizes: ".s1" of a sign is its display size, of a
+            // bracket its \big; a radical grows faster than a bracket.
+            if let step = sizeVariant(of: name) {
+                let stem = stem(of: name)
+                if stixOperators.contains(stem) { return 1.5 }
+                if stem == "uni221A" { return [1.4, 2.3, 3.0, 3.8][min(step, 4) - 1] + CGFloat(max(step - 4, 0)) * 0.8 }
+            }
             // "summationdisplay.1" is the display sum from a second font, and
             // newtx names its pieces "parenlefttpA".
             var glyphName = name.firstIndex(of: ".").map { String(name[..<$0]) } ?? name

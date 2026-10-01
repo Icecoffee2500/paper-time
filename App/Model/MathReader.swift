@@ -1419,8 +1419,13 @@ enum MathReader {
     /// to a row of its own, which is what stops "z_k" from being read as a "z"
     /// on one line and a "k" on the next.
     private static func rows(
-        of glyphs: [PDFContentScanner.Glyph], rules: [PDFContentScanner.Rule] = []
+        of given: [PDFContentScanner.Glyph], rules: [PDFContentScanner.Rule] = []
     ) -> [[PDFContentScanner.Glyph]] {
+        // The tips of an \underbrace or \overbrace spell nothing and stand
+        // on no line: hung from the nearest line — the other column's, as
+        // it happened — they carried the brace's label there with them,
+        // and the label came back inside the formula as its subscripts.
+        let glyphs = given.filter { !($0.glyphName?.hasPrefix("bracehtip") ?? false) }
         guard !glyphs.isEmpty else { return [] }
         let sizes = glyphs.map(\.size).sorted()
         let body = sizes[Int(Double(sizes.count) * 0.75)]
@@ -1453,8 +1458,36 @@ enum MathReader {
             .sorted(by: { $0.origin.y > $1.origin.y }) {
             if floats(glyph) || pieces.contains(Place(glyph)) { floating.append(glyph); continue }
             if MathTranscriber.isRadical(glyph) { radicals.append(glyph); continue }
+            // Two glyphs of one line never share their ink. One drawn over
+            // another at the same height is another layer of the page — the
+            // words of a figure standing level with a line of its caption —
+            // and the line read with it was "tion" interleaved with
+            // "I(Z;X)". A glyph printed twice for bold shares its own ink.
+            func layered(_ row: [PDFContentScanner.Glyph]) -> Bool {
+                // Only letters and digits say so: the pieces of a long
+                // arrow, the stroke through a relation, a mark over its
+                // letter all lie over one another on one line.
+                func lettered(_ one: PDFContentScanner.Glyph) -> Bool {
+                    // (A modifier letter is a letter to Unicode: the hat
+                    // over ŷ is U+02C6, and is no letter here.)
+                    guard !MathTranscriber.isAccent(one) else { return false }
+                    let spelled = MathTranscriber.spelling(of: one)
+                    return !spelled.isEmpty && spelled.allSatisfy { $0.isLetter || $0.isNumber }
+                }
+                guard glyph.width > 0.05, lettered(glyph) else { return false }
+                let spelled = MathTranscriber.spelling(of: glyph)
+                return row.contains { other in
+                    guard other.width > 0.05, lettered(other) else { return false }
+                    let overlap = min(other.rect.maxX, glyph.rect.maxX) - max(other.rect.minX, glyph.rect.minX)
+                    guard overlap > min(other.width, glyph.width) * 0.5 else { return false }
+                    let said = MathTranscriber.spelling(of: other)
+                    // The same glyph again, a hair off: printed twice.
+                    if said == spelled, abs(other.origin.x - glyph.origin.x) < glyph.size * 0.3 { return false }
+                    return true
+                }
+            }
             if let index = rows.firstIndex(where: {
-                abs($0.baseline - glyph.origin.y) < body * 0.6
+                abs($0.baseline - glyph.origin.y) < body * 0.6 && !layered($0.glyphs)
             }) {
                 rows[index].glyphs.append(glyph)
             } else {
@@ -1491,6 +1524,19 @@ enum MathReader {
         // the P to be beside it until the ∏ was, and made a row of its own
         // with its limits' baseline — too high for its lower limits to join.
         var pending = floating
+        // A piece of a bar built tall is placed where the whole bar stands:
+        // from its lowest piece. Measured each from its own point, the top
+        // pieces of a \big| lifted into an exponent stood a line and a half
+        // over the line and made a row of their own, and took the exponent's
+        // sum with them.
+        var feet: [Int: CGFloat] = [:]
+        for glyph in floating where pieces.contains(Place(glyph)) {
+            let column = Int((glyph.origin.x * 10).rounded())
+            feet[column] = min(feet[column] ?? glyph.origin.y, glyph.origin.y)
+        }
+        func foot(_ glyph: PDFContentScanner.Glyph) -> CGFloat {
+            pieces.contains(Place(glyph)) ? feet[Int((glyph.origin.x * 10).rounded())] ?? glyph.origin.y : glyph.origin.y
+        }
         var placedOne = true
         while placedOne {
             placedOne = false
@@ -1500,8 +1546,8 @@ enum MathReader {
                 let span = glyph.rect.insetBy(dx: -body * 0.9, dy: 0)
                 let nearest = rows.indices
                     .filter { beside(span, rows[$0].glyphs, body: body) }
-                    .min { abs(rows[$0].baseline - glyph.origin.y) < abs(rows[$1].baseline - glyph.origin.y) }
-                if let nearest, abs(rows[nearest].baseline - glyph.origin.y) < body * 1.3 {
+                    .min { abs(rows[$0].baseline - foot(glyph)) < abs(rows[$1].baseline - foot(glyph)) }
+                if let nearest, abs(rows[nearest].baseline - foot(glyph)) < body * 1.3 {
                     rows[nearest].glyphs.append(glyph)
                     pending.remove(at: at)
                     placedOne = true
@@ -1511,7 +1557,7 @@ enum MathReader {
             }
         }
         for glyph in pending {
-            if let index = rows.firstIndex(where: { abs($0.baseline - glyph.origin.y) < body * 0.6 }) {
+            if let index = rows.firstIndex(where: { abs($0.baseline - foot(glyph)) < body * 0.6 }) {
                 rows[index].glyphs.append(glyph)
             } else {
                 rows.append((glyph.origin.y, [glyph]))
@@ -1559,15 +1605,54 @@ enum MathReader {
                 progress = true
             }
         }
-        for glyph in waiting {
-            let ink = glyph.rect
-            if let nearest = rows.indices.min(by: {
-                abs(rows[$0].baseline - ink.midY) < abs(rows[$1].baseline - ink.midY)
+        // What is left goes where its neighbours go: a \big| lifted into an
+        // exponent is nearer the line of prose over the display than the
+        // display's own line, but nothing of that prose is anywhere near
+        // it, and the r_{ij} it stands against is the display's. The
+        // neighbours are asked whatever their size — the rows hold only the
+        // full-size glyphs yet, and a sum in an exponent has none of those
+        // beside it. And a bar built of pieces goes as one: measured each
+        // from its own middle, its top went to that prose and its foot
+        // stayed with the formula.
+        var stacks: [[PDFContentScanner.Glyph]] = []
+        for glyph in waiting.sorted(by: { $0.origin.y < $1.origin.y }) {
+            if let at = stacks.firstIndex(where: { stack in
+                stack.contains { other in
+                    abs(other.origin.x - glyph.origin.x) < glyph.size * 0.2
+                        && other.rect.maxY > glyph.rect.minY - glyph.size * 0.3
+                        && other.rect.minY < glyph.rect.maxY + glyph.size * 0.3
+                }
             }) {
-                rows[nearest].glyphs.append(glyph)
+                stacks[at].append(glyph)
             } else {
-                rows.append((ink.midY, [glyph]))
+                stacks.append([glyph])
             }
+        }
+        for stack in stacks {
+            let ink = extent(of: stack)
+            guard !rows.isEmpty else { rows.append((ink.midY, stack)); continue }
+            func nearestRow(to y: CGFloat) -> Int {
+                rows.indices.min { abs(rows[$0].baseline - y) < abs(rows[$1].baseline - y) }!
+            }
+            let places = Set(stack.map(Place.init))
+            var votes: [Int: Int] = [:]
+            // A neighbour is near in height as well — the "end." of the
+            // sentence over a display stood right over the display's sum —
+            // and only the nearest of them vote: the three letters under a
+            // \widetilde were outvoted by the line of prose under them.
+            let neighbours = glyphs.filter { glyph in
+                !places.contains(Place(glyph)) && !glyph.isExtension
+                    && glyph.rect.maxX > ink.minX - body * 0.6 && glyph.rect.minX < ink.maxX + body * 0.6
+                    && abs(glyph.origin.y - ink.midY) < body * 1.3
+            }
+            let closest = neighbours.map { abs($0.origin.y - ink.midY) }.min() ?? 0
+            for glyph in neighbours where abs(glyph.origin.y - ink.midY) <= closest + body * 0.3 {
+                votes[nearestRow(to: glyph.origin.y), default: 0] += 1
+            }
+            let most = votes.values.max() ?? 0
+            let chosen = votes.filter { $0.value == most }.keys
+                .min { abs(rows[$0].baseline - ink.midY) < abs(rows[$1].baseline - ink.midY) }
+            rows[chosen ?? nearestRow(to: ink.midY)].glyphs += stack
         }
 
         // Small glyphs hang from the row they are beside, as runs: a script
@@ -1575,6 +1660,43 @@ enum MathReader {
         // height alone is not enough — the upper limit of a displayed sum is
         // closer to the line of prose above the display than to the sum, and
         // took itself off to that sentence, a page-width away.
+        // Nor does a script stand over the ink of its line's own words:
+        // a run of letters that does is another layer — the labels of
+        // a figure, level with a line of its caption, came back as the
+        // caption's subscripts.
+    func layeredRun(_ run: [PDFContentScanner.Glyph], _ row: (baseline: CGFloat, glyphs: [PDFContentScanner.Glyph])) -> Bool {
+            func lettered(_ one: PDFContentScanner.Glyph) -> Bool {
+                guard one.width > 0.05, !MathTranscriber.isAccent(one) else { return false }
+                let spelled = MathTranscriber.spelling(of: one)
+                return !spelled.isEmpty && spelled.allSatisfy { $0.isLetter || $0.isNumber }
+            }
+            let letters = run.filter(lettered)
+            guard letters.count >= 2 else { return false }
+            // The line's own words round the run — eight letters of the
+            // text face within two ems of it, which is a passage of prose
+            // and not a formula: the limits under \lim and \max, and a
+            // sub-subscript of a wide exponent, stand over the formula's
+            // own few letters and are its. Counted round the run, not along
+            // the row: before the columns are cut apart a row holds the
+            // other column's line too, and its prose let the limits under
+            // a \max be taken for a figure's. (Not the scripts already
+            // hung from the line: the second row of a \substack stands
+            // under the first.)
+            let span = extent(of: run)
+            let own = onOwnLine(row, body: body).filter { one in
+                one.size >= body * 0.9 && lettered(one) && !MathTranscriber.isMathFont(one)
+                    && MathTranscriber.spelling(of: one).allSatisfy(\.isLetter)
+                    && one.rect.maxX > span.minX - body * 2 && one.rect.minX < span.maxX + body * 2
+            }
+            guard own.count >= 8 else { return false }
+            let over = letters.filter { glyph in
+                own.contains { other in
+                    min(other.rect.maxX, glyph.rect.maxX) - max(other.rect.minX, glyph.rect.minX)
+                        > min(other.width, glyph.width) * 0.5
+                }
+            }
+            return over.count * 2 > letters.count
+        }
         var unplaced: [(run: [PDFContentScanner.Glyph], level: CGFloat)] = []
         for run in smallRuns(glyphs.filter { $0.size < body * 0.9 && !$0.isExtension }, body: body) {
             let largest = run.map(\.size).max() ?? body
@@ -1582,11 +1704,23 @@ enum MathReader {
             let level = levels[levels.count / 2]
             let span = extent(of: run)
             let nearest = rows.indices
-                .filter { beside(span, rows[$0].glyphs, body: body) }
+                .filter { beside(span, rows[$0].glyphs, body: body) && !layeredRun(run, rows[$0]) }
                 .min { abs(rows[$0].baseline - level) < abs(rows[$1].baseline - level) }
             // Close enough to hang from this row. A glyph further off than
             // this came from the line above or below, clipped by the band.
-            if let nearest, abs(rows[nearest].baseline - level) < body * 0.85 {
+            // An exponent with a sum in it is lifted higher — TeX raises it
+            // clear of the limits hanging under the sum — so a run that
+            // starts or ends against a sign that grows, or a tall bracket,
+            // may stand a whole line up.
+            func againstASign(_ row: [PDFContentScanner.Glyph]) -> Bool {
+                row.contains { glyph in
+                    guard MathTranscriber.isDelimiter(glyph) || MathTranscriber.isBigOperator(glyph) || glyph.isExtension
+                    else { return false }
+                    return (span.minX >= glyph.rect.maxX - 1 && span.minX - glyph.rect.maxX < body * 0.5)
+                        || (span.maxX <= glyph.rect.minX + 1 && glyph.rect.minX - span.maxX < body * 0.5)
+                }
+            }
+            if let nearest, abs(rows[nearest].baseline - level) < body * (againstASign(rows[nearest].glyphs) ? 1.0 : 0.85) {
                 rows[nearest].glyphs += run
             } else {
                 unplaced.append((run, level))
@@ -1612,13 +1746,16 @@ enum MathReader {
             }
             let stacked = rows.indices.filter { row in
                 if let sign, row != sign { return false }
+                if layeredRun(run, rows[row]) { return false }
                 let distance = abs(rows[row].baseline - level)
                 return (distance < body * 1.05 && rows[row].glyphs.contains {
                     $0.size < body * 0.9 && $0.rect.maxX > span.minX && $0.rect.minX < span.maxX
                 })
                     // The script of a tall bracket or a sign that grows,
-                    // lifted as high as they are tall.
-                    || (distance < body * 1.3 && rows[row].glyphs.contains { glyph in
+                    // lifted as high as they are tall — STIX's sum lifts
+                    // its upper limit a third of an em higher than Computer
+                    // Modern's.
+                    || (distance < body * 1.5 && rows[row].glyphs.contains { glyph in
                         (MathTranscriber.isDelimiter(glyph) || MathTranscriber.isBigOperator(glyph)
                             || glyph.isExtension)
                             && span.minX >= glyph.rect.maxX - 1 && span.minX - glyph.rect.maxX < body * 0.5
@@ -1657,8 +1794,13 @@ enum MathReader {
 
         let laid = folded(rows.sorted { $0.baseline > $1.baseline }, body: body)
             .map { $0.glyphs.sorted { $0.origin.x < $1.origin.x } }
-        return gatheringBrackets(split(laid, atGuttersOf: glyphs))
+        let result = gatheringBrackets(split(laid, atGuttersOf: glyphs))
+        rowsObserver?(result)
+        return result
     }
+
+    /// Told of the rows a page's glyphs were laid in — for a probe. Nil in the app.
+    nonisolated(unsafe) static var rowsObserver: (([[PDFContentScanner.Glyph]]) -> Void)?
 
     /// A bracket built from pieces belongs on its formula's line.
     ///
@@ -2568,6 +2710,16 @@ enum MathReader {
             || (MathTranscriber.variablesInTextItalic
                 && ((MathTranscriber.isItalicLetter(first) && isFormulaMark(second))
                     || (isFormulaMark(first) && MathTranscriber.isItalicLetter(second))))
+        // Against a glyph that grows — a radical, the pieces of a tall bar —
+        // TeX sets a thick space and the glyph's own side bearing, which
+        // together pass for a narrow word space: a \big| after a root, and
+        // a root after a sum's limits, began a new word, and the exponent
+        // they were in ended there.
+        // (Not against a word of the sentence: mathptmx's ∫ is a point
+        // smaller than the line, and "Inline:" is still a word before it.)
+        let prose = (!MathTranscriber.isMathFont(first) && isProseMark(first))
+            || (!MathTranscriber.isMathFont(second) && isProseMark(second))
+        if formula, !prose, first.isExtension || second.isExtension { return width > body * 0.32 }
         return width > body * (formula ? 0.22 : 0.09)
     }
 
