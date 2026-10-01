@@ -767,7 +767,7 @@ function transcribe(glyphs: Glyph[], rules: Rule[], context: Context | null = nu
     // the F of F^i_{\hat{W}} came back as F\hat{W}i.
     const mark = accented.get(index)
     if (mark !== undefined && (!(base !== null && mark.covered.every((at) => glyphs[at].size < base!.size * 0.92))
-      || scripts(index, glyphs, base?.baseline ?? baseline, base?.size ?? body, line, consumed, stepped) === null)) {
+      || scripts(index, glyphs, base?.baseline ?? baseline, base?.size ?? body, line, consumed, stepped, bars) === null)) {
       for (const member of mark.covered) consumed.add(member)
       let inside = mark.covered.length === 1
         ? mathToken(glyphs[mark.covered[0]])
@@ -789,7 +789,7 @@ function transcribe(glyphs: Glyph[], rules: Rule[], context: Context | null = nu
     // before it — "small" against that, not the whole formula. Asked before
     // anything is read as a bracket: the "(" of x^{(i)} is a superscript first.
     if (base !== null && tokens.length > 0) {
-      const script = scripts(index, glyphs, base.baseline, base.size, line, consumed, stepped)
+      const script = scripts(index, glyphs, base.baseline, base.size, line, consumed, stepped, bars)
       if (script !== null) {
         // An accent on a letter of the script is the script's: its mark, read
         // already, goes where the letter went.
@@ -1182,7 +1182,7 @@ function inkOfStack(index: number, glyphs: Glyph[]): Rect {
   return box
 }
 
-function scripts(start: number, glyphs: Glyph[], baseline: number, body: number, line: number, consumed: Set<number>, stepped: Set<number> = new Set()): { end: number; raised: Glyph[]; lowered: Glyph[] } | null {
+function scripts(start: number, glyphs: Glyph[], baseline: number, body: number, line: number, consumed: Set<number>, stepped: Set<number> = new Set(), bars: Bar[] = []): { end: number; raised: Glyph[]; lowered: Glyph[] } | null {
   if (start <= 0) return null
   let end = start
   const raised: Glyph[] = []
@@ -1218,7 +1218,19 @@ function scripts(start: number, glyphs: Glyph[], baseline: number, body: number,
       break
     }
     const glyph = glyphs[end]
-    const offset = glyph.y - baseline
+    let offset = glyph.y - baseline
+    // A fraction's numerator and denominator go with their bar. One set on
+    // the line — its axis a quarter of an em over the baseline, the numerator
+    // above and the denominator below — is the line's and ends the run: read
+    // glyph by glyph, the ½ after ∇_{ω^t} went up as the 1 and down as the 2,
+    // and came back as ∇^{1}_{ω^t 2}. One lifted or dropped whole is the
+    // script's, on the bar's side whichever side each of its glyphs stands.
+    const bar = bars.find((one) => one.over.includes(end) || one.under.includes(end))
+    if (bar !== undefined) {
+      const level = midY(bar.rule.rect) - baseline
+      if (!(level > body * 0.42 || level < body * 0.1)) break
+      offset = level - body * 0.25
+    }
     const small = glyph.size < body * 0.92
     const asSmall = smallest && glyph.size <= body * 1.02 && Math.abs(offset) >= body * 0.2
     // A sign drawn from an extension font is not a script as such: the brace

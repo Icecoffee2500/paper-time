@@ -829,7 +829,8 @@ enum MathTranscriber {
             if let mark = accented[index],
                !(base.map { base in mark.covered.allSatisfy { glyphs[$0].size < base.size * 0.92 } } ?? false)
                    || scripts(from: index, in: glyphs, baseline: base?.baseline ?? baseline,
-                              body: base?.size ?? body, line: line, consumed: consumed, stepping: stepped) == nil {
+                              body: base?.size ?? body, line: line, consumed: consumed, stepping: stepped,
+                              bars: bars) == nil {
                 consumed.formUnion(mark.covered)
                 var inside = mark.covered.count == 1
                     ? mathToken(for: glyphs[mark.covered[0]])
@@ -854,7 +855,8 @@ enum MathTranscriber {
             // "x^{(i)}" is a superscript first and a bracket second.
             if let base, !tokens.isEmpty,
                var script = scripts(from: index, in: glyphs, baseline: base.baseline,
-                                    body: base.size, line: line, consumed: consumed, stepping: stepped) {
+                                    body: base.size, line: line, consumed: consumed, stepping: stepped,
+                                    bars: bars) {
                 // An accent on a letter of the script is the script's: its
                 // mark, read already, goes where the letter went.
                 for accent in accented.values where !accent.covered.isEmpty
@@ -1243,7 +1245,7 @@ enum MathTranscriber {
     /// in reading order and have to be told apart by height instead.
     private static func scripts(
         from start: Int, in glyphs: [Glyph], baseline: CGFloat, body: CGFloat, line: CGFloat,
-        consumed: Set<Int>, stepping stepped: Set<Int> = []
+        consumed: Set<Int>, stepping stepped: Set<Int> = [], bars: [Bar] = []
     ) -> (end: Int, raised: [Glyph], lowered: [Glyph])? {
         guard start > 0 else { return nil }
         var end = start
@@ -1283,7 +1285,19 @@ enum MathTranscriber {
                 break
             }
             let glyph = glyphs[end]
-            let offset = glyph.origin.y - baseline
+            var offset = glyph.origin.y - baseline
+            // A fraction's numerator and denominator go with their bar. One
+            // set on the line — its axis a quarter of an em over the
+            // baseline, the numerator above and the denominator below — is
+            // the line's and ends the run: read glyph by glyph, the ½ after
+            // ∇_{ω^t} went up as the 1 and down as the 2, and came back as
+            // ∇^{1}_{ω^t 2}. One lifted or dropped whole is the script's,
+            // on the bar's side whichever side each of its glyphs stands.
+            if let bar = bars.first(where: { $0.over.contains(end) || $0.under.contains(end) }) {
+                let level = bar.rule.rect.midY - baseline
+                guard level > body * 0.42 || level < body * 0.1 else { break }
+                offset = level - body * 0.25
+            }
             // Base level is always full size, so anything still small is still
             // part of the script. Only the first glyph has to be visibly off
             // the line: a script's own script — the "(l)" of "q_{\phi(z^{(l)})}"

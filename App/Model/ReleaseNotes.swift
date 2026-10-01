@@ -297,6 +297,24 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.9.19",
+            date: Text2("2026년 10월", "October 2026"),
+            note: Text2(
+                "Ultracopy가 줄 위에 선 작은 분수를 그대로 읽어요.",
+                "Ultracopy reads a small fraction set on the line as the fraction it is."
+            ),
+            added: [],
+            fixed: [
+                Entry(
+                    Text2("줄 위의 분수", "Fractions on the Line"),
+                    Text2(
+                        "첨자가 달린 글자 바로 뒤에 선 ½ 같은 작은 분수를 분수로 읽어요. 전에는 분자가 위첨자, 분모가 아래첨자로 갈려 ∇^{1}_{ω 2}처럼 나왔어요.",
+                        "A small fraction such as ½ right after a letter with a subscript reads as a fraction. Its numerator used to go up as a superscript and its denominator down as a subscript — ∇^{1}_{ω 2}."
+                    )
+                ),
+            ]
+        ),
+        Release(
             version: "0.9.18",
             date: Text2("2026년 10월", "October 2026"),
             note: Text2(
