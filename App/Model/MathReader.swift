@@ -1792,7 +1792,7 @@ enum MathReader {
             }
         }
 
-        let laid = folded(rows.sorted { $0.baseline > $1.baseline }, body: body)
+        let laid = folded(rows.sorted { $0.baseline > $1.baseline }, body: body, rules: rules)
             .map { $0.glyphs.sorted { $0.origin.x < $1.origin.x } }
         let result = gatheringBrackets(split(laid, atGuttersOf: glyphs))
         rowsObserver?(result)
@@ -2050,7 +2050,8 @@ enum MathReader {
     /// no ink at those x positions — and the line above has ink there,
     /// because it is a line.
     private static func folded(
-        _ rows: [(baseline: CGFloat, glyphs: [PDFContentScanner.Glyph])], body: CGFloat
+        _ rows: [(baseline: CGFloat, glyphs: [PDFContentScanner.Glyph])], body: CGFloat,
+        rules: [PDFContentScanner.Rule] = []
     ) -> [(baseline: CGFloat, glyphs: [PDFContentScanner.Glyph])] {
         guard rows.count > 1 else { return rows }
         var rows = rows
@@ -2079,10 +2080,25 @@ enum MathReader {
                 // off the line, can be what began the row.
                 let distance = min(abs(rows[other].baseline - row.baseline),
                                    abs(context(of: rows[other].glyphs).baseline - row.baseline))
+                // Over or under what the line already folded in — the
+                // numerator over a denominator still looking for a home —
+                // only with a bar between them: without one the two are two
+                // lines, and folded they read letter for letter through each
+                // other. (A fraction whose bar is drawn as a stroke and not
+                // a filled rule is beyond this, as it was.)
+                let folded = rows[other].glyphs.filter { abs($0.origin.y - rows[other].baseline) >= body * 0.25 }
+                let barred = !collides(own, folded) || rules.contains { rule in
+                    let (low, high) = row.baseline < rows[other].baseline
+                        ? (row.baseline, folded.map(\.origin.y).max() ?? rows[other].baseline)
+                        : (folded.map(\.origin.y).min() ?? rows[other].baseline, row.baseline)
+                    return rule.rect.midY > low && rule.rect.midY < high
+                        && rule.rect.maxX > span.minX && rule.rect.minX < span.maxX
+                }
                 return span.width < theirs.width * 0.75
                     && distance < body * 0.9
                     && beside(span, rows[other].glyphs, body: body)
                     && !collides(own, onOwnLine(rows[other], body: body))
+                    && barred
             }.min { abs(rows[$0].baseline - row.baseline) < abs(rows[$1].baseline - row.baseline) }
             guard let host else { index += 1; continue }
             rows[host].glyphs += row.glyphs

@@ -1536,7 +1536,7 @@ function rowsOf(given: Glyph[], rules: Rule[] = []): Glyph[][] {
     }
   }
 
-  const result = folded(sortedBy(laid, (a, b) => a.baseline > b.baseline), body)
+  const result = folded(sortedBy(laid, (a, b) => a.baseline > b.baseline), body, rules)
     .map((row) => sortedBy(row.glyphs, (a, b) => a.x < b.x))
   return gatheringBrackets(splitAtGutters(result, glyphs))
 }
@@ -1747,7 +1747,7 @@ function signOf(span: Rect, level: number, rows: { baseline: number; glyphs: Gly
   }), (a, b) => Math.abs(rows[a].baseline - level) < Math.abs(rows[b].baseline - level))
 }
 
-function folded(input: { baseline: number; glyphs: Glyph[] }[], body: number): { baseline: number; glyphs: Glyph[] }[] {
+function folded(input: { baseline: number; glyphs: Glyph[] }[], body: number, rules: Rule[] = []): { baseline: number; glyphs: Glyph[] }[] {
   if (input.length <= 1) return input
   const laid = input.map((row) => ({ baseline: row.baseline, glyphs: [...row.glyphs] }))
   let index = 0
@@ -1767,10 +1767,23 @@ function folded(input: { baseline: number; glyphs: Glyph[] }[], body: number): {
       // from the row, or from where the line's own glyphs stand.
       const distance = Math.min(Math.abs(laid[other].baseline - row.baseline),
         Math.abs(context(laid[other].glyphs).baseline - row.baseline))
+      // Over or under what the line already folded in — the numerator over a
+      // denominator still looking for a home — only with a bar between them:
+      // without one the two are two lines, and folded they read letter for
+      // letter through each other.
+      const foldedIn = laid[other].glyphs.filter((one) => Math.abs(one.y - laid[other].baseline) >= body * 0.25)
+      const barred = !collides(own, foldedIn) || rules.some((rule) => {
+        const [low, high] = row.baseline < laid[other].baseline
+          ? [row.baseline, maxOf(foldedIn.map((one) => one.y)) ?? laid[other].baseline]
+          : [minOf(foldedIn.map((one) => one.y)) ?? laid[other].baseline, row.baseline]
+        return midY(rule.rect) > low && midY(rule.rect) < high
+          && maxX(rule.rect) > minX(span) && minX(rule.rect) < maxX(span)
+      })
       return span.width < theirs.width * 0.75
         && distance < body * 0.9
         && beside(span, laid[other].glyphs, body)
         && !collides(own, onOwnLine(laid[other], body))
+        && barred
     }), (a, b) => Math.abs(laid[a].baseline - row.baseline) < Math.abs(laid[b].baseline - row.baseline))
     if (host === undefined) { index += 1; continue }
     laid[host].glyphs.push(...row.glyphs)
