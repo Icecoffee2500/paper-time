@@ -4,7 +4,7 @@
  * `openWikiLink(in:)`, case by case.
  */
 import assert from 'node:assert/strict'
-import { acceptWikiLink, blockOf, continuation, indentEdit, openWikiLink, returnEdit, type LineEdit } from '../shared/noteBlocks.js'
+import { acceptWikiLink, backspaceEdit, blockOf, continuation, indentEdit, openWikiLink, returnEdit, todoShortcutEdit, toggleEmphasisEdit, wrapEdit, type LineEdit, type SelectionEdit } from '../shared/noteBlocks.js'
 
 type Test = (name: string, body: () => void | Promise<void>) => Promise<void>
 
@@ -48,6 +48,9 @@ export async function noteBlocksSuite(test: Test, suite: (name: string) => void)
     assert.deepEqual(applied('> quoted', at('> quoted')), { text: '> quoted\n> ', caret: 11 })
     // An empty item: the marker goes, and the line breaks.
     assert.deepEqual(applied('- one\n- ', at('- one\n- ')), { text: '- one\n\n', caret: 7 })
+    // An empty nested item steps out a level first (Notion).
+    assert.deepEqual(applied('- one\n  - ', at('- one\n  - ')), { text: '- one\n- ', caret: 8 })
+    assert.deepEqual(applied('1. a\n    3. ', at('1. a\n    3. ')), { text: '1. a\n  3. ', caret: 10 })
     assert.equal(at('plain'), null)
     assert.equal(at('## Heading'), null)
     // In the middle of an item, the rest of it goes onto the new line.
@@ -75,5 +78,64 @@ export async function noteBlocksSuite(test: Test, suite: (name: string) => void)
     assert.deepEqual(applied(text, acceptWikiLink(text, 9, '202609281200', 'Entropy')), { text: 'see [[202609281200|Entropy]] more', caret: 28 })
     const bare = 'see [[ent'
     assert.deepEqual(applied(bare, acceptWikiLink(bare, 9, '202609281200', 'Entropy')), { text: 'see [[202609281200|Entropy]]', caret: 28 })
+  })
+
+  await test('Backspace right after a marker steps a nested item out, and takes the marker off one at the left', () => {
+    const nested = 'intro\n  - item'
+    assert.deepEqual(applied(nested, backspaceEdit(nested, 10)), { text: 'intro\n- item', caret: 8 })
+    assert.deepEqual(applied('- item', backspaceEdit('- item', 2)), { text: 'item', caret: 0 })
+    assert.deepEqual(applied('- [ ] todo', backspaceEdit('- [ ] todo', 6)), { text: 'todo', caret: 0 })
+    assert.deepEqual(applied('3. third', backspaceEdit('3. third', 3)), { text: 'third', caret: 0 })
+    assert.deepEqual(applied('> quoted', backspaceEdit('> quoted', 2)), { text: 'quoted', caret: 0 })
+    assert.deepEqual(applied('## Head', backspaceEdit('## Head', 3)), { text: 'Head', caret: 0 })
+    // Anywhere else, the ordinary Backspace.
+    assert.equal(backspaceEdit('- item', 3), null)
+    assert.equal(backspaceEdit('- item', 1), null)
+    assert.equal(backspaceEdit('plain', 3), null)
+    assert.equal(backspaceEdit('  - item', 2), null)
+  })
+
+  const emphasised = (text: string, edit: SelectionEdit) => ({
+    text: text.slice(0, edit.from) + edit.insert + text.slice(edit.to),
+    selected: [edit.selectFrom, edit.selectTo] as [number, number],
+  })
+
+  await test('⌘B, ⌘I and ⌘E put a mark around the selection and take it off again', () => {
+    assert.deepEqual(emphasised('say word here', toggleEmphasisEdit('say word here', 4, 8, '**')), { text: 'say **word** here', selected: [6, 10] })
+    // The marks taken in by the selection, or standing just outside it: both come off.
+    assert.deepEqual(emphasised('say **word** here', toggleEmphasisEdit('say **word** here', 4, 12, '**')), { text: 'say word here', selected: [4, 8] })
+    assert.deepEqual(emphasised('say **word** here', toggleEmphasisEdit('say **word** here', 6, 10, '**')), { text: 'say word here', selected: [4, 8] })
+    assert.deepEqual(emphasised('a *b* c', toggleEmphasisEdit('a *b* c', 3, 4, '*')), { text: 'a b c', selected: [2, 3] })
+    assert.deepEqual(emphasised('a `b` c', toggleEmphasisEdit('a `b` c', 2, 5, '`')), { text: 'a b c', selected: [2, 3] })
+    // A selection given backwards is the same selection.
+    assert.deepEqual(emphasised('say word', toggleEmphasisEdit('say word', 8, 4, '*')), { text: 'say *word*', selected: [5, 9] })
+    // «**bold**» is not in italics: ⌘I adds the third star rather than taking one away.
+    assert.deepEqual(emphasised('**bold**', toggleEmphasisEdit('**bold**', 0, 8, '*')), { text: '***bold***', selected: [1, 9] })
+    assert.deepEqual(emphasised('***both***', toggleEmphasisEdit('***both***', 0, 10, '*')), { text: '**both**', selected: [0, 8] })
+    assert.deepEqual(emphasised('***both***', toggleEmphasisEdit('***both***', 0, 10, '**')), { text: '*both*', selected: [0, 6] })
+    // Nothing selected: an empty pair with the caret between, and the pair gone again.
+    assert.deepEqual(emphasised('ab', toggleEmphasisEdit('ab', 1, 1, '**')), { text: 'a****b', selected: [3, 3] })
+    assert.deepEqual(emphasised('a****b', toggleEmphasisEdit('a****b', 3, 3, '**')), { text: 'ab', selected: [1, 1] })
+    assert.deepEqual(emphasised('a``b', toggleEmphasisEdit('a``b', 2, 2, '`')), { text: 'ab', selected: [1, 1] })
+  })
+
+  await test('an opening character typed over a selection wraps it, and the words stay selected', () => {
+    const pairs: [string, string][] = [['(', ')'], ['[', ']'], ['{', '}'], ['"', '"'], ["'", "'"], ['`', '`'], ['*', '*'], ['_', '_'], ['$', '$'], ['~', '~']]
+    for (const [open, close] of pairs) {
+      assert.deepEqual(emphasised('say word here', wrapEdit('say word here', 4, 8, open)!), { text: `say ${open}word${close} here`, selected: [5, 9] }, open)
+    }
+    assert.deepEqual(emphasised('say word', wrapEdit('say word', 8, 4, '(')!), { text: 'say (word)', selected: [5, 9] })
+    assert.equal(wrapEdit('say word', 4, 8, 'x'), null)
+    assert.equal(wrapEdit('say word', 4, 8, ')'), null)
+    assert.equal(wrapEdit('say word', 4, 4, '('), null)
+  })
+
+  await test('«[]» and a space at the start of a line become a checkbox', () => {
+    assert.deepEqual(applied('[]', todoShortcutEdit('[]', 2)), { text: '- [ ] ', caret: 6 })
+    assert.deepEqual(applied('a\n  []', todoShortcutEdit('a\n  []', 6)), { text: 'a\n  - [ ] ', caret: 10 })
+    assert.deepEqual(applied('[]tail', todoShortcutEdit('[]tail', 2)), { text: '- [ ] tail', caret: 6 })
+    assert.equal(todoShortcutEdit('x[]', 3), null)
+    assert.equal(todoShortcutEdit('[] ', 3), null)
+    assert.equal(todoShortcutEdit('[', 1), null)
   })
 }

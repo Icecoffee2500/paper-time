@@ -196,6 +196,9 @@ export interface Requests {
   /** Writes a note into its box; an empty note takes its file away. Answers with the box it went to. */
   'notes:save': { args: { note: NoteDTO }; result: NoteDTO }
   'notes:delete': { args: { id: string }; result: void }
+  /** The note's ⋯ «Export as PDF…»: the document the window built, printed where the person says. */
+  /** `to`: a probe's file, written without asking — in a probe run only. */
+  'notes:exportPDF': { args: { title: string; html: string; to?: string }; result: { path: string } | { cancelled: true } | { error: string } }
   /** Asks for a folder for the notes about no paper and moves them there. */
   'notes:chooseFolder': { args: void; result: { moved: number; kept: number; notesFolder: NotesFolderDTO } | { error: string } | null }
   /** The way back: the loose notes return to the app's own folder. */

@@ -31,6 +31,18 @@ struct PaperTimeApp: App {
         Trace.mark("app starting")
         if Trace.isOn { PaperTextIndex.report = { Trace.mark($0) } }
         if let markdown = Boot.setting("PAPERTIME_DUMP_NOTE") {
+            // `PAPERTIME_DUMP_NOTE_PDF=<path in the container>` writes the
+            // same note as the PDF «Export as PDF…» makes, and quits.
+            if let path = Boot.setting("PAPERTIME_DUMP_NOTE_PDF") {
+                do {
+                    try NotePDFExport.write(title: Boot.setting("PAPERTIME_DUMP_NOTE_TITLE") ?? "", markdown: markdown,
+                                            to: URL(fileURLWithPath: path))
+                    print("note pdf: \(path)")
+                } catch {
+                    print("note pdf: \(error)")
+                }
+                exit(0)
+            }
             NoteMarkdown.dump(markdown)
         }
         // Types a few Latex Suite keystrokes in memory, prints them and quits.

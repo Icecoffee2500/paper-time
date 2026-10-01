@@ -78,6 +78,16 @@ struct ZettelEditorView: View {
                         } label: {
                             Label(L("식별자 복사 — \(note.id)", "Copy Identifier — \(note.id)"), systemImage: "number")
                         }
+                        #if os(macOS)
+                        // The note as a page, to send on or keep: set the way
+                        // it is set here, on A4, the title over it.
+                        Button {
+                            flush()
+                            NotePDFExport.export(title: title, markdown: body_, from: NSApp.keyWindow)
+                        } label: {
+                            Label(L("PDF로 내보내기…", "Export as PDF…"), systemImage: "doc.richtext")
+                        }
+                        #endif
                         Divider()
                     }
                     Button(role: .destructive) {

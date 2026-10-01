@@ -64,13 +64,55 @@ export function noteLines(source: string): TextSpan[] {
   return ranges
 }
 
+/** A number as a spreadsheet names its columns, in lower case: 1 → a, 26 → z, 27 → aa. */
+export function letters(n: number): string {
+  let out = ''
+  let left = Math.max(1, Math.trunc(n))
+  while (left > 0) {
+    left -= 1
+    out = String.fromCharCode(97 + (left % 26)) + out
+    left = Math.trunc(left / 26)
+  }
+  return out
+}
+
+const ROMAN: [number, string][] = [
+  [1000, 'm'], [900, 'cm'], [500, 'd'], [400, 'cd'], [100, 'c'], [90, 'xc'],
+  [50, 'l'], [40, 'xl'], [10, 'x'], [9, 'ix'], [5, 'v'], [4, 'iv'], [1, 'i'],
+]
+
+/** A number in lower-case roman numerals: 4 → iv, 14 → xiv, 900 → cm. */
+export function roman(n: number): string {
+  let out = ''
+  let left = Math.max(1, Math.trunc(n))
+  for (const [value, glyphs] of ROMAN) {
+    while (left >= value) {
+      out += glyphs
+      left -= value
+    }
+  }
+  return out
+}
+
+/**
+ * What a marker shows, by how deep the item is (the Mac's `shownMarker`):
+ * a bullet goes • ◦ ▪ and round again; a number goes 1. a. i. and round
+ * again — as Notion and Word count nested lists.
+ */
 export function shownMarker(block: Block): string {
   switch (block.type.kind) {
     case 'plain': return ''
     case 'heading':
     case 'quote': return HIDDEN_MARKER
-    case 'bullet': return '•\t'
-    case 'ordered': return `${block.type.number}.\t`
+    case 'bullet': return `${['•', '◦', '▪'][block.indent % 3]}\t`
+    case 'ordered': {
+      const n = block.type.number
+      switch (block.indent % 3) {
+        case 1: return `${letters(n)}.\t`
+        case 2: return `${roman(n)}.\t`
+        default: return `${n}.\t`
+      }
+    }
     case 'task': return block.type.done ? '☑\t' : '☐\t'
   }
 }

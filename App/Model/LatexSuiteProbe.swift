@@ -279,6 +279,7 @@ enum LatexSuiteTypingProbe {
         }
         let before = marked(view)
         switch key {
+        case "Space": view.insertText(" ", replacementRange: NSRange(location: NSNotFound, length: 0))
         case "Tab": if let key = event("\t", 48) { view.keyDown(with: key) }
         case "Shift+Tab": if let key = event("\u{19}", 48, .shift) { view.keyDown(with: key) }
         case "Enter": if let key = event("\r", 36) { view.keyDown(with: key) }
@@ -296,6 +297,15 @@ enum LatexSuiteTypingProbe {
         default:
             if let offset = key.stripPrefix("Caret:").flatMap(Int.init) {
                 set([NSRange(location: offset, length: 0)], in: view)
+            } else if let count = key.stripPrefix("Select:").flatMap(Int.init) {
+                // The selection stretched back over the last `count`
+                // characters, as ⇧← does.
+                let caret = view.selectedRange()
+                let start = max(0, NSMaxRange(caret) - count)
+                view.setSelectedRange(NSRange(location: start, length: NSMaxRange(caret) - start))
+            } else if let letter = key.stripPrefix("Cmd:") {
+                // ⌘ and a letter, to the view as a key — the note's ⌘B.
+                if let key = event(letter, 0, .command) { view.keyDown(with: key) }
             } else if let composing = key.stripPrefix("Mark:") {
                 // With nothing marked, `markedRange()` is not NSNotFound here,
                 // so it is asked only while there is a composition.
