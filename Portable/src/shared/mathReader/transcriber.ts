@@ -684,9 +684,9 @@ function transcribe(glyphs: Glyph[], rules: Rule[], context: Context | null = nu
     if (stacked !== undefined) {
       let t = mathToken(glyph)
       const below = limit(stacked.below.map((member) => glyphs[member]), rules, line)
-      if (below !== null) t += '_' + below
+      if (written(below) !== null) t += '_' + below
       const above = limit(stacked.above.map((member) => glyphs[member]), rules, line)
-      if (above !== null) t += '^' + above
+      if (written(above) !== null) t += '^' + above
       tokens.push(t)
       base = { size: body, baseline, index }
       index += 1
@@ -712,9 +712,9 @@ function transcribe(glyphs: Glyph[], rules: Rule[], context: Context | null = nu
     if (named !== undefined) {
       let t = named.command
       const below = limit(named.below.map((member) => glyphs[member]), rules, line)
-      if (below !== null) t += '_' + below
+      if (written(below) !== null) t += '_' + below
       const above = limit(named.above.map((member) => glyphs[member]), rules, line)
-      if (above !== null) t += '^' + above
+      if (written(above) !== null) t += '^' + above
       tokens.push(t)
       for (const member of named.letters) consumed.add(member)
       const last = named.letters.length > 0 ? named.letters[named.letters.length - 1] : index
@@ -817,11 +817,11 @@ function transcribe(glyphs: Glyph[], rules: Rule[], context: Context | null = nu
           t += marks
         } else {
           const above = limit(script.raised, rules, line, true)
-          if (above !== null) t += '^' + above
+          if (written(above) !== null) t += '^' + above
         }
         // A \substack is a script too, beside \max in a sentence.
         const below = limit(script.lowered, rules, line, true)
-        if (below !== null) t += '_' + below
+        if (written(below) !== null) t += '_' + below
         if (t !== '') tokens.push(t)
         for (let member = index; member < script.end; member += 1) consumed.add(member)
         index = script.end
@@ -866,8 +866,10 @@ function transcribe(glyphs: Glyph[], rules: Rule[], context: Context | null = nu
     // however many pieces it took to reach that height.
     // A bar an OpenType font draws as a character, its | or its ∣, stacked
     // into a tall one out of several of itself, is one too.
+    // (An OpenType font's two | for a \big| stand an eighth of an em apart:
+    // anything but the one place is a stack.)
     const stackedOn = (one: Glyph, other: Glyph) => extension(other) === extension(one)
-      && Math.abs(other.x - one.x) < one.size * 0.2 && Math.abs(other.y - one.y) > one.size * 0.2
+      && Math.abs(other.x - one.x) < one.size * 0.2 && Math.abs(other.y - one.y) > one.size * 0.05
     const drawnBar = !struck.has(index) && index + 1 < glyphs.length && !consumed.has(index + 1)
       && barToken(glyph) !== null && barToken(glyphs[index + 1]) === barToken(glyph) && stackedOn(glyph, glyphs[index + 1])
     const kind = drawnBar ? barToken : (one: Glyph) => TeX.fence(one.glyphName) ?? opening(one) ?? closing(one)
@@ -929,8 +931,12 @@ function transcribe(glyphs: Glyph[], rules: Rule[], context: Context | null = nu
     const t = struck.get(index) ?? mathToken(glyph)
     if (t !== '') {
       tokens.push(t)
-      const drawnOffLine = extension(glyph) || isBigOperator(glyph)
-      base = { size: glyph.size, baseline: drawnOffLine ? baseline : glyph.y, index }
+      // A bracket or a bar set larger than the line — an OpenType font's |
+      // stacked for a \big| — is on the line, at the line's size: the r
+      // after it is not its script.
+      const tall = isDelimiter(glyph) && glyph.size > body * 1.1
+      const drawnOffLine = extension(glyph) || isBigOperator(glyph) || tall
+      base = { size: tall ? body : glyph.size, baseline: drawnOffLine ? baseline : glyph.y, index }
     }
     index += 1
   }
@@ -973,6 +979,13 @@ function group(glyphs: Glyph[], rules: Rule[], line: number): string | null {
 /** A limit, braced as a script is — or, set in rows one under another, the
  *  `\substack` it was written as. "i=s₁+1" over "i∉S≤t" under a product,
  *  read left to right as one row, came back as "ii=∉sS…". */
+/** A script or a limit with something in it: the small glyphs of a figure's
+ *  labels, from a font that names nothing, read as nothing, and came back as
+ *  "^{}_{}^{}". */
+function written(script: string | null): string | null {
+  return script === null || script === '' || script === '{}' ? null : script
+}
+
 function limit(glyphs: Glyph[], rules: Rule[], line: number, asScript = false): string | null {
   let rows = limitRows(glyphs, rules)
   // A script is read as rows only when they look like a \substack's: short
@@ -1079,8 +1092,11 @@ function baselineOf(glyphs: Glyph[], bodySize: number, bars: Bar[]): number {
   const barred = new Set(bars.flatMap((bar) => [...bar.over, ...bar.under]))
   const voters = ascending(indices(glyphs.length).filter((index) => {
     const glyph = glyphs[index]
+    // Nor a bracket or a bar: set to the height of what it holds, it stands
+    // where that is tallest, not on the line — the two OpenType | glyphs
+    // stacked for the \big| round r_{ij} in an exponent outvoted the r.
     return glyph.size >= bodySize * 0.92 && !extension(glyph) && !isBigOperator(glyph)
-      && !isRadical(glyph) && !barred.has(index)
+      && !isRadical(glyph) && !isDelimiter(glyph) && !barred.has(index)
   }).map((index) => glyphs[index].y))
   if (voters.length > 0) return voters[Math.floor(voters.length / 2)]
   if (bars.length > 0) return midY(bars[0].rule.rect) - bodySize * 0.25
@@ -1241,8 +1257,23 @@ function scripts(start: number, glyphs: Glyph[], baseline: number, body: number,
         // own baseline, as the script's other glyphs do: an OpenType \big| in
         // an exponent does. The ‖ of a line read a row too high for it stood a
         // point and a half off the r it followed, and went into its superscript.
+        // One built up out of several of the one glyph — STIX's "bar.x" four
+        // times over for a \big|, an OpenType font's two | glyphs a point
+        // apart — stands no piece on that baseline: it is centred on the
+        // script's axis, a quarter of an em over it.
+        const sameBar = (other: Glyph) => barToken(other) === barToken(glyph) && Math.abs(other.x - glyph.x) < glyph.size * 0.2
+        const stackedBar = !extension(glyph) && barToken(glyph) !== null && glyphs.some((other) =>
+          (other.x !== glyph.x || other.y !== glyph.y) && sameBar(other) && Math.abs(other.y - glyph.y) < glyph.size * 0.8)
+        const centredOnScript = () => {
+          const column = glyphs.filter((other) => sameBar(other) && Math.abs(other.y - glyph.y) < glyph.size * 1.6)
+          const low = minOf(column.map((one) => one.y)) ?? glyph.y
+          const high = maxOf(column.map((one) => one.y)) ?? glyph.y
+          const centre = (low - glyph.size * 0.2 + high + glyph.size * 0.8) / 2
+          return held.some((one) => !extension(one.glyph) && Math.abs(centre - one.glyph.y - one.glyph.size * 0.25) < one.glyph.size * 0.6)
+        }
         if (!extension(glyph) && !small
-          && !held.some((one) => !extension(one.glyph) && Math.abs(one.glyph.y - glyph.y) < body * 0.1)) {
+          && !held.some((one) => !extension(one.glyph) && Math.abs(one.glyph.y - glyph.y) < body * 0.1)
+          && !(stackedBar && centredOnScript())) {
           holds = false
         }
         const pairs: Record<string, string> = {
@@ -1513,10 +1544,37 @@ function fractionBars(rules: Rule[], glyphs: Glyph[]): Bar[] {
   const owned = new Set<number>()
   for (const rule of sortedBy(rules, (a, b) => a.rect.width > b.rect.width)) {
     if (!(rule.rect.width > 1 && rule.rect.height < rule.rect.width && !isVinculumOf(rule, glyphs))) continue
-    const inside = indices(glyphs.length).filter((at) => !owned.has(at) && spans(rule, glyphs[at]))
+    let inside = indices(glyphs.length).filter((at) => !owned.has(at) && spans(rule, glyphs[at]))
     const over = inside.filter((at) => glyphs[at].y > midY(rule.rect))
-    const under = inside.filter((at) => glyphs[at].y <= midY(rule.rect))
+    let under = inside.filter((at) => glyphs[at].y <= midY(rule.rect))
     if (over.length === 0 || under.length === 0) continue
+    // The denominator is the line nearest under the bar, with its scripts:
+    // what stands a line further down and happens to reach under the bar is
+    // something else's — the wide second row of the limits under the sum
+    // after 1/N_t ran back under that bar, and the τ of it made the
+    // denominator N_{tτ}. A glyph that far down is the denominator's only
+    // with a bar of its own between (a fraction in the denominator) or a sign
+    // of the denominator's over it (the limits of a sum there). The
+    // denominator's line is where its largest glyphs stand — not its highest
+    // script, which would put the j of ∑_j a line down.
+    const largest = maxOf(under.filter((at) => !extension(glyphs[at])).map((at) => glyphs[at].size)) ?? 0
+    const lines = ascending(under.filter((at) => glyphs[at].size >= largest * 0.9 && !extension(glyphs[at])).map((at) => glyphs[at].y))
+    const nearest = lines.length === 0 ? midY(rule.rect) : lines[Math.floor(lines.length / 2)]
+    const far = under.filter((at) => glyphs[at].y < nearest - glyphs[at].size * 1.0 && !extension(glyphs[at]))
+    if (far.length > 0) {
+      const stays = new Set(far.filter((at) => {
+        const glyph = glyphs[at]
+        const g = rectOf(glyph)
+        const between = rules.some((other) => midY(other.rect) > glyph.y && midY(other.rect) < nearest
+          && minX(other.rect) < midX(g) && maxX(other.rect) > midX(g))
+        const overIt = under.some((other) => other !== at && !far.includes(other) && isBigOperator(glyphs[other])
+          && minX(rectOf(glyphs[other])) < midX(g) + 1 && maxX(rectOf(glyphs[other])) > midX(g) - 1)
+        return between || overIt
+      }))
+      const dropped = new Set(far.filter((at) => !stays.has(at)))
+      under = under.filter((at) => !dropped.has(at))
+      inside = inside.filter((at) => !dropped.has(at))
+    }
     const parts = extent(inside.map((at) => glyphs[at]))
     if (!(minX(rule.rect) > minX(parts) - 4 && maxX(rule.rect) < maxX(parts) + 4)) continue
     bars.push({ rule, over, under })
@@ -2078,14 +2136,23 @@ function accents(glyphs: Glyph[], owned: Map<number, number>, consumed: Set<numb
       const nearest = maxBy(before, (a, b) => maxX(rectOf(glyphs[a])) < maxX(rectOf(glyphs[b])))
       covered = nearest === undefined ? [] : [nearest]
     } else {
-      covered = indices(glyphs.length).filter((other) => {
+      const under = indices(glyphs.length).filter((other) => {
         const glyph = glyphs[other]
-        if (other === index || consumed.has(other) || owned.has(other)
-          || accentName(glyph) !== null || isSpace(glyph)
-          || !(Math.abs(glyph.y - mark.y) < Math.max(glyph.size, 1) * 0.35)) return false
+        return other !== index && !consumed.has(other) && !owned.has(other)
+          && accentName(glyph) === null && !isSpace(glyph)
+          && Math.abs(glyph.y - mark.y) < Math.max(glyph.size, 1) * 0.35
+      })
+      // A mark grown wide — an OpenType font's \widehat over three letters is
+      // one glyph an em across — covers the letters at its ends too, which it
+      // lies over by less than half of themselves. A mark the width of a
+      // letter covers that one.
+      const middle = under.find((other) => minX(rectOf(glyphs[other])) <= midX(m) && maxX(rectOf(glyphs[other])) >= midX(m))
+      const wide = mark.width >= mark.size * 0.75 && (middle === undefined || mark.width >= glyphs[middle].width * 1.5)
+      covered = under.filter((other) => {
+        const glyph = glyphs[other]
         const g = rectOf(glyph)
         const overlap = Math.min(maxX(g), maxX(m)) - Math.max(minX(g), minX(m))
-        return overlap > Math.min(glyph.width, mark.width) * 0.5
+        return overlap > Math.min(glyph.width, mark.width) * (wide ? 0.3 : 0.5)
       })
     }
     const first = minOf(covered)

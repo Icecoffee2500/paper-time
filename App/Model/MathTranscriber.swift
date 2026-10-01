@@ -740,10 +740,10 @@ enum MathTranscriber {
             // A big operator takes what is stacked over and under it.
             if let stacked = limits[index] {
                 var token = mathToken(for: glyph)
-                if let below = limit(of: stacked.below.map { glyphs[$0] }, rules: rules, line: line) {
+                if let below = written(limit(of: stacked.below.map { glyphs[$0] }, rules: rules, line: line)) {
                     token += "_" + below
                 }
-                if let above = limit(of: stacked.above.map { glyphs[$0] }, rules: rules, line: line) {
+                if let above = written(limit(of: stacked.above.map { glyphs[$0] }, rules: rules, line: line)) {
                     token += "^" + above
                 }
                 tokens.append(token)
@@ -771,10 +771,10 @@ enum MathTranscriber {
             // A name that takes limits, with them — "lim" with "n→∞" under it.
             if let named = names[index] {
                 var token = named.command
-                if let below = limit(of: named.below.map { glyphs[$0] }, rules: rules, line: line) {
+                if let below = written(limit(of: named.below.map { glyphs[$0] }, rules: rules, line: line)) {
                     token += "_" + below
                 }
-                if let above = limit(of: named.above.map { glyphs[$0] }, rules: rules, line: line) {
+                if let above = written(limit(of: named.above.map { glyphs[$0] }, rules: rules, line: line)) {
                     token += "^" + above
                 }
                 tokens.append(token)
@@ -884,11 +884,11 @@ enum MathTranscriber {
                 // mark: "t'" and never "t^{'}".
                 if let primes = primes(script.raised) {
                     token += primes
-                } else if let above = limit(of: script.raised, rules: rules, line: line, asScript: true) {
+                } else if let above = written(limit(of: script.raised, rules: rules, line: line, asScript: true)) {
                     token += "^" + above
                 }
                 // A \substack is a script too, beside \max in a sentence.
-                if let below = limit(of: script.lowered, rules: rules, line: line, asScript: true) {
+                if let below = written(limit(of: script.lowered, rules: rules, line: line, asScript: true)) {
                     token += "_" + below
                 }
                 if !token.isEmpty { tokens.append(token) }
@@ -941,10 +941,12 @@ enum MathTranscriber {
             // symbol, however many pieces it took to reach that height.
             // A bar an OpenType font draws as a character, its | or its ∣,
             // stacked into a tall one out of several of itself, is one too.
+            // (An OpenType font's two | for a \big| stand an eighth of an
+            // em apart: anything but the one place is a stack.)
             func stacked(_ one: Glyph, _ other: Glyph) -> Bool {
                 other.isExtension == one.isExtension
                     && abs(other.origin.x - one.origin.x) < one.size * 0.2
-                    && abs(other.origin.y - one.origin.y) > one.size * 0.2
+                    && abs(other.origin.y - one.origin.y) > one.size * 0.05
             }
             let drawnBar = struck[index] == nil && index + 1 < glyphs.count && !consumed.contains(index + 1)
                 && barToken(glyph) != nil && barToken(glyphs[index + 1]) == barToken(glyph)
@@ -1008,8 +1010,12 @@ enum MathTranscriber {
             let token = struck[index] ?? mathToken(for: glyph)
             if !token.isEmpty {
                 tokens.append(token)
-                let drawnOffLine = glyph.isExtension || isBigOperator(glyph)
-                base = Base(size: glyph.size, baseline: drawnOffLine ? baseline : glyph.origin.y,
+                // A bracket or a bar set larger than the line — an OpenType
+                // font's | stacked for a \big| — is on the line, at the
+                // line's size: the r after it is not its script.
+                let tall = isDelimiter(glyph) && glyph.size > body * 1.1
+                let drawnOffLine = glyph.isExtension || isBigOperator(glyph) || tall
+                base = Base(size: tall ? body : glyph.size, baseline: drawnOffLine ? baseline : glyph.origin.y,
                             index: index)
             }
             index += 1
@@ -1057,6 +1063,14 @@ enum MathTranscriber {
     /// the `\substack` it was written as. "i=s₁+1" over "i∉S≤t" under a
     /// product, read left to right as one row, came back as "ii=∉sS…": the
     /// glyphs of the two rows interleaved.
+    /// A script or a limit with something in it. The small glyphs of a
+    /// figure's labels, from a font that names nothing, read as nothing, and
+    /// came back as "^{}_{}^{}" — scripts of nothing on nothing.
+    private static func written(_ script: String?) -> String? {
+        guard let script, !script.isEmpty, script != "{}" else { return nil }
+        return script
+    }
+
     private static func limit(of glyphs: [Glyph], rules: [Rule], line: CGFloat, asScript: Bool = false) -> String? {
         var rows = limitRows(glyphs, rules: rules)
         // A script is read as rows only when they look like a \substack's:
@@ -1161,8 +1175,12 @@ enum MathTranscriber {
         let barred = Set(bars.flatMap { $0.over + $0.under })
         let voters = glyphs.indices.filter { index in
             let glyph = glyphs[index]
+            // Nor a bracket or a bar: set to the height of what it holds,
+            // it stands where that is tallest, not on the line — the two
+            // OpenType | glyphs stacked for the \big| round r_{ij} in an
+            // exponent outvoted the r, and the r became their superscript.
             return glyph.size >= bodySize * 0.92 && !glyph.isExtension && !isBigOperator(glyph)
-                && !isRadical(glyph) && !barred.contains(index)
+                && !isRadical(glyph) && !isDelimiter(glyph) && !barred.contains(index)
         }.map { glyphs[$0].origin.y }.sorted()
         if !voters.isEmpty { return voters[voters.count / 2] }
         if let bar = bars.first { return bar.rule.rect.midY - bodySize * 0.25 }
@@ -1318,9 +1336,31 @@ enum MathTranscriber {
                     // line read a row too high for it stood a point and a half
                     // off the r it followed, and went into its superscript
                     // with the ² after it.
+                    // One built up out of several of the one glyph — STIX's
+                    // "bar.x" four times over for a \big|, an OpenType font's
+                    // two | glyphs a point apart — stands no piece on that
+                    // baseline: it is centred on the script's axis, a quarter
+                    // of an em over it.
+                    let stackedBar = !glyph.isExtension && barToken(glyph) != nil && glyphs.contains { other in
+                        other.origin != glyph.origin && barToken(other) == barToken(glyph)
+                            && abs(other.origin.x - glyph.origin.x) < glyph.size * 0.2
+                            && abs(other.origin.y - glyph.origin.y) < glyph.size * 0.8
+                    }
+                    func centredOnScript() -> Bool {
+                        let column = glyphs.filter {
+                            barToken($0) == barToken(glyph) && abs($0.origin.x - glyph.origin.x) < glyph.size * 0.2
+                                && abs($0.origin.y - glyph.origin.y) < glyph.size * 1.6
+                        }
+                        let low = column.map(\.origin.y).min() ?? glyph.origin.y
+                        let high = column.map(\.origin.y).max() ?? glyph.origin.y
+                        let centre = (low - glyph.size * 0.2 + high + glyph.size * 0.8) / 2
+                        return held.contains { one in
+                            !one.glyph.isExtension && abs(centre - one.glyph.origin.y - one.glyph.size * 0.25) < one.glyph.size * 0.6
+                        }
+                    }
                     if !glyph.isExtension, !small, !held.contains(where: {
                         !$0.glyph.isExtension && abs($0.glyph.origin.y - glyph.origin.y) < body * 0.1
-                    }) {
+                    }), !(stackedBar && centredOnScript()) {
                         holds = false
                     }
                     let pairs = ["(": ")", "[": "]", "\\{": "\\}", "\\langle": "\\rangle",
@@ -1655,10 +1695,42 @@ enum MathTranscriber {
         for rule in rules.sorted(by: { $0.rect.width > $1.rect.width })
         where rule.rect.width > 1 && rule.rect.height < rule.rect.width
             && !isVinculum(rule, in: glyphs) {
-            let inside = glyphs.indices.filter { !owned.contains($0) && spans(rule, glyphs[$0]) }
+            var inside = glyphs.indices.filter { !owned.contains($0) && spans(rule, glyphs[$0]) }
             let over = inside.filter { glyphs[$0].origin.y > rule.rect.midY }
-            let under = inside.filter { glyphs[$0].origin.y <= rule.rect.midY }
+            var under = inside.filter { glyphs[$0].origin.y <= rule.rect.midY }
             guard !over.isEmpty, !under.isEmpty else { continue }
+            // The denominator is the line nearest under the bar, with its
+            // scripts: what stands a line further down and happens to reach
+            // under the bar is something else's — the wide second row of the
+            // limits under the sum after 1/N_t ran back under that bar, and
+            // the τ of it made the denominator N_{tτ}. A glyph that far down
+            // is the denominator's only with a bar of its own between (a
+            // fraction in the denominator) or a sign of the denominator's
+            // over it (the limits of a sum there).
+            // The denominator's line is where its largest glyphs stand — not
+            // its highest script, which would put the j of ∑_j a line down.
+            let largest = under.filter { !glyphs[$0].isExtension }.map { glyphs[$0].size }.max() ?? 0
+            let lines = under.filter { glyphs[$0].size >= largest * 0.9 && !glyphs[$0].isExtension }
+                .map { glyphs[$0].origin.y }.sorted()
+            let nearest = lines.isEmpty ? rule.rect.midY : lines[lines.count / 2]
+            let far = under.filter { glyphs[$0].origin.y < nearest - glyphs[$0].size * 1.0 && !glyphs[$0].isExtension }
+            if !far.isEmpty {
+                let stays = Set(far.filter { index in
+                    let glyph = glyphs[index]
+                    let between = rules.contains { other in
+                        other.rect.midY > glyph.origin.y && other.rect.midY < nearest
+                            && other.rect.minX < glyph.rect.midX && other.rect.maxX > glyph.rect.midX
+                    }
+                    let overIt = under.contains { other in
+                        other != index && !far.contains(other) && isBigOperator(glyphs[other])
+                            && glyphs[other].rect.minX < glyph.rect.midX + 1 && glyphs[other].rect.maxX > glyph.rect.midX - 1
+                    }
+                    return between || overIt
+                })
+                let dropped = Set(far).subtracting(stays)
+                under.removeAll { dropped.contains($0) }
+                inside.removeAll { dropped.contains($0) }
+            }
             let parts = extent(inside.map { glyphs[$0] })
             guard rule.rect.minX > parts.minX - 4, rule.rect.maxX < parts.maxX + 4 else { continue }
             bars.append(Bar(rule: rule, over: over, under: under))
@@ -2299,14 +2371,22 @@ enum MathTranscriber {
                 }
                 covered = before.max { glyphs[$0].rect.maxX < glyphs[$1].rect.maxX }.map { [$0] } ?? []
             } else {
-                covered = glyphs.indices.filter { other in
+                let under = glyphs.indices.filter { other in
                     let glyph = glyphs[other]
-                    guard other != index, !consumed.contains(other), owned[other] == nil,
-                          accentName(of: glyph) == nil, !isSpace(glyph),
-                          abs(glyph.origin.y - mark.origin.y) < max(glyph.size, 1) * 0.35
-                    else { return false }
+                    return other != index && !consumed.contains(other) && owned[other] == nil
+                        && accentName(of: glyph) == nil && !isSpace(glyph)
+                        && abs(glyph.origin.y - mark.origin.y) < max(glyph.size, 1) * 0.35
+                }
+                // A mark grown wide — an OpenType font's \widehat over three
+                // letters is one glyph an em across — covers the letters at
+                // its ends too, which it lies over by less than half of
+                // themselves. A mark the width of a letter covers that one.
+                let middle = under.first { glyphs[$0].rect.minX <= mark.rect.midX && glyphs[$0].rect.maxX >= mark.rect.midX }
+                let wide = mark.width >= mark.size * 0.75 && middle.map { mark.width >= glyphs[$0].width * 1.5 } ?? true
+                covered = under.filter { other in
+                    let glyph = glyphs[other]
                     let overlap = min(glyph.rect.maxX, mark.rect.maxX) - max(glyph.rect.minX, mark.rect.minX)
-                    return overlap > min(glyph.width, mark.width) * 0.5
+                    return overlap > min(glyph.width, mark.width) * (wide ? 0.3 : 0.5)
                 }
             }
             guard let first = covered.min() else {

@@ -1248,7 +1248,36 @@ function rowsOf(glyphs: Glyph[], rules: Rule[] = []): Glyph[][] {
   for (const glyph of sortedBy(glyphs.filter((one) => one.size >= body * 0.9 && !extension(one)), (a, b) => a.y > b.y)) {
     if (floats(glyph) || pieces.has(place(glyph))) { floating.push(glyph); continue }
     if (isRadical(glyph)) { radicalSigns.push(glyph); continue }
-    const at = laid.findIndex((row) => Math.abs(row.baseline - glyph.y) < body * 0.6)
+    // Two glyphs of one line never share their ink. One drawn over another at
+    // the same height is another layer of the page — the words of a figure
+    // standing level with a line of its caption — and the line read with it
+    // was "tion" interleaved with "I(Z;X)". A glyph printed twice for bold
+    // shares its own ink.
+    const layered = (row: Glyph[]) => {
+      // Only letters and digits say so: the pieces of a long arrow, the
+      // stroke through a relation, a mark over its letter all lie over one
+      // another on one line.
+      const lettered = (one: Glyph) => {
+        // (A modifier letter is a letter to Unicode: the hat over ŷ is
+        // U+02C6, and is no letter here.)
+        if (isAccent(one)) return false
+        const drawn = spell(one)
+        return drawn !== '' && chars(drawn).every((c) => isLetter(c) || isNumber(c))
+      }
+      if (!(glyph.width > 0.05) || !lettered(glyph)) return false
+      const spelled = spell(glyph)
+      const g = rectOf(glyph)
+      return row.some((other) => {
+        if (!(other.width > 0.05) || !lettered(other)) return false
+        const o = rectOf(other)
+        const overlap = Math.min(maxX(o), maxX(g)) - Math.max(minX(o), minX(g))
+        if (!(overlap > Math.min(other.width, glyph.width) * 0.5)) return false
+        const said = spell(other)
+        if (said === spelled && Math.abs(other.x - glyph.x) < glyph.size * 0.3) return false
+        return true
+      })
+    }
+    const at = laid.findIndex((row) => Math.abs(row.baseline - glyph.y) < body * 0.6 && !layered(row.glyphs))
     if (at >= 0) laid[at].glyphs.push(glyph)
     else laid.push({ baseline: glyph.y, glyphs: [glyph] })
   }
@@ -1275,6 +1304,17 @@ function rowsOf(glyphs: Glyph[], rules: Rule[] = []): Glyph[][] {
   // next one to its row: the ∑ of "∑∏P", STIX's, stood too far from the P to
   // be beside it until the ∏ was.
   const pending = [...floating]
+  // A piece of a bar built tall is placed where the whole bar stands: from
+  // its lowest piece. Measured each from its own point, the top pieces of a
+  // \big| lifted into an exponent stood a line and a half over the line and
+  // made a row of their own, and took the exponent's sum with them.
+  const feet = new Map<number, number>()
+  for (const glyph of floating) {
+    if (!pieces.has(place(glyph))) continue
+    const column = Math.round(glyph.x * 10)
+    feet.set(column, Math.min(feet.get(column) ?? glyph.y, glyph.y))
+  }
+  const foot = (glyph: Glyph) => (pieces.has(place(glyph)) ? feet.get(Math.round(glyph.x * 10)) ?? glyph.y : glyph.y)
   let placedOne = true
   while (placedOne) {
     placedOne = false
@@ -1283,8 +1323,8 @@ function rowsOf(glyphs: Glyph[], rules: Rule[] = []): Glyph[][] {
       const glyph = pending[at]
       const span = insetBy(rectOf(glyph), -body * 0.9, 0)
       const nearest = minBy(indices(laid.length).filter((row) => beside(span, laid[row].glyphs, body)),
-        (a, b) => Math.abs(laid[a].baseline - glyph.y) < Math.abs(laid[b].baseline - glyph.y))
-      if (nearest !== undefined && Math.abs(laid[nearest].baseline - glyph.y) < body * 1.3) {
+        (a, b) => Math.abs(laid[a].baseline - foot(glyph)) < Math.abs(laid[b].baseline - foot(glyph)))
+      if (nearest !== undefined && Math.abs(laid[nearest].baseline - foot(glyph)) < body * 1.3) {
         laid[nearest].glyphs.push(glyph)
         pending.splice(at, 1)
         placedOne = true
@@ -1294,9 +1334,9 @@ function rowsOf(glyphs: Glyph[], rules: Rule[] = []): Glyph[][] {
     }
   }
   for (const glyph of pending) {
-    const at = laid.findIndex((row) => Math.abs(row.baseline - glyph.y) < body * 0.6)
+    const at = laid.findIndex((row) => Math.abs(row.baseline - foot(glyph)) < body * 0.6)
     if (at >= 0) laid[at].glyphs.push(glyph)
-    else laid.push({ baseline: glyph.y, glyphs: [glyph] })
+    else laid.push({ baseline: foot(glyph), glyphs: [glyph] })
   }
 
   // A big operator, or a piece of a tall delimiter, hangs from a point above
@@ -1333,27 +1373,96 @@ function rowsOf(glyphs: Glyph[], rules: Rule[] = []): Glyph[][] {
       progress = true
     }
   }
-  for (const glyph of waiting) {
-    const ink = rectOf(glyph)
-    const nearest = minBy(indices(laid.length), (a, b) => Math.abs(laid[a].baseline - midY(ink)) < Math.abs(laid[b].baseline - midY(ink)))
-    if (nearest !== undefined) laid[nearest].glyphs.push(glyph)
-    else laid.push({ baseline: midY(ink), glyphs: [glyph] })
+  // What is left goes where its neighbours go: a \big| lifted into an
+  // exponent is nearer the line of prose over the display than the display's
+  // own line, but nothing of that prose is anywhere near it, and the r_{ij}
+  // it stands against is the display's. The neighbours are asked whatever
+  // their size — the rows hold only the full-size glyphs yet, and a sum in an
+  // exponent has none of those beside it. And a bar built of pieces goes as
+  // one: measured each from its own middle, its top went to that prose and
+  // its foot stayed with the formula.
+  const stacks: Glyph[][] = []
+  for (const glyph of sortedBy(waiting, (a, b) => a.y < b.y)) {
+    const g = rectOf(glyph)
+    const at = stacks.findIndex((stack) => stack.some((other) => {
+      const o = rectOf(other)
+      return Math.abs(other.x - glyph.x) < glyph.size * 0.2
+        && maxY(o) > minY(g) - glyph.size * 0.3 && minY(o) < maxY(g) + glyph.size * 0.3
+    }))
+    if (at >= 0) stacks[at].push(glyph)
+    else stacks.push([glyph])
+  }
+  for (const stack of stacks) {
+    const ink = extent(stack)
+    if (laid.length === 0) { laid.push({ baseline: midY(ink), glyphs: stack }); continue }
+    const nearestRow = (y: number) => minBy(indices(laid.length), (a, b) => Math.abs(laid[a].baseline - y) < Math.abs(laid[b].baseline - y))!
+    const places = new Set(stack.map(place))
+    const votes = new Map<number, number>()
+    // A neighbour is near in height as well: the "end." of the sentence over
+    // a display stood right over the display's sum.
+    for (const glyph of glyphs) {
+      if (places.has(place(glyph)) || extension(glyph)) continue
+      const g = rectOf(glyph)
+      if (!(maxX(g) > minX(ink) - body * 0.6 && minX(g) < maxX(ink) + body * 0.6
+        && Math.abs(glyph.y - midY(ink)) < body * 1.3)) continue
+      const row = nearestRow(glyph.y)
+      votes.set(row, (votes.get(row) ?? 0) + 1)
+    }
+    const most = maxOf([...votes.values()]) ?? 0
+    const chosen = minBy([...votes.entries()].filter(([, count]) => count === most).map(([row]) => row),
+      (a, b) => Math.abs(laid[a].baseline - midY(ink)) < Math.abs(laid[b].baseline - midY(ink)))
+    laid[chosen ?? nearestRow(midY(ink))].glyphs.push(...stack)
   }
 
   // Small glyphs hang from the row they are beside, as runs: nearness in
   // height alone sent the upper limit of a displayed sum to the prose above.
+  // Nor does a script stand over the ink of its line's own words: a run of
+  // letters that does is another layer — the labels of a figure, level with
+  // a line of its caption, came back as the caption's subscripts.
+  const layeredRun = (run: Glyph[], row: { baseline: number; glyphs: Glyph[] }) => {
+    const lettered = (one: Glyph) => {
+      if (!(one.width > 0.05) || isAccent(one)) return false
+      const drawn = spell(one)
+      return drawn !== '' && chars(drawn).every((c) => isLetter(c) || isNumber(c))
+    }
+    const letters = run.filter(lettered)
+    if (letters.length < 2) return false
+    // (The line's own full-size words, not the scripts already hung from it:
+    // the second row of a \substack stands under the first.)
+    const own = onOwnLine(row, body).filter((one) => one.size >= body * 0.9 && lettered(one))
+    const over = letters.filter((glyph) => {
+      const g = rectOf(glyph)
+      return own.some((other) => {
+        const o = rectOf(other)
+        return Math.min(maxX(o), maxX(g)) - Math.max(minX(o), minX(g)) > Math.min(other.width, glyph.width) * 0.5
+      })
+    })
+    return over.length * 2 > letters.length
+  }
   const unplaced: { run: Glyph[]; level: number }[] = []
   for (const run of smallRuns(glyphs.filter((one) => one.size < body * 0.9 && !extension(one)), body)) {
     const largest = maxOf(run.map((one) => one.size)) ?? body
     const levels = ascending(run.filter((one) => one.size >= largest * 0.95).map((one) => one.y))
     const level = levels[Math.floor(levels.length / 2)]
     const span = extent(run)
-    const nearest = minBy(indices(laid.length).filter((row) => beside(span, laid[row].glyphs, body)),
+    const nearest = minBy(indices(laid.length).filter((row) => beside(span, laid[row].glyphs, body) && !layeredRun(run, laid[row])),
       (a, b) => Math.abs(laid[a].baseline - level) < Math.abs(laid[b].baseline - level))
     // Close enough to hang from this row; further off, it came from the line
-    // above or below, clipped by the band.
-    if (nearest !== undefined && Math.abs(laid[nearest].baseline - level) < body * 0.85) laid[nearest].glyphs.push(...run)
-    else unplaced.push({ run, level })
+    // above or below, clipped by the band. An exponent with a sum in it is
+    // lifted higher — TeX raises it clear of the limits hanging under the sum
+    // — so a run that starts or ends against a sign that grows, or a tall
+    // bracket, may stand a whole line up.
+    const againstASign = (row: Glyph[]) => row.some((glyph) => {
+      if (!(isDelimiter(glyph) || isBigOperator(glyph) || extension(glyph))) return false
+      const g = rectOf(glyph)
+      return (minX(span) >= maxX(g) - 1 && minX(span) - maxX(g) < body * 0.5)
+        || (maxX(span) <= minX(g) + 1 && minX(g) - maxX(span) < body * 0.5)
+    })
+    if (nearest !== undefined && Math.abs(laid[nearest].baseline - level) < body * (againstASign(laid[nearest].glyphs) ? 1.0 : 0.85)) {
+      laid[nearest].glyphs.push(...run)
+    } else {
+      unplaced.push({ run, level })
+    }
   }
   // A part stacked over another small part of a row belongs to it a little
   // further off: the numerator of a fraction inside a fraction in a sentence.
@@ -1371,12 +1480,14 @@ function rowsOf(glyphs: Glyph[], rules: Rule[] = []): Glyph[][] {
       && other.y - level > other.size * 0.6 && other.y - level < other.size * 1.6)
     const stacked = minBy(indices(laid.length).filter((row) => {
       if (sign !== undefined && row !== sign) return false
+      if (layeredRun(run, laid[row])) return false
       const distance = Math.abs(laid[row].baseline - level)
       return (distance < body * 1.05 && laid[row].glyphs.some((one) => one.size < body * 0.9
         && maxX(rectOf(one)) > minX(span) && minX(rectOf(one)) < maxX(span)))
         // The script of a tall bracket or a sign that grows, lifted as high
-        // as they are tall.
-        || (distance < body * 1.3 && laid[row].glyphs.some((glyph) => (isDelimiter(glyph) || isBigOperator(glyph) || extension(glyph))
+        // as they are tall — STIX's sum lifts its upper limit a third of an
+        // em higher than Computer Modern's.
+        || (distance < body * 1.5 && laid[row].glyphs.some((glyph) => (isDelimiter(glyph) || isBigOperator(glyph) || extension(glyph))
           && minX(span) >= maxX(rectOf(glyph)) - 1 && minX(span) - maxX(rectOf(glyph)) < body * 0.5))
         // The second row of a \substack beside a sum in a sentence, a line of
         // script under the first.
@@ -2137,6 +2248,14 @@ function isGap(first: Glyph, second: Glyph, body: number): boolean {
   const formula = Math.min(first.size, second.size) < body * 0.92
     || isMathFont(first) || isMathFont(second)
     || (italicVariables() && ((isItalicLetter(first) && isFormulaMark(second)) || (isFormulaMark(first) && isItalicLetter(second))))
+  // Against a glyph that grows — a radical, the pieces of a tall bar — TeX
+  // sets a thick space and the glyph's own side bearing, which together pass
+  // for a narrow word space: a \big| after a root, and a root after a sum's
+  // limits, began a new word, and the exponent they were in ended there.
+  // (Not against a word of the sentence: mathptmx's ∫ is a point smaller
+  // than the line, and "Inline:" is still a word before it.)
+  const prose = (!isMathFont(first) && isProseMark(first)) || (!isMathFont(second) && isProseMark(second))
+  if (formula && !prose && (extension(first) || extension(second))) return width > body * 0.32
   return width > body * (formula ? 0.22 : 0.09)
 }
 
