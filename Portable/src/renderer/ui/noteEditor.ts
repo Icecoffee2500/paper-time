@@ -21,21 +21,23 @@ import { copyText } from './clipboard.js'
 import { clear, el, on } from '../dom.js'
 import { icon, type IconName } from '../icons.js'
 import { L } from '../../shared/lang.js'
-import { isCommand, platform } from '../bridge.js'
+import { call, isCommand, platform } from '../bridge.js'
 import { anchorAt, parseAnchorURL, quotationInsertion } from '../../shared/noteQuote.js'
 import { zettelDisplayTitle, zettelPreviewBody, zettelTags } from '../../shared/zettel.js'
 import { noteByID, type Note } from '../state.js'
 import { deleteNote, flushNote, linkedFrom, linksOrTagsChanged, linksOut, updateNote } from '../notesModel.js'
-import { indentEdit, returnEdit } from '../../shared/noteBlocks.js'
+import { backspaceEdit, indentEdit, returnEdit, todoShortcutEdit, toggleEmphasisEdit, wrapEdit, type EmphasisMark } from '../../shared/noteBlocks.js'
 import { keyFor } from '../../shared/shortcuts.js'
 import { EditorSelection, EditorState, Prec, Transaction } from '@codemirror/state'
 import { EditorView, drawSelection, keymap, placeholder } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap, insertTab } from '@codemirror/commands'
 import { flash, markdownView, rawField, setRaw } from './note/markdownView.js'
 import { latexSuiteView } from './note/latexSuiteView.js'
+import { noteHTML } from './note/noteHTML.js'
+import { typesetter } from '../sketchMath.js'
 import { wikiLinkCompletion, type WikiLinkReport } from './wikiLinkPopover.js'
 import { mathPreview } from './mathPreview.js'
-import { showMenu } from './toolbar.js'
+import { showMenu, toast } from './toolbar.js'
 
 export interface NoteEditorActions {
   /** A quotation's page link followed: that paper, at that passage. */
@@ -93,6 +95,11 @@ export function findWords(text: string, snippet: string): { from: number; to: nu
   return null
 }
 
+/** The note as one HTML document, set as the editor sets it — what «Export as PDF…» prints. */
+export function exportNoteHTML(note: Pick<Note, 'title' | 'body'>): string {
+  return noteHTML(zettelDisplayTitle(note), note.body, { set: typesetter().set, lang: document.documentElement.lang || 'en' })
+}
+
 export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEditor {
   const node = el('div', { class: 'note-editor' })
 
@@ -124,6 +131,19 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
       // The identifier is worth keeping and not worth staring at: it is what
       // another note links to, so it lives where you go when you want it.
       { label: L(`식별자 복사 — ${id}`, `Copy Identifier — ${id}`), icon: 'number', action: () => void copyText(id) },
+      {
+        label: L('PDF로 내보내기…', 'Export as PDF…'),
+        icon: 'doc.text',
+        action: () => {
+          save()
+          const note = current()
+          if (!note) return
+          void call('notes:exportPDF', { title: zettelDisplayTitle(note), html: exportNoteHTML(note) }).then((result) => {
+            if ('path' in result) toast(L('PDF로 내보냈어요.', 'Exported as PDF.'))
+            else if ('error' in result) toast(result.error)
+          })
+        },
+      },
       { separator: true },
       {
         label: L('노트 지우기', 'Delete Note'),
@@ -230,6 +250,19 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
       },
     },
     {
+      // Right after a marker: a nested item steps out, one at the left is
+      // plain words again (Notion). Anywhere else the ordinary Backspace.
+      key: 'Backspace',
+      run: (target) => {
+        const range = target.state.selection.main
+        if (!range.empty || target.state.selection.ranges.length > 1) return false
+        const edit = backspaceEdit(target.state.doc.toString(), range.head)
+        if (!edit) return false
+        target.dispatch({ changes: { from: edit.from, to: edit.to, insert: edit.insert }, selection: { anchor: edit.caret }, userEvent: 'delete', scrollIntoView: true })
+        return true
+      },
+    },
+    {
       key: 'Tab',
       run: (target) => {
         const edit = indentEdit(target.state.doc.toString(), target.state.selection.main.head, 1)
@@ -245,6 +278,47 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
       },
     },
   ])
+
+  // ⌘B, ⌘I, ⌘E: emphasis put on or taken off, as Notion's. Ahead of every
+  // other key so neither the editor's defaults nor the window's take them.
+  const emphasis = (mark: EmphasisMark) => (target: EditorView) => {
+    const { from, to } = target.state.selection.main
+    const edit = toggleEmphasisEdit(target.state.doc.toString(), from, to, mark)
+    target.dispatch({
+      changes: { from: edit.from, to: edit.to, insert: edit.insert },
+      selection: EditorSelection.range(edit.selectFrom, edit.selectTo),
+      userEvent: 'input', scrollIntoView: true,
+    })
+    return true
+  }
+  const emphasisKeys = Prec.high(keymap.of([
+    { key: 'Mod-b', run: emphasis('**') },
+    { key: 'Mod-i', run: emphasis('*') },
+    { key: 'Mod-e', run: emphasis('`') },
+  ]))
+  // An opening character typed over a selection wraps it (Obsidian), and
+  // «[]» with a space becomes a checkbox (Notion) — before Latex Suite reads
+  // the character.
+  const wrapping = Prec.high(EditorView.inputHandler.of((target, _from, _to, text) => {
+    if (target.composing || target.state.selection.ranges.length > 1) return false
+    const range = target.state.selection.main
+    const source = target.state.doc.toString()
+    if (!range.empty) {
+      const edit = wrapEdit(source, range.from, range.to, text)
+      if (!edit) return false
+      target.dispatch({
+        changes: { from: edit.from, to: edit.to, insert: edit.insert },
+        selection: EditorSelection.range(edit.selectFrom, edit.selectTo),
+        userEvent: 'input.type', scrollIntoView: true,
+      })
+      return true
+    }
+    if (text !== ' ') return false
+    const edit = todoShortcutEdit(source, range.head)
+    if (!edit) return false
+    target.dispatch({ changes: { from: edit.from, to: edit.to, insert: edit.insert }, selection: { anchor: edit.caret }, userEvent: 'input.type', scrollIntoView: true })
+    return true
+  }))
 
   const note = current()
   const view = new EditorView({
@@ -265,6 +339,8 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
         markdownView(),
         links.extension,
         math.extension,
+        emphasisKeys,
+        wrapping,
         latexSuiteView(),
         Prec.default(listKeys),
         keymap.of([...historyKeymap, ...defaultKeymap]),

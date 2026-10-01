@@ -8,7 +8,7 @@
  */
 import { latex as mathLatex, structured as mathStructured } from '../shared/mathReader/reader.js'
 import { layoutPanes } from './layout.js'
-import { flags } from './bridge.js'
+import { call, flags } from './bridge.js'
 import { store } from './state.js'
 import { findBar, focused } from './pageArea.js'
 import { showPaper } from './actions/openPapers.js'
@@ -19,6 +19,8 @@ import { readings } from './library.js'
 import { setSettings } from './settingsController.js'
 import { createNote } from './notesModel.js'
 import { backToNotes, openNoteInSlipBox, slipBoxEditor } from './ui/slipBox.js'
+import { exportNoteHTML } from './ui/noteEditor.js'
+import { zettelDisplayTitle } from '../shared/zettel.js'
 import { openEditor as openNoteEditor, openNoteInTab } from './ui/notesTab.js'
 import { sketchEditor, sketchSelectionChanged } from './ui/sketchEditing.js'
 import type { TextHit } from './textSearch.js'
@@ -125,6 +127,17 @@ export function installProbeSurface() {
       slipBoxPaper: () => store.slipBox.paperID,
       back: () => backToNotes(),
       shelf: () => store.shelf.kind,
+      /** The document «Export as PDF…» would print for a note, as a string — nothing is saved. */
+      exportHTML: (id: string) => {
+        const note = store.notes.find((one) => one.id === id)
+        return note ? exportNoteHTML(note) : null
+      },
+      /** The PDF «Export as PDF…» makes, written to `to` with no dialog. */
+      exportPDF: async (id: string, to: string) => {
+        const note = store.notes.find((one) => one.id === id)
+        if (!note) return null
+        return call('notes:exportPDF', { title: zettelDisplayTitle(note), html: exportNoteHTML(note), to })
+      },
     },
   }
   Object.assign(window, surfaces)
