@@ -243,6 +243,21 @@ struct NoteEditor: NSViewRepresentable {
                 return
             }
             textView.typingAttributes = NoteMarkdown.bodyAttributes
+            // A caret set down inside a drawn marker — on the bullet, by a
+            // click — goes to the words after it: nothing is typed into a
+            // bullet.
+            if let storage = textView.textStorage, storage.length > 0 {
+                let caret = textView.selectedRange().location
+                let lineStart = (textView.string as NSString).lineRange(for: NSRange(location: caret, length: 0)).location
+                var run = NSRange()
+                if caret > lineStart, caret < storage.length,
+                   let standing = storage.attribute(.paperTimeSource, at: lineStart, longestEffectiveRange: &run,
+                                                    in: NSRange(location: lineStart, length: storage.length - lineStart)) as? String,
+                   caret < NSMaxRange(run), NoteMarkdown.Block(line: standing).marker == standing {
+                    textView.setSelectedRange(NSRange(location: NSMaxRange(run), length: 0))
+                    return
+                }
+            }
             let line = (textView.string as NSString).lineRange(for: textView.selectedRange())
             guard line != lastCaretLine else { return }
             scheduleRestyle(in: textView)
@@ -280,11 +295,15 @@ struct NoteEditor: NSViewRepresentable {
                 let line = source.prefix(caret).reduce(into: 0) { count, character in
                     if character == "\n" { count += 1 }
                 }
-                if lines == self.setLineCount, line == self.setCaretLine {
+                // And a marker arriving or going on that line — "- " typed
+                // at its start is a bullet at once, as it is in Notion.
+                let marker = Self.marker(ofLineAt: caret, in: source)
+                if lines == self.setLineCount, line == self.setCaretLine, marker == self.setCaretMarker {
                     return
                 }
                 self.setLineCount = lines
                 self.setCaretLine = line
+                self.setCaretMarker = marker
                 self.restyle(textView, source: source, caretSource: caret)
             }
         }
@@ -295,10 +314,19 @@ struct NoteEditor: NSViewRepresentable {
         /// click that stays on one line does not set the note again.)
         private var setCaretLine = -1
         private var setLineCount = -1
+        private var setCaretMarker = ""
+
+        /// The marker of the line a source offset is on, as written.
+        static func marker(ofLineAt caret: Int, in source: String) -> String {
+            let text = source as NSString
+            let bounded = min(max(caret, 0), text.length)
+            let line = text.lineRange(for: NSRange(location: bounded, length: 0))
+            return NoteMarkdown.Block(line: text.substring(with: line).trimmingCharacters(in: .newlines)).marker
+        }
 
         func restyle(_ textView: NoteTextView, source: String, caretSource: Int?) {
             guard !isRestyling else { return }
-            if caretSource == nil { setCaretLine = -1; setLineCount = -1 }
+            if caretSource == nil { setCaretLine = -1; setLineCount = -1; setCaretMarker = "" }
             isRestyling = true
             defer { isRestyling = false }
 
@@ -920,40 +948,81 @@ final class NoteTextView: LatexSuiteTextView {
         }
     }
 
-    // MARK: Keys
+    // MARK: The line under the caret, as it is written
 
-    override func keyDown(with event: NSEvent) {
-        guard let coordinator, coordinator.completions.isShowing else {
-            return super.keyDown(with: event)
-        }
-        switch event.keyCode {
-        case 125: if coordinator.completions.move(by: 1) { return }      // down
-        case 126: if coordinator.completions.move(by: -1) { return }     // up
-        case 36, 48: if coordinator.completions.chooseSelected() { return }  // return, tab
-        case 53: coordinator.completions.hide(); return                  // escape
-        default: break
-        }
-        super.keyDown(with: event)
+    /// The line the caret is on: its range on screen, what it says in the
+    /// Markdown (a list's marker is drawn as a bullet on screen and stands
+    /// for "- " underneath), its block, and where its marker is on screen.
+    private struct CaretLine {
+        var display: NSRange
+        var source: String
+        var block: NoteMarkdown.Block
+        /// The marker on screen — a drawn stand-in's run, or the marker as
+        /// written — and where the words begin.
+        var markerDisplay: NSRange
+        var contentStart: Int { NSMaxRange(markerDisplay) }
     }
+
+    private func caretLine() -> CaretLine? {
+        guard let storage = textStorage else { return nil }
+        let text = string as NSString
+        let display = text.lineRange(for: selectedRange())
+        let shown = storage.attributedSubstring(from: display)
+        let source = NoteMarkdown.markdown(from: shown).trimmingCharacters(in: .newlines)
+        let block = NoteMarkdown.Block(line: source)
+        var marker = NSRange(location: display.location, length: 0)
+        if !block.marker.isEmpty {
+            var effective = NSRange()
+            if display.length > 0,
+               let standing = storage.attribute(.paperTimeSource, at: display.location,
+                                                 longestEffectiveRange: &effective, in: display) as? String,
+               standing == block.marker {
+                marker = effective
+            } else {
+                marker = NSRange(location: display.location, length: (block.marker as NSString).length)
+            }
+        }
+        return CaretLine(display: display, source: source, block: block, markerDisplay: marker)
+    }
+
+    /// Puts another marker where this line's is — "- " for "  - " to
+    /// outdent, nothing to make the line plain. Written as Markdown; the
+    /// note is set again from it.
+    private func replaceMarker(of line: CaretLine, with marker: String) {
+        replaceDisplay(line.markerDisplay, with: marker)
+    }
+
+    /// Puts Markdown over a range of what is shown — with the note's own
+    /// attributes and none of a drawn stand-in's: text typed over a stand-in
+    /// inherits its `.paperTimeSource`, and would still read as the old
+    /// marker. Through `shouldChangeText`, so it can be undone, and
+    /// `didChangeText`, so the note is read and set again.
+    private func replaceDisplay(_ range: NSRange, with markdown: String) {
+        guard shouldChangeText(in: range, replacementString: markdown), let storage = textStorage else { return }
+        storage.replaceCharacters(in: range, with: NSAttributedString(string: markdown, attributes: NoteMarkdown.bodyAttributes))
+        didChangeText()
+        setSelectedRange(NSRange(location: range.location + (markdown as NSString).length, length: 0))
+    }
+
+    // MARK: Keys
 
     /// Return continues what the line was doing: another bullet, the next
     /// number, another empty checkbox — and an empty item ends the list, which
-    /// is how every outliner behaves and how nobody has to think about it.
+    /// is how every outliner behaves and how nobody has to think about it. An
+    /// empty item nested in another steps out a level first, as Notion's
+    /// does.
     override func insertNewline(_ sender: Any?) {
-        guard coordinator?.showsRawText != true else { return super.insertNewline(sender) }
-        let text = string as NSString
-        let line = text.lineRange(for: selectedRange())
-        let content = text.substring(with: line).trimmingCharacters(in: .newlines)
-        let block = NoteMarkdown.Block(line: content)
-
-        guard block.kind != .plain, !block.marker.isEmpty else {
-            return super.insertNewline(sender)
-        }
+        guard coordinator?.showsRawText != true, selectedRange().length == 0,
+              let line = caretLine(), line.block.kind != .plain, !line.block.marker.isEmpty
+        else { return super.insertNewline(sender) }
+        let block = line.block
         if block.content.trimmingCharacters(in: .whitespaces).isEmpty {
+            if block.indent > 0 {
+                replaceMarker(of: line, with: String(block.marker.dropFirst(2)))
+                return
+            }
             // An empty item: take the marker away rather than making another.
-            let markerRange = NSRange(location: line.location,
-                                      length: (block.marker as NSString).length)
-            insertText("", replacementRange: markerRange)
+            replaceMarker(of: line, with: "")
             super.insertNewline(sender)
             return
         }
@@ -972,6 +1041,21 @@ final class NoteTextView: LatexSuiteTextView {
         }
     }
 
+    /// Backspace at the start of an item's words steps the item out a level,
+    /// and at the left edge makes it a plain line — the way to turn a bullet
+    /// back into text when the "- " is drawn as a bullet.
+    override func deleteBackward(_ sender: Any?) {
+        guard coordinator?.showsRawText != true, selectedRange().length == 0,
+              let line = caretLine(), line.block.kind != .plain, !line.block.marker.isEmpty,
+              selectedRange().location == line.contentStart
+        else { return super.deleteBackward(sender) }
+        if line.block.indent > 0 {
+            replaceMarker(of: line, with: String(line.block.marker.dropFirst(2)))
+        } else {
+            replaceMarker(of: line, with: "")
+        }
+    }
+
     /// Tab indents the item the caret is in rather than dropping a tab into
     /// the middle of a sentence.
     override func insertTab(_ sender: Any?) {
@@ -983,25 +1067,114 @@ final class NoteTextView: LatexSuiteTextView {
     }
 
     private func shiftListItem(by step: Int) -> Bool {
-        guard coordinator?.showsRawText != true else { return false }
-        let text = string as NSString
-        let line = text.lineRange(for: selectedRange())
-        let content = text.substring(with: line).trimmingCharacters(in: .newlines)
-        let block = NoteMarkdown.Block(line: content)
-        switch block.kind {
-        case .bullet, .ordered, .task:
-            break
-        default:
-            return false
-        }
+        guard coordinator?.showsRawText != true, let line = caretLine(), line.block.isListItem else { return false }
         if step > 0 {
-            insertText("  ", replacementRange: NSRange(location: line.location, length: 0))
+            replaceMarker(of: line, with: "  " + line.block.marker)
             return true
         }
-        guard text.substring(with: NSRange(location: line.location,
-                                           length: min(2, line.length))) == "  " else { return true }
-        insertText("", replacementRange: NSRange(location: line.location, length: 2))
+        guard line.block.marker.hasPrefix("  ") else { return true }
+        replaceMarker(of: line, with: String(line.block.marker.dropFirst(2)))
         return true
+    }
+
+    /// ⌘B, ⌘I and ⌘E set the selection bold, italic and as code — as
+    /// Markdown, round the words — and take it off again when it is.
+    override func keyDown(with event: NSEvent) {
+        if coordinator?.showsRawText != true,
+           event.modifierFlags.intersection([.command, .control, .option]) == [.command],
+           let mark = ["b": "**", "i": "*", "e": "`"][event.charactersIgnoringModifiers?.lowercased() ?? ""] {
+            toggleEmphasis(mark)
+            return
+        }
+        guard let coordinator, coordinator.completions.isShowing else {
+            return super.keyDown(with: event)
+        }
+        switch event.keyCode {
+        case 125: if coordinator.completions.move(by: 1) { return }      // down
+        case 126: if coordinator.completions.move(by: -1) { return }     // up
+        case 36, 48: if coordinator.completions.chooseSelected() { return }  // return, tab
+        case 53: coordinator.completions.hide(); return                  // escape
+        default: break
+        }
+        super.keyDown(with: event)
+    }
+
+    private func toggleEmphasis(_ mark: String) {
+        let text = string as NSString
+        let range = selectedRange()
+        let width = (mark as NSString).length
+        undoManager?.beginUndoGrouping()
+        defer { undoManager?.endUndoGrouping() }
+        if range.length == 0 {
+            // Between an empty pair already: it comes off. Otherwise the pair
+            // goes in, and the caret between.
+            if range.location >= width, range.location + width <= text.length,
+               text.substring(with: NSRange(location: range.location - width, length: width)) == mark,
+               text.substring(with: NSRange(location: range.location, length: width)) == mark {
+                insertText("", replacementRange: NSRange(location: range.location - width, length: width * 2))
+                return
+            }
+            insertText(mark + mark, replacementRange: range)
+            setSelectedRange(NSRange(location: range.location + width, length: 0))
+            return
+        }
+        let selected = text.substring(with: range)
+        let before = range.location >= width
+            ? text.substring(with: NSRange(location: range.location - width, length: width)) : ""
+        let after = NSMaxRange(range) + width <= text.length
+            ? text.substring(with: NSRange(location: NSMaxRange(range), length: width)) : ""
+        if selected.hasPrefix(mark), selected.hasSuffix(mark), (selected as NSString).length >= width * 2 {
+            let inner = (selected as NSString).substring(
+                with: NSRange(location: width, length: (selected as NSString).length - width * 2))
+            insertText(inner, replacementRange: range)
+            setSelectedRange(NSRange(location: range.location, length: (inner as NSString).length))
+        } else if before == mark, after == mark {
+            insertText("", replacementRange: NSRange(location: NSMaxRange(range), length: width))
+            insertText("", replacementRange: NSRange(location: range.location - width, length: width))
+            setSelectedRange(NSRange(location: range.location - width, length: range.length))
+        } else {
+            insertText(mark, replacementRange: NSRange(location: NSMaxRange(range), length: 0))
+            insertText(mark, replacementRange: NSRange(location: range.location, length: 0))
+            setSelectedRange(NSRange(location: range.location + width, length: range.length))
+        }
+    }
+
+    /// A bracket, a quote or a mark typed over a selection wraps it — the
+    /// way every editor does — and "[] " at the start of a line is a task.
+    private static let wrapping: [String: String] = [
+        "(": ")", "[": "]", "{": "}", "\"": "\"", "'": "'", "`": "`",
+        "*": "*", "_": "_", "$": "$", "~": "~",
+    ]
+
+    override func insertText(_ string: Any, replacementRange: NSRange) {
+        let typed = (string as? String) ?? (string as? NSAttributedString)?.string ?? ""
+        let range = selectedRange()
+        if coordinator?.showsRawText != true, range.length > 0,
+           replacementRange.location == NSNotFound || replacementRange == range,
+           let closing = Self.wrapping[typed] {
+            undoManager?.beginUndoGrouping()
+            super.insertText(closing, replacementRange: NSRange(location: NSMaxRange(range), length: 0))
+            super.insertText(typed, replacementRange: NSRange(location: range.location, length: 0))
+            undoManager?.endUndoGrouping()
+            setSelectedRange(NSRange(location: range.location + (typed as NSString).length, length: range.length))
+            return
+        }
+        // "[] " at the start of a line, or of a bullet's words, is a task
+        // — Notion's shortcut for one.
+        if typed == " ", range.length == 0, coordinator?.showsRawText != true,
+           let line = caretLine(), line.block.kind == .plain || line.block.kind == .bullet,
+           range.location >= line.contentStart {
+            let text = self.string as NSString
+            let sofar = text.substring(with: NSRange(location: line.contentStart, length: range.location - line.contentStart))
+            if sofar.trimmingCharacters(in: .whitespaces) == "[]" {
+                let lead = String(repeating: "  ", count: line.block.indent)
+                    + (line.block.kind == .plain ? sofar.prefix { $0 == " " } : "")
+                replaceDisplay(NSRange(location: line.markerDisplay.location, length: range.location - line.markerDisplay.location),
+                               with: lead + "- [ ] ")
+                return
+            }
+        }
+        super.insertText(string, replacementRange: replacementRange)
     }
 }
 #endif

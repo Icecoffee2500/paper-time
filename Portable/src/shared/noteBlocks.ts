@@ -111,7 +111,9 @@ export function returnEdit(text: string, caret: number): LineEdit | null {
   const block = blockOf(line)
   if (block.type.kind === 'plain' || block.marker.length === 0) return null
   if (trimWhitespace(block.content).length === 0) {
-    // An empty item: the marker goes, rather than another being made.
+    // An empty nested item steps out a level first, as Notion's does; at the
+    // left already, the marker goes rather than another being made.
+    if (block.indent > 0) return { from: start, to: start + 2, insert: '', caret: Math.max(start, caret - 2) }
     const markerEnd = start + block.marker.length
     const tail = text.slice(markerEnd, caret)
     return { from: start, to: Math.max(caret, markerEnd), insert: `${tail}\n`, caret: start + tail.length + 1 }
@@ -131,6 +133,111 @@ export function indentEdit(text: string, caret: number, by: 1 | -1): LineEdit | 
   // Already at the left: the key is taken and nothing moves.
   if (!line.startsWith('  ')) return { from: start, to: start, insert: '', caret }
   return { from: start, to: start + 2, insert: '', caret: Math.max(start, caret - 2) }
+}
+
+/**
+ * What Backspace does with the caret right after a marker, nothing selected
+ * (Notion): a nested item steps out a level; one at the left loses its
+ * marker and is plain words again. Null anywhere else — the ordinary
+ * Backspace is right there.
+ */
+export function backspaceEdit(text: string, caret: number): LineEdit | null {
+  const { start, line } = lineAt(text, caret)
+  const block = blockOf(line)
+  if (block.type.kind === 'plain' || block.marker.length === 0) return null
+  if (caret !== start + block.marker.length) return null
+  if (block.indent > 0) return { from: start, to: start + 2, insert: '', caret: caret - 2 }
+  return { from: start, to: caret, insert: '', caret: start }
+}
+
+// MARK: - Emphasis and wrapping
+
+/** An edit that leaves something selected afterwards. */
+export interface SelectionEdit {
+  from: number
+  to: number
+  insert: string
+  selectFrom: number
+  selectTo: number
+}
+
+export type EmphasisMark = '**' | '*' | '`'
+
+/**
+ * ⌘B, ⌘I, ⌘E: the mark put around the selection, or taken off it when it
+ * is already there — whether the selection took the marks in or stopped
+ * just inside them. With nothing selected, an empty pair with the caret
+ * between, and the pair taken away again when the caret already stands in
+ * one.
+ */
+export function toggleEmphasisEdit(text: string, from: number, to: number, mark: EmphasisMark): SelectionEdit {
+  const [lo, hi] = from <= to ? [from, to] : [to, from]
+  const width = mark.length
+  if (lo === hi) {
+    if (text.slice(lo - width, lo) === mark && text.slice(lo, lo + width) === mark) {
+      return { from: lo - width, to: lo + width, insert: '', selectFrom: lo - width, selectTo: lo - width }
+    }
+    return { from: lo, to: lo, insert: mark + mark, selectFrom: lo + width, selectTo: lo + width }
+  }
+  const selected = text.slice(lo, hi)
+  // The marks inside the selection: «**bold**» selected whole.
+  if (wrappedBy(selected, mark)) {
+    const inner = selected.slice(width, selected.length - width)
+    return { from: lo, to: hi, insert: inner, selectFrom: lo, selectTo: lo + inner.length }
+  }
+  // The marks just outside it: «bold» selected inside its stars.
+  if (lo >= width && wrappedBy(text.slice(lo - width, hi + width), mark)) {
+    return { from: lo - width, to: hi + width, insert: selected, selectFrom: lo - width, selectTo: lo - width + selected.length }
+  }
+  return { from: lo, to: hi, insert: mark + selected + mark, selectFrom: lo + width, selectTo: lo + width + selected.length }
+}
+
+/**
+ * Whether `wrapped` is `mark`, something, `mark` — read as Markdown reads
+ * stars: «**bold**» is not in italics, and «***both***» is, the odd star
+ * being the italic one.
+ */
+function wrappedBy(wrapped: string, mark: EmphasisMark): boolean {
+  const width = mark.length
+  if (wrapped.length < 2 * width || !wrapped.startsWith(mark) || !wrapped.endsWith(mark)) return false
+  if (mark === '`') return true
+  const lead = wrapped.length - wrapped.replace(/^\*+/, '').length
+  const trail = wrapped.length - wrapped.replace(/\*+$/, '').length
+  if (mark === '*') return lead % 2 === 1 && trail % 2 === 1
+  return lead >= 2 && trail >= 2
+}
+
+/** The closing character each opening one takes (Obsidian's pairs). */
+const PAIRS: Record<string, string> = {
+  '(': ')', '[': ']', '{': '}', '"': '"', "'": "'", '`': '`', '*': '*', '_': '_', '$': '$', '~': '~',
+}
+
+/**
+ * An opening character typed over a selection wraps it rather than replacing
+ * it, and the words stay selected inside the pair. Null when the character
+ * opens nothing, and the typing goes in as typed.
+ */
+export function wrapEdit(text: string, from: number, to: number, typed: string): SelectionEdit | null {
+  const close = PAIRS[typed]
+  if (close === undefined) return null
+  const [lo, hi] = from <= to ? [from, to] : [to, from]
+  if (lo === hi) return null
+  const selected = text.slice(lo, hi)
+  return { from: lo, to: hi, insert: typed + selected + close, selectFrom: lo + 1, selectTo: lo + 1 + selected.length }
+}
+
+/**
+ * Notion's to-do: «[]» and a space at the start of a line become an empty
+ * checkbox. Null unless the line so far, after its indentation, is exactly
+ * that.
+ */
+export function todoShortcutEdit(text: string, caret: number): LineEdit | null {
+  const { start } = lineAt(text, caret)
+  const sofar = text.slice(start, caret)
+  const spaces = sofar.length - sofar.trimStart().length
+  if (sofar.slice(spaces) !== '[]') return null
+  const insert = '- [ ] '
+  return { from: start + spaces, to: caret, insert, caret: start + spaces + insert.length }
 }
 
 // MARK: - [[ completion

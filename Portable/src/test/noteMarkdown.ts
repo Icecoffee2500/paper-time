@@ -6,7 +6,8 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
-import { displayRuns, inlineTokens, noteLines, planNote, type DisplayRun } from '../shared/noteMarkdown.js'
+import { displayRuns, inlineTokens, letters, noteLines, planNote, roman, shownMarker, type DisplayRun } from '../shared/noteMarkdown.js'
+import { blockOf } from '../shared/noteBlocks.js'
 
 type Test = (name: string, body: () => void | Promise<void>) => Promise<void>
 
@@ -48,5 +49,29 @@ export async function noteMarkdownSuite(test: Test, suite: (name: string) => voi
     assert.deepEqual(noteLines('a\n$$\nx\n$$\nb').map((one) => [one.from, one.to]), [[0, 1], [2, 9], [10, 11]])
     const tokens = inlineTokens('[[a|b]] then [c](papertime://anchor?p=0&x=1.00&y=1.00&w=1.00&h=1.00)')
     assert.deepEqual(tokens.map((one) => one.kind), ['note', 'anchor'])
+  })
+
+  await test("a nested list's markers go round • ◦ ▪ and 1. a. i., as the Mac's do", () => {
+    assert.equal(letters(1), 'a')
+    assert.equal(letters(26), 'z')
+    assert.equal(letters(27), 'aa')
+    assert.equal(letters(28), 'ab')
+    assert.equal(letters(52), 'az')
+    assert.equal(letters(53), 'ba')
+    assert.equal(letters(703), 'aaa')
+    for (const [n, numeral] of [[1, 'i'], [2, 'ii'], [3, 'iii'], [4, 'iv'], [5, 'v'], [9, 'ix'], [14, 'xiv'], [40, 'xl'], [90, 'xc'], [400, 'cd'], [900, 'cm'], [1994, 'mcmxciv']] as [number, string][]) {
+      assert.equal(roman(n), numeral)
+    }
+    const marker = (line: string) => shownMarker(blockOf(line))
+    assert.equal(marker('- a'), '•\t')
+    assert.equal(marker('  - a'), '◦\t')
+    assert.equal(marker('    - a'), '▪\t')
+    assert.equal(marker('      - a'), '•\t')
+    assert.equal(marker('3. a'), '3.\t')
+    assert.equal(marker('  3. a'), 'c.\t')
+    assert.equal(marker('    4. a'), 'iv.\t')
+    assert.equal(marker('      2. a'), '2.\t')
+    assert.equal(marker('  - [x] a'), '☑\t')
+    assert.equal(marker('  > a'), '\u200b')
   })
 }

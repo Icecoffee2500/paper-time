@@ -5,13 +5,16 @@
  *
  * The file is still the Markdown, character for character: nothing here
  * changes the text, it only decides how each piece of it is drawn. The line
- * under the caret is drawn as written, markers in the tertiary colour, so the
- * line being edited is the source and the rest is read set. A passage is a
- * chip, a note link its title, a formula set by MathJax, emphasis without its
- * stars; headings are sized, list items hang under their first word, and a
- * quotation has its rule and — when it came off a page — its wash.
+ * under the caret is drawn as written — a heading's or a quotation's marker
+ * in the tertiary colour — so the line being edited is the source and the
+ * rest is read set. A list's marker is the one thing drawn set on that line
+ * too: a bullet is a bullet, never «- » (Notion), the caret steps over it
+ * and never rests inside it. A passage is a chip, a note link its title, a
+ * formula set by MathJax, emphasis without its stars; headings are sized,
+ * list items hang under their first word, and a quotation has its rule and
+ * — when it came off a page — its wash.
  */
-import { RangeSetBuilder, StateEffect, StateField, type EditorState, type Extension, type Range } from '@codemirror/state'
+import { EditorSelection, EditorState, RangeSetBuilder, StateEffect, StateField, type Extension, type Range } from '@codemirror/state'
 import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemirror/view'
 import { planNote, type InlineToken, type PlannedLine } from '../../../shared/noteMarkdown.js'
 import { parseTable, tableBlocks, type Table } from '../../../shared/noteTable.js'
@@ -28,12 +31,15 @@ export const rawField = StateField.define<boolean>({
   },
 })
 
+/** The three bullets a nested list goes round (`shownMarker`), each one glyph wide. */
+const BULLETS = new Set(['•', '◦', '▪'])
+
 class MarkerWidget extends WidgetType {
   constructor(readonly text: string, readonly done: boolean) { super() }
   override eq(other: MarkerWidget) { return other.text === this.text && other.done === this.done }
   toDOM() {
     const span = document.createElement('span')
-    span.className = `nm-marker${this.text === '•' ? '' : ' nm-marker-wide'}${this.done ? ' nm-marker-done' : ''}`
+    span.className = `nm-marker${BULLETS.has(this.text) ? '' : ' nm-marker-wide'}${this.done ? ' nm-marker-done' : ''}`
     span.textContent = this.text
     return span
   }
@@ -242,14 +248,24 @@ function tokenRanges(token: InlineToken, source: string, line: PlannedLine, out:
   }
 }
 
-export function noteDecorations(state: EditorState): DecorationSet {
-  if (state.field(rawField, false)) return Decoration.none
+/** What the note is drawn with, and the list markers among it — the ranges the caret steps over. */
+export interface Drawn {
+  decorations: DecorationSet
+  /** A bullet, a number or a checkbox: a marker drawn as the thing it is, whichever line the caret is on. */
+  markers: DecorationSet
+}
+
+const nothingDrawn: Drawn = { decorations: Decoration.none, markers: Decoration.none }
+
+export function noteDecorations(state: EditorState): Drawn {
+  if (state.field(rawField, false)) return nothingDrawn
   const source = state.doc.toString()
   const heads = state.selection.ranges.map((range) => range.head)
   // Planned with no caret, so every line has its pieces; a line with a caret
   // on it is then drawn as written and its pieces are left alone.
   const plan = planNote(source, null).map((line) => ({ ...line, revealed: heads.some((head) => head >= line.from && head <= line.to) }))
   const ranges: Range<Decoration>[] = []
+  const markers: Range<Decoration>[] = []
   const counted = numbering(source, plan)
   const tables = new Set(tableBlocks(source).map((one) => `${one.from}:${one.to}`))
   plan.forEach((line) => {
@@ -272,12 +288,16 @@ export function noteDecorations(state: EditorState): DecorationSet {
     }
     const { block } = line
     if (line.markerEnd > line.from) {
-      if (line.revealed) ranges.push(Decoration.mark({ class: 'nm-syntax' }).range(line.from, line.markerEnd))
-      else if (block.type.kind === 'heading' || block.type.kind === 'quote') ranges.push(hidden.range(line.from, line.markerEnd))
-      else {
+      if (block.type.kind === 'heading' || block.type.kind === 'quote') {
+        // Shown as written under the caret, quietly; hidden elsewhere.
+        ranges.push(line.revealed ? Decoration.mark({ class: 'nm-syntax' }).range(line.from, line.markerEnd) : hidden.range(line.from, line.markerEnd))
+      } else {
+        // A bullet is a bullet, on the caret's line too (Notion): never «- ».
         const shown = line.shownMarker.replace('\t', '')
         const done = block.type.kind === 'task' && block.type.done
-        ranges.push(Decoration.replace({ widget: new MarkerWidget(shown, done) }).range(line.from, line.markerEnd))
+        const marker = Decoration.replace({ widget: new MarkerWidget(shown, done) }).range(line.from, line.markerEnd)
+        ranges.push(marker)
+        markers.push(marker)
       }
     }
     // The words' own look: a quotation's italics and colour, a done task struck through.
@@ -287,17 +307,50 @@ export function noteDecorations(state: EditorState): DecorationSet {
     }
     if (!line.revealed) for (const token of pieces) tokenRanges(token, source, line, ranges, counted)
   })
-  return Decoration.set(ranges, true)
+  return { decorations: Decoration.set(ranges, true), markers: Decoration.set(markers, true) }
 }
 
-const decorationField = StateField.define<DecorationSet>({
+const decorationField = StateField.define<Drawn>({
   create: (state) => noteDecorations(state),
   update(value, tr) {
     const rawChanged = tr.effects.some((effect) => effect.is(setRaw))
     if (!tr.docChanged && !tr.selection && !rawChanged) return value
     return noteDecorations(tr.state)
   },
-  provide: (field) => EditorView.decorations.from(field),
+  provide: (field) => [
+    EditorView.decorations.from(field, (drawn) => drawn.decorations),
+    // The arrow keys step over a marker as over one character.
+    EditorView.atomicRanges.of((view) => view.state.field(field).markers),
+  ],
+})
+
+/** The marker's end a caret put inside a marker — by a press, a drag, anything — goes to; or the head as it is. */
+function outsideMarkers(markers: DecorationSet, head: number): number {
+  let moved = head
+  markers.between(head, head, (from, to) => {
+    if (from < head && head < to) {
+      moved = to
+      return false
+    }
+    return undefined
+  })
+  return moved
+}
+
+/** A caret never rests inside a marker: there is nothing there to type into. */
+const caretOutOfMarkers = EditorState.transactionFilter.of((tr) => {
+  if (!tr.selection) return tr
+  const { markers } = tr.state.field(decorationField)
+  if (markers.size === 0) return tr
+  let moved = false
+  const ranges = tr.selection.ranges.map((range) => {
+    const head = outsideMarkers(markers, range.head)
+    if (head === range.head) return range
+    moved = true
+    return range.empty ? EditorSelection.cursor(head) : EditorSelection.range(range.anchor, head)
+  })
+  if (!moved) return tr
+  return [tr, { selection: EditorSelection.create(ranges, tr.selection.mainIndex), sequential: true }]
 })
 
 /** A passage found in the note glows for a moment where it is (`reveal`). */
@@ -319,7 +372,7 @@ const flashField = StateField.define<DecorationSet>({
 
 export function markdownView(): Extension {
   return [
-    rawField, decorationField, flashField,
+    rawField, decorationField, caretOutOfMarkers, flashField,
     EditorView.editorAttributes.compute([rawField], (state) => ({ class: state.field(rawField) ? 'nm-raw' : '' })),
   ]
 }

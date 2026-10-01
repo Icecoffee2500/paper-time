@@ -57,6 +57,38 @@ enum NoteMarkdown {
     /// its source on and the caret has somewhere to be.
     static let hiddenMarker = "\u{200B}"
 
+    /// The number of a nested ordered item as a letter: 1 is a, 26 is z,
+    /// 27 is aa — a spreadsheet's columns, in lower case.
+    static func letters(_ number: Int) -> String {
+        guard number > 0 else { return "\(number)" }
+        var result = ""
+        var left = number
+        while left > 0 {
+            left -= 1
+            result = String(UnicodeScalar(UInt8(97 + left % 26))) + result
+            left /= 26
+        }
+        return result
+    }
+
+    /// The number of an item nested twice as a roman numeral, in lower case.
+    static func roman(_ number: Int) -> String {
+        guard number > 0, number < 4000 else { return "\(number)" }
+        let steps: [(Int, String)] = [
+            (1000, "m"), (900, "cm"), (500, "d"), (400, "cd"), (100, "c"), (90, "xc"),
+            (50, "l"), (40, "xl"), (10, "x"), (9, "ix"), (5, "v"), (4, "iv"), (1, "i"),
+        ]
+        var left = number
+        var result = ""
+        for (value, numeral) in steps {
+            while left >= value {
+                result += numeral
+                left -= value
+            }
+        }
+        return result
+    }
+
     /// The room a line has while a note is being rendered. Set for the length
     /// of a render rather than passed down through every kind of token, which
     /// only formulas care about. Rendering happens on the main thread, one
@@ -522,8 +554,12 @@ enum NoteMarkdown {
             let style = alone ? centered(block.paragraphStyle) : block.paragraphStyle
 
             if markerLength > 0 {
-                let shown = revealed ? block.marker : block.shownMarker
-                var attributes: [NSAttributedString.Key: Any] = revealed
+                // A list's marker is drawn on the line being edited as well;
+                // a heading's "#" and a quotation's ">" show there, so they
+                // can be changed.
+                let drawn = !revealed || block.isListItem
+                let shown = drawn ? block.shownMarker : block.marker
+                var attributes: [NSAttributedString.Key: Any] = !drawn
                     ? [.font: block.font, .foregroundColor: syntaxColor]
                     : [.font: block.markerFont, .foregroundColor: block.markerColor]
                 attributes[.paragraphStyle] = style
@@ -703,13 +739,31 @@ enum NoteMarkdown {
         }
 
         /// What stands in for the marker when the line is not being edited.
+        /// A list marker stands in on the line being edited too: a bullet
+        /// is a bullet, never "- " (a reader saw his bullets come and go as
+        /// the caret came and went). Nested lists step through the marks
+        /// an outliner does — •, ◦, ▪ and 1., a., i. — by depth.
         var shownMarker: String {
             switch kind {
             case .plain: ""
             case .heading, .quote: NoteMarkdown.hiddenMarker
-            case .bullet: "•\t"
-            case .ordered(let number): "\(number).\t"
+            case .bullet: ["•", "◦", "▪"][indent % 3] + "\t"
+            case .ordered(let number):
+                switch indent % 3 {
+                case 0: "\(number).\t"
+                case 1: "\(NoteMarkdown.letters(number)).\t"
+                default: "\(NoteMarkdown.roman(number)).\t"
+                }
             case .task(let done): done ? "☑\t" : "☐\t"
+            }
+        }
+
+        /// Whether the marker is a list's: drawn as its stand-in wherever
+        /// the caret is.
+        var isListItem: Bool {
+            switch kind {
+            case .bullet, .ordered, .task: true
+            default: false
             }
         }
 

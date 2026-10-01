@@ -102,6 +102,10 @@ enum NoteScrollProbe {
             await LatexSuiteTypingProbe.endOfEvent(window)
             try? await Task.sleep(for: .milliseconds(150))
             report(key)
+            // What the note says now, for a probe of the keys themselves.
+            if Boot.isSet("PAPERTIME_NOTE_SCROLL_TEXT") {
+                say("note text: \(note.markdown.debugDescription) selection \(text.selectedRange()) shown \(text.string.debugDescription)")
+            }
         }
 
         // Scrolled up by hand, the caret left at the end: does anything pull

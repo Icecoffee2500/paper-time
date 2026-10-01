@@ -54,6 +54,7 @@ import { notesModelSuite } from './notesModel.js'
 import { noteBlocksSuite } from './noteBlocks.js'
 import { drawingToolsSuite } from './drawingTools.js'
 import { noteMarkdownSuite } from './noteMarkdown.js'
+import { noteHTMLSuite } from './noteHTML.js'
 import { shortcutsAndLogSuite } from './shortcutsAndLog.js'
 import { mathReaderSuite } from './mathReader.js'
 import { metadataSuite } from './metadata.js'
@@ -442,6 +443,7 @@ async function main() {
   await noteBlocksSuite(test, suite)
   await drawingToolsSuite(test, suite)
   await noteMarkdownSuite(test, suite)
+  await noteHTMLSuite(test, suite)
   await shortcutsAndLogSuite(test, suite)
   await mathReaderSuite(test, suite)
   await metadataSuite(test, suite)
