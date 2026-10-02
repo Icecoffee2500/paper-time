@@ -594,8 +594,12 @@ export function ordinarySize(glyphs: Glyph[]): number {
 /** What a script hangs from: the last thing written at full height. */
 interface Base { size: number; baseline: number; index: number }
 
-function transcribe(glyphs: Glyph[], rules: Rule[], context: Context | null = null, lineSize: number | null = null): string {
+function transcribe(glyphs: Glyph[], allRules: Rule[], context: Context | null = null, lineSize: number | null = null): string {
   if (glyphs.length === 0) return ''
+  // A brace's fill is a bar to `fractionBars` alone: to every other pass —
+  // the grids, the radicals, the lines over and under runs — it is nothing.
+  const braces = allRules.filter((rule) => rule.brace === true)
+  const rules = allRules.filter((rule) => rule.brace !== true)
   const body = context?.bodySize ?? ordinarySize(glyphs)
   // The size of the line the whole formula is set on, which the smallest
   // scripts are measured against.
@@ -611,12 +615,13 @@ function transcribe(glyphs: Glyph[], rules: Rule[], context: Context | null = nu
     for (const member of found.members) gridded.add(member)
   }
   const free = gridded.size === 0 ? glyphs : glyphs.filter((_, index) => !gridded.has(index))
-  const found = fractionBars(rules, free)
+  const found = fractionBars([...rules, ...braces], free)
   // The bars were found among the glyphs the grids left; their members are
   // counted in the whole formula's numbers.
   const positions = indices(glyphs.length).filter((index) => !gridded.has(index))
   const bars: Bar[] = found.map((bar) => ({
     rule: bar.rule, over: bar.over.map((at) => positions[at]), under: bar.under.map((at) => positions[at]),
+    brace: bar.brace,
   }))
   const baseline = context?.baseline ?? baselineOf(glyphs, body, bars)
 
@@ -643,7 +648,9 @@ function transcribe(glyphs: Glyph[], rules: Rule[], context: Context | null = nu
   // The brackets built taller than \Bigg, to be paired at the end.
   const built: Built[] = []
 
-  const others = (rule: Rule) => rules.filter((one) => !sameRect(one.rect, rule.rect))
+  // (The braces go along to what is read inside a bar: a braced term in a
+  // numerator is braced there.)
+  const others = (rule: Rule) => [...rules, ...braces].filter((one) => !sameRect(one.rect, rule.rect))
   const part = (members: number[]) => byX(members.map((member) => glyphs[member]))
 
   while (index < glyphs.length) {
@@ -658,12 +665,36 @@ function transcribe(glyphs: Glyph[], rules: Rule[], context: Context | null = nu
       const bar = bars[number]
       for (const member of [...bar.over, ...bar.under]) consumed.add(member)
       const rest = others(bar.rule)
-      let t = `\\frac{${transcribe(part(bar.over), rest, null, line)}}` + `{${transcribe(part(bar.under), rest, null, line)}}`
+      // A brace's label is the smaller side: under an \underbrace, over an
+      // \overbrace.
+      const overSize = maxOf(bar.over.map((member) => glyphs[member].size)) ?? body
+      const underSize = maxOf(bar.under.map((member) => glyphs[member].size)) ?? body
+      const labelUnder = bar.rule.brace === true ? (bar.rule.braceLabelBelow ?? true) : underSize <= overSize
+      // A label set in two lines — "Object Region" over "Proposal" — reads
+      // letter by letter across both lines along x; each line is read on
+      // its own, in a \substack. The lines are where the label's largest
+      // glyphs stand; its scripts go with the nearest line.
+      const label = (members: number[]): string => {
+        const size = maxOf(members.map((member) => glyphs[member].size)) ?? body
+        const lines: number[] = []
+        for (const y of sortedBy(members.filter((member) => glyphs[member].size >= size * 0.9).map((member) => glyphs[member].y), (a, b) => a > b)) {
+          if (lines.length === 0 || lines[lines.length - 1] - y > size * 0.5) lines.push(y)
+        }
+        if (lines.length <= 1) return transcribe(part(members), rest, null, line)
+        const read = lines.map((y) => transcribe(part(members.filter((member) =>
+          minBy(lines, (a, b) => Math.abs(a - glyphs[member].y) < Math.abs(b - glyphs[member].y)) === y)), rest, null, line))
+        return `\\substack{${read.join(' \\\\ ')}}`
+      }
+      const over = bar.brace && !labelUnder ? label(bar.over) : transcribe(part(bar.over), rest, null, line)
+      const under = bar.brace && labelUnder ? label(bar.under) : transcribe(part(bar.under), rest, null, line)
+      let t = bar.brace
+        ? (labelUnder ? `\\underbrace{${over}}_{${under}}` : `\\overbrace{${under}}^{${over}}`)
+        : `\\frac{${over}}{${under}}`
       const parts = maxOf([...bar.over, ...bar.under].map((member) => glyphs[member].size)) ?? body
       let scripted = false
       // Nothing is a script of an opening bracket.
       const opened = base !== null ? opening(glyphs[base.index]) !== null : false
-      if (base !== null && tokens.length > 0 && !opened && parts < base.size * 0.8) {
+      if (!bar.brace && base !== null && tokens.length > 0 && !opened && parts < base.size * 0.8) {
         const level = midY(bar.rule.rect) - base.baseline
         if (level > base.size * 0.42) {
           t = `^{${t}}`
@@ -767,7 +798,7 @@ function transcribe(glyphs: Glyph[], rules: Rule[], context: Context | null = nu
     // the F of F^i_{\hat{W}} came back as F\hat{W}i.
     const mark = accented.get(index)
     if (mark !== undefined && (!(base !== null && mark.covered.every((at) => glyphs[at].size < base!.size * 0.92))
-      || scripts(index, glyphs, base?.baseline ?? baseline, base?.size ?? body, line, consumed, stepped) === null)) {
+      || scripts(index, glyphs, base?.baseline ?? baseline, base?.size ?? body, line, consumed, stepped, bars) === null)) {
       for (const member of mark.covered) consumed.add(member)
       let inside = mark.covered.length === 1
         ? mathToken(glyphs[mark.covered[0]])
@@ -789,7 +820,7 @@ function transcribe(glyphs: Glyph[], rules: Rule[], context: Context | null = nu
     // before it — "small" against that, not the whole formula. Asked before
     // anything is read as a bracket: the "(" of x^{(i)} is a superscript first.
     if (base !== null && tokens.length > 0) {
-      const script = scripts(index, glyphs, base.baseline, base.size, line, consumed, stepped)
+      const script = scripts(index, glyphs, base.baseline, base.size, line, consumed, stepped, bars)
       if (script !== null) {
         // An accent on a letter of the script is the script's: its mark, read
         // already, goes where the letter went.
@@ -1182,7 +1213,7 @@ function inkOfStack(index: number, glyphs: Glyph[]): Rect {
   return box
 }
 
-function scripts(start: number, glyphs: Glyph[], baseline: number, body: number, line: number, consumed: Set<number>, stepped: Set<number> = new Set()): { end: number; raised: Glyph[]; lowered: Glyph[] } | null {
+function scripts(start: number, glyphs: Glyph[], baseline: number, body: number, line: number, consumed: Set<number>, stepped: Set<number> = new Set(), bars: Bar[] = []): { end: number; raised: Glyph[]; lowered: Glyph[] } | null {
   if (start <= 0) return null
   let end = start
   const raised: Glyph[] = []
@@ -1218,7 +1249,22 @@ function scripts(start: number, glyphs: Glyph[], baseline: number, body: number,
       break
     }
     const glyph = glyphs[end]
-    const offset = glyph.y - baseline
+    let offset = glyph.y - baseline
+    // A fraction's numerator and denominator go with their bar. One set on
+    // the line — its axis a quarter of an em over the baseline, the numerator
+    // above and the denominator below — is the line's and ends the run: read
+    // glyph by glyph, the ½ after ∇_{ω^t} went up as the 1 and down as the 2,
+    // and came back as ∇^{1}_{ω^t 2}. One lifted or dropped whole is the
+    // script's, on the bar's side whichever side each of its glyphs stands.
+    const bar = bars.find((one) => one.over.includes(end) || one.under.includes(end))
+    if (bar !== undefined) {
+      // A braced formula and its label stand on the line, whatever the
+      // brace's fill is level with: never a script's.
+      if (bar.brace) break
+      const level = midY(bar.rule.rect) - baseline
+      if (!(level > body * 0.42 || level < body * 0.1)) break
+      offset = level - body * 0.25
+    }
     const small = glyph.size < body * 0.92
     const asSmall = smallest && glyph.size <= body * 1.02 && Math.abs(offset) >= body * 0.2
     // A sign drawn from an extension font is not a script as such: the brace
@@ -1292,7 +1338,7 @@ function scripts(start: number, glyphs: Glyph[], baseline: number, body: number,
         opens = barToken(glyph) ?? pairs[kind] ?? kind
       }
     }
-    const inScript = grows && sized && holds && end > start && Math.abs(centre) > body * 0.3
+    const inScript: boolean = grows && sized && holds && end > start && Math.abs(centre) > body * 0.3
       && side !== null && side === (centre > 0)
     if (!(((small || asSmall) && !extension(glyph)) || inScript) || isSpace(glyph)) break
     if (inScript && bracket) {
@@ -1530,7 +1576,10 @@ const SPACED_SYMBOLS = new Set([
 // MARK: - Structures
 
 /** A fraction bar, and which glyphs are over it and under it. */
-interface Bar { rule: Rule; over: number[]; under: number[] }
+/** A fraction bar — or, with `brace`, the fill of an \underbrace or
+ *  \overbrace: what stands over it the braced formula or its label, and
+ *  under it the other. */
+interface Bar { rule: Rule; over: number[]; under: number[]; brace?: boolean }
 
 /** Whether a glyph is across the width of a rule. */
 function spans(rule: Rule, glyph: Glyph): boolean {
@@ -1553,11 +1602,49 @@ function fractionBars(rules: Rule[], glyphs: Glyph[]): Bar[] {
   const bars: Bar[] = []
   const owned = new Set<number>()
   for (const rule of sortedBy(rules, (a, b) => a.rect.width > b.rect.width)) {
-    if (!(rule.rect.width > 1 && rule.rect.height < rule.rect.width && !isVinculumOf(rule, glyphs) && !isBraceFill(rule, glyphs))) continue
+    if (!(rule.rect.width > 1 && rule.rect.height < rule.rect.width && !isVinculumOf(rule, glyphs))) continue
+    // The fill of an \underbrace has a formula over it and a label under,
+    // everything a fraction bar has — and is written as the brace.
+    const brace = rule.brace === true || isBraceFill(rule, glyphs)
     let inside = indices(glyphs.length).filter((at) => !owned.has(at) && spans(rule, glyphs[at]))
-    const over = inside.filter((at) => glyphs[at].y > midY(rule.rect))
+    let over = inside.filter((at) => glyphs[at].y > midY(rule.rect))
     let under = inside.filter((at) => glyphs[at].y <= midY(rule.rect))
     if (over.length === 0 || under.length === 0) continue
+    // A brace's label is centred on the brace and may be wider than it —
+    // "loss for B" under ℓ_B(θ) — so the label side takes in what runs on
+    // along its baseline, letter after letter.
+    const labelUnder = brace && (rule.brace === true ? (rule.braceLabelBelow ?? true)
+      : (maxOf(under.map((at) => glyphs[at].size)) ?? 0) <= (maxOf(over.map((at) => glyphs[at].size)) ?? 0))
+    if (brace) {
+      let label = labelUnder ? under : over
+      const size = maxOf(label.map((at) => glyphs[at].size)) ?? 1
+      const levels = ascending(label.map((at) => glyphs[at].y))
+      const level = levels[Math.floor(levels.length / 2)]
+      // No further than halfway to the next brace on the level: two labels
+      // set side by side run into each other with a space between, and the
+      // first took the second's words.
+      const beside = rules.filter((one) => one.brace === true && !sameRect(one.rect, rule.rect) && Math.abs(midY(one.rect) - midY(rule.rect)) < 1)
+      const leftBound = maxOf(beside.filter((one) => maxX(one.rect) <= minX(rule.rect)).map((one) => (maxX(one.rect) + minX(rule.rect)) / 2)) ?? -Number.MAX_VALUE
+      const rightBound = minOf(beside.filter((one) => minX(one.rect) >= maxX(rule.rect)).map((one) => (minX(one.rect) + maxX(rule.rect)) / 2)) ?? Number.MAX_VALUE
+      let grew = true
+      while (grew) {
+        grew = false
+        const span = extent(label.map((at) => glyphs[at]))
+        for (const index of indices(glyphs.length)) {
+          if (owned.has(index) || inside.includes(index) || extension(glyphs[index])) continue
+          const glyph = glyphs[index]
+          const r = rectOf(glyph)
+          if (!(glyph.size <= size * 1.05 && Math.abs(glyph.y - level) < size * 0.15
+            && minX(r) < maxX(span) + size * 0.35 && maxX(r) > minX(span) - size * 0.35
+            && midX(r) > leftBound && midX(r) < rightBound)) continue
+          label = [...label, index]
+          inside = [...inside, index]
+          grew = true
+        }
+      }
+      if (labelUnder) under = label
+      else over = label
+    }
     // The denominator is the line nearest under the bar, with its scripts:
     // what stands a line further down and happens to reach under the bar is
     // something else's — the wide second row of the limits under the sum
@@ -1571,7 +1658,9 @@ function fractionBars(rules: Rule[], glyphs: Glyph[]): Bar[] {
     const lines = ascending(under.filter((at) => glyphs[at].size >= largest * 0.9 && !extension(glyphs[at])).map((at) => glyphs[at].y))
     const nearest = lines.length === 0 ? midY(rule.rect) : lines[Math.floor(lines.length / 2)]
     const far = under.filter((at) => glyphs[at].y < nearest - glyphs[at].size * 1.0 && !extension(glyphs[at]))
-    if (far.length > 0) {
+    // (A brace's label is all the label's, in as many lines as it is set —
+    // "Relationship" over "Proposal" under one brace.)
+    if (far.length > 0 && !labelUnder) {
       const stays = new Set(far.filter((at) => {
         const glyph = glyphs[at]
         const g = rectOf(glyph)
@@ -1587,7 +1676,7 @@ function fractionBars(rules: Rule[], glyphs: Glyph[]): Bar[] {
     }
     const parts = extent(inside.map((at) => glyphs[at]))
     if (!(minX(rule.rect) > minX(parts) - 4 && maxX(rule.rect) < maxX(parts) + 4)) continue
-    bars.push({ rule, over, under })
+    bars.push({ rule, over, under, brace })
     for (const at of inside) owned.add(at)
   }
   return bars
@@ -1597,7 +1686,7 @@ function fractionBars(rules: Rule[], glyphs: Glyph[]): Bar[] {
  *  brace as its tips and a rule between them (\downbracefill), and the rule
  *  has the formula over it and the brace's label under — everything a
  *  fraction bar has, and the formula came back divided by its own label. */
-function isBraceFill(rule: Rule, glyphs: Glyph[]): boolean {
+export function isBraceFill(rule: Rule, glyphs: Glyph[]): boolean {
   const tips = glyphs.filter((one) => one.glyphName?.startsWith('bracehtip') === true)
   if (tips.length === 0) return false
   const slack = Math.max(2, rule.rect.height * 4)
@@ -2103,7 +2192,7 @@ function overlines(rules: Rule[], glyphs: Glyph[], body: number, bars: Bar[], ro
   const used = [...bars.map((bar) => bar.rule.rect), ...[...roots.values()].map((root) => root.vinculum.rect)]
   for (const rule of sortedBy(rules, (a, b) => a.rect.width > b.rect.width)) {
     if (!(rule.rect.width > 1 && rule.rect.height < rule.rect.width
-      && !used.some((rect) => sameRect(rect, rule.rect)) && !isVinculumOf(rule, glyphs))) continue
+      && !used.some((rect) => sameRect(rect, rule.rect)) && !isVinculumOf(rule, glyphs) && rule.brace !== true && !isBraceFill(rule, glyphs))) continue
     const inside = indices(glyphs.length).filter((at) => !consumed.has(at) && !taken.has(at) && !owned.has(at)
       && spans(rule, glyphs[at]))
     if (inside.length === 0) continue

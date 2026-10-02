@@ -19,7 +19,9 @@ export interface Glyph {
   width: number
 }
 
-export interface Rule { rect: Rect }
+/** A rule; `brace` names the fill of an \underbrace or \overbrace, set by the
+ *  reader while it still has the brace's tips (`markingBraceFills`). */
+export interface Rule { rect: Rect; brace?: boolean; braceLabelBelow?: boolean }
 
 const families = new Map<string, string>()
 

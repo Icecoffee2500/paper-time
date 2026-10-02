@@ -3768,7 +3768,6 @@ body[data-solo='true'] .reader-header button {
 .note-field .nm-raw .cm-content { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14.7px; }
 
 /* Markers on the line being edited: there, and quiet. */
-.nm-syntax { color: var(--text-tertiary); }
 .note-raw[aria-pressed="true"] { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 
 /* Headings: a title, a heading, a subheading (`scale(forHeading:)`). */

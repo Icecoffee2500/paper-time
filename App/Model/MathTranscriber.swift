@@ -647,6 +647,11 @@ enum MathTranscriber {
         _ glyphs: [Glyph], rules: [Rule], context: Context? = nil, line: CGFloat? = nil
     ) -> String {
         guard !glyphs.isEmpty else { return "" }
+        // A brace's fill is a bar to `fractionBars` alone: to every other
+        // pass — the grids, the radicals, the lines over and under runs — it
+        // is nothing.
+        let braces = rules.filter(\.brace)
+        let rules = rules.filter { !$0.brace }
         let body = context?.bodySize ?? ordinarySize(of: glyphs)
         // The size of the line the whole formula is set on, which the smallest
         // scripts are measured against.
@@ -663,12 +668,13 @@ enum MathTranscriber {
             gridded.formUnion(found.members)
         }
         let free = gridded.isEmpty ? glyphs : glyphs.indices.filter { !gridded.contains($0) }.map { glyphs[$0] }
-        let found = fractionBars(among: rules, in: free)
+        let found = fractionBars(among: rules + braces, in: free)
         // The bars were found among the glyphs the grids left; their members
         // are counted in the whole formula's numbers.
         let positions = glyphs.indices.filter { !gridded.contains($0) }
         let bars = found.map { bar in
-            Bar(rule: bar.rule, over: bar.over.map { positions[$0] }, under: bar.under.map { positions[$0] })
+            Bar(rule: bar.rule, over: bar.over.map { positions[$0] }, under: bar.under.map { positions[$0] },
+                brace: bar.brace)
         }
         let baseline = context?.baseline ?? baselineOf(glyphs, bodySize: body, bars: bars)
 
@@ -700,7 +706,9 @@ enum MathTranscriber {
         // The brackets built taller than \Bigg, to be paired at the end.
         var built: [(token: Int, fence: String, opens: Bool, middle: CGFloat, height: CGFloat)] = []
 
-        func others(than rule: Rule) -> [Rule] { rules.filter { $0.rect != rule.rect } }
+        // (The braces go along to what is read inside a bar: a braced term
+        // in a numerator is braced there.)
+        func others(than rule: Rule) -> [Rule] { (rules + braces).filter { $0.rect != rule.rect } }
         func part(_ members: [Int]) -> [Glyph] { byX(members.map { glyphs[$0] }) }
 
         while index < glyphs.count {
@@ -715,13 +723,41 @@ enum MathTranscriber {
                 let bar = bars[number]
                 consumed.formUnion(bar.over + bar.under)
                 let rest = others(than: bar.rule)
-                var token = "\\frac{\(transcribe(part(bar.over), rules: rest, line: line))}"
-                    + "{\(transcribe(part(bar.under), rules: rest, line: line))}"
+                // A brace's label is the smaller side: under an \underbrace,
+                // over an \overbrace.
+                let overSize = bar.over.map { glyphs[$0].size }.max() ?? body
+                let underSize = bar.under.map { glyphs[$0].size }.max() ?? body
+                let labelUnder = bar.rule.brace ? bar.rule.braceLabelBelow : underSize <= overSize
+                // A label set in two lines — "Object Region" over
+                // "Proposal" — reads letter by letter across both lines
+                // along x; each line is read on its own, in a \substack.
+                // The lines are where the label's largest glyphs stand;
+                // its scripts go with the nearest line.
+                func label(_ members: [Int]) -> String {
+                    let size = members.map { glyphs[$0].size }.max() ?? body
+                    var lines: [CGFloat] = []
+                    for y in members.filter({ glyphs[$0].size >= size * 0.9 }).map({ glyphs[$0].origin.y }).sorted(by: >)
+                    where lines.last.map({ $0 - y > size * 0.5 }) ?? true {
+                        lines.append(y)
+                    }
+                    guard lines.count > 1 else { return transcribe(part(members), rules: rest, line: line) }
+                    let read = lines.map { y in
+                        transcribe(part(members.filter { member in
+                            lines.min { abs($0 - glyphs[member].origin.y) < abs($1 - glyphs[member].origin.y) } == y
+                        }), rules: rest, line: line)
+                    }
+                    return "\\substack{\(read.joined(separator: " \\\\ "))}"
+                }
+                let over = bar.brace && !labelUnder ? label(bar.over) : transcribe(part(bar.over), rules: rest, line: line)
+                let under = bar.brace && labelUnder ? label(bar.under) : transcribe(part(bar.under), rules: rest, line: line)
+                var token = bar.brace
+                    ? (labelUnder ? "\\underbrace{\(over)}_{\(under)}" : "\\overbrace{\(under)}^{\(over)}")
+                    : "\\frac{\(over)}{\(under)}"
                 let parts = (bar.over + bar.under).map { glyphs[$0].size }.max() ?? body
                 var scripted = false
                 // Nothing is a script of an opening bracket.
                 let opened = base.map { opening(glyphs[$0.index]) != nil } ?? false
-                if let base, !tokens.isEmpty, !opened, parts < base.size * 0.8 {
+                if !bar.brace, let base, !tokens.isEmpty, !opened, parts < base.size * 0.8 {
                     let level = bar.rule.rect.midY - base.baseline
                     if level > base.size * 0.42 {
                         token = "^{\(token)}"
@@ -829,7 +865,8 @@ enum MathTranscriber {
             if let mark = accented[index],
                !(base.map { base in mark.covered.allSatisfy { glyphs[$0].size < base.size * 0.92 } } ?? false)
                    || scripts(from: index, in: glyphs, baseline: base?.baseline ?? baseline,
-                              body: base?.size ?? body, line: line, consumed: consumed, stepping: stepped) == nil {
+                              body: base?.size ?? body, line: line, consumed: consumed, stepping: stepped,
+                              bars: bars) == nil {
                 consumed.formUnion(mark.covered)
                 var inside = mark.covered.count == 1
                     ? mathToken(for: glyphs[mark.covered[0]])
@@ -854,7 +891,8 @@ enum MathTranscriber {
             // "x^{(i)}" is a superscript first and a bracket second.
             if let base, !tokens.isEmpty,
                var script = scripts(from: index, in: glyphs, baseline: base.baseline,
-                                    body: base.size, line: line, consumed: consumed, stepping: stepped) {
+                                    body: base.size, line: line, consumed: consumed, stepping: stepped,
+                                    bars: bars) {
                 // An accent on a letter of the script is the script's: its
                 // mark, read already, goes where the letter went.
                 for accent in accented.values where !accent.covered.isEmpty
@@ -1243,7 +1281,7 @@ enum MathTranscriber {
     /// in reading order and have to be told apart by height instead.
     private static func scripts(
         from start: Int, in glyphs: [Glyph], baseline: CGFloat, body: CGFloat, line: CGFloat,
-        consumed: Set<Int>, stepping stepped: Set<Int> = []
+        consumed: Set<Int>, stepping stepped: Set<Int> = [], bars: [Bar] = []
     ) -> (end: Int, raised: [Glyph], lowered: [Glyph])? {
         guard start > 0 else { return nil }
         var end = start
@@ -1283,7 +1321,22 @@ enum MathTranscriber {
                 break
             }
             let glyph = glyphs[end]
-            let offset = glyph.origin.y - baseline
+            var offset = glyph.origin.y - baseline
+            // A fraction's numerator and denominator go with their bar. One
+            // set on the line — its axis a quarter of an em over the
+            // baseline, the numerator above and the denominator below — is
+            // the line's and ends the run: read glyph by glyph, the ½ after
+            // ∇_{ω^t} went up as the 1 and down as the 2, and came back as
+            // ∇^{1}_{ω^t 2}. One lifted or dropped whole is the script's,
+            // on the bar's side whichever side each of its glyphs stands.
+            if let bar = bars.first(where: { $0.over.contains(end) || $0.under.contains(end) }) {
+                // A braced formula and its label stand on the line, whatever
+                // the brace's fill is level with: never a script's.
+                if bar.brace { break }
+                let level = bar.rule.rect.midY - baseline
+                guard level > body * 0.42 || level < body * 0.1 else { break }
+                offset = level - body * 0.25
+            }
             // Base level is always full size, so anything still small is still
             // part of the script. Only the first glyph has to be visibly off
             // the line: a script's own script — the "(l)" of "q_{\phi(z^{(l)})}"
@@ -1684,6 +1737,10 @@ enum MathTranscriber {
         var rule: Rule
         var over: [Int]
         var under: [Int]
+        /// An \underbrace or \overbrace rather than a fraction: the rule is
+        /// the brace's fill, what stands over it the braced formula or its
+        /// label, and under it the other.
+        var brace = false
     }
 
     /// Whether a glyph is across the width of a rule.
@@ -1707,12 +1764,51 @@ enum MathTranscriber {
         var bars: [Bar] = []
         var owned = Set<Int>()
         for rule in rules.sorted(by: { $0.rect.width > $1.rect.width })
-        where rule.rect.width > 1 && rule.rect.height < rule.rect.width
-            && !isVinculum(rule, in: glyphs) && !isBraceFill(rule, in: glyphs) {
+        where rule.rect.width > 1 && rule.rect.height < rule.rect.width && !isVinculum(rule, in: glyphs) {
+            // The fill of an \underbrace has a formula over it and a label
+            // under, everything a fraction bar has — and is written as the
+            // brace, with the label where TeX puts it.
+            let brace = rule.brace || isBraceFill(rule, in: glyphs)
             var inside = glyphs.indices.filter { !owned.contains($0) && spans(rule, glyphs[$0]) }
-            let over = inside.filter { glyphs[$0].origin.y > rule.rect.midY }
+            var over = inside.filter { glyphs[$0].origin.y > rule.rect.midY }
             var under = inside.filter { glyphs[$0].origin.y <= rule.rect.midY }
             guard !over.isEmpty, !under.isEmpty else { continue }
+            // A brace's label is centred on the brace and may be wider than
+            // it — "loss for B" under ℓ_B(θ) — so the label side takes in
+            // what runs on along its baseline, letter after letter.
+            let labelUnder = brace && (rule.brace ? rule.braceLabelBelow
+                : (under.map { glyphs[$0].size }.max() ?? 0) <= (over.map { glyphs[$0].size }.max() ?? 0))
+            if brace {
+                var label = labelUnder ? under : over
+                let size = label.map { glyphs[$0].size }.max() ?? 1
+                let levels = label.map { glyphs[$0].origin.y }.sorted()
+                let level = levels[levels.count / 2]
+                // No further than halfway to the next brace on the level:
+                // two labels set side by side run into each other with a
+                // space between, and the first took the second's words.
+                let beside = rules.filter { $0.brace && $0.rect != rule.rect && abs($0.rect.midY - rule.rect.midY) < 1 }
+                let leftBound = beside.filter { $0.rect.maxX <= rule.rect.minX }.map { ($0.rect.maxX + rule.rect.minX) / 2 }.max()
+                    ?? -CGFloat.greatestFiniteMagnitude
+                let rightBound = beside.filter { $0.rect.minX >= rule.rect.maxX }.map { ($0.rect.minX + rule.rect.maxX) / 2 }.min()
+                    ?? CGFloat.greatestFiniteMagnitude
+                var grew = true
+                while grew {
+                    grew = false
+                    let span = extent(label.map { glyphs[$0] })
+                    for index in glyphs.indices
+                    where !owned.contains(index) && !inside.contains(index) && !glyphs[index].isExtension {
+                        let glyph = glyphs[index]
+                        guard glyph.size <= size * 1.05, abs(glyph.origin.y - level) < size * 0.15,
+                              glyph.rect.minX < span.maxX + size * 0.35, glyph.rect.maxX > span.minX - size * 0.35,
+                              glyph.rect.midX > leftBound, glyph.rect.midX < rightBound
+                        else { continue }
+                        label.append(index)
+                        inside.append(index)
+                        grew = true
+                    }
+                }
+                if labelUnder { under = label } else { over = label }
+            }
             // The denominator is the line nearest under the bar, with its
             // scripts: what stands a line further down and happens to reach
             // under the bar is something else's — the wide second row of the
@@ -1728,7 +1824,9 @@ enum MathTranscriber {
                 .map { glyphs[$0].origin.y }.sorted()
             let nearest = lines.isEmpty ? rule.rect.midY : lines[lines.count / 2]
             let far = under.filter { glyphs[$0].origin.y < nearest - glyphs[$0].size * 1.0 && !glyphs[$0].isExtension }
-            if !far.isEmpty {
+            // (A brace's label is all the label's, in as many lines as it
+            // is set — "Relationship" over "Proposal" under one brace.)
+            if !far.isEmpty, !labelUnder {
                 let stays = Set(far.filter { index in
                     let glyph = glyphs[index]
                     let between = rules.contains { other in
@@ -1747,7 +1845,7 @@ enum MathTranscriber {
             }
             let parts = extent(inside.map { glyphs[$0] })
             guard rule.rect.minX > parts.minX - 4, rule.rect.maxX < parts.maxX + 4 else { continue }
-            bars.append(Bar(rule: rule, over: over, under: under))
+            bars.append(Bar(rule: rule, over: over, under: under, brace: brace))
             owned.formUnion(inside)
         }
         return bars
@@ -1758,7 +1856,7 @@ enum MathTranscriber {
     /// and the rule has the formula over it and the brace's label under —
     /// everything a fraction bar has, and the formula came back divided by
     /// its own label.
-    private static func isBraceFill(_ rule: Rule, in glyphs: [Glyph]) -> Bool {
+    static func isBraceFill(_ rule: Rule, in glyphs: [Glyph]) -> Bool {
         let tips = glyphs.filter { $0.glyphName?.hasPrefix("bracehtip") == true }
         guard !tips.isEmpty else { return false }
         let slack = max(2, rule.rect.height * 4)
@@ -2336,7 +2434,7 @@ enum MathTranscriber {
         let used = bars.map(\.rule.rect) + roots.values.map(\.vinculum.rect)
         for rule in rules.sorted(by: { $0.rect.width > $1.rect.width })
         where rule.rect.width > 1 && rule.rect.height < rule.rect.width
-            && !used.contains(rule.rect) && !isVinculum(rule, in: glyphs) {
+            && !used.contains(rule.rect) && !isVinculum(rule, in: glyphs) && !rule.brace && !isBraceFill(rule, in: glyphs) {
             let inside = glyphs.indices.filter {
                 !consumed.contains($0) && !taken.contains($0) && owned[$0] == nil
                     && spans(rule, glyphs[$0])
