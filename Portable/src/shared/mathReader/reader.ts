@@ -21,8 +21,7 @@ import * as TeX from './texGlyphNames.js'
 import {
   barToken, closing, family, hasWordSubscript, isAccent, isBigOperator, isDelimiter, isItalicLetter, isMathFont, isOperatorName,
   isRadical, isSpace, isTallVariant, isUnreadable, isUprightLetter, italicVariables, joiningText, latexOf, maxBy, minBy,
-  isPiece, opening, ordinarySize, setFallback, setVariablesInTextItalic, sortedBy, spelling as spell, stack, type Context,
-} from './transcriber.js'
+  isPiece, opening, ordinarySize, setFallback, setVariablesInTextItalic, sortedBy, spelling as spell, stack, type Context, isBraceFill } from './transcriber.js'
 import { canon, chars, count, firstChar, isLetter, isNumber, isWhitespace, lastChar, trimSet } from './swiftText.js'
 import { trimWhitespace, trimWhitespaceAndNewlines } from '../zettel.js'
 
@@ -53,6 +52,9 @@ export type PieceKind = 'prose' | 'display' | 'inline' | { heading: number }
 
 export interface Piece {
   kind: PieceKind
+  /** Whether the row was a table's (`isTableRow`): its cells of measurements
+   *  are not a displayed equation, however much of the line is mathematics. */
+  isTable?: boolean
   plain: string
   marked: string
   left: number
@@ -124,7 +126,7 @@ export function pieces(pages: PageInput[]): Piece[] {
 
 function readPage(page: PageInput, number: number, layout: Layout, out: Piece[]) {
   const boxes = page.lineBoxes
-  const rules = page.rules
+  const rules = markingBraceFills(page.rules, page.glyphs)
   const pageBody = sizeOf(page.glyphs)
   // How wide the page sets its text, so "this line stops short" has
   // something to be short of.
@@ -185,6 +187,7 @@ function readPage(page: PageInput, number: number, layout: Layout, out: Piece[])
       const scale = sizeOf(glyphs) / Math.max(pageBody, 1)
       out.push({
         kind: heading(scale, glyphs, text, band.width < columnWidth * 0.55),
+        isTable: isTableRow(block.rows[0]),
         plain: text, marked,
         left: minX(band), right: maxX(band),
         baseline: glyphs[0].y, page: number, scale,
@@ -665,9 +668,18 @@ export function lines(read: Piece[], markdown: boolean): string[] {
     }
     // A line that is all mathematics and an equation number is a displayed
     // equation, whatever the row was classified as.
-    const equation = displayedEquation(text)
+    const equation = piece.isTable ? null : displayedEquation(text)
     if (equation !== null) {
       display(equation)
+      continue
+    }
+    // A table's row is a line of its own: joined into a paragraph, its cells
+    // and the next row's ran together.
+    if (piece.isTable) {
+      close()
+      out.push(text)
+      previous = piece
+      afterDisplay = false
       continue
     }
     // After a display, TeX starts the sentence's next words at the column's
@@ -1120,6 +1132,34 @@ function sizeOf(glyphs: Glyph[]): number {
  * the line's own size — and a row whose full-size glyphs stand a line apart
  * is a formula however few letters it has.
  */
+/** Whether a row is a table's: cells set an em and more apart, three gaps
+ *  and more along it, or two measured values ("93.2 ± 0.3") in it. A
+ *  formula's own spacing never opens that wide, and a formula carries one ±
+ *  at a time. */
+export function isTableRow(row: Glyph[]): boolean {
+  if (row.length <= 3) return false
+  // The rows of a matrix open the same gaps between their columns and are
+  // mostly digits too; a tall bracket's piece or a \cdots says which is which.
+  if (row.some((glyph) => extension(glyph) || isPiece(glyph) || ['\\cdots', '\\vdots', '\\ddots'].includes(spell(glyph)))) return false
+  const body = ordinarySize(row)
+  const ordered = sortedBy(row, (a, b) => minX(rectOf(a)) < minX(rectOf(b)))
+  let reach = -Number.MAX_VALUE
+  let gaps = 0
+  for (const glyph of ordered) {
+    const r = rectOf(glyph)
+    if (reach > -Number.MAX_VALUE && minX(r) - reach >= body * 0.8) gaps += 1
+    reach = Math.max(reach, maxX(r))
+  }
+  const measured = row.filter((one) => spell(one) === '\\pm').length
+  // And its cells are numbers: three formulas set a \quad apart on one line
+  // open the same gaps and are a display still.
+  const digits = row.filter((glyph) => {
+    const spelled = spell(glyph)
+    return count(spelled) === 1 && isNumber(firstChar(spelled) ?? '')
+  }).length
+  return (gaps >= 3 && digits * 3 >= row.length) || (measured >= 2 && digits >= 4)
+}
+
 function isDisplayRow(row: Glyph[]): boolean {
   if (row.length === 0) return false
   // Cases folded into the row their brace stands on: the "if" of each case is
@@ -1129,6 +1169,9 @@ function isDisplayRow(row: Glyph[]): boolean {
   // is still the sentence's.
   if (tallFences(row, context(row).bodySize).some((fence) => !fence.closed)) return true
   if (containsProse(row)) return false
+  // A row of a table is not a formula either, however many of its cells are
+  // numbers; read as one it came back as one run of digits.
+  if (isTableRow(row)) return false
   const standing = row.filter((one) => one.size >= context(row).bodySize * 0.92 && !extension(one) && !isDelimiter(one)).map((one) => one.y)
   const top = maxOf(standing)
   const bottom = minOf(standing)
@@ -1461,13 +1504,60 @@ function rowsOf(given: Glyph[], rules: Rule[] = []): Glyph[][] {
     })
     return over.length * 2 > letters.length
   }
+  // A run of small glyphs that is a line of prose in its own right — a
+  // caption, a footnote, a table set smaller than the text — is a line, not
+  // a script: a dozen letters of the text face along one baseline, wide as
+  // eight of them. Hung as a script, a caption's second line became the
+  // subscripts of its first, letter by letter. Such a line takes scripts of
+  // its own only from right beside its baseline; the next line of the
+  // caption is not one.
+  const isLineOfText = (run: Glyph[], level: number): boolean => {
+    const letters = run.filter((one) => {
+      if (!(one.width > 0.05) || isAccent(one) || isMathFont(one) || Math.abs(one.y - level) >= one.size * 0.1) return false
+      const drawn = spell(one)
+      return drawn !== '' && chars(drawn).every((c) => isLetter(c))
+    })
+    if (letters.length < 12) return false
+    const size = maxOf(run.map((one) => one.size)) ?? body
+    const span = extent(run)
+    // Not the label of a brace, however long: "continual learning excess
+    // risk" under an \underbrace is the formula's.
+    if (rules.some((rule) => rule.brace === true && maxX(rule.rect) > minX(span) && minX(rule.rect) < maxX(span)
+      && Math.abs(midY(rule.rect) - level) < size * 2.2)) return false
+    return span.width >= size * 8
+  }
+  const textLines = new Set<number>()
   const unplaced: { run: Glyph[]; level: number }[] = []
+  // The brace this run is the label of, if it is one: centred on the brace,
+  // on its label side, within a line or two of it. (A label is centred on
+  // its brace; the upper limits of the sums in the line below stand on the
+  // label's level too, and are not it.)
+  const braceLabelled = (span: Rect, level: number): Rule | undefined => {
+    const middle = midX(span)
+    return rules.find((rule) => rule.brace === true && middle > minX(rule.rect) && middle < maxX(rule.rect)
+      && Math.abs(middle - midX(rule.rect)) < Math.max(span.width / 2, body)
+      && (level < midY(rule.rect)) === (rule.braceLabelBelow ?? true) && Math.abs(midY(rule.rect) - level) < body * 2.5)
+  }
   for (const run of smallRuns(glyphs.filter((one) => one.size < body * 0.9 && !extension(one)), body)) {
     const largest = maxOf(run.map((one) => one.size)) ?? body
     const levels = ascending(run.filter((one) => one.size >= largest * 0.95).map((one) => one.y))
     const level = levels[Math.floor(levels.length / 2)]
     const span = extent(run)
-    const nearest = minBy(indices(laid.length).filter((row) => beside(span, laid[row].glyphs, body) && !layeredRun(run, laid[row])),
+    if (isLineOfText(run, level)) {
+      laid.push({ baseline: level, glyphs: [...run] })
+      textLines.add(laid.length - 1)
+      continue
+    }
+    // A brace's label goes with the row the brace braces, below — not with
+    // whatever line happens to run beside it: the label under the second
+    // term of (7) hung from the line that held the "(7)" and the other
+    // column's sentence.
+    if (braceLabelled(span, level) !== undefined) {
+      unplaced.push({ run, level })
+      continue
+    }
+    const nearest = minBy(indices(laid.length).filter((row) => beside(span, laid[row].glyphs, body) && !layeredRun(run, laid[row])
+      && !(textLines.has(row) && Math.abs(laid[row].baseline - level) > largest * 0.6)),
       (a, b) => Math.abs(laid[a].baseline - level) < Math.abs(laid[b].baseline - level))
     // Close enough to hang from this row; further off, it came from the line
     // above or below, clipped by the band. An exponent with a sum in it is
@@ -1491,6 +1581,30 @@ function rowsOf(given: Glyph[], rules: Rule[] = []): Glyph[][] {
   for (const { run, level } of unplaced) {
     const span = extent(run)
     const middle = midX(span)
+    // The label of a brace goes with the row it braces, however far the
+    // brace stands from that row — under the limits of the sums in it, a
+    // line and a half down.
+    const brace = braceLabelled(span, level)
+    if (brace) {
+      const below = brace.braceLabelBelow ?? true
+      // The row it braces is the nearest on its far side with a glyph larger
+      // than the label over it — not the second rows of the \substack limits
+      // in it, which stand nearer still and are the label's size; a
+      // denominator's row is folded into the line afterwards and takes the
+      // label along. (Larger than the label, not the page's body: a
+      // displayed equation set \small is braced too.)
+      const labelSize = maxOf(run.map((one) => one.size)) ?? body
+      const host = minBy(indices(laid.length).filter((row) => (laid[row].baseline > midY(brace.rect)) === below
+        && laid[row].glyphs.some((one) => one.size >= labelSize * 1.15 && midX(rectOf(one)) > minX(brace.rect) && midX(rectOf(one)) < maxX(brace.rect))),
+        (a, b) => Math.abs(laid[a].baseline - midY(brace.rect)) < Math.abs(laid[b].baseline - midY(brace.rect)))
+      if (host !== undefined) { laid[host].glyphs.push(...run); continue }
+    }
+    // A line of small text on this run's own baseline is this run's line
+    // before anything is: the numbers of a table set small stand on the line
+    // of their row's name, and stacked on the row above instead they read
+    // letter by letter with its numbers.
+    const line = indices(laid.length).find((row) => textLines.has(row) && Math.abs(laid[row].baseline - level) < body * 0.25)
+    if (line !== undefined) { laid[line].glyphs.push(...run); continue }
     // A limit is its sign's and nothing else's: the upper limits of a line of
     // a derivation set tight stood under a point from the lower limits of the
     // line above.
@@ -1504,7 +1618,7 @@ function rowsOf(given: Glyph[], rules: Rule[] = []): Glyph[][] {
       if (sign !== undefined && row !== sign) return false
       if (layeredRun(run, laid[row])) return false
       const distance = Math.abs(laid[row].baseline - level)
-      return (distance < body * 1.05 && laid[row].glyphs.some((one) => one.size < body * 0.9
+      return (distance < body * 1.05 && !textLines.has(row) && laid[row].glyphs.some((one) => one.size < body * 0.9
         && maxX(rectOf(one)) > minX(span) && minX(rectOf(one)) < maxX(span)))
         // The script of a tall bracket or a sign that grows, lifted as high
         // as they are tall — STIX's sum lifts its upper limit a third of an
@@ -1519,7 +1633,7 @@ function rowsOf(given: Glyph[], rules: Rule[] = []): Glyph[][] {
         // Over a bar the row has something under, or under one it has
         // something over.
         || (distance < body * 1.6 && rules.some((rule) => {
-          if (!(middle > minX(rule.rect) && middle < maxX(rule.rect))) return false
+          if (rule.brace === true || !(middle > minX(rule.rect) && middle < maxX(rule.rect))) return false
           const over = level > midY(rule.rect)
           return laid[row].glyphs.some((one) => midX(rectOf(one)) > minX(rule.rect) && midX(rectOf(one)) < maxX(rule.rect)
             && (one.y > midY(rule.rect)) !== over && Math.abs(one.y - midY(rule.rect)) < body * 1.2)
@@ -1529,7 +1643,8 @@ function rowsOf(given: Glyph[], rules: Rule[] = []): Glyph[][] {
       laid[stacked].glyphs.push(...run)
     } else {
       // Nothing to hang from, but a row on the same line: the limits under
-      // two sums side by side are one row.
+      // two sums side by side are one row — and the numbers of a table set
+      // small stand on the line of their row's name.
       const at = laid.findIndex((row) => Math.abs(row.baseline - level) < body * 0.25)
       if (at >= 0) laid[at].glyphs.push(...run)
       else laid.push({ baseline: level, glyphs: run })
@@ -2379,18 +2494,61 @@ function variablesInTextItalic(page: PageInput): boolean {
 /** A page is laid out once, because a selection asks about all of it. */
 const layouts = new WeakMap<Glyph[], { page: PageInput; layout: Layout }>()
 
+/** The page's rules with the fills of its \underbrace and \overbrace marks
+ *  named as such. The tips that would identify them are dropped before any
+ *  row is laid (`rowsOf`), so they have to be named here, while the tips are
+ *  still in hand: unnamed, a fill drawn as a short image under ℓ_B became an
+ *  \underline on the B, and a fill with a label under it a fraction bar with
+ *  the label for a denominator. Named, the transcriber writes the brace with
+ *  its label (`fractionBars`). */
+function markingBraceFills(rules: Rule[], glyphs: Glyph[]): Rule[] {
+  const tips = glyphs.filter((one) => one.glyphName?.startsWith('bracehtip') === true)
+  if (tips.length === 0) return rules
+  const plain: Rule[] = []
+  const fills: Rule[] = []
+  for (const rule of rules) (isBraceFill(rule, glyphs) ? fills : plain).push(rule)
+  // TeX draws a brace as two fills with a pair of tips meeting in the middle
+  // (\downbracefill: tip, fill, tip, tip, fill, tip), so one brace is two
+  // rules; read as two, each took half the formula and half the label. Fills
+  // on one level with exactly the middle pair between them — two tips' width
+  // — are one brace; two braces side by side have a space between them as
+  // well, and stay two.
+  // (Joined by level, not by order along the page: two braces under
+  // neighbouring terms stand a point apart in height and overlap.)
+  const tipWidth = maxOf(tips.map((tip) => tip.width)) ?? 5
+  const merged: Rule[] = []
+  for (const fill of sortedBy(fills, (a, b) => minX(a.rect) < minX(b.rect))) {
+    const at = merged.findIndex((other) => Math.abs(midY(other.rect) - midY(fill.rect)) < 1
+      && minX(fill.rect) >= maxX(other.rect) - 1 && minX(fill.rect) - maxX(other.rect) < tipWidth * 2 + 1)
+    if (at >= 0) merged[at] = { rect: union(merged[at].rect, fill.rect), brace: true }
+    else merged.push({ ...fill, brace: true })
+  }
+  // The brace reaches a tip's width past its fills on either side, and what
+  // stands over the tips — the bracket that opens the braced formula — is
+  // braced too.
+  // Its end tips say which way it faces: an \underbrace ends in tips that
+  // point up, and its label is under it; an \overbrace ends in tips that
+  // point down.
+  return [...plain, ...merged.map((brace) => {
+    const end = tips.find((tip) => Math.abs(maxX(rectOf(tip)) - minX(brace.rect)) < 1 && Math.abs(tip.y - midY(brace.rect)) < tipWidth * 3)
+    const braceLabelBelow = end ? (end.glyphName?.startsWith('bracehtipup') ?? true) : true
+    return { rect: insetBy(brace.rect, -tipWidth, 0), brace: true, braceLabelBelow }
+  })]
+}
+
 function layoutOf(page: PageInput): Layout {
   const known = layouts.get(page.glyphs)
   if (known && known.page.rules === page.rules && known.page.characters === page.characters
     && known.page.italicElsewhere?.ownLetters === page.italicElsewhere?.ownLetters
     && known.page.italicElsewhere?.evidence === page.italicElsewhere?.evidence) return known.layout
-  const laidRows = rowsOf(page.glyphs, page.rules)
+  const rules = markingBraceFills(page.rules, page.glyphs)
+  const laidRows = rowsOf(page.glyphs, rules)
   const body = sizeOf(page.glyphs)
   const italic = variablesInTextItalic(page)
   const before = italicVariables()
   setVariablesInTextItalic(italic)
   try {
-    const grouped = blocks(laidRows, body, page.rules)
+    const grouped = blocks(laidRows, body, rules)
     // Rows stacked closer than a line are a formula's rows — when something
     // in them came from a maths font.
     const laid: Layout = {
@@ -2398,8 +2556,16 @@ function layoutOf(page: PageInput): Layout {
       // not a row: two rows made a sentence round a \left( a display.
       blocks: grouped.map((group) => {
         const own = group.filter((row) => row.some((one) => !isPiece(one) && spell(one) !== ''))
+        // (Rows of small type — a footnote's — stack closer than the text's
+        // lines do and are not a formula's for it.)
         const stacked = own.length > 1 && group.some((row) => row.some(isMathish))
-        return { rows: group, isFormula: stacked || isDisplayRow(own[0] ?? group[0]) }
+          && own.some((row) => context(row).bodySize >= body * 0.9)
+        // The rows of a table stack a line apart too, and their cells of
+        // measurements are mathematics to the glyph: a block whose every
+        // row is a table's is the table, not a formula.
+        // (Most of its rows: the header row names its columns in words.)
+        const tabular = own.length > 0 && own.filter(isTableRow).length * 2 >= own.length
+        return { rows: group, isFormula: !tabular && (stacked || isDisplayRow(own[0] ?? group[0])) }
       }),
       variablesInTextItalic: italic,
     }

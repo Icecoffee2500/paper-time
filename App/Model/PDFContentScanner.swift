@@ -193,6 +193,13 @@ final class PDFContentScanner {
     /// A filled rectangle: a fraction bar, the roof of a radical, a table rule.
     struct Rule {
         var rect: CGRect
+        /// Whether the rule is the fill of an \underbrace or \overbrace,
+        /// between the brace's tips — set by the reader, which still has
+        /// the tips in hand (`MathReader.markingBraceFills`).
+        var brace = false
+        /// For a brace: whether its label stands under it (an \underbrace,
+        /// whose end tips point up) or over it (an \overbrace).
+        var braceLabelBelow = true
     }
 
     private(set) var glyphs: [Glyph] = []
@@ -201,7 +208,22 @@ final class PDFContentScanner {
     // MARK: - Text state
 
     private var ctm = CGAffineTransform.identity
-    private var ctmStack: [CGAffineTransform] = []
+    /// What `q` saves and `Q` restores: the transform and the text state —
+    /// spacing, scale, leading, rise, the font — which is part of the
+    /// graphics state (ISO 32000 §8.4.1, §9.3.1). Kept past the Q, a
+    /// table's `1.429 Tc` on one cell spread every letter of the cells
+    /// after it, and «Retraining» came back a letter per column.
+    private struct Saved {
+        var ctm: CGAffineTransform
+        var fontSize: CGFloat
+        var charSpacing: CGFloat
+        var wordSpacing: CGFloat
+        var horizontalScale: CGFloat
+        var leading: CGFloat
+        var rise: CGFloat
+        var currentFont: Font?
+    }
+    private var ctmStack: [Saved] = []
     private var textMatrix = CGAffineTransform.identity
     private var lineMatrix = CGAffineTransform.identity
     private var fontSize: CGFloat = 0
@@ -256,11 +278,21 @@ final class PDFContentScanner {
         }
         on("q") { _, info in
             guard let me = PDFContentScanner.me(info) else { return }
-            me.ctmStack.append(me.ctm)
+            me.ctmStack.append(Saved(
+                ctm: me.ctm, fontSize: me.fontSize, charSpacing: me.charSpacing, wordSpacing: me.wordSpacing,
+                horizontalScale: me.horizontalScale, leading: me.leading, rise: me.rise, currentFont: me.currentFont
+            ))
         }
         on("Q") { _, info in
             guard let me = PDFContentScanner.me(info), let last = me.ctmStack.popLast() else { return }
-            me.ctm = last
+            me.ctm = last.ctm
+            me.fontSize = last.fontSize
+            me.charSpacing = last.charSpacing
+            me.wordSpacing = last.wordSpacing
+            me.horizontalScale = last.horizontalScale
+            me.leading = last.leading
+            me.rise = last.rise
+            me.currentFont = last.currentFont
         }
         on("cm") { scanner, info in
             guard let me = PDFContentScanner.me(info), let numbers = PDFContentScanner.numbers(scanner, 6) else { return }
@@ -363,11 +395,46 @@ final class PDFContentScanner {
                   let numbers = PDFContentScanner.numbers(scanner, 2) else { return }
             me.pathStart = CGPoint(x: numbers[0], y: numbers[1])
             me.pathEnd = nil
+            me.pathLowY = numbers[1]
+            me.pathHighY = numbers[1]
         }
         on("l") { scanner, info in
             guard let me = PDFContentScanner.me(info),
                   let numbers = PDFContentScanner.numbers(scanner, 2) else { return }
             me.pathEnd = CGPoint(x: numbers[0], y: numbers[1])
+            me.pathLowY = min(me.pathLowY, numbers[1])
+            me.pathHighY = max(me.pathHighY, numbers[1])
+        }
+        // A curve whose control points all lie on one level is a straight
+        // line drawn the long way round: a document converted from HTML
+        // draws every fraction bar as `m c c c S`. Its control points'
+        // heights say whether it bent.
+        // (Each callback is a C function pointer, so none may capture.)
+        on("c") { scanner, info in
+            guard let me = PDFContentScanner.me(info),
+                  let numbers = PDFContentScanner.numbers(scanner, 6) else { return }
+            me.curved(through: numbers)
+        }
+        on("v") { scanner, info in
+            guard let me = PDFContentScanner.me(info),
+                  let numbers = PDFContentScanner.numbers(scanner, 4) else { return }
+            me.curved(through: numbers)
+        }
+        on("y") { scanner, info in
+            guard let me = PDFContentScanner.me(info),
+                  let numbers = PDFContentScanner.numbers(scanner, 4) else { return }
+            me.curved(through: numbers)
+        }
+        // An image drawn thin and wide is a rule too: a document converted
+        // from HTML draws its fraction bars as a one-pixel image mask
+        // stretched to 80 × 0.5 pt.
+        on("Do") { scanner, info in
+            guard let me = PDFContentScanner.me(info) else { return }
+            var name: UnsafePointer<CChar>?
+            guard CGPDFScannerPopName(scanner, &name), let name else { return }
+            let stream = CGPDFScannerGetContentStream(scanner)
+            guard let object = CGPDFContentStreamGetResource(stream, "XObject", name) else { return }
+            me.drewXObject(object)
         }
         on("w") { scanner, info in
             var value: CGPDFReal = 0
@@ -403,6 +470,9 @@ final class PDFContentScanner {
     private var pendingRect: CGRect?
     private var pathStart: CGPoint?
     private var pathEnd: CGPoint?
+    /// The lowest and highest point the current path reaches, in user space.
+    private var pathLowY: CGFloat = 0
+    private var pathHighY: CGFloat = 0
     private var lineWidth: CGFloat = 1
     /// Every rectangle the page filled, whatever its size — kept only while
     /// working out why a fraction bar has gone missing.
@@ -413,10 +483,35 @@ final class PDFContentScanner {
         defer { pathStart = nil; pathEnd = nil }
         guard let start = pathStart, let end = pathEnd else { return }
         let a = start.applying(ctm), b = end.applying(ctm)
-        guard abs(a.y - b.y) < 1.5, abs(a.x - b.x) > 1 else { return }
-        let thickness = max(lineWidth * sqrt(abs(ctm.a * ctm.d - ctm.b * ctm.c)), 0.4)
+        let scale = sqrt(abs(ctm.a * ctm.d - ctm.b * ctm.c))
+        guard abs(a.y - b.y) < 1.5, (pathHighY - pathLowY) * scale < 1.5, abs(a.x - b.x) > 1 else { return }
+        let thickness = max(lineWidth * scale, 0.4)
         rules.append(Rule(rect: CGRect(x: min(a.x, b.x), y: min(a.y, b.y) - thickness / 2,
                                        width: abs(b.x - a.x), height: thickness)))
+    }
+
+    /// A curve's control points and end, in user space: the path bent if any
+    /// of them left the level the path started on.
+    private func curved(through numbers: [CGFloat]) {
+        for pair in stride(from: 1, to: numbers.count, by: 2) {
+            pathLowY = min(pathLowY, numbers[pair])
+            pathHighY = max(pathHighY, numbers[pair])
+        }
+        pathEnd = CGPoint(x: numbers[numbers.count - 2], y: numbers[numbers.count - 1])
+    }
+
+    /// An image XObject placed where a rule would be — thin and wide under
+    /// the current transform — counts as one. Forms are not followed.
+    private func drewXObject(_ object: CGPDFObjectRef) {
+        var stream: CGPDFStreamRef?
+        guard CGPDFObjectGetValue(object, .stream, &stream), let stream,
+              let dictionary = CGPDFStreamGetDictionary(stream) else { return }
+        var subtype: UnsafePointer<CChar>?
+        guard CGPDFDictionaryGetName(dictionary, "Subtype", &subtype), let subtype,
+              String(cString: subtype) == "Image" else { return }
+        let placed = CGRect(x: 0, y: 0, width: 1, height: 1).applying(ctm).standardized
+        guard placed.height < 3, placed.width > 1 else { return }
+        rules.append(Rule(rect: placed))
     }
 
     private func fillPendingRect() {

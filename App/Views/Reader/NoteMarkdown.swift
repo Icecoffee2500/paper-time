@@ -258,7 +258,6 @@ enum NoteMarkdown {
         return attributes
     }
 
-    private static var syntaxColor: NoteColor { .tertiaryLabelColor }
 
     #if os(macOS)
     /// Renders a note file and prints what each run of it became, then quits.
@@ -554,14 +553,13 @@ enum NoteMarkdown {
             let style = alone ? centered(block.paragraphStyle) : block.paragraphStyle
 
             if markerLength > 0 {
-                // A list's marker is drawn on the line being edited as well;
-                // a heading's "#" and a quotation's ">" show there, so they
-                // can be changed.
-                let drawn = !revealed || block.isListItem
-                let shown = drawn ? block.shownMarker : block.marker
-                var attributes: [NSAttributedString.Key: Any] = !drawn
-                    ? [.font: block.font, .foregroundColor: syntaxColor]
-                    : [.font: block.markerFont, .foregroundColor: block.markerColor]
+                // Every marker is drawn on the line being edited as well
+                // (Notion): a bullet stays a bullet, a heading stays set as
+                // one with its "#" out of sight, a quotation keeps its bar.
+                // The way back to plain words is Backspace at the start of
+                // the words, which takes the marker away (`deleteBackward`).
+                let shown = block.shownMarker
+                var attributes: [NSAttributedString.Key: Any] = [.font: block.markerFont, .foregroundColor: block.markerColor]
                 attributes[.paragraphStyle] = style
                 #if os(macOS)
                 // The stand-in for a quotation's "> " is the first thing in

@@ -289,8 +289,13 @@ export function noteDecorations(state: EditorState): Drawn {
     const { block } = line
     if (line.markerEnd > line.from) {
       if (block.type.kind === 'heading' || block.type.kind === 'quote') {
-        // Shown as written under the caret, quietly; hidden elsewhere.
-        ranges.push(line.revealed ? Decoration.mark({ class: 'nm-syntax' }).range(line.from, line.markerEnd) : hidden.range(line.from, line.markerEnd))
+        // Out of sight on the caret's line too (Notion): a heading stays set
+        // as one and a quotation keeps its bar while they are typed in. The
+        // way back to plain words is Backspace at the start of the words
+        // (`backspaceEdit`). The caret steps over the hidden marker.
+        const marker = hidden.range(line.from, line.markerEnd)
+        ranges.push(marker)
+        markers.push(marker)
       } else {
         // A bullet is a bullet, on the caret's line too (Notion): never «- ».
         const shown = line.shownMarker.replace('\t', '')

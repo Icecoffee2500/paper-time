@@ -56,6 +56,10 @@ enum MathReader {
         }
 
         var kind: Kind
+        /// Whether the row was a table's (`isTableRow`): its cells of
+        /// measurements are not a displayed equation, however much of the
+        /// line is mathematics.
+        var isTable = false
         /// What `latex(from:)` has always answered with.
         var plain: String
         /// The same, with the page's bold kept as Markdown.
@@ -111,7 +115,7 @@ enum MathReader {
             MathTranscriber.variablesInTextItalic = layout.variablesInTextItalic
             defer { MathTranscriber.variablesInTextItalic = false }
             let boxes = lineBoxes(of: selection, on: page)
-            let rules = scanned.rules
+            let rules = markingBraceFills(scanned.rules, glyphs: scanned.glyphs)
             let pageBody = size(of: scanned.glyphs)
             // How wide the page sets its text, so "this line stops short" has
             // something to be short of.
@@ -185,6 +189,7 @@ enum MathReader {
                     pieces.append(Piece(
                         kind: heading(level: scale, glyphs: glyphs, text: text,
                                       short: band.width < columnWidth * 0.55),
+                        isTable: isTableRow(block.rows[0]),
                         plain: text, marked: marked,
                         left: band.minX, right: band.maxX,
                         baseline: glyphs[0].origin.y, page: number, scale: scale
@@ -757,8 +762,17 @@ enum MathReader {
                 // "minimize" is a word, and the line it stands on is still an
                 // equation. This is the line that used to arrive in the
                 // middle of a sentence with its number stuck to it.
-                if let equation = displayedEquation(in: text) {
+                if !piece.isTable, let equation = displayedEquation(in: text) {
                     display(equation)
+                    continue
+                }
+                // A table's row is a line of its own: joined into a
+                // paragraph, its cells and the next row's ran together.
+                if piece.isTable {
+                    close()
+                    lines.append(text)
+                    previous = piece
+                    afterDisplay = false
                     continue
                 }
                 // After a display, TeX starts the sentence's next words at
@@ -1283,6 +1297,38 @@ enum MathReader {
         return sizes.isEmpty ? 10 : sizes[Int(Double(sizes.count) * 0.75)]
     }
 
+    /// Whether a row is a table's: cells set an em and more apart, three
+    /// gaps and more along it, or two measured values ("93.2 ± 0.3") in it.
+    /// A formula's own spacing never opens that wide, and a formula carries
+    /// one ± at a time.
+    static func isTableRow(_ row: [PDFContentScanner.Glyph]) -> Bool {
+        guard row.count > 3 else { return false }
+        // The rows of a matrix open the same gaps between their columns and
+        // are mostly digits too; a tall bracket's piece or a \cdots says
+        // which is which.
+        if row.contains(where: { glyph in
+            glyph.isExtension || MathTranscriber.isPiece(glyph)
+                || ["\\cdots", "\\vdots", "\\ddots"].contains(MathTranscriber.spelling(of: glyph))
+        }) { return false }
+        let body = MathTranscriber.ordinarySize(of: row)
+        let ordered = row.sorted { $0.rect.minX < $1.rect.minX }
+        var reach = -CGFloat.greatestFiniteMagnitude
+        var gaps = 0
+        for glyph in ordered {
+            if reach > -.greatestFiniteMagnitude, glyph.rect.minX - reach >= body * 0.8 { gaps += 1 }
+            reach = max(reach, glyph.rect.maxX)
+        }
+        let measured = row.filter { MathTranscriber.spelling(of: $0) == "\\pm" }.count
+        // And its cells are numbers: three formulas set a \quad apart on
+        // one line — "∫z dz = 0, ∫zzᵀdz = (d+2)I, ∫‖z‖²dz = d+2" — open
+        // the same gaps and are a display still.
+        let digits = row.filter { glyph in
+            let spelled = MathTranscriber.spelling(of: glyph)
+            return spelled.count == 1 && spelled.first!.isNumber
+        }.count
+        return (gaps >= 3 && digits * 3 >= row.count) || (measured >= 2 && digits >= 4)
+    }
+
     /// Whether a row belongs to a displayed formula rather than to a sentence.
     ///
     /// A sentence mentions variables; a formula is made of them. The line
@@ -1303,6 +1349,11 @@ enum MathReader {
         // formula and "where" after it is a sentence however much of it is
         // symbols.
         if containsProse(row) { return false }
+        // A row of a table is not a formula either, however many of its
+        // cells are numbers: cells an em or more apart, three gaps and
+        // more, or two measurements — "93.2 ± 0.3" — in a line. Read as a
+        // formula it came back as one run of digits, "93.2\pm 0.36.4\pm 3.9".
+        if isTableRow(row) { return false }
         // A row whose full-size glyphs stand a line apart and more — the rows
         // of a matrix folded into the row its brackets are on — is a
         // formula however few letters it has: an identity matrix has none.
@@ -1697,14 +1748,69 @@ enum MathReader {
             }
             return over.count * 2 > letters.count
         }
+        // A run of small glyphs that is a line of prose in its own right — a
+        // caption, a footnote, a table set smaller than the text — is a
+        // line, not a script: a dozen letters of the text face along one
+        // baseline, wide as eight of them. Hung as a script, a caption's
+        // second line became the subscripts of its first, letter by letter.
+        // Such a line takes scripts of its own only from right beside its
+        // baseline; the next line of the caption is not one.
+        func isLineOfText(_ run: [PDFContentScanner.Glyph], level: CGFloat) -> Bool {
+            let letters = run.filter { one in
+                guard one.width > 0.05, !MathTranscriber.isAccent(one), !MathTranscriber.isMathFont(one),
+                      abs(one.origin.y - level) < one.size * 0.1 else { return false }
+                let spelled = MathTranscriber.spelling(of: one)
+                return !spelled.isEmpty && spelled.allSatisfy(\.isLetter)
+            }
+            guard letters.count >= 12 else { return false }
+            let size = run.map(\.size).max() ?? body
+            let span = extent(of: run)
+            // Not the label of a brace, however long: "continual learning
+            // excess risk" under an \underbrace is the formula's.
+            if rules.contains(where: { rule in
+                rule.brace && rule.rect.maxX > span.minX && rule.rect.minX < span.maxX
+                    && abs(rule.rect.midY - level) < size * 2.2
+            }) { return false }
+            return span.width >= size * 8
+        }
+        var textLines = Set<Int>()
         var unplaced: [(run: [PDFContentScanner.Glyph], level: CGFloat)] = []
+        // The brace this run is the label of, if it is one: centred on the
+        // brace, on its label side, within a line or two of it. (A label is
+        // centred on its brace; the upper limits of the sums in the line
+        // below stand on the label's level too, and are not it.)
+        func braceLabelled(_ span: CGRect, level: CGFloat) -> PDFContentScanner.Rule? {
+            let middle = span.midX
+            return rules.first(where: { rule in
+                rule.brace && middle > rule.rect.minX && middle < rule.rect.maxX
+                    && abs(middle - rule.rect.midX) < max(span.width / 2, body)
+                    && (level < rule.rect.midY) == rule.braceLabelBelow
+                    && abs(rule.rect.midY - level) < body * 2.5
+            })
+        }
         for run in smallRuns(glyphs.filter { $0.size < body * 0.9 && !$0.isExtension }, body: body) {
             let largest = run.map(\.size).max() ?? body
             let levels = run.filter { $0.size >= largest * 0.95 }.map(\.origin.y).sorted()
             let level = levels[levels.count / 2]
             let span = extent(of: run)
+            if isLineOfText(run, level: level) {
+                rows.append((level, run))
+                textLines.insert(rows.count - 1)
+                continue
+            }
+            // A brace's label goes with the row the brace braces, below —
+            // not with whatever line happens to run beside it: the label
+            // under the second term of (7) hung from the line that held the
+            // "(7)" and the other column's sentence.
+            if braceLabelled(span, level: level) != nil {
+                unplaced.append((run, level))
+                continue
+            }
             let nearest = rows.indices
-                .filter { beside(span, rows[$0].glyphs, body: body) && !layeredRun(run, rows[$0]) }
+                .filter {
+                    beside(span, rows[$0].glyphs, body: body) && !layeredRun(run, rows[$0])
+                        && !(textLines.contains($0) && abs(rows[$0].baseline - level) > largest * 0.6)
+                }
                 .min { abs(rows[$0].baseline - level) < abs(rows[$1].baseline - level) }
             // Close enough to hang from this row. A glyph further off than
             // this came from the line above or below, clipped by the band.
@@ -1732,6 +1838,38 @@ enum MathReader {
         for (run, level) in unplaced {
             let span = extent(of: run)
             let middle = span.midX
+            // The label of a brace goes with the row it braces, however
+            // far the brace stands from that row — under the limits of
+            // the sums in it, a line and a half down.
+            if let brace = braceLabelled(span, level: level) {
+                // The row it braces is the nearest on its far side with a
+                // glyph larger than the label over it — not the second rows
+                // of the \substack limits in it, which stand nearer still
+                // and are the label's size; a denominator's row is folded
+                // into the line afterwards and takes the label along. (Larger
+                // than the label, not the page's body: a displayed equation
+                // set \small is braced too.)
+                let labelSize = run.map(\.size).max() ?? body
+                let host = rows.indices.filter { row in
+                    (rows[row].baseline > brace.rect.midY) == brace.braceLabelBelow && rows[row].glyphs.contains {
+                        $0.size >= labelSize * 1.15 && $0.rect.midX > brace.rect.minX && $0.rect.midX < brace.rect.maxX
+                    }
+                }.min { abs(rows[$0].baseline - brace.rect.midY) < abs(rows[$1].baseline - brace.rect.midY) }
+                if let host {
+                    rows[host].glyphs += run
+                    continue
+                }
+            }
+            // A line of small text on this run's own baseline is this run's
+            // line before anything is: the numbers of a table set small
+            // stand on the line of their row's name, and stacked on the row
+            // above instead they read letter by letter with its numbers.
+            if let line = rows.indices.first(where: {
+                textLines.contains($0) && abs(rows[$0].baseline - level) < body * 0.25
+            }) {
+                rows[line].glyphs += run
+                continue
+            }
             // A limit is its sign's and nothing else's: the upper limits of a
             // line of a derivation set tight stood under a point from the
             // lower limits of the line above, and went to that line's row.
@@ -1748,7 +1886,7 @@ enum MathReader {
                 if let sign, row != sign { return false }
                 if layeredRun(run, rows[row]) { return false }
                 let distance = abs(rows[row].baseline - level)
-                return (distance < body * 1.05 && rows[row].glyphs.contains {
+                return (distance < body * 1.05 && !textLines.contains(row) && rows[row].glyphs.contains {
                     $0.size < body * 0.9 && $0.rect.maxX > span.minX && $0.rect.minX < span.maxX
                 })
                     // The script of a tall bracket or a sign that grows,
@@ -1771,7 +1909,7 @@ enum MathReader {
                     // has something over: a numerator of a fraction inside a
                     // fraction, however far up the page it went.
                     || (distance < body * 1.6 && rules.contains { rule in
-                        guard middle > rule.rect.minX, middle < rule.rect.maxX else { return false }
+                        guard !rule.brace, middle > rule.rect.minX, middle < rule.rect.maxX else { return false }
                         let over = level > rule.rect.midY
                         return rows[row].glyphs.contains {
                             $0.rect.midX > rule.rect.minX && $0.rect.midX < rule.rect.maxX
@@ -1782,10 +1920,11 @@ enum MathReader {
             }.min { abs(rows[$0].baseline - level) < abs(rows[$1].baseline - level) }
             if let stacked {
                 rows[stacked].glyphs += run
-            } else if let level = rows.firstIndex(where: { abs($0.baseline - level) < body * 0.25 }) {
+            } else if let level = rows.indices.first(where: { abs(rows[$0].baseline - level) < body * 0.25 }) {
                 // Nothing to hang from, but a row on the same line: the
                 // limits under two sums side by side are one row, as the
-                // full-size glyphs of a line are.
+                // full-size glyphs of a line are — and the numbers of a
+                // table set small stand on the line of their row's name.
                 rows[level].glyphs += run
             } else {
                 rows.append((level, run))
@@ -2871,16 +3010,74 @@ enum MathReader {
     @MainActor
     private static var layouts: [ObjectIdentifier: (page: PDFPage, value: Layout)] = [:]
 
+    /// The page's rules with the fills of its \underbrace and \overbrace
+    /// marks named as such. The tips that would identify them are dropped
+    /// before any row is laid (`rows(of:)`), so they have to be named here,
+    /// while the tips are still in hand: unnamed, a fill drawn as a short
+    /// image under ℓ_B became an \underline on the B, and a fill with a
+    /// label under it a fraction bar with the label for a denominator.
+    /// Named, the transcriber writes the brace with its label
+    /// (`MathTranscriber.fractionBars`).
+    private static func markingBraceFills(
+        _ rules: [PDFContentScanner.Rule], glyphs: [PDFContentScanner.Glyph]
+    ) -> [PDFContentScanner.Rule] {
+        let tips = glyphs.filter { $0.glyphName?.hasPrefix("bracehtip") == true }
+        guard !tips.isEmpty else { return rules }
+        var plain: [PDFContentScanner.Rule] = []
+        var fills: [PDFContentScanner.Rule] = []
+        for rule in rules {
+            if MathTranscriber.isBraceFill(rule, in: glyphs) { fills.append(rule) } else { plain.append(rule) }
+        }
+        // TeX draws a brace as two fills with a pair of tips meeting in the
+        // middle (\downbracefill: tip, fill, tip, tip, fill, tip), so one
+        // brace is two rules; read as two, each took half the formula and
+        // half the label. Fills on one level with exactly the middle pair
+        // between them — two tips' width — are one brace; two braces side
+        // by side have a space between them as well, and stay two.
+        // (Joined by level, not by order along the page: two braces under
+        // neighbouring terms stand a point apart in height and overlap.)
+        let tipWidth = tips.map(\.width).max() ?? 5
+        var merged: [PDFContentScanner.Rule] = []
+        for fill in fills.sorted(by: { $0.rect.minX < $1.rect.minX }) {
+            if let at = merged.firstIndex(where: { other in
+                abs(other.rect.midY - fill.rect.midY) < 1
+                    && fill.rect.minX >= other.rect.maxX - 1 && fill.rect.minX - other.rect.maxX < tipWidth * 2 + 1
+            }) {
+                merged[at].rect = merged[at].rect.union(fill.rect)
+            } else {
+                var named = fill
+                named.brace = true
+                merged.append(named)
+            }
+        }
+        // The brace reaches a tip's width past its fills on either side, and
+        // what stands over the tips — the bracket that opens the braced
+        // formula — is braced too. Its end tips say which way it faces:
+        // an \underbrace ends in tips that point up, and its label is
+        // under it; an \overbrace ends in tips that point down.
+        return plain + merged.map { brace in
+            var wide = brace
+            if let end = tips.first(where: {
+                abs($0.rect.maxX - brace.rect.minX) < 1 && abs($0.origin.y - brace.rect.midY) < tipWidth * 3
+            }) {
+                wide.braceLabelBelow = end.glyphName?.hasPrefix("bracehtipup") ?? true
+            }
+            wide.rect = brace.rect.insetBy(dx: -tipWidth, dy: 0)
+            return wide
+        }
+    }
+
     @MainActor
     private static func layout(of page: PDFPage, scanned: PDFContentScanner) -> Layout {
         let key = ObjectIdentifier(page)
         if let known = layouts[key], known.page === page { return known.value }
-        let rows = rows(of: scanned.glyphs, rules: scanned.rules)
+        let rules = markingBraceFills(scanned.rules, glyphs: scanned.glyphs)
+        let rows = rows(of: scanned.glyphs, rules: rules)
         let body = size(of: scanned.glyphs)
         let italic = variablesInTextItalic(for: page, scanned: scanned)
         MathTranscriber.variablesInTextItalic = italic
         defer { MathTranscriber.variablesInTextItalic = false }
-        let grouped = blocks(of: rows, body: body, rules: scanned.rules)
+        let grouped = blocks(of: rows, body: body, rules: rules)
         // Rows stacked closer than a line are a formula's rows — when
         // something in them came from a maths font. Two short lines of a
         // reference list, all digits, stack the same way and are not.
@@ -2891,8 +3088,16 @@ enum MathReader {
             let own = rows.filter { row in
                 row.contains { !MathTranscriber.isPiece($0) && !MathTranscriber.spelling(of: $0).isEmpty }
             }
+            // (Rows of small type — a footnote's — stack closer than the
+            // text's lines do and are not a formula's for it.)
             let stacked = own.count > 1 && rows.contains { $0.contains(where: isMathish) }
-            return Layout.Block(rows: rows, isFormula: stacked || isDisplayRow(own.first ?? rows[0]))
+                && own.contains { context(of: $0).bodySize >= body * 0.9 }
+            // The rows of a table stack a line apart too, and their cells
+            // of measurements are mathematics to the glyph: a block whose
+            // every row is a table's is the table, not a formula.
+            // (Most of its rows: the header row names its columns in words.)
+            let tabular = !own.isEmpty && own.filter(isTableRow).count * 2 >= own.count
+            return Layout.Block(rows: rows, isFormula: !tabular && (stacked || isDisplayRow(own.first ?? rows[0])))
         }, variablesInTextItalic: italic)
         if layouts.count > 12 { layouts.removeAll() }
         layouts[key] = (page, laid)
