@@ -133,11 +133,12 @@ const latin1 = (bytes: Uint8Array) => Buffer.from(bytes).toString('latin1')
 
 function scan(file: PDFFile, page: PDFDict): ScannedPage {
   const fonts = loadFonts(file, page)
+  const images = loadImageNames(file, page)
   const glyphs: Glyph[] = []
   const rules: Rule[] = []
 
   let ctm: Matrix = IDENTITY
-  const ctmStack: Matrix[] = []
+  const ctmStack: { ctm: Matrix; charSpacing: number; wordSpacing: number; horizontalScale: number; leading: number; rise: number; fontSize: number; currentFont: Font | null }[] = []
   let textMatrix: Matrix = IDENTITY
   let lineMatrix: Matrix = IDENTITY
   let fontSize = 0
@@ -150,6 +151,9 @@ function scan(file: PDFFile, page: PDFDict): ScannedPage {
   let pendingRect: Rect | null = null
   let pathStart: { x: number; y: number } | null = null
   let pathEnd: { x: number; y: number } | null = null
+  // The lowest and highest point the current path reaches, in user space.
+  let pathLowY = 0
+  let pathHighY = 0
   let lineWidth = 1
 
   const translate = (x: number, y: number): Matrix => [1, 0, 0, 1, x, y]
@@ -202,8 +206,9 @@ function scan(file: PDFFile, page: PDFDict): ScannedPage {
     if (!start || !end) return
     const a = applyPoint(start, ctm)
     const b = applyPoint(end, ctm)
-    if (!(Math.abs(a.y - b.y) < 1.5 && Math.abs(a.x - b.x) > 1)) return
-    const thickness = Math.max(lineWidth * Math.sqrt(Math.abs(ctm[0] * ctm[3] - ctm[1] * ctm[2])), 0.4)
+    const scale = Math.sqrt(Math.abs(ctm[0] * ctm[3] - ctm[1] * ctm[2]))
+    if (!(Math.abs(a.y - b.y) < 1.5 && (pathHighY - pathLowY) * scale < 1.5 && Math.abs(a.x - b.x) > 1)) return
+    const thickness = Math.max(lineWidth * scale, 0.4)
     rules.push({ rect: { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y) - thickness / 2, width: Math.abs(b.x - a.x), height: thickness } })
   }
 
@@ -229,8 +234,26 @@ function scan(file: PDFFile, page: PDFDict): ScannedPage {
       if (token.k === 'kw' && !['true', 'false', 'null'].includes(token.v)) {
         const op = token.v
         switch (op) {
-          case 'q': ctmStack.push(ctm); break
-          case 'Q': { const last = ctmStack.pop(); if (last) ctm = last; break }
+          // The text state — spacing, scale, leading, rise, the font — is
+          // part of the graphics state (ISO 32000 §8.4.1, §9.3.1): what a
+          // `q … Q` block set goes back with the block. Kept past the Q, a
+          // table's `1.429 Tc` on one cell spread every letter of the
+          // cells after it, and «Retraining» came back a letter per column.
+          case 'q': ctmStack.push({ ctm, charSpacing, wordSpacing, horizontalScale, leading, rise, fontSize, currentFont }); break
+          case 'Q': {
+            const last = ctmStack.pop()
+            if (last) {
+              ctm = last.ctm
+              charSpacing = last.charSpacing
+              wordSpacing = last.wordSpacing
+              horizontalScale = last.horizontalScale
+              leading = last.leading
+              rise = last.rise
+              fontSize = last.fontSize
+              currentFont = last.currentFont
+            }
+            break
+          }
           case 'cm': { const v = numbers(6); if (v) ctm = concat(v as Matrix, ctm); break }
           case 'BT': textMatrix = IDENTITY; lineMatrix = IDENTITY; break
           case 'Tf': {
@@ -262,11 +285,35 @@ function scan(file: PDFFile, page: PDFDict): ScannedPage {
             }
             break
           }
-          case 'm': { const v = numbers(2); if (v) { pathStart = { x: v[0], y: v[1] }; pathEnd = null } break }
-          case 'l': { const v = numbers(2); if (v) pathEnd = { x: v[0], y: v[1] }; break }
+          case 'm': { const v = numbers(2); if (v) { pathStart = { x: v[0], y: v[1] }; pathEnd = null; pathLowY = v[1]; pathHighY = v[1] } break }
+          case 'l': { const v = numbers(2); if (v) { pathEnd = { x: v[0], y: v[1] }; pathLowY = Math.min(pathLowY, v[1]); pathHighY = Math.max(pathHighY, v[1]) } break }
+          // A curve whose control points all lie on one level is a straight
+          // line drawn the long way round: a document converted from HTML
+          // draws every fraction bar as `m c c c S`. Its control points'
+          // heights say whether it bent.
+          case 'c': case 'v': case 'y': {
+            const count = op === 'c' ? 6 : 4
+            const v = numbers(count)
+            if (v) {
+              for (let pair = 1; pair < count; pair += 2) { pathLowY = Math.min(pathLowY, v[pair]); pathHighY = Math.max(pathHighY, v[pair]) }
+              pathEnd = { x: v[count - 2], y: v[count - 1] }
+            }
+            break
+          }
           case 'w': lineWidth = number() ?? 0; break
           case 're': { const v = numbers(4); if (v) pendingRect = { x: v[0], y: v[1], width: v[2], height: v[3] }; break }
           case 'f': case 'F': case 'f*': fillPendingRect(); break
+          // An image drawn thin and wide is a rule too: a document converted
+          // from HTML draws its fraction bars as a one-pixel image mask
+          // stretched to 80 × 0.5 pt. Forms are not followed.
+          case 'Do': {
+            const name = operands.length > 0 ? nameOf(operands[operands.length - 1]) : undefined
+            if (name !== undefined && images.has(name)) {
+              const placed = applyRect({ x: 0, y: 0, width: 1, height: 1 }, ctm)
+              if (placed.height < 3 && placed.width > 1) rules.push({ rect: placed })
+            }
+            break
+          }
           case 'S': case 's': case 'B': case 'B*': strokePendingLine(); break
           case 'BI': skipInlineImage(parser); break
           default: break
@@ -305,6 +352,20 @@ function skipInlineImage(parser: Parser) {
   i += 2
   while (i + 1 < b.length && !((b[i - 1] <= 0x20) && b[i] === 0x45 && b[i + 1] === 0x49 && (i + 2 >= b.length || b[i + 2] <= 0x20))) i += 1
   lex.pos = Math.min(b.length, i + 2)
+}
+
+/** The names of the page's image XObjects. */
+function loadImageNames(file: PDFFile, page: PDFDict): Set<string> {
+  const names = new Set<string>()
+  const resources = dictOf(file.resolve(page.get('Resources')))
+  const xobjects = resources ? dictOf(file.resolve(resources.get('XObject'))) : undefined
+  if (!xobjects) return names
+  for (const [key, value] of xobjects.pairs) {
+    const resolved = file.resolve(value)
+    const dictionary = resolved && typeof resolved === 'object' && 'dict' in resolved ? (resolved as { dict: PDFDict }).dict : dictOf(resolved)
+    if (dictionary && nameOf(file.resolve(dictionary.get('Subtype'))) === 'Image') names.add(key)
+  }
+  return names
 }
 
 function loadFonts(file: PDFFile, page: PDFDict): Map<string, Font> {

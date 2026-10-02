@@ -297,6 +297,60 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.9.19",
+            date: Text2("2026년 10월", "October 2026"),
+            note: Text2(
+                "제목과 인용도 쓰는 줄에서 그대로 조판돼요. Ultracopy는 그림으로 그린 분수 막대를 읽고, 표의 줄은 글로, 캡션의 둘째 줄은 제 줄로 복사해요.",
+                "A heading stays a heading and a quotation keeps its bar on the line you are typing. Ultracopy reads a fraction bar drawn as a picture, copies a table's rows as text, and keeps a caption's second line on its own line."
+            ),
+            added: [
+                Entry(
+                    Text2("캐럿 줄의 제목과 인용", "Headings and Quotations Under the Caret"),
+                    Text2(
+                        "제목과 인용도 쓰는 줄에서 그대로 조판돼요. «#»과 «>»는 보이지 않아요. 글머리에서 Backspace를 치면 보통 글로 돌아와요.",
+                        "A heading stays set as one and a quotation keeps its bar on the line you are typing; the “#” and “>” stay out of sight. Backspace at the start of the words turns the line back into text."
+                    )
+                ),
+            ],
+            fixed: [
+                Entry(
+                    Text2("줄 위의 분수", "Fractions on the Line"),
+                    Text2(
+                        "첨자가 달린 글자 바로 뒤에 선 ½ 같은 작은 분수를 분수로 읽어요. 전에는 분자가 위첨자, 분모가 아래첨자로 갈려 ∇^{1}_{ω 2}처럼 나왔어요.",
+                        "A small fraction such as ½ right after a letter with a subscript reads as a fraction. Its numerator used to go up as a superscript and its denominator down as a subscript — ∇^{1}_{ω 2}."
+                    )
+                ),
+                Entry(
+                    Text2("그림으로 그린 분수 막대", "Fraction Bars Drawn as Pictures"),
+                    Text2(
+                        "HTML에서 변환한 PDF가 분수 막대를 곡선이나 1픽셀 그림으로 그려도 분수로 읽어요. 전에는 ∂²ℓ/∂θ²의 분자와 분모가 한 줄로 이어졌어요.",
+                        "A fraction bar drawn as a curve or as a one-pixel image — the way a PDF converted from HTML draws one — reads as a fraction. ∂²ℓ/∂θ² used to come back as one line."
+                    )
+                ),
+                Entry(
+                    Text2("표의 줄", "Rows of a Table"),
+                    Text2(
+                        "표의 줄은 수식이 아니라 글로, 한 줄에 한 줄씩 복사해요. 한 칸에만 글자 간격을 준 표에서 «Retraining»이 글자마다 한 칸씩 떨어져 나오던 것도 고쳤어요.",
+                        "A table's rows copy as text, one row to a line, not as a formula. In a table that letter-spaced one cell, “Retraining” used to come out a letter per column."
+                    )
+                ),
+                Entry(
+                    Text2("밑괄호와 윗괄호", "Underbraces and Overbraces"),
+                    Text2(
+                        "\\underbrace와 \\overbrace를 이름표째 읽어요. 전에는 이름표가 분모가 되거나 글자 하나씩 첨자로 흩어졌어요 — 이제 ∂²ℓ/∂θ² 밑의 «=: G_t»도, 분자 위의 «likelihood»·«prior»도 제자리예요. 두 줄로 짠 이름표는 두 줄 그대로예요.",
+                        "An \\underbrace or \\overbrace reads with its label. The label used to become a denominator or scatter into subscripts letter by letter; “=: G_t” under a Hessian and “likelihood” and “prior” over a numerator now stand where they were set. A label set in two lines keeps its two lines."
+                    )
+                ),
+                Entry(
+                    Text2("캡션과 각주", "Captions and Footnotes"),
+                    Text2(
+                        "작은 글자로 조판한 캡션과 각주의 둘째 줄이 첫 줄의 첨자로 들어가지 않아요. 전에는 «Figure 2.»의 글자 사이사이에 다음 줄의 글자가 끼어 나왔어요.",
+                        "The second line of a caption or footnote set in small type no longer becomes the first line's subscripts; the words of the next line used to come out between the letters of “Figure 2.”."
+                    )
+                ),
+            ]
+        ),
+        Release(
             version: "0.9.18",
             date: Text2("2026년 10월", "October 2026"),
             note: Text2(
