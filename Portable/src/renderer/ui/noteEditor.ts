@@ -26,12 +26,12 @@ import { anchorAt, parseAnchorURL, quotationInsertion } from '../../shared/noteQ
 import { zettelDisplayTitle, zettelPreviewBody, zettelTags } from '../../shared/zettel.js'
 import { noteByID, type Note } from '../state.js'
 import { deleteNote, flushNote, linkedFrom, linksOrTagsChanged, linksOut, updateNote } from '../notesModel.js'
-import { backspaceEdit, indentEdit, returnEdit, todoShortcutEdit, toggleEmphasisEdit, wrapEdit, type EmphasisMark } from '../../shared/noteBlocks.js'
+import { backspaceEdit, homeTarget, indentEdit, pairBackspaceEdit, pairEdit, returnEdit, todoShortcutEdit, toggleEmphasisEdit, toggleShortcutEdit, wrapEdit, type EmphasisMark } from '../../shared/noteBlocks.js'
 import { keyFor } from '../../shared/shortcuts.js'
-import { EditorSelection, EditorState, Prec, Transaction } from '@codemirror/state'
-import { EditorView, drawSelection, keymap, placeholder } from '@codemirror/view'
+import { EditorSelection, EditorState, Prec, Transaction, type Extension } from '@codemirror/state'
+import { EditorView, ViewPlugin, drawSelection, keymap, placeholder, type ViewUpdate } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap, insertTab } from '@codemirror/commands'
-import { flash, markdownView, rawField, setRaw } from './note/markdownView.js'
+import { flash, foldedRanges, markdownView, rawField, setRaw } from './note/markdownView.js'
 import { latexSuiteView } from './note/latexSuiteView.js'
 import { noteHTML } from './note/noteHTML.js'
 import { typesetter } from '../sketchMath.js'
@@ -63,8 +63,136 @@ export interface NoteEditor {
   insert(block: string): void
   /** A passage found by meaning, scrolled to and glowing; true when it was found. */
   reveal(words: string): boolean
-  /** The formula card and the `[[` card, for a probe. */
-  report(): { math: string; links: WikiLinkReport; raw: boolean }
+  /** The formula card, the `[[` card, the selection bar and the folds, for a probe. */
+  report(): { math: string; links: WikiLinkReport; raw: boolean; toolbar: ToolbarReport; folded: number[] }
+}
+
+export interface ToolbarReport { showing: boolean; buttons: string[] }
+
+/** The marks the keys and the selection bar put on, in the bar's order. */
+const EMPHASIS_BUTTONS: { mark: EmphasisMark; label: string; title: string }[] = [
+  { mark: '**', label: 'B', title: L('굵게', 'Bold') },
+  { mark: '*', label: 'I', title: L('기울임', 'Italic') },
+  { mark: '`', label: '<>', title: L('코드', 'Code') },
+  { mark: '$', label: '$', title: L('수식', 'Math') },
+]
+
+/** The editor has the caret — not whether the window is in front. */
+function holdsCaret(view: EditorView): boolean {
+  return view.root.activeElement === view.contentDOM
+}
+
+const TOOLBAR_DELAY_MS = 250
+
+/**
+ * B, I, <>, $ in a small bar over the selection — Notion's. It comes after
+ * the pointer is let go, or a beat after a selection made with the keys,
+ * and goes when the selection collapses, the note loses the caret, the page
+ * scrolls, or the note is shown as Markdown. A press on it keeps the
+ * selection: the bar does the same as the key would.
+ */
+function selectionToolbar(apply: (view: EditorView, mark: EmphasisMark) => void): { extension: Extension; report: () => ToolbarReport } {
+  let bar: HTMLElement | null = null
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let pointerDown = false
+  let current: EditorView | null = null
+
+  const hide = () => {
+    if (timer) clearTimeout(timer)
+    timer = null
+    bar?.remove()
+    bar = null
+  }
+
+  const show = (view: EditorView) => {
+    timer = null
+    const range = view.state.selection.main
+    if (range.empty || !holdsCaret(view) || view.state.field(rawField) || pointerDown) return hide()
+    if (!bar) {
+      bar = el('div', { class: 'selection-toolbar', role: 'toolbar' })
+      // A press on the bar would take the focus and the selection with it.
+      on(bar, 'mousedown', (event: MouseEvent) => event.preventDefault())
+      for (const button of EMPHASIS_BUTTONS) {
+        const node = el('button', { class: 'selection-toolbar-button', type: 'button', title: button.title, text: button.label, 'data-mark': button.mark })
+        on(node, 'click', () => { if (current) apply(current, button.mark) })
+        bar.append(node)
+      }
+      document.body.append(bar)
+    }
+    // Over the middle of the selection's first line, a little above it.
+    const start = view.coordsAtPos(range.from)
+    if (!start) return hide()
+    const lineEnd = Math.min(range.to, view.state.doc.lineAt(range.from).to)
+    const end = view.coordsAtPos(lineEnd, -1)
+    const sameLine = end && Math.abs(end.top - start.top) < 2
+    const box = view.dom.getBoundingClientRect()
+    const right = sameLine ? end.right : box.right
+    const width = bar.offsetWidth
+    const height = bar.offsetHeight
+    let left = (start.left + right) / 2 - width / 2
+    left = Math.max(8, Math.min(left, window.innerWidth - width - 8))
+    let top = start.top - height - 6
+    if (top < 8) top = start.bottom + 6
+    Object.assign(bar.style, { left: `${left}px`, top: `${top}px` })
+  }
+
+  const schedule = (view: EditorView, after: number) => {
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(() => show(view), after)
+  }
+
+  const plugin = ViewPlugin.fromClass(class {
+    constructor(view: EditorView) { current = view }
+    update(update: ViewUpdate) {
+      if (!update.selectionSet && !update.docChanged && !update.focusChanged) return
+      const view = update.view
+      const range = view.state.selection.main
+      // Gone the moment the words under it change or the selection does; back
+      // after a beat when something is still selected.
+      hide()
+      if (range.empty || !holdsCaret(view)) return
+      if (!pointerDown) schedule(view, TOOLBAR_DELAY_MS)
+    }
+    destroy() {
+      hide()
+      current = null
+    }
+  })
+
+  const released = () => {
+    if (!pointerDown) return
+    pointerDown = false
+    if (current) schedule(current, 0)
+  }
+  const pressed = () => {
+    pointerDown = true
+    hide()
+  }
+  const scrolled = () => hide()
+  const listening = ViewPlugin.fromClass(class {
+    constructor() {
+      window.addEventListener('mouseup', released)
+      window.addEventListener('scroll', scrolled, true)
+    }
+    destroy() {
+      window.removeEventListener('mouseup', released)
+      window.removeEventListener('scroll', scrolled, true)
+    }
+  })
+
+  return {
+    extension: [
+      plugin, listening,
+      EditorView.domEventHandlers({
+        mousedown: () => { pressed() },
+        blur: () => { hide() },
+      }),
+      EditorView.updateListener.of((update) => {
+        if (update.transactions.some((tr) => tr.effects.some((effect) => effect.is(setRaw)))) hide()
+      }),
+    ],
+    report: () => ({ showing: bar !== null, buttons: bar ? [...bar.querySelectorAll('button')].map((button) => button.textContent ?? '') : [] }),
+  }
 }
 
 /** The `[[id|label]]` a character of a note sits in, read back into the id, or null. */
@@ -279,9 +407,10 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
     },
   ])
 
-  // ⌘B, ⌘I, ⌘E: emphasis put on or taken off, as Notion's. Ahead of every
-  // other key so neither the editor's defaults nor the window's take them.
-  const emphasis = (mark: EmphasisMark) => (target: EditorView) => {
+  // ⌘B, ⌘I, ⌘E, ⌘⇧M: emphasis put on or taken off, as Notion's. Ahead of
+  // every other key so neither the editor's defaults nor the window's take
+  // them. (⌘M on its own is the window's Minimize.)
+  const applyEmphasis = (target: EditorView, mark: EmphasisMark) => {
     const { from, to } = target.state.selection.main
     const edit = toggleEmphasisEdit(target.state.doc.toString(), from, to, mark)
     target.dispatch({
@@ -289,16 +418,62 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
       selection: EditorSelection.range(edit.selectFrom, edit.selectTo),
       userEvent: 'input', scrollIntoView: true,
     })
+  }
+  const emphasis = (mark: EmphasisMark) => (target: EditorView) => {
+    applyEmphasis(target, mark)
     return true
   }
   const emphasisKeys = Prec.high(keymap.of([
     { key: 'Mod-b', run: emphasis('**') },
     { key: 'Mod-i', run: emphasis('*') },
     { key: 'Mod-e', run: emphasis('`') },
+    { key: 'Mod-Shift-m', run: emphasis('$') },
   ]))
-  // An opening character typed over a selection wraps it (Obsidian), and
-  // «[]» with a space becomes a checkbox (Notion) — before Latex Suite reads
-  // the character.
+  const toolbar = selectionToolbar(applyEmphasis)
+  // Home (⌘←) on a marked line: to the words first, then to the very start
+  // (`homeTarget`); the shifted keys extend the selection there. On any
+  // other line the editor's own keys.
+  const home = (extend: boolean) => (target: EditorView) => {
+    const range = target.state.selection.main
+    const line = target.state.doc.lineAt(range.head)
+    const offset = homeTarget(line.text, range.head - line.from)
+    if (offset === null) return false
+    const head = line.from + offset
+    target.dispatch({ selection: extend ? EditorSelection.range(range.anchor, head) : EditorSelection.cursor(head), scrollIntoView: true })
+    return true
+  }
+  const homeKeys = Prec.high(keymap.of([
+    { key: 'Home', run: home(false), shift: home(true) },
+    { key: 'Cmd-ArrowLeft', run: home(false), shift: home(true) },
+  ]))
+  // Brackets and quotes bring their closers (`pairEdit`), after Latex Suite
+  // and the wrapping above have had the character: only a character typed
+  // into an empty, single selection, never while an input method composes.
+  const autoPairs = Prec.low(EditorView.inputHandler.of((target, _from, _to, text) => {
+    if (target.composing || target.state.selection.ranges.length > 1) return false
+    const range = target.state.selection.main
+    if (!range.empty) return false
+    const edit = pairEdit(target.state.doc.toString(), range.head, text)
+    if (!edit) return false
+    target.dispatch({ changes: { from: edit.from, to: edit.to, insert: edit.insert }, selection: { anchor: edit.caret }, userEvent: 'input.type', scrollIntoView: true })
+    return true
+  }))
+  // Backspace between an empty pair takes both — after Latex Suite's own
+  // Backspace, which deletes a `$$` pair of its own making.
+  const pairBackspace = Prec.high(keymap.of([{
+    key: 'Backspace',
+    run: (target) => {
+      const range = target.state.selection.main
+      if (!range.empty || target.state.selection.ranges.length > 1) return false
+      const edit = pairBackspaceEdit(target.state.doc.toString(), range.head)
+      if (!edit) return false
+      target.dispatch({ changes: { from: edit.from, to: edit.to, insert: edit.insert }, selection: { anchor: edit.caret }, userEvent: 'delete', scrollIntoView: true })
+      return true
+    },
+  }]))
+  // An opening character typed over a selection wraps it (Obsidian), «[]»
+  // with a space becomes a checkbox and «--» with a space a toggle (Notion)
+  // — before Latex Suite reads the character.
   const wrapping = Prec.high(EditorView.inputHandler.of((target, _from, _to, text) => {
     if (target.composing || target.state.selection.ranges.length > 1) return false
     const range = target.state.selection.main
@@ -314,7 +489,7 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
       return true
     }
     if (text !== ' ') return false
-    const edit = todoShortcutEdit(source, range.head)
+    const edit = todoShortcutEdit(source, range.head) ?? toggleShortcutEdit(source, range.head)
     if (!edit) return false
     target.dispatch({ changes: { from: edit.from, to: edit.to, insert: edit.insert }, selection: { anchor: edit.caret }, userEvent: 'input.type', scrollIntoView: true })
     return true
@@ -339,9 +514,13 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
         markdownView(),
         links.extension,
         math.extension,
+        toolbar.extension,
         emphasisKeys,
+        homeKeys,
         wrapping,
         latexSuiteView(),
+        pairBackspace,
+        autoPairs,
         Prec.default(listKeys),
         keymap.of([...historyKeymap, ...defaultKeymap]),
         EditorView.updateListener.of((update) => {
@@ -465,7 +644,10 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
 
   return {
     id, node, view, refresh, detach, focus, insert, reveal,
-    report: () => ({ math: math.report(), links: links.report(), raw: view.state.field(rawField) }),
+    report: () => ({
+      math: math.report(), links: links.report(), raw: view.state.field(rawField),
+      toolbar: toolbar.report(), folded: foldedRanges(view.state).map((fold) => fold.from),
+    }),
   }
 }
 

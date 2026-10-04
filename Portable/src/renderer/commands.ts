@@ -66,6 +66,15 @@ export const COMMANDS = {
     reader.update()
     changed('sketch')
   },
+  // The formula lasso: a rectangle dragged over the page catches the formula
+  // under it, and Ultracopy and ⌘L read the rectangle. Out, the pen goes away.
+  lasso: () => {
+    const reader = focused()
+    if (!reader) return
+    reader.setLasso(!reader.state.lasso)
+    reader.update()
+    changed('sketch')
+  },
   highlight: () => { if (!focused()?.markSelection('highlight')) selectFirst() },
   underline: () => { if (!focused()?.markSelection('underline')) selectFirst() },
   exportBibTeX: () => exportBibTeX(),

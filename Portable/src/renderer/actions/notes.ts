@@ -101,16 +101,34 @@ function saidInMainWindow() {
  */
 export async function linkSelectionToNote() {
   const reader = focused()
-  const anchor = reader?.selectionAnchor()
+  // The lasso's rectangle before any selection: while it is out there is no
+  // selection, and what it caught is what was meant (`ReaderLink.selectionAnchor`).
+  const lassoed = reader?.state.lasso ? reader.lassoAnchor() : null
+  const anchor = lassoed ?? reader?.selectionAnchor()
   if (!reader || !anchor || !store.selectedID) {
-    toast(L('먼저 글을 골라주세요.', 'Select some text first.'))
+    toast(reader?.state.lasso ? catchFirst() : L('먼저 글을 골라주세요.', 'Select some text first.'))
     return
   }
   // The page's shape, kept — a section title as a title, a displayed
   // equation on its own line with its number, the bold lead-in still bold —
   // read the way the Mac reads it (`MathReader.structured`); the words alone
   // when the page could not be read that way.
-  const shaped = structured(await reader.selectionForMath().catch(() => []))
+  let shaped = lassoed && reader.caught?.needsOCR
+    ? []
+    : structured(await (lassoed ? reader.lassoForMath() : reader.selectionForMath()).catch(() => []))
+  // The lasso's last resort: a rectangle the page could not be read for is
+  // read off its picture (`FormulaOCR`), and the quotation waits for it.
+  let readOffPicture = false
+  if (lassoed && shaped.length === 0) {
+    toast(readingPicture())
+    const reading = await reader.readCaughtByOCR().catch(() => null)
+    if (!reading || !reader.state.lasso) {
+      toast(noFormulaInside())
+      return
+    }
+    shaped = [reading.latex]
+    readOffPicture = true
+  }
   const block = quotationSource(
     { pageIndex: anchor.pageIndex, rect: anchor.rect, quotedText: shaped.length > 0 ? shaped.join('\n') : passageText(anchor.text) },
     (page) => L(`${page}쪽`, `p. ${page}`),
@@ -124,6 +142,10 @@ export async function linkSelectionToNote() {
   }
   if (!shell.inspector.insertIntoNote(block)) return
   reader.hideMarkBar()
+  if (readOffPicture) {
+    toast(L('그림에서 수식을 읽었어요. 틀린 데가 있는지 봐주세요.', 'Read the formula off the picture — check it over.'))
+    return
+  }
   const left = leftOutSentence(false)
   if (left) toast(left)
 }
@@ -147,6 +169,22 @@ function leftOutSentence(copied: boolean): string | null {
  */
 export async function ultracopySelection() {
   const reader = focused()
+  // The lasso's rectangle, while the lasso is out.
+  if (reader?.state.lasso) {
+    if (!reader.caught) return toast(catchFirst())
+    const text = reader.caught.needsOCR ? '' : latex(await reader.lassoForMath().catch(() => []))
+    if (!text) {
+      // Nothing the reader could use: the picture is read instead, and the
+      // clipboard waits for the model (a second or two).
+      toast(readingPicture())
+      const reading = await reader.readCaughtByOCR().catch(() => null)
+      if (!reading) return toast(noFormulaInside())
+      if (await copyText(reading.latex)) toast(L('그림에서 읽어 복사했어요. 틀린 데가 있는지 봐주세요.', 'Read off the picture and copied — check it over.'))
+      return
+    }
+    if (await copyText(text)) toast(leftOutSentence(true) ?? L('수식까지 복사했어요.', 'Copied with formulas.'))
+    return
+  }
   const pages = reader ? await reader.selectionForMath().catch(() => []) : []
   if (!reader || pages.length === 0) {
     toast(L('먼저 글을 골라주세요.', 'Select some text first.'))
@@ -156,6 +194,13 @@ export async function ultracopySelection() {
   if (!text) return
   if (await copyText(text)) toast(leftOutSentence(true) ?? L('수식까지 복사했어요.', 'Copied with formulas.'))
 }
+
+/** The lasso is out and holds nothing yet. */
+const catchFirst = () => L('먼저 수식을 사각형으로 잡아주세요.', 'Catch a formula in a rectangle first.')
+/** The model is reading the picture; a second or two. */
+const readingPicture = () => L('그림에서 수식을 읽는 중…', 'Reading the formula off the picture…')
+/** The picture held no formula the model could read. */
+const noFormulaInside = () => L('사각형 안에서 읽을 수식이 없어요.', 'No formula to read inside the rectangle.')
 
 /**
  * A passage followed out of a note in the slip-box: its paper takes the

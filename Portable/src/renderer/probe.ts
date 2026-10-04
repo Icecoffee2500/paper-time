@@ -83,6 +83,26 @@ export function installProbeSurface() {
         const pages = (await focused()?.selectionForMath()) ?? []
         return { pages: pages.length, glyphs: pages.map((page) => page.glyphs.length), latex: mathLatex(pages), structured: mathStructured(pages) }
       },
+      /** The formula lasso's catch of a rectangle on a page (page coordinates,
+       *  as pointer-up would make it), and what ⇧⌘C and ⌘L would read for it. */
+      lasso: async (pageIndex: number, x: number, y: number, width: number, height: number) => {
+        const reader = focused()
+        if (!reader) return null
+        if (!reader.state.lasso) reader.setLasso(true)
+        const caught = await reader.catchRect(pageIndex, { x, y, width, height })
+        const pages = await reader.lassoForMath()
+        return { caught, needsOCR: reader.caught?.needsOCR ?? false, glyphs: pages.map((page) => page.glyphs.length), latex: mathLatex(pages), structured: mathStructured(pages) }
+      },
+      /** The formula OCR's whole path on a rectangle of a page — the picture
+       *  drawn, sent, read — and what came back; nothing goes to the clipboard. */
+      ocr: async (pageIndex: number, x: number, y: number, width: number, height: number) => {
+        const reader = focused()
+        const page = reader?.pages[pageIndex]
+        if (!reader || !page) return null
+        return reader.readByOCR(page, { x, y, width, height })
+      },
+      /** Whether the lasso is out, what it holds, and where its box stands. */
+      state: () => focused()?.lassoReport() ?? null,
     },
     // The slip-box as the window holds it, and the ways into a note.
     __papertimeNotes: {
@@ -104,6 +124,14 @@ export function installProbeSurface() {
         view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text }, selection: { anchor: caret ?? text.length } })
         return true
       },
+      /** The slip-box editor given the caret, and a selection from `anchor` to `head` — no keys, no pointer. */
+      selectSlipBox: (anchor: number, head?: number) => {
+        const view = slipBoxEditor()?.view
+        if (!view) return false
+        view.focus()
+        view.dispatch({ selection: { anchor, head: head ?? anchor } })
+        return true
+      },
       /** The Notes tab's editor's text replaced. */
       setTabText: (text: string, caret?: number) => {
         const view = openNoteEditor()?.view
@@ -111,14 +139,22 @@ export function installProbeSurface() {
         view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text }, selection: { anchor: caret ?? text.length } })
         return true
       },
-      /** The slip-box editor's text and caret, and how its lines are drawn. */
+      /** The slip-box editor's text, caret and selection, how its lines are drawn, the selection bar, and the folds. */
       slipBoxState: () => {
-        const view = slipBoxEditor()?.view
-        if (!view) return null
+        const editor = slipBoxEditor()
+        const view = editor?.view
+        if (!editor || !view) return null
+        const report = editor.report()
+        const range = view.state.selection.main
         return {
           text: view.state.doc.toString(),
-          caret: view.state.selection.main.head,
+          caret: range.head,
+          selection: [range.from, range.to],
           lines: [...view.contentDOM.querySelectorAll('.cm-line')].map((line) => `${line.className.replace('cm-line', '').trim()} | ${line.textContent}`),
+          /** The spans with a class, in order, as `class:text` — the syntax colour, the markers. */
+          spans: [...view.contentDOM.querySelectorAll('.cm-line [class]')].map((span) => `${span.className}:${span.textContent}`),
+          toolbar: report.toolbar,
+          folded: report.folded,
         }
       },
       /** A note from a search, at the words it was found by (`--papertime-note-reveal`). */

@@ -94,11 +94,13 @@ function lineHTML(line: PlannedLine, source: string, counted: Map<number, Number
     }
     case 'bullet':
     case 'ordered':
-    case 'task': {
+    case 'task':
+    // A toggle prints open, its children under it as they are.
+    case 'toggle': {
       classes.push('nm-list', `nm-indent-${Math.min(block.indent, 6)}`)
       const shown = line.shownMarker.replace('\t', '')
       const done = block.type.kind === 'task' && block.type.done
-      const marker = `<span class="nm-marker${['•', '◦', '▪'].includes(shown) ? '' : ' nm-marker-wide'}${done ? ' nm-marker-done' : ''}">${escapeHTML(shown)}</span>`
+      const marker = `<span class="nm-marker${['•', '◦', '▪', '▾'].includes(shown) ? '' : ' nm-marker-wide'}${done ? ' nm-marker-done' : ''}">${escapeHTML(shown)}</span>`
       const words = done ? `<span class="nm-done">${inner}</span>` : inner
       return `<div class="${classes.join(' ')}">${marker}${words}</div>`
     }

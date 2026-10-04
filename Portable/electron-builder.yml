@@ -32,6 +32,16 @@ asarUnpack:
   # from files, and reads the model from one.
   - out/main/semantic.js
   - out/main/semantic/**
+  # The formula OCR worker loads the same runtime from that folder.
+  - out/main/ocr.js
+
+# The formula OCR model — pix2text's math formula recogniser as ONNX, int8,
+# 30 MB — is the Mac's copy in `App/Resources/MathOCR`: one copy in the
+# repository, shared with the Mac, copied into `resources/ocr/` here. In
+# development `ocrClient.ts` reads the Mac's folder itself.
+extraResources:
+  - from: ../App/Resources/MathOCR
+    to: ocr
 
 # ---------------------------------------------------------------- Windows
 win:

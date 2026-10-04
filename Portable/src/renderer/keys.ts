@@ -85,6 +85,16 @@ export function installKeys() {
       if (findBar.isOpen) return findBar.close()
       if (isOpenPapersShowing()) return closeOpenPapers()
       if (reader?.markBarShowing) return reader.hideMarkBar()
+      // The formula lasso: Escape lets go of the catch, and Escape again puts
+      // the lasso away (`LassoInputView.keyDown`).
+      if (reader?.state.lasso) {
+        event.preventDefault()
+        if (reader.caught) return reader.dropCatch()
+        reader.setLasso(false)
+        reader.update()
+        changed('sketch')
+        return
+      }
       // A passage followed out of a note: Escape is the «‹ Notes» above it.
       if (!drawing && store.shelf.kind === 'notes' && backToNotes()) return
     }

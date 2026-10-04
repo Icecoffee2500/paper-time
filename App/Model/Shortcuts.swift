@@ -118,7 +118,7 @@ public enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
     // Library
     case addPapers, exportBibTeX, copyCitationKey, resolveMetadata, refreshFolder
     // Reading
-    case searchEverything, findInDocument, ultracopy, linkToNote
+    case searchEverything, findInDocument, ultracopy, lasso, linkToNote
     case layoutContinuous, layoutSinglePage, layoutBook
     // Marking
     case highlight, underline, newNote, draw
@@ -148,7 +148,7 @@ public enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .addPapers, .exportBibTeX, .copyCitationKey, .resolveMetadata, .refreshFolder:
             .library
-        case .searchEverything, .findInDocument, .ultracopy, .linkToNote,
+        case .searchEverything, .findInDocument, .ultracopy, .lasso, .linkToNote,
              .layoutContinuous, .layoutSinglePage, .layoutBook:
             .reading
         case .highlight, .underline, .newNote, .draw:
@@ -175,6 +175,7 @@ public enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
         case .searchEverything: L("전부 찾기", "Search Everything")
         case .findInDocument: L("이 논문에서 찾기", "Find in Document")
         case .ultracopy: "Ultracopy"
+        case .lasso: L("수식 올가미", "Formula Lasso")
         case .linkToNote: L("고른 곳을 노트로", "Link Selection to Note")
         case .layoutContinuous: L("이어서 보기", "Continuous Layout")
         case .layoutSinglePage: L("한 쪽씩 보기", "Single Page Layout")
@@ -222,6 +223,7 @@ public enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
         case .searchEverything: Shortcut("k")
         case .findInDocument: Shortcut("f")
         case .ultracopy: Shortcut("c", [.command, .shift])
+        case .lasso: Shortcut("l", [.command, .option])
         case .linkToNote: Shortcut("l")
         case .layoutContinuous: Shortcut("1")
         case .layoutSinglePage: Shortcut("2")

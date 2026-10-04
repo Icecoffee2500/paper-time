@@ -18,6 +18,7 @@
  */
 import type { PageCharacter } from '../../shared/mathReader/reader.js'
 import type { Box, TextRun } from '../../shared/strokeSnap.js'
+import { OCR_SCALE, OCR_SIDE, paddedForOCR, pictureSize, pixelValues, stretchTarget } from '../../shared/formulaOCRInput.js'
 import { clear, el } from '../dom.js'
 import { TextLayer, type PDFPageProxy } from '../pdf.js'
 import { SketchElement } from '../../shared/sketch.js'
@@ -97,6 +98,11 @@ export class PageView {
   readonly images = new PageImagesLayer()
   textLayer: HTMLElement
   inputSurface: HTMLElement
+  /** Takes the mouse while the formula lasso is out (`LassoInputView`). */
+  lassoSurface: HTMLElement
+  /** The lasso's rectangle on this page — the catch, or the one being drawn. */
+  private lassoBox: HTMLElement
+  private lassoShown: { rect: Box; phase: 'drag' | 'caught'; needsOCR: boolean } | null = null
   /** How the reader draws its pages now, and the ground under night. */
   private rendering: PageRendering = 'plain'
   private ground = '#000000'
@@ -155,10 +161,14 @@ export class PageView {
     ])
     this.textLayer = el('div', { class: 'text-layer' })
     this.inputSurface = el('div', { class: 'sketch-input' })
+    this.lassoSurface = el('div', { class: 'lasso-input' })
+    this.lassoBox = el('div', { class: 'lasso-box' })
     this.root = el('div', { class: 'page', 'data-page': String(index) }, [
       this.print,
       this.images.canvas,
       this.textLayer,
+      this.lassoBox,
+      this.lassoSurface,
       this.inputSurface,
     ])
   }
@@ -205,6 +215,7 @@ export class PageView {
     // which is why a run's box bore no relation to its words and a highlight
     // drawn on that box was half again as tall as the line.
     this.root.style.setProperty('--scale-factor', String(scale))
+    this.placeLassoBox()
   }
 
   /** Stops whatever is drawing: a render for the last layout paints nothing. */
@@ -699,6 +710,106 @@ export class PageView {
 
   setDrawing(on: boolean) {
     this.root.setAttribute('data-drawing', String(on))
+  }
+
+  /** The formula lasso out over this page: its surface takes the mouse and
+   *  the words below stop being selectable. */
+  setLasso(on: boolean) {
+    this.root.setAttribute('data-lasso', String(on))
+  }
+
+  /**
+   * The lasso's rectangle on this page, in the page's own coordinates:
+   * `caught` is drawn as the Mac draws its catch — the accent, rounded, 3pt
+   * round what the reader read — and `drag` as the rectangle being drawn.
+   * Null takes it off. Laid out again with the page (`layout`), so a zoom
+   * leaves it on the same words.
+   */
+  showLasso(rect: Box | null, phase: 'drag' | 'caught' = 'caught', needsOCR = false) {
+    this.lassoShown = rect ? { rect, phase, needsOCR } : null
+    this.placeLassoBox()
+  }
+
+  /** For a probe: where the lasso's box stands, in the page's own coordinates. */
+  lassoReport(): { rect: Box; phase: 'drag' | 'caught'; needsOCR: boolean } | null {
+    return this.lassoShown
+  }
+
+  /**
+   * A rectangle of this page as the formula OCR model takes it
+   * (`FormulaOCR.picture(of:rect:)` + `pixelValues(of:)`): grown by the
+   * margin, drawn three times its size on white, stretched to the model's
+   * square, normalised, planes CHW. Null when the page cannot be drawn.
+   */
+  async ocrPixels(rect: Box): Promise<Float32Array | null> {
+    const proxy = await this.fetchProxy()
+    if (!proxy) return null
+    const [x0, y0, x1, y1] = this.shape.view
+    const padded = paddedForOCR(rect, { x: x0, y: y0, width: x1 - x0, height: y1 - y0 })
+    if (padded.width <= 0 || padded.height <= 0) return null
+    const viewport = proxy.getViewport({ scale: OCR_SCALE })
+    // The page may be turned: the picture is the corners' box in the viewport.
+    const corners = [
+      [padded.x, padded.y], [padded.x + padded.width, padded.y],
+      [padded.x, padded.y + padded.height], [padded.x + padded.width, padded.y + padded.height],
+    ].map(([x, y]) => viewport.convertToViewportPoint(x, y) as [number, number])
+    const left = Math.min(...corners.map((c) => c[0]))
+    const top = Math.min(...corners.map((c) => c[1]))
+    const size = pictureSize({ x: 0, y: 0, width: (Math.max(...corners.map((c) => c[0])) - left) / OCR_SCALE,
+      height: (Math.max(...corners.map((c) => c[1])) - top) / OCR_SCALE })
+    const picture = document.createElement('canvas')
+    picture.width = size.width
+    picture.height = size.height
+    const context = picture.getContext('2d', { alpha: false })
+    if (!context) return null
+    context.fillStyle = '#ffffff'
+    context.fillRect(0, 0, picture.width, picture.height)
+    try {
+      await proxy.render({
+        canvasContext: context, viewport, transform: [1, 0, 0, 1, -left, -top], annotationMode: 1, background: '#ffffff',
+      }).promise
+    } catch {
+      return null
+    }
+    // Stretched — not fitted — to the square, as the model was trained.
+    const square = document.createElement('canvas')
+    square.width = OCR_SIDE
+    square.height = OCR_SIDE
+    const target = square.getContext('2d', { alpha: false, willReadFrequently: true })
+    if (!target) return null
+    target.fillStyle = '#ffffff'
+    target.fillRect(0, 0, OCR_SIDE, OCR_SIDE)
+    target.imageSmoothingEnabled = true
+    target.imageSmoothingQuality = 'high'
+    const onto = stretchTarget()
+    target.drawImage(picture, 0, 0, picture.width, picture.height, onto.x, onto.y, onto.width, onto.height)
+    return pixelValues(target.getImageData(0, 0, OCR_SIDE, OCR_SIDE).data)
+  }
+
+  private placeLassoBox() {
+    const shown = this.lassoShown
+    if (!shown) {
+      this.lassoBox.removeAttribute('data-phase')
+      return
+    }
+    const { rect, phase } = shown
+    // The page may be turned: the box is the corners' box in the view.
+    const corners = [
+      this.toView(rect.x, rect.y), this.toView(rect.x + rect.width, rect.y),
+      this.toView(rect.x, rect.y + rect.height), this.toView(rect.x + rect.width, rect.y + rect.height),
+    ]
+    const left = Math.min(...corners.map((c) => c.x))
+    const right = Math.max(...corners.map((c) => c.x))
+    const top = Math.min(...corners.map((c) => c.y))
+    const bottom = Math.max(...corners.map((c) => c.y))
+    const inset = phase === 'caught' ? 3 : 0
+    this.lassoBox.setAttribute('data-phase', phase)
+    // A catch the reader could not read is drawn dashed: the picture will be read instead.
+    this.lassoBox.setAttribute('data-ocr', String(shown.needsOCR))
+    this.lassoBox.style.left = `${left - inset}px`
+    this.lassoBox.style.top = `${top - inset}px`
+    this.lassoBox.style.width = `${right - left + inset * 2}px`
+    this.lassoBox.style.height = `${bottom - top + inset * 2}px`
   }
 
   destroy() {

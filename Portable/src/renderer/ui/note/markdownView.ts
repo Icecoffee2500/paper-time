@@ -6,17 +6,21 @@
  * The file is still the Markdown, character for character: nothing here
  * changes the text, it only decides how each piece of it is drawn. The line
  * under the caret is drawn as written — a heading's or a quotation's marker
- * in the tertiary colour — so the line being edited is the source and the
- * rest is read set. A list's marker is the one thing drawn set on that line
- * too: a bullet is a bullet, never «- » (Notion), the caret steps over it
- * and never rests inside it. A passage is a chip, a note link its title, a
- * formula set by MathJax, emphasis without its stars; headings are sized,
- * list items hang under their first word, and a quotation has its rule and
- * — when it came off a page — its wash.
+ * and every inline delimiter in the accent colour, nothing hidden — so the
+ * line being edited is the source and the rest is read set. A list's marker
+ * is the one thing drawn set on that line too: a bullet is a bullet, never
+ * «- » (Notion), the caret steps over it and never rests inside it. A
+ * passage is a chip, a note link its title, a formula set by MathJax,
+ * emphasis without its stars; headings are sized, list items hang under
+ * their first word, and a quotation has its rule and — when it came off a
+ * page — its wash. A toggle («+ ») folds the lines indented under it away
+ * with a press on its marker, and the fold remembers the header's words.
  */
-import { EditorSelection, EditorState, RangeSetBuilder, StateEffect, StateField, type Extension, type Range } from '@codemirror/state'
-import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemirror/view'
+import { EditorSelection, EditorState, Prec, RangeSetBuilder, StateEffect, StateField, type Extension, type Range } from '@codemirror/state'
+import { Decoration, EditorView, WidgetType, keymap, type DecorationSet } from '@codemirror/view'
 import { planNote, type InlineToken, type PlannedLine } from '../../../shared/noteMarkdown.js'
+import { toggleChildrenEnd } from '../../../shared/noteBlocks.js'
+import { L } from '../../../shared/lang.js'
 import { parseTable, tableBlocks, type Table } from '../../../shared/noteTable.js'
 import { typesetNumbered, typesetter } from '../../sketchMath.js'
 import { numberFormulas, signature, type Numbered } from '../../../shared/mathJax.js'
@@ -31,8 +35,8 @@ export const rawField = StateField.define<boolean>({
   },
 })
 
-/** The three bullets a nested list goes round (`shownMarker`), each one glyph wide. */
-const BULLETS = new Set(['•', '◦', '▪'])
+/** The three bullets a nested list goes round (`shownMarker`), and a toggle's two arrows: each one glyph wide. */
+const BULLETS = new Set(['•', '◦', '▪', '▾', '▸'])
 
 class MarkerWidget extends WidgetType {
   constructor(readonly text: string, readonly done: boolean) { super() }
@@ -43,6 +47,63 @@ class MarkerWidget extends WidgetType {
     span.textContent = this.text
     return span
   }
+}
+
+// MARK: - Toggles
+
+/** The toggles folded shut, each by its header's words without their indentation («+ Title»). */
+export const toggleFold = StateEffect.define<{ key: string; folded: boolean }>()
+export const foldedField = StateField.define<ReadonlySet<string>>({
+  create: () => new Set(),
+  update(value, tr) {
+    let next: Set<string> | null = null
+    for (const effect of tr.effects) {
+      if (!effect.is(toggleFold)) continue
+      next ??= new Set(value)
+      if (effect.value.folded) next.add(effect.value.key)
+      else next.delete(effect.value.key)
+    }
+    return next ?? value
+  },
+})
+
+/** What a fold is keyed by: the header line as written, less its indentation. */
+export function toggleKey(header: string): string {
+  return header.trimStart()
+}
+
+/** A toggle's marker: ▾ open, ▸ shut, and a press turns it. */
+class ToggleWidget extends WidgetType {
+  constructor(readonly key: string, readonly folded: boolean) { super() }
+  override eq(other: ToggleWidget) { return other.key === this.key && other.folded === this.folded }
+  toDOM(view: EditorView) {
+    const span = document.createElement('span')
+    span.className = 'nm-marker nm-toggle'
+    span.textContent = this.folded ? '▸' : '▾'
+    span.title = this.folded ? L('펼치기', 'Expand') : L('접기', 'Collapse')
+    // The press must not move the caret or take the focus from the note.
+    span.addEventListener('mousedown', (event) => event.preventDefault())
+    span.addEventListener('click', (event) => {
+      event.preventDefault()
+      view.dispatch({ effects: toggleFold.of({ key: this.key, folded: !this.folded }) })
+    })
+    return span
+  }
+}
+
+/** What stands where a toggle's children were: one ellipsis, and a press opens them again. */
+class FoldedWidget extends WidgetType {
+  constructor(readonly key: string) { super() }
+  override eq(other: FoldedWidget) { return other.key === this.key }
+  toDOM(view: EditorView) {
+    const node = document.createElement('div')
+    node.className = 'nm-folded'
+    node.textContent = '…'
+    node.addEventListener('mousedown', (event) => event.preventDefault())
+    node.addEventListener('click', () => view.dispatch({ effects: toggleFold.of({ key: this.key, folded: false }) }))
+    return node
+  }
+  override get estimatedHeight() { return 20 }
 }
 
 class MathWidget extends WidgetType {
@@ -154,6 +215,8 @@ class TableWidget extends WidgetType {
 }
 
 const hidden = Decoration.replace({})
+/** A marker or a delimiter on the line being edited: there, in the accent. */
+const syntax = Decoration.mark({ class: 'nm-syntax' })
 
 function lineClasses(line: PlannedLine): string {
   const { block } = line
@@ -162,7 +225,8 @@ function lineClasses(line: PlannedLine): string {
     case 'heading': classes.push('nm-h', `nm-h${block.type.level}`); break
     case 'bullet':
     case 'ordered':
-    case 'task': classes.push('nm-list', `nm-indent-${Math.min(block.indent, 6)}`); break
+    case 'task':
+    case 'toggle': classes.push('nm-list', `nm-indent-${Math.min(block.indent, 6)}`); break
     case 'quote': {
       classes.push('nm-quote')
       if (block.quoteHeading) classes.push('nm-h', `nm-h${block.quoteHeading}`)
@@ -248,14 +312,69 @@ function tokenRanges(token: InlineToken, source: string, line: PlannedLine, out:
   }
 }
 
+/** The opening and the closing of a formula, as they are written: `$`, `$$`, `\(`, `\[`, `\begin{…}`, `\eqref{`. */
+const MATH_OPEN = /^(\$\$|\$|\\\(|\\\[|\\begin\{[^}\n]*\}|\\(?:eq)?ref\{)/
+const MATH_CLOSE = /(\$\$|\$|\\\)|\\\]|\\end\{[^}\n]*\}|\})$/
+
+/**
+ * The pieces of the line being edited: nothing hidden, nothing replaced,
+ * only the characters that are Markdown rather than words — a link's
+ * brackets, a note link's `[[` and `]]`, a formula's dollars, emphasis's
+ * stars, an escaped dollar's backslash — in the accent (`nm-syntax`).
+ */
+function syntaxRanges(token: InlineToken, source: string, out: Range<Decoration>[]) {
+  const { from, to } = token
+  const paint = (a: number, b: number) => { if (b > a) out.push(syntax.range(a, b)) }
+  switch (token.kind) {
+    case 'anchor': {
+      const labelEnd = source.indexOf('](', from)
+      if (labelEnd < 0 || labelEnd >= to) return
+      paint(from, from + 1)
+      paint(labelEnd, to)
+      return
+    }
+    case 'note': {
+      const bar = source.indexOf('|', from)
+      const titled = bar >= 0 && bar < to - 2
+      paint(from, titled ? bar + 1 : from + 2)
+      paint(to - 2, to)
+      return
+    }
+    case 'math': {
+      const text = source.slice(from, to)
+      const open = MATH_OPEN.exec(text)?.[0].length ?? 0
+      const close = MATH_CLOSE.exec(text.slice(open))?.[0].length ?? 0
+      paint(from, from + open)
+      paint(to - close, to)
+      return
+    }
+    case 'dollar':
+      paint(from, from + 1)
+      return
+    case 'emphasis': {
+      const width = token.bold ? 2 : 1
+      paint(from, from + width)
+      paint(to - width, to)
+      return
+    }
+  }
+}
+
 /** What the note is drawn with, and the list markers among it — the ranges the caret steps over. */
 export interface Drawn {
   decorations: DecorationSet
   /** A bullet, a number or a checkbox: a marker drawn as the thing it is, whichever line the caret is on. */
   markers: DecorationSet
+  /** The children of the toggles folded shut, in the source. */
+  folded: { from: number; to: number; key: string }[]
 }
 
-const nothingDrawn: Drawn = { decorations: Decoration.none, markers: Decoration.none }
+const nothingDrawn: Drawn = { decorations: Decoration.none, markers: Decoration.none, folded: [] }
+
+/** The children of the toggles folded shut, for a probe: where each fold begins. */
+export function foldedRanges(state: EditorState): { from: number; to: number }[] {
+  return state.field(decorationField).folded.map(({ from, to }) => ({ from, to }))
+}
 
 export function noteDecorations(state: EditorState): Drawn {
   if (state.field(rawField, false)) return nothingDrawn
@@ -266,9 +385,27 @@ export function noteDecorations(state: EditorState): Drawn {
   const plan = planNote(source, null).map((line) => ({ ...line, revealed: heads.some((head) => head >= line.from && head <= line.to) }))
   const ranges: Range<Decoration>[] = []
   const markers: Range<Decoration>[] = []
+  const folded: Drawn['folded'] = []
+  const shut = state.field(foldedField, false) ?? new Set<string>()
   const counted = numbering(source, plan)
   const tables = new Set(tableBlocks(source).map((one) => `${one.from}:${one.to}`))
+  // A toggle folded shut: its children, from the end of its line to the end
+  // of their last, stand as one block the caret steps over.
+  let fold: { from: number; to: number } | null = null
   plan.forEach((line) => {
+    // A line inside a fold is not drawn: the fold stands for it.
+    if (fold && line.from > fold.from && line.to <= fold.to) return
+    if (line.block.type.kind === 'toggle') {
+      const key = toggleKey(source.slice(line.from, line.to))
+      const end = shut.has(key) ? toggleChildrenEnd(source, line.from) : null
+      if (end !== null && end > line.to) {
+        const block = Decoration.replace({ widget: new FoldedWidget(key), block: true }).range(line.to, end)
+        ranges.push(block)
+        markers.push(block)
+        folded.push({ from: line.to, to: end, key })
+        fold = { from: line.to, to: end }
+      }
+    }
     // A table off the caret is a grid, and nothing else is drawn over it.
     if (!line.revealed && tables.has(`${line.from}:${line.to}`)) {
       const text = source.slice(line.from, line.to)
@@ -289,11 +426,19 @@ export function noteDecorations(state: EditorState): Drawn {
     const { block } = line
     if (line.markerEnd > line.from) {
       if (block.type.kind === 'heading' || block.type.kind === 'quote') {
-        // Out of sight on the caret's line too (Notion): a heading stays set
-        // as one and a quotation keeps its bar while they are typed in. The
-        // way back to plain words is Backspace at the start of the words
-        // (`backspaceEdit`). The caret steps over the hidden marker.
-        const marker = hidden.range(line.from, line.markerEnd)
+        // Out of sight while the caret is elsewhere: a heading is read as
+        // one and a quotation keeps its bar. On the caret's line the marker
+        // is there to see and to edit, in the accent, as the Mac shows it.
+        if (line.revealed) {
+          ranges.push(syntax.range(line.from, line.markerEnd))
+        } else {
+          const marker = hidden.range(line.from, line.markerEnd)
+          ranges.push(marker)
+          markers.push(marker)
+        }
+      } else if (block.type.kind === 'toggle') {
+        const key = toggleKey(source.slice(line.from, line.to))
+        const marker = Decoration.replace({ widget: new ToggleWidget(key, shut.has(key)) }).range(line.from, line.markerEnd)
         ranges.push(marker)
         markers.push(marker)
       } else {
@@ -311,15 +456,16 @@ export function noteDecorations(state: EditorState): Drawn {
       if (block.type.kind === 'task' && block.type.done) ranges.push(Decoration.mark({ class: 'nm-done' }).range(line.markerEnd, line.to))
     }
     if (!line.revealed) for (const token of pieces) tokenRanges(token, source, line, ranges, counted)
+    else for (const token of line.tokens) syntaxRanges(token, source, ranges)
   })
-  return { decorations: Decoration.set(ranges, true), markers: Decoration.set(markers, true) }
+  return { decorations: Decoration.set(ranges, true), markers: Decoration.set(markers, true), folded }
 }
 
 const decorationField = StateField.define<Drawn>({
   create: (state) => noteDecorations(state),
   update(value, tr) {
-    const rawChanged = tr.effects.some((effect) => effect.is(setRaw))
-    if (!tr.docChanged && !tr.selection && !rawChanged) return value
+    const redrawn = tr.effects.some((effect) => effect.is(setRaw) || effect.is(toggleFold))
+    if (!tr.docChanged && !tr.selection && !redrawn) return value
     return noteDecorations(tr.state)
   },
   provide: (field) => [
@@ -342,14 +488,29 @@ function outsideMarkers(markers: DecorationSet, head: number): number {
   return moved
 }
 
+/**
+ * A caret that lands on the far end of a fold — where the last folded line
+ * ends, which nobody can see — goes on to the next line when it was moving
+ * right, and back to the header's end when it was moving left: the fold is
+ * stepped over like one character.
+ */
+function pastFold(folded: Drawn['folded'], head: number, wasAt: number, length: number): number {
+  const fold = folded.find((one) => one.to === head)
+  if (!fold || wasAt === head) return head
+  if (wasAt < head) return fold.to < length ? fold.to + 1 : fold.from
+  return fold.from
+}
+
 /** A caret never rests inside a marker: there is nothing there to type into. */
 const caretOutOfMarkers = EditorState.transactionFilter.of((tr) => {
   if (!tr.selection) return tr
-  const { markers } = tr.state.field(decorationField)
+  const { markers, folded } = tr.state.field(decorationField)
   if (markers.size === 0) return tr
+  const wasAt = tr.startState.selection.main.head
   let moved = false
   const ranges = tr.selection.ranges.map((range) => {
-    const head = outsideMarkers(markers, range.head)
+    let head = outsideMarkers(markers, range.head)
+    if (range.empty && !tr.docChanged) head = pastFold(folded, head, wasAt, tr.state.doc.length)
     if (head === range.head) return range
     moved = true
     return range.empty ? EditorSelection.cursor(head) : EditorSelection.range(range.anchor, head)
@@ -375,9 +536,32 @@ const flashField = StateField.define<DecorationSet>({
   provide: (field) => EditorView.decorations.from(field),
 })
 
+/**
+ * A deletion that would reach into a fold opens the toggle instead: nothing
+ * folded away is taken out of sight — Backspace at the start of the line
+ * after a shut toggle, or Delete at the end of its header, shows what it
+ * would have deleted.
+ */
+function unfoldsBeforeDeleting(view: EditorView, direction: -1 | 1): boolean {
+  const { folded } = view.state.field(decorationField)
+  if (folded.length === 0) return false
+  const range = view.state.selection.main
+  const from = range.empty ? (direction < 0 ? range.head - 1 : range.head) : range.from
+  const to = range.empty ? (direction < 0 ? range.head : range.head + 1) : range.to
+  const touched = folded.filter((fold) => from <= fold.to && to >= fold.from)
+  if (touched.length === 0) return false
+  view.dispatch({ effects: touched.map((fold) => toggleFold.of({ key: fold.key, folded: false })) })
+  return true
+}
+
+const foldGuard = Prec.high(keymap.of([
+  { key: 'Backspace', run: (view) => unfoldsBeforeDeleting(view, -1) },
+  { key: 'Delete', run: (view) => unfoldsBeforeDeleting(view, 1) },
+]))
+
 export function markdownView(): Extension {
   return [
-    rawField, decorationField, caretOutOfMarkers, flashField,
+    rawField, foldedField, decorationField, caretOutOfMarkers, foldGuard, flashField,
     EditorView.editorAttributes.compute([rawField], (state) => ({ class: state.field(rawField) ? 'nm-raw' : '' })),
   ]
 }

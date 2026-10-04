@@ -135,6 +135,9 @@ struct MathReaderFixtures {
             let box = page.bounds(for: .cropBox)
             let asked = (item["rect"] as? [Double]).map { CGRect(x: $0[0], y: $0[1], width: $0[2], height: $0[3]) } ?? box
             guard let selection = page.selection(for: asked) else { continue }
+            // The whole page, for the lasso, is the page's size at the origin —
+            // `asked` is the cropBox with its own origin when no rect was given.
+            let lassoAsked = item["rect"] != nil ? asked : CGRect(origin: .zero, size: box.size)
 
             // The page as the scanner read it.
             let scanned = PDFContentScanner.scan(page: reference)
@@ -222,6 +225,10 @@ struct MathReaderFixtures {
                 "cropBox": rect(box),
                 "fonts": fonts, "glyphs": glyphs, "rules": rules,
                 "lineBoxes": lineBoxes.map(rect),
+                // The formula lasso: the rectangle asked for, in PDFKit's page
+                // coordinates, and what the reader snaps it to (`extentRead`).
+                "lassoRect": rect(lassoAsked),
+                "lassoExtent": MathReader.extentRead(on: page, rect: lassoAsked).map(rect) ?? NSNull(),
                 "pageText": String(text),
                 "characters": characters,
                 "selectionString": selection.string ?? "",

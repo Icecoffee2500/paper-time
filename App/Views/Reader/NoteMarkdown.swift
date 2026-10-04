@@ -12,6 +12,10 @@ extension NSAttributedString.Key {
     /// heading whose `##` is not shown, a formula set as mathematics, a link
     /// shown as what it points at. Plain text is its own source.
     static let paperTimeSource = NSAttributedString.Key("PaperTimeSource")
+    /// The lines folded away under a collapsed toggle, as written — carried
+    /// by a zero-width run at the end of the toggle's line, which is also
+    /// their `paperTimeSource`, so the note reads back whole.
+    static let paperTimeFolded = NSAttributedString.Key("PaperTimeFolded")
 }
 
 /// Turns a note between the Markdown that is stored and the text that is read.
@@ -56,6 +60,80 @@ enum NoteMarkdown {
     /// Stands in for syntax that is not shown, so the run has something to hang
     /// its source on and the caret has somewhere to be.
     static let hiddenMarker = "\u{200B}"
+    /// A toggle's marker, open and folded.
+    static let openToggle = "▾"
+    static let closedToggle = "▸"
+
+    /// The colour of the characters that do something — the `$` of a
+    /// formula, the `**` round bold words, the `#` of a heading — on the
+    /// line being edited, where they are shown as written. Coloured so they
+    /// read as controls, not as words (the accent, a little quieter).
+    static var syntaxColor: NoteColor { accent.withAlphaComponent(0.85) }
+
+    /// Which characters of a line's words are syntax: the delimiters of the
+    /// formulas, emphasis, links and escaped dollars in it, as `nextToken`
+    /// finds them. Offsets are into `content`.
+    static func syntaxRanges(inContent content: NSString) -> [NSRange] {
+        guard holdsMarkup(content as String) else { return [] }
+        var ranges: [NSRange] = []
+        var index = 0
+        while index < content.length, let token = nextToken(in: content, from: index) {
+            let range = token.range
+            let source = content.substring(with: range) as NSString
+            func ends(_ head: Int, _ tail: Int) {
+                guard head + tail <= range.length else { return }
+                if head > 0 { ranges.append(NSRange(location: range.location, length: head)) }
+                if tail > 0 { ranges.append(NSRange(location: NSMaxRange(range) - tail, length: tail)) }
+            }
+            switch token.kind {
+            case .anchorLink:
+                // "[" and "](url)".
+                let close = source.range(of: "](", options: .backwards)
+                ends(1, close.location == NSNotFound ? 0 : range.length - close.location)
+            case .noteLink:
+                // "[[id|" (or "[[") and "]]".
+                let bar = source.range(of: "|")
+                ends(bar.location == NSNotFound ? 2 : bar.location + 1, 2)
+            case .math:
+                if source.hasPrefix("$$") { ends(2, 2) }
+                else if source.hasPrefix("$") { ends(1, 1) }
+                else if source.hasPrefix("\\(") || source.hasPrefix("\\[") { ends(2, 2) }
+                else if source.hasPrefix("\\begin{"),
+                        let head = source.range(of: "}").location as Int?, head != NSNotFound,
+                        let tail = source.range(of: "\\end{", options: .backwards).location as Int?, tail != NSNotFound {
+                    ends(head + 1, range.length - tail)
+                } else {
+                    ends(0, 0)
+                }
+            case .emphasis(_, let bold, _, _, _):
+                let width = bold ? 2 : 1
+                ends(width, width)
+            case .dollar:
+                ends(1, 0)
+            }
+            index = NSMaxRange(range)
+        }
+        return ranges
+    }
+
+    /// The lines folded under a toggle at `index`: those indented deeper than
+    /// it, and blank lines between such lines.
+    static func children(ofToggleAt index: Int, lines: [NSRange], blocks: [Block], in text: NSString) -> Range<Int> {
+        let depth = blocks[index].indent
+        var end = index + 1
+        var last = index
+        while end < blocks.count {
+            let line = text.substring(with: lines[end])
+            if line.trimmingCharacters(in: .whitespaces).isEmpty {
+                end += 1
+                continue
+            }
+            guard blocks[end].indent > depth else { break }
+            last = end
+            end += 1
+        }
+        return (index + 1)..<(last + 1)
+    }
 
     /// The number of a nested ordered item as a letter: 1 is a, 26 is z,
     /// 27 is aa — a spreadsheet's columns, in lower case.
@@ -455,16 +533,16 @@ enum NoteMarkdown {
     /// fit is broken across lines rather than run off the edge of the pane.
     static func render(
         _ source: String, caret: Int? = nil, raw: Bool = false, width: CGFloat? = nil,
-        appearance: NoteAppearance? = nil
+        appearance: NoteAppearance? = nil, collapsed: Set<String> = []
     ) -> Rendered {
         Trace.time("note: render \(source.count) characters") {
-            renderNow(source, caret: caret, raw: raw, width: width, appearance: appearance)
+            renderNow(source, caret: caret, raw: raw, width: width, appearance: appearance, collapsed: collapsed)
         }
     }
 
     private static func renderNow(
         _ source: String, caret: Int? = nil, raw: Bool = false, width: CGFloat? = nil,
-        appearance: NoteAppearance? = nil
+        appearance: NoteAppearance? = nil, collapsed: Set<String> = []
     ) -> Rendered {
         available = width
         current = appearance
@@ -521,7 +599,23 @@ enum NoteMarkdown {
         #endif
 
         let tables = Set(NoteTable.blocks(in: source).map { NSStringRange($0) })
-        for (lineRange, block) in zip(lineRanges, blocks) {
+        var lineIndex = 0
+        while lineIndex < lineRanges.count {
+            let lineRange = lineRanges[lineIndex]
+            let block = blocks[lineIndex]
+            lineIndex += 1
+            // A folded toggle: its children are not set at all. They ride
+            // along as the source of a zero-width run at the end of its
+            // line, so the note reads back whole and the caret has nowhere
+            // to go inside them.
+            var folded: Range<Int>?
+            if block.kind == .toggle, collapsed.contains(block.toggleKey) {
+                let range = children(ofToggleAt: lineIndex - 1, lines: lineRanges, blocks: blocks, in: text)
+                if !range.isEmpty {
+                    folded = range
+                    lineIndex = range.upperBound
+                }
+            }
             let revealed = caret.map {
                 $0 >= lineRange.location && $0 <= lineRange.location + lineRange.length
             } ?? false
@@ -558,8 +652,15 @@ enum NoteMarkdown {
                 // one with its "#" out of sight, a quotation keeps its bar.
                 // The way back to plain words is Backspace at the start of
                 // the words, which takes the marker away (`deleteBackward`).
-                let shown = block.shownMarker
-                var attributes: [NSAttributedString.Key: Any] = [.font: block.markerFont, .foregroundColor: block.markerColor]
+                // On the line being edited a heading's "#" and a quotation's
+                // ">" are shown as written, coloured as syntax, so they can
+                // be seen and changed — as in Obsidian. A list's marker is
+                // drawn there too (Notion).
+                let asWritten = revealed && (block.kind == .quote || { if case .heading = block.kind { true } else { false } }())
+                let shown = asWritten ? block.marker : (folded != nil ? block.collapsedMarker : block.shownMarker)
+                var attributes: [NSAttributedString.Key: Any] = [
+                    .font: block.markerFont, .foregroundColor: asWritten ? syntaxColor : block.markerColor,
+                ]
                 attributes[.paragraphStyle] = style
                 #if os(macOS)
                 // The stand-in for a quotation's "> " is the first thing in
@@ -588,6 +689,16 @@ enum NoteMarkdown {
             // hold none of the four characters those begin with, and asking
             // that question costs one pass over the line instead of four.
             let mayHold = !revealed && Self.holdsMarkup(block.content)
+            if revealed {
+                // As written, with the characters that do something in the
+                // syntax colour.
+                let words = NSMutableAttributedString(string: block.content, attributes: block.attributes(style: style))
+                for range in syntaxRanges(inContent: content) {
+                    words.addAttribute(.foregroundColor, value: syntaxColor, range: range)
+                }
+                append(words, source: NSRange(location: contentStart, length: content.length))
+                index = content.length
+            }
             while index < content.length {
                 let rest = NSRange(location: index, length: content.length - index)
                 guard mayHold, let token = nextToken(in: content, from: index) else {
@@ -616,7 +727,17 @@ enum NoteMarkdown {
                 index = token.range.location + token.range.length
             }
 
-            let newline = lineRange.location + lineRange.length
+            var newline = lineRange.location + lineRange.length
+            if let folded {
+                let last = lineRanges[folded.upperBound - 1]
+                let hidden = NSRange(location: newline, length: NSMaxRange(last) - newline)
+                let away = text.substring(with: hidden)
+                let piece = NSMutableAttributedString(string: hiddenMarker, attributes: block.attributes(style: style))
+                piece.addAttribute(.paperTimeSource, value: away, range: NSRange(location: 0, length: piece.length))
+                piece.addAttribute(.paperTimeFolded, value: away, range: NSRange(location: 0, length: piece.length))
+                append(piece, source: hidden)
+                newline = NSMaxRange(last)
+            }
             if newline < text.length {
                 append(
                     NSAttributedString(string: "\n", attributes: [
@@ -655,7 +776,7 @@ enum NoteMarkdown {
 
     /// What kind of line this is, and what the characters at its head mean.
     struct Block {
-        enum Kind: Equatable { case plain, heading(Int), quote, bullet, ordered(Int), task(Bool) }
+        enum Kind: Equatable { case plain, heading(Int), quote, bullet, ordered(Int), task(Bool), toggle }
 
         var kind: Kind = .plain
         var marker = ""
@@ -706,6 +827,13 @@ enum NoteMarkdown {
                 marker = lead + body.substring(with: match.range)
                 content = body.substring(from: match.range.length)
                 kind = .heading(body.substring(with: match.range(at: 1)).count)
+            } else if let match = take(Self.togglePattern) {
+                // A "+" item is a toggle (Notion's): its children are the
+                // lines indented under it, and the marker folds them away.
+                // Everywhere else it is a bullet, which is what the file says.
+                marker = lead + body.substring(with: match.range)
+                content = body.substring(from: match.range.length)
+                kind = .toggle
             } else if let match = take(Self.bulletPattern) {
                 marker = lead + body.substring(with: match.range)
                 content = body.substring(from: match.range.length)
@@ -753,14 +881,22 @@ enum NoteMarkdown {
                 default: "\(NoteMarkdown.roman(number)).\t"
                 }
             case .task(let done): done ? "☑\t" : "☐\t"
+            case .toggle: NoteMarkdown.openToggle + "\t"
             }
         }
+
+        /// The toggle's marker when its children are folded away.
+        var collapsedMarker: String { NoteMarkdown.closedToggle + "\t" }
+
+        /// What names a toggle across edits elsewhere in the note: the line
+        /// as written, without its indentation.
+        var toggleKey: String { String((marker + content).drop { $0 == " " }) }
 
         /// Whether the marker is a list's: drawn as its stand-in wherever
         /// the caret is.
         var isListItem: Bool {
             switch kind {
-            case .bullet, .ordered, .task: true
+            case .bullet, .ordered, .task, .toggle: true
             default: false
             }
         }
@@ -843,7 +979,7 @@ enum NoteMarkdown {
             style.paragraphSpacing = 11
             let step = NoteTypography.baseSize * 1.5
             switch kind {
-            case .bullet, .ordered, .task:
+            case .bullet, .ordered, .task, .toggle:
                 let base = step * CGFloat(indent + 1)
                 style.firstLineHeadIndent = base - step * 0.62
                 style.headIndent = base
@@ -867,7 +1003,8 @@ enum NoteMarkdown {
         }
 
         static let headingPattern = try! NSRegularExpression(pattern: #"^(#{1,6})\s+"#)
-        static let bulletPattern = try! NSRegularExpression(pattern: #"^[-*+]\s+"#)
+        static let bulletPattern = try! NSRegularExpression(pattern: #"^[-*]\s+"#)
+        static let togglePattern = try! NSRegularExpression(pattern: #"^\+\s+"#)
         static let orderedPattern = try! NSRegularExpression(pattern: #"^(\d{1,3})[.)]\s+"#)
         static let taskPattern = try! NSRegularExpression(pattern: #"^([-*+])\s+\[([ xX])\]\s+"#)
     }

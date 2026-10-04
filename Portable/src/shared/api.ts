@@ -75,6 +75,10 @@ export interface Requests {
   /** One page's glyphs and rules as the Mac's scanner reads them (`MathScanner`), and what the paper's other first pages say about where it keeps its variables — Ultracopy and ⌘L read the mathematics from them. Null when the file cannot be read. */
   'math:page': { args: { id: string; pageIndex: number }; result: { glyphs: Glyph[]; rules: Rule[]; cropBox: { x: number; y: number; width: number; height: number }; italicElsewhere: { ownLetters: boolean; evidence: boolean } } | null }
   'paper:bytes': { args: { id: string }; result: PaperBytesDTO }
+  /** The formula lasso's last resort: the rectangle of the page as a picture — the model's normalised 3×384×384 tensor (`shared/formulaOCRInput.ts`) — read by the formula OCR model (`ocrWorker.ts`). `latex` is wrapped as Ultracopy wraps a displayed formula; null when nothing was read. */
+  'ocr:read': { args: { pixels: Float32Array | number[] }; result: { latex: string; tokens: number; seconds: number } | null }
+  /** Whether the model files are with this build. */
+  'ocr:available': { args: void; result: boolean }
   /** `null` in a patch takes the key off. Answers with the record as written. */
   'paper:state': { args: { id: string; patch: Record<string, unknown> }; result: Record<string, unknown> | null }
   /** `stamp: false`: written without `updatedAt`/`updatedBy` — the app's own guess, not the reader's edit. */

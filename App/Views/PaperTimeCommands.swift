@@ -85,6 +85,12 @@ struct PaperTimeCommands: Commands {
                 .disabled(model.library?.selectedPaperID == nil)
                 .help(L("고른 곳 복사, 수식은 LaTeX로", "Copy the selection, with formulas as LaTeX"))
 
+            // A rectangle over a formula instead of a drag through it: the
+            // lasso snaps to the formula, and ⇧⌘C and ⌘L read the rectangle.
+            command(L("수식 올가미", "Formula Lasso"), .lasso, post: .paperTimeToggleLasso)
+                .disabled(model.library?.selectedPaperID == nil)
+                .help(L("사각형으로 잡은 수식을 LaTeX로", "Catch a formula in a rectangle, for LaTeX"))
+
             command(L("고른 곳을 노트로", "Link Selection to Note"), .linkToNote, post: .paperTimeLinkToNote)
                 .disabled(model.library?.selectedPaperID == nil)
 
@@ -202,6 +208,7 @@ extension Notification.Name {
     static let paperTimeNewNote = Notification.Name("PaperTime.newNote")
     static let paperTimeNextPaper = Notification.Name("PaperTime.nextPaper")
     static let paperTimeToggleDraw = Notification.Name("PaperTime.toggleDraw")
+    static let paperTimeToggleLasso = Notification.Name("PaperTime.toggleLasso")
     static let paperTimeBackToPreviousPaper = Notification.Name("PaperTime.backToPreviousPaper")
     static let paperTimeForwardToNextPaper = Notification.Name("PaperTime.forwardToNextPaper")
     static let paperTimePreviousPaper = Notification.Name("PaperTime.previousPaper")

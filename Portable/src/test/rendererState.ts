@@ -195,7 +195,7 @@ export async function rendererStateSuite(test: Test, suite: (name: string) => vo
   })
 
   await test('the reader state is read from the reader in focus, and blank with none', () => {
-    const own = { pageCount: 9, currentPage: 3, zoom: 1, drawing: true }
+    const own = { pageCount: 9, currentPage: 3, zoom: 1, drawing: true, lasso: false }
     let focusedOne: typeof own | null = own
     setFocusedReaderState(() => focusedOne)
     assert.equal(readerState().drawing, true)
