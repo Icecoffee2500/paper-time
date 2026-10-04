@@ -31,6 +31,7 @@ import { PageCounter } from './pdfBytes.js'
 import { Records } from './records.js'
 import { TextBridge } from './textBridge.js'
 import { SemanticSearch, type NoteSource } from './semantic.js'
+import { OCRClient } from './ocrClient.js'
 import type { TextSource } from './textIndex.js'
 import { registerIPC } from './ipc.js'
 import type { Context, Handlers } from './handlers/context.js'
@@ -120,6 +121,17 @@ function semantic(): SemanticSearch {
     },
   })
   return semanticSearch
+}
+
+let ocrClient: OCRClient | null = null
+
+/** The formula OCR worker, started the first time a picture needs reading; kept for the app's life. */
+function ocr(): OCRClient {
+  if (ocrClient) return ocrClient
+  ocrClient = new OCRClient((line) => {
+    if (probe.isRun) log(line)
+  })
+  return ocrClient
 }
 
 /** Every note with words in it, as the index takes it — the Mac's `semanticSources`. */
@@ -224,7 +236,7 @@ async function openLibrary(root: string): Promise<LibrarySnapshot | { error: str
 }
 
 const context: Context = {
-  libraries, sync, flush, journals, records, text, semantic, notes, windows, pageCounter, metadata, updates,
+  libraries, sync, flush, journals, records, text, semantic, ocr, notes, windows, pageCounter, metadata, updates,
   isProbe: probe.hasLibrary,
   probeLibrary: probe.argument('library') ?? null,
   snapshot: (refused) => libraries.snapshot(refused),
@@ -469,6 +481,7 @@ app.on('will-quit', () => {
   text.end()
   pageCounter.end()
   semanticSearch?.end()
+  ocrClient?.end()
 })
 
 app.on('activate', () => {

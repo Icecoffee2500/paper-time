@@ -67,7 +67,10 @@ import {
   damagedNotice, lockedNotice, noticeNode, openingNotice, passwordPrompt, troubleButtons, troubleNotice, type Notice,
 } from './readerNotices.js'
 import { thumbnails } from './pageThumbnails.js'
-import type { PageInput as MathPage } from '../../shared/mathReader/reader.js'
+import { extentRead, type PageInput as MathPage } from '../../shared/mathReader/reader.js'
+import { platform } from '../bridge.js'
+import { shortcutText } from '../../shared/shortcuts.js'
+import { isBlankPicture } from '../../shared/formulaOCRInput.js'
 
 export { PageView, type PageLink, type TextRange } from './pageView.js'
 
@@ -135,6 +138,8 @@ const SHAPE_BATCH = 16
 
 /** Readers alive in this window — pdf.js's text caches go with the last. */
 let living = 0
+/** Said once per run, the first time the lasso catches something. */
+let lassoExplained = false
 
 export class Reader implements PageOwner {
   node: HTMLElement
@@ -194,6 +199,14 @@ export class Reader implements PageOwner {
   private outlineRead: Promise<{ title: string; depth: number; pageIndex: number | null; top: number | null }[]> | null = null
   private readonly onSelectionChange = () => this.bar.selectionChanged()
   private readonly onMathReady = () => this.redrawAll()
+  /**
+   * What the formula lasso holds: the page and the rectangle on it, in the
+   * page's own coordinates — snapped to what the reader reads for it, so the
+   * box on the page is exactly what Ultracopy copies (`LassoInputView.caught`).
+   */
+  caught: { pageIndex: number; rect: { x: number; y: number; width: number; height: number }; needsOCR: boolean } | null = null
+  /** The lasso's pointer handlers, a page at a time, taken off with the lasso. */
+  private readonly lassoInputs = new Map<PageView, AbortController>()
 
   constructor(private readonly actions: ReaderActions, options: ReaderOptions = {}) {
     this.state = options.state ?? freshReaderState()
@@ -261,7 +274,8 @@ export class Reader implements PageOwner {
     // drawn is never a picture you have to unlock first. The same press then
     // goes to the page's surface, which was not there to receive it.
     on(this.pagesBox, 'pointerdown', (event: PointerEvent) => {
-      if (this.state.drawing || event.button !== 0) return
+      // The lasso is out: the press is its.
+      if (this.state.drawing || this.state.lasso || event.button !== 0) return
       const page = this.pageContaining(event.target as Node)
       if (!page || !hitsDrawing(page, page.toPageFromClient(event.clientX, event.clientY))) return
       this.setDrawing(true)
@@ -274,7 +288,7 @@ export class Reader implements PageOwner {
     // A link in the paper goes where it points ahead of any mark under it.
     // A press anywhere else puts the controls away.
     on(this.pagesBox, 'click', (event: MouseEvent) => {
-      if (this.state.drawing || event.button !== 0) return
+      if (this.state.drawing || this.state.lasso || event.button !== 0) return
       const selection = window.getSelection()
       if (selection && !selection.isCollapsed) return
       const page = this.pageAtClient(event.clientX, event.clientY)
@@ -295,7 +309,7 @@ export class Reader implements PageOwner {
     // A right-click on a mark offers its colour and its removal; on a
     // selection, the marks and a note (`MarkupCapablePDFView.menu(for:)`).
     on(this.pagesBox, 'contextmenu', (event: MouseEvent) => {
-      if (this.state.drawing) return
+      if (this.state.drawing || this.state.lasso) return
       const page = this.pageAtClient(event.clientX, event.clientY)
       const point = page?.pointOnPage(event.clientX, event.clientY)
       const mark = page && point ? markAt(page.marks, point) : null
@@ -308,7 +322,7 @@ export class Reader implements PageOwner {
     })
     // Over a link the pointer says so, and a URL shows where it goes.
     on(this.pagesBox, 'mousemove', (event: MouseEvent) => {
-      if (this.state.drawing) return
+      if (this.state.drawing || this.state.lasso) return
       this.hover = { x: event.clientX, y: event.clientY, target: event.target as Node }
       if (this.hoverFrame) return
       this.hoverFrame = requestAnimationFrame(() => {
@@ -570,6 +584,9 @@ export class Reader implements PageOwner {
   }
 
   close() {
+    this.caught = null
+    for (const controller of this.lassoInputs.values()) controller.abort()
+    this.lassoInputs.clear()
     this.drawObserver?.disconnect()
     this.drawObserver = null
     this.releaseObserver?.disconnect()
@@ -684,6 +701,7 @@ export class Reader implements PageOwner {
     for (const page of this.pages) {
       page.layout(scale)
       page.setDrawing(this.state.drawing)
+      this.syncLasso(page)
     }
     this.tops = null
     this.applyTint()
@@ -1008,6 +1026,9 @@ export class Reader implements PageOwner {
   }
 
   setDrawing(drawing: boolean) {
+    // The pen and the lasso are two modes of one page: the pen out, the
+    // lasso goes away with its catch.
+    if (drawing && this.state.lasso) this.setLasso(false)
     this.state.drawing = drawing
     for (const page of this.pages) {
       page.setDrawing(drawing)
@@ -1092,20 +1113,208 @@ export class Reader implements PageOwner {
     this.actions.marksChanged?.()
   }
 
+  // MARK: - The formula lasso
+
   /**
-   * The selection as the Mac's MathReader takes it, page by page: the page's
-   * glyphs and rules (read in the main process by the same scanner), the
-   * selection's lines, and the text layer's characters near them. Nothing
-   * when there is no selection; a page the scanner could not read comes with
-   * no glyphs, and the reader falls back to the selection's words.
+   * The formula lasso out or away (`ReaderConfiguration.mode == .lasso`). Out,
+   * every page's lasso surface takes the mouse in place of the text layer, the
+   * pen is put away and the selection cleared, as the Mac does
+   * (`updateCanvasInteraction`). Away, the catch goes with it: a rectangle
+   * nobody can see is not a selection anybody meant.
+   */
+  setLasso(on: boolean) {
+    if (on && this.state.drawing) this.setDrawing(false)
+    this.state.lasso = on
+    if (on) {
+      this.bar.hideMark()
+      this.bar.hide()
+      window.getSelection()?.removeAllRanges()
+    } else {
+      this.dropCatch()
+    }
+    for (const page of this.pages) this.syncLasso(page)
+  }
+
+  /** The lasso lets go of what it holds; the box goes off the page. */
+  dropCatch() {
+    this.caught = null
+    for (const page of this.pages) page.showLasso(null)
+  }
+
+  /** A page's surface and handlers kept in step with the mode. */
+  private syncLasso(page: PageView) {
+    page.setLasso(this.state.lasso)
+    if (this.state.lasso && !this.lassoInputs.has(page)) this.lassoInputs.set(page, this.attachLasso(page))
+    if (!this.state.lasso) {
+      this.lassoInputs.get(page)?.abort()
+      this.lassoInputs.delete(page)
+    }
+  }
+
+  /**
+   * The drag: a rectangle from the press to the release, kept on the page.
+   * A click — under two points either way — lets go of the catch; a drag
+   * catches what is under it (`LassoInputView.mouseUp`).
+   */
+  private attachLasso(page: PageView): AbortController {
+    const controller = new AbortController()
+    const signal = controller.signal
+    const surface = page.lassoSurface
+    let origin: { x: number; y: number } | null = null
+    const rectFrom = (a: { x: number; y: number }, b: { x: number; y: number }) => ({
+      x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(b.x - a.x), height: Math.abs(b.y - a.y),
+    })
+    surface.addEventListener('pointerdown', (event: PointerEvent) => {
+      if (event.button !== 0) return
+      event.preventDefault()
+      surface.setPointerCapture(event.pointerId)
+      origin = page.toPageFromClient(event.clientX, event.clientY)
+      // The catch stays while the next rectangle is drawn; the drawing shows over it.
+      page.showLasso(rectFrom(origin, origin), 'drag')
+    }, { signal })
+    surface.addEventListener('pointermove', (event: PointerEvent) => {
+      if (!origin) return
+      page.showLasso(rectFrom(origin, page.toPageFromClient(event.clientX, event.clientY)), 'drag')
+    }, { signal })
+    surface.addEventListener('pointerup', (event: PointerEvent) => {
+      if (!origin) return
+      const rect = rectFrom(origin, page.toPageFromClient(event.clientX, event.clientY))
+      origin = null
+      if (rect.width < 2 || rect.height < 2) {
+        this.dropCatch()
+        return
+      }
+      void this.catchRect(page.index, rect)
+    }, { signal })
+    surface.addEventListener('pointercancel', () => {
+      origin = null
+      this.restoreLassoBox(page)
+    }, { signal })
+    return controller
+  }
+
+  /** The box as the catch has it — after a drawing that was abandoned. */
+  private restoreLassoBox(page: PageView) {
+    const caught = this.caught && this.caught.pageIndex === page.index ? this.caught : null
+    page.showLasso(caught ? caught.rect : null, 'caught', caught?.needsOCR ?? false)
+  }
+
+  /**
+   * Catches what the rectangle reaches, snapped to it (`LassoInputView.catch`):
+   * the whole formula touched, limits and bar and number included, or the
+   * words inside — or the rectangle as drawn when the page cannot be read.
+   * The first time in a run, says what the catch is for.
+   */
+  async catchRect(pageIndex: number, rect: { x: number; y: number; width: number; height: number }) {
+    const page = this.pages[pageIndex]
+    if (!page) return null
+    const input = await this.mathInput(page, [this.lassoBoxOf(rect)], '')
+    // `extentRead` takes the rectangle as a selection's bounds are — the
+    // cropBox's origin not added — where this page's coordinates have it added.
+    const crop = input.cropBox
+    const asked = { ...rect, x: rect.x - crop.x, y: rect.y - crop.y }
+    const read = extentRead(input, asked)
+    const snapped = read ? { ...read, x: read.x + crop.x, y: read.y + crop.y } : rect
+    if (!this.state.lasso || this.pages[pageIndex] !== page) return null
+    // Nothing to snap to — a scanned page, a formula pasted in as a picture,
+    // glyphs without meanings: the rectangle stays as drawn, dashed, and the
+    // picture is read instead when it is copied (`LassoInputView.catch`).
+    const needsOCR = read === null
+    this.caught = { pageIndex, rect: snapped, needsOCR }
+    for (const other of this.pages) other.showLasso(other === page ? snapped : null, 'caught', needsOCR)
+    if (!lassoExplained) {
+      lassoExplained = true
+      this.actions.toast(L('수식을 잡았어요. ⇧⌘C로 LaTeX을 복사하고, ⌘L로 노트에 넣어요.', 'Caught. ⇧⌘C copies it as LaTeX; ⌘L quotes it in the note.')
+        .replace('⇧⌘C', shortcutText('⇧⌘C', platform)).replace('⌘L', shortcutText('⌘L', platform)))
+    }
+    return snapped
+  }
+
+  /** The catch as a line box: a point wider either side, as the selection's are. */
+  private lassoBoxOf(rect: { x: number; y: number; width: number; height: number }) {
+    return { x: rect.x - 1, y: rect.y, width: rect.width + 2, height: rect.height }
+  }
+
+  /** The catch as the Mac's MathReader takes it: one page, the rectangle
+   *  where the selection's lines would go. Nothing without a catch. */
+  async lassoForMath(): Promise<MathPage[]> {
+    const caught = this.caught
+    const page = caught ? this.pages[caught.pageIndex] : undefined
+    if (!caught || !page) return []
+    return [await this.mathInput(page, [this.lassoBoxOf(caught.rect)], '')]
+  }
+
+  /**
+   * The catch read off a picture of the page — the formula OCR model, in
+   * the main process's worker (`FormulaOCR.read(page:rect:)`). The catch's
+   * rectangle is what is drawn; the picture is padded a little round it.
+   * Null when the model read nothing, or the page could not be drawn.
+   */
+  async readCaughtByOCR(): Promise<{ latex: string; tokens: number; seconds: number } | null> {
+    const caught = this.caught
+    const page = caught ? this.pages[caught.pageIndex] : undefined
+    if (!caught || !page) return null
+    return this.readByOCR(page, caught.rect)
+  }
+
+  /** A rectangle of a page read by the formula OCR model, catch or not. */
+  async readByOCR(page: PageView, rect: { x: number; y: number; width: number; height: number }): Promise<{ latex: string; tokens: number; seconds: number } | null> {
+    const pixels = await page.ocrPixels(rect)
+    // Blank paper is answered here: the model, shown nothing, makes something up.
+    if (!pixels || isBlankPicture(pixels)) return null
+    return call('ocr:read', { pixels })
+  }
+
+  /** The catch as a note cites it — the rectangle, with no words of its own. */
+  lassoAnchor(): { pageIndex: number; rect: { x: number; y: number; width: number; height: number }; text: string } | null {
+    return this.caught ? { pageIndex: this.caught.pageIndex, rect: this.caught.rect, text: '' } : null
+  }
+
+  /** For a probe: the mode and the catch. */
+  lassoReport() {
+    return { lasso: this.state.lasso, caught: this.caught, boxes: this.pages.map((page) => page.lassoReport()).filter((one) => one !== null) }
+  }
+
+  // MARK: - Reading mathematics
+
+  /**
+   * One page as the Mac's MathReader takes it: the page's glyphs and rules
+   * (read in the main process by the same scanner), the boxes the selection
+   * covers — or the lasso's one — and the text layer's characters near them.
+   * A page the scanner could not read comes with no glyphs, and the reader
+   * falls back to the words.
+   */
+  private async mathInput(page: PageView, lineBoxes: { x: number; y: number; width: number; height: number }[], selectionString: string): Promise<MathPage> {
+    const id = this.paperID
+    const scanned = id ? await call('math:page', { id, pageIndex: page.index }).catch(() => null) : null
+    const reachBox = lineBoxes.reduce((all, one) => ({
+      x: Math.min(all.x, one.x), y: Math.min(all.y, one.y),
+      width: Math.max(all.x + all.width, one.x + one.width) - Math.min(all.x, one.x),
+      height: Math.max(all.y + all.height, one.y + one.height) - Math.min(all.y, one.y),
+    }))
+    const reach = { x: reachBox.x - 40, y: reachBox.y - 40, width: reachBox.width + 80, height: reachBox.height + 80 }
+    return {
+      glyphs: scanned?.glyphs ?? [],
+      rules: scanned?.rules ?? [],
+      lineBoxes,
+      characters: page.characterBoxes(reach),
+      pageText: page.layerText() ?? '',
+      selectionString,
+      cropBox: scanned?.cropBox ?? { x: 0, y: 0, width: 612, height: 792 },
+      italicElsewhere: scanned?.italicElsewhere ?? null,
+    }
+  }
+
+  /**
+   * The selection as the Mac's MathReader takes it, page by page: the
+   * selection's lines on each page, and what `mathInput` adds. Nothing when
+   * there is no selection.
    */
   async selectionForMath(): Promise<MathPage[]> {
     const parts = this.selectionParts()
-    const id = this.paperID
-    if (!id || parts.length === 0) return []
+    if (!this.paperID || parts.length === 0) return []
     const pages: MathPage[] = []
     for (const part of parts) {
-      const scanned = await call('math:page', { id, pageIndex: part.page.index }).catch(() => null)
       const lineBoxes = part.quads.map((quad) => {
         const xs = [quad[0], quad[2], quad[4], quad[6]]
         const ys = [quad[1], quad[3], quad[5], quad[7]]
@@ -1114,22 +1323,7 @@ export class Reader implements PageOwner {
         // A point wider either side, as the Mac's line boxes are.
         return { x: x - 1, y, width: Math.max(...xs) - x + 2, height: Math.max(...ys) - y }
       })
-      const reachBox = lineBoxes.reduce((all, one) => ({
-        x: Math.min(all.x, one.x), y: Math.min(all.y, one.y),
-        width: Math.max(all.x + all.width, one.x + one.width) - Math.min(all.x, one.x),
-        height: Math.max(all.y + all.height, one.y + one.height) - Math.min(all.y, one.y),
-      }))
-      const reach = { x: reachBox.x - 40, y: reachBox.y - 40, width: reachBox.width + 80, height: reachBox.height + 80 }
-      pages.push({
-        glyphs: scanned?.glyphs ?? [],
-        rules: scanned?.rules ?? [],
-        lineBoxes,
-        characters: part.page.characterBoxes(reach),
-        pageText: part.page.layerText() ?? '',
-        selectionString: part.text,
-        cropBox: scanned?.cropBox ?? { x: 0, y: 0, width: 612, height: 792 },
-        italicElsewhere: scanned?.italicElsewhere ?? null,
-      })
+      pages.push(await this.mathInput(part.page, lineBoxes, part.text))
     }
     return pages
   }

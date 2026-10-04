@@ -94,18 +94,115 @@ enum MathReader {
                 "Linked without \(count == 1 ? "one formula" : "\(count) formulas"). The file doesn't say what \(count == 1 ? "its" : "their") symbols are.")
     }
 
+    /// A part of a page to read: the boxes it covers (in PDF space, the
+    /// cropBox's origin added — what `lineBoxes` makes of a selection) and
+    /// the words to fall back on when the page cannot be scanned.
+    struct Region {
+        var page: PDFPage
+        var boxes: [CGRect]
+        var fallback: String
+    }
+
     @MainActor
     static func pieces(from selection: PDFSelection) -> [Piece] {
+        pieces(of: selection.pages.map {
+            Region(page: $0, boxes: lineBoxes(of: selection, on: $0), fallback: selection.string ?? "")
+        })
+    }
+
+    /// A rectangle drawn by hand over a page — the formula lasso. `rect` is
+    /// in the page's coordinates as PDFKit gives them (the cropBox's origin
+    /// not added), the way a selection's bounds are. The rectangle stands
+    /// in for the selection's line boxes, and the reader does what it does
+    /// for a drag: a formula touched anywhere comes whole, prose comes as
+    /// the words inside.
+    @MainActor
+    static func pieces(on page: PDFPage, rect: CGRect) -> [Piece] {
+        pieces(of: [Region(page: page, boxes: [box(of: rect, on: page)],
+                           fallback: page.selection(for: rect)?.string ?? "")])
+    }
+
+    @MainActor
+    static func latex(on page: PDFPage, rect: CGRect) -> String {
+        let read = pieces(on: page, rect: rect)
+        guard !read.isEmpty else { return page.selection(for: rect)?.string ?? "" }
+        return lines(of: read, markdown: false).joined(separator: "\n")
+    }
+
+    @MainActor
+    static func structured(on page: PDFPage, rect: CGRect) -> [String] {
+        let read = pieces(on: page, rect: rect)
+        guard !read.isEmpty else {
+            let plain = (page.selection(for: rect)?.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            return plain.isEmpty ? [] : [plain]
+        }
+        return lines(of: read, markdown: true)
+    }
+
+    /// Where what a rectangle would read actually stands: the glyphs the
+    /// reader takes for it — whole formulas touched, the words inside
+    /// otherwise, and nothing of a line a formula's reach only clipped —
+    /// united, in the page's coordinates as PDFKit gives them. Nil when the
+    /// rectangle reaches nothing the page can be read for. This is what the
+    /// lasso snaps to, so that the box on the page is exactly what ⇧⌘C
+    /// will copy.
+    @MainActor
+    static func extentRead(on page: PDFPage, rect: CGRect) -> CGRect? {
+        guard let scanned = scan(page), !scanned.glyphs.isEmpty else { return nil }
+        let layout = layout(of: page, scanned: scanned)
+        let boxes = [box(of: rect, on: page)]
+        let reached = reached(in: layout, boxes: boxes)
+        let wantsFormula = reached.contains { $0.block.isFormula }
+        var union: CGRect?
+        for (block, glyphs) in reached {
+            if !block.isFormula, wantsFormula, glyphs.count * 10 < block.rows[0].count * 9 { continue }
+            for glyph in glyphs { union = union.map { $0.union(glyph.rect) } ?? glyph.rect }
+        }
+        guard let union else { return nil }
+        let offset = page.bounds(for: .cropBox).origin
+        return union.offsetBy(dx: -offset.x, dy: -offset.y)
+    }
+
+    /// A rectangle in PDFKit's page coordinates as a box the reader uses:
+    /// the cropBox's origin added, a point wider either side.
+    private static func box(of rect: CGRect, on page: PDFPage) -> CGRect {
+        let offset = page.bounds(for: .cropBox).origin
+        return rect.offsetBy(dx: offset.x, dy: offset.y).insetBy(dx: -1, dy: 0)
+    }
+
+    /// What the boxes reach. A formula is two-dimensional — its limits sit
+    /// under the sign and its numerator over the bar — so touching one means
+    /// taking all of it; of a line of prose, the glyphs inside.
+    private static func reached(in layout: Layout, boxes: [CGRect]) -> [(block: Layout.Block, glyphs: [PDFContentScanner.Glyph])] {
+        func selected(_ glyph: PDFContentScanner.Glyph) -> Bool {
+            boxes.contains { belongs(glyph, to: $0) }
+        }
+        var reached: [(block: Layout.Block, glyphs: [PDFContentScanner.Glyph])] = []
+        for block in layout.blocks {
+            if block.isFormula {
+                let all = block.rows.flatMap { $0 }
+                if all.contains(where: selected) { reached.append((block, all)) }
+            } else {
+                let kept = block.rows[0].filter(selected)
+                if !kept.isEmpty { reached.append((block, kept)) }
+            }
+        }
+        return reached
+    }
+
+    @MainActor
+    static func pieces(of regions: [Region]) -> [Piece] {
         skippedFormulas = 0
         var pieces: [Piece] = []
-        for (number, page) in selection.pages.enumerated() {
+        for (number, region) in regions.enumerated() {
+            let page = region.page
             let pageCharacters = characters(of: page)
             let pageText = (page.string ?? "") as NSString
             MathTranscriber.fallback = characterLookup(for: page)
             defer { MathTranscriber.fallback = nil }
             guard let scanned = scan(page), !scanned.glyphs.isEmpty else {
-                if let plain = selection.string, !plain.isEmpty {
-                    pieces.append(Piece(kind: .prose, plain: plain, marked: plain))
+                if !region.fallback.isEmpty {
+                    pieces.append(Piece(kind: .prose, plain: region.fallback, marked: region.fallback))
                 }
                 continue
             }
@@ -114,7 +211,7 @@ enum MathReader {
             let layout = layout(of: page, scanned: scanned)
             MathTranscriber.variablesInTextItalic = layout.variablesInTextItalic
             defer { MathTranscriber.variablesInTextItalic = false }
-            let boxes = lineBoxes(of: selection, on: page)
+            let boxes = region.boxes
             let rules = markingBraceFills(scanned.rules, glyphs: scanned.glyphs)
             let pageBody = size(of: scanned.glyphs)
             // How wide the page sets its text, so "this line stops short" has
@@ -130,19 +227,8 @@ enum MathReader {
                 boxes.contains { belongs(glyph, to: $0) }
             }
 
-            // What the selection reaches. A formula is two-dimensional — its
-            // limits sit under the sign and its numerator over the bar — so
-            // touching one means taking all of it.
-            var reached: [(block: Layout.Block, glyphs: [PDFContentScanner.Glyph])] = []
-            for block in layout.blocks {
-                if block.isFormula {
-                    let all = block.rows.flatMap { $0 }
-                    if all.contains(where: selected) { reached.append((block, all)) }
-                } else {
-                    let kept = block.rows[0].filter(selected)
-                    if !kept.isEmpty { reached.append((block, kept)) }
-                }
-            }
+            // What the selection reaches (`reached(in:boxes:)`).
+            let reached = reached(in: layout, boxes: boxes)
 
             // A range that ends anywhere on a line takes in the whole start of
             // it, so a drag round a displayed formula arrives with the opening

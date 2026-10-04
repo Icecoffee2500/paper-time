@@ -108,6 +108,8 @@ final class ReaderCoordinator: NSObject {
     /// Over the PDF view while the pencil is out; kept between outings so
     /// its selection state does not have to be rebuilt.
     private var sketchInput: SketchInputView?
+    /// The formula lasso over the page, while `mode` is `.lasso`.
+    var lassoInput: LassoInputView?
     #endif
     /// Trims every page to the paper's content: see `BookTrim`.
     private func trimForBook(_ document: PDFDocument) {
@@ -516,6 +518,7 @@ final class ReaderCoordinator: NSObject {
         installPinchMonitor(in: view)
         installMarkupShortcuts(for: view)
         if let plan = Boot.setting("PAPERTIME_MARK_TEST") { markWithoutAMouse(plan, in: view) }
+        if let plan = Boot.setting("PAPERTIME_LASSO") { lassoProbe(plan, in: view) }
         if Boot.isSet("PAPERTIME_DRAW") || Boot.isSet("PAPERTIME_SKETCH_SHOT") { sketchProbe(in: view) }
         if Boot.isSet("PAPERTIME_WATCH_THREADS") { watchNotificationThreads() }
         #endif
@@ -1471,10 +1474,75 @@ final class ReaderCoordinator: NSObject {
     /// Command-Shift-C, for when the hand is on the keyboard rather than on
     /// the bar that floats over the selection.
     @objc func ultraCopySelection() {
+        // The lasso's rectangle, while the lasso is out.
+        if let lasso = lassoInput, lasso.superview != nil {
+            guard let caught = lasso.caught else {
+                return onToast(L("먼저 수식을 사각형으로 잡아주세요.", "Catch a formula in a rectangle first."))
+            }
+            let text = caught.needsOCR ? "" : MathReader.latex(on: caught.page, rect: caught.rect)
+            if text.isEmpty {
+                // No glyphs to read: off the picture, in a moment.
+                #if canImport(OnnxRuntimeBindings)
+                onToast(L("그림에서 수식을 읽는 중…", "Reading the formula off the picture…"))
+                Task { @MainActor [weak self] in
+                    guard let read = try? await FormulaOCR.read(page: caught.page, rect: caught.rect) else {
+                        self?.onToast(L("사각형 안에서 읽을 수식이 없어요.", "No formula to read inside the rectangle."))
+                        return
+                    }
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(read.latex, forType: .string)
+                    self?.onToast(L("그림에서 읽어 복사했어요. 틀린 데가 있는지 봐주세요.",
+                                    "Read off the picture and copied — check it over."))
+                }
+                #else
+                onToast(L("사각형 안에서 읽을 글이 없어요.", "Nothing to read inside the rectangle."))
+                #endif
+                return
+            }
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+            onToast(MathReader.leftOutSentence(copied: true) ?? L("수식까지 복사했어요.", "Copied with formulas."))
+            return
+        }
         guard let selection = pdfView?.currentSelection, selection.string?.isEmpty == false else {
             return
         }
         copy(selection, asLaTeX: true)
+    }
+
+    /// `--papertime-lasso=<page>,<x>,<y>,<w>,<h>`: takes the lasso out,
+    /// catches that rectangle and says what it snapped to and would copy.
+    private func lassoProbe(_ plan: String, in view: PDFView) {
+        Task { @MainActor [weak self, weak view] in
+            func say(_ text: String) { FileHandle.standardError.write(Data("lasso: \(text)\n".utf8)) }
+            try? await Task.sleep(for: .seconds(2))
+            guard let self, let view, let document = view.document else { return say("no view") }
+            let numbers = plan.split(separator: ",").compactMap { Double($0) }
+            guard numbers.count >= 5, let page = document.page(at: Int(numbers[0])) else { return say("bad plan") }
+            let rect = CGRect(x: numbers[1], y: numbers[2], width: numbers[3], height: numbers[4])
+            configuration.mode = .lasso
+            updateCanvasInteraction()
+            try? await Task.sleep(for: .milliseconds(300))
+            guard let lasso = lassoInput, lasso.superview === view else { return say("no lasso view") }
+            lasso.catch(rect, on: page)
+            func text(_ r: CGRect) -> String { "\(Int(r.minX.rounded())) \(Int(r.minY.rounded())) \(Int(r.width.rounded())) \(Int(r.height.rounded()))" }
+            say("drawn \(text(rect)) → caught \(lasso.caught.map { "\(text($0.rect))\($0.needsOCR ? " (OCR)" : "")" } ?? "nothing")")
+            let read = lasso.caught?.rect ?? rect
+            say("latex: \(MathReader.latex(on: page, rect: read))")
+            say("structured: \(MathReader.structured(on: page, rect: read))")
+            say("link: \(link.lasso.map { "page \($0.pageIndex) \(text($0.rect))" } ?? "none")")
+            #if canImport(OnnxRuntimeBindings)
+            if lasso.caught?.needsOCR == true || Boot.isSet("PAPERTIME_LASSO_OCR") {
+                let began = Date()
+                if let reading = try? await FormulaOCR.read(page: page, rect: read) {
+                    say("ocr: \(reading.latex) (\(reading.tokens) tokens, \(String(format: "%.2f", reading.seconds)) s; \(String(format: "%.2f", Date().timeIntervalSince(began))) s with loading)")
+                } else {
+                    say("ocr: failed")
+                }
+            }
+            #endif
+            NSApp.terminate(nil)
+        }
     }
     #endif
 
@@ -1584,6 +1652,8 @@ final class ReaderCoordinator: NSObject {
             // A click on something drawn — a shape, a card, a stroke — takes
             // the pencil out by itself and goes straight to selecting it, so
             // what was drawn is never a picture you have to unlock first.
+            // The lasso is out: the click is its.
+            if lassoInput?.superview != nil { return event }
             if configuration.mode != .draw, sketchInput?.superview == nil, hitsDrawing(at: inView, on: page, in: view) {
                 configuration.mode = .draw
                 // Installed now rather than on the next SwiftUI pass, so
@@ -1805,6 +1875,7 @@ final class ReaderCoordinator: NSObject {
             hideMarkupPanel()
             view.clearSelection()
             onSelectionChange(nil, .zero)
+            removeLasso()
             let input = sketchInput ?? makeSketchInput(for: view)
             input.session = session
             if input.superview !== view {
@@ -1812,10 +1883,27 @@ final class ReaderCoordinator: NSObject {
                 view.addSubview(input)
             }
             input.activate()
-        } else if let input = sketchInput {
-            input.deactivate()
-            input.removeFromSuperview()
-            view.window?.makeFirstResponder(view)
+        } else if configuration.mode == .lasso {
+            hideMarkupPanel()
+            view.clearSelection()
+            onSelectionChange(nil, .zero)
+            if let input = sketchInput {
+                input.deactivate()
+                input.removeFromSuperview()
+            }
+            let lasso = lassoInput ?? makeLassoInput(for: view)
+            if lasso.superview !== view {
+                lasso.frame = view.bounds
+                view.addSubview(lasso)
+            }
+            lasso.activate()
+        } else {
+            if let input = sketchInput {
+                input.deactivate()
+                input.removeFromSuperview()
+                view.window?.makeFirstResponder(view)
+            }
+            if removeLasso() { view.window?.makeFirstResponder(view) }
         }
         #endif
         #if canImport(UIKit)
@@ -1941,6 +2029,31 @@ extension ReaderCoordinator: @preconcurrency PDFPageOverlayViewProvider {
     }
 
     /// The view that takes the mouse while the pencil is out.
+    private func makeLassoInput(for view: PDFView) -> LassoInputView {
+        let input = LassoInputView(pdfView: view, configuration: configuration, document: session.document)
+        input.onCaught = { [weak self] caught in
+            guard let self else { return }
+            if let caught {
+                let index = session.document.index(for: caught.page)
+                link.lasso = index == NSNotFound ? nil : (index, caught.rect, caught.needsOCR)
+            } else {
+                link.lasso = nil
+            }
+        }
+        input.onToast = { [weak self] message in self?.onToast(message) }
+        lassoInput = input
+        return input
+    }
+
+    /// Takes the lasso off the page. True when it was on.
+    @discardableResult
+    private func removeLasso() -> Bool {
+        guard let lasso = lassoInput, lasso.superview != nil else { return false }
+        lasso.deactivate()
+        lasso.removeFromSuperview()
+        return true
+    }
+
     private func makeSketchInput(for view: PDFView) -> SketchInputView {
         MathBridge.install()
         let input = SketchInputView(pdfView: view, configuration: configuration, session: session)

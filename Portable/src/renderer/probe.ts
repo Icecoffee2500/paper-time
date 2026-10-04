@@ -83,6 +83,26 @@ export function installProbeSurface() {
         const pages = (await focused()?.selectionForMath()) ?? []
         return { pages: pages.length, glyphs: pages.map((page) => page.glyphs.length), latex: mathLatex(pages), structured: mathStructured(pages) }
       },
+      /** The formula lasso's catch of a rectangle on a page (page coordinates,
+       *  as pointer-up would make it), and what ⇧⌘C and ⌘L would read for it. */
+      lasso: async (pageIndex: number, x: number, y: number, width: number, height: number) => {
+        const reader = focused()
+        if (!reader) return null
+        if (!reader.state.lasso) reader.setLasso(true)
+        const caught = await reader.catchRect(pageIndex, { x, y, width, height })
+        const pages = await reader.lassoForMath()
+        return { caught, needsOCR: reader.caught?.needsOCR ?? false, glyphs: pages.map((page) => page.glyphs.length), latex: mathLatex(pages), structured: mathStructured(pages) }
+      },
+      /** The formula OCR's whole path on a rectangle of a page — the picture
+       *  drawn, sent, read — and what came back; nothing goes to the clipboard. */
+      ocr: async (pageIndex: number, x: number, y: number, width: number, height: number) => {
+        const reader = focused()
+        const page = reader?.pages[pageIndex]
+        if (!reader || !page) return null
+        return reader.readByOCR(page, { x, y, width, height })
+      },
+      /** Whether the lasso is out, what it holds, and where its box stands. */
+      state: () => focused()?.lassoReport() ?? null,
     },
     // The slip-box as the window holds it, and the ways into a note.
     __papertimeNotes: {

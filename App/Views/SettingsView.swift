@@ -997,6 +997,11 @@ struct SettingsView: View {
                     "Snippets and behavior from Latex Suite by artisticat1, under the MIT License."
                 ))
                 .foregroundStyle(.tertiary)
+                Text(L(
+                    "수식 올가미가 그림에서 수식을 읽을 때는 breezedeus의 pix2text 모델과 ONNX Runtime(둘 다 MIT 라이선스)을 이 컴퓨터에서 돌려요.",
+                    "When the formula lasso reads a picture, it runs breezedeus’s pix2text model with ONNX Runtime (both under the MIT License), on this computer."
+                ))
+                .foregroundStyle(.tertiary)
             }
         }
     }

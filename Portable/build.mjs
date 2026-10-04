@@ -76,6 +76,19 @@ const targets = [
     external: ['electron'],
     ...nodeImportMeta,
   },
+  // The formula OCR, in a process of its own: the same runtime, loaded from
+  // the semantic worker's folder; the model itself comes from the Mac's
+  // `App/Resources/MathOCR` (`ocrClient.ts`), never copied into `out/`.
+  {
+    ...common,
+    entryPoints: [path.join(root, 'src/main/ocrWorker.ts')],
+    outfile: path.join(out, 'main/ocr.js'),
+    platform: 'node',
+    format: 'cjs',
+    target: 'node20',
+    external: ['electron'],
+    ...nodeImportMeta,
+  },
   {
     ...common,
     entryPoints: [path.join(root, 'src/main/preload.ts')],

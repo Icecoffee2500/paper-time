@@ -14,7 +14,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import zlib from 'node:zlib'
-import { latex, leftOutFormulas, pieces, spread, structured, type PageInput, type PieceKind } from '../shared/mathReader/reader.js'
+import { extentRead, latex, leftOutFormulas, pieces, spread, structured, type PageInput, type PieceKind } from '../shared/mathReader/reader.js'
 import { latex as glyphLatex } from '../shared/mathReader/texGlyphNames.js'
 import { holes, imageMask, PLAIN_HOLES } from '../main/mathScanner.js'
 import type { Glyph } from '../shared/mathReader/glyph.js'
@@ -38,6 +38,10 @@ interface Case {
   skipped: number
   structured: string[]
   latex: string
+  /** The formula lasso: a rectangle asked for, in PDFKit's page coordinates,
+   *  and what the Mac's `extentRead` snapped it to — or null. */
+  lassoRect?: number[]
+  lassoExtent?: number[] | null
 }
 
 const box = (r: number[]) => ({ x: r[0], y: r[1], width: r[2], height: r[3] })
@@ -73,6 +77,23 @@ function compare(one: Case) {
   assert.equal(skipped, one.skipped, 'as many formulas left out')
   assert.deepEqual(structured([page]), one.structured)
   assert.equal(latex([page]), one.latex)
+}
+
+/** Where the lasso snaps for the page's rectangle, beside where the Mac's did. */
+function compareLasso(one: Case) {
+  if (!one.lassoRect || one.lassoExtent === undefined) assert.fail('the fixture carries no lasso rectangle')
+  const snapped = extentRead(pageFromFixture(one), box(one.lassoRect))
+  if (one.lassoExtent === null) {
+    assert.equal(snapped, null, 'the Mac snapped to nothing')
+    return
+  }
+  assert.ok(snapped, `the Mac snapped to ${JSON.stringify(one.lassoExtent)}; the port to nothing`)
+  const theirs = box(one.lassoExtent)
+  for (const side of ['x', 'y', 'width', 'height'] as const) {
+    if (Math.abs(snapped[side] - theirs[side]) > 0.01) {
+      assert.fail(`${side}: ${snapped[side]} ≠ ${theirs[side]} (${JSON.stringify(snapped)} vs ${JSON.stringify(theirs)})`)
+    }
+  }
 }
 
 /** The page's glyphs and rules as the port's scanner reads the same bytes. */
@@ -130,6 +151,7 @@ export async function mathReaderSuite(test: Test, suite: (name: string) => void)
   for (const [setup, pages] of setups) {
     await test(`the bench set in ${setup}, ${pages.length} pages: the same pieces, Markdown and Ultracopy's LaTeX`, () => every(pages, compare))
   }
+  await test(`the formula lasso snaps where the Mac's does, on all ${cases.length} pages (within 0.01 pt)`, () => every(cases, compareLasso))
 
   await test('a display of several rows is written a row a line; one row stays on one line', () => {
     assert.equal(spread('$$a=b$$'), '$$a=b$$')

@@ -41,6 +41,9 @@ export const SHORTCUTS: Shortcut[] = [
   { command: 'findInDocument', group: 'reading', title: () => L('이 논문에서 찾기', 'Find in Document'), mac: 'CmdOrCtrl+F' },
   // The name is the feature's own, in both languages, as on the Mac.
   { command: 'ultracopy', group: 'reading', title: () => 'Ultracopy', mac: 'CmdOrCtrl+Shift+C' },
+  // A rectangle over a formula instead of a drag through it. Off the Mac not
+  // Ctrl+Alt: that is AltGr on most European keyboards.
+  { command: 'lasso', group: 'reading', title: () => L('수식 올가미', 'Formula Lasso'), mac: 'CmdOrCtrl+Alt+L', other: 'Ctrl+Shift+J' },
   { command: 'linkToNote', group: 'reading', title: () => L('고른 곳을 노트로', 'Link Selection to Note'), mac: 'CmdOrCtrl+L' },
   { command: 'layoutContinuous', group: 'reading', title: () => L('이어서 보기', 'Continuous Layout'), mac: 'CmdOrCtrl+1' },
   { command: 'layoutSinglePage', group: 'reading', title: () => L('한 쪽씩 보기', 'Single Page Layout'), mac: 'CmdOrCtrl+2' },

@@ -1066,6 +1066,57 @@ body[data-window-focused='false'] .paper-row[aria-selected='true'] {
   display: block;
 }
 
+/* The formula lasso: while it is out the page takes the mouse the same way,
+   with a crosshair, and the rectangle it holds is drawn beside the words —
+   outside `.page-print`, which a tint multiplies or inverts. */
+.page[data-lasso='true'] .text-layer {
+  pointer-events: none;
+  user-select: none;
+}
+
+.page .lasso-input {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: none;
+  cursor: crosshair;
+}
+
+.page[data-lasso='true'] .lasso-input {
+  display: block;
+}
+
+/* The catch, in the accent: filled lightly, a 1.5px line, rounded 3px, and
+   3px round what the reader read (`LassoInputView.draw`). While the rectangle
+   is being drawn: a lighter fill and a dashed hairline. */
+.page .lasso-box {
+  position: absolute;
+  z-index: 4;
+  pointer-events: none;
+  box-sizing: border-box;
+  display: none;
+}
+
+.page .lasso-box[data-phase='caught'] {
+  display: block;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--accent) 90%, transparent);
+  border-radius: 3px;
+}
+
+/* A catch the page could not be read for — a scan, a formula pasted in as a
+   picture: the rectangle as drawn, dashed 5/3, and the picture is read
+   instead (`LassoInputView.draw`'s `needsOCR`). */
+.page .lasso-box[data-phase='caught'][data-ocr='true'] {
+  border-style: dashed;
+}
+
+.page .lasso-box[data-phase='drag'] {
+  display: block;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
 /* The paper as printed and everything drawn onto it — the page, the marks,
    what a search found, the drawing — in one box, so a tint can blend it onto
    the ground as one thing. A stacking context of its own in every rendering,

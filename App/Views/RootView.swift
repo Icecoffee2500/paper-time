@@ -1194,6 +1194,20 @@ struct PaperDetailColumn: View {
         }
         // Command-L: the passage goes to the note, and the note comes forward.
         .onReceive(NotificationCenter.default.publisher(for: .paperTimeLinkToNote)) { _ in
+            // The lasso's catch first — read off the picture when it has to
+            // be, which takes a moment.
+            if link.lasso != nil {
+                Task { @MainActor in
+                    guard let anchor = await link.lassoAnchor() else {
+                        link.toastRequest = L("사각형 안에서 읽을 글이 없어요.", "Nothing to read inside the rectangle.")
+                        return
+                    }
+                    app.showsInspector = true
+                    inspectorTab = .note
+                    link.pendingNoteAnchor = anchor
+                }
+                return
+            }
             guard let anchor = link.selectionAnchor() else { return }
             app.showsInspector = true
             inspectorTab = .note
@@ -1478,6 +1492,10 @@ struct PaperDetailColumn: View {
                 // The menu's "Draw on the Page", and its key.
                 .onReceive(NotificationCenter.default.publisher(for: .paperTimeToggleDraw)) { _ in
                     configuration.mode = configuration.mode == .draw ? .read : .draw
+                }
+                // The formula lasso, and its key.
+                .onReceive(NotificationCenter.default.publisher(for: .paperTimeToggleLasso)) { _ in
+                    configuration.mode = configuration.mode == .lasso ? .read : .lasso
                 }
                 #if os(iOS)
                 // The tools, in a strip under the title while the pencil is

@@ -39,6 +39,12 @@ final class ReaderLink {
         self.sessionPaperID = paperID
     }
     var selection: PDFSelection?
+    /// The formula lasso's catch: a page and a rectangle on it (PDFKit page
+    /// coordinates), standing in for the selection while the lasso is out.
+    /// `needsOCR` when the rectangle holds no glyphs and the formula is read
+    /// off the picture — which takes a second or two, so ⌘L goes through
+    /// `lassoAnchor()` rather than `selectionAnchor()`.
+    var lasso: (pageIndex: Int, rect: CGRect, needsOCR: Bool)?
     /// Whether the in-document find bar is showing.
     var isFinding = false
     /// A selection the reader should scroll to and highlight. Cleared by the
@@ -103,6 +109,28 @@ final class ReaderLink {
     /// And with the shape of the page: the section it came under is a
     /// heading, the equation keeps its own line and its number, the bold
     /// lead-in of a paragraph is still bold, and paragraphs are paragraphs.
+    /// The lasso's catch as a note's anchor — read off the page's glyphs,
+    /// or, when the rectangle holds none, off its picture (`FormulaOCR`).
+    /// Nil when nothing is caught or nothing could be read.
+    func lassoAnchor() async -> NoteAnchor? {
+        guard let lasso, let session, let page = session.document.page(at: lasso.pageIndex) else { return nil }
+        var quoted = MathReader.structured(on: page, rect: lasso.rect).joined(separator: "\n")
+        if lasso.needsOCR || quoted.isEmpty {
+            #if os(macOS) && canImport(OnnxRuntimeBindings)
+            guard let read = try? await FormulaOCR.read(page: page, rect: lasso.rect) else { return nil }
+            quoted = read.latex
+            toastRequest = L("그림에서 수식을 읽었어요. 틀린 데가 있는지 봐주세요.",
+                             "Read the formula off the picture — check it over.")
+            #else
+            return nil
+            #endif
+        } else if let left = MathReader.leftOutSentence() {
+            toastRequest = left
+        }
+        guard !quoted.isEmpty else { return nil }
+        return NoteAnchor(pageIndex: lasso.pageIndex, rect: lasso.rect, quotedText: quoted, paperID: sessionPaperID)
+    }
+
     func selectionAnchor() -> NoteAnchor? {
         guard let selection, let session,
               let page = selection.pages.first,

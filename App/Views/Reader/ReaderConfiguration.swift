@@ -88,18 +88,23 @@ public final class ReaderConfiguration {
         case read
         /// Pencil draws; fingers still scroll.
         case draw
+        /// A rectangle dragged over the page catches the formula under it,
+        /// for Ultracopy and the note (`LassoInputView`).
+        case lasso
 
         public var id: String { rawValue }
         public var symbolName: String {
             switch self {
             case .read: "hand.point.up.left"
             case .draw: "pencil.tip"
+            case .lasso: "lasso"
             }
         }
         public var label: String {
             switch self {
             case .read: "Read"
             case .draw: "Draw"
+            case .lasso: "Lasso"
             }
         }
     }

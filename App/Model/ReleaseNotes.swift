@@ -305,6 +305,14 @@ enum ReleaseNotes {
             ),
             added: [
                 Entry(
+                    Text2("수식 올가미", "Formula Lasso"),
+                    Text2(
+                        "⌥⌘L로 올가미를 켜고 수식 위에 사각형을 그리면 그 수식에 딱 맞게 잡혀요. 그대로 ⇧⌘C면 LaTeX으로 복사되고, ⌘L이면 노트에 들어가요. 표 안이나 드래그가 엇나가는 PDF에서도 되고, 스캔한 쪽이나 그림으로 넣은 수식은 이 컴퓨터에서 그림을 읽어 LaTeX으로 만들어요.",
+                        "Turn on the lasso with ⌥⌘L and draw a rectangle over a formula: it snaps to the formula. ⇧⌘C then copies it as LaTeX and ⌘L quotes it in the note — inside tables too, and in PDFs where a drag goes astray. A scanned page or a formula pasted as a picture is read off the picture, on this computer."
+                    ),
+                    action: .lasso
+                ),
+                Entry(
                     Text2("기호의 색", "Syntax in Colour"),
                     Text2(
                         "쓰고 있는 줄에서 $와 **, [[ 같은 기능이 있는 글자가 강조색으로 보여요. 제목의 #과 인용의 >도 그 줄에서는 보이고 고칠 수 있어요.",
