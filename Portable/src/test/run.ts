@@ -39,6 +39,7 @@ import { searchSuite } from './search.js'
 import { semanticSuite } from './semantic.js'
 import { semanticPaletteSuite } from './semanticPalette.js'
 import { noteMathSuite } from './noteMath.js'
+import { formulaOCRTextSuite } from './formulaOCRText.js'
 import { pageTintSuite } from './pageTint.js'
 import { paritySuite } from './parity.js'
 import { zettelSuite } from './zettel.js'
@@ -428,6 +429,7 @@ async function main() {
   await semanticSuite(test, suite)
   await semanticPaletteSuite(test, suite)
   await noteMathSuite(test, suite)
+  await formulaOCRTextSuite(test, suite)
   await pageTintSuite(test, suite)
   await paritySuite(test, suite)
   await zettelSuite(test, suite)

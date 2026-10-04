@@ -105,6 +105,7 @@ enum NoteScrollProbe {
             // What the note says now, for a probe of the keys themselves.
             if Boot.isSet("PAPERTIME_NOTE_SCROLL_TEXT") {
                 say("note text: \(note.markdown.debugDescription) selection \(text.selectedRange()) shown \(text.string.debugDescription)")
+                say("note toolbar: \(text.probeToolbar) syntax \(text.probeSyntax)")
             }
         }
 

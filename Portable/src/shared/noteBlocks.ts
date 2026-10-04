@@ -18,6 +18,8 @@ export type BlockKind =
   | { kind: 'bullet' }
   | { kind: 'ordered'; number: number }
   | { kind: 'task'; done: boolean }
+  /** «+ Title»: a toggle, whose children are the deeper-indented lines under it (Notion). */
+  | { kind: 'toggle' }
 
 export interface Block {
   type: BlockKind
@@ -35,6 +37,8 @@ const HEADING = new RegExp(`^(#{1,6})${S}+`, 'u')
 const BULLET = new RegExp(`^[-*+]${S}+`, 'u')
 const ORDERED = new RegExp(`^(\\d{1,3})[.)]${S}+`, 'u')
 const TASK = new RegExp(`^([-*+])${S}+\\[([ xX])\\]${S}+`, 'u')
+/** A toggle's marker: a plus and one space, which every other reader shows as a bullet. */
+const TOGGLE = /^\+ /
 
 export function blockOf(line: string): Block {
   let spaces = 0
@@ -50,6 +54,9 @@ export function blockOf(line: string): Block {
   }
   if ((match = HEADING.exec(body))) {
     return { type: { kind: 'heading', level: match[1].length }, marker: lead + match[0], content: body.slice(match[0].length), indent }
+  }
+  if ((match = TOGGLE.exec(body))) {
+    return { type: { kind: 'toggle' }, marker: lead + match[0], content: body.slice(match[0].length), indent }
   }
   if ((match = BULLET.exec(body))) {
     return { type: { kind: 'bullet' }, marker: lead + match[0], content: body.slice(match[0].length), indent }
@@ -83,6 +90,8 @@ export function continuation(block: Block): string {
     case 'ordered': return `${indent}${block.type.number + 1}. `
     case 'task': return `${indent}- [ ] `
     case 'quote': return `${indent}> `
+    // A toggle's next line is its first child: a plain line, one step in.
+    case 'toggle': return `${indent}  `
     default: return ''
   }
 }
@@ -109,7 +118,18 @@ export interface LineEdit {
 export function returnEdit(text: string, caret: number): LineEdit | null {
   const { start, line } = lineAt(text, caret)
   const block = blockOf(line)
-  if (block.type.kind === 'plain' || block.marker.length === 0) return null
+  if (block.type.kind === 'plain' || block.marker.length === 0) {
+    // An empty child line of a toggle steps out to the toggle's own level,
+    // as an empty nested item does: Return twice leaves the toggle.
+    if (block.type.kind === 'plain' && line.length >= 2 && /^ +$/.test(line) && caret === start + line.length) {
+      const header = toggleAbove(text, start, line.length)
+      if (header) {
+        const lead = ' '.repeat(header.indent * 2)
+        return { from: start, to: start + line.length, insert: lead, caret: start + lead.length }
+      }
+    }
+    return null
+  }
   if (trimWhitespace(block.content).length === 0) {
     // An empty nested item steps out a level first, as Notion's does; at the
     // left already, the marker goes rather than another being made.
@@ -124,11 +144,59 @@ export function returnEdit(text: string, caret: number): LineEdit | null {
   return { from: caret, to: caret, insert: next, caret: caret + next.length }
 }
 
+/**
+ * The toggle a line at `lineStart` with `spaces` of indentation is a child
+ * of: the nearest line above with less indentation, when that line is a
+ * toggle header. Blank lines between are skipped; a line as deep or deeper
+ * is a sibling child. Null when the line is under no toggle.
+ */
+function toggleAbove(text: string, lineStart: number, spaces: number): Block | null {
+  let end = lineStart - 1
+  while (end >= 0) {
+    const start = text.lastIndexOf('\n', end - 1) + 1
+    const line = text.slice(start, end)
+    if (line.trim().length > 0) {
+      const lead = line.length - line.trimStart().length
+      if (lead < spaces) {
+        const block = blockOf(line)
+        return block.type.kind === 'toggle' ? block : null
+      }
+    }
+    end = start - 1
+  }
+  return null
+}
+
+/**
+ * Where a toggle's children end: the last line under the header at
+ * `headerStart` that is indented deeper than it — a blank line counting when
+ * the next non-blank line is still deeper. The offset is the end of that
+ * line, without its break; null when the header has no children.
+ */
+export function toggleChildrenEnd(text: string, headerStart: number): number | null {
+  const header = lineAt(text, headerStart)
+  const spaces = header.line.length - header.line.trimStart().length
+  let at = header.start + header.line.length
+  let lastChildEnd: number | null = null
+  while (at < text.length && text[at] === '\n') {
+    const start = at + 1
+    const end = text.indexOf('\n', start)
+    const line = text.slice(start, end < 0 ? text.length : end)
+    if (line.trim().length > 0) {
+      const lead = line.length - line.trimStart().length
+      if (lead <= spaces) break
+      lastChildEnd = start + line.length
+    }
+    at = start + line.length
+  }
+  return lastChildEnd
+}
+
 /** What Tab (`by: 1`) or Shift-Tab (`by: -1`) does: null off a list line. */
 export function indentEdit(text: string, caret: number, by: 1 | -1): LineEdit | null {
   const { start, line } = lineAt(text, caret)
   const kind = blockOf(line).type.kind
-  if (kind !== 'bullet' && kind !== 'ordered' && kind !== 'task') return null
+  if (kind !== 'bullet' && kind !== 'ordered' && kind !== 'task' && kind !== 'toggle') return null
   if (by > 0) return { from: start, to: start, insert: '  ', caret: caret + 2 }
   // Already at the left: the key is taken and nothing moves.
   if (!line.startsWith('  ')) return { from: start, to: start, insert: '', caret }
@@ -161,10 +229,10 @@ export interface SelectionEdit {
   selectTo: number
 }
 
-export type EmphasisMark = '**' | '*' | '`'
+export type EmphasisMark = '**' | '*' | '`' | '$'
 
 /**
- * ⌘B, ⌘I, ⌘E: the mark put around the selection, or taken off it when it
+ * ⌘B, ⌘I, ⌘E, ⌘⇧M: the mark put around the selection, or taken off it when it
  * is already there — whether the selection took the marks in or stopped
  * just inside them. With nothing selected, an empty pair with the caret
  * between, and the pair taken away again when the caret already stands in
@@ -200,7 +268,7 @@ export function toggleEmphasisEdit(text: string, from: number, to: number, mark:
 function wrappedBy(wrapped: string, mark: EmphasisMark): boolean {
   const width = mark.length
   if (wrapped.length < 2 * width || !wrapped.startsWith(mark) || !wrapped.endsWith(mark)) return false
-  if (mark === '`') return true
+  if (mark === '`' || mark === '$') return true
   const lead = wrapped.length - wrapped.replace(/^\*+/, '').length
   const trail = wrapped.length - wrapped.replace(/\*+$/, '').length
   if (mark === '*') return lead % 2 === 1 && trail % 2 === 1
@@ -238,6 +306,83 @@ export function todoShortcutEdit(text: string, caret: number): LineEdit | null {
   if (sofar.slice(spaces) !== '[]') return null
   const insert = '- [ ] '
   return { from: start + spaces, to: caret, insert, caret: start + spaces + insert.length }
+}
+
+/**
+ * Notion's toggle: «--» and a space at the start of a line become «+ », a
+ * toggle header whose children are the indented lines under it. Null unless
+ * the line so far, after its indentation, is exactly the two dashes.
+ */
+export function toggleShortcutEdit(text: string, caret: number): LineEdit | null {
+  const { start } = lineAt(text, caret)
+  const sofar = text.slice(start, caret)
+  const spaces = sofar.length - sofar.trimStart().length
+  if (sofar.slice(spaces) !== '--') return null
+  const insert = '+ '
+  return { from: start + spaces, to: caret, insert, caret: start + spaces + insert.length }
+}
+
+// MARK: - Auto-pairs
+
+/** The openers that take a different closer. */
+const OPENERS: Record<string, string> = { '(': ')', '[': ']', '{': '}' }
+/** The characters that close themselves — paired only between non-words, so «don't» and 5$ stay as typed. */
+const SYMMETRIC = new Set(['"', '$', '`', '*', '_', '~'])
+/** The symmetric characters that double up — `**` and `$$` are marks of their own, as Obsidian knows. */
+const DOUBLING = new Set(['*', '_', '$', '~'])
+/** Every character a typist may step over when it is already there. */
+const CLOSERS = new Set([')', ']', '}', ...SYMMETRIC])
+const WORD = /[\p{L}\p{N}]/u
+
+/**
+ * What typing one character does at a caret with nothing selected, besides
+ * going in — the Mac's rule, keystroke for keystroke. A closer that is
+ * already next is stepped over; unless the key is doubling a star, an
+ * underscore, a dollar or a tilde it just typed between non-words («*|*»
+ * and another star is «**|**», «$|$» and a dollar «$$|$$»). An opener
+ * brings its closer with it, the caret between; a quote, a dollar, a
+ * backtick, a star, an underscore or a tilde does the same between
+ * non-words. Null when the character simply goes in.
+ */
+export function pairEdit(text: string, caret: number, typed: string): LineEdit | null {
+  if (typed.length !== 1) return null
+  const next = text[caret] ?? ''
+  const before = caret > 0 ? text[caret - 1] : ''
+  if (CLOSERS.has(typed) && next === typed) {
+    const beforeThat = caret > 1 ? text[caret - 2] : ''
+    const doubling = DOUBLING.has(typed) && before === typed && (beforeThat === '' || !WORD.test(beforeThat))
+    if (!doubling) return { from: caret, to: caret, insert: '', caret: caret + 1 }
+  }
+  const closer = OPENERS[typed]
+  if (closer !== undefined) return { from: caret, to: caret, insert: typed + closer, caret: caret + 1 }
+  if (!SYMMETRIC.has(typed)) return null
+  if (WORD.test(before) || WORD.test(next)) return null
+  return { from: caret, to: caret, insert: typed + typed, caret: caret + 1 }
+}
+
+/** Backspace between an empty pair — «(|)», «$|$» — takes both away. Null anywhere else. */
+export function pairBackspaceEdit(text: string, caret: number): LineEdit | null {
+  if (caret < 1 || caret >= text.length) return null
+  const before = text[caret - 1]
+  const after = text[caret]
+  const pair = OPENERS[before] === after || (SYMMETRIC.has(before) && before === after)
+  if (!pair) return null
+  return { from: caret - 1, to: caret + 1, insert: '', caret: caret - 1 }
+}
+
+// MARK: - Home
+
+/**
+ * Where Home (⌘←) goes on a marked line, from `head` characters into it:
+ * after the marker when the caret is further in than that, else to the very
+ * start — the two places a line with a marker has. Null on a line with no
+ * marker, where the editor's own Home is right.
+ */
+export function homeTarget(line: string, head: number): number | null {
+  const block = blockOf(line)
+  if (block.marker.length === 0) return null
+  const contentStart = block.marker.length
+  return head > contentStart ? contentStart : 0
 }
 
 // MARK: - [[ completion

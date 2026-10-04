@@ -14,7 +14,7 @@
  * layer supplies the rest.
  */
 import {
-  ZERO_RECT, containsPoint, insetBy, intersection, intersects, isNull, maxX, maxY, midX, midY, minX, minY, union, type Rect,
+  ZERO_RECT, containsPoint, insetBy, intersection, intersects, isNull, maxX, maxY, midX, midY, minX, minY, offsetBy, union, type Rect,
 } from './geometry.js'
 import { extension, rectOf, type Glyph, type Rule } from './glyph.js'
 import * as TeX from './texGlyphNames.js'
@@ -140,22 +140,13 @@ function readPage(page: PageInput, number: number, layout: Layout, out: Piece[])
 
   // What the selection reaches. A formula is two-dimensional, so touching
   // one means taking all of it.
-  const reached: Reached[] = []
-  for (const block of layout.blocks) {
-    if (block.isFormula) {
-      const all = block.rows.flat()
-      if (all.some(selected)) reached.push({ block, glyphs: all })
-    } else {
-      const kept = block.rows[0].filter(selected)
-      if (kept.length > 0) reached.push({ block, glyphs: kept })
-    }
-  }
+  const reachedBlocks = reached(layout, boxes)
   // When a formula is what was asked for, a line the range only clipped was not.
-  const wantsFormula = reached.some((one) => one.block.isFormula)
+  const wantsFormula = reachedBlocks.some((one) => one.block.isFormula)
 
   let position = 0
-  while (position < reached.length) {
-    const { block, glyphs } = reached[position]
+  while (position < reachedBlocks.length) {
+    const { block, glyphs } = reachedBlocks[position]
     position += 1
     // Displayed formulas one under another that line up at a relation are
     // the lines of one aligned formula.
@@ -163,8 +154,8 @@ function readPage(page: PageInput, number: number, layout: Layout, out: Piece[])
       // …lines that break into cells at the same places are a matrix; lines
       // that only start, or are centred, at the same place are an aligned or
       // a gathered formula.
-      const aligned = alignedRun(position - 1, reached, selected, rules) ?? matrixRun(position - 1, reached, rules)
-        ?? alignedRun(position - 1, reached, selected, rules, false)
+      const aligned = alignedRun(position - 1, reachedBlocks, selected, rules) ?? matrixRun(position - 1, reachedBlocks, rules)
+        ?? alignedRun(position - 1, reachedBlocks, selected, rules, false)
       if (aligned !== null) {
         position = aligned.end
         const wrapped = displayed(aligned.latex)
@@ -229,6 +220,52 @@ function readPage(page: PageInput, number: number, layout: Layout, out: Piece[])
       baseline: all[0].y, page: number, scale: 1,
     })
   }
+}
+
+/**
+ * What the boxes reach. A formula is two-dimensional — its limits sit under
+ * the sign and its numerator over the bar — so touching one means taking all
+ * of it; of a line of prose, the glyphs inside (the Mac's `reached(in:boxes:)`).
+ */
+function reached(layout: Layout, boxes: Rect[]): Reached[] {
+  const selected = (glyph: Glyph) => boxes.some((box) => belongs(glyph, box))
+  const out: Reached[] = []
+  for (const block of layout.blocks) {
+    if (block.isFormula) {
+      const all = block.rows.flat()
+      if (all.some(selected)) out.push({ block, glyphs: all })
+    } else {
+      const kept = block.rows[0].filter(selected)
+      if (kept.length > 0) out.push({ block, glyphs: kept })
+    }
+  }
+  return out
+}
+
+/**
+ * The formula lasso's snap: the glyphs a rectangle over the page would be
+ * read for — the whole formula touched, limits and bar and number included,
+ * or the words inside — united, in the page's coordinates as a selection's
+ * bounds are (the cropBox's origin not added). Null when the rectangle
+ * reaches nothing the page can be read for. This is what the lasso snaps
+ * to, so that the box on the page is exactly what Ultracopy will copy (the
+ * Mac's `MathReader.extentRead`).
+ */
+export function extentRead(page: PageInput, rect: Rect): Rect | null {
+  if (page.glyphs.length === 0) return null
+  const layout = layoutOf(page)
+  // A rectangle in page coordinates as a box the reader uses: the cropBox's
+  // origin added, a point wider either side — exactly how `lineBoxes` are made.
+  const box = insetBy(offsetBy(rect, page.cropBox.x, page.cropBox.y), -1, 0)
+  const found = reached(layout, [box])
+  const wantsFormula = found.some((one) => one.block.isFormula)
+  let all: Rect | null = null
+  for (const { block, glyphs } of found) {
+    if (!block.isFormula && wantsFormula && glyphs.length * 10 < block.rows[0].length * 9) continue
+    for (const glyph of glyphs) all = all ? union(all, rectOf(glyph)) : rectOf(glyph)
+  }
+  if (!all) return null
+  return offsetBy(all, -page.cropBox.x, -page.cropBox.y)
 }
 
 /** The relations an aligned formula lines up at. */

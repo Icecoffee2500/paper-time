@@ -1,5 +1,6 @@
 /** The words inside the papers, and search by meaning. */
 import type { Context, Handlers } from './context.js'
+import { OCRClient } from '../ocrClient.js'
 
 export function textHandlers(ctx: Context): Partial<Handlers> {
   const { text } = ctx
@@ -32,5 +33,14 @@ export function textHandlers(ctx: Context): Partial<Handlers> {
       await ctx.semantic().build()
       return { status: ctx.semantic().status(), stats: await ctx.semantic().stats(), unread: ctx.semantic().unread }
     },
+
+    // A formula read off a picture of the page, when the lasso's rectangle
+    // holds nothing the reader can use. The window sends the picture as the
+    // model takes it; the worker answers with LaTeX.
+    'ocr:read': async ({ pixels }) => {
+      const tensor = pixels instanceof Float32Array ? pixels : Float32Array.from(pixels)
+      return ctx.ocr().read(tensor)
+    },
+    'ocr:available': () => OCRClient.isAvailable(),
   }
 }

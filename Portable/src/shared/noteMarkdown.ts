@@ -105,6 +105,8 @@ export function shownMarker(block: Block): string {
     case 'heading':
     case 'quote': return HIDDEN_MARKER
     case 'bullet': return `${['•', '◦', '▪'][block.indent % 3]}\t`
+    // Open, in the plan: the editor alone knows which toggles are folded.
+    case 'toggle': return '▾\t'
     case 'ordered': {
       const n = block.type.number
       switch (block.indent % 3) {
@@ -261,7 +263,8 @@ export function headIndent(block: Block): number {
   switch (block.type.kind) {
     case 'bullet':
     case 'ordered':
-    case 'task': return Math.trunc(STEP * (block.indent + 1))
+    case 'task':
+    case 'toggle': return Math.trunc(STEP * (block.indent + 1))
     case 'quote': return Math.trunc(STEP * 0.85)
     default: return 0
   }

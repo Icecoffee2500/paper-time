@@ -17,6 +17,7 @@ import type { Journals } from '../journal.js'
 import type { Records } from '../records.js'
 import type { TextBridge } from '../textBridge.js'
 import type { SemanticSearch } from '../semantic.js'
+import type { OCRClient } from '../ocrClient.js'
 import type { NotesStore } from '../slipBox.js'
 import type { Windows } from '../windows.js'
 import type { PageCounter } from '../pdfBytes.js'
@@ -33,6 +34,8 @@ export interface Context {
   records: Records
   text: TextBridge
   semantic: () => SemanticSearch
+  /** Reading a formula off a picture, in a process of its own (`ocrClient.ts`). */
+  ocr: () => OCRClient
   notes: () => NotesStore
   windows: Windows
   pageCounter: PageCounter

@@ -84,12 +84,15 @@ export interface ReaderState {
   zoom: number
   /** The pen is out: the page takes the mouse instead of the text layer. */
   drawing: boolean
+  /** The formula lasso is out: a rectangle dragged over the page catches
+   *  the formula under it, for Ultracopy and the note. */
+  lasso: boolean
   /** A followed link can be walked back, or forward again, inside this paper. */
   canGoBack?: boolean
   canGoForward?: boolean
 }
 
-export const freshReaderState = (): ReaderState => ({ pageCount: 0, currentPage: 0, zoom: 1, drawing: false })
+export const freshReaderState = (): ReaderState => ({ pageCount: 0, currentPage: 0, zoom: 1, drawing: false, lasso: false })
 
 /**
  * The reader in focus's own state, read where it lives.

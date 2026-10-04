@@ -38,7 +38,7 @@ export const DEFAULT_MENU_STATE: MenuState = {
 /** The commands that act on the paper showing, greyed with none showing —
  *  the Mac's menu disables them the same way. */
 const NEEDS_PAPER = new Set([
-  'copyCitationKey', 'findInDocument', 'ultracopy', 'linkToNote', 'highlight', 'underline', 'draw', 'pages',
+  'copyCitationKey', 'findInDocument', 'ultracopy', 'lasso', 'linkToNote', 'highlight', 'underline', 'draw', 'pages',
   'zoomIn', 'zoomOut', 'actualSize', 'nextPage', 'previousPage', 'layoutContinuous', 'layoutSinglePage', 'layoutBook',
 ])
 
@@ -122,6 +122,7 @@ export function buildMenu({ send, chooseLibrary }: MenuActions, state: MenuState
         item('searchEverything', L('전부 찾기…', 'Search Everything…')),
         item('findInDocument', L('이 논문에서 찾기…', 'Find in Document…')),
         item('ultracopy'),
+        item('lasso'),
         item('linkToNote'),
         separator,
         item('highlight'),
