@@ -297,6 +297,60 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.9.20",
+            date: Text2("2026년 10월", "October 2026"),
+            note: Text2(
+                "노트에서 기호가 색으로 보이고, 괄호와 $가 짝으로 들어오고, 선택하면 굵게·기울임 단추가 뜨고, «-- »가 토글이 돼요.",
+                "Notes colour their syntax, pair brackets and dollars as you type, offer bold and italic over a selection, and fold with a toggle."
+            ),
+            added: [
+                Entry(
+                    Text2("기호의 색", "Syntax in Colour"),
+                    Text2(
+                        "쓰고 있는 줄에서 $와 **, [[ 같은 기능이 있는 글자가 강조색으로 보여요. 제목의 #과 인용의 >도 그 줄에서는 보이고 고칠 수 있어요.",
+                        "On the line you are typing, the characters that do something — $, **, [[ — show in the accent colour. A heading’s # and a quotation’s > show there too, and can be changed."
+                    )
+                ),
+                Entry(
+                    Text2("자동 짝", "Pairs as You Type"),
+                    Text2(
+                        "괄호, 따옴표, $, 백틱, *를 치면 짝이 함께 들어오고 캐럿은 그 사이에 서요. 닫는 기호를 치면 건너뛰고, 빈 짝 사이에서 Backspace를 치면 둘 다 지워져요.",
+                        "Brackets, quotes, $, backticks and * bring their partner along, with the caret between. Typing the closer steps over it; Backspace between an empty pair removes both."
+                    )
+                ),
+                Entry(
+                    Text2("선택 위의 단추", "Buttons Over a Selection"),
+                    Text2(
+                        "글을 선택하면 그 위에 굵게·기울임·코드·수식 단추가 떠요. ⌘B, ⌘I, ⌘E, ⌘⇧M과 같은 일을 해요.",
+                        "Select some words and bold, italic, code and math buttons appear over them — the same as ⌘B, ⌘I, ⌘E and ⌘⇧M."
+                    )
+                ),
+                Entry(
+                    Text2("토글", "Toggles"),
+                    Text2(
+                        "줄 머리에 «-- »를 치면 토글이 돼요. ▾를 누르면 들여 쓴 자식 줄이 접히고, 파일에는 «+ » 목록으로 남아 다른 앱에서도 읽혀요.",
+                        "Type “-- ” at the start of a line for a toggle. Click ▾ to fold the indented lines under it; the file keeps a “+ ” list, which every other app reads."
+                    )
+                ),
+            ],
+            fixed: [
+                Entry(
+                    Text2("한글 자판의 ⌘B", "⌘B on a Korean Keyboard"),
+                    Text2(
+                        "두벌식이 켜져 있어도 ⌘B·⌘I·⌘E가 들어요. 전에는 B 키가 «ㅠ»로 읽혀 아무 일도 안 했어요.",
+                        "⌘B, ⌘I and ⌘E work with a Korean keyboard layout. The B key used to read as “ㅠ” and nothing happened."
+                    )
+                ),
+                Entry(
+                    Text2("줄 머리로 가기", "Home on a List Line"),
+                    Text2(
+                        "⌘←와 ⌘⇧←가 글머리표 뒤의 글 시작에 먼저 서고, 한 번 더 누르면 줄의 맨 앞으로 가요 — Notion과 Obsidian처럼.",
+                        "⌘← and ⌘⇧← stop after the bullet first, and at the very start of the line on a second press — as in Notion and Obsidian."
+                    )
+                ),
+            ]
+        ),
+        Release(
             version: "0.9.19",
             date: Text2("2026년 10월", "October 2026"),
             note: Text2(

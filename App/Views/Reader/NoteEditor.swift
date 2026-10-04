@@ -198,6 +198,12 @@ struct NoteEditor: NSViewRepresentable {
         let completions = WikiLinkPopover()
         /// The formula under the caret, set — see `MathPreviewCard`.
         let mathPreview = MathPreviewCard()
+        /// Bold, italic, code and math over a selection (`SelectionToolbar`).
+        let selectionToolbar = SelectionToolbar()
+        /// The toggles whose children are folded away, by `Block.toggleKey`.
+        /// Kept for the editor's life, not written anywhere: a fold is how
+        /// the note is being read, not what it says.
+        var collapsedToggles = Set<String>()
         private var mathPreviewWork: DispatchWorkItem?
 
         /// The line the caret was on when the text was last set: syntax is
@@ -225,9 +231,99 @@ struct NoteEditor: NSViewRepresentable {
             let source = NoteMarkdown.markdown(from: storage)
             lastKnownMarkdown = source
             markdown = source
+            carryFoldKey(in: textView)
             updateCompletions(in: textView)
             updateMathPreview(in: textView)
             scheduleRestyle(in: textView)
+            recolorCaretLine(in: textView)
+        }
+
+        /// The key of the folded toggle the caret was last on, if any — so
+        /// that typing in its title keeps it folded (`carryFoldKey`).
+        private var caretFoldKey: String?
+
+        /// A folded toggle is named by its line as written; typing in that
+        /// line renames it, and the name in `collapsedToggles` goes along.
+        func carryFoldKey(in textView: NoteTextView) {
+            guard let storage = textView.textStorage, textView.selectedRange().length == 0 else { return }
+            let line = (textView.string as NSString).lineRange(for: textView.selectedRange())
+            let source = NoteMarkdown.markdown(from: storage.attributedSubstring(from: line))
+            let block = NoteMarkdown.Block(line: String(source.prefix { $0 != "\n" }))
+            guard block.kind == .toggle else { caretFoldKey = nil; return }
+            let key = block.toggleKey
+            if let was = caretFoldKey, was != key, collapsedToggles.contains(was) {
+                collapsedToggles.remove(was)
+                collapsedToggles.insert(key)
+            }
+            caretFoldKey = key
+        }
+
+        /// Colours the syntax on the line being edited as it is typed: the
+        /// note is not set again for a keystroke that stays on one line
+        /// (`scheduleRestyle`), so a "$" typed there would stay the colour
+        /// of a word until the caret left the line.
+        func recolorCaretLine(in textView: NoteTextView) {
+            guard !showsRawText, textView.selectedRange().length == 0, !textView.hasMarkedText() else { return }
+            DispatchQueue.main.async { [weak self, weak textView] in
+                guard let self, !self.isRestyling, let textView, let storage = textView.textStorage,
+                      textView.selectedRange().length == 0 else { return }
+                let text = textView.string as NSString
+                let line = text.lineRange(for: textView.selectedRange())
+                guard line.length > 0 else { return }
+                let shown = storage.attributedSubstring(from: line)
+                let source = NoteMarkdown.markdown(from: shown).trimmingCharacters(in: .newlines)
+                let block = NoteMarkdown.Block(line: source)
+                var contentStart = line.location
+                storage.beginEditing()
+                if !block.marker.isEmpty {
+                    var run = NSRange()
+                    if let standing = storage.attribute(.paperTimeSource, at: line.location, longestEffectiveRange: &run, in: line) as? String,
+                       standing == block.marker {
+                        contentStart = NSMaxRange(run)
+                    } else {
+                        contentStart = min(line.location + (block.marker as NSString).length, NSMaxRange(line))
+                        storage.addAttribute(.foregroundColor, value: NoteMarkdown.syntaxColor,
+                                             range: NSRange(location: line.location, length: contentStart - line.location))
+                    }
+                }
+                var end = NSMaxRange(line)
+                if end > contentStart, text.substring(with: NSRange(location: end - 1, length: 1)) == "\n" { end -= 1 }
+                if end > contentStart {
+                    let words = NSRange(location: contentStart, length: end - contentStart)
+                    storage.addAttribute(.foregroundColor, value: block.colour, range: words)
+                    let content = text.substring(with: words) as NSString
+                    for range in NoteMarkdown.syntaxRanges(inContent: content)
+                    where NSMaxRange(range) <= words.length {
+                        storage.addAttribute(.foregroundColor, value: NoteMarkdown.syntaxColor,
+                                             range: NSRange(location: contentStart + range.location, length: range.length))
+                    }
+                }
+                storage.endEditing()
+            }
+        }
+
+        /// Shows the bar over a selection made with the keyboard or just let
+        /// go of with the mouse, and takes it away with the selection.
+        func updateSelectionToolbar(in textView: NoteTextView) {
+            let range = textView.selectedRange()
+            guard range.length > 0, !textView.isSelectingByHand, !showsRawText,
+                  let window = textView.window, window.firstResponder === textView
+            else { return selectionToolbar.hide() }
+            let rect = textView.firstRect(forCharacterRange: range, actualRange: nil)
+            guard rect.width.isFinite, rect.height.isFinite else { return selectionToolbar.hide() }
+            selectionToolbar.show(over: rect, in: textView) { [weak textView] mark in
+                textView?.toggleEmphasis(mark)
+            }
+        }
+
+        /// Folds a toggle's children away, or brings them back, and sets the
+        /// note again so the lines go and come.
+        func setFolded(_ key: String, _ folded: Bool, in textView: NoteTextView) {
+            guard let storage = textView.textStorage else { return }
+            if folded { collapsedToggles.insert(key) } else { collapsedToggles.remove(key) }
+            let source = NoteMarkdown.markdown(from: storage)
+            let caret = NoteMarkdown.sourceIndex(in: storage, displayIndex: textView.selectedRange().location)
+            restyle(textView, source: source, caretSource: caret)
         }
 
         func textViewDidChangeSelection(_ notification: Notification) {
@@ -235,6 +331,7 @@ struct NoteEditor: NSViewRepresentable {
                   !textView.hasMarkedText(), !isRestyling
             else { return }
             updateMathPreview(in: textView)
+            updateSelectionToolbar(in: textView)
             // Never rebuild the text under a selection: that is what made a
             // drag let go of what it had just selected.
             guard textView.selectedRange().length == 0, !textView.isSelectingByHand else {
@@ -257,9 +354,20 @@ struct NoteEditor: NSViewRepresentable {
                     textView.setSelectedRange(NSRange(location: NSMaxRange(run), length: 0))
                     return
                 }
+                // A caret set down after the folded children of a toggle
+                // goes before them: typed there, the words would land after
+                // the last line nobody can see.
+                if caret > 0, caret <= storage.length,
+                   storage.attribute(.paperTimeFolded, at: caret - 1, longestEffectiveRange: &run,
+                                     in: NSRange(location: 0, length: storage.length)) != nil {
+                    textView.setSelectedRange(NSRange(location: run.location, length: 0))
+                    return
+                }
             }
             let line = (textView.string as NSString).lineRange(for: textView.selectedRange())
             guard line != lastCaretLine else { return }
+            caretFoldKey = nil
+            carryFoldKey(in: textView)
             scheduleRestyle(in: textView)
         }
 
@@ -333,7 +441,7 @@ struct NoteEditor: NSViewRepresentable {
             let rendered = Trace.time("note: set the whole note again") {
                 NoteMarkdown.render(
                     source, caret: caretSource, raw: showsRawText, width: room(in: textView),
-                    appearance: textView.effectiveAppearance
+                    appearance: textView.effectiveAppearance, collapsed: collapsedToggles
                 )
             }
             lastKnownWidth = room(in: textView)
@@ -853,11 +961,12 @@ final class NoteTextView: LatexSuiteTextView {
         if let coordinator, coordinator.mathPreview.isShowing {
             coordinator.updateMathPreview(in: self, now: true)
         }
+        coordinator?.updateSelectionToolbar(in: self)
     }
 
     override func resignFirstResponder() -> Bool {
         let resigned = super.resignFirstResponder()
-        if resigned { coordinator?.mathPreview.hide() }
+        if resigned { coordinator?.mathPreview.hide(); coordinator?.selectionToolbar.hide() }
         return resigned
     }
 
@@ -865,12 +974,13 @@ final class NoteTextView: LatexSuiteTextView {
     /// out of the window. The card must not stay behind.
     override func viewWillMove(toWindow newWindow: NSWindow?) {
         super.viewWillMove(toWindow: newWindow)
-        if newWindow == nil { coordinator?.mathPreview.hide() }
+        if newWindow == nil { coordinator?.mathPreview.hide(); coordinator?.selectionToolbar.hide() }
     }
 
     override func viewDidHide() {
         super.viewDidHide()
         coordinator?.mathPreview.hide()
+        coordinator?.selectionToolbar.hide()
     }
 
     /// The whole chip under the pointer, in document offsets — and only when
@@ -938,6 +1048,7 @@ final class NoteTextView: LatexSuiteTextView {
         // A chip is not a `.link`, so the click that follows it is ours to
         // notice. Anything else falls through to the ordinary text handling.
         if followChip(at: event) { return }
+        if foldToggle(at: event) { return }
         isSelectingByHand = true
         // NSTextView tracks the drag itself and returns when the mouse is let
         // go, so this brackets the whole gesture.
@@ -946,6 +1057,54 @@ final class NoteTextView: LatexSuiteTextView {
         if let coordinator, selectedRange().length == 0 {
             coordinator.scheduleRestyle(in: self)
         }
+        coordinator?.updateSelectionToolbar(in: self)
+    }
+
+    /// What the probe sees of the bar over a selection.
+    var probeToolbar: String {
+        guard let coordinator else { return "no coordinator" }
+        return coordinator.selectionToolbar.isShowing
+            ? "showing \(coordinator.selectionToolbar.buttons)" : "hidden"
+    }
+
+    /// The stretches of the caret's line drawn in the syntax colour.
+    var probeSyntax: [String] {
+        guard let storage = textStorage, storage.length > 0 else { return [] }
+        let line = (string as NSString).lineRange(for: selectedRange())
+        var found: [String] = []
+        storage.enumerateAttribute(.foregroundColor, in: line) { value, range, _ in
+            guard let colour = value as? NSColor, colour == NoteMarkdown.syntaxColor else { return }
+            found.append((string as NSString).substring(with: range))
+        }
+        return found
+    }
+
+    /// Folds the toggle named `key` away, or back — the probe's click.
+    func probeFold(_ key: String) {
+        guard let coordinator else { return }
+        coordinator.setFolded(key, !coordinator.collapsedToggles.contains(key), in: self)
+    }
+
+    /// A click on a toggle's marker folds its children away, or brings them
+    /// back. The marker is the first glyph of the line, and a click lands
+    /// on the gap before or after it.
+    private func foldToggle(at event: NSEvent) -> Bool {
+        guard let coordinator, !coordinator.showsRawText, event.clickCount == 1, let storage = textStorage,
+              storage.length > 0 else { return false }
+        let point = convert(event.locationInWindow, from: nil)
+        let index = min(characterIndexForInsertion(at: point), storage.length - 1)
+        let lineStart = (string as NSString).lineRange(for: NSRange(location: index, length: 0)).location
+        guard index <= lineStart + 1, lineStart < storage.length,
+              let marker = storage.attribute(.paperTimeSource, at: lineStart, effectiveRange: nil) as? String
+        else { return false }
+        let block = NoteMarkdown.Block(line: marker)
+        guard block.kind == .toggle, block.marker == marker else { return false }
+        let line = (string as NSString).lineRange(for: NSRange(location: lineStart, length: 0))
+        let source = NoteMarkdown.markdown(from: storage.attributedSubstring(from: line))
+            .trimmingCharacters(in: .newlines)
+        let key = NoteMarkdown.Block(line: String(source.prefix { $0 != "\n" })).toggleKey
+        coordinator.setFolded(key, !coordinator.collapsedToggles.contains(key), in: self)
+        return true
     }
 
     // MARK: The line under the caret, as it is written
@@ -1026,8 +1185,30 @@ final class NoteTextView: LatexSuiteTextView {
             super.insertNewline(sender)
             return
         }
+        // Return on a folded toggle makes the line after the fold — at the
+        // toggle's own level, as Notion does — not a child nobody can see.
+        if block.kind == .toggle, let folded = foldedRun(in: line) {
+            // Put in after the folded run directly: a caret set there would
+            // be moved back before it (`textViewDidChangeSelection`).
+            // (With the note's own attributes: typed after the run, the
+            // newline would join it and read as part of the folded lines.)
+            replaceDisplay(NSRange(location: NSMaxRange(folded), length: 0),
+                           with: "\n" + String(repeating: "  ", count: block.indent))
+            return
+        }
         super.insertNewline(sender)
         insertText(continuation(of: block), replacementRange: selectedRange())
+    }
+
+    /// The zero-width run at the end of a folded toggle's line that carries
+    /// its children.
+    private func foldedRun(in line: CaretLine) -> NSRange? {
+        guard let storage = textStorage else { return nil }
+        var found: NSRange?
+        storage.enumerateAttribute(.paperTimeFolded, in: line.display) { value, range, stop in
+            if value != nil { found = range; stop.pointee = true }
+        }
+        return found
     }
 
     private func continuation(of block: NoteMarkdown.Block) -> String {
@@ -1037,6 +1218,8 @@ final class NoteTextView: LatexSuiteTextView {
         case .ordered(let number): return indent + "\(number + 1). "
         case .task: return indent + "- [ ] "
         case .quote: return indent + "> "
+        // A toggle's Return makes a child: a line indented under it.
+        case .toggle: return indent + "  "
         case .heading, .plain: return ""
         }
     }
@@ -1045,15 +1228,91 @@ final class NoteTextView: LatexSuiteTextView {
     /// and at the left edge makes it a plain line — the way to turn a bullet
     /// back into text when the "- " is drawn as a bullet.
     override func deleteBackward(_ sender: Any?) {
-        guard coordinator?.showsRawText != true, selectedRange().length == 0,
-              let line = caretLine(), line.block.kind != .plain, !line.block.marker.isEmpty,
-              selectedRange().location == line.contentStart
+        guard coordinator?.showsRawText != true, selectedRange().length == 0 else { return super.deleteBackward(sender) }
+        let caret = selectedRange().location
+        let text = string as NSString
+        // Folded children just behind the caret — at the end of the toggle's
+        // words, or at the start of the line after it — come back rather
+        // than go: nothing is deleted unseen.
+        if let storage = textStorage, caret > 0 {
+            let behind = storage.attribute(.paperTimeFolded, at: caret - 1, effectiveRange: nil) != nil
+                || (caret > 1 && text.substring(with: NSRange(location: caret - 1, length: 1)) == "\n"
+                    && storage.attribute(.paperTimeFolded, at: caret - 2, effectiveRange: nil) != nil)
+            if behind, let header = toggleHeader(before: caret), let coordinator {
+                coordinator.setFolded(header, false, in: self)
+                return
+            }
+        }
+        // Between the two of an empty pair, both go.
+        if caret > 0, caret < text.length {
+            let before = text.substring(with: NSRange(location: caret - 1, length: 1))
+            if Self.pairs[before] == text.substring(with: NSRange(location: caret, length: 1)) {
+                insertText("", replacementRange: NSRange(location: caret - 1, length: 2))
+                return
+            }
+        }
+        guard let line = caretLine(), line.block.kind != .plain, !line.block.marker.isEmpty,
+              caret == line.contentStart
         else { return super.deleteBackward(sender) }
         if line.block.indent > 0 {
             replaceMarker(of: line, with: String(line.block.marker.dropFirst(2)))
         } else {
             replaceMarker(of: line, with: "")
         }
+    }
+
+    override func deleteForward(_ sender: Any?) {
+        if coordinator?.showsRawText != true, selectedRange().length == 0, let storage = textStorage,
+           selectedRange().location < storage.length,
+           storage.attribute(.paperTimeFolded, at: selectedRange().location, effectiveRange: nil) != nil,
+           let header = toggleHeader(before: selectedRange().location + 1), let coordinator {
+            coordinator.setFolded(header, false, in: self)
+            return
+        }
+        super.deleteForward(sender)
+    }
+
+    /// The key of the toggle whose line holds the display offset just
+    /// before `index`.
+    private func toggleHeader(before index: Int) -> String? {
+        guard let storage = textStorage, index > 0 else { return nil }
+        let line = (string as NSString).lineRange(for: NSRange(location: index - 1, length: 0))
+        let source = NoteMarkdown.markdown(from: storage.attributedSubstring(from: line))
+        let block = NoteMarkdown.Block(line: String(source.prefix { $0 != "\n" }))
+        return block.kind == .toggle ? block.toggleKey : nil
+    }
+
+    // MARK: Home
+
+    /// Where ⌘← (and Home) go on a line with a marker: to the start of the
+    /// words first, and to the start of the line from there — past the
+    /// bullet only when asked twice, as Notion and Obsidian do.
+    private func homeTarget() -> Int? {
+        guard coordinator?.showsRawText != true, let line = caretLine(), !line.block.marker.isEmpty else { return nil }
+        let head = selectedRange().location
+        return head > line.contentStart ? line.contentStart : line.display.location
+    }
+
+    override func moveToLeftEndOfLine(_ sender: Any?) {
+        guard let target = homeTarget() else { return super.moveToLeftEndOfLine(sender) }
+        setSelectedRange(NSRange(location: target, length: 0))
+    }
+
+    override func moveToBeginningOfLine(_ sender: Any?) {
+        guard let target = homeTarget() else { return super.moveToBeginningOfLine(sender) }
+        setSelectedRange(NSRange(location: target, length: 0))
+    }
+
+    override func moveToLeftEndOfLineAndModifySelection(_ sender: Any?) {
+        guard let target = homeTarget() else { return super.moveToLeftEndOfLineAndModifySelection(sender) }
+        let range = selectedRange()
+        setSelectedRange(NSRange(location: target, length: NSMaxRange(range) - target))
+    }
+
+    override func moveToBeginningOfLineAndModifySelection(_ sender: Any?) {
+        guard let target = homeTarget() else { return super.moveToBeginningOfLineAndModifySelection(sender) }
+        let range = selectedRange()
+        setSelectedRange(NSRange(location: target, length: NSMaxRange(range) - target))
     }
 
     /// Tab indents the item the caret is in rather than dropping a tab into
@@ -1080,11 +1339,19 @@ final class NoteTextView: LatexSuiteTextView {
     /// ⌘B, ⌘I and ⌘E set the selection bold, italic and as code — as
     /// Markdown, round the words — and take it off again when it is.
     override func keyDown(with event: NSEvent) {
+        // By key code, not by the character: with a Korean keyboard the B
+        // key's character is "ㅠ", and ⌘B did nothing for anyone typing in
+        // Korean. ⌘⇧M is a formula (⌘M is the window's).
         if coordinator?.showsRawText != true,
-           event.modifierFlags.intersection([.command, .control, .option]) == [.command],
-           let mark = ["b": "**", "i": "*", "e": "`"][event.charactersIgnoringModifiers?.lowercased() ?? ""] {
-            toggleEmphasis(mark)
-            return
+           event.modifierFlags.intersection([.command, .control, .option]) == [.command] {
+            let shift = event.modifierFlags.contains(.shift)
+            switch (event.keyCode, shift) {
+            case (11, false): toggleEmphasis("**"); return
+            case (34, false): toggleEmphasis("*"); return
+            case (14, false): toggleEmphasis("`"); return
+            case (46, true): toggleEmphasis("$"); return
+            default: break
+            }
         }
         guard let coordinator, coordinator.completions.isShowing else {
             return super.keyDown(with: event)
@@ -1099,7 +1366,7 @@ final class NoteTextView: LatexSuiteTextView {
         super.keyDown(with: event)
     }
 
-    private func toggleEmphasis(_ mark: String) {
+    func toggleEmphasis(_ mark: String) {
         let text = string as NSString
         let range = selectedRange()
         let width = (mark as NSString).length
@@ -1145,6 +1412,22 @@ final class NoteTextView: LatexSuiteTextView {
         "(": ")", "[": "]", "{": "}", "\"": "\"", "'": "'", "`": "`",
         "*": "*", "_": "_", "$": "$", "~": "~",
     ]
+    /// What is typed as a pair with nothing selected (Obsidian): brackets
+    /// always; a quote, a dollar, a backtick, a star, an underscore or a
+    /// tilde only between things that are not words — the apostrophe in
+    /// "don't" is never one, and is left out altogether.
+    static let pairs: [String: String] = [
+        "(": ")", "[": "]", "{": "}", "\"": "\"", "`": "`",
+        "*": "*", "_": "_", "$": "$", "~": "~",
+    ]
+    private static let openers: Set<String> = ["(", "[", "{"]
+    private static let closers: Set<String> = [")", "]", "}", "\"", "`", "*", "_", "$", "~"]
+    /// The marks Markdown doubles: `**`, `__`, `$$`, `~~`.
+    private static let doubled: Set<String> = ["*", "_", "$", "~"]
+
+    private static func isWordy(_ character: String) -> Bool {
+        character.unicodeScalars.contains { $0.properties.isAlphabetic || $0.properties.numericType != nil }
+    }
 
     override func insertText(_ string: Any, replacementRange: NSRange) {
         let typed = (string as? String) ?? (string as? NSAttributedString)?.string ?? ""
@@ -1159,22 +1442,50 @@ final class NoteTextView: LatexSuiteTextView {
             setSelectedRange(NSRange(location: range.location + (typed as NSString).length, length: range.length))
             return
         }
-        // "[] " at the start of a line, or of a bullet's words, is a task
-        // — Notion's shortcut for one.
+        // Latex Suite first: a snippet that fires takes the character.
+        if latexSuite.insert(string, replacementRange: replacementRange, in: self) { return }
+        // "[] " at the start of a line, or of a bullet's words, is a task —
+        // Notion's shortcut for one — and "-- " there is a toggle (Notion
+        // makes one with ">", which Markdown has for quotations).
         if typed == " ", range.length == 0, coordinator?.showsRawText != true,
            let line = caretLine(), line.block.kind == .plain || line.block.kind == .bullet,
            range.location >= line.contentStart {
             let text = self.string as NSString
             let sofar = text.substring(with: NSRange(location: line.contentStart, length: range.location - line.contentStart))
-            if sofar.trimmingCharacters(in: .whitespaces) == "[]" {
+            let typedSoFar = sofar.trimmingCharacters(in: .whitespaces)
+            if typedSoFar == "[]" || (typedSoFar == "--" && line.block.kind == .plain) {
                 let lead = String(repeating: "  ", count: line.block.indent)
                     + (line.block.kind == .plain ? sofar.prefix { $0 == " " } : "")
                 replaceDisplay(NSRange(location: line.markerDisplay.location, length: range.location - line.markerDisplay.location),
-                               with: lead + "- [ ] ")
+                               with: lead + (typedSoFar == "[]" ? "- [ ] " : "+ "))
                 return
             }
         }
-        super.insertText(string, replacementRange: replacementRange)
+        // Pairs: a closer typed before the same closer steps over it, and an
+        // opener with nothing selected brings its closer along.
+        if range.length == 0, (typed as NSString).length == 1, !hasMarkedText(),
+           replacementRange.location == NSNotFound || replacementRange == range {
+            let text = self.string as NSString
+            let next = range.location < text.length ? text.substring(with: NSRange(location: range.location, length: 1)) : ""
+            let previous = range.location > 0 ? text.substring(with: NSRange(location: range.location - 1, length: 1)) : ""
+            // (Not when a Markdown mark is being doubled — "*|*" with another
+            // "*" typed is the start of "**bold**", and the pair doubles to
+            // "**|**"; at "**b*|*" the "*" before the caret follows a word,
+            // so it is the closing mark and the caret steps over.)
+            let beforePrevious = range.location > 1 ? text.substring(with: NSRange(location: range.location - 2, length: 1)) : ""
+            let doubling = Self.doubled.contains(typed) && previous == typed && !Self.isWordy(beforePrevious)
+            if Self.closers.contains(typed), next == typed, !doubling {
+                setSelectedRange(NSRange(location: range.location + 1, length: 0))
+                return
+            }
+            if let closing = Self.pairs[typed],
+               Self.openers.contains(typed) || (!Self.isWordy(previous) && !Self.isWordy(next)) {
+                insertTextBypassingLatexSuite(typed + closing, replacementRange: range)
+                setSelectedRange(NSRange(location: range.location + 1, length: 0))
+                return
+            }
+        }
+        insertTextBypassingLatexSuite(string, replacementRange: replacementRange)
     }
 }
 #endif

@@ -34,6 +34,13 @@ class LatexSuiteTextView: NSTextView {
         super.doCommand(by: selector)
     }
 
+    /// Puts text in without offering it to Latex Suite first — for a
+    /// character the caller has already offered it, and for a pair of
+    /// brackets typed as one.
+    func insertTextBypassingLatexSuite(_ string: Any, replacementRange: NSRange) {
+        super.insertText(string, replacementRange: replacementRange)
+    }
+
     override func shouldChangeText(inRanges affectedRanges: [NSValue], replacementStrings: [String]?) -> Bool {
         guard super.shouldChangeText(inRanges: affectedRanges, replacementStrings: replacementStrings) else { return false }
         latexSuite.willChange(affectedRanges, to: replacementStrings, in: self)

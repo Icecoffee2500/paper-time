@@ -3789,6 +3789,14 @@ body[data-solo='true'] .reader-header button {
 .nm-marker-wide { padding-right: 0.3em; }
 .nm-marker-done { color: var(--text-secondary); }
 .nm-done { color: var(--text-secondary); text-decoration: line-through; }
+/* A toggle's marker turns with a press; what it folded away is one quiet ellipsis. */
+.nm-marker.nm-toggle { cursor: pointer; border-radius: 4px; }
+.nm-marker.nm-toggle:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
+.nm-folded { padding: 0 0 11px 24px; color: var(--text-tertiary); font-size: 13px; line-height: 1.2; cursor: pointer; }
+
+/* The Markdown of the line being edited: its marker and its delimiters in
+   the accent, so what each character does is visible while it is typed. */
+.nm-syntax { color: var(--accent); opacity: .85; }
 
 /* A quotation: set in, a rule down its side — grey when typed, the accent
    on a wash when it came off a page (`NoteQuoteBar`). */
@@ -3885,6 +3893,37 @@ body[data-solo='true'] .reader-header button {
 .wiki-popover-title { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wiki-popover-id { font-size: 11px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .wiki-popover-row[aria-selected="true"] .wiki-popover-id { color: rgba(255, 255, 255, .8); }
+
+/* B, I, <>, $ over a selection in a note (`selectionToolbar`) — Notion's
+   little bar, with only what the keys already do. */
+.selection-toolbar {
+  position: fixed;
+  z-index: 125;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-popover);
+  background: var(--panel);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.1), 0 8px 28px rgba(0, 0, 0, 0.2);
+  animation: menu-in var(--motion-tap) var(--ease);
+}
+.selection-toolbar-button {
+  height: 26px;
+  min-width: 28px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: calc(var(--radius-popover) - 3px);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  line-height: 26px;
+  cursor: default;
+}
+.selection-toolbar-button:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
+.selection-toolbar-button[data-mark="**"] { font-weight: 700; }
+.selection-toolbar-button[data-mark="*"] { font-style: italic; }
+.selection-toolbar-button[data-mark="`"] { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
 
 /* A note beside the paper a passage in it was followed to. */
 .slipbox-side { display: flex; flex-direction: column; }

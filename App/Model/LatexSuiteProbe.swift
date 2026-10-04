@@ -285,6 +285,9 @@ enum LatexSuiteTypingProbe {
         case "Enter": if let key = event("\r", 36) { view.keyDown(with: key) }
         case "Shift+Enter": if let key = event("\r", 36, .shift) { view.keyDown(with: key) }
         case "Backspace": if let key = event("\u{7F}", 51) { view.keyDown(with: key) }
+        case "Delete": if let key = event("\u{F728}", 117, .function) { view.keyDown(with: key) }
+        case "CmdLeft": if let key = event("\u{F702}", 123, [.command, .function]) { view.keyDown(with: key) }
+        case "CmdShiftLeft": if let key = event("\u{F702}", 123, [.command, .shift, .function]) { view.keyDown(with: key) }
         // The Edit menu's own route: `undo:` to the first thing up the
         // responder chain from the text view that answers it — the card's
         // editor, or the window.
@@ -303,9 +306,17 @@ enum LatexSuiteTypingProbe {
                 let caret = view.selectedRange()
                 let start = max(0, NSMaxRange(caret) - count)
                 view.setSelectedRange(NSRange(location: start, length: NSMaxRange(caret) - start))
-            } else if let letter = key.stripPrefix("Cmd:") {
-                // ⌘ and a letter, to the view as a key — the note's ⌘B.
-                if let key = event(letter, 0, .command) { view.keyDown(with: key) }
+            } else if let letter = key.stripPrefix("CmdShift:") ?? key.stripPrefix("Cmd:") {
+                // ⌘ and a letter, to the view as a key — the note's ⌘B. With
+                // the letter's key code: the note reads the code, not the
+                // character, so that a Korean keyboard's ⌘B is ⌘B too.
+                let codes: [String: UInt16] = ["b": 11, "i": 34, "e": 14, "m": 46]
+                let flags: NSEvent.ModifierFlags = key.hasPrefix("CmdShift:") ? [.command, .shift] : [.command]
+                if let key = event(letter, codes[letter.lowercased()] ?? 0, flags) { view.keyDown(with: key) }
+            } else if let name = key.stripPrefix("Fold:"), let note = view as? NoteTextView {
+                // Folds a toggle's children away (or back), as a click on its
+                // marker does.
+                note.probeFold(name)
             } else if let composing = key.stripPrefix("Mark:") {
                 // With nothing marked, `markedRange()` is not NSNotFound here,
                 // so it is asked only while there is a composition.

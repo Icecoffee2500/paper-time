@@ -104,6 +104,14 @@ export function installProbeSurface() {
         view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text }, selection: { anchor: caret ?? text.length } })
         return true
       },
+      /** The slip-box editor given the caret, and a selection from `anchor` to `head` — no keys, no pointer. */
+      selectSlipBox: (anchor: number, head?: number) => {
+        const view = slipBoxEditor()?.view
+        if (!view) return false
+        view.focus()
+        view.dispatch({ selection: { anchor, head: head ?? anchor } })
+        return true
+      },
       /** The Notes tab's editor's text replaced. */
       setTabText: (text: string, caret?: number) => {
         const view = openNoteEditor()?.view
@@ -111,14 +119,22 @@ export function installProbeSurface() {
         view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text }, selection: { anchor: caret ?? text.length } })
         return true
       },
-      /** The slip-box editor's text and caret, and how its lines are drawn. */
+      /** The slip-box editor's text, caret and selection, how its lines are drawn, the selection bar, and the folds. */
       slipBoxState: () => {
-        const view = slipBoxEditor()?.view
-        if (!view) return null
+        const editor = slipBoxEditor()
+        const view = editor?.view
+        if (!editor || !view) return null
+        const report = editor.report()
+        const range = view.state.selection.main
         return {
           text: view.state.doc.toString(),
-          caret: view.state.selection.main.head,
+          caret: range.head,
+          selection: [range.from, range.to],
           lines: [...view.contentDOM.querySelectorAll('.cm-line')].map((line) => `${line.className.replace('cm-line', '').trim()} | ${line.textContent}`),
+          /** The spans with a class, in order, as `class:text` — the syntax colour, the markers. */
+          spans: [...view.contentDOM.querySelectorAll('.cm-line [class]')].map((span) => `${span.className}:${span.textContent}`),
+          toolbar: report.toolbar,
+          folded: report.folded,
         }
       },
       /** A note from a search, at the words it was found by (`--papertime-note-reveal`). */

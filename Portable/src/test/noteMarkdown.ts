@@ -73,5 +73,7 @@ export async function noteMarkdownSuite(test: Test, suite: (name: string) => voi
     assert.equal(marker('      2. a'), '2.\t')
     assert.equal(marker('  - [x] a'), '☑\t')
     assert.equal(marker('  > a'), '\u200b')
+    assert.equal(marker('+ a'), '▾\t')
+    assert.equal(marker('    + a'), '▾\t')
   })
 }
