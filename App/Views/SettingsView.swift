@@ -357,6 +357,7 @@ struct SettingsView: View {
                 listSection(settings: settings)
                 readingSection(settings: settings)
                 writingSection(settings: settings)
+                handwritingSection
                 searchSection(settings: settings)
             case .shortcuts: shortcutsSection
             case .log: logSection
@@ -1002,6 +1003,112 @@ struct SettingsView: View {
                     "When the formula lasso reads a picture, it runs breezedeus’s pix2text model with ONNX Runtime (both under the MIT License), on this computer."
                 ))
                 .foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    /// The handwriting model: what the formula lasso reads handwriting with.
+    ///
+    /// Not a switch but a download — six gigabytes is not something to fetch
+    /// behind anybody's back — with the size said before the button is
+    /// pressed, the bytes counted while it runs, and a way to stop it and a
+    /// way to take it off again. The 9B wants 16 GB of memory; on a smaller
+    /// Mac the 4B is the one offered first.
+    @ViewBuilder
+    private var handwritingSection: some View {
+        let models = HandwritingModels.shared
+        Section {
+            ForEach(HandwritingModel.allCases) { model in
+                handwritingRow(model, models: models)
+            }
+        } header: {
+            pageHeader(L("손글씨", "Handwriting"))
+        } footer: {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(L(
+                    "수식 올가미로 손글씨나 스캔한 쪽을 잡으면 이 모델이 글과 수식을 읽어요. 이 맥에서만 읽고, 밖으로 보내지 않아요.",
+                    "When the formula lasso catches handwriting or a scanned page, this model reads the words and the formulas. It reads on this Mac and sends nothing anywhere."
+                ))
+                if !HandwritingReader.canRun {
+                    Text(L("Apple 실리콘 맥에서만 돌아요.", "Runs only on Macs with Apple silicon."))
+                        .foregroundStyle(.secondary)
+                }
+                Text(L(
+                    "Alibaba Qwen 팀의 Qwen3.5(Apache 2.0 라이선스)를 Apple의 MLX로 돌려요.",
+                    "Runs Qwen3.5 by the Alibaba Qwen team (Apache 2.0 License) with Apple’s MLX."
+                ))
+                .foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func handwritingRow(_ model: HandwritingModel, models: HandwritingModels) -> some View {
+        let state = models.state(of: model)
+        LabeledContent {
+            switch state {
+            case .absent, .failed:
+                Button(L("받기", "Download")) { models.download(model) }
+                    .disabled(models.isDownloading || !HandwritingReader.canRun)
+            case .stopped:
+                HStack(spacing: 8) {
+                    Button(L("지우기", "Remove"), role: .destructive) { models.remove(model) }
+                    Button(L("이어 받기", "Resume")) { models.download(model) }
+                        .disabled(models.isDownloading || !HandwritingReader.canRun)
+                }
+            case .downloading:
+                Button(L("그만 받기", "Stop")) { models.cancel() }
+            case .checking:
+                ProgressView().controlSize(.small)
+            case .ready:
+                Button(L("지우기", "Remove"), role: .destructive) { models.remove(model) }
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text("\(model.title) · \(model.modelName)")
+                    if model == .recommended {
+                        Text(L("이 맥에 맞아요", "Fits this Mac"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                switch state {
+                case .absent:
+                    Text(UpdateMeasure.size(model.totalBytes) + " · " + (model == .precise
+                        ? L("메모리 16 GB 이상", "16 GB of memory or more")
+                        : L("메모리 8 GB에서도", "Fine with 8 GB of memory")))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                case .downloading(let received, let total):
+                    ProgressView(value: Double(received), total: Double(max(total, 1)))
+                        .frame(maxWidth: 260)
+                    Text(UpdateMeasure.bytes(received, of: total))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                case .stopped(let received, let total):
+                    ProgressView(value: Double(received), total: Double(max(total, 1)))
+                        .frame(maxWidth: 260)
+                        .tint(.secondary)
+                    Text(L("멈췄어요", "Stopped") + " · " + UpdateMeasure.bytes(received, of: total))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                case .checking:
+                    Text(L("받은 파일을 확인하는 중", "Checking the files"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                case .ready:
+                    // Both here: say which one a reading uses.
+                    let both = HandwritingModel.allCases.allSatisfy { models.state(of: $0) == .ready }
+                    Text(L("받았어요", "Downloaded") + " · " + UpdateMeasure.size(model.totalBytes)
+                        + (both && models.inUse == model ? " · " + L("읽을 때 이걸 써요", "Used for reading") : ""))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                case .failed(let message):
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
             }
         }
     }

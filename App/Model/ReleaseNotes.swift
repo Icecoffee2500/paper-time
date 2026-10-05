@@ -120,6 +120,17 @@ enum ReleaseNotes {
             tier: .one
         ),
         Highlight(
+            symbol: "pencil.and.scribble",
+            title: Text2("손글씨도 LaTeX으로", "Handwriting, copied as LaTeX"),
+            detail: Text2(
+                "손으로 쓴 강의 노트를 다시 칠 필요가 없어요. 수식 올가미(⌥⌘L)로 잡고 ⇧⌘C를 누르면 글은 글로, 수식은 LaTeX으로 복사돼요. 손글씨 모델은 설정 → 읽기에서 한 번 받으면 이 맥에서만 돌아요. 아래에서 두 결과를 눌러 비교해 보세요.",
+                "No more retyping lecture notes. Catch them with the formula lasso (⌥⌘L) and press ⇧⌘C: the words copy as words and the formulas as LaTeX. Download the handwriting model once in Settings → Reading, and it runs on this Mac alone. Press both results below and compare."
+            ),
+            action: .lasso,
+            demo: .handwriting,
+            tier: .one
+        ),
+        Highlight(
             symbol: "pencil.and.outline",
             title: Text2("맥에서도 자유롭게 그린다 — 도형·화살표·카드·손글씨", "Draw freely on the Mac: shapes, arrows, cards, handwriting"),
             detail: Text2(
@@ -296,6 +307,63 @@ enum ReleaseNotes {
     /// thing they care about moved; making them read a paragraph to find out
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
+        Release(
+            version: "0.9.23",
+            date: Text2("2026년 10월", "October 2026"),
+            note: Text2(
+                "손으로 쓴 글과 수식도 올가미로 잡아 LaTeX으로 복사해요. 이 맥에서 도는 손글씨 모델이 읽어요.",
+                "Handwritten words and formulas copy as LaTeX too: catch them with the lasso, and a handwriting model on this Mac reads them."
+            ),
+            added: [
+                Entry(
+                    Text2("손글씨 읽기", "Handwriting"),
+                    Text2(
+                        "손으로 쓴 노트나 스캔한 쪽을 수식 올가미로 잡고 ⇧⌘C를 누르면, 글은 글로, 수식은 $…$로 복사돼요. ⌘L이면 노트에 들어가요. 설정 → 읽기에서 손글씨 모델을 한 번 받으면, 그 뒤로는 이 맥에서만 읽고 밖으로 보내지 않아요.",
+                        "Catch handwritten notes or a scanned page with the formula lasso and press ⇧⌘C: the words copy as words and the formulas as $…$. ⌘L quotes them in the note. Download the handwriting model once in Settings → Reading; from then on it reads on this Mac and sends nothing anywhere."
+                    ),
+                    action: .lasso,
+                    demo: .handwriting,
+                    featured: true
+                ),
+                Entry(
+                    Text2("읽는 동안 보이는 낱말", "Words as They Are Read"),
+                    Text2(
+                        "손글씨를 읽는 동안 올가미 위 띠에 지금까지 읽은 낱말이 따라 나와요. 읽는 중인지 멈춘 것인지 바로 보여요.",
+                        "While the handwriting is read, the strip over the lasso shows the words read so far, so you can see it working."
+                    )
+                ),
+                Entry(
+                    Text2("펜으로 쓴 수식도", "Your Own Pen Too"),
+                    Text2(
+                        "Paper Time 펜으로 여백에 쓴 수식도 올가미가 읽어요. 쪽 위에 얹힌 펜 글씨와 도형까지 함께 그림에 담아 읽어요.",
+                        "Formulas written in the margin with Paper Time’s pen read too: the ink and the shapes over the page go into the picture that is read."
+                    )
+                ),
+                Entry(
+                    Text2("모델 받기", "Downloading the Model"),
+                    Text2(
+                        "모델은 커서(6 GB, 작은 것은 3 GB) 앱에 넣지 않고 원할 때 받아요. 받는 동안 얼마나 왔는지 숫자로 보이고, 멈췄다가 이어 받을 수 있고, 받은 파일은 하나하나 확인해요.",
+                        "The models are large — 6 GB, or 3 GB for the smaller one — so they are not in the app; you download one when you want it. The download shows how far it has got, stops and picks up where it left off, and checks every file it brings."
+                    )
+                ),
+            ],
+            fixed: [
+                Entry(
+                    Text2("가는 펜이 사라지던 것", "The Thin Pen Vanished"),
+                    Text2(
+                        "맥에서 가장 가는 펜(1.5 pt)으로 쓴 획이 손을 떼면 사라졌고, 3 pt 펜은 2 pt로 그려졌어요. PencilKit이 펜의 크기를 굵기와 다르게 읽기 때문이었어요. 이제 고른 굵기 그대로 그려지고, PDF에도 화면과 같은 굵기로 들어가요.",
+                        "Strokes made with the Mac’s thinnest pen (1.5 pt) vanished when you let go, and the 3 pt pen drew 2 pt: PencilKit reads a pen point’s size differently from its width. Strokes now draw at the width you picked, and the PDF gets the width the page shows."
+                    )
+                ),
+                Entry(
+                    Text2("빈 곳에서 지어낸 수식", "Formulas Made Up From Nothing"),
+                    Text2(
+                        "올가미가 빈 곳을 잡으면 모델이 없는 수식을 지어낼 수 있었어요. 이제 빈 그림은 읽지 않고, 읽을 글이 없다고 말해요.",
+                        "A lasso round empty paper could make a model invent a formula. An empty picture is no longer read, and the lasso says there is nothing to read."
+                    )
+                ),
+            ]
+        ),
         Release(
             version: "0.9.22",
             date: Text2("2026년 10월", "October 2026"),
@@ -2173,6 +2241,10 @@ enum ReleaseNotes {
                     Text2("같은 방식으로, 글자 아래 선으로.", "The same, as a line under the words."), action: .underline),
             Feature(Text2("Ultracopy", "Ultracopy"),
                     Text2("선택한 부분을 수식은 LaTeX으로 바꿔 복사한다.", "Copy the selection with its formulas as LaTeX."), action: .ultracopy),
+            Feature(Text2("수식 올가미", "Formula lasso"),
+                    Text2("사각형을 그리면 그 안의 수식에 딱 맞게 잡혀요. ⇧⌘C로 LaTeX, ⌘L로 노트에.", "Draw a rectangle and it snaps to the formula inside. ⇧⌘C for LaTeX, ⌘L for the note."), action: .lasso),
+            Feature(Text2("손글씨 읽기", "Handwriting"),
+                    Text2("올가미로 잡은 손글씨를 글과 LaTeX으로 읽어요. 모델은 설정 → 읽기에서 받아요.", "Handwriting in the lasso is read as words and LaTeX. Get the model in Settings → Reading."), action: .lasso),
             Feature(Text2("표시 목록", "The marks list"),
                     Text2("논문 안의 모든 표시를 종류별로. 인스펙터의 Marks 탭에 있고, 누르면 그 자리로 간다.", "Every mark in the paper, filtered by kind, in the inspector's Marks tab. Click one to go to it.")),
             Feature(Text2("다른 앱이 남긴 필기", "Ink from other apps"),
@@ -2467,6 +2539,10 @@ enum ReleaseNotes {
         /// written and as the note sets them — numbers at the right-hand
         /// edge, the reference turned into its number.
         case noteEnvironments
+        /// Two lines of handwriting in the lasso, and what ⇧⌘C copies of
+        /// them — without the handwriting model and with it, the words
+        /// arriving in the strip as they are read.
+        case handwriting
 
         var id: String { rawValue }
     }

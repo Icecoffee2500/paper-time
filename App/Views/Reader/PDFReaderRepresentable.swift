@@ -1483,16 +1483,21 @@ final class ReaderCoordinator: NSObject {
             if text.isEmpty {
                 // No glyphs to read: off the picture, in a moment.
                 #if canImport(OnnxRuntimeBindings)
-                onToast(L("그림에서 수식을 읽는 중…", "Reading the formula off the picture…"))
-                Task { @MainActor [weak self] in
-                    guard let read = try? await FormulaOCR.read(page: caught.page, rect: caught.rect) else {
-                        self?.onToast(L("사각형 안에서 읽을 수식이 없어요.", "No formula to read inside the rectangle."))
+                lasso.setReading("")
+                let index = session.document.index(for: caught.page)
+                let overlay = index == NSNotFound ? nil : PictureReading.overlay(of: session, page: index)
+                Task { @MainActor [weak self, weak lasso] in
+                    let read = try? await PictureReading.read(page: caught.page, rect: caught.rect, overlay: overlay, partial: { text in
+                        Task { @MainActor in lasso?.setReading(text) }
+                    })
+                    lasso?.setReading(nil)
+                    guard let read else {
+                        self?.onToast(L("사각형 안에서 읽을 글이 없어요.", "Nothing to read inside the rectangle."))
                         return
                     }
                     NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(read.latex, forType: .string)
-                    self?.onToast(L("그림에서 읽어 복사했어요. 틀린 데가 있는지 봐주세요.",
-                                    "Read off the picture and copied — check it over."))
+                    NSPasteboard.general.setString(read.text, forType: .string)
+                    self?.onToast(PictureReading.toast(after: read, copied: true))
                 }
                 #else
                 onToast(L("사각형 안에서 읽을 글이 없어요.", "Nothing to read inside the rectangle."))
@@ -1584,10 +1589,40 @@ final class ReaderCoordinator: NSObject {
             #if canImport(OnnxRuntimeBindings)
             if lasso.caught?.needsOCR == true || Boot.isSet("PAPERTIME_LASSO_OCR") {
                 let began = Date()
-                if let reading = try? await FormulaOCR.read(page: page, rect: read) {
+                let index = session.document.index(for: page)
+                let overlay = index == NSNotFound ? nil : PictureReading.overlay(of: session, page: index)
+                say("overlay: \(overlay?.ink.strokes.count ?? 0) strokes, \(overlay?.sketch.count ?? 0) shapes")
+                // `--papertime-lasso-picture=<png>`: the picture the readers
+                // are given, ink and shapes included.
+                if let path = Boot.setting("PAPERTIME_LASSO_PICTURE"),
+                   let picture = try? PictureReading.picture(of: page, rect: read, overlay: overlay) {
+                    try? NSBitmapImageRep(cgImage: picture).representation(using: .png, properties: [:])?
+                        .write(to: URL(fileURLWithPath: path))
+                    say("picture: \(path) \(picture.width)×\(picture.height)")
+                }
+                if let picture = try? PictureReading.picture(of: page, rect: read, overlay: overlay),
+                   let reading = try? await FormulaOCR.read(picture: picture) {
                     say("ocr: \(reading.latex) (\(reading.tokens) tokens, \(String(format: "%.2f", reading.seconds)) s; \(String(format: "%.2f", Date().timeIntervalSince(began))) s with loading)")
                 } else {
                     say("ocr: failed")
+                }
+                // The handwriting model, when one is here or named
+                // (`--papertime-handwriting-model=<folder in the container>`),
+                // with what the banner showed on the way.
+                if HandwritingModels.shared.readyDirectory != nil {
+                    let began = Date()
+                    var lastPartial = ""
+                    let reading = try? await PictureReading.read(page: page, rect: read, overlay: overlay, partial: { text in
+                        Task { @MainActor in lasso.setReading(text) }
+                    })
+                    lastPartial = lasso.debugReadingLine
+                    lasso.setReading(nil)
+                    if let reading, reading.engine == .handwriting {
+                        say("handwriting: \(reading.text.replacingOccurrences(of: "\n", with: " ⏎ ")) (\(String(format: "%.2f", reading.seconds)) s; \(String(format: "%.2f", Date().timeIntervalSince(began))) s with loading)")
+                        say("handwriting banner: \(lastPartial)")
+                    } else {
+                        say("handwriting: failed")
+                    }
                 }
             }
             #endif
@@ -2091,6 +2126,7 @@ extension ReaderCoordinator: @preconcurrency PDFPageOverlayViewProvider {
             }
         }
         input.onToast = { [weak self] message in self?.onToast(message) }
+        link.onPictureReading = { [weak input] text in input?.setReading(text) }
         lassoInput = input
         return input
     }

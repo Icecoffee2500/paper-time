@@ -102,6 +102,15 @@ final class LassoInputView: NSView {
     override var acceptsFirstResponder: Bool { true }
     override var isFlipped: Bool { false }
 
+    /// The banner's line while a picture is read (`LassoBanner.showReading`).
+    func setReading(_ text: String?) {
+        banner.showReading(text)
+        placeBanner()
+    }
+
+    /// What the banner says now — for the probe.
+    var debugReadingLine: String { banner.line }
+
     func activate() {
         window?.makeFirstResponder(self)
         window?.invalidateCursorRects(for: self)
@@ -207,6 +216,12 @@ final class LassoInputView: NSView {
             // Nothing to snap to: the rectangle stays as drawn, and the
             // formula is read off the picture.
             caught = Catch(page: page, rect: rect, ink: [], needsOCR: true)
+            #if canImport(MLXVLM)
+            // The handwriting model, if there is one, starts loading now.
+            if HandwritingReader.canRun, let directory = HandwritingModels.shared.readyDirectory {
+                Task { await HandwritingReader.shared.prewarm(directory) }
+            }
+            #endif
         }
         paintInk()
         onCaught(caught)
@@ -472,11 +487,38 @@ final class LassoBanner: NSView {
 
     /// The longest of the lines that fits in `width`.
     func fit(width: CGFloat) {
+        lastWidth = width
+        guard reading == nil else { return showReading(reading) }
         for line in lines {
             label.stringValue = line
             if stack.fittingSize.width <= width { return }
         }
     }
+
+    private var lastWidth: CGFloat = .greatestFiniteMagnitude
+    /// What the handwriting model has written so far, while it reads.
+    private var reading: String?
+
+    /// While a picture is being read, the capsule says so and shows the
+    /// last words of the answer as they come — a wait with something
+    /// happening in it, rather than a spinner. Nil puts the line back.
+    func showReading(_ text: String?) {
+        reading = text
+        guard let text else { return fit(width: lastWidth) }
+        let lead = L("손글씨 읽는 중", "Reading the handwriting")
+        let words = text.split(whereSeparator: \.isNewline).joined(separator: " ")
+            .trimmingCharacters(in: .whitespaces)
+        label.stringValue = words.isEmpty ? lead + "…" : lead + " · " + words
+        // From the end: the newest words are the news.
+        var kept = words.count
+        while stack.fittingSize.width > lastWidth, kept > 8 {
+            kept = Int(Double(kept) * 0.8)
+            label.stringValue = lead + " · …" + String(words.suffix(kept))
+        }
+    }
+
+    var line: String { label.stringValue }
+
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
     override func updateLayer() {
