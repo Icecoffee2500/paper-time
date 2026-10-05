@@ -24,6 +24,7 @@ const PIECES = [
   ["d-marks", demos.marksJump],
   ["d-draw", demos.figmaDrawing],
   ["d-ultracopy", demos.ultracopy],
+  ["d-handwriting", demos.handwriting],
   ["d-quote", demos.passageToNote],
   ["d-links", demos.noteLinks],
   ["d-draft", demos.draftToManuscript],
