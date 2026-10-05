@@ -297,6 +297,59 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.9.22",
+            date: Text2("2026년 10월", "October 2026"),
+            note: Text2(
+                "슬라이드처럼 수식 앞에 이름표가 붙은 줄도, 두 단 논문에서 옆 단과 높이가 조금 어긋난 줄도 수식을 온전히 복사해요.",
+                "Formulas copy whole on lines with a label in front, as on slides, and on lines that sit a little off the other column's."
+            ),
+            added: [],
+            fixed: [
+                Entry(
+                    Text2("이름표가 붙은 수식", "Formulas With a Label"),
+                    Text2(
+                        "«MC : ∑ⁿᵢ₌₁ (…)²»처럼 수식 앞에 낱말이 있으면 ∑ 위아래의 n과 i=1이 따로 떨어져 나왔어요. 이제 ∑에 붙은 채로 복사되고, 번호 (1)은 같은 줄에 남아요.",
+                        "When a word stood before a formula, as in “MC : ∑ⁿᵢ₌₁ (…)²”, the n and i=1 over and under the sum came out on lines of their own. They now stay with the sum, and the number (1) stays on its line."
+                    )
+                ),
+                Entry(
+                    Text2("글꼴이 밝힌 기울임", "Slant the Font Declares"),
+                    Text2(
+                        "이름에 Italic이 없는 기울인 글꼴(URW Gothic의 BookObli 같은)의 변수가 \\mathrm으로 똑바로 나왔어요. 이제 글꼴이 스스로 밝힌 기울기를 읽어요.",
+                        "Variables in a slanted font whose name doesn’t say Italic, such as URW Gothic’s BookObli, came out upright as \\mathrm. The font’s own slant now decides."
+                    )
+                ),
+                Entry(
+                    Text2("두 단 논문의 수식", "Formulas in Two-Column Papers"),
+                    Text2(
+                        "옆 단의 줄과 높이가 조금 어긋난 줄에서 분수, ∑의 극한, 큰 괄호가 떨어져 나가 다른 줄에 붙었어요. 이제 줄마다 제 높이와 제 단에서 읽어요.",
+                        "On a line set a few points off the other column’s line, fractions, the limits of a sum and big brackets broke away and joined another line. Each line now reads from its own baseline, in its own column."
+                    )
+                ),
+                Entry(
+                    Text2("기울인 제목과 참고문헌", "Italic Headings and References"),
+                    Text2(
+                        "본문 이탤릭으로 변수를 쓰는 논문에서 기울인 소제목이나 학회 이름이 수식으로 복사됐어요. 세 글자 이상 이어진 이탤릭은 이제 낱말로 읽어요.",
+                        "In papers that set their variables in the text italic, italic headings and conference names copied as formulas. Three or more italic letters in a row now read as a word."
+                    )
+                ),
+                Entry(
+                    Text2("굵은 글자와 괄호", "Bold Letters and Brackets"),
+                    Text2(
+                        "굵은 글자 옆의 괄호까지 굵게 감싸서 \\mathbf{TD(}\\lambda)처럼 짝이 어긋났어요. 이제 괄호와 쉼표는 \\mathbf 밖에 두고, 86.35나 CIFAR-10은 한 덩어리로 둬요.",
+                        "A bracket beside bold letters went inside the bold too, and pairs came apart as in \\mathbf{TD(}\\lambda). Brackets and commas now stay outside \\mathbf, and 86.35 or CIFAR-10 stays whole."
+                    )
+                ),
+                Entry(
+                    Text2("보이지 않는 글자", "Invisible Text"),
+                    Text2(
+                        "스캔한 쪽이나 손글씨 노트에 OCR이 깔아 둔 보이지 않는 글자를 수식으로 읽어서 엉뚱한 식이 나왔어요. 이제 그런 글자는 건너뛰고, 올가미는 쪽의 그림에서 읽어요.",
+                        "On scanned pages and handwritten notes, the invisible text an OCR layer puts under the ink was read as formulas, and wrong ones came out. That text is now skipped, and the lasso reads the page’s picture instead."
+                    )
+                ),
+            ]
+        ),
+        Release(
             version: "0.9.21",
             date: Text2("2026년 10월", "October 2026"),
             note: Text2(

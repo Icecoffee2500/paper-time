@@ -143,7 +143,7 @@ struct MathReaderFixtures {
             var fonts: [String] = []
             var fontIndex: [String: Int] = [:]
             let glyphs: [[Any]] = scanned.glyphs.map { glyph in
-                let key = "\(glyph.isSymbolic ? 1 : 0)\(glyph.fontName)"
+                let key = "\(glyph.isSymbolic ? 1 : 0)\(glyph.isItalic ? 1 : 0)\(glyph.fontName)"
                 if fontIndex[key] == nil { fontIndex[key] = fonts.count; fonts.append(key) }
                 return [glyph.code, fontIndex[key]!, glyph.unicode ?? NSNull(), glyph.glyphName ?? NSNull(),
                         Double(glyph.size), Double(glyph.origin.x), Double(glyph.origin.y), Double(glyph.width)]

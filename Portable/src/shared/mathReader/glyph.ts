@@ -12,6 +12,9 @@ export interface Glyph {
   unicode: string | null
   glyphName: string | null
   isSymbolic: boolean
+  /** Whether the font it came from says it is slanted — an italic or an
+   *  oblique (the scanner's `Font.isItalic`). Left out, it is not. */
+  isItalic?: boolean
   size: number
   /** The origin on its baseline, in page coordinates. */
   x: number

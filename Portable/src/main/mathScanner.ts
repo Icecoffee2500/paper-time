@@ -30,6 +30,14 @@ interface Font {
   glyphNames: Map<number, string>
   baseEncoding: string | null
   isSymbolic: boolean
+  /** Whether the font says it is slanted: a nonzero `/ItalicAngle`, or the
+   *  Italic flag, in its descriptor. The file says this outright, whatever
+   *  the font is called — URW's clone of Avant Garde names its oblique
+   *  "URWGothicL-BookObli", and read by name its letters were upright: the
+   *  variables of a slide deck set in it came back as
+   *  \mathrm{S}_{\mathrm{i}}, and the line they were on as a sentence (the
+   *  Mac's `Font.isItalic`). */
+  isItalic: boolean
   /** One byte a glyph for a simple font; two for a composite (Type0) one —
    *  what Word and every "Save as PDF" write (the Mac's `bytesPerCode`). */
   bytesPerCode: number
@@ -153,7 +161,7 @@ function scan(file: PDFFile, page: PDFDict): ScannedPage {
   const rules: Rule[] = []
 
   let ctm: Matrix = IDENTITY
-  const ctmStack: { ctm: Matrix; charSpacing: number; wordSpacing: number; horizontalScale: number; leading: number; rise: number; fontSize: number; currentFont: Font | null }[] = []
+  const ctmStack: { ctm: Matrix; charSpacing: number; wordSpacing: number; horizontalScale: number; leading: number; rise: number; fontSize: number; currentFont: Font | null; renderMode: number }[] = []
   let textMatrix: Matrix = IDENTITY
   let lineMatrix: Matrix = IDENTITY
   let fontSize = 0
@@ -163,6 +171,12 @@ function scan(file: PDFFile, page: PDFDict): ScannedPage {
   let leading = 0
   let rise = 0
   let currentFont: Font | null = null
+  // The text rendering mode (`Tr`, ISO 32000 §9.3.6). Modes 3 and 7 draw
+  // nothing: a scan's OCR layer, and the words iOS lays invisibly over
+  // handwriting so it can be searched — "P(Ai)= হ☆০P(Bi)" over a page of
+  // sums. A glyph the page does not draw is not on the page, and a rectangle
+  // over such a page reads the picture instead.
+  let renderMode = 0
   let pendingRect: Rect | null = null
   let pathStart: { x: number; y: number } | null = null
   let pathEnd: { x: number; y: number } | null = null
@@ -189,12 +203,14 @@ function scan(file: PDFFile, page: PDFDict): ScannedPage {
       // the glyph; its code is a glyph number, never a character code.
       let meaning = currentFont?.toUnicode.get(code)
       if (step > 1 && meaning !== undefined && [...meaning].every((c) => c.codePointAt(0) === 0)) meaning = undefined
-      glyphs.push({
+      // Passed over, not kept, when the page does not draw it.
+      if (renderMode !== 3 && renderMode !== 7) glyphs.push({
         code: step > 1 ? -1 : code,
         fontName: currentFont?.name ?? '',
         unicode: meaning ?? (currentFont ? decodeByte(code, currentFont.baseEncoding) : null),
         glyphName: plainName(currentFont?.glyphNames.get(code) ?? null, currentFont?.name ?? ''),
         isSymbolic: step > 1 ? false : currentFont?.isSymbolic ?? true,
+        isItalic: currentFont?.isItalic ?? false,
         size: scale,
         x: placement[4],
         y: placement[5],
@@ -254,7 +270,7 @@ function scan(file: PDFFile, page: PDFDict): ScannedPage {
           // `q … Q` block set goes back with the block. Kept past the Q, a
           // table's `1.429 Tc` on one cell spread every letter of the
           // cells after it, and «Retraining» came back a letter per column.
-          case 'q': ctmStack.push({ ctm, charSpacing, wordSpacing, horizontalScale, leading, rise, fontSize, currentFont }); break
+          case 'q': ctmStack.push({ ctm, charSpacing, wordSpacing, horizontalScale, leading, rise, fontSize, currentFont, renderMode }); break
           case 'Q': {
             const last = ctmStack.pop()
             if (last) {
@@ -266,6 +282,7 @@ function scan(file: PDFFile, page: PDFDict): ScannedPage {
               rise = last.rise
               fontSize = last.fontSize
               currentFont = last.currentFont
+              renderMode = last.renderMode
             }
             break
           }
@@ -287,6 +304,8 @@ function scan(file: PDFFile, page: PDFDict): ScannedPage {
           case 'Tw': wordSpacing = number() ?? 0; break
           case 'Tz': horizontalScale = (number() ?? 0) / 100; break
           case 'Ts': rise = number() ?? 0; break
+          // An integer, as `CGPDFScannerPopInteger` takes it: anything else is 0.
+          case 'Tr': renderMode = (operands.length > 0 ? intOf(operands[operands.length - 1]) : undefined) ?? 0; break
           case 'Tj': { const s = stringBytesOf(operands[operands.length - 1]); if (s) show(s); break }
           case "'": { const s = stringBytesOf(operands[operands.length - 1]); if (s) { nextLine(); show(s) } break }
           case 'TJ': {
@@ -391,7 +410,7 @@ function loadFonts(file: PDFFile, page: PDFDict): Map<string, Font> {
   for (const [key, value] of fontDictionary.pairs) {
     const dictionary = dictOf(file.resolve(value))
     if (!dictionary) continue
-    const font: Font = { name: '', widths: new Map(), defaultWidth: 500, toUnicode: new Map(), glyphNames: new Map(), baseEncoding: null, isSymbolic: true, bytesPerCode: 1, widthScale: 0.001 }
+    const font: Font = { name: '', widths: new Map(), defaultWidth: 500, toUnicode: new Map(), glyphNames: new Map(), baseEncoding: null, isSymbolic: true, isItalic: false, bytesPerCode: 1, widthScale: 0.001 }
     const baseFont = nameOf(file.resolve(dictionary.get('BaseFont')))
     if (baseFont !== undefined) font.name = baseFont
     const firstChar = intOf(file.resolve(dictionary.get('FirstChar'))) ?? 0
@@ -423,6 +442,11 @@ function loadFonts(file: PDFFile, page: PDFDict): Map<string, Font> {
     if (descriptor) {
       const flags = intOf(file.resolve(descriptor.get('Flags'))) ?? 0
       font.isSymbolic = (flags & 4) !== 0
+      // Bit 7 is Italic; the angle is the slant of its stems, in degrees
+      // from the vertical (TeX writes −14 for its maths italic, −12 for its
+      // sans italic, −9.5 for its slanted).
+      const angle = numberOf(file.resolve(descriptor.get('ItalicAngle'))) ?? 0
+      font.isItalic = (flags & 64) !== 0 || Math.abs(angle) >= 1
     }
     const toUnicode = decoded(file, dictionary.get('ToUnicode'))
     if (toUnicode) font.toUnicode = toUnicodeTable(latin1(toUnicode))
