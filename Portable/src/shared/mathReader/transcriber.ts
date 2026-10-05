@@ -39,6 +39,14 @@ let variablesInTextItalic = false
 export function setVariablesInTextItalic(value: boolean) { variablesInTextItalic = value }
 export function italicVariables(): boolean { return variablesInTextItalic }
 
+/** Whether the page being read sets its text in a sans face — a slide deck,
+ *  where the whole paper is sans. There an upright sans word in a formula is
+ *  what \mathrm or \max drew, not a \mathsf the author chose, and is
+ *  written as such (`uprightStyle`). */
+let sansTextFace = false
+export function setSansTextFace(value: boolean) { sansTextFace = value }
+export function sansText(): boolean { return sansTextFace }
+
 const MAX = Number.MAX_VALUE
 
 /** The LaTeX for everything drawn inside `region` of a scanned page. */
@@ -420,6 +428,10 @@ const MATH_FAMILIES = [
   'CMMI', 'CMSY', 'CMEX', 'CMBSY', 'MSAM', 'MSBM', 'EUFM', 'EUFB', 'EUSM', 'EUSB',
   'EURM', 'EURB', 'EUEX', 'RSFS', 'BBOLD', 'DSROM', 'DSSS', 'STMARY', 'WASY', 'LASY',
   'ESINT', 'CALLIGRA',
+  // cmbright's maths italic, symbols and AMS fonts (hfbright's Type 1
+  // versions are HFBR…), which a sans slide deck sets its maths with;
+  // newtxsf's sans maths italic (zsfmi, zsfmia).
+  'HFBRMI', 'HFBRSY', 'HFBRAS', 'HFBRBS', 'HFBRMB', 'CMBRMI', 'CMBRSY', 'CMBRMB', 'ZSFMI',
   // bbm, and any bitmap font the scanner saw draw double-struck letters
   // (`DOUBLE_STRUCK_TYPE3`).
   'BBM',
@@ -528,7 +540,32 @@ export function isItalicFace(upper: string): boolean {
     || upper.startsWith('SFBI') || upper.endsWith('-IT') || upper.endsWith('-BI')
     || upper.endsWith('-BOLDIT')
     || (upper.startsWith('LINLIBERTINE') && upper.endsWith('I'))
+    // The sans italics: Computer Modern's (which Beamer sets its variables
+    // in), cm-super's, cmbright's slanted.
+    || upper.startsWith('CMSSI') || upper.startsWith('CMSSBXO') || upper.startsWith('CMSSQI')
+    || upper.startsWith('SFSO') || upper.startsWith('HFBRSL') || upper.startsWith('CMBRSL')
 }
+
+/** A Greek letter, or a sign a formula is made of, drawn by a text face:
+ *  Arev keeps its Greek in ArevSans-Oblique and its ∇ in ArevSans-Roman, and
+ *  a slide deck in a sans text face sets "γ" from the face itself. On a page
+ *  that sets its variables in the text face, it is the formula's; a text
+ *  face's dagger or section sign is not. */
+export function isTextSymbol(glyph: Glyph): boolean {
+  if (isMathFont(glyph)) return false
+  const spelled = token(glyph)
+  if (!spelled.startsWith('\\')) return false
+  return TeX.isGreekCommand(spelled) || FORMULA_SYMBOLS.has(spelled)
+}
+
+const FORMULA_SYMBOLS = new Set([
+  '\\nabla', '\\partial', '\\infty', '\\in', '\\notin', '\\leq', '\\geq', '\\neq',
+  '\\approx', '\\equiv', '\\times', '\\pm', '\\mp', '\\cdot', '\\propto', '\\sim',
+  '\\leftarrow', '\\rightarrow', '\\Rightarrow', '\\Leftarrow', '\\leftrightarrow',
+  '\\Leftrightarrow', '\\forall', '\\exists', '\\sum', '\\prod', '\\int', '\\sqrt',
+  '\\subset', '\\subseteq', '\\supset', '\\supseteq', '\\cup', '\\cap', '\\emptyset',
+  '\\aleph', '\\hbar', '\\ell', '\\wp', '\\Re', '\\Im',
+])
 
 /** A letter from the italic of a text face — which, on a page that sets its
  *  variables that way, is a variable. */
@@ -568,16 +605,31 @@ export function isUnicodeMathFont(upper: string): boolean {
   return upper.startsWith('TEXGYRE') && upper.includes('MATH')
 }
 
-const SANS = ['CMSS', 'SFSS', 'LMSANS', 'HELVETICA', 'NIMBUSSAN', 'HEROS', 'BIOLINUM', 'ARIAL', 'SANS']
 const MONO = ['CMTT', 'SFTT', 'LMMONO', 'TXTT', 'T1XTT', 'COURIER', 'NIMBUSMON', 'CURSOR', 'MONO']
 
 /** How an upright run of letters is written: in roman, sans or typewriter,
  *  as the face it was set in. */
 export function uprightStyle(glyph: Glyph): string {
   const upper = family(glyph)
-  if (SANS.some((one) => upper.startsWith(one) || upper.includes(one))) return '\\mathsf'
+  // In a paper whose text is sans — a slide deck — sans is the plain face:
+  // its "max" is \max and its "T" is \mathrm{T}, as the author typed them.
+  // (The TeX sans faces only: a figure's labels in Calibri are a label,
+  // \mathrm, not a choice of \mathsf.)
+  if (SANS_STYLE.some((one) => upper.startsWith(one) || upper.includes(one))) return sansTextFace ? '\\mathrm' : '\\mathsf'
   if (MONO.some((one) => upper.startsWith(one) || upper.includes(one))) return '\\mathtt'
   return '\\mathrm'
+}
+
+const SANS_STYLE = ['CMSS', 'SFSS', 'LMSANS', 'HELVETICA', 'NIMBUSSAN', 'HEROS', 'BIOLINUM', 'ARIAL', 'SANS']
+const SANS = ['CMSS', 'SFSS', 'SFSO', 'SFSX', 'LMSANS', 'HELVETICA', 'NIMBUSSAN', 'HEROS', 'BIOLINUM',
+  'ARIAL', 'SANS', 'LATO', 'ROBOTO', 'AREV', 'HFBR', 'CMBR', 'VERDANA', 'CALIBRI', 'SEGOE',
+  'GILLSANS', 'FUTURA', 'AVENIR', 'TAHOMA']
+
+/** Whether a face is sans: Computer Modern Sans, cm-super's, Latin Modern's,
+ *  Helvetica and its clones, Biolinum, Arial, Fira Sans, Lato, Roboto, Arev,
+ *  the cmbright family and the common system sans faces. */
+export function isSansFace(upper: string): boolean {
+  return SANS.some((one) => upper.startsWith(one) || upper.includes(one))
 }
 
 /** The size a formula is set in: the largest of its ordinary glyphs — the
@@ -1450,8 +1502,15 @@ export function boldCommand(glyph: Glyph): string | null {
   // An alphabet of its own — mathpazo's bold blackboard — is that alphabet.
   if (TeX.letterStyle(glyph.fontName) !== null) return null
   const upper = family(glyph)
+  // Arev's symbols are MathDesign's bold Charter symbols — the regular
+  // weight of a heavy sans, not \boldsymbol. (In a Charter paper, which is
+  // not sans, the same fonts are its bold.)
+  if (sansTextFace && upper.startsWith('MATHDESIGN-CH-BOLD')) return null
+  // (cmbright's bold maths italic is HFBRMB; newtxsf's is zsfmi-bol.)
   if (upper.startsWith('CMMIB') || upper.startsWith('CMBSY') || upper.startsWith('RMTMIB')
     || upper.includes('BMI') || upper.includes('BSY') || upper.startsWith('EURB')
+    || upper.startsWith('HFBRMB') || upper.startsWith('CMBRMB')
+    || (upper.startsWith('ZSFMI') && upper.includes('BOL'))
     || (upper.includes('MATH') && (upper.includes('BOLD') || upper.endsWith('-B')))) {
     return '\\boldsymbol'
   }
@@ -1460,7 +1519,9 @@ export function boldCommand(glyph: Glyph): string | null {
   if (upper.startsWith('LINLIBERTINET') && (upper.slice(13).startsWith('B') || upper.slice(13).startsWith('Z'))) {
     return upper.endsWith('I') ? '\\boldsymbol' : '\\mathbf'
   }
+  // (Computer Modern Sans bold extended, cmbright's bold.)
   if (upper.startsWith('CMBX') || upper.startsWith('SFBX') || upper.includes('-BOLD')
+    || upper.startsWith('CMSSBX') || upper.startsWith('SFSX') || upper.startsWith('HFBRBX') || upper.startsWith('CMBRBX')
     || upper.endsWith('-BD') || upper.includes('-MEDI') || upper.endsWith('-B')
     || upper.endsWith('BOLD') || upper.endsWith('-BOL') || upper.startsWith('CMB10')
     || upper.startsWith('RTXB') || upper.startsWith('RPXB')) {
@@ -2250,10 +2311,13 @@ function accents(glyphs: Glyph[], owned: Map<number, number>, consumed: Set<numb
       const nearest = maxBy(before, (a, b) => maxX(rectOf(glyphs[a])) < maxX(rectOf(glyphs[b])))
       covered = nearest === undefined ? [] : [nearest]
     } else {
+      // (Of the mark's own size: the subscript crept under a broad sans hat
+      // is not under the hat — cmbright's \hat{y}_i read as \widehat{y_i}.)
       const under = indices(glyphs.length).filter((other) => {
         const glyph = glyphs[other]
         return other !== index && !consumed.has(other) && !owned.has(other)
           && accentName(glyph) === null && !isSpace(glyph)
+          && glyph.size >= mark.size * 0.9
           && Math.abs(glyph.y - mark.y) < Math.max(glyph.size, 1) * 0.35
       })
       // A mark grown wide — an OpenType font's \widehat over three letters is

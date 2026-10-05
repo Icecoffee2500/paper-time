@@ -363,6 +363,11 @@ const SHAPES = {
     <path d="M6.4 13.4H3.3a1.3 1.3 0 0 1-.92-2.22l6.5-6.5a1.3 1.3 0 0 1 1.84 0l2.9 2.9a1.3 1.3 0 0 1 0 1.84l-4 4"/>
     <path d="M6.2 7.2 11 12"/>
     <path d="M6.4 13.4h7.2"/>`,
+  // A loop with a knot and a tail — the formula lasso.
+  lasso: `
+    <ellipse cx="8.6" cy="6" rx="5.2" ry="3.4"/>
+    <circle cx="4.5" cy="8.6" r="0.95"/>
+    <path d="M4.1 9.5c-1.2 1.2-1.7 2.5-1 4"/>`,
   rectangle: `<rect x="2.3" y="3.6" width="11.4" height="8.8" rx="1.8"/>`,
   ellipse: `<ellipse cx="8" cy="8" rx="5.7" ry="4.6"/>`,
   arrow: `

@@ -8,12 +8,15 @@ import { L } from '../../shared/lang.js'
 import { withKey } from '../../shared/shortcuts.js'
 import type { KeptReason, SaveState } from '../../shared/api.js'
 
-/** The strip over the pages: the title, the pen, and in a pane the ×. */
+/** The strip over the pages: the title, the pen and the lasso, and in a pane the ×. */
 export function fillHeader(header: HTMLElement, options: {
   title: string | null
   drawing: boolean
+  /** The formula lasso out (`reader.state.lasso`). */
+  lasso: boolean
   pane: boolean
   toggleDrawing: () => void
+  toggleLasso: () => void
   close?: () => void
 }) {
   clear(header)
@@ -34,7 +37,16 @@ export function fillHeader(header: HTMLElement, options: {
     html: icon('pen'),
   })
   on(draw, 'click', options.toggleDrawing)
-  header.append(draw)
+  // The formula lasso beside the pen: a mode a button shows, as the pen is,
+  // so that it can be seen to be on and switched off where it was switched on.
+  const lasso = el('button', {
+    class: 'icon-button',
+    title: withKey(L('수식 올가미', 'Formula Lasso'), 'lasso', platform),
+    'aria-pressed': String(options.lasso),
+    html: icon('lasso'),
+  })
+  on(lasso, 'click', options.toggleLasso)
+  header.append(draw, lasso)
 }
 
 function closeButton(close: () => void): HTMLElement {

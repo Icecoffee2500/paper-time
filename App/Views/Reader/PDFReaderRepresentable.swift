@@ -1527,6 +1527,56 @@ final class ReaderCoordinator: NSObject {
             lasso.catch(rect, on: page)
             func text(_ r: CGRect) -> String { "\(Int(r.minX.rounded())) \(Int(r.minY.rounded())) \(Int(r.width.rounded())) \(Int(r.height.rounded()))" }
             say("drawn \(text(rect)) → caught \(lasso.caught.map { "\(text($0.rect))\($0.needsOCR ? " (OCR)" : "")" } ?? "nothing")")
+            say("ink: \(lasso.caught?.ink.count ?? 0) boxes")
+            // `--papertime-lasso-shot=<png>`: the page round the catch at
+            // three times its size, with the lasso's own picture of the
+            // caught ink laid where the lasso lays it (a layer the window's
+            // picture misses).
+            if let shot = Boot.setting("PAPERTIME_LASSO_SHOT"), let caught = lasso.caught {
+                let area = caught.rect.insetBy(dx: -36, dy: -28)
+                let scale: CGFloat = 3
+                let width = Int(area.width * scale), height = Int(area.height * scale)
+                let transform = page.transform(for: .cropBox)
+                if let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                           space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) {
+                    context.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+                    context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+                    context.scaleBy(x: scale, y: scale)
+                    let drawn = area.applying(transform)
+                    context.translateBy(x: -drawn.minX, y: -drawn.minY)
+                    page.draw(with: .cropBox, to: context)
+                    if let made = lasso.inkPicture {
+                        context.draw(made.image, in: made.area.applying(transform))
+                    }
+                    if let image = context.makeImage() {
+                        let rep = NSBitmapImageRep(cgImage: image)
+                        try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: shot))
+                        say("shot: \(shot) \(width)×\(height)")
+                    }
+                }
+            }
+            // `--papertime-lasso-view-shot=<png>`: the PDF view's own layers,
+            // the lasso's banner and ink among them, rendered as they stand.
+            if let shot = Boot.setting("PAPERTIME_LASSO_VIEW_SHOT"), let layer = view.layer {
+                view.displayIfNeeded()
+                let size = view.bounds.size
+                let scale: CGFloat = 2
+                if let context = CGContext(data: nil, width: Int(size.width * scale), height: Int(size.height * scale), bitsPerComponent: 8,
+                                           bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) {
+                    context.setFillColor(CGColor(red: 0.93, green: 0.93, blue: 0.94, alpha: 1))
+                    context.fill(CGRect(x: 0, y: 0, width: size.width * scale, height: size.height * scale))
+                    context.scaleBy(x: scale, y: scale)
+                    if view.isFlipped {
+                        context.translateBy(x: 0, y: size.height)
+                        context.scaleBy(x: 1, y: -1)
+                    }
+                    layer.render(in: context)
+                    if let image = context.makeImage() {
+                        try? NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: shot))
+                        say("view shot: \(shot) \(Int(size.width))×\(Int(size.height)) banner \(lasso.subviews.first.map { "\($0.frame)" } ?? "none")")
+                    }
+                }
+            }
             let read = lasso.caught?.rect ?? rect
             say("latex: \(MathReader.latex(on: page, rect: read))")
             say("structured: \(MathReader.structured(on: page, rect: read))")

@@ -67,7 +67,9 @@ import {
   damagedNotice, lockedNotice, noticeNode, openingNotice, passwordPrompt, troubleButtons, troubleNotice, type Notice,
 } from './readerNotices.js'
 import { thumbnails } from './pageThumbnails.js'
-import { extentRead, type PageInput as MathPage } from '../../shared/mathReader/reader.js'
+import { extentInk, extentRead, type PageInput as MathPage } from '../../shared/mathReader/reader.js'
+import type { Box } from '../../shared/strokeSnap.js'
+import { iconNode } from '../icons.js'
 import { platform } from '../bridge.js'
 import { shortcutText } from '../../shared/shortcuts.js'
 import { isBlankPicture } from '../../shared/formulaOCRInput.js'
@@ -204,9 +206,11 @@ export class Reader implements PageOwner {
    * page's own coordinates — snapped to what the reader reads for it, so the
    * box on the page is exactly what Ultracopy copies (`LassoInputView.caught`).
    */
-  caught: { pageIndex: number; rect: { x: number; y: number; width: number; height: number }; needsOCR: boolean } | null = null
+  caught: { pageIndex: number; rect: Box; needsOCR: boolean; ink: Box[] } | null = null
   /** The lasso's pointer handlers, a page at a time, taken off with the lasso. */
   private readonly lassoInputs = new Map<PageView, AbortController>()
+  /** The line over the pages while the lasso is out — what it is, how it ends. */
+  private lassoBanner: HTMLElement | null = null
 
   constructor(private readonly actions: ReaderActions, options: ReaderOptions = {}) {
     this.state = options.state ?? freshReaderState()
@@ -1133,6 +1137,32 @@ export class Reader implements PageOwner {
       this.dropCatch()
     }
     for (const page of this.pages) this.syncLasso(page)
+    this.showLassoBanner(on)
+    // The header's lasso button lights with the mode, whichever way it was switched.
+    this.update()
+  }
+
+  /**
+   * The lasso says it is out. A crosshair alone does not: nothing on the
+   * page changes when the mode is switched on, so a line stands over the
+   * pages — glass, as the zoom badge is — saying what the mode is and how it
+   * ends. It takes no mouse; the page under it is still the lasso's.
+   */
+  private showLassoBanner(on: boolean) {
+    if (!on) {
+      this.lassoBanner?.remove()
+      this.lassoBanner = null
+      return
+    }
+    if (this.lassoBanner) return
+    const banner = el('div', { class: 'reader-lasso-banner', role: 'status' })
+    const mark = iconNode('lasso')
+    if (mark) banner.append(mark)
+    banner.append(el('span', {
+      text: L('수식 올가미 — 끌어서 수식을 잡아요. Esc로 끝내요.', 'Formula Lasso — drag around a formula. Press Esc to finish.'),
+    }))
+    this.overlayHost.append(banner)
+    this.lassoBanner = banner
   }
 
   /** The lasso lets go of what it holds; the box goes off the page. */
@@ -1196,7 +1226,7 @@ export class Reader implements PageOwner {
   /** The box as the catch has it — after a drawing that was abandoned. */
   private restoreLassoBox(page: PageView) {
     const caught = this.caught && this.caught.pageIndex === page.index ? this.caught : null
-    page.showLasso(caught ? caught.rect : null, 'caught', caught?.needsOCR ?? false)
+    page.showLasso(caught ? caught.rect : null, 'caught', caught?.needsOCR ?? false, caught?.ink ?? [])
   }
 
   /**
@@ -1205,29 +1235,30 @@ export class Reader implements PageOwner {
    * words inside — or the rectangle as drawn when the page cannot be read.
    * The first time in a run, says what the catch is for.
    */
-  async catchRect(pageIndex: number, rect: { x: number; y: number; width: number; height: number }) {
+  async catchRect(pageIndex: number, rect: Box) {
     const page = this.pages[pageIndex]
     if (!page) return null
     const input = await this.mathInput(page, [this.lassoBoxOf(rect)], '')
-    // `extentRead` takes the rectangle as a selection's bounds are — the
-    // cropBox's origin not added — where this page's coordinates have it added.
-    const crop = input.cropBox
-    const asked = { ...rect, x: rect.x - crop.x, y: rect.y - crop.y }
-    const read = extentRead(input, asked)
-    const snapped = read ? { ...read, x: read.x + crop.x, y: read.y + crop.y } : rect
+    // What the reader will read for the rectangle, and where the ink of it
+    // is — a box a glyph, and the rules among them. Both in the page's own
+    // coordinates, as the scanner's glyphs are. The ink is what the page
+    // shows: those letters, and no others, turn the accent colour.
+    const snapped = extentRead(input, rect)
+    const ink = snapped ? extentInk(input, rect) ?? [] : []
     if (!this.state.lasso || this.pages[pageIndex] !== page) return null
     // Nothing to snap to — a scanned page, a formula pasted in as a picture,
     // glyphs without meanings: the rectangle stays as drawn, dashed, and the
     // picture is read instead when it is copied (`LassoInputView.catch`).
-    const needsOCR = read === null
-    this.caught = { pageIndex, rect: snapped, needsOCR }
-    for (const other of this.pages) other.showLasso(other === page ? snapped : null, 'caught', needsOCR)
+    const needsOCR = snapped === null
+    const held = snapped ?? rect
+    this.caught = { pageIndex, rect: held, needsOCR, ink }
+    for (const other of this.pages) other.showLasso(other === page ? held : null, 'caught', needsOCR, other === page ? ink : [])
     if (!lassoExplained) {
       lassoExplained = true
       this.actions.toast(L('수식을 잡았어요. ⇧⌘C로 LaTeX을 복사하고, ⌘L로 노트에 넣어요.', 'Caught. ⇧⌘C copies it as LaTeX; ⌘L quotes it in the note.')
         .replace('⇧⌘C', shortcutText('⇧⌘C', platform)).replace('⌘L', shortcutText('⌘L', platform)))
     }
-    return snapped
+    return held
   }
 
   /** The catch as a line box: a point wider either side, as the selection's are. */
@@ -1270,9 +1301,15 @@ export class Reader implements PageOwner {
     return this.caught ? { pageIndex: this.caught.pageIndex, rect: this.caught.rect, text: '' } : null
   }
 
-  /** For a probe: the mode and the catch. */
+  /** For a probe: the mode, whether its banner stands, the catch and its ink. */
   lassoReport() {
-    return { lasso: this.state.lasso, caught: this.caught, boxes: this.pages.map((page) => page.lassoReport()).filter((one) => one !== null) }
+    return {
+      lasso: this.state.lasso,
+      banner: this.lassoBanner !== null && this.lassoBanner.isConnected,
+      caught: this.caught,
+      ink: this.caught?.ink.length ?? 0,
+      boxes: this.pages.map((page) => page.lassoReport()).filter((one) => one !== null),
+    }
   }
 
   // MARK: - Reading mathematics
@@ -1702,6 +1739,14 @@ export class Reader implements PageOwner {
       pane: this.pane,
       toggleDrawing: () => {
         this.setDrawing(!this.state.drawing)
+        this.update()
+        this.actions.changed()
+      },
+      lasso: this.state.lasso,
+      // The same path as the `lasso` command (`commands.ts`): the mode, the
+      // header again, and the window told.
+      toggleLasso: () => {
+        this.setLasso(!this.state.lasso)
         this.update()
         this.actions.changed()
       },
