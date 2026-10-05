@@ -14,7 +14,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import zlib from 'node:zlib'
-import { extentRead, latex, leftOutFormulas, pieces, spread, structured, type PageInput, type PieceKind } from '../shared/mathReader/reader.js'
+import { extentInk, extentRead, latex, leftOutFormulas, pieces, spread, structured, type PageInput, type PieceKind } from '../shared/mathReader/reader.js'
 import { latex as glyphLatex } from '../shared/mathReader/texGlyphNames.js'
 import { holes, imageMask, PLAIN_HOLES } from '../main/mathScanner.js'
 import type { Glyph } from '../shared/mathReader/glyph.js'
@@ -42,6 +42,9 @@ interface Case {
    *  and what the Mac's `extentRead` snapped it to — or null. */
   lassoRect?: number[]
   lassoExtent?: number[] | null
+  /** How many boxes of ink the Mac's `extentInk` gave for it: a box a glyph,
+   *  and the rules among them. */
+  lassoInk?: number
 }
 
 const box = (r: number[]) => ({ x: r[0], y: r[1], width: r[2], height: r[3] })
@@ -82,7 +85,11 @@ function compare(one: Case) {
 /** Where the lasso snaps for the page's rectangle, beside where the Mac's did. */
 function compareLasso(one: Case) {
   if (!one.lassoRect || one.lassoExtent === undefined) assert.fail('the fixture carries no lasso rectangle')
-  const snapped = extentRead(pageFromFixture(one), box(one.lassoRect))
+  const page = pageFromFixture(one)
+  const snapped = extentRead(page, box(one.lassoRect))
+  if (one.lassoInk !== undefined) {
+    assert.equal(extentInk(page, box(one.lassoRect))?.length ?? 0, one.lassoInk, 'as many boxes of ink as the Mac')
+  }
   if (one.lassoExtent === null) {
     assert.equal(snapped, null, 'the Mac snapped to nothing')
     return

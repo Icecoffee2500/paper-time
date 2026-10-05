@@ -50,6 +50,21 @@ export interface ScannedPage {
 }
 
 /** Every page's glyphs, read on demand and kept while the file is the same. */
+/** A glyph's name as the TeX tables know it: MathDesign numbers its variants
+ *  ("radicalbig3", "parenleftbig4") where every other font writes
+ *  "radicalbig" (`PDFContentScanner.plainName`). */
+export function plainName(name: string | null, font: string): string | null {
+  if (name === null || !/[0-9]$/.test(name)) return name
+  const family = (font.split('+').pop() ?? font).toUpperCase()
+  if (!family.startsWith('MATHDESIGN')) return name
+  const trimmed = name.replace(/[0-9]+$/, '')
+  if (trimmed === '') return name
+  // The digit is the size: "parenleftbig1" to "parenleftbig4" are \bigl( to \Biggl(.
+  const digit = Number(name.slice(trimmed.length))
+  if (trimmed.endsWith('big') && digit >= 1 && digit <= 4) return trimmed.slice(0, -3) + ['big', 'Big', 'bigg', 'Bigg'][digit - 1]
+  return trimmed
+}
+
 export class MathScanner {
   private file: PDFFile
   private pages: { dict: PDFDict }[]
@@ -178,7 +193,7 @@ function scan(file: PDFFile, page: PDFDict): ScannedPage {
         code: step > 1 ? -1 : code,
         fontName: currentFont?.name ?? '',
         unicode: meaning ?? (currentFont ? decodeByte(code, currentFont.baseEncoding) : null),
-        glyphName: currentFont?.glyphNames.get(code) ?? null,
+        glyphName: plainName(currentFont?.glyphNames.get(code) ?? null, currentFont?.name ?? ''),
         isSymbolic: step > 1 ? false : currentFont?.isSymbolic ?? true,
         size: scale,
         x: placement[4],

@@ -84,6 +84,12 @@ final class PDFContentScanner {
                    !name.hasSuffix("tp"), !name.hasSuffix("bt") { return false }
                 return true
             }
+            // MathDesign's extension fonts (Charter's, Utopia's, Garamond's —
+            // and Arev's, which borrows Charter's) are built the TeX way too.
+            if family.hasPrefix("MATHDESIGN"), family.contains("EXTENSION") {
+                guard let name = glyphName else { return true }
+                return name != "infinity"
+            }
             // pdfTeX's STIX Two draws its big operators and its sized
             // variants — "uni2211", "uni2211.s1", "uni221A.s2",
             // "bracketleft.s8" — from their top, as the extension fonts
@@ -267,6 +273,23 @@ final class PDFContentScanner {
     }
 
     // MARK: - Scanning
+
+    /// A glyph's name as the TeX tables know it. MathDesign numbers its
+    /// variants — "radicalbig3", "parenleftbig4" — where every other font
+    /// writes "radicalbig"; read with the digit, the radical was a "q".
+    static func plainName(_ name: String?, font: String) -> String? {
+        guard let name, let last = name.last, last.isNumber,
+              (font.split(separator: "+").last.map(String.init) ?? font).uppercased().hasPrefix("MATHDESIGN")
+        else { return name }
+        let trimmed = String(name.reversed().drop(while: \.isNumber).reversed())
+        guard !trimmed.isEmpty else { return name }
+        // The digit is the size: "parenleftbig1" to "parenleftbig4" are
+        // \bigl( to \Biggl(, "radicalbig3" the third radical.
+        if trimmed.hasSuffix("big"), let digit = Int(name.dropFirst(trimmed.count)), (1...4).contains(digit) {
+            return String(trimmed.dropLast(3)) + ["big", "Big", "bigg", "Bigg"][digit - 1]
+        }
+        return trimmed
+    }
 
     static func scan(page: CGPDFPage) -> PDFContentScanner {
         let scanner = PDFContentScanner()
@@ -563,7 +586,7 @@ final class PDFContentScanner {
                 fontName: currentFont?.name ?? "",
                 unicode: meaning
                     ?? currentFont.flatMap { Self.decode(code, with: $0.baseEncoding) },
-                glyphName: currentFont?.glyphNames[code],
+                glyphName: Self.plainName(currentFont?.glyphNames[code], font: currentFont?.name ?? ""),
                 // A composite font's codes are glyph numbers, never letters
                 // of a standard encoding, so what it means is only what its
                 // ToUnicode says — and a glyph that is not symbolic is read

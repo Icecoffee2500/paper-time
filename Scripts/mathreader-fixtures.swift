@@ -84,12 +84,11 @@ struct MathReaderFixtures {
     /// — what `MathReader.characters(of:)` asks for.
     static func characters(of page: PDFPage) -> [Box] {
         let text = Array(page.string ?? "")
-        let offset = page.bounds(for: .cropBox).origin
         var result: [Box] = []
         for index in text.indices {
             let bounds = page.characterBounds(at: index)
             guard !bounds.isEmpty else { continue }
-            result.append(Box(index: index, rect: bounds.offsetBy(dx: offset.x, dy: offset.y), character: text[index]))
+            result.append(Box(index: index, rect: bounds, character: text[index]))
         }
         return result
     }
@@ -135,9 +134,9 @@ struct MathReaderFixtures {
             let box = page.bounds(for: .cropBox)
             let asked = (item["rect"] as? [Double]).map { CGRect(x: $0[0], y: $0[1], width: $0[2], height: $0[3]) } ?? box
             guard let selection = page.selection(for: asked) else { continue }
-            // The whole page, for the lasso, is the page's size at the origin —
-            // `asked` is the cropBox with its own origin when no rect was given.
-            let lassoAsked = item["rect"] != nil ? asked : CGRect(origin: .zero, size: box.size)
+            // The whole page, for the lasso, is the crop box — PDFKit's page
+            // coordinates are the file's own.
+            let lassoAsked = asked
 
             // The page as the scanner read it.
             let scanned = PDFContentScanner.scan(page: reference)
@@ -152,7 +151,6 @@ struct MathReaderFixtures {
             let rules = scanned.rules.map { rect($0.rect) }
 
             // The selection's lines, as MathReader asks for them.
-            let offset = box.origin
             var boxes: [CGRect] = []
             for line in selection.selectionsByLine() where line.pages.contains(page) {
                 let r = line.bounds(for: page)
@@ -163,7 +161,7 @@ struct MathReaderFixtures {
                 let r = selection.bounds(for: page)
                 if !r.isEmpty { boxes = [r] }
             }
-            let lineBoxes = boxes.map { CGRect(x: $0.minX + offset.x, y: $0.minY + offset.y, width: $0.width, height: $0.height).insetBy(dx: -1, dy: 0) }
+            let lineBoxes = boxes.map { $0.insetBy(dx: -1, dy: 0) }
 
             // The page's characters where the selection is, as PDFKit read them.
             let text = Array(page.string ?? "")
@@ -229,6 +227,7 @@ struct MathReaderFixtures {
                 // coordinates, and what the reader snaps it to (`extentRead`).
                 "lassoRect": rect(lassoAsked),
                 "lassoExtent": MathReader.extentRead(on: page, rect: lassoAsked).map(rect) ?? NSNull(),
+                "lassoInk": MathReader.extentInk(on: page, rect: lassoAsked)?.count ?? 0,
                 "pageText": String(text),
                 "characters": characters,
                 "selectionString": selection.string ?? "",

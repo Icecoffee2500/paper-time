@@ -8,7 +8,7 @@
  */
 import tables from './texTables.json'
 import { familyOf } from './glyph.js'
-import { canon, count, firstChar, isLetter, isNumber, keyed } from './swiftText.js'
+import { canon, chars, count, firstChar, isLetter, isNumber, keyed, lastChar } from './swiftText.js'
 
 type Table = Record<string, string>
 const T = tables as unknown as {
@@ -65,9 +65,16 @@ function resolve(name: string | null, code: number, fontName: string, unicode: s
     const table = amsTable(fontName)
     const ams = table ? table.get(canon(name)) ?? table.get(canon(stripped(name))) : undefined
     if (ams !== undefined) return ams
+    const arev = arevName(name, fontName)
+    if (arev !== null) return arev
     const named = byName.get(canon(name)) ?? byName.get(canon(stripped(name)))
     if (named !== undefined) return named
     if (count(name) === 1) return name
+    // newtx's and newtxsf's own names: "bbE" for the double-struck E (in
+    // zsfmia and txmia), "upnabla", "uppartial" and "upalpha" for the
+    // upright forms. Read as codes they were "(" and "+".
+    const newtx = newtxName(name)
+    if (newtx !== null) return newtx
     // "u1D437", "uni2260": a glyph named after its code point.
     const scalars = unicodeName(name)
     if (scalars !== null) return latexOfScalars(scalars)
@@ -81,11 +88,73 @@ function resolve(name: string | null, code: number, fontName: string, unicode: s
   return asciiIfPrintable(code)
 }
 
+/** newtx's names for glyphs other fonts name by code point: "bbA"–"bbZ" and
+ *  "bbk" are \mathbb, "upnabla" and "uppartial" the upright signs, "upalpha"
+ *  the upright Greek (written as the Greek — LaTeX's \alpha). */
+export function newtxName(name: string): string | null {
+  const all = chars(name)
+  if (all.length === 3 && all[0] === 'b' && all[1] === 'b') {
+    const letter = lastChar(name) ?? ''
+    if (/^[A-Za-z]$/.test(letter)) return `\\mathbb{${letter}}`
+  }
+  if (!(all.length > 2 && all[0] === 'u' && all[1] === 'p')) return null
+  const rest = '\\' + all.slice(2).join('')
+  return isGreekCommand(rest) ? rest : null
+}
+
+/** Whether a command names a Greek letter, ∇ or ∂ — the letters a text face
+ *  carries for a paper that sets its formulas in the text face. */
+export function isGreekCommand(command: string): boolean {
+  return GREEK_COMMANDS.has(command)
+}
+
+/** The Swift's `greekLetters`: what the Mathematical Alphanumeric Symbols'
+ *  Greek block spells, in its order (the plain capitals and "o" among them
+ *  are the letters Unicode shares with Latin). */
+const GREEK_LETTERS = [
+  'A', 'B', '\\Gamma', '\\Delta', 'E', 'Z', 'H', '\\Theta', 'I', 'K', '\\Lambda', 'M', 'N',
+  '\\Xi', 'O', '\\Pi', 'P', '\\varTheta', '\\Sigma', 'T', '\\Upsilon', '\\Phi', 'X',
+  '\\Psi', '\\Omega', '\\nabla',
+  '\\alpha', '\\beta', '\\gamma', '\\delta', '\\varepsilon', '\\zeta', '\\eta',
+  '\\theta', '\\iota', '\\kappa', '\\lambda', '\\mu', '\\nu', '\\xi', 'o', '\\pi',
+  '\\rho', '\\varsigma', '\\sigma', '\\tau', '\\upsilon', '\\varphi', '\\chi',
+  '\\psi', '\\omega', '\\partial', '\\epsilon', '\\vartheta', '\\varkappa', '\\phi',
+  '\\varrho', '\\varpi',
+]
+
+const GREEK_COMMANDS = new Set([...GREEK_LETTERS.filter((one) => one.startsWith('\\')), '\\Omega', '\\digamma'])
+
+/**
+ * Arev's own names for its maths letters: the letters a formula would confuse
+ * with symbols — a, i, l, u, v, w, x, I — are variant shapes in the font's
+ * private-use area, named "uniEB" + 0x80 + the letter's ASCII code
+ * ("uniEBF8" is x); f is the florin; three upright Greek capitals are
+ * private-use too (`TeXGlyphNames.arevName`).
+ */
+export function arevName(name: string, fontName: string): string | null {
+  if (!family(fontName).startsWith('AREVSANS')) return null
+  if (name === 'florin') return 'f'
+  if (name.startsWith('uniEB') && name.length === 7) {
+    const code = parseInt(name.slice(5), 16)
+    if (!Number.isNaN(code) && code >= 0x80 + 0x41 && code <= 0x80 + 0x7a) {
+      const letter = String.fromCharCode(code - 0x80)
+      if (/^[A-Za-z]$/.test(letter)) return letter
+    }
+  }
+  switch (name) {
+    case 'uniEF13': return '\\Gamma'
+    case 'uniEF23': return '\\Sigma'
+    case 'uniEF26': return '\\Phi'
+    default: return null
+  }
+}
+
 /** The AMS fonts' own names, for the fonts that use them. */
 function amsTable(fontName: string): Map<string, string> | null {
   const upper = family(fontName)
-  if (['MSAM', 'TXSYA', 'PXSYA'].some((prefix) => upper.startsWith(prefix))) return msam
-  if (['MSBM', 'TXSYB', 'PXSYB', 'TXSYM', 'PXSYM'].some((prefix) => upper.startsWith(prefix))) return msbm
+  // (cmbright's AMS fonts are hfbright's HFBRAS and HFBRBS.)
+  if (['MSAM', 'TXSYA', 'PXSYA', 'HFBRAS'].some((prefix) => upper.startsWith(prefix))) return msam
+  if (['MSBM', 'TXSYB', 'PXSYB', 'TXSYM', 'PXSYM', 'HFBRBS'].some((prefix) => upper.startsWith(prefix))) return msbm
   if (['TXSYC', 'PXSYC'].some((prefix) => upper.startsWith(prefix))) return txsyc
   return null
 }
@@ -110,11 +179,13 @@ export function letterStyle(fontName: string): string | null {
   if (upper.startsWith('FOURIER-MATH-CAL')) return '\\mathcal'
   if (upper.startsWith('FOURIER-MATH-BLACKBOARD') || upper.startsWith('PAZOMATHBLACKBOARD')) return '\\mathbb'
   if (upper.startsWith('CMSY') || upper.startsWith('CMBSY') || upper.startsWith('EUSM')
-    || upper.startsWith('EUSB') || upper.startsWith('LMMATHSYMBOLS')) return '\\mathcal'
+    || upper.startsWith('EUSB') || upper.startsWith('LMMATHSYMBOLS')
+    || upper.startsWith('HFBRSY') || upper.startsWith('CMBRSY')) return '\\mathcal'
   if (upper.startsWith('EUFM') || upper.startsWith('EUFB')) return '\\mathfrak'
   if (upper.startsWith('RSFS')) return '\\mathscr'
   if (upper.startsWith('BBOLD') || upper.startsWith('DSROM') || upper.startsWith('DSSS')
-    || upper.startsWith('MSBM') || upper.startsWith('BBM') || upper.includes('STBB')) return '\\mathbb'
+    || upper.startsWith('MSBM') || upper.startsWith('BBM') || upper.includes('STBB')
+    || upper.startsWith('HFBRBS')) return '\\mathbb'
   return null
 }
 

@@ -62,6 +62,11 @@ const PIECES = ['tpA', 'exA', 'btA', 'midA']
 export function isExtension(glyph: Glyph): boolean {
   const family = familyOf(glyph.fontName)
   const name = glyph.glyphName
+  // MathDesign's extension fonts (Charter's, Utopia's, Garamond's — and
+  // Arev's, which borrows Charter's) are built the TeX way too.
+  if (family.startsWith('MATHDESIGN') && family.includes('EXTENSION')) {
+    return name === null || name !== 'infinity'
+  }
   if (EXTENSION_FAMILIES.some((prefix) => family.startsWith(prefix))) {
     if (name === null) return true
     if (name === 'infinity') return false

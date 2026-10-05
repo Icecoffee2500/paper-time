@@ -297,6 +297,47 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.9.21",
+            date: Text2("2026년 10월", "October 2026"),
+            note: Text2(
+                "올가미가 잡은 수식은 글자 자체가 강조색으로 물들고, 올가미가 켜져 있다는 것이 보이고, 슬라이드의 산세리프 수식도 읽혀요.",
+                "The letters the lasso catches turn the accent colour, the lasso shows when it is on, and the sans-serif formulas of slides read too."
+            ),
+            added: [
+                Entry(
+                    Text2("글자가 물드는 올가미", "A Lasso That Colours the Letters"),
+                    Text2(
+                        "잡은 수식을 상자로 두르지 않고, 그 수식의 글자만 강조색으로 물들여요. 바로 앞의 «Targets:»는 검은색 그대로라서, 복사될 글자가 정확히 어디까지인지 보여요.",
+                        "Instead of a box round the formula, its letters turn the accent colour — and only its letters: the “Targets:” right before it stays black, so you see exactly what will be copied."
+                    ),
+                    action: .lasso
+                ),
+                Entry(
+                    Text2("올가미가 켜진 것이 보여요", "The Lasso Shows It Is On"),
+                    Text2(
+                        "⌥⌘L로 켜면 커서가 십자가 되고, 쪽 위에 «수식 올가미» 띠가 뜨고, 제목 줄의 올가미 단추가 켜져요. Esc로 끝내요.",
+                        "Turn it on with ⌥⌘L and the cursor becomes a crosshair, a “Formula Lasso” strip appears over the page and the lasso button in the title row lights up. Esc puts it away."
+                    )
+                ),
+            ],
+            fixed: [
+                Entry(
+                    Text2("여백을 자른 PDF의 수식", "Formulas in Cropped PDFs"),
+                    Text2(
+                        "쪽의 여백을 잘라 둔 PDF에서 ⇧⌘C와 ⌘L이 엉뚱한 줄을 읽어 낱말이 잘려 나왔어요. 이제 자른 쪽에서도 고른 그대로 읽어요.",
+                        "In a PDF whose pages were cropped, ⇧⌘C and ⌘L read lines a little off and words came out cut short. They now read what you selected."
+                    )
+                ),
+                Entry(
+                    Text2("슬라이드의 수식", "Formulas on Slides"),
+                    Text2(
+                        "Beamer 슬라이드처럼 산세리프로 짠 수식(cmbright, sansmath, Fira Math, newtxsf, arev)이 글이 아니라 수식으로 읽혀요. 전에는 y_t가 «yt»로, max가 \\mathsf{max}로 나왔어요. 글머리표 줄은 목록 항목이 돼요.",
+                        "Formulas set in a sans face — Beamer slides, cmbright, sansmath, Fira Math, newtxsf, arev — read as formulas rather than words. y_t used to come out as “yt” and max as \\mathsf{max}. Bulleted lines become list items."
+                    )
+                ),
+            ]
+        ),
+        Release(
             version: "0.9.20",
             date: Text2("2026년 10월", "October 2026"),
             note: Text2(

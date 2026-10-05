@@ -118,7 +118,7 @@ enum MathReader {
     /// the words inside.
     @MainActor
     static func pieces(on page: PDFPage, rect: CGRect) -> [Piece] {
-        pieces(of: [Region(page: page, boxes: [box(of: rect, on: page)],
+        pieces(of: [Region(page: page, boxes: [box(of: rect)],
                            fallback: page.selection(for: rect)?.string ?? "")])
     }
 
@@ -144,30 +144,124 @@ enum MathReader {
     /// otherwise, and nothing of a line a formula's reach only clipped —
     /// united, in the page's coordinates as PDFKit gives them. Nil when the
     /// rectangle reaches nothing the page can be read for. This is what the
-    /// lasso snaps to, so that the box on the page is exactly what ⇧⌘C
-    /// will copy.
+    /// lasso snaps to, so that what it holds is exactly what ⇧⌘C will copy.
     @MainActor
     static func extentRead(on page: PDFPage, rect: CGRect) -> CGRect? {
-        guard let scanned = scan(page), !scanned.glyphs.isEmpty else { return nil }
-        let layout = layout(of: page, scanned: scanned)
-        let boxes = [box(of: rect, on: page)]
-        let reached = reached(in: layout, boxes: boxes)
-        let wantsFormula = reached.contains { $0.block.isFormula }
-        var union: CGRect?
-        for (block, glyphs) in reached {
-            if !block.isFormula, wantsFormula, glyphs.count * 10 < block.rows[0].count * 9 { continue }
-            for glyph in glyphs { union = union.map { $0.union(glyph.rect) } ?? glyph.rect }
-        }
-        guard let union else { return nil }
-        let offset = page.bounds(for: .cropBox).origin
-        return union.offsetBy(dx: -offset.x, dy: -offset.y)
+        guard let rows = extentRows(on: page, rect: rect), let first = rows.first else { return nil }
+        return rows.dropFirst().reduce(first) { $0.union($1) }
     }
 
-    /// A rectangle in PDFKit's page coordinates as a box the reader uses:
-    /// the cropBox's origin added, a point wider either side.
-    private static func box(of rect: CGRect, on page: PDFPage) -> CGRect {
-        let offset = page.bounds(for: .cropBox).origin
-        return rect.offsetBy(dx: offset.x, dy: offset.y).insetBy(dx: -1, dy: 0)
+    /// The same glyphs, a rectangle per line they were set on. A formula's
+    /// rows (its limits, its numerator) are lines of their own; two that
+    /// touch or overlap are one.
+    @MainActor
+    static func extentRows(on page: PDFPage, rect: CGRect) -> [CGRect]? {
+        guard let caught = caught(on: page, rect: rect) else { return nil }
+        let rows = caught.lines.compactMap { line -> CGRect? in
+            guard let first = line.first else { return nil }
+            return line.dropFirst().reduce(first.rect) { $0.union($1.rect) }
+        }
+        return rows.isEmpty ? nil : joinedRows(rows)
+    }
+
+    /// Where the ink of what a rectangle reads is: a box for every glyph the
+    /// reader takes, and the rules drawn among them (a fraction's bar, a
+    /// root's vinculum, a brace's fill). The lasso recolours the page's ink
+    /// inside these and nowhere else — a segmentation of the formula, laid
+    /// over its own letters, not a box round them.
+    @MainActor
+    static func extentInk(on page: PDFPage, rect: CGRect) -> [CGRect]? {
+        guard let caught = caught(on: page, rect: rect) else { return nil }
+        var ink: [CGRect] = []
+        for line in caught.lines {
+            guard let first = line.first else { continue }
+            ink += line.map(\.rect)
+            let reach = line.dropFirst().reduce(first.rect) { $0.union($1.rect) }.insetBy(dx: -1, dy: -1)
+            ink += caught.rules.filter { $0.intersects(reach) }
+        }
+        return ink.isEmpty ? nil : ink
+    }
+
+    /// The glyphs a rectangle reads, a list a line, and the page's rules.
+    @MainActor
+    private static func caught(on page: PDFPage, rect: CGRect) -> (lines: [[PDFContentScanner.Glyph]], rules: [CGRect])? {
+        guard let scanned = scan(page), !scanned.glyphs.isEmpty else { return nil }
+        let layout = layout(of: page, scanned: scanned)
+        let boxes = [box(of: rect)]
+        let reached = reached(in: layout, boxes: boxes)
+        let wantsFormula = reached.contains { $0.block.isFormula }
+        MathTranscriber.variablesInTextItalic = layout.variablesInTextItalic
+        MathTranscriber.sansTextFace = layout.sansText
+        defer { MathTranscriber.variablesInTextItalic = false; MathTranscriber.sansTextFace = false }
+        var lines: [[PDFContentScanner.Glyph]] = []
+        for (block, glyphs) in reached {
+            if block.isFormula {
+                // Every row of a formula that was touched (`reached`).
+                lines += block.rows.filter { !$0.isEmpty }
+            } else {
+                if wantsFormula, glyphs.count * 10 < block.rows[0].count * 9 { continue }
+                let line = grown(glyphs, in: block.rows[0])
+                if !line.isEmpty { lines.append(line) }
+            }
+        }
+        guard !lines.isEmpty else { return nil }
+        return (lines, scanned.rules.map(\.rect))
+    }
+
+    /// What a rectangle takes of a line of prose, grown to the whole of the
+    /// inline formula it landed in: from the glyphs inside the rectangle,
+    /// outwards over anything that is the formula's — a maths glyph, a
+    /// script, a bracket or a sign — as long as the gaps stay a formula's
+    /// (under 0.3 em; a word space is a third of an em and more). A hand
+    /// that starts its rectangle after the "(" of "(y_t − Q(S_t, A_t))²"
+    /// still catches the "(": copied as drawn, the bracket came out odd.
+    private static func grown(_ kept: [PDFContentScanner.Glyph], in row: [PDFContentScanner.Glyph]) -> [PDFContentScanner.Glyph] {
+        let ordered = row.sorted { $0.rect.minX < $1.rect.minX }
+        guard let first = kept.min(by: { $0.rect.minX < $1.rect.minX }),
+              let last = kept.max(by: { $0.rect.maxX < $1.rect.maxX }),
+              var low = ordered.firstIndex(where: { $0.rect.minX >= first.rect.minX - 0.01 }),
+              var high = ordered.lastIndex(where: { $0.rect.maxX <= last.rect.maxX + 0.01 })
+        else { return kept }
+        func formulaGlyph(_ glyph: PDFContentScanner.Glyph, beside neighbour: PDFContentScanner.Glyph) -> Bool {
+            let spelled = MathTranscriber.spelling(of: glyph)
+            if spelled.isEmpty || MathTranscriber.isAccent(glyph) { return true }
+            if isMathish(glyph) || isFormulaMark(glyph) { return true }
+            if glyph.size < neighbour.size * 0.92 && !MathTranscriber.isPiece(glyph) { return true }
+            return ["(", ")", "[", "]", "+", "-", "=", "|", ",", "'", "\\{", "\\}", "\\|"].contains(spelled)
+        }
+        while low > 0 {
+            let previous = ordered[low - 1], edge = ordered[low]
+            guard edge.rect.minX - previous.rect.maxX < edge.size * 0.3, formulaGlyph(previous, beside: edge) else { break }
+            low -= 1
+        }
+        while high + 1 < ordered.count {
+            let next = ordered[high + 1], edge = ordered[high]
+            guard next.rect.minX - edge.rect.maxX < edge.size * 0.3, formulaGlyph(next, beside: edge) else { break }
+            high += 1
+        }
+        return Array(ordered[low...high])
+    }
+
+    /// Rows that touch or overlap in height, united — top to bottom.
+    static func joinedRows(_ rows: [CGRect]) -> [CGRect] {
+        var joined: [CGRect] = []
+        for row in rows.sorted(by: { $0.maxY > $1.maxY }) {
+            if let last = joined.last, row.maxY >= last.minY - 1 {
+                joined[joined.count - 1] = last.union(row)
+            } else {
+                joined.append(row)
+            }
+        }
+        return joined
+    }
+
+    /// A rectangle in PDFKit's page coordinates as a box the reader uses: a
+    /// point wider either side. (PDFKit's page coordinates are the file's own
+    /// — the scanner's — whatever the crop box: a box once had the crop
+    /// box's origin added, and on a page whose crop box does not start at
+    /// the origin every line it reached was the wrong one.)
+    private static func box(of rect: CGRect) -> CGRect {
+        rect.insetBy(dx: -1, dy: 0)
     }
 
     /// What the boxes reach. A formula is two-dimensional — its limits sit
@@ -210,7 +304,8 @@ enum MathReader {
             // things they belong to.
             let layout = layout(of: page, scanned: scanned)
             MathTranscriber.variablesInTextItalic = layout.variablesInTextItalic
-            defer { MathTranscriber.variablesInTextItalic = false }
+            MathTranscriber.sansTextFace = layout.sansText
+            defer { MathTranscriber.variablesInTextItalic = false; MathTranscriber.sansTextFace = false }
             let boxes = region.boxes
             let rules = markingBraceFills(scanned.rules, glyphs: scanned.glyphs)
             let pageBody = size(of: scanned.glyphs)
@@ -843,6 +938,17 @@ enum MathReader {
                 paragraph += paragraph.isEmpty ? text : " " + text
 
             case .prose:
+                // A line that opens with a bullet is an item of a list — a
+                // slide's, or an itemize in a paper — and is written as one:
+                // on a line of its own, the bullet a "- ". Joined into a
+                // paragraph, a slide's three points ran into one sentence.
+                if let item = afterBullet(text) {
+                    breakHere()
+                    paragraph = "- " + item
+                    previous = piece
+                    afterDisplay = false
+                    continue
+                }
                 // A line that is all mathematics and an equation number is a
                 // displayed equation, whatever the row was classified as —
                 // "minimize" is a word, and the line it stands on is still an
@@ -892,6 +998,30 @@ enum MathReader {
         return lines
     }
 
+    /// What a line says after the bullet it opens with — Beamer's ▶, the
+    /// • of an itemize, the ◦ and – of its inner levels, set in a maths font
+    /// (so `$\\bullet$`) or as the character — or nil when it opens with
+    /// no bullet. A hyphen is not one: "- x" is a negation.
+    static func afterBullet(_ text: String) -> String? {
+        let bullets = ["\\blacktriangleright", "\\bullet", "\\triangleright", "\\circ", "\\boldsymbol{▶}",
+                       "\\boldsymbol{\\blacktriangleright}", "\\boldsymbol{\\bullet}", "▶", "•", "◦", "–", "▪",
+                       "\\blacksquare", "\\ast", "\\star", "\\diamond"]
+        var rest = Substring(text)
+        var wrapped = false
+        if rest.hasPrefix("$") { rest = rest.dropFirst(); wrapped = true }
+        guard let bullet = bullets.first(where: { rest.hasPrefix($0) }) else { return nil }
+        rest = rest.dropFirst(bullet.count)
+        if wrapped {
+            guard rest.hasPrefix("$") else { return nil }
+            rest = rest.dropFirst()
+        }
+        // The bullet stands off its item by a space; a bullet that is the
+        // whole line, or one with a sign stuck to it, is not a list's.
+        guard rest.first == " " else { return nil }
+        let item = rest.trimmingCharacters(in: .whitespaces)
+        return item.isEmpty ? nil : item
+    }
+
     /// One character as PDFKit read it, with where it sits on the page.
     struct PageCharacter {
         var index: Int
@@ -904,14 +1034,11 @@ enum MathReader {
         let key = ObjectIdentifier(page)
         if let known = characterBoxes[key], known.page === page { return known.value }
         let text = Array(page.string ?? "")
-        let offset = page.bounds(for: .cropBox).origin
         var result: [PageCharacter] = []
         for index in text.indices {
             let bounds = page.characterBounds(at: index)
             guard !bounds.isEmpty else { continue }
-            result.append(PageCharacter(index: index,
-                                        rect: bounds.offsetBy(dx: offset.x, dy: offset.y),
-                                        character: text[index]))
+            result.append(PageCharacter(index: index, rect: bounds, character: text[index]))
         }
         if characterBoxes.count > 12 { characterBoxes.removeAll() }
         characterBoxes[key] = (page, result)
@@ -979,7 +1106,6 @@ enum MathReader {
     /// partly in it. Keeping the lines apart keeps a partial drag partial.
     @MainActor
     private static func lineBoxes(of selection: PDFSelection, on page: PDFPage) -> [CGRect] {
-        let offset = page.bounds(for: .cropBox).origin
         var boxes: [CGRect] = []
         for line in selection.selectionsByLine() where line.pages.contains(page) {
             let rect = line.bounds(for: page)
@@ -991,11 +1117,7 @@ enum MathReader {
             guard !rect.isEmpty else { return [] }
             boxes = [rect]
         }
-        return boxes.map {
-            CGRect(x: $0.minX + offset.x, y: $0.minY + offset.y,
-                   width: $0.width, height: $0.height)
-                .insetBy(dx: -1, dy: 0)
-        }
+        return boxes.map(box(of:))
     }
 
     /// A formula split from the number printed beside it.
@@ -2319,8 +2441,15 @@ enum MathReader {
                     return rule.rect.midY > low && rule.rect.midY < high
                         && rule.rect.maxX > span.minX && rule.rect.minX < span.maxX
                 }
+                // A row of scripts — small type, and the bars and brackets
+                // sized to it — reaches a full em: Fira Math lifts an
+                // exponent 0.91 em, and the exponent of an inline e was a
+                // display of its own above the sentence.
+                let scripts = row.glyphs.allSatisfy {
+                    $0.size < body * 0.8 || MathTranscriber.barToken($0) != nil || MathTranscriber.isDelimiter($0)
+                }
                 return span.width < theirs.width * 0.75
-                    && distance < body * 0.9
+                    && distance < body * (scripts ? 1.0 : 0.9)
                     && beside(span, rows[other].glyphs, body: body)
                     && !collides(own, onOwnLine(rows[other], body: body))
                     && barred
@@ -2528,7 +2657,7 @@ enum MathReader {
             return true
         }
         guard MathTranscriber.variablesInTextItalic,
-              word.contains(where: MathTranscriber.isItalicLetter) else { return false }
+              word.contains(where: isTextVariable) else { return false }
         let full = word.filter { $0.size >= body * 0.92 && !MathTranscriber.isAccent($0) }
         // Every run of italic letters in it is a variable or two, not a word:
         // "f(x)" and "Pr[X" are formulas, "(sketch)" is not.
@@ -2549,8 +2678,9 @@ enum MathReader {
         // A variable or two standing alone between words that are not in
         // italics — "for each *i*", "*Wx*" — which an emphasised sentence,
         // and a short English word set in italics, are not.
-        guard full.count <= 2, full.allSatisfy({ MathTranscriber.spelling(of: $0).first?.isLetter == true }),
-              !commonShortWords.contains(marks.joined().lowercased())
+        guard full.count <= 2, full.allSatisfy({
+            MathTranscriber.spelling(of: $0).first?.isLetter == true || MathTranscriber.isTextSymbol($0)
+        }), !commonShortWords.contains(marks.joined().lowercased())
         else { return false }
         // Stressed: a word of three italic letters or more, or a short
         // English one — not "dx", which is the formula going on.
@@ -2949,8 +3079,8 @@ enum MathReader {
         let formula = min(first.size, second.size) < body * 0.92
             || MathTranscriber.isMathFont(first) || MathTranscriber.isMathFont(second)
             || (MathTranscriber.variablesInTextItalic
-                && ((MathTranscriber.isItalicLetter(first) && isFormulaMark(second))
-                    || (isFormulaMark(first) && MathTranscriber.isItalicLetter(second))))
+                && ((isTextVariable(first) && isFormulaMark(second))
+                    || (isFormulaMark(first) && isTextVariable(second))))
         // Against a glyph that grows — a radical, the pieces of a tall bar —
         // TeX sets a thick space and the glyph's own side bearing, which
         // together pass for a narrow word space: a \big| after a root, and
@@ -2974,10 +3104,17 @@ enum MathReader {
             && !(MathTranscriber.variablesInTextItalic && MathTranscriber.isItalicLetter(glyph))
     }
 
+    /// A variable a text face draws: a letter from its italic, or the Greek
+    /// and the signs a face like Arev's carries for its formulas.
+    private static func isTextVariable(_ glyph: PDFContentScanner.Glyph) -> Bool {
+        MathTranscriber.isItalicLetter(glyph) || MathTranscriber.isTextSymbol(glyph)
+    }
+
     /// What a formula set in a text face is held together by: an italic
     /// variable, a bracket, a sign.
     private static func isFormulaMark(_ glyph: PDFContentScanner.Glyph) -> Bool {
         MathTranscriber.isItalicLetter(glyph) || MathTranscriber.isMathFont(glyph)
+            || MathTranscriber.isTextSymbol(glyph)
             || ["(", ")", "[", "]", "+", "=", "|", ","].contains(MathTranscriber.spelling(of: glyph))
     }
 
@@ -2997,12 +3134,28 @@ enum MathReader {
         /// Whether the page sets its variables in the italic of its text face
         /// (`MathTranscriber.variablesInTextItalic`).
         var variablesInTextItalic = false
+        /// Whether the page sets its text in a sans face
+        /// (`MathTranscriber.sansTextFace`).
+        var sansText = false
+    }
+
+    /// Whether a page's text is sans: most of the Latin letters its text
+    /// faces draw are from a sans face. A slide deck is; its "max" is \max.
+    static func sansText(of glyphs: [PDFContentScanner.Glyph]) -> Bool {
+        var sans = 0, serif = 0
+        for glyph in glyphs where !MathTranscriber.isMathFont(glyph) {
+            let spelled = MathTranscriber.spelling(of: glyph)
+            guard spelled.count == 1, let letter = spelled.first, letter.isASCII, letter.isLetter else { continue }
+            if MathTranscriber.isSansFace(MathTranscriber.family(of: glyph)) { sans += 1 } else { serif += 1 }
+        }
+        return sans > serif
     }
 
     /// Whether a glyph belongs to a formula by its face alone.
     private static func isMathish(_ glyph: PDFContentScanner.Glyph) -> Bool {
         MathTranscriber.isMathFont(glyph)
-            || (MathTranscriber.variablesInTextItalic && MathTranscriber.isItalicLetter(glyph))
+            || (MathTranscriber.variablesInTextItalic
+                && (MathTranscriber.isItalicLetter(glyph) || MathTranscriber.isTextSymbol(glyph)))
     }
 
     /// Whether a paper sets its variables in the italic of its text face, as
@@ -3062,6 +3215,12 @@ enum MathReader {
             if greekOnly.contains(where: { family.hasPrefix($0) }) { evidence = true }
         }
         if evidence { return (false, true) }
+        // Greek from the italic of a text face — Arev's γ and θ come from
+        // ArevSans-Oblique — is a formula set in the text face.
+        if glyphs.contains(where: {
+            MathTranscriber.isTextSymbol($0) && MathTranscriber.isItalicFace(MathTranscriber.family(of: $0))
+                && TeXGlyphNames.isGreekCommand(MathTranscriber.spelling(of: $0))
+        }) { return (false, true) }
         let small = glyphs.filter { !$0.isExtension }.sorted { $0.rect.minX < $1.rect.minX }
         for letter in glyphs where MathTranscriber.isItalicLetter(letter) {
             // A script starts where its letter ends.
@@ -3161,8 +3320,10 @@ enum MathReader {
         let rows = rows(of: scanned.glyphs, rules: rules)
         let body = size(of: scanned.glyphs)
         let italic = variablesInTextItalic(for: page, scanned: scanned)
+        let sans = sansText(of: scanned.glyphs)
         MathTranscriber.variablesInTextItalic = italic
-        defer { MathTranscriber.variablesInTextItalic = false }
+        MathTranscriber.sansTextFace = sans
+        defer { MathTranscriber.variablesInTextItalic = false; MathTranscriber.sansTextFace = false }
         let grouped = blocks(of: rows, body: body, rules: rules)
         // Rows stacked closer than a line are a formula's rows — when
         // something in them came from a maths font. Two short lines of a
@@ -3184,7 +3345,7 @@ enum MathReader {
             // (Most of its rows: the header row names its columns in words.)
             let tabular = !own.isEmpty && own.filter(isTableRow).count * 2 >= own.count
             return Layout.Block(rows: rows, isFormula: !tabular && (stacked || isDisplayRow(own.first ?? rows[0])))
-        }, variablesInTextItalic: italic)
+        }, variablesInTextItalic: italic, sansText: sans)
         if layouts.count > 12 { layouts.removeAll() }
         layouts[key] = (page, laid)
         return laid
