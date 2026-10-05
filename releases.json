@@ -2,6 +2,165 @@
   "repo": "Icecoffee2500/paper-time",
   "releases": [
     {
+      "version": "0.9.23",
+      "date": "2026-10-05T06:59:57Z",
+      "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.23/Paper.Time.0.9.23.dmg",
+      "size": 97600718,
+      "downloads": 0,
+      "builds": {
+        "mac": [
+          {
+            "label": "디스크 이미지",
+            "label_en": "Disk image",
+            "arch": "Apple Silicon",
+            "arch_en": "Apple Silicon",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.23/Paper.Time.0.9.23.dmg",
+            "size": 97600718,
+            "downloads": 0
+          }
+        ],
+        "windows": [
+          {
+            "label": "설치본",
+            "label_en": "Installer",
+            "arch": "64비트 · ARM",
+            "arch_en": "64-bit and ARM",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.23/Paper.Time.Setup.0.9.23.exe",
+            "size": 310986908,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "64비트",
+            "arch_en": "64-bit",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.23/Paper.Time-0.9.23-win.zip",
+            "size": 185540968,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.23/Paper.Time-0.9.23-arm64-win.zip",
+            "size": 190488647,
+            "downloads": 0
+          }
+        ],
+        "linux": [
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.23/Paper.Time-0.9.23-x86_64.AppImage",
+            "size": 183759189,
+            "downloads": 0
+          },
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.23/Paper.Time-0.9.23-arm64.AppImage",
+            "size": 184145794,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.23/paper-time-0.9.23.tar.gz",
+            "size": 176652264,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.23/paper-time-0.9.23-arm64.tar.gz",
+            "size": 181148761,
+            "downloads": 0
+          }
+        ]
+      },
+      "note": "손으로 쓴 글과 수식도 올가미로 잡아 LaTeX으로 복사해요. 이 맥에서 도는 손글씨 모델이 읽어요.",
+      "note_en": "Handwritten words and formulas copy as LaTeX too: catch them with the lasso, and a handwriting model on this Mac reads them.",
+      "notes": {
+        "note": {
+          "ko": "손으로 쓴 글과 수식도 올가미로 잡아 LaTeX으로 복사해요. 이 맥에서 도는 손글씨 모델이 읽어요.",
+          "en": "Handwritten words and formulas copy as LaTeX too: catch them with the lasso, and a handwriting model on this Mac reads them."
+        },
+        "added": [
+          {
+            "title": {
+              "ko": "손글씨 읽기",
+              "en": "Handwriting"
+            },
+            "detail": {
+              "ko": "손으로 쓴 노트나 스캔한 쪽을 수식 올가미로 잡고 ⇧⌘C를 누르면, 글은 글로, 수식은 $…$로 복사돼요. ⌘L이면 노트에 들어가요. 설정 → 읽기에서 손글씨 모델을 한 번 받으면, 그 뒤로는 이 맥에서만 읽고 밖으로 보내지 않아요.",
+              "en": "Catch handwritten notes or a scanned page with the formula lasso and press ⇧⌘C: the words copy as words and the formulas as $…$. ⌘L quotes them in the note. Download the handwriting model once in Settings → Reading; from then on it reads on this Mac and sends nothing anywhere."
+            }
+          },
+          {
+            "title": {
+              "ko": "읽는 동안 보이는 낱말",
+              "en": "Words as They Are Read"
+            },
+            "detail": {
+              "ko": "손글씨를 읽는 동안 올가미 위 띠에 지금까지 읽은 낱말이 따라 나와요. 읽는 중인지 멈춘 것인지 바로 보여요.",
+              "en": "While the handwriting is read, the strip over the lasso shows the words read so far, so you can see it working."
+            }
+          },
+          {
+            "title": {
+              "ko": "펜으로 쓴 수식도",
+              "en": "Your Own Pen Too"
+            },
+            "detail": {
+              "ko": "Paper Time 펜으로 여백에 쓴 수식도 올가미가 읽어요. 쪽 위에 얹힌 펜 글씨와 도형까지 함께 그림에 담아 읽어요.",
+              "en": "Formulas written in the margin with Paper Time’s pen read too: the ink and the shapes over the page go into the picture that is read."
+            }
+          },
+          {
+            "title": {
+              "ko": "모델 받기",
+              "en": "Downloading the Model"
+            },
+            "detail": {
+              "ko": "모델은 커서(6 GB, 작은 것은 3 GB) 앱에 넣지 않고 원할 때 받아요. 받는 동안 얼마나 왔는지 숫자로 보이고, 멈췄다가 이어 받을 수 있고, 받은 파일은 하나하나 확인해요.",
+              "en": "The models are large — 6 GB, or 3 GB for the smaller one — so they are not in the app; you download one when you want it. The download shows how far it has got, stops and picks up where it left off, and checks every file it brings."
+            }
+          }
+        ],
+        "fixed": [
+          {
+            "title": {
+              "ko": "가는 펜이 사라지던 것",
+              "en": "The Thin Pen Vanished"
+            },
+            "detail": {
+              "ko": "맥에서 가장 가는 펜(1.5 pt)으로 쓴 획이 손을 떼면 사라졌고, 3 pt 펜은 2 pt로 그려졌어요. PencilKit이 펜의 크기를 굵기와 다르게 읽기 때문이었어요. 이제 고른 굵기 그대로 그려지고, PDF에도 화면과 같은 굵기로 들어가요.",
+              "en": "Strokes made with the Mac’s thinnest pen (1.5 pt) vanished when you let go, and the 3 pt pen drew 2 pt: PencilKit reads a pen point’s size differently from its width. Strokes now draw at the width you picked, and the PDF gets the width the page shows."
+            }
+          },
+          {
+            "title": {
+              "ko": "빈 곳에서 지어낸 수식",
+              "en": "Formulas Made Up From Nothing"
+            },
+            "detail": {
+              "ko": "올가미가 빈 곳을 잡으면 모델이 없는 수식을 지어낼 수 있었어요. 이제 빈 그림은 읽지 않고, 읽을 글이 없다고 말해요.",
+              "en": "A lasso round empty paper could make a model invent a formula. An empty picture is no longer read, and the lasso says there is nothing to read."
+            }
+          }
+        ]
+      }
+    },
+    {
       "version": "0.9.22",
       "date": "2026-10-05T05:11:36Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.22/Paper.Time.0.9.22.dmg",
