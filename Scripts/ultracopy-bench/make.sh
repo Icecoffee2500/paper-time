@@ -40,6 +40,7 @@ arev|pdflatex|10pt|\usepackage{arev}\usepackage{mathrsfs}
 newtxsf|pdflatex|10pt|\usepackage[sfdefault]{FiraSans}\usepackage{newtxsf}\usepackage{mathrsfs}
 sfmath|pdflatex|10pt|\usepackage{helvet}\renewcommand{\familydefault}{\sfdefault}\usepackage{amssymb}\usepackage{mathrsfs}\usepackage{sfmath}
 firamath-lua|lualatex|10pt|\usepackage{unicode-math}\setmainfont{Fira Sans}\setmathfont{Fira Math}
+avant|pdflatex|10pt|\usepackage{avant}\renewcommand{\familydefault}{\sfdefault}\usepackage{amssymb}\usepackage{mathrsfs}\usepackage{sansmath}\sansmath
 LIST
 )
 

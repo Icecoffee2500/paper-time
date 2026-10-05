@@ -36,7 +36,7 @@ h_t = \tanh(W_h h_{t-1} + W_x x_t + b)
 \hat{y}_i
 \bar{x}_n
 \tilde{\mu}_k
-\vec{v} => = || sansmath: \tilde{v}
+\vec{v} => = || sansmath,avant: \tilde{v}
 \dot{x}
 x'
 f''(x)
@@ -53,7 +53,7 @@ D_{\mathrm{KL}}(q \| p)
 \|\mathbf{w}\|_1
 \mathbf{x}^\top \mathbf{W} \mathbf{y} => = || firamath-lua: -
 \boldsymbol{\mu}_k => = || mathptmx,lm-otf,lm-xe,stix2-otf,termes-otf,libertinus-otf,firamath-lua: \mu_k || arev: \mu_k
-\boldsymbol{\Sigma}^{-1} => = || mathptmx,lm-otf,lm-xe,stix2-otf,termes-otf,libertinus-otf,cmbright,sansmath,firamath-lua: \Sigma^{-1} || arev: \Sigma^{-1}
+\boldsymbol{\Sigma}^{-1} => = || mathptmx,lm-otf,lm-xe,stix2-otf,termes-otf,libertinus-otf,cmbright,sansmath,firamath-lua: \Sigma^{-1} || arev: \Sigma^{-1} || avant: -1
 \mathbb{R}^{n\times m}
 x \in \mathbb{R}^d
 \mathbb{N}, \mathbb{Z}, \mathbb{Q}, \mathbb{C}
@@ -112,9 +112,9 @@ x \leftarrow x + 1
 \infty
 \ell_1
 \aleph_0
-\partial_t u = \Delta u
+\partial_t u = \Delta u => = || avant: \partial_t u = u
 \varepsilon, \epsilon, \varphi, \phi, \vartheta => = || mathptmx: \varepsilon, \varepsilon, \varphi, \phi, \vartheta || arev: \epsilon, \varepsilon, \phi, \varphi, \vartheta
-\Gamma, \Delta, \Theta, \Lambda, \Sigma, \Phi, \Psi, \Omega
+\Gamma, \Delta, \Theta, \Lambda, \Sigma, \Phi, \Psi, \Omega => = || avant: -
 x_1, \ldots, x_n
 x_1 + \cdots + x_n
 O(n \log n)
@@ -140,17 +140,17 @@ y = Wx + b
 @display \begin{vmatrix} a & b \\ c & d \end{vmatrix}
 @display \begin{pmatrix} x_1 \\ x_2 \\ x_3 \end{pmatrix} => = || firamath-lua: x_1 (x_2) x_3
 @display A = \begin{bmatrix} a_{11} & a_{12} & a_{13} \\ a_{21} & a_{22} & a_{23} \end{bmatrix}
-@display \Sigma = \begin{pmatrix} \sigma_1^2 & 0 \\ 0 & \sigma_2^2 \end{pmatrix}
+@display \Sigma = \begin{pmatrix} \sigma_1^2 & 0 \\ 0 & \sigma_2^2 \end{pmatrix} => = || avant: = \begin{pmatrix} \sigma_1^2 & 0 \\ 0 & \sigma_2^2 \end{pmatrix}
 @display f(x) = \begin{cases} x & \text{if } x \geq 0 \\ -x & \text{otherwise} \end{cases}
 @display |x| = \begin{cases} x, & x \geq 0 \\ -x, & x < 0 \end{cases}
-@display \mathbf{1}[y = k] = \begin{cases} 1 & y = k \\ 0 & y \neq k \end{cases} => = || newtxsf,sansmath: 1[y = k] = \begin{cases} 1 & y = k \\ 0 & y \neq k \end{cases}
+@display \mathbf{1}[y = k] = \begin{cases} 1 & y = k \\ 0 & y \neq k \end{cases} => = || newtxsf,sansmath,avant: 1[y = k] = \begin{cases} 1 & y = k \\ 0 & y \neq k \end{cases}
 @display \begin{aligned} a &= b + c \\ d &= e - f \end{aligned}
 @display \begin{aligned} \mathcal{L}(\theta) &= \mathbb{E}[\log p_\theta(x|z)] \\ &\leq \log p_\theta(x) \end{aligned} => = || firamath-lua: \begin{aligned} L(\theta) &= \mathbb{E}[\log p_\theta(x|z)] \\ &\leq \log p_\theta(x) \end{aligned}
 @display \begin{aligned} f(x) &= (x+1)^2 \\ &= x^2 + 2x + 1 \end{aligned}
 @display \begin{array}{cc} a & b \\ c & d \end{array} => \begin{matrix} a & b \\ c & d \end{matrix}
 # Found reading whole pages: the limits of two sums side by side run into
 # one row (I-JEPA), and a bold letter under an accent.
-\frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{\boldsymbol{s}}_{y_j} - \boldsymbol{s}_{y_j}\|_2^2 => = || mathptmx: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2 || termes-otf: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2 || stix2-otf: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2 || libertinus-otf: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2 || lm-otf: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2 || lm-xe: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2 || firamath-lua: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2 || sansmath: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2
+\frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{\boldsymbol{s}}_{y_j} - \boldsymbol{s}_{y_j}\|_2^2 => = || mathptmx: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2 || termes-otf: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2 || stix2-otf: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2 || libertinus-otf: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2 || lm-otf: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2 || lm-xe: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2 || firamath-lua: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2 || sansmath,avant: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2
 # The upper limit of the second line's sum stands under the first line's
 # parentheses (VAE, page 10): still two lines of one aligned formula.
 @display \begin{aligned} \int q(z) \log p(z)\, dz &= \int \mathcal{N}(z; \mu, \sigma^2) \log \mathcal{N}(z; 0, I)\, dz \\ &= -\frac{J}{2}\log(2\pi) - \frac{1}{2}\sum_{j=1}^J (\mu_j^2 + \sigma_j^2) \end{aligned} => = || firamath-lua: \begin{aligned} \int q(z) \log p(z)\, dz &= \int N(z; \mu, \sigma^2) \log N(z; 0, I)\, dz \\ &= -\frac{J}{2}\log(2\pi) - \frac{1}{2}\sum_{j=1}^J (\mu_j^2 + \sigma_j^2) \end{aligned}
@@ -197,7 +197,7 @@ g \iff h \implies i \longleftarrow j
 \left. \frac{df}{dx} \right|_{x=0}
 # Lines that only start together are an aligned formula with & at the head
 # of each (2512.11732, page 7).
-@display \begin{aligned} &E_i|\xi_i = \ell \overset{iid}{\sim} N_p(0, \Sigma_{\ell i}) \\ &\tau_{ij} \overset{iid}{\sim} \mathrm{Exp}(1) \end{aligned}
+@display \begin{aligned} &E_i|\xi_i = \ell \overset{iid}{\sim} N_p(0, \Sigma_{\ell i}) \\ &\tau_{ij} \overset{iid}{\sim} \mathrm{Exp}(1) \end{aligned} => = || avant: \begin{aligned} &E_i|\xi_i = \ell \overset{iid}{\sim} N_p(0, _{\ell i}) \\ &\tau_{ij} \overset{iid}{\sim} \mathrm{Exp}(1) \end{aligned}
 # \mathbbm: in the cm-bbm setup a bitmap Type 3 font with no name and glyphs
 # called "a80", whose pictures say they are double-struck (2512.11732: its ℙ
 # came back as \mathrm{P}, and 0.78 points wide).
@@ -215,3 +215,9 @@ g \iff h \implies i \longleftarrow j
 # A sum inside an exponent is the exponent's, and its limits are read round
 # the exponent's own line (2512.11732, eq. 3.2, came back as e^-\sum^{i:ξ=ℓ}).
 e^{-\sum_{i=1}^{n}\sum_{j=1}^{p}\sqrt{\frac{2}{\sigma_{j}}}\big|r_{ij}\big|}
+# A word before a displayed sum makes the line a sentence, and a sentence's
+# row gathers no rows of its own: the limits, a line off, stood as rows of
+# their own and came back as the lines "n" and "i=1" (a lecture slide's
+# "MC : ∑ⁿᵢ₌₁ (v̂(Sᵢ;θ) − Gᵢ)²", 0.9.21). Where the maths font draws the
+# colon, it is read with the formula.
+@display \text{MC} : \sum_{i=1}^{n} (\hat{v}(S_i;\theta) - G_i)^2 => \sum_{i=1}^{n}(\hat{v}(S_i;\theta)-G_i)^2 || :\sum_{i=1}^{n}(\hat{v}(S_i;\theta)-G_i)^2

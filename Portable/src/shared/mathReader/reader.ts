@@ -19,7 +19,8 @@ import {
 import { extension, rectOf, type Glyph, type Rule } from './glyph.js'
 import * as TeX from './texGlyphNames.js'
 import {
-  barToken, closing, family, hasWordSubscript, isAccent, isBigOperator, isDelimiter, isItalicFace, isItalicLetter, isMathFont, isOperatorName,
+  barToken, closing, family, hasWordSubscript, isAccent, isBigOperator, isDelimiter, isItalic, isItalicLetter, isMathFont, isOperatorName,
+  isOperatorOrRelation,
   isRadical, isSansFace, isSpace, isTallVariant, isTextSymbol, isUnreadable, isUprightLetter, italicVariables, joiningText, latexOf, maxBy, minBy,
   isPiece, opening, ordinarySize, sansText as sansTextWas, setFallback, setSansTextFace, setVariablesInTextItalic, sortedBy, spelling as spell, stack, type Context, isBraceFill } from './transcriber.js'
 import { canon, chars, count, firstChar, isLetter, isNumber, isWhitespace, lastChar, trimSet } from './swiftText.js'
@@ -46,6 +47,11 @@ export interface PageInput {
    *  its variables, the answers or-ed together — or nothing when the page is
    *  not in a paper, which then answers for itself. */
   italicElsewhere?: ItalicEvidence | null
+  /** Whether a glyph is in a box when the middle of its ink is — a rectangle
+   *  drawn by hand, the formula lasso — rather than when its baseline is,
+   *  which is what a selection's line boxes mean (`belongs`; the Mac's
+   *  `Region.byInk`). */
+  byInk?: boolean
 }
 
 export type PieceKind = 'prose' | 'display' | 'inline' | { heading: number }
@@ -55,6 +61,11 @@ export interface Piece {
   /** Whether the row was a table's (`isTableRow`): its cells of measurements
    *  are not a displayed equation, however much of the line is mathematics. */
   isTable?: boolean
+  /** Whether the row sets a big operator in display style, its limits stacked
+   *  over and under it (`stacksLimits`) — a displayed equation with a word on
+   *  it, which a sentence never is: a slide's "MC : ∑ⁿᵢ₌₁ (…)²   (1)". It
+   *  stands on a line of its own. */
+  displayStyle?: boolean
   plain: string
   marked: string
   left: number
@@ -138,11 +149,12 @@ function readPage(page: PageInput, number: number, layout: Layout, out: Piece[])
     return [extent(row).width]
   })
   const columnWidth = maxOf(extents) ?? page.cropBox.width
-  const selected = (glyph: Glyph) => boxes.some((box) => belongs(glyph, box))
+  const byInk = page.byInk ?? false
+  const selected = (glyph: Glyph) => boxes.some((box) => belongs(glyph, box, byInk))
 
   // What the selection reaches. A formula is two-dimensional, so touching
   // one means taking all of it.
-  const reachedBlocks = reached(layout, boxes)
+  const reachedBlocks = reached(layout, boxes, byInk)
   // When a formula is what was asked for, a line the range only clipped was not.
   const wantsFormula = reachedBlocks.some((one) => one.block.isFormula)
 
@@ -181,6 +193,7 @@ function readPage(page: PageInput, number: number, layout: Layout, out: Piece[])
       out.push({
         kind: heading(scale, glyphs, text, band.width < columnWidth * 0.55),
         isTable: isTableRow(block.rows[0]),
+        displayStyle: stacksLimits(block.rows[0]),
         plain: text, marked,
         left: minX(band), right: maxX(band),
         baseline: glyphs[0].y, page: number, scale,
@@ -229,8 +242,8 @@ function readPage(page: PageInput, number: number, layout: Layout, out: Piece[])
  * the sign and its numerator over the bar — so touching one means taking all
  * of it; of a line of prose, the glyphs inside (the Mac's `reached(in:boxes:)`).
  */
-function reached(layout: Layout, boxes: Rect[]): Reached[] {
-  const selected = (glyph: Glyph) => boxes.some((box) => belongs(glyph, box))
+function reached(layout: Layout, boxes: Rect[], byInk = false): Reached[] {
+  const selected = (glyph: Glyph) => boxes.some((box) => belongs(glyph, box, byInk))
   const out: Reached[] = []
   for (const block of layout.blocks) {
     if (block.isFormula) {
@@ -296,7 +309,7 @@ export function extentInk(page: PageInput, rect: Rect): Rect[] | null {
 function caughtGlyphs(page: PageInput, rect: Rect): { lines: Glyph[][]; rules: Rect[] } | null {
   if (page.glyphs.length === 0) return null
   const layout = layoutOf(page)
-  const found = reached(layout, [insetBy(rect, -1, 0)])
+  const found = reached(layout, [insetBy(rect, -1, 0)], true)
   const wantsFormula = found.some((one) => one.block.isFormula)
   const lines: Glyph[][] = []
   const italicBefore = italicVariables()
@@ -345,16 +358,22 @@ function grown(kept: Glyph[], row: Glyph[]): Glyph[] {
     if (glyph.size < neighbour.size * 0.92 && !isPiece(glyph)) return true
     return ['(', ')', '[', ']', '+', '-', '=', '|', ',', "'", '\\{', '\\}', '\\|'].includes(spelled)
   }
+  // A formula's own spaces stay under a third of an em, but for the ones TeX
+  // puts round a binary operator or a relation: four and five eighteenths of
+  // an em, and the glyphs' own side bearings besides — the "+" in
+  // "(R_{i+1} + γ" stood a third of an em and more from both. A word's space
+  // is wider still, and never next to one.
+  const room = (one: Glyph, other: Glyph): number => (isOperatorOrRelation(one) || isOperatorOrRelation(other) ? 0.5 : 0.3)
   while (low > 0) {
     const previous = ordered[low - 1]
     const edge = ordered[low]
-    if (!(minX(rectOf(edge)) - maxX(rectOf(previous)) < edge.size * 0.3 && formulaGlyph(previous, edge))) break
+    if (!(minX(rectOf(edge)) - maxX(rectOf(previous)) < edge.size * room(previous, edge) && formulaGlyph(previous, edge))) break
     low -= 1
   }
   while (high + 1 < ordered.length) {
     const next = ordered[high + 1]
     const edge = ordered[high]
-    if (!(minX(rectOf(next)) - maxX(rectOf(edge)) < edge.size * 0.3 && formulaGlyph(next, edge))) break
+    if (!(minX(rectOf(next)) - maxX(rectOf(edge)) < edge.size * room(next, edge) && formulaGlyph(next, edge))) break
     high += 1
   }
   return ordered.slice(low, high + 1)
@@ -767,6 +786,9 @@ export function lines(read: Piece[], markdown: boolean): string[] {
   let previous: Piece | null = null
   // On a clipboard: that the last thing written was a display.
   let afterDisplay = false
+  // The last line written for a row in display style, and where it stood:
+  // the number printed out at the margin on its baseline is its.
+  let styled: { line: number; baseline: number; page: number } | null = null
   const close = () => {
     const trimmed = trimWhitespace(paragraph)
     if (trimmed !== '') out.push(trimmed)
@@ -806,6 +828,15 @@ export function lines(read: Piece[], markdown: boolean): string[] {
       paragraph += paragraph === '' ? text : ' ' + text
       continue
     }
+    // The number beside a line in display style — "(1)", out at the margin
+    // on its baseline — is that line's.
+    if (styled !== null && styled.page === piece.page && Math.abs(styled.baseline - piece.baseline) < 2
+      && isEquationNumber(text)) {
+      out[styled.line] += ' ' + trimWhitespace(text)
+      styled = null
+      continue
+    }
+    styled = null
     // A line that opens with a bullet is an item of a list — a slide's, or
     // an itemize in a paper — and is written as one: on a line of its own,
     // the bullet a "- ". Joined into a paragraph, a slide's three points ran
@@ -823,6 +854,19 @@ export function lines(read: Piece[], markdown: boolean): string[] {
     const equation = piece.isTable ? null : displayedEquation(text)
     if (equation !== null) {
       display(equation)
+      continue
+    }
+    // A row in display style is a line of its own, as a display is: its
+    // label made it a row of words, and joined into a paragraph a slide's
+    // three labelled equations ran on as one.
+    if (piece.displayStyle) {
+      if (markdown) breakHere()
+      else close()
+      out.push(trimWhitespace(text))
+      styled = { line: out.length - 1, baseline: piece.baseline, page: piece.page }
+      if (markdown) out.push('')
+      else afterDisplay = true
+      previous = null
       continue
     }
     // A table's row is a line of its own: joined into a paragraph, its cells
@@ -880,6 +924,42 @@ export function afterBullet(text: string): string | null {
   if (firstChar(rest) !== ' ') return null
   const item = trimWhitespace(rest)
   return item === '' ? null : item
+}
+
+/**
+ * Whether a row holds a big operator with its limits stacked over or under
+ * it, the way TeX sets one in display style: a run of small glyphs centred on
+ * the sign, more than half a line off the row's baseline. (A script beside
+ * the sign — text style — is not centred on it, and a sentence that only
+ * mentions a sum has no limits at all.) The Mac's `stacksLimits`.
+ */
+export function stacksLimits(row: Glyph[]): boolean {
+  const line = context(row)
+  const body = line.bodySize
+  const small = row.filter((one) => one.size < body * 0.8 && !extension(one))
+  return row.some((sign) => {
+    if (!isBigOperator(sign)) return false
+    const ink = rectOf(sign)
+    for (const over of [true, false]) {
+      const limit = small.filter((glyph) => {
+        const lift = glyph.y - line.baseline
+        return (over ? lift > body * 0.6 : -lift > body * 0.6)
+          && maxX(rectOf(glyph)) > minX(ink) - body * 0.6 && minX(rectOf(glyph)) < maxX(ink) + body * 0.6
+      })
+      if (limit.length === 0) continue
+      const span = limit.slice(1).reduce((all, one) => union(all, rectOf(one)), rectOf(limit[0]))
+      if (maxX(span) > minX(ink) && minX(span) < maxX(ink)
+        && Math.abs(midX(span) - midX(ink)) < Math.max(span.width, ink.width) * 0.5 + 1) return true
+    }
+    return false
+  })
+}
+
+/** Whether a line of words is only an equation's number: "(1)", "(3.2)",
+ *  "(4a)". ICU's `\s` is White_Space, and its `$` stands before a line's
+ *  last line break too. */
+export function isEquationNumber(text: string): boolean {
+  return /^\(\p{White_Space}*[0-9]+(\.[0-9]+)*[a-z]?\p{White_Space}*\)(?:\r\n|[\n\v\f\r\u0085\u2028\u2029])?$/u.test(trimWhitespace(text))
 }
 
 /** The environments whose rows are lines of a display. */
@@ -985,7 +1065,15 @@ function characterLookup(characters: PageCharacter[]): (glyph: Glyph) => string 
 
 /** Whether a glyph is inside the selection rather than grazing it: the line
  *  a glyph is on is the line its baseline sits in. */
-function belongs(glyph: Glyph, box: Rect): boolean {
+function belongs(glyph: Glyph, box: Rect, byInk = false): boolean {
+  // A rectangle drawn by hand has the glyphs whose ink is mostly in it: its
+  // edge, run along the gap between two displayed lines, crossed the foot of
+  // the lower limits of the line above, and a baseline inside the rectangle
+  // took that whole formula in as well. (`CGRect.contains`: half-open.)
+  if (byInk) {
+    const ink = rectOf(glyph)
+    return containsPoint(box, { x: midX(ink), y: midY(ink) })
+  }
   const slack = glyph.size * 0.15
   const r = rectOf(glyph)
   return glyph.y > minY(box) - slack && glyph.y < maxY(box) + slack && maxX(r) > minX(box) && minX(r) < maxX(box)
@@ -1395,7 +1483,15 @@ function containsProse(row: Glyph[]): boolean {
     // stands a word's space off.
     if (appliesTo(word, index + 1 < split.length ? split[index + 1] : null, body)) return false
     const full = word.filter((one) => one.size >= body * 0.92)
-    if (!(full.length >= 2 && !full.some(isMathish))) return false
+    // On a page that sets its variables in its text italic, three italic
+    // letters running together are a word — stressed, a title, a figure's
+    // label — not three variables multiplied, as `isFormula` says of one
+    // word. Read as variables, an IEEE paper's figure labels and the
+    // conference names in its references came back as displayed formulas,
+    // "Federatedunlearningframework", once its italic face was known to be
+    // italic.
+    const wordy = italicVariables() && longestItalicRun(full) >= 3
+    if (!(full.length >= 2 && !full.some((one) => isMathish(one) && !(wordy && isItalicLetter(one))))) return false
     const spelled = full.map(spell)
     if (!(spelled.filter((one) => isLetter(firstChar(one) ?? '')).length >= 2)) return false
     return !isOperatorName(spelled.join(''))
@@ -1563,6 +1659,53 @@ function rowsOf(given: Glyph[], rules: Rule[] = []): Glyph[][] {
     if (at >= 0) laid[at].glyphs.push(glyph)
     else laid.push({ baseline: foot(glyph), glyphs: [glyph] })
   }
+  // The lines of two columns a few points apart are two lines. A row takes
+  // every full-size glyph within a little of its baseline across the page and
+  // is cut at the gutters only at the end — and until then everything hung on
+  // it is measured from its first glyph's baseline, whichever column that was
+  // in. The last line of an algorithm in the left column stood five points
+  // under a line of prose in the right and took that line's baseline: the
+  // fraction and the sum's limit under it stood too far from it to hang from
+  // it, and came back as a line of their own. A row whose sides of a gutter
+  // stand a quarter of an em apart and more is cut there now, each side with
+  // its own baseline. (Sides on one baseline stay one row until the end, as
+  // before: a script between them is measured the same either way.)
+  const columns = gutters(laid.map((row) => row.glyphs), glyphs)
+  if (columns.length > 0) {
+    const cut = laid.flatMap((row) => {
+      const parts = splitAt([row.glyphs], columns)
+      if (parts.length <= 1) return [row]
+      // Each side's baseline is the one most of its glyphs stand on — not its
+      // highest glyph's: a table's label set on its side has a letter a few
+      // points over each row it passes.
+      const lineOf = (part: Glyph[]): number => {
+        const counts = new Map<number, number>()
+        for (const one of part) {
+          if (floats(one) || isRadical(one)) continue
+          const key = Math.round(one.y * 10)
+          counts.set(key, (counts.get(key) ?? 0) + 1)
+        }
+        let most: [number, number] | undefined
+        for (const [key, value] of counts) {
+          if (most === undefined || value > most[1] || (value === most[1] && key > most[0])) most = [key, value]
+        }
+        return most === undefined ? row.baseline : most[0] / 10
+      }
+      const lines = parts.map((part) => ({ baseline: lineOf(part), glyphs: part }))
+      const baselines = lines.map((line) => line.baseline)
+      // And a line of the other column is a line of words: the columns of a
+      // table have strips of nothing between them too, and a table's row cut
+      // there was a column of cells, each read as a formula of its own.
+      return Math.max(...baselines) - Math.min(...baselines) > body * 0.25
+        && lines.some((line) => containsProse(line.glyphs)) ? lines : [row]
+    })
+    laid.splice(0, laid.length, ...cut)
+  }
+  // Whether a row has something on a glyph's side of every gutter — a row cut
+  // at a gutter is a line of one column now, and a sign of the other column
+  // may run through its baseline.
+  const sameSide = (x: number, row: Glyph[]): boolean =>
+    columns.every((gutter) => row.some((one) => (midX(rectOf(one)) < gutter) === (x < gutter)))
 
   // A big operator, or a piece of a tall delimiter, hangs from a point above
   // its own ink: it joins the row whose baseline runs through it. A piece no
@@ -1572,7 +1715,8 @@ function rowsOf(given: Glyph[], rules: Rule[] = []): Glyph[][] {
   let waiting: Glyph[] = []
   for (const glyph of glyphs.filter((one) => extension(one) && !(isRadical(one) && placed(one)))) {
     const ink = rectOf(glyph)
-    const through = indices(laid.length).filter((row) => laid[row].baseline > minY(ink) - 1 && laid[row].baseline < maxY(ink) + 1)
+    const through = indices(laid.length).filter((row) => laid[row].baseline > minY(ink) - 1 && laid[row].baseline < maxY(ink) + 1
+      && sameSide(midX(ink), laid[row].glyphs))
     const nearest = minBy(through, (a, b) => Math.abs(laid[a].baseline - midY(ink)) < Math.abs(laid[b].baseline - midY(ink)))
     if (nearest !== undefined) {
       laid[nearest].glyphs.push(glyph)
@@ -1620,7 +1764,16 @@ function rowsOf(given: Glyph[], rules: Rule[] = []): Glyph[][] {
   for (const stack of stacks) {
     const ink = extent(stack)
     if (laid.length === 0) { laid.push({ baseline: midY(ink), glyphs: stack }); continue }
-    const nearestRow = (y: number) => minBy(indices(laid.length), (a, b) => Math.abs(laid[a].baseline - y) < Math.abs(laid[b].baseline - y))!
+    // A row of its own column, and near: the rows hold only the full-size
+    // glyphs yet, and a formula set \small in a column of ten-point text has
+    // none of those. Its \Bigl( and \Bigr) had only the other column's lines
+    // anywhere near them, which they joined; with those out of reach, the
+    // nearest row of their own column was the theorem's title three lines up.
+    // A sign with no row near it is a row of its own, and the formula's
+    // glyphs come to it.
+    const nearestRow = (y: number): number | undefined => minBy(
+      indices(laid.length).filter((row) => sameSide(midX(ink), laid[row].glyphs) && Math.abs(laid[row].baseline - y) < body * 0.85),
+      (a, b) => Math.abs(laid[a].baseline - y) < Math.abs(laid[b].baseline - y))
     const places = new Set(stack.map(place))
     const votes = new Map<number, number>()
     // A neighbour is near in height as well — the "end." of the sentence over
@@ -1637,12 +1790,22 @@ function rowsOf(given: Glyph[], rules: Rule[] = []): Glyph[][] {
     for (const glyph of neighbours) {
       if (!(Math.abs(glyph.y - midY(ink)) <= closest + body * 0.3)) continue
       const row = nearestRow(glyph.y)
-      votes.set(row, (votes.get(row) ?? 0) + 1)
+      if (row !== undefined) votes.set(row, (votes.get(row) ?? 0) + 1)
     }
     const most = maxOf([...votes.values()]) ?? 0
     const chosen = minBy([...votes.entries()].filter(([, count]) => count === most).map(([row]) => row),
       (a, b) => Math.abs(laid[a].baseline - midY(ink)) < Math.abs(laid[b].baseline - midY(ink)))
-    laid[chosen ?? nearestRow(midY(ink))].glyphs.push(...stack)
+    const home = chosen ?? nearestRow(midY(ink))
+    if (home !== undefined) {
+      laid[home].glyphs.push(...stack)
+    } else {
+      // Centred on the axis, a quarter of an em over the baseline — the row
+      // the other bracket of the pair made, if it made one.
+      const baseline = midY(ink) - body * 0.25
+      const pair = laid.findIndex((row) => Math.abs(row.baseline - baseline) < body * 0.25 && sameSide(midX(ink), row.glyphs))
+      if (pair >= 0) laid[pair].glyphs.push(...stack)
+      else laid.push({ baseline, glyphs: stack })
+    }
   }
 
   // Small glyphs hang from the row they are beside, as runs: nearness in
@@ -1753,9 +1916,87 @@ function rowsOf(given: Glyph[], rules: Rule[] = []): Glyph[][] {
       unplaced.push({ run, level })
     }
   }
+  // A limit is its sign's, and goes to its sign's row first. A displayed
+  // sum's limits stand a line off — TeX sets them clear of the sign's own
+  // height — so nothing nearer took them, and they stood as rows of their
+  // own; a formula's rows are gathered again into one block later, but a line
+  // with a word on it is not: in a slide's "MC : ∑ⁿᵢ₌₁ (…)²" the label made
+  // the line a sentence, the limits were left behind as the lines "n" and
+  // "i=1", and the sum came back without them. The next row of a \substack
+  // under (or over) a limit goes where that limit went: it stands a line of
+  // script further off, centred on the same sign. (Not a brace's label or a
+  // run on a line of small text — those have homes of their own, below.)
+  // Centred as TeX centres a limit — on the sign's own box, to a point or
+  // so. (Only overlapping the sign is how the rows a limit may go to are
+  // narrowed; a wide exponent of the next line of a derivation overlapped the
+  // sum of the line above, and went to it as a limit.)
+  const centred = (span: Rect, other: Rect, size: number): boolean => Math.abs(midX(span) - midX(other)) < Math.max(1, size * 0.12)
+  // Which sign, the ink says where it can: TeX sets a displayed limit a fixed
+  // clearance off its sign's own box — about a sixth of an em under it, a
+  // fifth over it — and the baseline of the row a sign is on could be a line
+  // of the other column's text, a few points off the formula's. Of two
+  // equations set one over the other, each with a sum, the first sum's "i=1"
+  // touched its own sign and stood an em and a bit over the second; measured
+  // from the baselines it was too far from its own row and went to the second
+  // sum as a row over its "N_t". The ink is known only for an extension font's
+  // sign, drawn from its top; elsewhere the box is a guess at the glyph's
+  // height — a display sum from a font of its own came out a line short, and
+  // its lower limit went to the next line's sum by it — and the baselines
+  // decide, as they did.
+  const limitOf = (span: Rect, level: number): { row: number; below: boolean } | undefined => {
+    let best: { row: number; below: boolean; gap: number } | undefined
+    for (const row of indices(laid.length)) {
+      for (const glyph of laid[row].glyphs) {
+        const box = rectOf(glyph)
+        if (!extension(glyph) || !isBigOperator(glyph) || !centred(span, box, glyph.size)) continue
+        const below = midY(span) < midY(box)
+        const gap = below ? minY(box) - maxY(span) : minY(span) - maxY(box)
+        if (!(gap > -body * 0.35 && gap < body * 0.7)) continue
+        if (best === undefined || gap < best.gap) best = { row, below, gap }
+      }
+    }
+    if (best !== undefined) return { row: best.row, below: best.below }
+    const sign = signOf(span, level, laid, body)
+    if (sign === undefined || !laid[sign].glyphs.some((glyph) =>
+      !extension(glyph) && isBigOperator(glyph) && centred(span, rectOf(glyph), glyph.size))) return undefined
+    return { row: sign, below: level < laid[sign].baseline }
+  }
+  const limits: { row: number; span: Rect; level: number; below: boolean }[] = []
+  let others: { run: Glyph[]; level: number }[] = []
+  for (const { run, level } of unplaced) {
+    const span = extent(run)
+    const place = braceLabelled(span, level) === undefined
+      && !indices(laid.length).some((row) => textLines.has(row) && Math.abs(laid[row].baseline - level) < body * 0.25)
+      ? limitOf(span, level) : undefined
+    if (place === undefined || layeredRun(run, laid[place.row])) {
+      others.push({ run, level })
+      continue
+    }
+    laid[place.row].glyphs.push(...run)
+    limits.push({ row: place.row, span, level, below: place.below })
+  }
+  let moved = true
+  while (moved) {
+    moved = false
+    others = others.filter(({ run, level }) => {
+      const span = extent(run)
+      if (braceLabelled(span, level) !== undefined) return true
+      const limit = limits.find((one) => {
+        const step = one.below ? one.level - level : level - one.level
+        return step > 0 && step < body * 1.2
+          && maxX(span) > minX(one.span) && minX(span) < maxX(one.span)
+          && centred(span, one.span, body)
+      })
+      if (limit === undefined || layeredRun(run, laid[limit.row])) return true
+      laid[limit.row].glyphs.push(...run)
+      limits.push({ row: limit.row, span, level, below: limit.below })
+      moved = true
+      return false
+    })
+  }
   // A part stacked over another small part of a row belongs to it a little
   // further off: the numerator of a fraction inside a fraction in a sentence.
-  for (const { run, level } of unplaced) {
+  for (const { run, level } of others) {
     const span = extent(run)
     const middle = midX(span)
     // The label of a brace goes with the row it braces, however far the
@@ -1807,6 +2048,18 @@ function rowsOf(given: Glyph[], rules: Rule[] = []): Glyph[][] {
         || (distance < body * 1.6 && level < laid[row].baseline && secondRow(laid[row].glyphs)
           && laid[row].glyphs.some((glyph) => isBigOperator(glyph)
             && minX(span) >= maxX(rectOf(glyph)) - 1 && minX(span) - maxX(rectOf(glyph)) < body * 1.5))
+        // A fraction set in a line stands on the line's axis, its bar a
+        // quarter of an em over the baseline, and the bar says whose line it
+        // is when nothing of the line comes within reach of its numerator: in
+        // "return 1/|P'| ∑_{p∈P'} |G∩X|/|G|" the second fraction stood clear
+        // of the sum's ink, made a line of its own, and went into the line
+        // above.
+        || (distance < body * 1.6 && rules.some((rule) => {
+          if (rule.brace === true || !(middle > minX(rule.rect) && middle < maxX(rule.rect))) return false
+          const lift = midY(rule.rect) - laid[row].baseline
+          return lift > body * 0.1 && lift < body * 0.42 && laid[row].glyphs.some((one) =>
+            maxX(rectOf(one)) > minX(rule.rect) - body * 1.5 && minX(rectOf(one)) < maxX(rule.rect) + body * 1.5)
+        }))
         // Over a bar the row has something under, or under one it has
         // something over.
         || (distance < body * 1.6 && rules.some((rule) => {
@@ -1822,7 +2075,7 @@ function rowsOf(given: Glyph[], rules: Rule[] = []): Glyph[][] {
       // Nothing to hang from, but a row on the same line: the limits under
       // two sums side by side are one row — and the numbers of a table set
       // small stand on the line of their row's name.
-      const at = laid.findIndex((row) => Math.abs(row.baseline - level) < body * 0.25)
+      const at = laid.findIndex((row) => Math.abs(row.baseline - level) < body * 0.25 && sameSide(midX(span), row.glyphs))
       if (at >= 0) laid[at].glyphs.push(...run)
       else laid.push({ baseline: level, glyphs: run })
     }
@@ -1927,7 +2180,11 @@ function beside(span: Rect, row: Glyph[], body: number): boolean {
 /** Rows cut apart at the page's gutters — a strip with no ink in it, top to
  *  bottom. A row that steps over the gutter is left whole. */
 function splitAtGutters(laid: Glyph[][], glyphs: Glyph[]): Glyph[][] {
-  const found = gutters(laid, glyphs)
+  return splitAt(laid, gutters(laid, glyphs))
+}
+
+/** Rows cut apart at the given gutters, each only where it keeps clear of one. */
+function splitAt(laid: Glyph[][], found: number[]): Glyph[][] {
   if (found.length === 0) return laid
   const result: Glyph[][] = []
   for (const row of laid) {
@@ -2309,7 +2566,24 @@ function peeled(word: Glyph[]): { lead: Glyph[]; core: Glyph[]; trail: Glyph[] }
  * tall bracket that draw nothing — nothing on a line is set larger than it.
  */
 function context(row: Glyph[]): Context {
-  const ordinary = row.filter((one) => !extension(one) && !isBigOperator(one) && !isDelimiter(one) && spell(one) !== '')
+  let ordinary = row.filter((one) => !extension(one) && !isBigOperator(one) && !isDelimiter(one) && spell(one) !== '')
+  // Save one: a drop cap, the paragraph's first letter set three lines tall,
+  // stands on its first line's baseline and is no size of that line's —
+  // measured against it, the whole line was a subscript of it,
+  // "\mathbf{A}_{\mathrm{are}}". One letter alone at its size, a line of
+  // glyphs under half of it, and the line going on right after it. (Not a
+  // digit of the arXiv stamp in the margin, which stands an inch from the
+  // line it lands in.)
+  const top = maxOf(ordinary.map((one) => one.size))
+  const caps = top === undefined ? [] : ordinary.filter((one) => one.size >= top * 0.92)
+  if (top !== undefined && caps.length === 1 && count(spell(caps[0])) === 1 && isLetter(firstChar(spell(caps[0])) ?? '')) {
+    const cap = rectOf(caps[0])
+    const next = maxOf(ordinary.map((one) => one.size).filter((size) => size < top * 0.5))
+    if (next !== undefined && ordinary.filter((one) => one.size >= next * 0.92 && one.size < top * 0.5).length >= 3
+      && ordinary.some((one) => one.size < top * 0.5 && minX(rectOf(one)) >= maxX(cap) - 1 && minX(rectOf(one)) - maxX(cap) < next)) {
+      ordinary = ordinary.filter((one) => one.size < top * 0.92)
+    }
+  }
   const body = maxOf(ordinary.map((one) => one.size))
     ?? maxOf(row.filter((one) => !extension(one)).map((one) => one.size)) ?? maxOf(row.map((one) => one.size)) ?? 10
   const full = ordinary.filter((one) => one.size >= body * 0.92)
@@ -2660,7 +2934,7 @@ export function italicEvidence(glyphs: Glyph[]): ItalicEvidence {
   if (evidence) return { ownLetters: false, evidence: true }
   // Greek from the italic of a text face — Arev's γ and θ come from
   // ArevSans-Oblique — is a formula set in the text face.
-  if (glyphs.some((one) => isTextSymbol(one) && isItalicFace(family(one)) && TeX.isGreekCommand(spell(one)))) {
+  if (glyphs.some((one) => isTextSymbol(one) && isItalic(one) && TeX.isGreekCommand(spell(one)))) {
     return { ownLetters: false, evidence: true }
   }
   const small = sortedBy(glyphs.filter((one) => !extension(one)), (a, b) => minX(rectOf(a)) < minX(rectOf(b)))

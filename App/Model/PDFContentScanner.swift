@@ -24,6 +24,9 @@ final class PDFContentScanner {
         var glyphName: String?
         /// Whether the font it came from draws symbols or text.
         var isSymbolic = true
+        /// Whether the font it came from says it is slanted — an italic or
+        /// an oblique (`Font.isItalic`).
+        var isItalic = false
         /// The size the glyph is drawn at, in page points.
         var size: CGFloat
         /// The glyph's origin on its baseline, in page coordinates.
@@ -228,6 +231,7 @@ final class PDFContentScanner {
         var leading: CGFloat
         var rise: CGFloat
         var currentFont: Font?
+        var renderMode: Int
     }
     private var ctmStack: [Saved] = []
     private var textMatrix = CGAffineTransform.identity
@@ -239,6 +243,12 @@ final class PDFContentScanner {
     private var leading: CGFloat = 0
     private var rise: CGFloat = 0
     private var currentFont: Font?
+    /// The text rendering mode (`Tr`, ISO 32000 §9.3.6). Modes 3 and 7 draw
+    /// nothing: a scan's OCR layer, and the words iOS lays invisibly over
+    /// handwriting so it can be searched — "P(Ai)= হ☆০P(Bi)" over a page of
+    /// sums. A glyph the page does not draw is not on the page, and a
+    /// rectangle over such a page reads the picture instead.
+    private var renderMode = 0
     private var fonts: [String: Font] = [:]
 
     /// One font as the page describes it.
@@ -257,6 +267,13 @@ final class PDFContentScanner {
         /// nonsymbolic one draws text and means the encoding it declares. TeX
         /// writes both, and the difference decides how a byte is read.
         var isSymbolic = true
+        /// Whether the font says it is slanted: a nonzero `/ItalicAngle`, or
+        /// the Italic flag, in its descriptor. The file says this outright,
+        /// whatever the font is called — URW's clone of Avant Garde names its
+        /// oblique "URWGothicL-BookObli", and read by name its letters were
+        /// upright: the variables of a slide deck set in it came back as
+        /// \mathrm{S}_{\mathrm{i}}, and the line they were on as a sentence.
+        var isItalic = false
         /// How many bytes of a string make one glyph: one for the simple
         /// fonts TeX writes, two for a composite (Type0) font with an
         /// Identity CMap — what Word and every "Save as PDF" write. Reading
@@ -303,7 +320,8 @@ final class PDFContentScanner {
             guard let me = PDFContentScanner.me(info) else { return }
             me.ctmStack.append(Saved(
                 ctm: me.ctm, fontSize: me.fontSize, charSpacing: me.charSpacing, wordSpacing: me.wordSpacing,
-                horizontalScale: me.horizontalScale, leading: me.leading, rise: me.rise, currentFont: me.currentFont
+                horizontalScale: me.horizontalScale, leading: me.leading, rise: me.rise, currentFont: me.currentFont,
+                renderMode: me.renderMode
             ))
         }
         on("Q") { _, info in
@@ -316,6 +334,7 @@ final class PDFContentScanner {
             me.leading = last.leading
             me.rise = last.rise
             me.currentFont = last.currentFont
+            me.renderMode = last.renderMode
         }
         on("cm") { scanner, info in
             guard let me = PDFContentScanner.me(info), let numbers = PDFContentScanner.numbers(scanner, 6) else { return }
@@ -381,6 +400,11 @@ final class PDFContentScanner {
             var value: CGPDFReal = 0
             CGPDFScannerPopNumber(scanner, &value)
             PDFContentScanner.me(info)?.rise = value
+        }
+        on("Tr") { scanner, info in
+            var value: CGPDFInteger = 0
+            CGPDFScannerPopInteger(scanner, &value)
+            PDFContentScanner.me(info)?.renderMode = value
         }
         on("Tj") { scanner, info in
             guard let me = PDFContentScanner.me(info) else { return }
@@ -577,7 +601,8 @@ final class PDFContentScanner {
             // how they are read.)
             var meaning = currentFont?.toUnicode[code]
             if step > 1, meaning?.unicodeScalars.allSatisfy({ $0.value == 0 }) == true { meaning = nil }
-            glyphs.append(Glyph(
+            // Passed over, not kept, when the page does not draw it.
+            if renderMode != 3, renderMode != 7 { glyphs.append(Glyph(
                 // A composite font's code is a glyph number and never a
                 // character code; -1 keeps anything from reading it as one
                 // (the Cambria Math of a Word equation otherwise spelled its
@@ -593,10 +618,11 @@ final class PDFContentScanner {
                 // that way first. Taken as a standard encoding, a figure's
                 // Arial came out "6WHS" for "Step".
                 isSymbolic: step > 1 ? false : currentFont?.isSymbolic ?? true,
+                isItalic: currentFont?.isItalic ?? false,
                 size: scale,
                 origin: origin,
                 width: width * scale
-            ))
+            )) }
 
             var advance = width * fontSize + charSpacing
             // Word spacing is for the single byte 32 only (ISO 32000 §9.3.3).
@@ -683,6 +709,12 @@ final class PDFContentScanner {
                 var flags: CGPDFInteger = 0
                 CGPDFDictionaryGetInteger(descriptorDictionary, "Flags", &flags)
                 font.isSymbolic = (flags & 4) != 0
+                // Bit 7 is Italic; the angle is the slant of its stems, in
+                // degrees from the vertical (TeX writes −14 for its maths
+                // italic, −12 for its sans italic, −9.5 for its slanted).
+                var angle: CGPDFReal = 0
+                CGPDFDictionaryGetNumber(descriptorDictionary, "ItalicAngle", &angle)
+                font.isItalic = (flags & 64) != 0 || abs(angle) >= 1
             }
             var stream: CGPDFStreamRef?
             if CGPDFDictionaryGetStream(dictionary, "ToUnicode", &stream), let stream {
