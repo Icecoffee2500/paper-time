@@ -45,6 +45,9 @@ final class ReaderLink {
     /// off the picture — which takes a second or two, so ⌘L goes through
     /// `lassoAnchor()` rather than `selectionAnchor()`.
     var lasso: (pageIndex: Int, rect: CGRect, needsOCR: Bool)?
+    /// Told what a picture's reading has said so far while it reads, and nil
+    /// when it is done — the lasso's banner shows it. Set by the reader.
+    @ObservationIgnored var onPictureReading: (@MainActor (String?) -> Void)?
     /// Whether the in-document find bar is showing.
     var isFinding = false
     /// A selection the reader should scroll to and highlight. Cleared by the
@@ -117,10 +120,15 @@ final class ReaderLink {
         var quoted = MathReader.structured(on: page, rect: lasso.rect).joined(separator: "\n")
         if lasso.needsOCR || quoted.isEmpty {
             #if os(macOS) && canImport(OnnxRuntimeBindings)
-            guard let read = try? await FormulaOCR.read(page: page, rect: lasso.rect) else { return nil }
-            quoted = read.latex
-            toastRequest = L("그림에서 수식을 읽었어요. 틀린 데가 있는지 봐주세요.",
-                             "Read the formula off the picture — check it over.")
+            let reading = onPictureReading
+            reading?("")
+            defer { reading?(nil) }
+            let overlay = PictureReading.overlay(of: session, page: lasso.pageIndex)
+            guard let read = try? await PictureReading.read(page: page, rect: lasso.rect, overlay: overlay, partial: { text in
+                Task { @MainActor in reading?(text) }
+            }) else { return nil }
+            quoted = read.text
+            toastRequest = PictureReading.toast(after: read, copied: false)
             #else
             return nil
             #endif

@@ -64,27 +64,34 @@ actor FormulaOCR {
         self.env = env
     }
 
-    /// Reads the formula in a rectangle of a page: the page is drawn at
-    /// three times its size into the rectangle, stretched to the model's
-    /// square, and read. The drawing happens where the page is (the main
-    /// actor — a `PDFPage` does not travel); the model runs here.
+    /// Reads the formula in a picture of the page (`PictureReading.picture`,
+    /// drawn three times its size with room round the rectangle — pressed
+    /// against the edge of the picture, the letters of a label came back
+    /// wrong, "messace"), stretched to the model's square. The drawing
+    /// happens where the page is (the main actor — a `PDFPage` does not
+    /// travel); the model runs here.
     @MainActor
-    static func read(page: PDFPage, rect: CGRect) async throws -> Reading {
-        // Room round the formula: pressed against the edge of the picture,
-        // the letters of a label came back wrong ("messace").
-        let picture = try picture(of: page, rect: rect.insetBy(dx: -6, dy: -5))
-        let pixels = pixelValues(of: picture)
-        return try await shared.read(pixels: pixels)
+    static func read(picture: CGImage) async throws -> Reading {
+        try await shared.read(pixels: pixelValues(of: picture))
+    }
+
+    /// Blank paper makes a model invent things — LaTeX preambles here, a sum
+    /// of fractions from the handwriting model — so a picture with fewer
+    /// than 64 dark values (of 442,368) is nothing to read. The Portable
+    /// build asks the same (`isBlankPicture`).
+    nonisolated static func isBlank(pixels: [Float]) -> Bool {
+        let ink = Float((242.0 / 255.0 - 0.5) / 0.5)
+        return pixels.lazy.filter { $0 < ink }.count < 64
+    }
+
+    nonisolated static func isBlank(_ picture: CGImage) -> Bool {
+        isBlank(pixels: pixelValues(of: picture))
     }
 
     /// Reads a formula from the model's input: the picture's pixel values,
     /// as `pixelValues(of:)` makes them.
     func read(pixels: [Float]) throws -> Reading {
-        // Blank paper makes the model invent LaTeX preambles; a picture with
-        // fewer than 64 dark values (of 442,368) is nothing to read. The
-        // Portable build asks the same (`isBlankPicture`).
-        let ink = (242.0 / 255.0 - 0.5) / 0.5
-        guard pixels.lazy.filter({ $0 < Float(ink) }).count >= 64 else { throw Failure.nothingRead }
+        guard !Self.isBlank(pixels: pixels) else { throw Failure.nothingRead }
         try load()
         guard let encoder, let decoder, let tokenizer else { throw Failure.noModel }
         let began = Date()
@@ -128,7 +135,12 @@ actor FormulaOCR {
     /// coordinates, as PDFKit gives them: it goes where the page's transform
     /// takes it. Translated by itself alone, a page whose crop box does not
     /// start at the origin had its picture taken that far off the formula.
-    nonisolated static func picture(of page: PDFPage, rect: CGRect, scale: CGFloat = 3) throws -> CGImage {
+    ///
+    /// `over` draws what the page itself does not — the ink and shapes kept
+    /// beside the file — in the same space the page was drawn in: the crop
+    /// box, turned, its corner at the origin, in points.
+    nonisolated static func picture(of page: PDFPage, rect: CGRect, scale: CGFloat = 3,
+                                    over: ((CGContext) -> Void)? = nil) throws -> CGImage {
         let drawn = rect.applying(page.transform(for: .cropBox))
         let width = max(1, Int((drawn.width * scale).rounded()))
         let height = max(1, Int((drawn.height * scale).rounded()))
@@ -141,6 +153,11 @@ actor FormulaOCR {
         context.scaleBy(x: scale, y: scale)
         context.translateBy(x: -drawn.minX, y: -drawn.minY)
         page.draw(with: .cropBox, to: context)
+        if let over {
+            context.saveGState()
+            over(context)
+            context.restoreGState()
+        }
         guard let image = context.makeImage() else { throw Failure.noPicture }
         return image
     }

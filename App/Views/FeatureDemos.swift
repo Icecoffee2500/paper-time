@@ -62,6 +62,7 @@ struct FeatureDemoView: View {
             case .meaning: MeaningDemo(scale: scale)
             case .mathPreview: MathPreviewDemo(scale: scale)
             case .noteEnvironments: NoteEnvironmentsDemo(scale: scale)
+            case .handwriting: HandwritingDemo(scale: scale)
             case .nightPage: NightPageDemo(scale: scale)
             }
         }
@@ -1211,6 +1212,214 @@ private struct UltracopyDemo: View {
                         .background(Capsule().fill(.quaternary))
                     }
                     .buttonStyle(.plain)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(minHeight: scale.isFull ? 84 : 44, alignment: .topLeading)
+            .padding(scale.isFull ? 10 : 8)
+            .background(
+                RoundedRectangle(cornerRadius: scale.corner, style: .continuous)
+                    .fill(.background)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: scale.corner, style: .continuous)
+                    .stroke(tint == .accentColor && shown ? Color.accentColor.opacity(0.35) : .clear, lineWidth: 1)
+            )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: - Handwriting
+
+/// Two lines of handwriting in the lasso, and what ⇧⌘C makes of them.
+///
+/// Both results are what the app really copied of these two lines, written
+/// with the pen in a handwriting hand: the formula OCR, which learned printed
+/// formulas, took "Let" for an angle and "Then" for a tangent; the
+/// handwriting model read them as they are. The right one streams into the
+/// strip over the lasso word by word, the way the reader shows a reading in
+/// progress, so a person sees that it is working rather than stuck.
+private struct HandwritingDemo: View {
+    let scale: DemoScale
+    @Environment(AppModel.self) private var app
+    @State private var formulaShown = false
+    @State private var handwritingShown = false
+    /// What the strip says while the model reads; nil when it is not reading.
+    @State private var streaming: String?
+    @State private var reading: Task<Void, Never>?
+
+    private static let lines = ["Let f(x) = x² + 3x", "Then f'(x) = 2x + 3"]
+    private static let formulaRead = "$$\\begin{matrix}\\angle etf(x)=x^{2}+3x\\\\\\tan\\theta(x)=2x+8\\end{matrix}$$"
+    private static let handwritingRead = "Let $f(x) = x^2 + 3x$\nThen $f'(x) = 2x + 3$"
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: scale.gap) {
+            page
+            if scale.isFull {
+                HStack(alignment: .top, spacing: scale.gap) {
+                    formula
+                    handwriting
+                }
+            } else {
+                formula
+                handwriting
+            }
+            if formulaShown && handwritingShown {
+                Text(ReleaseNotes.string(
+                    "왼쪽은 인쇄된 수식을 읽는 모델이라 글씨를 기호로 읽었고, 오른쪽은 손글씨 모델이 쓴 그대로 읽었어요.",
+                    "The left is a model for printed formulas and took the writing for symbols; the right is the handwriting model, which read it as written."
+                ))
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .transition(.opacity)
+            }
+        }
+        .onDisappear { reading?.cancel() }
+    }
+
+    /// The note on the page, written by hand, with the lasso round it — the
+    /// dashed edge is how the lasso says there are no letters under it to
+    /// read, only a picture.
+    private var page: some View {
+        Paper(scale: scale) {
+            VStack(alignment: .leading, spacing: scale.isFull ? 8 : 5) {
+                Rule(width: 90)
+                ZStack(alignment: .topLeading) {
+                    VStack(alignment: .leading, spacing: scale.isFull ? 4 : 2) {
+                        ForEach(Self.lines, id: \.self) { line in
+                            Text(verbatim: line)
+                                .font(.custom("Bradley Hand", size: scale.isFull ? 22 : 15).weight(.bold))
+                                .foregroundStyle(Color(red: 0.12, green: 0.14, blue: 0.3))
+                        }
+                    }
+                    .padding(.horizontal, scale.isFull ? 12 : 8)
+                    .padding(.vertical, scale.isFull ? 8 : 5)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 3, style: .continuous)
+                            .strokeBorder(Color.accentColor, style: StrokeStyle(lineWidth: 1.2, dash: [4, 3]))
+                    )
+                    .padding(.top, scale.isFull ? 26 : 20)
+                    strip
+                }
+                Rule(width: 130)
+            }
+        }
+    }
+
+    /// The lasso's strip: its name, or the words read so far.
+    private var strip: some View {
+        HStack(spacing: 5) {
+            Image(systemName: streaming == nil ? "lasso" : "text.viewfinder")
+            if let streaming {
+                Text(ReleaseNotes.string("손글씨 읽는 중", "Reading handwriting"))
+                    .fontWeight(.medium)
+                Text(verbatim: "· " + (streaming.isEmpty ? "…" : "…" + String(streaming.suffix(scale.isFull ? 26 : 16))))
+                    .monospaced()
+                    .lineLimit(1)
+            } else {
+                Text(ReleaseNotes.string("수식 올가미", "Formula Lasso"))
+                    .fontWeight(.medium)
+            }
+        }
+        .font(scale.small)
+        .foregroundStyle(.white)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background(Capsule().fill(Color.accentColor))
+    }
+
+    private var formula: some View {
+        result(
+            name: ReleaseNotes.string("모델 없이", "Without the model"),
+            tint: .secondary,
+            shown: formulaShown,
+            press: { withAnimation(Motion.surface) { formulaShown = true } }
+        ) {
+            Text(verbatim: Self.formulaRead)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var handwriting: some View {
+        result(
+            name: ReleaseNotes.string("손글씨 모델로", "With the handwriting model"),
+            tint: .accentColor,
+            shown: handwritingShown,
+            press: read
+        ) {
+            Text(verbatim: Self.handwritingRead)
+                .foregroundStyle(.tint)
+        }
+    }
+
+    /// The reading as the reader shows it: the strip says what has been read
+    /// so far, and the result lands when it is done.
+    private func read() {
+        reading?.cancel()
+        streaming = ""
+        let words = Self.handwritingRead.replacingOccurrences(of: "\n", with: " ").split(separator: " ").map(String.init)
+        reading = Task { @MainActor in
+            var said = ""
+            for word in words {
+                try? await Task.sleep(for: .milliseconds(170))
+                if Task.isCancelled { return }
+                said += (said.isEmpty ? "" : " ") + word
+                streaming = said
+            }
+            try? await Task.sleep(for: .milliseconds(250))
+            if Task.isCancelled { return }
+            withAnimation(Motion.surface) {
+                streaming = nil
+                handwritingShown = true
+            }
+        }
+    }
+
+    /// One result: the key that copies it, and what it copied.
+    private func result(
+        name: String, tint: Color, shown: Bool,
+        press: @escaping () -> Void, @ViewBuilder content: () -> some View
+    ) -> some View {
+        let key = app.shortcut(for: .ultracopy).display
+        return VStack(alignment: .leading, spacing: scale.isFull ? 8 : 5) {
+            HStack(spacing: 6) {
+                Text(key)
+                    .font(scale.small.weight(.medium))
+                    .monospaced()
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(
+                        RoundedRectangle(cornerRadius: Corner.row - 2, style: .continuous)
+                            .fill(tint.opacity(tint == .accentColor ? 0.14 : 0.1))
+                    )
+                    .foregroundStyle(tint)
+                Text(name)
+                    .font(scale.small.weight(tint == .accentColor ? .semibold : .regular))
+                    .foregroundStyle(tint == .accentColor ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                Spacer(minLength: 0)
+            }
+            ZStack(alignment: .topLeading) {
+                if shown {
+                    content()
+                        .font(scale.small.monospaced())
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                } else {
+                    Button(action: press) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "doc.on.clipboard")
+                            Text(ReleaseNotes.string("\(key) 눌러 보기", "Press \(key)"))
+                        }
+                        .font(scale.small)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(.quaternary))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(streaming != nil && tint == .accentColor)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

@@ -11,7 +11,7 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
-    MARKETING_VERSION: "0.9.22"
+    MARKETING_VERSION: "0.9.23"
     # The same as the version people see. Sparkle compares CFBundleVersion,
     # and a build number that was "1" in every release would never be newer.
     CURRENT_PROJECT_VERSION: $(MARKETING_VERSION)
@@ -43,6 +43,19 @@ packages:
   onnxruntime-swift-package-manager:
     url: https://github.com/microsoft/onnxruntime-swift-package-manager
     from: 1.24.2
+  # Handwriting (App/Model/Handwriting*.swift): a vision-language model —
+  # Qwen3.5, Apache-2.0 — run on this Mac by MLX. The weights are not in the
+  # app; they are downloaded on request into Application Support. MLX breaks
+  # its API between minor versions, hence the pin to the minor. Building it
+  # needs Xcode's Metal toolchain (`xcodebuild -downloadComponent
+  # MetalToolchain`), and it runs on Apple silicon only, which is all the app
+  # is built for.
+  mlx-swift-lm:
+    url: https://github.com/ml-explore/mlx-swift-lm
+    minorVersion: 3.32.3
+  swift-transformers:
+    url: https://github.com/huggingface/swift-transformers
+    from: 1.3.0
 
 targets:
   PaperTime:
@@ -74,6 +87,15 @@ targets:
         destinationFilters: [macOS]
       - package: onnxruntime-swift-package-manager
         product: onnxruntime
+        destinationFilters: [macOS]
+      - package: mlx-swift-lm
+        product: MLXVLM
+        destinationFilters: [macOS]
+      - package: mlx-swift-lm
+        product: MLXLMCommon
+        destinationFilters: [macOS]
+      - package: swift-transformers
+        product: Tokenizers
         destinationFilters: [macOS]
     info:
       path: App/Resources/Info.plist

@@ -650,6 +650,14 @@ public enum WindowProbe {
             // Core Animation does — layer filters and compositing filters
             // (the page tints), glass. Only this window is asked for, which
             // needs no permission; an off-screen window still has its surface.
+            // `--papertime-window-shot-scroll=bottom|<0–1>`: every scroll view
+            // in the window moved there first. A page whose lower sections
+            // are below the fold shows only what is above it otherwise, and a
+            // taller window does not help — the page sizes the window.
+            if let place = Boot.setting("PAPERTIME_WINDOW_SHOT_SCROLL") {
+                scrollEverything(in: content, to: place == "bottom" ? 1 : (Double(place) ?? 1), say: say)
+                try? await Task.sleep(for: .milliseconds(600))
+            }
             let shot = Boot.isSet("PAPERTIME_WINDOW_SHOT_SERVER") ? serverPixels(of: window) : pixels(of: content)
             if let png = shot {
                 try? png.write(to: URL(fileURLWithPath: path))
@@ -673,6 +681,22 @@ public enum WindowProbe {
             }
             if Boot.isSet("PAPERTIME_WINDOW_SHOT_QUIT") { NSApp.terminate(nil) }
         }
+    }
+
+    /// Every scroll view under `view` moved to `fraction` of its travel
+    /// (0 the top, 1 the bottom), for a picture of what is below the fold.
+    private static func scrollEverything(in view: NSView, to fraction: Double, say: (String) -> Void) {
+        if let scroll = view as? NSScrollView, let document = scroll.documentView {
+            let clip = scroll.contentView
+            let travel = max(0, document.frame.height - clip.bounds.height)
+            if travel > 0 {
+                let y = document.isFlipped ? travel * fraction : travel * (1 - fraction)
+                clip.scroll(to: NSPoint(x: clip.bounds.minX, y: y))
+                scroll.reflectScrolledClipView(clip)
+                say("window probe: scrolled \(type(of: scroll)) to \(Int(y)) of \(Int(travel))")
+            }
+        }
+        for child in view.subviews { scrollEverything(in: child, to: fraction, say: say) }
     }
 
     /// A window put where no display reaches, for a run started hidden.

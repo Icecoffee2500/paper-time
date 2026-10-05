@@ -1011,9 +1011,12 @@ final class SketchInputView: NSView, SketchEditing {
             let (point, time) = pair
             // A tablet pen thins the line as it lightens; a mouse draws even.
             let nib = width * (inkTool == .highlighter ? 1 : (0.55 + 0.45 * min(max(force, 0.15), 1)))
+            // The pen's point is sized to draw the nib (`PenWidth`): the nib
+            // written straight in drew a 1.5 pt pen as nothing at all.
+            let size = inkTool == .highlighter ? nib : PenWidth.size(drawing: nib)
             return PKStrokePoint(
                 location: geometry.canvasPoint(fromPDF: point), timeOffset: time,
-                size: CGSize(width: nib, height: nib), opacity: 1, force: force, azimuth: 0, altitude: .pi / 2
+                size: CGSize(width: size, height: size), opacity: 1, force: force, azimuth: 0, altitude: .pi / 2
             )
         }
         let stroke = PKStroke(ink: ink, path: PKStrokePath(controlPoints: controls, creationDate: .now))
@@ -2295,7 +2298,10 @@ final class SketchInputView: NSView, SketchEditing {
             var width: CGFloat = 2
             for sample in samples {
                 points.append(viewPoint(geometry.pdfPoint(fromCanvas: sample.location.applying(stroke.transform)), on: page))
-                width = sample.size.width
+                // The width PencilKit draws, so nothing jumps when it lands.
+                width = PenWidth.applies(to: stroke.ink.inkType)
+                    ? max(PenWidth.drawn(bySize: sample.size.width), 0.5)
+                    : sample.size.width
             }
             guard let first = points.first else { continue }
             let alpha: CGFloat = stroke.ink.inkType == .marker ? 0.35 : 1
