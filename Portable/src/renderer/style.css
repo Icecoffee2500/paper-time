@@ -1086,9 +1086,23 @@ body[data-window-focused='false'] .paper-row[aria-selected='true'] {
   display: block;
 }
 
-/* The catch, in the accent: filled lightly, a 1.5px line, rounded 3px, and
-   3px round what the reader read (`LassoInputView.draw`). While the rectangle
-   is being drawn: a lighter fill and a dashed hairline. */
+/* The catch as the letters themselves (`LassoInputView`'s ink): a canvas
+   holding the ink of exactly the glyphs the reader read, in the accent, laid
+   over them, with a glow of the same colour round them — a segmentation of
+   the formula, not a box round it. Outside `.page-print`, so the tint's
+   multiply and invert do not touch it: the letters are the accent on paper,
+   sepia and night alike. */
+.page .lasso-ink {
+  position: absolute;
+  z-index: 4;
+  pointer-events: none;
+  display: none;
+  filter: drop-shadow(0 0 1.5px color-mix(in srgb, var(--accent) 60%, transparent));
+}
+
+/* The one rectangle, kept for two cases: while the rectangle is being drawn
+   (a lighter fill and a dashed hairline), and a catch the page could not be
+   read for (the accent, dashed, 3px round what was drawn). */
 .page .lasso-box {
   position: absolute;
   z-index: 4;
@@ -1268,6 +1282,44 @@ body[data-window-focused='false'] .paper-row[aria-selected='true'] {
 
 .reader-zoom[data-on='true'] {
   opacity: 1;
+}
+
+/* The formula lasso says it is out: a line of glass over the top of the
+   pages — the zoom badge's capsule, with the lasso's icon — saying what the
+   mode is and how it ends. It takes no mouse: the page under it is the
+   lasso's. The zoom badge steps down below it while it stands. */
+.reader-overlay > .reader-lasso-banner {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  max-width: calc(100% - 32px);
+  padding: 6px 14px 6px 11px;
+  border-radius: 99px;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+  background: color-mix(in srgb, var(--panel) 90%, transparent);
+  backdrop-filter: blur(20px) saturate(1.5);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.08), 0 4px 16px rgba(0, 0, 0, 0.14);
+  pointer-events: none;
+  animation: toast-in var(--motion-move) var(--ease);
+}
+
+.reader-lasso-banner svg {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  color: var(--accent);
+}
+
+.reader-overlay:has(.reader-lasso-banner) .reader-zoom {
+  top: 46px;
 }
 
 /* A passage a note quotes, lit for a moment where the jump landed. */

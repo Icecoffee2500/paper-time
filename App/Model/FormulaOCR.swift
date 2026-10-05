@@ -122,9 +122,16 @@ actor FormulaOCR {
     // MARK: - The picture
 
     /// The rectangle of the page, drawn three times its size on white.
+    ///
+    /// `draw(with:to:)` puts the crop box's corner at the context's origin
+    /// (and turns a turned page), while the rectangle is in the file's own
+    /// coordinates, as PDFKit gives them: it goes where the page's transform
+    /// takes it. Translated by itself alone, a page whose crop box does not
+    /// start at the origin had its picture taken that far off the formula.
     nonisolated static func picture(of page: PDFPage, rect: CGRect, scale: CGFloat = 3) throws -> CGImage {
-        let width = max(1, Int((rect.width * scale).rounded()))
-        let height = max(1, Int((rect.height * scale).rounded()))
+        let drawn = rect.applying(page.transform(for: .cropBox))
+        let width = max(1, Int((drawn.width * scale).rounded()))
+        let height = max(1, Int((drawn.height * scale).rounded()))
         guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
                                       bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
                                       bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
@@ -132,7 +139,7 @@ actor FormulaOCR {
         context.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
         context.fill(CGRect(x: 0, y: 0, width: width, height: height))
         context.scaleBy(x: scale, y: scale)
-        context.translateBy(x: -rect.minX, y: -rect.minY)
+        context.translateBy(x: -drawn.minX, y: -drawn.minY)
         page.draw(with: .cropBox, to: context)
         guard let image = context.makeImage() else { throw Failure.noPicture }
         return image

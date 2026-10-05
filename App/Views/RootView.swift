@@ -1476,6 +1476,19 @@ struct PaperDetailColumn: View {
                         .tint(configuration.mode == .draw ? Color.accentColor : .primary)
                         .toolbarHover()
                         .help(L("쪽에 그리기 (\(app.shortcut(for: .draw).display))", "Draw on the page (\(app.shortcut(for: .draw).display))"))
+                        // The lasso beside the pencil: lit while it is out,
+                        // so the mode shows somewhere the eye already goes.
+                        Button {
+                            configuration.mode = configuration.mode == .lasso ? .read : .lasso
+                        } label: {
+                            Label(L("수식 올가미", "Formula Lasso"), systemImage: "lasso")
+                                .labelStyle(.iconOnly)
+                                .toolbarIcon()
+                        }
+                        .buttonStyle(.borderless)
+                        .tint(configuration.mode == .lasso ? Color.accentColor : .primary)
+                        .toolbarHover()
+                        .help(L("수식 올가미 (\(app.shortcut(for: .lasso).display))", "Formula lasso (\(app.shortcut(for: .lasso).display))"))
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 10)

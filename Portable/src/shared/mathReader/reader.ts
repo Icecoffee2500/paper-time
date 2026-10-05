@@ -19,9 +19,9 @@ import {
 import { extension, rectOf, type Glyph, type Rule } from './glyph.js'
 import * as TeX from './texGlyphNames.js'
 import {
-  barToken, closing, family, hasWordSubscript, isAccent, isBigOperator, isDelimiter, isItalicLetter, isMathFont, isOperatorName,
-  isRadical, isSpace, isTallVariant, isUnreadable, isUprightLetter, italicVariables, joiningText, latexOf, maxBy, minBy,
-  isPiece, opening, ordinarySize, setFallback, setVariablesInTextItalic, sortedBy, spelling as spell, stack, type Context, isBraceFill } from './transcriber.js'
+  barToken, closing, family, hasWordSubscript, isAccent, isBigOperator, isDelimiter, isItalicFace, isItalicLetter, isMathFont, isOperatorName,
+  isRadical, isSansFace, isSpace, isTallVariant, isTextSymbol, isUnreadable, isUprightLetter, italicVariables, joiningText, latexOf, maxBy, minBy,
+  isPiece, opening, ordinarySize, sansText as sansTextWas, setFallback, setSansTextFace, setVariablesInTextItalic, sortedBy, spelling as spell, stack, type Context, isBraceFill } from './transcriber.js'
 import { canon, chars, count, firstChar, isLetter, isNumber, isWhitespace, lastChar, trimSet } from './swiftText.js'
 import { trimWhitespace, trimWhitespaceAndNewlines } from '../zettel.js'
 
@@ -90,7 +90,7 @@ export function latex(pages: PageInput[]): string {
 // MARK: - Pieces
 
 interface Block { rows: Glyph[][]; isFormula: boolean }
-interface Layout { blocks: Block[]; variablesInTextItalic: boolean }
+interface Layout { blocks: Block[]; variablesInTextItalic: boolean; sansText: boolean }
 type Reached = { block: Block; glyphs: Glyph[] }
 
 /** How many formulas the last reading left out because the file does not
@@ -112,10 +112,12 @@ export function pieces(pages: PageInput[]): Piece[] {
       // things they belong to.
       const layout = layoutOf(page)
       setVariablesInTextItalic(layout.variablesInTextItalic)
+      setSansTextFace(layout.sansText)
       try {
         readPage(page, number, layout, out)
       } finally {
         setVariablesInTextItalic(false)
+        setSansTextFace(false)
       }
     } finally {
       setFallback(null)
@@ -245,27 +247,128 @@ function reached(layout: Layout, boxes: Rect[]): Reached[] {
 /**
  * The formula lasso's snap: the glyphs a rectangle over the page would be
  * read for — the whole formula touched, limits and bar and number included,
- * or the words inside — united, in the page's coordinates as a selection's
- * bounds are (the cropBox's origin not added). Null when the rectangle
- * reaches nothing the page can be read for. This is what the lasso snaps
- * to, so that the box on the page is exactly what Ultracopy will copy (the
+ * or the words inside — united, in the page's own coordinates. Null when the
+ * rectangle reaches nothing the page can be read for. This is what the lasso
+ * snaps to, so that what it holds is exactly what Ultracopy will copy (the
  * Mac's `MathReader.extentRead`).
  */
 export function extentRead(page: PageInput, rect: Rect): Rect | null {
+  const rows = extentRows(page, rect)
+  if (rows === null || rows.length === 0) return null
+  return rows.slice(1).reduce((all, row) => union(all, row), rows[0])
+}
+
+/**
+ * The same glyphs, a rectangle per line they were set on. A formula's rows
+ * (its limits, its numerator) are lines of their own; two that touch or
+ * overlap are one (`MathReader.extentRows`).
+ */
+export function extentRows(page: PageInput, rect: Rect): Rect[] | null {
+  const found = caughtGlyphs(page, rect)
+  if (found === null) return null
+  const rows = found.lines.map((line) => line.slice(1).reduce((all, glyph) => union(all, rectOf(glyph)), rectOf(line[0])))
+  return rows.length === 0 ? null : joinedRows(rows)
+}
+
+/**
+ * Where the ink of what a rectangle reads is: a box for every glyph the
+ * reader takes, and the rules drawn among them (a fraction's bar, a root's
+ * vinculum, a brace's fill). The lasso recolours the page's ink inside these
+ * and nowhere else — a segmentation of the formula, laid over its own
+ * letters, not a box round them (`MathReader.extentInk`).
+ */
+export function extentInk(page: PageInput, rect: Rect): Rect[] | null {
+  const found = caughtGlyphs(page, rect)
+  if (found === null) return null
+  const ink: Rect[] = []
+  for (const line of found.lines) {
+    const boxes = line.map(rectOf)
+    ink.push(...boxes)
+    const reach = insetBy(boxes.slice(1).reduce((all, one) => union(all, one), boxes[0]), -1, -1)
+    ink.push(...found.rules.filter((rule) => intersects(rule, reach)))
+  }
+  return ink.length === 0 ? null : ink
+}
+
+/** The glyphs a rectangle reads, a list a line, and the page's rules. A
+ *  rectangle is in the page's own coordinates, as the scanner's glyphs are;
+ *  a point wider either side, as the selection's line boxes are. */
+function caughtGlyphs(page: PageInput, rect: Rect): { lines: Glyph[][]; rules: Rect[] } | null {
   if (page.glyphs.length === 0) return null
   const layout = layoutOf(page)
-  // A rectangle in page coordinates as a box the reader uses: the cropBox's
-  // origin added, a point wider either side — exactly how `lineBoxes` are made.
-  const box = insetBy(offsetBy(rect, page.cropBox.x, page.cropBox.y), -1, 0)
-  const found = reached(layout, [box])
+  const found = reached(layout, [insetBy(rect, -1, 0)])
   const wantsFormula = found.some((one) => one.block.isFormula)
-  let all: Rect | null = null
-  for (const { block, glyphs } of found) {
-    if (!block.isFormula && wantsFormula && glyphs.length * 10 < block.rows[0].length * 9) continue
-    for (const glyph of glyphs) all = all ? union(all, rectOf(glyph)) : rectOf(glyph)
+  const lines: Glyph[][] = []
+  const italicBefore = italicVariables()
+  const sansBefore = sansTextWas()
+  setVariablesInTextItalic(layout.variablesInTextItalic)
+  setSansTextFace(layout.sansText)
+  try {
+    for (const { block, glyphs } of found) {
+      if (block.isFormula) {
+        // Every row of a formula that was touched (`reached`).
+        for (const row of block.rows) if (row.length > 0) lines.push(row)
+      } else {
+        if (wantsFormula && glyphs.length * 10 < block.rows[0].length * 9) continue
+        const line = grown(glyphs, block.rows[0])
+        if (line.length > 0) lines.push(line)
+      }
+    }
+  } finally {
+    setVariablesInTextItalic(italicBefore)
+    setSansTextFace(sansBefore)
   }
-  if (!all) return null
-  return offsetBy(all, -page.cropBox.x, -page.cropBox.y)
+  return lines.length === 0 ? null : { lines, rules: page.rules.map((rule) => rule.rect) }
+}
+
+/**
+ * What a rectangle takes of a line of prose, grown to the whole of the inline
+ * formula it landed in (`MathReader.grown`): outwards from the glyphs inside
+ * over anything that is the formula's — a maths glyph, a script, a bracket or
+ * a sign — while the gaps stay under 0.3 em.
+ */
+function grown(kept: Glyph[], row: Glyph[]): Glyph[] {
+  const ordered = sortedBy(row, (a, b) => minX(rectOf(a)) < minX(rectOf(b)))
+  if (kept.length === 0) return kept
+  const first = minBy(kept, (a, b) => minX(rectOf(a)) < minX(rectOf(b)))!
+  const last = maxBy(kept, (a, b) => maxX(rectOf(a)) < maxX(rectOf(b)))!
+  let low = ordered.findIndex((one) => minX(rectOf(one)) >= minX(rectOf(first)) - 0.01)
+  let high = -1
+  for (let i = ordered.length - 1; i >= 0; i -= 1) {
+    if (maxX(rectOf(ordered[i])) <= maxX(rectOf(last)) + 0.01) { high = i; break }
+  }
+  if (low < 0 || high < 0) return kept
+  const formulaGlyph = (glyph: Glyph, neighbour: Glyph): boolean => {
+    const spelled = spell(glyph)
+    if (spelled === '' || isAccent(glyph)) return true
+    if (isMathish(glyph) || isFormulaMark(glyph)) return true
+    if (glyph.size < neighbour.size * 0.92 && !isPiece(glyph)) return true
+    return ['(', ')', '[', ']', '+', '-', '=', '|', ',', "'", '\\{', '\\}', '\\|'].includes(spelled)
+  }
+  while (low > 0) {
+    const previous = ordered[low - 1]
+    const edge = ordered[low]
+    if (!(minX(rectOf(edge)) - maxX(rectOf(previous)) < edge.size * 0.3 && formulaGlyph(previous, edge))) break
+    low -= 1
+  }
+  while (high + 1 < ordered.length) {
+    const next = ordered[high + 1]
+    const edge = ordered[high]
+    if (!(minX(rectOf(next)) - maxX(rectOf(edge)) < edge.size * 0.3 && formulaGlyph(next, edge))) break
+    high += 1
+  }
+  return ordered.slice(low, high + 1)
+}
+
+/** Rows that touch or overlap in height, united — top to bottom (`MathReader.joinedRows`). */
+export function joinedRows(rows: Rect[]): Rect[] {
+  const joined: Rect[] = []
+  for (const row of sortedBy(rows, (a, b) => maxY(a) > maxY(b))) {
+    const last = joined[joined.length - 1]
+    if (last && maxY(row) >= minY(last) - 1) joined[joined.length - 1] = union(last, row)
+    else joined.push(row)
+  }
+  return joined
 }
 
 /** The relations an aligned formula lines up at. */
@@ -703,6 +806,18 @@ export function lines(read: Piece[], markdown: boolean): string[] {
       paragraph += paragraph === '' ? text : ' ' + text
       continue
     }
+    // A line that opens with a bullet is an item of a list — a slide's, or
+    // an itemize in a paper — and is written as one: on a line of its own,
+    // the bullet a "- ". Joined into a paragraph, a slide's three points ran
+    // into one sentence.
+    const item = afterBullet(text)
+    if (item !== null) {
+      breakHere()
+      paragraph = '- ' + item
+      previous = piece
+      afterDisplay = false
+      continue
+    }
     // A line that is all mathematics and an equation number is a displayed
     // equation, whatever the row was classified as.
     const equation = piece.isTable ? null : displayedEquation(text)
@@ -740,6 +855,31 @@ export function lines(read: Piece[], markdown: boolean): string[] {
   close()
   while (out.length > 0 && out[out.length - 1] === '') out.pop()
   return out
+}
+
+/** What a line says after the bullet it opens with — Beamer's ▶, the • of an
+ *  itemize, the ◦ and – of its inner levels, set in a maths font (so
+ *  `$\\bullet$`) or as the character — or null when it opens with no bullet.
+ *  A hyphen is not one: "- x" is a negation. */
+export function afterBullet(text: string): string | null {
+  const bullets = ['\\blacktriangleright', '\\bullet', '\\triangleright', '\\circ', '\\boldsymbol{▶}',
+    '\\boldsymbol{\\blacktriangleright}', '\\boldsymbol{\\bullet}', '▶', '•', '◦', '–', '▪',
+    '\\blacksquare', '\\ast', '\\star', '\\diamond']
+  let rest = text
+  let wrapped = false
+  if (rest.startsWith('$')) { rest = rest.slice(1); wrapped = true }
+  const bullet = bullets.find((one) => rest.startsWith(one))
+  if (bullet === undefined) return null
+  rest = rest.slice(bullet.length)
+  if (wrapped) {
+    if (!rest.startsWith('$')) return null
+    rest = rest.slice(1)
+  }
+  // The bullet stands off its item by a space; a bullet that is the whole
+  // line, or one with a sign stuck to it, is not a list's.
+  if (firstChar(rest) !== ' ') return null
+  const item = trimWhitespace(rest)
+  return item === '' ? null : item
 }
 
 /** The environments whose rows are lines of a display. */
@@ -1931,8 +2071,12 @@ function folded(input: { baseline: number; glyphs: Glyph[] }[], body: number, ru
         return midY(rule.rect) > low && midY(rule.rect) < high
           && maxX(rule.rect) > minX(span) && minX(rule.rect) < maxX(span)
       })
+      // A row of scripts — small type, and the bars and brackets sized to it
+      // — reaches a full em: Fira Math lifts an exponent 0.91 em, and the
+      // exponent of an inline e was a display of its own above the sentence.
+      const scripts = row.glyphs.every((one) => one.size < body * 0.8 || barToken(one) !== null || isDelimiter(one))
       return span.width < theirs.width * 0.75
-        && distance < body * 0.9
+        && distance < body * (scripts ? 1.0 : 0.9)
         && beside(span, laid[other].glyphs, body)
         && !collides(own, onOwnLine(laid[other], body))
         && barred
@@ -2083,7 +2227,7 @@ function isFormula(word: Glyph[], position: number, all: Glyph[][], ctx: Context
     lead.push(one)
   }
   if (lead.length > 0 && isOperatorName(lead.map(spell).join('')) && word.some(scriptedHere)) return true
-  if (!italicVariables() || !word.some(isItalicLetter)) return false
+  if (!italicVariables() || !word.some(isTextVariable)) return false
   const full = word.filter((one) => one.size >= body * 0.92 && !isAccent(one))
   // Every run of italic letters in it is a variable or two, not a word.
   if (longestItalicRun(full) > 2) return false
@@ -2095,8 +2239,10 @@ function isFormula(word: Glyph[], position: number, all: Glyph[][], ctx: Context
   const marks = full.map(spell)
   if (marks.some((one) => ['(', ')', '[', ']', '|', '=', '+', ',', '\\{', '\\}'].includes(one))) return true
   // A variable or two standing alone between words that are not in italics.
-  if (!(full.length <= 2 && full.every((one) => isLetter(firstChar(spell(one)) ?? ''))
-    && !COMMON_SHORT_WORDS.has(marks.join('').toLowerCase()))) return false
+  if (!(full.length <= 2 && full.every((one) => {
+    const spelled = spell(one)
+    return isLetter(firstChar(spelled) ?? '') || isTextSymbol(one)
+  }) && !COMMON_SHORT_WORDS.has(marks.join('').toLowerCase()))) return false
   // Stressed: a word of three italic letters or more, or a short English one.
   const emphasised = (at: number) => {
     if (at < 0 || at >= all.length) return false
@@ -2434,7 +2580,7 @@ function isGap(first: Glyph, second: Glyph, body: number): boolean {
   // Anything set smaller than the line is a script, and a script has no words.
   const formula = Math.min(first.size, second.size) < body * 0.92
     || isMathFont(first) || isMathFont(second)
-    || (italicVariables() && ((isItalicLetter(first) && isFormulaMark(second)) || (isFormulaMark(first) && isItalicLetter(second))))
+    || (italicVariables() && ((isTextVariable(first) && isFormulaMark(second)) || (isFormulaMark(first) && isTextVariable(second))))
   // Against a glyph that grows — a radical, the pieces of a tall bar — TeX
   // sets a thick space and the glyph's own side bearing, which together pass
   // for a narrow word space: a \big| after a root, and a root after a sum's
@@ -2454,16 +2600,39 @@ function isProseMark(glyph: Glyph): boolean {
   return drawn !== '' && /^[A-Za-z]+$/.test(drawn) && !(italicVariables() && isItalicLetter(glyph))
 }
 
-/** What a formula set in a text face is held together by. */
+/** A variable a text face draws: a letter from its italic, or the Greek and
+ *  the signs a face like Arev's carries for its formulas. */
+function isTextVariable(glyph: Glyph): boolean {
+  return isItalicLetter(glyph) || isTextSymbol(glyph)
+}
+
+/** What a formula set in a text face is held together by: an italic
+ *  variable, a bracket, a sign. */
 function isFormulaMark(glyph: Glyph): boolean {
-  return isItalicLetter(glyph) || isMathFont(glyph) || ['(', ')', '[', ']', '+', '=', '|', ','].includes(spell(glyph))
+  return isItalicLetter(glyph) || isMathFont(glyph) || isTextSymbol(glyph)
+    || ['(', ')', '[', ']', '+', '=', '|', ','].includes(spell(glyph))
 }
 
 // MARK: - Pages
 
+/** Whether a page's text is sans: most of the Latin letters its text faces
+ *  draw are from a sans face. A slide deck is; its "max" is \max. */
+export function sansText(glyphs: Glyph[]): boolean {
+  let sans = 0
+  let serif = 0
+  for (const glyph of glyphs) {
+    if (isMathFont(glyph)) continue
+    const spelled = spell(glyph)
+    if (!/^[A-Za-z]$/.test(spelled)) continue
+    if (isSansFace(family(glyph))) sans += 1
+    else serif += 1
+  }
+  return sans > serif
+}
+
 /** Whether a glyph belongs to a formula by its face alone. */
 function isMathish(glyph: Glyph): boolean {
-  return isMathFont(glyph) || (italicVariables() && isItalicLetter(glyph))
+  return isMathFont(glyph) || (italicVariables() && (isItalicLetter(glyph) || isTextSymbol(glyph)))
 }
 
 /** The maths fonts that carry only Greek, because the paper sets its Latin
@@ -2489,6 +2658,11 @@ export function italicEvidence(glyphs: Glyph[]): ItalicEvidence {
     if (GREEK_ONLY.some((prefix) => upper.startsWith(prefix))) evidence = true
   }
   if (evidence) return { ownLetters: false, evidence: true }
+  // Greek from the italic of a text face — Arev's γ and θ come from
+  // ArevSans-Oblique — is a formula set in the text face.
+  if (glyphs.some((one) => isTextSymbol(one) && isItalicFace(family(one)) && TeX.isGreekCommand(spell(one)))) {
+    return { ownLetters: false, evidence: true }
+  }
   const small = sortedBy(glyphs.filter((one) => !extension(one)), (a, b) => minX(rectOf(a)) < minX(rectOf(b)))
   for (const letter of glyphs) {
     if (!isItalicLetter(letter)) continue
@@ -2582,8 +2756,11 @@ function layoutOf(page: PageInput): Layout {
   const laidRows = rowsOf(page.glyphs, rules)
   const body = sizeOf(page.glyphs)
   const italic = variablesInTextItalic(page)
+  const sans = sansText(page.glyphs)
   const before = italicVariables()
+  const sansBefore = sansTextWas()
   setVariablesInTextItalic(italic)
+  setSansTextFace(sans)
   try {
     const grouped = blocks(laidRows, body, rules)
     // Rows stacked closer than a line are a formula's rows — when something
@@ -2605,11 +2782,13 @@ function layoutOf(page: PageInput): Layout {
         return { rows: group, isFormula: !tabular && (stacked || isDisplayRow(own[0] ?? group[0])) }
       }),
       variablesInTextItalic: italic,
+      sansText: sans,
     }
     layouts.set(page.glyphs, { page, layout: laid })
     return laid
   } finally {
     setVariablesInTextItalic(before)
+    setSansTextFace(sansBefore)
   }
 }
 

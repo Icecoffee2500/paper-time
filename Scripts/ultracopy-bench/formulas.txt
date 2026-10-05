@@ -19,10 +19,10 @@ x_{i,j}
 x_{i+1}
 x_{n-1}^{(k)}
 \theta^{(t)}
-\theta^{(t+1)} = \theta^{(t)} - \eta \nabla_\theta \mathcal{L}
-W_{\ell}^{\top}
+\theta^{(t+1)} = \theta^{(t)} - \eta \nabla_\theta \mathcal{L} => = || firamath-lua: \theta^{(t+1)} = \theta^{(t)} - \eta \nabla_\theta L
+W_{\ell}^{\top} => = || firamath-lua: W_{\ell}
 A^{-1}
-A^\top B
+A^\top B => = || firamath-lua: AB
 e^{-x^2/2}
 2^{n-1}
 2^{2^n}
@@ -36,30 +36,30 @@ h_t = \tanh(W_h h_{t-1} + W_x x_t + b)
 \hat{y}_i
 \bar{x}_n
 \tilde{\mu}_k
-\vec{v}
+\vec{v} => = || sansmath: \tilde{v}
 \dot{x}
 x'
 f''(x)
 y_i'
 p_\theta(x|z)
-q_\phi(z|x)
+q_\phi(z|x) => = || arev: q_\varphi(z|x)
 \mathbb{E}_{x\sim p(x)}[\log p_\theta(x)]
-\mathcal{L}_{\text{KL}}
-\mathcal{L}_{\mathrm{rec}} + \lambda \mathcal{L}_{\mathrm{reg}}
+\mathcal{L}_{\text{KL}} => = || firamath-lua: L_{\text{KL}}
+\mathcal{L}_{\mathrm{rec}} + \lambda \mathcal{L}_{\mathrm{reg}} => = || firamath-lua: L_{\mathrm{rec}} + \lambda L_{\mathrm{reg}}
 D_{\mathrm{KL}}(q \| p)
-\mathcal{N}(\mu, \sigma^2)
-\mathcal{N}(0, I)
+\mathcal{N}(\mu, \sigma^2) => = || firamath-lua: N(\mu, \sigma^2)
+\mathcal{N}(0, I) => = || firamath-lua: N(0, I)
 \|x\|_2^2
 \|\mathbf{w}\|_1
-\mathbf{x}^\top \mathbf{W} \mathbf{y}
-\boldsymbol{\mu}_k => = || mathptmx,lm-otf,lm-xe,stix2-otf,termes-otf,libertinus-otf: \mu_k
-\boldsymbol{\Sigma}^{-1} => = || mathptmx,lm-otf,lm-xe,stix2-otf,termes-otf,libertinus-otf: \Sigma^{-1}
+\mathbf{x}^\top \mathbf{W} \mathbf{y} => = || firamath-lua: -
+\boldsymbol{\mu}_k => = || mathptmx,lm-otf,lm-xe,stix2-otf,termes-otf,libertinus-otf,firamath-lua: \mu_k || arev: \mu_k
+\boldsymbol{\Sigma}^{-1} => = || mathptmx,lm-otf,lm-xe,stix2-otf,termes-otf,libertinus-otf,cmbright,sansmath,firamath-lua: \Sigma^{-1} || arev: \Sigma^{-1}
 \mathbb{R}^{n\times m}
 x \in \mathbb{R}^d
 \mathbb{N}, \mathbb{Z}, \mathbb{Q}, \mathbb{C}
-\mathfrak{g}
-\mathscr{L}
-\mathsf{T} => \mathsf{T} || -
+\mathfrak{g} => = || firamath-lua: g
+\mathscr{L} => = || firamath-lua: L
+\mathsf{T} => \mathsf{T} || - || arev: T
 \mathtt{x} => \mathtt{x} || -
 \mathrm{d}x
 # Big operators and names
@@ -73,7 +73,7 @@ x \in \mathbb{R}^d
 \min_{w \in W} \|w\|
 \arg\min_{w} L(w)
 \sum_{i} \sum_{j} a_{ij}
-\bigcup_{i=1}^{n} A_i
+\bigcup_{i=1}^{n} A_i => = || firamath-lua: ni=1A_i || firamath-lua: i=n1A_i
 \sup_{x \in X} f(x)
 \log_2 n
 \exp(-\lambda t)
@@ -86,7 +86,7 @@ x \in \mathbb{R}^d
 \frac{\frac{a}{b}}{c}
 \sqrt{x^2+y^2}
 \sqrt[3]{x}
-\binom{n}{k} => = || termes-otf: \begin{pmatrix} n \\ k \end{pmatrix}
+\binom{n}{k} => = || termes-otf: \begin{pmatrix} n \\ k \end{pmatrix} || firamath-lua: \begin{pmatrix} n \\ k \end{pmatrix}
 # Delimiters and sets
 \{x \in \mathbb{R} : x > 0\}
 \{x_i\}_{i=1}^N
@@ -98,11 +98,11 @@ x \in \mathbb{R}^d
 \Big[ x \Big]
 # Relations and symbols
 f: X \to Y
-\forall \epsilon > 0, \exists \delta > 0 => = || mathptmx: \forall \varepsilon > 0, \exists \delta > 0
+\forall \epsilon > 0, \exists \delta > 0 => = || mathptmx: \forall \varepsilon > 0, \exists \delta > 0 || arev: \forall \varepsilon > 0, \exists \delta > 0
 a \leq b, c \geq d, e \neq f
 x \approx y \equiv z \sim w \propto v
 A \subseteq B \cup C \cap D
-A \setminus B
+A \setminus B => = || firamath-lua: AB
 x \notin S
 a \pm b \mp c \times d \div e
 f \circ g
@@ -113,7 +113,7 @@ x \leftarrow x + 1
 \ell_1
 \aleph_0
 \partial_t u = \Delta u
-\varepsilon, \epsilon, \varphi, \phi, \vartheta => = || mathptmx: \varepsilon, \varepsilon, \varphi, \phi, \vartheta
+\varepsilon, \epsilon, \varphi, \phi, \vartheta => = || mathptmx: \varepsilon, \varepsilon, \varphi, \phi, \vartheta || arev: \epsilon, \varepsilon, \phi, \varphi, \vartheta
 \Gamma, \Delta, \Theta, \Lambda, \Sigma, \Phi, \Psi, \Omega
 x_1, \ldots, x_n
 x_1 + \cdots + x_n
@@ -122,9 +122,9 @@ O(n \log n)
 \text{if } x > 0 => \text{if } x > 0 || x > 0
 \operatorname{diag}(x)
 \det(A) \neq 0
-\mathrm{Tr}(A^\top A)
+\mathrm{Tr}(A^\top A) => = || firamath-lua: \mathrm{Tr}(AA)
 \overline{AB}
-\widehat{xyz}
+\widehat{xyz} => = || firamath-lua: x\hat{y}z
 \nabla_\theta J(\theta) = \mathbb{E}[\nabla_\theta \log \pi_\theta(a|s)]
 \sigma(\cdot)
 \Pr[X = x]
@@ -132,39 +132,39 @@ O(n \log n)
 P(A \mid B) = \frac{P(B \mid A) P(A)}{P(B)}
 y = Wx + b
 \min_{G}\max_{D} V(D,G)
-\mathbb{E}_{z \sim q_\phi(z|x)}[\log p_\theta(x|z)] - D_{\mathrm{KL}}(q_\phi(z|x) \| p(z))
+\mathbb{E}_{z \sim q_\phi(z|x)}[\log p_\theta(x|z)] - D_{\mathrm{KL}}(q_\phi(z|x) \| p(z)) => = || arev: \mathbb{E}_{z \sim q_\varphi(z|x)}[\log p_\theta(x|z)] - D_{\mathrm{KL}}(q_\varphi(z|x) \| p(z))
 # Environments — set on their own lines only (`@display`): a matrix or a
 # system of cases in the middle of a sentence is not what papers write.
 @display \begin{pmatrix} a & b \\ c & d \end{pmatrix}
 @display \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix}
 @display \begin{vmatrix} a & b \\ c & d \end{vmatrix}
-@display \begin{pmatrix} x_1 \\ x_2 \\ x_3 \end{pmatrix}
+@display \begin{pmatrix} x_1 \\ x_2 \\ x_3 \end{pmatrix} => = || firamath-lua: x_1 (x_2) x_3
 @display A = \begin{bmatrix} a_{11} & a_{12} & a_{13} \\ a_{21} & a_{22} & a_{23} \end{bmatrix}
 @display \Sigma = \begin{pmatrix} \sigma_1^2 & 0 \\ 0 & \sigma_2^2 \end{pmatrix}
 @display f(x) = \begin{cases} x & \text{if } x \geq 0 \\ -x & \text{otherwise} \end{cases}
 @display |x| = \begin{cases} x, & x \geq 0 \\ -x, & x < 0 \end{cases}
-@display \mathbf{1}[y = k] = \begin{cases} 1 & y = k \\ 0 & y \neq k \end{cases}
+@display \mathbf{1}[y = k] = \begin{cases} 1 & y = k \\ 0 & y \neq k \end{cases} => = || newtxsf,sansmath: 1[y = k] = \begin{cases} 1 & y = k \\ 0 & y \neq k \end{cases}
 @display \begin{aligned} a &= b + c \\ d &= e - f \end{aligned}
-@display \begin{aligned} \mathcal{L}(\theta) &= \mathbb{E}[\log p_\theta(x|z)] \\ &\leq \log p_\theta(x) \end{aligned}
+@display \begin{aligned} \mathcal{L}(\theta) &= \mathbb{E}[\log p_\theta(x|z)] \\ &\leq \log p_\theta(x) \end{aligned} => = || firamath-lua: \begin{aligned} L(\theta) &= \mathbb{E}[\log p_\theta(x|z)] \\ &\leq \log p_\theta(x) \end{aligned}
 @display \begin{aligned} f(x) &= (x+1)^2 \\ &= x^2 + 2x + 1 \end{aligned}
 @display \begin{array}{cc} a & b \\ c & d \end{array} => \begin{matrix} a & b \\ c & d \end{matrix}
 # Found reading whole pages: the limits of two sums side by side run into
 # one row (I-JEPA), and a bold letter under an accent.
-\frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{\boldsymbol{s}}_{y_j} - \boldsymbol{s}_{y_j}\|_2^2 => = || mathptmx: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2 || termes-otf: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2 || stix2-otf: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2 || libertinus-otf: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2 || lm-otf: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2 || lm-xe: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2
+\frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{\boldsymbol{s}}_{y_j} - \boldsymbol{s}_{y_j}\|_2^2 => = || mathptmx: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2 || termes-otf: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2 || stix2-otf: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2 || libertinus-otf: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2 || lm-otf: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2 || lm-xe: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2 || firamath-lua: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2 || sansmath: \frac{1}{M}\sum_{i=1}^M \sum_{j \in B_i} \|\hat{s}_{y_j} - s_{y_j}\|_2^2
 # The upper limit of the second line's sum stands under the first line's
 # parentheses (VAE, page 10): still two lines of one aligned formula.
-@display \begin{aligned} \int q(z) \log p(z)\, dz &= \int \mathcal{N}(z; \mu, \sigma^2) \log \mathcal{N}(z; 0, I)\, dz \\ &= -\frac{J}{2}\log(2\pi) - \frac{1}{2}\sum_{j=1}^J (\mu_j^2 + \sigma_j^2) \end{aligned}
+@display \begin{aligned} \int q(z) \log p(z)\, dz &= \int \mathcal{N}(z; \mu, \sigma^2) \log \mathcal{N}(z; 0, I)\, dz \\ &= -\frac{J}{2}\log(2\pi) - \frac{1}{2}\sum_{j=1}^J (\mu_j^2 + \sigma_j^2) \end{aligned} => = || firamath-lua: \begin{aligned} \int q(z) \log p(z)\, dz &= \int N(z; \mu, \sigma^2) \log N(z; 0, I)\, dz \\ &= -\frac{J}{2}\log(2\pi) - \frac{1}{2}\sum_{j=1}^J (\mu_j^2 + \sigma_j^2) \end{aligned}
 # Systems of cases as papers set them (Fading to Grow, The Forgetting
 # Retention): three cases with the left side on the middle one, a fraction in
 # every case — its bar under the case above — a displayed fraction whose
 # numerator and denominator are as large as the case, and the comma after the
 # brace, halfway between two cases (a selection of the one line gives the
 # comma back to the sentence).
-@display r(x) = \begin{cases} 0 & \text{if } x = y \\ \log\frac{1-\alpha}{\alpha} & \text{if } y = x_0 \\ \log\frac{\alpha}{1-\alpha} & \text{otherwise} \end{cases}
+@display r(x) = \begin{cases} 0 & \text{if } x = y \\ \log\frac{1-\alpha}{\alpha} & \text{if } y = x_0 \\ \log\frac{\alpha}{1-\alpha} & \text{otherwise} \end{cases} => = || firamath-lua: 0 x = y r(x) = \{\log \frac{1-\alpha}{\alpha} y = x_0 \log \frac{\alpha}{1-\alpha}
 @display C = \begin{cases} \dfrac{\mu+\lambda}{\mu-\nu}\hat{\kappa} & x = 1 \\ \dfrac{\mu}{\nu}\hat{\rho} & x = 2 \end{cases}
 @display C_k = \begin{cases} \rho^{n^k_{[s+1,t]}} & x = 1, \\ \rho^{n^{i+1}_{[s,t]}} & x = 2, \end{cases}, => C_k = \begin{cases} \rho^{n^k_{[s+1,t]}} & x = 1, \\ \rho^{n^{i+1}_{[s,t]}} & x = 2, \end{cases}
 # \vdots and \ddots are three full stops each.
-@display E = \begin{pmatrix} 0 & \cdots & 0 \\ \vdots & \ddots & \vdots \\ 1 & \cdots & 1 \end{pmatrix}
+@display E = \begin{pmatrix} 0 & \cdots & 0 \\ \vdots & \ddots & \vdots \\ 1 & \cdots & 1 \end{pmatrix} => = || firamath-lua: E=\begin{pmatrix} 0 & \cdots & 0 \\ 1 & \cdots & 1 \end{pmatrix}
 # What follows the cases on the brace's own line is no case (Selective
 # Synaptic Dampening, equations 2 to 4).
 @display \theta_i = \begin{cases} 0, & \text{if } x > 0 \\ \theta_i, & \text{if } x = 0 \end{cases} \quad \forall i \in [0, n]

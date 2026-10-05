@@ -56,8 +56,13 @@ enum TeXGlyphNames {
         // the thicker one in msbm.
         if let name, let table = amsTable(fontName: fontName),
            let command = table[name] ?? table[stripped(name)] { return command }
+        if let name, let command = arevName(name, fontName: fontName) { return command }
         if let name, let command = byName[name] ?? byName[stripped(name)] { return command }
         if let name, name.count == 1 { return name }
+        // newtx's and newtxsf's own names: "bbE" for the double-struck E
+        // (in zsfmia and txmia), "upnabla", "uppartial" and "upalpha" for
+        // the upright forms. Read as codes they were "(" and "+".
+        if let name, let command = newtxName(name) { return command }
         // "u1D437", "uni2260": the glyph named after its code point, which is
         // how the newtx, newpx and Libertine maths fonts name every letter —
         // a font whose alphabet is the Mathematical Alphanumeric Symbols has
@@ -75,11 +80,56 @@ enum TeXGlyphNames {
         return asciiIfPrintable(code)
     }
 
+    /// Arev's own names for its maths letters. The letters a formula would
+    /// confuse with symbols — a, i, l, u, v, w, x, I — are drawn as variant
+    /// shapes in the font's private-use area, named "uniEB" + 0x80 + the
+    /// letter's ASCII code ("uniEBF8" is x); f is the florin; and three of
+    /// the upright Greek capitals are private-use too (Γ, Σ, Φ). Read as
+    /// nothing, x_i came out as an empty subscript.
+    static func arevName(_ name: String, fontName: String) -> String? {
+        let family = (fontName.split(separator: "+").last.map(String.init) ?? fontName).uppercased()
+        guard family.hasPrefix("AREVSANS") else { return nil }
+        if name == "florin" { return "f" }
+        if name.hasPrefix("uniEB"), name.count == 7, let code = Int(name.dropFirst(5), radix: 16),
+           code >= 0x80 + 0x41, code <= 0x80 + 0x7A, let scalar = UnicodeScalar(code - 0x80),
+           Character(scalar).isLetter {
+            return String(Character(scalar))
+        }
+        switch name {
+        case "uniEF13": return "\\Gamma"
+        case "uniEF23": return "\\Sigma"
+        case "uniEF26": return "\\Phi"
+        default: return nil
+        }
+    }
+
+    /// newtx's names for glyphs other fonts name by code point: "bbA"–"bbZ"
+    /// and "bbk" are \mathbb, "upnabla" and "uppartial" the upright signs,
+    /// "upalpha" the upright Greek (written as the Greek — LaTeX's \alpha).
+    static func newtxName(_ name: String) -> String? {
+        if name.count == 3, name.hasPrefix("bb"), let letter = name.last, letter.isASCII, letter.isLetter {
+            return "\\mathbb{\(letter)}"
+        }
+        guard name.hasPrefix("up"), name.count > 2 else { return nil }
+        let rest = "\\" + name.dropFirst(2)
+        return isGreekCommand(rest) ? rest : nil
+    }
+
+    /// Whether a command names a Greek letter, ∇ or ∂ — the letters a text
+    /// face carries for a paper that sets its formulas in the text face.
+    static func isGreekCommand(_ command: String) -> Bool {
+        greekCommands.contains(command)
+    }
+
+    private static let greekCommands: Set<String> = Set(greekLetters.filter { $0.hasPrefix("\\") })
+        .union(["\\Omega", "\\digamma"])
+
     /// The AMS fonts' own names, for the fonts that use them.
     static func amsTable(fontName: String) -> [String: String]? {
         let family = (fontName.split(separator: "+").last.map(String.init) ?? fontName).uppercased()
-        if ["MSAM", "TXSYA", "PXSYA"].contains(where: { family.hasPrefix($0) }) { return msam }
-        if ["MSBM", "TXSYB", "PXSYB", "TXSYM", "PXSYM"].contains(where: { family.hasPrefix($0) }) {
+        // (cmbright's AMS fonts are hfbright's HFBRAS and HFBRBS.)
+        if ["MSAM", "TXSYA", "PXSYA", "HFBRAS"].contains(where: { family.hasPrefix($0) }) { return msam }
+        if ["MSBM", "TXSYB", "PXSYB", "TXSYM", "PXSYM", "HFBRBS"].contains(where: { family.hasPrefix($0) }) {
             return msbm
         }
         if ["TXSYC", "PXSYC"].contains(where: { family.hasPrefix($0) }) { return txsyc }
@@ -228,11 +278,13 @@ enum TeXGlyphNames {
             return "\\mathbb"
         }
         if family.hasPrefix("CMSY") || family.hasPrefix("CMBSY") || family.hasPrefix("EUSM")
-            || family.hasPrefix("EUSB") || family.hasPrefix("LMMATHSYMBOLS") { return "\\mathcal" }
+            || family.hasPrefix("EUSB") || family.hasPrefix("LMMATHSYMBOLS")
+            || family.hasPrefix("HFBRSY") || family.hasPrefix("CMBRSY") { return "\\mathcal" }
         if family.hasPrefix("EUFM") || family.hasPrefix("EUFB") { return "\\mathfrak" }
         if family.hasPrefix("RSFS") { return "\\mathscr" }
         if family.hasPrefix("BBOLD") || family.hasPrefix("DSROM") || family.hasPrefix("DSSS")
-            || family.hasPrefix("MSBM") || family.hasPrefix("BBM") || family.contains("STBB") {
+            || family.hasPrefix("MSBM") || family.hasPrefix("BBM") || family.contains("STBB")
+            || family.hasPrefix("HFBRBS") {
             return "\\mathbb"
         }
         return nil
@@ -606,6 +658,7 @@ enum TeXGlyphNames {
             "triangle": "\\triangle", "triangleinv": "\\triangledown",
             "negationslash": "\\not", "mapsto": "\\mapsto",
             "universal": "\\forall", "existential": "\\exists",
+            "universalAlt": "\\forall", "existentialAlt": "\\exists",
             "logicalnot": "\\neg", "emptyset": "\\emptyset",
             "Rfractur": "\\Re", "Ifractur": "\\Im",
             "latticetop": "\\top", "perpendicular": "\\bot", "aleph": "\\aleph",

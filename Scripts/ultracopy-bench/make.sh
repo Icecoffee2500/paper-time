@@ -34,6 +34,12 @@ stix2-otf|lualatex|10pt|\usepackage{unicode-math}\setmainfont{STIX Two Text}\set
 termes-otf|lualatex|10pt|\usepackage{unicode-math}\setmainfont{TeX Gyre Termes}\setmathfont{TeX Gyre Termes Math}
 libertinus-otf|lualatex|10pt|\usepackage{unicode-math}\setmainfont{Libertinus Serif}\setmathfont{Libertinus Math}
 lm-xe|xelatex|10pt|\usepackage{unicode-math}\setmathfont{latinmodern-math.otf}
+sansmath|pdflatex|10pt|\renewcommand{\familydefault}{\sfdefault}\usepackage{amssymb}\usepackage{mathrsfs}\usepackage{sansmath}\sansmath
+cmbright|pdflatex|10pt|\usepackage{cmbright}\usepackage{amssymb}\usepackage{mathrsfs}
+arev|pdflatex|10pt|\usepackage{arev}\usepackage{mathrsfs}
+newtxsf|pdflatex|10pt|\usepackage[sfdefault]{FiraSans}\usepackage{newtxsf}\usepackage{mathrsfs}
+sfmath|pdflatex|10pt|\usepackage{helvet}\renewcommand{\familydefault}{\sfdefault}\usepackage{amssymb}\usepackage{mathrsfs}\usepackage{sfmath}
+firamath-lua|lualatex|10pt|\usepackage{unicode-math}\setmainfont{Fira Sans}\setmathfont{Fira Math}
 LIST
 )
 

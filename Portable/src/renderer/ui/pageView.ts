@@ -100,9 +100,18 @@ export class PageView {
   inputSurface: HTMLElement
   /** Takes the mouse while the formula lasso is out (`LassoInputView`). */
   lassoSurface: HTMLElement
-  /** The lasso's rectangle on this page — the catch, or the one being drawn. */
+  /** The lasso's rectangle on this page — the one being drawn, or a catch
+   *  the page could not be read for. */
   private lassoBox: HTMLElement
-  private lassoShown: { rect: Box; phase: 'drag' | 'caught'; needsOCR: boolean } | null = null
+  /** The catch as the letters themselves: the ink of the glyphs it read,
+   *  in the accent colour, laid exactly over them (`LassoInputView.ink`). */
+  private lassoInk: HTMLCanvasElement
+  /** What the ink picture was made for: the scale and device pixels it was
+   *  drawn at, and the generation of the catch — a picture for an old catch
+   *  or an old zoom is not shown. */
+  private inkMade: { scale: number; ink: Box[] } | null = null
+  private inkGeneration = 0
+  private lassoShown: { rect: Box; phase: 'drag' | 'caught'; needsOCR: boolean; ink: Box[] } | null = null
   /** How the reader draws its pages now, and the ground under night. */
   private rendering: PageRendering = 'plain'
   private ground = '#000000'
@@ -163,11 +172,13 @@ export class PageView {
     this.inputSurface = el('div', { class: 'sketch-input' })
     this.lassoSurface = el('div', { class: 'lasso-input' })
     this.lassoBox = el('div', { class: 'lasso-box' })
+    this.lassoInk = el('canvas', { class: 'lasso-ink' }) as HTMLCanvasElement
     this.root = el('div', { class: 'page', 'data-page': String(index) }, [
       this.print,
       this.images.canvas,
       this.textLayer,
       this.lassoBox,
+      this.lassoInk,
       this.lassoSurface,
       this.inputSurface,
     ])
@@ -719,20 +730,31 @@ export class PageView {
   }
 
   /**
-   * The lasso's rectangle on this page, in the page's own coordinates:
-   * `caught` is drawn as the Mac draws its catch — the accent, rounded, 3pt
-   * round what the reader read — and `drag` as the rectangle being drawn.
-   * Null takes it off. Laid out again with the page (`layout`), so a zoom
-   * leaves it on the same words.
+   * The lasso's catch on this page, in the page's own coordinates. A catch
+   * with `ink` is drawn as the Mac draws its: the ink of exactly the glyphs
+   * the reader read turns the accent colour, with a soft glow — a
+   * segmentation of the formula, not a box round it; `rect` is their union,
+   * kept for Ultracopy and the note. A catch the page could not be read for
+   * (`needsOCR`) is the rectangle as drawn, dashed, and `drag` is the
+   * rectangle being drawn. Null takes it all off. Laid out again with the
+   * page (`layout`), and drawn again sharper when the page is zoomed.
    */
-  showLasso(rect: Box | null, phase: 'drag' | 'caught' = 'caught', needsOCR = false) {
-    this.lassoShown = rect ? { rect, phase, needsOCR } : null
+  showLasso(rect: Box | null, phase: 'drag' | 'caught' = 'caught', needsOCR = false, ink: Box[] = []) {
+    const before = this.lassoShown
+    this.lassoShown = rect ? { rect, phase, needsOCR, ink } : null
+    // A drag over a catch leaves the catch's ink where it is.
+    if (phase === 'drag' && before?.phase === 'caught' && rect) this.lassoShown = { rect, phase, needsOCR, ink: before.ink }
+    if (phase === 'caught') {
+      this.inkMade = null
+      this.inkGeneration += 1
+    }
     this.placeLassoBox()
   }
 
-  /** For a probe: where the lasso's box stands, in the page's own coordinates. */
-  lassoReport(): { rect: Box; phase: 'drag' | 'caught'; needsOCR: boolean } | null {
-    return this.lassoShown
+  /** For a probe: where the lasso's box stands and how much ink it holds, in the page's own coordinates. */
+  lassoReport(): { rect: Box; phase: 'drag' | 'caught'; needsOCR: boolean; ink: number; inkDrawn: boolean } | null {
+    const shown = this.lassoShown
+    return shown ? { rect: shown.rect, phase: shown.phase, needsOCR: shown.needsOCR, ink: shown.ink.length, inkDrawn: this.inkMade !== null && this.lassoInk.style.display !== 'none' } : null
   }
 
   /**
@@ -786,22 +808,36 @@ export class PageView {
     return pixelValues(target.getImageData(0, 0, OCR_SIDE, OCR_SIDE).data)
   }
 
-  private placeLassoBox() {
-    const shown = this.lassoShown
-    if (!shown) {
-      this.lassoBox.removeAttribute('data-phase')
-      return
-    }
-    const { rect, phase } = shown
-    // The page may be turned: the box is the corners' box in the view.
+  /** A rectangle of the page as it stands in the view. The page may be
+   *  turned: it is the corners' box. */
+  private viewBoxOf(rect: Box): { left: number; top: number; right: number; bottom: number } {
     const corners = [
       this.toView(rect.x, rect.y), this.toView(rect.x + rect.width, rect.y),
       this.toView(rect.x, rect.y + rect.height), this.toView(rect.x + rect.width, rect.y + rect.height),
     ]
-    const left = Math.min(...corners.map((c) => c.x))
-    const right = Math.max(...corners.map((c) => c.x))
-    const top = Math.min(...corners.map((c) => c.y))
-    const bottom = Math.max(...corners.map((c) => c.y))
+    return {
+      left: Math.min(...corners.map((c) => c.x)),
+      right: Math.max(...corners.map((c) => c.x)),
+      top: Math.min(...corners.map((c) => c.y)),
+      bottom: Math.max(...corners.map((c) => c.y)),
+    }
+  }
+
+  private placeLassoBox() {
+    const shown = this.lassoShown
+    const inked = shown !== null && !shown.needsOCR && shown.ink.length > 0
+    if (!inked) {
+      this.lassoInk.style.display = 'none'
+      this.inkMade = null
+    } else {
+      this.placeInk()
+    }
+    if (!shown || (shown.phase === 'caught' && inked)) {
+      this.lassoBox.removeAttribute('data-phase')
+      return
+    }
+    const { rect, phase } = shown
+    const { left, right, top, bottom } = this.viewBoxOf(rect)
     const inset = phase === 'caught' ? 3 : 0
     this.lassoBox.setAttribute('data-phase', phase)
     // A catch the reader could not read is drawn dashed: the picture will be read instead.
@@ -812,10 +848,127 @@ export class PageView {
     this.lassoBox.style.height = `${bottom - top + inset * 2}px`
   }
 
+  /** The ink picture where the page now has it — made again when there is
+   *  none for this catch at this zoom. */
+  private placeInk() {
+    const shown = this.lassoShown
+    const viewport = this.viewport
+    if (!shown || !viewport) return
+    const dpr = devicePixels(window.devicePixelRatio)
+    if (this.inkMade && this.inkMade.ink === shown.ink && Math.abs(this.inkMade.scale - viewport.scale * dpr) < 0.01) {
+      this.lassoInk.style.display = 'block'
+      return
+    }
+    this.lassoInk.style.display = 'none'
+    void this.paintInk()
+  }
+
+  /**
+   * The caught ink, recoloured (`LassoInputView.paintInk`): the page under
+   * the catch drawn once by pdf.js on white at the zoom it is seen at, its
+   * darkness taken as the alpha of the accent colour, and that kept inside
+   * the glyphs' boxes only — the "Targets:" before a formula stays black, the
+   * formula turns blue. The canvas sits outside `.page-print`, so a tint's
+   * multiply and invert leave it alone: the letters are the accent on any
+   * ground.
+   */
+  private async paintInk() {
+    const shown = this.lassoShown
+    if (!shown || shown.needsOCR || shown.ink.length === 0 || !this.viewport) return
+    const generation = this.inkGeneration
+    const proxy = await this.fetchProxy()
+    if (!proxy || generation !== this.inkGeneration || !this.viewport || this.lassoShown?.ink !== shown.ink) return
+    const dpr = devicePixels(window.devicePixelRatio)
+    const scale = this.viewport.scale * dpr
+    const viewport = proxy.getViewport({ scale })
+    const pixels = (box: Box) => {
+      const corners = [[box.x, box.y], [box.x + box.width, box.y], [box.x, box.y + box.height], [box.x + box.width, box.y + box.height]]
+        .map(([x, y]) => viewport.convertToViewportPoint(x, y) as [number, number])
+      const left = Math.min(...corners.map((c) => c[0]))
+      const top = Math.min(...corners.map((c) => c[1]))
+      return { left, top, right: Math.max(...corners.map((c) => c[0])), bottom: Math.max(...corners.map((c) => c[1])) }
+    }
+    const grown = (box: Box, by: number): Box => ({ x: box.x - by, y: box.y - by, width: box.width + by * 2, height: box.height + by * 2 })
+    let area = shown.ink[0]
+    for (const one of shown.ink) {
+      const x = Math.min(area.x, one.x)
+      const y = Math.min(area.y, one.y)
+      area = { x, y, width: Math.max(area.x + area.width, one.x + one.width) - x, height: Math.max(area.y + area.height, one.y + one.height) - y }
+    }
+    const frame = pixels(grown(area, 3))
+    const left = Math.floor(frame.left)
+    const top = Math.floor(frame.top)
+    const width = Math.ceil(frame.right) - left
+    const height = Math.ceil(frame.bottom) - top
+    if (width <= 0 || height <= 0 || width * height > 16_000_000) return
+    const picture = document.createElement('canvas')
+    picture.width = width
+    picture.height = height
+    const context = picture.getContext('2d', { willReadFrequently: true })
+    if (!context) return
+    context.fillStyle = '#ffffff'
+    context.fillRect(0, 0, width, height)
+    try {
+      await proxy.render({ canvasContext: context, viewport, transform: [1, 0, 0, 1, -left, -top], annotationMode: 0, background: '#ffffff' }).promise
+    } catch {
+      return
+    }
+    if (generation !== this.inkGeneration || this.lassoShown?.ink !== shown.ink) return
+    // Darkness as the alpha of the accent.
+    const [red, green, blue] = accentColour(this.root)
+    const image = context.getImageData(0, 0, width, height)
+    const data = image.data
+    for (let at = 0; at < data.length; at += 4) {
+      const luma = 0.299 * data[at] + 0.587 * data[at + 1] + 0.114 * data[at + 2]
+      data[at] = red
+      data[at + 1] = green
+      data[at + 2] = blue
+      data[at + 3] = Math.min(255, Math.max(0, (255 - luma) * 1.2))
+    }
+    context.putImageData(image, 0, 0)
+    // Inside the glyphs' boxes only.
+    context.globalCompositeOperation = 'destination-in'
+    context.fillStyle = '#000000'
+    context.beginPath()
+    for (const one of shown.ink) {
+      const box = pixels(grown(one, 0.6))
+      context.rect(box.left - left, box.top - top, box.right - box.left, box.bottom - box.top)
+    }
+    context.fill()
+    this.lassoInk.width = width
+    this.lassoInk.height = height
+    const target = this.lassoInk.getContext('2d')
+    if (!target) return
+    target.clearRect(0, 0, width, height)
+    target.drawImage(picture, 0, 0)
+    this.lassoInk.style.left = `${left / dpr}px`
+    this.lassoInk.style.top = `${top / dpr}px`
+    this.lassoInk.style.width = `${width / dpr}px`
+    this.lassoInk.style.height = `${height / dpr}px`
+    this.lassoInk.style.display = 'block'
+    this.inkMade = { scale, ink: shown.ink }
+  }
+
   destroy() {
     this.release()
     this.input?.detach()
     this.input = null
     this.proxy = null
   }
+}
+
+/** The accent as the page has it, in numbers a canvas can paint with: an
+ *  element coloured with the token, asked what colour it computed to. */
+function accentColour(host: HTMLElement): [number, number, number] {
+  const probe = document.createElement('span')
+  probe.style.color = 'var(--accent)'
+  probe.style.display = 'none'
+  host.append(probe)
+  const computed = getComputedStyle(probe).color
+  probe.remove()
+  const numbers = computed.match(/[0-9.]+/g)?.map(Number) ?? []
+  if (computed.startsWith('color(srgb') && numbers.length >= 3) {
+    return [Math.round(numbers[0] * 255), Math.round(numbers[1] * 255), Math.round(numbers[2] * 255)]
+  }
+  return numbers.length >= 3 ? [numbers[0], numbers[1], numbers[2]] : [47, 110, 240]
 }

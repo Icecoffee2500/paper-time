@@ -42,6 +42,12 @@ enum MathTranscriber {
     /// italic letters of its own, an italic letter is prose.
     nonisolated(unsafe) static var variablesInTextItalic = false
 
+    /// Whether the page being read sets its text in a sans face — a slide
+    /// deck, where the whole paper is sans. There an upright sans word in a
+    /// formula is what \mathrm or \max drew, not a \mathsf the author
+    /// chose, and is written as such (`uprightStyle`).
+    nonisolated(unsafe) static var sansTextFace = false
+
     /// The LaTeX for everything drawn inside `region` of a scanned page.
     static func latex(glyphs: [Glyph], rules: [Rule], in region: CGRect) -> String {
         let box = region.insetBy(dx: -1, dy: -1)
@@ -461,6 +467,10 @@ enum MathTranscriber {
         "CMMI", "CMSY", "CMEX", "CMBSY", "MSAM", "MSBM", "EUFM", "EUFB", "EUSM", "EUSB",
         "EURM", "EURB", "EUEX", "RSFS", "BBOLD", "DSROM", "DSSS", "STMARY", "WASY", "LASY",
         "ESINT", "CALLIGRA",
+        // cmbright's maths italic, symbols and AMS fonts (hfbright's Type 1
+        // versions are HFBR…), which a sans slide deck sets its maths with;
+        // newtxsf's sans maths italic (zsfmi, zsfmia).
+        "HFBRMI", "HFBRSY", "HFBRAS", "HFBRBS", "HFBRMB", "CMBRMI", "CMBRSY", "CMBRMB", "ZSFMI",
         // bbm, and any bitmap font the scanner saw draw double-struck letters
         // (`PDFContentScanner.doubleStruckType3`).
         "BBM",
@@ -566,7 +576,32 @@ enum MathTranscriber {
             || family.hasPrefix("SFBI") || family.hasSuffix("-IT") || family.hasSuffix("-BI")
             || family.hasSuffix("-BOLDIT")
             || (family.hasPrefix("LINLIBERTINE") && family.hasSuffix("I"))
+            // The sans italics: Computer Modern's (which Beamer sets its
+            // variables in), cm-super's, cmbright's slanted.
+            || family.hasPrefix("CMSSI") || family.hasPrefix("CMSSBXO") || family.hasPrefix("CMSSQI")
+            || family.hasPrefix("SFSO") || family.hasPrefix("HFBRSL") || family.hasPrefix("CMBRSL")
     }
+
+    /// A Greek letter, or a sign a formula is made of, drawn by a text face:
+    /// Arev keeps its Greek in ArevSans-Oblique and its ∇ in ArevSans-Roman,
+    /// and a slide deck in a sans text face sets "γ" from the face itself.
+    /// On a page that sets its variables in the text face, it is the
+    /// formula's; a text face's dagger or section sign is not.
+    static func isTextSymbol(_ glyph: Glyph) -> Bool {
+        guard !isMathFont(glyph) else { return false }
+        let spelled = token(for: glyph)
+        guard spelled.hasPrefix("\\") else { return false }
+        return TeXGlyphNames.isGreekCommand(spelled) || formulaSymbols.contains(spelled)
+    }
+
+    private static let formulaSymbols: Set<String> = [
+        "\\nabla", "\\partial", "\\infty", "\\in", "\\notin", "\\leq", "\\geq", "\\neq",
+        "\\approx", "\\equiv", "\\times", "\\pm", "\\mp", "\\cdot", "\\propto", "\\sim",
+        "\\leftarrow", "\\rightarrow", "\\Rightarrow", "\\Leftarrow", "\\leftrightarrow",
+        "\\Leftrightarrow", "\\forall", "\\exists", "\\sum", "\\prod", "\\int", "\\sqrt",
+        "\\subset", "\\subseteq", "\\supset", "\\supseteq", "\\cup", "\\cap", "\\emptyset",
+        "\\aleph", "\\hbar", "\\ell", "\\wp", "\\Re", "\\Im",
+    ]
 
     /// A letter from the italic of a text face — which, on a page that sets
     /// its variables that way, is a variable.
@@ -611,13 +646,30 @@ enum MathTranscriber {
     /// typewriter, as the face it was set in.
     static func uprightStyle(_ glyph: Glyph) -> String {
         let upper = family(of: glyph)
+        // In a paper whose text is sans — a slide deck — sans is the plain
+        // face: its "max" is \max and its "T" is \mathrm{T}, as the author
+        // typed them. (The TeX sans faces only: a figure's labels in Calibri
+        // are a label, \mathrm, not a choice of \mathsf.)
         let sans = ["CMSS", "SFSS", "LMSANS", "HELVETICA", "NIMBUSSAN", "HEROS", "BIOLINUM",
                     "ARIAL", "SANS"]
-        if sans.contains(where: { upper.hasPrefix($0) || upper.contains($0) }) { return "\\mathsf" }
+        if sans.contains(where: { upper.hasPrefix($0) || upper.contains($0) }) {
+            return sansTextFace ? "\\mathrm" : "\\mathsf"
+        }
         let mono = ["CMTT", "SFTT", "LMMONO", "TXTT", "T1XTT", "COURIER", "NIMBUSMON", "CURSOR",
                     "MONO"]
         if mono.contains(where: { upper.hasPrefix($0) || upper.contains($0) }) { return "\\mathtt" }
         return "\\mathrm"
+    }
+
+    /// Whether a face is sans — asked of a page's text to tell a slide deck
+    /// (`MathReader.sansText`): Computer Modern Sans, cm-super's, Latin
+    /// Modern's, Helvetica and its clones, Biolinum, Arial, Fira Sans, Lato,
+    /// Roboto, Arev, the cmbright family and the common system sans faces.
+    static func isSansFace(_ upper: String) -> Bool {
+        let sans = ["CMSS", "SFSS", "SFSO", "SFSX", "LMSANS", "HELVETICA", "NIMBUSSAN", "HEROS", "BIOLINUM",
+                    "ARIAL", "SANS", "LATO", "ROBOTO", "AREV", "HFBR", "CMBR", "VERDANA", "CALIBRI", "SEGOE",
+                    "GILLSANS", "FUTURA", "AVENIR", "TAHOMA"]
+        return sans.contains { upper.hasPrefix($0) || upper.contains($0) }
     }
 
     /// The size a formula is set in: the largest of its ordinary glyphs.
@@ -1593,10 +1645,17 @@ enum MathTranscriber {
         // alphabet, not bold: \mathbb{E}, never \boldsymbol{\mathbb{E}}.
         if TeXGlyphNames.letterStyle(fontName: glyph.fontName) != nil { return nil }
         let upper = family(of: glyph)
+        // Arev's symbols are MathDesign's bold Charter symbols — the regular
+        // weight of a heavy sans, not \boldsymbol. (In a Charter paper, which
+        // is not sans, the same fonts are its bold.)
+        if sansTextFace, upper.hasPrefix("MATHDESIGN-CH-BOLD") { return nil }
         // The bold maths italics: Computer Modern's, Latin Modern's, the tx
         // and px families', MathTime's.
+        // (cmbright's bold maths italic is HFBRMB; newtxsf's is zsfmi-bol.)
         if upper.hasPrefix("CMMIB") || upper.hasPrefix("CMBSY") || upper.hasPrefix("RMTMIB")
             || upper.contains("BMI") || upper.contains("BSY") || upper.hasPrefix("EURB")
+            || upper.hasPrefix("HFBRMB") || upper.hasPrefix("CMBRMB")
+            || (upper.hasPrefix("ZSFMI") && upper.contains("BOL"))
             || (upper.contains("MATH") && (upper.contains("BOLD") || upper.hasSuffix("-B"))) {
             return "\\boldsymbol"
         }
@@ -1607,7 +1666,9 @@ enum MathTranscriber {
             || upper.dropFirst(13).hasPrefix("Z") {
             return upper.hasSuffix("I") ? "\\boldsymbol" : "\\mathbf"
         }
+        // (Computer Modern Sans bold extended, cmbright's bold.)
         if upper.hasPrefix("CMBX") || upper.hasPrefix("SFBX") || upper.contains("-BOLD")
+            || upper.hasPrefix("CMSSBX") || upper.hasPrefix("SFSX") || upper.hasPrefix("HFBRBX") || upper.hasPrefix("CMBRBX")
             || upper.hasSuffix("-BD") || upper.contains("-MEDI") || upper.hasSuffix("-B")
             || upper.hasSuffix("BOLD") || upper.hasSuffix("-BOL") || upper.hasPrefix("CMB10")
             || upper.hasPrefix("RTXB") || upper.hasPrefix("RPXB") {
@@ -2498,10 +2559,14 @@ enum MathTranscriber {
                 }
                 covered = before.max { glyphs[$0].rect.maxX < glyphs[$1].rect.maxX }.map { [$0] } ?? []
             } else {
+                // (Of the mark's own size: the subscript crept under a
+                // broad sans hat is not under the hat — cmbright's \hat{y}_i
+                // read as \widehat{y_i}.)
                 let under = glyphs.indices.filter { other in
                     let glyph = glyphs[other]
                     return other != index && !consumed.contains(other) && owned[other] == nil
                         && accentName(of: glyph) == nil && !isSpace(glyph)
+                        && glyph.size >= mark.size * 0.9
                         && abs(glyph.origin.y - mark.origin.y) < max(glyph.size, 1) * 0.35
                 }
                 // A mark grown wide — an OpenType font's \widehat over three
