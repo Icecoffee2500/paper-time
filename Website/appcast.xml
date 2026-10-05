@@ -4,12 +4,12 @@
     <title>Paper Time</title>
     <link>https://github.com/Icecoffee2500/paper-time/releases</link>
     <item>
-      <title>Paper Time 0.9.22</title>
-      <pubDate>Mon, 05 Oct 2026 05:11:40 +0000</pubDate>
-      <sparkle:version>0.9.22</sparkle:version>
-      <sparkle:shortVersionString>0.9.22</sparkle:shortVersionString>
+      <title>Paper Time 0.9.23</title>
+      <pubDate>Mon, 05 Oct 2026 07:00:02 +0000</pubDate>
+      <sparkle:version>0.9.23</sparkle:version>
+      <sparkle:shortVersionString>0.9.23</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-      <enclosure url="https://github.com/Icecoffee2500/paper-time/releases/download/0.9.22/Paper.Time.0.9.22.dmg" length="87068029" type="application/octet-stream" sparkle:edSignature="LMGSL4LlcOjiuwCg1mRomUSh5/w9gnIJwol/tlQTPsLLJkyeABdsDDPE1kxwjgAICPmtoYpb8DeaaZFX0YpCDg=="/>
+      <enclosure url="https://github.com/Icecoffee2500/paper-time/releases/download/0.9.23/Paper.Time.0.9.23.dmg" length="97600718" type="application/octet-stream" sparkle:edSignature="cbSFtcbHF38VJgnI+Xles5KJpY0fcNOyy2O6+zYYVGLU+azF5UorfiSuUgnJxKurizuygPp1JQbXjzLCKFp4Dw=="/>
     </item>
   </channel>
 </rss>
