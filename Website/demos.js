@@ -54,8 +54,8 @@ function mountMetadata() {
     if (node) node.setAttribute("content", value);
   };
   set('meta[name="description"]', L(
-    "논문을 읽고, 표시하고, 그 표시를 생각으로 바꾸기 위한 앱. 맥·윈도우·리눅스에서 같은 라이브러리 폴더를 열어요. 수식은 LaTeX으로 나오고, 구절은 주소째로 노트가 돼요.",
-    "An app for reading papers, marking them up, and turning those marks into writing. The same library folder opens on macOS, Windows and Linux. Formulas copy out as LaTeX; passages become notes with their page numbers attached."
+    "논문을 읽고, PDF에 표시하고, 수식째 노트로 옮기는 앱이에요. 맥·윈도우·리눅스에서 같은 라이브러리 폴더를 열어요. 수식은 LaTeX으로 복사되고, 맥에서는 손글씨도 읽어요.",
+    "An app for reading papers, marking the PDF and taking it into notes, formulas and all. The same library folder opens on macOS, Windows and Linux. Formulas copy as LaTeX, and on a Mac handwriting does too."
   ));
   set('meta[property="og:description"]', L(
     "논문을 읽고, 표시하고, 그 표시를 생각으로 바꾸기 위한 앱.",
@@ -112,6 +112,92 @@ function ultracopy() {
       el("button", { class: "btn btn-primary", onclick: () => show(ULTRA, "ultra") },
         el("span", { class: "key", style: "background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.3);color:#fff" }, "⇧⌘C"),
         "Ultracopy")),
+    el("div", { class: "pane", style: "flex:1;min-height:0" }, label, out));
+}
+
+/* ══════════════════ 1b · Handwriting, read off the picture ══════════════════
+   Two handwritten lines inside the lasso, and what ⇧⌘C copies of them. Both
+   results are what the Mac app really copied of these two lines: without the
+   handwriting model, a model for printed formulas reads the picture and takes
+   "Let" for an angle and "Then" for a tangent; with it, the lines come back as
+   written. The second arrives a word at a time in the lasso's strip, the way
+   the app shows a reading in progress. */
+
+function handwriting() {
+  const LINES = ["Let f(x) = x² + 3x", "Then f'(x) = 2x + 3"];
+  const WITHOUT = "$$\\begin{matrix}\\angle etf(x)=x^{2}+3x\\\\\\tan\\theta(x)=2x+8\\end{matrix}$$";
+  const WITH = "Let $f(x) = x^2 + 3x$\nThen $f'(x) = 2x + 3$";
+  const HAND =
+    "font-family:'Bradley Hand','Segoe Print','Comic Sans MS',cursive;font-weight:700;" +
+    "font-size:21px;line-height:1.45;color:var(--ink)";
+
+  const strip = el("span", {
+    style:
+      "display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;" +
+      "background:var(--accent);color:#fff;font:600 12px/1.45 var(--sans);max-width:100%;" +
+      "white-space:nowrap;overflow:hidden;text-overflow:ellipsis",
+  }, L("수식 올가미", "Formula Lasso"));
+
+  // The dashed edge is how the lasso says there are no letters under it to
+  // read — only a picture.
+  const caught = el("div", {
+    style:
+      "display:inline-block;margin-top:8px;padding:8px 14px;border:1.5px dashed var(--accent);" +
+      "border-radius:6px;" + HAND,
+  }, ...LINES.map((line) => el("div", {}, line)));
+
+  const out = el("pre", {
+    style:
+      "margin:0;font:12.5px/1.75 var(--mono);white-space:pre-wrap;word-break:break-word;" +
+      "color:var(--ink-2);min-height:3.6em",
+  }, L("아래 두 단추를 눌러 보세요.", "Try both buttons."));
+  const label = el("div", { class: "hint", style: "margin:0 0 6px" }, " ");
+
+  let timer = null;
+  const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
+
+  const without = () => {
+    stop();
+    strip.textContent = L("수식 올가미", "Formula Lasso");
+    out.textContent = WITHOUT;
+    out.style.color = "var(--ink-3)";
+    label.innerHTML = L(
+      "<b>손글씨 모델 없이</b> — 인쇄된 수식을 읽는 모델이 글씨를 기호로 읽었어요.",
+      "<b>Without the handwriting model</b> — a model for printed formulas read the writing as symbols.");
+  };
+
+  const withModel = () => {
+    stop();
+    const words = WITH.replace("\n", " ").split(" ");
+    let said = 0;
+    out.textContent = "";
+    label.innerHTML = L("<b>손글씨 모델로 읽는 중…</b>", "<b>Reading with the handwriting model…</b>");
+    strip.textContent = L("손글씨 읽는 중 · …", "Reading handwriting · …");
+    timer = setInterval(() => {
+      said += 1;
+      const text = words.slice(0, said).join(" ");
+      strip.textContent = L("손글씨 읽는 중 · ", "Reading handwriting · ") + "…" + text.slice(-24);
+      if (said >= words.length) {
+        stop();
+        strip.textContent = L("수식 올가미", "Formula Lasso");
+        out.textContent = WITH;
+        out.style.color = "var(--ink)";
+        label.innerHTML = L(
+          '<b style="color:var(--green)">글은 글로, 수식은 LaTeX으로 복사됐어요.</b>',
+          '<b style="color:var(--green)">The words as words, the formulas as LaTeX.</b>');
+        navigator.clipboard?.writeText(WITH).catch(() => {});
+      }
+    }, 170);
+  };
+
+  return el("div", { class: "demo-shell", style: "flex-direction:column;gap:12px" },
+    el("div", { class: "pane paper-face", style: "flex:0 0 auto" }, strip, el("div", {}, caught)),
+    el("div", { style: "display:flex;gap:10px;flex-wrap:wrap" },
+      el("button", { class: "btn btn-ghost", onclick: without },
+        el("span", { class: "key" }, "⇧⌘C"), L("모델 없이", "Without the model")),
+      el("button", { class: "btn btn-primary", onclick: withModel },
+        el("span", { class: "key", style: "background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.3);color:#fff" }, "⇧⌘C"),
+        L("손글씨 모델로", "With the handwriting model"))),
     el("div", { class: "pane", style: "flex:1;min-height:0" }, label, out));
 }
 
@@ -1230,6 +1316,7 @@ function lockedPDF() {
    when the page loads, so seventeen of them do not all animate at once into
    an empty screen. */
 const BANDS = [
+  ["demo-handwriting", handwriting],
   ["demo-kind", paperOrDocument],
   ["demo-pages", pageGrid],
   ["demo-book", bookMode],
@@ -1771,7 +1858,7 @@ window.PaperTime = {
     ultracopy, searchEverything, bookMode, fittedHighlight, marksJump,
     passageToNote, noteLinks, panes, everyDesktop, threeDevices,
     draftToManuscript, figmaDrawing, papersSideBySide, paperOrDocument,
-    pageGrid, manyLibraries, fileName, lockedPDF,
+    pageGrid, manyLibraries, fileName, lockedPDF, handwriting,
   },
   mountLanguage, mountReveals, mountDownloads, mountDialogs, mountHowPicker,
 };
