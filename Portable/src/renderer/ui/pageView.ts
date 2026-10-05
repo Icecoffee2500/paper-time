@@ -793,6 +793,17 @@ export class PageView {
     } catch {
       return null
     }
+    // The pen's ink and the shapes, which the page itself does not carry
+    // (the PDF's copies of them are taken out of the bytes it is drawn
+    // from): a formula written in the margin is the handwriting most worth
+    // reading. In page coordinates, as `redraw` draws them.
+    if (this.strokes.length > 0 || this.elements.length > 0) {
+      const [a, b, c, d, e, f] = viewport.transform
+      context.setTransform(a, b, c, d, e - left, f - top)
+      drawInk(this.strokes, context)
+      drawElements(this.elements, context)
+      context.setTransform(1, 0, 0, 1, 0, 0)
+    }
     // Stretched — not fitted — to the square, as the model was trained.
     const square = document.createElement('canvas')
     square.width = OCR_SIDE

@@ -70,9 +70,15 @@ public enum InkConverter {
         }
         guard !points.isEmpty else { return nil }
 
-        let width = widths.isEmpty
+        let size = widths.isEmpty
             ? 2
             : widths.reduce(0, +) / CGFloat(widths.count)
+        // A pen point's size is not the width it draws (`PenWidth`): the
+        // file gets the width the page shows, never less than a hairline a
+        // reader still draws.
+        let width = PenWidth.applies(to: stroke.ink.inkType)
+            ? max(PenWidth.drawn(bySize: size), 0.5)
+            : size
         let colour = colour(for: stroke)
         return Sampled(points: points, width: width, colour: colour, digest: digest(points: points, width: width, colour: colour))
     }
@@ -232,6 +238,8 @@ public enum InkConverter {
             let colour = annotation.color
             let translucent = colour.cgColor.alpha < 0.95
             let ink = PKInk(translucent ? .marker : .pen, color: colour.withAlphaComponent(1))
+            // The pen's points are sized to draw the file's width (`PenWidth`).
+            let size = translucent ? width : PenWidth.size(drawing: width)
             for path in annotation.paths ?? [] {
                 let points = polylinePoints(of: path).map {
                     resolved.canvasPoint(fromPDF: CGPoint(x: $0.x + offset.x, y: $0.y + offset.y))
@@ -241,7 +249,7 @@ public enum InkConverter {
                     .enumerated().map { index, point in
                         PKStrokePoint(
                             location: point, timeOffset: TimeInterval(index) * 0.005,
-                            size: CGSize(width: width, height: width), opacity: 1, force: 1, azimuth: 0, altitude: .pi / 2
+                            size: CGSize(width: size, height: size), opacity: 1, force: 1, azimuth: 0, altitude: .pi / 2
                         )
                     }
                 strokes.append(PKStroke(ink: ink, path: PKStrokePath(controlPoints: controls, creationDate: .now)))
