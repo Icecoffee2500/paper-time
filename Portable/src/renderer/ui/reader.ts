@@ -1238,7 +1238,7 @@ export class Reader implements PageOwner {
   async catchRect(pageIndex: number, rect: Box) {
     const page = this.pages[pageIndex]
     if (!page) return null
-    const input = await this.mathInput(page, [this.lassoBoxOf(rect)], '')
+    const input = await this.mathInput(page, [this.lassoBoxOf(rect)], '', true)
     // What the reader will read for the rectangle, and where the ink of it
     // is — a box a glyph, and the rules among them. Both in the page's own
     // coordinates, as the scanner's glyphs are. The ink is what the page
@@ -1272,7 +1272,7 @@ export class Reader implements PageOwner {
     const caught = this.caught
     const page = caught ? this.pages[caught.pageIndex] : undefined
     if (!caught || !page) return []
-    return [await this.mathInput(page, [this.lassoBoxOf(caught.rect)], '')]
+    return [await this.mathInput(page, [this.lassoBoxOf(caught.rect)], '', true)]
   }
 
   /**
@@ -1319,9 +1319,11 @@ export class Reader implements PageOwner {
    * (read in the main process by the same scanner), the boxes the selection
    * covers — or the lasso's one — and the text layer's characters near them.
    * A page the scanner could not read comes with no glyphs, and the reader
-   * falls back to the words.
+   * falls back to the words. `byInk` for the lasso: a glyph is inside its
+   * rectangle when the middle of its ink is, where a selection's line boxes
+   * hold the glyphs whose baselines they hold (the Mac's `Region.byInk`).
    */
-  private async mathInput(page: PageView, lineBoxes: { x: number; y: number; width: number; height: number }[], selectionString: string): Promise<MathPage> {
+  private async mathInput(page: PageView, lineBoxes: { x: number; y: number; width: number; height: number }[], selectionString: string, byInk = false): Promise<MathPage> {
     const id = this.paperID
     const scanned = id ? await call('math:page', { id, pageIndex: page.index }).catch(() => null) : null
     const reachBox = lineBoxes.reduce((all, one) => ({
@@ -1339,6 +1341,7 @@ export class Reader implements PageOwner {
       selectionString,
       cropBox: scanned?.cropBox ?? { x: 0, y: 0, width: 612, height: 792 },
       italicElsewhere: scanned?.italicElsewhere ?? null,
+      byInk,
     }
   }
 

@@ -534,7 +534,9 @@ export function isTallVariant(bracket: Glyph, glyphs: Glyph[], body: number): bo
 
 /** Whether a font is an italic or slanted face. */
 export function isItalicFace(upper: string): boolean {
-  return upper.includes('ITAL') || upper.includes('OBLIQUE') || upper.includes('SLANT')
+  // ("OBLI" for URW's abbreviation of oblique — "NimbusMonL-ReguObli",
+  // "URWGothicL-BookObli" — and Oblique itself.)
+  return upper.includes('ITAL') || upper.includes('OBLI') || upper.includes('SLANT')
     || upper.startsWith('CMTI') || upper.startsWith('CMSL') || upper.startsWith('CMBXTI')
     || upper.startsWith('CMBXSL') || upper.startsWith('SFTI') || upper.startsWith('SFSL')
     || upper.startsWith('SFBI') || upper.endsWith('-IT') || upper.endsWith('-BI')
@@ -570,7 +572,7 @@ const FORMULA_SYMBOLS = new Set([
 /** A letter from the italic of a text face — which, on a page that sets its
  *  variables that way, is a variable. */
 export function isItalicLetter(glyph: Glyph): boolean {
-  if (isMathFont(glyph) || !isItalicFace(family(glyph))) return false
+  if (isMathFont(glyph) || !isItalic(glyph)) return false
   const drawn = token(glyph)
   const all = chars(drawn)
   return all.length === 1 && isLetter(all[0])
@@ -590,7 +592,15 @@ export function isUprightLetter(glyph: Glyph): boolean {
     if (glyph.unicode === null || glyph.unicode === '') return glyph.glyphName !== null && same(glyph.glyphName, drawn)
     return same(glyph.unicode, drawn)
   }
-  return !isItalicFace(upper)
+  return !isItalic(glyph)
+}
+
+/** Whether a glyph is set in an italic or oblique face: as its font's
+ *  descriptor says (the scanner's `Font.isItalic`), or — for a font that
+ *  carries no descriptor, as the base fonts a PDF need not embed do not — as
+ *  its name says. */
+export function isItalic(glyph: Glyph): boolean {
+  return (glyph.isItalic ?? false) || isItalicFace(family(glyph))
 }
 
 const UNICODE_FACES = ['LATINMODERNMATH', 'STIXTWOMATH', 'STIXMATH', 'XITSMATH',
@@ -623,7 +633,7 @@ export function uprightStyle(glyph: Glyph): string {
 const SANS_STYLE = ['CMSS', 'SFSS', 'LMSANS', 'HELVETICA', 'NIMBUSSAN', 'HEROS', 'BIOLINUM', 'ARIAL', 'SANS']
 const SANS = ['CMSS', 'SFSS', 'SFSO', 'SFSX', 'LMSANS', 'HELVETICA', 'NIMBUSSAN', 'HEROS', 'BIOLINUM',
   'ARIAL', 'SANS', 'LATO', 'ROBOTO', 'AREV', 'HFBR', 'CMBR', 'VERDANA', 'CALIBRI', 'SEGOE',
-  'GILLSANS', 'FUTURA', 'AVENIR', 'TAHOMA']
+  'GILLSANS', 'FUTURA', 'AVENIR', 'TAHOMA', 'GOTHIC', 'AVANTGARDE']
 
 /** Whether a face is sans: Computer Modern Sans, cm-super's, Latin Modern's,
  *  Helvetica and its clones, Biolinum, Arial, Fira Sans, Lato, Roboto, Arev,
@@ -1483,12 +1493,26 @@ function dotRun(start: number, glyphs: Glyph[], consumed: Set<number>): { end: n
 
 /** A run of glyphs from a bold face, wrapped once rather than letter by letter. */
 function boldRun(start: number, glyphs: Glyph[], consumed: Set<number>): { end: number; text: string } | null {
+  // Only what bold changes the look of — letters, digits, Greek: a bracket
+  // or a colon from the bold face is a bracket or a colon, and wrapped with
+  // the letters it gave \mathbf{TD(}\lambda).
+  const emboldened = (glyph: Glyph) => {
+    const spelled = mathToken(glyph)
+    return (chars(spelled).every((c) => isLetter(c) || isNumber(c)) && spelled !== '')
+      || TeX.isGreekCommand(spelled)
+  }
   const command = boldCommand(glyphs[start])
-  if (command === null) return null
+  if (command === null || !emboldened(glyphs[start])) return null
+  const continues = (index: number): boolean => index < glyphs.length && !consumed.has(index)
+    && boldCommand(glyphs[index]) === command
+    && Math.abs(glyphs[index].y - glyphs[start].y) < 0.01
+    && minX(rectOf(glyphs[index])) - maxX(rectOf(glyphs[index - 1])) < glyphs[index].size * 0.22
+  // A decimal point, a hyphen or a slash between two of them belongs to the
+  // word they make: \mathbf{86.35}, \mathbf{CIFAR-10}, \mathbf{w/o}.
+  const joins = (index: number): boolean => ['.', '-', '/'].includes(mathToken(glyphs[index]))
+    && continues(index + 1) && emboldened(glyphs[index + 1])
   let end = start + 1
-  while (end < glyphs.length && !consumed.has(end) && boldCommand(glyphs[end]) === command
-    && Math.abs(glyphs[end].y - glyphs[start].y) < 0.01
-    && minX(rectOf(glyphs[end])) - maxX(rectOf(glyphs[end - 1])) < glyphs[end].size * 0.22) {
+  while (continues(end) && (emboldened(glyphs[end]) || joins(end))) {
     end += 1
   }
   const inner = join(glyphs.slice(start, end).map(mathToken))
@@ -1522,13 +1546,14 @@ export function boldCommand(glyph: Glyph): string | null {
   // (Computer Modern Sans bold extended, cmbright's bold.)
   if (upper.startsWith('CMBX') || upper.startsWith('SFBX') || upper.includes('-BOLD')
     || upper.startsWith('CMSSBX') || upper.startsWith('SFSX') || upper.startsWith('HFBRBX') || upper.startsWith('CMBRBX')
+    // (Avant Garde's and Bookman's bold is their Demi.)
+    || upper.includes('-DEMI')
     || upper.endsWith('-BD') || upper.includes('-MEDI') || upper.endsWith('-B')
     || upper.endsWith('BOLD') || upper.endsWith('-BOL') || upper.startsWith('CMB10')
     || upper.startsWith('RTXB') || upper.startsWith('RPXB')) {
     // A bold italic text face is what \boldsymbol draws a letter with in the
     // Times, Palatino and Utopia papers: \mathbf is upright.
-    const italic = upper.includes('ITAL') || upper.includes('OBLIQUE') || upper.endsWith('-BI')
-    return italic ? '\\boldsymbol' : '\\mathbf'
+    return isItalic(glyph) ? '\\boldsymbol' : '\\mathbf'
   }
   return null
 }
@@ -1542,7 +1567,7 @@ function uprightRun(start: number, glyphs: Glyph[], consumed: Set<number>): { en
     if (isUprightLetter(glyph)) return true
     const drawn = token(glyph)
     return drawn.length >= 2 && drawn.length <= 3 && allASCIILetters(drawn)
-      && !isMathFont(glyph) && !isItalicFace(family(glyph)) && boldCommand(glyph) === null
+      && !isMathFont(glyph) && !isItalic(glyph) && boldCommand(glyph) === null
   }
   if (!upright(first)) return null
   const style = uprightStyle(first)
@@ -1633,6 +1658,14 @@ const SPACED_SYMBOLS = new Set([
   '\\setminus', '\\wedge', '\\vee', '\\oplus', '\\otimes', '\\circ', '\\ast', '\\star', '\\div',
   '\\coloneqq', '\\triangleq', '\\iff', '\\implies', '\\lor', '\\land',
 ])
+
+/** Whether a glyph is a binary operator or a relation — what TeX sets a
+ *  medium or a thick space round (`SPACED_SYMBOLS` without the punctuation
+ *  and the bar, which take a thin space or none). */
+export function isOperatorOrRelation(glyph: Glyph): boolean {
+  const spelled = mathToken(glyph)
+  return SPACED_SYMBOLS.has(spelled) && ![',', ';', ':', '.', '|'].includes(spelled)
+}
 
 // MARK: - Structures
 

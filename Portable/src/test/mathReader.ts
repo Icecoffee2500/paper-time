@@ -50,8 +50,11 @@ interface Case {
 const box = (r: number[]) => ({ x: r[0], y: r[1], width: r[2], height: r[3] })
 
 export function pageFromFixture(one: Case): PageInput {
+  // A font is named "<symbolic 0/1><italic 0/1><name>": what the Mac's
+  // scanner said of the font, and its name.
   const glyphs: Glyph[] = one.glyphs.map(([code, font, unicode, glyphName, size, x, y, width]) => ({
-    code, fontName: one.fonts[font].slice(1), isSymbolic: one.fonts[font][0] === '1', unicode, glyphName, size, x, y, width,
+    code, fontName: one.fonts[font].slice(2), isSymbolic: one.fonts[font][0] === '1', isItalic: one.fonts[font][1] === '1',
+    unicode, glyphName, size, x, y, width,
   }))
   return {
     glyphs,
@@ -113,6 +116,7 @@ function compareScan(one: Case, scanner: MathScanner) {
     const theirs = expected.glyphs[index]
     const same = glyph.code === theirs.code && glyph.fontName === theirs.fontName && glyph.unicode === theirs.unicode
       && glyph.glyphName === theirs.glyphName && glyph.isSymbolic === theirs.isSymbolic
+      && (glyph.isItalic ?? false) === (theirs.isItalic ?? false)
       && close(glyph.size, theirs.size) && close(glyph.x, theirs.x) && close(glyph.y, theirs.y) && close(glyph.width, theirs.width)
     if (!same) assert.fail(`glyph ${index}: ${JSON.stringify(glyph)} ≠ ${JSON.stringify(theirs)}`)
   })

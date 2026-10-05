@@ -570,7 +570,9 @@ enum MathTranscriber {
 
     /// Whether a font is an italic or slanted face.
     static func isItalicFace(_ family: String) -> Bool {
-        family.contains("ITAL") || family.contains("OBLIQUE") || family.contains("SLANT")
+        // ("OBLI" for URW's abbreviation of oblique — "NimbusMonL-ReguObli",
+        // "URWGothicL-BookObli" — and Oblique itself.)
+        family.contains("ITAL") || family.contains("OBLI") || family.contains("SLANT")
             || family.hasPrefix("CMTI") || family.hasPrefix("CMSL") || family.hasPrefix("CMBXTI")
             || family.hasPrefix("CMBXSL") || family.hasPrefix("SFTI") || family.hasPrefix("SFSL")
             || family.hasPrefix("SFBI") || family.hasSuffix("-IT") || family.hasSuffix("-BI")
@@ -606,7 +608,7 @@ enum MathTranscriber {
     /// A letter from the italic of a text face — which, on a page that sets
     /// its variables that way, is a variable.
     static func isItalicLetter(_ glyph: Glyph) -> Bool {
-        guard !isMathFont(glyph), isItalicFace(family(of: glyph)) else { return false }
+        guard !isMathFont(glyph), isItalic(glyph) else { return false }
         let spelled = token(for: glyph)
         return spelled.count == 1 && spelled.first?.isLetter == true
     }
@@ -627,7 +629,15 @@ enum MathTranscriber {
             guard let unicode = glyph.unicode, !unicode.isEmpty else { return glyph.glyphName == spelled }
             return unicode == spelled
         }
-        return !isItalicFace(upper)
+        return !isItalic(glyph)
+    }
+
+    /// Whether a glyph is set in an italic or oblique face: as its font's
+    /// descriptor says (`PDFContentScanner.Font.isItalic`), or — for a font
+    /// that carries no descriptor, as the base fonts a PDF need not embed
+    /// do not — as its name says.
+    static func isItalic(_ glyph: Glyph) -> Bool {
+        glyph.isItalic || isItalicFace(family(of: glyph))
     }
 
     /// The OpenType maths fonts, and STIX's own for pdfTeX: fonts in which a
@@ -668,7 +678,7 @@ enum MathTranscriber {
     static func isSansFace(_ upper: String) -> Bool {
         let sans = ["CMSS", "SFSS", "SFSO", "SFSX", "LMSANS", "HELVETICA", "NIMBUSSAN", "HEROS", "BIOLINUM",
                     "ARIAL", "SANS", "LATO", "ROBOTO", "AREV", "HFBR", "CMBR", "VERDANA", "CALIBRI", "SEGOE",
-                    "GILLSANS", "FUTURA", "AVENIR", "TAHOMA"]
+                    "GILLSANS", "FUTURA", "AVENIR", "TAHOMA", "GOTHIC", "AVANTGARDE"]
         return sans.contains { upper.hasPrefix($0) || upper.contains($0) }
     }
 
@@ -1623,12 +1633,29 @@ enum MathTranscriber {
     private static func boldRun(
         from start: Int, in glyphs: [Glyph], consumed: Set<Int>
     ) -> (end: Int, text: String)? {
-        guard let command = boldCommand(for: glyphs[start]) else { return nil }
+        // Only what bold changes the look of — letters, digits, Greek: a
+        // bracket or a colon from the bold face is a bracket or a colon, and
+        // wrapped with the letters it gave \mathbf{TD(}\lambda).
+        func emboldened(_ glyph: Glyph) -> Bool {
+            let spelled = mathToken(for: glyph)
+            return spelled.allSatisfy { $0.isLetter || $0.isNumber } && !spelled.isEmpty
+                || TeXGlyphNames.isGreekCommand(spelled)
+        }
+        guard let command = boldCommand(for: glyphs[start]), emboldened(glyphs[start]) else { return nil }
+        func continues(_ index: Int) -> Bool {
+            index < glyphs.count && !consumed.contains(index)
+                && boldCommand(for: glyphs[index]) == command
+                && abs(glyphs[index].origin.y - glyphs[start].origin.y) < 0.01
+                && glyphs[index].rect.minX - glyphs[index - 1].rect.maxX < glyphs[index].size * 0.22
+        }
+        // A decimal point, a hyphen or a slash between two of them belongs to
+        // the word they make: \mathbf{86.35}, \mathbf{CIFAR-10}, \mathbf{w/o}.
+        func joins(_ index: Int) -> Bool {
+            [".", "-", "/"].contains(mathToken(for: glyphs[index]))
+                && continues(index + 1) && emboldened(glyphs[index + 1])
+        }
         var end = start + 1
-        while end < glyphs.count, !consumed.contains(end),
-              boldCommand(for: glyphs[end]) == command,
-              abs(glyphs[end].origin.y - glyphs[start].origin.y) < 0.01,
-              glyphs[end].rect.minX - glyphs[end - 1].rect.maxX < glyphs[end].size * 0.22 {
+        while continues(end), emboldened(glyphs[end]) || joins(end) {
             end += 1
         }
         let inner = join(glyphs[start..<end].map { mathToken(for: $0) })
@@ -1669,13 +1696,14 @@ enum MathTranscriber {
         // (Computer Modern Sans bold extended, cmbright's bold.)
         if upper.hasPrefix("CMBX") || upper.hasPrefix("SFBX") || upper.contains("-BOLD")
             || upper.hasPrefix("CMSSBX") || upper.hasPrefix("SFSX") || upper.hasPrefix("HFBRBX") || upper.hasPrefix("CMBRBX")
+            // (Avant Garde's and Bookman's bold is their Demi.)
+            || upper.contains("-DEMI")
             || upper.hasSuffix("-BD") || upper.contains("-MEDI") || upper.hasSuffix("-B")
             || upper.hasSuffix("BOLD") || upper.hasSuffix("-BOL") || upper.hasPrefix("CMB10")
             || upper.hasPrefix("RTXB") || upper.hasPrefix("RPXB") {
             // A bold italic text face is what \boldsymbol draws a letter with
             // in the Times, Palatino and Utopia papers: \mathbf is upright.
-            let italic = upper.contains("ITAL") || upper.contains("OBLIQUE") || upper.hasSuffix("-BI")
-            return italic ? "\\boldsymbol" : "\\mathbf"
+            return isItalic(glyph) ? "\\boldsymbol" : "\\mathbf"
         }
         return nil
     }
@@ -1692,7 +1720,7 @@ enum MathTranscriber {
             if Self.isUprightLetter(glyph) { return true }
             let spelled = token(for: glyph)
             return (2...3).contains(spelled.count) && spelled.allSatisfy { $0.isASCII && $0.isLetter }
-                && !isMathFont(glyph) && !isItalicFace(family(of: glyph)) && boldCommand(for: glyph) == nil
+                && !isMathFont(glyph) && !isItalic(glyph) && boldCommand(for: glyph) == nil
         }
         guard isUprightLetter(first) else { return nil }
         let style = uprightStyle(first)
@@ -1781,6 +1809,14 @@ enum MathTranscriber {
 
     /// The symbols TeX spaces for themselves: relations, the binary
     /// operators, and punctuation.
+    /// Whether a glyph is a binary operator or a relation — what TeX sets a
+    /// medium or a thick space round (`spacedSymbols` without the
+    /// punctuation and the bar, which take a thin space or none).
+    static func isOperatorOrRelation(_ glyph: Glyph) -> Bool {
+        let spelled = mathToken(for: glyph)
+        return spacedSymbols.contains(spelled) && ![",", ";", ":", ".", "|"].contains(spelled)
+    }
+
     private static let spacedSymbols: Set<String> = [
         "=", "<", ">", "+", "-", ",", ";", ":", ".", "|", "\\mid", "\\leq", "\\geq", "\\neq", "\\le", "\\ge",
         "\\ne", "\\in", "\\notin", "\\ni", "\\subset", "\\subseteq", "\\supset", "\\supseteq", "\\times",
