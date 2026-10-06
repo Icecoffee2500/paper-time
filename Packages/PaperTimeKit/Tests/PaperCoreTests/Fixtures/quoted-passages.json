@@ -507,10 +507,7 @@
     },
     {
       "quotation" : "> $x + y = 1$ [1쪽](papertime://anchor?p=0&x=1.00&y=1.00&w=1.00&h=1.00)",
-      "span" : [
-        3,
-        14
-      ],
+      "span" : null,
       "text" : "so 𝑥 + 𝑦 = 1 holds"
     },
     {
@@ -533,6 +530,51 @@
         27
       ],
       "text" : "the model the model is good"
+    },
+    {
+      "quotation" : "> \\begin{equation} \\mathcal{L}(\\boldsymbol{\\theta},\\boldsymbol{\\phi};\\mathbf{x}^{(i)})=-D_{KL}(q_{\\boldsymbol{\\phi}}(\\mathbf{z}|\\mathbf{x}^{(i)})||p_{\\boldsymbol{\\theta}}(\\mathbf{z}))+\\mathbb{E}_{q_{\\boldsymbol{\\phi}}(\\mathbf{z}|\\mathbf{x}^{(i)})}\\Bigl[\\log p_{\\boldsymbol{\\theta}}(\\mathbf{x}^{(i)}|\\mathbf{z})\\Bigr]\\tag{3} \\end{equation}\n> [3쪽](papertime://anchor?p=2&x=159.00&y=407.97&w=345.00&h=37.18)\n",
+      "span" : [
+        0,
+        77
+      ],
+      "text" : "L(✓, \u0000; x(i)) =\u0000DKL(q\u0000(z|x(i))||p✓ (z)) + Eq\u0000 (z|x(i) ) hlog p✓ (x(i)|z)i (3)\n"
+    },
+    {
+      "quotation" : "> \\begin{equation} \\mathcal{L}(\\boldsymbol{\\theta},\\boldsymbol{\\phi};\\mathbf{x}^{(i)})=-D_{KL}(q_{\\boldsymbol{\\phi}}(\\mathbf{z}|\\mathbf{x}^{(i)})||p_{\\boldsymbol{\\theta}}(\\mathbf{z}))+\\mathbb{E}_{q_{\\boldsymbol{\\phi}}(\\mathbf{z}|\\mathbf{x}^{(i)})}\\Bigl[\\log p_{\\boldsymbol{\\theta}}(\\mathbf{x}^{(i)}|\\mathbf{z})\\Bigr]\\tag{3} \\end{equation}\n> [3쪽](papertime://anchor?p=2&x=159.00&y=407.97&w=345.00&h=37.18)\n",
+      "span" : [
+        0,
+        77
+      ],
+      "text" : "L(✓, \u0000; x(i)) =\u0000DKL(q\u0000(z|x(i))||p✓ (z)) + Eq\u0000 (z|x(i) ) hlog p✓ (x(i)|z)i (3)\nWe want to differentiate and optimize the lower bound L(✓, \u0000; x(i)) w.r.t. both the variational\n"
+    },
+    {
+      "quotation" : "> $\\nabla_\\theta \\mathcal{L}$ vanishes at the optimum, as expected",
+      "span" : [
+        55,
+        95
+      ],
+      "text" : "Some earlier sentence of the paragraph that ends here.\n∇✓L vanishes at the optimum, as expected\n"
+    },
+    {
+      "quotation" : "> the bound is $\\mathcal{L}(\\theta)$",
+      "span" : [
+        3,
+        20
+      ],
+      "text" : "so the bound is L(θ), which is tight"
+    },
+    {
+      "quotation" : "> $\\alpha + \\beta = 1$",
+      "span" : null,
+      "text" : "where α + β = 1 holds"
+    },
+    {
+      "quotation" : "> as shown in \\cite{kingma2014} and Eq.~\\eqref{eq:elbo}, the bound holds",
+      "span" : [
+        8,
+        53
+      ],
+      "text" : "Indeed, as shown in [12] and Eq. (3), the bound holds for"
     },
     {
       "quotation" : "> line one\r\n> line ȷoins [p](papertime://anchor?p=0&x=1.00&y=1.00&w=1.00&h=1.00)",

@@ -279,11 +279,12 @@ export class PageView {
 
   /**
    * A quoted passage's lines: the words its box holds, narrowed to where the
-   * quotation's words are in them (`quoteSpan`), as the text layer sets them
-   * — or the box itself, where the page has no words there or not the
-   * quotation's (a formula caught with the lasso, a scan). A box round two
-   * lines of a column runs from margin to margin, and a passage that starts
-   * in the middle of a line would otherwise be tinted from the margin.
+   * quotation's words are in them (`quoteSpan`), as the text layer sets them.
+   * A box round two lines of a column runs from margin to margin, and a
+   * passage that starts in the middle of a line would otherwise be tinted
+   * from the margin. Where the words are not found (a formula the note holds
+   * as LaTeX), the lines the box holds; where it holds no words (a scan), the
+   * box itself.
    */
   private passageBoxes(link: QuoteLink): PageFraction[] {
     const region = link.passage.rect
@@ -311,8 +312,7 @@ export class PageView {
       for (let unit = 0; unit < character.character.length; unit += 1) owner.push(index)
       end = character.index + character.character.length
     })
-    const span = quoteSpan(link.quotation, text)
-    if (!span) return fallback
+    const span = quoteSpan(link.quotation, text) ?? { from: 0, to: text.length }
     let first = span.from
     while (first < span.to && owner[first] < 0) first += 1
     let last = span.to - 1

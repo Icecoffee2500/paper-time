@@ -97,6 +97,21 @@ enum QuotedPassagesFixture {
         ("[1쪽](papertime://anchor?p=0&x=1.00&y=1.00&w=1.00&h=1.00)", "anything at all"),
         // The phrase twice: the first place it is whole.
         ("> the model is good", "the model the model is good"),
+        // A displayed formula quoted from a paper whose font gives the page
+        // no letters for θ or φ: the environment's name is not on the page.
+        ("> \\begin{equation} \\mathcal{L}(\\boldsymbol{\\theta},\\boldsymbol{\\phi};\\mathbf{x}^{(i)})=-D_{KL}(q_{\\boldsymbol{\\phi}}(\\mathbf{z}|\\mathbf{x}^{(i)})||p_{\\boldsymbol{\\theta}}(\\mathbf{z}))+\\mathbb{E}_{q_{\\boldsymbol{\\phi}}(\\mathbf{z}|\\mathbf{x}^{(i)})}\\Bigl[\\log p_{\\boldsymbol{\\theta}}(\\mathbf{x}^{(i)}|\\mathbf{z})\\Bigr]\\tag{3} \\end{equation}\n> [3쪽](papertime://anchor?p=2&x=159.00&y=407.97&w=345.00&h=37.18)\n", "L(\u{2713}, \u{0}; x(i)) =\u{0}DKL(q\u{0}(z|x(i))||p\u{2713} (z)) + Eq\u{0} (z|x(i) ) hlog p\u{2713} (x(i)|z)i (3)\n"),
+        // The same formula read off the text layer of another build, whose
+        // boxes sit higher: the box takes in the line under the formula.
+        ("> \\begin{equation} \\mathcal{L}(\\boldsymbol{\\theta},\\boldsymbol{\\phi};\\mathbf{x}^{(i)})=-D_{KL}(q_{\\boldsymbol{\\phi}}(\\mathbf{z}|\\mathbf{x}^{(i)})||p_{\\boldsymbol{\\theta}}(\\mathbf{z}))+\\mathbb{E}_{q_{\\boldsymbol{\\phi}}(\\mathbf{z}|\\mathbf{x}^{(i)})}\\Bigl[\\log p_{\\boldsymbol{\\theta}}(\\mathbf{x}^{(i)}|\\mathbf{z})\\Bigr]\\tag{3} \\end{equation}\n> [3쪽](papertime://anchor?p=2&x=159.00&y=407.97&w=345.00&h=37.18)\n", "L(\u{2713}, \u{0}; x(i)) =\u{0}DKL(q\u{0}(z|x(i))||p\u{2713} (z)) + Eq\u{0} (z|x(i) ) hlog p\u{2713} (x(i)|z)i (3)\nWe want to differentiate and optimize the lower bound L(\u{2713}, \u{0}; x(i)) w.r.t. both the variational\n"),
+        // The line above a passage whose opening is a formula.
+        ("> $\\nabla_\\theta \\mathcal{L}$ vanishes at the optimum, as expected", "Some earlier sentence of the paragraph that ends here.\n\u{2207}\u{2713}L vanishes at the optimum, as expected\n"),
+        // A quotation that closes with a formula: its letters the commands
+        // do not spell are the formula's, the comma after it the sentence's.
+        ("> the bound is $\\mathcal{L}(\\theta)$", "so the bound is L(\u{3B8}), which is tight"),
+        // Too short to be found anywhere in particular.
+        ("> $\\alpha + \\beta = 1$", "where \u{3B1} + \u{3B2} = 1 holds"),
+        // A citation's key and a label are not on the page; their numbers are.
+        ("> as shown in \\cite{kingma2014} and Eq.~\\eqref{eq:elbo}, the bound holds", "Indeed, as shown in [12] and Eq. (3), the bound holds for"),
         // Windows line breaks, and a dotless j.
         ("> line one\r\n> line \u{237}oins [p](papertime://anchor?p=0&x=1.00&y=1.00&w=1.00&h=1.00)", "line one\nline joins"),
     ]

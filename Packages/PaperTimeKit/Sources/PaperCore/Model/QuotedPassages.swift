@@ -129,16 +129,18 @@ extension QuotedPassages {
     /// The whole quotation is looked for first. One that was edited, or
     /// whose formulas read differently, is placed by the longest stretch of
     /// its opening the text holds and the longest of its close — eight
-    /// letters at the least, or the text's own start and end stand in. Nil
-    /// when neither end is there. The span takes in the punctuation the
+    /// letters at the least, or the text's own start and end stand in, less
+    /// any line there that holds almost nothing of the quotation. Nil when
+    /// neither end is there, and for a quotation of fewer than four letters,
+    /// which could be found anywhere. The span takes in the punctuation the
     /// quotation opens and closes with («(», «.»). Offsets are UTF-16, into
-    /// `text`.
+    /// `text`, whose lines are its `\n`s.
     public static func span(of quotation: String, in text: String) -> Range<Int>? {
         let words = cleaned(quotation)
         let wanted = Keys(words).values
         let page = Keys(text)
         let found = page.values
-        guard !wanted.isEmpty, !found.isEmpty else { return nil }
+        guard wanted.count >= 4, !found.isEmpty else { return nil }
 
         var start: Int?
         var end: Int?
@@ -157,8 +159,30 @@ extension QuotedPassages {
             }
         }
         guard start != nil || end != nil else { return nil }
-        let from = start ?? 0, to = end ?? found.count
+        var from = start ?? 0, to = end ?? found.count
         guard to > from else { return nil }
+        // Where an end was not found, a line at that end that holds almost
+        // nothing of the quotation is a neighbour the box reached into:
+        // PDFKit draws the box round a displayed formula as deep as its
+        // brackets' font goes, over the line under it.
+        let line = lineNumbers(of: page, in: text)
+        let belongs = Neighbours(wanted)
+        if end == nil {
+            while to - 1 > from, line[to - 1] > line[from] {
+                var first = to - 1
+                while first > from, line[first - 1] == line[to - 1] { first -= 1 }
+                if belongs(found[first..<to]) { break }
+                to = first
+            }
+        }
+        if start == nil {
+            while from < to - 1, line[from] < line[to - 1] {
+                var last = from + 1
+                while last < to, line[last] == line[from] { last += 1 }
+                if belongs(found[from..<last]) { break }
+                from = last
+            }
+        }
 
         let scalars = Array(text.unicodeScalars)
         var offsets: [Int] = []
@@ -169,26 +193,87 @@ extension QuotedPassages {
             offset += scalar.utf16.count
         }
         offsets.append(offset)
-        var lower = page.from[from], upper = page.to[to - 1]
         // The quotation's own opening and closing punctuation, where the
-        // text has it right against the words.
-        var first = offsets.firstIndex(of: lower) ?? 0
-        for _ in 0..<edgePunctuation(of: words, fromEnd: false) {
-            guard first > 0, isPunctuation(scalars[first - 1]) else { break }
-            first -= 1
-            lower = offsets[first]
+        // text has it right against the words — and where it opens or closes
+        // with a formula, the formula's marks the text has there: «∇θ» before
+        // «L», which the formula's commands do not spell. Any more
+        // punctuation than the quotation's own is the sentence's.
+        var first = offsets.firstIndex(of: page.from[from]) ?? 0
+        let opening = edge(of: words, fromEnd: false)
+        if opening.math {
+            let core = first
+            while first > 0, isFormulaMark(scalars[first - 1]) { first -= 1 }
+            var marks = (first..<core).filter { isPunctuation(scalars[$0]) }.count
+            while marks > opening.punctuation, first < core, isPunctuation(scalars[first]) {
+                first += 1
+                marks -= 1
+            }
+        } else {
+            for _ in 0..<opening.punctuation {
+                guard first > 0, isPunctuation(scalars[first - 1]) else { break }
+                first -= 1
+            }
         }
-        var last = offsets.firstIndex(of: upper) ?? scalars.count
-        for _ in 0..<edgePunctuation(of: words, fromEnd: true) {
-            guard last < scalars.count, isPunctuation(scalars[last]) else { break }
-            last += 1
-            upper = offsets[last]
+        var last = offsets.firstIndex(of: page.to[to - 1]) ?? scalars.count
+        let closing = edge(of: words, fromEnd: true)
+        if closing.math {
+            let core = last
+            while last < scalars.count, isFormulaMark(scalars[last]) { last += 1 }
+            var marks = (core..<last).filter { isPunctuation(scalars[$0]) }.count
+            while marks > closing.punctuation, last > core, isPunctuation(scalars[last - 1]) {
+                last -= 1
+                marks -= 1
+            }
+        } else {
+            for _ in 0..<closing.punctuation {
+                guard last < scalars.count, isPunctuation(scalars[last]) else { break }
+                last += 1
+            }
         }
-        return lower..<upper
+        return offsets[first]..<offsets[last]
+    }
+
+    /// Which line of the text each key is on.
+    static func lineNumbers(of keys: Keys, in text: String) -> [Int] {
+        var breaks: [Int] = []
+        var offset = 0
+        for unit in text.utf16 {
+            if unit == 10 { breaks.append(offset) }
+            offset += 1
+        }
+        var numbers: [Int] = []
+        numbers.reserveCapacity(keys.from.count)
+        var passed = 0
+        for at in keys.from {
+            while passed < breaks.count, breaks[passed] < at { passed += 1 }
+            numbers.append(passed)
+        }
+        return numbers
+    }
+
+    /// Whether a line's keys are the quotation's: three in ten of its
+    /// neighbouring pairs are pairs the quotation has too. A line of one key
+    /// is if the quotation has that key — an equation's «(3)».
+    struct Neighbours {
+        let pairs: Set<UInt64>
+        let keys: Set<UInt32>
+
+        init(_ wanted: [UInt32]) {
+            pairs = Set(zip(wanted, wanted.dropFirst()).map { UInt64($0) << 32 | UInt64($1) })
+            keys = Set(wanted)
+        }
+
+        func callAsFunction(_ line: ArraySlice<UInt32>) -> Bool {
+            guard line.count >= 2 else { return line.allSatisfy(keys.contains) }
+            let shared = zip(line, line.dropFirst()).filter { pairs.contains(UInt64($0) << 32 | UInt64($1)) }.count
+            return Double(shared) >= Double(line.count - 1) * 0.3
+        }
     }
 
     /// A quotation as words: its page links taken out, and LaTeX's command
-    /// words (`\theta`) and control symbols (`\{`, `\\`).
+    /// words (`\theta`) and control symbols (`\{`, `\\`) — with the
+    /// argument of a command whose argument the page does not print, and
+    /// an equation's tag as the number the page prints.
     static func cleaned(_ quotation: String) -> String {
         let linked = linkPattern.stringByReplacingMatches(
             in: quotation, range: NSRange(location: 0, length: (quotation as NSString).length), withTemplate: " "
@@ -203,14 +288,42 @@ extension QuotedPassages {
                 continue
             }
             index += 1
-            if index < scalars.count, isASCIILetter(scalars[index]) {
-                while index < scalars.count, isASCIILetter(scalars[index]) { index += 1 }
-            } else if index < scalars.count {
+            guard index < scalars.count, isASCIILetter(scalars[index]) else {
+                if index < scalars.count { index += 1 }
+                continue
+            }
+            var word = ""
+            while index < scalars.count, isASCIILetter(scalars[index]) {
+                word.unicodeScalars.append(scalars[index])
                 index += 1
             }
+            guard word == "tag" || unprinted.contains(word) else { continue }
+            var next = index
+            while next < scalars.count, scalars[next] == " " { next += 1 }
+            guard next < scalars.count, scalars[next] == "{" else { continue }
+            let open = next
+            var depth = 0
+            while next < scalars.count {
+                if scalars[next] == "{" { depth += 1 }
+                if scalars[next] == "}" { depth -= 1 }
+                next += 1
+                if depth == 0 { break }
+            }
+            // An equation's number is printed in brackets: «(3)».
+            if word == "tag" {
+                kept.append("(")
+                for scalar in scalars[(open + 1)..<max(open + 1, next - 1)] { kept.append(scalar) }
+                kept.append(")")
+            }
+            index = next
         }
         return String(kept)
     }
+
+    /// Commands whose argument the page does not print: an environment's
+    /// name (`\begin{equation}`), a label and what refers to it, a
+    /// citation's key, a colour.
+    static let unprinted: Set<String> = ["begin", "end", "label", "ref", "eqref", "cite", "color", "textcolor"]
 
     /// The letters and digits of a text, folded so two hands' spellings of
     /// one passage agree — each with the UTF-16 span of the character it
@@ -283,16 +396,26 @@ extension QuotedPassages {
         }
     }
 
-    /// How many marks of punctuation the words open (or close) with, before
-    /// their first (or after their last) letter or digit.
-    static func edgePunctuation(of words: String, fromEnd: Bool) -> Int {
+    /// How the words open (or close), before their first (or after their
+    /// last) letter or digit: how many marks of punctuation, and whether in
+    /// a formula.
+    static func edge(of words: String, fromEnd: Bool) -> (punctuation: Int, math: Bool) {
         let scalars = fromEnd ? Array(words.unicodeScalars.reversed()) : Array(words.unicodeScalars)
         var count = 0
+        var math = false
         for scalar in scalars {
             if !keys(of: scalar).isEmpty { break }
+            if scalar == "$" { math = true }
             if isPunctuation(scalar) { count += 1 }
         }
-        return count
+        return (count, math)
+    }
+
+    /// What a formula sets that the words round it are not made of: not a
+    /// space, not a Latin letter or a digit — a symbol, a bracket, a Greek
+    /// letter, a glyph the text has no letter for.
+    static func isFormulaMark(_ scalar: Unicode.Scalar) -> Bool {
+        !scalar.properties.isWhitespace && !(scalar.isASCII && keys(of: scalar).count == 1)
     }
 
     /// The longest opening of `pattern` that `text` holds, and where the

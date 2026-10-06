@@ -159,16 +159,18 @@ export const QUOTE_WASH = { rest: 0.18, lit: 0.3 }
  * are left out of the quotation. The whole quotation is looked for first; one
  * that was edited, or whose formulas read differently, is placed by the
  * longest stretch of its opening the text holds and the longest of its close —
- * eight letters at the least, or the text's own start and end stand in. Null
- * when neither end is there. The span takes in the punctuation the quotation
- * opens and closes with. Offsets are UTF-16, into `text`.
+ * eight letters at the least, or the text's own start and end stand in, less
+ * any line there that holds almost nothing of the quotation. Null when neither
+ * end is there, and for a quotation of fewer than four letters, which could be
+ * found anywhere. The span takes in the punctuation the quotation opens and
+ * closes with. Offsets are UTF-16, into `text`, whose lines are its `\n`s.
  */
 export function quoteSpan(quotation: string, text: string): { from: number; to: number } | null {
   const words = cleanedQuotation(quotation)
   const wanted = keysOf(words).values
   const page = keysOf(text)
   const found = page.values
-  if (wanted.length === 0 || found.length === 0) return null
+  if (wanted.length < 4 || found.length === 0) return null
 
   let start: number | null = null
   let end: number | null = null
@@ -188,9 +190,31 @@ export function quoteSpan(quotation: string, text: string): { from: number; to: 
     }
   }
   if (start === null && end === null) return null
-  const from = start ?? 0
-  const to = end ?? found.length
+  let from = start ?? 0
+  let to = end ?? found.length
   if (to <= from) return null
+  // Where an end was not found, a line at that end that holds almost nothing
+  // of the quotation is a neighbour the box reached into: PDFKit draws the box
+  // round a displayed formula as deep as its brackets' font goes, over the
+  // line under it.
+  const line = lineNumbers(page.from, text)
+  const belongs = neighbours(wanted)
+  if (end === null) {
+    while (to - 1 > from && line[to - 1] > line[from]) {
+      let first = to - 1
+      while (first > from && line[first - 1] === line[to - 1]) first -= 1
+      if (belongs(found.slice(first, to))) break
+      to = first
+    }
+  }
+  if (start === null) {
+    while (from < to - 1 && line[from] < line[to - 1]) {
+      let last = from + 1
+      while (last < to && line[last] === line[from]) last += 1
+      if (belongs(found.slice(from, last))) break
+      from = last
+    }
+  }
 
   const scalars: number[] = []
   const offsets: number[] = []
@@ -201,26 +225,74 @@ export function quoteSpan(quotation: string, text: string): { from: number; to: 
     offset += character.length
   }
   offsets.push(offset)
-  let lower = page.from[from]
-  let upper = page.to[to - 1]
-  // The quotation's own opening and closing punctuation, where the text has it right against the words.
-  let first = Math.max(offsets.indexOf(lower), 0)
-  for (let left = edgePunctuation(words, false); left > 0; left -= 1) {
-    if (first <= 0 || !isPunctuation(scalars[first - 1])) break
-    first -= 1
-    lower = offsets[first]
+  // The quotation's own opening and closing punctuation, where the text has it
+  // right against the words — and where it opens or closes with a formula, the
+  // formula's marks the text has there: «∇θ» before «L», which the formula's
+  // commands do not spell. Any more punctuation than the quotation's own is
+  // the sentence's.
+  let first = Math.max(offsets.indexOf(page.from[from]), 0)
+  const opening = edge(words, false)
+  if (opening.math) {
+    const core = first
+    while (first > 0 && isFormulaMark(scalars[first - 1])) first -= 1
+    let marks = scalars.slice(first, core).filter(isPunctuation).length
+    while (marks > opening.punctuation && first < core && isPunctuation(scalars[first])) {
+      first += 1
+      marks -= 1
+    }
+  } else {
+    for (let left = opening.punctuation; left > 0; left -= 1) {
+      if (first <= 0 || !isPunctuation(scalars[first - 1])) break
+      first -= 1
+    }
   }
-  let last = offsets.indexOf(upper)
+  let last = offsets.indexOf(page.to[to - 1])
   if (last < 0) last = scalars.length
-  for (let left = edgePunctuation(words, true); left > 0; left -= 1) {
-    if (last >= scalars.length || !isPunctuation(scalars[last])) break
-    last += 1
-    upper = offsets[last]
+  const closing = edge(words, true)
+  if (closing.math) {
+    const core = last
+    while (last < scalars.length && isFormulaMark(scalars[last])) last += 1
+    let marks = scalars.slice(core, last).filter(isPunctuation).length
+    while (marks > closing.punctuation && last > core && isPunctuation(scalars[last - 1])) {
+      last -= 1
+      marks -= 1
+    }
+  } else {
+    for (let left = closing.punctuation; left > 0; left -= 1) {
+      if (last >= scalars.length || !isPunctuation(scalars[last])) break
+      last += 1
+    }
   }
-  return { from: lower, to: upper }
+  return { from: offsets[first], to: offsets[last] }
 }
 
-/** A quotation as words: its page links taken out, and LaTeX's command words (`\theta`) and control symbols (`\{`, `\\`). */
+/** Which line of the text each key is on, from where the key's character starts. */
+function lineNumbers(starts: readonly number[], text: string): number[] {
+  const breaks: number[] = []
+  for (let offset = 0; offset < text.length; offset += 1) if (text.charCodeAt(offset) === 10) breaks.push(offset)
+  const numbers: number[] = []
+  let passed = 0
+  for (const at of starts) {
+    while (passed < breaks.length && breaks[passed] < at) passed += 1
+    numbers.push(passed)
+  }
+  return numbers
+}
+
+/** Whether a line's keys are the quotation's: three in ten of its neighbouring pairs are pairs the quotation has too. A line of one key is if the quotation has that key — an equation's «(3)». */
+function neighbours(wanted: readonly number[]): (line: readonly number[]) => boolean {
+  const pairs = new Set<string>()
+  for (let index = 0; index + 1 < wanted.length; index += 1) pairs.add(`${wanted[index]},${wanted[index + 1]}`)
+  const keys = new Set(wanted)
+  return (line) => {
+    if (line.length < 2) return line.every((key) => keys.has(key))
+    let shared = 0
+    for (let index = 0; index + 1 < line.length; index += 1) if (pairs.has(`${line[index]},${line[index + 1]}`)) shared += 1
+    return shared >= (line.length - 1) * 0.3
+  }
+}
+
+/** A quotation as words: its page links taken out, and LaTeX's command words (`\theta`) and control symbols (`\{`, `\\`) — with the argument of a command whose argument the page does not print, and an equation's tag as the number the page prints. */
 function cleanedQuotation(quotation: string): string {
   const scalars = [...quotation.replace(LINK, ' ')]
   let kept = ''
@@ -232,14 +304,36 @@ function cleanedQuotation(quotation: string): string {
       continue
     }
     index += 1
-    if (index < scalars.length && isASCIILetter(scalars[index])) {
-      while (index < scalars.length && isASCIILetter(scalars[index])) index += 1
-    } else if (index < scalars.length) {
+    if (index >= scalars.length || !isASCIILetter(scalars[index])) {
+      if (index < scalars.length) index += 1
+      continue
+    }
+    let word = ''
+    while (index < scalars.length && isASCIILetter(scalars[index])) {
+      word += scalars[index]
       index += 1
     }
+    if (word !== 'tag' && !UNPRINTED.has(word)) continue
+    let next = index
+    while (next < scalars.length && scalars[next] === ' ') next += 1
+    if (next >= scalars.length || scalars[next] !== '{') continue
+    const open = next
+    let depth = 0
+    while (next < scalars.length) {
+      if (scalars[next] === '{') depth += 1
+      if (scalars[next] === '}') depth -= 1
+      next += 1
+      if (depth === 0) break
+    }
+    // An equation's number is printed in brackets: «(3)».
+    if (word === 'tag') kept += `(${scalars.slice(open + 1, Math.max(open + 1, next - 1)).join('')})`
+    index = next
   }
   return kept
 }
+
+/** Commands whose argument the page does not print: an environment's name (`\begin{equation}`), a label and what refers to it, a citation's key, a colour. */
+const UNPRINTED = new Set(['begin', 'end', 'label', 'ref', 'eqref', 'cite', 'color', 'textcolor'])
 
 const isASCIILetter = (character: string) => /^[A-Za-z]$/.test(character)
 
@@ -286,17 +380,24 @@ function isPunctuation(point: number): boolean {
   return /^\p{P}$/u.test(character) && !'*_#{}\\'.includes(character)
 }
 
-/** How many marks of punctuation the words open (or close) with, before their first (or after their last) letter or digit. */
-function edgePunctuation(words: string, fromEnd: boolean): number {
+/** How the words open (or close), before their first (or after their last) letter or digit: how many marks of punctuation, and whether in a formula. */
+function edge(words: string, fromEnd: boolean): { punctuation: number; math: boolean } {
   const scalars = [...words]
   if (fromEnd) scalars.reverse()
-  let count = 0
+  let punctuation = 0
+  let math = false
   for (const character of scalars) {
     const point = character.codePointAt(0)!
     if (characterKeys(point).length > 0) break
-    if (isPunctuation(point)) count += 1
+    if (character === '$') math = true
+    if (isPunctuation(point)) punctuation += 1
   }
-  return count
+  return { punctuation, math }
+}
+
+/** What a formula sets that the words round it are not made of: not a space, not a Latin letter or a digit — a symbol, a bracket, a Greek letter, a glyph the text has no letter for. */
+function isFormulaMark(point: number): boolean {
+  return !/^\p{White_Space}$/u.test(String.fromCodePoint(point)) && !(point < 0x80 && characterKeys(point).length === 1)
 }
 
 /** The longest opening of `pattern` that `text` holds, and where the first such stretch ends (exclusive). Knuth–Morris–Pratt: one pass. */

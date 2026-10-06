@@ -90,9 +90,8 @@ enum QuoteWashShare {
 struct QuoteWash: Equatable {
     var link: QuoteLink
     /// The passage's lines in page space, fitted to their letters the way a
-    /// highlight's are — or, when the page's text does not hold the
-    /// quotation's words (a formula caught with the lasso, a scan), the box
-    /// it was quoted from.
+    /// highlight's are — or, where its box holds no words at all (a scan),
+    /// the box.
     var lines: [CGRect]
 
     /// Whether a point on the page is on the passage.
@@ -138,7 +137,11 @@ struct QuoteWash: Equatable {
     /// narrowed to where the quotation's words are in it. A box round two
     /// lines of a column runs from margin to margin, and a passage that
     /// starts in the middle of a line would otherwise be tinted from the
-    /// margin. Nil when the box holds no text, or not the quotation's.
+    /// margin. Where the words are not found — a formula the lasso caught
+    /// and the note holds as LaTeX the page's text cannot be matched to —
+    /// the lines the box was drawn round: fitted to their letters, they
+    /// stay off the next line, which PDFKit's box round a displayed
+    /// formula reaches into. Nil when the box holds no text.
     static func passage(of link: QuoteLink, on page: PDFPage) -> PDFSelection? {
         let region = link.rect
         guard let rough = page.selection(for: region), let string = page.string as NSString? else { return nil }
@@ -167,7 +170,7 @@ struct QuoteWash: Equatable {
             text += words
             length += (words as NSString).length
         }
-        guard let span = QuotedPassages.span(of: link.quotation, in: text) else { return nil }
+        let span = QuotedPassages.span(of: link.quotation, in: text) ?? 0..<length
         // From the text back to the page: within a line, one for one; on the
         // break after it, the line's end.
         func onPage(_ offset: Int) -> Int {
