@@ -1367,6 +1367,43 @@ body[data-window-focused='false'] .paper-row[aria-selected='true'] {
 }
 
 /* A passage a note quotes, lit for a moment where the jump landed. */
+/* The rule beside a passage a note quotes: the note's own quotation rule
+   (`.nm-q-anchored`), from the page's side, standing in the margin of the
+   passage's column (`quoteRule`). A click goes back to the quotation. Outside
+   the print, so a tint does not touch the accent. */
+.page .quote-links {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+.page .quote-rule {
+  position: absolute;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.page .quote-rule::before {
+  content: '';
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  left: 50%;
+  width: var(--rule, 2px);
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 55%, transparent);
+  transition: background-color var(--motion-tap) var(--ease), width var(--motion-tap) var(--ease);
+}
+.page .quote-rule:hover::before {
+  width: calc(var(--rule, 2px) + 1px);
+  background: color-mix(in srgb, var(--accent) 90%, transparent);
+}
+.page[data-drawing='true'] .quote-rule,
+.page[data-lasso='true'] .quote-rule { pointer-events: none; }
+
 .page .passage-flash {
   position: absolute;
   z-index: 6;

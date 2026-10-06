@@ -6,7 +6,9 @@
  * reader whose paper leaves the page area is taken down, canvases and all.
  * Everything that changes what is in the page area ends in `reconcileReaders`.
  */
-import { ultracopySelection } from './actions/notes.js'
+import { openQuotation, ultracopySelection } from './actions/notes.js'
+import { quoteLinksOf } from '../shared/quotedPassages.js'
+import { zettelDisplayTitle } from '../shared/zettel.js'
 import { call } from './bridge.js'
 import { clear, el } from './dom.js'
 import {
@@ -75,6 +77,25 @@ export function fileNameOf(entry: Paper | null | undefined): string {
   return relative.split(/[\\/]/).pop() ?? ''
 }
 
+/** The passages of a paper that the notes quote (`QuoteLink`). */
+function quoteLinksFor(id: string) {
+  return quoteLinksOf(store.notes, id, zettelDisplayTitle)
+}
+
+let quoteLinksTimer = 0
+
+/**
+ * Every open paper's quote links, read off the notes again — a moment after
+ * they last changed: while a note is typed into they change with every key,
+ * and the rules on the page wait for the typing to pause.
+ */
+export function refreshQuoteLinksSoon() {
+  window.clearTimeout(quoteLinksTimer)
+  quoteLinksTimer = window.setTimeout(() => {
+    for (const [id, reader] of readers) reader.setQuoteLinks(id, quoteLinksFor(id))
+  }, 300)
+}
+
 function readerFor(id: string, pane: boolean): Reader {
   const existing = readers.get(id)
   if (existing) return existing
@@ -105,6 +126,7 @@ function readerFor(id: string, pane: boolean): Reader {
     title: () => findPaper(id)?.meta.displayTitle ?? '',
     pageChanged: (index) => recordPosition(id, index),
     fileName: () => fileNameOf(findPaper(id)),
+    openQuote: (link) => void openQuotation(id, link),
   }, { pane, layout: store.settings.pageLayout })
   readers.set(id, reader)
   void loadInto(reader, id)
@@ -144,6 +166,7 @@ async function loadInto(reader: Reader, id: string) {
     size: result.size,
     again: () => void loadInto(reader, id),
   }, findPaper(id)?.state.lastPageIndex ?? 0)
+  reader.setQuoteLinks(id, quoteLinksFor(id))
   reader.setDrawing(reader.state.drawing)
   reader.update()
   if (focused() === reader) focusChanged()

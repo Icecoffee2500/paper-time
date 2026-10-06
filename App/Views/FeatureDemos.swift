@@ -38,6 +38,7 @@ struct FeatureDemoView: View {
             case .annotations: AnnotationDemo(scale: scale)
             case .panes: PaneDemo(scale: scale)
             case .passageLink: PassageDemo(scale: scale)
+            case .quoteLink: QuoteLinkDemo(scale: scale)
             case .ultracopy: UltracopyDemo(scale: scale)
             case .slipBox: SlipBoxDemo(scale: scale)
             case .graph: GraphDemo(scale: scale)
@@ -1050,6 +1051,115 @@ private struct PassageDemo: View {
                         }
                     } else {
                         Rule(width: 70)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - The way back from the page
+
+/// A passage on the page, and beside it the rule ⌘L leaves: the note's own
+/// quotation rule, seen from the page's side. Pressing it is what the page
+/// does — the note comes forward and the quotation in it glows.
+private struct QuoteLinkDemo: View {
+    let scale: DemoScale
+    @State private var lit = false
+    @State private var hovering = false
+
+    private var words: String {
+        ReleaseNotes.string(
+            "Tip-Adapter는 클래스마다 표본 몇 개만 담아 캐시의 메모리 문제를 푼다.",
+            "Tip-Adapter solves the cache's memory problem by keeping a few samples per class."
+        )
+    }
+
+    private var title: String { ReleaseNotes.string("캐시 모델", "Cache Models") }
+
+    /// The rule beside the passage, in the page's margin: a press on it is
+    /// the press that goes to the note.
+    private var rule: some View {
+        Button {
+            withAnimation(Motion.tap) { lit = true }
+            Task {
+                try? await Task.sleep(for: .seconds(1.4))
+                withAnimation(Motion.fade) { lit = false }
+            }
+        } label: {
+            Capsule()
+                .fill(Color.accentColor.opacity(hovering ? 0.9 : 0.55))
+                .frame(width: (scale.isFull ? 2 : 1.5) + (hovering ? 1 : 0))
+                .padding(.horizontal, 4)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .onHover { inside in
+            withAnimation(Motion.tap) { hovering = inside }
+            #if os(macOS)
+            if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+            #endif
+        }
+        .help(ReleaseNotes.string("노트에서 보기", "Show in Note"))
+    }
+
+    /// The quotation as the note sets it: the rule, the faint ground, the
+    /// words in italics and the page at the end — glowing when it is the one
+    /// the page went to.
+    private var quotation: some View {
+        HStack(alignment: .top, spacing: scale.isFull ? 9 : 6) {
+            Capsule()
+                .fill(Color.accentColor.opacity(0.55))
+                .frame(width: scale.isFull ? 2.5 : 2)
+            (Text(words).italic()
+                + Text(" ")
+                + Text(ReleaseNotes.string("3쪽", "p. 3")).font(scale.small).foregroundColor(.accentColor))
+                .font(scale.body)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, scale.isFull ? 7 : 5)
+        .padding(.vertical, scale.isFull ? 5 : 3)
+        .background(
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(Color.accentColor.opacity(lit ? 0.24 : 0.05))
+        )
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: scale.gap) {
+            Paper(scale: scale) {
+                VStack(alignment: .leading, spacing: scale.isFull ? 7 : 4) {
+                    Rule(width: 90)
+                    Rule()
+                    Text(words)
+                        .font(scale.body)
+                        .fixedSize(horizontal: false, vertical: true)
+                        // In the margin, left of the column — where the rule
+                        // stands on a page.
+                        .overlay(alignment: .leading) {
+                            rule
+                                .padding(.vertical, 1)
+                                .offset(x: scale.isFull ? -13 : -10)
+                        }
+                    Rule()
+                    Rule(width: 120)
+                }
+                .padding(.leading, scale.isFull ? 6 : 4)
+            }
+
+            Paper(scale: scale) {
+                VStack(alignment: .leading, spacing: scale.isFull ? 7 : 5) {
+                    Text(title)
+                        .font(scale.body.weight(.semibold))
+                    quotation
+                    if scale.isFull {
+                        Text(ReleaseNotes.string(
+                            "구절 옆의 세로줄을 누르면 그 구절을 인용한 노트가 열려요.",
+                            "Click the rule beside a passage to open the note that quotes it."
+                        ))
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
                     }
                 }
             }

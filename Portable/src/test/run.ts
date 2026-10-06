@@ -46,6 +46,7 @@ import { zettelSuite } from './zettel.js'
 import { updatesSuite } from './updates.js'
 import { noteTableSuite } from './noteTable.js'
 import { noteCodeSuite } from './noteCode.js'
+import { quotedPassagesSuite } from './quotedPassages.js'
 import { codeHighlightSuite } from './codeHighlight.js'
 import { feedbackNameSuite } from './feedbackName.js'
 import { slipBoxSuite } from './slipBox.js'
@@ -438,6 +439,7 @@ async function main() {
   await updatesSuite(test, suite)
   await noteTableSuite(test, suite)
   await noteCodeSuite(test, suite)
+  await quotedPassagesSuite(test, suite)
   await codeHighlightSuite(test, suite)
   await feedbackNameSuite(test, suite)
   await slipBoxSuite(test, suite)

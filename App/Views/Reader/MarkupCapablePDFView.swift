@@ -102,6 +102,12 @@ final class MarkupCapablePDFView: PDFView {
     /// Called to take a mark off the page, and to recolour one.
     var onRemoveMark: ((PDFAnnotation) -> Void)?
     var onRecolorMark: ((PDFAnnotation, MarkupColor) -> Void)?
+    /// The rule beside a quoted passage under the pointer, deepened (nil:
+    /// the pointer has gone); answers whether there is one.
+    var hoverQuote: ((NSPoint?) -> Bool)?
+    /// The quotations of the passage under a right-click, and opening one.
+    var quotesAt: ((NSPoint) -> [QuoteLink])?
+    var onOpenQuote: ((QuoteLink) -> Void)?
     private var hitMark: PDFAnnotation?
 
     // MARK: Hovering
@@ -129,12 +135,15 @@ final class MarkupCapablePDFView: PDFView {
     override func mouseMoved(with event: NSEvent) {
         super.mouseMoved(with: event)
         setHoveredMark(mark(at: event.locationInWindow))
-        if MarkHover.hovered != nil { NSCursor.pointingHand.set() }
+        // The rule beside a quoted passage is a link too.
+        let onQuote = hoverQuote?(event.locationInWindow) ?? false
+        if MarkHover.hovered != nil || onQuote { NSCursor.pointingHand.set() }
     }
 
     override func mouseExited(with event: NSEvent) {
         super.mouseExited(with: event)
         setHoveredMark(nil)
+        _ = hoverQuote?(nil)
     }
 
     private func setHoveredMark(_ mark: PDFAnnotation?) {
@@ -157,7 +166,32 @@ final class MarkupCapablePDFView: PDFView {
         }
     }
 
+    /// A right-click on a quoted passage offers its quotation first — on the
+    /// words as well as on the rule, since the words are what a reader
+    /// points at.
     override func menu(for event: NSEvent) -> NSMenu? {
+        let menu = markupMenu(for: event)
+        let quotes = quotesAt?(event.locationInWindow) ?? []
+        guard !quotes.isEmpty else { return menu }
+        menu.insertItem(NSMenuItem.separator(), at: 0)
+        for link in quotes.reversed() {
+            let title = quotes.count == 1 || link.noteTitle.isEmpty
+                ? L("노트에서 보기", "Show in Note")
+                : L("노트에서 보기 · \(link.noteTitle)", "Show in Note · \(link.noteTitle)")
+            let item = NSMenuItem(title: title, action: #selector(openQuoteFromMenu(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = link
+            menu.insertItem(item, at: 0)
+        }
+        return menu
+    }
+
+    @objc private func openQuoteFromMenu(_ sender: NSMenuItem) {
+        guard let link = sender.representedObject as? QuoteLink else { return }
+        onOpenQuote?(link)
+    }
+
+    private func markupMenu(for event: NSEvent) -> NSMenu {
         let menu = super.menu(for: event) ?? NSMenu()
 
         // Control-clicking a mark offers to change or remove it, which is the

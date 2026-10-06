@@ -38,6 +38,11 @@ struct PDFReaderRepresentable: PlatformViewRepresentable {
     var onNoteRequested: () -> Void
     /// Shows a short confirmation for actions that leave nothing on screen.
     var onToast: (String) -> Void
+    /// The passages of this paper that notes quote, each drawn as a rule
+    /// beside it that goes back to its quotation (`QuoteLink`).
+    var quoteLinks = QuoteLinks()
+    /// A rule was clicked: the quotation it goes back to.
+    var onOpenQuote: (QuoteLink) -> Void = { _ in }
 
     func makeCoordinator() -> ReaderCoordinator {
         ReaderCoordinator(
@@ -74,6 +79,8 @@ struct PDFReaderRepresentable: PlatformViewRepresentable {
             onToast: onToast
         )
         context.coordinator.update(view, revision: revision)
+        context.coordinator.onOpenQuote = onOpenQuote
+        context.coordinator.show(quoteLinks)
     }
     static func dismantleNSView(_ view: PDFView, coordinator: ReaderCoordinator) {
         coordinator.tearDown()
@@ -110,6 +117,13 @@ final class ReaderCoordinator: NSObject {
     private var sketchInput: SketchInputView?
     /// The formula lasso over the page, while `mode` is `.lasso`.
     var lassoInput: LassoInputView?
+    /// The passages notes quote, by page, and the rules beside them as
+    /// worked out for this document's pages.
+    private var quoteLinks: [Int: [QuoteLink]] = [:]
+    private var quoteBarCache: (document: ObjectIdentifier, bars: [Int: [QuoteBar]])?
+    /// The rule under the pointer, drawn a shade deeper.
+    private var hoveredQuote: QuoteBar?
+    var onOpenQuote: (QuoteLink) -> Void = { _ in }
     #endif
     /// Trims every page to the paper's content: see `BookTrim`.
     private func trimForBook(_ document: PDFDocument) {
@@ -383,6 +397,15 @@ final class ReaderCoordinator: NSObject {
             guard let self, let id = Self.markID(of: annotation) else { return }
             session.recolor(id: id, to: color)
         }
+        view.hoverQuote = { [weak self, weak view] inWindow in
+            guard let self, let view else { return false }
+            return hoverQuote(at: inWindow, in: view)
+        }
+        view.quotesAt = { [weak self, weak view] inWindow in
+            guard let self, let view else { return [] }
+            return quotes(at: inWindow, in: view)
+        }
+        view.onOpenQuote = { [weak self] link in self?.onOpenQuote(link) }
 
         #endif
         #if os(macOS)
@@ -519,6 +542,7 @@ final class ReaderCoordinator: NSObject {
         installMarkupShortcuts(for: view)
         if let plan = Boot.setting("PAPERTIME_MARK_TEST") { markWithoutAMouse(plan, in: view) }
         if let plan = Boot.setting("PAPERTIME_LASSO") { lassoProbe(plan, in: view) }
+        if let plan = Boot.setting("PAPERTIME_QUOTE_LINK") { quoteLinkProbe(plan, in: view) }
         if Boot.isSet("PAPERTIME_DRAW") || Boot.isSet("PAPERTIME_SKETCH_SHOT") { sketchProbe(in: view) }
         if Boot.isSet("PAPERTIME_WATCH_THREADS") { watchNotificationThreads() }
         #endif
@@ -729,6 +753,10 @@ final class ReaderCoordinator: NSObject {
     /// turn, not scroll: `twoUp` horizontally, with `displaysAsBook` so the
     /// first page sits alone on the right the way a cover does.
     private func apply(layout: ReaderConfiguration.PageLayout, to view: PDFView) {
+        #if os(macOS)
+        // A book's pages are trimmed, and a rule is kept inside its page.
+        quoteBarCache = nil
+        #endif
         // The page you were on survives the change. Switching the display
         // mode makes PDFKit lay the document out again, and it came back at
         // the last page — so ⌘1 read as "go to the end" rather than "one
@@ -1517,6 +1545,126 @@ final class ReaderCoordinator: NSObject {
 
     /// `--papertime-lasso=<page>,<x>,<y>,<w>,<h>`: takes the lasso out,
     /// catches that rectangle and says what it snapped to and would copy.
+    /// `--papertime-quote-link=<page>|<first words>|<last words>`: the way
+    /// back from a page to its quotation, end to end and without a mouse.
+    /// Selects the passage, quotes it with ⌘L, waits for the rule beside it,
+    /// rests the pointer on it, closes the note and clicks the rule — saying
+    /// at each step what happened. `--papertime-quote-link-shot=<png>`
+    /// renders the PDF view's layers with the rule lit (the window's own
+    /// picture misses them).
+    private func quoteLinkProbe(_ plan: String, in view: PDFView) {
+        Task { @MainActor [weak self, weak view] in
+            func say(_ text: String) { FileHandle.standardError.write(Data("quote link: \(text)\n".utf8)) }
+            func text(_ r: CGRect) -> String { "\(Int(r.minX.rounded())) \(Int(r.minY.rounded())) \(Int(r.width.rounded())) \(Int(r.height.rounded()))" }
+            try? await Task.sleep(for: .seconds(2.5))
+            guard let self, let view, let document = view.document else { return say("no view") }
+            // `<page>|<first words>|<last words>`: the passage from the one
+            // to the other in the page's own text, as a drag selects it — a
+            // passage that starts in the middle of a line, not a box of words.
+            let parts = plan.components(separatedBy: "|")
+            guard parts.count == 3, let index = Int(parts[0]), let page = document.page(at: index),
+                  let pageText = page.string as NSString?
+            else { return say("bad plan") }
+            let from = pageText.range(of: parts[1])
+            let after = from.location == NSNotFound ? 0 : from.location
+            let to = pageText.range(of: parts[2], range: NSRange(location: after, length: pageText.length - after))
+            guard from.location != NSNotFound, to.location != NSNotFound,
+                  let selection = page.selection(for: NSRange(location: from.location, length: NSMaxRange(to) - from.location)),
+                  selection.string?.isEmpty == false
+            else { return say("those words are not on page \(index)") }
+            view.go(to: selection.bounds(for: page).insetBy(dx: -24, dy: -80), on: page)
+            view.setCurrentSelection(selection, animate: false)
+            link.selection = selection
+            let words = (selection.string ?? "").replacingOccurrences(of: "\n", with: " ")
+            say("selected “\(words.prefix(90))” \(text(selection.bounds(for: page)))")
+            NotificationCenter.default.post(name: .paperTimeLinkToNote, object: nil)
+            // The rule for this passage — the page may have others already.
+            let chosen = selection.bounds(for: page)
+            var bars: [QuoteBar] = []
+            var mine: QuoteBar?
+            for _ in 0..<50 {
+                try? await Task.sleep(for: .milliseconds(100))
+                bars = quoteBars(onPage: index)
+                mine = bars.last { abs($0.link.rect.minX - chosen.minX) < 1 && abs($0.link.rect.minY - chosen.minY) < 1 }
+                if mine != nil { break }
+            }
+            guard let bar = mine else { return say("no rule came") }
+            for each in bars { say("rule \(text(each.rect)) beside \(text(each.link.rect)) for note \(each.link.noteID)") }
+            let centre = CGPoint(x: bar.rect.midX, y: bar.rect.midY)
+            let beside = hoverQuote(at: windowPoint(CGPoint(x: bar.rect.minX - 12, y: bar.rect.midY), on: page, in: view), in: view)
+            let on = hoverQuote(at: windowPoint(centre, on: page, in: view), in: view)
+            say("pointer on the rule: \(on); 12pt left of it: \(beside)")
+            let menu = quotes(at: windowPoint(CGPoint(x: bar.link.rect.midX, y: bar.link.rect.midY), on: page, in: view), in: view).map(\.noteID)
+            say("right-click on the words offers: \(menu)")
+            view.clearSelection()
+            if let shot = Boot.setting("PAPERTIME_QUOTE_LINK_SHOT"), let layer = view.layer {
+                try? await Task.sleep(for: .milliseconds(400))
+                view.displayIfNeeded()
+                let size = view.bounds.size
+                let scale: CGFloat = 2
+                if let context = CGContext(data: nil, width: Int(size.width * scale), height: Int(size.height * scale), bitsPerComponent: 8,
+                                           bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) {
+                    context.setFillColor(CGColor(red: 0.93, green: 0.93, blue: 0.94, alpha: 1))
+                    context.fill(CGRect(x: 0, y: 0, width: size.width * scale, height: size.height * scale))
+                    context.scaleBy(x: scale, y: scale)
+                    if view.isFlipped {
+                        context.translateBy(x: 0, y: size.height)
+                        context.scaleBy(x: 1, y: -1)
+                    }
+                    layer.render(in: context)
+                    if let image = context.makeImage() {
+                        try? NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: shot))
+                        let shown = view.convert(view.convert(bar.rect, from: page), to: view)
+                        say("view shot: \(shot) \(Int(size.width))×\(Int(size.height)), rule at \(text(shown)) in the view")
+                    }
+                }
+            }
+            // `--papertime-quote-link-page-shot=<png>`: the page round the
+            // passage at three times its size, the rules on it where the
+            // overlay puts them — the overlay's own drawing, into the page's
+            // space.
+            if let shot = Boot.setting("PAPERTIME_QUOTE_LINK_PAGE_SHOT") {
+                let area = bars.reduce(bar.link.rect.union(bar.rect)) { $0.union($1.rect).union($1.link.rect) }.insetBy(dx: -30, dy: -24)
+                let scale: CGFloat = 3
+                let width = Int(area.width * scale), height = Int(area.height * scale)
+                let transform = page.transform(for: .cropBox)
+                if let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                           space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) {
+                    context.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+                    context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+                    context.scaleBy(x: scale, y: scale)
+                    let drawn = area.applying(transform)
+                    context.translateBy(x: -drawn.minX, y: -drawn.minY)
+                    page.draw(with: .cropBox, to: context)
+                    let box = page.bounds(for: .cropBox)
+                    let overlay = QuoteLinkOverlayView(page: page, bars: { bars }, hovered: { nil })
+                    overlay.frame = CGRect(origin: .zero, size: box.size)
+                    NSGraphicsContext.saveGraphicsState()
+                    NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
+                    overlay.draw(overlay.bounds)
+                    NSGraphicsContext.restoreGraphicsState()
+                    if let image = context.makeImage() {
+                        try? NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: shot))
+                        say("page shot: \(shot) \(width)×\(height)")
+                    }
+                }
+            }
+            _ = hoverQuote(at: nil, in: view)
+            // The note put away, so the click has something to open.
+            link.openNoteID = nil
+            try? await Task.sleep(for: .milliseconds(600))
+            guard let hit = quoteBar(at: centre, on: page) else { return say("the click missed the rule") }
+            onOpenQuote(hit.link)
+            say("clicked the rule of note \(hit.link.noteID)")
+            try? await Task.sleep(for: .milliseconds(1500))
+            say("open in the inspector: \(link.openNoteID ?? "nothing")")
+        }
+    }
+
+    private func windowPoint(_ point: CGPoint, on page: PDFPage, in view: PDFView) -> NSPoint {
+        view.convert(view.convert(point, from: page), to: nil)
+    }
+
     private func lassoProbe(_ plan: String, in view: PDFView) {
         Task { @MainActor [weak self, weak view] in
             func say(_ text: String) { FileHandle.standardError.write(Data("lasso: \(text)\n".utf8)) }
@@ -1739,6 +1887,14 @@ final class ReaderCoordinator: NSObject {
             // what was drawn is never a picture you have to unlock first.
             // The lasso is out: the click is its.
             if lassoInput?.superview != nil { return event }
+            // The rule beside a quoted passage goes back to its quotation.
+            // Before anything drawn: the rule is small, and a click that
+            // lands on it was aimed.
+            if configuration.mode != .draw, sketchInput?.superview == nil,
+               let bar = quoteBar(at: view.convert(inView, to: page), on: page) {
+                onOpenQuote(bar.link)
+                return nil
+            }
             if configuration.mode != .draw, sketchInput?.superview == nil, hitsDrawing(at: inView, on: page, in: view) {
                 configuration.mode = .draw
                 // Installed now rather than on the next SwiftUI pass, so
@@ -1765,6 +1921,79 @@ final class ReaderCoordinator: NSObject {
             if let id = Self.markID(of: hit) { link.revealedMarkID = id }
             return nil
         }
+    }
+
+    // MARK: Quoted passages
+
+    /// The quote links for the paper being read, kept by page; the pages
+    /// whose rules changed are drawn again. Another paper's links are none
+    /// of this reader's — it can be handed them for a moment while it
+    /// moves from one paper to the next.
+    func show(_ links: QuoteLinks) {
+        let mine = links.paperID == session.paper.id ? links.links : []
+        let grouped = Dictionary(grouping: mine, by: \.pageIndex)
+        guard grouped != quoteLinks else { return }
+        let touched = Set(grouped.keys).union(quoteLinks.keys)
+        quoteLinks = grouped
+        quoteBarCache = nil
+        hoveredQuote = nil
+        for index in touched {
+            if let page = session.document.page(at: index) { QuoteLinkOverlayView.refresh(page) }
+        }
+    }
+
+    /// The rules beside a page's quoted passages, worked out once for the
+    /// page as this document has it.
+    func quoteBars(onPage index: Int) -> [QuoteBar] {
+        guard let links = quoteLinks[index], !links.isEmpty, let page = session.document.page(at: index) else { return [] }
+        let document = ObjectIdentifier(session.document)
+        if quoteBarCache?.document != document { quoteBarCache = (document, [:]) }
+        if let bars = quoteBarCache?.bars[index] { return bars }
+        let bars = QuoteBar.bars(for: links, on: page)
+        quoteBarCache?.bars[index] = bars
+        return bars
+    }
+
+    /// The rule a point on a page is on — the newest note's, where two
+    /// notes quote one passage.
+    func quoteBar(at onPage: CGPoint, on page: PDFPage) -> QuoteBar? {
+        let index = session.document.index(for: page)
+        guard index != NSNotFound else { return nil }
+        return quoteBars(onPage: index).last { $0.target.contains(onPage) }
+    }
+
+    /// The rule under the pointer, deepened; nil when the pointer has left
+    /// the page. Answers whether there is one, for the hand cursor.
+    func hoverQuote(at inWindow: NSPoint?, in view: PDFView) -> Bool {
+        var hit: QuoteBar?
+        if let inWindow, configuration.mode != .draw, lassoInput?.superview == nil {
+            let inView = view.convert(inWindow, from: nil)
+            if let page = view.page(for: inView, nearest: false) {
+                hit = quoteBar(at: view.convert(inView, to: page), on: page)
+            }
+        }
+        guard hit != hoveredQuote else { return hit != nil }
+        let before = hoveredQuote
+        hoveredQuote = hit
+        for bar in [before, hit].compactMap({ $0 }) {
+            if let page = session.document.page(at: bar.link.pageIndex) { QuoteLinkOverlayView.refresh(page) }
+        }
+        return hit != nil
+    }
+
+    /// The quotations of the passage under a right-click — on its words or
+    /// on its rule — newest first, each note once.
+    func quotes(at inWindow: NSPoint, in view: PDFView) -> [QuoteLink] {
+        let inView = view.convert(inWindow, from: nil)
+        guard let page = view.page(for: inView, nearest: false) else { return [] }
+        let index = session.document.index(for: page)
+        guard index != NSNotFound else { return [] }
+        let onPage = view.convert(inView, to: page)
+        var seen = Set<String>()
+        return quoteBars(onPage: index).reversed()
+            .filter { $0.target.contains(onPage) || $0.link.rect.insetBy(dx: -2, dy: -2).contains(onPage) }
+            .filter { seen.insert($0.link.noteID + " " + $0.link.passage.url).inserted }
+            .map(\.link)
     }
 
     /// Whether a point on a page is on something the pencil drew: a sketch
@@ -2109,7 +2338,12 @@ extension ReaderCoordinator: @preconcurrency PDFPageOverlayViewProvider {
                 return PKDrawing(strokes: drawing.strokes.enumerated().filter { !hidden.contains($0.offset) }.map(\.element))
             },
             sketch: { [weak self] in self?.session.sketch(forPage: index) ?? [] },
-            hiddenSketch: { [weak self] in self?.sketchInput?.hiddenElementIDs(onPage: index) ?? [] }
+            hiddenSketch: { [weak self] in self?.sketchInput?.hiddenElementIDs(onPage: index) ?? [] },
+            quoteBars: { [weak self] in self?.quoteBars(onPage: index) ?? [] },
+            hoveredQuote: { [weak self] in
+                guard let self, let hovered = hoveredQuote, hovered.link.pageIndex == index else { return nil }
+                return hovered
+            }
         )
     }
 
