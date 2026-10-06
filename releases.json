@@ -2,11 +2,140 @@
   "repo": "Icecoffee2500/paper-time",
   "releases": [
     {
+      "version": "0.9.26",
+      "date": "2026-10-06T04:14:53Z",
+      "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.26/Paper.Time.0.9.26.dmg",
+      "size": 98083281,
+      "downloads": 0,
+      "builds": {
+        "mac": [
+          {
+            "label": "디스크 이미지",
+            "label_en": "Disk image",
+            "arch": "Apple Silicon",
+            "arch_en": "Apple Silicon",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.26/Paper.Time.0.9.26.dmg",
+            "size": 98083281,
+            "downloads": 0
+          }
+        ],
+        "windows": [
+          {
+            "label": "설치본",
+            "label_en": "Installer",
+            "arch": "64비트 · ARM",
+            "arch_en": "64-bit and ARM",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.26/Paper.Time.Setup.0.9.26.exe",
+            "size": 311128643,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "64비트",
+            "arch_en": "64-bit",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.26/Paper.Time-0.9.26-win.zip",
+            "size": 185632022,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.26/Paper.Time-0.9.26-arm64-win.zip",
+            "size": 190579701,
+            "downloads": 0
+          }
+        ],
+        "linux": [
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.26/Paper.Time-0.9.26-x86_64.AppImage",
+            "size": 183853383,
+            "downloads": 0
+          },
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.26/Paper.Time-0.9.26-arm64.AppImage",
+            "size": 184239975,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.26/paper-time-0.9.26.tar.gz",
+            "size": 176746470,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.26/paper-time-0.9.26-arm64.tar.gz",
+            "size": 181243212,
+            "downloads": 0
+          }
+        ]
+      },
+      "note": "노트의 코드 블록이 코드 편집기처럼 보여요. 언어 이름과 복사 단추, 줄 번호, 색이 붙어요.",
+      "note_en": "A block of code in a note now looks like a code editor, with its language, a Copy button, line numbers and colour.",
+      "notes": {
+        "note": {
+          "ko": "노트의 코드 블록이 코드 편집기처럼 보여요. 언어 이름과 복사 단추, 줄 번호, 색이 붙어요.",
+          "en": "A block of code in a note now looks like a code editor, with its language, a Copy button, line numbers and colour."
+        },
+        "added": [
+          {
+            "title": {
+              "ko": "코드 편집기 같은 코드 블록",
+              "en": "Code Blocks Like an Editor"
+            },
+            "detail": {
+              "ko": "백틱 세 개(```)와 언어 이름으로 연 블록이 둥근 상자로 보여요. 위에는 언어 이름과 복사 단추가, 왼쪽에는 줄 번호가 서고, 코드는 Xcode와 같은 색으로 보여요. 라이트 모드와 다크 모드에서 각자 맞는 색을 쓰고, PDF로 내보낸 노트에서도 같아요. 펜스에 커서를 두면 적은 그대로 보여서 언어를 고칠 수 있어요.",
+              "en": "A block opened with three backticks (```) and a language shows as a rounded box. The language and a Copy button sit at the top, line numbers run down the side, and the code takes Xcode’s colours, light and dark. Exported PDFs show it the same way. Put the cursor on a fence to see it as written and change the language."
+            }
+          },
+          {
+            "title": {
+              "ko": "코드를 쓰는 키",
+              "en": "Keys for Writing Code"
+            },
+            "detail": {
+              "ko": "```python을 치고 Return을 누르면 블록이 닫히고 커서가 그 안에 서요. 블록 안에서 Return은 들여쓰기를 이어 가고, 콜론이나 여는 괄호 뒤에서는 한 단계 더 들여요. Tab과 ⇧Tab은 네 칸씩 들이고 내밀어요. 괄호와 따옴표는 짝을 지어 주지만 별표나 달러는 그대로 두고, ⌘B·⌘I는 코드를 건드리지 않아요.",
+              "en": "Type ```python and press Return, and the block closes with the cursor inside. In a block, Return keeps the indent, and adds a step after a colon or an opening bracket. Tab and ⇧Tab indent and outdent by four spaces. Brackets and quotes come in pairs, but stars and dollars stay single, and ⌘B and ⌘I leave code alone."
+            }
+          }
+        ],
+        "fixed": [
+          {
+            "title": {
+              "ko": "백틱 세 개",
+              "en": "Three Backticks"
+            },
+            "detail": {
+              "ko": "백틱을 한 번에 하나씩 세 번 치면 자동으로 붙는 짝 때문에 네 개가 되어서 코드 블록이 열리지 않았어요. 이제 세 번째 백틱이 펜스를 만들어요.",
+              "en": "Typing three backticks one at a time left four, because each one brought its pair, so the code block never opened. Now the third backtick makes the fence."
+            }
+          }
+        ]
+      }
+    },
+    {
       "version": "0.9.25",
       "date": "2026-10-06T02:45:42Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.25/Paper.Time.0.9.25.dmg",
       "size": 97616635,
-      "downloads": 0,
+      "downloads": 1,
       "builds": {
         "mac": [
           {
@@ -16,7 +145,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.25/Paper.Time.0.9.25.dmg",
             "size": 97616635,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "windows": [
