@@ -11,6 +11,7 @@
  */
 import { trimWhitespace } from './zettel.js'
 import { codeRowAt, openingFence, wantsClosing } from './noteCode.js'
+import { shiftItem } from './noteList.js'
 
 export type BlockKind =
   | { kind: 'plain' }
@@ -135,9 +136,10 @@ export function returnEdit(text: string, caret: number): LineEdit | null {
     return null
   }
   if (trimWhitespace(block.content).length === 0) {
-    // An empty nested item steps out a level first, as Notion's does; at the
-    // left already, the marker goes rather than another being made.
-    if (block.indent > 0) return { from: start, to: start + 2, insert: '', caret: Math.max(start, caret - 2) }
+    // An empty nested item steps out a level first, as Notion's does — a list
+    // item as ⇧Tab moves it (`shiftItem`); at the left already, the marker
+    // goes rather than another being made.
+    if (block.indent > 0) return (isListItem(block) ? shiftItem(text, caret, -1) : null) ?? { from: start, to: start + 2, insert: '', caret: Math.max(start, caret - 2) }
     const markerEnd = start + block.marker.length
     const tail = text.slice(markerEnd, caret)
     return { from: start, to: Math.max(caret, markerEnd), insert: `${tail}\n`, caret: start + tail.length + 1 }
@@ -196,16 +198,21 @@ export function toggleChildrenEnd(text: string, headerStart: number): number | n
   return lastChildEnd
 }
 
-/** What Tab (`by: 1`) or Shift-Tab (`by: -1`) does: null off a list line. */
+/**
+ * What Tab (`by: 1`) or Shift-Tab (`by: -1`) does: the item goes a level in or
+ * out with what is under it, and its list is numbered as it is shown
+ * (`shiftItem`, the Mac's `NoteList.shift`). Null off a list line; at the left
+ * already, an edit that changes nothing — the key is taken.
+ */
 export function indentEdit(text: string, caret: number, by: 1 | -1): LineEdit | null {
   if (codeRowAt(text, caret)) return null
-  const { start, line } = lineAt(text, caret)
-  const kind = blockOf(line).type.kind
-  if (kind !== 'bullet' && kind !== 'ordered' && kind !== 'task' && kind !== 'toggle') return null
-  if (by > 0) return { from: start, to: start, insert: '  ', caret: caret + 2 }
-  // Already at the left: the key is taken and nothing moves.
-  if (!line.startsWith('  ')) return { from: start, to: start, insert: '', caret }
-  return { from: start, to: start + 2, insert: '', caret: Math.max(start, caret - 2) }
+  return shiftItem(text, caret, by)
+}
+
+/** A bullet, a number, a box or a toggle. */
+function isListItem(block: Block): boolean {
+  const kind = block.type.kind
+  return kind === 'bullet' || kind === 'ordered' || kind === 'task' || kind === 'toggle'
 }
 
 /**
@@ -220,7 +227,7 @@ export function backspaceEdit(text: string, caret: number): LineEdit | null {
   const block = blockOf(line)
   if (block.type.kind === 'plain' || block.marker.length === 0) return null
   if (caret !== start + block.marker.length) return null
-  if (block.indent > 0) return { from: start, to: start + 2, insert: '', caret: caret - 2 }
+  if (block.indent > 0) return (isListItem(block) ? shiftItem(text, caret, -1) : null) ?? { from: start, to: start + 2, insert: '', caret: caret - 2 }
   return { from: start, to: caret, insert: '', caret: start }
 }
 

@@ -33,6 +33,11 @@ By \eqref{eq:a}, the \(x\) and \[y\] cost \$5.
 > \begin{equation} E = mc^2 \tag{3} \end{equation}
 - $$z$$
   \[ w \]  
+1. outer
+  2. moved in with Tab
+  3. next
+    9. deeper
+2. outer again
 A line before code.
 ```python
 # not a heading $x$

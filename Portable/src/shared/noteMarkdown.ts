@@ -15,6 +15,7 @@ import { blockOf, type Block } from './noteBlocks.js'
 import { codeBlocks, codeLanguageName, codeRows, type CodeBlock, type CodeRow } from './noteCode.js'
 import { firstFormula, lineRanges, mathBlocks, type TextSpan } from './noteMath.js'
 import { tableBlocks } from './noteTable.js'
+import { listNumbersOf } from './noteList.js'
 import { parseAnchorURL } from './noteQuote.js'
 
 /** What stands in for a heading's or a quotation's marker: nothing to see. */
@@ -120,9 +121,11 @@ export function roman(n: number): string {
 /**
  * What a marker shows, by how deep the item is (the Mac's `shownMarker`):
  * a bullet goes • ◦ ▪ and round again; a number goes 1. a. i. and round
- * again — as Notion and Word count nested lists.
+ * again — as Notion and Word count nested lists. A number is the one the item
+ * shows where it stands (`listNumbers`), not the one written: an item moved in
+ * with Tab kept its «2.» and was shown «b.».
  */
-export function shownMarker(block: Block): string {
+export function shownMarker(block: Block, shown?: number): string {
   switch (block.type.kind) {
     case 'plain': return ''
     case 'heading':
@@ -131,7 +134,7 @@ export function shownMarker(block: Block): string {
     // Open, in the plan: the editor alone knows which toggles are folded.
     case 'toggle': return '▾\t'
     case 'ordered': {
-      const n = block.type.number
+      const n = shown ?? block.type.number
       switch (block.indent % 3) {
         case 1: return `${letters(n)}.\t`
         case 2: return `${roman(n)}.\t`
@@ -152,6 +155,7 @@ export function planNote(source: string, caret: number | null = null): PlannedLi
     const text = source.slice(range.from, range.to)
     return rows.has(range.from) ? plain(text) : blockOf(text)
   })
+  const numbers = listNumbersOf(ranges, source, (range) => rows.has(range.from))
   const edges: (QuoteEdge | null)[] = blocks.map((block, index) => block.type.kind !== 'quote' ? null : {
     opens: index === 0 || blocks[index - 1].type.kind !== 'quote',
     closes: index === blocks.length - 1 || blocks[index + 1].type.kind !== 'quote',
@@ -183,7 +187,7 @@ export function planNote(source: string, caret: number | null = null): PlannedLi
       : inlineTokens(block.content).map((token) => ({ ...token, from: token.from + markerEnd, to: token.to + markerEnd }))
     return {
       from: range.from, to: range.to, block, quoteEdge: edges[index], revealed, markerEnd,
-      shownMarker: shownMarker(block), tokens, alone: !revealed && standsAlone(block), code: null,
+      shownMarker: shownMarker(block, numbers.get(range.from)), tokens, alone: !revealed && standsAlone(block), code: null,
     }
   })
 }

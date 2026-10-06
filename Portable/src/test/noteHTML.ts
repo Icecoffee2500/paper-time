@@ -40,8 +40,10 @@ export async function noteHTMLSuite(test: Test, suite: (name: string) => void) {
     assert.equal(lines[1], '<div class="nm-line nm-list nm-indent-1"><span class="nm-marker">◦</span>two</div>')
     assert.equal(lines[2], '<div class="nm-line nm-list nm-indent-2"><span class="nm-marker">▪</span>three</div>')
     assert.equal(lines[3], '<div class="nm-line nm-list nm-indent-0"><span class="nm-marker nm-marker-wide">1.</span>first</div>')
-    assert.equal(lines[4], '<div class="nm-line nm-list nm-indent-1"><span class="nm-marker nm-marker-wide">b.</span>second</div>')
-    assert.equal(lines[5], '<div class="nm-line nm-list nm-indent-2"><span class="nm-marker nm-marker-wide">iii.</span>third</div>')
+    // Each list set in starts at its own first: «a.» and «i.», whatever the
+    // «2.» and «3.» written in front of them.
+    assert.equal(lines[4], '<div class="nm-line nm-list nm-indent-1"><span class="nm-marker nm-marker-wide">a.</span>second</div>')
+    assert.equal(lines[5], '<div class="nm-line nm-list nm-indent-2"><span class="nm-marker nm-marker-wide">i.</span>third</div>')
     assert.equal(lines[6], '<div class="nm-line nm-list nm-indent-0"><span class="nm-marker nm-marker-wide nm-marker-done">☑</span><span class="nm-done">done</span></div>')
     assert.equal(lines[7], '<div class="nm-line nm-list nm-indent-0"><span class="nm-marker nm-marker-wide">☐</span>open</div>')
   })

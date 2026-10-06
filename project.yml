@@ -11,7 +11,7 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
-    MARKETING_VERSION: "0.9.29"
+    MARKETING_VERSION: "0.9.30"
     # The same as the version people see. Sparkle compares CFBundleVersion,
     # and a build number that was "1" in every release would never be newer.
     CURRENT_PROJECT_VERSION: $(MARKETING_VERSION)

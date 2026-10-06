@@ -1535,7 +1535,9 @@ final class NoteTextView: LatexSuiteTextView {
         let block = line.block
         if block.content.trimmingCharacters(in: .whitespaces).isEmpty {
             if block.indent > 0 {
-                replaceMarker(of: line, with: String(block.marker.dropFirst(2)))
+                if !block.isListItem || !shiftItem(by: -1, named: L("내어쓰기", "Outdent")) {
+                    replaceMarker(of: line, with: String(block.marker.dropFirst(2)))
+                }
                 return
             }
             // An empty item: take the marker away rather than making another.
@@ -1613,7 +1615,9 @@ final class NoteTextView: LatexSuiteTextView {
               caret == line.contentStart
         else { return super.deleteBackward(sender) }
         if line.block.indent > 0 {
-            replaceMarker(of: line, with: String(line.block.marker.dropFirst(2)))
+            if !line.block.isListItem || !shiftItem(by: -1, named: L("내어쓰기", "Outdent")) {
+                replaceMarker(of: line, with: String(line.block.marker.dropFirst(2)))
+            }
         } else {
             replaceMarker(of: line, with: "")
         }
@@ -1864,12 +1868,28 @@ final class NoteTextView: LatexSuiteTextView {
 
     private func shiftListItem(by step: Int) -> Bool {
         guard coordinator?.showsRawText != true, let line = caretLine(), line.block.isListItem else { return false }
-        if step > 0 {
-            replaceMarker(of: line, with: "  " + line.block.marker)
-            return true
-        }
-        guard line.block.marker.hasPrefix("  ") else { return true }
-        replaceMarker(of: line, with: String(line.block.marker.dropFirst(2)))
+        return shiftItem(by: step, named: step > 0 ? L("들여쓰기", "Indent") : L("내어쓰기", "Outdent"))
+    }
+
+    /// Moves the item the caret is in a level in or out, with what is under
+    /// it, and numbers its list as it is shown (`NoteList.shift`) — in the
+    /// Markdown, as one step of the note's undo. On the screen it was the
+    /// marker alone that changed: the caret went to the start of the words
+    /// (what was typed next went in front of them, and Return split the
+    /// item), the number stayed what it was, and an item's sub-list stayed
+    /// behind.
+    private func shiftItem(by step: Int, named name: String) -> Bool {
+        guard let coordinator, let storage = textStorage else { return false }
+        let source = NoteMarkdown.markdown(from: storage)
+        let caret = NoteMarkdown.sourceIndex(in: storage, displayIndex: selectedRange().location)
+        guard let edit = NoteList.shift(in: source, caret: caret, by: step) else { return false }
+        // At the left already: the key is taken, and nothing moves.
+        guard edit.range.length > 0 || !edit.replacement.isEmpty else { return true }
+        let updated = (source as NSString).replacingCharacters(in: edit.range, with: edit.replacement)
+        coordinator.registerStep(named: name, in: self)
+        coordinator.lastKnownMarkdown = updated
+        coordinator.markdown = updated
+        coordinator.restyle(self, source: updated, caretSource: edit.caret)
         return true
     }
 
