@@ -2,6 +2,125 @@
   "repo": "Icecoffee2500/paper-time",
   "releases": [
     {
+      "version": "0.9.29",
+      "date": "2026-10-06T12:02:33Z",
+      "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.29/Paper.Time.0.9.29.dmg",
+      "size": 97886466,
+      "downloads": 0,
+      "builds": {
+        "mac": [
+          {
+            "label": "디스크 이미지",
+            "label_en": "Disk image",
+            "arch": "Apple Silicon",
+            "arch_en": "Apple Silicon",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.29/Paper.Time.0.9.29.dmg",
+            "size": 97886466,
+            "downloads": 0
+          }
+        ],
+        "windows": [
+          {
+            "label": "설치본",
+            "label_en": "Installer",
+            "arch": "64비트 · ARM",
+            "arch_en": "64-bit and ARM",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.29/Paper.Time.Setup.0.9.29.exe",
+            "size": 311143446,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "64비트",
+            "arch_en": "64-bit",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.29/Paper.Time-0.9.29-win.zip",
+            "size": 185640270,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.29/Paper.Time-0.9.29-arm64-win.zip",
+            "size": 190587946,
+            "downloads": 0
+          }
+        ],
+        "linux": [
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.29/Paper.Time-0.9.29-x86_64.AppImage",
+            "size": 183865703,
+            "downloads": 0
+          },
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.29/Paper.Time-0.9.29-arm64.AppImage",
+            "size": 184252278,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.29/paper-time-0.9.29.tar.gz",
+            "size": 176754039,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.29/paper-time-0.9.29-arm64.tar.gz",
+            "size": 181250313,
+            "downloads": 0
+          }
+        ]
+      },
+      "note": "⌘L로 인용한 구절을 쪽 위에 연한 강조색으로 칠해요. 누르면 그 인용이 있는 노트로 가요.",
+      "note_en": "Passages you quote with ⌘L are tinted on the page in a pale shade of your accent colour. Click one to go to the quotation in your note.",
+      "notes": {
+        "note": {
+          "ko": "⌘L로 인용한 구절을 쪽 위에 연한 강조색으로 칠해요. 누르면 그 인용이 있는 노트로 가요.",
+          "en": "Passages you quote with ⌘L are tinted on the page in a pale shade of your accent colour. Click one to go to the quotation in your note."
+        },
+        "added": [
+          {
+            "title": {
+              "ko": "인용한 구절에 색칠",
+              "en": "Tinted Quotations"
+            },
+            "detail": {
+              "ko": "⌘L로 노트에 넣은 구절을 쪽 위에 연한 강조색으로 칠해요. 여백의 세로줄로는 인용이 어디서 시작하는지 알 수 없었어요. 이제 줄 가운데서 시작한 인용은 그 낱말부터 칠해요. 칠한 곳을 누르면 노트가 열리고 인용이 반짝여요. 끌면 전처럼 글자를 고를 수 있어요.",
+              "en": "A passage you quote with ⌘L is now tinted on the page, in a pale shade of your accent colour. The rule in the margin couldn’t show where a quotation began; now one that starts mid-line is tinted from its first word. Click the tint to open the note at the quotation. Drag across it to select the words, as before."
+            }
+          }
+        ],
+        "fixed": [
+          {
+            "title": {
+              "ko": "악센트가 있는 i",
+              "en": "Accented i"
+            },
+            "detail": {
+              "ko": "«naïve»처럼 악센트가 붙은 i를 인용하거나 Ultracopy로 복사하면 i가 엉뚱한 명령어로 바뀌었어요. 이제 쓴 그대로 «naïve»로 들어가요.",
+              "en": "Quoting or Ultracopying an accented i, as in “naïve”, turned the i into a stray command. Now it comes out as written."
+            }
+          }
+        ]
+      }
+    },
+    {
       "version": "0.9.28",
       "date": "2026-10-06T09:02:06Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.28/Paper.Time.0.9.28.dmg",
