@@ -2,6 +2,185 @@
   "repo": "Icecoffee2500/paper-time",
   "releases": [
     {
+      "version": "0.9.24",
+      "date": "2026-10-06T01:34:07Z",
+      "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.24/Paper.Time.0.9.24.dmg",
+      "size": 97531988,
+      "downloads": 0,
+      "builds": {
+        "mac": [
+          {
+            "label": "디스크 이미지",
+            "label_en": "Disk image",
+            "arch": "Apple Silicon",
+            "arch_en": "Apple Silicon",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.24/Paper.Time.0.9.24.dmg",
+            "size": 97531988,
+            "downloads": 0
+          }
+        ],
+        "windows": [
+          {
+            "label": "설치본",
+            "label_en": "Installer",
+            "arch": "64비트 · ARM",
+            "arch_en": "64-bit and ARM",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.24/Paper.Time.Setup.0.9.24.exe",
+            "size": 310990722,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "64비트",
+            "arch_en": "64-bit",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.24/Paper.Time-0.9.24-win.zip",
+            "size": 185544376,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.24/Paper.Time-0.9.24-arm64-win.zip",
+            "size": 190492059,
+            "downloads": 0
+          }
+        ],
+        "linux": [
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.24/Paper.Time-0.9.24-x86_64.AppImage",
+            "size": 183763118,
+            "downloads": 0
+          },
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.24/Paper.Time-0.9.24-arm64.AppImage",
+            "size": 184149705,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.24/paper-time-0.9.24.tar.gz",
+            "size": 176658114,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.24/paper-time-0.9.24-arm64.tar.gz",
+            "size": 181152265,
+            "downloads": 0
+          }
+        ]
+      },
+      "note": "노트의 굵게와 기울임이 한글에도 적용되고, 쓰는 줄에서도 바로 보여요. 코드는 노션처럼 보여요.",
+      "note_en": "Bold and italics now work on Korean in notes and show on the line you are writing. Code looks the way Notion sets it.",
+      "notes": {
+        "note": {
+          "ko": "노트의 굵게와 기울임이 한글에도 적용되고, 쓰고 있는 줄에서도 바로 보여요. 코드는 노션처럼 보여요.",
+          "en": "Bold and italics now work on Korean in notes, and show on the line you are writing. Code looks the way Notion sets it."
+        },
+        "added": [
+          {
+            "title": {
+              "ko": "노션 같은 코드",
+              "en": "Code as Notion Sets It"
+            },
+            "detail": {
+              "ko": "백틱으로 감싼 글이 조금 작은 고정폭 글꼴에 붉은 글씨, 둥근 회색 바탕으로 보여요. 제목 안에서는 제목 크기를 따르고, 표 칸과 PDF로 내보낸 노트에서도 같아요.",
+              "en": "Words in backticks show in a slightly smaller monospaced face, in red on a rounded grey. In a heading they follow the heading’s size, and tables and exported PDFs show them the same way."
+            }
+          },
+          {
+            "title": {
+              "ko": "쓰는 줄에서도 보이는 강조",
+              "en": "Emphasis as You Write"
+            },
+            "detail": {
+              "ko": "커서가 있는 줄에서도 별표 두 개 안의 글은 굵게, 하나 안의 글은 기울여 보여요. 별표는 강조색으로 남아서 바로 고칠 수 있어요.",
+              "en": "On the line with the cursor, words between two stars show bold and words between one star lean as you type them. The stars stay in the accent colour, ready to change."
+            }
+          },
+          {
+            "title": {
+              "ko": "굵은 기울임",
+              "en": "Bold Italics"
+            },
+            "detail": {
+              "ko": "별표 세 개로 감싸면 굵으면서 기울어진 글이 돼요. ⌘B 다음 ⌘I를 누른 결과도 이렇게 보여요.",
+              "en": "Three stars on each side make words bold and italic, which is also what ⌘B then ⌘I give you."
+            }
+          },
+          {
+            "title": {
+              "ko": "표 안의 강조",
+              "en": "Emphasis in Tables"
+            },
+            "detail": {
+              "ko": "표 칸 안의 굵게, 기울임, 코드도 표로 볼 때 그대로 보여요.",
+              "en": "Bold, italics and code inside table cells show in the table."
+            }
+          }
+        ],
+        "fixed": [
+          {
+            "title": {
+              "ko": "한글 굵게와 기울임",
+              "en": "Bold and Italics in Korean"
+            },
+            "detail": {
+              "ko": "노트의 한글은 굵게나 기울임을 해도 그대로였어요. 한글 글꼴이 늘 보통 굵기로만 붙어 있었기 때문이에요. 이제 굵게는 굵은 한글로, 기울임은 옆의 라틴 글자와 같은 각도로 기울어 보여요. 한글 제목도 이제 제 굵기로 보여요.",
+              "en": "Korean in notes stayed the same in bold and italics: its typeface was only ever attached at regular weight. Bold Korean is now bold, italic Korean leans at the angle of the Latin beside it, and Korean headings have their weight too."
+            }
+          },
+          {
+            "title": {
+              "ko": "고른 채 누른 ⌘B",
+              "en": "⌘B Over a Selection"
+            },
+            "detail": {
+              "ko": "글을 고르고 ⌘B나 선택 막대의 B를 누르면, 선택을 풀 때까지 굵게가 보이지 않았어요. 이제 누르는 순간 보여요.",
+              "en": "After choosing words and pressing ⌘B, or B on the selection bar, the bold did not show until the selection was let go. It shows at once now."
+            }
+          },
+          {
+            "title": {
+              "ko": "굵은 낱말 끝으로 가던 커서",
+              "en": "The Cursor Jumped Past Bold Words"
+            },
+            "detail": {
+              "ko": "굵거나 기울인 낱말의 가운데를 누르면 커서가 별표 뒤로 갔어요. 이제 누른 자리에 서요.",
+              "en": "Clicking in the middle of a bold or italic word put the cursor after its closing stars. It now stays where you click."
+            }
+          },
+          {
+            "title": {
+              "ko": "제목 없는 노트 링크",
+              "en": "Note Links Without a Title"
+            },
+            "detail": {
+              "ko": "제목 없이 쓴 노트 링크가 저장할 때마다 아이디를 제목 자리에 한 번 더 적은 꼴로 바뀌었어요. 이제 쓴 그대로 남아요. 똑같은 링크 둘을 붙여 쓰면 하나가 사라질 수 있던 것도 고쳤어요.",
+              "en": "A note link written without a title was saved with its id written again as the title. It now stays as you wrote it, and two identical links side by side no longer lose one."
+            }
+          }
+        ]
+      }
+    },
+    {
       "version": "0.9.23",
       "date": "2026-10-05T06:59:57Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.23/Paper.Time.0.9.23.dmg",
