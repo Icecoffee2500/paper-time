@@ -288,6 +288,15 @@ enum LatexSuiteTypingProbe {
         case "Delete": if let key = event("\u{F728}", 117, .function) { view.keyDown(with: key) }
         case "CmdLeft": if let key = event("\u{F702}", 123, [.command, .function]) { view.keyDown(with: key) }
         case "CmdShiftLeft": if let key = event("\u{F702}", 123, [.command, .shift, .function]) { view.keyDown(with: key) }
+        // The arrows, and the arrows with ⇧ — a caret walked over a marker.
+        case "Left": if let key = event("\u{F702}", 123, .function) { view.keyDown(with: key) }
+        case "Right": if let key = event("\u{F703}", 124, .function) { view.keyDown(with: key) }
+        case "Up": if let key = event("\u{F700}", 126, .function) { view.keyDown(with: key) }
+        case "Down": if let key = event("\u{F701}", 125, .function) { view.keyDown(with: key) }
+        case "ShiftLeft": if let key = event("\u{F702}", 123, [.shift, .function]) { view.keyDown(with: key) }
+        case "ShiftRight": if let key = event("\u{F703}", 124, [.shift, .function]) { view.keyDown(with: key) }
+        case "ShiftUp": if let key = event("\u{F700}", 126, [.shift, .function]) { view.keyDown(with: key) }
+        case "ShiftDown": if let key = event("\u{F701}", 125, [.shift, .function]) { view.keyDown(with: key) }
         // The Edit menu's own route: `undo:` to the first thing up the
         // responder chain from the text view that answers it — the card's
         // editor, or the window.
@@ -300,6 +309,26 @@ enum LatexSuiteTypingProbe {
         default:
             if let offset = key.stripPrefix("Caret:").flatMap(Int.init) {
                 set([NSRange(location: offset, length: 0)], in: view)
+            } else if let spot = key.stripPrefix("Click:"), let window = view.window,
+                      case let parts = spot.split(separator: "@").map(String.init),
+                      let offset = Int(parts[0]) {
+                // A press and a let-go on the character at that display
+                // offset — its left edge, or `@<fraction>` across it —
+                // through the text view's own mouseDown, as a click arrives.
+                // The let-go is put on this app's own queue first, where the
+                // view's tracking loop finds it; nothing goes to the system.
+                let fraction = parts.count > 1 ? Double(parts[1]) ?? 0.1 : 0.1
+                let screen = view.firstRect(forCharacterRange: NSRange(location: offset, length: 1), actualRange: nil)
+                let inWindow = window.convertFromScreen(screen)
+                let point = NSPoint(x: inWindow.minX + inWindow.width * fraction, y: inWindow.midY)
+                func mouse(_ type: NSEvent.EventType) -> NSEvent? {
+                    NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                       windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)
+                }
+                if let down = mouse(.leftMouseDown), let up = mouse(.leftMouseUp) {
+                    NSApp.postEvent(up, atStart: false)
+                    view.mouseDown(with: down)
+                }
             } else if let pair = key.stripPrefix("Range:"),
                       case let parts = pair.split(separator: "+").compactMap({ Int($0) }), parts.count == 2 {
                 // A selection set in one go, as a drag leaves it — on a line

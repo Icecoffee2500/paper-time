@@ -9,7 +9,7 @@
  * Pure apart from the typesetter it is handed, so a test can run it with a
  * stub and no window (`src/test/noteHTML.ts`).
  */
-import { blankingCode, emphasisClasses, emphasisPieces, planNote, type InlineToken, type PlannedLine } from '../../../shared/noteMarkdown.js'
+import { blankingCode, emphasisClasses, emphasisPieces, markerClass, planNote, type InlineToken, type PlannedLine } from '../../../shared/noteMarkdown.js'
 import { numberFormulas, type MathSetter, type Numbered } from '../../../shared/mathJax.js'
 import { parseTable, tableBlocks, type Table } from '../../../shared/noteTable.js'
 import { codeBlocks, codeLanguageName, codeOf, type CodeBlock } from '../../../shared/noteCode.js'
@@ -107,7 +107,7 @@ function lineHTML(line: PlannedLine, source: string, counted: Map<number, Number
       classes.push('nm-list', `nm-indent-${Math.min(block.indent, 6)}`)
       const shown = line.shownMarker.replace('\t', '')
       const done = block.type.kind === 'task' && block.type.done
-      const marker = `<span class="nm-marker${['•', '◦', '▪', '▾'].includes(shown) ? '' : ' nm-marker-wide'}${done ? ' nm-marker-done' : ''}">${escapeHTML(shown)}</span>`
+      const marker = `<span class="${markerClass(shown, done)}">${escapeHTML(shown)}</span>`
       const words = done ? `<span class="nm-done">${inner}</span>` : inner
       return `<div class="${classes.join(' ')}">${marker}${words}</div>`
     }
@@ -267,8 +267,9 @@ h4.nm-h, h5.nm-h, h6.nm-h { font-size: 16px; }
 .nm-indent-4 { padding-left: 120px; }
 .nm-indent-5 { padding-left: 144px; }
 .nm-indent-6 { padding-left: 168px; }
-.nm-marker { display: inline-block; min-width: 14.88px; text-indent: 0; color: var(--text-secondary); }
-.nm-marker-wide { padding-right: 0.3em; }
+.nm-marker { display: inline-block; width: 14.88px; text-indent: 0; color: var(--text-secondary); white-space: nowrap; }
+.nm-marker-label { width: auto; min-width: 48px; margin-left: -33.12px; padding-right: 0.3em; box-sizing: border-box; text-align: right; }
+.nm-indent-0 .nm-marker-label { min-width: 24px; margin-left: -9.12px; }
 .nm-done { color: var(--text-secondary); text-decoration: line-through; }
 .nm-quote { position: relative; padding: 3px 0 3px 20.4px; }
 .nm-quote::before, .nm-quote::after { content: ''; position: absolute; top: 0; bottom: 0; left: 7.4px; }

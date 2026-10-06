@@ -27,13 +27,13 @@ import { quotedPassages } from '../../shared/quotedPassages.js'
 import { zettelDisplayTitle, zettelPreviewBody, zettelTags } from '../../shared/zettel.js'
 import { noteByID, type Note } from '../state.js'
 import { deleteNote, flushNote, linkedFrom, linksOrTagsChanged, linksOut, updateNote } from '../notesModel.js'
-import { backspaceEdit, codeIndentEdit, codeReturnEdit, homeTarget, indentEdit, pairBackspaceEdit, pairEdit, returnEdit, todoShortcutEdit, toggleEmphasisEdit, toggleShortcutEdit, wrapEdit, type EmphasisMark } from '../../shared/noteBlocks.js'
+import { backspaceEdit, codeIndentEdit, codeReturnEdit, deleteForwardEdit, homeTarget, indentEdit, pairBackspaceEdit, pairEdit, returnEdit, shortcutEdit, toggleEmphasisEdit, wrapEdit, type EmphasisMark, type LineEdit } from '../../shared/noteBlocks.js'
 import { codeRowAt } from '../../shared/noteCode.js'
 import { keyFor } from '../../shared/shortcuts.js'
 import { EditorSelection, EditorState, Prec, Transaction, type Extension } from '@codemirror/state'
 import { EditorView, ViewPlugin, drawSelection, keymap, placeholder, type ViewUpdate } from '@codemirror/view'
-import { defaultKeymap, history, historyKeymap, insertTab } from '@codemirror/commands'
-import { flash, foldedRanges, markdownView, rawField, setRaw } from './note/markdownView.js'
+import { defaultKeymap, history, historyKeymap, insertTab, isolateHistory } from '@codemirror/commands'
+import { flash, foldedField, foldedRanges, markdownView, rawField, setRaw, toggleKey } from './note/markdownView.js'
 import { latexSuiteView } from './note/latexSuiteView.js'
 import { noteHTML } from './note/noteHTML.js'
 import { typesetter } from '../sketchMath.js'
@@ -384,6 +384,29 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
     })
     return true
   }
+  /**
+   * A list's edit, as one step of the history of its own: never joined to the
+   * typing before it or after it. Joined, a Return or a Backspace at a
+   * marker went with the words around it, and ⌘Z took both — as it did on the
+   * Mac, where a whole list of bullets was one ⌘Z.
+   */
+  const applyListEdit = (target: EditorView, edit: LineEdit) => {
+    if (edit.from === edit.to && edit.insert === '') {
+      // At the left already: the key is taken, and nothing moves.
+      return
+    }
+    target.dispatch({
+      changes: { from: edit.from, to: edit.to, insert: edit.insert },
+      selection: EditorSelection.range(edit.caret, edit.caret + (edit.length ?? 0)),
+      annotations: isolateHistory.of('full'),
+      userEvent: 'input.list', scrollIntoView: true,
+    })
+  }
+  /** Whether the caret's line is a toggle with its children folded away. */
+  const onFoldedToggle = (target: EditorView, head: number): boolean => {
+    const line = target.state.doc.lineAt(head)
+    return target.state.field(foldedField, false)?.has(toggleKey(line.text)) ?? false
+  }
   const listKeys = keymap.of([
     {
       key: 'Enter',
@@ -393,14 +416,19 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
         // In a block of code, a code editor's Return: the indent kept, the
         // fence just typed closed under the caret (`codeReturnEdit`).
         const source = target.state.doc.toString()
-        const edit = codeReturnEdit(source, range.head) ?? returnEdit(source, range.head)
+        const code = codeReturnEdit(source, range.head)
+        if (code) {
+          target.dispatch({ changes: { from: code.from, to: code.to, insert: code.insert }, selection: { anchor: code.caret }, userEvent: 'input', scrollIntoView: true })
+          return true
+        }
+        const edit = returnEdit(source, range.head, onFoldedToggle(target, range.head))
         if (!edit) return false
-        target.dispatch({ changes: { from: edit.from, to: edit.to, insert: edit.insert }, selection: { anchor: edit.caret }, userEvent: 'input', scrollIntoView: true })
+        applyListEdit(target, edit)
         return true
       },
     },
     {
-      // Right after a marker: a nested item steps out, one at the left is
+      // At a marker's edge: a nested item steps out, one at the left is
       // plain words again (Notion). Anywhere else the ordinary Backspace.
       key: 'Backspace',
       run: (target) => {
@@ -408,24 +436,42 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
         if (!range.empty || target.state.selection.ranges.length > 1) return false
         const edit = backspaceEdit(target.state.doc.toString(), range.head)
         if (!edit) return false
-        target.dispatch({ changes: { from: edit.from, to: edit.to, insert: edit.insert }, selection: { anchor: edit.caret }, userEvent: 'delete', scrollIntoView: true })
+        applyListEdit(target, edit)
         return true
       },
     },
     {
+      // At the end of a line before a marked one: the next line's words come
+      // up without their marker. Anywhere else the ordinary Delete.
+      key: 'Delete',
+      run: (target) => {
+        const range = target.state.selection.main
+        if (!range.empty || target.state.selection.ranges.length > 1) return false
+        const edit = deleteForwardEdit(target.state.doc.toString(), range.head)
+        if (!edit) return false
+        applyListEdit(target, edit)
+        return true
+      },
+    },
+    {
+      // The item — or every item selected — a level in or out.
       key: 'Tab',
       run: (target) => {
         if (indentCode(target, 1)) return true
-        const edit = indentEdit(target.state.doc.toString(), target.state.selection.main.head, 1)
+        if (target.state.selection.ranges.length > 1) return insertTab(target)
+        const { anchor, head } = target.state.selection.main
+        const edit = indentEdit(target.state.doc.toString(), anchor, head, 1)
         if (!edit) return insertTab(target)
-        target.dispatch({ changes: { from: edit.from, to: edit.to, insert: edit.insert }, selection: { anchor: edit.caret }, userEvent: 'input' })
+        applyListEdit(target, edit)
         return true
       },
       shift: (target) => {
         if (indentCode(target, -1)) return true
-        const edit = indentEdit(target.state.doc.toString(), target.state.selection.main.head, -1)
+        if (target.state.selection.ranges.length > 1) return false
+        const { anchor, head } = target.state.selection.main
+        const edit = indentEdit(target.state.doc.toString(), anchor, head, -1)
         if (!edit) return false
-        target.dispatch({ changes: { from: edit.from, to: edit.to, insert: edit.insert }, selection: { anchor: edit.caret }, userEvent: 'delete' })
+        applyListEdit(target, edit)
         return true
       },
     },
@@ -463,7 +509,7 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
     const range = target.state.selection.main
     const line = target.state.doc.lineAt(range.head)
     if (codeRowAt(target.state.doc.toString(), range.head)) return false
-    const offset = homeTarget(line.text, range.head - line.from)
+    const offset = homeTarget(line.text, range.head - line.from, extend)
     if (offset === null) return false
     const head = line.from + offset
     target.dispatch({ selection: extend ? EditorSelection.range(range.anchor, head) : EditorSelection.cursor(head), scrollIntoView: true })
@@ -516,9 +562,9 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
       return true
     }
     if (text !== ' ') return false
-    const edit = todoShortcutEdit(source, range.head) ?? toggleShortcutEdit(source, range.head)
+    const edit = shortcutEdit(source, range.head)
     if (!edit) return false
-    target.dispatch({ changes: { from: edit.from, to: edit.to, insert: edit.insert }, selection: { anchor: edit.caret }, userEvent: 'input.type', scrollIntoView: true })
+    applyListEdit(target, edit)
     return true
   }))
 

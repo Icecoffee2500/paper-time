@@ -4,7 +4,7 @@
  * `openWikiLink(in:)`, case by case.
  */
 import assert from 'node:assert/strict'
-import { acceptWikiLink, backspaceEdit, blockOf, continuation, homeTarget, indentEdit, openWikiLink, pairBackspaceEdit, pairEdit, returnEdit, todoShortcutEdit, toggleChildrenEnd, toggleEmphasisEdit, toggleShortcutEdit, wrapEdit, type LineEdit, type SelectionEdit } from '../shared/noteBlocks.js'
+import { acceptWikiLink, backspaceEdit, blockOf, deleteForwardEdit, homeTarget, indentEdit, openWikiLink, pairBackspaceEdit, pairEdit, returnEdit, shortcutEdit, toggleChildrenEnd, toggleEmphasisEdit, wrapEdit, type LineEdit, type SelectionEdit } from '../shared/noteBlocks.js'
 
 type Test = (name: string, body: () => void | Promise<void>) => Promise<void>
 
@@ -19,7 +19,7 @@ export async function noteBlocksSuite(test: Test, suite: (name: string) => void)
       ['plain words', 'plain', '', 'plain words', 0],
       ['- item', 'bullet', '- ', 'item', 0],
       ['  * nested', 'bullet', '  * ', 'nested', 1],
-      ['+\titem', 'bullet', '+\t', 'item', 0],
+      ['+\titem', 'toggle', '+\t', 'item', 0],
       ['3. third', 'ordered', '3. ', 'third', 0],
       ['12) twelfth', 'ordered', '12) ', 'twelfth', 0],
       ['1234. not a list', 'plain', '', '1234. not a list', 0],
@@ -30,7 +30,7 @@ export async function noteBlocksSuite(test: Test, suite: (name: string) => void)
       ['> quoted', 'quote', '> ', 'quoted', 0],
       ['>### Section', 'quote', '>### ', 'Section', 0],
       ['-no space', 'plain', '', '-no space', 0],
-      // «+ » is a toggle; «+» with a tab is still the bullet it always was.
+      // «+» and white space is a toggle, as the Mac reads it.
       ['+ toggle', 'toggle', '+ ', 'toggle', 0],
       ['    + nested toggle', 'toggle', '    + ', 'nested toggle', 2],
       ['+ [ ] still a task', 'task', '+ [ ] ', 'still a task', 0],
@@ -39,10 +39,16 @@ export async function noteBlocksSuite(test: Test, suite: (name: string) => void)
       const block = blockOf(line)
       assert.deepEqual([block.type.kind, block.marker, block.content, block.indent], [kind, marker, content, indent], line)
     }
-    assert.equal(continuation(blockOf('  7. seven')), '  8. ')
-    assert.equal(continuation(blockOf('- [x] done')), '- [ ] ')
-    assert.equal(continuation(blockOf('## Heading')), '')
-    assert.equal(continuation(blockOf('  + toggle')), '    ')
+    // What Return carries on with, in the line's own marks.
+    const next = (line: string) => { const edit = returnEdit(line, line.length); return edit ? (line.slice(0, edit.from) + edit.insert + line.slice(edit.to)).slice(line.length + 1) : null }
+    assert.equal(next('7. seven'), '8. ')
+    assert.equal(next('7) seven'), '8) ')
+    // A list set in starts at 1, and the file says so once Return has been at it.
+    assert.equal(next('  7. seven'), '  2. ')
+    assert.equal(next('- [x] done'), '- [ ] ')
+    assert.equal(next('* item'), '* ')
+    assert.equal(next('## Heading'), null)
+    assert.equal(next('  + toggle'), '    ')
   })
 
   await test('Return continues a list, and an empty item ends it', () => {
@@ -66,14 +72,14 @@ export async function noteBlocksSuite(test: Test, suite: (name: string) => void)
 
   await test('Tab indents a list item and Shift-Tab takes it back', () => {
     const text = 'intro\n- item'
-    assert.deepEqual(applied(text, indentEdit(text, text.length, 1)), { text: 'intro\n  - item', caret: text.length + 2 })
+    assert.deepEqual(applied(text, indentEdit(text, text.length, text.length, 1)), { text: 'intro\n  - item', caret: text.length + 2 })
     const indented = 'intro\n  - item'
-    assert.deepEqual(applied(indented, indentEdit(indented, indented.length, -1)), { text: 'intro\n- item', caret: indented.length - 2 })
+    assert.deepEqual(applied(indented, indentEdit(indented, indented.length, indented.length, -1)), { text: 'intro\n- item', caret: indented.length - 2 })
     // At the left already: the key is taken, nothing moves.
-    assert.deepEqual(applied(text, indentEdit(text, text.length, -1)), { text, caret: text.length })
-    assert.equal(indentEdit('plain words', 3, 1), null)
-    assert.equal(indentEdit('> quote', 3, 1), null)
-    assert.deepEqual(applied('+ toggle', indentEdit('+ toggle', 8, 1)), { text: '  + toggle', caret: 10 })
+    assert.deepEqual(applied(text, indentEdit(text, text.length, text.length, -1)), { text, caret: text.length })
+    assert.equal(indentEdit('plain words', 3, 3, 1), null)
+    assert.equal(indentEdit('> quote', 3, 3, 1), null)
+    assert.deepEqual(applied('+ toggle', indentEdit('+ toggle', 8, 8, 1)), { text: '  + toggle', caret: 10 })
   })
 
   await test('a toggle opens its children under it, and Return twice steps back out', () => {
@@ -84,10 +90,13 @@ export async function noteBlocksSuite(test: Test, suite: (name: string) => void)
     // Return on an empty child line: out to the toggle's own level.
     assert.deepEqual(applied('+ Title\n  ', at('+ Title\n  ')), { text: '+ Title\n', caret: 8 })
     assert.deepEqual(applied('  + Title\n    child\n    ', at('  + Title\n    child\n    ')), { text: '  + Title\n    child\n  ', caret: 22 })
-    // An empty indented line under no toggle, or one as deep as the toggle, is the editor's own Return.
-    assert.equal(at('- item\n  '), null)
+    // An indented line under no toggle keeps its indent on the next line, as
+    // CodeMirror's Return does (and now the Mac's); at the left it is the
+    // editor's own Return.
+    assert.deepEqual(applied('- item\n  ', at('- item\n  ')), { text: '- item\n\n  ', caret: 10 })
+    assert.deepEqual(applied('+ Title\n  child', at('+ Title\n  child')), { text: '+ Title\n  child\n  ', caret: 18 })
     assert.equal(at('+ Title\n  child\n'), null)
-    assert.equal(at('plain\n  '), null)
+    assert.deepEqual(applied('plain\n  ', at('plain\n  ')), { text: 'plain\n\n  ', caret: 9 })
     // Backspace at the words takes the marker off, as for any marker.
     assert.deepEqual(applied('+ Title', backspaceEdit('+ Title', 2)), { text: 'Title', caret: 0 })
     // The children: every deeper line, blank lines between them included, up to the first that is not.
@@ -99,11 +108,11 @@ export async function noteBlocksSuite(test: Test, suite: (name: string) => void)
   })
 
   await test('«--» and a space at the start of a line become a toggle', () => {
-    assert.deepEqual(applied('--', toggleShortcutEdit('--', 2)), { text: '+ ', caret: 2 })
-    assert.deepEqual(applied('a\n  --', toggleShortcutEdit('a\n  --', 6)), { text: 'a\n  + ', caret: 6 })
-    assert.equal(toggleShortcutEdit('x--', 3), null)
-    assert.equal(toggleShortcutEdit('-', 1), null)
-    assert.equal(toggleShortcutEdit('---', 3), null)
+    assert.deepEqual(applied('--', shortcutEdit('--', 2)), { text: '+ ', caret: 2 })
+    assert.deepEqual(applied('a\n  --', shortcutEdit('a\n  --', 6)), { text: 'a\n  + ', caret: 6 })
+    assert.equal(shortcutEdit('x--', 3), null)
+    assert.equal(shortcutEdit('-', 1), null)
+    assert.equal(shortcutEdit('---', 3), null)
   })
 
   /** Types `text` character by character through `pairEdit`, as the editor would; `trace` has the text after each key, the caret as «|». */
@@ -173,8 +182,12 @@ export async function noteBlocksSuite(test: Test, suite: (name: string) => void)
 
   await test('Home on a marked line goes to the words, then to the very start', () => {
     assert.equal(homeTarget('- item', 6), 2)
-    assert.equal(homeTarget('- item', 2), 0)
-    assert.equal(homeTarget('- item', 1), 0)
+    // A caret on a list line rests at its words — its marker is drawn, and
+    // nothing typed before it would be the item's; a selection reaches the start.
+    assert.equal(homeTarget('- item', 2), 2)
+    assert.equal(homeTarget('- item', 1), 2)
+    assert.equal(homeTarget('- item', 2, true), 0)
+    assert.equal(homeTarget('- item', 6, true), 2)
     assert.equal(homeTarget('  - [ ] todo', 12), 8)
     assert.equal(homeTarget('## Heading', 10), 3)
     assert.equal(homeTarget('## Heading', 3), 0)
@@ -202,11 +215,18 @@ export async function noteBlocksSuite(test: Test, suite: (name: string) => void)
     assert.deepEqual(applied('3. third', backspaceEdit('3. third', 3)), { text: 'third', caret: 0 })
     assert.deepEqual(applied('> quoted', backspaceEdit('> quoted', 2)), { text: 'quoted', caret: 0 })
     assert.deepEqual(applied('## Head', backspaceEdit('## Head', 3)), { text: 'Head', caret: 0 })
+    // A list's marker is drawn: its start and its inside are its edge too.
+    assert.deepEqual(applied('- item', backspaceEdit('- item', 1)), { text: 'item', caret: 0 })
+    assert.deepEqual(applied('- item', backspaceEdit('- item', 0)), { text: 'item', caret: 0 })
+    assert.deepEqual(applied('  - item', backspaceEdit('  - item', 2)), { text: '- item', caret: 2 })
     // Anywhere else, the ordinary Backspace.
     assert.equal(backspaceEdit('- item', 3), null)
-    assert.equal(backspaceEdit('- item', 1), null)
     assert.equal(backspaceEdit('plain', 3), null)
-    assert.equal(backspaceEdit('  - item', 2), null)
+    assert.equal(backspaceEdit('## Head', 1), null)
+    assert.equal(backspaceEdit('> q', 0), null)
+    // Delete at the end of a line takes the next line's words, not its marker.
+    assert.deepEqual(applied('1. a\n2. b', deleteForwardEdit('1. a\n2. b', 4)), { text: '1. ab', caret: 4 })
+    assert.equal(deleteForwardEdit('a\nb', 1), null)
   })
 
   const emphasised = (text: string, edit: SelectionEdit) => ({
@@ -251,11 +271,13 @@ export async function noteBlocksSuite(test: Test, suite: (name: string) => void)
   })
 
   await test('«[]» and a space at the start of a line become a checkbox', () => {
-    assert.deepEqual(applied('[]', todoShortcutEdit('[]', 2)), { text: '- [ ] ', caret: 6 })
-    assert.deepEqual(applied('a\n  []', todoShortcutEdit('a\n  []', 6)), { text: 'a\n  - [ ] ', caret: 10 })
-    assert.deepEqual(applied('[]tail', todoShortcutEdit('[]tail', 2)), { text: '- [ ] tail', caret: 6 })
-    assert.equal(todoShortcutEdit('x[]', 3), null)
-    assert.equal(todoShortcutEdit('[] ', 3), null)
-    assert.equal(todoShortcutEdit('[', 1), null)
+    assert.deepEqual(applied('[]', shortcutEdit('[]', 2)), { text: '- [ ] ', caret: 6 })
+    assert.deepEqual(applied('a\n  []', shortcutEdit('a\n  []', 6)), { text: 'a\n  - [ ] ', caret: 10 })
+    assert.deepEqual(applied('[]tail', shortcutEdit('[]tail', 2)), { text: '- [ ] tail', caret: 6 })
+    // A bullet's words too (the Mac's way, and now the Portable build's).
+    assert.deepEqual(applied('- []', shortcutEdit('- []', 4)), { text: '- [ ] ', caret: 6 })
+    assert.equal(shortcutEdit('x[]', 3), null)
+    assert.equal(shortcutEdit('[] ', 3), null)
+    assert.equal(shortcutEdit('[', 1), null)
   })
 }

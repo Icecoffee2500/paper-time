@@ -3965,8 +3965,15 @@ body[data-solo='true'] .reader-header button {
 .cm-line.nm-indent-4 { padding-left: 120px; }
 .cm-line.nm-indent-5 { padding-left: 144px; }
 .cm-line.nm-indent-6 { padding-left: 168px; }
-.nm-marker { display: inline-block; min-width: 14.88px; text-indent: 0; color: var(--text-secondary); }
-.nm-marker-wide { padding-right: 0.3em; }
+/* A bullet, a box, a toggle's arrow: one glyph in a box of its own, so the
+   words start in one column whatever the glyph. A number, a letter or a
+   numeral is a label: set against the words, a third of an em short of them,
+   in the room to their left — a level's at the left, two levels' under an
+   item (`NoteMarkdown.Block.labelStyle`) — so «iii.» ends where «i.» does.
+   A label too wide even for that pushes its own words on. */
+.nm-marker { display: inline-block; width: 14.88px; text-indent: 0; color: var(--text-secondary); white-space: nowrap; }
+.nm-marker.nm-marker-label { width: auto; min-width: 48px; margin-left: -33.12px; padding-right: 0.3em; box-sizing: border-box; text-align: right; }
+.cm-line.nm-indent-0 .nm-marker.nm-marker-label { min-width: 24px; margin-left: -9.12px; }
 .nm-marker-done { color: var(--text-secondary); }
 .nm-done { color: var(--text-secondary); text-decoration: line-through; }
 /* A toggle's marker turns with a press; what it folded away is one quiet ellipsis. */

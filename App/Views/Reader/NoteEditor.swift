@@ -315,6 +315,11 @@ struct NoteEditor: NSViewRepresentable {
             else { return }
 
             let source = NoteMarkdown.markdown(from: storage)
+            // A change to a drawn stand-in that leaves the note as it was —
+            // the tab after a bullet deleted on its own — is undone on screen
+            // at once: nothing else would set that line again until the
+            // caret left it.
+            if source == lastKnownMarkdown { setCaretLine = -1 }
             lastKnownMarkdown = source
             markdown = source
             didEdit(in: textView)
@@ -437,10 +442,15 @@ struct NoteEditor: NSViewRepresentable {
             restyle(textView, source: source, caretSource: caret)
         }
 
+        /// The selection before the last change of it — which way a caret
+        /// stepped (`NoteTextView.settledCaret`).
+        private var lastSelection = NSRange(location: 0, length: 0)
+
         func textViewDidChangeSelection(_ notification: Notification) {
-            guard let textView = notification.object as? NoteTextView,
-                  !textView.hasMarkedText(), !isRestyling
-            else { return }
+            guard let textView = notification.object as? NoteTextView else { return }
+            let previous = lastSelection
+            lastSelection = textView.selectedRange()
+            guard !textView.hasMarkedText(), !isRestyling else { return }
             updateMathPreview(in: textView)
             updateSelectionToolbar(in: textView)
             // Never rebuild the text under a selection: that is what made a
@@ -451,18 +461,14 @@ struct NoteEditor: NSViewRepresentable {
                 return
             }
             textView.typingAttributes = textView.codeTypingAttributes() ?? NoteMarkdown.bodyAttributes
-            // A caret set down inside a drawn marker — on the bullet, by a
-            // click — goes to the words after it: nothing is typed into a
-            // bullet.
+            // A caret at the start of a list's line or inside its drawn
+            // marker goes to the words after it — or, stepping left from
+            // them, on to the line above: nothing is typed into a bullet.
             if let storage = textView.textStorage, storage.length > 0 {
                 let caret = textView.selectedRange().location
-                let lineStart = (textView.string as NSString).lineRange(for: NSRange(location: caret, length: 0)).location
                 var run = NSRange()
-                if caret > lineStart, caret < storage.length,
-                   let standing = storage.attribute(.paperTimeSource, at: lineStart, longestEffectiveRange: &run,
-                                                    in: NSRange(location: lineStart, length: storage.length - lineStart)) as? String,
-                   caret < NSMaxRange(run), NoteMarkdown.Block(line: standing).marker == standing {
-                    textView.setSelectedRange(NSRange(location: NSMaxRange(run), length: 0))
+                if let settled = textView.settledCaret(caret, previous: previous.length == 0 ? previous.location : nil) {
+                    textView.setSelectedRange(NSRange(location: settled, length: 0))
                     return
                 }
                 // A caret set down after the folded children of a toggle
@@ -585,6 +591,10 @@ struct NoteEditor: NSViewRepresentable {
                 if let selection, selection.length > 0 {
                     let end = min(rendered.displayIndex(forSource: NSMaxRange(selection)), textView.string.utf16.count)
                     range.length = max(0, end - range.location)
+                } else if let settled = textView.settledCaret(range.location) {
+                    // A caret at a list line's start, which the source
+                    // allows, rests at its words on screen.
+                    range.location = settled
                 }
                 textView.setSelectedRange(range)
                 if caretWasShown { textView.scrollRangeToVisible(range) }
@@ -1379,6 +1389,15 @@ final class NoteTextView: LatexSuiteTextView {
         // go, so this brackets the whole gesture.
         super.mouseDown(with: event)
         isSelectingByHand = false
+        if selectedRange().length == 0 {
+            // The selection changed while the hand had it, and nothing
+            // looked: a press on a marker leaves the caret beside it, and
+            // what is typed next is the note's own, not the marker's.
+            if let settled = settledCaret(selectedRange().location) {
+                setSelectedRange(NSRange(location: settled, length: 0))
+            }
+            typingAttributes = codeTypingAttributes() ?? NoteMarkdown.bodyAttributes
+        }
         if let coordinator, selectedRange().length == 0 {
             coordinator.scheduleRestyle(in: self)
         }
@@ -1499,65 +1518,36 @@ final class NoteTextView: LatexSuiteTextView {
         return CaretLine(display: display, source: source, block: block, markerDisplay: marker)
     }
 
-    /// Puts another marker where this line's is — "- " for "  - " to
-    /// outdent, nothing to make the line plain. Written as Markdown; the
-    /// note is set again from it.
-    private func replaceMarker(of line: CaretLine, with marker: String) {
-        replaceDisplay(line.markerDisplay, with: marker)
-    }
-
-    /// Puts Markdown over a range of what is shown — with the note's own
-    /// attributes and none of a drawn stand-in's: text typed over a stand-in
-    /// inherits its `.paperTimeSource`, and would still read as the old
-    /// marker. Through `shouldChangeText`, so it can be undone, and
-    /// `didChangeText`, so the note is read and set again.
-    private func replaceDisplay(_ range: NSRange, with markdown: String) {
-        guard shouldChangeText(in: range, replacementString: markdown), let storage = textStorage else { return }
-        storage.replaceCharacters(in: range, with: NSAttributedString(string: markdown, attributes: NoteMarkdown.bodyAttributes))
-        didChangeText()
-        setSelectedRange(NSRange(location: range.location + (markdown as NSString).length, length: 0))
-    }
-
     // MARK: Keys
 
     /// Return continues what the line was doing: another bullet, the next
     /// number, another empty checkbox — and an empty item ends the list, which
     /// is how every outliner behaves and how nobody has to think about it. An
     /// empty item nested in another steps out a level first, as Notion's
-    /// does.
+    /// does. What it does is `NoteList.newLine`, made in the Markdown as one
+    /// step to undo (`applyListEdit`): it had been the text view's newline
+    /// and then the next marker typed in, which the note's undo took for a
+    /// keystroke and an edit — ⌘Z left a bare line, and «- » was short enough
+    /// to count as typing, so a list of bullets went in one ⌘Z.
     override func insertNewline(_ sender: Any?) {
         if coordinator?.showsRawText != true, selectedRange().length == 0, let code = codeRowAtCaret() {
             return insertCodeNewline(code, sender: sender)
         }
-        guard coordinator?.showsRawText != true, selectedRange().length == 0,
-              let line = caretLine(), line.block.kind != .plain, !line.block.marker.isEmpty
+        // A line at the left with no marker is a line break and nothing more,
+        // found without reading the whole note back as Markdown — that is
+        // most Returns.
+        guard selectedRange().length == 0, let line = caretLine(),
+              !line.block.marker.isEmpty || line.source.first == " " || line.source.first == "\t",
+              let (source, selection) = sourceAndSelection(),
+              let edit = NoteList.newLine(in: source, caret: selection.location, folded: caretIsOnFoldedToggle())
         else { return super.insertNewline(sender) }
-        let block = line.block
-        if block.content.trimmingCharacters(in: .whitespaces).isEmpty {
-            if block.indent > 0 {
-                if !block.isListItem || !shiftItem(by: -1, named: L("내어쓰기", "Outdent")) {
-                    replaceMarker(of: line, with: String(block.marker.dropFirst(2)))
-                }
-                return
-            }
-            // An empty item: take the marker away rather than making another.
-            replaceMarker(of: line, with: "")
-            super.insertNewline(sender)
-            return
-        }
-        // Return on a folded toggle makes the line after the fold — at the
-        // toggle's own level, as Notion does — not a child nobody can see.
-        if block.kind == .toggle, let folded = foldedRun(in: line) {
-            // Put in after the folded run directly: a caret set there would
-            // be moved back before it (`textViewDidChangeSelection`).
-            // (With the note's own attributes: typed after the run, the
-            // newline would join it and read as part of the folded lines.)
-            replaceDisplay(NSRange(location: NSMaxRange(folded), length: 0),
-                           with: "\n" + String(repeating: "  ", count: block.indent))
-            return
-        }
-        super.insertNewline(sender)
-        insertText(continuation(of: block), replacementRange: selectedRange())
+        applyListEdit(edit, to: source, named: L("줄 바꿈", "New Line"))
+    }
+
+    /// Whether the caret's line is a toggle with its children folded away.
+    private func caretIsOnFoldedToggle() -> Bool {
+        guard let line = caretLine(), line.block.kind == .toggle else { return false }
+        return foldedRun(in: line) != nil
     }
 
     /// The zero-width run at the end of a folded toggle's line that carries
@@ -1571,22 +1561,10 @@ final class NoteTextView: LatexSuiteTextView {
         return found
     }
 
-    private func continuation(of block: NoteMarkdown.Block) -> String {
-        let indent = String(repeating: "  ", count: block.indent)
-        switch block.kind {
-        case .bullet: return indent + "- "
-        case .ordered(let number): return indent + "\(number + 1). "
-        case .task: return indent + "- [ ] "
-        case .quote: return indent + "> "
-        // A toggle's Return makes a child: a line indented under it.
-        case .toggle: return indent + "  "
-        case .heading, .plain: return ""
-        }
-    }
-
     /// Backspace at the start of an item's words steps the item out a level,
     /// and at the left edge makes it a plain line — the way to turn a bullet
-    /// back into text when the "- " is drawn as a bullet.
+    /// back into text when the "- " is drawn as a bullet (`NoteList.backspace`,
+    /// one step to undo).
     override func deleteBackward(_ sender: Any?) {
         guard coordinator?.showsRawText != true, selectedRange().length == 0 else { return super.deleteBackward(sender) }
         let caret = selectedRange().location
@@ -1611,18 +1589,18 @@ final class NoteTextView: LatexSuiteTextView {
                 return
             }
         }
-        guard let line = caretLine(), line.block.kind != .plain, !line.block.marker.isEmpty,
-              caret == line.contentStart
+        // Only at the edge of a marker: every other Backspace is a
+        // character's, and is not worth reading the note back for.
+        guard let line = caretLine(), !line.block.marker.isEmpty, caret <= line.contentStart,
+              let (source, selection) = sourceAndSelection(),
+              let edit = NoteList.backspace(in: source, caret: selection.location)
         else { return super.deleteBackward(sender) }
-        if line.block.indent > 0 {
-            if !line.block.isListItem || !shiftItem(by: -1, named: L("내어쓰기", "Outdent")) {
-                replaceMarker(of: line, with: String(line.block.marker.dropFirst(2)))
-            }
-        } else {
-            replaceMarker(of: line, with: "")
-        }
+        applyListEdit(edit, to: source, named: L("지우기", "Delete"))
     }
 
+    /// Delete at the end of a line before a marked one takes the next line's
+    /// words, not its marker (`NoteList.deleteForward`): «1. a» and «2. b»
+    /// had become «1. a2. b».
     override func deleteForward(_ sender: Any?) {
         if coordinator?.showsRawText != true, selectedRange().length == 0, let storage = textStorage,
            selectedRange().location < storage.length,
@@ -1630,6 +1608,13 @@ final class NoteTextView: LatexSuiteTextView {
            let header = toggleHeader(before: selectedRange().location + 1), let coordinator {
             coordinator.setFolded(header, false, in: self)
             return
+        }
+        // Only at the end of a line.
+        if selectedRange().length == 0, selectedRange().location < (string as NSString).length,
+           (string as NSString).character(at: selectedRange().location) == 10,
+           let (source, selection) = sourceAndSelection(),
+           let edit = NoteList.deleteForward(in: source, caret: selection.location) {
+            return applyListEdit(edit, to: source, named: L("지우기", "Delete"))
         }
         super.deleteForward(sender)
     }
@@ -1648,45 +1633,72 @@ final class NoteTextView: LatexSuiteTextView {
 
     /// Where ⌘← (and Home) go on a line with a marker: to the start of the
     /// words first, and to the start of the line from there — past the
-    /// bullet only when asked twice, as Notion and Obsidian do.
-    private func homeTarget() -> Int? {
+    /// marker only when asked twice, as Notion and Obsidian do. A caret on a
+    /// list's line has only the first: its marker is drawn, and a caret
+    /// before it was typed into as the line's words — «x- a», the item gone
+    /// (`settledCaret`). A selection still reaches the line's start.
+    private func homeTarget(extending: Bool) -> Int? {
         guard coordinator?.showsRawText != true, let line = caretLine(), !line.block.marker.isEmpty else { return nil }
+        if line.block.isListItem, !extending { return line.contentStart }
         let head = selectedRange().location
         return head > line.contentStart ? line.contentStart : line.display.location
     }
 
     override func moveToLeftEndOfLine(_ sender: Any?) {
-        guard let target = homeTarget() else { return super.moveToLeftEndOfLine(sender) }
+        guard let target = homeTarget(extending: false) else { return super.moveToLeftEndOfLine(sender) }
         setSelectedRange(NSRange(location: target, length: 0))
     }
 
     override func moveToBeginningOfLine(_ sender: Any?) {
-        guard let target = homeTarget() else { return super.moveToBeginningOfLine(sender) }
+        guard let target = homeTarget(extending: false) else { return super.moveToBeginningOfLine(sender) }
         setSelectedRange(NSRange(location: target, length: 0))
     }
 
     override func moveToLeftEndOfLineAndModifySelection(_ sender: Any?) {
-        guard let target = homeTarget() else { return super.moveToLeftEndOfLineAndModifySelection(sender) }
+        guard let target = homeTarget(extending: true) else { return super.moveToLeftEndOfLineAndModifySelection(sender) }
         let range = selectedRange()
         setSelectedRange(NSRange(location: target, length: NSMaxRange(range) - target))
     }
 
     override func moveToBeginningOfLineAndModifySelection(_ sender: Any?) {
-        guard let target = homeTarget() else { return super.moveToBeginningOfLineAndModifySelection(sender) }
+        guard let target = homeTarget(extending: true) else { return super.moveToBeginningOfLineAndModifySelection(sender) }
         let range = selectedRange()
         setSelectedRange(NSRange(location: target, length: NSMaxRange(range) - target))
+    }
+
+    /// Where a caret that has come to rest at the start of a list's line,
+    /// or inside its drawn marker, goes: to the marker's words — or, when it
+    /// got there stepping left from those words (`previous`, where it was),
+    /// on to the end of the line above. Nil when it is anywhere else. There
+    /// is nothing before or inside a drawn marker to type into: a press on
+    /// the bullet's left half left the caret before it and what was typed
+    /// went in front of the marker, «x- a»; on its right half the caret was
+    /// between the bullet and its tab, and the marker was read twice,
+    /// «- x- a». And ← at an item's words went into its marker and was put
+    /// back where it started: it could not leave the line.
+    func settledCaret(_ caret: Int, previous: Int? = nil) -> Int? {
+        guard coordinator?.showsRawText != true, let storage = textStorage, caret < storage.length else { return nil }
+        let lineStart = (string as NSString).lineRange(for: NSRange(location: caret, length: 0)).location
+        var run = NSRange()
+        guard let standing = storage.attribute(.paperTimeSource, at: lineStart, longestEffectiveRange: &run,
+                                               in: NSRange(location: lineStart, length: storage.length - lineStart)) as? String
+        else { return nil }
+        let block = NoteMarkdown.Block(line: standing)
+        guard block.isListItem, block.marker == standing, caret < NSMaxRange(run) else { return nil }
+        let words = NSMaxRange(run)
+        return previous == words && lineStart > 0 ? lineStart - 1 : words
     }
 
     /// Tab indents the item the caret is in rather than dropping a tab into
     /// the middle of a sentence.
     override func insertTab(_ sender: Any?) {
         if indentCode(by: 1) { return }
-        guard shiftListItem(by: 1) else { return super.insertTab(sender) }
+        guard shiftListItems(by: 1) else { return super.insertTab(sender) }
     }
 
     override func insertBacktab(_ sender: Any?) {
         if indentCode(by: -1) { return }
-        guard shiftListItem(by: -1) else { return super.insertBacktab(sender) }
+        guard shiftListItems(by: -1) else { return super.insertBacktab(sender) }
     }
 
     // MARK: Fenced code
@@ -1866,31 +1878,43 @@ final class NoteTextView: LatexSuiteTextView {
         return true
     }
 
-    private func shiftListItem(by step: Int) -> Bool {
-        guard coordinator?.showsRawText != true, let line = caretLine(), line.block.isListItem else { return false }
-        return shiftItem(by: step, named: step > 0 ? L("들여쓰기", "Indent") : L("내어쓰기", "Outdent"))
+    /// Tab and ⇧Tab on a list: the item the caret is in — or every item
+    /// selected — a level in or out with what is under it, its list
+    /// numbered as it is shown (`NoteList.shift`), as one step to undo.
+    /// With a selection it had been the caret's item alone, and the
+    /// selection was let go.
+    private func shiftListItems(by step: Int) -> Bool {
+        guard let line = caretLine(), line.block.isListItem, let (source, selection) = sourceAndSelection(),
+              let edit = NoteList.shift(in: source, selection: selection, by: step) else { return false }
+        applyListEdit(edit, to: source, named: step > 0 ? L("들여쓰기", "Indent") : L("내어쓰기", "Outdent"))
+        return true
     }
 
-    /// Moves the item the caret is in a level in or out, with what is under
-    /// it, and numbers its list as it is shown (`NoteList.shift`) — in the
-    /// Markdown, as one step of the note's undo. On the screen it was the
-    /// marker alone that changed: the caret went to the start of the words
-    /// (what was typed next went in front of them, and Return split the
-    /// item), the number stayed what it was, and an item's sub-list stayed
-    /// behind.
-    private func shiftItem(by step: Int, named name: String) -> Bool {
-        guard let coordinator, let storage = textStorage else { return false }
-        let source = NoteMarkdown.markdown(from: storage)
-        let caret = NoteMarkdown.sourceIndex(in: storage, displayIndex: selectedRange().location)
-        guard let edit = NoteList.shift(in: source, caret: caret, by: step) else { return false }
-        // At the left already: the key is taken, and nothing moves.
-        guard edit.range.length > 0 || !edit.replacement.isEmpty else { return true }
+    /// The note's Markdown and the selection in it, for a list's edit. Nil
+    /// while an input method is composing — the syllable is not in the note
+    /// yet, and the note set again under it would put it in twice — and in
+    /// the Markdown view, where every key is the text view's.
+    private func sourceAndSelection() -> (source: String, selection: NSRange)? {
+        guard coordinator?.showsRawText != true, !hasMarkedText(), let storage = textStorage else { return nil }
+        let shown = selectedRange()
+        let start = NoteMarkdown.sourceIndex(in: storage, displayIndex: shown.location)
+        let end = shown.length > 0 ? NoteMarkdown.sourceIndex(in: storage, displayIndex: NSMaxRange(shown)) : start
+        return (NoteMarkdown.markdown(from: storage), NSRange(location: start, length: max(0, end - start)))
+    }
+
+    /// A list's edit (`NoteList`), made in the Markdown — the note set again
+    /// from it, the caret or the selection where the edit leaves it — as one
+    /// step of the note's undo, never part of the typing either side of it.
+    /// An edit that changes nothing (⇧Tab at the left) takes the key and
+    /// leaves the note alone.
+    private func applyListEdit(_ edit: NoteList.Edit, to source: String, named name: String) {
+        guard let coordinator, !edit.changesNothing else { return }
         let updated = (source as NSString).replacingCharacters(in: edit.range, with: edit.replacement)
         coordinator.registerStep(named: name, in: self)
         coordinator.lastKnownMarkdown = updated
         coordinator.markdown = updated
-        coordinator.restyle(self, source: updated, caretSource: edit.caret)
-        return true
+        coordinator.restyle(self, source: updated, caretSource: edit.caret,
+                            selection: edit.length > 0 ? NSRange(location: edit.caret, length: edit.length) : nil)
     }
 
     /// ⌘B, ⌘I and ⌘E set the selection bold, italic and as code — as
@@ -2059,20 +2083,15 @@ final class NoteTextView: LatexSuiteTextView {
         if latexSuite.insert(string, replacementRange: replacementRange, in: self) { return }
         // "[] " at the start of a line, or of a bullet's words, is a task —
         // Notion's shortcut for one — and "-- " there is a toggle (Notion
-        // makes one with ">", which Markdown has for quotations).
-        if typed == " ", range.length == 0, coordinator?.showsRawText != true,
-           let line = caretLine(), line.block.kind == .plain || line.block.kind == .bullet,
-           range.location >= line.contentStart {
-            let text = self.string as NSString
-            let sofar = text.substring(with: NSRange(location: line.contentStart, length: range.location - line.contentStart))
-            let typedSoFar = sofar.trimmingCharacters(in: .whitespaces)
-            if typedSoFar == "[]" || (typedSoFar == "--" && line.block.kind == .plain) {
-                let lead = String(repeating: "  ", count: line.block.indent)
-                    + (line.block.kind == .plain ? sofar.prefix { $0 == " " } : "")
-                replaceDisplay(NSRange(location: line.markerDisplay.location, length: range.location - line.markerDisplay.location),
-                               with: lead + (typedSoFar == "[]" ? "- [ ] " : "+ "))
-                return
-            }
+        // makes one with ">", which Markdown has for quotations): `NoteList.shortcut`,
+        // one step to undo.
+        if typed == " ", range.length == 0, replacementRange.location == NSNotFound || replacementRange == range,
+           range.location >= 2,
+           ["[]", "--"].contains((self.string as NSString).substring(with: NSRange(location: range.location - 2, length: 2))),
+           let (source, selection) = sourceAndSelection(),
+           let edit = NoteList.shortcut(in: source, caret: selection.location) {
+            applyListEdit(edit, to: source, named: edit.replacement.hasPrefix("+") ? L("토글", "Toggle") : L("할 일", "To-Do"))
+            return
         }
         // Pairs: a closer typed before the same closer steps over it, and an
         // opener with nothing selected brings its closer along.
