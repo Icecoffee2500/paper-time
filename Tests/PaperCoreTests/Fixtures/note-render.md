@@ -30,3 +30,21 @@ By \eqref{eq:a}, the \(x\) and \[y\] cost \$5.
 > \begin{equation} E = mc^2 \tag{3} \end{equation}
 - $$z$$
   \[ w \]  
+A line before code.
+```python
+# not a heading $x$
+- not a bullet
+| a | b |
+|---|---|
+x = `y` **z**
+```
+
+```
+no language
+```
+~~~js
+let a = 1 // $$x$$
+~~~
+```cpp
+never closed
+- still code

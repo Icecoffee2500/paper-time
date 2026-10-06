@@ -63,6 +63,7 @@ struct FeatureDemoView: View {
             case .mathPreview: MathPreviewDemo(scale: scale)
             case .noteEnvironments: NoteEnvironmentsDemo(scale: scale)
             case .handwriting: HandwritingDemo(scale: scale)
+            case .noteCodeBlock: NoteCodeBlockDemo(scale: scale)
             case .nightPage: NightPageDemo(scale: scale)
             }
         }
@@ -4627,6 +4628,160 @@ private struct NoteEnvironmentsDemo: View {
         Text(Self.formula.joined(separator: " ")).font(.system(size: lineSize, design: .monospaced))
         #endif
     }
+}
+
+
+// MARK: - Code blocks in a note
+
+/// A block of code in a note, as written and as the note sets it.
+///
+/// Three backticks and a language are all it takes, and nobody guesses
+/// that from a sentence about fences. So the demo is the two, switched: the
+/// lines as they are typed, and the small code editor the note makes of
+/// them — the language's name over a rule, a Copy button, the lines
+/// numbered, the code in the colours the note itself gives it (the same
+/// highlighter, `CodeHighlighter`, and the same palette). The button works:
+/// it copies the demo's code and says so for a moment, as the note's does.
+private struct NoteCodeBlockDemo: View {
+    let scale: DemoScale
+    @State private var shown = true
+    @State private var copied = false
+
+    private static let code = [
+        "def area(r):",
+        ReleaseNotes.string("    # 반지름이 r인 원", "    # a circle of radius r"),
+        "    return 3.14 * r ** 2",
+    ]
+
+    var body: some View {
+        let full = scale.isFull
+        return VStack(alignment: .leading, spacing: scale.gap) {
+            Paper(scale: scale) {
+                Group {
+                    if shown { block } else { written }
+                }
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .frame(height: full ? 94 : 64, alignment: .topLeading)
+            }
+            HStack(spacing: full ? 10 : 6) {
+                Picker("", selection: $shown.animation(Motion.move)) {
+                    Text(ReleaseNotes.string("적은 그대로", "As Written")).tag(false)
+                    Text(ReleaseNotes.string("노트에서", "In the Note")).tag(true)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(maxWidth: full ? 220 : 170)
+                Spacer(minLength: 0)
+                Text(ReleaseNotes.string("```와 언어 이름, 그리고 Return", "``` and a language, then Return"))
+                    .font(scale.small)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    private var codeSize: CGFloat { scale.isFull ? 12 : 8.5 }
+    private var lineHeight: CGFloat { scale.isFull ? 17 : 12 }
+
+    /// The lines as they are typed, the fences and all.
+    private var written: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array((["```python"] + Self.code + ["```"]).enumerated()), id: \.offset) { _, line in
+                Text(line)
+                    .font(.system(size: codeSize, design: .monospaced))
+                    .foregroundStyle(line.hasPrefix("```") ? Color.accentColor : Color.primary)
+                    .frame(height: lineHeight, alignment: .leading)
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    /// The box the note draws for them.
+    @ViewBuilder
+    private var block: some View {
+        let full = scale.isFull
+        #if os(macOS)
+        let style = NoteCodeStyle.Block.self
+        let radius = full ? style.radius : style.radius * 0.75
+        let source = Self.code.joined(separator: "\n")
+        let runs = CodeHighlighter.shared.runs(of: source, language: "python")
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("Python")
+                    .font(.system(size: full ? 10.5 : 7.5, weight: .medium))
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+                Button {
+                    #if canImport(AppKit)
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(source, forType: .string)
+                    #endif
+                    withAnimation(Motion.tap) { copied = true }
+                    Task {
+                        try? await Task.sleep(for: .seconds(1.6))
+                        withAnimation(Motion.fade) { copied = false }
+                    }
+                } label: {
+                    Label(copied ? ReleaseNotes.string("복사했어요", "Copied") : ReleaseNotes.string("복사", "Copy"),
+                          systemImage: copied ? "checkmark" : "doc.on.doc")
+                        .font(.system(size: full ? 10 : 7))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, full ? 12 : 8)
+            .frame(height: full ? 27 : 18)
+            Rectangle().fill(Color(nsColor: style.rule)).frame(height: 1)
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(Self.code.enumerated()), id: \.offset) { index, line in
+                    HStack(alignment: .firstTextBaseline, spacing: full ? 9 : 6) {
+                        Text("\(index + 1)")
+                            .font(.system(size: full ? 10 : 7, design: .monospaced))
+                            .foregroundStyle(.tertiary)
+                            .frame(width: full ? 19 : 12, alignment: .trailing)
+                        // The note's own code face, its Hangul included.
+                        coloured(line, offset: Self.offset(ofLine: index), runs: runs)
+                            .font(Font(NoteTypography.code(size: codeSize / 0.85) as CTFont))
+                            .lineLimit(1)
+                    }
+                    .frame(height: lineHeight, alignment: .leading)
+                }
+            }
+            .padding(.top, full ? 6 : 4)
+            .padding(.bottom, full ? 6 : 4)
+            .padding(.leading, full ? 12 : 8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: radius, style: .continuous).fill(Color(nsColor: style.fill)))
+        .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1))
+        #else
+        written
+        #endif
+    }
+
+    /// Where a line starts in the block's code.
+    private static func offset(ofLine index: Int) -> Int {
+        code.prefix(index).reduce(0) { $0 + $1.utf16.count + 1 }
+    }
+
+    #if os(macOS)
+    /// One line in the block's colours: the runs that fall on it, in its own offsets.
+    private func coloured(_ line: String, offset: Int, runs: [CodeHighlighter.Run]) -> Text {
+        let units = Array(line.utf16)
+        func piece(_ from: Int, _ to: Int) -> String { String(decoding: units[from..<to], as: UTF16.self) }
+        var text = Text("")
+        var at = 0
+        for run in runs {
+            let from = max(run.range.location - offset, at)
+            let to = min(NSMaxRange(run.range) - offset, units.count)
+            guard to > from else { continue }
+            if from > at { text = text + Text(piece(at, from)) }
+            text = text + Text(piece(from, to)).foregroundColor(Color(nsColor: NoteCodeStyle.Block.ink(run.role)))
+            at = to
+        }
+        if at < units.count { text = text + Text(piece(at, units.count)) }
+        return text
+    }
+    #endif
 }
 
 

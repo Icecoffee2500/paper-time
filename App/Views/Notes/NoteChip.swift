@@ -77,10 +77,153 @@ enum NoteQuoteBar {
 /// on top.
 final class NoteLayoutFragment: NSTextLayoutFragment {
     override func draw(at point: CGPoint, in context: CGContext) {
+        drawCodeBlock(in: context)
         drawQuotes(in: context)
         drawChips(in: context)
         drawCode(in: context)
         super.draw(at: point, in: context)
+    }
+
+    // MARK: Fenced code
+
+    /// The row of a fenced block this paragraph is, if it is one.
+    var codeRow: NoteCodeStyle.Block.Row? {
+        guard let paragraph = textElement as? NSTextParagraph else { return nil }
+        let text = paragraph.attributedString
+        guard text.length > 0 else { return nil }
+        return NoteCodeStyle.Block.Row(text.attribute(NoteCodeStyle.Block.attribute, at: 0, effectiveRange: nil))
+    }
+
+    /// This row's slice of the block's box, in the fragment's coordinates:
+    /// the column's width less the line padding, and the row's height less
+    /// the block's margin above its header and below its last row.
+    private func codeBox(for row: NoteCodeStyle.Block.Row) -> CGRect {
+        let container = textLayoutManager?.textContainer
+        let padding = container?.lineFragmentPadding ?? 0
+        let room = container.map(\.size.width).flatMap { $0 > 0 && $0 < 10_000 ? $0 : nil }
+            ?? layoutFragmentFrame.maxX + padding
+        let left = padding - layoutFragmentFrame.minX
+        let right = room - padding - layoutFragmentFrame.minX
+        let top = row.role == .header ? NoteCodeStyle.Block.margin : 0
+        var bottom = layoutFragmentFrame.height
+        // The last row ends at its words (and the foot's room): the space
+        // under it is the block's margin — and the note's last paragraph has
+        // none, which is why this is not measured from the bottom.
+        if row.isLast, let line = textLineFragments.last {
+            bottom = min(bottom, line.typographicBounds.maxY + (row.role == .close ? 0 : NoteCodeStyle.Block.footHeight / 2))
+        }
+        return CGRect(x: left, y: top, width: max(0, right - left), height: max(0, bottom - top))
+    }
+
+    /// Where the copy button stands over a block's header, in the
+    /// fragment's coordinates. Nil on any other row, on a header shown as
+    /// written, and on paper (`NotePDFExport` draws no buttons).
+    var codeCopyButton: CGRect? {
+        guard let row = codeRow, row.role == .header,
+              let paragraph = textElement as? NSTextParagraph,
+              paragraph.attributedString.attribute(.paperTimeSource, at: 0, effectiveRange: nil) != nil
+        else { return nil }
+        let box = codeBox(for: row)
+        let size = Self.copyLabel(copied: false).size()
+        let width = size.width + 16
+        return CGRect(x: box.maxX - NoteCodeStyle.Block.inset / 2 - width, y: box.minY + 4,
+                      width: width, height: NoteCodeStyle.Block.headerHeight - 8)
+    }
+
+    /// The copy button's words, and its picture.
+    static func copyLabel(copied: Bool) -> NSAttributedString {
+        let font = NSFont.systemFont(ofSize: NoteTypography.baseSize * 0.72, weight: .regular)
+        let label = NSMutableAttributedString()
+        if let symbol = NSImage(systemSymbolName: copied ? "checkmark" : "doc.on.doc", accessibilityDescription: nil)?
+            .withSymbolConfiguration(.init(pointSize: font.pointSize, weight: .regular)) {
+            let attachment = NSTextAttachment()
+            attachment.image = symbol
+            attachment.bounds = CGRect(x: 0, y: -1.5, width: symbol.size.width, height: symbol.size.height)
+            label.append(NSAttributedString(attachment: attachment))
+            label.append(NSAttributedString(string: " "))
+        }
+        label.append(NSAttributedString(string: copied ? L("복사했어요", "Copied") : L("복사", "Copy")))
+        label.addAttributes([.font: font, .foregroundColor: NSColor.secondaryLabelColor],
+                            range: NSRange(location: 0, length: label.length))
+        return label
+    }
+
+    /// The block's box, a row at a time, behind its words: the fill, the
+    /// outline (its sides on every row, its rounded top on the header and
+    /// its rounded foot on the last row), the rule under the header, the
+    /// line's number, and the copy button. Each row's slice is drawn from a
+    /// box that runs on past the row where the block does, clipped to the
+    /// row — so the corners belong to the header and the foot only, and the
+    /// slices meet without a seam.
+    private func drawCodeBlock(in context: CGContext) {
+        guard let row = codeRow, let paragraph = textElement as? NSTextParagraph else { return }
+        let block = NoteCodeStyle.Block.self
+        var band = codeBox(for: row)
+        guard band.width > 0, band.height > 0 else { return }
+        // Rows meet on whole device pixels. Two translucent slices that both
+        // half-cover the pixel row where they meet paint it twice, and the
+        // block showed a faint line between every two lines of code. Snapped
+        // through the context's own transform: the fragment is drawn at
+        // wherever the view and the container's inset put it, which the
+        // fragment's frame alone does not say — snapping by that left one
+        // pixel row painted twice and another missed.
+        func snapped(_ y: CGFloat) -> CGFloat {
+            let device = context.convertToDeviceSpace(CGPoint(x: 0, y: y))
+            return context.convertToUserSpace(CGPoint(x: device.x, y: device.y.rounded())).y
+        }
+        let snappedTop = snapped(band.minY)
+        band = CGRect(x: band.minX, y: snappedTop, width: band.width, height: snapped(band.maxY) - snappedTop)
+        let top = row.role == .header
+        let bottom = row.isLast
+        let reach = block.radius + 4
+        let whole = CGRect(x: band.minX, y: band.minY - (top ? 0 : reach), width: band.width,
+                           height: band.height + (top ? 0 : reach) + (bottom ? 0 : reach))
+        let shape = NSBezierPath(roundedRect: whole, xRadius: block.radius, yRadius: block.radius)
+        context.saveGState()
+        NSBezierPath(rect: band).addClip()
+        block.fill.setFill()
+        shape.fill()
+        block.border.setStroke()
+        let outline = NSBezierPath(roundedRect: whole.insetBy(dx: 0.5, dy: 0.5),
+                                   xRadius: block.radius - 0.5, yRadius: block.radius - 0.5)
+        outline.lineWidth = 1
+        outline.stroke()
+        context.restoreGState()
+
+        let text = paragraph.attributedString
+        if top, !bottom {
+            block.rule.setFill()
+            NSRect(x: band.minX + 1, y: band.maxY - 1, width: band.width - 2, height: 1).fill()
+        }
+        if row.role == .line, row.number > 0, let line = textLineFragments.first,
+           let style = text.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle {
+            let font = block.numberFont()
+            let number = NSAttributedString(string: "\(row.number)", attributes: [
+                .font: font, .foregroundColor: block.lineNumber,
+            ])
+            let size = number.size()
+            let baseline = line.typographicBounds.minY + line.glyphOrigin.y
+            let codeStart = band.minX + style.headIndent
+            Self.drawDownward(number, at: CGPoint(x: codeStart - 9 - size.width, y: baseline - font.ascender), in: context)
+        }
+        if let button = codeCopyButton, NSGraphicsContext.current?.isDrawingToScreen ?? true {
+            let copied = text.attribute(block.copied, at: 0, effectiveRange: nil) != nil
+            let label = Self.copyLabel(copied: copied)
+            let size = label.size()
+            Self.drawDownward(label, at: CGPoint(x: button.maxX - 8 - size.width, y: button.midY - size.height / 2), in: context)
+        }
+    }
+
+    /// Words drawn in the fragment's own space, which runs downward wherever
+    /// the fragment is drawn. The text view's graphics context says so; the
+    /// PDF export's (`NotePDFExport`) turns the page over with its transform
+    /// and says otherwise — and there a block's numbers came out upside down.
+    static func drawDownward(_ words: NSAttributedString, at point: CGPoint, in context: CGContext) {
+        if NSGraphicsContext.current?.isFlipped ?? true { return words.draw(at: point) }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: true)
+        words.draw(at: point)
+        NSGraphicsContext.restoreGraphicsState()
     }
 
     /// The quotation this fragment belongs to, if it belongs to one: which
@@ -145,6 +288,8 @@ final class NoteLayoutFragment: NSTextLayoutFragment {
     /// of two words got two words' worth of quotation.
     override var renderingSurfaceBounds: CGRect {
         var bounds = super.renderingSurfaceBounds
+        // A block of code is as wide as the column, past its words.
+        if let row = codeRow { bounds = bounds.union(codeBox(for: row).insetBy(dx: -1, dy: -1)) }
         // A code span's tint reaches 0.2 em above and below its letters,
         // which on the first and last lines is past the box of the words.
         if holdsCode { bounds = bounds.insetBy(dx: 0, dy: -4) }
@@ -156,7 +301,7 @@ final class NoteLayoutFragment: NSTextLayoutFragment {
         guard let paragraph = textElement as? NSTextParagraph else { return false }
         let text = paragraph.attributedString
         var found = false
-        text.enumerateAttribute(NoteCode.attribute, in: NSRange(location: 0, length: text.length)) { value, _, stop in
+        text.enumerateAttribute(NoteCodeStyle.attribute, in: NSRange(location: 0, length: text.length)) { value, _, stop in
             if value != nil { found = true; stop.pointee = true }
         }
         return found
@@ -170,18 +315,18 @@ final class NoteLayoutFragment: NSTextLayoutFragment {
         let text = paragraph.attributedString
         guard text.length > 0 else { return }
         context.saveGState()
-        NoteCode.fill.setFill()
+        NoteCodeStyle.fill.setFill()
         text.enumerateAttribute(
-            NoteCode.attribute, in: NSRange(location: 0, length: text.length)
+            NoteCodeStyle.attribute, in: NSRange(location: 0, length: text.length)
         ) { value, range, _ in
             guard let size = value as? CGFloat, size > 0 else { return }
             let face = NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
-            let above = face.ascender + size * NoteCode.padding.height
-            let below = -face.descender + size * NoteCode.padding.height
+            let above = face.ascender + size * NoteCodeStyle.padding.height
+            let below = -face.descender + size * NoteCodeStyle.padding.height
             for (frame, baseline) in segments(for: range, in: paragraph) where frame.width > 0 {
                 let box = CGRect(x: frame.minX, y: frame.minY + baseline - above,
                                  width: frame.width, height: above + below)
-                NSBezierPath(roundedRect: box, xRadius: NoteCode.radius, yRadius: NoteCode.radius).fill()
+                NSBezierPath(roundedRect: box, xRadius: NoteCodeStyle.radius, yRadius: NoteCodeStyle.radius).fill()
             }
         }
         context.restoreGState()

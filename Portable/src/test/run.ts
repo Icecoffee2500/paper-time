@@ -45,6 +45,8 @@ import { paritySuite } from './parity.js'
 import { zettelSuite } from './zettel.js'
 import { updatesSuite } from './updates.js'
 import { noteTableSuite } from './noteTable.js'
+import { noteCodeSuite } from './noteCode.js'
+import { codeHighlightSuite } from './codeHighlight.js'
 import { feedbackNameSuite } from './feedbackName.js'
 import { slipBoxSuite } from './slipBox.js'
 import { safetySuite } from './safety.js'
@@ -435,6 +437,8 @@ async function main() {
   await zettelSuite(test, suite)
   await updatesSuite(test, suite)
   await noteTableSuite(test, suite)
+  await noteCodeSuite(test, suite)
+  await codeHighlightSuite(test, suite)
   await feedbackNameSuite(test, suite)
   await slipBoxSuite(test, suite)
   await safetySuite(test, suite)

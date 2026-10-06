@@ -97,6 +97,40 @@ enum NoteScrollProbe {
                 report(key)
                 continue
             }
+            // `Shot:<png>`: the note as it stands, caret and all, drawn by the
+            // view itself (`cacheDisplay`) — no screen is looked at.
+            if let file = key.stripPrefix("Shot:") {
+                if let rep = scroll.bitmapImageRepForCachingDisplay(in: scroll.bounds) {
+                    scroll.cacheDisplay(in: scroll.bounds, to: rep)
+                    try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: file))
+                }
+                say("note scroll: shot \(file)")
+                continue
+            }
+            // `Dark` / `Light`: the window's appearance, and the note set
+            // again in it.
+            if key == "Dark" || key == "Light" {
+                window.appearance = NSAppearance(named: key == "Dark" ? .darkAqua : .aqua)
+                try? await Task.sleep(for: .milliseconds(400))
+                report(key)
+                continue
+            }
+            // `CopyCode`: the first block's copy button, onto a pasteboard of
+            // the probe's own — never the one people copy to.
+            if key == "CopyCode" {
+                let board = NSPasteboard(name: NSPasteboard.Name("PaperTimeProbe-\(ProcessInfo.processInfo.processIdentifier)"))
+                var header: Int?
+                if let storage = text.textStorage {
+                    storage.enumerateAttribute(NoteCodeStyle.Block.attribute, in: NSRange(location: 0, length: storage.length)) { value, range, stop in
+                        if NoteCodeStyle.Block.Row(value)?.role == .header { header = range.location; stop.pointee = true }
+                    }
+                }
+                let copied = header.map { text.copyCode(ofBlockAt: $0, to: board) } ?? false
+                say("note scroll: copied code \(copied): \((board.string(forType: .string) ?? "").debugDescription)")
+                board.releaseGlobally()
+                report(key)
+                continue
+            }
             _ = await LatexSuiteTypingProbe.press(key, in: text, window: window)
             if key.hasPrefix("Caret:") { text.scrollRangeToVisible(text.selectedRange()) }
             await LatexSuiteTypingProbe.endOfEvent(window)

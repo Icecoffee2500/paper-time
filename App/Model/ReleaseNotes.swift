@@ -308,6 +308,40 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.9.26",
+            date: Text2("2026년 10월", "October 2026"),
+            note: Text2(
+                "노트의 코드 블록이 코드 편집기처럼 보여요. 언어 이름과 복사 단추, 줄 번호, 색이 붙어요.",
+                "A block of code in a note now looks like a code editor, with its language, a Copy button, line numbers and colour."
+            ),
+            added: [
+                Entry(
+                    Text2("코드 편집기 같은 코드 블록", "Code Blocks Like an Editor"),
+                    Text2(
+                        "백틱 세 개(```)와 언어 이름으로 연 블록이 둥근 상자로 보여요. 위에는 언어 이름과 복사 단추가, 왼쪽에는 줄 번호가 서고, 코드는 Xcode와 같은 색으로 보여요. 라이트 모드와 다크 모드에서 각자 맞는 색을 쓰고, PDF로 내보낸 노트에서도 같아요. 펜스에 커서를 두면 적은 그대로 보여서 언어를 고칠 수 있어요.",
+                        "A block opened with three backticks (```) and a language shows as a rounded box. The language and a Copy button sit at the top, line numbers run down the side, and the code takes Xcode’s colours, light and dark. Exported PDFs show it the same way. Put the cursor on a fence to see it as written and change the language."
+                    ),
+                    demo: .noteCodeBlock
+                ),
+                Entry(
+                    Text2("코드를 쓰는 키", "Keys for Writing Code"),
+                    Text2(
+                        "```python을 치고 Return을 누르면 블록이 닫히고 커서가 그 안에 서요. 블록 안에서 Return은 들여쓰기를 이어 가고, 콜론이나 여는 괄호 뒤에서는 한 단계 더 들여요. Tab과 ⇧Tab은 네 칸씩 들이고 내밀어요. 괄호와 따옴표는 짝을 지어 주지만 별표나 달러는 그대로 두고, ⌘B·⌘I는 코드를 건드리지 않아요.",
+                        "Type ```python and press Return, and the block closes with the cursor inside. In a block, Return keeps the indent, and adds a step after a colon or an opening bracket. Tab and ⇧Tab indent and outdent by four spaces. Brackets and quotes come in pairs, but stars and dollars stay single, and ⌘B and ⌘I leave code alone."
+                    )
+                ),
+            ],
+            fixed: [
+                Entry(
+                    Text2("백틱 세 개", "Three Backticks"),
+                    Text2(
+                        "백틱을 한 번에 하나씩 세 번 치면 자동으로 붙는 짝 때문에 네 개가 되어서 코드 블록이 열리지 않았어요. 이제 세 번째 백틱이 펜스를 만들어요.",
+                        "Typing three backticks one at a time left four, because each one brought its pair, so the code block never opened. Now the third backtick makes the fence."
+                    )
+                ),
+            ]
+        ),
+        Release(
             version: "0.9.25",
             date: Text2("2026년 10월", "October 2026"),
             note: Text2(
@@ -2377,6 +2411,8 @@ enum ReleaseNotes {
                     Text2("\\begin{align}, cases, 행렬, \\[…\\]를 논문 원고처럼 적어요. 번호는 노트 맨 위부터 세고, \\eqref{…}가 \\label을 붙인 식을 가리켜요.", "Write \\begin{align}, cases, the matrices and \\[…\\] as a paper's source does. Numbers count from the top of the note, and \\eqref{…} points to a labeled formula.")),
             Feature(Text2("LaTeX 단축 입력", "LaTeX Shortcuts"),
                     Text2("Obsidian의 Latex Suite와 같아요. 수식 안에서 //는 분수, x1은 x_{1}, sr은 제곱이 되고 Tab은 다음 칸으로 가요. 글 카드에서도 돼요.", "The same as Latex Suite in Obsidian: inside math, // is a fraction, x1 is x_{1}, sr a square, and Tab moves to the next field. Text cards too.")),
+            Feature(Text2("코드 블록", "Code blocks"),
+                    Text2("```와 언어 이름으로 열면 코드 편집기처럼 보여요. 언어 이름, 복사 단추, 줄 번호, Xcode의 색이 붙고, Return·Tab이 코드처럼 들여 써요.", "Open a block with ``` and a language and it looks like a code editor: the language, a Copy button, line numbers and Xcode’s colours. Return and Tab indent as code does.")),
             Feature(Text2("원문 보기", "Raw"),
                     Text2("</> 버튼이 노트를 Markdown 그대로 보여준다. 링크나 수식을 손으로 고칠 때 쓴다.", "The </> button shows the note as Markdown, for fixing a link or a formula by hand.")),
         ]),
@@ -2643,6 +2679,10 @@ enum ReleaseNotes {
         /// them — without the handwriting model and with it, the words
         /// arriving in the strip as they are read.
         case handwriting
+        /// A block of code in a note, as written — the fence and its
+        /// language — and as the note sets it: a small code editor with the
+        /// language's name, a copy button, numbered lines in Xcode's colours.
+        case noteCodeBlock
 
         var id: String { rawValue }
     }

@@ -18,10 +18,10 @@ enum NoteTableDrawing {
             rule = NSColor(cgColor: NSColor.separatorColor.cgColor) ?? .separatorColor
             ground = NSColor(cgColor: NSColor.labelColor.withAlphaComponent(0.05).cgColor) ?? .clear
         }
-        var code = NoteCode.ink, codeFill = NoteCode.fill
+        var code = NoteCodeStyle.ink, codeFill = NoteCodeStyle.fill
         appearance.performAsCurrentDrawingAppearance {
-            code = NSColor(cgColor: NoteCode.ink.cgColor) ?? NoteCode.ink
-            codeFill = NSColor(cgColor: NoteCode.fill.cgColor) ?? NoteCode.fill
+            code = NSColor(cgColor: NoteCodeStyle.ink.cgColor) ?? NoteCodeStyle.ink
+            codeFill = NSColor(cgColor: NoteCodeStyle.fill.cgColor) ?? NoteCodeStyle.fill
         }
         let body = NoteTypography.body()
         let rows = [table.header] + table.rows
