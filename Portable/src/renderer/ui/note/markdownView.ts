@@ -18,7 +18,7 @@
  */
 import { EditorSelection, EditorState, Prec, RangeSetBuilder, StateEffect, StateField, type Extension, type Range } from '@codemirror/state'
 import { Decoration, EditorView, WidgetType, keymap, type DecorationSet } from '@codemirror/view'
-import { planNote, type InlineToken, type PlannedLine } from '../../../shared/noteMarkdown.js'
+import { emphasisClasses, emphasisPieces, emphasisWidth, planNote, type InlineToken, type PlannedLine } from '../../../shared/noteMarkdown.js'
 import { toggleChildrenEnd } from '../../../shared/noteBlocks.js'
 import { L } from '../../../shared/lang.js'
 import { parseTable, tableBlocks, type Table } from '../../../shared/noteTable.js'
@@ -181,7 +181,18 @@ class TableWidget extends WidgetType {
     const frame = document.createElement('div')
     frame.className = 'nm-table'
     const grid = document.createElement('table')
-    const plain = (cell: string) => cell.replaceAll('**', '').replaceAll('__', '').replaceAll('`', '')
+    // A cell's emphasis is set as emphasis (`NoteTableDrawing.text`); it was
+    // only taken out, so `*기울*` stayed as written.
+    const fill = (into: HTMLElement, cell: string) => {
+      for (const piece of emphasisPieces(cell)) {
+        const classes = emphasisClasses(piece)
+        if (!classes) { into.append(piece.text); continue }
+        const span = document.createElement(piece.mono ? 'code' : piece.bold ? 'strong' : 'em')
+        span.className = classes
+        span.textContent = piece.text
+        into.append(span)
+      }
+    }
     const align = (index: number) => {
       const one = this.table.alignments[index]
       return one === 'center' ? 'center' : one === 'right' ? 'right' : 'left'
@@ -189,7 +200,7 @@ class TableWidget extends WidgetType {
     const head = grid.createTHead().insertRow()
     this.table.header.forEach((cell, index) => {
       const th = document.createElement('th')
-      th.textContent = plain(cell)
+      fill(th, cell)
       th.style.textAlign = align(index)
       head.append(th)
     })
@@ -198,7 +209,7 @@ class TableWidget extends WidgetType {
       const tr = body.insertRow()
       row.forEach((cell, index) => {
         const td = tr.insertCell()
-        td.textContent = plain(cell)
+        fill(td, cell)
         td.style.textAlign = align(index)
       })
     }
@@ -303,9 +314,9 @@ function tokenRanges(token: InlineToken, source: string, line: PlannedLine, out:
       out.push(hidden.range(from, from + 1))
       return
     case 'emphasis': {
-      const width = token.bold ? 2 : 1
+      const width = emphasisWidth(token)
       out.push(hidden.range(from, from + width))
-      out.push(Decoration.mark({ class: token.mono ? 'nm-mono' : token.bold ? 'nm-bold' : 'nm-italic' }).range(from + width, to - width))
+      out.push(Decoration.mark({ class: emphasisClasses(token) }).range(from + width, to - width))
       out.push(hidden.range(to - width, to))
       return
     }
@@ -352,7 +363,12 @@ function syntaxRanges(token: InlineToken, source: string, out: Range<Decoration>
       paint(from, from + 1)
       return
     case 'emphasis': {
-      const width = token.bold ? 2 : 1
+      // And what the marks do, done already, as Obsidian does it: the words
+      // between `**` bold while their line is being written (the Mac's
+      // `styleAsWritten`). Code is tinted with its backticks.
+      const width = emphasisWidth(token)
+      if (token.mono) out.push(Decoration.mark({ class: 'nm-mono' }).range(from, to))
+      else if (to - from > 2 * width) out.push(Decoration.mark({ class: emphasisClasses(token) }).range(from + width, to - width))
       paint(from, from + width)
       paint(to - width, to)
       return

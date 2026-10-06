@@ -1,6 +1,6 @@
 {
- "markdown": "# Entropy and forgetting\nPlain words with **bold**, *italic* and `code` in them.\n## A heading two\n### Third level\n- a bullet\n  - nested bullet\n1. first\n12) twelfth\n- [ ] to do\n- [x] done\n> typed aside with *emphasis*\n> second line\n> the model forgets [p. 4](papertime://anchor?p=3&x=145.00&y=95.00&w=366.00&h=12.00)\n>### Section on the page\n\nA link to [[202609280047|Entropy note]] and [[202609280048]] here.\nAn inline $x^2$ formula, and a passage [p. 2](papertime://anchor?p=1&x=10.00&y=20.00&w=30.00&h=12.00).\n$$\n\\int_0^1 f(x)\\,dx\n$$\n[a quoted \\] label](papertime://anchor?p=0&x=1.00&y=2.00&w=3.00&h=4.00)\n> [whole quoted line](papertime://anchor?p=5&x=1.00&y=2.00&w=3.00&h=4.00)\nLast line with $$a+b$$ inline display.\n\\begin{align}\na &= b \\label{eq:a} \\\\\nc &= d\n\\end{align}\nBy \\eqref{eq:a}, the \\(x\\) and \\[y\\] cost \\$5.\n> \\begin{equation} E = mc^2 \\tag{3} \\end{equation}\n- $$z$$\n  \\[ w \\]  ",
- "length": 448,
+ "markdown": "# Entropy and forgetting\nPlain words with **bold**, *italic* and `code` in them.\n한글 **굵게**와 *기울여 쓴 말*, ***둘 다***, `코드 x` 끝.\n## A heading two with **bold**, *italic* and `code`\n### Third level\n- a bullet\n  - nested bullet\n1. first\n12) twelfth\n- [ ] to do\n- [x] done\n> typed aside with *emphasis* and `code`\n> second line\n> the model forgets [p. 4](papertime://anchor?p=3&x=145.00&y=95.00&w=366.00&h=12.00)\n>### Section on the page\n\nA link to [[202609280047|Entropy note]] and [[202609280048]] here.\nAn inline $x^2$ formula, and a passage [p. 2](papertime://anchor?p=1&x=10.00&y=20.00&w=30.00&h=12.00).\n$$\n\\int_0^1 f(x)\\,dx\n$$\n[a quoted \\] label](papertime://anchor?p=0&x=1.00&y=2.00&w=3.00&h=4.00)\n> [whole quoted line](papertime://anchor?p=5&x=1.00&y=2.00&w=3.00&h=4.00)\nLast line with $$a+b$$ inline display.\n\\begin{align}\na &= b \\label{eq:a} \\\\\nc &= d\n\\end{align}\nBy \\eqref{eq:a}, the \\(x\\) and \\[y\\] cost \\$5.\n> \\begin{equation} E = mc^2 \\tag{3} \\end{equation}\n- $$z$$\n  \\[ w \\]  ",
+ "length": 521,
  "runs": [
   {
    "location": 0,
@@ -44,371 +44,516 @@
   },
   {
    "location": 58,
-   "marks": "—",
+   "marks": "CODE",
+   "text": " "
+  },
+  {
+   "location": 59,
+   "marks": "CODE",
    "text": "code"
   },
   {
-   "location": 62,
-   "marks": "—",
-   "text": " in them.\n"
+   "location": 63,
+   "marks": "CODE",
+   "text": " "
   },
   {
-   "location": 72,
+   "location": 64,
    "marks": "—",
-   "text": "​"
+   "text": " in them.\n한글 "
   },
   {
-   "location": 73,
+   "location": 77,
    "marks": "—",
-   "text": "A heading two"
+   "text": "굵게"
+  },
+  {
+   "location": 79,
+   "marks": "—",
+   "text": "와 "
+  },
+  {
+   "location": 81,
+   "marks": "italic",
+   "text": "기울여"
+  },
+  {
+   "location": 84,
+   "marks": "italic",
+   "text": " "
+  },
+  {
+   "location": 85,
+   "marks": "italic",
+   "text": "쓴"
   },
   {
    "location": 86,
-   "marks": "—",
-   "text": "\n"
+   "marks": "italic",
+   "text": " "
   },
   {
    "location": 87,
-   "marks": "—",
-   "text": "​"
+   "marks": "italic",
+   "text": "말"
   },
   {
    "location": 88,
    "marks": "—",
-   "text": "Third level"
+   "text": ", "
   },
   {
-   "location": 99,
+   "location": 90,
+   "marks": "italic",
+   "text": "둘"
+  },
+  {
+   "location": 91,
+   "marks": "italic",
+   "text": " "
+  },
+  {
+   "location": 92,
+   "marks": "italic",
+   "text": "다"
+  },
+  {
+   "location": 93,
+   "marks": "—",
+   "text": ", "
+  },
+  {
+   "location": 95,
+   "marks": "CODE",
+   "text": " "
+  },
+  {
+   "location": 96,
+   "marks": "CODE",
+   "text": "코드 x"
+  },
+  {
+   "location": 100,
+   "marks": "CODE",
+   "text": " "
+  },
+  {
+   "location": 101,
+   "marks": "—",
+   "text": " 끝.\n"
+  },
+  {
+   "location": 105,
+   "marks": "—",
+   "text": "​"
+  },
+  {
+   "location": 106,
+   "marks": "—",
+   "text": "A heading two with "
+  },
+  {
+   "location": 125,
+   "marks": "—",
+   "text": "bold"
+  },
+  {
+   "location": 129,
+   "marks": "—",
+   "text": ", "
+  },
+  {
+   "location": 131,
+   "marks": "italic",
+   "text": "italic"
+  },
+  {
+   "location": 137,
+   "marks": "—",
+   "text": " and "
+  },
+  {
+   "location": 142,
+   "marks": "CODE",
+   "text": " "
+  },
+  {
+   "location": 143,
+   "marks": "CODE",
+   "text": "code"
+  },
+  {
+   "location": 147,
+   "marks": "CODE",
+   "text": " "
+  },
+  {
+   "location": 148,
    "marks": "—",
    "text": "\n"
   },
   {
-   "location": 100,
-   "marks": "indent 24",
-   "text": "•\t"
-  },
-  {
-   "location": 102,
-   "marks": "indent 24",
-   "text": "a bullet\n"
-  },
-  {
-   "location": 111,
-   "marks": "indent 48",
-   "text": "◦\t"
-  },
-  {
-   "location": 113,
-   "marks": "indent 48",
-   "text": "nested bullet\n"
-  },
-  {
-   "location": 127,
-   "marks": "indent 24",
-   "text": "1.\t"
-  },
-  {
-   "location": 130,
-   "marks": "indent 24",
-   "text": "first\n"
-  },
-  {
-   "location": 136,
-   "marks": "indent 24",
-   "text": "12.\t"
-  },
-  {
-   "location": 140,
-   "marks": "indent 24",
-   "text": "twelfth\n"
-  },
-  {
-   "location": 148,
-   "marks": "indent 24",
-   "text": "☐\t"
+   "location": 149,
+   "marks": "—",
+   "text": "​"
   },
   {
    "location": 150,
-   "marks": "indent 24",
-   "text": "to do\n"
+   "marks": "—",
+   "text": "Third level"
   },
   {
-   "location": 156,
-   "marks": "indent 24",
-   "text": "☑\t"
-  },
-  {
-   "location": 158,
-   "marks": "indent 24",
-   "text": "done"
+   "location": 161,
+   "marks": "—",
+   "text": "\n"
   },
   {
    "location": 162,
    "marks": "indent 24",
+   "text": "•\t"
+  },
+  {
+   "location": 164,
+   "marks": "indent 24",
+   "text": "a bullet\n"
+  },
+  {
+   "location": 173,
+   "marks": "indent 48",
+   "text": "◦\t"
+  },
+  {
+   "location": 175,
+   "marks": "indent 48",
+   "text": "nested bullet\n"
+  },
+  {
+   "location": 189,
+   "marks": "indent 24",
+   "text": "1.\t"
+  },
+  {
+   "location": 192,
+   "marks": "indent 24",
+   "text": "first\n"
+  },
+  {
+   "location": 198,
+   "marks": "indent 24",
+   "text": "12.\t"
+  },
+  {
+   "location": 202,
+   "marks": "indent 24",
+   "text": "twelfth\n"
+  },
+  {
+   "location": 210,
+   "marks": "indent 24",
+   "text": "☐\t"
+  },
+  {
+   "location": 212,
+   "marks": "indent 24",
+   "text": "to do\n"
+  },
+  {
+   "location": 218,
+   "marks": "indent 24",
+   "text": "☑\t"
+  },
+  {
+   "location": 220,
+   "marks": "indent 24",
+   "text": "done"
+  },
+  {
+   "location": 224,
+   "marks": "indent 24",
    "text": "\n"
   },
   {
-   "location": 163,
+   "location": 225,
    "marks": "QUOTE+indent 20",
    "text": "​"
   },
   {
-   "location": 164,
+   "location": 226,
    "marks": "QUOTE+italic+indent 20",
    "text": "typed aside with "
   },
   {
-   "location": 181,
+   "location": 243,
    "marks": "italic+indent 20",
    "text": "emphasis"
   },
   {
-   "location": 189,
+   "location": 251,
+   "marks": "QUOTE+italic+indent 20",
+   "text": " and "
+  },
+  {
+   "location": 256,
+   "marks": "CODE+indent 20",
+   "text": " "
+  },
+  {
+   "location": 257,
+   "marks": "CODE+indent 20",
+   "text": "code"
+  },
+  {
+   "location": 261,
+   "marks": "CODE+indent 20",
+   "text": " "
+  },
+  {
+   "location": 262,
    "marks": "indent 20",
    "text": "\n"
   },
   {
-   "location": 190,
+   "location": 263,
    "marks": "QUOTE+indent 20",
    "text": "​"
   },
   {
-   "location": 191,
+   "location": 264,
    "marks": "QUOTE+italic+indent 20",
    "text": "second line"
   },
   {
-   "location": 202,
+   "location": 275,
    "marks": "indent 20",
    "text": "\n"
   },
   {
-   "location": 203,
+   "location": 276,
    "marks": "QUOTE+indent 20",
    "text": "​"
   },
   {
-   "location": 204,
+   "location": 277,
    "marks": "QUOTE+italic+indent 20",
    "text": "the model forgets "
   },
   {
-   "location": 222,
+   "location": 295,
    "marks": "PASSAGE+indent 20",
    "text": "p. 4"
   },
   {
-   "location": 226,
+   "location": 299,
    "marks": "indent 20",
    "text": "\n"
   },
   {
-   "location": 227,
+   "location": 300,
    "marks": "QUOTE+indent 20",
    "text": "​"
   },
   {
-   "location": 228,
+   "location": 301,
    "marks": "QUOTE+indent 20",
    "text": "Section on the page"
   },
   {
-   "location": 247,
+   "location": 320,
    "marks": "indent 20",
    "text": "\n"
   },
   {
-   "location": 248,
+   "location": 321,
    "marks": "—",
    "text": "\nA link to "
   },
   {
-   "location": 259,
+   "location": 332,
    "marks": "LINK",
    "text": "Entropy note"
   },
   {
-   "location": 271,
+   "location": 344,
    "marks": "—",
    "text": " and "
   },
   {
-   "location": 276,
+   "location": 349,
    "marks": "LINK",
    "text": "202609280048"
   },
   {
-   "location": 288,
+   "location": 361,
    "marks": "—",
    "text": " here.\nAn inline "
   },
   {
-   "location": 305,
+   "location": 378,
    "marks": "—",
    "text": "￼"
   },
   {
-   "location": 306,
+   "location": 379,
    "marks": "—",
    "text": " formula, and a passage "
   },
   {
-   "location": 330,
+   "location": 403,
    "marks": "PASSAGE",
    "text": "p. 2"
   },
   {
-   "location": 334,
+   "location": 407,
    "marks": "—",
    "text": ".\n"
   },
   {
-   "location": 336,
+   "location": 409,
    "marks": "center",
    "text": "￼"
   },
   {
-   "location": 337,
+   "location": 410,
    "marks": "center",
    "text": "\n"
   },
   {
-   "location": 338,
+   "location": 411,
    "marks": "PASSAGE",
    "text": "a quoted ] label"
   },
   {
-   "location": 354,
+   "location": 427,
    "marks": "—",
    "text": "\n"
   },
   {
-   "location": 355,
+   "location": 428,
    "marks": "QUOTE+indent 20",
    "text": "​"
   },
   {
-   "location": 356,
+   "location": 429,
    "marks": "QUOTE+PASSAGE+italic+indent 20",
    "text": "whole quoted line"
   },
   {
-   "location": 373,
+   "location": 446,
    "marks": "indent 20",
    "text": "\n"
   },
   {
-   "location": 374,
+   "location": 447,
    "marks": "—",
    "text": "Last line with "
   },
   {
-   "location": 389,
+   "location": 462,
    "marks": "—",
    "text": "￼"
   },
   {
-   "location": 390,
+   "location": 463,
    "marks": "—",
    "text": " inline display.\n"
   },
   {
-   "location": 407,
+   "location": 480,
    "marks": "center",
    "text": "￼"
   },
   {
-   "location": 408,
+   "location": 481,
    "marks": "center",
    "text": "\n"
   },
   {
-   "location": 409,
+   "location": 482,
    "marks": "—",
    "text": "By "
   },
   {
-   "location": 412,
+   "location": 485,
    "marks": "—",
    "text": "￼"
   },
   {
-   "location": 413,
+   "location": 486,
    "marks": "—",
    "text": ", the "
   },
   {
-   "location": 419,
+   "location": 492,
    "marks": "—",
    "text": "￼"
   },
   {
-   "location": 420,
+   "location": 493,
    "marks": "—",
    "text": " and "
   },
   {
-   "location": 425,
+   "location": 498,
    "marks": "—",
    "text": "￼"
   },
   {
-   "location": 426,
+   "location": 499,
    "marks": "—",
    "text": " cost "
   },
   {
-   "location": 432,
+   "location": 505,
    "marks": "—",
    "text": "$"
   },
   {
-   "location": 433,
+   "location": 506,
    "marks": "—",
    "text": "5.\n"
   },
   {
-   "location": 436,
+   "location": 509,
    "marks": "QUOTE+indent 20+center",
    "text": "​"
   },
   {
-   "location": 437,
+   "location": 510,
    "marks": "indent 20+center",
    "text": "￼"
   },
   {
-   "location": 438,
+   "location": 511,
    "marks": "indent 20+center",
    "text": "\n"
   },
   {
-   "location": 439,
+   "location": 512,
    "marks": "indent 24",
    "text": "•\t"
   },
   {
-   "location": 441,
+   "location": 514,
    "marks": "indent 24",
    "text": "￼"
   },
   {
-   "location": 442,
+   "location": 515,
    "marks": "indent 24",
    "text": "\n"
   },
   {
-   "location": 443,
+   "location": 516,
    "marks": "center",
    "text": "  "
   },
   {
-   "location": 445,
+   "location": 518,
    "marks": "center",
    "text": "￼"
   },
   {
-   "location": 446,
+   "location": 519,
    "marks": "center",
    "text": "  "
   }

@@ -18,8 +18,12 @@ enum NoteTableDrawing {
             rule = NSColor(cgColor: NSColor.separatorColor.cgColor) ?? .separatorColor
             ground = NSColor(cgColor: NSColor.labelColor.withAlphaComponent(0.05).cgColor) ?? .clear
         }
+        var code = NoteCode.ink, codeFill = NoteCode.fill
+        appearance.performAsCurrentDrawingAppearance {
+            code = NSColor(cgColor: NoteCode.ink.cgColor) ?? NoteCode.ink
+            codeFill = NSColor(cgColor: NoteCode.fill.cgColor) ?? NoteCode.fill
+        }
         let body = NoteTypography.body()
-        let bold = NSFontManager.shared.convert(body, toHaveTrait: .boldFontMask)
         let rows = [table.header] + table.rows
 
         func text(_ cell: String, header: Bool, column: Int) -> NSAttributedString {
@@ -31,9 +35,22 @@ enum NoteTableDrawing {
             case .right: style.alignment = .right
             default: style.alignment = .natural
             }
-            return NSAttributedString(string: plain(cell), attributes: [
-                .font: header ? bold : body, .foregroundColor: ink, .paragraphStyle: style,
-            ])
+            // The cell's emphasis as emphasis: it was only taken out, so
+            // `*기울*` stayed as written.
+            let words = NSMutableAttributedString()
+            for piece in NoteMarkdown.emphasisPieces(lines(cell)) {
+                var attributes: [NSAttributedString.Key: Any] = [.foregroundColor: ink, .paragraphStyle: style]
+                if piece.mono {
+                    attributes[.font] = NoteTypography.code(size: body.pointSize)
+                    attributes[.foregroundColor] = code
+                    attributes[.backgroundColor] = codeFill
+                } else {
+                    attributes[.font] = NoteTypography.body(bold: header || piece.bold, italic: piece.italic)
+                }
+                words.append(NSAttributedString(string: piece.text, attributes: attributes))
+            }
+            NoteTypography.slantHangul(in: words, range: NSRange(location: 0, length: words.length))
+            return words
         }
 
         // What each column would like, on one line, and what it gets.
@@ -119,13 +136,9 @@ enum NoteTableDrawing {
         return image
     }
 
-    /// A cell's words without the Markdown marks around them: the grid shows
-    /// what the cell says, and the lines under the caret show how.
-    static func plain(_ cell: String) -> String {
-        var text = cell
-        for mark in ["**", "__", "`"] { text = text.replacingOccurrences(of: mark, with: "") }
-        text = text.replacingOccurrences(of: "<br>", with: "\n").replacingOccurrences(of: "<br/>", with: "\n")
-        return text
+    /// A cell's line breaks, which a table writes as `<br>`.
+    static func lines(_ cell: String) -> String {
+        cell.replacingOccurrences(of: "<br>", with: "\n").replacingOccurrences(of: "<br/>", with: "\n")
     }
 }
 #endif

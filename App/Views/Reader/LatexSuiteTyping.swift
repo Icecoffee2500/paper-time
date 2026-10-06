@@ -622,11 +622,23 @@ struct LatexSuiteDisplay {
                 built.append(contentsOf: units[range.location ..< range.location + range.length])
                 return
             }
-            // Two formulas side by side with the same source are one span of
-            // that attribute, and two pieces: `markdown(from:)` reads them
-            // run by run, and each picture is its own run.
+            // Two pieces side by side with the same source are one span of
+            // that attribute, and two pieces: the note numbers its pieces
+            // (`.paperTimePiece`) and `markdown(from:)` reads one source a
+            // number. A piece set in several runs — Hangul leaning in its
+            // own face, a code span's room — is still one. Text that was
+            // not set by the note has no numbers, and there each picture
+            // is its own run.
             var parts: [NSRange] = []
-            text.enumerateAttribute(.attachment, in: range) { _, part, _ in parts.append(part) }
+            var numbered = false
+            text.enumerateAttribute(.paperTimePiece, in: range) { number, part, _ in
+                if number != nil { numbered = true }
+                parts.append(part)
+            }
+            if !numbered {
+                parts = []
+                text.enumerateAttribute(.attachment, in: range) { _, part, _ in parts.append(part) }
+            }
             if parts.count < 2 { parts = [range] }
             let pieceUnits = Array(piece.utf16)
             for part in parts {
