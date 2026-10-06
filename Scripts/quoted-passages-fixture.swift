@@ -1,6 +1,7 @@
 // The answers the Portable build's `shared/quotedPassages.ts` is held to: the
-// Mac's own `QuotedPassages` on a set of note bodies, and which passages a
-// paper gets from a handful of notes.
+// Mac's own `QuotedPassages` on a set of note bodies, which passages a paper
+// gets from a handful of notes, and where a quotation's words are in the
+// text of the page it was quoted from.
 //
 //     swiftc -O -parse-as-library \
 //       Packages/PaperTimeKit/Sources/PaperCore/Model/NoteAnchor.swift \
@@ -62,6 +63,59 @@ enum QuotedPassagesFixture {
         (nil, "A draft quoting [A](papertime://anchor?p=5&x=1.00&y=1.00&w=1.00&h=1.00&paper=\(paperA)) and an unnamed one [?](papertime://anchor?p=6&x=1.00&y=1.00&w=1.00&h=1.00)"),
     ]
 
+    /// A quotation as a note writes it, and a stretch of a page's text it
+    /// was quoted from — the text a passage's box holds, line by line.
+    static let spans: [(quotation: String, text: String)] = [
+        // The slide a reader quoted, as MathReader read its «ï» then, and as
+        // PDFKit hands the page over: the accent and a dotless i apart.
+        ("> (na\\\u{308}imathve method $O(n)$) [27쪽](papertime://anchor?p=26&x=153.13&y=154.78&w=110.56&h=10.46)\n", "(na\u{A8} \u{131}ve method O(n))\n"),
+        // The same passage read well, its line whole: only the passage.
+        ("> (naïve method $O(n)$) [27쪽](papertime://anchor?p=26&x=153.13&y=154.78&w=110.56&h=10.46)\n", "Sample data: O(ln(n)) (na\u{A8} \u{131}ve method O(n))\n"),
+        // Two lines of a column, the passage starting and ending mid-line.
+        ("> Tip-Adapter [48] solves the cache memory problem by only storing few-shot samples per class [3쪽](papertime://anchor?p=2&x=50.00&y=554.00&w=236.00&h=21.00)\n", "natively, Tip-Adapter [48] solves the cache memory prob-\nlem by only storing few-shot samples per class to create a\n"),
+        // A heading and a list as MathReader writes them.
+        ("> ## Method\n> - First item\n> - Second item [2쪽](papertime://anchor?p=1&x=1.00&y=2.00&w=3.00&h=4.00)\n", "3 Method\n• First item\n• Second item\nThird item\n"),
+        // Ligatures and capitals.
+        ("> The FINAL efficiency [p. 1](papertime://anchor?p=0&x=1.00&y=1.00&w=1.00&h=1.00)", "and the \u{FB01}nal e\u{FB03}ciency of"),
+        // A formula in the middle, spelled differently on either side.
+        ("> We minimize $\\mathcal{L}(\\theta)$ over the data. [4쪽](papertime://anchor?p=3&x=1.00&y=1.00&w=1.00&h=1.00)", "Then we minimize L(\u{3B8}) over the data. Next"),
+        // Words taken out of the middle by hand.
+        ("> The results show … improvements on all benchmarks.", "As expected, the results show that our method yields consistent improvements on all benchmarks. Further"),
+        // A passage that runs on to the next page: its close is not here.
+        ("> We propose a simple method that works well across many settings and scales [p. 5](papertime://anchor?p=4&x=1.00&y=1.00&w=1.00&h=1.00)", "intro text. We propose a simple method that\nworks well across"),
+        // Nothing in common.
+        ("> $$\\frac{a}{b}$$\n> [1쪽](papertime://anchor?p=0&x=1.00&y=1.00&w=1.00&h=1.00)", "completely different words"),
+        // Short, and exact.
+        ("> loss [1쪽](papertime://anchor?p=0&x=1.00&y=1.00&w=1.00&h=1.00)", "the loss function"),
+        // Korean, with its full stop.
+        ("> 한국어 문장을 인용했어요. [3쪽](papertime://anchor?p=2&x=1.00&y=1.00&w=1.00&h=1.00)", "앞 문장이에요. 한국어 문장을 인용했어요. 뒤 문장"),
+        // Mathematical letters outside the basic plane: UTF-16 offsets.
+        ("> $x + y = 1$ [1쪽](papertime://anchor?p=0&x=1.00&y=1.00&w=1.00&h=1.00)", "so \u{1D465} + \u{1D466} = 1 holds"),
+        // Brackets the quotation opens and closes with.
+        ("> (see Fig. 2) [p. 4](papertime://anchor?p=3&x=1.00&y=1.00&w=1.00&h=1.00)", "as shown (see Fig. 2) here"),
+        // Only the link: no words.
+        ("[1쪽](papertime://anchor?p=0&x=1.00&y=1.00&w=1.00&h=1.00)", "anything at all"),
+        // The phrase twice: the first place it is whole.
+        ("> the model is good", "the model the model is good"),
+        // A displayed formula quoted from a paper whose font gives the page
+        // no letters for θ or φ: the environment's name is not on the page.
+        ("> \\begin{equation} \\mathcal{L}(\\boldsymbol{\\theta},\\boldsymbol{\\phi};\\mathbf{x}^{(i)})=-D_{KL}(q_{\\boldsymbol{\\phi}}(\\mathbf{z}|\\mathbf{x}^{(i)})||p_{\\boldsymbol{\\theta}}(\\mathbf{z}))+\\mathbb{E}_{q_{\\boldsymbol{\\phi}}(\\mathbf{z}|\\mathbf{x}^{(i)})}\\Bigl[\\log p_{\\boldsymbol{\\theta}}(\\mathbf{x}^{(i)}|\\mathbf{z})\\Bigr]\\tag{3} \\end{equation}\n> [3쪽](papertime://anchor?p=2&x=159.00&y=407.97&w=345.00&h=37.18)\n", "L(\u{2713}, \u{0}; x(i)) =\u{0}DKL(q\u{0}(z|x(i))||p\u{2713} (z)) + Eq\u{0} (z|x(i) ) hlog p\u{2713} (x(i)|z)i (3)\n"),
+        // The same formula read off the text layer of another build, whose
+        // boxes sit higher: the box takes in the line under the formula.
+        ("> \\begin{equation} \\mathcal{L}(\\boldsymbol{\\theta},\\boldsymbol{\\phi};\\mathbf{x}^{(i)})=-D_{KL}(q_{\\boldsymbol{\\phi}}(\\mathbf{z}|\\mathbf{x}^{(i)})||p_{\\boldsymbol{\\theta}}(\\mathbf{z}))+\\mathbb{E}_{q_{\\boldsymbol{\\phi}}(\\mathbf{z}|\\mathbf{x}^{(i)})}\\Bigl[\\log p_{\\boldsymbol{\\theta}}(\\mathbf{x}^{(i)}|\\mathbf{z})\\Bigr]\\tag{3} \\end{equation}\n> [3쪽](papertime://anchor?p=2&x=159.00&y=407.97&w=345.00&h=37.18)\n", "L(\u{2713}, \u{0}; x(i)) =\u{0}DKL(q\u{0}(z|x(i))||p\u{2713} (z)) + Eq\u{0} (z|x(i) ) hlog p\u{2713} (x(i)|z)i (3)\nWe want to differentiate and optimize the lower bound L(\u{2713}, \u{0}; x(i)) w.r.t. both the variational\n"),
+        // The line above a passage whose opening is a formula.
+        ("> $\\nabla_\\theta \\mathcal{L}$ vanishes at the optimum, as expected", "Some earlier sentence of the paragraph that ends here.\n\u{2207}\u{2713}L vanishes at the optimum, as expected\n"),
+        // A quotation that closes with a formula: its letters the commands
+        // do not spell are the formula's, the comma after it the sentence's.
+        ("> the bound is $\\mathcal{L}(\\theta)$", "so the bound is L(\u{3B8}), which is tight"),
+        // Too short to be found anywhere in particular.
+        ("> $\\alpha + \\beta = 1$", "where \u{3B1} + \u{3B2} = 1 holds"),
+        // A citation's key and a label are not on the page; their numbers are.
+        ("> as shown in \\cite{kingma2014} and Eq.~\\eqref{eq:elbo}, the bound holds", "Indeed, as shown in [12] and Eq. (3), the bound holds for"),
+        // Windows line breaks, and a dotless j.
+        ("> line one\r\n> line \u{237}oins [p](papertime://anchor?p=0&x=1.00&y=1.00&w=1.00&h=1.00)", "line one\nline joins"),
+    ]
+
     static func main() throws {
         func span(_ range: NSRange) -> [Int] { [range.location, NSMaxRange(range)] }
         func passage(_ found: QuotedPassage) -> [String: Any] {
@@ -85,8 +139,13 @@ enum QuotedPassagesFixture {
             papers.append(["paper": paper, "passages": urls])
         }
         let shelf = Self.notes.map { ["paper": $0.paper ?? NSNull(), "body": $0.body] as [String: Any] }
+        let found = spans.map { item -> [String: Any] in
+            let span = QuotedPassages.span(of: item.quotation, in: item.text)
+            return ["quotation": item.quotation, "text": item.text,
+                    "span": span.map { [$0.lowerBound, $0.upperBound] as Any } ?? NSNull()]
+        }
         let data = try JSONSerialization.data(
-            withJSONObject: ["bodies": notes, "notes": shelf, "papers": papers],
+            withJSONObject: ["bodies": notes, "notes": shelf, "papers": papers, "spans": found],
             options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         )
         FileHandle.standardOutput.write(data)

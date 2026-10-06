@@ -418,5 +418,171 @@
         ]
       ]
     }
+  ],
+  "spans" : [
+    {
+      "quotation" : "> (na\\̈imathve method $O(n)$) [27쪽](papertime://anchor?p=26&x=153.13&y=154.78&w=110.56&h=10.46)\n",
+      "span" : [
+        0,
+        21
+      ],
+      "text" : "(na¨ ıve method O(n))\n"
+    },
+    {
+      "quotation" : "> (naïve method $O(n)$) [27쪽](papertime://anchor?p=26&x=153.13&y=154.78&w=110.56&h=10.46)\n",
+      "span" : [
+        22,
+        43
+      ],
+      "text" : "Sample data: O(ln(n)) (na¨ ıve method O(n))\n"
+    },
+    {
+      "quotation" : "> Tip-Adapter [48] solves the cache memory problem by only storing few-shot samples per class [3쪽](papertime://anchor?p=2&x=50.00&y=554.00&w=236.00&h=21.00)\n",
+      "span" : [
+        10,
+        103
+      ],
+      "text" : "natively, Tip-Adapter [48] solves the cache memory prob-\nlem by only storing few-shot samples per class to create a\n"
+    },
+    {
+      "quotation" : "> ## Method\n> - First item\n> - Second item [2쪽](papertime://anchor?p=1&x=1.00&y=2.00&w=3.00&h=4.00)\n",
+      "span" : [
+        2,
+        35
+      ],
+      "text" : "3 Method\n• First item\n• Second item\nThird item\n"
+    },
+    {
+      "quotation" : "> The FINAL efficiency [p. 1](papertime://anchor?p=0&x=1.00&y=1.00&w=1.00&h=1.00)",
+      "span" : [
+        4,
+        21
+      ],
+      "text" : "and the ﬁnal eﬃciency of"
+    },
+    {
+      "quotation" : "> We minimize $\\mathcal{L}(\\theta)$ over the data. [4쪽](papertime://anchor?p=3&x=1.00&y=1.00&w=1.00&h=1.00)",
+      "span" : [
+        5,
+        36
+      ],
+      "text" : "Then we minimize L(θ) over the data. Next"
+    },
+    {
+      "quotation" : "> The results show … improvements on all benchmarks.",
+      "span" : [
+        13,
+        95
+      ],
+      "text" : "As expected, the results show that our method yields consistent improvements on all benchmarks. Further"
+    },
+    {
+      "quotation" : "> We propose a simple method that works well across many settings and scales [p. 5](papertime://anchor?p=4&x=1.00&y=1.00&w=1.00&h=1.00)",
+      "span" : [
+        12,
+        61
+      ],
+      "text" : "intro text. We propose a simple method that\nworks well across"
+    },
+    {
+      "quotation" : "> $$\\frac{a}{b}$$\n> [1쪽](papertime://anchor?p=0&x=1.00&y=1.00&w=1.00&h=1.00)",
+      "span" : null,
+      "text" : "completely different words"
+    },
+    {
+      "quotation" : "> loss [1쪽](papertime://anchor?p=0&x=1.00&y=1.00&w=1.00&h=1.00)",
+      "span" : [
+        4,
+        8
+      ],
+      "text" : "the loss function"
+    },
+    {
+      "quotation" : "> 한국어 문장을 인용했어요. [3쪽](papertime://anchor?p=2&x=1.00&y=1.00&w=1.00&h=1.00)",
+      "span" : [
+        9,
+        23
+      ],
+      "text" : "앞 문장이에요. 한국어 문장을 인용했어요. 뒤 문장"
+    },
+    {
+      "quotation" : "> $x + y = 1$ [1쪽](papertime://anchor?p=0&x=1.00&y=1.00&w=1.00&h=1.00)",
+      "span" : null,
+      "text" : "so 𝑥 + 𝑦 = 1 holds"
+    },
+    {
+      "quotation" : "> (see Fig. 2) [p. 4](papertime://anchor?p=3&x=1.00&y=1.00&w=1.00&h=1.00)",
+      "span" : [
+        9,
+        21
+      ],
+      "text" : "as shown (see Fig. 2) here"
+    },
+    {
+      "quotation" : "[1쪽](papertime://anchor?p=0&x=1.00&y=1.00&w=1.00&h=1.00)",
+      "span" : null,
+      "text" : "anything at all"
+    },
+    {
+      "quotation" : "> the model is good",
+      "span" : [
+        10,
+        27
+      ],
+      "text" : "the model the model is good"
+    },
+    {
+      "quotation" : "> \\begin{equation} \\mathcal{L}(\\boldsymbol{\\theta},\\boldsymbol{\\phi};\\mathbf{x}^{(i)})=-D_{KL}(q_{\\boldsymbol{\\phi}}(\\mathbf{z}|\\mathbf{x}^{(i)})||p_{\\boldsymbol{\\theta}}(\\mathbf{z}))+\\mathbb{E}_{q_{\\boldsymbol{\\phi}}(\\mathbf{z}|\\mathbf{x}^{(i)})}\\Bigl[\\log p_{\\boldsymbol{\\theta}}(\\mathbf{x}^{(i)}|\\mathbf{z})\\Bigr]\\tag{3} \\end{equation}\n> [3쪽](papertime://anchor?p=2&x=159.00&y=407.97&w=345.00&h=37.18)\n",
+      "span" : [
+        0,
+        77
+      ],
+      "text" : "L(✓, \u0000; x(i)) =\u0000DKL(q\u0000(z|x(i))||p✓ (z)) + Eq\u0000 (z|x(i) ) hlog p✓ (x(i)|z)i (3)\n"
+    },
+    {
+      "quotation" : "> \\begin{equation} \\mathcal{L}(\\boldsymbol{\\theta},\\boldsymbol{\\phi};\\mathbf{x}^{(i)})=-D_{KL}(q_{\\boldsymbol{\\phi}}(\\mathbf{z}|\\mathbf{x}^{(i)})||p_{\\boldsymbol{\\theta}}(\\mathbf{z}))+\\mathbb{E}_{q_{\\boldsymbol{\\phi}}(\\mathbf{z}|\\mathbf{x}^{(i)})}\\Bigl[\\log p_{\\boldsymbol{\\theta}}(\\mathbf{x}^{(i)}|\\mathbf{z})\\Bigr]\\tag{3} \\end{equation}\n> [3쪽](papertime://anchor?p=2&x=159.00&y=407.97&w=345.00&h=37.18)\n",
+      "span" : [
+        0,
+        77
+      ],
+      "text" : "L(✓, \u0000; x(i)) =\u0000DKL(q\u0000(z|x(i))||p✓ (z)) + Eq\u0000 (z|x(i) ) hlog p✓ (x(i)|z)i (3)\nWe want to differentiate and optimize the lower bound L(✓, \u0000; x(i)) w.r.t. both the variational\n"
+    },
+    {
+      "quotation" : "> $\\nabla_\\theta \\mathcal{L}$ vanishes at the optimum, as expected",
+      "span" : [
+        55,
+        95
+      ],
+      "text" : "Some earlier sentence of the paragraph that ends here.\n∇✓L vanishes at the optimum, as expected\n"
+    },
+    {
+      "quotation" : "> the bound is $\\mathcal{L}(\\theta)$",
+      "span" : [
+        3,
+        20
+      ],
+      "text" : "so the bound is L(θ), which is tight"
+    },
+    {
+      "quotation" : "> $\\alpha + \\beta = 1$",
+      "span" : null,
+      "text" : "where α + β = 1 holds"
+    },
+    {
+      "quotation" : "> as shown in \\cite{kingma2014} and Eq.~\\eqref{eq:elbo}, the bound holds",
+      "span" : [
+        8,
+        53
+      ],
+      "text" : "Indeed, as shown in [12] and Eq. (3), the bound holds for"
+    },
+    {
+      "quotation" : "> line one\r\n> line ȷoins [p](papertime://anchor?p=0&x=1.00&y=1.00&w=1.00&h=1.00)",
+      "span" : [
+        0,
+        19
+      ],
+      "text" : "line one\nline joins"
+    }
   ]
 }

@@ -2409,7 +2409,7 @@ function read(row: Glyph[], rules: Rule[], characters: PageCharacter[], text: st
   }
   const pieces: Word[] = []
   const prose = (word: Glyph[], tight = false): Word => {
-    const spelled = word.map(spell)
+    const spelled = word.map((glyph) => inProse(spell(glyph)))
     if (spelled.some((one) => one === '')) {
       const borrowed = spellingFrom(word, near, text)
       if (borrowed !== null && agrees(borrowed, spelled)) return { isMath: false, text: borrowed, tight }
@@ -2742,6 +2742,19 @@ const MARKS: Record<string, string> = {
 const markOf = (character: string) => {
   const key = canon(character)
   return Object.prototype.hasOwnProperty.call(MARKS, key) ? MARKS[key] : undefined
+}
+
+/** A glyph's spelling in a sentence. The letters TeX's text fonts keep
+ *  outside ASCII are letters there, not the commands a formula writes for
+ *  them: «ï» is a dotless i under an accent, and spelled `\imath` the accent
+ *  landed on its backslash — «na\̈imathve», «del R\́imatho». */
+function inProse(spelling: string): string {
+  return Object.prototype.hasOwnProperty.call(TEXT_LETTERS, spelling) ? TEXT_LETTERS[spelling] : spelling
+}
+
+const TEXT_LETTERS: Record<string, string> = {
+  '\\imath': '\u0131', '\\jmath': '\u0237', '\\ss': 'ß', '\\ae': 'æ', '\\oe': 'œ', '\\o': 'ø',
+  '\\AE': 'Æ', '\\OE': 'Œ', '\\O': 'Ø',
 }
 
 /** TeX sets an accent and its letter as two glyphs, the mark first; put back
