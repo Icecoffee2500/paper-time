@@ -308,6 +308,74 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.9.24",
+            date: Text2("2026년 10월", "October 2026"),
+            note: Text2(
+                "노트의 굵게와 기울임이 한글에도 적용되고, 쓰고 있는 줄에서도 바로 보여요. 코드는 노션처럼 보여요.",
+                "Bold and italics now work on Korean in notes, and show on the line you are writing. Code looks the way Notion sets it."
+            ),
+            added: [
+                Entry(
+                    Text2("노션 같은 코드", "Code as Notion Sets It"),
+                    Text2(
+                        "백틱으로 감싼 글이 조금 작은 고정폭 글꼴에 붉은 글씨, 둥근 회색 바탕으로 보여요. 제목 안에서는 제목 크기를 따르고, 표 칸과 PDF로 내보낸 노트에서도 같아요.",
+                        "Words in backticks show in a slightly smaller monospaced face, in red on a rounded grey. In a heading they follow the heading’s size, and tables and exported PDFs show them the same way."
+                    )
+                ),
+                Entry(
+                    Text2("쓰는 줄에서도 보이는 강조", "Emphasis as You Write"),
+                    Text2(
+                        "커서가 있는 줄에서도 별표 두 개 안의 글은 굵게, 하나 안의 글은 기울여 보여요. 별표는 강조색으로 남아서 바로 고칠 수 있어요.",
+                        "On the line with the cursor, words between two stars show bold and words between one star lean as you type them. The stars stay in the accent colour, ready to change."
+                    )
+                ),
+                Entry(
+                    Text2("굵은 기울임", "Bold Italics"),
+                    Text2(
+                        "별표 세 개로 감싸면 굵으면서 기울어진 글이 돼요. ⌘B 다음 ⌘I를 누른 결과도 이렇게 보여요.",
+                        "Three stars on each side make words bold and italic, which is also what ⌘B then ⌘I give you."
+                    )
+                ),
+                Entry(
+                    Text2("표 안의 강조", "Emphasis in Tables"),
+                    Text2(
+                        "표 칸 안의 굵게, 기울임, 코드도 표로 볼 때 그대로 보여요.",
+                        "Bold, italics and code inside table cells show in the table."
+                    )
+                ),
+            ],
+            fixed: [
+                Entry(
+                    Text2("한글 굵게와 기울임", "Bold and Italics in Korean"),
+                    Text2(
+                        "노트의 한글은 굵게나 기울임을 해도 그대로였어요. 한글 글꼴이 늘 보통 굵기로만 붙어 있었기 때문이에요. 이제 굵게는 굵은 한글로, 기울임은 옆의 라틴 글자와 같은 각도로 기울어 보여요. 한글 제목도 이제 제 굵기로 보여요.",
+                        "Korean in notes stayed the same in bold and italics: its typeface was only ever attached at regular weight. Bold Korean is now bold, italic Korean leans at the angle of the Latin beside it, and Korean headings have their weight too."
+                    )
+                ),
+                Entry(
+                    Text2("고른 채 누른 ⌘B", "⌘B Over a Selection"),
+                    Text2(
+                        "글을 고르고 ⌘B나 선택 막대의 B를 누르면, 선택을 풀 때까지 굵게가 보이지 않았어요. 이제 누르는 순간 보여요.",
+                        "After choosing words and pressing ⌘B, or B on the selection bar, the bold did not show until the selection was let go. It shows at once now."
+                    )
+                ),
+                Entry(
+                    Text2("굵은 낱말 끝으로 가던 커서", "The Cursor Jumped Past Bold Words"),
+                    Text2(
+                        "굵거나 기울인 낱말의 가운데를 누르면 커서가 별표 뒤로 갔어요. 이제 누른 자리에 서요.",
+                        "Clicking in the middle of a bold or italic word put the cursor after its closing stars. It now stays where you click."
+                    )
+                ),
+                Entry(
+                    Text2("제목 없는 노트 링크", "Note Links Without a Title"),
+                    Text2(
+                        "제목 없이 쓴 노트 링크가 저장할 때마다 아이디를 제목 자리에 한 번 더 적은 꼴로 바뀌었어요. 이제 쓴 그대로 남아요. 똑같은 링크 둘을 붙여 쓰면 하나가 사라질 수 있던 것도 고쳤어요.",
+                        "A note link written without a title was saved with its id written again as the title. It now stays as you wrote it, and two identical links side by side no longer lose one."
+                    )
+                ),
+            ]
+        ),
+        Release(
             version: "0.9.23",
             date: Text2("2026년 10월", "October 2026"),
             note: Text2(

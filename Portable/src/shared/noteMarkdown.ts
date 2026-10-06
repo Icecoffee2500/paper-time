@@ -173,7 +173,43 @@ export function standsAlone(block: Block): boolean {
 const LINK = /\[((?:\\.|[^\\\]\n]|\](?!\())*)\]\((papertime:\/\/[^)\s]+)\)/g
 const WIKI = /\[\[([^\]|\n]+)(?:\|([^\]\n]*))?\]\]/g
 const DOLLAR = /\\\$/g
-const EMPHASIS = /(\*\*)([^*\n]+)(\*\*)|(\*)([^*\n]+)(\*)|(`)([^`\n]+)(`)/g
+const EMPHASIS = /(\*\*\*)([^*\n]+)(\*\*\*)|(\*\*)([^*\n]+)(\*\*)|(\*)([^*\n]+)(\*)|(`)([^`\n]+)(`)/g
+
+/** How many characters each side of emphasised words are its marks: `*`, `**`, `***`, or a backtick (`NoteMarkdown.emphasisWidth`). */
+export function emphasisWidth(token: { bold: boolean; italic: boolean; mono: boolean }): number {
+  return token.mono ? 1 : (token.bold ? 2 : 0) + (token.italic ? 1 : 0)
+}
+
+/** The classes emphasised words are drawn with. */
+export function emphasisClasses(token: { bold: boolean; italic: boolean; mono: boolean }): string {
+  if (token.mono) return 'nm-mono'
+  return [token.bold ? 'nm-bold' : '', token.italic ? 'nm-italic' : ''].filter(Boolean).join(' ')
+}
+
+/** What stands either side of a code span's letters on the Mac, where its tint reaches (`NoteMarkdown.codePad`); here CSS padding does it. */
+export const CODE_PAD = '\u202f'
+
+/** A table cell's words in pieces: emphasis set as emphasis, the rest as written with stray `**`, `__` and backticks dropped (`NoteTableDrawing.text`). */
+export function emphasisPieces(cell: string): { text: string; bold: boolean; italic: boolean; mono: boolean }[] {
+  const pieces: { text: string; bold: boolean; italic: boolean; mono: boolean }[] = []
+  const plain = (text: string) => {
+    const left = text.replaceAll('**', '').replaceAll('__', '').replaceAll('`', '')
+    if (left) pieces.push({ text: left, bold: false, italic: false, mono: false })
+  }
+  let at = 0
+  // A fresh one: `matchAll` starts where the shared expression's
+  // `lastIndex` was left by the last line read.
+  for (const match of cell.matchAll(new RegExp(EMPHASIS.source, 'g'))) {
+    plain(cell.slice(at, match.index))
+    const [bold, italic, mono, text] = match[2] !== undefined ? [true, true, false, match[2]]
+      : match[5] !== undefined ? [true, false, false, match[5]]
+        : match[8] !== undefined ? [false, true, false, match[8]] : [false, false, true, match[11]]
+    pieces.push({ text: text as string, bold: bold as boolean, italic: italic as boolean, mono: mono as boolean })
+    at = (match.index ?? 0) + match[0].length
+  }
+  plain(cell.slice(at))
+  return pieces
+}
 
 /** Whether a line could hold a link, a note link, a formula or emphasis — they all begin with one of five
  *  characters: a formula with `$` or, written as LaTeX writes it, with a backslash. */
@@ -233,7 +269,8 @@ export function inlineTokens(content: string): InlineToken[] {
     if (dollar) consider({ kind: 'dollar', from: dollar.index, to: dollar.index + 2 })
     const emphasis = firstFrom(EMPHASIS, content, index)
     if (emphasis) {
-      const groups: [number, boolean, boolean, boolean][] = [[2, true, false, false], [5, false, true, false], [8, false, false, true]]
+      // `***both***` is bold and italic — what Ctrl+B then Ctrl+I make of a selection.
+      const groups: [number, boolean, boolean, boolean][] = [[2, true, true, false], [5, true, false, false], [8, false, true, false], [11, false, false, true]]
       for (const [group, bold, italic, mono] of groups) {
         if (emphasis[group] === undefined) continue
         consider({ kind: 'emphasis', from: emphasis.index, to: emphasis.index + emphasis[0].length, text: emphasis[group], bold, italic, mono })
@@ -272,7 +309,7 @@ export function headIndent(block: Block): number {
 
 /**
  * The note as `NoteMarkdown.dump` prints it: runs of shown text, each with
- * the marks the dump names (QUOTE, PASSAGE, LINK, italic, indent N, center), runs of
+ * the marks the dump names (QUOTE, PASSAGE, LINK, CODE, italic, indent N, center), runs of
  * the same marks joined. A formula is one object replacement character.
  */
 export function displayRuns(source: string): DisplayRun[] {
@@ -315,8 +352,10 @@ export function displayRuns(source: string): DisplayRun[] {
           plain('$')
           break
         case 'emphasis': {
+          // The Mac pads code with a narrow space each side, where its tint reaches.
+          if (token.mono) { put(CODE_PAD + token.text + CODE_PAD, withIndent(['CODE'])); break }
           const quoted = quote && block.quoteHeading === undefined
-          put(token.text, withIndent(!token.mono && (token.italic || quoted) ? ['italic'] : []))
+          put(token.text, withIndent(token.italic || quoted ? ['italic'] : []))
           break
         }
       }

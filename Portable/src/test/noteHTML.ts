@@ -56,11 +56,12 @@ export async function noteHTMLSuite(test: Test, suite: (name: string) => void) {
     assert.ok(!body.includes('data-anchor') && !body.includes('data-note'), 'nothing to press on paper')
   })
 
-  await test('a table is a table', () => {
-    const body = noteBodyHTML('| a | b |\n|:--|--:|\n| **1** | 2 |\n| 3 | 4 |\nafter', { set: stub })
+  await test('a table is a table, its cells\' emphasis set as emphasis', () => {
+    const body = noteBodyHTML('| a | b |\n|:--|--:|\n| **1** | *2* |\n| `3` | ***4*** |\nafter', { set: stub })
     const lines = body.split('\n')
     assert.equal(lines[0], '<div class="nm-table"><table><thead><tr><th style="text-align:left">a</th><th style="text-align:right">b</th></tr></thead>'
-      + '<tbody><tr><td style="text-align:left">1</td><td style="text-align:right">2</td></tr><tr><td style="text-align:left">3</td><td style="text-align:right">4</td></tr></tbody></table></div>')
+      + '<tbody><tr><td style="text-align:left"><strong class="nm-bold">1</strong></td><td style="text-align:right"><em class="nm-italic">2</em></td></tr>'
+      + '<tr><td style="text-align:left"><code class="nm-mono">3</code></td><td style="text-align:right"><strong class="nm-bold nm-italic">4</strong></td></tr></tbody></table></div>')
     assert.equal(lines[1], '<div class="nm-line">after</div>')
   })
 

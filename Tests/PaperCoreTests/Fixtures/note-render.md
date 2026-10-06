@@ -1,6 +1,7 @@
 # Entropy and forgetting
 Plain words with **bold**, *italic* and `code` in them.
-## A heading two
+한글 **굵게**와 *기울여 쓴 말*, ***둘 다***, `코드 x` 끝.
+## A heading two with **bold**, *italic* and `code`
 ### Third level
 - a bullet
   - nested bullet
@@ -8,7 +9,7 @@ Plain words with **bold**, *italic* and `code` in them.
 12) twelfth
 - [ ] to do
 - [x] done
-> typed aside with *emphasis*
+> typed aside with *emphasis* and `code`
 > second line
 > the model forgets [p. 4](papertime://anchor?p=3&x=145.00&y=95.00&w=366.00&h=12.00)
 >### Section on the page
