@@ -2,11 +2,119 @@
   "repo": "Icecoffee2500/paper-time",
   "releases": [
     {
+      "version": "0.9.27",
+      "date": "2026-10-06T05:46:16Z",
+      "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.27/Paper.Time.0.9.27.dmg",
+      "size": 97719177,
+      "downloads": 0,
+      "builds": {
+        "mac": [
+          {
+            "label": "디스크 이미지",
+            "label_en": "Disk image",
+            "arch": "Apple Silicon",
+            "arch_en": "Apple Silicon",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.27/Paper.Time.0.9.27.dmg",
+            "size": 97719177,
+            "downloads": 0
+          }
+        ],
+        "windows": [
+          {
+            "label": "설치본",
+            "label_en": "Installer",
+            "arch": "64비트 · ARM",
+            "arch_en": "64-bit and ARM",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.27/Paper.Time.Setup.0.9.27.exe",
+            "size": 311130527,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "64비트",
+            "arch_en": "64-bit",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.27/Paper.Time-0.9.27-win.zip",
+            "size": 185632491,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.27/Paper.Time-0.9.27-arm64-win.zip",
+            "size": 190580168,
+            "downloads": 0
+          }
+        ],
+        "linux": [
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.27/Paper.Time-0.9.27-x86_64.AppImage",
+            "size": 183853387,
+            "downloads": 0
+          },
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.27/Paper.Time-0.9.27-arm64.AppImage",
+            "size": 184239978,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.27/paper-time-0.9.27.tar.gz",
+            "size": 176748752,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.27/paper-time-0.9.27-arm64.tar.gz",
+            "size": 181245021,
+            "downloads": 0
+          }
+        ]
+      },
+      "note": null,
+      "note_en": null,
+      "notes": {
+        "note": {
+          "ko": "노트의 코드 블록이 앱의 다른 편집기처럼 둥글고 맑아졌어요.",
+          "en": "Code blocks in notes are rounder and brighter, like the app’s other editors."
+        },
+        "added": [
+          {
+            "title": {
+              "ko": "둥글고 맑은 코드 블록",
+              "en": "Softer Code Blocks"
+            },
+            "detail": {
+              "ko": "코드 블록의 모서리를 앱의 다른 편집기만큼 둥글게 했어요. 칙칙한 회색 대신 옅은 파란 바탕을 쓰고, 다크 모드에서는 Xcode 편집기처럼 푸른빛이 도는 바탕을 써요. 테두리와 머리 아래의 선은 걷어 냈어요. 언어 이름은 강조색 칩에, 복사 단추는 흰 알약에 담았어요. PDF로 내보낸 노트도 같은 모양이에요.",
+              "en": "Code blocks now have the rounded corners of the app’s other editors. A pale blue replaces the dull grey, and in dark mode the box takes on the blue-grey of Xcode’s editor. The outline and the rule under the header are gone: the language sits in a chip in your accent colour, and Copy is a white pill. Exported PDFs match."
+            }
+          }
+        ],
+        "fixed": []
+      }
+    },
+    {
       "version": "0.9.26",
       "date": "2026-10-06T04:14:53Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.26/Paper.Time.0.9.26.dmg",
       "size": 98083281,
-      "downloads": 0,
+      "downloads": 2,
       "builds": {
         "mac": [
           {
@@ -16,7 +124,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.26/Paper.Time.0.9.26.dmg",
             "size": 98083281,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "windows": [
@@ -27,7 +135,7 @@
             "arch_en": "64-bit and ARM",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.26/Paper.Time.Setup.0.9.26.exe",
             "size": 311128643,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
