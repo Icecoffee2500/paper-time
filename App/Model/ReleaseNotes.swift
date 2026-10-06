@@ -318,6 +318,24 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.9.30",
+            date: Text2("2026년 10월", "October 2026"),
+            note: Text2(
+                "노트의 번호 목록을 들여쓰면 이제 «a.»부터 나와요. Tab으로 옮긴 항목이 번호와 함께 제자리를 찾아요.",
+                "Numbered lists in notes count from “a.” when you indent an item, and Tab moves an item to the right place with its number."
+            ),
+            added: [],
+            fixed: [
+                Entry(
+                    Text2("노트의 번호 목록", "Numbered Lists in Notes"),
+                    Text2(
+                        "Tab으로 들인 항목이 «a.»가 아니라 «b.»부터 나왔어요. 번호를 목록에서의 차례가 아니라 그 줄에 적힌 숫자로 그렸기 때문이에요. 이제 안쪽 목록은 늘 «a.»부터 나와요. Tab과 ⇧Tab은 아래 항목까지 함께 옮기고 번호를 다시 맞춰요. 맥에서 Tab을 누르면 캐럿이 글 맨 앞으로 가서, 이어 친 글이 앞에 들어가던 것도 고쳤어요.",
+                        "An item moved in with Tab started at “b.” instead of “a.”, because the number shown was the one written in front of it, not its place in the list. Nested lists now count from “a.”, and Tab and Shift-Tab move an item together with what’s under it and renumber the list. On the Mac, Tab no longer sends the caret to the start of the item."
+                    )
+                ),
+            ]
+        ),
+        Release(
             version: "0.9.29",
             date: Text2("2026년 10월", "October 2026"),
             note: Text2(

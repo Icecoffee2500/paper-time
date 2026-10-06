@@ -13,7 +13,7 @@ OUT=Tests/PaperCoreTests/Fixtures/note-render.json
 LIB="$HOME/Library/Containers/com.imtaeheon.PaperTime/Data/tmp/note-render-fixture"
 mkdir -p "$LIB"
 LOG="$(mktemp)"
-Scripts/probe.sh -s 8 -l "$LOG" -- --papertime-library="$LIB" --papertime-dump-note="$(cat "$NOTE")" >/dev/null
+Scripts/probe.sh -s 20 -l "$LOG" -- --papertime-library="$LIB" --papertime-dump-note="$(cat "$NOTE")" >/dev/null
 python3 - "$NOTE" "$LOG" "$OUT" <<'PY'
 import json, re, sys
 note, log, out = sys.argv[1:]

@@ -801,6 +801,7 @@ enum NoteMarkdown {
         #if os(macOS)
         numbering = numbered(lineRanges, blocks, source: source)
         #endif
+        let listNumbers = NoteList.numbers(of: lineRanges, in: text, isCode: isCode)
 
         let tables = Set(NoteTable.blocks(in: blankingCode(in: source, fenced.map(\.range))).map { NSStringRange($0) })
         var lineIndex = 0
@@ -866,7 +867,8 @@ enum NoteMarkdown {
                 // be seen and changed — as in Obsidian. A list's marker is
                 // drawn there too (Notion).
                 let asWritten = revealed && (block.kind == .quote || { if case .heading = block.kind { true } else { false } }())
-                let shown = asWritten ? block.marker : (folded != nil ? block.collapsedMarker : block.shownMarker)
+                let shown = asWritten ? block.marker
+                    : (folded != nil ? block.collapsedMarker : block.shownMarker(number: listNumbers[lineRange.location]))
                 var attributes: [NSAttributedString.Key: Any] = [
                     .font: block.markerFont, .foregroundColor: asWritten ? syntaxColor : block.markerColor,
                 ]
@@ -1079,20 +1081,24 @@ enum NoteMarkdown {
         /// A list marker stands in on the line being edited too: a bullet
         /// is a bullet, never "- " (a reader saw his bullets come and go as
         /// the caret came and went). Nested lists step through the marks
-        /// an outliner does — •, ◦, ▪ and 1., a., i. — by depth.
-        var shownMarker: String {
+        /// an outliner does — •, ◦, ▪ and 1., a., i. — by depth. A number
+        /// is the one the item shows where it stands (`NoteList.numbers`),
+        /// not the one written: an item moved in with Tab kept its «2.» and
+        /// was shown «b.», the first of a list that starts at «a.».
+        func shownMarker(number shown: Int? = nil) -> String {
             switch kind {
-            case .plain: ""
-            case .heading, .quote: NoteMarkdown.hiddenMarker
-            case .bullet: ["•", "◦", "▪"][indent % 3] + "\t"
-            case .ordered(let number):
+            case .plain: return ""
+            case .heading, .quote: return NoteMarkdown.hiddenMarker
+            case .bullet: return ["•", "◦", "▪"][indent % 3] + "\t"
+            case .ordered(let written):
+                let number = shown ?? written
                 switch indent % 3 {
-                case 0: "\(number).\t"
-                case 1: "\(NoteMarkdown.letters(number)).\t"
-                default: "\(NoteMarkdown.roman(number)).\t"
+                case 0: return "\(number).\t"
+                case 1: return "\(NoteMarkdown.letters(number)).\t"
+                default: return "\(NoteMarkdown.roman(number)).\t"
                 }
-            case .task(let done): done ? "☑\t" : "☐\t"
-            case .toggle: NoteMarkdown.openToggle + "\t"
+            case .task(let done): return done ? "☑\t" : "☐\t"
+            case .toggle: return NoteMarkdown.openToggle + "\t"
             }
         }
 
