@@ -53,9 +53,10 @@ export async function noteBlocksSuite(test: Test, suite: (name: string) => void)
     assert.deepEqual(applied('> quoted', at('> quoted')), { text: '> quoted\n> ', caret: 11 })
     // An empty item: the marker goes, and the line breaks.
     assert.deepEqual(applied('- one\n- ', at('- one\n- ')), { text: '- one\n\n', caret: 7 })
-    // An empty nested item steps out a level first (Notion).
+    // An empty nested item steps out a level first (Notion), and starts the
+    // list it lands in at 1 when it is that list's first (`shiftItem`).
     assert.deepEqual(applied('- one\n  - ', at('- one\n  - ')), { text: '- one\n- ', caret: 8 })
-    assert.deepEqual(applied('1. a\n    3. ', at('1. a\n    3. ')), { text: '1. a\n  3. ', caret: 10 })
+    assert.deepEqual(applied('1. a\n    3. ', at('1. a\n    3. ')), { text: '1. a\n  1. ', caret: 10 })
     assert.equal(at('plain'), null)
     assert.equal(at('## Heading'), null)
     // In the middle of an item, the rest of it goes onto the new line.
