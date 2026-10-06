@@ -1,6 +1,62 @@
 {
  "releases": [
   {
+   "version": "0.9.26",
+   "date": {
+    "ko": "2026년 10월",
+    "en": "October 2026"
+   },
+   "note": {
+    "ko": "노트의 코드 블록이 코드 편집기처럼 보여요. 언어 이름과 복사 단추, 줄 번호, 색이 붙어요.",
+    "en": "A block of code in a note now looks like a code editor, with its language, a Copy button, line numbers and colour."
+   },
+   "added": [
+    {
+     "title": {
+      "ko": "코드 편집기 같은 코드 블록",
+      "en": "Code Blocks Like an Editor"
+     },
+     "detail": {
+      "ko": "백틱 세 개(```)와 언어 이름으로 연 블록이 둥근 상자로 보여요. 위에는 언어 이름과 복사 단추가, 왼쪽에는 줄 번호가 서고, 코드는 Xcode와 같은 색으로 보여요. 라이트 모드와 다크 모드에서 각자 맞는 색을 쓰고, PDF로 내보낸 노트에서도 같아요. 펜스에 커서를 두면 적은 그대로 보여서 언어를 고칠 수 있어요.",
+      "en": "A block opened with three backticks (```) and a language shows as a rounded box. The language and a Copy button sit at the top, line numbers run down the side, and the code takes Xcode’s colours, light and dark. Exported PDFs show it the same way. Put the cursor on a fence to see it as written and change the language."
+     },
+     "demo": "noteCodeBlock",
+     "devices": [
+      "mac"
+     ]
+    },
+    {
+     "title": {
+      "ko": "코드를 쓰는 키",
+      "en": "Keys for Writing Code"
+     },
+     "detail": {
+      "ko": "```python을 치고 Return을 누르면 블록이 닫히고 커서가 그 안에 서요. 블록 안에서 Return은 들여쓰기를 이어 가고, 콜론이나 여는 괄호 뒤에서는 한 단계 더 들여요. Tab과 ⇧Tab은 네 칸씩 들이고 내밀어요. 괄호와 따옴표는 짝을 지어 주지만 별표나 달러는 그대로 두고, ⌘B·⌘I는 코드를 건드리지 않아요.",
+      "en": "Type ```python and press Return, and the block closes with the cursor inside. In a block, Return keeps the indent, and adds a step after a colon or an opening bracket. Tab and ⇧Tab indent and outdent by four spaces. Brackets and quotes come in pairs, but stars and dollars stay single, and ⌘B and ⌘I leave code alone."
+     },
+     "devices": [
+      "mac"
+     ]
+    }
+   ],
+   "removed": [],
+   "fixed": [
+    {
+     "title": {
+      "ko": "백틱 세 개",
+      "en": "Three Backticks"
+     },
+     "detail": {
+      "ko": "백틱을 한 번에 하나씩 세 번 치면 자동으로 붙는 짝 때문에 네 개가 되어서 코드 블록이 열리지 않았어요. 이제 세 번째 백틱이 펜스를 만들어요.",
+      "en": "Typing three backticks one at a time left four, because each one brought its pair, so the code block never opened. Now the third backtick makes the fence."
+     },
+     "devices": [
+      "mac"
+     ]
+    }
+   ]
+  },
+  {
    "version": "0.9.25",
    "date": {
     "ko": "2026년 10월",
@@ -4348,6 +4404,16 @@
      "detail": {
       "ko": "Obsidian의 Latex Suite와 같아요. 수식 안에서 //는 분수, x1은 x_{1}, sr은 제곱이 되고 Tab은 다음 칸으로 가요. 글 카드에서도 돼요.",
       "en": "The same as Latex Suite in Obsidian: inside math, // is a fraction, x1 is x_{1}, sr a square, and Tab moves to the next field. Text cards too."
+     }
+    },
+    {
+     "title": {
+      "ko": "코드 블록",
+      "en": "Code blocks"
+     },
+     "detail": {
+      "ko": "```와 언어 이름으로 열면 코드 편집기처럼 보여요. 언어 이름, 복사 단추, 줄 번호, Xcode의 색이 붙고, Return·Tab이 코드처럼 들여 써요.",
+      "en": "Open a block with ``` and a language and it looks like a code editor: the language, a Copy button, line numbers and Xcode’s colours. Return and Tab indent as code does."
      }
     },
     {

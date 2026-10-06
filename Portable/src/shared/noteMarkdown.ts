@@ -12,6 +12,7 @@
  * set, and the line under the hand is the one being edited.
  */
 import { blockOf, type Block } from './noteBlocks.js'
+import { codeBlocks, codeLanguageName, codeRows, type CodeBlock, type CodeRow } from './noteCode.js'
 import { firstFormula, lineRanges, mathBlocks, type TextSpan } from './noteMath.js'
 import { tableBlocks } from './noteTable.js'
 import { parseAnchorURL } from './noteQuote.js'
@@ -48,13 +49,35 @@ export interface PlannedLine {
    *  middle of the line, and one with numbers across all of it
    *  (`NoteMarkdown.standsAlone`). Not while the line is being edited. */
   alone: boolean
+  /** A line of a fenced block: what it is in the block. Its words are code —
+   *  no marker, no pieces, whatever it starts with. */
+  code: CodeRow | null
+}
+
+/**
+ * The source with every fenced block's characters but its line breaks turned
+ * to spaces (`NoteMarkdown.blankingCode`): what the readers of mathematics and
+ * tables are given, so nothing inside code is read as either, at the same
+ * offsets.
+ */
+export function blankingCode(source: string, blocks: readonly CodeBlock[]): string {
+  if (blocks.length === 0) return source
+  let out = ''
+  let at = 0
+  for (const block of blocks) {
+    out += source.slice(at, block.range.from) + source.slice(block.range.from, block.range.to).replace(/[^\n]/g, ' ')
+    at = block.range.to
+  }
+  return out + source.slice(at)
 }
 
 /** The lines, a `$$` that opens on one line and closes on another read as one. */
-export function noteLines(source: string): TextSpan[] {
+export function noteLines(source: string, code: readonly CodeBlock[] = codeBlocks(source)): TextSpan[] {
   const ranges = lineRanges(source)
   // A table's lines too, for the same reason: one thing over several lines.
-  const joined = [...mathBlocks(source), ...tableBlocks(source)].sort((a, b) => a.from - b.from)
+  // Neither is looked for inside fenced code.
+  const read = blankingCode(source, code)
+  const joined = [...mathBlocks(read), ...tableBlocks(read)].sort((a, b) => a.from - b.from)
   for (const block of joined.reverse()) {
     const first = ranges.findIndex((one) => one.from === block.from)
     const last = ranges.findIndex((one) => one.to === block.to)
@@ -121,8 +144,14 @@ export function shownMarker(block: Block): string {
 
 /** The whole note, planned; `caret` is where the typist is, in the source. */
 export function planNote(source: string, caret: number | null = null): PlannedLine[] {
-  const ranges = noteLines(source)
-  const blocks = ranges.map((range) => blockOf(source.slice(range.from, range.to)))
+  const fenced = codeBlocks(source)
+  const rows = codeRows(source, fenced)
+  const ranges = noteLines(source, fenced)
+  const plain = (content: string): Block => ({ type: { kind: 'plain' }, marker: '', content, indent: 0 })
+  const blocks = ranges.map((range) => {
+    const text = source.slice(range.from, range.to)
+    return rows.has(range.from) ? plain(text) : blockOf(text)
+  })
   const edges: (QuoteEdge | null)[] = blocks.map((block, index) => block.type.kind !== 'quote' ? null : {
     opens: index === 0 || blocks[index - 1].type.kind !== 'quote',
     closes: index === blocks.length - 1 || blocks[index + 1].type.kind !== 'quote',
@@ -144,13 +173,17 @@ export function planNote(source: string, caret: number | null = null): PlannedLi
   return ranges.map((range, index) => {
     const block = blocks[index]
     const revealed = caret !== null && caret >= range.from && caret <= range.to
+    const code = rows.get(range.from) ?? null
+    if (code) {
+      return { from: range.from, to: range.to, block, quoteEdge: null, revealed, markerEnd: range.from, shownMarker: '', tokens: [], alone: false, code }
+    }
     const markerEnd = range.from + block.marker.length
     const tokens = revealed || !holdsMarkup(block.content)
       ? []
       : inlineTokens(block.content).map((token) => ({ ...token, from: token.from + markerEnd, to: token.to + markerEnd }))
     return {
       from: range.from, to: range.to, block, quoteEdge: edges[index], revealed, markerEnd,
-      shownMarker: shownMarker(block), tokens, alone: !revealed && standsAlone(block),
+      shownMarker: shownMarker(block), tokens, alone: !revealed && standsAlone(block), code: null,
     }
   })
 }
@@ -309,8 +342,10 @@ export function headIndent(block: Block): number {
 
 /**
  * The note as `NoteMarkdown.dump` prints it: runs of shown text, each with
- * the marks the dump names (QUOTE, PASSAGE, LINK, CODE, italic, indent N, center), runs of
- * the same marks joined. A formula is one object replacement character.
+ * the marks the dump names (QUOTE, PASSAGE, LINK, CODE, CODEBLOCK, italic, indent N, center), runs of
+ * the same marks joined. A formula is one object replacement character; a
+ * fenced block's header is its language's name (nothing to see when it has
+ * none), its closing fence nothing to see.
  */
 export function displayRuns(source: string): DisplayRun[] {
   const pieces: DisplayRun[] = []
@@ -323,6 +358,14 @@ export function displayRuns(source: string): DisplayRun[] {
   }
   const lines = planNote(source)
   lines.forEach((line, index) => {
+    if (line.code) {
+      const row = line.code
+      const shown = row.role === 'line' ? source.slice(line.from, line.to)
+        : row.role === 'header' && row.block.language !== '' ? codeLanguageName(row.block.language) : HIDDEN_MARKER
+      put(shown, ['CODEBLOCK'])
+      if (index < lines.length - 1) put('\n', ['CODEBLOCK'])
+      return
+    }
     const { block } = line
     const quote = block.type.kind === 'quote'
     const indent = headIndent(block)

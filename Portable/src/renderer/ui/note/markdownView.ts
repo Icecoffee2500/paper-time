@@ -18,12 +18,16 @@
  */
 import { EditorSelection, EditorState, Prec, RangeSetBuilder, StateEffect, StateField, type Extension, type Range } from '@codemirror/state'
 import { Decoration, EditorView, WidgetType, keymap, type DecorationSet } from '@codemirror/view'
-import { emphasisClasses, emphasisPieces, emphasisWidth, planNote, type InlineToken, type PlannedLine } from '../../../shared/noteMarkdown.js'
+import { blankingCode, emphasisClasses, emphasisPieces, emphasisWidth, planNote, type InlineToken, type PlannedLine } from '../../../shared/noteMarkdown.js'
 import { toggleChildrenEnd } from '../../../shared/noteBlocks.js'
 import { L } from '../../../shared/lang.js'
 import { parseTable, tableBlocks, type Table } from '../../../shared/noteTable.js'
 import { typesetNumbered, typesetter } from '../../sketchMath.js'
 import { numberFormulas, signature, type Numbered } from '../../../shared/mathJax.js'
+import { codeBlocks, codeLanguageName, codeOf, type CodeBlock, type CodeRow } from '../../../shared/noteCode.js'
+import { highlightCode } from '../../../shared/codeHighlight.js'
+import { copyText } from '../clipboard.js'
+import { icon } from '../../icons.js'
 
 /** Shows the Markdown as it is written — «Show Markdown» (`showsRawText`). */
 export const setRaw = StateEffect.define<boolean>()
@@ -225,6 +229,125 @@ class TableWidget extends WidgetType {
   override ignoreEvent() { return true }
 }
 
+// MARK: - Fenced code
+
+/** What a block's copy button copies with: the clipboard — or, in a probe, a stand-in that never touches it. */
+let copier: (text: string) => Promise<boolean> = copyText
+export function setCodeCopier(next: (text: string) => Promise<boolean>) {
+  copier = next
+}
+
+/** A digit of the numbers' face (16 × 0.72, monospaced): what the gutter is measured in. */
+const NUMBER_DIGIT = 6.912
+
+/**
+ * The room a block's numbers take (`NoteCodeStyle.Block.gutter`): two digits
+ * at least, so a block that grows past nine lines does not shift its code.
+ */
+export function codeGutter(lines: number): number {
+  const digits = Math.max(2, String(Math.max(lines, 1)).length)
+  return Math.ceil(digits * NUMBER_DIGIT) + 14
+}
+
+/**
+ * A block's header while the caret is elsewhere: its language's name, and the
+ * copy button at the other end (`NoteLayoutFragment.drawCodeBlock`). A press
+ * on the name puts the caret on the fence, which then shows as written.
+ */
+class CodeHeaderWidget extends WidgetType {
+  constructor(readonly name: string) { super() }
+  override eq(other: CodeHeaderWidget) { return other.name === this.name }
+  toDOM(view: EditorView) {
+    const head = document.createElement('span')
+    head.className = 'nm-code-head'
+    const label = document.createElement('span')
+    label.className = 'nm-code-lang'
+    label.textContent = this.name
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'nm-code-copy'
+    const paint = (copied: boolean) => {
+      button.innerHTML = `${icon(copied ? 'checkmark' : 'doc.on.doc')}<span>${copied ? L('복사했어요', 'Copied') : L('복사', 'Copy')}</span>`
+    }
+    paint(false)
+    // The press must not move the caret or take the focus from the note.
+    button.addEventListener('mousedown', (event) => event.preventDefault())
+    button.addEventListener('click', (event) => {
+      event.preventDefault()
+      const source = view.state.doc.toString()
+      const start = view.state.doc.lineAt(view.posAtDOM(head)).from
+      const block = codeBlocks(source).find((one) => one.open.from === start)
+      if (!block) return
+      void copier(codeOf(block, source)).then((copied) => {
+        if (!copied) return
+        paint(true)
+        window.setTimeout(() => paint(false), 1600)
+      })
+    })
+    head.append(label, button)
+    return head
+  }
+  // The button's press is the button's; one on the name is the editor's.
+  override ignoreEvent(event: Event) {
+    return event.target instanceof Element && event.target.closest('.nm-code-copy') !== null
+  }
+}
+
+/** A row's look: the box's slice, the row's paddings and its number (`style.css`, `.nm-code`). */
+function codeLineDecoration(row: CodeRow, revealed: boolean): Decoration {
+  const classes = ['nm-line', 'nm-code', `nm-code-${row.role}`]
+  if (row.role === 'line' && row.number === 1) classes.push('nm-code-first')
+  if (row.isLast) classes.push('nm-code-last')
+  // The closing fence is the box's foot while the caret is elsewhere.
+  if (row.role === 'close' && !revealed) classes.push('nm-code-foot')
+  if (revealed) classes.push('nm-revealed')
+  const attributes: Record<string, string> = { class: classes.join(' '), style: `--code-gutter: ${codeGutter(row.block.lines.length)}px` }
+  if (row.role === 'line') attributes['data-n'] = String(row.number)
+  return Decoration.line({ attributes })
+}
+
+/**
+ * A line of a fenced block, drawn: the header its language and copy button
+ * (the fence as written, its marks in the accent, while the caret is on it),
+ * a line of code in its colours (`highlightCode`, the same as the Mac's), the
+ * closing fence nothing to see — the box's foot — until the caret is on it.
+ */
+function codeRanges(line: PlannedLine, row: CodeRow, source: string, out: Range<Decoration>[], colours: Map<CodeBlock, ReturnType<typeof highlightCode>>) {
+  out.push(codeLineDecoration(row, line.revealed).range(line.from))
+  switch (row.role) {
+    case 'header': {
+      if (!line.revealed) {
+        const name = row.block.language ? codeLanguageName(row.block.language) : ''
+        out.push(Decoration.replace({ widget: new CodeHeaderWidget(name) }).range(line.from, line.to))
+        return
+      }
+      const marks = /^[ `~]*/.exec(source.slice(line.from, line.to))?.[0].length ?? 0
+      if (marks > 0) out.push(syntax.range(line.from, line.from + marks))
+      if (line.to > line.from + marks) out.push(Decoration.mark({ class: 'nm-code-info' }).range(line.from + marks, line.to))
+      return
+    }
+    case 'close':
+      if (line.to > line.from) out.push((line.revealed ? syntax : hidden).range(line.from, line.to))
+      return
+    case 'line': {
+      let runs = colours.get(row.block)
+      if (!runs) {
+        runs = highlightCode(codeOf(row.block, source), row.block.language)
+        colours.set(row.block, runs)
+      }
+      // The block's colours are in its code's offsets; this line's start there is `offset`.
+      const end = row.offset + (line.to - line.from)
+      for (const run of runs) {
+        if (run.to <= row.offset || run.from >= end) continue
+        const from = line.from + Math.max(run.from, row.offset) - row.offset
+        const to = line.from + Math.min(run.to, end) - row.offset
+        if (to > from) out.push(Decoration.mark({ class: `nm-tok-${run.role}` }).range(from, to))
+      }
+      return
+    }
+  }
+}
+
 const hidden = Decoration.replace({})
 /** A marker or a delimiter on the line being edited: there, in the accent. */
 const syntax = Decoration.mark({ class: 'nm-syntax' })
@@ -404,7 +527,9 @@ export function noteDecorations(state: EditorState): Drawn {
   const folded: Drawn['folded'] = []
   const shut = state.field(foldedField, false) ?? new Set<string>()
   const counted = numbering(source, plan)
-  const tables = new Set(tableBlocks(source).map((one) => `${one.from}:${one.to}`))
+  // No table is looked for inside fenced code.
+  const tables = new Set(tableBlocks(blankingCode(source, codeBlocks(source))).map((one) => `${one.from}:${one.to}`))
+  const colours = new Map<CodeBlock, ReturnType<typeof highlightCode>>()
   // A toggle folded shut: its children, from the end of its line to the end
   // of their last, stand as one block the caret steps over.
   let fold: { from: number; to: number } | null = null
@@ -421,6 +546,10 @@ export function noteDecorations(state: EditorState): Drawn {
         folded.push({ from: line.to, to: end, key })
         fold = { from: line.to, to: end }
       }
+    }
+    if (line.code) {
+      codeRanges(line, line.code, source, ranges, colours)
+      return
     }
     // A table off the caret is a grid, and nothing else is drawn over it.
     if (!line.revealed && tables.has(`${line.from}:${line.to}`)) {

@@ -124,6 +124,25 @@
      grey (`NoteCode`). */
   --code-ink: #eb5757;
   --code-fill: rgba(135, 131, 120, 0.15);
+
+  /* A fenced block of code: a box a shade off the page, its outline, the
+     rule under its header (`NoteCodeStyle.Block`), and Xcode's colours for
+     what is in it (`CODE_PALETTE` in `shared/codeHighlight.ts`). */
+  --codeblock-fill: rgba(0, 0, 0, 0.035);
+  --codeblock-border: rgba(0, 0, 0, 0.1);
+  --codeblock-rule: rgba(0, 0, 0, 0.06);
+  --code-tok-keyword: #9b2393;
+  --code-tok-string: #c41a16;
+  --code-tok-number: #1c00cf;
+  --code-tok-comment: #5d6c79;
+  --code-tok-type: #0b4f79;
+  --code-tok-function: #326d74;
+  --code-tok-builtIn: #6c36a9;
+  --code-tok-meta: #643820;
+  --code-tok-attribute: #815f03;
+  /* Monospaced, with the note's own Hangul after it: a comment in Korean is
+     set in one Korean face, not the system's second one. */
+  --code-font: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, 'Cascadia Mono', Consolas, 'DejaVu Sans Mono', monospace, 'Pretendard Variable', Pretendard;
 }
 
 :root[data-theme='dark'] {
@@ -173,6 +192,19 @@
   --tag-gray: #98989d;
 
   --code-ink: #ff7369;
+
+  --codeblock-fill: rgba(255, 255, 255, 0.055);
+  --codeblock-border: rgba(255, 255, 255, 0.1);
+  --codeblock-rule: rgba(255, 255, 255, 0.08);
+  --code-tok-keyword: #fc5fa3;
+  --code-tok-string: #fc6a5d;
+  --code-tok-number: #d0bf69;
+  --code-tok-comment: #7f8c98;
+  --code-tok-type: #5dd8ff;
+  --code-tok-function: #67b7a4;
+  --code-tok-builtIn: #a167e6;
+  --code-tok-meta: #fd8f3f;
+  --code-tok-attribute: #bf8555;
 }
 
 * {
@@ -3942,6 +3974,110 @@ body[data-solo='true'] .reader-header button {
    rounded warm grey 0.2em above and below its letters and 0.4em either side
    (`NoteCode`). In a heading it is the heading's size, less. */
 .nm-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.85em; color: var(--code-ink); background: var(--code-fill); border-radius: 4px; padding: 0.2em 0.4em; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+
+/* Fenced code, as a code editor shows it (`NoteLayoutFragment.drawCodeBlock`):
+   one box a shade off the page with a hairline outline, rounded at its
+   header and its foot; the header the language's name and a copy button
+   over a rule; every line numbered in a gutter; the code in Xcode's colours.
+   Each row draws its own slice of the box, so the rows meet without seams.
+   Every row is a whole number of pixels tall (18 a line), as on the Mac. */
+.note-field .cm-line.nm-code {
+  position: relative;
+  z-index: 0;
+  padding: 0 12px 0 calc(12px + var(--code-gutter, 28px));
+  font-family: var(--code-font);
+  font-size: 13.6px;
+  line-height: 18px;
+  tab-size: 4;
+  word-break: normal;
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+.note-field .cm-line.nm-code::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: var(--codeblock-fill);
+  border-left: 1px solid var(--codeblock-border);
+  border-right: 1px solid var(--codeblock-border);
+  pointer-events: none;
+}
+.note-field .cm-line.nm-code-header {
+  height: 33px;
+  padding: 6px 8px 0 12px;
+  line-height: 27px;
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.note-field .cm-line.nm-code-header.nm-revealed { font-family: var(--code-font); font-size: 13.6px; font-weight: 400; text-overflow: ellipsis; }
+.note-field .cm-line.nm-code-header::after {
+  top: 6px;
+  border-top: 1px solid var(--codeblock-border);
+  border-bottom: 1px solid var(--codeblock-rule);
+  border-radius: 6px 6px 0 0;
+}
+.note-field .cm-line.nm-code-first { padding-top: 6px; }
+.note-field .cm-line.nm-code-last { padding-bottom: 10px; }
+.note-field .cm-line.nm-code-last::after {
+  bottom: 6px;
+  border-bottom: 1px solid var(--codeblock-border);
+  border-bottom-left-radius: 6px;
+  border-bottom-right-radius: 6px;
+}
+.note-field .cm-line.nm-code-header.nm-code-last { height: 43px; padding-bottom: 10px; }
+.note-field .cm-line.nm-code-header.nm-code-last::after { border-bottom-color: var(--codeblock-border); }
+/* The closing fence, while the caret is elsewhere: the box's foot. */
+.note-field .cm-line.nm-code-foot { height: 14px; padding-bottom: 6px; line-height: 8px; }
+.nm-code-info { color: var(--text-secondary); }
+.note-field .cm-line.nm-code-line::before {
+  content: attr(data-n);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: calc(var(--code-gutter, 28px) + 3px);
+  text-align: right;
+  font-family: var(--code-font);
+  font-size: 11.52px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary);
+  pointer-events: none;
+  user-select: none;
+}
+.note-field .cm-line.nm-code-first::before { top: 6px; }
+.nm-code-head { display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; height: 27px; vertical-align: top; }
+.nm-code-lang { overflow: hidden; text-overflow: ellipsis; }
+.nm-code-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  height: 21px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  font: inherit;
+  font-size: 11.52px;
+  font-weight: 400;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.nm-code-copy:hover { background: color-mix(in srgb, var(--text) 5.5%, transparent); }
+.nm-code-copy svg { width: 12px; height: 12px; }
+.nm-tok-keyword { color: var(--code-tok-keyword); }
+.nm-tok-string { color: var(--code-tok-string); }
+.nm-tok-number { color: var(--code-tok-number); }
+.nm-tok-comment { color: var(--code-tok-comment); }
+.nm-tok-type { color: var(--code-tok-type); }
+.nm-tok-function { color: var(--code-tok-function); }
+.nm-tok-builtIn { color: var(--code-tok-builtIn); }
+.nm-tok-meta { color: var(--code-tok-meta); }
+.nm-tok-attribute { color: var(--code-tok-attribute); }
 
 /* Formulas, set by MathJax at the body's size. */
 .nm-math svg { vertical-align: middle; }

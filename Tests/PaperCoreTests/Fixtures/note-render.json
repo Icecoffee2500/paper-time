@@ -1,6 +1,6 @@
 {
- "markdown": "# Entropy and forgetting\nPlain words with **bold**, *italic* and `code` in them.\n한글 **굵게**와 *기울여 쓴 말*, ***둘 다***, `코드 x` 끝.\n## A heading two with **bold**, *italic* and `code`\n### Third level\n- a bullet\n  - nested bullet\n1. first\n12) twelfth\n- [ ] to do\n- [x] done\n> typed aside with *emphasis* and `code`\n> second line\n> the model forgets [p. 4](papertime://anchor?p=3&x=145.00&y=95.00&w=366.00&h=12.00)\n>### Section on the page\n\nA link to [[202609280047|Entropy note]] and [[202609280048]] here.\nAn inline $x^2$ formula, and a passage [p. 2](papertime://anchor?p=1&x=10.00&y=20.00&w=30.00&h=12.00).\n$$\n\\int_0^1 f(x)\\,dx\n$$\n[a quoted \\] label](papertime://anchor?p=0&x=1.00&y=2.00&w=3.00&h=4.00)\n> [whole quoted line](papertime://anchor?p=5&x=1.00&y=2.00&w=3.00&h=4.00)\nLast line with $$a+b$$ inline display.\n\\begin{align}\na &= b \\label{eq:a} \\\\\nc &= d\n\\end{align}\nBy \\eqref{eq:a}, the \\(x\\) and \\[y\\] cost \\$5.\n> \\begin{equation} E = mc^2 \\tag{3} \\end{equation}\n- $$z$$\n  \\[ w \\]  ",
- "length": 521,
+ "markdown": "# Entropy and forgetting\nPlain words with **bold**, *italic* and `code` in them.\n한글 **굵게**와 *기울여 쓴 말*, ***둘 다***, `코드 x` 끝.\n## A heading two with **bold**, *italic* and `code`\n### Third level\n- a bullet\n  - nested bullet\n1. first\n12) twelfth\n- [ ] to do\n- [x] done\n> typed aside with *emphasis* and `code`\n> second line\n> the model forgets [p. 4](papertime://anchor?p=3&x=145.00&y=95.00&w=366.00&h=12.00)\n>### Section on the page\n\nA link to [[202609280047|Entropy note]] and [[202609280048]] here.\nAn inline $x^2$ formula, and a passage [p. 2](papertime://anchor?p=1&x=10.00&y=20.00&w=30.00&h=12.00).\n$$\n\\int_0^1 f(x)\\,dx\n$$\n[a quoted \\] label](papertime://anchor?p=0&x=1.00&y=2.00&w=3.00&h=4.00)\n> [whole quoted line](papertime://anchor?p=5&x=1.00&y=2.00&w=3.00&h=4.00)\nLast line with $$a+b$$ inline display.\n\\begin{align}\na &= b \\label{eq:a} \\\\\nc &= d\n\\end{align}\nBy \\eqref{eq:a}, the \\(x\\) and \\[y\\] cost \\$5.\n> \\begin{equation} E = mc^2 \\tag{3} \\end{equation}\n- $$z$$\n  \\[ w \\]  \nA line before code.\n```python\n# not a heading $x$\n- not a bullet\n| a | b |\n|---|---|\nx = `y` **z**\n```\n\n```\nno language\n```\n~~~js\nlet a = 1 // $$x$$\n~~~\n```cpp\nnever closed\n- still code",
+ "length": 698,
  "runs": [
   {
    "location": 0,
@@ -555,7 +555,172 @@
   {
    "location": 519,
    "marks": "center",
-   "text": "  "
+   "text": "  \n"
+  },
+  {
+   "location": 522,
+   "marks": "—",
+   "text": "A line before code.\n"
+  },
+  {
+   "location": 542,
+   "marks": "CODEBLOCK",
+   "text": "Python"
+  },
+  {
+   "location": 548,
+   "marks": "CODEBLOCK",
+   "text": "\n"
+  },
+  {
+   "location": 549,
+   "marks": "CODEBLOCK",
+   "text": "# not a heading $x$"
+  },
+  {
+   "location": 568,
+   "marks": "CODEBLOCK",
+   "text": "\n"
+  },
+  {
+   "location": 569,
+   "marks": "CODEBLOCK",
+   "text": "- "
+  },
+  {
+   "location": 571,
+   "marks": "CODEBLOCK",
+   "text": "not"
+  },
+  {
+   "location": 574,
+   "marks": "CODEBLOCK",
+   "text": " a bullet\n"
+  },
+  {
+   "location": 584,
+   "marks": "CODEBLOCK",
+   "text": "| a | b |\n"
+  },
+  {
+   "location": 594,
+   "marks": "CODEBLOCK",
+   "text": "|---|---|\n"
+  },
+  {
+   "location": 604,
+   "marks": "CODEBLOCK",
+   "text": "x = `y` **z**\n"
+  },
+  {
+   "location": 618,
+   "marks": "CODEBLOCK",
+   "text": "​"
+  },
+  {
+   "location": 619,
+   "marks": "CODEBLOCK",
+   "text": "\n"
+  },
+  {
+   "location": 620,
+   "marks": "—",
+   "text": "\n"
+  },
+  {
+   "location": 621,
+   "marks": "CODEBLOCK",
+   "text": "​"
+  },
+  {
+   "location": 622,
+   "marks": "CODEBLOCK",
+   "text": "\n"
+  },
+  {
+   "location": 623,
+   "marks": "CODEBLOCK",
+   "text": "no language\n"
+  },
+  {
+   "location": 635,
+   "marks": "CODEBLOCK",
+   "text": "​"
+  },
+  {
+   "location": 636,
+   "marks": "CODEBLOCK",
+   "text": "\n"
+  },
+  {
+   "location": 637,
+   "marks": "CODEBLOCK",
+   "text": "JavaScript"
+  },
+  {
+   "location": 647,
+   "marks": "CODEBLOCK",
+   "text": "\n"
+  },
+  {
+   "location": 648,
+   "marks": "CODEBLOCK",
+   "text": "let"
+  },
+  {
+   "location": 651,
+   "marks": "CODEBLOCK",
+   "text": " a = "
+  },
+  {
+   "location": 656,
+   "marks": "CODEBLOCK",
+   "text": "1"
+  },
+  {
+   "location": 657,
+   "marks": "CODEBLOCK",
+   "text": " "
+  },
+  {
+   "location": 658,
+   "marks": "CODEBLOCK",
+   "text": "// $$x$$"
+  },
+  {
+   "location": 666,
+   "marks": "CODEBLOCK",
+   "text": "\n"
+  },
+  {
+   "location": 667,
+   "marks": "CODEBLOCK",
+   "text": "​"
+  },
+  {
+   "location": 668,
+   "marks": "CODEBLOCK",
+   "text": "\n"
+  },
+  {
+   "location": 669,
+   "marks": "CODEBLOCK",
+   "text": "C++"
+  },
+  {
+   "location": 672,
+   "marks": "CODEBLOCK",
+   "text": "\n"
+  },
+  {
+   "location": 673,
+   "marks": "CODEBLOCK",
+   "text": "never closed\n"
+  },
+  {
+   "location": 686,
+   "marks": "CODEBLOCK",
+   "text": "- still code"
   }
  ]
 }

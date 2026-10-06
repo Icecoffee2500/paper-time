@@ -26,7 +26,8 @@ import { anchorAt, parseAnchorURL, quotationInsertion } from '../../shared/noteQ
 import { zettelDisplayTitle, zettelPreviewBody, zettelTags } from '../../shared/zettel.js'
 import { noteByID, type Note } from '../state.js'
 import { deleteNote, flushNote, linkedFrom, linksOrTagsChanged, linksOut, updateNote } from '../notesModel.js'
-import { backspaceEdit, homeTarget, indentEdit, pairBackspaceEdit, pairEdit, returnEdit, todoShortcutEdit, toggleEmphasisEdit, toggleShortcutEdit, wrapEdit, type EmphasisMark } from '../../shared/noteBlocks.js'
+import { backspaceEdit, codeIndentEdit, codeReturnEdit, homeTarget, indentEdit, pairBackspaceEdit, pairEdit, returnEdit, todoShortcutEdit, toggleEmphasisEdit, toggleShortcutEdit, wrapEdit, type EmphasisMark } from '../../shared/noteBlocks.js'
+import { codeRowAt } from '../../shared/noteCode.js'
 import { keyFor } from '../../shared/shortcuts.js'
 import { EditorSelection, EditorState, Prec, Transaction, type Extension } from '@codemirror/state'
 import { EditorView, ViewPlugin, drawSelection, keymap, placeholder, type ViewUpdate } from '@codemirror/view'
@@ -108,6 +109,8 @@ function selectionToolbar(apply: (view: EditorView, mark: EmphasisMark) => void)
     timer = null
     const range = view.state.selection.main
     if (range.empty || !holdsCaret(view) || view.state.field(rawField) || pointerDown) return hide()
+    // Code is not made bold: no bar over a selection in a block of code.
+    if (codeRowAt(view.state.doc.toString(), range.from)) return hide()
     if (!bar) {
       bar = el('div', { class: 'selection-toolbar', role: 'toolbar' })
       // A press on the bar would take the focus and the selection with it.
@@ -365,13 +368,29 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
 
   const links = wikiLinkCompletion(id)
   const math = mathPreview()
+  /** Tab and Shift-Tab in a block of code: four spaces, or the selected lines in or out (`codeIndentEdit`). */
+  const indentCode = (target: EditorView, by: 1 | -1): boolean => {
+    if (target.state.selection.ranges.length > 1) return false
+    const range = target.state.selection.main
+    const edit = codeIndentEdit(target.state.doc.toString(), range.from, range.to, by)
+    if (!edit) return false
+    target.dispatch({
+      changes: { from: edit.from, to: edit.to, insert: edit.insert },
+      selection: EditorSelection.range(edit.selectFrom, edit.selectTo),
+      userEvent: by > 0 ? 'input' : 'delete', scrollIntoView: true,
+    })
+    return true
+  }
   const listKeys = keymap.of([
     {
       key: 'Enter',
       run: (target) => {
         const range = target.state.selection.main
         if (!range.empty || target.state.selection.ranges.length > 1) return false
-        const edit = returnEdit(target.state.doc.toString(), range.head)
+        // In a block of code, a code editor's Return: the indent kept, the
+        // fence just typed closed under the caret (`codeReturnEdit`).
+        const source = target.state.doc.toString()
+        const edit = codeReturnEdit(source, range.head) ?? returnEdit(source, range.head)
         if (!edit) return false
         target.dispatch({ changes: { from: edit.from, to: edit.to, insert: edit.insert }, selection: { anchor: edit.caret }, userEvent: 'input', scrollIntoView: true })
         return true
@@ -393,12 +412,14 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
     {
       key: 'Tab',
       run: (target) => {
+        if (indentCode(target, 1)) return true
         const edit = indentEdit(target.state.doc.toString(), target.state.selection.main.head, 1)
         if (!edit) return insertTab(target)
         target.dispatch({ changes: { from: edit.from, to: edit.to, insert: edit.insert }, selection: { anchor: edit.caret }, userEvent: 'input' })
         return true
       },
       shift: (target) => {
+        if (indentCode(target, -1)) return true
         const edit = indentEdit(target.state.doc.toString(), target.state.selection.main.head, -1)
         if (!edit) return false
         target.dispatch({ changes: { from: edit.from, to: edit.to, insert: edit.insert }, selection: { anchor: edit.caret }, userEvent: 'delete' })
@@ -412,6 +433,8 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
   // them. (⌘M on its own is the window's Minimize.)
   const applyEmphasis = (target: EditorView, mark: EmphasisMark) => {
     const { from, to } = target.state.selection.main
+    // Code is not made bold: the keys do nothing in a block of code.
+    if (codeRowAt(target.state.doc.toString(), from)) return
     const edit = toggleEmphasisEdit(target.state.doc.toString(), from, to, mark)
     target.dispatch({
       changes: { from: edit.from, to: edit.to, insert: edit.insert },
@@ -436,6 +459,7 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
   const home = (extend: boolean) => (target: EditorView) => {
     const range = target.state.selection.main
     const line = target.state.doc.lineAt(range.head)
+    if (codeRowAt(target.state.doc.toString(), range.head)) return false
     const offset = homeTarget(line.text, range.head - line.from)
     if (offset === null) return false
     const head = line.from + offset

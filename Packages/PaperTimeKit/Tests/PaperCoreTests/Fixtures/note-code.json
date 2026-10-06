@@ -1,0 +1,610 @@
+{
+  "fences" : [
+    {
+      "fence" : {
+        "character" : "`",
+        "language" : "",
+        "length" : 3
+      },
+      "line" : "```"
+    },
+    {
+      "fence" : {
+        "character" : "`",
+        "language" : "python",
+        "length" : 3
+      },
+      "line" : "```python"
+    },
+    {
+      "fence" : {
+        "character" : "`",
+        "language" : "py",
+        "length" : 3
+      },
+      "line" : "  ```py"
+    },
+    {
+      "fence" : {
+        "character" : "`",
+        "language" : "",
+        "length" : 3
+      },
+      "line" : "   ```"
+    },
+    {
+      "fence" : null,
+      "line" : "    ```"
+    },
+    {
+      "fence" : null,
+      "line" : "``"
+    },
+    {
+      "fence" : {
+        "character" : "~",
+        "language" : "ruby",
+        "length" : 3
+      },
+      "line" : "~~~ ruby"
+    },
+    {
+      "fence" : null,
+      "line" : "```a`b"
+    },
+    {
+      "fence" : {
+        "character" : "`",
+        "language" : "",
+        "length" : 5
+      },
+      "line" : "`````"
+    },
+    {
+      "fence" : {
+        "character" : "`",
+        "language" : "r",
+        "length" : 3
+      },
+      "line" : "```{r}"
+    },
+    {
+      "fence" : {
+        "character" : "`",
+        "language" : "swift",
+        "length" : 3
+      },
+      "line" : "``` swift  "
+    }
+  ],
+  "names" : [
+    {
+      "language" : "python",
+      "name" : "Python"
+    },
+    {
+      "language" : "py",
+      "name" : "Python"
+    },
+    {
+      "language" : "JS",
+      "name" : "JavaScript"
+    },
+    {
+      "language" : "ts",
+      "name" : "TypeScript"
+    },
+    {
+      "language" : "swift",
+      "name" : "Swift"
+    },
+    {
+      "language" : "c",
+      "name" : "C"
+    },
+    {
+      "language" : "cpp",
+      "name" : "C++"
+    },
+    {
+      "language" : "c++",
+      "name" : "C++"
+    },
+    {
+      "language" : "cs",
+      "name" : "C#"
+    },
+    {
+      "language" : "objc",
+      "name" : "Objective-C"
+    },
+    {
+      "language" : "bash",
+      "name" : "Shell"
+    },
+    {
+      "language" : "sh",
+      "name" : "Shell"
+    },
+    {
+      "language" : "zsh",
+      "name" : "Shell"
+    },
+    {
+      "language" : "json",
+      "name" : "JSON"
+    },
+    {
+      "language" : "yml",
+      "name" : "YAML"
+    },
+    {
+      "language" : "html",
+      "name" : "HTML"
+    },
+    {
+      "language" : "tex",
+      "name" : "LaTeX"
+    },
+    {
+      "language" : "md",
+      "name" : "Markdown"
+    },
+    {
+      "language" : "rb",
+      "name" : "Ruby"
+    },
+    {
+      "language" : "go",
+      "name" : "Go"
+    },
+    {
+      "language" : "rust",
+      "name" : "Rust"
+    },
+    {
+      "language" : "text",
+      "name" : "Text"
+    },
+    {
+      "language" : "unknownlang",
+      "name" : "unknownlang"
+    },
+    {
+      "language" : "",
+      "name" : ""
+    }
+  ],
+  "notes" : [
+    {
+      "blocks" : [
+        {
+          "close" : [
+            25,
+            28
+          ],
+          "code" : "i = 1\nprint(i)",
+          "language" : "python",
+          "lines" : [
+            [
+              10,
+              15
+            ],
+            [
+              16,
+              24
+            ]
+          ],
+          "open" : [
+            0,
+            9
+          ],
+          "range" : [
+            0,
+            28
+          ]
+        }
+      ],
+      "text" : "```python\ni = 1\nprint(i)\n```"
+    },
+    {
+      "blocks" : [
+        {
+          "close" : [
+            17,
+            20
+          ],
+          "code" : "plain",
+          "language" : "",
+          "lines" : [
+            [
+              11,
+              16
+            ]
+          ],
+          "open" : [
+            7,
+            10
+          ],
+          "range" : [
+            7,
+            20
+          ]
+        }
+      ],
+      "text" : "Before\n```\nplain\n```\nAfter"
+    },
+    {
+      "blocks" : [
+        {
+          "close" : [
+            34,
+            37
+          ],
+          "code" : "const a = 1\n\n\/\/ blank above",
+          "language" : "js",
+          "lines" : [
+            [
+              6,
+              17
+            ],
+            [
+              18,
+              18
+            ],
+            [
+              19,
+              33
+            ]
+          ],
+          "open" : [
+            0,
+            5
+          ],
+          "range" : [
+            0,
+            37
+          ]
+        },
+        {
+          "close" : [
+            59,
+            62
+          ],
+          "code" : "echo hi",
+          "language" : "bash",
+          "lines" : [
+            [
+              51,
+              58
+            ]
+          ],
+          "open" : [
+            43,
+            50
+          ],
+          "range" : [
+            43,
+            62
+          ]
+        }
+      ],
+      "text" : "```js\nconst a = 1\n\n\/\/ blank above\n```\ntext\n~~~bash\necho hi\n~~~"
+    },
+    {
+      "blocks" : [
+        {
+          "close" : [
+            41,
+            45
+          ],
+          "code" : "```\nnested fence, not a close\n```",
+          "language" : "md",
+          "lines" : [
+            [
+              7,
+              10
+            ],
+            [
+              11,
+              36
+            ],
+            [
+              37,
+              40
+            ]
+          ],
+          "open" : [
+            0,
+            6
+          ],
+          "range" : [
+            0,
+            45
+          ]
+        }
+      ],
+      "text" : "````md\n```\nnested fence, not a close\n```\n````"
+    },
+    {
+      "blocks" : [
+        {
+          "close" : null,
+          "code" : "never closed\n# not a heading\n- not a bullet",
+          "language" : "python",
+          "lines" : [
+            [
+              10,
+              22
+            ],
+            [
+              23,
+              38
+            ],
+            [
+              39,
+              53
+            ]
+          ],
+          "open" : [
+            0,
+            9
+          ],
+          "range" : [
+            0,
+            53
+          ]
+        }
+      ],
+      "text" : "```python\nnever closed\n# not a heading\n- not a bullet"
+    },
+    {
+      "blocks" : [
+        {
+          "close" : [
+            23,
+            28
+          ],
+          "code" : "  let x = 1",
+          "language" : "swift",
+          "lines" : [
+            [
+              11,
+              22
+            ]
+          ],
+          "open" : [
+            0,
+            10
+          ],
+          "range" : [
+            0,
+            28
+          ]
+        }
+      ],
+      "text" : "  ```swift\n  let x = 1\n  ```"
+    },
+    {
+      "blocks" : [
+        {
+          "close" : null,
+          "code" : "",
+          "language" : "",
+          "lines" : [
+
+          ],
+          "open" : [
+            36,
+            39
+          ],
+          "range" : [
+            36,
+            39
+          ]
+        }
+      ],
+      "text" : "    ```indented four is not a fence\n```"
+    },
+    {
+      "blocks" : [
+        {
+          "close" : [
+            48,
+            51
+          ],
+          "code" : "x",
+          "language" : "python",
+          "lines" : [
+            [
+              46,
+              47
+            ]
+          ],
+          "open" : [
+            33,
+            45
+          ],
+          "range" : [
+            33,
+            51
+          ]
+        }
+      ],
+      "text" : "inline ```code``` is not a fence\n```{.python}\nx\n```"
+    },
+    {
+      "blocks" : [
+        {
+          "close" : [
+            33,
+            39
+          ],
+          "code" : "int main() {}",
+          "language" : "c++",
+          "lines" : [
+            [
+              19,
+              32
+            ]
+          ],
+          "open" : [
+            0,
+            18
+          ],
+          "range" : [
+            0,
+            39
+          ]
+        }
+      ],
+      "text" : "```c++ extra words\nint main() {}\n```   \nafter"
+    },
+    {
+      "blocks" : [
+        {
+          "close" : [
+            14,
+            18
+          ],
+          "code" : "windows\r",
+          "language" : "",
+          "lines" : [
+            [
+              5,
+              13
+            ]
+          ],
+          "open" : [
+            0,
+            4
+          ],
+          "range" : [
+            0,
+            18
+          ]
+        }
+      ],
+      "text" : "```\r\nwindows\r\n```\r\nend"
+    },
+    {
+      "blocks" : [
+        {
+          "close" : [
+            19,
+            22
+          ],
+          "code" : "```\nstill code",
+          "language" : "",
+          "lines" : [
+            [
+              4,
+              7
+            ],
+            [
+              8,
+              18
+            ]
+          ],
+          "open" : [
+            0,
+            3
+          ],
+          "range" : [
+            0,
+            22
+          ]
+        }
+      ],
+      "text" : "~~~\n```\nstill code\n~~~"
+    },
+    {
+      "blocks" : [
+        {
+          "close" : [
+            4,
+            7
+          ],
+          "code" : "",
+          "language" : "",
+          "lines" : [
+
+          ],
+          "open" : [
+            0,
+            3
+          ],
+          "range" : [
+            0,
+            7
+          ]
+        }
+      ],
+      "text" : "```\n```"
+    },
+    {
+      "blocks" : [
+
+      ],
+      "text" : "no fences at all\n$$x$$"
+    },
+    {
+      "blocks" : [
+        {
+          "close" : [
+            11,
+            14
+          ],
+          "code" : "",
+          "language" : "python",
+          "lines" : [
+            [
+              10,
+              10
+            ]
+          ],
+          "open" : [
+            0,
+            9
+          ],
+          "range" : [
+            0,
+            14
+          ]
+        }
+      ],
+      "text" : "```python\n\n```"
+    },
+    {
+      "blocks" : [
+        {
+          "close" : [
+            31,
+            34
+          ],
+          "code" : "# 한글 주석\nprint(\"안녕\")",
+          "language" : "py",
+          "lines" : [
+            [
+              11,
+              18
+            ],
+            [
+              19,
+              30
+            ]
+          ],
+          "open" : [
+            5,
+            10
+          ],
+          "range" : [
+            5,
+            34
+          ]
+        }
+      ],
+      "text" : "한글 앞\n```py\n# 한글 주석\nprint(\"안녕\")\n```\n뒤"
+    }
+  ]
+}
