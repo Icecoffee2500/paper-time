@@ -2815,7 +2815,7 @@ enum MathReader {
         }
         var pieces: [Word] = []
         func prose(_ word: [PDFContentScanner.Glyph], tight: Bool = false) -> Word {
-            let spelled = word.map(MathTranscriber.spelling(of:))
+            let spelled = word.map { inProse(MathTranscriber.spelling(of: $0)) }
             if spelled.contains(where: \.isEmpty),
                let borrowed = spelling(of: word, from: characters, text: text),
                agrees(borrowed, with: spelled) {
@@ -3240,6 +3240,19 @@ enum MathReader {
         if let mark = pending { result.append(mark) }
         return result.precomposedStringWithCanonicalMapping
     }
+
+    /// A glyph's spelling in a sentence. The letters TeX's text fonts keep
+    /// outside ASCII are letters there, not the commands a formula writes
+    /// for them: «ï» is a dotless i under an accent, and spelled `\imath`
+    /// the accent landed on its backslash — «na\̈imathve», «del R\́imatho».
+    private static func inProse(_ spelling: String) -> String {
+        textLetters[spelling] ?? spelling
+    }
+
+    private static let textLetters: [String: String] = [
+        "\\imath": "\u{0131}", "\\jmath": "\u{0237}", "\\ss": "ß", "\\ae": "æ", "\\oe": "œ", "\\o": "ø",
+        "\\AE": "Æ", "\\OE": "Œ", "\\O": "Ø",
+    ]
 
     /// The marks a text font draws on their own, and what they are as
     /// combining characters. The ASCII lookalikes — "^", "~", "`" — are left

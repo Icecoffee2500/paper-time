@@ -1060,13 +1060,18 @@ private struct PassageDemo: View {
 
 // MARK: - The way back from the page
 
-/// A passage on the page, and beside it the rule ⌘L leaves: the note's own
-/// quotation rule, seen from the page's side. Pressing it is what the page
-/// does — the note comes forward and the quotation in it glows.
+/// A paragraph on the page with the sentence ⌘L quoted from it tinted — that
+/// sentence, from where it starts in the middle of a line, and nothing round
+/// it. Pressing it is what the page does: the note comes forward and the
+/// quotation in it glows.
 private struct QuoteLinkDemo: View {
     let scale: DemoScale
     @State private var lit = false
     @State private var hovering = false
+
+    private var before: String {
+        ReleaseNotes.string("캐시는 메모리를 많이 쓴다. ", "A cache costs memory. ")
+    }
 
     private var words: String {
         ReleaseNotes.string(
@@ -1075,11 +1080,22 @@ private struct QuoteLinkDemo: View {
         )
     }
 
+    private var after: String {
+        ReleaseNotes.string(" 우리도 그 구조를 쓴다.", " We use the same design.")
+    }
+
     private var title: String { ReleaseNotes.string("캐시 모델", "Cache Models") }
 
-    /// The rule beside the passage, in the page's margin: a press on it is
-    /// the press that goes to the note.
-    private var rule: some View {
+    /// The paragraph, its quoted sentence in the accent's wash
+    /// (`QuoteWashShare`), deeper under the pointer.
+    private var paragraph: AttributedString {
+        var quoted = AttributedString(words)
+        quoted.backgroundColor = Color.accentColor.opacity(hovering ? QuoteWashShare.lit : QuoteWashShare.rest)
+        return AttributedString(before) + quoted + AttributedString(after)
+    }
+
+    /// A press on the passage is the press that goes to the note.
+    private var passage: some View {
         Button {
             withAnimation(Motion.tap) { lit = true }
             Task {
@@ -1087,10 +1103,10 @@ private struct QuoteLinkDemo: View {
                 withAnimation(Motion.fade) { lit = false }
             }
         } label: {
-            Capsule()
-                .fill(Color.accentColor.opacity(hovering ? 0.9 : 0.55))
-                .frame(width: (scale.isFull ? 2 : 1.5) + (hovering ? 1 : 0))
-                .padding(.horizontal, 4)
+            Text(paragraph)
+                .font(scale.body)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -1132,20 +1148,10 @@ private struct QuoteLinkDemo: View {
                 VStack(alignment: .leading, spacing: scale.isFull ? 7 : 4) {
                     Rule(width: 90)
                     Rule()
-                    Text(words)
-                        .font(scale.body)
-                        .fixedSize(horizontal: false, vertical: true)
-                        // In the margin, left of the column — where the rule
-                        // stands on a page.
-                        .overlay(alignment: .leading) {
-                            rule
-                                .padding(.vertical, 1)
-                                .offset(x: scale.isFull ? -13 : -10)
-                        }
+                    passage
                     Rule()
                     Rule(width: 120)
                 }
-                .padding(.leading, scale.isFull ? 6 : 4)
             }
 
             Paper(scale: scale) {
@@ -1155,8 +1161,8 @@ private struct QuoteLinkDemo: View {
                     quotation
                     if scale.isFull {
                         Text(ReleaseNotes.string(
-                            "구절 옆의 세로줄을 누르면 그 구절을 인용한 노트가 열려요.",
-                            "Click the rule beside a passage to open the note that quotes it."
+                            "연하게 칠한 구절을 누르면 그 구절을 인용한 노트가 열려요.",
+                            "Click a tinted passage to open the note that quotes it."
                         ))
                         .font(.caption2)
                         .foregroundStyle(.tertiary)

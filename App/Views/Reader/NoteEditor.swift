@@ -33,8 +33,8 @@ struct NoteEditor: NSViewRepresentable {
     /// what is on screen, and the whole run is not asked for — a formula
     /// or a link in the middle of it is spelled differently here.
     @Binding var pendingReveal: String?
-    /// A quotation to scroll to and flash, by its page link's address — the
-    /// rule beside its passage was clicked on the page. Cleared once shown.
+    /// A quotation to scroll to and flash, by its page link's address — its
+    /// passage was clicked on the page. Cleared once shown.
     @Binding var pendingPassage: String?
     /// Shows the Markdown as written, for when a link or a formula needs
     /// changing by hand.

@@ -1,4 +1,5 @@
 import Foundation
+import InkEngine
 import PaperCore
 import PDFKit
 import SwiftUI
@@ -14,10 +15,13 @@ import AppKit
 /// (`QuotedPassages`) — so it is exactly as current as they are.
 struct QuoteLink: Hashable {
     var noteID: String
-    /// The note's name, for the rule's tooltip.
+    /// The note's name, for the tooltip.
     var noteTitle: String
     var modified: Date
     var passage: QuotedPassage
+    /// The quotation as the note writes it — the words the page's text is
+    /// searched for, to tint the passage and nothing round it.
+    var quotation: String
 
     var pageIndex: Int { passage.anchor.pageIndex }
     var rect: CGRect { passage.anchor.rect }
@@ -28,8 +32,10 @@ struct QuoteLink: Hashable {
     static func of(paper: UUID, in notes: NotesModel) -> [QuoteLink] {
         notes.notes
             .flatMap { note in
-                QuotedPassages.passages(in: note, of: paper).map {
-                    QuoteLink(noteID: note.id, noteTitle: note.displayTitle, modified: note.modified, passage: $0)
+                let body = note.body as NSString
+                return QuotedPassages.passages(in: note, of: paper).map {
+                    let quote = NSMaxRange($0.quote) <= body.length ? body.substring(with: $0.quote) : ""
+                    return QuoteLink(noteID: note.id, noteTitle: note.displayTitle, modified: note.modified, passage: $0, quotation: quote)
                 }
             }
             .sorted { $0.modified < $1.modified }
@@ -62,67 +68,146 @@ struct QuoteLinkWatcher: View {
     }
 }
 
+/// How much of the accent a quoted passage's wash takes on its page, at
+/// rest and under the pointer: enough to find the passage at a glance, and
+/// little enough that a highlight under it keeps its own colour. Portable's
+/// `QUOTE_WASH` and `--quote-wash` are the same two.
+enum QuoteWashShare {
+    static let rest: CGFloat = 0.18
+    static let lit: CGFloat = 0.3
+}
+
 #if os(macOS)
-/// The rule beside a quoted passage, in page space: the note's quotation
-/// rule (`NoteQuoteBar`), standing in the margin of the column the passage
-/// is set in, so the two read as one quotation seen from either side.
-struct QuoteBar: Equatable {
+/// A quoted passage on its page, tinted: the words ⌘L put into a note,
+/// in a pale wash of the accent.
+///
+/// It was a rule in the margin first — the note's quotation rule, seen from
+/// the page's side — and a rule beside a column says nothing about where in
+/// the column the quotation starts: beside a slide's line it read as the
+/// whole line quoted when only its last words were. Tinted, the passage is
+/// exactly what was quoted, in the shape a highlight has, so it reads as a
+/// mark that leads somewhere.
+struct QuoteWash: Equatable {
     var link: QuoteLink
-    /// The rule itself.
-    var rect: CGRect
-    /// What a click takes: the rule and a little either side of it.
-    var target: CGRect
+    /// The passage's lines in page space, fitted to their letters the way a
+    /// highlight's are — or, where its box holds no words at all (a scan),
+    /// the box.
+    var lines: [CGRect]
 
-    static let width: CGFloat = 2
-    /// Between the rule and the words of the column.
-    static let gap: CGFloat = 4
+    /// Whether a point on the page is on the passage.
+    func contains(_ point: CGPoint) -> Bool {
+        lines.contains { $0.insetBy(dx: -1, dy: -1).contains(point) }
+    }
 
-    /// The rules for a page's passages. A rule stands left of the column,
-    /// not left of the passage: a passage that starts in the middle of a
-    /// line put it between two words. PDFKit's line knows where its column
-    /// begins — it keeps the two columns of a paper apart.
-    static func bars(for links: [QuoteLink], on page: PDFPage) -> [QuoteBar] {
+    /// How round the lines' ends are: a highlight's (`RoundedMarks`).
+    static func radius(of line: CGRect) -> CGFloat { min(line.height * 0.3, 3.5) }
+
+    /// The accent, most of the way to white — multiplied onto the page like
+    /// a mark, so the letters keep their black. Deeper under the pointer.
+    static func fill(lit: Bool) -> CGColor {
+        let accent = NSColor.controlAccentColor.usingColorSpace(.sRGB) ?? .systemBlue
+        let share = lit ? QuoteWashShare.lit : QuoteWashShare.rest
+        func mixed(_ part: CGFloat) -> CGFloat { 1 - share + share * part }
+        return CGColor(srgbRed: mixed(accent.redComponent), green: mixed(accent.greenComponent),
+                       blue: mixed(accent.blueComponent), alpha: 1)
+    }
+
+    /// The washes for a page's passages, worked out together: their lines
+    /// are fitted to the letters off one rendering of the page.
+    static func washes(for links: [QuoteLink], on page: PDFPage) -> [QuoteWash] {
         let box = page.bounds(for: .cropBox)
-        return links.compactMap { link in
-            let passage = link.rect
-            guard passage.isFinite, passage.width > 0, passage.height > 0, passage.intersects(box) else { return nil }
-            var left = passage.minX
-            let reach = min(passage.height / 2, 6)
-            for y in [passage.maxY - reach, passage.minY + reach] {
-                let point = CGPoint(x: passage.minX + 1, y: y)
-                guard let line = page.selectionForLine(at: point)?.bounds(for: page), line.isFinite,
-                      line.height > 0, line.minY - 1 <= y, y <= line.maxY + 1,
-                      line.minX <= passage.minX + 1, line.maxX >= passage.minX,
-                      // A line that reaches across to the other column is
-                      // not one this rule can stand beside.
-                      passage.minX - line.minX < box.width / 2
-                else { continue }
-                left = min(left, line.minX)
-            }
-            let x = max(box.minX + 1, left - gap - width)
-            let rect = CGRect(x: x, y: passage.minY + 1, width: width, height: max(passage.height - 2, width))
-            return QuoteBar(link: link, rect: rect, target: rect.insetBy(dx: -5, dy: -1))
+        let shown = links.filter {
+            $0.rect.isFinite && $0.rect.width > 0 && $0.rect.height > 0 && $0.rect.intersects(box)
         }
+        let passages = shown.map { passage(of: $0, on: page) }
+        var fitted = TextMarkupWriter.fittedLines(of: passages.compactMap { $0 }, on: page).makeIterator()
+        return zip(shown, passages).map { link, passage in
+            let region = link.rect
+            // Never outside the box the passage was quoted from.
+            let within = region.insetBy(dx: -2, dy: -2)
+            let lines = (passage == nil ? [] : fitted.next() ?? []).compactMap { line -> CGRect? in
+                let kept = line.intersection(within)
+                return kept.isNull || kept.width < 0.5 || kept.height < 0.5 ? nil : kept
+            }
+            return QuoteWash(link: link, lines: lines.isEmpty ? [region] : lines)
+        }
+    }
+
+    /// The quoted words as a selection: the text the passage's box holds,
+    /// narrowed to where the quotation's words are in it. A box round two
+    /// lines of a column runs from margin to margin, and a passage that
+    /// starts in the middle of a line would otherwise be tinted from the
+    /// margin. Where the words are not found — a formula the lasso caught
+    /// and the note holds as LaTeX the page's text cannot be matched to —
+    /// the lines the box was drawn round: fitted to their letters, they
+    /// stay off the next line, which PDFKit's box round a displayed
+    /// formula reaches into. Nil when the box holds no text.
+    static func passage(of link: QuoteLink, on page: PDFPage) -> PDFSelection? {
+        let region = link.rect
+        guard let rough = page.selection(for: region), let string = page.string as NSString? else { return nil }
+        // The lines the box was drawn round: their middles inside it. A
+        // neighbour's descenders can reach into it.
+        var ranges: [NSRange] = []
+        for line in rough.selectionsByLine() {
+            let bounds = line.bounds(for: page)
+            guard bounds.isFinite, !bounds.isNull, bounds.height > 0,
+                  bounds.midY >= region.minY - 1, bounds.midY <= region.maxY + 1
+            else { continue }
+            for index in 0..<line.numberOfTextRanges(on: page) {
+                let range = line.range(at: index, on: page)
+                guard range.location != NSNotFound, range.length > 0, NSMaxRange(range) <= string.length else { continue }
+                ranges.append(range)
+            }
+        }
+        guard !ranges.isEmpty else { return nil }
+        ranges.sort { $0.location < $1.location }
+        var text = ""
+        var length = 0
+        var pieces: [(offset: Int, range: NSRange)] = []
+        for range in ranges {
+            pieces.append((length, range))
+            let words = string.substring(with: range) + "\n"
+            text += words
+            length += (words as NSString).length
+        }
+        let span = QuotedPassages.span(of: link.quotation, in: text) ?? 0..<length
+        // From the text back to the page: within a line, one for one; on the
+        // break after it, the line's end.
+        func onPage(_ offset: Int) -> Int {
+            var answer = pieces[0].range.location
+            for piece in pieces where piece.offset <= offset {
+                answer = piece.range.location + min(offset - piece.offset, piece.range.length)
+            }
+            return answer
+        }
+        let start = onPage(span.lowerBound), end = onPage(span.upperBound)
+        guard end > start else { return nil }
+        return page.selection(for: NSRange(location: start, length: end - start))
     }
 }
 
-/// The rules beside this page's quoted passages, over the page.
+/// The washes over this page's quoted passages.
 ///
-/// Composited plainly rather than multiplied like the marks: the rule is
-/// the accent, and multiplied it would darken into whatever is under it.
+/// Multiplied onto the page like the marks: pale as it is, a wash laid on
+/// plainly would grey the letters under it. Each wash is filled in one go,
+/// so where its lines touch the colour does not double, and where two notes
+/// quote one passage the newer covers the older instead of deepening it.
 final class QuoteLinkOverlayView: NSView, NSViewToolTipOwner {
     private weak var page: PDFPage?
-    private let bars: () -> [QuoteBar]
-    private let hovered: () -> QuoteBar?
+    private let washes: () -> [QuoteWash]
+    private let hovered: () -> QuoteWash?
 
     nonisolated(unsafe) private static var byPage: [ObjectIdentifier: Weak] = [:]
     private struct Weak { weak var view: QuoteLinkOverlayView? }
 
-    init(page: PDFPage, bars: @escaping () -> [QuoteBar], hovered: @escaping () -> QuoteBar?) {
+    init(page: PDFPage, washes: @escaping () -> [QuoteWash], hovered: @escaping () -> QuoteWash?) {
         self.page = page
-        self.bars = bars
+        self.washes = washes
         self.hovered = hovered
         super.init(frame: .zero)
+        wantsLayer = true
+        layer?.compositingFilter = "multiplyBlendMode"
+        layer?.isOpaque = false
         Self.byPage[ObjectIdentifier(page)] = Weak(view: self)
     }
 
@@ -154,32 +239,45 @@ final class QuoteLinkOverlayView: NSView, NSViewToolTipOwner {
     }
 
     override func draw(_ dirtyRect: NSRect) {
+        guard let page, let context = NSGraphicsContext.current?.cgContext else { return }
+        let all = washes()
+        guard !all.isEmpty else { return }
+        let box = page.bounds(for: .cropBox)
+        guard box.width > 0, box.height > 0 else { return }
         let hover = hovered()
-        for bar in bars() {
-            let lit = hover?.link == bar.link && hover?.rect == bar.rect
-            // A shade wider and the full accent under the pointer, the way
-            // a mark deepens.
-            let drawn = lit ? bar.rect.insetBy(dx: -0.5, dy: 0) : bar.rect
-            guard let rect = viewRect(drawn) else { continue }
-            let color = lit ? NSColor.controlAccentColor.withAlphaComponent(0.9) : NoteQuoteBar.bar(anchored: true)
-            color.setFill()
-            NSBezierPath(roundedRect: rect, xRadius: rect.width / 2, yRadius: rect.width / 2).fill()
+        context.saveGState()
+        context.scaleBy(x: bounds.width / box.width, y: bounds.height / box.height)
+        context.translateBy(x: -box.minX, y: -box.minY)
+        // The one under the pointer last, over any other on its words.
+        for wash in all.filter({ $0 != hover }) + all.filter({ $0 == hover }) {
+            let path = CGMutablePath()
+            for line in wash.lines {
+                let radius = QuoteWash.radius(of: line)
+                path.addRoundedRect(in: line, cornerWidth: radius, cornerHeight: radius)
+            }
+            context.addPath(path)
+            context.setFillColor(QuoteWash.fill(lit: wash == hover))
+            context.fillPath()
         }
+        context.restoreGState()
     }
 
-    /// Each rule says whose it is when the pointer rests on it.
+    /// Each passage says whose it is when the pointer rests on it.
     private func placeToolTips() {
         removeAllToolTips()
-        for bar in bars() {
-            guard let rect = viewRect(bar.target) else { continue }
-            addToolTip(rect, owner: self, userData: nil)
+        for wash in washes() {
+            for line in wash.lines {
+                guard let rect = viewRect(line) else { continue }
+                addToolTip(rect, owner: self, userData: nil)
+            }
         }
     }
 
     func view(_ view: NSView, stringForToolTip tag: NSView.ToolTipTag, point: NSPoint,
               userData data: UnsafeMutableRawPointer?) -> String {
-        guard let bar = bars().last(where: { viewRect($0.target)?.contains(point) == true }) else { return "" }
-        let title = bar.link.noteTitle
+        guard let wash = washes().last(where: { wash in wash.lines.contains { viewRect($0)?.contains(point) == true } })
+        else { return "" }
+        let title = wash.link.noteTitle
         return title.isEmpty ? L("노트에서 보기", "Show in Note") : L("노트에서 보기 · \(title)", "Show in Note · \(title)")
     }
 }

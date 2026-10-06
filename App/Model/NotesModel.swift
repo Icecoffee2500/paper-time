@@ -466,8 +466,8 @@ public final class NotesModel {
     /// text and the editor shows the Markdown.
     public var reveal: String?
 
-    /// A quotation asked for from the page it quotes: the rule beside a
-    /// passage was clicked (`QuoteLink`). Set by a reader; the window opens
+    /// A quotation asked for from the page it quotes: a quoted passage was
+    /// clicked (`QuoteLink`). Set by a reader; the window opens
     /// the note where notes are showing, hands the address to
     /// `revealPassage`, and clears this.
     public struct PassageRequest: Equatable {

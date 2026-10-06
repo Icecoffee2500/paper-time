@@ -134,6 +134,11 @@
   --codeblock-pill: rgba(255, 255, 255, 0.85);
   --codeblock-pill-edge: rgba(0, 0, 0, 0.06);
   --codeblock-label: var(--accent);
+
+  /* A quoted passage on its page: the accent, mostly white, multiplied onto
+     the page (`QUOTE_WASH`, the Mac's `QuoteWash.shares`). */
+  --quote-wash: color-mix(in srgb, var(--accent) 18%, white);
+  --quote-wash-lit: color-mix(in srgb, var(--accent) 30%, white);
   --code-tok-keyword: #9b2393;
   --code-tok-string: #c41a16;
   --code-tok-number: #1c00cf;
@@ -1366,44 +1371,34 @@ body[data-window-focused='false'] .paper-row[aria-selected='true'] {
   top: 46px;
 }
 
-/* A passage a note quotes, lit for a moment where the jump landed. */
-/* The rule beside a passage a note quotes: the note's own quotation rule
-   (`.nm-q-anchored`), from the page's side, standing in the margin of the
-   passage's column (`quoteRule`). A click goes back to the quotation. Outside
-   the print, so a tint does not touch the accent. */
-.page .quote-links {
+/* A passage a note quotes, tinted: the words ⌘L put into a note, in a pale
+   wash of the accent (the Mac's `QuoteWash`, `QUOTE_WASH`). Inside the print
+   like the marks — multiplied onto the page, so the letters keep their black,
+   and turned over with it under night. The layer itself is no stacking
+   context, so each passage's group blends with the page and not with an
+   empty layer; a group is blended as one, so where its lines touch the colour
+   does not double. A click goes back to the quotation (`Reader.openQuote`) —
+   the words under it still take a drag. */
+.page .quote-washes {
   position: absolute;
   inset: 0;
-  z-index: 4;
   pointer-events: none;
 }
-.page .quote-rule {
+.page .quote-wash {
   position: absolute;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  pointer-events: auto;
-  cursor: pointer;
+  inset: 0;
+  mix-blend-mode: multiply;
 }
-.page .quote-rule::before {
-  content: '';
+.page .quote-wash > div {
   position: absolute;
-  top: 1px;
-  bottom: 1px;
-  left: 50%;
-  width: var(--rule, 2px);
-  transform: translateX(-50%);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--accent) 55%, transparent);
-  transition: background-color var(--motion-tap) var(--ease), width var(--motion-tap) var(--ease);
+  background: var(--quote-wash);
+  transition: background-color var(--motion-tap) var(--ease);
 }
-.page .quote-rule:hover::before {
-  width: calc(var(--rule, 2px) + 1px);
-  background: color-mix(in srgb, var(--accent) 90%, transparent);
+.page .quote-wash.lit > div {
+  background: var(--quote-wash-lit);
 }
-.page[data-drawing='true'] .quote-rule,
-.page[data-lasso='true'] .quote-rule { pointer-events: none; }
 
+/* A passage a note quotes, lit for a moment where the jump landed. */
 .page .passage-flash {
   position: absolute;
   z-index: 6;
@@ -2999,7 +2994,8 @@ textarea:focus-visible {
 /* Over a link in the paper, the pointer is a hand (`Reader.showOverLink`),
    and over a mark, which a press opens (`MarkHover`). */
 .reader-scroll.over-link .page .text-layer,
-.reader-scroll.over-mark .page .text-layer { cursor: pointer; }
+.reader-scroll.over-mark .page .text-layer,
+.reader-scroll.over-quote .page .text-layer { cursor: pointer; }
 
 /* A note written in the bar, about a passage or on a mark. */
 /* Writing a note: the passage, quiet, then the field, then Cancel and Save
