@@ -21,6 +21,9 @@ $$
 $$
 [a quoted \] label](papertime://anchor?p=0&x=1.00&y=2.00&w=3.00&h=4.00)
 > [whole quoted line](papertime://anchor?p=5&x=1.00&y=2.00&w=3.00&h=4.00)
+
+> Tip-Adapter [48] solves the cache memory problem [3쪽](papertime://anchor?p=2&x=50.00&y=554.00&w=236.00&h=21.00)
+> [whole line with a citation [48] in it](papertime://anchor?p=6&x=1.00&y=2.00&w=3.00&h=4.00)
 Last line with $$a+b$$ inline display.
 \begin{align}
 a &= b \label{eq:a} \\

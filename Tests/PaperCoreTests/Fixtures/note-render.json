@@ -1,6 +1,6 @@
 {
- "markdown": "# Entropy and forgetting\nPlain words with **bold**, *italic* and `code` in them.\n한글 **굵게**와 *기울여 쓴 말*, ***둘 다***, `코드 x` 끝.\n## A heading two with **bold**, *italic* and `code`\n### Third level\n- a bullet\n  - nested bullet\n1. first\n12) twelfth\n- [ ] to do\n- [x] done\n> typed aside with *emphasis* and `code`\n> second line\n> the model forgets [p. 4](papertime://anchor?p=3&x=145.00&y=95.00&w=366.00&h=12.00)\n>### Section on the page\n\nA link to [[202609280047|Entropy note]] and [[202609280048]] here.\nAn inline $x^2$ formula, and a passage [p. 2](papertime://anchor?p=1&x=10.00&y=20.00&w=30.00&h=12.00).\n$$\n\\int_0^1 f(x)\\,dx\n$$\n[a quoted \\] label](papertime://anchor?p=0&x=1.00&y=2.00&w=3.00&h=4.00)\n> [whole quoted line](papertime://anchor?p=5&x=1.00&y=2.00&w=3.00&h=4.00)\nLast line with $$a+b$$ inline display.\n\\begin{align}\na &= b \\label{eq:a} \\\\\nc &= d\n\\end{align}\nBy \\eqref{eq:a}, the \\(x\\) and \\[y\\] cost \\$5.\n> \\begin{equation} E = mc^2 \\tag{3} \\end{equation}\n- $$z$$\n  \\[ w \\]  \nA line before code.\n```python\n# not a heading $x$\n- not a bullet\n| a | b |\n|---|---|\nx = `y` **z**\n```\n\n```\nno language\n```\n~~~js\nlet a = 1 // $$x$$\n~~~\n```cpp\nnever closed\n- still code",
- "length": 698,
+ "markdown": "# Entropy and forgetting\nPlain words with **bold**, *italic* and `code` in them.\n한글 **굵게**와 *기울여 쓴 말*, ***둘 다***, `코드 x` 끝.\n## A heading two with **bold**, *italic* and `code`\n### Third level\n- a bullet\n  - nested bullet\n1. first\n12) twelfth\n- [ ] to do\n- [x] done\n> typed aside with *emphasis* and `code`\n> second line\n> the model forgets [p. 4](papertime://anchor?p=3&x=145.00&y=95.00&w=366.00&h=12.00)\n>### Section on the page\n\nA link to [[202609280047|Entropy note]] and [[202609280048]] here.\nAn inline $x^2$ formula, and a passage [p. 2](papertime://anchor?p=1&x=10.00&y=20.00&w=30.00&h=12.00).\n$$\n\\int_0^1 f(x)\\,dx\n$$\n[a quoted \\] label](papertime://anchor?p=0&x=1.00&y=2.00&w=3.00&h=4.00)\n> [whole quoted line](papertime://anchor?p=5&x=1.00&y=2.00&w=3.00&h=4.00)\n\n> Tip-Adapter [48] solves the cache memory problem [3쪽](papertime://anchor?p=2&x=50.00&y=554.00&w=236.00&h=21.00)\n> [whole line with a citation [48] in it](papertime://anchor?p=6&x=1.00&y=2.00&w=3.00&h=4.00)\nLast line with $$a+b$$ inline display.\n\\begin{align}\na &= b \\label{eq:a} \\\\\nc &= d\n\\end{align}\nBy \\eqref{eq:a}, the \\(x\\) and \\[y\\] cost \\$5.\n> \\begin{equation} E = mc^2 \\tag{3} \\end{equation}\n- $$z$$\n  \\[ w \\]  \nA line before code.\n```python\n# not a heading $x$\n- not a bullet\n| a | b |\n|---|---|\nx = `y` **z**\n```\n\n```\nno language\n```\n~~~js\nlet a = 1 // $$x$$\n~~~\n```cpp\nnever closed\n- still code",
+ "length": 791,
  "runs": [
   {
    "location": 0,
@@ -445,280 +445,320 @@
   {
    "location": 447,
    "marks": "—",
+   "text": "\n"
+  },
+  {
+   "location": 448,
+   "marks": "QUOTE+indent 20",
+   "text": "​"
+  },
+  {
+   "location": 449,
+   "marks": "QUOTE+italic+indent 20",
+   "text": "Tip-Adapter [48] solves the cache memory problem "
+  },
+  {
+   "location": 498,
+   "marks": "PASSAGE+indent 20",
+   "text": "3쪽"
+  },
+  {
+   "location": 500,
+   "marks": "indent 20",
+   "text": "\n"
+  },
+  {
+   "location": 501,
+   "marks": "QUOTE+indent 20",
+   "text": "​"
+  },
+  {
+   "location": 502,
+   "marks": "QUOTE+PASSAGE+italic+indent 20",
+   "text": "whole line with a citation [48] in it"
+  },
+  {
+   "location": 539,
+   "marks": "indent 20",
+   "text": "\n"
+  },
+  {
+   "location": 540,
+   "marks": "—",
    "text": "Last line with "
   },
   {
-   "location": 462,
+   "location": 555,
    "marks": "—",
    "text": "￼"
   },
   {
-   "location": 463,
+   "location": 556,
    "marks": "—",
    "text": " inline display.\n"
   },
   {
-   "location": 480,
+   "location": 573,
    "marks": "center",
    "text": "￼"
   },
   {
-   "location": 481,
+   "location": 574,
    "marks": "center",
    "text": "\n"
   },
   {
-   "location": 482,
+   "location": 575,
    "marks": "—",
    "text": "By "
   },
   {
-   "location": 485,
+   "location": 578,
    "marks": "—",
    "text": "￼"
   },
   {
-   "location": 486,
+   "location": 579,
    "marks": "—",
    "text": ", the "
   },
   {
-   "location": 492,
+   "location": 585,
    "marks": "—",
    "text": "￼"
   },
   {
-   "location": 493,
+   "location": 586,
    "marks": "—",
    "text": " and "
   },
   {
-   "location": 498,
+   "location": 591,
    "marks": "—",
    "text": "￼"
   },
   {
-   "location": 499,
+   "location": 592,
    "marks": "—",
    "text": " cost "
   },
   {
-   "location": 505,
+   "location": 598,
    "marks": "—",
    "text": "$"
   },
   {
-   "location": 506,
+   "location": 599,
    "marks": "—",
    "text": "5.\n"
   },
   {
-   "location": 509,
+   "location": 602,
    "marks": "QUOTE+indent 20+center",
    "text": "​"
   },
   {
-   "location": 510,
+   "location": 603,
    "marks": "indent 20+center",
    "text": "￼"
   },
   {
-   "location": 511,
+   "location": 604,
    "marks": "indent 20+center",
    "text": "\n"
   },
   {
-   "location": 512,
+   "location": 605,
    "marks": "indent 24",
    "text": "•\t"
   },
   {
-   "location": 514,
+   "location": 607,
    "marks": "indent 24",
    "text": "￼"
   },
   {
-   "location": 515,
+   "location": 608,
    "marks": "indent 24",
    "text": "\n"
   },
   {
-   "location": 516,
+   "location": 609,
    "marks": "center",
    "text": "  "
   },
   {
-   "location": 518,
+   "location": 611,
    "marks": "center",
    "text": "￼"
   },
   {
-   "location": 519,
+   "location": 612,
    "marks": "center",
    "text": "  \n"
   },
   {
-   "location": 522,
+   "location": 615,
    "marks": "—",
    "text": "A line before code.\n"
   },
   {
-   "location": 542,
+   "location": 635,
    "marks": "CODEBLOCK",
    "text": "Python"
   },
   {
-   "location": 548,
+   "location": 641,
    "marks": "CODEBLOCK",
    "text": "\n"
   },
   {
-   "location": 549,
+   "location": 642,
    "marks": "CODEBLOCK",
    "text": "# not a heading $x$"
   },
   {
-   "location": 568,
+   "location": 661,
    "marks": "CODEBLOCK",
    "text": "\n"
   },
   {
-   "location": 569,
+   "location": 662,
    "marks": "CODEBLOCK",
    "text": "- "
   },
   {
-   "location": 571,
+   "location": 664,
    "marks": "CODEBLOCK",
    "text": "not"
   },
   {
-   "location": 574,
+   "location": 667,
    "marks": "CODEBLOCK",
    "text": " a bullet\n"
   },
   {
-   "location": 584,
+   "location": 677,
    "marks": "CODEBLOCK",
    "text": "| a | b |\n"
   },
   {
-   "location": 594,
+   "location": 687,
    "marks": "CODEBLOCK",
    "text": "|---|---|\n"
   },
   {
-   "location": 604,
+   "location": 697,
    "marks": "CODEBLOCK",
    "text": "x = `y` **z**\n"
   },
   {
-   "location": 618,
+   "location": 711,
    "marks": "CODEBLOCK",
    "text": "​"
   },
   {
-   "location": 619,
+   "location": 712,
    "marks": "CODEBLOCK",
    "text": "\n"
   },
   {
-   "location": 620,
+   "location": 713,
    "marks": "—",
    "text": "\n"
   },
   {
-   "location": 621,
+   "location": 714,
    "marks": "CODEBLOCK",
    "text": "​"
   },
   {
-   "location": 622,
+   "location": 715,
    "marks": "CODEBLOCK",
    "text": "\n"
   },
   {
-   "location": 623,
+   "location": 716,
    "marks": "CODEBLOCK",
    "text": "no language\n"
   },
   {
-   "location": 635,
+   "location": 728,
    "marks": "CODEBLOCK",
    "text": "​"
   },
   {
-   "location": 636,
+   "location": 729,
    "marks": "CODEBLOCK",
    "text": "\n"
   },
   {
-   "location": 637,
+   "location": 730,
    "marks": "CODEBLOCK",
    "text": "JavaScript"
   },
   {
-   "location": 647,
+   "location": 740,
    "marks": "CODEBLOCK",
    "text": "\n"
   },
   {
-   "location": 648,
+   "location": 741,
    "marks": "CODEBLOCK",
    "text": "let"
   },
   {
-   "location": 651,
+   "location": 744,
    "marks": "CODEBLOCK",
    "text": " a = "
   },
   {
-   "location": 656,
+   "location": 749,
    "marks": "CODEBLOCK",
    "text": "1"
   },
   {
-   "location": 657,
+   "location": 750,
    "marks": "CODEBLOCK",
    "text": " "
   },
   {
-   "location": 658,
+   "location": 751,
    "marks": "CODEBLOCK",
    "text": "// $$x$$"
   },
   {
-   "location": 666,
+   "location": 759,
    "marks": "CODEBLOCK",
    "text": "\n"
   },
   {
-   "location": 667,
+   "location": 760,
    "marks": "CODEBLOCK",
    "text": "​"
   },
   {
-   "location": 668,
+   "location": 761,
    "marks": "CODEBLOCK",
    "text": "\n"
   },
   {
-   "location": 669,
+   "location": 762,
    "marks": "CODEBLOCK",
    "text": "C++"
   },
   {
-   "location": 672,
+   "location": 765,
    "marks": "CODEBLOCK",
    "text": "\n"
   },
   {
-   "location": 673,
+   "location": 766,
    "marks": "CODEBLOCK",
    "text": "never closed\n"
   },
   {
-   "location": 686,
+   "location": 779,
    "marks": "CODEBLOCK",
    "text": "- still code"
   }
