@@ -57,7 +57,12 @@ struct NoteEditor: NSViewRepresentable {
         textView.coordinator = context.coordinator
         textView.delegate = context.coordinator
         textView.isRichText = true
-        textView.allowsUndo = true
+        // Undo is the coordinator's, in the Markdown (`Coordinator.willEdit`):
+        // the text view's own undo is in screen offsets, which the note
+        // invalidates every time it sets a line again, and under TextKit 2
+        // it changes the screen without telling the delegate — so ⌘Z after
+        // ⌘B took the stars off the screen and left them in the note.
+        textView.allowsUndo = false
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticDashSubstitutionEnabled = false
         textView.isAutomaticTextReplacementEnabled = false
@@ -123,7 +128,10 @@ struct NoteEditor: NSViewRepresentable {
             context.coordinator.restyle(textView, source: markdown, caretSource: nil)
         } else if context.coordinator.lastKnownMarkdown != markdown {
             // Only replace what is on screen when the note changed elsewhere —
-            // rewriting it on every pass would fight the typist.
+            // rewriting it on every pass would fight the typist. What could be
+            // undone was about the note as it was: undone now, it would put
+            // that note back over this one.
+            context.coordinator.forgetUndo(in: textView)
             context.coordinator.lastKnownMarkdown = markdown
             context.coordinator.restyle(textView, source: markdown, caretSource: nil)
         }
@@ -231,6 +239,7 @@ struct NoteEditor: NSViewRepresentable {
             let source = NoteMarkdown.markdown(from: storage)
             lastKnownMarkdown = source
             markdown = source
+            didEdit(in: textView)
             carryFoldKey(in: textView)
             updateCompletions(in: textView)
             updateMathPreview(in: textView)
@@ -333,6 +342,7 @@ struct NoteEditor: NSViewRepresentable {
         func setFolded(_ key: String, _ folded: Bool, in textView: NoteTextView) {
             guard let storage = textView.textStorage else { return }
             if folded { collapsedToggles.insert(key) } else { collapsedToggles.remove(key) }
+            endTyping()
             let source = NoteMarkdown.markdown(from: storage)
             let caret = NoteMarkdown.sourceIndex(in: storage, displayIndex: textView.selectedRange().location)
             restyle(textView, source: source, caretSource: caret)
@@ -409,22 +419,17 @@ struct NoteEditor: NSViewRepresentable {
                 // and the words arrived behind the fingers. Anything that
                 // changes the shape of the note — a line more, a line fewer,
                 // the caret moving to another line — still sets it.
-                let lines = source.reduce(into: 1) { count, character in
-                    if character == "\n" { count += 1 }
-                }
-                let line = source.prefix(caret).reduce(into: 0) { count, character in
-                    if character == "\n" { count += 1 }
-                }
                 // And a marker arriving or going on that line — "- " typed
                 // at its start is a bullet at once, as it is in Notion.
-                let marker = Self.marker(ofLineAt: caret, in: source)
-                if lines == self.setLineCount, line == self.setCaretLine, marker == self.setCaretMarker {
+                let shape = Self.shape(of: source, caret: caret)
+                if shape.lines == self.setLineCount, shape.line == self.setCaretLine, shape.marker == self.setCaretMarker {
                     return
                 }
-                self.setLineCount = lines
-                self.setCaretLine = line
-                self.setCaretMarker = marker
+                self.remember(shape)
                 self.restyle(textView, source: source, caretSource: caret)
+                // The caret is where it was in the note, at another place on
+                // screen: the words being typed go on being one step.
+                if self.typing != nil { self.typing?.caret = textView.selectedRange().location }
             }
         }
 
@@ -436,6 +441,24 @@ struct NoteEditor: NSViewRepresentable {
         private var setLineCount = -1
         private var setCaretMarker = ""
 
+        /// How many lines the note has, which one the caret is on, and that
+        /// line's marker — what decides whether it has to be set again.
+        static func shape(of source: String, caret: Int) -> (lines: Int, line: Int, marker: String) {
+            let lines = source.reduce(into: 1) { count, character in
+                if character == "\n" { count += 1 }
+            }
+            let line = source.utf16.prefix(caret).reduce(into: 0) { count, unit in
+                if unit == 10 { count += 1 }
+            }
+            return (lines, line, marker(ofLineAt: caret, in: source))
+        }
+
+        private func remember(_ shape: (lines: Int, line: Int, marker: String)) {
+            setLineCount = shape.lines
+            setCaretLine = shape.line
+            setCaretMarker = shape.marker
+        }
+
         /// The marker of the line a source offset is on, as written.
         static func marker(ofLineAt caret: Int, in source: String) -> String {
             let text = source as NSString
@@ -444,7 +467,7 @@ struct NoteEditor: NSViewRepresentable {
             return NoteMarkdown.Block(line: text.substring(with: line).trimmingCharacters(in: .newlines)).marker
         }
 
-        func restyle(_ textView: NoteTextView, source: String, caretSource: Int?) {
+        func restyle(_ textView: NoteTextView, source: String, caretSource: Int?, selection: NSRange? = nil) {
             guard !isRestyling else { return }
             if caretSource == nil { setCaretLine = -1; setLineCount = -1; setCaretMarker = "" }
             isRestyling = true
@@ -463,7 +486,13 @@ struct NoteEditor: NSViewRepresentable {
             let caretWasShown = caretIsShown(in: textView)
             setContents(rendered.text, in: textView)
             if let caret {
-                let range = NSRange(location: min(max(caret, 0), textView.string.utf16.count), length: 0)
+                var range = NSRange(location: min(max(caret, 0), textView.string.utf16.count), length: 0)
+                // A selection put back by ⌘Z: on the caret's line, which is
+                // shown as written, so its two ends are the same characters.
+                if let selection, selection.length > 0 {
+                    let end = min(rendered.displayIndex(forSource: NSMaxRange(selection)), textView.string.utf16.count)
+                    range.length = max(0, end - range.location)
+                }
                 textView.setSelectedRange(range)
                 if caretWasShown { textView.scrollRangeToVisible(range) }
             }
@@ -736,11 +765,172 @@ struct NoteEditor: NSViewRepresentable {
             let after = tail.hasPrefix("\n") ? "" : "\n"
             let updated = head + block + after + tail
 
+            registerStep(named: L("인용 넣기", "Insert Quotation"), in: textView)
             lastKnownMarkdown = updated
             markdown = updated
             restyle(textView, source: updated,
                     caretSource: (head + block + after).utf16.count)
             textView.window?.makeFirstResponder(textView)
+        }
+
+        // MARK: Undo, in the Markdown
+
+        /// The note as it was, for ⌘Z: its Markdown, and the selection in it.
+        struct Snapshot {
+            var source: String
+            var selection: NSRange
+        }
+
+        /// The step being typed. Characters typed one after another at the
+        /// caret — or taken back beside it — are one ⌘Z, as in any Mac text
+        /// view; `caret` is where the next keystroke has to land to join it.
+        struct Typing { var caret: Int }
+        var typing: Typing?
+        /// A syllable is being composed (`willEdit`).
+        private var composing = false
+        /// While ⌘Z or ⇧⌘Z puts a note back.
+        private var isRestoring = false
+        /// What the Edit menu calls the next step, when it is not typing —
+        /// set by a command for the edits it makes.
+        var nextStepName: String?
+
+        /// A change is about to land on screen. If it starts a step, the note
+        /// as it is now goes on the undo stack — as Markdown, so it means the
+        /// same thing after the note has set its lines again. The text view's
+        /// own undo was in screen offsets: ⌘B on the line being written, the
+        /// caret moved off it (the stars go out of sight, the line is
+        /// shorter), and ⌘Z took two characters from the wrong place.
+        func willEdit(_ ranges: [NSRange], strings: [String]?, in textView: NoteTextView) {
+            if Self.tracesUndo {
+                FileHandle.standardError.write(Data("undo: will edit \(ranges) \((strings ?? []).map(\.debugDescription)) marked \(textView.hasMarkedText()) typing \(typing.map { "\($0.caret)" } ?? "-") registration \(textView.stepUndoManager?.isUndoRegistrationEnabled ?? false)\n".utf8))
+            }
+            guard !isRestyling, !isRestoring,
+                  let manager = textView.stepUndoManager, !manager.isUndoing, !manager.isRedoing
+            else { return }
+            // Latex Suite lands its own steps, already in the Markdown, with
+            // registration switched off while it does.
+            guard manager.isUndoRegistrationEnabled else { typing = nil; composing = false; return }
+            if textView.hasMarkedText() {
+                // Hangul being put together: the text view marks it before it
+                // asks, so the first jamo of a syllable already reads as
+                // marked. That first change starts the step or joins the one
+                // being typed; the rest of the syllable belongs to it.
+                guard !composing else { return }
+                composing = true
+                if let typing, Self.continues(typing, ranges) { return }
+                registerStep(named: nextStepName ?? L("입력", "Typing"), in: textView)
+                typing = Typing(caret: -1)
+                return
+            }
+            if composing {
+                // The syllable put in for good — the marked text replaced by
+                // what it spelled, which reads as a replacement, not a
+                // keystroke. Still the same step: one ⌘Z took one syllable.
+                composing = false
+                if typing == nil { typing = Typing(caret: -1) }
+                return
+            }
+            let keystroke = Self.isKeystroke(ranges, strings: strings)
+            if keystroke, let typing, Self.continues(typing, ranges) { return }
+            registerStep(named: nextStepName ?? (keystroke ? L("입력", "Typing") : L("편집", "Edit")), in: textView)
+            typing = keystroke ? Typing(caret: -1) : nil
+        }
+
+        /// The text has changed: the step being typed goes on from the caret.
+        func didEdit(in textView: NoteTextView) {
+            guard typing != nil else { return }
+            typing?.caret = textView.selectedRange().location
+        }
+
+        /// The next change starts a step of its own.
+        func endTyping() { typing = nil }
+
+        /// `PAPERTIME_UNDO_TRACE=1`: every edit the note sees, and every step
+        /// it puts on the stack, on stderr.
+        static let tracesUndo = Boot.isSet("PAPERTIME_UNDO_TRACE")
+
+        /// Puts the note as it is now on the undo stack, as one step.
+        func registerStep(named name: String, in textView: NoteTextView) {
+            guard let manager = textView.stepUndoManager, manager.isUndoRegistrationEnabled else { return }
+            let before = Snapshot(source: lastKnownMarkdown, selection: sourceSelection(in: textView))
+            if Self.tracesUndo {
+                FileHandle.standardError.write(Data("undo: step “\(name)” back to \(before.source.debugDescription) at \(before.selection)\n".utf8))
+            }
+            manager.registerUndo(withTarget: self) { [weak textView] coordinator in
+                MainActor.assumeIsolated {
+                    guard let textView else { return }
+                    coordinator.restore(before, in: textView)
+                }
+            }
+            manager.setActionName(name)
+            typing = nil
+        }
+
+        /// ⌘Z, and ⇧⌘Z: the note as it was, set again, with the selection it
+        /// had — and the note as it is now goes on the other stack. Through
+        /// the binding as well as the screen: under TextKit 2 the text view's
+        /// undo changed the screen without a word to the delegate, so the
+        /// note kept what had been undone and put it back at the next save.
+        func restore(_ snapshot: Snapshot, in textView: NoteTextView) {
+            guard let manager = textView.stepUndoManager else { return }
+            let now = Snapshot(source: lastKnownMarkdown, selection: sourceSelection(in: textView))
+            manager.registerUndo(withTarget: self) { [weak textView] coordinator in
+                MainActor.assumeIsolated {
+                    guard let textView else { return }
+                    coordinator.restore(now, in: textView)
+                }
+            }
+            isRestoring = true
+            defer { isRestoring = false }
+            typing = nil
+            composing = false
+            let source = snapshot.source as NSString
+            let start = min(snapshot.selection.location, source.length)
+            let selection = NSRange(location: start,
+                                    length: max(0, min(NSMaxRange(snapshot.selection), source.length) - start))
+            lastKnownMarkdown = snapshot.source
+            markdown = snapshot.source
+            remember(Self.shape(of: snapshot.source, caret: start))
+            restyle(textView, source: snapshot.source, caretSource: start, selection: selection)
+            lastCaretLine = (textView.string as NSString)
+                .lineRange(for: NSRange(location: textView.selectedRange().location, length: 0))
+            textView.latexSuite.dropPlaceholders(in: textView)
+            updateMathPreview(in: textView)
+            updateSelectionToolbar(in: textView)
+        }
+
+        /// The note was replaced from elsewhere: nothing on the undo stack is
+        /// about it any more, and undone it would put the old one back.
+        func forgetUndo(in textView: NoteTextView) {
+            typing = nil
+            composing = false
+            textView.stepUndoManager?.removeAllActions(withTarget: self)
+            textView.stepUndoManager?.removeAllActions(withTarget: textView)
+        }
+
+        /// The selection, in the Markdown.
+        private func sourceSelection(in textView: NSTextView) -> NSRange {
+            guard let storage = textView.textStorage else { return NSRange(location: 0, length: 0) }
+            let shown = textView.selectedRange()
+            let start = NoteMarkdown.sourceIndex(in: storage, displayIndex: shown.location)
+            guard shown.length > 0 else { return NSRange(location: start, length: 0) }
+            let end = NoteMarkdown.sourceIndex(in: storage, displayIndex: NSMaxRange(shown))
+            return NSRange(location: start, length: max(0, end - start))
+        }
+
+        /// One character typed with nothing selected, or one taken away.
+        static func isKeystroke(_ ranges: [NSRange], strings: [String]?) -> Bool {
+            guard ranges.count == 1, let range = ranges.first, let strings, strings.count == 1 else { return false }
+            let length = (strings[0] as NSString).length
+            if range.length == 0 { return length > 0 && length <= 2 }
+            return length == 0 && range.length <= 2
+        }
+
+        /// Whether a keystroke lands where the step being typed left off:
+        /// typed at the caret, taken back from before it, deleted after it.
+        static func continues(_ typing: Typing, _ ranges: [NSRange]) -> Bool {
+            guard let range = ranges.first, typing.caret >= 0 else { return false }
+            return range.location == typing.caret || NSMaxRange(range) == typing.caret
         }
 
         // MARK: The formula being typed
@@ -866,6 +1056,28 @@ final class NoteTextView: LatexSuiteTextView {
     /// Latex Suite is not to read that as a step out of its placeholders.
     override var isSettingText: Bool { coordinator?.isRestyling ?? false }
 
+    // MARK: Undo
+
+    /// The window's stack. The text view's own undo is off (`allowsUndo`),
+    /// which also makes `undoManager` answer nil — and lending it the
+    /// window's turns the text view's registration back on (measured).
+    override var stepUndoManager: UndoManager? { window?.undoManager }
+
+    /// Every change goes past the coordinator first, which keeps the undo
+    /// stack in the Markdown (`Coordinator.willEdit`).
+    override func shouldChangeText(inRanges affectedRanges: [NSValue], replacementStrings: [String]?) -> Bool {
+        guard super.shouldChangeText(inRanges: affectedRanges, replacementStrings: replacementStrings) else { return false }
+        coordinator?.willEdit(affectedRanges.map(\.rangeValue), strings: replacementStrings, in: self)
+        return true
+    }
+
+    /// What breaks the text view's typing into steps breaks the
+    /// coordinator's too — Latex Suite's snippets ask for it.
+    override func breakUndoCoalescing() {
+        super.breakUndoCoalescing()
+        coordinator?.endTyping()
+    }
+
     // MARK: Copying
 
     /// Copying gives back Markdown — `$x^2$` rather than a picture of x², and
@@ -985,6 +1197,9 @@ final class NoteTextView: LatexSuiteTextView {
     /// A note put away does not always resign: the view is simply taken
     /// out of the window. The card must not stay behind.
     override func viewWillMove(toWindow newWindow: NSWindow?) {
+        // The note's steps go with the editor, as Latex Suite's do: left on
+        // the window's stack they would be ⌘Zs that do nothing.
+        if newWindow == nil, window != nil, let coordinator { stepUndoManager?.removeAllActions(withTarget: coordinator) }
         super.viewWillMove(toWindow: newWindow)
         if newWindow == nil { coordinator?.mathPreview.hide(); coordinator?.selectionToolbar.hide() }
     }
@@ -1086,6 +1301,7 @@ final class NoteTextView: LatexSuiteTextView {
     var probeEmphasis: [String] {
         guard let storage = textStorage, storage.length > 0 else { return [] }
         var found: [(text: String, marks: String)] = []
+        var lastEnd = -1
         storage.enumerateAttributes(in: NSRange(location: 0, length: storage.length)) { attributes, range, _ in
             guard let font = attributes[.font] as? NSFont else { return }
             var marks = ""
@@ -1096,8 +1312,13 @@ final class NoteTextView: LatexSuiteTextView {
             if attributes[NoteCode.attribute] != nil { marks += "c" }
             guard !marks.isEmpty else { return }
             let text = (string as NSString).substring(with: range)
-            if let last = found.last, last.marks == marks,
-               NSMaxRange(range) > 0, found.count > 0 { found[found.count - 1].text += text } else { found.append((text, marks)) }
+            // Runs that touch, joined: a Korean word in italics is several.
+            if let last = found.last, last.marks == marks, lastEnd == range.location {
+                found[found.count - 1].text += text
+            } else {
+                found.append((text, marks))
+            }
+            lastEnd = NSMaxRange(range)
         }
         return found.map { "\($0.text):\($0.marks)" }
     }
@@ -1404,8 +1625,23 @@ final class NoteTextView: LatexSuiteTextView {
         let text = string as NSString
         let range = selectedRange()
         let width = (mark as NSString).length
-        undoManager?.beginUndoGrouping()
-        defer { undoManager?.endUndoGrouping() }
+        // One step, named for what it did, and never part of the typing
+        // around it.
+        coordinator?.endTyping()
+        let name: String? = switch mark {
+        case "**": L("굵게", "Bold")
+        case "*": L("기울임", "Italic")
+        case "`": L("코드", "Code")
+        case "$": L("수식", "Math")
+        default: nil
+        }
+        coordinator?.nextStepName = name
+        stepUndoManager?.beginUndoGrouping()
+        defer {
+            stepUndoManager?.endUndoGrouping()
+            coordinator?.nextStepName = nil
+            coordinator?.endTyping()
+        }
         if range.length == 0 {
             // Between an empty pair already: it comes off. Otherwise the pair
             // goes in, and the caret between.
@@ -1469,10 +1705,12 @@ final class NoteTextView: LatexSuiteTextView {
         if coordinator?.showsRawText != true, range.length > 0,
            replacementRange.location == NSNotFound || replacementRange == range,
            let closing = Self.wrapping[typed] {
-            undoManager?.beginUndoGrouping()
+            coordinator?.endTyping()
+            stepUndoManager?.beginUndoGrouping()
             super.insertText(closing, replacementRange: NSRange(location: NSMaxRange(range), length: 0))
             super.insertText(typed, replacementRange: NSRange(location: range.location, length: 0))
-            undoManager?.endUndoGrouping()
+            stepUndoManager?.endUndoGrouping()
+            coordinator?.endTyping()
             setSelectedRange(NSRange(location: range.location + (typed as NSString).length, length: range.length))
             return
         }
