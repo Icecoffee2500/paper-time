@@ -179,7 +179,7 @@ struct LibraryWindow: View {
                 model.selectedPaperID = papers[0].id
                 app.dock(papers[1].id, at: .right, in: model)
             }
-            // The rule beside a quoted passage was clicked: its note opens
+            // A quoted passage was clicked on the page: its note opens
             // where notes are showing, at the quotation.
             .onChange(of: model.notes.passageRequest) { _, request in
                 guard let request else { return }

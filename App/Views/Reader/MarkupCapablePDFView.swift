@@ -102,8 +102,8 @@ final class MarkupCapablePDFView: PDFView {
     /// Called to take a mark off the page, and to recolour one.
     var onRemoveMark: ((PDFAnnotation) -> Void)?
     var onRecolorMark: ((PDFAnnotation, MarkupColor) -> Void)?
-    /// The rule beside a quoted passage under the pointer, deepened (nil:
-    /// the pointer has gone); answers whether there is one.
+    /// The quoted passage under the pointer, deepened (nil: the pointer has
+    /// gone); answers whether there is one.
     var hoverQuote: ((NSPoint?) -> Bool)?
     /// The quotations of the passage under a right-click, and opening one.
     var quotesAt: ((NSPoint) -> [QuoteLink])?
@@ -135,7 +135,7 @@ final class MarkupCapablePDFView: PDFView {
     override func mouseMoved(with event: NSEvent) {
         super.mouseMoved(with: event)
         setHoveredMark(mark(at: event.locationInWindow))
-        // The rule beside a quoted passage is a link too.
+        // A quoted passage is a link too.
         let onQuote = hoverQuote?(event.locationInWindow) ?? false
         if MarkHover.hovered != nil || onQuote { NSCursor.pointingHand.set() }
     }
@@ -166,9 +166,9 @@ final class MarkupCapablePDFView: PDFView {
         }
     }
 
-    /// A right-click on a quoted passage offers its quotation first — on the
-    /// words as well as on the rule, since the words are what a reader
-    /// points at.
+    /// A right-click on a quoted passage offers its quotation first, above
+    /// whatever else the words offer — a mark's colour, the selection's
+    /// marks.
     override func menu(for event: NSEvent) -> NSMenu? {
         let menu = markupMenu(for: event)
         let quotes = quotesAt?(event.locationInWindow) ?? []

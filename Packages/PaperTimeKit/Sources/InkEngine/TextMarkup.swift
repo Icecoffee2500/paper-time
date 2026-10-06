@@ -150,6 +150,26 @@ public enum TextMarkupWriter {
         }
     }
 
+    /// The lines of several passages on one page, fitted to their letters
+    /// the way a highlight's are — off one rendering of the page for all of
+    /// them, for the reason `descriptor(for:)` gives. One list per
+    /// selection, in the order given.
+    public static func fittedLines(of selections: [PDFSelection], on page: PDFPage) -> [[CGRect]] {
+        let found: [[CGRect]] = selections.map { selection in
+            selection.selectionsByLine().compactMap { line in
+                guard line.pages.contains(page),
+                      let rect = placement(of: line, on: page, within: selection),
+                      rect.width > 0.5, rect.height > 0.5
+                else { return nil }
+                return rect
+            }
+        }
+        let region = found.joined().reduce(CGRect.null) { $0.union($1) }
+        guard !region.isNull else { return found }
+        let metrics = LineMetrics(page: page, over: region)
+        return found.map { lines in lines.map { metrics.tightened($0) } }
+    }
+
     /// Where a line of a selection is, asked three ways.
     ///
     /// For a selection made in a table — once PDFKit's own table analysis has

@@ -21,7 +21,7 @@ import type { Box, TextRun } from '../../shared/strokeSnap.js'
 import { OCR_SCALE, OCR_SIDE, paddedForOCR, pictureSize, pixelValues, stretchTarget } from '../../shared/formulaOCRInput.js'
 import { clear, el } from '../dom.js'
 import { L } from '../../shared/lang.js'
-import { quoteRule, type PageBox, type QuoteLink } from '../../shared/quotedPassages.js'
+import { quoteSpan, type PageBox, type QuoteLink } from '../../shared/quotedPassages.js'
 import { TextLayer, type PDFPageProxy } from '../pdf.js'
 import { SketchElement } from '../../shared/sketch.js'
 import { InkStroke } from '../../shared/ink.js'
@@ -40,6 +40,12 @@ export interface TextRange {
   start: number
   end: number
 }
+
+/** A box as fractions of the page as shown — what the text layer's lines are measured in (`rangeBoxes`). */
+interface PageFraction { x: number; y: number; width: number; height: number }
+
+/** A quotation as the page knows it: its note, its link and its words — any of them changed, its lines are worked out again. */
+const washKey = (link: QuoteLink) => `${link.noteID} ${link.passage.url} ${link.quotation}`
 
 /** A place found on a page, and whether it is the one being shown. */
 export interface FindMark extends TextRange {
@@ -64,8 +70,6 @@ export interface PageOwner {
   fetchPage(index: number): Promise<PDFPageProxy | null>
   /** Its own shape turned out other than the first page's: laid out again. */
   pageResized(page: PageView): void
-  /** The rule beside a quoted passage was clicked: its quotation, please. */
-  openQuote(link: QuoteLink): void
 }
 
 type TextContent = { items: { str?: string; hasEOL?: boolean }[] }
@@ -116,12 +120,20 @@ export class PageView {
   private inkMade: { scale: number; ink: Box[] } | null = null
   private inkGeneration = 0
   private lassoShown: { rect: Box; phase: 'drag' | 'caught'; needsOCR: boolean; ink: Box[] } | null = null
-  /** The rules beside this page's quoted passages — the note's quotation
-   *  rule, from the page's side (`QuoteLinkOverlayView`). Outside the print
-   *  like the lasso: the accent is not to be tinted. */
+  /** The washes over this page's quoted passages (`QuoteWash`): each
+   *  passage's lines in the accent, pale. Inside the print like the marks —
+   *  multiplied onto the page, and turned over with it under night. */
   private quoteLayer: HTMLElement
   private quotes: QuoteLink[] = []
-  private quoteRules: { link: QuoteLink; rect: PageBox; target: PageBox }[] = []
+  private quoteWashes: { link: QuoteLink; key: string; boxes: PageFraction[]; group: HTMLElement | null }[] = []
+  /** Each quotation's lines as last worked out from the words, so a page
+   *  that let its words go keeps its washes; and whether the words of this
+   *  layout are read — until they are, nothing is tinted rather than the
+   *  wrong thing. */
+  private washBoxes = new Map<string, PageFraction[]>()
+  private textRead = false
+  /** The quotation under the pointer, drawn a shade deeper. */
+  private litQuote: string | null = null
   /** How the reader draws its pages now, and the ground under night. */
   private rendering: PageRendering = 'plain'
   private ground = '#000000'
@@ -171,9 +183,11 @@ export class PageView {
     this.findLayer = el('div', { class: 'find-layer' })
     this.drawCanvas = el('canvas', { class: 'draw-canvas' })
     this.overlayCanvas = el('canvas', { class: 'draw-canvas draw-overlay' })
+    this.quoteLayer = el('div', { class: 'quote-washes' })
     this.print = el('div', { class: 'page-print' }, [
       this.canvas,
       this.markCanvas,
+      this.quoteLayer,
       this.findLayer,
       this.drawCanvas,
       this.overlayCanvas,
@@ -183,12 +197,10 @@ export class PageView {
     this.lassoSurface = el('div', { class: 'lasso-input' })
     this.lassoBox = el('div', { class: 'lasso-box' })
     this.lassoInk = el('canvas', { class: 'lasso-ink' }) as HTMLCanvasElement
-    this.quoteLayer = el('div', { class: 'quote-links' })
     this.root = el('div', { class: 'page', 'data-page': String(index) }, [
       this.print,
       this.images.canvas,
       this.textLayer,
-      this.quoteLayer,
       this.lassoBox,
       this.lassoInk,
       this.lassoSurface,
@@ -239,59 +251,164 @@ export class PageView {
     // drawn on that box was half again as tall as the line.
     this.root.style.setProperty('--scale-factor', String(scale))
     this.placeLassoBox()
-    this.placeQuotes()
   }
 
-  /** The passages of this page that notes quote; their rules are drawn beside them. */
+  /** The passages of this page that notes quote; each is tinted. */
   setQuotes(links: QuoteLink[]) {
-    const key = (list: QuoteLink[]) => list.map((link) => `${link.noteID} ${link.passage.url} ${link.noteTitle}`).join('|')
+    const key = (list: QuoteLink[]) => list.map((link) => `${washKey(link)} ${link.noteTitle}`).join('|')
     if (key(links) === key(this.quotes)) return
     this.quotes = links
     this.measureQuotes()
   }
 
-  /** Where the rules stand — beside the column each passage is set in, as far
-   *  as the page's words say; until they are read, beside the passage. */
+  /** Where the washes go — the quoted words' lines, once the words are read. */
   private measureQuotes() {
-    const runs = this.quotes.length > 0 && this.textDivs.length > 0 ? this.textGeometry().runs.map((run) => run.box) : []
-    this.quoteRules = this.quotes.flatMap((link) => {
-      const rule = quoteRule(link.passage.rect, runs, this.shape.view)
-      return rule ? [{ link, ...rule }] : []
-    })
+    const washes: typeof this.quoteWashes = []
+    const kept = new Map<string, PageFraction[]>()
+    for (const link of this.quotes) {
+      const key = washKey(link)
+      const boxes = this.textRead ? this.passageBoxes(link) : this.washBoxes.get(key)
+      if (!boxes || boxes.length === 0) continue
+      kept.set(key, boxes)
+      washes.push({ link, key, boxes, group: null })
+    }
+    this.washBoxes = kept
+    this.quoteWashes = washes
     this.placeQuotes()
   }
 
-  /** The rules where the page now has them: a button each — the pointer's
-   *  target, a little wider than the rule it shows. */
+  /**
+   * A quoted passage's lines: the words its box holds, narrowed to where the
+   * quotation's words are in them (`quoteSpan`), as the text layer sets them
+   * — or the box itself, where the page has no words there or not the
+   * quotation's (a formula caught with the lasso, a scan). A box round two
+   * lines of a column runs from margin to margin, and a passage that starts
+   * in the middle of a line would otherwise be tinted from the margin.
+   */
+  private passageBoxes(link: QuoteLink): PageFraction[] {
+    const region = link.passage.rect
+    const whole = this.fractionOf(region)
+    const fallback = whole ? [whole] : []
+    if (this.textDivs.length === 0) return fallback
+    const inside = (box: Box) => {
+      const x = box.x + box.width / 2
+      const y = box.y + box.height / 2
+      return x >= region.x - 1 && x <= region.x + region.width + 1 && y >= region.y - 1 && y <= region.y + region.height + 1
+    }
+    const reach = { x: region.x - 1, y: region.y - 1, width: region.width + 2, height: region.height + 2 }
+    const characters = this.characterBoxes(reach).filter((character) => inside(character.rect))
+    if (characters.length === 0) return fallback
+    // The words in order, a line break wherever the layer's text skips.
+    let text = ''
+    const owner: number[] = []
+    let end = -1
+    characters.forEach((character, index) => {
+      if (end >= 0 && character.index !== end) {
+        text += '\n'
+        owner.push(-1)
+      }
+      text += character.character
+      for (let unit = 0; unit < character.character.length; unit += 1) owner.push(index)
+      end = character.index + character.character.length
+    })
+    const span = quoteSpan(link.quotation, text)
+    if (!span) return fallback
+    let first = span.from
+    while (first < span.to && owner[first] < 0) first += 1
+    let last = span.to - 1
+    while (last >= first && owner[last] < 0) last -= 1
+    if (last < first) return fallback
+    const from = characters[owner[first]]
+    const to = characters[owner[last]]
+    // Never outside the box it was quoted from.
+    const limit = this.fractionOf({ x: region.x - 2, y: region.y - 2, width: region.width + 4, height: region.height + 4 })
+    const boxes = this.rangeBoxes({ start: from.index, end: to.index + to.character.length }).flatMap((box) => {
+      if (!limit) return [box]
+      const left = Math.max(box.x, limit.x)
+      const right = Math.min(box.x + box.width, limit.x + limit.width)
+      const top = Math.max(box.y, limit.y)
+      const bottom = Math.min(box.y + box.height, limit.y + limit.height)
+      return right > left && bottom > top ? [{ x: left, y: top, width: right - left, height: bottom - top }] : []
+    })
+    return boxes.length > 0 ? boxes : fallback
+  }
+
+  /** A box in the page's own coordinates as fractions of the page as shown. */
+  private fractionOf(box: Box): PageFraction | null {
+    const viewport = this.viewport
+    if (!viewport || viewport.width <= 0 || viewport.height <= 0) return null
+    const { left, right, top, bottom } = this.viewBoxOf(box)
+    return { x: left / viewport.width, y: top / viewport.height, width: (right - left) / viewport.width, height: (bottom - top) / viewport.height }
+  }
+
+  /** The washes on the page: a group for each passage, multiplied as one, so
+   *  where its lines touch the colour does not double; the line ends rounded
+   *  as a highlight's (`RoundedMarks`). */
   private placeQuotes() {
     clear(this.quoteLayer)
-    const viewport = this.viewport
-    if (!viewport || this.quoteRules.length === 0) return
-    for (const rule of this.quoteRules) {
-      const { left, right, top, bottom } = this.viewBoxOf(rule.target)
-      const title = rule.link.noteTitle
-      const label = title ? L(`노트에서 보기 · ${title}`, `Show in Note · ${title}`) : L('노트에서 보기', 'Show in Note')
-      const button = el('button', { class: 'quote-rule', type: 'button', title: label, 'aria-label': label, tabindex: '-1' })
-      button.style.left = `${left}px`
-      button.style.top = `${top}px`
-      button.style.width = `${right - left}px`
-      button.style.height = `${bottom - top}px`
-      button.style.setProperty('--rule', `${Math.max(1.5, rule.rect.width * viewport.scale)}px`)
-      // The press is the button's: no text selection starts under it, and
-      // the note keeps the focus it had.
-      button.addEventListener('mousedown', (event) => event.preventDefault())
-      button.addEventListener('click', (event) => {
-        event.preventDefault()
-        event.stopPropagation()
-        this.owner.openQuote(rule.link)
-      })
-      this.quoteLayer.append(button)
+    const pageHeight = this.shape.view[3] - this.shape.view[1]
+    for (const wash of this.quoteWashes) {
+      const group = el('div', { class: wash.key === this.litQuote ? 'quote-wash lit' : 'quote-wash' })
+      for (const box of wash.boxes) {
+        const line = el('div')
+        line.style.left = `${box.x * 100}%`
+        line.style.top = `${box.y * 100}%`
+        line.style.width = `${box.width * 100}%`
+        line.style.height = `${box.height * 100}%`
+        // A highlight's corner: three tenths of the line's height, at most 3.5 points.
+        const radius = Math.min(box.height * pageHeight * 0.3, 3.5)
+        line.style.borderRadius = `calc(var(--scale-factor, 1) * ${radius.toFixed(2)}px)`
+        group.append(line)
+      }
+      wash.group = group
+      this.quoteLayer.append(group)
     }
   }
 
-  /** The rules as placed — for a probe. */
-  quoteReport(): { noteID: string; rule: PageBox; passage: PageBox }[] {
-    return this.quoteRules.map((rule) => ({ noteID: rule.link.noteID, rule: rule.rect, passage: rule.link.passage.rect }))
+  /** The quotation whose passage is under a point in the window — the newest
+   *  note's, where two notes quote one passage. */
+  quoteAtClient(clientX: number, clientY: number): QuoteLink | null {
+    if (this.quoteWashes.length === 0) return null
+    const box = this.root.getBoundingClientRect()
+    if (box.width === 0 || box.height === 0) return null
+    const x = (clientX - box.left) / box.width
+    const y = (clientY - box.top) / box.height
+    // A point's worth of slack round each line.
+    const slackX = 1 / Math.max(this.shape.view[2] - this.shape.view[0], 1)
+    const slackY = 1 / Math.max(this.shape.view[3] - this.shape.view[1], 1)
+    for (let index = this.quoteWashes.length - 1; index >= 0; index -= 1) {
+      const wash = this.quoteWashes[index]
+      const hit = wash.boxes.some((line) =>
+        x >= line.x - slackX && x <= line.x + line.width + slackX && y >= line.y - slackY && y <= line.y + line.height + slackY)
+      if (hit) return wash.link
+    }
+    return null
+  }
+
+  /** Deepens the passage under the pointer, and lets the last one go. */
+  lightQuote(link: QuoteLink | null) {
+    const key = link ? washKey(link) : null
+    if (key === this.litQuote) return
+    this.litQuote = key
+    for (const wash of this.quoteWashes) wash.group?.classList.toggle('lit', wash.key === key)
+  }
+
+  /** The washes as placed — for a probe: each quotation's lines in the page's own coordinates. */
+  quoteReport(): { noteID: string; passage: PageBox; lines: PageBox[] }[] {
+    const view = this.shape.view
+    const width = view[2] - view[0]
+    const height = view[3] - view[1]
+    return this.quoteWashes.map((wash) => ({
+      noteID: wash.link.noteID,
+      passage: wash.link.passage.rect,
+      // Unrotated pages only — what a probe looks at.
+      lines: wash.boxes.map((box) => ({
+        x: view[0] + box.x * width,
+        y: view[3] - (box.y + box.height) * height,
+        width: box.width * width,
+        height: box.height * height,
+      })),
+    }))
   }
 
   /** Stops whatever is drawing: a render for the last layout paints nothing. */
@@ -326,6 +443,7 @@ export class PageView {
     this.textItems = []
     this.textDivs = []
     this.textStarts = []
+    this.textRead = false
     this.textAsked = null
     this.proxy?.cleanup()
   }
@@ -470,7 +588,8 @@ export class PageView {
     if (generation !== this.generation) return
     this.redraw()
     this.drawFind()
-    // The words are read now: the rules can find their columns.
+    // The words are read now: the washes can find the quoted ones.
+    this.textRead = true
     if (this.quotes.length > 0) this.measureQuotes()
     // The pictures, the first time night meets this page.
     if (this.rendering === 'night' && !this.images.found) void this.findImages()
@@ -484,6 +603,7 @@ export class PageView {
     this.textItems = []
     this.textDivs = []
     this.textStarts = []
+    this.textRead = false
     const source = await this.textContent()
     if (!source || generation !== this.generation) return
     try {

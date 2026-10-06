@@ -292,7 +292,8 @@ export class Reader implements PageOwner {
     })
     // A click on a mark — a press, not a drag across it, which is a
     // selection — brings up its controls, as the Mac's click on a mark does.
-    // A link in the paper goes where it points ahead of any mark under it.
+    // A link in the paper goes where it points ahead of any mark under it,
+    // and a quoted passage goes back to its quotation ahead of a mark too.
     // A press anywhere else puts the controls away.
     on(this.pagesBox, 'click', (event: MouseEvent) => {
       if (this.state.drawing || this.state.lasso || event.button !== 0) return
@@ -308,6 +309,12 @@ export class Reader implements PageOwner {
           void this.followLink(link)
           return
         }
+        const quote = page.quoteAtClient(event.clientX, event.clientY)
+        if (quote) {
+          this.bar.hideMark()
+          this.openQuote(quote)
+          return
+        }
         const mark = markAt(page.marks, point)
         if (mark) this.bar.showMark(page, mark)
         else this.bar.hideMark()
@@ -315,17 +322,23 @@ export class Reader implements PageOwner {
     })
     // A right-click on a mark offers its colour and its removal; on a
     // selection, the marks and a note (`MarkupCapablePDFView.menu(for:)`).
+    // On a quoted passage the quotation comes first («Show in Note»).
     on(this.pagesBox, 'contextmenu', (event: MouseEvent) => {
       if (this.state.drawing || this.state.lasso) return
       const page = this.pageAtClient(event.clientX, event.clientY)
       const point = page?.pointOnPage(event.clientX, event.clientY)
       const mark = page && point ? markAt(page.marks, point) : null
+      const quote = page ? page.quoteAtClient(event.clientX, event.clientY) : null
       const selection = window.getSelection()
       const selected = selection && !selection.isCollapsed && this.selectionParts().length > 0
-      if (!mark && !selected) return
+      if (!mark && !selected && !quote) return
       event.preventDefault()
       const anchor = { getBoundingClientRect: () => new DOMRect(event.clientX, event.clientY, 0, 0) } as Element
-      this.actions.menu?.(anchor, mark && page ? this.bar.markMenu(page, mark) : this.bar.selectionMenu())
+      const rest = mark && page ? this.bar.markMenu(page, mark) : selected ? this.bar.selectionMenu() : []
+      const back: MenuEntry[] = quote
+        ? [{ label: quoteLabel(quote), icon: 'text.quote', action: () => this.openQuote(quote) }, ...(rest.length > 0 ? [{ separator: true } as MenuEntry] : [])]
+        : []
+      this.actions.menu?.(anchor, [...back, ...rest])
     })
     // Over a link the pointer says so, and a URL shows where it goes.
     on(this.pagesBox, 'mousemove', (event: MouseEvent) => {
@@ -340,6 +353,7 @@ export class Reader implements PageOwner {
     on(this.pagesBox, 'mouseleave', () => {
       this.showOverLink(null)
       this.hoverMark(null, null)
+      this.hoverQuote(null, null)
     })
     // A formula's picture arrives after the card was drawn; the page is
     // drawn again when it does.
@@ -414,6 +428,7 @@ export class Reader implements PageOwner {
     for (const page of this.pages) page.setQuotes(this.quoteLinks.get(page.index) ?? [])
   }
 
+  /** A quoted passage was clicked, or «Show in Note» chosen on it: its quotation, please. */
   openQuote(link: QuoteLink) {
     this.actions.openQuote?.(link)
   }
@@ -1572,12 +1587,15 @@ export class Reader implements PageOwner {
     const point = page?.pointOnPage(at.x, at.y)
     if (!page || !point) {
       this.hoverMark(null, null)
+      this.hoverQuote(null, null)
       return this.showOverLink(null)
     }
     await page.pageLinks()
     const link = page.linkAt(point)
     this.showOverLink(link)
-    this.hoverMark(link ? null : page, link ? null : point)
+    const quote = link ? null : page.quoteAtClient(at.x, at.y)
+    this.hoverQuote(quote ? page : null, quote)
+    this.hoverMark(link || quote ? null : page, link || quote ? null : point)
   }
 
   private showOverLink(link: PageLink | null) {
@@ -1586,6 +1604,18 @@ export class Reader implements PageOwner {
     this.scroll.classList.toggle('over-link', Boolean(link))
     if (link?.url) this.scroll.title = link.url
     else this.scroll.removeAttribute('title')
+  }
+
+  /** The quoted passage under the pointer is a link too: a shade deeper, a
+   *  hand, and whose quotation it is (`QuoteLinkOverlayView`). */
+  private overQuote: QuoteLink | null = null
+  private hoverQuote(page: PageView | null, quote: QuoteLink | null) {
+    for (const other of this.near) other.lightQuote(other === page ? quote : null)
+    if (quote === this.overQuote) return
+    this.overQuote = quote
+    this.scroll.classList.toggle('over-quote', Boolean(quote))
+    if (quote) this.scroll.title = quoteLabel(quote)
+    else if (!this.overLink) this.scroll.removeAttribute('title')
   }
 
   get canGoBackInDocument(): boolean {
@@ -1902,4 +1932,9 @@ export class Reader implements PageOwner {
     }
     return { pages: this.pages.length, drawn, proxies, near: this.near.size, megapixels: Math.round(pixels / 1e5) / 10, runs }
   }
+}
+
+/** «Show in Note», with the note's name when it has one. */
+function quoteLabel(link: QuoteLink): string {
+  return link.noteTitle ? L(`노트에서 보기 · ${link.noteTitle}`, `Show in Note · ${link.noteTitle}`) : L('노트에서 보기', 'Show in Note')
 }

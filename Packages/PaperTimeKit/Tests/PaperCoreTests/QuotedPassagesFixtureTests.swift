@@ -18,7 +18,8 @@ import Testing
             if let index = try? value.decode(Int.self) { self = .index(index) } else { self = .url(try value.decode(String.self)) }
         }
     }
-    struct File: Decodable { var bodies: [Body]; var notes: [Note]; var papers: [Paper] }
+    struct Span: Decodable { var quotation: String; var text: String; var span: [Int]? }
+    struct File: Decodable { var bodies: [Body]; var notes: [Note]; var papers: [Paper]; var spans: [Span] }
 
     func fixture() throws -> File {
         let url = try #require(Bundle.module.url(forResource: "quoted-passages", withExtension: "json", subdirectory: "Fixtures"))
@@ -61,6 +62,31 @@ import Testing
             }
             #expect(found == expected, "\(paper.paper)")
         }
+    }
+
+    @Test func quotationsAreFoundWhereTheFileSays() throws {
+        for item in try fixture().spans {
+            let span = QuotedPassages.span(of: item.quotation, in: item.text)
+            #expect(span.map { [$0.lowerBound, $0.upperBound] } == item.span, "\(item.quotation.debugDescription)")
+        }
+    }
+
+    /// What the page tints is the passage, and nothing round it: not the
+    /// start of a line a quotation began in the middle of, not a slide's
+    /// line a quotation took only the end of.
+    @Test func theSpanIsThePassage() {
+        func words(_ quotation: String, _ text: String) -> String? {
+            QuotedPassages.span(of: quotation, in: text).map {
+                (text as NSString).substring(with: NSRange(location: $0.lowerBound, length: $0.count))
+            }
+        }
+        #expect(words("> per class [3쪽](papertime://anchor?p=2&x=1&y=1&w=1&h=1)", "few-shot samples per class to create")
+            == "per class")
+        #expect(words("> (naïve method $O(n)$)", "Sample data: O(ln(n)) (na\u{A8} \u{131}ve method O(n))") == "(na\u{A8} \u{131}ve method O(n))")
+        #expect(words("> We minimize $\\mathcal{L}(\\theta)$ over the data.", "Then we minimize L(θ) over the data. Next")
+            == "we minimize L(θ) over the data.")
+        #expect(words("> $$\\frac{a}{b}$$", "completely different words") == nil)
+        #expect(words("> the model is good", "the model the model is good") == "the model is good")
     }
 
     /// The quotation is the block the link closes, and a passage in a

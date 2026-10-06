@@ -91,8 +91,8 @@ export function newNote() {
 }
 
 /**
- * The rule beside a quoted passage was clicked: its note opens where notes
- * are showing, at the quotation, glowing — the Mac's `openQuotation`. A note
+ * A quoted passage was clicked on the page: its note opens where notes are
+ * showing, at the quotation, glowing — the Mac's `openQuotation`. A note
  * about this paper, or about none, opens in the paper's Notes tab; another
  * paper's note that quotes this one opens in the slip-box with the paper
  * beside it, which is where a note about another paper is read — and so

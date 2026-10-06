@@ -52,8 +52,8 @@ enum ReleaseNotes {
             symbol: "text.quote",
             title: Text2("쪽에서 노트로 돌아가요", "From the page back to your note"),
             detail: Text2(
-                "⌘L로 노트에 넣은 구절은 쪽 위에도 자국이 남아요. 노트의 인용과 같은 세로줄이 그 구절 옆 여백에 서요. 줄을 누르면 오른쪽 노트 칸이 그 노트를 열고, 인용으로 가서 잠깐 반짝여요. 노트의 쪽수를 누르면 쪽으로 가고, 쪽의 세로줄을 누르면 노트로 와요. 아래에서 눌러 보세요.",
-                "A passage you quote with ⌘L leaves a mark on the page: the note's quotation rule, in the margin beside it. Click the rule and the note opens at that quotation, which glows for a moment. The page number in the note takes you to the page, and the rule on the page brings you back. Try it below."
+                "⌘L로 노트에 넣은 구절을 쪽 위에서도 연한 강조색으로 칠해요. 줄 가운데서 시작한 인용은 그 낱말부터 칠해요. 칠한 곳을 누르면 오른쪽 노트 칸이 그 노트를 열고, 인용으로 가서 잠깐 반짝여요. 노트의 쪽수를 누르면 쪽으로 가고, 쪽의 칠한 구절을 누르면 노트로 와요. 아래에서 눌러 보세요.",
+                "A passage you quote with ⌘L stays tinted on the page, in a pale shade of your accent colour, from the very word it starts with. Click it and the note opens at that quotation, which glows for a moment. The page number in the note takes you to the page, and the tinted passage brings you back. Try it below."
             ),
             demo: .quoteLink,
             tier: .one
@@ -318,6 +318,33 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.9.29",
+            date: Text2("2026년 10월", "October 2026"),
+            note: Text2(
+                "⌘L로 인용한 구절을 쪽 위에 연한 강조색으로 칠해요. 누르면 그 인용이 있는 노트로 가요.",
+                "Passages you quote with ⌘L are tinted on the page in a pale shade of your accent colour. Click one to go to the quotation in your note."
+            ),
+            added: [
+                Entry(
+                    Text2("인용한 구절에 색칠", "Tinted Quotations"),
+                    Text2(
+                        "⌘L로 노트에 넣은 구절을 쪽 위에 연한 강조색으로 칠해요. 여백의 세로줄로는 인용이 어디서 시작하는지 알 수 없었어요. 이제 줄 가운데서 시작한 인용은 그 낱말부터 칠해요. 칠한 곳을 누르면 노트가 열리고 인용이 반짝여요. 끌면 전처럼 글자를 고를 수 있어요.",
+                        "A passage you quote with ⌘L is now tinted on the page, in a pale shade of your accent colour. The rule in the margin couldn’t show where a quotation began; now one that starts mid-line is tinted from its first word. Click the tint to open the note at the quotation. Drag across it to select the words, as before."
+                    ),
+                    demo: .quoteLink
+                ),
+            ],
+            fixed: [
+                Entry(
+                    Text2("악센트가 있는 i", "Accented i"),
+                    Text2(
+                        "«naïve»처럼 악센트가 붙은 i를 인용하거나 Ultracopy로 복사하면 i가 엉뚱한 명령어로 바뀌었어요. 이제 쓴 그대로 «naïve»로 들어가요.",
+                        "Quoting or Ultracopying an accented i, as in “naïve”, turned the i into a stray command. Now it comes out as written."
+                    )
+                ),
+            ]
+        ),
+        Release(
             version: "0.9.28",
             date: Text2("2026년 10월", "October 2026"),
             note: Text2(
@@ -330,8 +357,7 @@ enum ReleaseNotes {
                     Text2(
                         "⌘L로 노트에 넣은 구절 옆 여백에 노트의 인용과 같은 세로줄이 서요. 줄을 누르면 오른쪽 노트 칸이 그 노트를 열고 인용으로 가서 반짝여요. 구절을 오른쪽 클릭해도 «노트에서 보기»가 있어요. 링크는 노트 안에만 있어서 인용을 지우면 줄도 사라지고, PDF 파일은 그대로예요.",
                         "A passage you quote with ⌘L gets the note's quotation rule beside it, in the page's margin. Click the rule and the note opens at the quotation, which glows for a moment. Control-click the passage for Show in Note. The link lives only in the note: delete the quotation and the rule goes with it, and the PDF stays as it was."
-                    ),
-                    demo: .quoteLink
+                    )
                 ),
             ],
             fixed: [
@@ -2459,7 +2485,7 @@ enum ReleaseNotes {
             Feature(Text2("선택한 구절을 노트로", "Link the selection to a note"),
                     Text2("인용구로 들어가고, 누르면 그 페이지로 돌아간다.", "The passage arrives as a quotation you can click to return to the page."), action: .linkToNote),
             Feature(Text2("쪽에서 노트로", "From the page to the note"),
-                    Text2("인용한 구절 옆에 세로줄이 선다. 누르면 그 인용이 있는 노트가 열린다.", "A quoted passage has a rule beside it on the page; click it to open the note at the quotation.")),
+                    Text2("인용한 구절을 쪽 위에 연하게 칠한다. 누르면 그 인용이 있는 노트가 열린다.", "A quoted passage is tinted on the page; click it to open the note at the quotation.")),
             Feature(Text2("노트끼리 잇기", "Link notes to each other"),
                     Text2("[[ 를 치면 다른 노트를 부른다. 나를 가리키는 노트는 읽고 있는 노트 아래에 모인다.", "Type [[ to reach for another note. What links back is listed under the one you are reading.")),
             Feature(Text2("태그", "Tags"),
@@ -2748,9 +2774,9 @@ enum ReleaseNotes {
         /// language — and as the note sets it: a small code editor with the
         /// language's name, a copy button, numbered lines in Xcode's colours.
         case noteCodeBlock
-        /// A passage on the page with the rule beside it that ⌘L leaves, and
-        /// the note it goes back to: pressing the rule makes the quotation
-        /// in the note glow.
+        /// A paragraph on the page with the sentence ⌘L quoted from it
+        /// tinted, and the note it goes back to: pressing the tint makes the
+        /// quotation in the note glow.
         case quoteLink
 
         var id: String { rawValue }
