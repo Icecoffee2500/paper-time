@@ -18,6 +18,7 @@
 import { clear, el, on } from '../dom.js'
 import { freshReaderState, store, type ReaderState } from '../state.js'
 import { PAPER_DRAG_TYPE } from '../../shared/split.js'
+import type { QuoteLink } from '../../shared/quotedPassages.js'
 import { openDocument, releaseTextCaches, type Opening, type PDFDocumentProxy, type PDFPageProxy } from '../pdf.js'
 import { headBytes, headLine, rightsHandler, type ByteTrouble, type PDFLock } from '../../shared/pdfLock.js'
 import type { KeptReason, SaveState } from '../../shared/api.js'
@@ -115,6 +116,8 @@ export interface ReaderActions {
   pageChanged?: (index: number) => void
   /** The paper's title, for «Opening …» while it loads. */
   title?: () => string
+  /** The rule beside a quoted passage was clicked: open its quotation. */
+  openQuote?: (link: QuoteLink) => void
 }
 
 /** A place in a paper: how far down, and down how much. */
@@ -395,6 +398,26 @@ export class Reader implements PageOwner {
     if (page.wanted) void page.render()
   }
 
+  /** The passages of this paper that notes quote, by page (`QuoteLink`). */
+  private quoteLinks = new Map<number, QuoteLink[]>()
+
+  /** The quote links for this paper — another paper's are none of this
+   *  reader's — handed on to the pages they are on. */
+  setQuoteLinks(paperID: string, links: QuoteLink[]) {
+    const mine = this.paperID && paperID.toUpperCase() === this.paperID.toUpperCase() ? links : []
+    this.quoteLinks = new Map()
+    for (const link of mine) {
+      const page = this.quoteLinks.get(link.passage.pageIndex) ?? []
+      page.push(link)
+      this.quoteLinks.set(link.passage.pageIndex, page)
+    }
+    for (const page of this.pages) page.setQuotes(this.quoteLinks.get(page.index) ?? [])
+  }
+
+  openQuote(link: QuoteLink) {
+    this.actions.openQuote?.(link)
+  }
+
   /** The page under a point in the window, if any is — from the tops laid
    *  out, not by measuring every page. */
   pageAtClient(clientX: number, clientY: number): PageView | null {
@@ -457,6 +480,7 @@ export class Reader implements PageOwner {
   async open(id: string, bytes: Uint8Array, why?: Reason, startAt = 0) {
     const generation = ++this.generation
     this.close()
+    if (this.paperID?.toUpperCase() !== id.toUpperCase()) this.quoteLinks = new Map()
     this.paperID = id
     // Something to look at while it loads, as the Mac says it — a blank page
     // reads as a paper that failed.
@@ -485,6 +509,7 @@ export class Reader implements PageOwner {
         ? { view: [...(first.view as number[])], rotate: first.rotate, userUnit: (first as { userUnit?: number }).userUnit ?? 1 }
         : { view: [0, 0, 612, 792], rotate: 0, userUnit: 1 }
       this.pages = Array.from({ length: document.numPages }, (_, index) => new PageView(index, shape, this))
+      for (const page of this.pages) page.setQuotes(this.quoteLinks.get(page.index) ?? [])
       if (first) void this.pages[0].fetchProxy()
       this.text = new DocumentText(this.pages)
       clear(this.pagesBox)

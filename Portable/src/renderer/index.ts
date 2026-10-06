@@ -32,7 +32,7 @@ import { buildSlipBox } from './ui/slipBox.js'
 import { buildSetup } from './ui/setup.js'
 import { buildSketchRack } from './ui/sketchToolbar.js'
 import { refreshOpenPapers } from './ui/openPapers.js'
-import { flushPositions, focused, reconcileReaders, relayoutReadersSoon } from './pageArea.js'
+import { flushPositions, focused, reconcileReaders, refreshQuoteLinksSoon, relayoutReadersSoon } from './pageArea.js'
 import {
   addLibraryFolder, addPapers, adoptLoose, chooseLibrary, newCollection, openLibraryAt, reload, removeLibraryFolder, start,
 } from './library.js'
@@ -269,6 +269,8 @@ subscribe((keys) => {
     }
     if (keys.has('notes') && store.settings.inspectorTab === 'note') shell.inspector.update()
     if (keys.has('notes')) shell.sidebar.update()
+    // The rules beside quoted passages follow the notes they are read from.
+    if (keys.has('notes') || keys.has('papers')) refreshQuoteLinksSoon()
   }
   if (keys.has('shelf') || keys.has('papers')) scanListText()
   if (keys.has('papers') || keys.has('shelf') || keys.has('selection')) {

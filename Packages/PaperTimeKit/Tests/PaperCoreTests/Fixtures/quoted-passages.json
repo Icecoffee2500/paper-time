@@ -1,0 +1,422 @@
+{
+  "bodies" : [
+    {
+      "body" : "> the encoder is trained with a masked objective [4쪽](papertime://anchor?p=3&x=145.00&y=95.00&w=366.50&h=12.00&paper=4F3A1C08-1111-2222-3333-444455556666)\n",
+      "passages" : [
+        {
+          "link" : [
+            49,
+            154
+          ],
+          "page" : 3,
+          "paper" : "4F3A1C08-1111-2222-3333-444455556666",
+          "quote" : [
+            0,
+            154
+          ],
+          "rect" : [
+            145,
+            95,
+            366.5,
+            12
+          ],
+          "url" : "papertime://anchor?p=3&x=145.00&y=95.00&w=366.50&h=12.00&paper=4F3A1C08-1111-2222-3333-444455556666"
+        }
+      ]
+    },
+    {
+      "body" : "Intro line\n> first line of the quote\n> second line [p. 2](papertime://anchor?p=1&x=72.00&y=600.00&w=240.00&h=24.00)\n\nmy thoughts",
+      "passages" : [
+        {
+          "link" : [
+            51,
+            115
+          ],
+          "page" : 1,
+          "paper" : null,
+          "quote" : [
+            11,
+            115
+          ],
+          "rect" : [
+            72,
+            600,
+            240,
+            24
+          ],
+          "url" : "papertime://anchor?p=1&x=72.00&y=600.00&w=240.00&h=24.00"
+        }
+      ]
+    },
+    {
+      "body" : "> one [1쪽](papertime://anchor?p=0&x=1.00&y=2.00&w=3.00&h=4.00)\n> two\n> two more [2쪽](papertime://anchor?p=1&x=5.00&y=6.00&w=7.00&h=8.00)\n",
+      "passages" : [
+        {
+          "link" : [
+            6,
+            62
+          ],
+          "page" : 0,
+          "paper" : null,
+          "quote" : [
+            0,
+            62
+          ],
+          "rect" : [
+            1,
+            2,
+            3,
+            4
+          ],
+          "url" : "papertime://anchor?p=0&x=1.00&y=2.00&w=3.00&h=4.00"
+        },
+        {
+          "link" : [
+            80,
+            136
+          ],
+          "page" : 1,
+          "paper" : null,
+          "quote" : [
+            63,
+            136
+          ],
+          "rect" : [
+            5,
+            6,
+            7,
+            8
+          ],
+          "url" : "papertime://anchor?p=1&x=5.00&y=6.00&w=7.00&h=8.00"
+        }
+      ]
+    },
+    {
+      "body" : "> Loss is\n> $$\\mathcal{L} = 1$$\n> [5쪽](papertime://anchor?p=4&x=100.00&y=200.00&w=300.00&h=40.00)",
+      "passages" : [
+        {
+          "link" : [
+            34,
+            97
+          ],
+          "page" : 4,
+          "paper" : null,
+          "quote" : [
+            0,
+            97
+          ],
+          "rect" : [
+            100,
+            200,
+            300,
+            40
+          ],
+          "url" : "papertime://anchor?p=4&x=100.00&y=200.00&w=300.00&h=40.00"
+        }
+      ]
+    },
+    {
+      "body" : "As shown in [the encoder is trained…](papertime://anchor?p=2&x=10.00&y=20.00&w=30.00&h=5.00), we see.",
+      "passages" : [
+        {
+          "link" : [
+            12,
+            92
+          ],
+          "page" : 2,
+          "paper" : null,
+          "quote" : [
+            0,
+            101
+          ],
+          "rect" : [
+            10,
+            20,
+            30,
+            5
+          ],
+          "url" : "papertime://anchor?p=2&x=10.00&y=20.00&w=30.00&h=5.00"
+        }
+      ]
+    },
+    {
+      "body" : "```\n[p. 1](papertime://anchor?p=0&x=1.00&y=1.00&w=1.00&h=1.00)\n```\nafter",
+      "passages" : [
+
+      ]
+    },
+    {
+      "body" : "[p](papertime://anchor?p=0&x=1&y=1&w=1) [q](papertime://anchor?p=0&x=1.00&y=1.00&w=0.00&h=1.00) [r](papertime://anchor?x=1&y=1&w=1&h=1)",
+      "passages" : [
+
+      ]
+    },
+    {
+      "body" : "> words [see \\[1\\] 3쪽](papertime://anchor?p=2&x=50.00&y=60.00&w=70.00&h=8.00)",
+      "passages" : [
+        {
+          "link" : [
+            8,
+            77
+          ],
+          "page" : 2,
+          "paper" : null,
+          "quote" : [
+            0,
+            77
+          ],
+          "rect" : [
+            50,
+            60,
+            70,
+            8
+          ],
+          "url" : "papertime://anchor?p=2&x=50.00&y=60.00&w=70.00&h=8.00"
+        }
+      ]
+    },
+    {
+      "body" : "   > quoted [p. 9](papertime://anchor?p=8&x=1.00&y=2.00&w=3.00&h=4.00)\n    > not a quote [p. 10](papertime://anchor?p=9&x=1.00&y=2.00&w=3.00&h=4.00)",
+      "passages" : [
+        {
+          "link" : [
+            12,
+            70
+          ],
+          "page" : 8,
+          "paper" : null,
+          "quote" : [
+            0,
+            70
+          ],
+          "rect" : [
+            1,
+            2,
+            3,
+            4
+          ],
+          "url" : "papertime://anchor?p=8&x=1.00&y=2.00&w=3.00&h=4.00"
+        },
+        {
+          "link" : [
+            89,
+            148
+          ],
+          "page" : 9,
+          "paper" : null,
+          "quote" : [
+            71,
+            148
+          ],
+          "rect" : [
+            1,
+            2,
+            3,
+            4
+          ],
+          "url" : "papertime://anchor?p=9&x=1.00&y=2.00&w=3.00&h=4.00"
+        }
+      ]
+    },
+    {
+      "body" : "> crlf quote [p. 1](papertime://anchor?p=0&x=1.00&y=2.00&w=3.00&h=4.00)\r\nnext",
+      "passages" : [
+        {
+          "link" : [
+            13,
+            71
+          ],
+          "page" : 0,
+          "paper" : null,
+          "quote" : [
+            0,
+            71
+          ],
+          "rect" : [
+            1,
+            2,
+            3,
+            4
+          ],
+          "url" : "papertime://anchor?p=0&x=1.00&y=2.00&w=3.00&h=4.00"
+        }
+      ]
+    },
+    {
+      "body" : "😀 메모\n> 인용 [3쪽](papertime://anchor?p=2&x=1.00&y=2.00&w=3.00&h=4.00)",
+      "passages" : [
+        {
+          "link" : [
+            11,
+            67
+          ],
+          "page" : 2,
+          "paper" : null,
+          "quote" : [
+            6,
+            67
+          ],
+          "rect" : [
+            1,
+            2,
+            3,
+            4
+          ],
+          "url" : "papertime://anchor?p=2&x=1.00&y=2.00&w=3.00&h=4.00"
+        }
+      ]
+    },
+    {
+      "body" : "> my own aside\n> the quoted words [7쪽](papertime://anchor?p=6&x=9.00&y=8.00&w=7.00&h=6.00)",
+      "passages" : [
+        {
+          "link" : [
+            34,
+            90
+          ],
+          "page" : 6,
+          "paper" : null,
+          "quote" : [
+            0,
+            90
+          ],
+          "rect" : [
+            9,
+            8,
+            7,
+            6
+          ],
+          "url" : "papertime://anchor?p=6&x=9.00&y=8.00&w=7.00&h=6.00"
+        }
+      ]
+    },
+    {
+      "body" : "> elsewhere [2쪽](papertime://anchor?p=1&x=3.00&y=4.00&w=5.00&h=6.00&paper=9b2e7d10-aaaa-bbbb-cccc-ddddeeeeffff)",
+      "passages" : [
+        {
+          "link" : [
+            12,
+            111
+          ],
+          "page" : 1,
+          "paper" : "9B2E7D10-AAAA-BBBB-CCCC-DDDDEEEEFFFF",
+          "quote" : [
+            0,
+            111
+          ],
+          "rect" : [
+            3,
+            4,
+            5,
+            6
+          ],
+          "url" : "papertime://anchor?p=1&x=3.00&y=4.00&w=5.00&h=6.00&paper=9b2e7d10-aaaa-bbbb-cccc-ddddeeeeffff"
+        }
+      ]
+    },
+    {
+      "body" : "> Tip-Adapter [48] solves the cache memory problem [3쪽](papertime://anchor?p=2&x=50.00&y=554.00&w=236.00&h=21.00)",
+      "passages" : [
+        {
+          "link" : [
+            51,
+            113
+          ],
+          "page" : 2,
+          "paper" : null,
+          "quote" : [
+            0,
+            113
+          ],
+          "rect" : [
+            50,
+            554,
+            236,
+            21
+          ],
+          "url" : "papertime://anchor?p=2&x=50.00&y=554.00&w=236.00&h=21.00"
+        }
+      ]
+    },
+    {
+      "body" : "> [Tip-Adapter [48] solves the problem](papertime://anchor?p=2&x=1.00&y=2.00&w=3.00&h=4.00)",
+      "passages" : [
+        {
+          "link" : [
+            2,
+            91
+          ],
+          "page" : 2,
+          "paper" : null,
+          "quote" : [
+            0,
+            91
+          ],
+          "rect" : [
+            1,
+            2,
+            3,
+            4
+          ],
+          "url" : "papertime://anchor?p=2&x=1.00&y=2.00&w=3.00&h=4.00"
+        }
+      ]
+    },
+    {
+      "body" : "Just a thought, with a [[202609081530|link]] to another note.",
+      "passages" : [
+
+      ]
+    }
+  ],
+  "notes" : [
+    {
+      "body" : "> own, unnamed [1쪽](papertime://anchor?p=0&x=1.00&y=1.00&w=1.00&h=1.00)\n> own, named [2쪽](papertime://anchor?p=1&x=1.00&y=1.00&w=1.00&h=1.00&paper=4F3A1C08-1111-2222-3333-444455556666)\n\n> of B [3쪽](papertime://anchor?p=2&x=1.00&y=1.00&w=1.00&h=1.00&paper=9B2E7D10-AAAA-BBBB-CCCC-DDDDEEEEFFFF)",
+      "paper" : "4F3A1C08-1111-2222-3333-444455556666"
+    },
+    {
+      "body" : "> B's own [4쪽](papertime://anchor?p=3&x=1.00&y=1.00&w=1.00&h=1.00)\n\n> of A [5쪽](papertime://anchor?p=4&x=1.00&y=1.00&w=1.00&h=1.00&paper=4f3a1c08-1111-2222-3333-444455556666)",
+      "paper" : "9B2E7D10-AAAA-BBBB-CCCC-DDDDEEEEFFFF"
+    },
+    {
+      "body" : "A draft quoting [A](papertime://anchor?p=5&x=1.00&y=1.00&w=1.00&h=1.00&paper=4F3A1C08-1111-2222-3333-444455556666) and an unnamed one [?](papertime://anchor?p=6&x=1.00&y=1.00&w=1.00&h=1.00)",
+      "paper" : null
+    }
+  ],
+  "papers" : [
+    {
+      "paper" : "4F3A1C08-1111-2222-3333-444455556666",
+      "passages" : [
+        [
+          0,
+          "papertime://anchor?p=0&x=1.00&y=1.00&w=1.00&h=1.00"
+        ],
+        [
+          0,
+          "papertime://anchor?p=1&x=1.00&y=1.00&w=1.00&h=1.00&paper=4F3A1C08-1111-2222-3333-444455556666"
+        ],
+        [
+          1,
+          "papertime://anchor?p=4&x=1.00&y=1.00&w=1.00&h=1.00&paper=4f3a1c08-1111-2222-3333-444455556666"
+        ],
+        [
+          2,
+          "papertime://anchor?p=5&x=1.00&y=1.00&w=1.00&h=1.00&paper=4F3A1C08-1111-2222-3333-444455556666"
+        ]
+      ]
+    },
+    {
+      "paper" : "9B2E7D10-AAAA-BBBB-CCCC-DDDDEEEEFFFF",
+      "passages" : [
+        [
+          0,
+          "papertime://anchor?p=2&x=1.00&y=1.00&w=1.00&h=1.00&paper=9B2E7D10-AAAA-BBBB-CCCC-DDDDEEEEFFFF"
+        ],
+        [
+          1,
+          "papertime://anchor?p=3&x=1.00&y=1.00&w=1.00&h=1.00"
+        ]
+      ]
+    }
+  ]
+}

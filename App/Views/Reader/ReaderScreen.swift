@@ -36,6 +36,9 @@ struct ReaderScreen: View {
     /// still says that it happened.
     @State private var toast: String?
     @State private var toastTask: Task<Void, Never>?
+    /// The passages of this paper that notes quote, read from the notes
+    /// (`QuoteLink`) — read again a moment after the notes change.
+    @State private var quoteLinks = QuoteLinks()
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.colorScheme) private var colorScheme
     /// The custom tint's ground as Settings and the colour panel store it —
@@ -63,6 +66,10 @@ struct ReaderScreen: View {
             }
         }
         .task(id: paper.id) { await load() }
+        // Read off the notes by a view of its own, so typing in a note does
+        // not set the whole reader going again — only a change to what the
+        // rules say does.
+        .background { QuoteLinkWatcher(notes: library.notes, paperID: paper.id, links: $quoteLinks) }
         // Side by side, the handle a pane holds changes as focus moves; the
         // open session goes with it, so the inspector reads this paper.
         .onChange(of: ObjectIdentifier(link)) { _, _ in
@@ -108,7 +115,11 @@ struct ReaderScreen: View {
                 noteDraft = ""
                 noteSelection = selection
             },
-            onToast: { show(toast: $0) }
+            onToast: { show(toast: $0) },
+            quoteLinks: quoteLinks,
+            onOpenQuote: { quote in
+                library.notes.passageRequest = .init(noteID: quote.noteID, url: quote.passage.url, paperID: paper.id)
+            }
         )
         // Glass paper: multiplied against what is behind it, so the page's
         // white falls away to whatever the panel is showing and the ink stays

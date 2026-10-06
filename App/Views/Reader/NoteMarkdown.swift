@@ -1529,8 +1529,13 @@ enum NoteMarkdown {
         var kind: Kind
     }
 
+    /// `[label](papertime://…)`. Brackets inside a label only in pairs, as
+    /// CommonMark has them: a quotation's words often hold a citation — «[48]
+    /// solves … [3쪽](…)» — and a label that could hold any `]` began at the
+    /// citation's bracket, swallowing the words into the link and the `[`
+    /// with them. A label written whole round such words still reads.
     private static let linkPattern = try! NSRegularExpression(
-        pattern: #"\[((?:\\.|[^\\\]\n]|\](?!\())*)\]\((papertime://[^)\s]+)\)"#
+        pattern: #"\[((?:\\.|[^\\\[\]\n]|\[(?:\\.|[^\\\[\]\n])*\])*)\]\((papertime://[^)\s]+)\)"#
     )
     private static let wikiPattern = try! NSRegularExpression(
         pattern: #"\[\[([^\]|\n]+)(?:\|([^\]\n]*))?\]\]"#

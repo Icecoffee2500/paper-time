@@ -143,6 +143,10 @@ struct ZettelEditorView: View {
                     get: { loadedID == noteID ? notes.reveal : nil },
                     set: { notes.reveal = $0 }
                 ),
+                pendingPassage: Binding(
+                    get: { loadedID == noteID ? notes.revealPassage : nil },
+                    set: { notes.revealPassage = $0 }
+                ),
                 showsRawText: showsRaw,
                 onFollow: { anchor in
                     link?.anchorRequest = ReaderLink.Anchor(

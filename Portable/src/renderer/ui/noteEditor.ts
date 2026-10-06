@@ -23,6 +23,7 @@ import { icon, type IconName } from '../icons.js'
 import { L } from '../../shared/lang.js'
 import { call, isCommand, platform } from '../bridge.js'
 import { anchorAt, parseAnchorURL, quotationInsertion } from '../../shared/noteQuote.js'
+import { quotedPassages } from '../../shared/quotedPassages.js'
 import { zettelDisplayTitle, zettelPreviewBody, zettelTags } from '../../shared/zettel.js'
 import { noteByID, type Note } from '../state.js'
 import { deleteNote, flushNote, linkedFrom, linksOrTagsChanged, linksOut, updateNote } from '../notesModel.js'
@@ -64,6 +65,8 @@ export interface NoteEditor {
   insert(block: string): void
   /** A passage found by meaning, scrolled to and glowing; true when it was found. */
   reveal(words: string): boolean
+  /** Scrolls to the quotation whose page link is this address and makes it glow; the caret stays where it was. */
+  revealQuotation(url: string): boolean
   /** The formula card, the `[[` card, the selection bar and the folds, for a probe. */
   report(): { math: string; links: WikiLinkReport; raw: boolean; toolbar: ToolbarReport; folded: number[] }
 }
@@ -662,12 +665,33 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
     return true
   }
 
+  /**
+   * The quotation a page link closes — its block quote, or the link's own line
+   * for a passage in a sentence (`quotedPassages`) — brought into view and
+   * glowing for a moment, as the Mac's `revealQuotation` does it. The caret
+   * stays where it was: put on the quotation, its lines would turn back into
+   * their Markdown.
+   */
+  function revealQuotation(url: string): boolean {
+    const doc = view.state.doc.toString()
+    const passage = quotedPassages(doc).find((one) => one.url === url)
+    const at = passage ? -1 : doc.indexOf(url)
+    const range = passage ? passage.quote : at >= 0 ? { from: at, to: at + url.length } : null
+    if (!range) return false
+    view.dispatch({ effects: [flash.of(range), EditorView.scrollIntoView(range.from, { y: 'center' })] })
+    setTimeout(() => {
+      if (!view.dom.isConnected) return
+      view.dispatch({ effects: flash.of(null) })
+    }, 1600)
+    return true
+  }
+
   title.value = loadedTitle = note?.title ?? ''
   drawTags()
   drawConnections()
 
   return {
-    id, node, view, refresh, detach, focus, insert, reveal,
+    id, node, view, refresh, detach, focus, insert, reveal, revealQuotation,
     report: () => ({
       math: math.report(), links: links.report(), raw: view.state.field(rawField),
       toolbar: toolbar.report(), folded: foldedRanges(view.state).map((fold) => fold.from),

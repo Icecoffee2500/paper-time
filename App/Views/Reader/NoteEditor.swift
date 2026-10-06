@@ -33,6 +33,9 @@ struct NoteEditor: NSViewRepresentable {
     /// what is on screen, and the whole run is not asked for — a formula
     /// or a link in the middle of it is spelled differently here.
     @Binding var pendingReveal: String?
+    /// A quotation to scroll to and flash, by its page link's address — the
+    /// rule beside its passage was clicked on the page. Cleared once shown.
+    @Binding var pendingPassage: String?
     /// Shows the Markdown as written, for when a link or a formula needs
     /// changing by hand.
     var showsRawText = false
@@ -149,6 +152,81 @@ struct NoteEditor: NSViewRepresentable {
                 pendingReveal = nil
             }
         }
+
+        if let address = pendingPassage {
+            DispatchQueue.main.async {
+                Self.revealQuotation(address, in: textView)
+                pendingPassage = nil
+            }
+        }
+    }
+
+    /// Scrolls to the quotation whose page link is this address and flashes
+    /// it the way Find does: the block quote the link closes, or the link's
+    /// own line for a passage in a sentence. The caret stays where it was —
+    /// put on the quotation, the line would turn back into its Markdown.
+    static func revealQuotation(_ address: String, in textView: NSTextView) {
+        guard let storage = textView.textStorage, storage.length > 0 else { return }
+        let shown = storage.string as NSString
+        var chip: NSRange?
+        storage.enumerateAttribute(NoteChip.attribute, in: NSRange(location: 0, length: storage.length)) { value, range, stop in
+            let url = (value as? URL)?.absoluteString ?? (value as? String)
+            if url == address {
+                chip = range
+                stop.pointee = true
+            }
+        }
+        // A line shown as written spells the address out.
+        let found = chip ?? {
+            let raw = shown.range(of: address)
+            return raw.location == NSNotFound ? nil : raw
+        }()
+        guard let found else {
+            if Boot.isSet("PAPERTIME_NOTE_REVEAL") {
+                FileHandle.standardError.write(Data("note reveal: quotation \(address.prefix(60)) not in the note\n".utf8))
+            }
+            return
+        }
+        let range = quotation(endingWith: found, in: storage)
+        textView.scrollRangeToVisible(range)
+        textView.showFindIndicator(for: range)
+        if Boot.isSet("PAPERTIME_NOTE_REVEAL") {
+            let words = shown.substring(with: range).replacingOccurrences(of: "\n", with: "⏎")
+            FileHandle.standardError.write(Data("note reveal: quotation at \(range.location)+\(range.length): “\(words)”\n".utf8))
+        }
+    }
+
+    /// The quotation a page link closes, as the note shows it: back up the
+    /// lines of its block quote — the ones under the quotation's rule — to
+    /// where the quote opens, or to the line before that closes another
+    /// quotation. A link outside a quote is its own line.
+    static func quotation(endingWith link: NSRange, in storage: NSTextStorage) -> NSRange {
+        let shown = storage.string as NSString
+        let last = shown.paragraphRange(for: link)
+        func quoteEdge(_ paragraph: NSRange) -> NoteMarkdown.QuoteEdge? {
+            guard paragraph.length > 0 else { return nil }
+            return (storage.attribute(NoteQuoteBar.attribute, at: paragraph.location, effectiveRange: nil) as? Int)
+                .map(NoteMarkdown.QuoteEdge.init(rawValue:))
+        }
+        func hasLink(_ paragraph: NSRange) -> Bool {
+            var found = false
+            storage.enumerateAttribute(NoteChip.attribute, in: paragraph) { value, _, stop in
+                if value != nil { found = true; stop.pointee = true }
+            }
+            return found
+        }
+        var start = last.location
+        if let edge = quoteEdge(last), !edge.contains(.opens) {
+            while start > 0 {
+                let above = shown.paragraphRange(for: NSRange(location: start - 1, length: 0))
+                guard let edge = quoteEdge(above), !hasLink(above) else { break }
+                start = above.location
+                if edge.contains(.opens) { break }
+            }
+        }
+        var end = NSMaxRange(last)
+        while end > start, [10, 13].contains(shown.character(at: end - 1)) { end -= 1 }
+        return NSRange(location: start, length: max(end - start, 0))
     }
 
     /// Scrolls to the first place the first few of these words stand, and

@@ -466,6 +466,25 @@ public final class NotesModel {
     /// text and the editor shows the Markdown.
     public var reveal: String?
 
+    /// A quotation asked for from the page it quotes: the rule beside a
+    /// passage was clicked (`QuoteLink`). Set by a reader; the window opens
+    /// the note where notes are showing, hands the address to
+    /// `revealPassage`, and clears this.
+    public struct PassageRequest: Equatable {
+        public var noteID: String
+        /// The quotation's page link, as the note spells it.
+        public var url: String
+        /// The paper whose page was clicked.
+        public var paperID: UUID
+    }
+    public var passageRequest: PassageRequest?
+
+    /// The quotation the open note's editor scrolls to and flashes, by its
+    /// page link's address; read and cleared by the editor once shown.
+    /// An address rather than words: a passage can be quoted twice, and
+    /// the words of one are the words of the other.
+    public var revealPassage: String?
+
     /// The notes written while reading one paper, in the order they were
     /// written — the Notes tab's order on both builds.
     public func notes(forPaper paperID: UUID) -> [Zettel] {
