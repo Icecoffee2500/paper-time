@@ -18,7 +18,7 @@
  */
 import { EditorSelection, EditorState, Prec, RangeSetBuilder, StateEffect, StateField, type Extension, type Range } from '@codemirror/state'
 import { Decoration, EditorView, WidgetType, keymap, type DecorationSet } from '@codemirror/view'
-import { blankingCode, emphasisClasses, emphasisPieces, emphasisWidth, planNote, type InlineToken, type PlannedLine } from '../../../shared/noteMarkdown.js'
+import { blankingCode, emphasisClasses, emphasisPieces, emphasisWidth, markerClass, planNote, type InlineToken, type PlannedLine } from '../../../shared/noteMarkdown.js'
 import { toggleChildrenEnd } from '../../../shared/noteBlocks.js'
 import { L } from '../../../shared/lang.js'
 import { parseTable, tableBlocks, type Table } from '../../../shared/noteTable.js'
@@ -39,15 +39,12 @@ export const rawField = StateField.define<boolean>({
   },
 })
 
-/** The three bullets a nested list goes round (`shownMarker`), and a toggle's two arrows: each one glyph wide. */
-const BULLETS = new Set(['•', '◦', '▪', '▾', '▸'])
-
 class MarkerWidget extends WidgetType {
   constructor(readonly text: string, readonly done: boolean) { super() }
   override eq(other: MarkerWidget) { return other.text === this.text && other.done === this.done }
   toDOM() {
     const span = document.createElement('span')
-    span.className = `nm-marker${BULLETS.has(this.text) ? '' : ' nm-marker-wide'}${this.done ? ' nm-marker-done' : ''}`
+    span.className = markerClass(this.text, this.done)
     span.textContent = this.text
     return span
   }
@@ -504,11 +501,13 @@ export interface Drawn {
   decorations: DecorationSet
   /** A bullet, a number or a checkbox: a marker drawn as the thing it is, whichever line the caret is on. */
   markers: DecorationSet
+  /** The markers of a list's lines — a bullet, a number, a box, a toggle's arrow — which a caret never rests before or inside. */
+  listMarkers: DecorationSet
   /** The children of the toggles folded shut, in the source. */
   folded: { from: number; to: number; key: string }[]
 }
 
-const nothingDrawn: Drawn = { decorations: Decoration.none, markers: Decoration.none, folded: [] }
+const nothingDrawn: Drawn = { decorations: Decoration.none, markers: Decoration.none, listMarkers: Decoration.none, folded: [] }
 
 /** The children of the toggles folded shut, for a probe: where each fold begins. */
 export function foldedRanges(state: EditorState): { from: number; to: number }[] {
@@ -524,6 +523,7 @@ export function noteDecorations(state: EditorState): Drawn {
   const plan = planNote(source, null).map((line) => ({ ...line, revealed: heads.some((head) => head >= line.from && head <= line.to) }))
   const ranges: Range<Decoration>[] = []
   const markers: Range<Decoration>[] = []
+  const listMarkers: Range<Decoration>[] = []
   const folded: Drawn['folded'] = []
   const shut = state.field(foldedField, false) ?? new Set<string>()
   const counted = numbering(source, plan)
@@ -586,6 +586,7 @@ export function noteDecorations(state: EditorState): Drawn {
         const marker = Decoration.replace({ widget: new ToggleWidget(key, shut.has(key)) }).range(line.from, line.markerEnd)
         ranges.push(marker)
         markers.push(marker)
+        listMarkers.push(marker)
       } else {
         // A bullet is a bullet, on the caret's line too (Notion): never «- ».
         const shown = line.shownMarker.replace('\t', '')
@@ -593,6 +594,7 @@ export function noteDecorations(state: EditorState): Drawn {
         const marker = Decoration.replace({ widget: new MarkerWidget(shown, done) }).range(line.from, line.markerEnd)
         ranges.push(marker)
         markers.push(marker)
+        listMarkers.push(marker)
       }
     }
     // The words' own look: a quotation's italics and colour, a done task struck through.
@@ -603,7 +605,7 @@ export function noteDecorations(state: EditorState): Drawn {
     if (!line.revealed) for (const token of pieces) tokenRanges(token, source, line, ranges, counted)
     else for (const token of line.tokens) syntaxRanges(token, source, ranges)
   })
-  return { decorations: Decoration.set(ranges, true), markers: Decoration.set(markers, true), folded }
+  return { decorations: Decoration.set(ranges, true), markers: Decoration.set(markers, true), listMarkers: Decoration.set(listMarkers, true), folded }
 }
 
 const decorationField = StateField.define<Drawn>({
@@ -646,15 +648,38 @@ function pastFold(folded: Drawn['folded'], head: number, wasAt: number, length: 
   return fold.from
 }
 
+/**
+ * A caret at the start of a list's line, or inside its marker, goes to the
+ * marker's words — or, when it got there stepping left from those words, on
+ * to the end of the line above. There is nothing before a drawn marker to
+ * type into: a caret left there (a press on the bullet's left half, Home
+ * twice) put what was typed in front of the marker, «x- a», and the item
+ * was gone. `wasAt` is null when the caret did not step there — a press, an
+ * edit.
+ */
+function besideListMarker(markers: DecorationSet, head: number, wasAt: number | null): number {
+  let moved = head
+  markers.between(head, head, (from, to) => {
+    if (from <= head && head < to) {
+      moved = wasAt === to && from > 0 ? from - 1 : to
+      return false
+    }
+    return undefined
+  })
+  return moved
+}
+
 /** A caret never rests inside a marker: there is nothing there to type into. */
 const caretOutOfMarkers = EditorState.transactionFilter.of((tr) => {
   if (!tr.selection) return tr
-  const { markers, folded } = tr.state.field(decorationField)
+  const { markers, listMarkers, folded } = tr.state.field(decorationField)
   if (markers.size === 0) return tr
   const wasAt = tr.startState.selection.main.head
+  const stepped = !tr.docChanged && !tr.isUserEvent('select.pointer')
   let moved = false
   const ranges = tr.selection.ranges.map((range) => {
     let head = outsideMarkers(markers, range.head)
+    if (range.empty) head = besideListMarker(listMarkers, head, stepped ? wasAt : null)
     if (range.empty && !tr.docChanged) head = pastFold(folded, head, wasAt, tr.state.doc.length)
     if (head === range.head) return range
     moved = true

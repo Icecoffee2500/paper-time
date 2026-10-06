@@ -854,7 +854,8 @@ enum NoteMarkdown {
             // in the middle of the line, and one with numbers across all of
             // it, the numbers at the right-hand edge.
             let alone = !revealed && standsAlone(block)
-            let style = alone ? centered(block.paragraphStyle) : block.paragraphStyle
+            let number = listNumbers[lineRange.location]
+            let style = alone ? centered(block.paragraphStyle) : block.paragraphStyle(number: number)
 
             if markerLength > 0 {
                 // Every marker is drawn on the line being edited as well
@@ -868,7 +869,7 @@ enum NoteMarkdown {
                 // drawn there too (Notion).
                 let asWritten = revealed && (block.kind == .quote || { if case .heading = block.kind { true } else { false } }())
                 let shown = asWritten ? block.marker
-                    : (folded != nil ? block.collapsedMarker : block.shownMarker(number: listNumbers[lineRange.location]))
+                    : (folded != nil ? block.collapsedMarker : block.shownMarker(number: number))
                 var attributes: [NSAttributedString.Key: Any] = [
                     .font: block.markerFont, .foregroundColor: asWritten ? syntaxColor : block.markerColor,
                 ]
@@ -1180,6 +1181,38 @@ enum NoteMarkdown {
             return attributes
         }
 
+        /// The gap between a number's label and its words: a third of an
+        /// em, the Portable build's `0.3em`.
+        static let labelGap = NoteTypography.baseSize * 0.3
+
+        /// The paragraph a line is set in, its label measured: a number, a
+        /// letter or a numeral is set against its words, `labelGap` short
+        /// of them, in the room to their left — a level's at the left, two
+        /// levels' under an item, where nothing else is on that line — so
+        /// «iii.» ends where «i.» does and every item's words start in one
+        /// column. The room had been a bullet's: «ii.» and «2.» touched
+        /// their words, and a label wider than it — «iii.», «iv.», «10.» —
+        /// sent its tab past the line's one tab stop, and the words were set
+        /// out of sight, the caret with them: what was typed there did not
+        /// appear. A label too wide even for this room pushes its own words
+        /// on, and only its own.
+        func paragraphStyle(number shown: Int?) -> NSParagraphStyle {
+            guard case .ordered = kind else { return paragraphStyle }
+            let label = String(shownMarker(number: shown).dropLast())
+            let key = "label|\(indent)|\(label)"
+            if let known = NoteMarkdown.styles[key] { return known }
+            let style = paragraphStyle.mutableCopy() as! NSMutableParagraphStyle
+            let step = NoteTypography.baseSize * 1.5
+            let base = step * CGFloat(indent + 1)
+            let room = min(base, step * 2)
+            let width = NSAttributedString(string: label, attributes: [.font: markerFont]).size().width
+            let start = max(base - room, base - Self.labelGap - width)
+            style.firstLineHeadIndent = start
+            style.tabStops = [NSTextTab(textAlignment: .left, location: max(base, start + width + Self.labelGap))]
+            NoteMarkdown.styles[key] = style
+            return style
+        }
+
         /// Wrapped lines of a list item line up under the first word rather
         /// than under the bullet — what every outliner does and no plain text
         /// view does by itself.
@@ -1202,6 +1235,9 @@ enum NoteMarkdown {
             // rhythm the system's own writing apps use.
             style.lineSpacing = 4.5
             style.paragraphSpacing = 11
+            // A tab past the last stop goes to the next of these rather than
+            // nowhere: with none, the words after it were set out of sight.
+            style.defaultTabInterval = NoteTypography.baseSize * 1.75
             let step = NoteTypography.baseSize * 1.5
             switch kind {
             case .bullet, .ordered, .task, .toggle:

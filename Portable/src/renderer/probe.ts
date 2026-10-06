@@ -26,6 +26,7 @@ import { openEditor as openNoteEditor, openNoteInTab } from './ui/notesTab.js'
 import { sketchEditor, sketchSelectionChanged } from './ui/sketchEditing.js'
 import type { TextHit } from './textSearch.js'
 import type { Settings } from './state.js'
+import { Transaction } from '@codemirror/state'
 
 export function installProbeSurface() {
   if (!flags.probe) return
@@ -129,7 +130,8 @@ export function installProbeSurface() {
       setSlipBoxText: (text: string, caret?: number) => {
         const view = slipBoxEditor()?.view
         if (!view) return false
-        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text }, selection: { anchor: caret ?? text.length } })
+        // Not a step of the note's history: ⌘Z after it is the keys' own.
+        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text }, selection: { anchor: caret ?? text.length }, annotations: Transaction.addToHistory.of(false) })
         return true
       },
       /** The slip-box editor given the caret, and a selection from `anchor` to `head` — no keys, no pointer. */
@@ -138,6 +140,14 @@ export function installProbeSurface() {
         if (!view) return false
         view.focus()
         view.dispatch({ selection: { anchor, head: head ?? anchor } })
+        return true
+      },
+      /** The caret put where a press put it: the transaction a click makes (`select.pointer`) — a press on a list's marker. */
+      pressSlipBox: (at: number) => {
+        const view = slipBoxEditor()?.view
+        if (!view) return false
+        view.focus()
+        view.dispatch({ selection: { anchor: at }, userEvent: 'select.pointer' })
         return true
       },
       /** The Notes tab's editor's text replaced. */

@@ -145,6 +145,19 @@ export function shownMarker(block: Block, shown?: number): string {
   }
 }
 
+/**
+ * The classes a list's marker is drawn with: a number, a letter or a numeral
+ * is a label, set against the words with the room to its left a level gives
+ * it (`NoteMarkdown.labelGap`); a bullet, a box or an arrow is one glyph in a
+ * box of its own. Either way the words of every item at a depth start in one
+ * column. The labels' room had been a glyph's: «2.» pushed its words three
+ * points further than «1.», and on the Mac a label wider than the room —
+ * «iii.», «10.» — sent its words past the line's last tab stop, out of sight.
+ */
+export function markerClass(shown: string, done = false): string {
+  return `nm-marker${shown.endsWith('.') ? ' nm-marker-label' : ''}${done ? ' nm-marker-done' : ''}`
+}
+
 /** The whole note, planned; `caret` is where the typist is, in the source. */
 export function planNote(source: string, caret: number | null = null): PlannedLine[] {
   const fenced = codeBlocks(source)

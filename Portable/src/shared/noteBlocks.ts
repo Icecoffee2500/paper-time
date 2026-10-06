@@ -3,15 +3,13 @@
  * `NoteMarkdown.Block(line:)`, the half that reads the marker — and what
  * Return and Tab do with it (`NoteTextView.insertNewline`, `insertTab`).
  *
- * Return continues what the line was doing: another bullet, the next
- * number, another empty checkbox — and an empty item ends the list, which
- * is how every outliner behaves and how nobody has to think about it. Tab
- * indents the item the caret is in rather than dropping a tab into the
- * middle of a sentence.
+ * What Return, Backspace, Delete, Tab and the «[] » and «-- » shortcuts do
+ * to a list is `NoteList` — `shared/noteList.ts`, held to the Mac's answers —
+ * and here are the doors to it. Fenced code is code: those functions leave it
+ * alone, and look for it only once there is something to do.
  */
-import { trimWhitespace } from './zettel.js'
 import { codeRowAt, openingFence, wantsClosing } from './noteCode.js'
-import { shiftItem } from './noteList.js'
+import { backspaceAt, deleteForwardAt, newLine, shiftSelection, shortcutAt } from './noteList.js'
 
 export type BlockKind =
   | { kind: 'plain' }
@@ -39,8 +37,8 @@ const HEADING = new RegExp(`^(#{1,6})${S}+`, 'u')
 const BULLET = new RegExp(`^[-*+]${S}+`, 'u')
 const ORDERED = new RegExp(`^(\\d{1,3})[.)]${S}+`, 'u')
 const TASK = new RegExp(`^([-*+])${S}+\\[([ xX])\\]${S}+`, 'u')
-/** A toggle's marker: a plus and one space, which every other reader shows as a bullet. */
-const TOGGLE = /^\+ /
+/** A toggle's marker: a plus and white space, which every other reader shows as a bullet (`Block.togglePattern`). */
+const TOGGLE = new RegExp(`^\\+${S}+`, 'u')
 
 export function blockOf(line: string): Block {
   let spaces = 0
@@ -84,93 +82,31 @@ export function blockOf(line: string): Block {
   return plain
 }
 
-/** The marker the next line starts with. */
-export function continuation(block: Block): string {
-  const indent = '  '.repeat(block.indent)
-  switch (block.type.kind) {
-    case 'bullet': return `${indent}- `
-    case 'ordered': return `${indent}${block.type.number + 1}. `
-    case 'task': return `${indent}- [ ] `
-    case 'quote': return `${indent}> `
-    // A toggle's next line is its first child: a plain line, one step in.
-    case 'toggle': return `${indent}  `
-    default: return ''
-  }
-}
-
 /** The line the caret is on: where it starts and what it says, without its break. */
 function lineAt(text: string, caret: number): { start: number; line: string } {
-  const start = text.lastIndexOf('\n', caret - 1) + 1
+  // (`lastIndexOf` reads a place before the start as the start itself.)
+  const start = caret <= 0 ? 0 : text.lastIndexOf('\n', caret - 1) + 1
   const end = text.indexOf('\n', caret)
   return { start, line: text.slice(start, end < 0 ? text.length : end).replace(/\r$/, '') }
 }
 
-/** An edit to make: put `insert` over [from, to), then the caret goes to `caret`. */
+/** An edit to make: put `insert` over [from, to), then the caret goes to `caret` — or a selection of `length` from it. */
 export interface LineEdit {
   from: number
   to: number
   insert: string
   caret: number
+  length?: number
 }
 
 /**
- * What Return does at a caret with nothing selected: null when the line is
- * no list, and the plain new line is right.
+ * What Return does at a caret with nothing selected (`NoteList.newLine`):
+ * null when the line is no list, and the plain new line is right — and in
+ * fenced code, which has its own Return (`codeReturnEdit`). `folded`: the
+ * caret's line is a toggle whose children are folded away.
  */
-export function returnEdit(text: string, caret: number): LineEdit | null {
-  // A line of fenced code has no marker, whatever it starts with: `- x` in
-  // code is not a bullet to carry on (`codeReturnEdit` has code's Return).
-  if (codeRowAt(text, caret)) return null
-  const { start, line } = lineAt(text, caret)
-  const block = blockOf(line)
-  if (block.type.kind === 'plain' || block.marker.length === 0) {
-    // An empty child line of a toggle steps out to the toggle's own level,
-    // as an empty nested item does: Return twice leaves the toggle.
-    if (block.type.kind === 'plain' && line.length >= 2 && /^ +$/.test(line) && caret === start + line.length) {
-      const header = toggleAbove(text, start, line.length)
-      if (header) {
-        const lead = ' '.repeat(header.indent * 2)
-        return { from: start, to: start + line.length, insert: lead, caret: start + lead.length }
-      }
-    }
-    return null
-  }
-  if (trimWhitespace(block.content).length === 0) {
-    // An empty nested item steps out a level first, as Notion's does — a list
-    // item as ⇧Tab moves it (`shiftItem`); at the left already, the marker
-    // goes rather than another being made.
-    if (block.indent > 0) return (isListItem(block) ? shiftItem(text, caret, -1) : null) ?? { from: start, to: start + 2, insert: '', caret: Math.max(start, caret - 2) }
-    const markerEnd = start + block.marker.length
-    const tail = text.slice(markerEnd, caret)
-    return { from: start, to: Math.max(caret, markerEnd), insert: `${tail}\n`, caret: start + tail.length + 1 }
-  }
-  // A heading carries nothing on: the plain new line is right.
-  if (continuation(block) === '') return null
-  const next = `\n${continuation(block)}`
-  return { from: caret, to: caret, insert: next, caret: caret + next.length }
-}
-
-/**
- * The toggle a line at `lineStart` with `spaces` of indentation is a child
- * of: the nearest line above with less indentation, when that line is a
- * toggle header. Blank lines between are skipped; a line as deep or deeper
- * is a sibling child. Null when the line is under no toggle.
- */
-function toggleAbove(text: string, lineStart: number, spaces: number): Block | null {
-  let end = lineStart - 1
-  while (end >= 0) {
-    const start = text.lastIndexOf('\n', end - 1) + 1
-    const line = text.slice(start, end)
-    if (line.trim().length > 0) {
-      const lead = line.length - line.trimStart().length
-      if (lead < spaces) {
-        const block = blockOf(line)
-        return block.type.kind === 'toggle' ? block : null
-      }
-    }
-    end = start - 1
-  }
-  return null
+export function returnEdit(text: string, caret: number, folded = false): LineEdit | null {
+  return newLine(text, caret, folded)
 }
 
 /**
@@ -199,39 +135,46 @@ export function toggleChildrenEnd(text: string, headerStart: number): number | n
 }
 
 /**
- * What Tab (`by: 1`) or Shift-Tab (`by: -1`) does: the item goes a level in or
- * out with what is under it, and its list is numbered as it is shown
- * (`shiftItem`, the Mac's `NoteList.shift`). Null off a list line; at the left
- * already, an edit that changes nothing — the key is taken.
+ * What Tab (`by: 1`) or Shift-Tab (`by: -1`) does over [from, to): the item
+ * — or every item selected — goes a level in or out with what is under it,
+ * and its list is numbered as it is shown (`NoteList.shift`). Null off a
+ * list line; at the left already, an edit that changes nothing — the key is
+ * taken.
  */
-export function indentEdit(text: string, caret: number, by: 1 | -1): LineEdit | null {
-  if (codeRowAt(text, caret)) return null
-  return shiftItem(text, caret, by)
-}
-
-/** A bullet, a number, a box or a toggle. */
-function isListItem(block: Block): boolean {
-  const kind = block.type.kind
-  return kind === 'bullet' || kind === 'ordered' || kind === 'task' || kind === 'toggle'
+export function indentEdit(text: string, from: number, to: number, by: 1 | -1): LineEdit | null {
+  return shiftSelection(text, from, to, by)
 }
 
 /**
- * What Backspace does with the caret right after a marker, nothing selected
- * (Notion): a nested item steps out a level; one at the left loses its
- * marker and is plain words again. Null anywhere else — the ordinary
- * Backspace is right there.
+ * What Backspace does with nothing selected and the caret at the edge of a
+ * marker (`NoteList.backspace`): a nested item steps out a level; one at the
+ * left loses its marker and is plain words again. Null anywhere else — the
+ * ordinary Backspace is right there.
  */
 export function backspaceEdit(text: string, caret: number): LineEdit | null {
-  if (codeRowAt(text, caret)) return null
-  const { start, line } = lineAt(text, caret)
-  const block = blockOf(line)
-  if (block.type.kind === 'plain' || block.marker.length === 0) return null
-  if (caret !== start + block.marker.length) return null
-  if (block.indent > 0) return (isListItem(block) ? shiftItem(text, caret, -1) : null) ?? { from: start, to: start + 2, insert: '', caret: caret - 2 }
-  return { from: start, to: caret, insert: '', caret: start }
+  return backspaceAt(text, caret)
+}
+
+/**
+ * What Delete does with nothing selected at the end of a line before a
+ * marked one (`NoteList.deleteForward`): the next line's words join this
+ * one, without its marker. Null anywhere else.
+ */
+export function deleteForwardEdit(text: string, caret: number): LineEdit | null {
+  return deleteForwardAt(text, caret)
+}
+
+/**
+ * Notion's shortcuts, as a space is typed (`NoteList.shortcut`): «[]» at the
+ * start of a line or of a bullet's words is a box to tick, «--» at the start
+ * of a line a toggle. Null anywhere else, where the space goes in.
+ */
+export function shortcutEdit(text: string, caret: number): LineEdit | null {
+  return shortcutAt(text, caret)
 }
 
 // MARK: - Emphasis and wrapping
+
 
 /** An edit that leaves something selected afterwards. */
 export interface SelectionEdit {
@@ -307,36 +250,6 @@ export function wrapEdit(text: string, from: number, to: number, typed: string):
   if (!CODE_WRAPS.has(typed) && codeRowAt(text, lo)) return null
   const selected = text.slice(lo, hi)
   return { from: lo, to: hi, insert: typed + selected + close, selectFrom: lo + 1, selectTo: lo + 1 + selected.length }
-}
-
-/**
- * Notion's to-do: «[]» and a space at the start of a line become an empty
- * checkbox. Null unless the line so far, after its indentation, is exactly
- * that.
- */
-export function todoShortcutEdit(text: string, caret: number): LineEdit | null {
-  if (codeRowAt(text, caret)) return null
-  const { start } = lineAt(text, caret)
-  const sofar = text.slice(start, caret)
-  const spaces = sofar.length - sofar.trimStart().length
-  if (sofar.slice(spaces) !== '[]') return null
-  const insert = '- [ ] '
-  return { from: start + spaces, to: caret, insert, caret: start + spaces + insert.length }
-}
-
-/**
- * Notion's toggle: «--» and a space at the start of a line become «+ », a
- * toggle header whose children are the indented lines under it. Null unless
- * the line so far, after its indentation, is exactly the two dashes.
- */
-export function toggleShortcutEdit(text: string, caret: number): LineEdit | null {
-  if (codeRowAt(text, caret)) return null
-  const { start } = lineAt(text, caret)
-  const sofar = text.slice(start, caret)
-  const spaces = sofar.length - sofar.trimStart().length
-  if (sofar.slice(spaces) !== '--') return null
-  const insert = '+ '
-  return { from: start + spaces, to: caret, insert, caret: start + spaces + insert.length }
 }
 
 // MARK: - Auto-pairs
@@ -477,7 +390,7 @@ export function codeIndentEdit(text: string, from: number, to: number, by: 1 | -
   const row = codeRowAt(text, lo)
   if (!row || row.role !== 'line') return null
   if (by > 0 && lo === hi) return { from: lo, to: lo, insert: CODE_INDENT, selectFrom: lo + CODE_INDENT.length, selectTo: lo + CODE_INDENT.length }
-  const start = text.lastIndexOf('\n', lo - 1) + 1
+  const start = lo <= 0 ? 0 : text.lastIndexOf('\n', lo - 1) + 1
   // A selection that ends at the start of a line does not take that line.
   const last = hi > lo && text[hi - 1] === '\n' ? hi - 1 : hi
   const lineEnd = text.indexOf('\n', last)
@@ -503,13 +416,19 @@ export function codeIndentEdit(text: string, from: number, to: number, by: 1 | -
 /**
  * Where Home (⌘←) goes on a marked line, from `head` characters into it:
  * after the marker when the caret is further in than that, else to the very
- * start — the two places a line with a marker has. Null on a line with no
+ * start — the two places a line with a marker has. A caret on a list line
+ * has only the first: its marker is drawn, and a caret before it was typed
+ * into as the line's words — «x- a», the item gone. A selection (`extend`)
+ * still reaches the start, to take the line whole. Null on a line with no
  * marker, where the editor's own Home is right.
  */
-export function homeTarget(line: string, head: number): number | null {
+export function homeTarget(line: string, head: number, extend = false): number | null {
   const block = blockOf(line)
   if (block.marker.length === 0) return null
   const contentStart = block.marker.length
+  const kind = block.type.kind
+  const listed = kind === 'bullet' || kind === 'ordered' || kind === 'task' || kind === 'toggle'
+  if (listed && !extend) return contentStart
   return head > contentStart ? contentStart : 0
 }
 

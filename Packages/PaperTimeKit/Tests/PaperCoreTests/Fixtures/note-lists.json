@@ -1,4 +1,326 @@
 {
+  "backspaces" : [
+    {
+      "caret" : 2,
+      "edit" : {
+        "after" : "a",
+        "caret" : 0,
+        "range" : [
+          0,
+          2
+        ],
+        "replacement" : ""
+      },
+      "note" : "- a"
+    },
+    {
+      "caret" : 0,
+      "edit" : {
+        "after" : "a",
+        "caret" : 0,
+        "range" : [
+          0,
+          2
+        ],
+        "replacement" : ""
+      },
+      "note" : "- a"
+    },
+    {
+      "caret" : 1,
+      "edit" : {
+        "after" : "a",
+        "caret" : 0,
+        "range" : [
+          0,
+          2
+        ],
+        "replacement" : ""
+      },
+      "note" : "- a"
+    },
+    {
+      "caret" : 4,
+      "edit" : {
+        "after" : "- a",
+        "caret" : 2,
+        "range" : [
+          0,
+          2
+        ],
+        "replacement" : ""
+      },
+      "note" : "  - a"
+    },
+    {
+      "caret" : 10,
+      "edit" : {
+        "after" : "1. a\n2. x\n  1. y\n3. b",
+        "caret" : 8,
+        "range" : [
+          5,
+          15
+        ],
+        "replacement" : "2. x\n  1. y\n3"
+      },
+      "note" : "1. a\n  1. x\n  2. y\n2. b"
+    },
+    {
+      "caret" : 8,
+      "edit" : {
+        "after" : "1. a\nb\n3. c",
+        "caret" : 5,
+        "range" : [
+          5,
+          3
+        ],
+        "replacement" : ""
+      },
+      "note" : "1. a\n2. b\n3. c"
+    },
+    {
+      "caret" : 2,
+      "edit" : {
+        "after" : "q",
+        "caret" : 0,
+        "range" : [
+          0,
+          2
+        ],
+        "replacement" : ""
+      },
+      "note" : "> q"
+    },
+    {
+      "caret" : 3,
+      "edit" : {
+        "after" : "H",
+        "caret" : 0,
+        "range" : [
+          0,
+          3
+        ],
+        "replacement" : ""
+      },
+      "note" : "## H"
+    },
+    {
+      "caret" : 1,
+      "edit" : null,
+      "note" : "## H"
+    },
+    {
+      "caret" : 0,
+      "edit" : null,
+      "note" : "> q"
+    },
+    {
+      "caret" : 2,
+      "edit" : {
+        "after" : "T",
+        "caret" : 0,
+        "range" : [
+          0,
+          2
+        ],
+        "replacement" : ""
+      },
+      "note" : "+ T"
+    },
+    {
+      "caret" : 7,
+      "edit" : {
+        "after" : "1. a\n",
+        "caret" : 5,
+        "range" : [
+          5,
+          2
+        ],
+        "replacement" : ""
+      },
+      "note" : "1. a\n- "
+    },
+    {
+      "caret" : 9,
+      "edit" : {
+        "after" : "- p\n1. x",
+        "caret" : 7,
+        "range" : [
+          4,
+          2
+        ],
+        "replacement" : ""
+      },
+      "note" : "- p\n  1. x"
+    },
+    {
+      "caret" : 4,
+      "edit" : {
+        "after" : "> q",
+        "caret" : 2,
+        "range" : [
+          0,
+          2
+        ],
+        "replacement" : ""
+      },
+      "note" : "  > q"
+    },
+    {
+      "caret" : 2,
+      "edit" : {
+        "after" : "",
+        "caret" : 0,
+        "range" : [
+          0,
+          2
+        ],
+        "replacement" : ""
+      },
+      "note" : "- "
+    },
+    {
+      "caret" : 6,
+      "edit" : null,
+      "note" : "```\n- x\n```"
+    },
+    {
+      "caret" : 4,
+      "edit" : null,
+      "note" : "- a\ntext"
+    },
+    {
+      "caret" : 3,
+      "edit" : null,
+      "note" : "- a"
+    }
+  ],
+  "deletes" : [
+    {
+      "caret" : 4,
+      "edit" : {
+        "after" : "1. ab\n2. c",
+        "caret" : 4,
+        "range" : [
+          4,
+          7
+        ],
+        "replacement" : "b\n2"
+      },
+      "note" : "1. a\n2. b\n3. c"
+    },
+    {
+      "caret" : 4,
+      "edit" : {
+        "after" : "1. ab\n  1. x\n2. c",
+        "caret" : 4,
+        "range" : [
+          4,
+          14
+        ],
+        "replacement" : "b\n  1. x\n2"
+      },
+      "note" : "1. a\n2. b\n  1. x\n3. c"
+    },
+    {
+      "caret" : 3,
+      "edit" : {
+        "after" : "- ax",
+        "caret" : 3,
+        "range" : [
+          3,
+          5
+        ],
+        "replacement" : ""
+      },
+      "note" : "- a\n  - x"
+    },
+    {
+      "caret" : 0,
+      "edit" : {
+        "after" : "- a",
+        "caret" : 2,
+        "range" : [
+          0,
+          1
+        ],
+        "replacement" : ""
+      },
+      "note" : "\n- a"
+    },
+    {
+      "caret" : 2,
+      "edit" : {
+        "after" : "  - a",
+        "caret" : 4,
+        "range" : [
+          2,
+          3
+        ],
+        "replacement" : ""
+      },
+      "note" : "  \n  - a"
+    },
+    {
+      "caret" : 4,
+      "edit" : {
+        "after" : "textH",
+        "caret" : 4,
+        "range" : [
+          4,
+          4
+        ],
+        "replacement" : ""
+      },
+      "note" : "text\n## H"
+    },
+    {
+      "caret" : 1,
+      "edit" : null,
+      "note" : "a\nb"
+    },
+    {
+      "caret" : 3,
+      "edit" : null,
+      "note" : "- a"
+    },
+    {
+      "caret" : 3,
+      "edit" : null,
+      "note" : "- a\n\n- b"
+    },
+    {
+      "caret" : 1,
+      "edit" : null,
+      "note" : "x\n```\n- y\n```"
+    },
+    {
+      "caret" : 3,
+      "edit" : {
+        "after" : "- ab",
+        "caret" : 3,
+        "range" : [
+          3,
+          4
+        ],
+        "replacement" : ""
+      },
+      "note" : "- a\r\n- b"
+    },
+    {
+      "caret" : 2,
+      "edit" : {
+        "after" : "- b",
+        "caret" : 2,
+        "range" : [
+          2,
+          3
+        ],
+        "replacement" : ""
+      },
+      "note" : "- \n- b"
+    }
+  ],
   "numbers" : [
     {
       "note" : "## Method\n\n1. original model\n  2. the whole gradient\n  3. the retain gradient\n  4. $$\\nabla L = 0$$\n2. \n$$\nL(w)\n$$",
@@ -296,6 +618,575 @@
       ]
     }
   ],
+  "returns" : [
+    {
+      "caret" : 3,
+      "edit" : {
+        "after" : "- a\n- ",
+        "caret" : 6,
+        "range" : [
+          3,
+          0
+        ],
+        "replacement" : "\n- "
+      },
+      "note" : "- a"
+    },
+    {
+      "caret" : 3,
+      "edit" : {
+        "after" : "* a\n* ",
+        "caret" : 6,
+        "range" : [
+          3,
+          0
+        ],
+        "replacement" : "\n* "
+      },
+      "note" : "* a"
+    },
+    {
+      "caret" : 4,
+      "edit" : {
+        "after" : "1. a\n2. ",
+        "caret" : 8,
+        "range" : [
+          4,
+          0
+        ],
+        "replacement" : "\n2. "
+      },
+      "note" : "1. a"
+    },
+    {
+      "caret" : 4,
+      "edit" : {
+        "after" : "1) a\n2) ",
+        "caret" : 8,
+        "range" : [
+          4,
+          0
+        ],
+        "replacement" : "\n2) "
+      },
+      "note" : "1) a"
+    },
+    {
+      "caret" : 11,
+      "edit" : {
+        "after" : "1. a\n  1) x\n  2) ",
+        "caret" : 17,
+        "range" : [
+          11,
+          0
+        ],
+        "replacement" : "\n  2) "
+      },
+      "note" : "1. a\n  1) x"
+    },
+    {
+      "caret" : 10,
+      "edit" : {
+        "after" : "- [x] done\n- [ ] ",
+        "caret" : 17,
+        "range" : [
+          10,
+          0
+        ],
+        "replacement" : "\n- [ ] "
+      },
+      "note" : "- [x] done"
+    },
+    {
+      "caret" : 7,
+      "edit" : {
+        "after" : "* [ ] t\n* [ ] ",
+        "caret" : 14,
+        "range" : [
+          7,
+          0
+        ],
+        "replacement" : "\n* [ ] "
+      },
+      "note" : "* [ ] t"
+    },
+    {
+      "caret" : 8,
+      "edit" : {
+        "after" : "> quoted\n> ",
+        "caret" : 11,
+        "range" : [
+          8,
+          0
+        ],
+        "replacement" : "\n> "
+      },
+      "note" : "> quoted"
+    },
+    {
+      "caret" : 4,
+      "edit" : {
+        "after" : "9. a\n10. ",
+        "caret" : 9,
+        "range" : [
+          4,
+          0
+        ],
+        "replacement" : "\n10. "
+      },
+      "note" : "9. a"
+    },
+    {
+      "caret" : 4,
+      "edit" : {
+        "after" : "1. a\n2. \n3. b\n4. c",
+        "caret" : 8,
+        "range" : [
+          8,
+          3
+        ],
+        "replacement" : "\n3. b\n4"
+      },
+      "note" : "1. a\n2. b\n3. c"
+    },
+    {
+      "caret" : 9,
+      "edit" : {
+        "after" : "1. a\n2. b\n3. \n4. c",
+        "caret" : 13,
+        "range" : [
+          5,
+          6
+        ],
+        "replacement" : "2. b\n3. \n4"
+      },
+      "note" : "1. a\n1. b\n1. c"
+    },
+    {
+      "caret" : 5,
+      "edit" : {
+        "after" : "- one\n-  two",
+        "caret" : 8,
+        "range" : [
+          5,
+          0
+        ],
+        "replacement" : "\n- "
+      },
+      "note" : "- one two"
+    },
+    {
+      "caret" : 6,
+      "edit" : {
+        "after" : "- [ ] \n- [ ] todo",
+        "caret" : 13,
+        "range" : [
+          6,
+          0
+        ],
+        "replacement" : "\n- [ ] "
+      },
+      "note" : "- [ ] todo"
+    },
+    {
+      "caret" : 10,
+      "edit" : {
+        "after" : "1. a\n2. b\n3. \n4. c",
+        "caret" : 17,
+        "range" : [
+          13,
+          0
+        ],
+        "replacement" : "\n4. "
+      },
+      "note" : "1. a\n2. b\n3. c"
+    },
+    {
+      "caret" : 1,
+      "edit" : {
+        "after" : "1. \n2. a",
+        "caret" : 7,
+        "range" : [
+          3,
+          0
+        ],
+        "replacement" : "\n2. "
+      },
+      "note" : "1. a"
+    },
+    {
+      "caret" : 4,
+      "edit" : {
+        "after" : "  - \n  - x",
+        "caret" : 9,
+        "range" : [
+          4,
+          0
+        ],
+        "replacement" : "\n  - "
+      },
+      "note" : "  - x"
+    },
+    {
+      "caret" : 6,
+      "edit" : {
+        "after" : "- a\n\n",
+        "caret" : 5,
+        "range" : [
+          4,
+          2
+        ],
+        "replacement" : "\n"
+      },
+      "note" : "- a\n- "
+    },
+    {
+      "caret" : 8,
+      "edit" : {
+        "after" : "- a\n- ",
+        "caret" : 6,
+        "range" : [
+          4,
+          2
+        ],
+        "replacement" : ""
+      },
+      "note" : "- a\n  - "
+    },
+    {
+      "caret" : 17,
+      "edit" : {
+        "after" : "1. a\n  1. x\n2. ",
+        "caret" : 15,
+        "range" : [
+          12,
+          2
+        ],
+        "replacement" : ""
+      },
+      "note" : "1. a\n  1. x\n  2. "
+    },
+    {
+      "caret" : 12,
+      "edit" : {
+        "after" : "1. a\n  1. ",
+        "caret" : 10,
+        "range" : [
+          7,
+          3
+        ],
+        "replacement" : "1"
+      },
+      "note" : "1. a\n    3. "
+    },
+    {
+      "caret" : 8,
+      "edit" : {
+        "after" : "1. a\n\n\n2. b",
+        "caret" : 6,
+        "range" : [
+          5,
+          5
+        ],
+        "replacement" : "\n\n2"
+      },
+      "note" : "1. a\n2. \n3. b"
+    },
+    {
+      "caret" : 6,
+      "edit" : {
+        "after" : "> a\n\n",
+        "caret" : 5,
+        "range" : [
+          4,
+          2
+        ],
+        "replacement" : "\n"
+      },
+      "note" : "> a\n> "
+    },
+    {
+      "caret" : 6,
+      "edit" : {
+        "after" : "a\n> ",
+        "caret" : 4,
+        "range" : [
+          2,
+          2
+        ],
+        "replacement" : ""
+      },
+      "note" : "a\n  > "
+    },
+    {
+      "caret" : 7,
+      "edit" : {
+        "after" : "+ Title\n  ",
+        "caret" : 10,
+        "range" : [
+          7,
+          0
+        ],
+        "replacement" : "\n  "
+      },
+      "note" : "+ Title"
+    },
+    {
+      "caret" : 9,
+      "edit" : {
+        "after" : "  + Title\n    ",
+        "caret" : 14,
+        "range" : [
+          9,
+          0
+        ],
+        "replacement" : "\n    "
+      },
+      "note" : "  + Title"
+    },
+    {
+      "caret" : 2,
+      "edit" : {
+        "after" : "+ \n+ Title",
+        "caret" : 5,
+        "range" : [
+          2,
+          0
+        ],
+        "replacement" : "\n+ "
+      },
+      "note" : "+ Title"
+    },
+    {
+      "caret" : 4,
+      "edit" : {
+        "after" : "+ Ti\n  tle",
+        "caret" : 7,
+        "range" : [
+          4,
+          0
+        ],
+        "replacement" : "\n  "
+      },
+      "note" : "+ Title"
+    },
+    {
+      "caret" : 2,
+      "edit" : {
+        "after" : "+ \n+ T\n  child",
+        "caret" : 5,
+        "range" : [
+          2,
+          0
+        ],
+        "replacement" : "\n+ "
+      },
+      "folded" : true,
+      "note" : "+ T\n  child"
+    },
+    {
+      "caret" : 10,
+      "edit" : {
+        "after" : "+ Title\n",
+        "caret" : 8,
+        "range" : [
+          8,
+          2
+        ],
+        "replacement" : ""
+      },
+      "note" : "+ Title\n  "
+    },
+    {
+      "caret" : 24,
+      "edit" : {
+        "after" : "  + Title\n    child\n  ",
+        "caret" : 22,
+        "range" : [
+          22,
+          2
+        ],
+        "replacement" : ""
+      },
+      "note" : "  + Title\n    child\n    "
+    },
+    {
+      "caret" : 3,
+      "edit" : {
+        "after" : "+ T\n  child\n\n+ U",
+        "caret" : 12,
+        "range" : [
+          12,
+          0
+        ],
+        "replacement" : "\n"
+      },
+      "folded" : true,
+      "note" : "+ T\n  child\n+ U"
+    },
+    {
+      "caret" : 3,
+      "edit" : {
+        "after" : "+ T\n  one\n\n  two\n\n\n+ U",
+        "caret" : 17,
+        "range" : [
+          18,
+          0
+        ],
+        "replacement" : "\n"
+      },
+      "folded" : true,
+      "note" : "+ T\n  one\n\n  two\n\n+ U"
+    },
+    {
+      "caret" : 3,
+      "edit" : {
+        "after" : "+ T\n  ",
+        "caret" : 6,
+        "range" : [
+          3,
+          0
+        ],
+        "replacement" : "\n  "
+      },
+      "folded" : true,
+      "note" : "+ T"
+    },
+    {
+      "caret" : 7,
+      "edit" : {
+        "after" : "+ T\n  c\n  ",
+        "caret" : 10,
+        "range" : [
+          7,
+          0
+        ],
+        "replacement" : "\n  "
+      },
+      "note" : "+ T\n  c"
+    },
+    {
+      "caret" : 18,
+      "edit" : {
+        "after" : "- a\n  more about a\n  ",
+        "caret" : 21,
+        "range" : [
+          18,
+          0
+        ],
+        "replacement" : "\n  "
+      },
+      "note" : "- a\n  more about a"
+    },
+    {
+      "caret" : 4,
+      "edit" : {
+        "after" : "  ab\n  cd",
+        "caret" : 7,
+        "range" : [
+          4,
+          1
+        ],
+        "replacement" : "\n  "
+      },
+      "note" : "  ab cd"
+    },
+    {
+      "caret" : 2,
+      "edit" : {
+        "after" : "\n    x",
+        "caret" : 5,
+        "range" : [
+          0,
+          4
+        ],
+        "replacement" : "\n    "
+      },
+      "note" : "    x"
+    },
+    {
+      "caret" : 2,
+      "edit" : {
+        "after" : "\tx\n    ",
+        "caret" : 7,
+        "range" : [
+          2,
+          0
+        ],
+        "replacement" : "\n    "
+      },
+      "note" : "\tx"
+    },
+    {
+      "caret" : 6,
+      "edit" : {
+        "after" : "  ## H\n  ",
+        "caret" : 9,
+        "range" : [
+          6,
+          0
+        ],
+        "replacement" : "\n  "
+      },
+      "note" : "  ## H"
+    },
+    {
+      "caret" : 9,
+      "edit" : {
+        "after" : "- item\n\n  ",
+        "caret" : 10,
+        "range" : [
+          7,
+          2
+        ],
+        "replacement" : "\n  "
+      },
+      "note" : "- item\n  "
+    },
+    {
+      "caret" : 7,
+      "edit" : null,
+      "note" : "1. $$x+y$$"
+    },
+    {
+      "caret" : 12,
+      "edit" : null,
+      "note" : "  3. $\\alpha$ and more"
+    },
+    {
+      "caret" : 10,
+      "edit" : {
+        "after" : "1. $$x+y$$\n2. ",
+        "caret" : 14,
+        "range" : [
+          10,
+          0
+        ],
+        "replacement" : "\n2. "
+      },
+      "note" : "1. $$x+y$$"
+    },
+    {
+      "caret" : 5,
+      "edit" : null,
+      "note" : "plain"
+    },
+    {
+      "caret" : 10,
+      "edit" : null,
+      "note" : "## Heading"
+    },
+    {
+      "caret" : 0,
+      "edit" : null,
+      "note" : "> quoted"
+    },
+    {
+      "caret" : 7,
+      "edit" : null,
+      "note" : "```\n- x\n```"
+    }
+  ],
   "shifts" : [
     {
       "by" : 1,
@@ -532,6 +1423,288 @@
         "replacement" : ""
       },
       "note" : "1. a\n  1. x\n  2. "
+    },
+    {
+      "by" : 1,
+      "caret" : 0,
+      "edit" : {
+        "after" : "  - a\n  - b\n- c",
+        "caret" : 0,
+        "length" : 11,
+        "range" : [
+          0,
+          4
+        ],
+        "replacement" : "  - a\n  "
+      },
+      "length" : 7,
+      "note" : "- a\n- b\n- c"
+    },
+    {
+      "by" : 1,
+      "caret" : 4,
+      "edit" : {
+        "after" : "- a\n  - b\n  - c",
+        "caret" : 4,
+        "length" : 11,
+        "range" : [
+          4,
+          4
+        ],
+        "replacement" : "  - b\n  "
+      },
+      "length" : 7,
+      "note" : "- a\n- b\n- c"
+    },
+    {
+      "by" : 1,
+      "caret" : 5,
+      "edit" : {
+        "after" : "1. a\n  1. b\n  2. c\n2. d",
+        "caret" : 5,
+        "length" : 13,
+        "range" : [
+          5,
+          11
+        ],
+        "replacement" : "  1. b\n  2. c\n2"
+      },
+      "length" : 9,
+      "note" : "1. a\n2. b\n3. c\n4. d"
+    },
+    {
+      "by" : -1,
+      "caret" : 7,
+      "edit" : {
+        "after" : "1. a\n2. b\n3. c\n4. d",
+        "caret" : 5,
+        "length" : 9,
+        "range" : [
+          5,
+          15
+        ],
+        "replacement" : "2. b\n3. c\n4"
+      },
+      "length" : 11,
+      "note" : "1. a\n  1. b\n  2. c\n2. d"
+    },
+    {
+      "by" : -1,
+      "caret" : 17,
+      "edit" : {
+        "after" : "1. a\n  1. b\n2. c\n3. d\n4. e",
+        "caret" : 15,
+        "length" : 6,
+        "range" : [
+          12,
+          15
+        ],
+        "replacement" : "2. c\n3. d\n4"
+      },
+      "length" : 8,
+      "note" : "1. a\n  1. b\n  2. c\n  3. d\n2. e"
+    },
+    {
+      "by" : 1,
+      "caret" : 4,
+      "edit" : {
+        "after" : "- a\n  - b\n- c",
+        "caret" : 4,
+        "length" : 6,
+        "range" : [
+          4,
+          0
+        ],
+        "replacement" : "  "
+      },
+      "length" : 4,
+      "note" : "- a\n- b\n- c"
+    },
+    {
+      "by" : -1,
+      "caret" : 0,
+      "edit" : {
+        "after" : "1. a\n2. b",
+        "caret" : 0,
+        "length" : 9,
+        "range" : [
+          0,
+          0
+        ],
+        "replacement" : ""
+      },
+      "length" : 9,
+      "note" : "1. a\n2. b"
+    },
+    {
+      "by" : 1,
+      "caret" : 5,
+      "edit" : {
+        "after" : "1. a\n  1. b\n    1. x\n    2. y\n2. c",
+        "caret" : 5,
+        "length" : 15,
+        "range" : [
+          5,
+          20
+        ],
+        "replacement" : "  1. b\n    1. x\n    2. y\n2"
+      },
+      "length" : 11,
+      "note" : "1. a\n2. b\n  1. x\n  2. y\n3. c"
+    },
+    {
+      "by" : 1,
+      "caret" : 0,
+      "edit" : null,
+      "length" : 8,
+      "note" : "text\n- a"
+    },
+    {
+      "by" : -1,
+      "caret" : 6,
+      "edit" : {
+        "after" : "- p\n1. x\n2. y",
+        "caret" : 4,
+        "length" : 9,
+        "range" : [
+          4,
+          10
+        ],
+        "replacement" : "1. x\n2"
+      },
+      "length" : 11,
+      "note" : "- p\n  3. x\n  4. y"
+    }
+  ],
+  "shortcuts" : [
+    {
+      "caret" : 2,
+      "edit" : {
+        "after" : "- [ ] ",
+        "caret" : 6,
+        "range" : [
+          0,
+          2
+        ],
+        "replacement" : "- [ ] "
+      },
+      "note" : "[]"
+    },
+    {
+      "caret" : 4,
+      "edit" : {
+        "after" : "  - [ ] ",
+        "caret" : 8,
+        "range" : [
+          2,
+          2
+        ],
+        "replacement" : "- [ ] "
+      },
+      "note" : "  []"
+    },
+    {
+      "caret" : 2,
+      "edit" : {
+        "after" : "+ ",
+        "caret" : 2,
+        "range" : [
+          0,
+          2
+        ],
+        "replacement" : "+ "
+      },
+      "note" : "--"
+    },
+    {
+      "caret" : 4,
+      "edit" : {
+        "after" : "  + ",
+        "caret" : 4,
+        "range" : [
+          2,
+          2
+        ],
+        "replacement" : "+ "
+      },
+      "note" : "  --"
+    },
+    {
+      "caret" : 4,
+      "edit" : {
+        "after" : "- [ ] ",
+        "caret" : 6,
+        "range" : [
+          0,
+          4
+        ],
+        "replacement" : "- [ ] "
+      },
+      "note" : "- []"
+    },
+    {
+      "caret" : 4,
+      "edit" : {
+        "after" : "* [ ] ",
+        "caret" : 6,
+        "range" : [
+          0,
+          4
+        ],
+        "replacement" : "* [ ] "
+      },
+      "note" : "* []"
+    },
+    {
+      "caret" : 6,
+      "edit" : {
+        "after" : "  - [ ] ",
+        "caret" : 8,
+        "range" : [
+          2,
+          4
+        ],
+        "replacement" : "- [ ] "
+      },
+      "note" : "  - []"
+    },
+    {
+      "caret" : 3,
+      "edit" : null,
+      "note" : "x[]"
+    },
+    {
+      "caret" : 2,
+      "edit" : {
+        "after" : "- [ ] tail",
+        "caret" : 6,
+        "range" : [
+          0,
+          2
+        ],
+        "replacement" : "- [ ] "
+      },
+      "note" : "[]tail"
+    },
+    {
+      "caret" : 5,
+      "edit" : null,
+      "note" : "1. []"
+    },
+    {
+      "caret" : 6,
+      "edit" : null,
+      "note" : "```\n[]\n```"
+    },
+    {
+      "caret" : 3,
+      "edit" : null,
+      "note" : "---"
+    },
+    {
+      "caret" : 4,
+      "edit" : null,
+      "note" : "- --"
     }
   ]
 }

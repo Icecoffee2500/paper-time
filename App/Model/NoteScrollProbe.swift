@@ -73,9 +73,13 @@ enum NoteScrollProbe {
             let shown = rect.minY >= visible.minY - 1 && rect.maxY <= visible.maxY + 1
             let moved = visible.origin.y - last
             last = visible.origin.y
-            say(String(format: "note scroll: %-14@ top %7.1f (%+6.1f)  height %7.1f  caret %7.1f…%7.1f %@",
-                       label as NSString, visible.origin.y, moved, text.frame.height, rect.minY, rect.maxY,
-                       shown ? "shown" : "HIDDEN"))
+            // Across too: a caret set past the right edge is as out of sight
+            // as one scrolled away — where the words after a too-wide list
+            // number went.
+            let across = rect.minX >= visible.minX - 1 && rect.maxX <= visible.maxX + 1
+            say(String(format: "note scroll: %-14@ top %7.1f (%+6.1f)  height %7.1f  caret %7.1f…%7.1f at x %7.1f %@",
+                       label as NSString, visible.origin.y, moved, text.frame.height, rect.minY, rect.maxY, rect.minX,
+                       shown && across ? "shown" : "HIDDEN"))
         }
         report("start")
 
