@@ -20,6 +20,7 @@ import { setSettings } from './settingsController.js'
 import { createNote } from './notesModel.js'
 import { backToNotes, openNoteInSlipBox, slipBoxEditor } from './ui/slipBox.js'
 import { exportNoteHTML } from './ui/noteEditor.js'
+import { setCodeCopier } from './ui/note/markdownView.js'
 import { zettelDisplayTitle } from '../shared/zettel.js'
 import { openEditor as openNoteEditor, openNoteInTab } from './ui/notesTab.js'
 import { sketchEditor, sketchSelectionChanged } from './ui/sketchEditing.js'
@@ -28,6 +29,13 @@ import type { Settings } from './state.js'
 
 export function installProbeSurface() {
   if (!flags.probe) return
+  // A block's copy button, pressed by a probe, copies here — never onto the
+  // clipboard of the person whose desktop this is.
+  const copiedCode: string[] = []
+  setCodeCopier(async (text) => {
+    copiedCode.push(text)
+    return true
+  })
   const surfaces: Record<string, unknown> = {
     // The drawing contract, so a test can stand in for the page's editor and
     // look at the Tools tab.
@@ -156,6 +164,16 @@ export function installProbeSurface() {
           toolbar: report.toolbar,
           folded: report.folded,
         }
+      },
+      /** The slip-box editor's `index`th copy button pressed, in the page: what it copied (onto the probe's stand-in) and what the button says after. */
+      copyCode: async (index = 0) => {
+        const view = slipBoxEditor()?.view
+        const button = view?.contentDOM.querySelectorAll<HTMLButtonElement>('.nm-code-copy')[index]
+        if (!button) return null
+        const before = copiedCode.length
+        button.click()
+        await new Promise((done) => setTimeout(done, 50))
+        return { copied: copiedCode.slice(before), label: button.textContent }
       },
       /** A note from a search, at the words it was found by (`--papertime-note-reveal`). */
       reveal: (id: string, words: string) => openNoteFromSearch(id, words),

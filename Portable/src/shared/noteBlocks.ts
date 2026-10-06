@@ -10,6 +10,7 @@
  * middle of a sentence.
  */
 import { trimWhitespace } from './zettel.js'
+import { codeRowAt, openingFence, wantsClosing } from './noteCode.js'
 
 export type BlockKind =
   | { kind: 'plain' }
@@ -116,6 +117,9 @@ export interface LineEdit {
  * no list, and the plain new line is right.
  */
 export function returnEdit(text: string, caret: number): LineEdit | null {
+  // A line of fenced code has no marker, whatever it starts with: `- x` in
+  // code is not a bullet to carry on (`codeReturnEdit` has code's Return).
+  if (codeRowAt(text, caret)) return null
   const { start, line } = lineAt(text, caret)
   const block = blockOf(line)
   if (block.type.kind === 'plain' || block.marker.length === 0) {
@@ -194,6 +198,7 @@ export function toggleChildrenEnd(text: string, headerStart: number): number | n
 
 /** What Tab (`by: 1`) or Shift-Tab (`by: -1`) does: null off a list line. */
 export function indentEdit(text: string, caret: number, by: 1 | -1): LineEdit | null {
+  if (codeRowAt(text, caret)) return null
   const { start, line } = lineAt(text, caret)
   const kind = blockOf(line).type.kind
   if (kind !== 'bullet' && kind !== 'ordered' && kind !== 'task' && kind !== 'toggle') return null
@@ -210,6 +215,7 @@ export function indentEdit(text: string, caret: number, by: 1 | -1): LineEdit | 
  * Backspace is right there.
  */
 export function backspaceEdit(text: string, caret: number): LineEdit | null {
+  if (codeRowAt(text, caret)) return null
   const { start, line } = lineAt(text, caret)
   const block = blockOf(line)
   if (block.type.kind === 'plain' || block.marker.length === 0) return null
@@ -290,6 +296,8 @@ export function wrapEdit(text: string, from: number, to: number, typed: string):
   if (close === undefined) return null
   const [lo, hi] = from <= to ? [from, to] : [to, from]
   if (lo === hi) return null
+  // In code a star is a star: only brackets and quotes wrap what is selected.
+  if (!CODE_WRAPS.has(typed) && codeRowAt(text, lo)) return null
   const selected = text.slice(lo, hi)
   return { from: lo, to: hi, insert: typed + selected + close, selectFrom: lo + 1, selectTo: lo + 1 + selected.length }
 }
@@ -300,6 +308,7 @@ export function wrapEdit(text: string, from: number, to: number, typed: string):
  * that.
  */
 export function todoShortcutEdit(text: string, caret: number): LineEdit | null {
+  if (codeRowAt(text, caret)) return null
   const { start } = lineAt(text, caret)
   const sofar = text.slice(start, caret)
   const spaces = sofar.length - sofar.trimStart().length
@@ -314,6 +323,7 @@ export function todoShortcutEdit(text: string, caret: number): LineEdit | null {
  * the line so far, after its indentation, is exactly the two dashes.
  */
 export function toggleShortcutEdit(text: string, caret: number): LineEdit | null {
+  if (codeRowAt(text, caret)) return null
   const { start } = lineAt(text, caret)
   const sofar = text.slice(start, caret)
   const spaces = sofar.length - sofar.trimStart().length
@@ -346,6 +356,9 @@ const WORD = /[\p{L}\p{N}]/u
  */
 export function pairEdit(text: string, caret: number, typed: string): LineEdit | null {
   if (typed.length !== 1) return null
+  const fence = fenceTypingEdit(text, caret, typed)
+  if (fence) return fence
+  if (codeRowAt(text, caret)?.role === 'line') return codePairEdit(text, caret, typed)
   const next = text[caret] ?? ''
   const before = caret > 0 ? text[caret - 1] : ''
   if (CLOSERS.has(typed) && next === typed) {
@@ -368,6 +381,114 @@ export function pairBackspaceEdit(text: string, caret: number): LineEdit | null 
   const pair = OPENERS[before] === after || (SYMMETRIC.has(before) && before === after)
   if (!pair) return null
   return { from: caret - 1, to: caret + 1, insert: '', caret: caret - 1 }
+}
+
+/** What wraps a selection in code: brackets and quotes — never a star, an underscore, a dollar or a tilde. */
+const CODE_WRAPS = new Set(['(', '[', '{', '"', "'", '`'])
+/** What closes itself in code. */
+const CODE_QUOTES = new Set(['"', "'", '`'])
+
+/**
+ * The third backtick (or tilde) of a fence. A line of nothing but two of
+ * them before the caret, and nothing but more of them after it, takes the
+ * third as typed — and the marks after the caret, which the pairs put
+ * there, go. Typed a key at a time ``` was otherwise ```` with the caret
+ * before the last: the first brings its closer, the second steps over it,
+ * and the third brought another, so «```python» was never a fence.
+ */
+export function fenceTypingEdit(text: string, caret: number, typed: string): LineEdit | null {
+  if (typed !== '`' && typed !== '~') return null
+  const { start, line } = lineAt(text, caret)
+  const before = text.slice(start, caret)
+  const marks = before.replace(/^ {0,3}/, '')
+  if (marks.length < 2 || [...marks].some((one) => one !== typed)) return null
+  const after = line.slice(caret - start)
+  if ([...after].some((one) => one !== typed)) return null
+  return { from: caret, to: start + line.length, insert: typed, caret: caret + 1 }
+}
+
+/**
+ * Pairs in a line of code, as a code editor makes them: a bracket brings its
+ * closer, and a quote does between non-words; a closer already next is
+ * stepped over. Markdown's own marks — a star, an underscore, a dollar, a
+ * tilde — are only characters there.
+ */
+function codePairEdit(text: string, caret: number, typed: string): LineEdit | null {
+  const next = text[caret] ?? ''
+  const before = caret > 0 ? text[caret - 1] : ''
+  if ((CODE_QUOTES.has(typed) || typed === ')' || typed === ']' || typed === '}') && next === typed) {
+    return { from: caret, to: caret, insert: '', caret: caret + 1 }
+  }
+  const closer = OPENERS[typed]
+  if (closer !== undefined) return { from: caret, to: caret, insert: typed + closer, caret: caret + 1 }
+  if (!CODE_QUOTES.has(typed)) return null
+  if (WORD.test(before) || WORD.test(next) || CODE_QUOTES.has(before)) return null
+  return { from: caret, to: caret, insert: typed + typed, caret: caret + 1 }
+}
+
+/** A block's indent: four spaces, as most code is written. */
+export const CODE_INDENT = '    '
+
+/**
+ * Return in a block, as a code editor has it (`insertCodeNewline`): the next
+ * line starts where this one did, and one indent further after a `:` or an
+ * opening bracket. Return at the end of an opening fence closes the block
+ * below it and leaves the caret on the empty line between (`wantsClosing`).
+ * Null on a closing fence and outside code — the plain new line is right.
+ */
+export function codeReturnEdit(text: string, caret: number): LineEdit | null {
+  const row = codeRowAt(text, caret)
+  if (!row) return null
+  const written = text.slice(row.line.from, row.line.to).replace(/\r$/, '')
+  const lineEnd = row.line.from + written.length
+  switch (row.role) {
+    case 'header': {
+      const fence = openingFence(written)
+      if (caret !== lineEnd || !fence || !wantsClosing(row.block, text)) return null
+      const lead = /^ */.exec(written)?.[0] ?? ''
+      const insert = `\n\n${lead}${fence.character.repeat(fence.length)}`
+      return { from: lineEnd, to: lineEnd, insert, caret: lineEnd + 1 }
+    }
+    case 'line': {
+      const before = text.slice(row.line.from, caret)
+      const indent = /^[ \t]*/.exec(before)?.[0] ?? ''
+      const last = before.replace(/[ \t]+$/, '').slice(-1)
+      const insert = `\n${indent}${last !== '' && ':{(['.includes(last) ? CODE_INDENT : ''}`
+      return { from: caret, to: caret, insert, caret: caret + insert.length }
+    }
+    case 'close': return null
+  }
+}
+
+/**
+ * Tab and Shift-Tab in a block's code (`indentCode`): four spaces in at the
+ * caret, or every line of the selection in or out by four. Null outside a
+ * block's lines of code.
+ */
+export function codeIndentEdit(text: string, from: number, to: number, by: 1 | -1): SelectionEdit | null {
+  const [lo, hi] = from <= to ? [from, to] : [to, from]
+  const row = codeRowAt(text, lo)
+  if (!row || row.role !== 'line') return null
+  if (by > 0 && lo === hi) return { from: lo, to: lo, insert: CODE_INDENT, selectFrom: lo + CODE_INDENT.length, selectTo: lo + CODE_INDENT.length }
+  const start = text.lastIndexOf('\n', lo - 1) + 1
+  // A selection that ends at the start of a line does not take that line.
+  const last = hi > lo && text[hi - 1] === '\n' ? hi - 1 : hi
+  const lineEnd = text.indexOf('\n', last)
+  const end = lineEnd < 0 ? text.length : lineEnd
+  const written = text.slice(start, end)
+  let removedBeforeCaret = 0
+  const changed = written.split('\n').map((line, index) => {
+    if (by > 0) return line.length === 0 ? line : CODE_INDENT + line
+    const spaces = /^ {0,4}/.exec(line)?.[0].length ?? 0
+    if (index === 0) removedBeforeCaret = spaces
+    return line.slice(spaces)
+  })
+  const insert = changed.join('\n')
+  if (lo === hi) {
+    const caret = Math.max(start, lo - removedBeforeCaret)
+    return { from: start, to: end, insert, selectFrom: caret, selectTo: caret }
+  }
+  return { from: start, to: end, insert, selectFrom: start, selectTo: start + insert.length }
 }
 
 // MARK: - Home

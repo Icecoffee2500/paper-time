@@ -390,6 +390,10 @@ export function showSettings(actions: SettingsActions, section?: SettingsSection
       '`//`를 치면 분수가 되는 것처럼, 짧게 친 말을 LaTeX로 바꿔요.',
       'Expands short triggers into LaTeX as you type, like // into a fraction.',
     )))
+    body.append(note(L(
+      '노트 속 코드의 색은 Ivan Sagalaev의 highlight.js(BSD 3-Clause 라이선스)로 칠해요.',
+      'Colours for code in notes come from highlight.js by Ivan Sagalaev, under the BSD 3-Clause License.',
+    )))
   }
 
   // The Mac's Metadata page: whether papers are looked up as they arrive,

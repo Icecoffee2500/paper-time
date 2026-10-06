@@ -171,7 +171,7 @@ enum NoteMarkdown {
             text.addAttributes([.font: block.font, .foregroundColor: block.colour], range: run)
             text.removeAttribute(.kern, range: run)
             #if os(macOS)
-            text.removeAttribute(NoteCode.attribute, range: run)
+            text.removeAttribute(NoteCodeStyle.attribute, range: run)
             #endif
         }
         func isWritten(_ span: NSRange) -> Bool {
@@ -217,14 +217,14 @@ enum NoteMarkdown {
     }
 
     /// Words in backticks, as Notion sets them: a monospaced face a size
-    /// below the line, in a warm red, on a rounded warm grey (`NoteCode`).
+    /// below the line, in a warm red, on a rounded warm grey (`NoteCodeStyle`).
     static func codeAttributes(in block: Block) -> [NSAttributedString.Key: Any] {
         let face = NoteTypography.code(size: block.font.pointSize)
-        var attributes: [NSAttributedString.Key: Any] = [.font: face, .foregroundColor: NoteCode.ink]
+        var attributes: [NSAttributedString.Key: Any] = [.font: face, .foregroundColor: NoteCodeStyle.ink]
         #if os(macOS)
-        attributes[NoteCode.attribute] = face.pointSize
+        attributes[NoteCodeStyle.attribute] = face.pointSize
         #else
-        attributes[.backgroundColor] = NoteCode.fill
+        attributes[.backgroundColor] = NoteCodeStyle.fill
         #endif
         return attributes
     }
@@ -496,9 +496,13 @@ enum NoteMarkdown {
             if attributes[NoteQuoteBar.attribute] != nil { marks.append("QUOTE") }
             if attributes[NoteChip.attribute] != nil { marks.append("PASSAGE") }
             if attributes[.link] != nil { marks.append("LINK") }
-            if attributes[NoteCode.attribute] != nil { marks.append("CODE") }
+            if attributes[NoteCodeStyle.attribute] != nil { marks.append("CODE") }
+            // A fenced block's rows: their set-in is the numbers' room, which
+            // is measured from this Mac's fonts, so it is left unprinted.
+            let fenced = attributes[NoteCodeStyle.Block.attribute] != nil
+            if fenced { marks.append("CODEBLOCK") }
             if let font = attributes[.font] as? NSFont, NoteTypography.isItalic(font) { marks.append("italic") }
-            if let style = attributes[.paragraphStyle] as? NSParagraphStyle, style.headIndent > 0 {
+            if !fenced, let style = attributes[.paragraphStyle] as? NSParagraphStyle, style.headIndent > 0 {
                 marks.append("indent \(Int(style.headIndent))")
             }
             if let style = attributes[.paragraphStyle] as? NSParagraphStyle, style.alignment == .center {
@@ -755,10 +759,21 @@ enum NoteMarkdown {
             pieces.append((shown, range))
         }
 
+        // Fenced code first: its lines are code whatever they look like —
+        // `# comment` is not a heading, `- x` not a bullet, `$x$` not a
+        // formula — so they are read as nothing else (`NoteCode`).
+        let fenced = NoteCode.blocks(in: source)
+        #if os(macOS)
+        let codeRows = codeRows(of: fenced, in: text)
+        #endif
+        let isCode: (NSRange) -> Bool = { range in
+            fenced.contains { NSLocationInRange(range.location, $0.range) || range.location == $0.range.location }
+        }
+
         // Every line is read before any is set, because a quoted line needs
         // to know whether the line above and below it are quoted too.
         let lineRanges = lines(of: text, joiningMathBlocksIn: source)
-        var blocks = lineRanges.map { Block(line: text.substring(with: $0)) }
+        var blocks = lineRanges.map { isCode($0) ? Block(line: "") : Block(line: text.substring(with: $0)) }
         for index in blocks.indices where blocks[index].kind == .quote {
             var edge: QuoteEdge = []
             if index == 0 || blocks[index - 1].kind != .quote { edge.insert(.opens) }
@@ -787,7 +802,7 @@ enum NoteMarkdown {
         numbering = numbered(lineRanges, blocks, source: source)
         #endif
 
-        let tables = Set(NoteTable.blocks(in: source).map { NSStringRange($0) })
+        let tables = Set(NoteTable.blocks(in: blankingCode(in: source, fenced.map(\.range))).map { NSStringRange($0) })
         var lineIndex = 0
         while lineIndex < lineRanges.count {
             let lineRange = lineRanges[lineIndex]
@@ -810,6 +825,10 @@ enum NoteMarkdown {
                 $0 >= lineRange.location && $0 <= lineRange.location + lineRange.length
             } ?? false
             #if os(macOS)
+            if let row = codeRows[lineRange.location] {
+                appendCode(row, line: lineRange, revealed: revealed, in: text, append: append)
+                continue
+            }
             // A table, drawn as a grid while the caret is elsewhere; with the
             // caret in it, its lines as they are written.
             if !revealed, tables.contains(NSStringRange(lineRange)),
@@ -1240,8 +1259,10 @@ enum NoteMarkdown {
     static func lines(of text: NSString, joiningMathBlocksIn source: String) -> [NSRange] {
         var ranges = lines(of: text)
         // A table's lines too, and for the same reason: it is one thing
-        // written over several lines (`NoteTable`).
-        let joined = (NoteMath.blocks(in: source) + NoteTable.blocks(in: source))
+        // written over several lines (`NoteTable`). Not inside fenced code,
+        // where a `$$` and a `|` are code (`blankingCode`).
+        let searched = blankingCode(in: source, NoteCode.blocks(in: source).map(\.range))
+        let joined = (NoteMath.blocks(in: searched) + NoteTable.blocks(in: searched))
             .sorted { $0.location < $1.location }
         for block in joined.reversed() {
             guard let first = ranges.firstIndex(where: { $0.location == block.location }),
@@ -1252,6 +1273,236 @@ enum NoteMarkdown {
             ranges.replaceSubrange(first...last, with: [block])
         }
         return ranges
+    }
+
+    #if os(macOS)
+    // MARK: - Fenced code
+
+    /// A line of a fenced block, as the renderer sets it: its block, what it
+    /// is in the block, where it starts in the block's code, and the
+    /// block's colours (in the code's offsets).
+    struct CodeRow {
+        var block: NoteCode.Block
+        var row: NoteCodeStyle.Block.Row
+        var offset: Int
+        var runs: [CodeHighlighter.Run]
+    }
+
+    /// Every line of every fenced block, by where the line starts.
+    static func codeRows(of fenced: [NoteCode.Block], in text: NSString) -> [Int: CodeRow] {
+        var rows: [Int: CodeRow] = [:]
+        for block in fenced {
+            let code = NoteCode.code(of: block, in: text)
+            let runs = CodeHighlighter.shared.runs(of: code, language: block.language)
+            let closed = block.close != nil
+            rows[block.open.location] = CodeRow(
+                block: block, row: .init(role: .header, isLast: !closed && block.lines.isEmpty), offset: 0, runs: runs)
+            var offset = 0
+            for (index, line) in block.lines.enumerated() {
+                let last = !closed && index == block.lines.count - 1
+                rows[line.location] = CodeRow(block: block, row: .init(role: .line, number: index + 1, isLast: last),
+                                             offset: offset, runs: runs)
+                offset += line.length + 1
+            }
+            if let close = block.close {
+                rows[close.location] = CodeRow(block: block, row: .init(role: .close, isLast: true), offset: 0, runs: runs)
+            }
+        }
+        return rows
+    }
+
+    /// A line of a fenced block, set: the header shows the language (the
+    /// fence as written while the caret is on it), each line of code is
+    /// itself in the code face with its colours, and the closing fence is
+    /// the box's foot. The box, the numbers and the copy button are painted
+    /// behind by `NoteLayoutFragment.drawCodeBlock`.
+    static func appendCode(_ row: CodeRow, line: NSRange, revealed: Bool, in text: NSString,
+                           append: (NSAttributedString, NSRange) -> Void) {
+        let block = NoteCodeStyle.Block.self
+        let gutter = block.gutter(lines: row.block.lines.count)
+        let codeFont = NoteTypography.code()
+        let written = text.substring(with: line)
+        let style: NSParagraphStyle
+        let piece: NSMutableAttributedString
+        switch row.row.role {
+        case .header:
+            style = codeParagraph(.header, gutter: gutter, isLast: row.row.isLast)
+            if revealed {
+                piece = NSMutableAttributedString(string: written, attributes: [
+                    .font: codeFont, .foregroundColor: syntaxColor, .paragraphStyle: style,
+                ])
+                // The language as words, after the fence's marks.
+                let marks = written.prefix { $0 == " " || $0 == "`" || $0 == "~" }.utf16.count
+                if marks < piece.length {
+                    piece.addAttribute(.foregroundColor, value: NoteColor.secondaryLabelColor,
+                                       range: NSRange(location: marks, length: piece.length - marks))
+                }
+            } else {
+                let name = NoteCode.displayName(of: row.block.language)
+                let font = block.headerFont()
+                // In the middle of the header's height: a line taller than its
+                // words is filled from the top, so the words sat at the foot.
+                let lift = max(0, (block.headerHeight - (font.ascender - font.descender)) / 2 + font.descender)
+                piece = NSMutableAttributedString(string: name.isEmpty ? hiddenMarker : name, attributes: [
+                    .font: font, .foregroundColor: NoteColor.secondaryLabelColor, .paragraphStyle: style,
+                    .baselineOffset: lift,
+                ])
+                piece.addAttribute(.paperTimeSource, value: written, range: NSRange(location: 0, length: piece.length))
+            }
+        case .line:
+            style = codeParagraph(.line(first: row.row.number == 1), gutter: gutter, isLast: row.row.isLast)
+            piece = NSMutableAttributedString(string: written, attributes: [
+                .font: codeFont, .foregroundColor: NoteColor.labelColor, .paragraphStyle: style,
+            ])
+            let span = NSRange(location: row.offset, length: line.length)
+            for run in row.runs {
+                let overlap = NSIntersectionRange(run.range, span)
+                guard overlap.length > 0 else { continue }
+                piece.addAttribute(.foregroundColor, value: block.ink(run.role),
+                                   range: NSRange(location: overlap.location - row.offset, length: overlap.length))
+            }
+        case .close:
+            if revealed {
+                style = codeParagraph(.writtenFoot, gutter: gutter, isLast: true)
+                piece = NSMutableAttributedString(string: written, attributes: [
+                    .font: codeFont, .foregroundColor: syntaxColor, .paragraphStyle: style,
+                ])
+            } else {
+                style = codeParagraph(.foot, gutter: gutter, isLast: true)
+                piece = NSMutableAttributedString(string: hiddenMarker, attributes: [
+                    .font: NoteTypography.code(size: 6), .foregroundColor: NoteColor.labelColor, .paragraphStyle: style,
+                ])
+                piece.addAttribute(.paperTimeSource, value: written, range: NSRange(location: 0, length: piece.length))
+            }
+        }
+        piece.addAttribute(block.attribute, value: row.row.raw, range: NSRange(location: 0, length: piece.length))
+        append(piece, line)
+        let newline = NSMaxRange(line)
+        if newline < text.length {
+            // The line's own look on its line break: an empty line of code is
+            // nothing but this, and it still has to be a row of the box.
+            let font = (piece.length > 0 ? piece.attribute(.font, at: 0, effectiveRange: nil) as? NoteFont : nil) ?? codeFont
+            append(NSAttributedString(string: "\n", attributes: [
+                .font: font, .foregroundColor: NoteColor.labelColor, .paragraphStyle: style,
+                block.attribute: row.row.raw,
+            ]), NSRange(location: newline, length: 1))
+        }
+    }
+
+    /// The colours of the block around a display offset, laid over its lines
+    /// again while it is typed into: its rows are the lines round about that
+    /// carry `NoteCodeStyle.Block.attribute`, from its header to its foot.
+    static func recolourCode(_ text: NSMutableAttributedString, around index: Int) {
+        let string = text.string as NSString
+        let key = NoteCodeStyle.Block.attribute
+        func row(of line: NSRange) -> NoteCodeStyle.Block.Row? {
+            guard text.length > 0 else { return nil }
+            return NoteCodeStyle.Block.Row(text.attribute(key, at: min(line.location, text.length - 1), effectiveRange: nil))
+        }
+        var rows = [string.lineRange(for: NSRange(location: min(index, string.length), length: 0))]
+        guard let here = row(of: rows[0]) else { return }
+        if here.role != .header {
+            while let first = rows.first, first.location > 0 {
+                let above = string.lineRange(for: NSRange(location: first.location - 1, length: 0))
+                guard let kind = row(of: above), kind.role != .close else { break }
+                rows.insert(above, at: 0)
+                if kind.role == .header { break }
+            }
+        }
+        if !here.isLast {
+            while let last = rows.last, NSMaxRange(last) < string.length {
+                let below = string.lineRange(for: NSRange(location: NSMaxRange(last), length: 0))
+                guard let kind = row(of: below), kind.role != .header else { break }
+                rows.append(below)
+                if kind.role == .close || kind.isLast { break }
+            }
+        }
+        // The language: the header's fence, as written or behind its name.
+        var language = ""
+        if let header = rows.first, row(of: header)?.role == .header {
+            let fence = (text.attribute(.paperTimeSource, at: header.location, effectiveRange: nil) as? String)
+                ?? string.substring(with: header).trimmingCharacters(in: .newlines)
+            language = NoteCode.opening(fence)?.language ?? ""
+        }
+        let lines = rows.filter { row(of: $0)?.role == .line }.map { line -> NSRange in
+            var range = line
+            if range.length > 0, string.character(at: NSMaxRange(range) - 1) == 10 { range.length -= 1 }
+            return range
+        }
+        let code = lines.map { string.substring(with: $0) }.joined(separator: "\n")
+        let runs = CodeHighlighter.shared.runs(of: code, language: language)
+        var offset = 0
+        for line in lines {
+            text.addAttribute(.foregroundColor, value: NoteColor.labelColor, range: line)
+            let span = NSRange(location: offset, length: line.length)
+            for run in runs {
+                let overlap = NSIntersectionRange(run.range, span)
+                guard overlap.length > 0 else { continue }
+                text.addAttribute(.foregroundColor, value: NoteCodeStyle.Block.ink(run.role),
+                                  range: NSRange(location: line.location + overlap.location - offset, length: overlap.length))
+            }
+            offset += line.length + 1
+        }
+    }
+
+    private enum CodeParagraph: Hashable {
+        case header, line(first: Bool), foot, writtenFoot
+    }
+
+    private nonisolated(unsafe) static var codeStyles: [String: NSParagraphStyle] = [:]
+
+    /// The paragraph of a row: the code set in past the numbers, the header
+    /// and foot their own heights, and the block's margin above and below.
+    private static func codeParagraph(_ kind: CodeParagraph, gutter: CGFloat, isLast: Bool) -> NSParagraphStyle {
+        let key = "\(kind)|\(gutter)|\(isLast)"
+        if let kept = codeStyles[key] { return kept }
+        let block = NoteCodeStyle.Block.self
+        let style = NSMutableParagraphStyle()
+        style.lineBreakStrategy = .standard
+        style.tailIndent = -block.inset
+        switch kind {
+        case .header:
+            style.firstLineHeadIndent = block.inset
+            style.headIndent = block.inset
+            style.minimumLineHeight = block.headerHeight
+            style.maximumLineHeight = block.headerHeight
+            style.lineBreakMode = .byTruncatingTail
+            style.paragraphSpacingBefore = block.margin
+        case .line(let first):
+            style.firstLineHeadIndent = block.inset + gutter
+            style.headIndent = block.inset + gutter
+            style.minimumLineHeight = block.lineHeight()
+            style.maximumLineHeight = block.lineHeight()
+            if first { style.paragraphSpacingBefore = block.firstLineGap }
+        case .foot:
+            style.minimumLineHeight = block.footHeight
+            style.maximumLineHeight = block.footHeight
+        case .writtenFoot:
+            style.firstLineHeadIndent = block.inset + gutter
+            style.headIndent = block.inset + gutter
+            style.minimumLineHeight = block.lineHeight()
+            style.maximumLineHeight = block.lineHeight()
+        }
+        // The last row carries the room under the box, and in a block never
+        // closed that is its last line.
+        if isLast { style.paragraphSpacing = block.margin + (kind == .foot ? 0 : block.footHeight / 2) }
+        codeStyles[key] = style
+        return style
+    }
+    #endif
+
+    /// The source with every fenced block's characters but its line breaks
+    /// turned to spaces: what the readers of mathematics and tables are
+    /// given, so nothing inside code is read as either, at the same offsets.
+    static func blankingCode(in source: String, _ code: [NSRange]) -> String {
+        guard !code.isEmpty else { return source }
+        var units = Array(source.utf16)
+        for range in code {
+            for index in range.location..<min(NSMaxRange(range), units.count) where units[index] != 10 {
+                units[index] = 32
+            }
+        }
+        return String(decoding: units, as: UTF16.self)
     }
 
     // MARK: - Inline
@@ -1501,7 +1752,7 @@ enum NoteMarkdown {
         // narrow space and would borrow one from another face.
         let room = NoteTypography.body(size: block.font.pointSize)
         let face = NoteTypography.code(size: block.font.pointSize)
-        let kern = NoteCode.padding.width * face.pointSize - advance(of: codePad, in: room)
+        let kern = NoteCodeStyle.padding.width * face.pointSize - advance(of: codePad, in: room)
         for end in [0, piece.length - 1] {
             piece.addAttributes([.font: room, .kern: kern], range: NSRange(location: end, length: 1))
         }

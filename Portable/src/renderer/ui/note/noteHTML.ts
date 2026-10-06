@@ -9,9 +9,11 @@
  * Pure apart from the typesetter it is handed, so a test can run it with a
  * stub and no window (`src/test/noteHTML.ts`).
  */
-import { emphasisClasses, emphasisPieces, planNote, type InlineToken, type PlannedLine } from '../../../shared/noteMarkdown.js'
+import { blankingCode, emphasisClasses, emphasisPieces, planNote, type InlineToken, type PlannedLine } from '../../../shared/noteMarkdown.js'
 import { numberFormulas, type MathSetter, type Numbered } from '../../../shared/mathJax.js'
 import { parseTable, tableBlocks, type Table } from '../../../shared/noteTable.js'
+import { codeBlocks, codeLanguageName, codeOf, type CodeBlock } from '../../../shared/noteCode.js'
+import { highlightCode } from '../../../shared/codeHighlight.js'
 
 export interface NoteHTMLOptions {
   /** MathJax, or a stand-in: `typesetter().set` in the window. */
@@ -57,9 +59,14 @@ export function noteHTML(title: string, source: string, options: NoteHTMLOptions
 export function noteBodyHTML(source: string, options: NoteHTMLOptions): string {
   const plan = planNote(source, null)
   const counted = numbering(source, plan, options.set)
-  const tables = new Set(tableBlocks(source).map((one) => `${one.from}:${one.to}`))
+  const tables = new Set(tableBlocks(blankingCode(source, codeBlocks(source))).map((one) => `${one.from}:${one.to}`))
   const out: string[] = []
   for (const line of plan) {
+    // A block of code is printed whole at its header; its other lines are in it.
+    if (line.code) {
+      if (line.code.role === 'header') out.push(codeBlockHTML(line.code.block, source))
+      continue
+    }
     if (tables.has(`${line.from}:${line.to}`)) {
       const table = parseTable(source.slice(line.from, line.to))
       if (table) {
@@ -184,6 +191,38 @@ export function fitNumbered(svg: string, room: number): string {
   return svg.slice(0, open.index) + tag + svg.slice(open.index + open[0].length)
 }
 
+/**
+ * A block of code as the editor draws it (`codeRanges`): its language over a
+ * rule, every line numbered, the code in its colours — and no copy button,
+ * there is nothing to press on paper.
+ */
+export function codeBlockHTML(block: CodeBlock, source: string): string {
+  const code = codeOf(block, source)
+  const runs = highlightCode(code, block.language)
+  const coloured = (from: number, to: number) => {
+    let out = ''
+    let at = from
+    for (const run of runs) {
+      if (run.to <= from || run.from >= to) continue
+      const start = Math.max(run.from, from)
+      const end = Math.min(run.to, to)
+      if (start > at) out += escapeHTML(code.slice(at, start))
+      out += `<span class="nm-tok-${run.role}">${escapeHTML(code.slice(start, end))}</span>`
+      at = end
+    }
+    return out + escapeHTML(code.slice(at, to))
+  }
+  let offset = 0
+  const lines = block.lines.map((line, index) => {
+    const length = line.to - line.from
+    const html = `<div class="nm-codeblock-line"><span class="nm-codeblock-n">${index + 1}</span><span class="nm-codeblock-code">${coloured(offset, offset + length) || '&#8203;'}</span></div>`
+    offset += length + 1
+    return html
+  }).join('')
+  const name = block.language ? escapeHTML(codeLanguageName(block.language)) : ''
+  return `<div class="nm-codeblock"><div class="nm-codeblock-head">${name}</div><div class="nm-codeblock-body">${lines}</div></div>`
+}
+
 /** A table as a table — the editor's `TableWidget`, in markup. */
 export function tableHTML(table: Table): string {
   // A cell's emphasis as emphasis, as the editor sets it (`TableWidget`).
@@ -257,6 +296,21 @@ h4.nm-h, h5.nm-h, h6.nm-h { font-size: 16px; }
 .nm-display-line { text-align: center; }
 .nm-math-alone { display: inline-block; width: 100%; text-align: center; }
 .nm-math-raw { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14.7px; color: var(--text-secondary); }
+.nm-codeblock { margin: 6px 0 17px; border: 1px solid rgba(0, 0, 0, 0.1); border-radius: 6px; background: rgba(0, 0, 0, 0.035); }
+.nm-codeblock-head { height: 27px; padding: 0 12px; line-height: 27px; font-size: 12px; font-weight: 500; color: var(--text-secondary); border-bottom: 1px solid rgba(0, 0, 0, 0.06); }
+.nm-codeblock-body { padding: 6px 12px 4px 0; }
+.nm-codeblock-line { display: flex; break-inside: avoid; }
+.nm-codeblock-n { flex: none; width: 40px; padding-right: 9px; text-align: right; font: 11.52px/18px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; color: var(--text-tertiary); }
+.nm-codeblock-code { flex: 1; min-width: 0; font: 13.6px/18px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace, 'Pretendard Variable', Pretendard; white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 4; }
+.nm-tok-keyword { color: #9b2393; }
+.nm-tok-string { color: #c41a16; }
+.nm-tok-number { color: #1c00cf; }
+.nm-tok-comment { color: #5d6c79; }
+.nm-tok-type { color: #0b4f79; }
+.nm-tok-function { color: #326d74; }
+.nm-tok-builtIn { color: #6c36a9; }
+.nm-tok-meta { color: #643820; }
+.nm-tok-attribute { color: #815f03; }
 .nm-table { margin: 4px 0 6px; max-width: 100%; break-inside: avoid; }
 .nm-table table { border-collapse: separate; border-spacing: 0; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; font-size: inherit; line-height: 1.45; }
 .nm-table th, .nm-table td { padding: 5px 9px; vertical-align: top; }

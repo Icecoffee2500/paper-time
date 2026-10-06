@@ -285,6 +285,15 @@ struct NoteEditor: NSViewRepresentable {
                 let text = textView.string as NSString
                 let line = text.lineRange(for: textView.selectedRange())
                 guard line.length > 0 else { return }
+                // A block of code is coloured as a whole: a quote opened on one
+                // line colours the lines after it.
+                if storage.attribute(NoteCodeStyle.Block.attribute, at: min(line.location, storage.length - 1),
+                                     effectiveRange: nil) != nil {
+                    storage.beginEditing()
+                    NoteMarkdown.recolourCode(storage, around: textView.selectedRange().location)
+                    storage.endEditing()
+                    return
+                }
                 let shown = storage.attributedSubstring(from: line)
                 let source = NoteMarkdown.markdown(from: shown).trimmingCharacters(in: .newlines)
                 let block = NoteMarkdown.Block(line: source)
@@ -327,8 +336,10 @@ struct NoteEditor: NSViewRepresentable {
         /// go of with the mouse, and takes it away with the selection.
         func updateSelectionToolbar(in textView: NoteTextView) {
             let range = textView.selectedRange()
+            // Code is not made bold: no bar over a selection in a block of code.
             guard range.length > 0, !textView.isSelectingByHand, !showsRawText,
-                  let window = textView.window, window.firstResponder === textView
+                  let window = textView.window, window.firstResponder === textView,
+                  textView.codeRowAtCaret() == nil
             else { return selectionToolbar.hide() }
             let rect = textView.firstRect(forCharacterRange: range, actualRange: nil)
             guard rect.width.isFinite, rect.height.isFinite else { return selectionToolbar.hide() }
@@ -361,7 +372,7 @@ struct NoteEditor: NSViewRepresentable {
                     .lineRange(for: textView.selectedRange())
                 return
             }
-            textView.typingAttributes = NoteMarkdown.bodyAttributes
+            textView.typingAttributes = textView.codeTypingAttributes() ?? NoteMarkdown.bodyAttributes
             // A caret set down inside a drawn marker — on the bullet, by a
             // click — goes to the words after it: nothing is typed into a
             // bullet.
@@ -450,7 +461,11 @@ struct NoteEditor: NSViewRepresentable {
             let line = source.utf16.prefix(caret).reduce(into: 0) { count, unit in
                 if unit == 10 { count += 1 }
             }
-            return (lines, line, marker(ofLineAt: caret, in: source))
+            // Where the fences are is part of the shape: a third backtick
+            // typed on a line makes every line under it code.
+            let fences = NoteCode.blocks(in: source).map { "\($0.open.location),\($0.close?.location ?? -1)" }
+                .joined(separator: ";")
+            return (lines, line, marker(ofLineAt: caret, in: source) + "|" + fences)
         }
 
         private func remember(_ shape: (lines: Int, line: Int, marker: String)) {
@@ -496,8 +511,10 @@ struct NoteEditor: NSViewRepresentable {
                 textView.setSelectedRange(range)
                 if caretWasShown { textView.scrollRangeToVisible(range) }
             }
+            // In a block of code, what is typed is code: set as the line it
+            // goes into, or the next Return would not know it is in one.
             textView.typingAttributes = showsRawText
-                ? NoteMarkdown.rawAttributes : NoteMarkdown.bodyAttributes
+                ? NoteMarkdown.rawAttributes : (textView.codeTypingAttributes() ?? NoteMarkdown.bodyAttributes)
             lastCaretLine = (textView.string as NSString).lineRange(for: textView.selectedRange())
         }
 
@@ -954,6 +971,8 @@ struct NoteEditor: NSViewRepresentable {
         }
 
         private func placeMathPreview(in textView: NoteTextView) {
+            // In code a `$` is a dollar.
+            guard textView.codeRowAtCaret() == nil else { return mathPreview.hide() }
             guard let storage = textView.textStorage, let window = textView.window,
                   window.firstResponder === textView,
                   textView.selectedRange().length == 0, !textView.hasMarkedText(),
@@ -998,7 +1017,7 @@ struct NoteEditor: NSViewRepresentable {
         }
 
         func updateCompletions(in textView: NoteTextView) {
-            guard let open = openWikiLink(in: textView) else { return completions.hide() }
+            guard textView.codeRowAtCaret() == nil, let open = openWikiLink(in: textView) else { return completions.hide() }
             let matches = suggestions(open.query).map {
                 WikiLinkPopover.Match(id: $0.id, title: $0.title, subtitle: $0.subtitle)
             }
@@ -1276,6 +1295,7 @@ final class NoteTextView: LatexSuiteTextView {
         // notice. Anything else falls through to the ordinary text handling.
         if followChip(at: event) { return }
         if foldToggle(at: event) { return }
+        if copyCode(at: event) { return }
         isSelectingByHand = true
         // NSTextView tracks the drag itself and returns when the mouse is let
         // go, so this brackets the whole gesture.
@@ -1309,7 +1329,7 @@ final class NoteTextView: LatexSuiteTextView {
             let cascade = (font.fontDescriptor.object(forKey: .cascadeList) as? [NSFontDescriptor])?.first?.postscriptName ?? ""
             if name.contains("Bold") || (font.textTransform.m21 != 0 && name.contains("Bold")) || cascade.contains("Bold") { marks += "b" }
             if NoteTypography.isItalic(font) { marks += "i" }
-            if attributes[NoteCode.attribute] != nil { marks += "c" }
+            if attributes[NoteCodeStyle.attribute] != nil { marks += "c" }
             guard !marks.isEmpty else { return }
             let text = (string as NSString).substring(with: range)
             // Runs that touch, joined: a Korean word in italics is several.
@@ -1378,7 +1398,9 @@ final class NoteTextView: LatexSuiteTextView {
     }
 
     private func caretLine() -> CaretLine? {
-        guard let storage = textStorage else { return nil }
+        // A line of fenced code has no marker, whatever it starts with:
+        // `- x` in code is not a bullet to continue or take away.
+        guard let storage = textStorage, codeRowAtCaret() == nil else { return nil }
         let text = string as NSString
         let display = text.lineRange(for: selectedRange())
         let shown = storage.attributedSubstring(from: display)
@@ -1426,6 +1448,9 @@ final class NoteTextView: LatexSuiteTextView {
     /// empty item nested in another steps out a level first, as Notion's
     /// does.
     override func insertNewline(_ sender: Any?) {
+        if coordinator?.showsRawText != true, selectedRange().length == 0, let code = codeRowAtCaret() {
+            return insertCodeNewline(code, sender: sender)
+        }
         guard coordinator?.showsRawText != true, selectedRange().length == 0,
               let line = caretLine(), line.block.kind != .plain, !line.block.marker.isEmpty
         else { return super.insertNewline(sender) }
@@ -1573,11 +1598,173 @@ final class NoteTextView: LatexSuiteTextView {
     /// Tab indents the item the caret is in rather than dropping a tab into
     /// the middle of a sentence.
     override func insertTab(_ sender: Any?) {
+        if indentCode(by: 1) { return }
         guard shiftListItem(by: 1) else { return super.insertTab(sender) }
     }
 
     override func insertBacktab(_ sender: Any?) {
+        if indentCode(by: -1) { return }
         guard shiftListItem(by: -1) else { return super.insertBacktab(sender) }
+    }
+
+    // MARK: Fenced code
+
+    /// What a code block's indent is: four spaces, as most code is written.
+    static let codeIndent = "    "
+
+    /// The row of a fenced block the caret's line is, read off the screen —
+    /// every row carries what it is (`NoteCodeStyle.Block.attribute`).
+    func codeRowAtCaret() -> (row: NoteCodeStyle.Block.Row, line: NSRange)? {
+        guard coordinator?.showsRawText != true, let storage = textStorage, storage.length > 0 else { return nil }
+        let line = (string as NSString).lineRange(for: NSRange(location: selectedRange().location, length: 0))
+        let probe = min(line.location, storage.length - 1)
+        guard let row = NoteCodeStyle.Block.Row(storage.attribute(NoteCodeStyle.Block.attribute, at: probe, effectiveRange: nil))
+        else { return nil }
+        return (row, line)
+    }
+
+    /// What a character typed into a block is set in: its line's own look —
+    /// the code face, the block's paragraph — in the plain colour, which the
+    /// block's colours are laid over as it is typed (`NoteMarkdown.recolourCode`).
+    func codeTypingAttributes() -> [NSAttributedString.Key: Any]? {
+        guard let code = codeRowAtCaret(), let storage = textStorage else { return nil }
+        var attributes = storage.attributes(at: min(code.line.location, storage.length - 1), effectiveRange: nil)
+        for key in [NSAttributedString.Key.paperTimeSource, .paperTimePiece, .paperTimeSourceLead, .link,
+                    NoteCodeStyle.Block.copied, .baselineOffset] {
+            attributes.removeValue(forKey: key)
+        }
+        if code.row.role == .line {
+            attributes[.foregroundColor] = NSColor.labelColor
+        } else {
+            // The fence as written: the language after its marks.
+            attributes[.font] = NoteTypography.code()
+            attributes[.foregroundColor] = NSColor.secondaryLabelColor
+        }
+        return attributes
+    }
+
+    /// Return in a block, as a code editor has it: the next line starts
+    /// where this one did, and one indent further after a `:` or an opening
+    /// bracket. Return on a fence just typed closes the block below it, and
+    /// leaves the caret on the empty line between.
+    private func insertCodeNewline(_ code: (row: NoteCodeStyle.Block.Row, line: NSRange), sender: Any?) {
+        let text = string as NSString
+        let caret = selectedRange().location
+        var lineEnd = NSMaxRange(code.line)
+        if lineEnd > code.line.location, text.character(at: lineEnd - 1) == 10 { lineEnd -= 1 }
+        let written = text.substring(with: NSRange(location: code.line.location, length: lineEnd - code.line.location))
+        switch code.row.role {
+        case .header:
+            // Into the Markdown, not the screen: once the caret leaves the
+            // fence it is shown by its language's name, and offsets on the
+            // screen move under it.
+            guard caret == lineEnd, let coordinator, let storage = textStorage,
+                  let fence = NoteCode.opening(written)
+            else { return super.insertNewline(sender) }
+            let source = NoteMarkdown.markdown(from: storage) as NSString
+            let at = NoteMarkdown.sourceIndex(in: storage, displayIndex: code.line.location)
+            guard let block = NoteCode.blocks(in: source as String).first(where: { $0.open.location == at }),
+                  Self.wantsClosing(block, in: source)
+            else { return super.insertNewline(sender) }
+            let end = NSMaxRange(block.open)
+            let lead = String(written.prefix { $0 == " " })
+            let marks = String(repeating: fence.character, count: fence.length)
+            let updated = source.replacingCharacters(in: NSRange(location: end, length: 0), with: "\n\n" + lead + marks)
+            coordinator.registerStep(named: L("코드 블록", "Code Block"), in: self)
+            coordinator.lastKnownMarkdown = updated
+            coordinator.markdown = updated
+            coordinator.restyle(self, source: updated, caretSource: end + 1)
+        case .line:
+            let before = text.substring(with: NSRange(location: code.line.location, length: caret - code.line.location))
+            let indent = String(before.prefix { $0 == " " || $0 == "\t" })
+            let opens = before.trimmingCharacters(in: .whitespaces).last.map { ":{([".contains($0) } ?? false
+            insertText("\n" + indent + (opens ? Self.codeIndent : ""), replacementRange: selectedRange())
+        case .close:
+            super.insertNewline(sender)
+        }
+    }
+
+    /// Whether Return on a block's opening fence should close the block:
+    /// when nothing closes it — or what closes it is another block's closing
+    /// fence, which a fence typed above that block takes for its own, and
+    /// the other block's opening fence (`py`, a language after the marks)
+    /// is read as a line of code.
+    static func wantsClosing(_ block: NoteCode.Block, in source: NSString) -> Bool {
+        if block.close == nil { return true }
+        return block.lines.contains { NoteCode.opening(source.substring(with: $0))?.language.isEmpty == false }
+    }
+
+    /// Tab and ⇧Tab in a block: four spaces in at the caret, or every line
+    /// of a selection in or out by four.
+    private func indentCode(by step: Int) -> Bool {
+        guard let code = codeRowAtCaret(), code.row.role == .line else { return false }
+        let range = selectedRange()
+        let text = string as NSString
+        if step > 0, range.length == 0 {
+            insertText(Self.codeIndent, replacementRange: range)
+            return true
+        }
+        let lines = text.lineRange(for: range)
+        let written = text.substring(with: lines)
+        var changed: [String] = []
+        var removedBeforeCaret = 0
+        for (index, line) in written.components(separatedBy: "\n").enumerated() {
+            if step > 0 {
+                changed.append(line.isEmpty ? line : Self.codeIndent + line)
+            } else {
+                let spaces = line.prefix(4).prefix { $0 == " " }.count
+                if index == 0 { removedBeforeCaret = spaces }
+                changed.append(String(line.dropFirst(spaces)))
+            }
+        }
+        let replacement = changed.joined(separator: "\n")
+        guard replacement != written else { return true }
+        insertText(replacement, replacementRange: lines)
+        if range.length == 0 {
+            setSelectedRange(NSRange(location: max(lines.location, range.location - removedBeforeCaret), length: 0))
+        } else {
+            setSelectedRange(NSRange(location: lines.location, length: (replacement as NSString).length))
+        }
+        return true
+    }
+
+    /// A click on a block's copy button copies its code — the lines between
+    /// the fences, as written — and says so on the button for a moment.
+    private func copyCode(at event: NSEvent) -> Bool {
+        guard coordinator?.showsRawText != true, let layout = textLayoutManager else { return false }
+        let point = convert(event.locationInWindow, from: nil)
+        let inContainer = CGPoint(x: point.x - textContainerOrigin.x, y: point.y - textContainerOrigin.y)
+        guard let fragment = layout.textLayoutFragment(for: inContainer) as? NoteLayoutFragment,
+              let button = fragment.codeCopyButton?.offsetBy(dx: fragment.layoutFragmentFrame.minX,
+                                                              dy: fragment.layoutFragmentFrame.minY),
+              button.contains(inContainer),
+              let content = layout.textContentManager,
+              let start = fragment.textElement?.elementRange?.location
+        else { return false }
+        let index = content.offset(from: content.documentRange.location, to: start)
+        return copyCode(ofBlockAt: index, to: .general)
+    }
+
+    /// Copies the code of the block whose header is at this display offset.
+    /// The pasteboard is a parameter so a probe can hand in one of its own.
+    @discardableResult
+    func copyCode(ofBlockAt index: Int, to pasteboard: NSPasteboard) -> Bool {
+        guard let coordinator, let storage = textStorage, index < storage.length else { return false }
+        let source = coordinator.lastKnownMarkdown
+        let at = NoteMarkdown.sourceIndex(in: storage, displayIndex: index)
+        guard let block = NoteCode.blocks(in: source).first(where: { NSLocationInRange(at, $0.range) || at == $0.range.location })
+        else { return false }
+        pasteboard.clearContents()
+        pasteboard.setString(NoteCode.code(of: block, in: source as NSString), forType: .string)
+        // "Copied" on the button for a moment: an attribute on the header,
+        // which its fragment reads when it draws.
+        let header = (string as NSString).lineRange(for: NSRange(location: index, length: 0))
+        storage.addAttribute(NoteCodeStyle.Block.copied, value: true, range: header)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
+            guard let storage = self?.textStorage else { return }
+            storage.removeAttribute(NoteCodeStyle.Block.copied, range: NSRange(location: 0, length: storage.length))
+        }
+        return true
     }
 
     private func shiftListItem(by step: Int) -> Bool {
@@ -1600,11 +1787,13 @@ final class NoteTextView: LatexSuiteTextView {
         if coordinator?.showsRawText != true,
            event.modifierFlags.intersection([.command, .control, .option]) == [.command] {
             let shift = event.modifierFlags.contains(.shift)
+            // Code is not made bold: in a block of code the keys do nothing.
+            let inCode = codeRowAtCaret() != nil
             switch (event.keyCode, shift) {
-            case (11, false): toggleEmphasis("**"); return
-            case (34, false): toggleEmphasis("*"); return
-            case (14, false): toggleEmphasis("`"); return
-            case (46, true): toggleEmphasis("$"); return
+            case (11, false): if !inCode { toggleEmphasis("**") }; return
+            case (34, false): if !inCode { toggleEmphasis("*") }; return
+            case (14, false): if !inCode { toggleEmphasis("`") }; return
+            case (46, true): if !inCode { toggleEmphasis("$") }; return
             default: break
             }
         }
@@ -1691,6 +1880,34 @@ final class NoteTextView: LatexSuiteTextView {
         "*": "*", "_": "_", "$": "$", "~": "~",
     ]
     private static let openers: Set<String> = ["(", "[", "{"]
+    /// What wraps a selection in code: brackets and quotes — never a star,
+    /// an underscore, a dollar or a tilde.
+    private static let codeWrapping: Set<String> = ["(", "[", "{", "\"", "'", "`"]
+    /// What closes itself in code.
+    private static let codeQuotes: Set<String> = ["\"", "'", "`"]
+
+    /// The third backtick (or tilde) of a fence: where it goes. A line of
+    /// nothing but two of them before the caret, and nothing but more of
+    /// them after it, takes the third as typed — and the marks after the
+    /// caret, which the pairs put there, go. Typed a key at a time ``` was
+    /// otherwise ```` with the caret before the last: the first brings its
+    /// closer, the second steps over it, and the third brought another, so
+    /// «```python» was never a fence. The Portable build's `fenceTypingEdit`.
+    private func typedFenceMarks(_ typed: String, at caret: Int) -> NSRange? {
+        guard typed == "`" || typed == "~" else { return nil }
+        let text = string as NSString
+        let line = text.lineRange(for: NSRange(location: caret, length: 0))
+        var end = NSMaxRange(line)
+        while end > caret, [10, 13].contains(text.character(at: end - 1)) { end -= 1 }
+        let before = text.substring(with: NSRange(location: line.location, length: caret - line.location))
+        let after = text.substring(with: NSRange(location: caret, length: end - caret))
+        let spaces = before.prefix { $0 == " " }.count
+        let marks = before.dropFirst(spaces)
+        guard spaces <= 3, marks.count >= 2,
+              marks.allSatisfy({ String($0) == typed }), after.allSatisfy({ String($0) == typed })
+        else { return nil }
+        return NSRange(location: caret, length: end - caret)
+    }
     private static let closers: Set<String> = [")", "]", "}", "\"", "`", "*", "_", "$", "~"]
     /// The marks Markdown doubles: `**`, `__`, `$$`, `~~`.
     private static let doubled: Set<String> = ["*", "_", "$", "~"]
@@ -1704,7 +1921,9 @@ final class NoteTextView: LatexSuiteTextView {
         let range = selectedRange()
         if coordinator?.showsRawText != true, range.length > 0,
            replacementRange.location == NSNotFound || replacementRange == range,
-           let closing = Self.wrapping[typed] {
+           let closing = Self.wrapping[typed],
+           // In code a star is a star: only brackets and quotes wrap there.
+           Self.codeWrapping.contains(typed) || codeRowAtCaret() == nil {
             coordinator?.endTyping()
             stepUndoManager?.beginUndoGrouping()
             super.insertText(closing, replacementRange: NSRange(location: NSMaxRange(range), length: 0))
@@ -1712,6 +1931,13 @@ final class NoteTextView: LatexSuiteTextView {
             stepUndoManager?.endUndoGrouping()
             coordinator?.endTyping()
             setSelectedRange(NSRange(location: range.location + (typed as NSString).length, length: range.length))
+            return
+        }
+        // The third backtick of a fence takes the pairs' marks after it away.
+        if range.length == 0, coordinator?.showsRawText != true, (typed as NSString).length == 1, !hasMarkedText(),
+           replacementRange.location == NSNotFound || replacementRange == range,
+           let marks = typedFenceMarks(typed, at: range.location) {
+            insertTextBypassingLatexSuite(typed, replacementRange: marks)
             return
         }
         // Latex Suite first: a snippet that fires takes the character.
@@ -1740,6 +1966,24 @@ final class NoteTextView: LatexSuiteTextView {
             let text = self.string as NSString
             let next = range.location < text.length ? text.substring(with: NSRange(location: range.location, length: 1)) : ""
             let previous = range.location > 0 ? text.substring(with: NSRange(location: range.location - 1, length: 1)) : ""
+            // In a line of code, a code editor's pairs: a bracket brings its
+            // closer, a quote does between non-words, a closer already next
+            // is stepped over — and Markdown's marks are only characters.
+            if codeRowAtCaret()?.row.role == .line {
+                if Self.codeQuotes.contains(typed) || [")", "]", "}"].contains(typed), next == typed {
+                    setSelectedRange(NSRange(location: range.location + 1, length: 0))
+                    return
+                }
+                let closing = Self.openers.contains(typed) ? Self.pairs[typed]
+                    : Self.codeQuotes.contains(typed) && !Self.isWordy(previous) && !Self.isWordy(next)
+                        && !Self.codeQuotes.contains(previous) ? typed : nil
+                if let closing {
+                    insertTextBypassingLatexSuite(typed + closing, replacementRange: range)
+                    setSelectedRange(NSRange(location: range.location + 1, length: 0))
+                    return
+                }
+                return insertTextBypassingLatexSuite(string, replacementRange: replacementRange)
+            }
             // (Not when a Markdown mark is being doubled — "*|*" with another
             // "*" typed is the start of "**bold**", and the pair doubles to
             // "**|**"; at "**b*|*" the "*" before the caret follows a word,

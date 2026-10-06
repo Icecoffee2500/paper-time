@@ -266,7 +266,7 @@ enum NoteTypography {
 /// It had been the monospaced face on the system's faintest grey, a
 /// rectangle cut tight to the letters — which read as a selection somebody
 /// forgot, not as code.
-enum NoteCode {
+enum NoteCodeStyle {
     #if os(macOS)
     /// Marks a run as code; the value is the code face's point size, which
     /// the tint is measured from. Painted by `NoteLayoutFragment`.
@@ -307,3 +307,134 @@ enum NoteCode {
     /// 0.4 across, 0.2 up and down.
     static let padding = CGSize(width: 0.4, height: 0.2)
 }
+
+#if os(macOS)
+extension NoteCodeStyle {
+    /// A fenced block, drawn as a small code editor: a rounded box on the
+    /// page's own faint grey — the table's corner, the table's rule — with
+    /// the language over the code, a way to copy it, line numbers down the
+    /// side, and the code coloured as Xcode colours it, light and dark.
+    ///
+    /// The lines stay text — they wrap, select, search and copy as words —
+    /// and the box is painted behind them a line at a time by
+    /// `NoteLayoutFragment.drawCodeBlock`, the way a quotation's rule is.
+    enum Block {
+        /// Marks a line of a block. The value is `Row.raw`: what the line is
+        /// and, for a line of code, its number.
+        static let attribute = NSAttributedString.Key("PaperTimeCodeBlock")
+        /// On a header for a moment after its code was copied.
+        static let copied = NSAttributedString.Key("PaperTimeCodeCopied")
+
+        enum Role: Int {
+            /// The opening fence: the language and the copy button, or the
+            /// fence as written when the caret is on it.
+            case header = 0
+            case line = 1
+            /// The closing fence: the box's foot, or the fence as written.
+            case close = 2
+        }
+
+        struct Row: Equatable {
+            var role: Role
+            /// A line of code's number, from 1.
+            var number: Int
+            /// The block's last row: its foot, or — in a block never closed —
+            /// its last line of code, or its header when it has none.
+            var isLast: Bool
+
+            var raw: Int { number << 3 | (isLast ? 4 : 0) | role.rawValue }
+
+            init(role: Role, number: Int = 0, isLast: Bool = false) {
+                self.role = role
+                self.number = number
+                self.isLast = isLast
+            }
+
+            init?(_ value: Any?) {
+                guard let raw = value as? Int, let role = Role(rawValue: raw & 3) else { return nil }
+                self.init(role: role, number: raw >> 3, isLast: raw & 4 != 0)
+            }
+        }
+
+        /// The table's corner: the two are the note's two boxes.
+        static let radius: CGFloat = Corner.row - 2
+        /// Room inside the box, left and right of the words.
+        static let inset: CGFloat = 12
+        static let headerHeight: CGFloat = 30
+        /// The box's foot under the last line, when the closing fence is out
+        /// of sight.
+        static let footHeight: CGFloat = 8
+        /// Above and below the block, so it does not sit on the words around it.
+        static let margin: CGFloat = 6
+        /// Between the header's rule and the first line of code.
+        static let firstLineGap: CGFloat = 6
+
+        static var fill: NSColor {
+            NSColor(name: nil) { appearance in
+                appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+                    ? NSColor(white: 1, alpha: 0.055)
+                    : NSColor(white: 0, alpha: 0.035)
+            }
+        }
+        static var border: NSColor { .separatorColor }
+        /// Under the header: lighter than the outline, so the box stays one box.
+        static var rule: NSColor {
+            NSColor(name: nil) { appearance in
+                appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+                    ? NSColor(white: 1, alpha: 0.08)
+                    : NSColor(white: 0, alpha: 0.06)
+            }
+        }
+        static var lineNumber: NSColor { .tertiaryLabelColor }
+
+        static func headerFont(size: CGFloat = NoteTypography.baseSize) -> NSFont {
+            NSFont.systemFont(ofSize: size * 0.75, weight: .medium)
+        }
+
+        static func numberFont(size: CGFloat = NoteTypography.baseSize) -> NSFont {
+            NSFont.monospacedDigitSystemFont(ofSize: size * 0.72, weight: .regular)
+        }
+
+        /// A line of code's height: the code face's own, and 15% more — in
+        /// whole points. Every row is its own layer, set down on a whole
+        /// pixel; a row 18.4 points tall ended a fraction past where the next
+        /// one began, and that pixel row was painted by both.
+        static func lineHeight(size: CGFloat = NoteTypography.baseSize) -> CGFloat {
+            let font = NoteTypography.code(size: size)
+            return ((font.ascender - font.descender + font.leading) * 1.15).rounded()
+        }
+
+        /// The room the line numbers take, for a block of this many lines:
+        /// two digits at least, so a block that grows past nine lines does
+        /// not shift its code.
+        static func gutter(lines: Int, size: CGFloat = NoteTypography.baseSize) -> CGFloat {
+            let digits = max(2, String(max(lines, 1)).count)
+            let width = ("0" as NSString).size(withAttributes: [.font: numberFont(size: size)]).width
+            return ceil(CGFloat(digits) * width) + 14
+        }
+
+        /// Xcode's colours for a role, light and dark — the same palette as
+        /// the Portable build's `CODE_PALETTE`.
+        static func ink(_ role: CodeHighlighter.Role) -> NSColor {
+            let (light, dark): (UInt32, UInt32) = switch role {
+            case .keyword: (0x9B2393, 0xFC5FA3)
+            case .string: (0xC41A16, 0xFC6A5D)
+            case .number: (0x1C00CF, 0xD0BF69)
+            case .comment: (0x5D6C79, 0x7F8C98)
+            case .type: (0x0B4F79, 0x5DD8FF)
+            case .function: (0x326D74, 0x67B7A4)
+            case .builtIn: (0x6C36A9, 0xA167E6)
+            case .meta: (0x643820, 0xFD8F3F)
+            case .attribute: (0x815F03, 0xBF8555)
+            }
+            func color(_ hex: UInt32) -> NSColor {
+                NSColor(srgbRed: CGFloat(hex >> 16 & 0xFF) / 255, green: CGFloat(hex >> 8 & 0xFF) / 255,
+                        blue: CGFloat(hex & 0xFF) / 255, alpha: 1)
+            }
+            return NSColor(name: nil) { appearance in
+                appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? color(dark) : color(light)
+            }
+        }
+    }
+}
+#endif
