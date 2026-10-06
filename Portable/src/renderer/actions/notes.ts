@@ -13,6 +13,7 @@ import { openEditor as openNoteEditor, openNoteInTab } from '../ui/notesTab.js'
 import { toast } from '../ui/toolbar.js'
 import { L } from '../../shared/lang.js'
 import { passageText, quotationSource } from '../../shared/noteQuote.js'
+import type { QuoteLink } from '../../shared/quotedPassages.js'
 import { latex, leftOutFormulas, structured } from '../../shared/mathReader/reader.js'
 import { copyText } from '../ui/clipboard.js'
 
@@ -87,6 +88,38 @@ export function newNote() {
   const paperID = store.selectedID && findPaper(store.selectedID) ? store.selectedID : null
   revealNoteInSlipBox(createNote(paperID).id)
   requestAnimationFrame(() => slipBoxEditor()?.focus())
+}
+
+/**
+ * The rule beside a quoted passage was clicked: its note opens where notes
+ * are showing, at the quotation, glowing — the Mac's `openQuotation`. A note
+ * about this paper, or about none, opens in the paper's Notes tab; another
+ * paper's note that quotes this one opens in the slip-box with the paper
+ * beside it, which is where a note about another paper is read — and so
+ * does any note while the slip-box is showing.
+ */
+export async function openQuotation(paperID: string, link: QuoteLink) {
+  const note = noteByID(link.noteID)
+  if (!note) return
+  if (solo) return saidInMainWindow()
+  const own = note.paperID === null || note.paperID.toUpperCase() === paperID.toUpperCase()
+  if (store.shelf.kind === 'notes' || !own) {
+    revealNoteInSlipBox(note.id)
+    // The paper stays where it was being read, the note beside it.
+    store.slipBox.paperID = paperID
+    changed('shelf', 'slipBox')
+    if (store.selectedID !== paperID) await showPaper(paperID)
+    else {
+      reconcileReaders()
+      changed('reader')
+    }
+    requestAnimationFrame(() => slipBoxEditor()?.revealQuotation(link.passage.url))
+    return
+  }
+  if (store.selectedID !== paperID) await showPaper(paperID)
+  showNoteTab()
+  openNoteInTab(note.id, paperID)
+  requestAnimationFrame(() => openNoteEditor()?.revealQuotation(link.passage.url))
 }
 
 /** A window for one paper has no slip-box: the note is for the main window. */

@@ -58,8 +58,11 @@ struct PaperNotesView: View {
         // Command-L with no note open carries on with the one last written
         // in about this paper, or starts one. (`.first` was the oldest: the
         // list is in the order the notes were made.) Portable picks the
-        // same note — `latestNoteForPaper`.
-        .onChange(of: link.pendingNoteAnchor) { _, anchor in
+        // same note — `latestNoteForPaper`. `initial`: from another tab, this
+        // view is made in the same pass that sets the anchor, and a change
+        // seen only after it was made was never seen — the passage went
+        // nowhere.
+        .onChange(of: link.pendingNoteAnchor, initial: true) { _, anchor in
             guard anchor != nil, link.openNoteID == nil else { return }
             link.openNoteID = notes.notes(forPaper: paperID).max(by: { $0.modified < $1.modified })?.id
                 ?? notes.create(paperID: paperID).id

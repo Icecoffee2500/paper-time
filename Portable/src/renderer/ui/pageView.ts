@@ -20,6 +20,8 @@ import type { PageCharacter } from '../../shared/mathReader/reader.js'
 import type { Box, TextRun } from '../../shared/strokeSnap.js'
 import { OCR_SCALE, OCR_SIDE, paddedForOCR, pictureSize, pixelValues, stretchTarget } from '../../shared/formulaOCRInput.js'
 import { clear, el } from '../dom.js'
+import { L } from '../../shared/lang.js'
+import { quoteRule, type PageBox, type QuoteLink } from '../../shared/quotedPassages.js'
 import { TextLayer, type PDFPageProxy } from '../pdf.js'
 import { SketchElement } from '../../shared/sketch.js'
 import { InkStroke } from '../../shared/ink.js'
@@ -62,6 +64,8 @@ export interface PageOwner {
   fetchPage(index: number): Promise<PDFPageProxy | null>
   /** Its own shape turned out other than the first page's: laid out again. */
   pageResized(page: PageView): void
+  /** The rule beside a quoted passage was clicked: its quotation, please. */
+  openQuote(link: QuoteLink): void
 }
 
 type TextContent = { items: { str?: string; hasEOL?: boolean }[] }
@@ -112,6 +116,12 @@ export class PageView {
   private inkMade: { scale: number; ink: Box[] } | null = null
   private inkGeneration = 0
   private lassoShown: { rect: Box; phase: 'drag' | 'caught'; needsOCR: boolean; ink: Box[] } | null = null
+  /** The rules beside this page's quoted passages — the note's quotation
+   *  rule, from the page's side (`QuoteLinkOverlayView`). Outside the print
+   *  like the lasso: the accent is not to be tinted. */
+  private quoteLayer: HTMLElement
+  private quotes: QuoteLink[] = []
+  private quoteRules: { link: QuoteLink; rect: PageBox; target: PageBox }[] = []
   /** How the reader draws its pages now, and the ground under night. */
   private rendering: PageRendering = 'plain'
   private ground = '#000000'
@@ -173,10 +183,12 @@ export class PageView {
     this.lassoSurface = el('div', { class: 'lasso-input' })
     this.lassoBox = el('div', { class: 'lasso-box' })
     this.lassoInk = el('canvas', { class: 'lasso-ink' }) as HTMLCanvasElement
+    this.quoteLayer = el('div', { class: 'quote-links' })
     this.root = el('div', { class: 'page', 'data-page': String(index) }, [
       this.print,
       this.images.canvas,
       this.textLayer,
+      this.quoteLayer,
       this.lassoBox,
       this.lassoInk,
       this.lassoSurface,
@@ -227,6 +239,59 @@ export class PageView {
     // drawn on that box was half again as tall as the line.
     this.root.style.setProperty('--scale-factor', String(scale))
     this.placeLassoBox()
+    this.placeQuotes()
+  }
+
+  /** The passages of this page that notes quote; their rules are drawn beside them. */
+  setQuotes(links: QuoteLink[]) {
+    const key = (list: QuoteLink[]) => list.map((link) => `${link.noteID} ${link.passage.url} ${link.noteTitle}`).join('|')
+    if (key(links) === key(this.quotes)) return
+    this.quotes = links
+    this.measureQuotes()
+  }
+
+  /** Where the rules stand — beside the column each passage is set in, as far
+   *  as the page's words say; until they are read, beside the passage. */
+  private measureQuotes() {
+    const runs = this.quotes.length > 0 && this.textDivs.length > 0 ? this.textGeometry().runs.map((run) => run.box) : []
+    this.quoteRules = this.quotes.flatMap((link) => {
+      const rule = quoteRule(link.passage.rect, runs, this.shape.view)
+      return rule ? [{ link, ...rule }] : []
+    })
+    this.placeQuotes()
+  }
+
+  /** The rules where the page now has them: a button each — the pointer's
+   *  target, a little wider than the rule it shows. */
+  private placeQuotes() {
+    clear(this.quoteLayer)
+    const viewport = this.viewport
+    if (!viewport || this.quoteRules.length === 0) return
+    for (const rule of this.quoteRules) {
+      const { left, right, top, bottom } = this.viewBoxOf(rule.target)
+      const title = rule.link.noteTitle
+      const label = title ? L(`노트에서 보기 · ${title}`, `Show in Note · ${title}`) : L('노트에서 보기', 'Show in Note')
+      const button = el('button', { class: 'quote-rule', type: 'button', title: label, 'aria-label': label, tabindex: '-1' })
+      button.style.left = `${left}px`
+      button.style.top = `${top}px`
+      button.style.width = `${right - left}px`
+      button.style.height = `${bottom - top}px`
+      button.style.setProperty('--rule', `${Math.max(1.5, rule.rect.width * viewport.scale)}px`)
+      // The press is the button's: no text selection starts under it, and
+      // the note keeps the focus it had.
+      button.addEventListener('mousedown', (event) => event.preventDefault())
+      button.addEventListener('click', (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        this.owner.openQuote(rule.link)
+      })
+      this.quoteLayer.append(button)
+    }
+  }
+
+  /** The rules as placed — for a probe. */
+  quoteReport(): { noteID: string; rule: PageBox; passage: PageBox }[] {
+    return this.quoteRules.map((rule) => ({ noteID: rule.link.noteID, rule: rule.rect, passage: rule.link.passage.rect }))
   }
 
   /** Stops whatever is drawing: a render for the last layout paints nothing. */
@@ -405,6 +470,8 @@ export class PageView {
     if (generation !== this.generation) return
     this.redraw()
     this.drawFind()
+    // The words are read now: the rules can find their columns.
+    if (this.quotes.length > 0) this.measureQuotes()
     // The pictures, the first time night meets this page.
     if (this.rendering === 'night' && !this.images.found) void this.findImages()
   }

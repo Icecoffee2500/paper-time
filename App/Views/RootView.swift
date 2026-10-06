@@ -179,6 +179,40 @@ struct LibraryWindow: View {
                 model.selectedPaperID = papers[0].id
                 app.dock(papers[1].id, at: .right, in: model)
             }
+            // The rule beside a quoted passage was clicked: its note opens
+            // where notes are showing, at the quotation.
+            .onChange(of: model.notes.passageRequest) { _, request in
+                guard let request else { return }
+                Task { @MainActor in await openQuotation(request) }
+            }
+    }
+
+    /// Opens a quotation asked for from its page. In the slip-box the note
+    /// takes the open note's place beside the paper; otherwise the inspector
+    /// comes forward on Notes with it. A pane beside another becomes the one
+    /// being read with the same click, and the inspector follows its paper —
+    /// clearing the open note as it does — so the note is opened once that
+    /// has settled.
+    @MainActor
+    private func openQuotation(_ request: NotesModel.PassageRequest) async {
+        defer { if model.notes.passageRequest == request { model.notes.passageRequest = nil } }
+        guard model.notes.note(request.noteID) != nil else { return }
+        if model.scope == .notes {
+            model.notes.openNoteID = request.noteID
+        } else {
+            for _ in 0..<20 where model.selectedPaperID != request.paperID {
+                try? await Task.sleep(for: .milliseconds(25))
+            }
+            await Task.yield()
+            app.showsInspector = true
+            inspectorTab = .note
+            link.openNoteID = request.noteID
+        }
+        model.notes.revealPassage = request.url
+        if Boot.isSet("PAPERTIME_QUOTE_LINK") {
+            let place = model.scope == .notes ? "the slip-box" : "the inspector on \(inspectorTab)"
+            FileHandle.standardError.write(Data("quote link: opened \(request.noteID) in \(place)\n".utf8))
+        }
     }
 
     /// The Mac hangs the toolbar off the split view itself, which is what makes

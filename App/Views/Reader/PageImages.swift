@@ -248,8 +248,9 @@ final class FigureOverlayView: NSView {
 }
 
 /// One view over a page holding its overlays: the mask over the margin's
-/// stamps, the figures for the dimmed tint, composited plainly, and the
-/// marks, multiplied onto the paper.
+/// stamps, the figures for the dimmed tint, composited plainly, the marks,
+/// multiplied onto the paper, and on top the rules beside the passages
+/// notes quote.
 final class PageOverlay: NSView {
     private let mask: MarginMaskView
 
@@ -257,7 +258,9 @@ final class PageOverlay: NSView {
         page: PDFPage,
         drawing: @escaping () -> PKDrawing = { PKDrawing() },
         sketch: @escaping () -> [SketchElement] = { [] },
-        hiddenSketch: @escaping () -> Set<UUID> = { [] }
+        hiddenSketch: @escaping () -> Set<UUID> = { [] },
+        quoteBars: @escaping () -> [QuoteBar] = { [] },
+        hoveredQuote: @escaping () -> QuoteBar? = { nil }
     ) {
         mask = MarginMaskView(page: page)
         super.init(frame: .zero)
@@ -265,7 +268,8 @@ final class PageOverlay: NSView {
         let figures = FigureOverlayView(page: page)
         let ink = InkOverlayView(page: page, drawing: drawing)
         let shapes = SketchOverlayView(page: page, elements: sketch, hidden: hiddenSketch)
-        for child in [mask, figures, marks, ink, shapes] as [NSView] {
+        let quotes = QuoteLinkOverlayView(page: page, bars: quoteBars, hovered: hoveredQuote)
+        for child in [mask, figures, marks, ink, shapes, quotes] as [NSView] {
             child.autoresizingMask = [.width, .height]
             addSubview(child)
         }

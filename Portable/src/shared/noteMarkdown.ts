@@ -203,7 +203,8 @@ export function standsAlone(block: Block): boolean {
 
 // MARK: - Inline
 
-const LINK = /\[((?:\\.|[^\\\]\n]|\](?!\())*)\]\((papertime:\/\/[^)\s]+)\)/g
+/** Brackets inside a label only in pairs, as CommonMark has them — the Mac's `linkPattern`: a quotation's words often hold a citation, «[48] solves … [3쪽](…)». */
+const LINK = /\[((?:\\.|[^\\\[\]\n]|\[(?:\\.|[^\\\[\]\n])*\])*)\]\((papertime:\/\/[^)\s]+)\)/g
 const WIKI = /\[\[([^\]|\n]+)(?:\|([^\]\n]*))?\]\]/g
 const DOLLAR = /\\\$/g
 const EMPHASIS = /(\*\*\*)([^*\n]+)(\*\*\*)|(\*\*)([^*\n]+)(\*\*)|(\*)([^*\n]+)(\*)|(`)([^`\n]+)(`)/g
