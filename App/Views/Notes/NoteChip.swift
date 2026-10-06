@@ -108,37 +108,71 @@ final class NoteLayoutFragment: NSTextLayoutFragment {
         var bottom = layoutFragmentFrame.height
         // The last row ends at its words (and the foot's room): the space
         // under it is the block's margin — and the note's last paragraph has
-        // none, which is why this is not measured from the bottom.
+        // none, which is why this is not measured from the bottom. The foot
+        // is its own room; a last line, or the closing fence as written,
+        // gets half of one under it.
         if row.isLast, let line = textLineFragments.last {
-            bottom = min(bottom, line.typographicBounds.maxY + (row.role == .close ? 0 : NoteCodeStyle.Block.footHeight / 2))
+            let foot = row.role == .close && !isShownAsWritten ? 0 : NoteCodeStyle.Block.footHeight / 2
+            bottom = min(bottom, line.typographicBounds.maxY + foot)
         }
         return CGRect(x: left, y: top, width: max(0, right - left), height: max(0, bottom - top))
+    }
+
+    /// Whether this row shows its line as typed — the caret is on it — rather
+    /// than as the box draws it: a drawn row keeps what was typed beside it
+    /// (`.paperTimeSource`).
+    private var isShownAsWritten: Bool {
+        guard let paragraph = textElement as? NSTextParagraph, paragraph.attributedString.length > 0 else { return true }
+        return paragraph.attributedString.attribute(.paperTimeSource, at: 0, effectiveRange: nil) == nil
+    }
+
+    /// Where the header's language chip stands, in the fragment's
+    /// coordinates: round the language's name, as far as the header lets the
+    /// name run. Nil when the block names no language, and while the fence
+    /// is shown as written.
+    private func codeLanguageChip(in band: CGRect) -> CGRect? {
+        guard let paragraph = textElement as? NSTextParagraph, !isShownAsWritten else { return nil }
+        let text = paragraph.attributedString
+        let name = text.string.trimmingCharacters(in: .newlines)
+        guard !name.isEmpty, name != NoteMarkdown.hiddenMarker,
+              let font = text.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
+        else { return nil }
+        let block = NoteCodeStyle.Block.self
+        let style = text.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
+        let start = style?.headIndent ?? block.labelIndent
+        let room = band.width - start + (style?.tailIndent ?? -block.copyRoom)
+        let width = min(ceil(NSAttributedString(string: name, attributes: [.font: font]).size().width), max(0, room))
+        return CGRect(x: band.minX + start - block.pillPadding,
+                      y: band.minY + (block.headerHeight - block.pillHeight) / 2,
+                      width: width + 2 * block.pillPadding, height: block.pillHeight)
     }
 
     /// Where the copy button stands over a block's header, in the
     /// fragment's coordinates. Nil on any other row, on a header shown as
     /// written, and on paper (`NotePDFExport` draws no buttons).
     var codeCopyButton: CGRect? {
-        guard let row = codeRow, row.role == .header,
-              let paragraph = textElement as? NSTextParagraph,
-              paragraph.attributedString.attribute(.paperTimeSource, at: 0, effectiveRange: nil) != nil
+        guard let row = codeRow, row.role == .header, !isShownAsWritten,
+              let paragraph = textElement as? NSTextParagraph
         else { return nil }
+        let block = NoteCodeStyle.Block.self
         let box = codeBox(for: row)
-        let size = Self.copyLabel(copied: false).size()
-        let width = size.width + 16
-        return CGRect(x: box.maxX - NoteCodeStyle.Block.inset / 2 - width, y: box.minY + 4,
-                      width: width, height: NoteCodeStyle.Block.headerHeight - 8)
+        let copied = paragraph.attributedString.attribute(block.copied, at: 0, effectiveRange: nil) != nil
+        let width = ceil(Self.copyLabel(copied: copied).size().width) + 2 * block.pillPadding
+        return CGRect(x: box.maxX - block.pillInset - width, y: box.minY + (block.headerHeight - block.pillHeight) / 2,
+                      width: width, height: block.pillHeight)
     }
 
-    /// The copy button's words, and its picture.
+    /// The copy button's words, and its picture — the picture on the words'
+    /// middle, so the two stand on one line in the pill.
     static func copyLabel(copied: Bool) -> NSAttributedString {
-        let font = NSFont.systemFont(ofSize: NoteTypography.baseSize * 0.72, weight: .regular)
+        let font = NoteCodeStyle.Block.copyFont()
         let label = NSMutableAttributedString()
         if let symbol = NSImage(systemSymbolName: copied ? "checkmark" : "doc.on.doc", accessibilityDescription: nil)?
-            .withSymbolConfiguration(.init(pointSize: font.pointSize, weight: .regular)) {
+            .withSymbolConfiguration(.init(pointSize: font.pointSize, weight: .regular, scale: .small)) {
             let attachment = NSTextAttachment()
             attachment.image = symbol
-            attachment.bounds = CGRect(x: 0, y: -1.5, width: symbol.size.width, height: symbol.size.height)
+            attachment.bounds = CGRect(x: 0, y: (font.capHeight - symbol.size.height) / 2,
+                                       width: symbol.size.width, height: symbol.size.height)
             label.append(NSAttributedString(attachment: attachment))
             label.append(NSAttributedString(string: " "))
         }
@@ -148,13 +182,12 @@ final class NoteLayoutFragment: NSTextLayoutFragment {
         return label
     }
 
-    /// The block's box, a row at a time, behind its words: the fill, the
-    /// outline (its sides on every row, its rounded top on the header and
-    /// its rounded foot on the last row), the rule under the header, the
-    /// line's number, and the copy button. Each row's slice is drawn from a
-    /// box that runs on past the row where the block does, clipped to the
-    /// row — so the corners belong to the header and the foot only, and the
-    /// slices meet without a seam.
+    /// The block's box, a row at a time, behind its words: the wash (its
+    /// rounded top on the header and its rounded foot on the last row), the
+    /// language's chip and the copy pill on the header, and the line's
+    /// number. Each row's slice is drawn from a box that runs on past the
+    /// row where the block does, clipped to the row — so the corners belong
+    /// to the header and the foot only, and the slices meet without a seam.
     private func drawCodeBlock(in context: CGContext) {
         guard let row = codeRow, let paragraph = textElement as? NSTextParagraph else { return }
         let block = NoteCodeStyle.Block.self
@@ -183,17 +216,12 @@ final class NoteLayoutFragment: NSTextLayoutFragment {
         NSBezierPath(rect: band).addClip()
         block.fill.setFill()
         shape.fill()
-        block.border.setStroke()
-        let outline = NSBezierPath(roundedRect: whole.insetBy(dx: 0.5, dy: 0.5),
-                                   xRadius: block.radius - 0.5, yRadius: block.radius - 0.5)
-        outline.lineWidth = 1
-        outline.stroke()
         context.restoreGState()
 
         let text = paragraph.attributedString
-        if top, !bottom {
-            block.rule.setFill()
-            NSRect(x: band.minX + 1, y: band.maxY - 1, width: band.width - 2, height: 1).fill()
+        if top, let chip = codeLanguageChip(in: band) {
+            NoteChip.fill.setFill()
+            NSBezierPath(roundedRect: chip, xRadius: chip.height / 2, yRadius: chip.height / 2).fill()
         }
         if row.role == .line, row.number > 0, let line = textLineFragments.first,
            let style = text.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle {
@@ -207,10 +235,25 @@ final class NoteLayoutFragment: NSTextLayoutFragment {
             Self.drawDownward(number, at: CGPoint(x: codeStart - 9 - size.width, y: baseline - font.ascender), in: context)
         }
         if let button = codeCopyButton, NSGraphicsContext.current?.isDrawingToScreen ?? true {
+            let pill = NSBezierPath(roundedRect: button, xRadius: button.height / 2, yRadius: button.height / 2)
+            block.pillFill.setFill()
+            pill.fill()
+            let edge = NSBezierPath(roundedRect: button.insetBy(dx: 0.25, dy: 0.25),
+                                    xRadius: button.height / 2 - 0.25, yRadius: button.height / 2 - 0.25)
+            edge.lineWidth = 0.5
+            block.pillEdge.setStroke()
+            edge.stroke()
             let copied = text.attribute(block.copied, at: 0, effectiveRange: nil) != nil
             let label = Self.copyLabel(copied: copied)
-            let size = label.size()
-            Self.drawDownward(label, at: CGPoint(x: button.maxX - 8 - size.width, y: button.midY - size.height / 2), in: context)
+            // The words' capitals on the pill's middle; the line's top is
+            // where it is drawn from, its tallest piece above the baseline.
+            let font = block.copyFont()
+            var ascent = font.ascender
+            label.enumerateAttribute(.attachment, in: NSRange(location: 0, length: label.length)) { value, _, _ in
+                if let bounds = (value as? NSTextAttachment)?.bounds { ascent = max(ascent, bounds.maxY) }
+            }
+            let baseline = button.midY + font.capHeight / 2
+            Self.drawDownward(label, at: CGPoint(x: button.minX + block.pillPadding, y: baseline - ascent), in: context)
         }
     }
 

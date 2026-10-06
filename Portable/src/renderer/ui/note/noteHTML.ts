@@ -192,9 +192,9 @@ export function fitNumbered(svg: string, room: number): string {
 }
 
 /**
- * A block of code as the editor draws it (`codeRanges`): its language over a
- * rule, every line numbered, the code in its colours — and no copy button,
- * there is nothing to press on paper.
+ * A block of code as the editor draws it (`codeRanges`): its language in a
+ * chip on the box's cool wash, every line numbered, the code in its colours —
+ * and no copy pill, there is nothing to press on paper.
  */
 export function codeBlockHTML(block: CodeBlock, source: string): string {
   const code = codeOf(block, source)
@@ -219,7 +219,7 @@ export function codeBlockHTML(block: CodeBlock, source: string): string {
     offset += length + 1
     return html
   }).join('')
-  const name = block.language ? escapeHTML(codeLanguageName(block.language)) : ''
+  const name = block.language ? `<span class="nm-codeblock-lang">${escapeHTML(codeLanguageName(block.language))}</span>` : ''
   return `<div class="nm-codeblock"><div class="nm-codeblock-head">${name}</div><div class="nm-codeblock-body">${lines}</div></div>`
 }
 
@@ -296,11 +296,12 @@ h4.nm-h, h5.nm-h, h6.nm-h { font-size: 16px; }
 .nm-display-line { text-align: center; }
 .nm-math-alone { display: inline-block; width: 100%; text-align: center; }
 .nm-math-raw { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14.7px; color: var(--text-secondary); }
-.nm-codeblock { margin: 6px 0 17px; border: 1px solid rgba(0, 0, 0, 0.1); border-radius: 6px; background: rgba(0, 0, 0, 0.035); }
-.nm-codeblock-head { height: 27px; padding: 0 12px; line-height: 27px; font-size: 12px; font-weight: 500; color: var(--text-secondary); border-bottom: 1px solid rgba(0, 0, 0, 0.06); }
-.nm-codeblock-body { padding: 6px 12px 4px 0; }
+.nm-codeblock { margin: 6px 0 17px; border-radius: 14px; background: rgba(30, 90, 200, 0.05); }
+.nm-codeblock-head { display: flex; align-items: center; height: 34px; padding: 0 6px; }
+.nm-codeblock-lang { height: 22px; padding: 0 9px; border-radius: 11px; line-height: 22px; font-size: 12px; font-weight: 600; color: var(--accent); background: rgba(10, 95, 214, 0.12); }
+.nm-codeblock-body { padding: 2px 14px 14px 0; }
 .nm-codeblock-line { display: flex; break-inside: avoid; }
-.nm-codeblock-n { flex: none; width: 40px; padding-right: 9px; text-align: right; font: 11.52px/18px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; color: var(--text-tertiary); }
+.nm-codeblock-n { flex: none; width: 33px; padding-right: 9px; text-align: right; font: 11.52px/18px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; color: var(--text-tertiary); }
 .nm-codeblock-code { flex: 1; min-width: 0; font: 13.6px/18px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace, 'Pretendard Variable', Pretendard; white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 4; }
 .nm-tok-keyword { color: #9b2393; }
 .nm-tok-string { color: #c41a16; }
