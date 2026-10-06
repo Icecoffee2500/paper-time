@@ -2340,8 +2340,11 @@ final class SketchTextEditor: LatexSuiteTextView {
     // and the step taken back was whatever had been drawn before the card —
     // under the words still being typed. It matters more now that a key can
     // turn into LaTeX, because one ⌘Z has to give the typed key back.
-    @objc func undo(_ sender: Any?) { ownUndoManager.undo() }
-    @objc func redo(_ sender: Any?) { ownUndoManager.redo() }
+    // Told as a change, because it is one: under TextKit 2 the text view's
+    // undo changes the words without a word to the delegate, and the card
+    // kept the size of what had been undone.
+    @objc func undo(_ sender: Any?) { ownUndoManager.undo(); onChange?() }
+    @objc func redo(_ sender: Any?) { ownUndoManager.redo(); onChange?() }
 
     override func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
         switch item.action {

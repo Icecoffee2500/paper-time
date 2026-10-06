@@ -20,6 +20,11 @@ class LatexSuiteTextView: NSTextView {
     /// jumps is the typist leaving a placeholder.
     var isSettingText: Bool { false }
 
+    /// The stack Latex Suite's steps go on. The text view's own, unless the
+    /// owner keeps the undo itself — the note does, in the Markdown, and
+    /// switches the text view's off, which leaves `undoManager` nil.
+    var stepUndoManager: UndoManager? { undoManager }
+
     override func keyDown(with event: NSEvent) {
         latexSuite.handling(event) { super.keyDown(with: event) }
     }
@@ -65,7 +70,7 @@ class LatexSuiteTextView: NSTextView {
     override func viewWillMove(toWindow newWindow: NSWindow?) {
         // What was registered to undo an expansion goes with the view: left on
         // the window's stack it would be a ⌘Z that does nothing, spent.
-        if newWindow == nil, window != nil { undoManager?.removeAllActions(withTarget: self) }
+        if newWindow == nil, window != nil { stepUndoManager?.removeAllActions(withTarget: self) }
         super.viewWillMove(toWindow: newWindow)
     }
 }
@@ -310,7 +315,7 @@ final class LatexSuiteTyping {
         // view saw it). The typing before the key stops coalescing here, so
         // that it stays a step of its own and the text view does not go on
         // extending it at offsets this edit has moved.
-        let manager = view.undoManager
+        let manager = view.stepUndoManager
         view.breakUndoCoalescing()
         let separate = history.count > 1 && manager?.groupingLevel == 0
         let groupsByEvent = manager?.groupsByEvent ?? true
@@ -342,7 +347,7 @@ final class LatexSuiteTyping {
 
         isApplying = true
         defer { isApplying = false }
-        let manager = view.undoManager
+        let manager = view.stepUndoManager
         // The text view would record the edit in screen offsets; this records
         // it in source offsets instead (see the type's comment).
         manager?.disableUndoRegistration()
@@ -384,7 +389,7 @@ final class LatexSuiteTyping {
     }
 
     private func register(_ step: Step, in view: LatexSuiteTextView) {
-        view.undoManager?.registerUndo(withTarget: view) { view in
+        view.stepUndoManager?.registerUndo(withTarget: view) { view in
             MainActor.assumeIsolated { view.latexSuite.revert(step, in: view) }
         }
     }
@@ -397,7 +402,7 @@ final class LatexSuiteTyping {
         tabstops = .none
         view.breakUndoCoalescing()
         view.needsDisplay = true
-        view.undoManager?.registerUndo(withTarget: view) { view in
+        view.stepUndoManager?.registerUndo(withTarget: view) { view in
             MainActor.assumeIsolated { view.latexSuite.reapply(step, in: view) }
         }
     }
@@ -411,6 +416,15 @@ final class LatexSuiteTyping {
         view.breakUndoCoalescing()
         view.needsDisplay = true
         register(step, in: view)
+    }
+
+    /// The note was put back by ⌘Z or ⇧⌘Z without an edit of the text
+    /// view's: as in Latex Suite, an undo leaves no placeholders.
+    func dropPlaceholders(in view: LatexSuiteTextView) {
+        tabstops = .none
+        mirrors = []
+        pending = []
+        view.needsDisplay = true
     }
 
     // MARK: Following the text view's own edits
@@ -428,7 +442,7 @@ final class LatexSuiteTyping {
         }
         guard tabstops.isActive, let strings else { return }
         // Latex Suite drops every placeholder on undo.
-        if let manager = view.undoManager, manager.isUndoing || manager.isRedoing {
+        if let manager = view.stepUndoManager, manager.isUndoing || manager.isRedoing {
             tabstops = .none
             view.needsDisplay = true
             return
