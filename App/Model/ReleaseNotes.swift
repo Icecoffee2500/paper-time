@@ -308,6 +308,25 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.9.27",
+            date: Text2("2026년 10월", "October 2026"),
+            note: Text2(
+                "노트의 코드 블록이 앱의 다른 편집기처럼 둥글고 맑아졌어요.",
+                "Code blocks in notes are rounder and brighter, like the app’s other editors."
+            ),
+            added: [
+                Entry(
+                    Text2("둥글고 맑은 코드 블록", "Softer Code Blocks"),
+                    Text2(
+                        "코드 블록의 모서리를 앱의 다른 편집기만큼 둥글게 했어요. 칙칙한 회색 대신 옅은 파란 바탕을 쓰고, 다크 모드에서는 Xcode 편집기처럼 푸른빛이 도는 바탕을 써요. 테두리와 머리 아래의 선은 걷어 냈어요. 언어 이름은 강조색 칩에, 복사 단추는 흰 알약에 담았어요. PDF로 내보낸 노트도 같은 모양이에요.",
+                        "Code blocks now have the rounded corners of the app’s other editors. A pale blue replaces the dull grey, and in dark mode the box takes on the blue-grey of Xcode’s editor. The outline and the rule under the header are gone: the language sits in a chip in your accent colour, and Copy is a white pill. Exported PDFs match."
+                    ),
+                    demo: .noteCodeBlock
+                ),
+            ],
+            fixed: []
+        ),
+        Release(
             version: "0.9.26",
             date: Text2("2026년 10월", "October 2026"),
             note: Text2(

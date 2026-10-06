@@ -209,3 +209,15 @@ const NAMES = new Map<string, string>(GROUPS.flatMap(([name, aliases]) => aliase
 export function codeLanguageName(language: string): string {
   return NAMES.get(language.toLowerCase()) ?? language
 }
+
+/**
+ * A block's own colours, as the Mac paints them (`NoteCodeStyle.Block.fill`,
+ * `pillFill`, `pillEdge`): a cool wash of the page — the faintest blue, and
+ * in the dark the slate of Xcode's own editor — and the copy pill on it. The
+ * window's `--codeblock-*` tokens are these; a test holds the three together.
+ */
+export const CODE_SURFACE = {
+  fill: { light: 'rgba(30, 90, 200, 0.05)', dark: 'rgba(140, 170, 255, 0.085)' },
+  pill: { light: 'rgba(255, 255, 255, 0.85)', dark: 'rgba(255, 255, 255, 0.08)' },
+  pillEdge: { light: 'rgba(0, 0, 0, 0.06)', dark: 'transparent' },
+} as const

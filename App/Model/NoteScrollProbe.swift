@@ -115,6 +115,29 @@ enum NoteScrollProbe {
                 report(key)
                 continue
             }
+            // `PressCopy`: a press on the first block's copy pill where it is
+            // drawn, and one just left of it — through the same hit test a
+            // click takes — onto a pasteboard of the probe's own.
+            if key == "PressCopy" {
+                let board = NSPasteboard(name: NSPasteboard.Name("PaperTimeProbe-\(ProcessInfo.processInfo.processIdentifier)"))
+                board.clearContents()
+                var header: Int?
+                if let storage = text.textStorage {
+                    storage.enumerateAttribute(NoteCodeStyle.Block.attribute, in: NSRange(location: 0, length: storage.length)) { value, range, stop in
+                        if NoteCodeStyle.Block.Row(value)?.role == .header { header = range.location; stop.pointee = true }
+                    }
+                }
+                guard let header, let pill = text.copyButtonFrame(ofBlockAt: header) else {
+                    say("note scroll: no copy pill")
+                    continue
+                }
+                let beside = text.copyCode(at: NSPoint(x: pill.minX - 4, y: pill.midY), to: board)
+                let inside = text.copyCode(at: NSPoint(x: pill.midX, y: pill.midY), to: board)
+                say("note scroll: copy pill \(NSStringFromRect(pill)) beside \(beside) inside \(inside): \((board.string(forType: .string) ?? "").debugDescription)")
+                board.releaseGlobally()
+                report(key)
+                continue
+            }
             // `CopyCode`: the first block's copy button, onto a pasteboard of
             // the probe's own — never the one people copy to.
             if key == "CopyCode" {

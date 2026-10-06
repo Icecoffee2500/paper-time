@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
-import { codeBlocks, codeLanguageName, codeOf, codeRowAt, openingFence } from '../shared/noteCode.js'
+import { CODE_SURFACE, codeBlocks, codeLanguageName, codeOf, codeRowAt, openingFence } from '../shared/noteCode.js'
 import { codeIndentEdit, codeReturnEdit, fenceTypingEdit, pairEdit, returnEdit, wrapEdit, type LineEdit } from '../shared/noteBlocks.js'
 import { codeBlockHTML, noteBodyHTML } from '../renderer/ui/note/noteHTML.js'
 import { CODE_PALETTE, type CodeRole } from '../shared/codeHighlight.js'
@@ -143,7 +143,7 @@ export async function noteCodeSuite(test: Test, suite: (name: string) => void) {
     const source = 'before\n```python\ndef f():\n    return 1 < 2\n```\nafter'
     const block = codeBlocks(source)[0]
     const html = codeBlockHTML(block, source)
-    assert.ok(html.includes('<div class="nm-codeblock-head">Python</div>'), html)
+    assert.ok(html.includes('<div class="nm-codeblock-head"><span class="nm-codeblock-lang">Python</span></div>'), html)
     assert.ok(html.includes('<span class="nm-codeblock-n">1</span>') && html.includes('<span class="nm-codeblock-n">2</span>'), html)
     assert.ok(html.includes('<span class="nm-tok-keyword">def</span>'), html)
     assert.ok(html.includes('1 &lt; 2') || html.includes('&lt;'), html)
@@ -151,6 +151,40 @@ export async function noteCodeSuite(test: Test, suite: (name: string) => void) {
     assert.equal(body.split('nm-codeblock"').length - 1, 1, body)
     assert.ok(!body.includes('```'), body)
     assert.ok(body.includes('before') && body.includes('after'), body)
+  })
+
+  await test('a block with no language prints no chip', () => {
+    const source = '```\nplain\n```'
+    const html = codeBlockHTML(codeBlocks(source)[0], source)
+    assert.ok(html.includes('<div class="nm-codeblock-head"></div>'), html)
+  })
+
+  await test('the box is the Mac\'s box: its wash and its copy pill, light and dark', () => {
+    const css = fs.readFileSync(path.join(process.cwd(), 'src/renderer/style.css'), 'utf8')
+    const light = /:root \{([\s\S]*?)\n\}/.exec(css)?.[1] ?? ''
+    const dark = /:root\[data-theme='dark'\] \{([\s\S]*?)\n\}/.exec(css)?.[1] ?? ''
+    const token = (block: string, name: string) => new RegExp(`--codeblock-${name}:\\s*([^;]+);`).exec(block)?.[1].trim()
+    for (const [name, key] of [['fill', 'fill'], ['pill', 'pill'], ['pill-edge', 'pillEdge']] as const) {
+      assert.equal(token(light, name), CODE_SURFACE[key].light, `--codeblock-${name} light`)
+      assert.equal(token(dark, name), CODE_SURFACE[key].dark, `--codeblock-${name} dark`)
+    }
+    // The Mac's, read from its source: `dark ? <colour> : <light colour>`.
+    const swift = fs.readFileSync(path.join(process.cwd(), '..', 'App/Views/Notes/NoteTypography.swift'), 'utf8')
+    const rgba = (r: string, g: string, b: string, a: string) => `rgba(${r}, ${g}, ${b}, ${a})`
+    const srgb = String.raw`NSColor\(srgbRed: (\d+) / 255, green: (\d+) / 255, blue: (\d+) / 255, alpha: ([\d.]+)\)`
+    const fill = new RegExp(String.raw`static var fill: NSColor \{[^}]*?\? ${srgb}\s*: ${srgb}`).exec(swift)
+    assert.ok(fill, 'NoteCodeStyle.Block.fill')
+    assert.equal(rgba(fill[1], fill[2], fill[3], fill[4]), CODE_SURFACE.fill.dark)
+    assert.equal(rgba(fill[5], fill[6], fill[7], fill[8]), CODE_SURFACE.fill.light)
+    const white = (w: string, a: string) => (w === '1' ? `rgba(255, 255, 255, ${a})` : `rgba(0, 0, 0, ${a})`)
+    const pill = /static var pillFill: NSColor \{[^}]*?\? NSColor\(white: (\d), alpha: ([\d.]+)\)\s*: NSColor\(white: (\d), alpha: ([\d.]+)\)/.exec(swift)
+    assert.ok(pill, 'NoteCodeStyle.Block.pillFill')
+    assert.equal(white(pill[1], pill[2]), CODE_SURFACE.pill.dark)
+    assert.equal(white(pill[3], pill[4]), CODE_SURFACE.pill.light)
+    const edge = /static var pillEdge: NSColor \{[^}]*?\? \.clear\s*: NSColor\(white: (\d), alpha: ([\d.]+)\)/.exec(swift)
+    assert.ok(edge, 'NoteCodeStyle.Block.pillEdge')
+    assert.equal(CODE_SURFACE.pillEdge.dark, 'transparent')
+    assert.equal(white(edge[1], edge[2]), CODE_SURFACE.pillEdge.light)
   })
 
   await test('the window paints with the palette the Mac paints with', () => {

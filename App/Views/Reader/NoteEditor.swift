@@ -1295,7 +1295,7 @@ final class NoteTextView: LatexSuiteTextView {
         // notice. Anything else falls through to the ordinary text handling.
         if followChip(at: event) { return }
         if foldToggle(at: event) { return }
-        if copyCode(at: event) { return }
+        if copyCode(at: convert(event.locationInWindow, from: nil), to: .general) { return }
         isSelectingByHand = true
         // NSTextView tracks the drag itself and returns when the mouse is let
         // go, so this brackets the whole gesture.
@@ -1636,9 +1636,13 @@ final class NoteTextView: LatexSuiteTextView {
         if code.row.role == .line {
             attributes[.foregroundColor] = NSColor.labelColor
         } else {
-            // The fence as written: the language after its marks.
+            // The fence as written: the language after its marks — on the
+            // header, lifted to its middle as the rest of the line is.
             attributes[.font] = NoteTypography.code()
             attributes[.foregroundColor] = NSColor.secondaryLabelColor
+            if code.row.role == .header {
+                attributes[.baselineOffset] = NoteCodeStyle.Block.headerLift(for: NoteTypography.code())
+            }
         }
         return attributes
     }
@@ -1729,10 +1733,11 @@ final class NoteTextView: LatexSuiteTextView {
     }
 
     /// A click on a block's copy button copies its code — the lines between
-    /// the fences, as written — and says so on the button for a moment.
-    private func copyCode(at event: NSEvent) -> Bool {
+    /// the fences, as written — and says so on the button for a moment. The
+    /// point is in the view's coordinates; the pasteboard is a parameter so a
+    /// probe can press the button onto one of its own.
+    func copyCode(at point: NSPoint, to pasteboard: NSPasteboard) -> Bool {
         guard coordinator?.showsRawText != true, let layout = textLayoutManager else { return false }
-        let point = convert(event.locationInWindow, from: nil)
         let inContainer = CGPoint(x: point.x - textContainerOrigin.x, y: point.y - textContainerOrigin.y)
         guard let fragment = layout.textLayoutFragment(for: inContainer) as? NoteLayoutFragment,
               let button = fragment.codeCopyButton?.offsetBy(dx: fragment.layoutFragmentFrame.minX,
@@ -1742,7 +1747,19 @@ final class NoteTextView: LatexSuiteTextView {
               let start = fragment.textElement?.elementRange?.location
         else { return false }
         let index = content.offset(from: content.documentRange.location, to: start)
-        return copyCode(ofBlockAt: index, to: .general)
+        return copyCode(ofBlockAt: index, to: pasteboard)
+    }
+
+    /// Where the copy pill of the block whose header is at this display
+    /// offset stands, in the view's coordinates — what a probe presses.
+    func copyButtonFrame(ofBlockAt index: Int) -> NSRect? {
+        guard let layout = textLayoutManager, let content = layout.textContentManager,
+              let location = content.location(content.documentRange.location, offsetBy: index),
+              let fragment = layout.textLayoutFragment(for: location) as? NoteLayoutFragment,
+              let button = fragment.codeCopyButton
+        else { return nil }
+        return button.offsetBy(dx: fragment.layoutFragmentFrame.minX + textContainerOrigin.x,
+                               dy: fragment.layoutFragmentFrame.minY + textContainerOrigin.y)
     }
 
     /// Copies the code of the block whose header is at this display offset.
