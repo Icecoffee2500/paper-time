@@ -308,6 +308,38 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.9.25",
+            date: Text2("2026년 10월", "October 2026"),
+            note: Text2(
+                "노트에서 ⌘Z가 방금 한 일을 정확히 되돌려요. ⌘B나 ⌘I 뒤에 눌러도 별표만 걷혀요.",
+                "⌘Z in a note undoes exactly what was just done. After ⌘B or ⌘I, it takes off just the stars."
+            ),
+            added: [],
+            fixed: [
+                Entry(
+                    Text2("엉뚱하게 되돌리던 ⌘Z", "⌘Z Undid the Wrong Thing"),
+                    Text2(
+                        "노트에서 ⌘B나 ⌘I 뒤에 ⌘Z를 누르면 다른 글자가 지워지거나, 화면에서는 되돌아갔는데 저장된 노트에는 남아 있었어요. 이제 되돌리기와 다시 하기가 노트의 원문을 기준으로 움직여서, 커서를 다른 줄로 옮긴 뒤에도 방금 한 일만 정확히 되돌리고 고른 범위도 그대로 돌아와요.",
+                        "In a note, ⌘Z after ⌘B or ⌘I could delete other characters, or change the screen while the saved note kept what had been undone. Undo and Redo now work on the note’s Markdown, so they take back exactly the last change, even after the cursor has moved to another line, and bring the selection back with it."
+                    )
+                ),
+                Entry(
+                    Text2("한 번에 되돌리는 단위", "What One ⌘Z Takes Back"),
+                    Text2(
+                        "이어서 친 글은 한 번에, 굵게·기울임·붙여넣기·인용 넣기는 하나씩 되돌려요. 한글도 글자마다가 아니라 이어서 친 만큼 되돌려요.",
+                        "Words typed in one go come back as one step, and bold, italics, a paste or an inserted quotation each as one. Korean comes back as typed, not one syllable at a time."
+                    )
+                ),
+                Entry(
+                    Text2("글 카드의 되돌리기", "Undo in Text Cards"),
+                    Text2(
+                        "쪽 위 글 카드에서 ⌘Z를 누르면 글은 되돌아가는데 카드 크기와 저장된 글은 그대로였어요. 이제 같이 바뀌어요.",
+                        "⌘Z in a text card on the page changed the words but not the card’s size or what was saved. Now both follow."
+                    )
+                ),
+            ]
+        ),
+        Release(
             version: "0.9.24",
             date: Text2("2026년 10월", "October 2026"),
             note: Text2(

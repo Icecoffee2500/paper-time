@@ -196,14 +196,14 @@ enum LatexSuiteTypingProbe {
                 // A fresh start: the typing the text view is still coalescing
                 // belongs to the case before, in a text that is gone.
                 view.breakUndoCoalescing()
-                view.undoManager?.removeAllActions()
+                view.stepUndoManager?.removeAllActions()
                 view.latexSuite.select(selection, in: view)
                 window.makeFirstResponder(view)
                 try? await Task.sleep(for: .milliseconds(40))
                 var handled: [String] = []
                 for key in probe.keys {
                     if Boot.isSet("PAPERTIME_LATEX_TYPING_DEBUG") {
-                        say("  key \(key.debugDescription): level \(view.undoManager?.groupingLevel ?? -1) canUndo \(view.undoManager?.canUndo ?? false)")
+                        say("  key \(key.debugDescription): level \(view.stepUndoManager?.groupingLevel ?? -1) canUndo \(view.stepUndoManager?.canUndo ?? false)")
                     }
                     handled.append(await press(key, in: view, window: window))
                     await endOfEvent(window)
@@ -292,14 +292,19 @@ enum LatexSuiteTypingProbe {
         // responder chain from the text view that answers it — the card's
         // editor, or the window.
         case "Undo":
-            guard view.undoManager?.canUndo == true else { return "nothing to undo" }
+            guard view.stepUndoManager?.canUndo == true else { return "nothing to undo" }
             sendUp(Selector(("undo:")), from: view)
         case "Redo":
-            guard view.undoManager?.canRedo == true else { return "nothing to redo" }
+            guard view.stepUndoManager?.canRedo == true else { return "nothing to redo" }
             sendUp(Selector(("redo:")), from: view)
         default:
             if let offset = key.stripPrefix("Caret:").flatMap(Int.init) {
                 set([NSRange(location: offset, length: 0)], in: view)
+            } else if let pair = key.stripPrefix("Range:"),
+                      case let parts = pair.split(separator: "+").compactMap({ Int($0) }), parts.count == 2 {
+                // A selection set in one go, as a drag leaves it — on a line
+                // that is still set, which a caret put down first would not be.
+                view.setSelectedRange(NSRange(location: parts[0], length: parts[1]))
             } else if let count = key.stripPrefix("Select:").flatMap(Int.init) {
                 // The selection stretched back over the last `count`
                 // characters, as ⇧← does.
@@ -348,7 +353,7 @@ enum LatexSuiteTypingProbe {
             view.string = text
             view.latexSuite.reset()
             view.breakUndoCoalescing()
-            view.undoManager?.removeAllActions()
+            view.stepUndoManager?.removeAllActions()
             view.latexSuite.select(selection, in: view)
             return "card: set to \(self.marked(view).debugDescription)"
         }
