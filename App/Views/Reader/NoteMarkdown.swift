@@ -1326,10 +1326,11 @@ enum NoteMarkdown {
         let piece: NSMutableAttributedString
         switch row.row.role {
         case .header:
-            style = codeParagraph(.header, gutter: gutter, isLast: row.row.isLast)
+            style = codeParagraph(.header(written: revealed), gutter: gutter, isLast: row.row.isLast)
             if revealed {
                 piece = NSMutableAttributedString(string: written, attributes: [
                     .font: codeFont, .foregroundColor: syntaxColor, .paragraphStyle: style,
+                    .baselineOffset: block.headerLift(for: codeFont),
                 ])
                 // The language as words, after the fence's marks.
                 let marks = written.prefix { $0 == " " || $0 == "`" || $0 == "~" }.utf16.count
@@ -1340,12 +1341,10 @@ enum NoteMarkdown {
             } else {
                 let name = NoteCode.displayName(of: row.block.language)
                 let font = block.headerFont()
-                // In the middle of the header's height: a line taller than its
-                // words is filled from the top, so the words sat at the foot.
-                let lift = max(0, (block.headerHeight - (font.ascender - font.descender)) / 2 + font.descender)
+                // In the accent, in the middle of the chip `drawCodeBlock` paints.
                 piece = NSMutableAttributedString(string: name.isEmpty ? hiddenMarker : name, attributes: [
-                    .font: font, .foregroundColor: NoteColor.secondaryLabelColor, .paragraphStyle: style,
-                    .baselineOffset: lift,
+                    .font: font, .foregroundColor: block.labelInk, .paragraphStyle: style,
+                    .baselineOffset: block.headerLift(for: font),
                 ])
                 piece.addAttribute(.paperTimeSource, value: written, range: NSRange(location: 0, length: piece.length))
             }
@@ -1446,7 +1445,9 @@ enum NoteMarkdown {
     }
 
     private enum CodeParagraph: Hashable {
-        case header, line(first: Bool), foot, writtenFoot
+        /// `written`: the fence as typed, which may run to the box's edge —
+        /// otherwise the words keep clear of the copy pill.
+        case header(written: Bool), line(first: Bool), foot, writtenFoot
     }
 
     private nonisolated(unsafe) static var codeStyles: [String: NSParagraphStyle] = [:]
@@ -1461,9 +1462,11 @@ enum NoteMarkdown {
         style.lineBreakStrategy = .standard
         style.tailIndent = -block.inset
         switch kind {
-        case .header:
-            style.firstLineHeadIndent = block.inset
-            style.headIndent = block.inset
+        case .header(let written):
+            // Inside the chip, and the fence as written where the chip was.
+            style.firstLineHeadIndent = block.labelIndent
+            style.headIndent = block.labelIndent
+            style.tailIndent = -(written ? block.inset : block.copyRoom)
             style.minimumLineHeight = block.headerHeight
             style.maximumLineHeight = block.headerHeight
             style.lineBreakMode = .byTruncatingTail

@@ -4695,20 +4695,25 @@ private struct NoteCodeBlockDemo: View {
         }
     }
 
-    /// The box the note draws for them.
+    /// The box the note draws for them: its wash, the language's chip and
+    /// the copy pill (`NoteLayoutFragment.drawCodeBlock`).
     @ViewBuilder
     private var block: some View {
         let full = scale.isFull
         #if os(macOS)
         let style = NoteCodeStyle.Block.self
         let radius = full ? style.radius : style.radius * 0.75
+        let pill: CGFloat = full ? 19 : 13
         let source = Self.code.joined(separator: "\n")
         let runs = CodeHighlighter.shared.runs(of: source, language: "python")
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text("Python")
-                    .font(.system(size: full ? 10.5 : 7.5, weight: .medium))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: full ? 10.5 : 7.5, weight: .semibold))
+                    .foregroundStyle(Color(nsColor: style.labelInk))
+                    .padding(.horizontal, full ? 8 : 5.5)
+                    .frame(height: pill)
+                    .background(Capsule().fill(Color(nsColor: NoteChip.fill)))
                 Spacer(minLength: 0)
                 Button {
                     #if canImport(AppKit)
@@ -4721,16 +4726,23 @@ private struct NoteCodeBlockDemo: View {
                         withAnimation(Motion.fade) { copied = false }
                     }
                 } label: {
-                    Label(copied ? ReleaseNotes.string("복사했어요", "Copied") : ReleaseNotes.string("복사", "Copy"),
-                          systemImage: copied ? "checkmark" : "doc.on.doc")
+                    // The picture and the words as close as the note sets them.
+                    HStack(spacing: full ? 3 : 2) {
+                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                            .imageScale(.small)
+                        Text(copied ? ReleaseNotes.string("복사했어요", "Copied") : ReleaseNotes.string("복사", "Copy"))
+                    }
                         .font(.system(size: full ? 10 : 7))
                         .foregroundStyle(.secondary)
+                        .padding(.horizontal, full ? 8 : 5.5)
+                        .frame(height: pill)
+                        .background(Capsule().fill(Color(nsColor: style.pillFill)))
+                        .overlay(Capsule().strokeBorder(Color(nsColor: style.pillEdge), lineWidth: 0.5))
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.horizontal, full ? 12 : 8)
-            .frame(height: full ? 27 : 18)
-            Rectangle().fill(Color(nsColor: style.rule)).frame(height: 1)
+            .padding(.horizontal, full ? 5 : 3.5)
+            .frame(height: full ? 29 : 20)
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(Self.code.enumerated()), id: \.offset) { index, line in
                     HStack(alignment: .firstTextBaseline, spacing: full ? 9 : 6) {
@@ -4746,13 +4758,12 @@ private struct NoteCodeBlockDemo: View {
                     .frame(height: lineHeight, alignment: .leading)
                 }
             }
-            .padding(.top, full ? 6 : 4)
-            .padding(.bottom, full ? 6 : 4)
+            .padding(.top, full ? 2 : 1)
+            .padding(.bottom, full ? 10 : 6)
             .padding(.leading, full ? 12 : 8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: radius, style: .continuous).fill(Color(nsColor: style.fill)))
-        .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1))
+        .background(RoundedRectangle(cornerRadius: radius).fill(Color(nsColor: style.fill)))
         #else
         written
         #endif

@@ -125,12 +125,15 @@
   --code-ink: #eb5757;
   --code-fill: rgba(135, 131, 120, 0.15);
 
-  /* A fenced block of code: a box a shade off the page, its outline, the
-     rule under its header (`NoteCodeStyle.Block`), and Xcode's colours for
-     what is in it (`CODE_PALETTE` in `shared/codeHighlight.ts`). */
-  --codeblock-fill: rgba(0, 0, 0, 0.035);
-  --codeblock-border: rgba(0, 0, 0, 0.1);
-  --codeblock-rule: rgba(0, 0, 0, 0.06);
+  /* A fenced block of code: a cool wash of the page — the faintest blue,
+     and in the dark the slate of Xcode's own editor — its language in the
+     accent, the copy pill on it (`NoteCodeStyle.Block`, `CODE_SURFACE` in
+     `shared/noteCode.ts`), and Xcode's colours for what is in it
+     (`CODE_PALETTE` in `shared/codeHighlight.ts`). */
+  --codeblock-fill: rgba(30, 90, 200, 0.05);
+  --codeblock-pill: rgba(255, 255, 255, 0.85);
+  --codeblock-pill-edge: rgba(0, 0, 0, 0.06);
+  --codeblock-label: var(--accent);
   --code-tok-keyword: #9b2393;
   --code-tok-string: #c41a16;
   --code-tok-number: #1c00cf;
@@ -193,9 +196,11 @@
 
   --code-ink: #ff7369;
 
-  --codeblock-fill: rgba(255, 255, 255, 0.055);
-  --codeblock-border: rgba(255, 255, 255, 0.1);
-  --codeblock-rule: rgba(255, 255, 255, 0.08);
+  --codeblock-fill: rgba(140, 170, 255, 0.085);
+  --codeblock-pill: rgba(255, 255, 255, 0.08);
+  --codeblock-pill-edge: transparent;
+  /* The accent is too deep to read on a tint of itself in the dark. */
+  --codeblock-label: color-mix(in srgb, var(--accent) 65%, white);
   --code-tok-keyword: #fc5fa3;
   --code-tok-string: #fc6a5d;
   --code-tok-number: #d0bf69;
@@ -3976,15 +3981,16 @@ body[data-solo='true'] .reader-header button {
 .nm-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.85em; color: var(--code-ink); background: var(--code-fill); border-radius: 4px; padding: 0.2em 0.4em; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 
 /* Fenced code, as a code editor shows it (`NoteLayoutFragment.drawCodeBlock`):
-   one box a shade off the page with a hairline outline, rounded at its
-   header and its foot; the header the language's name and a copy button
-   over a rule; every line numbered in a gutter; the code in Xcode's colours.
+   one box on a cool wash of the page with an editor's corner (14), rounded at
+   its header and its foot; on the header the language as a chip and a pill
+   to copy it; every line numbered in a gutter; the code in Xcode's colours.
+   No line anywhere — no outline, no rule under the header.
    Each row draws its own slice of the box, so the rows meet without seams.
    Every row is a whole number of pixels tall (18 a line), as on the Mac. */
 .note-field .cm-line.nm-code {
   position: relative;
   z-index: 0;
-  padding: 0 12px 0 calc(12px + var(--code-gutter, 28px));
+  padding: 0 14px 0 calc(14px + var(--code-gutter, 28px));
   font-family: var(--code-font);
   font-size: 13.6px;
   line-height: 18px;
@@ -3999,47 +4005,43 @@ body[data-solo='true'] .reader-header button {
   z-index: -1;
   inset: 0;
   background: var(--codeblock-fill);
-  border-left: 1px solid var(--codeblock-border);
-  border-right: 1px solid var(--codeblock-border);
   pointer-events: none;
 }
 .note-field .cm-line.nm-code-header {
-  height: 33px;
-  padding: 6px 8px 0 12px;
-  line-height: 27px;
+  height: 40px;
+  padding: 6px 6px 0 6px;
+  line-height: 34px;
   font-family: var(--font);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
 }
-.note-field .cm-line.nm-code-header.nm-revealed { font-family: var(--code-font); font-size: 13.6px; font-weight: 400; text-overflow: ellipsis; }
+/* The fence as written stands where the chip's words did. */
+.note-field .cm-line.nm-code-header.nm-revealed { padding-left: 15px; padding-right: 14px; font-family: var(--code-font); font-size: 13.6px; font-weight: 400; text-overflow: ellipsis; }
 .note-field .cm-line.nm-code-header::after {
   top: 6px;
-  border-top: 1px solid var(--codeblock-border);
-  border-bottom: 1px solid var(--codeblock-rule);
-  border-radius: 6px 6px 0 0;
+  border-radius: 14px 14px 0 0;
 }
-.note-field .cm-line.nm-code-first { padding-top: 6px; }
-.note-field .cm-line.nm-code-last { padding-bottom: 10px; }
+.note-field .cm-line.nm-code-first { padding-top: 2px; }
+.note-field .cm-line.nm-code-last { padding-bottom: 13px; }
 .note-field .cm-line.nm-code-last::after {
   bottom: 6px;
-  border-bottom: 1px solid var(--codeblock-border);
-  border-bottom-left-radius: 6px;
-  border-bottom-right-radius: 6px;
+  border-bottom-left-radius: 14px;
+  border-bottom-right-radius: 14px;
 }
-.note-field .cm-line.nm-code-header.nm-code-last { height: 43px; padding-bottom: 10px; }
-.note-field .cm-line.nm-code-header.nm-code-last::after { border-bottom-color: var(--codeblock-border); }
-/* The closing fence, while the caret is elsewhere: the box's foot. */
-.note-field .cm-line.nm-code-foot { height: 14px; padding-bottom: 6px; line-height: 8px; }
+.note-field .cm-line.nm-code-header.nm-code-last { height: 53px; padding-bottom: 13px; }
+/* The closing fence, while the caret is elsewhere: the box's foot, as tall
+   as its corner, so the corner is the foot's own. */
+.note-field .cm-line.nm-code-foot { height: 20px; padding-bottom: 6px; line-height: 14px; }
 .nm-code-info { color: var(--text-secondary); }
 .note-field .cm-line.nm-code-line::before {
   content: attr(data-n);
   position: absolute;
   top: 0;
   left: 0;
-  width: calc(var(--code-gutter, 28px) + 3px);
+  width: calc(var(--code-gutter, 28px) + 5px);
   text-align: right;
   font-family: var(--code-font);
   font-size: 11.52px;
@@ -4048,26 +4050,42 @@ body[data-solo='true'] .reader-header button {
   pointer-events: none;
   user-select: none;
 }
-.note-field .cm-line.nm-code-first::before { top: 6px; }
-.nm-code-head { display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; height: 27px; vertical-align: top; }
-.nm-code-lang { overflow: hidden; text-overflow: ellipsis; }
+.note-field .cm-line.nm-code-first::before { top: 2px; }
+.nm-code-head { display: inline-flex; align-items: center; gap: 8px; width: 100%; height: 34px; vertical-align: top; }
+/* The language, a chip as a passage is: the accent over a tint of it. */
+.nm-code-lang {
+  flex: 0 1 auto;
+  min-width: 0;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 11px;
+  line-height: 22px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--codeblock-label);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.nm-code-lang:empty { display: none; }
 .nm-code-copy {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   flex: none;
-  height: 21px;
-  padding: 0 6px;
+  height: 22px;
+  margin-left: auto;
+  padding: 0 9px;
   border: 0;
-  border-radius: 5px;
-  background: transparent;
+  border-radius: 11px;
+  background: var(--codeblock-pill);
+  box-shadow: inset 0 0 0 0.5px var(--codeblock-pill-edge);
   font: inherit;
   font-size: 11.52px;
   font-weight: 400;
   color: var(--text-secondary);
   cursor: pointer;
+  transition: color var(--motion-tap) var(--ease), background-color var(--motion-tap) var(--ease);
 }
-.nm-code-copy:hover { background: color-mix(in srgb, var(--text) 5.5%, transparent); }
+.nm-code-copy:hover { color: var(--text); background: color-mix(in srgb, var(--codeblock-pill), var(--text) 6%); }
 .nm-code-copy svg { width: 12px; height: 12px; }
 .nm-tok-keyword { color: var(--code-tok-keyword); }
 .nm-tok-string { color: var(--code-tok-string); }

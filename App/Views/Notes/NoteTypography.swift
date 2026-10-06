@@ -310,10 +310,17 @@ enum NoteCodeStyle {
 
 #if os(macOS)
 extension NoteCodeStyle {
-    /// A fenced block, drawn as a small code editor: a rounded box on the
-    /// page's own faint grey — the table's corner, the table's rule — with
-    /// the language over the code, a way to copy it, line numbers down the
-    /// side, and the code coloured as Xcode colours it, light and dark.
+    /// A fenced block, drawn as a small code editor: a rounded box on a cool
+    /// wash of the page, with the code's language as a chip, a pill to copy
+    /// it, line numbers down the side, and the code coloured as Xcode colours
+    /// it, light and dark.
+    ///
+    /// It had been the table's box — the page's faint grey, an outline, a
+    /// rule under the header, the table's tight corner — and every edge of
+    /// it was a line, so it read as a form to fill in rather than as code
+    /// somebody wrote. Nothing in it is a line now: the box is a tint with
+    /// an editor's corner, the language is a chip as a passage is, and the
+    /// copy button is a pill as a button on a surface is.
     ///
     /// The lines stay text — they wrap, select, search and copy as words —
     /// and the box is painted behind them a line at a time by
@@ -356,39 +363,97 @@ extension NoteCodeStyle {
             }
         }
 
-        /// The table's corner: the two are the note's two boxes.
-        static let radius: CGFloat = Corner.row - 2
-        /// Room inside the box, left and right of the words.
-        static let inset: CGFloat = 12
-        static let headerHeight: CGFloat = 30
+        /// An editor's corner (`Corner.popover`): the block is a small editor
+        /// set into the note, and the table's tight corner made it a form.
+        static let radius: CGFloat = Corner.popover
+        /// Room inside the box, left and right of the code.
+        static let inset: CGFloat = 14
+        static let headerHeight: CGFloat = 34
         /// The box's foot under the last line, when the closing fence is out
-        /// of sight.
-        static let footHeight: CGFloat = 8
+        /// of sight: as tall as the corner, so the corner is all the foot's
+        /// and turns without a step where the row above it ends.
+        static let footHeight: CGFloat = 14
         /// Above and below the block, so it does not sit on the words around it.
         static let margin: CGFloat = 6
-        /// Between the header's rule and the first line of code.
-        static let firstLineGap: CGFloat = 6
+        /// Between the header and the first line of code: the pills have
+        /// their own room round them, and there is no rule to clear.
+        static let firstLineGap: CGFloat = 2
 
+        /// The language's chip and the copy pill: how tall, how far in from
+        /// the box's edges (the same on top as at the side, so each sits
+        /// square in its corner), and the room either side of their words.
+        static let pillHeight: CGFloat = 22
+        static let pillInset: CGFloat = 6
+        static let pillPadding: CGFloat = 9
+        /// Where the header's words start: inside the chip.
+        static var labelIndent: CGFloat { pillInset + pillPadding }
+        /// What the header keeps clear at its right end for the copy pill:
+        /// "복사했어요" with its tick, and the room round it.
+        static let copyRoom: CGFloat = 100
+
+        /// A cool wash rather than a grey. On a white page the faintest
+        /// blue; in the dark the slate of Xcode's own dark editor, which the
+        /// code's colours were made for. Translucent, so the page — glass, or
+        /// paper in a PDF — shows through. The grey it replaced was the
+        /// page's colour made dirtier, and read as dull. The Portable build's
+        /// `--codeblock-fill` is the same two colours.
         static var fill: NSColor {
             NSColor(name: nil) { appearance in
                 appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-                    ? NSColor(white: 1, alpha: 0.055)
-                    : NSColor(white: 0, alpha: 0.035)
+                    ? NSColor(srgbRed: 140 / 255, green: 170 / 255, blue: 255 / 255, alpha: 0.085)
+                    : NSColor(srgbRed: 30 / 255, green: 90 / 255, blue: 200 / 255, alpha: 0.05)
             }
         }
-        static var border: NSColor { .separatorColor }
-        /// Under the header: lighter than the outline, so the box stays one box.
-        static var rule: NSColor {
+        /// The copy pill: white on the wash by day, with a hairline so the
+        /// white has an edge; a lighter shade of the wash at night, where a
+        /// lighter shade is edge enough.
+        static var pillFill: NSColor {
             NSColor(name: nil) { appearance in
                 appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
                     ? NSColor(white: 1, alpha: 0.08)
+                    : NSColor(white: 1, alpha: 0.85)
+            }
+        }
+        static var pillEdge: NSColor {
+            NSColor(name: nil) { appearance in
+                appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+                    ? .clear
                     : NSColor(white: 0, alpha: 0.06)
             }
         }
         static var lineNumber: NSColor { .tertiaryLabelColor }
+        /// The language's name: the accent — and in the dark the accent
+        /// lifted toward white, as the Portable build's `--accent-text` is:
+        /// the accent itself is too deep to read on a tint of itself there.
+        static var labelInk: NSColor {
+            NSColor(name: nil) { appearance in
+                var ink = NSColor.controlAccentColor
+                appearance.performAsCurrentDrawingAppearance {
+                    ink = NSColor.controlAccentColor.usingColorSpace(.sRGB) ?? .systemBlue
+                }
+                guard appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua else { return ink }
+                return ink.blended(withFraction: 0.35, of: .white) ?? ink
+            }
+        }
 
+        /// The language's name, in its chip: the accent over a tint of it,
+        /// as a passage reads (`NoteChip`).
         static func headerFont(size: CGFloat = NoteTypography.baseSize) -> NSFont {
-            NSFont.systemFont(ofSize: size * 0.75, weight: .medium)
+            NSFont.systemFont(ofSize: size * 0.75, weight: .semibold)
+        }
+
+        /// The copy pill's words.
+        static func copyFont(size: CGFloat = NoteTypography.baseSize) -> NSFont {
+            NSFont.systemFont(ofSize: size * 0.72, weight: .regular)
+        }
+
+        /// How far words on the header are lifted to stand in its middle —
+        /// the middle of their capitals on the middle of the header, where
+        /// the chip's is. A line taller than its words is filled from the
+        /// top, so they sit at its foot; centring their whole height instead
+        /// left the name a few points low in its chip.
+        static func headerLift(for font: NSFont) -> CGFloat {
+            max(0, headerHeight / 2 + font.descender - font.capHeight / 2)
         }
 
         static func numberFont(size: CGFloat = NoteTypography.baseSize) -> NSFont {
