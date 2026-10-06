@@ -2,11 +2,140 @@
   "repo": "Icecoffee2500/paper-time",
   "releases": [
     {
+      "version": "0.9.28",
+      "date": "2026-10-06T09:02:06Z",
+      "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.28/Paper.Time.0.9.28.dmg",
+      "size": 97858220,
+      "downloads": 0,
+      "builds": {
+        "mac": [
+          {
+            "label": "디스크 이미지",
+            "label_en": "Disk image",
+            "arch": "Apple Silicon",
+            "arch_en": "Apple Silicon",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.28/Paper.Time.0.9.28.dmg",
+            "size": 97858220,
+            "downloads": 0
+          }
+        ],
+        "windows": [
+          {
+            "label": "설치본",
+            "label_en": "Installer",
+            "arch": "64비트 · ARM",
+            "arch_en": "64-bit and ARM",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.28/Paper.Time.Setup.0.9.28.exe",
+            "size": 311137396,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "64비트",
+            "arch_en": "64-bit",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.28/Paper.Time-0.9.28-win.zip",
+            "size": 185636818,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.28/Paper.Time-0.9.28-arm64-win.zip",
+            "size": 190584494,
+            "downloads": 0
+          }
+        ],
+        "linux": [
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.28/Paper.Time-0.9.28-x86_64.AppImage",
+            "size": 183861595,
+            "downloads": 0
+          },
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.28/Paper.Time-0.9.28-arm64.AppImage",
+            "size": 184248173,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.28/paper-time-0.9.28.tar.gz",
+            "size": 176750012,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.28/paper-time-0.9.28-arm64.tar.gz",
+            "size": 181246355,
+            "downloads": 0
+          }
+        ]
+      },
+      "note": null,
+      "note_en": null,
+      "notes": {
+        "note": {
+          "ko": "⌘L로 인용한 구절 옆에 세로줄이 서요. 누르면 그 인용이 있는 노트로 가요.",
+          "en": "Passages you quote with ⌘L get a rule beside them on the page. Click it to go to the quotation in your note."
+        },
+        "added": [
+          {
+            "title": {
+              "ko": "쪽에서 노트로",
+              "en": "From the Page to the Note"
+            },
+            "detail": {
+              "ko": "⌘L로 노트에 넣은 구절 옆 여백에 노트의 인용과 같은 세로줄이 서요. 줄을 누르면 오른쪽 노트 칸이 그 노트를 열고 인용으로 가서 반짝여요. 구절을 오른쪽 클릭해도 «노트에서 보기»가 있어요. 링크는 노트 안에만 있어서 인용을 지우면 줄도 사라지고, PDF 파일은 그대로예요.",
+              "en": "A passage you quote with ⌘L gets the note's quotation rule beside it, in the page's margin. Click the rule and the note opens at the quotation, which glows for a moment. Control-click the passage for Show in Note. The link lives only in the note: delete the quotation and the rule goes with it, and the PDF stays as it was."
+            }
+          }
+        ],
+        "fixed": [
+          {
+            "title": {
+              "ko": "다른 탭에서 누른 ⌘L",
+              "en": "⌘L From Another Tab"
+            },
+            "detail": {
+              "ko": "인스펙터가 정보나 표시 탭에 있을 때 ⌘L을 누르면 노트가 열리지 않아서 인용이 어디에도 들어가지 않았어요. 이제 노트 탭이 앞으로 오고 인용이 들어가요.",
+              "en": "With the inspector on Info or Marks, ⌘L opened no note, so the quotation went nowhere. Now the Notes tab comes forward with the quotation in it."
+            }
+          },
+          {
+            "title": {
+              "ko": "인용 번호가 든 인용",
+              "en": "Citations in Quotations"
+            },
+            "detail": {
+              "ko": "인용한 문장에 [48] 같은 번호가 있으면 노트에서 «[»가 사라지고 글자 모양이 둘로 갈라졌어요. 이제 쓴 그대로 보여요.",
+              "en": "When a quoted sentence held a citation like [48], the note dropped the [ and set the words in two styles. Now it shows as written."
+            }
+          }
+        ]
+      }
+    },
+    {
       "version": "0.9.27",
       "date": "2026-10-06T05:46:16Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.27/Paper.Time.0.9.27.dmg",
       "size": 97719177,
-      "downloads": 0,
+      "downloads": 1,
       "builds": {
         "mac": [
           {
@@ -16,7 +145,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.27/Paper.Time.0.9.27.dmg",
             "size": 97719177,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "windows": [
