@@ -9,7 +9,7 @@
  * Pure apart from the typesetter it is handed, so a test can run it with a
  * stub and no window (`src/test/noteHTML.ts`).
  */
-import { planNote, type InlineToken, type PlannedLine } from '../../../shared/noteMarkdown.js'
+import { emphasisClasses, emphasisPieces, planNote, type InlineToken, type PlannedLine } from '../../../shared/noteMarkdown.js'
 import { numberFormulas, type MathSetter, type Numbered } from '../../../shared/mathJax.js'
 import { parseTable, tableBlocks, type Table } from '../../../shared/noteTable.js'
 
@@ -148,8 +148,7 @@ function tokenHTML(token: InlineToken, source: string, line: PlannedLine, counte
       return '$'
     case 'emphasis': {
       const tag = token.mono ? 'code' : token.bold ? 'strong' : 'em'
-      const kind = token.mono ? 'nm-mono' : token.bold ? 'nm-bold' : 'nm-italic'
-      return `<${tag} class="${kind}">${escapeHTML(token.text)}</${tag}>`
+      return `<${tag} class="${emphasisClasses(token)}">${escapeHTML(token.text)}</${tag}>`
     }
     case 'math': {
       const text = source.slice(token.from, token.to)
@@ -187,7 +186,13 @@ export function fitNumbered(svg: string, room: number): string {
 
 /** A table as a table — the editor's `TableWidget`, in markup. */
 export function tableHTML(table: Table): string {
-  const plain = (cell: string) => escapeHTML(cell.replaceAll('**', '').replaceAll('__', '').replaceAll('`', ''))
+  // A cell's emphasis as emphasis, as the editor sets it (`TableWidget`).
+  const plain = (cell: string) => emphasisPieces(cell).map((piece) => {
+    const classes = emphasisClasses(piece)
+    if (!classes) return escapeHTML(piece.text)
+    const tag = piece.mono ? 'code' : piece.bold ? 'strong' : 'em'
+    return `<${tag} class="${classes}">${escapeHTML(piece.text)}</${tag}>`
+  }).join('')
   const align = (index: number) => {
     const one = table.alignments[index]
     return one === 'center' ? 'center' : one === 'right' ? 'right' : 'left'
@@ -243,7 +248,7 @@ h4.nm-h, h5.nm-h, h6.nm-h { font-size: 16px; }
 .nm-link, .nm-note-link { color: var(--accent); text-decoration: underline; }
 .nm-bold { font-weight: 700; }
 .nm-italic { font-style: italic; }
-.nm-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14.7px; background: rgba(0, 0, 0, 0.08); border-radius: 3px; padding: 0 2px; }
+.nm-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.85em; color: #eb5757; background: rgba(135, 131, 120, 0.15); border-radius: 4px; padding: 0.2em 0.4em; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .nm-math svg { vertical-align: middle; }
 .nm-math-display, .nm-math-block { max-width: 100%; }
 .nm-math-display svg, .nm-math-block svg { max-width: 100%; height: auto; }

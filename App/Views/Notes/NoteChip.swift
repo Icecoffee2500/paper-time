@@ -73,11 +73,13 @@ enum NoteQuoteBar {
     static let gap: CGFloat = 13
 }
 
-/// Paints the quotations and the chips, then lets the text draw on top.
+/// Paints the quotations, the chips and the code, then lets the text draw
+/// on top.
 final class NoteLayoutFragment: NSTextLayoutFragment {
     override func draw(at point: CGPoint, in context: CGContext) {
         drawQuotes(in: context)
         drawChips(in: context)
+        drawCode(in: context)
         super.draw(at: point, in: context)
     }
 
@@ -142,8 +144,47 @@ final class NoteLayoutFragment: NSTextLayoutFragment {
     /// rule stands and where the ground reaches, so without this a quotation
     /// of two words got two words' worth of quotation.
     override var renderingSurfaceBounds: CGRect {
-        guard let quotation else { return super.renderingSurfaceBounds }
-        return super.renderingSurfaceBounds.union(quotation.ground)
+        var bounds = super.renderingSurfaceBounds
+        // A code span's tint reaches 0.2 em above and below its letters,
+        // which on the first and last lines is past the box of the words.
+        if holdsCode { bounds = bounds.insetBy(dx: 0, dy: -4) }
+        guard let quotation else { return bounds }
+        return bounds.union(quotation.ground)
+    }
+
+    private var holdsCode: Bool {
+        guard let paragraph = textElement as? NSTextParagraph else { return false }
+        let text = paragraph.attributedString
+        var found = false
+        text.enumerateAttribute(NoteCode.attribute, in: NSRange(location: 0, length: text.length)) { value, _, stop in
+            if value != nil { found = true; stop.pointee = true }
+        }
+        return found
+    }
+
+    /// The rounded warm grey behind code, a box per line it runs over. Its
+    /// height is the code face's, from the baseline — not the line's, which
+    /// holds the space between lines too — and 0.2 em more each way.
+    private func drawCode(in context: CGContext) {
+        guard let paragraph = textElement as? NSTextParagraph else { return }
+        let text = paragraph.attributedString
+        guard text.length > 0 else { return }
+        context.saveGState()
+        NoteCode.fill.setFill()
+        text.enumerateAttribute(
+            NoteCode.attribute, in: NSRange(location: 0, length: text.length)
+        ) { value, range, _ in
+            guard let size = value as? CGFloat, size > 0 else { return }
+            let face = NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
+            let above = face.ascender + size * NoteCode.padding.height
+            let below = -face.descender + size * NoteCode.padding.height
+            for (frame, baseline) in segments(for: range, in: paragraph) where frame.width > 0 {
+                let box = CGRect(x: frame.minX, y: frame.minY + baseline - above,
+                                 width: frame.width, height: above + below)
+                NSBezierPath(roundedRect: box, xRadius: NoteCode.radius, yRadius: NoteCode.radius).fill()
+            }
+        }
+        context.restoreGState()
     }
 
     private func drawQuotes(in context: CGContext) {
@@ -242,6 +283,27 @@ final class NoteLayoutFragment: NSTextLayoutFragment {
             // its own, so they are moved back by where the fragment begins.
             found.append(frame.offsetBy(dx: -layoutFragmentFrame.minX,
                                         dy: -layoutFragmentFrame.minY))
+            return true
+        }
+        return found
+    }
+
+    /// The same, with where the baseline is in each — measured down from
+    /// the top of the segment.
+    private func segments(for range: NSRange, in paragraph: NSTextParagraph) -> [(frame: CGRect, baseline: CGFloat)] {
+        guard let content = textLayoutManager?.textContentManager,
+              let paragraphStart = paragraph.elementRange?.location,
+              let start = content.location(paragraphStart, offsetBy: range.location),
+              let end = content.location(start, offsetBy: range.length),
+              let span = NSTextRange(location: start, end: end)
+        else { return [] }
+
+        var found: [(CGRect, CGFloat)] = []
+        textLayoutManager?.enumerateTextSegments(
+            in: span, type: .standard, options: []
+        ) { _, frame, baseline, _ in
+            found.append((frame.offsetBy(dx: -layoutFragmentFrame.minX,
+                                         dy: -layoutFragmentFrame.minY), baseline))
             return true
         }
         return found

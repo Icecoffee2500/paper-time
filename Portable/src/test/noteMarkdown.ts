@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
-import { displayRuns, inlineTokens, letters, noteLines, planNote, roman, shownMarker, type DisplayRun } from '../shared/noteMarkdown.js'
+import { displayRuns, emphasisClasses, emphasisPieces, emphasisWidth, inlineTokens, letters, noteLines, planNote, roman, shownMarker, type DisplayRun } from '../shared/noteMarkdown.js'
 import { blockOf } from '../shared/noteBlocks.js'
 
 type Test = (name: string, body: () => void | Promise<void>) => Promise<void>
@@ -43,6 +43,27 @@ export async function noteMarkdownSuite(test: Test, suite: (name: string) => voi
     assert.equal(editing[1].revealed, true)
     assert.equal(editing[1].tokens.length, 0, 'no pieces on the line under the caret')
     assert.equal(editing[0].revealed, false)
+  })
+
+  await test('*** is bold and italic, and a cell\'s emphasis comes in pieces', () => {
+    const tokens = inlineTokens('a ***both*** b **bold** c *it* d `code`')
+    assert.deepEqual(tokens.map((one) => one.kind === 'emphasis' ? [one.text, one.bold, one.italic, one.mono, emphasisWidth(one), emphasisClasses(one)] : one.kind), [
+      ['both', true, true, false, 3, 'nm-bold nm-italic'],
+      ['bold', true, false, false, 2, 'nm-bold'],
+      ['it', false, true, false, 1, 'nm-italic'],
+      ['code', false, false, true, 1, 'nm-mono'],
+    ])
+    assert.deepEqual(emphasisPieces('x **b** `c` *i* ***bi*** y__z'), [
+      { text: 'x ', bold: false, italic: false, mono: false },
+      { text: 'b', bold: true, italic: false, mono: false },
+      { text: ' ', bold: false, italic: false, mono: false },
+      { text: 'c', bold: false, italic: false, mono: true },
+      { text: ' ', bold: false, italic: false, mono: false },
+      { text: 'i', bold: false, italic: true, mono: false },
+      { text: ' ', bold: false, italic: false, mono: false },
+      { text: 'bi', bold: true, italic: true, mono: false },
+      { text: ' yz', bold: false, italic: false, mono: false },
+    ])
   })
 
   await test('a $$ block across lines is one line; the shorter of two pieces at one bracket wins', () => {

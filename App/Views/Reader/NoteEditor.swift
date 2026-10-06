@@ -258,15 +258,21 @@ struct NoteEditor: NSViewRepresentable {
             caretFoldKey = key
         }
 
-        /// Colours the syntax on the line being edited as it is typed: the
-        /// note is not set again for a keystroke that stays on one line
-        /// (`scheduleRestyle`), so a "$" typed there would stay the colour
-        /// of a word until the caret left the line.
+        /// Colours the syntax on the line being edited as it is typed, and
+        /// sets its emphasis: the note is not set again for a keystroke that
+        /// stays on one line (`scheduleRestyle`), so a "$" typed there would
+        /// stay the colour of a word, and a word closed in `**` stay plain,
+        /// until the caret left the line.
+        ///
+        /// With a selection too, on one line: ⌘B over a selected word puts its
+        /// stars in and leaves the word selected, and the word stayed plain
+        /// — under the stars, looking like nothing had happened — until the
+        /// selection was let go.
         func recolorCaretLine(in textView: NoteTextView) {
-            guard !showsRawText, textView.selectedRange().length == 0, !textView.hasMarkedText() else { return }
+            guard !showsRawText, Self.isOnOneLine(textView), !textView.hasMarkedText() else { return }
             DispatchQueue.main.async { [weak self, weak textView] in
                 guard let self, !self.isRestyling, let textView, let storage = textView.textStorage,
-                      textView.selectedRange().length == 0 else { return }
+                      Self.isOnOneLine(textView) else { return }
                 let text = textView.string as NSString
                 let line = text.lineRange(for: textView.selectedRange())
                 guard line.length > 0 else { return }
@@ -289,17 +295,23 @@ struct NoteEditor: NSViewRepresentable {
                 var end = NSMaxRange(line)
                 if end > contentStart, text.substring(with: NSRange(location: end - 1, length: 1)) == "\n" { end -= 1 }
                 if end > contentStart {
-                    let words = NSRange(location: contentStart, length: end - contentStart)
-                    storage.addAttribute(.foregroundColor, value: block.colour, range: words)
-                    let content = text.substring(with: words) as NSString
-                    for range in NoteMarkdown.syntaxRanges(inContent: content)
-                    where NSMaxRange(range) <= words.length {
-                        storage.addAttribute(.foregroundColor, value: NoteMarkdown.syntaxColor,
-                                             range: NSRange(location: contentStart + range.location, length: range.length))
-                    }
+                    // The emphasis too, not only the colours: a word made
+                    // bold is bold while its line is being written.
+                    NoteMarkdown.styleAsWritten(storage, range: NSRange(location: contentStart, length: end - contentStart),
+                                                block: block)
                 }
                 storage.endEditing()
             }
+        }
+
+        /// Whether the caret, or the whole of the selection, is on one line.
+        static func isOnOneLine(_ textView: NSTextView) -> Bool {
+            let range = textView.selectedRange()
+            guard range.length > 0 else { return true }
+            let text = textView.string as NSString
+            guard NSMaxRange(range) <= text.length else { return false }
+            return text.lineRange(for: NSRange(location: range.location, length: 0)) == text.lineRange(for: range)
+                && !text.substring(with: range).contains("\n")
         }
 
         /// Shows the bar over a selection made with the keyboard or just let
@@ -1068,6 +1080,28 @@ final class NoteTextView: LatexSuiteTextView {
     }
 
     /// The stretches of the caret's line drawn in the syntax colour.
+    /// Every run of the note set in bold, in italics or as code, with what
+    /// it says: `굵게:b`, `기울여:i`, `x:c` — and the face the Hangul in it
+    /// is drawn with, where a cascade would have drawn it.
+    var probeEmphasis: [String] {
+        guard let storage = textStorage, storage.length > 0 else { return [] }
+        var found: [(text: String, marks: String)] = []
+        storage.enumerateAttributes(in: NSRange(location: 0, length: storage.length)) { attributes, range, _ in
+            guard let font = attributes[.font] as? NSFont else { return }
+            var marks = ""
+            let name = font.fontName
+            let cascade = (font.fontDescriptor.object(forKey: .cascadeList) as? [NSFontDescriptor])?.first?.postscriptName ?? ""
+            if name.contains("Bold") || (font.textTransform.m21 != 0 && name.contains("Bold")) || cascade.contains("Bold") { marks += "b" }
+            if NoteTypography.isItalic(font) { marks += "i" }
+            if attributes[NoteCode.attribute] != nil { marks += "c" }
+            guard !marks.isEmpty else { return }
+            let text = (string as NSString).substring(with: range)
+            if let last = found.last, last.marks == marks,
+               NSMaxRange(range) > 0, found.count > 0 { found[found.count - 1].text += text } else { found.append((text, marks)) }
+        }
+        return found.map { "\($0.text):\($0.marks)" }
+    }
+
     var probeSyntax: [String] {
         guard let storage = textStorage, storage.length > 0 else { return [] }
         let line = (string as NSString).lineRange(for: selectedRange())

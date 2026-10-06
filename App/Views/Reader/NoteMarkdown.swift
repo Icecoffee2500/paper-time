@@ -3,6 +3,7 @@ import PaperCore
 
 #if os(macOS)
 import AppKit
+import CoreText
 #else
 import UIKit
 #endif
@@ -16,6 +17,21 @@ extension NSAttributedString.Key {
     /// by a zero-width run at the end of the toggle's line, which is also
     /// their `paperTimeSource`, so the note reads back whole.
     static let paperTimeFolded = NSAttributedString.Key("PaperTimeFolded")
+    /// Which piece of its line a run belongs to, counted from the start of
+    /// the line: a run that stands for a source is part of one piece, and a
+    /// piece is often several runs — a Korean word in italics leans in a
+    /// face of its own, the room either side of a code span is set apart
+    /// from its letters. A piece is read back once however many runs it is
+    /// set in (`markdown(from:)`); read run by run, a code span split three
+    /// ways had come back as three code spans. Counted per line rather than
+    /// across the note, so a line set again unchanged is the same line
+    /// (`NoteEditor.changedLines` compares lines whole).
+    static let paperTimePiece = NSAttributedString.Key("PaperTimePiece")
+    /// Where the words a piece shows begin in its source, when they are
+    /// written there as they are shown: the words of `**bold**` begin at 2.
+    /// A caret put down among them goes to the same place among the words
+    /// as written — it went to the end of the piece, past the closing `**`.
+    static let paperTimeSourceLead = NSAttributedString.Key("PaperTimeSourceLead")
 }
 
 /// Turns a note between the Markdown that is stored and the text that is read.
@@ -105,8 +121,8 @@ enum NoteMarkdown {
                 } else {
                     ends(0, 0)
                 }
-            case .emphasis(_, let bold, _, _, _):
-                let width = bold ? 2 : 1
+            case .emphasis(_, let bold, let italic, let mono, _):
+                let width = emphasisWidth(bold: bold, italic: italic, mono: mono)
                 ends(width, width)
             case .dollar:
                 ends(1, 0)
@@ -114,6 +130,103 @@ enum NoteMarkdown {
             index = NSMaxRange(range)
         }
         return ranges
+    }
+
+    /// How many characters each side of emphasised words are its marks:
+    /// `*`, `**`, `***`, or a backtick.
+    static func emphasisWidth(bold: Bool, italic: Bool, mono: Bool) -> Int {
+        mono ? 1 : (bold ? 2 : 0) + (italic ? 1 : 0)
+    }
+
+    /// The words of the line being edited, as they are written: the line's
+    /// own face and colour, the characters that do something in the syntax
+    /// colour — and what they do already done, as Obsidian does it: the
+    /// words between `**` bold, between `*` in italics, between backticks
+    /// set as code. It had been only the colour, so a word made bold stayed
+    /// plain for as long as the caret stayed on its line, which is to say
+    /// while it was being looked at.
+    ///
+    /// `range` is a line's words — not its marker — in `text`. Used when the
+    /// note is set (`render`) and on every keystroke that stays on the line
+    /// (`NoteEditor.recolorCaretLine`), which is why the faces are put back
+    /// first: a `*` taken away takes its italics with it.
+    ///
+    /// Only what is written as it is shown is touched. A line that is still
+    /// set — a selection made on it by hand is not rebuilt under the hand —
+    /// holds pieces (a chip, a formula, a bold word with its stars out of
+    /// sight), and those keep their own faces; the stars ⌘B has just put in
+    /// beside them are set all the same.
+    static func styleAsWritten(_ text: NSMutableAttributedString, range: NSRange, block: Block) {
+        guard range.length > 0 else { return }
+        var written: [NSRange] = []
+        text.enumerateAttribute(.paperTimeSource, in: range) { value, run, _ in
+            guard value == nil else { return }
+            if let last = written.last, NSMaxRange(last) == run.location {
+                written[written.count - 1].length += run.length
+            } else {
+                written.append(run)
+            }
+        }
+        for run in written {
+            text.addAttributes([.font: block.font, .foregroundColor: block.colour], range: run)
+            text.removeAttribute(.kern, range: run)
+            #if os(macOS)
+            text.removeAttribute(NoteCode.attribute, range: run)
+            #endif
+        }
+        func isWritten(_ span: NSRange) -> Bool {
+            written.contains { $0.location <= span.location && NSMaxRange(span) <= NSMaxRange($0) }
+        }
+        let content = (text.string as NSString).substring(with: range) as NSString
+        if holdsMarkup(content as String) {
+            var index = 0
+            while index < content.length, let token = nextToken(in: content, from: index) {
+                let whole = NSRange(location: range.location + token.range.location, length: token.range.length)
+                if case .emphasis(_, let bold, let italic, let mono, _) = token.kind, isWritten(whole) {
+                    let width = emphasisWidth(bold: bold, italic: italic, mono: mono)
+                    if mono {
+                        // The backticks in the code's face too, and the tint
+                        // behind all of it.
+                        text.addAttributes(codeAttributes(in: block), range: whole)
+                    } else if whole.length > 2 * width {
+                        text.addAttribute(.font, value: emphasisFont(in: block, bold: bold, italic: italic),
+                                          range: NSRange(location: whole.location + width, length: whole.length - 2 * width))
+                    }
+                }
+                index = NSMaxRange(token.range)
+            }
+            for syntax in syntaxRanges(inContent: content) {
+                let span = NSRange(location: range.location + syntax.location, length: syntax.length)
+                if isWritten(span) { text.addAttribute(.foregroundColor, value: syntaxColor, range: span) }
+            }
+        }
+        #if os(macOS)
+        NoteTypography.slantHangul(in: text, range: range)
+        #endif
+    }
+
+    /// The face of emphasised words: the line's size — a heading's bold
+    /// word is the heading's size, not the body's — with the weight and the
+    /// slant asked for. Inside a quotation the words are in italics already,
+    /// so bold there is bold italic: it is the paper's own emphasis, still
+    /// quoted.
+    static func emphasisFont(in block: Block, bold: Bool, italic: Bool) -> NoteFont {
+        if let level = block.headingLevel { return NoteTypography.heading(level: level, bold: bold, italic: italic) }
+        let quoted = block.kind == .quote
+        return NoteTypography.body(bold: bold, italic: italic || quoted)
+    }
+
+    /// Words in backticks, as Notion sets them: a monospaced face a size
+    /// below the line, in a warm red, on a rounded warm grey (`NoteCode`).
+    static func codeAttributes(in block: Block) -> [NSAttributedString.Key: Any] {
+        let face = NoteTypography.code(size: block.font.pointSize)
+        var attributes: [NSAttributedString.Key: Any] = [.font: face, .foregroundColor: NoteCode.ink]
+        #if os(macOS)
+        attributes[NoteCode.attribute] = face.pointSize
+        #else
+        attributes[.backgroundColor] = NoteCode.fill
+        #endif
+        return attributes
     }
 
     /// The lines folded under a toggle at `index`: those indented deeper than
@@ -188,13 +301,19 @@ enum NoteMarkdown {
 
     static func markdown(from attributed: NSAttributedString) -> String {
         var result = ""
+        var piece: Int?
         attributed.enumerateAttributes(
             in: NSRange(location: 0, length: attributed.length)
         ) { attributes, range, _ in
             if let source = attributes[.paperTimeSource] as? String {
+                // The rest of a piece already read.
+                let number = attributes[.paperTimePiece] as? Int
+                if let number, number == piece { return }
+                piece = number
                 result += source
                 return
             }
+            piece = nil
             result += attributed.attributedSubstring(from: range).string
         }
         return result
@@ -202,26 +321,38 @@ enum NoteMarkdown {
 
     /// Where the caret sits in the source, given where it sits on screen.
     static func sourceIndex(in attributed: NSAttributedString, displayIndex: Int) -> Int {
+        let length = attributed.length
         var source = 0
-        var display = 0
-        attributed.enumerateAttributes(
-            in: NSRange(location: 0, length: attributed.length)
-        ) { attributes, range, stop in
-            let text = attributes[.paperTimeSource] as? String
-                ?? attributed.attributedSubstring(from: range).string
+        var location = 0
+        while location < length {
+            var run = NSRange()
+            let attributes = attributed.attributes(at: location, effectiveRange: &run)
+            guard let text = attributes[.paperTimeSource] as? String else {
+                // Plain words are their own source, character for character.
+                if displayIndex < NSMaxRange(run) { return source + max(0, displayIndex - run.location) }
+                source += run.length
+                location = NSMaxRange(run)
+                continue
+            }
+            // A piece, however many runs it is set in.
+            var piece = run
+            if attributes[.paperTimePiece] != nil {
+                _ = attributed.attribute(.paperTimePiece, at: location, longestEffectiveRange: &piece,
+                                         in: NSRange(location: location, length: length - location))
+            }
             let sourceLength = (text as NSString).length
-
-            if displayIndex >= display + range.length {
+            if displayIndex >= NSMaxRange(piece) {
                 source += sourceLength
-                display += range.length
-                return
+                location = NSMaxRange(piece)
+                continue
             }
-            if sourceLength == range.length {
-                source += displayIndex - display
-            } else if displayIndex > display {
-                source += sourceLength
+            let offset = displayIndex - piece.location
+            if offset <= 0 { return source }
+            if sourceLength == piece.length { return source + offset }
+            if let lead = attributes[.paperTimeSourceLead] as? Int, lead + offset <= sourceLength {
+                return source + lead + offset
             }
-            stop.pointee = true
+            return source + sourceLength
         }
         return source
     }
@@ -346,9 +477,15 @@ enum NoteMarkdown {
     /// terminal.
     /// The Markdown itself, not a path to it: the app is sandboxed, and a
     /// path handed to it on the command line is a path it may not read.
+    /// `PAPERTIME_DUMP_NOTE_CARET=<offset in the Markdown>` sets the note
+    /// with the caret there, so its line is shown as written;
+    /// `PAPERTIME_DUMP_NOTE_FONTS=1` adds each run's face and the face the
+    /// text is actually drawn in (where a cascade takes over).
     @MainActor
     static func dump(_ markdown: String) {
-        let rendered = render(markdown, raw: false).text
+        let caret = Boot.setting("PAPERTIME_DUMP_NOTE_CARET").flatMap { Int($0) }
+        let fonts = Boot.isSet("PAPERTIME_DUMP_NOTE_FONTS")
+        let rendered = render(markdown, caret: caret, raw: false).text
         let whole = NSRange(location: 0, length: rendered.length)
         print("— \(rendered.length) characters from \(markdown.count) of Markdown")
         rendered.enumerateAttributes(in: whole) { attributes, range, _ in
@@ -359,24 +496,67 @@ enum NoteMarkdown {
             if attributes[NoteQuoteBar.attribute] != nil { marks.append("QUOTE") }
             if attributes[NoteChip.attribute] != nil { marks.append("PASSAGE") }
             if attributes[.link] != nil { marks.append("LINK") }
-            if let font = attributes[.font] as? NSFont,
-               font.fontDescriptor.symbolicTraits.contains(.italic) { marks.append("italic") }
+            if attributes[NoteCode.attribute] != nil { marks.append("CODE") }
+            if let font = attributes[.font] as? NSFont, NoteTypography.isItalic(font) { marks.append("italic") }
             if let style = attributes[.paragraphStyle] as? NSParagraphStyle, style.headIndent > 0 {
                 marks.append("indent \(Int(style.headIndent))")
             }
             if let style = attributes[.paragraphStyle] as? NSParagraphStyle, style.alignment == .center {
                 marks.append("center")
             }
-            print(String(format: "%5d %-14@ %@", range.location,
-                         marks.isEmpty ? "—" : marks.joined(separator: "+") as NSString,
-                         String(text.prefix(60)) as NSString))
+            var line = String(format: "%5d %-14@ %@", range.location,
+                              marks.isEmpty ? "—" : marks.joined(separator: "+") as NSString,
+                              String(text.prefix(60)) as NSString)
+            if fonts, let font = attributes[.font] as? NSFont {
+                let drawn = CTLineCreateWithAttributedString(rendered.attributedSubstring(from: range))
+                let faces = (CTLineGetGlyphRuns(drawn) as? [CTRun] ?? []).compactMap { run -> String? in
+                    guard let face = (CTRunGetAttributes(run) as NSDictionary)[kCTFontAttributeName] else { return nil }
+                    return CTFontCopyPostScriptName(face as! CTFont) as String
+                }
+                var seen: [String] = []
+                for face in faces where !seen.contains(face) { seen.append(face) }
+                line += "   [\(font.fontName) \(font.pointSize)\(font.textTransform.m21 != 0 ? " leaning" : "")"
+                    + "\(attributes[.kern].map { " kern \($0)" } ?? "") → \(seen.joined(separator: ", "))]"
+            }
+            print(line)
         }
+        // That the note reads back as it was written — with the caret on
+        // no line and on each — and that a caret anywhere on screen lands
+        // somewhere in the source, never backwards.
+        var misread: [String] = []
+        let source = markdown as NSString
+        var starts = [0]
+        for index in 0..<source.length where source.character(at: index) == 10 { starts.append(index + 1) }
+        for caretAt in [nil] + starts.map(Optional.some) {
+            let shown = render(markdown, caret: caretAt).text
+            let back = NoteMarkdown.markdown(from: shown)
+            if back != markdown {
+                let read = back as NSString
+                var at = 0
+                while at < min(read.length, source.length), read.character(at: at) == source.character(at: at) { at += 1 }
+                func near(_ text: NSString) -> String {
+                    let from = max(0, at - 12)
+                    return text.substring(with: NSRange(location: from, length: min(text.length, at + 24) - from)).debugDescription
+                }
+                misread.append("caret \(caretAt.map(String.init) ?? "none") at \(at): \(near(read)) ≠ \(near(source))")
+            }
+            var last = 0
+            for index in 0...shown.length {
+                let at = sourceIndex(in: shown, displayIndex: index)
+                if at < last || at > source.length {
+                    misread.append("caret \(caretAt.map(String.init) ?? "none"): screen \(index) → \(at) after \(last)")
+                    break
+                }
+                last = at
+            }
+        }
+        print(misread.isEmpty ? "— reads back whole" : "— reads back WRONG: \(misread.joined(separator: "; "))")
         // What the runs *say* is only half of it: the rule down a quotation
         // and the formula set as mathematics are drawn, not spelled, and
         // neither shows up in a list of attributes. With a path to write to,
         // the same note is laid out and saved as a picture.
         if let path = Boot.setting("PAPERTIME_DUMP_NOTE_IMAGE") {
-            draw(markdown, to: path)
+            draw(markdown, to: path, caret: caret)
         }
         exit(0)
     }
@@ -392,13 +572,16 @@ enum NoteMarkdown {
     }
 
     @MainActor
-    private static func draw(_ markdown: String, to path: String, width: CGFloat = 620) {
+    private static func draw(_ markdown: String, to path: String, width: CGFloat = 620, caret: Int? = nil) {
         let view = NSTextView(frame: CGRect(x: 0, y: 0, width: width, height: 900))
         view.textContainerInset = CGSize(width: 20, height: 18)
         view.backgroundColor = .textBackgroundColor
+        // `PAPERTIME_DUMP_NOTE_DARK=1`: the same note on a dark page.
+        let dark = Boot.isSet("PAPERTIME_DUMP_NOTE_DARK") ? NSAppearance(named: .darkAqua) : nil
+        if let dark { view.appearance = dark }
         let fragments = Fragments()
         view.textLayoutManager?.delegate = fragments
-        view.textStorage?.setAttributedString(render(markdown, width: width - 64).text)
+        view.textStorage?.setAttributedString(render(markdown, caret: caret, width: width - 64, appearance: dark).text)
         if let layout = view.textLayoutManager {
             layout.ensureLayout(for: layout.documentRange)
         }
@@ -558,12 +741,18 @@ enum NoteMarkdown {
 
         let result = NSMutableAttributedString()
         var pieces: [(display: NSRange, source: NSRange)] = []
+        var pieceInLine = 0
 
         func append(_ piece: NSAttributedString, source range: NSRange) {
             guard piece.length > 0 else { return }
             let start = result.length
             result.append(piece)
-            pieces.append((NSRange(location: start, length: piece.length), range))
+            let shown = NSRange(location: start, length: piece.length)
+            if piece.attribute(.paperTimeSource, at: 0, effectiveRange: nil) != nil {
+                result.addAttribute(.paperTimePiece, value: pieceInLine, range: shown)
+                pieceInLine += 1
+            }
+            pieces.append((shown, range))
         }
 
         // Every line is read before any is set, because a quoted line needs
@@ -604,6 +793,7 @@ enum NoteMarkdown {
             let lineRange = lineRanges[lineIndex]
             let block = blocks[lineIndex]
             lineIndex += 1
+            pieceInLine = 0
             // A folded toggle: its children are not set at all. They ride
             // along as the source of a zero-width run at the end of its
             // line, so the note reads back whole and the caret has nowhere
@@ -690,12 +880,10 @@ enum NoteMarkdown {
             // that question costs one pass over the line instead of four.
             let mayHold = !revealed && Self.holdsMarkup(block.content)
             if revealed {
-                // As written, with the characters that do something in the
-                // syntax colour.
+                // As written, the syntax in the syntax colour and the
+                // emphasis already applied (`styleAsWritten`).
                 let words = NSMutableAttributedString(string: block.content, attributes: block.attributes(style: style))
-                for range in syntaxRanges(inContent: content) {
-                    words.addAttribute(.foregroundColor, value: syntaxColor, range: range)
-                }
+                styleAsWritten(words, range: NSRange(location: 0, length: words.length), block: block)
                 append(words, source: NSRange(location: contentStart, length: content.length))
                 index = content.length
             }
@@ -750,6 +938,10 @@ enum NoteMarkdown {
             }
         }
 
+        #if os(macOS)
+        // Hangul in italics leans with the Latin beside it.
+        NoteTypography.slantHangul(in: result, range: NSRange(location: 0, length: result.length))
+        #endif
         return Rendered(text: result, pieces: pieces)
     }
 
@@ -891,6 +1083,14 @@ enum NoteMarkdown {
         /// What names a toggle across edits elsewhere in the note: the line
         /// as written, without its indentation.
         var toggleKey: String { String((marker + content).drop { $0 == " " }) }
+
+        /// The size of heading the line is set at — a heading's own, or a
+        /// quoted section title's — or nil.
+        var headingLevel: Int? {
+            if let heading { return heading }
+            if case .heading(let level) = kind { return level }
+            return nil
+        }
 
         /// Whether the marker is a list's: drawn as its stand-in wherever
         /// the caret is.
@@ -1058,7 +1258,9 @@ enum NoteMarkdown {
 
     private enum Kind {
         case anchorLink(label: String, url: URL)
-        case noteLink(id: String, title: String)
+        /// `source` as written: `[[id]]` and `[[id|id]]` show the same and
+        /// are not the same characters.
+        case noteLink(id: String, title: String, source: String)
         /// `source` is the span as written, delimiters and line breaks and
         /// all: the run has to stand for exactly those characters.
         case math(latex: String, display: Bool, source: String)
@@ -1081,8 +1283,34 @@ enum NoteMarkdown {
     )
     private static let dollarPattern = try! NSRegularExpression(pattern: #"\\\$"#)
     private static let emphasisPattern = try! NSRegularExpression(
-        pattern: #"(\*\*)([^*\n]+)(\*\*)|(\*)([^*\n]+)(\*)|(`)([^`\n]+)(`)"#
+        pattern: #"(\*\*\*)([^*\n]+)(\*\*\*)|(\*\*)([^*\n]+)(\*\*)|(\*)([^*\n]+)(\*)|(`)([^`\n]+)(`)"#
     )
+
+    /// A table cell's words in pieces: emphasis as emphasis, and the rest
+    /// as written with stray `**`, `__` and backticks left out — Portable's
+    /// `emphasisPieces`, the same rule.
+    static func emphasisPieces(_ cell: String) -> [(text: String, bold: Bool, italic: Bool, mono: Bool)] {
+        var pieces: [(text: String, bold: Bool, italic: Bool, mono: Bool)] = []
+        let line = cell as NSString
+        func plain(_ range: NSRange) {
+            guard range.length > 0 else { return }
+            var text = line.substring(with: range)
+            for mark in ["**", "__", "`"] { text = text.replacingOccurrences(of: mark, with: "") }
+            if !text.isEmpty { pieces.append((text, false, false, false)) }
+        }
+        var at = 0
+        for match in emphasisPattern.matches(in: cell, range: NSRange(location: 0, length: line.length)) {
+            plain(NSRange(location: at, length: match.range.location - at))
+            let groups = [(2, true, true, false), (5, true, false, false), (8, false, true, false), (11, false, false, true)]
+            for (group, bold, italic, mono) in groups where match.range(at: group).location != NSNotFound {
+                pieces.append((line.substring(with: match.range(at: group)), bold, italic, mono))
+                break
+            }
+            at = NSMaxRange(match.range)
+        }
+        plain(NSRange(location: at, length: line.length - at))
+        return pieces
+    }
 
     /// Whether a line could hold any of the four things that are set
     /// differently — a link, a note link, a formula, or emphasis. All four
@@ -1146,7 +1374,8 @@ enum NoteMarkdown {
             let target = line.substring(with: match.range(at: 1))
             let shown = match.range(at: 2).location == NSNotFound
                 ? target : line.substring(with: match.range(at: 2))
-            consider(Token(range: match.range, kind: .noteLink(id: target, title: shown)))
+            consider(Token(range: match.range, kind: .noteLink(
+                id: target, title: shown, source: line.substring(with: match.range))))
         }
         // One with nothing in it is still a formula — it is shown as it was
         // typed, and the line is read on after it.
@@ -1160,7 +1389,9 @@ enum NoteMarkdown {
             consider(Token(range: match.range, kind: .dollar))
         }
         if let match = emphasisPattern.firstMatch(in: line as String, range: range) {
-            let groups = [(2, true, false, false), (5, false, true, false), (8, false, false, true)]
+            // `***both***` is bold and italic — what ⌘B then ⌘I make of a
+            // selection.
+            let groups = [(2, true, true, false), (5, true, false, false), (8, false, true, false), (11, false, false, true)]
             for (group, bold, italic, mono) in groups
             where match.range(at: group).location != NSNotFound {
                 consider(Token(range: match.range, kind: .emphasis(
@@ -1205,9 +1436,11 @@ enum NoteMarkdown {
             return atomic(label, source: "[\(escape(label))](\(url.absoluteString))",
                           attributes: attributes, style: style)
 
-        case .noteLink(let id, let title):
+        case .noteLink(let id, let title, let source):
+            // The source as it was written. It was made again from the id and
+            // the title, and `[[id]]` — whose title is its id — came back
+            // as `[[id|id]]`, rewritten in the file at the next save.
             let shown = title.isEmpty ? id : title
-            let source = title.isEmpty ? "[[\(id)]]" : "[[\(id)|\(title)]]"
             return atomic(shown, source: source,
                           attributes: linkAttributes(noteURL(id: id)), style: style)
 
@@ -1227,15 +1460,13 @@ enum NoteMarkdown {
             ])
 
         case .emphasis(let text, let bold, let italic, let mono, let source):
-            // Inside a quotation the words are set in italics, so bold there
-            // is bold italic: it is the paper's own emphasis, still quoted.
-            let quoted = block.kind == .quote && block.heading == nil
+            if mono { return codePiece(text, source: source, block: block, style: style) }
             var attributes: [NSAttributedString.Key: Any] = [
-                .font: mono ? NoteTypography.mono()
-                            : NoteTypography.body(bold: bold, italic: italic || quoted),
-                .foregroundColor: NoteColor.labelColor,
+                .font: emphasisFont(in: block, bold: bold, italic: italic),
+                .foregroundColor: block.kind == .task(true) ? block.colour : NoteColor.labelColor,
+                .paperTimeSourceLead: emphasisWidth(bold: bold, italic: italic, mono: false),
             ]
-            if mono { attributes[.backgroundColor] = NoteColor.quaternaryLabelColor }
+            if block.kind == .task(true) { attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
             return atomic(text, source: source, attributes: attributes, style: style)
 
         case .dollar:
@@ -1253,6 +1484,36 @@ enum NoteMarkdown {
         piece.addAttribute(.paperTimeSource, value: source,
                            range: NSRange(location: 0, length: piece.length))
         return piece
+    }
+
+    /// A code span set as Notion sets one. The tint reaches past the
+    /// letters by 0.4 em either side, which has to be room on the line, not
+    /// paint over the next word: a narrow no-break space at each end, opened
+    /// to that width by kerning. The two stand where the backticks stand, so
+    /// the piece is as long as its source and a caret in it is the same
+    /// character over.
+    private static func codePiece(_ text: String, source: String, block: Block, style: NSParagraphStyle) -> NSAttributedString {
+        var attributes = codeAttributes(in: block)
+        if block.kind == .task(true) { attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
+        let piece = NSMutableAttributedString(attributedString: atomic(
+            codePad + text + codePad, source: source, attributes: attributes, style: style))
+        // The room is set in the line's own face: the code face has no
+        // narrow space and would borrow one from another face.
+        let room = NoteTypography.body(size: block.font.pointSize)
+        let face = NoteTypography.code(size: block.font.pointSize)
+        let kern = NoteCode.padding.width * face.pointSize - advance(of: codePad, in: room)
+        for end in [0, piece.length - 1] {
+            piece.addAttributes([.font: room, .kern: kern], range: NSRange(location: end, length: 1))
+        }
+        return piece
+    }
+
+    /// What stands either side of a code span's letters.
+    static let codePad = "\u{202F}"
+
+    private static func advance(of text: String, in font: NoteFont) -> CGFloat {
+        let size = (text as NSString).size(withAttributes: [.font: font])
+        return size.width
     }
 
     /// An `NSRange` that can go in a set.

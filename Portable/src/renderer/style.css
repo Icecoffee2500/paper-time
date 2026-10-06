@@ -119,6 +119,11 @@
   --tag-purple: #af52de;
   --tag-pink: #ff2d55;
   --tag-gray: #8e8e93;
+
+  /* Code in a note, as Notion sets it: a warm red on a translucent warm
+     grey (`NoteCode`). */
+  --code-ink: #eb5757;
+  --code-fill: rgba(135, 131, 120, 0.15);
 }
 
 :root[data-theme='dark'] {
@@ -166,6 +171,8 @@
   --tag-purple: #bf5af2;
   --tag-pink: #ff375f;
   --tag-gray: #98989d;
+
+  --code-ink: #ff7369;
 }
 
 * {
@@ -3931,7 +3938,10 @@ body[data-solo='true'] .reader-header button {
 .nm-link, .nm-note-link { color: var(--accent-text, var(--accent)); text-decoration: underline; cursor: pointer; }
 .nm-bold { font-weight: 700; }
 .nm-italic { font-style: italic; }
-.nm-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14.7px; background: color-mix(in srgb, var(--text) 8%, transparent); border-radius: 3px; padding: 0 2px; }
+/* Code as Notion sets it: a size below its line (85%), in a warm red, on a
+   rounded warm grey 0.2em above and below its letters and 0.4em either side
+   (`NoteCode`). In a heading it is the heading's size, less. */
+.nm-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.85em; color: var(--code-ink); background: var(--code-fill); border-radius: 4px; padding: 0.2em 0.4em; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 
 /* Formulas, set by MathJax at the body's size. */
 .nm-math svg { vertical-align: middle; }
