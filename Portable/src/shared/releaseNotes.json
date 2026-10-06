@@ -1,6 +1,86 @@
 {
  "releases": [
   {
+   "version": "0.9.31",
+   "date": {
+    "ko": "2026년 10월",
+    "en": "October 2026"
+   },
+   "note": {
+    "ko": "노트의 목록이 이제 예상대로 움직여요. 넓은 번호 뒤의 글이 사라지지 않고, ⌘Z는 목록 동작을 하나씩 되돌려요.",
+    "en": "Lists in notes now behave the way you expect. Words after a wide number stay in sight, and ⌘Z undoes list actions one at a time."
+   },
+   "added": [],
+   "removed": [],
+   "fixed": [
+    {
+     "title": {
+      "ko": "넓은 번호 뒤의 글",
+      "en": "Words After Wide Numbers"
+     },
+     "detail": {
+      "ko": "«iii.», «iv.», «10.»처럼 넓은 번호 뒤에 쓴 글이 화면 밖으로 밀려나 보이지 않았어요. 번호가 설 자리가 글머리표만큼 좁았기 때문이에요. 이제 번호는 글 바로 앞에 오른쪽으로 맞춰 서고, 한 목록의 글은 모두 같은 자리에서 시작해요.",
+      "en": "Words after a wide number like “iii.”, “iv.”, or “10.” were pushed out of sight, because a number had only as much room as a bullet. Numbers now sit right-aligned just before the words, and every item in a list starts its words in the same place."
+     },
+     "devices": [
+      "mac"
+     ]
+    },
+    {
+     "title": {
+      "ko": "목록의 되돌리기",
+      "en": "Undo in Lists"
+     },
+     "detail": {
+      "ko": "목록에서 ⌘Z가 엉뚱하게 움직였어요. 글머리표 목록은 한 번에 통째로 사라지고, 번호 목록은 번호 없는 빈 줄을 남겼어요. Return과 Backspace가 만든 변화를 앱이 글자 입력으로 잘못 읽었기 때문이에요. 이제 Return, Tab, Backspace 같은 목록 동작은 하나씩 되돌아가요.",
+      "en": "⌘Z behaved oddly in lists. A whole bulleted list could vanish at once, and a numbered list left an empty line with no number behind, because the app read the changes Return and Backspace made as typing. Now each list action, such as Return, Tab, or Backspace, undoes on its own."
+     },
+     "devices": [
+      "mac"
+     ]
+    },
+    {
+     "title": {
+      "ko": "글머리표 옆의 캐럿",
+      "en": "The Caret Beside a Bullet"
+     },
+     "detail": {
+      "ko": "글머리표나 번호를 누르고 글자를 치면 항목이 깨지거나 표시가 두 번 들어갔어요. 항목 글 맨 앞에서 ←를 누르면 캐럿이 줄을 넘지 못했어요. 이제 캐럿은 늘 표시 뒤의 글에 서고, ←와 →는 표시를 한 번에 넘어가요.",
+      "en": "Clicking a bullet or a number and typing could break the item or write its marker twice, and ← at the start of an item’s words couldn’t leave the line. The caret now always rests in the words after a marker, and the arrow keys step over a marker in one press."
+     },
+     "devices": [
+      "mac"
+     ]
+    },
+    {
+     "title": {
+      "ko": "항목을 나누고 합치기",
+      "en": "Splitting and Joining Items"
+     },
+     "detail": {
+      "ko": "줄 맨 앞에서 Return을 누르면 원래 번호가 글자로 남아 «3. 2. b»가 됐어요. 줄 끝에서 Delete를 누르면 다음 항목의 번호가 글로 딸려 왔어요. 이제 둘 다 항목을 깔끔하게 나누고 합쳐요. 목록 중간에 항목을 넣거나 빼면 파일에 적힌 번호도 화면과 같게 바뀌어요.",
+      "en": "Return at the start of a line left the old number behind as words, like “3. 2. b”, and Delete at the end of a line pulled the next item’s number in as text. Both now split and join items cleanly. When you add or remove an item mid-list, the numbers written in the file change to match what you see."
+     },
+     "devices": [
+      "mac"
+     ]
+    },
+    {
+     "title": {
+      "ko": "토글과 여러 항목",
+      "en": "Toggles and Several Items"
+     },
+     "detail": {
+      "ko": "맥에서 토글 아래 둘째 줄부터는 토글 밖으로 나갔어요. 이제 들여 쓴 줄에서 Return을 누르면 같은 깊이로 이어져요. 여러 항목을 골라 Tab을 누르면 첫 항목만 옮겨졌는데, 이제 고른 항목이 모두 함께 움직여요. 윈도우와 리눅스에서도 «- []» 뒤에 띄어쓰기를 치면 할 일이 돼요.",
+      "en": "On the Mac, the second line under a toggle fell out of it. Return on an indented line now keeps the indent. Selecting several items and pressing Tab used to move only the first; now they all move together. On Windows and Linux, typing a space after “- []” now makes a to-do too."
+     },
+     "devices": [
+      "mac"
+     ]
+    }
+   ]
+  },
+  {
    "version": "0.9.30",
    "date": {
     "ko": "2026년 10월",
