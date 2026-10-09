@@ -341,6 +341,9 @@ export interface LibrarySnapshot {
   collections: Record<string, unknown>
   papers: PaperRowDTO[]
   looseCount: number
+  /** Every folder under every root as the disk has them, `/`-spelt, the
+   *  empty ones too — the tree, beside what the papers say. */
+  folders?: string[]
   /**
    * PDFs the last "add the loose PDFs" could not take in, by name.
    *

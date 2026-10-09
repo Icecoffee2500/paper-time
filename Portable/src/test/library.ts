@@ -101,6 +101,26 @@ export async function librarySuite(test: Test, suite: (name: string) => void) {
     }
   })
 
+  await test('the walk names every folder, the empty ones too, and skips the app’s own', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'papertime-walk-'))
+    try {
+      const library = await Library.open(root)
+      for (const name of ['2026/Week 1', '2026/Week 2', 'Empty', 'Trash/old', '.hidden/x']) {
+        fs.mkdirSync(path.join(root, name), { recursive: true })
+      }
+      fs.writeFileSync(path.join(root, '2026/Week 1/a.pdf'), '%PDF-1.7\n% a\n')
+      const walked = await library.walkFolder()
+      const base = root.replace(/\\/g, '/')
+      assert.deepEqual(walked.folders.map((one) => one.slice(base.length + 1)), ['2026', '2026/Week 1', '2026/Week 2', 'Empty'])
+      assert.deepEqual(walked.documents.map((one) => path.basename(one)), ['a.pdf'])
+      const unclaimed = await library.unclaimedWalk(new Set(['2026/Week 1/a.pdf']))
+      assert.deepEqual(unclaimed.files, [])
+      assert.deepEqual(unclaimed.folders, walked.folders)
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   await test('the first screen offers the cloud folders this machine keeps', () => {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'papertime-home-'))
     try {

@@ -45,6 +45,30 @@ struct LooseDocumentTests {
         #expect(loose.map(\.lastPathComponent) == ["first.pdf", "second.pdf"])
     }
 
+    /// The sidebar's tree is read off this walk, so a folder with nothing in
+    /// it is still a folder — somebody just made it and expects to see it —
+    /// while the support folder, the Trash and dot-folders are not.
+    @Test("The walk names every folder, the empty ones too, and skips the app's own")
+    func walkNamesFolders() async throws {
+        let root = try Self.makeTemporaryFolder()
+        defer { try? FileManager.default.removeItem(at: root) }
+        for name in ["2026/Week 1", "2026/Week 2", "Empty", "Trash/old", ".hidden/x"] {
+            try FileManager.default.createDirectory(at: root.appending(path: name), withIntermediateDirectories: true)
+        }
+        try Self.writePDF(named: "a.pdf", in: root.appending(path: "2026/Week 1"))
+
+        let store = LibraryStore(root: root)
+        try await store.bootstrap()
+        let walk = await store.walk()
+        let base = LibraryStore.normalizedPath(root)
+        let folders = walk.folders.map { String(LibraryStore.normalizedPath($0).dropFirst(base.count + 1)) }
+        #expect(folders == ["2026", "2026/Week 1", "2026/Week 2", "Empty"])
+        #expect(walk.documents.map(\.lastPathComponent) == ["a.pdf"])
+        let unclaimed = await store.unclaimed(claiming: ["2026/Week 1/a.pdf"])
+        #expect(unclaimed.documents.isEmpty)
+        #expect(unclaimed.folders == walk.folders)
+    }
+
     @Test("A PDF that already has a record is no longer offered")
     func searchesSubfoldersOnly() async throws {
         let root = try Self.makeTemporaryFolder()

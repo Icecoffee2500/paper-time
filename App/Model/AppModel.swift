@@ -1032,6 +1032,14 @@ public final class AppModel {
                 }
                 FileHandle.standardError.write(Data((said + "\n").utf8))
                 await model.reportFolders()
+                // `--papertime-folders-after=<seconds>` says it again later:
+                // the only way to see from here that a folder made, or a PDF
+                // put into a subfolder, while the app runs is noticed.
+                if let later = Boot.setting("PAPERTIME_FOLDERS_AFTER").flatMap(Double.init) {
+                    try? await Task.sleep(for: .seconds(later))
+                    FileHandle.standardError.write(Data("folders after \(later)s:\n".utf8))
+                    await model.reportFolders()
+                }
             }
             if Boot.isSet("PAPERTIME_OPEN_FIRST"), let first = model.visiblePapers.first {
                 model.selection = [first.id]

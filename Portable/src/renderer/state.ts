@@ -126,6 +126,9 @@ export interface Store {
   unavailable: { root: string; message: string } | null
   /** Every folder being read, the first one first. */
   roots: string[]
+  /** Every folder under the roots as the last read found them (`/`-spelt),
+   *  the ones holding nothing included. */
+  folders: string[]
   papers: Paper[]
   collections: Collection[]
   tags: Tag[]
@@ -238,6 +241,7 @@ export const store: Store = {
   root: null,
   unavailable: null,
   roots: [],
+  folders: [],
   papers: [],
   collections: [],
   tags: [],
@@ -353,8 +357,17 @@ export function isUnderFolder(entry: Paper, folder: string): boolean {
   return isUnder(here, folder)
 }
 
-/** The folders one step inside this one that hold papers, and how many each
- *  holds counting everything beneath it. */
+/**
+ * The folders one step inside this one, and how many papers each holds
+ * counting everything beneath it.
+ *
+ * Two sources, because each is wrong alone: the papers say where the
+ * library's papers are, and the disk (`store.folders`, from the main
+ * process's walk) says which folders exist. Until 0.9.32 only the papers
+ * were asked, so a folder holding only PDFs not yet taken in, or nothing at
+ * all, was not in the tree — a folder just made in the file manager never
+ * appeared. The Mac does the same (`LibraryModel.subfolders(of:)`).
+ */
 export function subfolders(folder: string): { path: string; name: string; count: number }[] {
   const base = slashed(folder)
   const counts = new Map<string, number>()
@@ -366,6 +379,12 @@ export function subfolders(folder: string): { path: string; name: string; count:
     const name = here.slice(base.length + 1).split('/')[0]
     if (!name) continue
     counts.set(name, (counts.get(name) ?? 0) + 1)
+  }
+  for (const here of store.folders) {
+    if (!isInside(here, base)) continue
+    const name = slashed(here).slice(base.length + 1).split('/')[0]
+    if (!name || counts.has(name)) continue
+    counts.set(name, 0)
   }
   return [...counts]
     .map(([name, count]) => ({ path: `${base}/${name}`, name, count }))
@@ -492,6 +511,7 @@ export function adopt(snapshot: LibrarySnapshot) {
   store.unreadable = snapshot.unreadable ?? []
   store.root = snapshot.root
   store.roots = snapshot.roots ?? (snapshot.root ? [snapshot.root] : [])
+  store.folders = snapshot.folders ?? []
   store.papers = snapshot.papers.map(toPaper)
   store.collections = ((snapshot.collections?.collections as Collection[]) ?? []).slice()
   store.tags = ((snapshot.manifest?.tags as Tag[]) ?? []).slice()

@@ -415,8 +415,30 @@ public actor LibraryStore {
         try FileOperations.decode(PaperState.self, at: folder.stateURL)
     }
 
+    /// What one walk of the folder finds: every PDF, and every folder, under
+    /// the root — the support folder, the Trash and dot-folders stepped over.
+    public struct Walk: Sendable {
+        /// The PDFs, by name.
+        public var documents: [URL]
+        /// The folders, however deep, by path — the ones holding nothing
+        /// included. A folder somebody just made is a folder they expect
+        /// to see.
+        public var folders: [URL]
+    }
+
     /// Every PDF in the library, wherever it sits under the root.
     public func documentURLs() -> [URL] {
+        walk().documents
+    }
+
+    /// One pass over the folder for both the PDFs and the folders.
+    ///
+    /// The sidebar's tree used to be read off the papers alone, so a folder
+    /// held only PDFs not yet taken in, or nothing at all, was not there —
+    /// and a folder made in Finder a minute ago never appeared. The walk
+    /// was already being made for the loose PDFs; the folders it passes
+    /// through are the tree, at no further cost.
+    public func walk() -> Walk {
         let support = Self.normalizedPath(LibraryLayout.supportDirectoryURL(inLibrary: root))
         let trash = Self.normalizedPath(LibraryLayout.trashURL(inLibrary: root))
 
@@ -424,9 +446,10 @@ public actor LibraryStore {
             at: root,
             includingPropertiesForKeys: [.isDirectoryKey],
             options: [.skipsPackageDescendants]
-        ) else { return [] }
+        ) else { return Walk(documents: [], folders: []) }
 
-        var found: [URL] = []
+        var documents: [URL] = []
+        var folders: [URL] = []
         while let item = enumerator.nextObject() as? URL {
             let path = Self.normalizedPath(item)
             if item.lastPathComponent.hasPrefix(".")
@@ -435,10 +458,17 @@ public actor LibraryStore {
                 enumerator.skipDescendants()
                 continue
             }
+            if (try? item.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+                folders.append(URL(filePath: path, directoryHint: .isDirectory))
+                continue
+            }
             guard item.pathExtension.lowercased() == "pdf" else { continue }
-            found.append(item)
+            documents.append(item)
         }
-        return found.sorted { $0.lastPathComponent < $1.lastPathComponent }
+        return Walk(
+            documents: documents.sorted { $0.lastPathComponent < $1.lastPathComponent },
+            folders: folders.sorted { $0.path(percentEncoded: false) < $1.path(percentEncoded: false) }
+        )
     }
 
     /// PDFs in the library that no record points at yet.
@@ -459,7 +489,15 @@ public actor LibraryStore {
     /// compares, without reading every record from disk. Used when the folder
     /// reports a change and the answer is usually "nothing new".
     public func unclaimedDocumentURLs(claiming claimed: Set<String>) -> [URL] {
-        documentURLs().filter { !claimed.contains(relativePath(of: $0)) }
+        unclaimed(claiming: claimed).documents
+    }
+
+    /// The same, with the folders the walk went through: the loose PDFs and
+    /// the tree come out of one pass over the folder.
+    public func unclaimed(claiming claimed: Set<String>) -> Walk {
+        var found = walk()
+        found.documents.removeAll { claimed.contains(relativePath(of: $0)) }
+        return found
     }
 
     /// Whether every one of these relative paths still names a file.
