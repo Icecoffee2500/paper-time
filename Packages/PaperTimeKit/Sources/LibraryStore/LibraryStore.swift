@@ -452,13 +452,22 @@ public actor LibraryStore {
         var folders: [URL] = []
         while let item = enumerator.nextObject() as? URL {
             let path = Self.normalizedPath(item)
+            let isDirectory = (try? item.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
             if item.lastPathComponent.hasPrefix(".")
                 || path == support || path.hasPrefix(support + "/")
                 || path == trash || path.hasPrefix(trash + "/") {
-                enumerator.skipDescendants()
+                // Only for a folder. `skipDescendants()` skips "the most
+                // recently obtained subdirectory", whatever the current item
+                // is — called on a `.DS_Store`, it skipped the subfolder
+                // listed just before it, and every PDF in that subfolder went
+                // unseen: never loose, never taken in, and (while the tree was
+                // read off the papers) not in the sidebar at all. Finder puts
+                // a `.DS_Store` in every folder it has shown, so this was the
+                // library that showed one subfolder and not the next.
+                if isDirectory { enumerator.skipDescendants() }
                 continue
             }
-            if (try? item.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+            if isDirectory {
                 folders.append(URL(filePath: path, directoryHint: .isDirectory))
                 continue
             }

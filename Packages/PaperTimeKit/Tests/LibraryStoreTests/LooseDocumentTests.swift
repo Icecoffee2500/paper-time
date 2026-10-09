@@ -69,6 +69,31 @@ struct LooseDocumentTests {
         #expect(unclaimed.folders == walk.folders)
     }
 
+    /// Finder leaves a `.DS_Store` in every folder it has shown. The walk
+    /// used to call `skipDescendants()` on it — which skips the subfolder
+    /// listed just before, not the file — so a subfolder beside a dot-file
+    /// lost every PDF in it. That was the library that showed one subfolder
+    /// and never the next.
+    @Test("A dot-file beside a subfolder does not hide the subfolder's PDFs")
+    func dotFilesDoNotSkipSubfolders() async throws {
+        let root = try Self.makeTemporaryFolder()
+        defer { try? FileManager.default.removeItem(at: root) }
+        for name in ["A", "B", "C", "A/Inner"] {
+            try FileManager.default.createDirectory(at: root.appending(path: name), withIntermediateDirectories: true)
+            try Self.writePDF(named: "\(name.replacingOccurrences(of: "/", with: "-")).pdf", in: root.appending(path: name))
+            try Data().write(to: root.appending(path: "\(name)/.DS_Store"))
+        }
+        try Data().write(to: root.appending(path: ".DS_Store"))
+        try Data().write(to: root.appending(path: "._resource"))
+
+        let store = LibraryStore(root: root)
+        try await store.bootstrap()
+        let walk = await store.walk()
+        #expect(walk.documents.map(\.lastPathComponent).sorted() == ["A-Inner.pdf", "A.pdf", "B.pdf", "C.pdf"])
+        let base = LibraryStore.normalizedPath(root)
+        #expect(walk.folders.map { String(LibraryStore.normalizedPath($0).dropFirst(base.count + 1)) } == ["A", "A/Inner", "B", "C"])
+    }
+
     @Test("A PDF that already has a record is no longer offered")
     func searchesSubfoldersOnly() async throws {
         let root = try Self.makeTemporaryFolder()
