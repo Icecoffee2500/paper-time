@@ -791,6 +791,11 @@ public final class LibraryModel {
     public func folderDidChange(paths: [String] = []) async {
         folderCheck?.cancel()
         let meaning = Self.meaning(of: paths, under: sources.map(\.url), knowing: Set(papers.map(\.id)))
+        // `--papertime-folders=1` says what each change was taken for.
+        let says = Boot.isSet("PAPERTIME_FOLDERS")
+        if says {
+            FileHandle.standardError.write(Data("folder change: \(meaning) \(paths.count) path(s) \(paths.suffix(3).map { ($0 as NSString).lastPathComponent })\n".utf8))
+        }
         folderCheck = Task { [weak self] in
             guard let self else { return }
             switch meaning {
@@ -832,6 +837,9 @@ public final class LibraryModel {
             }
             guard !Task.isCancelled else { return }
             diskFolders = folders
+            if says {
+                FileHandle.standardError.write(Data("folder walk: unclaimed \(unclaimed.map(\.lastPathComponent)) folders \(folders.count) failures \(loadFailures.count)\n".utf8))
+            }
             guard loadFailures.isEmpty else {
                 await refresh()
                 return
@@ -850,7 +858,10 @@ public final class LibraryModel {
                 looseDocuments = unclaimed
                 return
             }
-            await adopt(unclaimed)
+            let taken = await adopt(unclaimed)
+            if says {
+                FileHandle.standardError.write(Data("folder adopt: \(taken) taken, refused \(adoptFailures)\n".utf8))
+            }
         }
         await folderCheck?.value
     }

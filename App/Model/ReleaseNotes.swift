@@ -318,7 +318,7 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
-            version: "0.9.32",
+            version: "0.9.33",
             date: Text2("2026년 10월", "October 2026"),
             note: Text2(
                 "라이브러리의 폴더 트리가 이제 폴더를 전부 보여줘요. 새로 만든 폴더도, 논문을 아직 들이지 않은 폴더도 보이고, 하위 폴더에 넣은 PDF도 바로 들어와요.",
@@ -331,6 +331,13 @@ enum ReleaseNotes {
                     Text2(
                         "라이브러리의 하위 폴더가 하나만 보이고 나머지는 안 보였어요. 트리를 디스크가 아니라 «이미 들여온 논문»에서만 읽었기 때문이에요. 논문을 아직 들이지 않은 폴더와 빈 폴더는 트리에 없었어요. 이제 폴더 트리는 디스크에 있는 폴더를 전부 보여줘요. 새로 만든 폴더도 바로 나타나요.",
                         "Only one subfolder of a library showed, and the others didn’t. The tree was read from the papers already added, not from the disk, so a folder whose papers hadn’t been added yet, or an empty one, wasn’t in it. The tree now shows every folder on the disk, and a folder you just made appears right away."
+                    )
+                ),
+                Entry(
+                    Text2("점 파일 옆의 폴더", "A Folder Beside a Dot-File"),
+                    Text2(
+                        "Finder가 남기는 .DS_Store 같은 점 파일 바로 앞에 나열된 하위 폴더는 그 안의 PDF가 하나도 읽히지 않았어요. 폴더를 걷다가 점 파일을 만나면 «그 아래로 내려가지 않기»를 불렀는데, 그 호출이 점 파일이 아니라 직전 하위 폴더를 건너뛰었기 때문이에요. 그래서 하위 폴더 하나만 보이고 다음 폴더는 영영 안 보였어요. 이제 폴더에서만 건너뛰어요.",
+                        "A subfolder listed just before a dot-file such as Finder’s .DS_Store had none of its PDFs read. When the walk met a dot-file it asked to skip what was beneath it, and that call skipped the previous subfolder, not the file. That is why one subfolder showed and the next never did. It now skips only folders."
                     )
                 ),
                 Entry(
