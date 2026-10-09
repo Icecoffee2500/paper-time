@@ -2,11 +2,140 @@
   "repo": "Icecoffee2500/paper-time",
   "releases": [
     {
+      "version": "0.9.33",
+      "date": "2026-10-09T07:44:21Z",
+      "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.33/Paper.Time.0.9.33.dmg",
+      "size": 97944595,
+      "downloads": 0,
+      "builds": {
+        "mac": [
+          {
+            "label": "디스크 이미지",
+            "label_en": "Disk image",
+            "arch": "Apple Silicon",
+            "arch_en": "Apple Silicon",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.33/Paper.Time.0.9.33.dmg",
+            "size": 97944595,
+            "downloads": 0
+          }
+        ],
+        "windows": [
+          {
+            "label": "설치본",
+            "label_en": "Installer",
+            "arch": "64비트 · ARM",
+            "arch_en": "64-bit and ARM",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.33/Paper.Time.Setup.0.9.33.exe",
+            "size": 311156542,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "64비트",
+            "arch_en": "64-bit",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.33/Paper.Time-0.9.33-win.zip",
+            "size": 185649905,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.33/Paper.Time-0.9.33-arm64-win.zip",
+            "size": 190597589,
+            "downloads": 0
+          }
+        ],
+        "linux": [
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.33/Paper.Time-0.9.33-x86_64.AppImage",
+            "size": 183869793,
+            "downloads": 0
+          },
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.33/Paper.Time-0.9.33-arm64.AppImage",
+            "size": 184256397,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.33/paper-time-0.9.33.tar.gz",
+            "size": 176760632,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.33/paper-time-0.9.33-arm64.tar.gz",
+            "size": 181257412,
+            "downloads": 0
+          }
+        ]
+      },
+      "note": "라이브러리 폴더 트리가 폴더를 전부 보여주고, 하위 폴더의 PDF도 들어와요.",
+      "note_en": "The library's folder tree shows every folder, and PDFs in subfolders come in.",
+      "stable": true,
+      "notes": {
+        "note": {
+          "ko": "라이브러리의 폴더 트리가 이제 폴더를 전부 보여줘요. 새로 만든 폴더도, 논문을 아직 들이지 않은 폴더도 보이고, 하위 폴더에 넣은 PDF도 바로 들어와요.",
+          "en": "The library’s folder tree now shows every folder. A folder you just made, or one whose papers haven’t been added yet, is there, and a PDF put into a subfolder comes in right away."
+        },
+        "added": [],
+        "fixed": [
+          {
+            "title": {
+              "ko": "보이지 않던 하위 폴더",
+              "en": "Subfolders That Didn’t Show"
+            },
+            "detail": {
+              "ko": "라이브러리의 하위 폴더가 하나만 보이고 나머지는 안 보였어요. 트리를 디스크가 아니라 «이미 들여온 논문»에서만 읽었기 때문이에요. 논문을 아직 들이지 않은 폴더와 빈 폴더는 트리에 없었어요. 이제 폴더 트리는 디스크에 있는 폴더를 전부 보여줘요. 새로 만든 폴더도 바로 나타나요.",
+              "en": "Only one subfolder of a library showed, and the others didn’t. The tree was read from the papers already added, not from the disk, so a folder whose papers hadn’t been added yet, or an empty one, wasn’t in it. The tree now shows every folder on the disk, and a folder you just made appears right away."
+            }
+          },
+          {
+            "title": {
+              "ko": "점 파일 옆의 폴더",
+              "en": "A Folder Beside a Dot-File"
+            },
+            "detail": {
+              "ko": "Finder가 남기는 .DS_Store 같은 점 파일 바로 앞에 나열된 하위 폴더는 그 안의 PDF가 하나도 읽히지 않았어요. 폴더를 걷다가 점 파일을 만나면 «그 아래로 내려가지 않기»를 불렀는데, 그 호출이 점 파일이 아니라 직전 하위 폴더를 건너뛰었기 때문이에요. 그래서 하위 폴더 하나만 보이고 다음 폴더는 영영 안 보였어요. 이제 폴더에서만 건너뛰어요.",
+              "en": "A subfolder listed just before a dot-file such as Finder’s .DS_Store had none of its PDFs read. When the walk met a dot-file it asked to skip what was beneath it, and that call skipped the previous subfolder, not the file. That is why one subfolder showed and the next never did. It now skips only folders."
+            }
+          },
+          {
+            "title": {
+              "ko": "하위 폴더에 넣은 PDF",
+              "en": "PDFs Put Into a Subfolder"
+            },
+            "detail": {
+              "ko": "맥에서 하위 폴더에 넣은 PDF와 다른 기계에서 온 기록을 앱이 알아채지 못했어요. 폴더 감시가 라이브러리 맨 위 폴더만 보고 있었기 때문이에요. 이제 라이브러리 아래 어디가 바뀌어도 알아채요.",
+              "en": "On the Mac, a PDF put into a subfolder and a record arriving from another machine went unnoticed, because the folder watcher only looked at the top of the library. It now notices a change anywhere under the library."
+            }
+          }
+        ]
+      }
+    },
+    {
       "version": "0.9.31",
       "date": "2026-10-06T18:03:24Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.31/Paper.Time.0.9.31.dmg",
       "size": 97915824,
-      "downloads": 0,
+      "downloads": 6,
       "builds": {
         "mac": [
           {
@@ -16,7 +145,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.31/Paper.Time.0.9.31.dmg",
             "size": 97915824,
-            "downloads": 0
+            "downloads": 5
           }
         ],
         "windows": [
@@ -27,7 +156,7 @@
             "arch_en": "64-bit and ARM",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.31/Paper.Time.Setup.0.9.31.exe",
             "size": 311154978,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -89,6 +218,7 @@
       },
       "note": null,
       "note_en": null,
+      "stable": false,
       "notes": {
         "note": {
           "ko": "노트의 목록이 이제 예상대로 움직여요. 넓은 번호 뒤의 글이 사라지지 않고, ⌘Z는 목록 동작을 하나씩 되돌려요.",
@@ -237,6 +367,7 @@
       },
       "note": "노트의 번호 목록을 들여쓰면 이제 «a.»부터 나와요. Tab으로 옮긴 항목이 번호와 함께 제자리를 찾아요.",
       "note_en": "Numbered lists in notes count from “a.” when you indent an item, and Tab moves an item to the right place with its number.",
+      "stable": false,
       "notes": {
         "note": {
           "ko": "노트의 번호 목록을 들여쓰면 이제 «a.»부터 나와요. Tab으로 옮긴 항목이 번호와 함께 제자리를 찾아요.",
@@ -345,6 +476,7 @@
       },
       "note": "⌘L로 인용한 구절을 쪽 위에 연한 강조색으로 칠해요. 누르면 그 인용이 있는 노트로 가요.",
       "note_en": "Passages you quote with ⌘L are tinted on the page in a pale shade of your accent colour. Click one to go to the quotation in your note.",
+      "stable": false,
       "notes": {
         "note": {
           "ko": "⌘L로 인용한 구절을 쪽 위에 연한 강조색으로 칠해요. 누르면 그 인용이 있는 노트로 가요.",
@@ -464,6 +596,7 @@
       },
       "note": null,
       "note_en": null,
+      "stable": false,
       "notes": {
         "note": {
           "ko": "⌘L로 인용한 구절 옆에 세로줄이 서요. 누르면 그 인용이 있는 노트로 가요.",
@@ -593,6 +726,7 @@
       },
       "note": null,
       "note_en": null,
+      "stable": false,
       "notes": {
         "note": {
           "ko": "노트의 코드 블록이 앱의 다른 편집기처럼 둥글고 맑아졌어요.",
@@ -701,6 +835,7 @@
       },
       "note": "노트의 코드 블록이 코드 편집기처럼 보여요. 언어 이름과 복사 단추, 줄 번호, 색이 붙어요.",
       "note_en": "A block of code in a note now looks like a code editor, with its language, a Copy button, line numbers and colour.",
+      "stable": false,
       "notes": {
         "note": {
           "ko": "노트의 코드 블록이 코드 편집기처럼 보여요. 언어 이름과 복사 단추, 줄 번호, 색이 붙어요.",
@@ -830,6 +965,7 @@
       },
       "note": "노트에서 ⌘Z가 방금 한 일을 정확히 되돌려요. ⌘B나 ⌘I 뒤에 눌러도 별표만 걷혀요.",
       "note_en": "⌘Z in a note undoes exactly what was just done. After ⌘B or ⌘I, it takes off just the stars.",
+      "stable": false,
       "notes": {
         "note": {
           "ko": "노트에서 ⌘Z가 방금 한 일을 정확히 되돌려요. ⌘B나 ⌘I 뒤에 눌러도 별표만 걷혀요.",
@@ -958,6 +1094,7 @@
       },
       "note": "노트의 굵게와 기울임이 한글에도 적용되고, 쓰는 줄에서도 바로 보여요. 코드는 노션처럼 보여요.",
       "note_en": "Bold and italics now work on Korean in notes and show on the line you are writing. Code looks the way Notion sets it.",
+      "stable": false,
       "notes": {
         "note": {
           "ko": "노트의 굵게와 기울임이 한글에도 적용되고, 쓰고 있는 줄에서도 바로 보여요. 코드는 노션처럼 보여요.",
@@ -1137,6 +1274,7 @@
       },
       "note": "손으로 쓴 글과 수식도 올가미로 잡아 LaTeX으로 복사해요. 이 맥에서 도는 손글씨 모델이 읽어요.",
       "note_en": "Handwritten words and formulas copy as LaTeX too: catch them with the lasso, and a handwriting model on this Mac reads them.",
+      "stable": false,
       "notes": {
         "note": {
           "ko": "손으로 쓴 글과 수식도 올가미로 잡아 LaTeX으로 복사해요. 이 맥에서 도는 손글씨 모델이 읽어요.",
@@ -1296,6 +1434,7 @@
       },
       "note": "슬라이드처럼 수식 앞에 이름표가 붙은 줄도, 두 단 논문에서 옆 단과 높이가 조금 어긋난 줄도 수식을 온전히 복사해요.",
       "note_en": "Formulas copy whole on lines with a label in front, as on slides, and on lines that sit a little off the other column's.",
+      "stable": false,
       "notes": {
         "note": {
           "ko": "슬라이드처럼 수식 앞에 이름표가 붙은 줄도, 두 단 논문에서 옆 단과 높이가 조금 어긋난 줄도 수식을 온전히 복사해요.",
@@ -1454,6 +1593,7 @@
       },
       "note": "올가미가 잡은 수식은 글자 자체가 강조색으로 물들고, 올가미가 켜져 있다는 것이 보이고, 슬라이드의 산세리프 수식도 읽혀요.",
       "note_en": "The letters the lasso catches turn the accent colour, the lasso shows when it is on, and the sans-serif formulas of slides read too.",
+      "stable": false,
       "notes": {
         "note": {
           "ko": "올가미가 잡은 수식은 글자 자체가 강조색으로 물들고, 올가미가 켜져 있다는 것이 보이고, 슬라이드의 산세리프 수식도 읽혀요.",
@@ -1593,6 +1733,7 @@
       },
       "note": "노트가 Obsidian처럼 움직이고(기호 색·자동 짝·선택 단추·토글), 수식 올가미가 사각형으로 수식을 잡아 LaTeX으로 복사하며, 스캔한 수식은 이 컴퓨터에서 그림을 읽어요.",
       "note_en": "Notes edit like Obsidian's (syntax colour, pairs, a selection bar, toggles); the formula lasso catches a formula in a rectangle for LaTeX, and a scanned formula is read off the picture on this computer.",
+      "stable": false,
       "notes": {
         "note": {
           "ko": "노트에서 기호가 색으로 보이고, 괄호와 $가 짝으로 들어오고, 선택하면 굵게·기울임 단추가 뜨고, «-- »가 토글이 돼요.",
@@ -1762,6 +1903,7 @@
       },
       "note": "Ultracopy가 밑괄호·윗괄호를 이름표째, 표를 줄로, 캡션을 제 줄로 읽어요. 제목과 인용은 쓰는 줄에서도 조판돼요.",
       "note_en": "Ultracopy reads braces with their labels, tables as rows and captions as lines; headings and quotations stay set under the caret.",
+      "stable": false,
       "notes": {
         "note": {
           "ko": "제목과 인용도 쓰는 줄에서 그대로 조판돼요. Ultracopy는 그림으로 그린 분수 막대를 읽고, 표의 줄은 글로, 캡션의 둘째 줄은 제 줄로 복사해요.",
@@ -1921,6 +2063,7 @@
       },
       "note": "노트가 Notion처럼 움직이고 PDF로 내보내요. Ultracopy가 벤치 수식을 전부 읽어요.",
       "note_en": "Notes edit the way Notion's do and export as PDF. Ultracopy reads every bench formula.",
+      "stable": false,
       "notes": {
         "note": {
           "ko": "노트가 Notion처럼 움직여요. 글머리표가 글을 쓰는 줄에서도 그대로 있고, ⌘B·⌘I로 굵게·기울임을 넣고, 고른 글 위에 괄호를 치면 감싸요. 노트를 PDF로 내보내요. Ultracopy는 벤치의 수식 6,060개를 모두 맞혀요.",
@@ -2080,6 +2223,7 @@
       },
       "note": null,
       "note_en": null,
+      "stable": false,
       "notes": {
         "note": {
           "ko": "Ultracopy가 수식을 논문에 적힌 모양 그대로 옮겨요. 기호 위의 글자, 괄호 크기, 여러 줄 수식의 정렬까지요. 복사한 글도 페이지처럼 줄을 바꿔요.",
@@ -2258,6 +2402,7 @@
       },
       "note": null,
       "note_en": null,
+      "stable": false,
       "notes": {
         "note": {
           "ko": "업데이트가 어디까지 왔는지 막대와 숫자로 보여줘요. 이번 업데이트만은, 맥에서 «설치하는 중»이 끝나지 않으면 «나중에»를 누르고 Paper Time을 꺼 주세요. 끄면 설치가 끝나요.",
@@ -2376,6 +2521,7 @@
       },
       "note": "노트가 수식을 Overleaf처럼 조판해요 — align, cases, 행렬, 식 번호와 \\eqref까지요. Ultracopy는 첨자와 행렬, 여러 줄 수식을 제대로 읽어요.",
       "note_en": "Notes set LaTeX the way Overleaf does — align, cases, matrices, equation numbers and \\eqref. Ultracopy reads scripts, matrices and multi-line formulas correctly.",
+      "stable": false,
       "notes": {
         "note": {
           "ko": "노트가 수식을 Overleaf처럼 조판해요 — align, cases, 행렬, 식 번호와 \\eqref까지요. Ultracopy는 첨자와 행렬, 여러 줄 수식을 제대로 읽어요.",
@@ -2495,6 +2641,7 @@
       },
       "note": "한마디를 보낼 때 닉네임을 적으면, 배포 페이지의 «함께 만드는 중»에 그 이름이 남아요.",
       "note_en": "Leave a name when you send feedback, and it goes on the download page with everyone else building Paper Time.",
+      "stable": false,
       "notes": {
         "note": {
           "ko": "한마디를 보낼 때 닉네임을 적으면, 배포 페이지의 «함께 만드는 중»에 그 이름이 남아요.",
@@ -2603,6 +2750,7 @@
       },
       "note": "노트가 치는 동안 흔들리지 않아요. Word로 만든 논문의 수식과 구절도 제대로 읽고, 붙여 넣은 표는 표로 남아요.",
       "note_en": "Notes stay still while you type. Formulas and passages from papers made in Word read correctly, and a pasted table stays a table.",
+      "stable": false,
       "notes": {
         "note": {
           "ko": "노트가 치는 동안 흔들리지 않아요. Word로 만든 논문의 수식과 구절도 제대로 읽고, 붙여 넣은 표는 표로 남아요.",
@@ -2742,6 +2890,7 @@
       },
       "note": "새 버전이 나오면 앱이 알려줘요. 맥과 윈도우는 누르면 설치까지 해요.",
       "note_en": "Paper Time now tells you when a new version is out. On the Mac and on Windows, one click installs it.",
+      "stable": false,
       "notes": {
         "note": {
           "ko": "새 버전이 나오면 앱이 알려줘요. 맥과 윈도우는 누르면 설치까지 해요.",
@@ -2860,6 +3009,7 @@
       },
       "note": "윈도우·리눅스가 맥과 같은 방식으로 일해요. 서지를 찾고, 노트를 쓰는 동안 조판하고, 맥에서 쓴 노트가 보여요.",
       "note_en": "Windows and Linux now work the way the Mac does. They look up metadata, set notes as you type, and show the notes you wrote on the Mac.",
+      "stable": false,
       "notes": {
         "note": {
           "ko": "윈도우·리눅스가 맥과 같은 방식으로 일해요. 서지를 찾고, 노트를 쓰는 동안 조판하고, 맥에서 쓴 노트가 보여요.",
@@ -3039,6 +3189,7 @@
       },
       "note": "밤에도 쪽이 잘 읽혀요. 글자는 밝아지고 사진은 인쇄된 그대로예요. 윈도우·리눅스는 맥처럼 움직이고, 덮어 설치할 때 더 멈추지 않아요.",
       "note_en": "Pages read well at night: the words turn light and photographs stay as printed. Windows and Linux work like the Mac, and installing over an old version no longer stops.",
+      "stable": false,
       "notes": {
         "note": {
           "ko": "뜻으로 찾기가 노트도 읽어요. 윈도우·리눅스에서도 저장이 논문 파일을 다시 쓰지 않아요.",
@@ -3218,6 +3369,7 @@
       },
       "note": "저장해도 논문은 그대로예요. 찾기가 뜻으로도 찾고, 노트의 수식은 짧게 치고 바로 보여요.",
       "note_en": "Your paper's bytes stay as they were. Search finds passages by meaning, and math goes into a note in shorthand with a live preview.",
+      "stable": false,
       "notes": {
         "note": {
           "ko": "찾기가 이제 뜻으로도 찾아요. 그리고 노트에 수식을 짧게 쳐도 돼요 — //는 분수가 되고, Tab을 누르면 다음 칸으로 가요.",
@@ -3437,6 +3589,7 @@
       },
       "note": "논문이 많아져도 목록이 느려지지 않아요. 들여오는 동안 앱이 멈추던 것도, «남은 PDF 더하기»가 눌러도 안 끝나던 것도 고쳤어요.",
       "note_en": "A long list scrolls like a short one, importing no longer stops the app, and the paper you attach something to is one you can search for.",
+      "stable": false,
       "notes": {
         "note": {
           "ko": "논문이 많아져도 목록이 느려지지 않아요. 논문을 들여오는 동안 앱이 멈추던 것도 고쳤고요. 그리고 보충 자료를 붙일 논문을 이제 찾아서 골라요.",
@@ -3586,6 +3739,7 @@
       },
       "note": "못 여는 파일이 왜 못 열리는지, 그 파일에 적힌 글자를 그대로 보여줘요.",
       "note_en": "When a file will not open, the reader shows the file's own first line — and offers to take you to the file.",
+      "stable": false,
       "notes": {
         "note": {
           "ko": "못 여는 파일이 왜 못 열리는지, 그 파일에 적힌 글자를 그대로 보여줘요. 그 화면에서 바로 폴더로 갈 수도 있고요.",
@@ -3694,6 +3848,7 @@
       },
       "note": "윈도우·리눅스에서 하이라이트가 줄을 따라가요. 칠한 뒤에 1쪽으로 돌아가지도 않고요.",
       "note_en": "On Windows and Linux, a highlight follows the lines of the text, and the paper stays where you were reading.",
+      "stable": false,
       "notes": {
         "note": {
           "ko": "윈도우·리눅스에서 하이라이트가 글자를 따라가지 않던 것을 고쳤어요. 여러 줄을 칠하면 하나의 커다란 덩어리가 됐고, 칠한 자리의 글자가 아예 안 보였고, 칠하고 나면 논문이 1쪽으로 돌아갔어요. 세 가지 다 고쳤어요.",
@@ -3832,6 +3987,7 @@
       },
       "note": "윈도우·리눅스에 설정 화면이 생겼어요. 도구 막대의 ⚙, 메뉴, Ctrl+, 세 갈래로 열리고, 말도 여기서 바꿔요. 늦게 도착한 기록 하나가 라이브러리를 비우던 것도 고쳤어요.",
       "note_en": "The Windows and Linux build has settings at last — from the gear in the bar, the menu, or Ctrl+, — and the language is one of them. A record arriving late no longer empties the library.",
+      "stable": false,
       "notes": {
         "note": {
           "ko": "윈도우·리눅스에 설정 화면이 생겼어요. 메뉴에 «설정…»은 처음부터 있었는데 그 뒤에 아무것도 없었고, 그래서 말을 바꿀 길이 아예 없었어요. 그리고 기록 하나가 늦게 도착하면 라이브러리 전체가 비어 보이던 것을 고쳤어요.",
@@ -3951,6 +4107,7 @@
       },
       "note": "라이브러리를 누르면 그 안이 열려요. 강의자료가 제 종류가 됐고, 하위 폴더에 넣어 둔 논문이 윈도우·리눅스에서도 보여요.",
       "note_en": "Press a library and it opens. Course material is its own kind, and a paper filed in a subfolder exists on Windows and Linux too.",
+      "stable": false,
       "notes": {
         "note": {
           "ko": "폴더가 많아지면 사이드바가 먼저 무너져요. 이제 라이브러리를 누르면 그 안이 열리고, 한 번에 한 갈래만 보여요. 강의자료도 제 종류가 됐고요. 그리고 윈도우·리눅스에서 하위 폴더의 논문이 아예 안 보이던 것을 고쳤어요.",
@@ -4120,6 +4277,7 @@
       },
       "note": "줄이 낱말 가운데서 끊기지 않아요. 선반에 «책» 자리가 늘 있고, 환영 화면과 정보 창이 보여줄 것을 다 보여줘요.",
       "note_en": "A line no longer breaks in the middle of a word. Books always have a shelf, and the welcome sheet and About show all of what they are showing.",
+      "stable": false,
       "notes": {
         "note": {
           "ko": "여는 데 걸리던 시간이 대부분 없어졌어요. 앱의 움직임도 한 벌로 맞췄고요 — 같은 크기의 변화는 어디서나 같은 속도예요. 그리고 책이 논문도 일반 문서도 아닌 제 종류가 됐어요. 이제 베타예요.",
@@ -4289,6 +4447,7 @@
       },
       "note": "라이브러리를 여러 개 열어 두고, 폴더마다 제 노트와 태그를 갖게 했어요.",
       "note_en": "Open several libraries at once; each folder keeps its own notes and tags.",
+      "stable": false,
       "notes": {
         "note": {
           "ko": "라이브러리를 여러 개 열어 둘 수 있어요. 사이드바 맨 위의 «라이브러리»에서 하나씩 들어가 보고, 더 이상 안 볼 폴더는 연결을 해제하면 돼요. 폴더마다 제 노트·태그·컬렉션을 제 안에 갖고 있어요.",
@@ -4437,6 +4596,7 @@
       },
       "note": "논문만이 아니라 모든 PDF를 위한 앱이 됐어요. 새 PDF에는 논문인지 일반 문서인지 먼저 물어보고, 답에 따라 정보 칸이 바뀌어요. 차례가 없는 문서는 쪽 그림으로 넘겨요.",
       "note_en": "Not only papers. A new PDF is asked what it is — a paper or a document — and the fields follow the answer. A document with no headings is turned by the look of its pages.",
+      "stable": false,
       "notes": {
         "note": {
           "ko": "논문만이 아니라 모든 PDF를 위한 앱이 됐어요. 새 PDF에는 먼저 논문인지 일반 문서인지 물어보고, 답에 따라 정보 칸이 바뀌어요. 차례가 없는 문서는 쪽 그림으로 넘겨요.",
@@ -4565,6 +4725,7 @@
       },
       "note": "폴더를 끌어다 놓으면 라이브러리가 돼요 — Google Drive 폴더도요. PC에서 더한 논문이 맥에서 안 보이던 것도 고쳤어요.",
       "note_en": "Drop a folder on the app and it becomes the library — a Google Drive folder too. And a paper added on a PC is no longer invisible on the Mac.",
+      "stable": false,
       "notes": {
         "note": {
           "ko": "PC에서 더한 논문이 맥에서 안 보이던 것을 고쳤어요. 그리고 폴더를 앱에 끌어다 놓으면 그 폴더가 라이브러리가 돼요 — Google Drive 폴더도요.",
@@ -4684,6 +4845,7 @@
       },
       "note": "잠긴 PDF가 빈 화면으로 남지 않아요. 암호가 걸렸으면 물어보고, 회사가 보호한 파일이면 그렇다고 말해요.",
       "note_en": "A locked PDF no longer sits on a blank page: Paper Time asks for the password, or says which protection is holding the door.",
+      "stable": false,
       "notes": {
         "note": {
           "ko": "잠긴 PDF가 빈 화면으로 남지 않아요. 암호가 걸렸으면 물어보고, 회사가 보호한 파일이면 그렇다고 말해요.",
@@ -4813,6 +4975,7 @@
       },
       "note": "다크 모드에서 패널이 바닥보다 밝아 흰 글자가 잘 안 보이던 것과, ⌥⌘/ 제보 창이 지난 내용을 들고 열리던 것을 고쳤어요.",
       "note_en": "Fixes panels coming out paler than the ground in dark mode, and the ⌥⌘/ report opening on top of the last one.",
+      "stable": false,
       "notes": {
         "note": {
           "ko": "다크 모드에서 패널이 창 바닥보다 밝아서 흰 글자가 잘 안 보였어요. 이제 읽는 자리가 창에서 가장 어두워요.",
@@ -4921,6 +5084,7 @@
       },
       "note": "그리기가 Figma처럼 됐어요. 프레임·묶음·오토 레이아웃, Tools 탭, 카드 속 수식, 논문 나란히 넷, 열린 논문 팝업. 세 데스크톱 모두요.",
       "note_en": "Drawing the way Figma does it: frames, groups, auto layout, a Tools tab, formulas in a card, four papers side by side, an Open Papers popup. On all three desktops.",
+      "stable": false,
       "notes": {
         "note": {
           "ko": "그리기가 Figma처럼 됐어요. 프레임·묶음·오토 레이아웃, 사이드바의 Tools 탭, 종이 위에 바로 쓰는 글, 카드 안의 수식. 논문을 나란히 넷까지 열고, 다크 모드에서도 논문이 잘 보여요.",
@@ -5130,6 +5294,7 @@
       },
       "note": "0.7.1에서 창이 텅 비어 열리던 것을 고쳤어요.",
       "note_en": "Fixes the empty window in 0.7.1.",
+      "stable": false,
       "notes": {
         "note": {
           "ko": "0.7.1에서 창이 비어 보이던 것을 고쳤어요.",
@@ -5238,6 +5403,7 @@
       },
       "note": "보내주신 네 가지를 고쳤어요. 글 쓸 때 창이 까매지던 것, 첫 화면이 안 보이던 것, 폴더 고르기가 안 열리던 것, 그리고 그린 것을 다른 쪽으로 옮길 수 없던 것.",
       "note_en": "Four things you told us about: the window going black as you typed, a first screen you could barely see, Choose Folder opening nothing, and no way to take a drawing to another page.",
+      "stable": false,
       "notes": {
         "note": {
           "ko": "보내주신 네 가지를 고쳤어요.",
@@ -5377,6 +5543,7 @@
       },
       "note": "이제 같이 만들어요. 앱과 페이지가 두 언어로 나오고, ⌥⌘/ 한 번이면 한마디 보낼 수 있어요.",
       "note_en": "Now we build it together. The app and the page speak two languages, and ⌥⌘/ sends a word back.",
+      "stable": false,
       "notes": {
         "note": {
           "ko": "이제 같이 만들어요.",
@@ -5478,6 +5645,7 @@
       },
       "note": "윈도우와 리눅스에서도 연다 — 같은 라이브러리 폴더, 같은 표시. 칸 단추가 둘씩 양쪽으로, ＋와 뒤로·앞으로도 고쳤다.",
       "note_en": null,
+      "stable": false,
       "notes": {
         "note": {
           "ko": "라이브러리가 맥 밖으로 나갔다.",
@@ -5550,6 +5718,7 @@
       },
       "note": "도구 막대를 둘로 — 왼쪽 사이드바·뒤로·앞으로, 오른쪽 검색·추가·칸 셋·메뉴.",
       "note_en": null,
+      "stable": false,
       "notes": {
         "note": {
           "ko": "도구 막대가 조용해졌다.",
@@ -5611,7 +5780,8 @@
         ]
       },
       "note": "칸 단추 넷 — 사이드바·목록·논문·인스펙터, 도구 막대에서 켜고 끈다.",
-      "note_en": null
+      "note_en": null,
+      "stable": false
     },
     {
       "version": "0.4.2",
@@ -5633,7 +5803,8 @@
         ]
       },
       "note": "칸마다 닫는 단추 — 목록·논문·인스펙터 각각.",
-      "note_en": null
+      "note_en": null,
+      "stable": false
     },
     {
       "version": "0.4.1",
@@ -5655,7 +5826,8 @@
         ]
       },
       "note": "스타일 패널 잘림 수정, 인스펙터 단추.",
-      "note_en": null
+      "note_en": null,
+      "stable": false
     },
     {
       "version": "0.4.0",
@@ -5678,6 +5850,7 @@
       },
       "note": "맥에서 자유롭게 그린다 — 도형·구부러지는 화살표·글 카드·손글씨 테두리. ⇧⌘D.",
       "note_en": null,
+      "stable": false,
       "notes": {
         "note": {
           "ko": "맥이 아이패드처럼 그린다 — 그리고 아이패드가 못 하던 것까지.",
@@ -5739,6 +5912,7 @@
       },
       "note": "Sonoma를 위해 지었다 — macOS 14부터. 아직 Sonoma에서 켜 본 것은 아니다.",
       "note_en": null,
+      "stable": false,
       "notes": {
         "note": {
           "ko": "Sonoma를 위해 지었다 — 아직 Sonoma에서 켜 본 것은 아니다.",
@@ -5781,6 +5955,7 @@
       },
       "note": "표 위에서도 마음대로 드래그한다.",
       "note_en": null,
+      "stable": false,
       "notes": {
         "note": {
           "ko": "표 위에서도 마음대로 드래그한다.",
@@ -5823,6 +5998,7 @@
       },
       "note": "표의 셀이 노랗게 칠해진다.",
       "note_en": null,
+      "stable": false,
       "notes": {
         "note": {
           "ko": "표의 셀이 노랗게 칠해진다.",
@@ -5865,6 +6041,7 @@
       },
       "note": "표에서 죽던 진짜 이유를 찾았다.",
       "note_en": null,
+      "stable": false,
       "notes": {
         "note": {
           "ko": "표에서 죽던 진짜 이유를 찾았다.",
@@ -5907,6 +6084,7 @@
       },
       "note": "표 안에서도 형광펜이 통한다.",
       "note_en": null,
+      "stable": false,
       "notes": {
         "note": {
           "ko": "표 안에서도 형광펜이 통한다.",
@@ -5959,6 +6137,7 @@
       },
       "note": "두 번째 알파: 논문 본문까지 찾는 검색, 구조를 지키는 인용, 그리고 아이패드·아이폰.",
       "note_en": null,
+      "stable": false,
       "notes": {
         "note": {
           "ko": "두 번째 알파: 상자가 글이 되는 길, 그리고 아이패드와 아이폰.",
@@ -6371,6 +6550,7 @@
       },
       "note": "첫 알파. 읽기·표시·노트·BibTeX.",
       "note_en": null,
+      "stable": false,
       "notes": {
         "note": {
           "ko": "첫 알파.",
