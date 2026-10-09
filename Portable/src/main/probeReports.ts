@@ -38,7 +38,9 @@ export async function runLibraryProbes(options: {
       const manifest = await one.manifest()
       const set = await one.collections()
       const noteIDs = await noteIDsIn(one.root)
+      const { folders } = await one.walkFolder()
       say(`folder ${path.basename(one.root)}: papers=${papers.length}`
+        + ` folders=[${folders.map((folder) => folder.slice(one.root.replace(/\\/g, '/').length + 1)).join(',')}]`
         + ` tags=[${(manifest.tags ?? []).map((tag) => tag.name).join(',')}]`
         + ` collections=[${(set.collections ?? []).map((collection) => collection.name).join(',')}]`
         + ` notes=[${noteIDs.join(',')}]`)

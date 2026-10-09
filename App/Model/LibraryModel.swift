@@ -129,23 +129,37 @@ public final class LibraryModel {
         return path.hasPrefix(base.hasSuffix("/") ? base : base + "/")
     }
 
-    /// The folders directly inside this one that hold papers, and how many
-    /// each holds counting everything beneath it.
+    /// Every folder under every library root, as the last walk of the disk
+    /// found them (`LibraryStore.Walk`), by normalised path. Holding nothing
+    /// or holding PDFs not yet taken in, they are folders all the same.
+    public private(set) var diskFolders: Set<String> = []
+
+    /// The folders directly inside this one, and how many papers each holds
+    /// counting everything beneath it.
     ///
-    /// Read off the papers rather than off the disk. The tree is then always
-    /// exactly what the list can show — a folder with nothing in it is not a
-    /// place you can go and find nothing — and it costs no round trip on a
-    /// cloud folder, which is the whole reason this app stopped walking them.
+    /// Two sources, because each is wrong alone. The papers say where the
+    /// library's papers are, whatever the disk is doing. The disk says which
+    /// folders exist — and until 0.9.32 nobody asked it, so a folder holding
+    /// only PDFs the library had not taken in yet, or a folder somebody had
+    /// just made in Finder, was not in the tree at all: with the watcher
+    /// then deaf to subfolders, a library showed the one folder it had read
+    /// at launch and never another. The disk is not walked here: the walk is
+    /// the one already made for the loose PDFs, and its folders are kept.
     public func subfolders(of folder: URL) -> [FolderNode] {
-        let base = folder.path(percentEncoded: false)
-        let prefix = base.hasSuffix("/") ? base : base + "/"
+        let base = LibraryStore.normalizedPath(folder)
+        let prefix = base + "/"
         var counts: [String: Int] = [:]
         for paper in papers where paper.meta.parentID == nil {
-            let path = paper.documentURL.deletingLastPathComponent().path(percentEncoded: false)
+            let path = LibraryStore.normalizedPath(paper.documentURL.deletingLastPathComponent())
             guard path.hasPrefix(prefix) else { continue }
             let rest = path.dropFirst(prefix.count)
             guard let head = rest.split(separator: "/").first.map(String.init), !head.isEmpty else { continue }
             counts[head, default: 0] += 1
+        }
+        for path in diskFolders where path.hasPrefix(prefix) {
+            let rest = path.dropFirst(prefix.count)
+            guard let head = rest.split(separator: "/").first.map(String.init), !head.isEmpty else { continue }
+            counts[head, default: 0] += 0
         }
         return counts
             .map { FolderNode(url: folder.appending(path: $0.key, directoryHint: .isDirectory), count: $0.value) }
@@ -668,11 +682,11 @@ public final class LibraryModel {
         // one on a cloud drive that has to wake up should not hold up the one
         // on this machine, and read one after another the slowest folder set
         // the time for all of them.
-        var gathered = [(papers: [LoadedPaper], failures: [String], loose: [URL])](
-            repeating: ([], [], []), count: stores.count
+        var gathered = [(papers: [LoadedPaper], failures: [String], loose: [URL], folders: [URL])](
+            repeating: ([], [], [], []), count: stores.count
         )
         await Trace.time("library: read \(stores.count) folder(s)") {
-            await withTaskGroup(of: (Int, [LoadedPaper], [String], [URL]).self) { group in
+            await withTaskGroup(of: (Int, [LoadedPaper], [String], LibraryStore.Walk).self) { group in
                 for (position, source) in stores.enumerated() {
                     group.addTask {
                         let result = try? await source.loadAll()
@@ -695,22 +709,25 @@ public final class LibraryModel {
                         // identifier, with none of its marks. Not knowing which
                         // PDFs are claimed is not the same as knowing one is
                         // free, and this is the answer nobody can take back.
-                        let loose = failures.isEmpty
-                            ? await source.unclaimedDocumentURLs(claiming: claimed)
-                            : []
-                        return (position, papers, failures, loose)
+                        // The folders come out of the same walk whatever the
+                        // records did: a tree is owed even while a record is
+                        // still coming down.
+                        var walk = await source.unclaimed(claiming: claimed)
+                        if !failures.isEmpty { walk.documents = [] }
+                        return (position, papers, failures, walk)
                     }
                 }
                 // By position, so the first folder's papers stay first however
                 // the reads finish.
-                for await (position, papers, failures, loose) in group {
-                    gathered[position] = (papers, failures, loose)
+                for await (position, papers, failures, walk) in group {
+                    gathered[position] = (papers, failures, walk.documents, walk.folders)
                 }
             }
         }
 
         loadFailures = gathered.flatMap(\.failures)
         looseDocuments = gathered.flatMap(\.loose)
+        diskFolders = Set(gathered.flatMap(\.folders).map(LibraryStore.normalizedPath))
         // The vocabulary before the papers: setting `papers` rebuilds the
         // derived indexes, and the collection counts are counted against the
         // collections. Loaded the other way round they were built once
@@ -747,8 +764,8 @@ public final class LibraryModel {
         // One watcher per folder: each is a library of its own, and a PDF
         // dropped into any of them is a paper in this one.
         watchers = sources.map { source in
-            FolderWatcher(url: source.url) { [weak self] in
-                Task { @MainActor [weak self] in await self?.folderDidChange() }
+            FolderWatcher(url: source.url) { [weak self] (paths: [String]) in
+                Task { @MainActor [weak self] in await self?.folderDidChange(paths: paths) }
             }
         }
         for watcher in watchers { watcher.start() }
@@ -771,22 +788,54 @@ public final class LibraryModel {
     /// Papers that were sitting in the folder when it was first opened are a
     /// different matter and still wait to be offered, because the user has not
     /// yet said that folder full of PDFs is their library.
-    public func folderDidChange() async {
+    public func folderDidChange(paths: [String] = []) async {
         folderCheck?.cancel()
+        let meaning = Self.meaning(of: paths, under: sources.map(\.url), knowing: Set(papers.map(\.id)))
         folderCheck = Task { [weak self] in
             guard let self else { return }
+            switch meaning {
+            case .nothing:
+                return
+            case .records:
+                // A record arrived or changed from outside — another machine's
+                // paper coming down the cloud, or a record this run could not
+                // read a minute ago. Only a full read relinks it; and a read
+                // that failed is a read worth trying again, so this does not
+                // wait on `loadFailures` the way taking a PDF in does. Not
+                // under an adoption, though: the records being heard are the
+                // ones it is writing, and it reads the folder again itself.
+                // The read comes first, before any PDF in the same burst is
+                // looked at: the PDF that came down beside its record is that
+                // record's, not a loose one to take in a second time.
+                guard !isAdopting else {
+                    adoptAgain = true
+                    return
+                }
+                await refresh()
+                guard !Task.isCancelled else { return }
+            case .files:
+                break
+            }
             // As in `refresh`: taking a PDF in on the app's own account is
             // only safe when every record answered, because the check for a
-            // paper already here is a check against the records. Nothing is
-            // lost by waiting — this runs again on the next change to the
-            // folder, and on every reload.
-            guard loadFailures.isEmpty else { return }
+            // paper already here is a check against the records. The tree is
+            // still kept in line — a folder is a folder whether or not its
+            // neighbour's record has arrived — and a read that failed is read
+            // again, which is what makes it stop failing.
             let claimed = Set(papers.map(\.meta.file.relativePath))
             var unclaimed: [URL] = []
+            var folders: Set<String> = []
             for source in allStores {
-                unclaimed += await source.unclaimedDocumentURLs(claiming: claimed)
+                let walk = await source.unclaimed(claiming: claimed)
+                unclaimed += walk.documents
+                folders.formUnion(walk.folders.map(LibraryStore.normalizedPath))
             }
             guard !Task.isCancelled else { return }
+            diskFolders = folders
+            guard loadFailures.isEmpty else {
+                await refresh()
+                return
+            }
 
             if await store.documentsAreMissing(among: claimed) {
                 // Something was renamed, moved or removed outside the app. A
@@ -804,6 +853,59 @@ public final class LibraryModel {
             await adopt(unclaimed)
         }
         await folderCheck?.value
+    }
+
+    /// What a burst of changed paths means to the library.
+    enum ChangeMeaning: Equatable {
+        /// Our own sidecars, temporary files, the Trash, a record already
+        /// loaded: nothing to read.
+        case nothing
+        /// A record this run does not have: read the library again.
+        case records
+        /// PDFs or folders, or no names at all: walk the folder.
+        case files
+    }
+
+    /// Sorts what the watcher named, so that saving a mark — which writes a
+    /// journal under `.papertime/papers/<id>/marks/` and is heard by the same
+    /// stream — does not walk a cloud folder, while a record arriving from
+    /// another machine is read, and a PDF or a folder is looked for.
+    ///
+    /// No names (`[]`) is the platform saying "something under here": the
+    /// folder is walked, which is what the root-only watcher always did.
+    static func meaning(of paths: [String], under roots: [URL], knowing loaded: Set<UUID>) -> ChangeMeaning {
+        guard !paths.isEmpty else { return .files }
+        let support = LibraryLayout.supportDirectoryName
+        let records = LibraryLayout.papersDirectoryName
+        let trash = LibraryLayout.trashDirectoryName
+        var result = ChangeMeaning.nothing
+        for path in paths {
+            guard let root = roots.map(LibraryStore.normalizedPath).first(where: { path == $0 || path.hasPrefix($0 + "/") })
+            else { continue }
+            let parts = path.dropFirst(root.count + 1).split(separator: "/").map(String.init)
+            guard let head = parts.first else { return .files }
+            let name = parts.last ?? ""
+            // A file still being written, a cloud stub, a Finder droppings file.
+            if name.hasSuffix(".tmp") || name.hasSuffix(".part") || name.hasSuffix(".icloud")
+                || name == ".DS_Store" || name.hasSuffix("~") { continue }
+            if head == trash { continue }
+            if head == support {
+                guard parts.count >= 3, parts[1] == records else { continue }
+                let id = UUID(uuidString: parts[2])
+                let leaf = parts.count >= 4 ? parts[3] : nil
+                let isRecord = leaf == nil
+                    || leaf == LibraryLayout.metadataFileName || leaf == LibraryLayout.stateFileName
+                // Our own sidecars and state changes of a paper already here
+                // are heard by the paper's own session; a record this run has
+                // not loaded is new or was unreadable, and is read. A record
+                // outranks a PDF in the same burst — see `folderDidChange`.
+                if isRecord, id.map({ !loaded.contains($0) }) ?? true { return .records }
+                continue
+            }
+            if name.hasPrefix(".") { continue }
+            result = .files
+        }
+        return result
     }
 
     /// Gives the PDFs already sitting in the library folder a record.
@@ -1766,6 +1868,13 @@ public final class LibraryModel {
         // leaving it to be noticed.
         let files = papers.map { LibraryStore.normalizedPath($0.documentURL) }
         report += "papers: \(papers.count) on \(Set(files).count) file(s)\n"
+        report += "folders: \(diskFolders.count)"
+        report += " [\(diskFolders.sorted().prefix(12).map { folderLabel(for: URL(filePath: $0, directoryHint: .isDirectory)) }.joined(separator: ","))]\n"
+        // The tree as the sidebar would show it under each root.
+        for source in sources {
+            let nodes = subfolders(of: source.url).map { "\($0.name)(\($0.count))" }
+            report += "tree \(source.url.lastPathComponent): [\(nodes.joined(separator: ","))]\n"
+        }
         report += "loose: \(looseDocuments.count)"
         report += " [\(looseDocuments.prefix(6).map(\.lastPathComponent).joined(separator: ","))]"
         report += " refused=\(adoptFailures.count)"

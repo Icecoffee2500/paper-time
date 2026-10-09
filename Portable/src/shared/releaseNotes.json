@@ -1,6 +1,47 @@
 {
  "releases": [
   {
+   "version": "0.9.32",
+   "date": {
+    "ko": "2026년 10월",
+    "en": "October 2026"
+   },
+   "note": {
+    "ko": "라이브러리의 폴더 트리가 이제 폴더를 전부 보여줘요. 새로 만든 폴더도, 논문을 아직 들이지 않은 폴더도 보이고, 하위 폴더에 넣은 PDF도 바로 들어와요.",
+    "en": "The library’s folder tree now shows every folder. A folder you just made, or one whose papers haven’t been added yet, is there, and a PDF put into a subfolder comes in right away."
+   },
+   "added": [],
+   "removed": [],
+   "fixed": [
+    {
+     "title": {
+      "ko": "보이지 않던 하위 폴더",
+      "en": "Subfolders That Didn’t Show"
+     },
+     "detail": {
+      "ko": "라이브러리의 하위 폴더가 하나만 보이고 나머지는 안 보였어요. 트리를 디스크가 아니라 «이미 들여온 논문»에서만 읽었기 때문이에요. 논문을 아직 들이지 않은 폴더와 빈 폴더는 트리에 없었어요. 이제 폴더 트리는 디스크에 있는 폴더를 전부 보여줘요. 새로 만든 폴더도 바로 나타나요.",
+      "en": "Only one subfolder of a library showed, and the others didn’t. The tree was read from the papers already added, not from the disk, so a folder whose papers hadn’t been added yet, or an empty one, wasn’t in it. The tree now shows every folder on the disk, and a folder you just made appears right away."
+     },
+     "devices": [
+      "mac"
+     ]
+    },
+    {
+     "title": {
+      "ko": "하위 폴더에 넣은 PDF",
+      "en": "PDFs Put Into a Subfolder"
+     },
+     "detail": {
+      "ko": "맥에서 하위 폴더에 넣은 PDF와 다른 기계에서 온 기록을 앱이 알아채지 못했어요. 폴더 감시가 라이브러리 맨 위 폴더만 보고 있었기 때문이에요. 이제 라이브러리 아래 어디가 바뀌어도 알아채요.",
+      "en": "On the Mac, a PDF put into a subfolder and a record arriving from another machine went unnoticed, because the folder watcher only looked at the top of the library. It now notices a change anywhere under the library."
+     },
+     "devices": [
+      "mac"
+     ]
+    }
+   ]
+  },
+  {
    "version": "0.9.31",
    "date": {
     "ko": "2026년 10월",

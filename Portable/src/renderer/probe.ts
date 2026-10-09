@@ -9,7 +9,7 @@
 import { latex as mathLatex, structured as mathStructured } from '../shared/mathReader/reader.js'
 import { layoutPanes } from './layout.js'
 import { call, flags } from './bridge.js'
-import { store } from './state.js'
+import { store, subfolders } from './state.js'
 import { findBar, focused } from './pageArea.js'
 import { showPaper } from './actions/openPapers.js'
 import { openNote, openNoteFromSearch } from './actions/notes.js'
@@ -84,6 +84,9 @@ export function installProbeSurface() {
       split: () => store.split,
       trail: () => ({ trail: [...store.trail], index: store.trailIndex }),
       readings: () => readings,
+      /** The disk's folders as the last read found them, and the tree under a folder. */
+      folders: () => [...store.folders],
+      subfolders: (folder: string) => subfolders(folder).map((one) => `${one.name}(${one.count})`),
     },
     // What Ultracopy and ⌘L would make of the selection — read, not copied:
     // a probe never writes the person's clipboard.

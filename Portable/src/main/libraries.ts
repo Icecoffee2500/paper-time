@@ -23,6 +23,8 @@ export interface FolderRead {
   papers: Awaited<ReturnType<Library['read']>>['papers']
   trouble: string[]
   loose: number
+  /** Every folder under the root, however deep, `/`-spelt. */
+  folders: string[]
   vocabulary: FolderVocabulary
 }
 
@@ -190,6 +192,7 @@ export class LibrarySet {
       const rows: LibrarySnapshot['papers'] = []
       const unreadable: string[] = []
       let loose = 0
+      const treeFolders: string[] = []
       // Built fresh and swapped in once the read is whole: cleared up front,
       // every save that arrived during a slow read found no owner.
       const owners = new Map<string, Library>()
@@ -204,6 +207,7 @@ export class LibrarySet {
           rows.push({ id: row.id, meta: row.meta, state: row.state, exists: row.exists, root: folder.library.root })
         }
         loose += folder.loose
+        treeFolders.push(...folder.folders)
       }
       this.ownerByID.clear()
       for (const [id, one] of owners) this.ownerByID.set(id, one)
@@ -218,6 +222,7 @@ export class LibrarySet {
         collections: { ...first.vocabulary.collectionSet, collections: vocabulary.collections },
         papers: rows,
         looseCount: loose,
+        folders: treeFolders,
         unreadable,
         refused,
         notes: extras.notes,
@@ -235,12 +240,16 @@ export class LibrarySet {
       // A PDF whose record would not be read is not a loose PDF. It is a paper
       // whose record is late, and offering it takes the same paper in a second
       // time: another identifier, none of its marks, both rows on the shelf.
-      const free = trouble.length > 0 ? [] : await one.unclaimedFiles(claimedBy(papers))
+      // The folders come out of the same walk whatever the records did: a
+      // tree is owed even while a record is still coming down.
+      const walked = await one.unclaimedWalk(claimedBy(papers))
+      const free = trouble.length > 0 ? [] : walked.files
       return {
         library: one,
         papers,
         trouble,
         loose: free.length,
+        folders: walked.folders,
         vocabulary: {
           root: one.root,
           tags: (manifest.tags ?? []) as Tag[],

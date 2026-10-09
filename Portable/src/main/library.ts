@@ -12,7 +12,7 @@
  * never left holding half a record because a laptop lid closed mid-save.
  */
 import { noteOwnWrite } from './ownWrites.js'
-import { isInside, pathKey, samePath } from '../shared/paths.js'
+import { isInside, pathKey, samePath, slashed } from '../shared/paths.js'
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
@@ -632,14 +632,20 @@ export class Library {
    * decoded the whole library twice.
    */
   async unclaimedFiles(claimed: Set<string>): Promise<string[]> {
+    return (await this.unclaimedWalk(claimed)).files
+  }
+
+  /** The same, with the folders the walk went through. */
+  async unclaimedWalk(claimed: Set<string>): Promise<{ files: string[]; folders: string[] }> {
     const found: string[] = []
     // Keyed whichever way the names came: from `claimedBy`, or spelled as the records spell them.
     const keys = new Set([...claimed].map(pathKey))
-    for (const file of await this.documentFiles()) {
+    const walked = await this.walkFolder()
+    for (const file of walked.documents) {
       if (keys.has(pathKey(L.recordPath(this.root, file)))) continue
       found.push(file)
     }
-    return found
+    return { files: found, folders: walked.folders }
   }
 
   /**
@@ -667,7 +673,22 @@ export class Library {
    * levels is deeper than any library anybody files by hand.
    */
   private async documentFiles(): Promise<string[]> {
+    return (await this.walkFolder()).documents
+  }
+
+  /**
+   * One pass for both the PDFs and the folders under the root — the folders
+   * holding nothing included.
+   *
+   * The sidebar's tree was read off the papers alone, so a folder holding
+   * only PDFs not yet taken in, or nothing at all, was not in it, and a
+   * folder made in the file manager a minute ago never appeared (the Mac was
+   * the same). The walk was already being made for the loose PDFs; the
+   * folders it passes through are the tree, at no further cost.
+   */
+  async walkFolder(): Promise<{ documents: string[]; folders: string[] }> {
     const found: string[] = []
+    const folders: string[] = []
     const skip = new Set([L.SUPPORT_DIR, L.TRASH_DIR])
 
     const walk = async (folder: string, depth: number): Promise<void> => {
@@ -695,6 +716,7 @@ export class Library {
           }
         }
         if (isDirectory) {
+          folders.push(slashed(full))
           if (depth < 8) deeper.push(full)
           continue
         }
@@ -707,7 +729,10 @@ export class Library {
     }
 
     await walk(this.root, 0)
-    return found.sort((a, b) => path.basename(a).localeCompare(path.basename(b)))
+    return {
+      documents: found.sort((a, b) => path.basename(a).localeCompare(path.basename(b))),
+      folders: folders.sort(),
+    }
   }
 
   /**

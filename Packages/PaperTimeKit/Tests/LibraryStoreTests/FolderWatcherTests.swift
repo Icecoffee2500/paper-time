@@ -29,6 +29,46 @@ struct FolderWatcherTests {
         #expect(heard == true)
     }
 
+    /// The watcher was a kqueue on the root, which hears only the root's own
+    /// entries: a PDF put into a subfolder, a folder made inside a folder and
+    /// a record arriving under `.papertime/papers/` were all missed — and
+    /// the sidebar showed the one subfolder read at launch. These three are
+    /// what it must hear now, with their paths.
+    #if os(macOS)
+    @Test("A file in a subfolder, a folder in a folder and a record all reach the callback, named")
+    func firesUnderSubfolders() async throws {
+        let root = try FlatLayoutTests.makeRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let week = root.appending(path: "2026/Week 3", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: week, withIntermediateDirectories: true)
+
+        let heard = Heard()
+        let watcher = FolderWatcher(url: root, quietPeriod: .milliseconds(50)) { (paths: [String]) in
+            Task { await heard.add(paths) }
+        }
+        watcher.start()
+        defer { watcher.stop() }
+        try await Task.sleep(for: .milliseconds(400))
+
+        try Data("x".utf8).write(to: week.appending(path: "deep.pdf"))
+        try await Task.sleep(for: .milliseconds(600))
+        try FileManager.default.createDirectory(at: week.appending(path: "Deeper"), withIntermediateDirectories: false)
+        try await Task.sleep(for: .milliseconds(600))
+        let record = root.appending(path: ".papertime/papers/\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: record, withIntermediateDirectories: true)
+        try Data("{}".utf8).write(to: record.appending(path: "meta.json"))
+
+        let named = await withTimeout(seconds: 6) {
+            while await !heard.has(["deep.pdf", "Deeper", "meta.json"]) {
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            return true
+        }
+        let paths = await heard.paths
+        #expect(named == true, "\(paths)")
+    }
+    #endif
+
     @Test("Bursts of changes are reported once")
     func coalesces() async throws {
         let root = try FlatLayoutTests.makeRoot()
@@ -74,6 +114,15 @@ struct FolderWatcherTests {
         #expect(cheap.map(\.lastPathComponent) == full.map(\.lastPathComponent))
         #expect(await store.documentsAreMissing(among: claimed) == false)
         #expect(await store.documentsAreMissing(among: ["gone.pdf"]) == true)
+    }
+}
+
+private actor Heard {
+    private(set) var paths: [String] = []
+    func add(_ more: [String]) { paths += more }
+    /// Whether every one of these names ends a path heard so far.
+    func has(_ names: [String]) -> Bool {
+        names.allSatisfy { name in paths.contains { $0.hasSuffix("/" + name) } }
     }
 }
 

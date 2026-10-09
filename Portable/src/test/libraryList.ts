@@ -55,6 +55,7 @@ function made(one: Made): Paper {
 function library(papers: Paper[], roots = ['/lib']) {
   store.papers = papers
   store.roots = roots
+  store.folders = []
   store.root = roots[0]
   store.shelf = { kind: 'all' }
   store.selectedID = null
