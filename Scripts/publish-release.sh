@@ -15,7 +15,10 @@
 # Mac build alone and says so.
 set -e
 
-TAG="$1"; [ -n "$TAG" ] || { echo "usage: $0 <tag> [note]"; exit 64; }
+TAG="$1"; [ -n "$TAG" ] || { echo "usage: $0 <tag> [note] [note_en]   (PAPERTIME_STABLE=1 marks it stable)"; exit 64; }
+# `PAPERTIME_STABLE=1` puts a «stable» badge on this version on the page: the
+# reader installed it, used it, and said it is the one to publish (2026-10-09).
+STABLE="${PAPERTIME_STABLE:-}"
 NOTE="$2"
 # The same line in English. The page is read in two languages, so a note
 # that exists only in Korean is a Korean sentence in an English list.
@@ -106,11 +109,11 @@ SIGNATURE="$(Scripts/sparkle-key.sh sign "$DMG" 2>/dev/null || true)"
 
 # The page reads this and nothing else: one entry per version, newest first,
 # with every platform's file under it.
-python3 - "$REPO" "$TAG" "$NOTE" "$NOTE_EN" "$SIGNATURE" "$(stat -f %z "$DMG")" <<'PY'
+python3 - "$REPO" "$TAG" "$NOTE" "$NOTE_EN" "$SIGNATURE" "$(stat -f %z "$DMG")" "$STABLE" <<'PY'
 import json, subprocess, sys, pathlib
 from xml.sax.saxutils import escape
 
-repo, tag, note, note_en, signature, dmg_length = sys.argv[1:7]
+repo, tag, note, note_en, signature, dmg_length, stable = sys.argv[1:8]
 
 raw = subprocess.run(
     ["gh", "api", "repos/" + repo + "/releases", "--paginate"],
@@ -208,6 +211,9 @@ for item in json.loads(raw):
         "builds": builds,
         "note": note if item["tag_name"] == tag and note else None,
         "note_en": note_en if item["tag_name"] == tag and note_en else None,
+        # The badge the reader gave this version by hand; kept from the
+        # last run for every other version below.
+        "stable": bool(stable) if item["tag_name"] == tag else False,
     })
 
 # What changed in each version, for the app's own update notice: the entry
@@ -243,6 +249,8 @@ if page.exists():
         # how many other people took it.
         if was.get("ours"):
             entry["ours"] = was["ours"]
+        if entry["version"] != tag and was.get("stable"):
+            entry["stable"] = True
 
 page.write_text(json.dumps({"repo": repo, "releases": releases},
                            indent=2, ensure_ascii=False) + "\n")

@@ -737,12 +737,18 @@ dialog::backdrop { background: rgba(0, 0, 0, .45); backdrop-filter: blur(4px); }
 
 .vrow {
   display: grid;
-  grid-template-columns: 62px 88px 1fr auto auto;
+  grid-template-columns: auto 88px 1fr auto auto;
   gap: 12px; align-items: baseline;
   padding: 11px 0; border-top: 1px solid var(--rule);
   font-size: 14px;
 }
-.vrow .v { font-weight: 600; }
+.vrow .v { font-weight: 600; display: inline-flex; align-items: baseline; gap: 6px; }
+/* The badge a version gets once it has been used and found good. */
+.vrow .stable {
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.02em; line-height: 1;
+  padding: 3px 6px; border-radius: 999px;
+  color: var(--green); background: color-mix(in srgb, var(--green) 14%, transparent);
+}
 .vrow .when { color: var(--ink-3); font-size: 12.5px; }
 .vrow .n { color: var(--ink-2); min-width: 0; }
 .vrow .d { color: var(--ink-3); font-size: 12.5px; white-space: nowrap; }
