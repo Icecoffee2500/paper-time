@@ -400,6 +400,12 @@ button { font: inherit; color: inherit; }
 .btn-primary { background: var(--accent); color: #fff; }
 .btn-primary:hover { background: var(--accent); filter: brightness(1.08); }
 .btn-primary .sub { display: block; font-size: 11.5px; opacity: .78; font-weight: 400; margin-top: 1px; }
+.btn-primary .stable {
+  display: inline-block; vertical-align: 2px; margin-left: 8px;
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.02em; line-height: 1;
+  padding: 3px 7px; border-radius: 999px;
+  color: #fff; background: rgba(255, 255, 255, 0.22);
+}
 .btn-ghost { background: none; color: var(--accent); padding: 11px 10px; }
 .btn-ghost:hover { background: none; text-decoration: underline; }
 
