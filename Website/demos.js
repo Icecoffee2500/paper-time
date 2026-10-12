@@ -1502,7 +1502,14 @@ async function mountDownloads() {
       primary.href = first.url;
       setLabel(primary, L(`${latest.version} 받기`, `Download ${latest.version}`));
       primary.querySelector(".sub").textContent =
-        `${OS[os].name} · ${buildArch(first) ? buildArch(first) + " · " : ""}${first.size ? mb(first.size) : ""}${latest.stable ? " · stable" : ""}`;
+        `${OS[os].name} · ${buildArch(first) ? buildArch(first) + " · " : ""}${first.size ? mb(first.size) : ""}`;
+      /* The badge beside the word, where the eye lands first: this version
+         was used and found good before it went up. */
+      primary.querySelector(".stable")?.remove();
+      if (latest.stable) {
+        primary.querySelector("br")?.before(
+          el("span", { class: "stable", title: L("써 보고 괜찮다고 한 버전", "Tried and found good") }, "stable"));
+      }
       /* Everything else for this platform, small, on one line. */
       const rest = files.slice(1);
       variants.replaceChildren(
