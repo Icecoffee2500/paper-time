@@ -5,7 +5,7 @@
 import { dialog, type BrowserWindow } from 'electron'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
-import type { Collection } from '../../shared/model.js'
+import type { Collection, Tag } from '../../shared/model.js'
 import { acceptedPatch } from '../../shared/appSettings.js'
 import { L as say } from '../../shared/lang.js'
 import { settings, update } from '../settings.js'
@@ -236,6 +236,19 @@ export function libraryHandlers(ctx: Context): Partial<Handlers> {
     // folder keeps the collections it already had, and a new one goes into
     // the folder being looked at, or the first — the folder a paper added
     // now would go into.
+    // A new tag goes into the folder being looked at — the one a paper added
+    // now would go into — and travels to the others as papers there wear it.
+    'tags:add': async ({ tag, root }, sender) => {
+      const folders = libraries.all()
+      if (folders.length === 0) return null
+      const destination = libraries.destination(root) ?? folders[0]
+      const manifest = await destination.manifest()
+      const tags = ((manifest.tags ?? []) as Tag[]).filter((one) => one.id !== tag.id)
+      await destination.saveManifest({ ...manifest, tags: [...tags, tag as Tag] })
+      windows.sendExcept(sender, 'library:changed')
+      return null
+    },
+
     'collections:save': async ({ collections, root }, sender) => {
       const all = collections as Collection[]
       const folders = libraries.all()

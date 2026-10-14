@@ -1,6 +1,34 @@
 {
  "releases": [
   {
+   "version": "0.9.34",
+   "date": {
+    "ko": "2026년 10월",
+    "en": "October 2026"
+   },
+   "note": {
+    "ko": "태그를 이제 만들 수 있어요. 옆 목록에서 만들고, 정보 탭과 줄의 메뉴에서 붙이고 떼요.",
+    "en": "You can now make tags: in the sidebar, and put them on in the Info tab or a row's menu."
+   },
+   "added": [
+    {
+     "title": {
+      "ko": "태그 만들기",
+      "en": "Making Tags"
+     },
+     "detail": {
+      "ko": "태그는 끌어다 놓을 수는 있었는데 만들 길이 없었어요. 옆 목록 «태그» 구역의 «새 태그…»에서 이름과 색을 골라 만들어요. 정보 탭의 «읽기» 절에 태그 칩이 서고, 누르면 붙고 다시 누르면 떨어져요. 목록 줄의 오른쪽 클릭 메뉴에도 «태그»가 있어요.",
+      "en": "Tags could be dropped onto but never made. New Tag… in the sidebar's Tags section takes a name and a colour. The Info tab's Reading section shows every tag as a chip — press one to put it on, again to take it off — and a row's right-click menu has Tags too."
+     },
+     "devices": [
+      "mac"
+     ]
+    }
+   ],
+   "removed": [],
+   "fixed": []
+  },
+  {
    "version": "0.9.33",
    "date": {
     "ko": "2026년 10월",

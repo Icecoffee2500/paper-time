@@ -349,6 +349,8 @@ export type TagColor =
   | 'red' | 'orange' | 'yellow' | 'green' | 'mint'
   | 'teal' | 'blue' | 'indigo' | 'purple' | 'pink' | 'gray'
 
+export const TAG_COLORS: readonly TagColor[] = ['red', 'orange', 'yellow', 'green', 'mint', 'teal', 'blue', 'indigo', 'purple', 'pink', 'gray']
+
 export interface Tag {
   id: string
   name: string

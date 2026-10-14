@@ -136,6 +136,8 @@ export interface Requests {
   }
   /** `root`: the library a new collection goes into — the one being looked at. */
   'collections:save': { args: { collections: unknown[]; root?: string }; result: null }
+  /** A new tag, into the library being looked at (`root`) — the Mac's `addTag(named:color:)`. */
+  'tags:add': { args: { tag: { id: string; name: string; color: string }; root?: string }; result: null }
   /** The sheet's «Save…»: the text it previewed, where the person says. */
   'bibtex:save': { args: { text: string }; result: { path: string } | { cancelled: true } }
   /** The version, and whether a probe asked for What's New (`--papertime-whats-new=1`, never marked seen). */

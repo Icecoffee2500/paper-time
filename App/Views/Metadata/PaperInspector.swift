@@ -588,9 +588,55 @@ private struct PaperInspectorForm: View {
 
             ratingControl
 
+            tagsRow
+
             TextField(L("메모", "Note"), text: $noteDraft, axis: .vertical)
                 .lineLimit(3 ... 8)
                 .onSubmit { saveNoteIfNeeded() }
+        }
+    }
+
+    /// Every tag the library has, as chips; the ones this paper wears are
+    /// filled, and a press puts one on or takes it off. Tags are made in
+    /// the sidebar («New Tag…»), which this row says when there are none.
+    @ViewBuilder
+    private var tagsRow: some View {
+        let worn = Set(paper?.meta.tagIDs ?? [])
+        let tags = model.manifest.tags
+        VStack(alignment: .leading, spacing: 6) {
+            Text(L("태그", "Tags"))
+            if tags.isEmpty {
+                Text(L("옆 목록의 «새 태그…»로 태그를 만들어요.", "Make a tag with New Tag… in the sidebar."))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                ChipFlow(spacing: 6) {
+                    ForEach(tags) { tag in
+                        let on = worn.contains(tag.id)
+                        Button {
+                            var ids = paper?.meta.tagIDs ?? []
+                            if on { ids.removeAll { $0 == tag.id } } else { ids.append(tag.id) }
+                            Task { await model.setTags(ids, for: paperID) }
+                        } label: {
+                            HStack(spacing: 5) {
+                                Circle().fill(tag.color.swiftUIColor).frame(width: 7, height: 7)
+                                Text(tag.name)
+                            }
+                            .font(.callout)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 3)
+                            .background(
+                                Capsule().fill(on ? tag.color.swiftUIColor.opacity(0.22) : Color.primary.opacity(0.05))
+                            )
+                            .overlay(Capsule().strokeBorder(on ? tag.color.swiftUIColor.opacity(0.6) : Color.clear, lineWidth: 1))
+                            .foregroundStyle(on ? Color.primary : Color.secondary)
+                            .contentShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(on ? [.isSelected] : [])
+                    }
+                }
+            }
         }
     }
 
@@ -725,6 +771,46 @@ private struct PaperInspectorForm: View {
         case .importedBibTeX: L("BibTeX에서 들여옴", "Imported BibTeX")
         case .importedRIS: L("RIS에서 들여옴", "Imported RIS")
         case .manual: L("직접 적음", "Entered by You")
+        }
+    }
+}
+
+
+/// Chips laid left to right, wrapping to the next line when the row is
+/// full — what an `HStack` cannot do, and a `Grid` cannot do with chips of
+/// different widths.
+struct ChipFlow: Layout {
+    var spacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? .infinity
+        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0, widest: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > width {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+            widest = max(widest, x - spacing)
+        }
+        return CGSize(width: width == .infinity ? widest : width, height: y + rowHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX, y = bounds.minY, rowHeight: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x > bounds.minX, x + size.width > bounds.maxX {
+                x = bounds.minX
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            view.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
         }
     }
 }

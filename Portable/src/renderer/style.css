@@ -4782,3 +4782,45 @@ textarea.memo {
 .nm-table th { font-weight: 650; background: color-mix(in srgb, var(--text) 5%, transparent); }
 .nm-table th + th, .nm-table td + td { border-left: 1px solid var(--separator-strong); }
 .nm-table tr + tr td, .nm-table tbody tr:first-child td { border-top: 1px solid var(--separator-strong); }
+
+/* A new tag's colours, under the name field: dots, one of them ringed. */
+.ask-swatches {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.ask-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--swatch);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.12);
+}
+.ask-swatch[aria-checked='true'] {
+  box-shadow: 0 0 0 2px var(--panel), 0 0 0 3.5px var(--text);
+}
+
+/* The inspector's tags: every tag as a chip, the worn ones filled. */
+.insp-line-stacked {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.insp-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.insp-tag {
+  cursor: default;
+  padding: 2px 9px;
+  font-size: 12px;
+  border: 1px solid transparent;
+}
+.insp-tag[aria-pressed='false'] {
+  background: var(--hover);
+  color: var(--text-secondary);
+}
+.insp-tag[aria-pressed='true'] {
+  border-color: color-mix(in srgb, var(--tag) 60%, transparent);
+}

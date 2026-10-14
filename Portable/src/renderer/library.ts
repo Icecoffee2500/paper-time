@@ -11,6 +11,8 @@
  * answered last won, older or not.
  */
 import { showWhatsNew } from './ui/releaseNotes.js'
+import { tagColor } from './ui/paperList.js'
+import { TAG_COLORS } from '../shared/model.js'
 import { parseShortcutOverrides, setShortcutOverrides } from '../shared/shortcuts.js'
 import { inkPresetsFrom } from '../shared/inkPresets.js'
 import { call, flags, soloPaperID } from './bridge.js'
@@ -228,6 +230,21 @@ export async function newCollection() {
     sortIndex: store.collections.length,
   }]
   await call('collections:save', { collections, root: importDestination() })
+  await reload()
+}
+
+/** A tag of the reader's own: a name and a colour, into the library being
+ *  looked at — the Mac's «New Tag…». */
+export async function newTag() {
+  const swatches = { options: TAG_COLORS, colorOf: tagColor, chosen: 'blue' }
+  const name = await askForName({
+    title: L('새 태그', 'New Tag'),
+    placeholder: L('태그 이름', 'Tag Name'),
+    confirm: L('만들기', 'Create'),
+    swatches,
+  })
+  if (!name) return
+  await call('tags:add', { tag: { id: crypto.randomUUID().toUpperCase(), name, color: swatches.chosen }, root: importDestination() })
   await reload()
 }
 

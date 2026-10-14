@@ -1133,6 +1133,30 @@ private struct PaperMenu: View {
             )
         }
 
+        // Every tag, ticked where this paper wears it; a press puts it on
+        // or takes it off. Tags are made in the sidebar.
+        Menu {
+            if model.manifest.tags.isEmpty {
+                Text(L("태그가 없어요", "No Tags"))
+            }
+            ForEach(model.manifest.tags) { tag in
+                let on = paper.meta.tagIDs.contains(tag.id)
+                Button {
+                    var ids = paper.meta.tagIDs
+                    if on { ids.removeAll { $0 == tag.id } } else { ids.append(tag.id) }
+                    Task { await model.setTags(ids, for: paper.id) }
+                } label: {
+                    if on {
+                        Label(tag.name, systemImage: "checkmark")
+                    } else {
+                        Text(tag.name)
+                    }
+                }
+            }
+        } label: {
+            Label(L("태그", "Tags"), systemImage: "tag")
+        }
+
         // A picker, not a submenu. The submenu listed the first thirty papers
         // in title order, and the one being looked for is a supplement's
         // parent — as likely to be at Z as at A. On a shelf of two hundred it
