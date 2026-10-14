@@ -605,6 +605,13 @@ private struct PaperInspectorForm: View {
         let tags = model.manifest.tags
         VStack(alignment: .leading, spacing: 6) {
             Text(L("태그", "Tags"))
+                // `--papertime-tags=1`: what the row shows, for a probe — a
+                // photograph of the inspector is blank (`cacheDisplay`).
+                .onAppear {
+                    guard Boot.isSet("PAPERTIME_TAGS") else { return }
+                    let said = tags.map { "\($0.name)(\($0.color.rawValue))\(worn.contains($0.id) ? "*" : "")" }.joined(separator: ", ")
+                    FileHandle.standardError.write(Data("tags row: [\(said)]\n".utf8))
+                }
             if tags.isEmpty {
                 Text(L("옆 목록의 «새 태그…»로 태그를 만들어요.", "Make a tag with New Tag… in the sidebar."))
                     .font(.callout)
