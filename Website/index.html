@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Paper Time — 논문에만 집중하기 위한 앱</title>
-<meta name="description" content="논문을 읽고, PDF에 표시하고, 수식째 노트로 옮기는 앱이에요. 맥·윈도우·리눅스에서 같은 라이브러리 폴더를 열어요. 수식은 LaTeX으로 복사되고, 맥에서는 손글씨도 읽어요.">
+<meta name="description" content="논문을 읽고, PDF에 표시하고, 수식째 노트로 옮기는 앱이에요. 맥·윈도우·리눅스에서 같은 라이브러리 폴더를 열어요. 수식은 LaTeX으로 복사돼요.">
 <meta property="og:title" content="Paper Time">
 <meta property="og:description" content="논문을 읽고, 표시하고, 그 표시를 생각으로 바꾸기 위한 앱.">
 <meta property="og:type" content="website">
@@ -89,69 +89,26 @@
   </div>
 </header>
 
-<!-- ───────────────────── 0.9.23 · handwriting ─────────────────────────── -->
-<section class="band tone-dark" id="handwriting">
+<!-- ──────────────────────────── reading ────────────────────────────────── -->
+<section class="band" id="read">
   <div class="band-inner rise">
     <div class="band-head">
-      <p class="eyebrow" data-l="ko">새로워진 것 · 0.9.23</p>
-      <p class="eyebrow" data-l="en">New in 0.9.23</p>
-      <h2 class="display" data-l="ko">손글씨도<br>LaTeX으로.</h2>
-      <h2 class="display" data-l="en">Handwriting,<br>copied as LaTeX.</h2>
-      <p class="say" data-l="ko">수식 올가미(<span class="key">⌥⌘L</span>)로 손으로 쓴 노트나 스캔한 쪽을 잡고 <span class="key">⇧⌘C</span>를 눌러요.
-        글은 글로, 수식은 <code>$…$</code>로 복사돼요. 읽는 모델은 맥 안에서 돌고, 쪽은 밖으로 나가지 않아요.</p>
-      <p class="say" data-l="en">Catch handwritten notes or a scanned page with the formula lasso (<span class="key">⌥⌘L</span>) and press <span class="key">⇧⌘C</span>.
-        The words copy as words and the formulas as <code>$…$</code>. The model runs on your Mac, and the page never leaves it.</p>
-    </div>
-    <div class="duo tops">
-      <article class="cell">
-        <h3 data-l="ko">같은 두 줄, 두 가지 결과</h3>
-        <h3 data-l="en">One note, two readings</h3>
-        <p data-l="ko">인쇄된 수식을 읽는 모델과 손글씨 모델이 같은 두 줄을 읽은 실제 결과예요.</p>
-        <p data-l="en">What a model for printed formulas and the handwriting model each made of the same two lines.</p>
-        <div class="demo-slot" id="demo-handwriting"></div>
-      </article>
-      <article class="cell">
-        <h3 data-l="ko">필요한 것</h3>
-        <h3 data-l="en">What it needs</h3>
-        <ul class="points" data-l="ko">
-          <li><b>Apple 실리콘 맥.</b> 손글씨 모델은 맥에서만 돌아요.</li>
-          <li><b>모델 한 번 받기.</b> 설정 → 읽기 → 손글씨에서 정밀(Qwen3.5 9B, 6 GB, 메모리 16 GB 이상)이나 표준(4B, 3 GB)을 받아요.</li>
-          <li><b>몇 초.</b> 두 줄에 4~9초쯤 걸리고, 읽는 동안 올가미 띠에 읽은 낱말이 나와요.</li>
-          <li><b>Paper Time 펜으로 쓴 것도.</b> 여백에 펜으로 쓴 수식도 함께 읽어요.</li>
-        </ul>
-        <ul class="points" data-l="en">
-          <li><b>A Mac with Apple silicon.</b> The handwriting model runs on the Mac only.</li>
-          <li><b>One download.</b> In Settings → Reading → Handwriting, get Precise (Qwen3.5 9B, 6 GB, for 16 GB of memory or more) or Standard (4B, 3 GB).</li>
-          <li><b>A few seconds.</b> Two lines take about four to nine, and the words appear in the lasso’s strip as they are read.</li>
-          <li><b>Your own pen too.</b> Formulas written in the margin with Paper Time’s pen are read as well.</li>
-        </ul>
-        <p data-l="ko">윈도우와 리눅스는 그림 속 인쇄된 수식을 읽고, 손글씨는 아직 읽지 못해요.</p>
-        <p data-l="en">Windows and Linux read printed formulas off a picture, but not handwriting yet.</p>
-      </article>
-    </div>
-  </div>
-</section>
-
-<!-- ───────────────────── 0.9.0 · not only papers ───────────────────────── -->
-<section class="band tone-grey">
-  <div class="band-inner rise">
-    <div class="band-head">
-      <p class="eyebrow" data-l="ko">문서 종류</p>
-      <p class="eyebrow" data-l="en">Kinds of PDF</p>
-      <h2 class="display" data-l="ko">논문, 책, 강의자료,<br>그리고 문서.</h2>
-      <h2 class="display" data-l="en">Papers, books,<br>course material, documents.</h2>
-      <p class="say" data-l="ko">새 PDF에는 무엇인지 한 번 물어봐요. 답에 따라 칸이 바뀌어요.
-        논문은 등록기관에서 서지를 찾고, 책은 <b>출판사와 ISBN</b>을 적고, 강의자료와 문서는 밖에 아무것도 묻지 않아요.</p>
-      <p class="say" data-l="en">A new PDF is asked once what it is, and the fields follow the answer.
-        A paper is looked up with a registrar, a book takes <b>a publisher and an ISBN</b>, and course material and documents are never looked up online.</p>
+      <p class="eyebrow" data-l="ko">읽기</p>
+      <p class="eyebrow" data-l="en">Reading</p>
+      <h2 class="display" data-l="ko">전자책처럼 펼치고,<br>차례로 건너요.</h2>
+      <h2 class="display" data-l="en">Open it like an e-book.<br>Move by the contents.</h2>
+      <p class="say" data-l="ko">책처럼 보기(<span class="key">⌘3</span>)는 인쇄용 여백을 잘라 두 쪽을 화면에 채우고, ←→로 장을 넘겨요.
+        차례(<span class="key">⇧⌘L</span>)는 논문의 절을 읽어 세우고, 제목이 없는 PDF는 쪽 그림으로 펼쳐요. 논문 안에서 찾기는 <span class="key">⌘F</span>예요.</p>
+      <p class="say" data-l="en">Book Layout (<span class="key">⌘3</span>) trims the print margins, fills the screen with two pages and turns them with ← and →.
+        The contents (<span class="key">⇧⌘L</span>) are read from the paper’s own sections; a PDF with no headings opens as a grid of pages. <span class="key">⌘F</span> searches inside the paper.</p>
     </div>
     <div class="duo">
       <article class="cell">
-        <h3 data-l="ko">한 번만 물어봐요</h3>
-        <h3 data-l="en">Asked once</h3>
-        <p data-l="ko">앱이 미리 짐작해 둬서 대개 한 번 누르면 돼요. 답하면 질문이 사라지고, 나중에는 ⋯ 메뉴에서 바꿔요.</p>
-        <p data-l="en">The app guesses first, so it is usually one click. Once answered, the question goes away; change it later in the ⋯ menu.</p>
-        <div class="demo-slot" id="demo-kind"></div>
+        <h3 data-l="ko">책처럼 보기</h3>
+        <h3 data-l="en">Book Layout</h3>
+        <p data-l="ko">여백을 자르면 15인치 화면에 두 쪽이 온전히 들어가요. 다른 논문 앱에는 없는 보기예요. 절 이름을 누르면 그 절로 가요.</p>
+        <p data-l="en">With the margins trimmed, two whole pages fit on a 15-inch screen — a view no other paper reader has. Click a section to go to it.</p>
+        <div class="demo-slot" id="demo-book"></div>
       </article>
       <article class="cell">
         <h3 data-l="ko">차례가 없으면 쪽 그림</h3>
@@ -159,31 +116,6 @@
         <p data-l="ko">스캔한 문서처럼 제목을 찾지 못하면, 차례(<span class="key">⇧⌘L</span>)가 모든 쪽의 그림으로 열려요.</p>
         <p data-l="en">When a PDF has no headings to find, as with a scan, the contents (<span class="key">⇧⌘L</span>) open as thumbnails of every page.</p>
         <div class="demo-slot" id="demo-pages"></div>
-      </article>
-    </div>
-  </div>
-</section>
-
-<!-- ──────────────────────────── reading ────────────────────────────────── -->
-<section class="band" id="read">
-  <div class="band-inner rise">
-    <div class="band-head">
-      <p class="eyebrow" data-l="ko">읽기</p>
-      <p class="eyebrow" data-l="en">Reading</p>
-      <h2 class="display" data-l="ko">두 쪽을 펴고,<br>여백은 잘라요.</h2>
-      <h2 class="display" data-l="en">Two pages open,<br>margins trimmed.</h2>
-      <p class="say" data-l="ko">책처럼 보기(<span class="key">⌘3</span>)는 인쇄용 여백을 잘라 두 쪽을 화면에 채워요.
-        차례는 <span class="key">⇧⌘L</span>, 논문 안에서 찾기는 <span class="key">⌘F</span>예요.</p>
-      <p class="say" data-l="en">Book Layout (<span class="key">⌘3</span>) trims the print margins and fills the screen with two pages.
-        <span class="key">⇧⌘L</span> opens the contents, and <span class="key">⌘F</span> searches inside the paper.</p>
-    </div>
-    <div class="duo one-up">
-      <article class="cell">
-        <h3 data-l="ko">책처럼 보기와 차례</h3>
-        <h3 data-l="en">Book Layout and contents</h3>
-        <p data-l="ko">여백을 자르면 15인치 화면에 두 쪽이 온전히 들어가요. 절 이름을 누르면 그 절로 가요.</p>
-        <p data-l="en">With the margins trimmed, two whole pages fit on a 15-inch screen. Click a section to go to it.</p>
-        <div class="demo-slot" id="demo-book"></div>
       </article>
     </div>
   </div>
@@ -198,9 +130,9 @@
       <h2 class="display" data-l="ko">표시는<br>PDF 파일에 남아요.</h2>
       <h2 class="display" data-l="en">Marks are saved<br>in the PDF.</h2>
       <p class="say" data-l="ko">하이라이트, 밑줄, 펜 글씨, 도형은 모두 표준 PDF 주석이에요. Preview, Acrobat, Zotero, 아이패드에서도 보이고, 앱을 지워도 남아요.
-        저장할 때 원래 글자는 다시 쓰지 않고, 바뀐 것만 파일 끝에 덧붙여요.</p>
+        여기서는 애플 노트처럼 보여요 — 글자는 그 색의 진한 잉크가 되고, 그 밑에 연한 띠가 둥글게 깔려요.</p>
       <p class="say" data-l="en">Highlights, underlines, ink and shapes are all standard PDF annotations. They show in Preview, Acrobat, Zotero and on an iPad, and they stay if you delete the app.
-        Saving never rewrites the original text; only the change is appended to the file.</p>
+        Here they look the way Apple Notes draws them: the words take the colour’s deep ink, with a soft rounded band beneath.</p>
     </div>
     <div class="duo">
       <article class="cell">
@@ -218,6 +150,8 @@
         <div class="demo-slot" id="demo-marks"></div>
       </article>
     </div>
+    <p class="ask" data-l="ko">저장할 때 원본은 한 바이트도 건드리지 않고, 표시만 파일 끝에 덧붙여요. 파일을 통째로 다시 쓰면 TeX 논문의 «ff»가 «!»로 바뀌는 일이 있어서요. 그래서 글자가 안 깨지고, 표시는 어느 리더에서도 보여요.</p>
+    <p class="ask" data-l="en">Saving never touches the original bytes; the marks are appended at the end of the file. Rewriting the whole file is what turns a TeX paper’s “ff” into “!”. So the text stays intact, and the marks show in every reader.</p>
   </div>
 </section>
 
@@ -229,10 +163,10 @@
       <p class="eyebrow" data-l="en">Drawing</p>
       <h2 class="display" data-l="ko">쪽 위에 도형과<br>글 카드를.</h2>
       <h2 class="display" data-l="en">Shapes and cards<br>on the page.</h2>
-      <p class="say" data-l="ko"><span class="key">⇧⌘D</span>로 펜을 들면 도구 줄이 떠요. 네모·화살표·글 카드를 프레임에 담고, 묶고, 오토 레이아웃으로 정렬해요.
-        카드 안의 <code>$…$</code>는 수식으로 조판되고, 그린 것은 모두 PDF 주석으로 저장돼요.</p>
-      <p class="say" data-l="en">Press <span class="key">⇧⌘D</span> and the tool rack appears. Put rectangles, arrows and text cards in frames, group them and align them with auto layout.
-        A <code>$…$</code> in a card is typeset, and everything you draw is saved as PDF annotations.</p>
+      <p class="say" data-l="ko"><span class="key">⇧⌘D</span>로 펜을 들면 Figma의 도구 줄이 떠요. 펜과 형광펜, 네모·동그라미·화살표, 그리고 글 카드예요.
+        카드 안의 <code>$…$</code>는 수식으로 조판되고 글꼴도 고를 수 있어요. 그린 것은 모두 PDF 주석으로 저장돼요.</p>
+      <p class="say" data-l="en">Press <span class="key">⇧⌘D</span> and Figma’s tool rack appears: a pen and a highlighter, rectangles, ellipses and arrows, and text cards.
+        A <code>$…$</code> in a card is typeset and the font is yours to choose. Everything you draw is saved as PDF annotations.</p>
     </div>
     <div class="band-demo" id="demo-draw"></div>
   </div>
@@ -253,8 +187,8 @@
       <article class="cell">
         <h3 data-l="ko">나란히 보기</h3>
         <h3 data-l="en">Side by side</h3>
-        <p data-l="ko"><span class="key">⇧⌘O</span>(열린 문서)는 지금 열린 논문을 보여 줘요. 줄을 창 밖으로 끌면 그 논문이 새 창으로 열려요.</p>
-        <p data-l="en"><span class="key">⇧⌘O</span> (Open Documents) shows the papers you have open. Drag one out of the window to give it a window of its own.</p>
+        <p data-l="ko">같은 논문을 두 칸에 둘 수도 있어요 — 한 칸은 그림, 한 칸은 그 그림을 말하는 글. <span class="key">⇧⌘O</span>(열린 문서)는 지금 열린 논문을 보여 주고, 줄을 창 밖으로 끌면 새 창으로 열려요.</p>
+        <p data-l="en">The same paper can stand in two panes — one at the figure, one at the text that cites it. <span class="key">⇧⌘O</span> (Open Documents) shows the papers you have open; drag one out of the window to give it a window of its own.</p>
         <div class="demo-slot" id="demo-split"></div>
       </article>
       <article class="cell">
@@ -274,12 +208,12 @@
     <div class="band-head">
       <p class="eyebrow" data-l="ko">노트</p>
       <p class="eyebrow" data-l="en">Notes</p>
-      <h2 class="display" data-l="ko">구절을 노트로,<br>쪽수와 함께.</h2>
-      <h2 class="display" data-l="en">Passages into notes,<br>page numbers attached.</h2>
-      <p class="say" data-l="ko">글을 골라 <span class="key">⌘L</span>을 누르면 노트에 인용으로 들어가고, 끝에 쪽수가 붙어요.
-        쪽수를 누르면 논문의 그 줄로 돌아가요. 노트는 평범한 Markdown 파일이에요.</p>
-      <p class="say" data-l="en">Select text and press <span class="key">⌘L</span>: it lands in the note as a quotation with its page number.
-        Click the number to return to that line. Notes are plain Markdown files.</p>
+      <h2 class="display" data-l="ko">읽은 것들이<br>서로 이어져요.</h2>
+      <h2 class="display" data-l="en">What you read<br>joins up.</h2>
+      <p class="say" data-l="ko">글을 골라 <span class="key">⌘L</span>을 누르면 노트에 인용으로 들어가고, 그 구절은 쪽 위에 연하게 칠해져요. 어느 쪽에서 눌러도 반대쪽으로 돌아가요.
+        <code>[[</code>로 노트끼리 잇고, 뒤로(<span class="key">⌥⌘[</span>)로 지나온 길을 되짚어요. 노트는 평범한 Markdown 파일이에요.</p>
+      <p class="say" data-l="en">Select text and press <span class="key">⌘L</span>: it lands in the note as a quotation, and the passage is tinted on the page. Press either side to get back to the other.
+        Link notes with <code>[[</code>, and retrace your steps with Back (<span class="key">⌥⌘[</span>). Notes are plain Markdown files.</p>
     </div>
     <div class="duo">
       <article class="cell">
@@ -300,23 +234,6 @@
   </div>
 </section>
 
-<!-- ──────────────────────────── the draft ──────────────────────────────── -->
-<section class="band tone-dark">
-  <div class="band-inner rise">
-    <div class="band-head">
-      <p class="eyebrow" data-l="ko">쓰기</p>
-      <p class="eyebrow" data-l="en">Writing</p>
-      <h2 class="display" data-l="ko">노트에서<br>원고로.</h2>
-      <h2 class="display" data-l="en">From notes<br>to a manuscript.</h2>
-      <p class="say" data-l="ko">초안도 노트예요. 구절과 노트를 넣고 <span class="key">⇧⌘E</span>를 누르면 구절은 <code>\cite{키}</code>가 되고,
-        인용한 논문만 담은 .bib 파일이 함께 나와요.</p>
-      <p class="say" data-l="en">A draft is a note too. Add passages and notes, press <span class="key">⇧⌘E</span>, and each passage becomes <code>\cite{key}</code>,
-        next to a .bib holding only the papers you cited.</p>
-    </div>
-    <div class="band-demo" id="demo-draft"></div>
-  </div>
-</section>
-
 <!-- ──────────────────────────── searching ──────────────────────────────── -->
 <section class="band">
   <div class="band-inner rise">
@@ -326,9 +243,9 @@
       <h2 class="display" data-l="ko">논문 안의<br>한 줄까지.</h2>
       <h2 class="display" data-l="en">Down to one line<br>inside a paper.</h2>
       <p class="say" data-l="ko"><span class="key">⌘K</span> 한 칸에서 논문·노트·태그·동작을 찾아요. 제목에 없는 말은 본문에서 찾고,
-        뜻이 비슷한 구절도 함께 보여 줘요. 빈칸이면 이어 읽을 논문과 다시 볼 노트를 먼저 보여 줘요.</p>
+        뜻이 비슷한 구절도 함께 보여 줘요 — 맥의 Spotlight처럼, 어디에 적었는지 몰라도 돼요.</p>
       <p class="say" data-l="en">One field, <span class="key">⌘K</span>, finds papers, notes, tags and actions. Words missing from the titles are found in the text,
-        along with passages that mean the same thing. Empty, it suggests what to keep reading and what to revisit.</p>
+        along with passages that mean the same thing — like Spotlight, it does not matter where you wrote it down.</p>
     </div>
     <div class="band-demo" id="demo-search"></div>
   </div>
@@ -374,23 +291,16 @@
       <p class="eyebrow" data-l="en">Everywhere</p>
       <h2 class="display" data-l="ko">맥·윈도우·리눅스에서<br>같은 폴더를.</h2>
       <h2 class="display" data-l="en">One folder on<br>Mac, Windows and Linux.</h2>
-      <p class="say" data-l="ko">표시는 PDF 안에, 라이브러리는 폴더에 있어서 어느 데스크톱에서 열어도 같아요. 계정, 서버, 내보내기가 없어요.</p>
-      <p class="say" data-l="en">Marks live in the PDF and the library is a folder, so it is the same on every desktop. No account, no server, no export.</p>
+      <p class="say" data-l="ko">표시는 PDF 안에, 라이브러리는 폴더에 있어서 어느 데스크톱에서 열어도 같아요. 클라우드 폴더면 한쪽의 표시가 몇 초 뒤 다른 쪽에 보여요. 계정, 서버, 내보내기가 없어요.</p>
+      <p class="say" data-l="en">Marks live in the PDF and the library is a folder, so it is the same on every desktop. In a cloud folder, a mark made on one machine shows on the other seconds later. No account, no server, no export.</p>
     </div>
-    <div class="duo">
+    <div class="duo one-up">
       <article class="cell">
         <h3 data-l="ko">세 데스크톱, 폴더 하나</h3>
         <h3 data-l="en">Three desktops, one folder</h3>
         <p data-l="ko">창 단추만 데스크톱마다 달라요. 나머지는 모두 같은 모양으로 그려요.</p>
         <p data-l="en">Only the window buttons differ by desktop. Everything else looks the same.</p>
         <div class="demo-slot" id="demo-desktops"></div>
-      </article>
-      <article class="cell">
-        <h3 data-l="ko">기기 사이로 바로</h3>
-        <h3 data-l="en">Across devices, right away</h3>
-        <p data-l="ko">맥·아이패드·아이폰 사이에서는 표시가 몇 KB짜리 기록으로 먼저 건너가고, PDF는 뒤따라와요.</p>
-        <p data-l="en">Between Mac, iPad and iPhone, a mark crosses first as a record of a few kilobytes; the PDF follows.</p>
-        <div class="demo-slot" id="demo-devices"></div>
       </article>
     </div>
   </div>
@@ -420,8 +330,8 @@
       <article class="cell">
         <h3 data-l="ko">Zotero와 함께 쓰기</h3>
         <h3 data-l="en">Alongside Zotero</h3>
-        <p data-l="ko">라이브러리가 폴더라서 Zotero의 <code>storage</code> 폴더를 그대로 열 수 있어요. 수집과 인용 관리는 Zotero에서, 읽기와 쓰기는 Paper Time에서 하면 돼요.</p>
-        <p data-l="en">Because a library is a folder, it can open Zotero’s <code>storage</code> folder as it is. Collect and manage citations in Zotero; read and write in Paper Time.</p>
+        <p data-l="ko">라이브러리가 폴더라서 Zotero의 <code>storage</code> 폴더를 그대로 열 수 있어요. 아예 옮겨 오려면 Zotero나 Bookends에서 내보낸 .bib·.ris와 PDF 폴더를 «기존 라이브러리 가져오기…»에 주면 기록과 PDF가 짝을 지어 들어와요.</p>
+        <p data-l="en">Because a library is a folder, it can open Zotero’s <code>storage</code> folder as it is. To move in for good, give Import Existing Library… the .bib or .ris you exported from Zotero or Bookends and the folder of PDFs; records and files come in paired.</p>
       </article>
     </div>
   </div>
@@ -454,14 +364,14 @@
       <div class="tile">
         <h3 data-l="ko">어느 데스크톱에서나</h3>
         <h3 data-l="en">On every desktop</h3>
-        <p data-l="ko">맥·윈도우·리눅스·아이패드·아이폰이 같은 폴더를 열어요. 클라우드 폴더 하나면 되고, 계정도 서버도 없어요.</p>
-        <p data-l="en">Mac, Windows, Linux, iPad and iPhone open the same folder. A cloud folder is all it takes, with no account and no server.</p>
+        <p data-l="ko">맥·윈도우·리눅스가 같은 폴더를 열어요. 클라우드 폴더 하나면 되고, 계정도 서버도 없어요.</p>
+        <p data-l="en">Mac, Windows and Linux open the same folder. A cloud folder is all it takes, with no account and no server.</p>
       </div>
       <div class="tile">
         <h3 data-l="ko">클라우드 LLM 없음</h3>
         <h3 data-l="en">No cloud LLM</h3>
-        <p data-l="ko">모델은 모두 이 기기에서 돌아요. 손글씨를 읽는 모델도요. 읽는 논문은 어디로도 올라가지 않아요.</p>
-        <p data-l="en">Every model runs on your device, the handwriting model included. The papers you read are never uploaded.</p>
+        <p data-l="ko">수식을 읽는 모델도, 뜻으로 찾는 모델도 이 기기에서 돌아요. 읽는 논문은 어디로도 올라가지 않아요.</p>
+        <p data-l="en">The model that reads formulas and the one that searches by meaning both run on your device. The papers you read are never uploaded.</p>
       </div>
     </div>
   </div>
@@ -564,16 +474,12 @@
     <p class="hint" style="margin-top:16px" data-l="ko">
       <b>macOS 14 Sonoma 이상 · Apple Silicon.</b>
       기기 안의 모델로 제목과 저자를 읽는 것만 macOS 26이 필요해요. 그 아래에서는 조판 규칙으로 읽어요.
-      손글씨 읽기는 설정에서 모델을 한 번 받아야 해요(6 GB 또는 3 GB).
       14에 맞춰 짓고 확인했어요. 다만 진짜 Sonoma 맥에서 켜 본 적은 아직 없어요 — 그런 맥이 있으면 어땠는지 알려주세요.
-      아이패드·아이폰 앱은 아직 App Store에 없어요. 소스를 받아 Xcode에서 자기 기기로 빌드하면 무료 계정으로도 쓸 수 있어요.
     </p>
     <p class="hint" style="margin-top:16px" data-l="en">
       <b>macOS 14 Sonoma or later · Apple Silicon.</b>
       Only the on-device model that reads titles and authors needs macOS 26. Below that, typesetting rules do the reading.
-      Reading handwriting needs a one-time model download in Settings (6 GB or 3 GB).
       Paper Time is built and checked for 14. No one has launched it on a real Sonoma Mac yet — if you have one, say how it went.
-      The iPad and iPhone apps are not on the App Store yet. Download the source, build onto your own device from Xcode, and a free account covers it.
     </p>
     </div><!-- /mac -->
 
