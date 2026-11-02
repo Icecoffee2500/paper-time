@@ -2,11 +2,120 @@
   "repo": "Icecoffee2500/paper-time",
   "releases": [
     {
+      "version": "0.9.36",
+      "date": "2026-11-02T06:57:36Z",
+      "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.36/Paper.Time.0.9.36.dmg",
+      "size": 97999201,
+      "downloads": 0,
+      "builds": {
+        "mac": [
+          {
+            "label": "디스크 이미지",
+            "label_en": "Disk image",
+            "arch": "Apple Silicon",
+            "arch_en": "Apple Silicon",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.36/Paper.Time.0.9.36.dmg",
+            "size": 97999201,
+            "downloads": 0
+          }
+        ],
+        "windows": [
+          {
+            "label": "설치본",
+            "label_en": "Installer",
+            "arch": "64비트 · ARM",
+            "arch_en": "64-bit and ARM",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.36/Paper.Time.Setup.0.9.36.exe",
+            "size": 311182485,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "64비트",
+            "arch_en": "64-bit",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.36/Paper.Time-0.9.36-win.zip",
+            "size": 185664951,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.36/Paper.Time-0.9.36-arm64-win.zip",
+            "size": 190612627,
+            "downloads": 0
+          }
+        ],
+        "linux": [
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.36/Paper.Time-0.9.36-x86_64.AppImage",
+            "size": 183898390,
+            "downloads": 0
+          },
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.36/Paper.Time-0.9.36-arm64.AppImage",
+            "size": 184280877,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.36/paper-time-0.9.36.tar.gz",
+            "size": 176779169,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.36/paper-time-0.9.36-arm64.tar.gz",
+            "size": 181275957,
+            "downloads": 0
+          }
+        ]
+      },
+      "note": "확대한 쪽에서 형광펜 글자가 흐리게 보이던 것을 고쳤어요.",
+      "note_en": "Highlighted words on a zoomed page are no longer blurry.",
+      "stable": false,
+      "notes": {
+        "note": {
+          "ko": "확대한 쪽에서 형광펜 글자가 흐리게 보이던 것을 고쳤어요.",
+          "en": "Highlighted words on a zoomed page are no longer blurry."
+        },
+        "added": [],
+        "fixed": [
+          {
+            "title": {
+              "ko": "확대하면 흐려지던 형광펜 글자",
+              "en": "Blurry highlighted words when zoomed"
+            },
+            "detail": {
+              "ko": "쪽을 확대하면 형광펜 아래의 글자가 사진처럼 흐려졌어요. 확대는 쪽을 늘여 보이는 것이라 글자 그림이 함께 늘어났던 거예요. 이제 확대 배율에 맞춰 다시 그려서 어느 배율에서도 주변 글자만큼 선명해요.",
+              "en": "Words under a highlight went soft on a zoomed page: the zoom stretches the page, and the picture of the words stretched with it. The words are now drawn again at the zoom, as sharp as the words around them at any scale."
+            }
+          }
+        ]
+      }
+    },
+    {
       "version": "0.9.35",
       "date": "2026-11-02T06:26:44Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.35/Paper.Time.0.9.35.dmg",
       "size": 97991585,
-      "downloads": 0,
+      "downloads": 8,
       "builds": {
         "mac": [
           {
@@ -16,7 +125,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.35/Paper.Time.0.9.35.dmg",
             "size": 97991585,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "windows": [
@@ -27,7 +136,7 @@
             "arch_en": "64-bit and ARM",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.35/Paper.Time.Setup.0.9.35.exe",
             "size": 311180833,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -36,7 +145,7 @@
             "arch_en": "64-bit",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.35/Paper.Time-0.9.35-win.zip",
             "size": 185665010,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -45,7 +154,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.35/Paper.Time-0.9.35-arm64-win.zip",
             "size": 190612688,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "linux": [
@@ -56,7 +165,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.35/Paper.Time-0.9.35-x86_64.AppImage",
             "size": 183898462,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "AppImage",
@@ -65,7 +174,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.35/Paper.Time-0.9.35-arm64.AppImage",
             "size": 184280946,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -74,7 +183,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.35/paper-time-0.9.35.tar.gz",
             "size": 176778815,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -83,7 +192,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.35/paper-time-0.9.35-arm64.tar.gz",
             "size": 181275287,
-            "downloads": 0
+            "downloads": 1
           }
         ]
       },
@@ -176,7 +285,7 @@
       "date": "2026-10-09T07:44:21Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.33/Paper.Time.0.9.33.dmg",
       "size": 97944595,
-      "downloads": 3,
+      "downloads": 11,
       "builds": {
         "mac": [
           {
@@ -186,7 +295,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.33/Paper.Time.0.9.33.dmg",
             "size": 97944595,
-            "downloads": 2
+            "downloads": 3
           }
         ],
         "windows": [
@@ -197,7 +306,7 @@
             "arch_en": "64-bit and ARM",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.33/Paper.Time.Setup.0.9.33.exe",
             "size": 311156542,
-            "downloads": 1
+            "downloads": 2
           },
           {
             "label": "압축본 — 설치 없이",
@@ -206,7 +315,7 @@
             "arch_en": "64-bit",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.33/Paper.Time-0.9.33-win.zip",
             "size": 185649905,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -215,7 +324,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.33/Paper.Time-0.9.33-arm64-win.zip",
             "size": 190597589,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "linux": [
@@ -226,7 +335,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.33/Paper.Time-0.9.33-x86_64.AppImage",
             "size": 183869793,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "AppImage",
@@ -235,7 +344,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.33/Paper.Time-0.9.33-arm64.AppImage",
             "size": 184256397,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -244,7 +353,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.33/paper-time-0.9.33.tar.gz",
             "size": 176760632,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -253,7 +362,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.33/paper-time-0.9.33-arm64.tar.gz",
             "size": 181257412,
-            "downloads": 0
+            "downloads": 1
           }
         ]
       },
@@ -305,7 +414,7 @@
       "date": "2026-10-06T18:03:24Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.31/Paper.Time.0.9.31.dmg",
       "size": 97915824,
-      "downloads": 6,
+      "downloads": 14,
       "builds": {
         "mac": [
           {
@@ -315,7 +424,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.31/Paper.Time.0.9.31.dmg",
             "size": 97915824,
-            "downloads": 5
+            "downloads": 6
           }
         ],
         "windows": [
@@ -326,7 +435,7 @@
             "arch_en": "64-bit and ARM",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.31/Paper.Time.Setup.0.9.31.exe",
             "size": 311154978,
-            "downloads": 1
+            "downloads": 2
           },
           {
             "label": "압축본 — 설치 없이",
@@ -335,7 +444,7 @@
             "arch_en": "64-bit",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.31/Paper.Time-0.9.31-win.zip",
             "size": 185646413,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -344,7 +453,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.31/Paper.Time-0.9.31-arm64-win.zip",
             "size": 190594089,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "linux": [
@@ -355,7 +464,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.31/Paper.Time-0.9.31-x86_64.AppImage",
             "size": 183865718,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "AppImage",
@@ -364,7 +473,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.31/Paper.Time-0.9.31-arm64.AppImage",
             "size": 184252298,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -373,7 +482,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.31/paper-time-0.9.31.tar.gz",
             "size": 176762693,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -382,7 +491,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.31/paper-time-0.9.31-arm64.tar.gz",
             "size": 181259302,
-            "downloads": 0
+            "downloads": 1
           }
         ]
       },
@@ -454,7 +563,7 @@
       "date": "2026-10-06T15:06:32Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.30/Paper.Time.0.9.30.dmg",
       "size": 97904130,
-      "downloads": 0,
+      "downloads": 8,
       "builds": {
         "mac": [
           {
@@ -464,7 +573,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.30/Paper.Time.0.9.30.dmg",
             "size": 97904130,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "windows": [
@@ -475,7 +584,7 @@
             "arch_en": "64-bit and ARM",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.30/Paper.Time.Setup.0.9.30.exe",
             "size": 311147491,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -484,7 +593,7 @@
             "arch_en": "64-bit",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.30/Paper.Time-0.9.30-win.zip",
             "size": 185643077,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -493,7 +602,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.30/Paper.Time-0.9.30-arm64-win.zip",
             "size": 190590763,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "linux": [
@@ -504,7 +613,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.30/Paper.Time-0.9.30-x86_64.AppImage",
             "size": 183865787,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "AppImage",
@@ -513,7 +622,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.30/Paper.Time-0.9.30-arm64.AppImage",
             "size": 184248270,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -522,7 +631,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.30/paper-time-0.9.30.tar.gz",
             "size": 176756297,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -531,7 +640,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.30/paper-time-0.9.30-arm64.tar.gz",
             "size": 181252457,
-            "downloads": 0
+            "downloads": 1
           }
         ]
       },
@@ -563,7 +672,7 @@
       "date": "2026-10-06T12:02:33Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.29/Paper.Time.0.9.29.dmg",
       "size": 97886466,
-      "downloads": 1,
+      "downloads": 9,
       "builds": {
         "mac": [
           {
@@ -573,7 +682,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.29/Paper.Time.0.9.29.dmg",
             "size": 97886466,
-            "downloads": 1
+            "downloads": 2
           }
         ],
         "windows": [
@@ -584,7 +693,7 @@
             "arch_en": "64-bit and ARM",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.29/Paper.Time.Setup.0.9.29.exe",
             "size": 311143446,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -593,7 +702,7 @@
             "arch_en": "64-bit",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.29/Paper.Time-0.9.29-win.zip",
             "size": 185640270,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -602,7 +711,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.29/Paper.Time-0.9.29-arm64-win.zip",
             "size": 190587946,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "linux": [
@@ -613,7 +722,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.29/Paper.Time-0.9.29-x86_64.AppImage",
             "size": 183865703,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "AppImage",
@@ -622,7 +731,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.29/Paper.Time-0.9.29-arm64.AppImage",
             "size": 184252278,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -631,7 +740,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.29/paper-time-0.9.29.tar.gz",
             "size": 176754039,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -640,7 +749,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.29/paper-time-0.9.29-arm64.tar.gz",
             "size": 181250313,
-            "downloads": 0
+            "downloads": 1
           }
         ]
       },
@@ -683,7 +792,7 @@
       "date": "2026-10-06T09:02:06Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.28/Paper.Time.0.9.28.dmg",
       "size": 97858220,
-      "downloads": 0,
+      "downloads": 8,
       "builds": {
         "mac": [
           {
@@ -693,7 +802,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.28/Paper.Time.0.9.28.dmg",
             "size": 97858220,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "windows": [
@@ -704,7 +813,7 @@
             "arch_en": "64-bit and ARM",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.28/Paper.Time.Setup.0.9.28.exe",
             "size": 311137396,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -713,7 +822,7 @@
             "arch_en": "64-bit",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.28/Paper.Time-0.9.28-win.zip",
             "size": 185636818,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -722,7 +831,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.28/Paper.Time-0.9.28-arm64-win.zip",
             "size": 190584494,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "linux": [
@@ -733,7 +842,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.28/Paper.Time-0.9.28-x86_64.AppImage",
             "size": 183861595,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "AppImage",
@@ -742,7 +851,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.28/Paper.Time-0.9.28-arm64.AppImage",
             "size": 184248173,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -751,7 +860,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.28/paper-time-0.9.28.tar.gz",
             "size": 176750012,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -760,7 +869,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.28/paper-time-0.9.28-arm64.tar.gz",
             "size": 181246355,
-            "downloads": 0
+            "downloads": 1
           }
         ]
       },
@@ -813,7 +922,7 @@
       "date": "2026-10-06T05:46:16Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.27/Paper.Time.0.9.27.dmg",
       "size": 97719177,
-      "downloads": 1,
+      "downloads": 9,
       "builds": {
         "mac": [
           {
@@ -823,7 +932,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.27/Paper.Time.0.9.27.dmg",
             "size": 97719177,
-            "downloads": 1
+            "downloads": 2
           }
         ],
         "windows": [
@@ -834,7 +943,7 @@
             "arch_en": "64-bit and ARM",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.27/Paper.Time.Setup.0.9.27.exe",
             "size": 311130527,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -843,7 +952,7 @@
             "arch_en": "64-bit",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.27/Paper.Time-0.9.27-win.zip",
             "size": 185632491,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -852,7 +961,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.27/Paper.Time-0.9.27-arm64-win.zip",
             "size": 190580168,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "linux": [
@@ -863,7 +972,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.27/Paper.Time-0.9.27-x86_64.AppImage",
             "size": 183853387,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "AppImage",
@@ -872,7 +981,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.27/Paper.Time-0.9.27-arm64.AppImage",
             "size": 184239978,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -881,7 +990,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.27/paper-time-0.9.27.tar.gz",
             "size": 176748752,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -890,7 +999,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.27/paper-time-0.9.27-arm64.tar.gz",
             "size": 181245021,
-            "downloads": 0
+            "downloads": 1
           }
         ]
       },
@@ -922,7 +1031,7 @@
       "date": "2026-10-06T04:14:53Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.26/Paper.Time.0.9.26.dmg",
       "size": 98083281,
-      "downloads": 2,
+      "downloads": 10,
       "builds": {
         "mac": [
           {
@@ -932,7 +1041,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.26/Paper.Time.0.9.26.dmg",
             "size": 98083281,
-            "downloads": 1
+            "downloads": 2
           }
         ],
         "windows": [
@@ -943,7 +1052,7 @@
             "arch_en": "64-bit and ARM",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.26/Paper.Time.Setup.0.9.26.exe",
             "size": 311128643,
-            "downloads": 1
+            "downloads": 2
           },
           {
             "label": "압축본 — 설치 없이",
@@ -952,7 +1061,7 @@
             "arch_en": "64-bit",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.26/Paper.Time-0.9.26-win.zip",
             "size": 185632022,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -961,7 +1070,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.26/Paper.Time-0.9.26-arm64-win.zip",
             "size": 190579701,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "linux": [
@@ -972,7 +1081,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.26/Paper.Time-0.9.26-x86_64.AppImage",
             "size": 183853383,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "AppImage",
@@ -981,7 +1090,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.26/Paper.Time-0.9.26-arm64.AppImage",
             "size": 184239975,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -990,7 +1099,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.26/paper-time-0.9.26.tar.gz",
             "size": 176746470,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -999,7 +1108,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.26/paper-time-0.9.26-arm64.tar.gz",
             "size": 181243212,
-            "downloads": 0
+            "downloads": 1
           }
         ]
       },
@@ -1052,7 +1161,7 @@
       "date": "2026-10-06T02:45:42Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.25/Paper.Time.0.9.25.dmg",
       "size": 97616635,
-      "downloads": 1,
+      "downloads": 9,
       "builds": {
         "mac": [
           {
@@ -1062,7 +1171,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.25/Paper.Time.0.9.25.dmg",
             "size": 97616635,
-            "downloads": 1
+            "downloads": 2
           }
         ],
         "windows": [
@@ -1073,7 +1182,7 @@
             "arch_en": "64-bit and ARM",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.25/Paper.Time.Setup.0.9.25.exe",
             "size": 310991452,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -1082,7 +1191,7 @@
             "arch_en": "64-bit",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.25/Paper.Time-0.9.25-win.zip",
             "size": 185545190,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -1091,7 +1200,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.25/Paper.Time-0.9.25-arm64-win.zip",
             "size": 190492868,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "linux": [
@@ -1102,7 +1211,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.25/Paper.Time-0.9.25-x86_64.AppImage",
             "size": 183763251,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "AppImage",
@@ -1111,7 +1220,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.25/Paper.Time-0.9.25-arm64.AppImage",
             "size": 184149808,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -1120,7 +1229,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.25/paper-time-0.9.25.tar.gz",
             "size": 176657323,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -1129,7 +1238,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.25/paper-time-0.9.25-arm64.tar.gz",
             "size": 181153564,
-            "downloads": 0
+            "downloads": 1
           }
         ]
       },
@@ -1181,7 +1290,7 @@
       "date": "2026-10-06T01:34:07Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.24/Paper.Time.0.9.24.dmg",
       "size": 97531988,
-      "downloads": 0,
+      "downloads": 8,
       "builds": {
         "mac": [
           {
@@ -1191,7 +1300,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.24/Paper.Time.0.9.24.dmg",
             "size": 97531988,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "windows": [
@@ -1202,7 +1311,7 @@
             "arch_en": "64-bit and ARM",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.24/Paper.Time.Setup.0.9.24.exe",
             "size": 310990722,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -1211,7 +1320,7 @@
             "arch_en": "64-bit",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.24/Paper.Time-0.9.24-win.zip",
             "size": 185544376,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -1220,7 +1329,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.24/Paper.Time-0.9.24-arm64-win.zip",
             "size": 190492059,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "linux": [
@@ -1231,7 +1340,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.24/Paper.Time-0.9.24-x86_64.AppImage",
             "size": 183763118,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "AppImage",
@@ -1240,7 +1349,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.24/Paper.Time-0.9.24-arm64.AppImage",
             "size": 184149705,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -1249,7 +1358,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.24/paper-time-0.9.24.tar.gz",
             "size": 176658114,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -1258,7 +1367,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.24/paper-time-0.9.24-arm64.tar.gz",
             "size": 181152265,
-            "downloads": 0
+            "downloads": 1
           }
         ]
       },
@@ -1361,7 +1470,7 @@
       "date": "2026-10-05T06:59:57Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.23/Paper.Time.0.9.23.dmg",
       "size": 97600718,
-      "downloads": 0,
+      "downloads": 8,
       "builds": {
         "mac": [
           {
@@ -1371,7 +1480,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.23/Paper.Time.0.9.23.dmg",
             "size": 97600718,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "windows": [
@@ -1382,7 +1491,7 @@
             "arch_en": "64-bit and ARM",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.23/Paper.Time.Setup.0.9.23.exe",
             "size": 310986908,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -1391,7 +1500,7 @@
             "arch_en": "64-bit",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.23/Paper.Time-0.9.23-win.zip",
             "size": 185540968,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -1400,7 +1509,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.23/Paper.Time-0.9.23-arm64-win.zip",
             "size": 190488647,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "linux": [
@@ -1411,7 +1520,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.23/Paper.Time-0.9.23-x86_64.AppImage",
             "size": 183759189,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "AppImage",
@@ -1420,7 +1529,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.23/Paper.Time-0.9.23-arm64.AppImage",
             "size": 184145794,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -1429,7 +1538,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.23/paper-time-0.9.23.tar.gz",
             "size": 176652264,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -1438,7 +1547,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.23/paper-time-0.9.23-arm64.tar.gz",
             "size": 181148761,
-            "downloads": 0
+            "downloads": 1
           }
         ]
       },
@@ -1521,7 +1630,7 @@
       "date": "2026-10-05T05:11:36Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.22/Paper.Time.0.9.22.dmg",
       "size": 87068029,
-      "downloads": 0,
+      "downloads": 8,
       "builds": {
         "mac": [
           {
@@ -1531,7 +1640,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.22/Paper.Time.0.9.22.dmg",
             "size": 87068029,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "windows": [
@@ -1542,7 +1651,7 @@
             "arch_en": "64-bit and ARM",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.22/Paper.Time.Setup.0.9.22.exe",
             "size": 310981719,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -1551,7 +1660,7 @@
             "arch_en": "64-bit",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.22/Paper.Time-0.9.22-win.zip",
             "size": 185538881,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -1560,7 +1669,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.22/Paper.Time-0.9.22-arm64-win.zip",
             "size": 190486555,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "linux": [
@@ -1571,7 +1680,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.22/Paper.Time-0.9.22-x86_64.AppImage",
             "size": 183755051,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "AppImage",
@@ -1580,7 +1689,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.22/Paper.Time-0.9.22-arm64.AppImage",
             "size": 184141651,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -1589,7 +1698,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.22/paper-time-0.9.22.tar.gz",
             "size": 176651862,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -1598,7 +1707,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.22/paper-time-0.9.22-arm64.tar.gz",
             "size": 181147888,
-            "downloads": 0
+            "downloads": 1
           }
         ]
       },
@@ -1680,7 +1789,7 @@
       "date": "2026-10-05T01:29:21Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.21/Paper.Time.0.9.21.dmg",
       "size": 87047832,
-      "downloads": 1,
+      "downloads": 9,
       "builds": {
         "mac": [
           {
@@ -1690,7 +1799,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.21/Paper.Time.0.9.21.dmg",
             "size": 87047832,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "windows": [
@@ -1701,7 +1810,7 @@
             "arch_en": "64-bit and ARM",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.21/Paper.Time.Setup.0.9.21.exe",
             "size": 310978626,
-            "downloads": 1
+            "downloads": 2
           },
           {
             "label": "압축본 — 설치 없이",
@@ -1710,7 +1819,7 @@
             "arch_en": "64-bit",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.21/Paper.Time-0.9.21-win.zip",
             "size": 185535280,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -1719,7 +1828,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.21/Paper.Time-0.9.21-arm64-win.zip",
             "size": 190482959,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "linux": [
@@ -1730,7 +1839,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.21/Paper.Time-0.9.21-x86_64.AppImage",
             "size": 183750908,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "AppImage",
@@ -1739,7 +1848,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.21/Paper.Time-0.9.21-arm64.AppImage",
             "size": 184137481,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -1748,7 +1857,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.21/paper-time-0.9.21.tar.gz",
             "size": 176649213,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -1757,7 +1866,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.21/paper-time-0.9.21-arm64.tar.gz",
             "size": 181146470,
-            "downloads": 0
+            "downloads": 1
           }
         ]
       },
@@ -1820,7 +1929,7 @@
       "date": "2026-10-04T17:32:41Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.20/Paper.Time.0.9.20.dmg",
       "size": 87053521,
-      "downloads": 0,
+      "downloads": 8,
       "builds": {
         "mac": [
           {
@@ -1830,7 +1939,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.20/Paper.Time.0.9.20.dmg",
             "size": 87053521,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "windows": [
@@ -1841,7 +1950,7 @@
             "arch_en": "64-bit and ARM",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.20/Paper.Time.Setup.0.9.20.exe",
             "size": 310961864,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -1850,7 +1959,7 @@
             "arch_en": "64-bit",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.20/Paper.Time-0.9.20-win.zip",
             "size": 185529713,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -1859,7 +1968,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.20/Paper.Time-0.9.20-arm64-win.zip",
             "size": 190477398,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "linux": [
@@ -1870,7 +1979,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.20/Paper.Time-0.9.20-x86_64.AppImage",
             "size": 183738431,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "AppImage",
@@ -1879,7 +1988,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.20/Paper.Time-0.9.20-arm64.AppImage",
             "size": 184125020,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -1888,7 +1997,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.20/paper-time-0.9.20.tar.gz",
             "size": 176642963,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -1897,7 +2006,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.20/paper-time-0.9.20-arm64.tar.gz",
             "size": 181139499,
-            "downloads": 0
+            "downloads": 1
           }
         ]
       },
@@ -1990,7 +2099,7 @@
       "date": "2026-10-02T14:35:46Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.19/Paper.Time.0.9.19.dmg",
       "size": 53880120,
-      "downloads": 2,
+      "downloads": 10,
       "builds": {
         "mac": [
           {
@@ -2000,7 +2109,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.19/Paper.Time.0.9.19.dmg",
             "size": 53880120,
-            "downloads": 1
+            "downloads": 2
           }
         ],
         "windows": [
@@ -2011,7 +2120,7 @@
             "arch_en": "64-bit and ARM",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.19/Paper.Time.Setup.0.9.19.exe",
             "size": 265733732,
-            "downloads": 1
+            "downloads": 2
           },
           {
             "label": "압축본 — 설치 없이",
@@ -2020,7 +2129,7 @@
             "arch_en": "64-bit",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.19/Paper.Time-0.9.19-win.zip",
             "size": 163006932,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -2029,7 +2138,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.19/Paper.Time-0.9.19-arm64-win.zip",
             "size": 167954610,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "linux": [
@@ -2040,7 +2149,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.19/Paper.Time-0.9.19-x86_64.AppImage",
             "size": 160542319,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "AppImage",
@@ -2049,7 +2158,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.19/Paper.Time-0.9.19-arm64.AppImage",
             "size": 160924729,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -2058,7 +2167,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.19/paper-time-0.9.19.tar.gz",
             "size": 154136038,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -2067,7 +2176,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.19/paper-time-0.9.19-arm64.tar.gz",
             "size": 158631195,
-            "downloads": 0
+            "downloads": 1
           }
         ]
       },
@@ -2150,7 +2259,7 @@
       "date": "2026-10-01T11:59:39Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.18/Paper.Time.0.9.18.dmg",
       "size": 53953633,
-      "downloads": 2,
+      "downloads": 10,
       "builds": {
         "mac": [
           {
@@ -2160,7 +2269,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.18/Paper.Time.0.9.18.dmg",
             "size": 53953633,
-            "downloads": 2
+            "downloads": 3
           }
         ],
         "windows": [
@@ -2171,7 +2280,7 @@
             "arch_en": "64-bit and ARM",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.18/Paper.Time.Setup.0.9.18.exe",
             "size": 265731712,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -2180,7 +2289,7 @@
             "arch_en": "64-bit",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.18/Paper.Time-0.9.18-win.zip",
             "size": 163002873,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -2189,7 +2298,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.18/Paper.Time-0.9.18-arm64-win.zip",
             "size": 167950561,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "linux": [
@@ -2200,7 +2309,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.18/Paper.Time-0.9.18-x86_64.AppImage",
             "size": 160542179,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "AppImage",
@@ -2209,7 +2318,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.18/Paper.Time-0.9.18-arm64.AppImage",
             "size": 160924580,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -2218,7 +2327,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.18/paper-time-0.9.18.tar.gz",
             "size": 154129669,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -2227,7 +2336,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.18/paper-time-0.9.18-arm64.tar.gz",
             "size": 158626192,
-            "downloads": 0
+            "downloads": 1
           }
         ]
       },
@@ -2310,7 +2419,7 @@
       "date": "2026-09-30T09:25:45Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.17/Paper.Time.0.9.17.dmg",
       "size": 53808287,
-      "downloads": 4,
+      "downloads": 12,
       "builds": {
         "mac": [
           {
@@ -2320,7 +2429,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.17/Paper.Time.0.9.17.dmg",
             "size": 53808287,
-            "downloads": 3
+            "downloads": 4
           }
         ],
         "windows": [
@@ -2331,7 +2440,7 @@
             "arch_en": "64-bit and ARM",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.17/Paper.Time.Setup.0.9.17.exe",
             "size": 265716020,
-            "downloads": 1
+            "downloads": 2
           },
           {
             "label": "압축본 — 설치 없이",
@@ -2340,7 +2449,7 @@
             "arch_en": "64-bit",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.17/Paper.Time-0.9.17-win.zip",
             "size": 162995877,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -2349,7 +2458,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.17/Paper.Time-0.9.17-arm64-win.zip",
             "size": 167943557,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "linux": [
@@ -2360,7 +2469,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.17/Paper.Time-0.9.17-x86_64.AppImage",
             "size": 160525612,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "AppImage",
@@ -2369,7 +2478,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.17/Paper.Time-0.9.17-arm64.AppImage",
             "size": 160908038,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -2378,7 +2487,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.17/paper-time-0.9.17.tar.gz",
             "size": 154122070,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -2387,7 +2496,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.17/paper-time-0.9.17-arm64.tar.gz",
             "size": 158618358,
-            "downloads": 0
+            "downloads": 1
           }
         ]
       },
@@ -2489,7 +2598,7 @@
       "date": "2026-09-30T02:17:10Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.16/Paper.Time.0.9.16.dmg",
       "size": 53839126,
-      "downloads": 3,
+      "downloads": 11,
       "builds": {
         "mac": [
           {
@@ -2499,7 +2608,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.16/Paper.Time.0.9.16.dmg",
             "size": 53839126,
-            "downloads": 2
+            "downloads": 3
           }
         ],
         "windows": [
@@ -2510,7 +2619,7 @@
             "arch_en": "64-bit and ARM",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.16/Paper.Time.Setup.0.9.16.exe",
             "size": 265691748,
-            "downloads": 1
+            "downloads": 2
           },
           {
             "label": "압축본 — 설치 없이",
@@ -2519,7 +2628,7 @@
             "arch_en": "64-bit",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.16/Paper.Time-0.9.16-win.zip",
             "size": 162982609,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -2528,7 +2637,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.16/Paper.Time-0.9.16-arm64-win.zip",
             "size": 167930286,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "linux": [
@@ -2539,7 +2648,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.16/Paper.Time-0.9.16-x86_64.AppImage",
             "size": 160505291,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "AppImage",
@@ -2548,7 +2657,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.16/Paper.Time-0.9.16-arm64.AppImage",
             "size": 160887699,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -2557,7 +2666,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.16/paper-time-0.9.16.tar.gz",
             "size": 154109461,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -2566,7 +2675,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.16/paper-time-0.9.16-arm64.tar.gz",
             "size": 158605815,
-            "downloads": 0
+            "downloads": 1
           }
         ]
       },
@@ -2608,7 +2717,7 @@
       "date": "2026-09-29T17:00:53Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.15/Paper.Time.0.9.15.dmg",
       "size": 53728640,
-      "downloads": 1,
+      "downloads": 9,
       "builds": {
         "mac": [
           {
@@ -2618,7 +2727,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.15/Paper.Time.0.9.15.dmg",
             "size": 53728640,
-            "downloads": 1
+            "downloads": 2
           }
         ],
         "windows": [
@@ -2629,7 +2738,7 @@
             "arch_en": "64-bit and ARM",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.15/Paper.Time.Setup.0.9.15.exe",
             "size": 265687992,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -2638,7 +2747,7 @@
             "arch_en": "64-bit",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.15/Paper.Time-0.9.15-win.zip",
             "size": 162980879,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -2647,7 +2756,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.15/Paper.Time-0.9.15-arm64-win.zip",
             "size": 167928558,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "linux": [
@@ -2658,7 +2767,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.15/Paper.Time-0.9.15-x86_64.AppImage",
             "size": 160501176,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "AppImage",
@@ -2667,7 +2776,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.15/Paper.Time-0.9.15-arm64.AppImage",
             "size": 160887666,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -2676,7 +2785,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.15/paper-time-0.9.15.tar.gz",
             "size": 154106993,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -2685,7 +2794,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.15/paper-time-0.9.15-arm64.tar.gz",
             "size": 158604171,
-            "downloads": 0
+            "downloads": 1
           }
         ]
       },
@@ -2728,7 +2837,7 @@
       "date": "2026-09-28T11:12:30Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.14/Paper.Time.0.9.14.dmg",
       "size": 52732724,
-      "downloads": 3,
+      "downloads": 11,
       "builds": {
         "mac": [
           {
@@ -2738,7 +2847,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.14/Paper.Time.0.9.14.dmg",
             "size": 52732724,
-            "downloads": 1
+            "downloads": 2
           }
         ],
         "windows": [
@@ -2749,7 +2858,7 @@
             "arch_en": "64-bit and ARM",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.14/Paper.Time.Setup.0.9.14.exe",
             "size": 265611763,
-            "downloads": 2
+            "downloads": 3
           },
           {
             "label": "압축본 — 설치 없이",
@@ -2758,7 +2867,7 @@
             "arch_en": "64-bit",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.14/Paper.Time-0.9.14-win.zip",
             "size": 162930949,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -2767,7 +2876,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.14/Paper.Time-0.9.14-arm64-win.zip",
             "size": 167878629,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "linux": [
@@ -2778,7 +2887,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.14/Paper.Time-0.9.14-x86_64.AppImage",
             "size": 160456349,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "AppImage",
@@ -2787,7 +2896,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.14/Paper.Time-0.9.14-arm64.AppImage",
             "size": 160842842,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -2796,7 +2905,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.14/paper-time-0.9.14.tar.gz",
             "size": 154059953,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -2805,7 +2914,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.14/paper-time-0.9.14-arm64.tar.gz",
             "size": 158556313,
-            "downloads": 0
+            "downloads": 1
           }
         ]
       },
@@ -2837,7 +2946,7 @@
       "date": "2026-09-28T08:14:03Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.13/Paper.Time.0.9.13.dmg",
       "size": 52703231,
-      "downloads": 1,
+      "downloads": 9,
       "builds": {
         "mac": [
           {
@@ -2847,7 +2956,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.13/Paper.Time.0.9.13.dmg",
             "size": 52703231,
-            "downloads": 1
+            "downloads": 2
           }
         ],
         "windows": [
@@ -2858,7 +2967,7 @@
             "arch_en": "64-bit and ARM",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.13/Paper.Time.Setup.0.9.13.exe",
             "size": 265603423,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -2867,7 +2976,7 @@
             "arch_en": "64-bit",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.13/Paper.Time-0.9.13-win.zip",
             "size": 162926229,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -2876,7 +2985,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.13/Paper.Time-0.9.13-arm64-win.zip",
             "size": 167873905,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "linux": [
@@ -2887,7 +2996,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.13/Paper.Time-0.9.13-x86_64.AppImage",
             "size": 160452178,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "AppImage",
@@ -2896,7 +3005,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.13/Paper.Time-0.9.13-arm64.AppImage",
             "size": 160834600,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -2905,7 +3014,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.13/paper-time-0.9.13.tar.gz",
             "size": 154055987,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -2914,7 +3023,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.13/paper-time-0.9.13-arm64.tar.gz",
             "size": 158551609,
-            "downloads": 0
+            "downloads": 1
           }
         ]
       },
@@ -2977,7 +3086,7 @@
       "date": "2026-09-28T04:28:59Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.12/Paper.Time.0.9.12.dmg",
       "size": 52644622,
-      "downloads": 1,
+      "downloads": 9,
       "builds": {
         "mac": [
           {
@@ -2987,7 +3096,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.12/Paper.Time.0.9.12.dmg",
             "size": 52644622,
-            "downloads": 1
+            "downloads": 2
           }
         ],
         "windows": [
@@ -2998,7 +3107,7 @@
             "arch_en": "64-bit and ARM",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.12/Paper.Time.Setup.0.9.12.exe",
             "size": 265594641,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -3007,7 +3116,7 @@
             "arch_en": "64-bit",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.12/Paper.Time-0.9.12-win.zip",
             "size": 162921088,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -3016,7 +3125,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.12/Paper.Time-0.9.12-arm64-win.zip",
             "size": 167868765,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "linux": [
@@ -3027,7 +3136,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.12/Paper.Time-0.9.12-x86_64.AppImage",
             "size": 160448045,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "AppImage",
@@ -3036,7 +3145,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.12/Paper.Time-0.9.12-arm64.AppImage",
             "size": 160830455,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -3045,7 +3154,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.12/paper-time-0.9.12.tar.gz",
             "size": 154048470,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -3054,7 +3163,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.12/paper-time-0.9.12-arm64.tar.gz",
             "size": 158545549,
-            "downloads": 0
+            "downloads": 1
           }
         ]
       },
@@ -3096,7 +3205,7 @@
       "date": "2026-09-27T19:12:28Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.11/Paper.Time.0.9.11.dmg",
       "size": 50905567,
-      "downloads": 0,
+      "downloads": 8,
       "builds": {
         "mac": [
           {
@@ -3106,7 +3215,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.11/Paper.Time.0.9.11.dmg",
             "size": 50905567,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "windows": [
@@ -3117,7 +3226,7 @@
             "arch_en": "64-bit and ARM",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.11/Paper.Time.Setup.0.9.11.exe",
             "size": 265396064,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -3126,7 +3235,7 @@
             "arch_en": "64-bit",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.11/Paper.Time-0.9.11-win.zip",
             "size": 162807726,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -3135,7 +3244,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.11/Paper.Time-0.9.11-arm64-win.zip",
             "size": 167755399,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "linux": [
@@ -3146,7 +3255,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.11/Paper.Time-0.9.11-x86_64.AppImage",
             "size": 160312656,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "AppImage",
@@ -3155,7 +3264,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.11/Paper.Time-0.9.11-arm64.AppImage",
             "size": 160695067,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -3164,7 +3273,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.11/paper-time-0.9.11.tar.gz",
             "size": 153934841,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -3173,7 +3282,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.11/paper-time-0.9.11-arm64.tar.gz",
             "size": 158432521,
-            "downloads": 0
+            "downloads": 1
           }
         ]
       },
@@ -3276,7 +3385,7 @@
       "date": "2026-09-26T12:27:58Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.10/Paper.Time.0.9.10.dmg",
       "size": 50902680,
-      "downloads": 0,
+      "downloads": 8,
       "builds": {
         "mac": [
           {
@@ -3286,7 +3395,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.10/Paper.Time.0.9.10.dmg",
             "size": 50902680,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "windows": [
@@ -3297,7 +3406,7 @@
             "arch_en": "64-bit and ARM",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.10/Paper.Time.Setup.0.9.10.exe",
             "size": 264714074,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -3306,7 +3415,7 @@
             "arch_en": "64-bit",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.10/Paper.Time-0.9.10-win.zip",
             "size": 162407255,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -3315,7 +3424,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.10/Paper.Time-0.9.10-arm64-win.zip",
             "size": 167354931,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "linux": [
@@ -3326,7 +3435,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.10/Paper.Time-0.9.10-x86_64.AppImage",
             "size": 159878038,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "AppImage",
@@ -3335,7 +3444,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.10/Paper.Time-0.9.10-arm64.AppImage",
             "size": 160264539,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -3344,7 +3453,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.10/paper-time-0.9.10.tar.gz",
             "size": 153534391,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -3353,7 +3462,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.10/paper-time-0.9.10-arm64.tar.gz",
             "size": 158030852,
-            "downloads": 0
+            "downloads": 1
           }
         ]
       },
@@ -3456,7 +3565,7 @@
       "date": "2026-09-25T17:30:23Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.9/Paper.Time.0.9.9.dmg",
       "size": 50761350,
-      "downloads": 0,
+      "downloads": 1,
       "builds": {
         "mac": [
           {
@@ -3506,7 +3615,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/0.9.9/Paper.Time-0.9.9-x86_64.AppImage",
             "size": 159841091,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "AppImage",
