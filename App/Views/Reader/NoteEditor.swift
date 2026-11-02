@@ -1724,7 +1724,7 @@ final class NoteTextView: LatexSuiteTextView {
         guard let code = codeRowAtCaret(), let storage = textStorage else { return nil }
         var attributes = storage.attributes(at: min(code.line.location, storage.length - 1), effectiveRange: nil)
         for key in [NSAttributedString.Key.paperTimeSource, .paperTimePiece, .paperTimeSourceLead, .link,
-                    NoteCodeStyle.Block.copied, .baselineOffset] {
+                    NoteCodeStyle.Block.copied, NoteHighlight.attribute, .baselineOffset] {
             attributes.removeValue(forKey: key)
         }
         if code.row.role == .line {
@@ -1933,6 +1933,7 @@ final class NoteTextView: LatexSuiteTextView {
             case (34, false): if !inCode { toggleEmphasis("*") }; return
             case (14, false): if !inCode { toggleEmphasis("`") }; return
             case (46, true): if !inCode { toggleEmphasis("$") }; return
+            case (4, true): if !inCode { toggleHighlight(nil) }; return   // ⌘⇧H
             default: break
             }
         }
@@ -1949,7 +1950,31 @@ final class NoteTextView: LatexSuiteTextView {
         super.keyDown(with: event)
     }
 
+    /// ⌘⇧H and the colour dots on the selection bar: `==` round the
+    /// selection — or `=={pink}` — taken off again when it is there, and
+    /// recoloured when it is there in another colour (`NoteHighlightEdit`,
+    /// one replacement, one step). `color` nil is the default colour.
+    func toggleHighlight(_ color: String?) {
+        coordinator?.endTyping()
+        coordinator?.nextStepName = L("하이라이트", "Highlight")
+        stepUndoManager?.beginUndoGrouping()
+        defer {
+            stepUndoManager?.endUndoGrouping()
+            coordinator?.nextStepName = nil
+            coordinator?.endTyping()
+        }
+        let edit = NoteHighlightEdit.toggle(in: string, selection: selectedRange(), color: color)
+        insertText(edit.insert, replacementRange: edit.range)
+        setSelectedRange(edit.selection)
+    }
+
     func toggleEmphasis(_ mark: String) {
+        // A highlight's marks go through their own edit.
+        if mark.hasPrefix("==") {
+            let name = mark.dropFirst(2)
+            toggleHighlight(name.hasPrefix("{") && name.hasSuffix("}") ? String(name.dropFirst().dropLast()) : nil)
+            return
+        }
         let text = string as NSString
         let range = selectedRange()
         let width = (mark as NSString).length
@@ -2009,7 +2034,12 @@ final class NoteTextView: LatexSuiteTextView {
     private static let wrapping: [String: String] = [
         "(": ")", "[": "]", "{": "}", "\"": "\"", "'": "'", "`": "`",
         "*": "*", "_": "_", "$": "$", "~": "~",
+        // One `=` over a selection is a highlight: `==` either side.
+        "=": "==",
     ]
+    /// What goes in front when a character wraps a selection: the character,
+    /// or `==` for `=`.
+    private static let openersOverSelection: [String: String] = ["=": "=="]
     /// What is typed as a pair with nothing selected (Obsidian): brackets
     /// always; a quote, a dollar, a backtick, a star, an underscore or a
     /// tilde only between things that are not words — the apostrophe in
@@ -2063,13 +2093,14 @@ final class NoteTextView: LatexSuiteTextView {
            let closing = Self.wrapping[typed],
            // In code a star is a star: only brackets and quotes wrap there.
            Self.codeWrapping.contains(typed) || codeRowAtCaret() == nil {
+            let opening = Self.openersOverSelection[typed] ?? typed
             coordinator?.endTyping()
             stepUndoManager?.beginUndoGrouping()
             super.insertText(closing, replacementRange: NSRange(location: NSMaxRange(range), length: 0))
-            super.insertText(typed, replacementRange: NSRange(location: range.location, length: 0))
+            super.insertText(opening, replacementRange: NSRange(location: range.location, length: 0))
             stepUndoManager?.endUndoGrouping()
             coordinator?.endTyping()
-            setSelectedRange(NSRange(location: range.location + (typed as NSString).length, length: range.length))
+            setSelectedRange(NSRange(location: range.location + (opening as NSString).length, length: range.length))
             return
         }
         // The third backtick of a fence takes the pairs' marks after it away.

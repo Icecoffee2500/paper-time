@@ -27,7 +27,8 @@ import { quotedPassages } from '../../shared/quotedPassages.js'
 import { zettelDisplayTitle, zettelPreviewBody, zettelTags } from '../../shared/zettel.js'
 import { noteByID, type Note } from '../state.js'
 import { deleteNote, flushNote, linkedFrom, linksOrTagsChanged, linksOut, updateNote } from '../notesModel.js'
-import { backspaceEdit, codeIndentEdit, codeReturnEdit, deleteForwardEdit, homeTarget, indentEdit, pairBackspaceEdit, pairEdit, returnEdit, shortcutEdit, toggleEmphasisEdit, wrapEdit, type EmphasisMark, type LineEdit } from '../../shared/noteBlocks.js'
+import { HIGHLIGHT_NAMES, backspaceEdit, codeIndentEdit, codeReturnEdit, deleteForwardEdit, highlightOpening, homeTarget, indentEdit, pairBackspaceEdit, pairEdit, returnEdit, shortcutEdit, toggleEmphasisEdit, toggleHighlightEdit, wrapEdit, type EmphasisMark, type LineEdit } from '../../shared/noteBlocks.js'
+import { MARK_COLORS, cssColor, highlightInk } from '../../shared/marks.js'
 import { codeRowAt } from '../../shared/noteCode.js'
 import { keyFor } from '../../shared/shortcuts.js'
 import { EditorSelection, EditorState, Prec, Transaction, type Extension } from '@codemirror/state'
@@ -74,11 +75,16 @@ export interface NoteEditor {
 export interface ToolbarReport { showing: boolean; buttons: string[] }
 
 /** The marks the keys and the selection bar put on, in the bar's order. */
-const EMPHASIS_BUTTONS: { mark: EmphasisMark; label: string; title: string }[] = [
+/** What the bar puts on: a mark round the words, or a highlight in one of the five colours (null is the default). */
+type BarMark = { mark: EmphasisMark } | { highlight: string | null }
+
+/** Bold, italic, code, math — and the five highlighter colours as dots, the way Apple Notes offers them (`SelectionToolbar.marks`). */
+const EMPHASIS_BUTTONS: ({ label: string; title: string } & BarMark)[] = [
   { mark: '**', label: 'B', title: L('굵게', 'Bold') },
   { mark: '*', label: 'I', title: L('기울임', 'Italic') },
   { mark: '`', label: '<>', title: L('코드', 'Code') },
   { mark: '$', label: '$', title: L('수식', 'Math') },
+  ...HIGHLIGHT_NAMES.map((name) => ({ highlight: name === 'yellow' ? null : name, label: name, title: `${L('하이라이트', 'Highlight')} · ${name[0].toUpperCase()}${name.slice(1)}` })),
 ]
 
 /** The editor has the caret — not whether the window is in front. */
@@ -95,7 +101,7 @@ const TOOLBAR_DELAY_MS = 250
  * scrolls, or the note is shown as Markdown. A press on it keeps the
  * selection: the bar does the same as the key would.
  */
-function selectionToolbar(apply: (view: EditorView, mark: EmphasisMark) => void): { extension: Extension; report: () => ToolbarReport } {
+function selectionToolbar(apply: (view: EditorView, mark: BarMark) => void): { extension: Extension; report: () => ToolbarReport } {
   let bar: HTMLElement | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
   let pointerDown = false
@@ -119,8 +125,20 @@ function selectionToolbar(apply: (view: EditorView, mark: EmphasisMark) => void)
       // A press on the bar would take the focus and the selection with it.
       on(bar, 'mousedown', (event: MouseEvent) => event.preventDefault())
       for (const button of EMPHASIS_BUTTONS) {
-        const node = el('button', { class: 'selection-toolbar-button', type: 'button', title: button.title, text: button.label, 'data-mark': button.mark })
-        on(node, 'click', () => { if (current) apply(current, button.mark) })
+        let node: HTMLElement
+        if ('mark' in button) {
+          // Code and math as the symbols the Mac's bar uses; bold and italic as the letters.
+          const glyph = button.mark === '`' ? icon('chevron.left.forwardslash.chevron.right') : button.mark === '$' ? icon('function') : null
+          node = el('button', { class: 'selection-toolbar-button', type: 'button', title: button.title, 'data-mark': button.mark, ...(glyph ? { html: glyph } : { text: button.label }) })
+        } else {
+          // The dot is the colour the words will be.
+          const rgb = MARK_COLORS[button.highlight ?? 'yellow']
+          const dot = el('span', { class: 'selection-toolbar-dot' })
+          dot.style.setProperty('--dot-ink', cssColor(highlightInk(rgb)))
+          if (button.highlight === null) bar.append(el('span', { class: 'selection-toolbar-divider' }))
+          node = el('button', { class: 'selection-toolbar-button', type: 'button', title: button.title, 'data-mark': highlightOpening(button.highlight), 'data-color': button.highlight ?? 'yellow' }, [dot])
+        }
+        on(node, 'click', () => { if (current) apply(current, button) })
         bar.append(node)
       }
       document.body.append(bar)
@@ -197,7 +215,7 @@ function selectionToolbar(apply: (view: EditorView, mark: EmphasisMark) => void)
         if (update.transactions.some((tr) => tr.effects.some((effect) => effect.is(setRaw)))) hide()
       }),
     ],
-    report: () => ({ showing: bar !== null, buttons: bar ? [...bar.querySelectorAll('button')].map((button) => button.textContent ?? '') : [] }),
+    report: () => ({ showing: bar !== null, buttons: bar ? [...bar.querySelectorAll('button')].map((button) => button.textContent || button.dataset.mark || '') : [] }),
   }
 }
 
@@ -480,26 +498,29 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
   // ⌘B, ⌘I, ⌘E, ⌘⇧M: emphasis put on or taken off, as Notion's. Ahead of
   // every other key so neither the editor's defaults nor the window's take
   // them. (⌘M on its own is the window's Minimize.)
-  const applyEmphasis = (target: EditorView, mark: EmphasisMark) => {
+  const applyEmphasis = (target: EditorView, mark: BarMark) => {
     const { from, to } = target.state.selection.main
     // Code is not made bold: the keys do nothing in a block of code.
-    if (codeRowAt(target.state.doc.toString(), from)) return
-    const edit = toggleEmphasisEdit(target.state.doc.toString(), from, to, mark)
+    const text = target.state.doc.toString()
+    if (codeRowAt(text, from)) return
+    const edit = 'mark' in mark ? toggleEmphasisEdit(text, from, to, mark.mark) : toggleHighlightEdit(text, from, to, mark.highlight)
     target.dispatch({
       changes: { from: edit.from, to: edit.to, insert: edit.insert },
       selection: EditorSelection.range(edit.selectFrom, edit.selectTo),
       userEvent: 'input', scrollIntoView: true,
     })
   }
-  const emphasis = (mark: EmphasisMark) => (target: EditorView) => {
+  const emphasis = (mark: BarMark) => (target: EditorView) => {
     applyEmphasis(target, mark)
     return true
   }
+  // ⌘⇧H (Ctrl+Shift+H): a highlight in the default colour; the colours are on the bar.
   const emphasisKeys = Prec.high(keymap.of([
-    { key: 'Mod-b', run: emphasis('**') },
-    { key: 'Mod-i', run: emphasis('*') },
-    { key: 'Mod-e', run: emphasis('`') },
-    { key: 'Mod-Shift-m', run: emphasis('$') },
+    { key: 'Mod-b', run: emphasis({ mark: '**' }) },
+    { key: 'Mod-i', run: emphasis({ mark: '*' }) },
+    { key: 'Mod-e', run: emphasis({ mark: '`' }) },
+    { key: 'Mod-Shift-m', run: emphasis({ mark: '$' }) },
+    { key: 'Mod-Shift-h', run: emphasis({ highlight: null }) },
   ]))
   const toolbar = selectionToolbar(applyEmphasis)
   // Home (⌘←) on a marked line: to the words first, then to the very start

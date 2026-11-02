@@ -249,8 +249,9 @@ final class FigureOverlayView: NSView {
 
 /// One view over a page holding its overlays: the mask over the margin's
 /// stamps, the figures for the dimmed tint, composited plainly, the marks,
-/// multiplied onto the paper, and on top the washes over the passages notes
-/// quote, multiplied too.
+/// multiplied onto the paper, the words under the highlights in their ink,
+/// plainly, and on top the washes over the passages notes quote, multiplied
+/// too.
 final class PageOverlay: NSView {
     private let mask: MarginMaskView
 
@@ -265,11 +266,12 @@ final class PageOverlay: NSView {
         mask = MarginMaskView(page: page)
         super.init(frame: .zero)
         let marks = MarkOverlayView(page: page)
+        let markInk = MarkInkView(page: page)
         let figures = FigureOverlayView(page: page)
         let ink = InkOverlayView(page: page, drawing: drawing)
         let shapes = SketchOverlayView(page: page, elements: sketch, hidden: hiddenSketch)
         let quotes = QuoteLinkOverlayView(page: page, washes: quoteWashes, hovered: hoveredQuote)
-        for child in [mask, figures, marks, ink, shapes, quotes] as [NSView] {
+        for child in [mask, figures, marks, markInk, ink, shapes, quotes] as [NSView] {
             child.autoresizingMask = [.width, .height]
             addSubview(child)
         }

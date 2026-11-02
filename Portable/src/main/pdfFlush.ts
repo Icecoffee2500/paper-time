@@ -191,6 +191,13 @@ export class PDFFlusher {
     const owner = await this.hooks.ownerOf(id)
     if (!owner) return { error: 'No library is open.' }
     const row = await owner.paper(id)
+    // A paper from an address with no file: nothing to write into, and the
+    // marks are where they always are — the journal, the sidecars, the
+    // screen. Said once on the reader's foot, not as a failure.
+    if (row?.source && !row.exists) {
+      this.hooks.send('paper:kept', { id, reason: 'noFile' })
+      return { kept: 'noFile' }
+    }
     if (!row?.file || !row.exists) return { error: 'The PDF is not where the record says it is.' }
     let wanted = new Map<number, MarkupRecord[]>()
     try {

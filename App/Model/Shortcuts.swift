@@ -116,7 +116,7 @@ public struct Shortcut: Equatable, Sendable {
 /// up on the same key.
 public enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
     // Library
-    case addPapers, exportBibTeX, copyCitationKey, resolveMetadata, refreshFolder
+    case addPapers, addByAddress, exportBibTeX, copyCitationKey, resolveMetadata, refreshFolder
     // Reading
     case searchEverything, findInDocument, ultracopy, lasso, linkToNote
     case layoutContinuous, layoutSinglePage, layoutBook
@@ -146,7 +146,7 @@ public enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
 
     public var group: Group {
         switch self {
-        case .addPapers, .exportBibTeX, .copyCitationKey, .resolveMetadata, .refreshFolder:
+        case .addPapers, .addByAddress, .exportBibTeX, .copyCitationKey, .resolveMetadata, .refreshFolder:
             .library
         case .searchEverything, .findInDocument, .ultracopy, .lasso, .linkToNote,
              .layoutContinuous, .layoutSinglePage, .layoutBook:
@@ -168,6 +168,7 @@ public enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
     public var title: String {
         switch self {
         case .addPapers: L("논문 더하기", "Add Papers")
+        case .addByAddress: L("주소로 논문 더하기", "Add Paper by Address")
         case .exportBibTeX: L("BibTeX 내보내기", "Export BibTeX")
         case .copyCitationKey: L("인용 키 복사", "Copy Citation Key")
         case .resolveMetadata: L("빠진 서지 채우기", "Resolve Missing Metadata")
@@ -216,6 +217,7 @@ public enum ShortcutAction: String, CaseIterable, Identifiable, Sendable {
     public var fallback: Shortcut {
         switch self {
         case .addPapers: Shortcut("o")
+        case .addByAddress: Shortcut("o", [.command, .option])
         case .exportBibTeX: Shortcut("e", [.command, .shift])
         case .copyCitationKey: Shortcut("k", [.command, .shift])
         case .resolveMetadata: Shortcut("r", [.command, .shift])

@@ -25,6 +25,8 @@ const REPLACEMENTS: Array<[RegExp, string]> = [
   [/\[\[([^\]|\n]+)\|([^\]\n]*)\]\]/g, '$2'],
   [/\[\[([^\]|\n]+)\]\]/g, '$1'],
   [/\[([^\]\n]*)\]\([^)\s]*\)/g, '$1'],
+  // A highlight's marks, with the colour's name when it has one.
+  [/(?<![\p{L}\p{N}=])==(?:\{[a-z]+\})?(?![\s=])((?:[^=\n]|=(?!=))+?)(?<!\s)==(?!=)/gu, '$1'],
   // Emphasis marks, when they stand in pairs around something.
   [/\*\*([^*\n]+)\*\*/g, '$1'],
   [/__([^_\n]+)__/g, '$1'],

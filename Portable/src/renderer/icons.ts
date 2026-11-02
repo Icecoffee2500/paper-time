@@ -324,6 +324,9 @@ const SHAPES = {
     <circle cx="11.6" cy="11.6" r="1.5"/>
     <path d="M11.6 8.9v.8M11.6 13.5v.8M13.9 10.2l-.7.4M10 12.6l-.7.4M13.9 13l-.7-.4M10 10.6l-.7-.4"/>`,
 
+  // An address: two links of a chain, for «Add Paper by Address».
+  'link': `
+    <path d="M6.9 9.1 9.1 6.9M7.6 10.8l-1.2 1.2a2.1 2.1 0 0 1-3-3l1.2-1.2M8.4 5.2l1.2-1.2a2.1 2.1 0 0 1 3 3l-1.2 1.2"/>`,
   // Where a library folder lives: a cloud, Apple's cloud, or this machine.
   // Drawn rather than borrowed — SF Symbols are for Apple's platforms.
   'cloud': `

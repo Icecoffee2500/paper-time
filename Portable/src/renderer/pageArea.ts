@@ -13,14 +13,17 @@ import { call } from './bridge.js'
 import { clear, el } from './dom.js'
 import {
   changed,
+  focusPane,
+  focusedPaneKey,
   keepOpen,
-  panePapers,
+  paneKeys,
   patchPaper,
   paper as findPaper,
   setFocusedReaderState,
   store,
   type Paper,
 } from './state.js'
+import { paperOfPane } from '../shared/split.js'
 import { shell, solo } from './shell.js'
 import { Reader, type ReaderPlace } from './ui/reader.js'
 import { FindBar } from './ui/findBar.js'
@@ -29,7 +32,7 @@ import { closePages } from './ui/pages.js'
 import { sketchEditor } from './ui/sketchEditing.js'
 import { showMenu, toast } from './ui/toolbar.js'
 import { couldNot } from './notices.js'
-import { closePaper } from './actions/openPapers.js'
+import { closePane } from './actions/openPapers.js'
 import { saveSettings } from './settingsController.js'
 import { icon } from './icons.js'
 import { L } from '../shared/lang.js'
@@ -64,9 +67,26 @@ const emptyReader = el('div', { class: 'panel reader-panel' }, [
 ])
 pageArea.append(emptyReader, dockZone)
 
-/** The reader in focus: the pane showing `store.selectedID`. */
+/**
+ * The readers, by pane key (`paperOfPane` for the paper): the one reader's
+ * key is its paper, and a second pane of the same paper is `<paper>@2`.
+ */
+/** The reader in focus: the pane in focus, or the one reader. */
 export function focused(): Reader | null {
-  return store.selectedID ? readers.get(store.selectedID) ?? null : null
+  const key = focusedPaneKey()
+  return key ? readers.get(key) ?? null : null
+}
+
+/** The readers showing a paper — the one in focus first, when it is one of them. */
+export function readersOf(paperID: string): Reader[] {
+  const front = focused()
+  const list = [...readers].filter(([key]) => paperOfPane(key) === paperID).map(([, reader]) => reader)
+  return front && list.includes(front) ? [front, ...list.filter((reader) => reader !== front)] : list
+}
+
+/** The reader a paper's event goes to: the one in focus if it shows the paper, else its first pane. */
+export function readerOf(paperID: string): Reader | null {
+  return readersOf(paperID)[0] ?? null
 }
 
 setFocusedReaderState(() => focused()?.state ?? null)
@@ -92,13 +112,14 @@ let quoteLinksTimer = 0
 export function refreshQuoteLinksSoon() {
   window.clearTimeout(quoteLinksTimer)
   quoteLinksTimer = window.setTimeout(() => {
-    for (const [id, reader] of readers) reader.setQuoteLinks(id, quoteLinksFor(id))
+    for (const [key, reader] of readers) reader.setQuoteLinks(paperOfPane(key), quoteLinksFor(paperOfPane(key)))
   }, 300)
 }
 
-function readerFor(id: string, pane: boolean): Reader {
-  const existing = readers.get(id)
+function readerFor(key: string, pane: boolean): Reader {
+  const existing = readers.get(key)
   if (existing) return existing
+  const id = paperOfPane(key)
   const reader = new Reader({
     changed: () => changed('sketch'),
     toast,
@@ -112,8 +133,9 @@ function readerFor(id: string, pane: boolean): Reader {
       // A press in a pane makes it the one in use: the pane in focus, and a
       // paper kept open.
       keepOpen(id)
-      if (store.selectedID !== id) {
-        store.selectedID = id
+      const was = focusedPaneKey()
+      focusPane(key)
+      if (was !== key) {
         saveSettings({ selectedPaperID: id })
         focusChanged()
         changed('papers', 'selection')
@@ -121,15 +143,15 @@ function readerFor(id: string, pane: boolean): Reader {
         changed('papers')
       }
     },
-    close: () => closePaper(id),
+    close: () => closePane(key),
     reveal: () => void call('paper:reveal', { id }),
     title: () => findPaper(id)?.meta.displayTitle ?? '',
     pageChanged: (index) => recordPosition(id, index),
     fileName: () => fileNameOf(findPaper(id)),
     openQuote: (link) => void openQuotation(id, link),
-  }, { pane, layout: store.settings.pageLayout })
-  readers.set(id, reader)
-  void loadInto(reader, id)
+  }, { pane, layout: store.settings.pageLayout, paneKey: key })
+  readers.set(key, reader)
+  void loadInto(reader, key)
   // A paper nobody has guessed at — one from before guesses were made on
   // arrival — is guessed at now, by the main process, the way every new one
   // is (`metadata/queue.ts`): read off the file, nothing looked up.
@@ -138,7 +160,8 @@ function readerFor(id: string, pane: boolean): Reader {
   return reader
 }
 
-async function loadInto(reader: Reader, id: string) {
+async function loadInto(reader: Reader, key: string) {
+  const id = paperOfPane(key)
   // Nothing in here may throw past this function: a rejected request reaching
   // the window as an unhandled rejection is a blank page with no sentence on
   // it, which is what a locked PDF used to look like.
@@ -149,14 +172,14 @@ async function loadInto(reader: Reader, id: string) {
     console.error('paper:bytes failed', error)
     result = { error: L('이 논문의 PDF를 읽지 못했어요.', "Paper Time couldn't read this paper's PDF.") }
   }
-  if (!readers.has(id) || readers.get(id) !== reader) return
+  if (!readers.has(key) || readers.get(key) !== reader) return
   if (result.locked) return reader.showLocked(result.locked)
   // Only when there are no bytes at all to try. Everything else goes to pdf.js
   // first: it reads more than this app does, and what was diagnosed only picks
   // the sentence for a failure that has actually happened.
   if (!result.data && result.trouble) {
     return reader.showTrouble(
-      result.trouble, result.size ?? 0, () => void loadInto(reader, id),
+      result.trouble, result.size ?? 0, () => void loadInto(reader, key),
       undefined, result.head, result.line,
     )
   }
@@ -216,10 +239,10 @@ export function reconcileReaders() {
     showSlipBoxDetail()
     return
   }
-  const wanted = panePapers()
+  const wanted = paneKeys()
   const split = store.split
   const previous = focused()
-  const previousID = store.selectedID
+  const previousID = focusedPaneKey()
   const shape = [split ? JSON.stringify(split) : 'one', ...wanted].join(' ')
   // A paper leaving the page area takes its reader with it. One that stays
   // keeps its reader — and its document, its pen and its place — whether it
@@ -348,7 +371,8 @@ let focusedBefore: Reader | null = null
  */
 export function focusChanged() {
   const reader = focused()
-  for (const [id, other] of readers) other.setFocused(id === store.selectedID && Boolean(store.split))
+  const front = focusedPaneKey()
+  for (const [key, other] of readers) other.setFocused(key === front && Boolean(store.split))
   if (reader !== focusedBefore) {
     focusedBefore = reader
     store.sketch.selection = null

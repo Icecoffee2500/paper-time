@@ -77,6 +77,7 @@ const WORDS = (): RankWords => ({
  *  nothing is worse than no row. */
 const ACTIONS = (): { name: ActionName; title: string; icon: IconName }[] => [
   { name: 'addPDFs', title: L('PDF 더하기…', 'Add PDFs…'), icon: 'plus' },
+  { name: 'addByAddress', title: L('주소로 논문 더하기…', 'Add Paper by Address…'), icon: 'link' },
   { name: 'exportBibTeX', title: L('BibTeX 내보내기…', 'Export BibTeX…'), icon: 'square.and.arrow.up' },
   { name: 'resolveMetadata', title: L('빠진 서지 채우기', 'Resolve Missing Metadata'), icon: 'arrow.triangle.2.circlepath' },
   { name: 'refresh', title: L('라이브러리 다시 읽기', 'Refresh Library'), icon: 'arrow.clockwise' },

@@ -4,7 +4,7 @@
  * `openWikiLink(in:)`, case by case.
  */
 import assert from 'node:assert/strict'
-import { acceptWikiLink, backspaceEdit, blockOf, deleteForwardEdit, homeTarget, indentEdit, openWikiLink, pairBackspaceEdit, pairEdit, returnEdit, shortcutEdit, toggleChildrenEnd, toggleEmphasisEdit, wrapEdit, type LineEdit, type SelectionEdit } from '../shared/noteBlocks.js'
+import { acceptWikiLink, backspaceEdit, blockOf, deleteForwardEdit, homeTarget, indentEdit, openWikiLink, pairBackspaceEdit, pairEdit, returnEdit, shortcutEdit, toggleChildrenEnd, toggleEmphasisEdit, toggleHighlightEdit, wrapEdit, type LineEdit, type SelectionEdit } from '../shared/noteBlocks.js'
 
 type Test = (name: string, body: () => void | Promise<void>) => Promise<void>
 
@@ -265,9 +265,29 @@ export async function noteBlocksSuite(test: Test, suite: (name: string) => void)
       assert.deepEqual(emphasised('say word here', wrapEdit('say word here', 4, 8, open)!), { text: `say ${open}word${close} here`, selected: [5, 9] }, open)
     }
     assert.deepEqual(emphasised('say word', wrapEdit('say word', 8, 4, '(')!), { text: 'say (word)', selected: [5, 9] })
+    // One = over a selection is a highlight: == either side, the words still selected.
+    assert.deepEqual(emphasised('say word here', wrapEdit('say word here', 4, 8, '=')!), { text: 'say ==word== here', selected: [6, 10] })
+    assert.equal(pairEdit('say ', 4, '='), null, 'with nothing selected = is just =')
     assert.equal(wrapEdit('say word', 4, 8, 'x'), null)
     assert.equal(wrapEdit('say word', 4, 8, ')'), null)
     assert.equal(wrapEdit('say word', 4, 4, '('), null)
+  })
+
+  // The Mac's `NoteHighlightEditTests`, case for case.
+  await test('Ctrl+Shift+H and the colour dots put a highlight round the selection, recolour it, take it off', () => {
+    assert.deepEqual(emphasised('say word here', toggleHighlightEdit('say word here', 4, 8, null)), { text: 'say ==word== here', selected: [6, 10] })
+    assert.deepEqual(emphasised('say word here', toggleHighlightEdit('say word here', 4, 8, 'pink')), { text: 'say =={pink}word== here', selected: [12, 16] })
+    // Selected whole, or inside its marks: the same colour takes it off.
+    assert.deepEqual(emphasised('say ==word== here', toggleHighlightEdit('say ==word== here', 4, 12, null)), { text: 'say word here', selected: [4, 8] })
+    assert.deepEqual(emphasised('say =={pink}word== here', toggleHighlightEdit('say =={pink}word== here', 12, 16, 'pink')), { text: 'say word here', selected: [4, 8] })
+    // Another colour recolours rather than nesting.
+    assert.deepEqual(emphasised('a ==w== b', toggleHighlightEdit('a ==w== b', 4, 5, 'blue')), { text: 'a =={blue}w== b', selected: [10, 11] })
+    assert.deepEqual(emphasised('a =={blue}w== b', toggleHighlightEdit('a =={blue}w== b', 2, 13, null)), { text: 'a ==w== b', selected: [4, 5] })
+    // With nothing selected an empty pair goes in and comes off.
+    const on = emphasised('ab', toggleHighlightEdit('ab', 1, 1, 'green'))
+    assert.deepEqual(on, { text: 'a=={green}==b', selected: [10, 10] })
+    assert.deepEqual(emphasised(on.text, toggleHighlightEdit(on.text, 10, 10, 'green')), { text: 'ab', selected: [1, 1] })
+    assert.deepEqual(emphasised('a====b', toggleHighlightEdit('a====b', 3, 3, 'pink')).text, 'ab')
   })
 
   await test('«[]» and a space at the start of a line become a checkbox', () => {

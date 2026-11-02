@@ -26,6 +26,11 @@ export type InlineToken =
   | { kind: 'note'; from: number; to: number; id: string; title: string }
   | { kind: 'math'; from: number; to: number; latex: string; display: boolean }
   | { kind: 'emphasis'; from: number; to: number; text: string; bold: boolean; italic: boolean; mono: boolean }
+  /** `==words==` or `=={pink}words==`: highlighted as Apple Notes highlights — the words in a deep
+   *  shade of the colour on a pale band of it. `color` is the name as written, null for the default. */
+  | { kind: 'highlight'; from: number; to: number; text: string; color: string | null }
+  /** `->` and `<-`, shown as the arrows they stand for. */
+  | { kind: 'arrow'; from: number; to: number; right: boolean }
   /** `\$`: a dollar written so it does not open a formula, shown as the dollar it is. */
   | { kind: 'dollar'; from: number; to: number }
 
@@ -225,6 +230,27 @@ const LINK = /\[((?:\\.|[^\\\[\]\n]|\[(?:\\.|[^\\\[\]\n])*\])*)\]\((papertime:\/
 const WIKI = /\[\[([^\]|\n]+)(?:\|([^\]\n]*))?\]\]/g
 const DOLLAR = /\\\$/g
 const EMPHASIS = /(\*\*\*)([^*\n]+)(\*\*\*)|(\*\*)([^*\n]+)(\*\*)|(\*)([^*\n]+)(\*)|(`)([^`\n]+)(`)/g
+/** `==words==` and `=={pink}words==` — the Mac's `highlightPattern`: opened where no letter, digit or `=`
+ *  stands before it and no space after it, closed where no space stands before it and no `=` after, so
+ *  `a==b && c==d` in prose is not a highlight and `x = y` inside one is fine. One line. */
+const HIGHLIGHT = /(?<![\p{L}\p{N}=])==(?:\{(yellow|green|blue|pink|purple)\})?(?![\s=])((?:[^=\n]|=(?!=))+?)(?<!\s)==(?!=)/gu
+/** `->` and `<-`, not the middle of a longer dash or a `<->` (the Mac's `arrowPattern`). */
+const ARROW = /(?<![-<])->|<-(?![->])/g
+
+/** The five names a highlight can be written with: the page's highlighter colours. */
+export const HIGHLIGHT_NAMES = ['yellow', 'green', 'blue', 'pink', 'purple']
+/** What `==words==` with no name is. */
+export const DEFAULT_HIGHLIGHT = 'yellow'
+
+/** How many characters open a highlight: `==`, or `=={pink}` (`NoteMarkdown.highlightLead`). */
+export function highlightLead(color: string | null): number {
+  return 2 + (color ? color.length + 2 : 0)
+}
+
+/** The classes highlighted words are drawn with. */
+export function highlightClasses(color: string | null): string {
+  return `nm-hl nm-hl-${color ?? DEFAULT_HIGHLIGHT}`
+}
 
 /** How many characters each side of emphasised words are its marks: `*`, `**`, `***`, or a backtick (`NoteMarkdown.emphasisWidth`). */
 export function emphasisWidth(token: { bold: boolean; italic: boolean; mono: boolean }): number {
@@ -265,7 +291,7 @@ export function emphasisPieces(cell: string): { text: string; bold: boolean; ita
 /** Whether a line could hold a link, a note link, a formula or emphasis — they all begin with one of five
  *  characters: a formula with `$` or, written as LaTeX writes it, with a backslash. */
 export function holdsMarkup(line: string): boolean {
-  return /[[$*`\\]/.test(line)
+  return /[[$*`\\=]|->|<-/.test(line)
 }
 
 function firstFrom(pattern: RegExp, text: string, from: number): RegExpExecArray | null {
@@ -318,6 +344,10 @@ export function inlineTokens(content: string): InlineToken[] {
     if (math) consider({ kind: 'math', from: math.range.from, to: math.range.to, latex: math.latex, display: math.display })
     const dollar = firstFrom(DOLLAR, content, index)
     if (dollar) consider({ kind: 'dollar', from: dollar.index, to: dollar.index + 2 })
+    const highlight = firstFrom(HIGHLIGHT, content, index)
+    if (highlight) consider({ kind: 'highlight', from: highlight.index, to: highlight.index + highlight[0].length, text: highlight[2], color: highlight[1] ?? null })
+    const arrow = firstFrom(ARROW, content, index)
+    if (arrow) consider({ kind: 'arrow', from: arrow.index, to: arrow.index + 2, right: arrow[0] === '->' })
     const emphasis = firstFrom(EMPHASIS, content, index)
     if (emphasis) {
       // `***both***` is bold and italic — what Ctrl+B then Ctrl+I make of a selection.
@@ -360,7 +390,7 @@ export function headIndent(block: Block): number {
 
 /**
  * The note as `NoteMarkdown.dump` prints it: runs of shown text, each with
- * the marks the dump names (QUOTE, PASSAGE, LINK, CODE, CODEBLOCK, italic, indent N, center), runs of
+ * the marks the dump names (QUOTE, PASSAGE, LINK, CODE, HIGHLIGHT[:colour], CODEBLOCK, italic, indent N, center), runs of
  * the same marks joined. A formula is one object replacement character; a
  * fenced block's header is its language's name (nothing to see when it has
  * none), its closing fence nothing to see.
@@ -419,6 +449,15 @@ export function displayRuns(source: string): DisplayRun[] {
           put(token.text, withIndent(token.italic || quoted ? ['italic'] : []))
           break
         }
+        case 'highlight': {
+          const quoted = quote && block.quoteHeading === undefined
+          const name = token.color === null || token.color === DEFAULT_HIGHLIGHT ? 'HIGHLIGHT' : `HIGHLIGHT:${token.color}`
+          put(token.text, withIndent([name, ...(quoted ? ['italic'] : [])]))
+          break
+        }
+        case 'arrow':
+          plain(token.right ? '→' : '←')
+          break
       }
       at = token.to
     }

@@ -13,6 +13,7 @@
  * Papers the cache does not have are read by a few threads at once
  * (`textWorker.ts`). Queries are answered here, on this thread, between them.
  */
+import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -33,6 +34,8 @@ export type ServiceRequest =
    *  cache, and read only when neither has them. */
   | { type: 'texts'; token: number; ids: string[] }
   | { type: 'asset'; request: number; data: Uint8Array | null }
+  /** A paper's bytes, for one that has no file (`paperSource.ts`). */
+  | { type: 'bytes'; request: number; data: Uint8Array | null }
   | { type: 'stats' }
 
 /** What this process says back. */
@@ -42,6 +45,8 @@ export type ServiceReply =
   | { type: 'warmed'; loaded: number; total: number; ms: number; removed: number }
   | { type: 'texts'; token: number; papers: { id: string; pages: string[] }[]; unread: string[]; ms: number }
   | { type: 'asset'; request: number; kind: 'cmap' | 'font'; name: string }
+  /** A paper whose file is not there: the main process holds its bytes. */
+  | { type: 'bytes'; request: number; id: string }
   | { type: 'stats'; stats: ServiceStats }
 
 export interface ServiceStats {
@@ -110,6 +115,21 @@ function asset(kind: 'cmap' | 'font', name: string): Promise<Uint8Array | null> 
   return asked
 }
 
+const bytesRequests = new Map<number, (data: Uint8Array | null) => void>()
+let bytesCount = 0
+
+/** The bytes of a paper that has no file, from the main process. */
+function bytesFromMain(id: string): Promise<Uint8Array> {
+  return new Promise((resolve, reject) => {
+    const request = (bytesCount += 1)
+    bytesRequests.set(request, (data) => {
+      if (data) resolve(data)
+      else reject(new Error('The PDF for this paper is not in the folder.'))
+    })
+    post({ type: 'bytes', request, id })
+  })
+}
+
 interface Job {
   source: TextSource
   resolve: (read: ReadText) => void
@@ -160,7 +180,9 @@ class Readers {
   private async start(worker: Worker, job: Job) {
     let bytes: Uint8Array
     try {
-      bytes = await readWhole(job.source.file)
+      // A paper from an address has no file: the main process holds its
+      // bytes, or fetches them.
+      bytes = fs.existsSync(job.source.file) ? await readWhole(job.source.file) : await bytesFromMain(job.source.id)
     } catch (error) {
       this.finish(worker, job, error as Error)
       return
@@ -235,6 +257,7 @@ class Readers {
 
 let index: TextIndex | null = null
 const readers = new Readers()
+
 const sources = new Map<string, TextSource>()
 let roots: string[] = []
 const cancelled = new Set<number>()
@@ -369,6 +392,10 @@ port.on('message', ({ data: request }) => {
       if (request.data) assetsFound += 1
       assetRequests.get(request.request)?.(request.data)
       assetRequests.delete(request.request)
+      break
+    case 'bytes':
+      bytesRequests.get(request.request)?.(request.data)
+      bytesRequests.delete(request.request)
       break
     case 'stats':
       watchMemory()

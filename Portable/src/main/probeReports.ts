@@ -24,6 +24,20 @@ export async function runLibraryProbes(options: {
     const refusal = await libraries.attach(adding)
     say(refusal ? `add folder: refused — ${refusal.error}` : `add folder: ${adding}`)
   }
+  // `--papertime-add-address=<text>`: the paper an address names, taken in
+  // the way the sheet takes one; with `--papertime-fetch-base=` the fetch
+  // goes to a server of the probe's own.
+  const address = argument('add-address')
+  if (address) {
+    const answer = await handlers['library:addByAddress']?.({ text: address, root: undefined }, null)
+    if (!answer) say('add address: no handler')
+    else if ('error' in answer) say(`add address: failed (${answer.fetch ?? 'error'}) ${answer.error}`)
+    else {
+      const id = answer.added ?? answer.already
+      const row = answer.papers.find((one) => one.id === id)
+      say(`add address: ${answer.added ? 'added' : 'already'} ${id} file=${String((row?.meta.file as { relativePath?: string } | undefined)?.relativePath ?? '')} exists=${row?.exists} source=${row?.source ?? '-'}`)
+    }
+  }
   if (argument('adopt-loose') === '1') {
     const loose = (await Promise.all(libraries.all().map((one) => one.looseFiles()))).flat()
     const answer = await handlers['library:adoptLoose']?.(undefined as never, null)

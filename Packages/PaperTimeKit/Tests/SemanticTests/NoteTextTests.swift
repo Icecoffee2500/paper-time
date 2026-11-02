@@ -23,6 +23,12 @@ struct NoteTextTests {
         """)
     }
 
+    @Test("A highlight keeps its words and loses its marks; a stray == stays")
+    func highlights() {
+        #expect(NoteText.plain("a ==word== and =={pink}two words== b") == "a word and two words b")
+        #expect(NoteText.plain("if a==b && c==d then") == "if a==b && c==d then")
+    }
+
     @Test("A formula keeps its letters and loses its dollars")
     func formulas() {
         let plain = NoteText.plain("Loss $$\\mathcal{L}_{\\text{rollout}}$$ and $x^2$ inline.")

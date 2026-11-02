@@ -308,7 +308,7 @@ function rowShape(entry: Paper): string {
   // use — as on the Mac: one kept by clicking into it had no way off the
   // shelf but the menu.
   const closable = store.shelf.kind === 'open' && isOpenPaper(entry.id)
-  return `${entry.exists ? 1 : 0}|${closable ? 'close' : ''}`
+  return `${entry.exists || entry.source ? 1 : 0}|${closable ? 'close' : ''}`
 }
 
 /** A row, and the way to tell it what it now says. */
@@ -364,9 +364,10 @@ function paperRow(entry: Paper, actions: PaperListActions): BuiltRow {
   // The tags it wears, in their colours, as the Mac's row has them.
   const tagRow = el('div', { class: 'paper-tags' })
   const main = el('div', { class: 'paper-main' }, [title, subtitle, tagRow])
-  if (!entry.exists) {
+  if (!entry.exists && !entry.source) {
     // Not on the Mac's row, which finds a missing file only on opening it.
-    // Kept here on purpose: a row that cannot open should say so.
+    // Kept here on purpose: a row that cannot open should say so. A paper
+    // from an address opens without its file, so it is not missing.
     main.append(el('div', {
       class: 'paper-subtitle',
       style: 'color: var(--danger)',

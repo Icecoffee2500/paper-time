@@ -124,6 +124,10 @@ enum NoteMarkdown {
             case .emphasis(_, let bold, let italic, let mono, _):
                 let width = emphasisWidth(bold: bold, italic: italic, mono: mono)
                 ends(width, width)
+            case .highlight(_, let color, _):
+                ends(highlightLead(color: color), 2)
+            case .arrow:
+                ends(0, 0)
             case .dollar:
                 ends(1, 0)
             }
@@ -172,6 +176,9 @@ enum NoteMarkdown {
             text.removeAttribute(.kern, range: run)
             #if os(macOS)
             text.removeAttribute(NoteCodeStyle.attribute, range: run)
+            text.removeAttribute(NoteHighlight.attribute, range: run)
+            #else
+            text.removeAttribute(.backgroundColor, range: run)
             #endif
         }
         func isWritten(_ span: NSRange) -> Bool {
@@ -191,6 +198,16 @@ enum NoteMarkdown {
                     } else if whole.length > 2 * width {
                         text.addAttribute(.font, value: emphasisFont(in: block, bold: bold, italic: italic),
                                           range: NSRange(location: whole.location + width, length: whole.length - 2 * width))
+                    }
+                }
+                // A highlight too: its words in the ink, on the band, with
+                // the `==` either side shown — as Obsidian shows one.
+                if case .highlight(_, let color, _) = token.kind, isWritten(whole) {
+                    let lead = highlightLead(color: color)
+                    if whole.length > lead + 2 {
+                        var attributes = highlightAttributes(in: block, color: color)
+                        attributes.removeValue(forKey: .font)
+                        text.addAttributes(attributes, range: NSRange(location: whole.location + lead, length: whole.length - lead - 2))
                     }
                 }
                 index = NSMaxRange(token.range)
@@ -497,6 +514,9 @@ enum NoteMarkdown {
             if attributes[NoteChip.attribute] != nil { marks.append("PASSAGE") }
             if attributes[.link] != nil { marks.append("LINK") }
             if attributes[NoteCodeStyle.attribute] != nil { marks.append("CODE") }
+            if let name = attributes[NoteHighlight.attribute] as? String {
+                marks.append(name == NoteHighlight.defaultName ? "HIGHLIGHT" : "HIGHLIGHT:\(name)")
+            }
             // A fenced block's rows: their set-in is the numbers' room, which
             // is measured from this Mac's fonts, so it is left unprinted.
             let fenced = attributes[NoteCodeStyle.Block.attribute] != nil
@@ -1561,6 +1581,12 @@ enum NoteMarkdown {
         /// all: the run has to stand for exactly those characters.
         case math(latex: String, display: Bool, source: String)
         case emphasis(text: String, bold: Bool, italic: Bool, mono: Bool, source: String)
+        /// `==words==`, or `=={pink}words==`: highlighted, as Apple Notes
+        /// highlights — the words in a deep shade of the colour over a pale
+        /// band of it. `color` is the name as written, nil for the default.
+        case highlight(text: String, color: String?, source: String)
+        /// `->` and `<-`, shown as the arrows they stand for.
+        case arrow(right: Bool)
         /// `\$`: a dollar, written so it does not open a formula — shown as
         /// the dollar it is, as LaTeX and every Markdown reader show it.
         case dollar
@@ -1586,6 +1612,16 @@ enum NoteMarkdown {
     private static let emphasisPattern = try! NSRegularExpression(
         pattern: #"(\*\*\*)([^*\n]+)(\*\*\*)|(\*\*)([^*\n]+)(\*\*)|(\*)([^*\n]+)(\*)|(`)([^`\n]+)(`)"#
     )
+    /// `==words==` and `=={pink}words==`: opened where no letter, digit or
+    /// `=` stands before it and no space after it, closed where no space
+    /// stands before it and no `=` after — so `a==b && c==d` in a line of
+    /// prose is not a highlight, and `x = y` inside one is fine. One line.
+    /// Portable's `HIGHLIGHT` is the same expression.
+    static let highlightPattern = try! NSRegularExpression(
+        pattern: #"(?<![\p{L}\p{N}=])==(?:\{(yellow|green|blue|pink|purple)\})?(?![\s=])((?:[^=\n]|=(?!=))+?)(?<!\s)==(?!=)"#
+    )
+    /// `->` and `<-`, not the middle of a longer dash or a `<->`.
+    static let arrowPattern = try! NSRegularExpression(pattern: #"(?<![-<])->|<-(?![->])"#)
 
     /// A table cell's words in pieces: emphasis as emphasis, and the rest
     /// as written with stray `**`, `__` and backticks left out — Portable's
@@ -1620,8 +1656,19 @@ enum NoteMarkdown {
     private static func holdsMarkup(_ line: String) -> Bool {
         // Over the bytes, not through `NSString.character(at:)` — that is a
         // message send per character, and there are thirty thousand of them
-        // in a note worth worrying about.
-        line.utf8.contains { $0 == 0x5B || $0 == 0x24 || $0 == 0x2A || $0 == 0x60 || $0 == 0x5C }
+        // in a note worth worrying about. A highlight begins with `=`; an
+        // arrow is `->` or `<-`, two bytes, so the byte before is kept.
+        var previous: UInt8 = 0
+        for byte in line.utf8 {
+            switch byte {
+            case 0x5B, 0x24, 0x2A, 0x60, 0x5C, 0x3D: return true
+            case 0x3E where previous == 0x2D: return true   // ->
+            case 0x2D where previous == 0x3C: return true   // <-
+            default: break
+            }
+            previous = byte
+        }
+        return false
     }
 
     /// Whether a line is one displayed formula and nothing else — the way a
@@ -1688,6 +1735,16 @@ enum NoteMarkdown {
         }
         if let match = dollarPattern.firstMatch(in: line as String, range: range) {
             consider(Token(range: match.range, kind: .dollar))
+        }
+        if let match = highlightPattern.firstMatch(in: line as String, range: range) {
+            let named = match.range(at: 1).location == NSNotFound ? nil : line.substring(with: match.range(at: 1))
+            consider(Token(range: match.range, kind: .highlight(
+                text: line.substring(with: match.range(at: 2)), color: named,
+                source: line.substring(with: match.range)
+            )))
+        }
+        if let match = arrowPattern.firstMatch(in: line as String, range: range) {
+            consider(Token(range: match.range, kind: .arrow(right: line.substring(with: match.range) == "->")))
         }
         if let match = emphasisPattern.firstMatch(in: line as String, range: range) {
             // `***both***` is bold and italic — what ⌘B then ⌘I make of a
@@ -1770,9 +1827,36 @@ enum NoteMarkdown {
             if block.kind == .task(true) { attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
             return atomic(text, source: source, attributes: attributes, style: style)
 
+        case .highlight(let text, let color, let source):
+            var attributes = highlightAttributes(in: block, color: color)
+            attributes[.paperTimeSourceLead] = highlightLead(color: color)
+            if block.kind == .task(true) { attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
+            return atomic(text, source: source, attributes: attributes, style: style)
+
+        case .arrow(let right):
+            return atomic(right ? "→" : "←", source: right ? "->" : "<-",
+                          attributes: block.attributes(style: style), style: style)
+
         case .dollar:
             return atomic("$", source: "\\$", attributes: block.attributes(style: style), style: style)
         }
+    }
+
+    /// How many characters open a highlight: `==`, or `=={pink}`.
+    static func highlightLead(color: String?) -> Int {
+        2 + (color.map { ($0 as NSString).length + 2 } ?? 0)
+    }
+
+    /// Highlighted words: the line's own face in the highlight's ink, and
+    /// the band behind them (painted by `NoteLayoutFragment` on the Mac).
+    static func highlightAttributes(in block: Block, color: String?) -> [NSAttributedString.Key: Any] {
+        var attributes: [NSAttributedString.Key: Any] = [.font: block.font, .foregroundColor: NoteHighlight.ink(color)]
+        #if os(macOS)
+        attributes[NoteHighlight.attribute] = color ?? NoteHighlight.defaultName
+        #else
+        attributes[.backgroundColor] = NoteHighlight.fill(color)
+        #endif
+        return attributes
     }
 
     private static func atomic(

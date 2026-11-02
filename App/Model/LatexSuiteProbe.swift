@@ -344,7 +344,7 @@ enum LatexSuiteTypingProbe {
                 // ⌘ and a letter, to the view as a key — the note's ⌘B. With
                 // the letter's key code: the note reads the code, not the
                 // character, so that a Korean keyboard's ⌘B is ⌘B too.
-                let codes: [String: UInt16] = ["b": 11, "i": 34, "e": 14, "m": 46]
+                let codes: [String: UInt16] = ["b": 11, "i": 34, "e": 14, "m": 46, "h": 4]
                 let flags: NSEvent.ModifierFlags = key.hasPrefix("CmdShift:") ? [.command, .shift] : [.command]
                 if let key = event(letter, codes[letter.lowercased()] ?? 0, flags) { view.keyDown(with: key) }
             } else if let name = key.stripPrefix("Fold:"), let note = view as? NoteTextView {

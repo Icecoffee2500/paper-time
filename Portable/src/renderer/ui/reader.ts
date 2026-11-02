@@ -17,7 +17,7 @@
  */
 import { clear, el, on } from '../dom.js'
 import { freshReaderState, store, type ReaderState } from '../state.js'
-import { PAPER_DRAG_TYPE } from '../../shared/split.js'
+import { PANE_DRAG_TYPE, PAPER_DRAG_TYPE } from '../../shared/split.js'
 import type { QuoteLink } from '../../shared/quotedPassages.js'
 import { openDocument, releaseTextCaches, type Opening, type PDFDocumentProxy, type PDFPageProxy } from '../pdf.js'
 import { headBytes, headLine, rightsHandler, type ByteTrouble, type PDFLock } from '../../shared/pdfLock.js'
@@ -133,6 +133,10 @@ export interface ReaderOptions {
   state?: ReaderState
   /** One page, a book's two, or all of them scrolled. */
   layout?: PageLayout
+  /** The pane's key in the arrangement (`paperOfPane` for the paper): what a
+   *  drag of the title carries, so the pane moves rather than a second one
+   *  of its paper opening. */
+  paneKey?: string
 }
 
 /** The gutter between the two pages of a book's spread, in the window's pixels. */
@@ -161,6 +165,7 @@ export class Reader implements PageOwner {
   /** Page count, page, zoom and whether the pen is out — this reader's own. */
   readonly state: ReaderState
   private pane: boolean
+  private paneKey: string | null
   private layout: PageLayout
   /** Draws a page as it comes near; the pages near the view now. */
   private drawObserver: IntersectionObserver | null = null
@@ -218,6 +223,7 @@ export class Reader implements PageOwner {
   constructor(private readonly actions: ReaderActions, options: ReaderOptions = {}) {
     this.state = options.state ?? freshReaderState()
     this.pane = options.pane ?? false
+    this.paneKey = options.paneKey ?? null
     this.layout = options.layout ?? 'continuous'
     living += 1
     this.scroll.append(this.pagesBox)
@@ -268,6 +274,7 @@ export class Reader implements PageOwner {
       const paper = this.paperID ? store.papers.find((entry) => entry.id === this.paperID) : null
       if (!this.pane || !paper || !event.dataTransfer) return
       event.dataTransfer.setData(PAPER_DRAG_TYPE, paper.id)
+      if (this.paneKey) event.dataTransfer.setData(PANE_DRAG_TYPE, this.paneKey)
       event.dataTransfer.setData('text/plain', paper.meta.displayTitle)
       event.dataTransfer.effectAllowed = 'move'
     })

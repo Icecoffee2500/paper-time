@@ -35,6 +35,8 @@ import { applyTheme, saveSettings } from './settingsController.js'
 import { layoutPanes } from './layout.js'
 import { shell, solo } from './shell.js'
 import { askForName } from './ui/ask.js'
+import { askForAddress, type AddressOutcome } from './ui/addByAddress.js'
+import { readPaperAddress } from '../shared/paperAddress.js'
 import { toast } from './ui/toolbar.js'
 import { couldNot } from './notices.js'
 import { L } from '../shared/lang.js'
@@ -194,6 +196,42 @@ export async function addPapers(paths?: string[]) {
     said.push(L(`PDF ${refused.length}개는 읽지 못했어요.`, `${refused.length} PDF${refused.length === 1 ? '' : 's'} couldn't be read.`))
   }
   if (said.length > 0) toast(said.join(' '))
+}
+
+/**
+ * «Add Paper by Address…»: what was typed, fetched and taken in, and then
+ * shown. The sheet carries the asking and the saying; this is the one call
+ * behind it, so the probe reaches the same path (`__papertimeLibrary.addByAddress`).
+ */
+export async function addPaperByAddress(text: string): Promise<AddressOutcome> {
+  const at = ticket()
+  const answer = await call('library:addByAddress', { text, root: importDestination() })
+  if ('error' in answer) return { failed: answer.fetch ?? null, message: answer.error }
+  settle(answer, at, 'keep')
+  if (answer.added) return { added: answer.added }
+  if (answer.already) return { already: answer.already }
+  return { failed: null }
+}
+
+export async function addByAddress() {
+  // The clipboard's address, when it holds one: the usual way here is to
+  // copy the address from a browser and come to Paper Time.
+  let initial = ''
+  try {
+    const held = (await navigator.clipboard.readText()).trim()
+    if (held.length < 400 && readPaperAddress(held)) initial = held
+  } catch {
+    // Not granted, or empty: the field starts empty.
+  }
+  const outcome = await askForAddress(addPaperByAddress, initial)
+  if (!outcome || 'failed' in outcome) return
+  if ('already' in outcome) {
+    toast(L('이미 라이브러리에 있는 논문이에요.', 'This paper is already in the library.'))
+    await showPaper(outcome.already)
+    return
+  }
+  toast(L('논문을 더했어요.', 'Added the paper.'))
+  await showPaper(outcome.added)
 }
 
 /**

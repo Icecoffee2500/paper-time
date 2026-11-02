@@ -18,7 +18,7 @@
  */
 import { EditorSelection, EditorState, Prec, RangeSetBuilder, StateEffect, StateField, type Extension, type Range } from '@codemirror/state'
 import { Decoration, EditorView, WidgetType, keymap, type DecorationSet } from '@codemirror/view'
-import { blankingCode, emphasisClasses, emphasisPieces, emphasisWidth, markerClass, planNote, type InlineToken, type PlannedLine } from '../../../shared/noteMarkdown.js'
+import { blankingCode, emphasisClasses, emphasisPieces, emphasisWidth, highlightClasses, highlightLead, markerClass, planNote, type InlineToken, type PlannedLine } from '../../../shared/noteMarkdown.js'
 import { toggleChildrenEnd } from '../../../shared/noteBlocks.js'
 import { L } from '../../../shared/lang.js'
 import { parseTable, tableBlocks, type Table } from '../../../shared/noteTable.js'
@@ -440,7 +440,30 @@ function tokenRanges(token: InlineToken, source: string, line: PlannedLine, out:
       out.push(hidden.range(to - width, to))
       return
     }
+    case 'highlight': {
+      const lead = highlightLead(token.color)
+      out.push(hidden.range(from, from + lead))
+      out.push(Decoration.mark({ class: highlightClasses(token.color) }).range(from + lead, to - 2))
+      out.push(hidden.range(to - 2, to))
+      return
+    }
+    case 'arrow':
+      out.push(Decoration.replace({ widget: new ArrowWidget(token.right) }).range(from, to))
+      return
   }
+}
+
+/** `->` shown as →, `<-` as ←: the two characters stand for one. */
+class ArrowWidget extends WidgetType {
+  constructor(readonly right: boolean) { super() }
+  override eq(other: ArrowWidget) { return other.right === this.right }
+  override toDOM() {
+    const span = document.createElement('span')
+    span.className = 'nm-arrow'
+    span.textContent = this.right ? '→' : '←'
+    return span
+  }
+  override ignoreEvent() { return false }
 }
 
 /** The opening and the closing of a formula, as they are written: `$`, `$$`, `\(`, `\[`, `\begin{…}`, `\eqref{`. */
@@ -493,6 +516,17 @@ function syntaxRanges(token: InlineToken, source: string, out: Range<Decoration>
       paint(to - width, to)
       return
     }
+    case 'highlight': {
+      // The words in the ink on the band, the `==` either side shown.
+      const lead = highlightLead(token.color)
+      if (to - from > lead + 2) out.push(Decoration.mark({ class: highlightClasses(token.color) }).range(from + lead, to - 2))
+      paint(from, from + lead)
+      paint(to - 2, to)
+      return
+    }
+    case 'arrow':
+      // Two characters that are being typed: left as typed.
+      return
   }
 }
 

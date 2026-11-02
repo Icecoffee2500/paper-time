@@ -5,6 +5,7 @@
  * spreads them into one `Handlers`, which the compiler checks for
  * completeness against `shared/api.ts`.
  */
+import type { Fetch, FetchedPapers } from '../paperSource.js'
 import type { MetadataQueue } from '../metadata/queue.js'
 import type { Updates } from '../updates.js'
 import type { MenuState } from '../../shared/api.js'
@@ -43,6 +44,10 @@ export interface Context {
   metadata: MetadataQueue
   /** Whether there is a newer version, and installing it on Windows (`updates.ts`). */
   updates: Updates
+  /** The bytes of papers that have no file, for the session (`paperSource.ts`). */
+  fetched: FetchedPapers
+  /** One request to the web, for a paper's bytes; the probe's goes somewhere of its own. */
+  fetch: Fetch
   /** Whether this run is a probe, which reads a folder of its own and remembers nothing. */
   isProbe: boolean
   /** The folder a probe was told to open, or null. */

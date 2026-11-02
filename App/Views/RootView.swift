@@ -147,6 +147,7 @@ struct LibraryWindow: View {
     @State private var isImportingPDFs = false
     @State private var showsExport = false
     @State private var showsMigration = false
+    @State private var showsAddByAddress = false
     @State private var showsCitationStyles = false
     #if os(iOS)
     /// Settings on iOS: there is no Settings window, so a sheet from a gear.
@@ -161,6 +162,24 @@ struct LibraryWindow: View {
             // hand on the machine.
             .preferredColorScheme(Boot.isSet("PAPERTIME_DARK") ? .dark : nil)
             .task {
+                // `--papertime-toolbar-shot=<png in the container>`: the bar
+                // over a selection in a note, drawn light and dark — its
+                // layout; the glass itself needs a window to be glass.
+                if let path = Boot.setting("PAPERTIME_TOOLBAR_SHOT") {
+                    for (name, scheme) in [("light", ColorScheme.light), ("dark", ColorScheme.dark)] {
+                        let renderer = ImageRenderer(content: SelectionToolbar.Bar(choose: { _ in })
+                            .padding(24)
+                            .background(scheme == .dark ? Color(white: 0.12) : Color.white)
+                            .environment(\.colorScheme, scheme))
+                        renderer.scale = 2
+                        if let image = renderer.nsImage, let tiff = image.tiffRepresentation,
+                           let rep = NSBitmapImageRep(data: tiff), let png = rep.representation(using: .png, properties: [:]) {
+                            let file = path.replacingOccurrences(of: ".png", with: "-\(name).png")
+                            try? png.write(to: URL(fileURLWithPath: file))
+                            FileHandle.standardError.write(Data("toolbar shot: \(file) \(Int(image.size.width))×\(Int(image.size.height))\n".utf8))
+                        }
+                    }
+                }
                 // `--papertime-contents=1` opens the contents over the page,
                 // which is where the page grid lives.
                 if Boot.isSet("PAPERTIME_CONTENTS") {
@@ -172,12 +191,22 @@ struct LibraryWindow: View {
                     if let first = model.visiblePapers.first { model.keepOpen(first.id) }
                     app.toggleOpenPapers()
                 }
-                guard Boot.isSet("PAPERTIME_SPLIT") else { return }
+                guard let split = Boot.setting("PAPERTIME_SPLIT") else { return }
                 try? await Task.sleep(for: .seconds(2))
                 let papers = model.visiblePapers
-                guard papers.count >= 2 else { return }
-                model.selectedPaperID = papers[0].id
-                app.dock(papers[1].id, at: .right, in: model)
+                // `--papertime-split=same`: the first paper beside itself —
+                // two panes of one paper, each a reader of its own.
+                if split == "same", let first = papers.first {
+                    model.selectedPaperID = first.id
+                    app.dock(first.id, at: .right, in: model)
+                } else {
+                    guard papers.count >= 2 else { return }
+                    model.selectedPaperID = papers[0].id
+                    app.dock(papers[1].id, at: .right, in: model)
+                }
+                try? await Task.sleep(for: .seconds(1))
+                let panes = (app.split?.panes ?? []).map { "\($0.id.uuidString.prefix(4)):\(model.paper($0.paper)?.meta.displayTitle ?? "?")" }
+                FileHandle.standardError.write(Data("split: \(panes) focused \(app.focusedPaneID?.uuidString.prefix(4) ?? "none") selected \(model.selectedPaper?.meta.displayTitle ?? "none")\n".utf8))
             }
             // A quoted passage was clicked on the page: its note opens
             // where notes are showing, at the quotation.
@@ -605,6 +634,7 @@ struct LibraryWindow: View {
         #endif
         .sheet(isPresented: $showsExport) { BibTeXExportView() }
         .sheet(isPresented: $showsMigration) { MigrationView(model: model) }
+        .sheet(isPresented: $showsAddByAddress) { AddByAddressSheet(model: model) { showsAddByAddress = false } }
         .modifier(RestoreAlerts(model: model))
         .sheet(isPresented: $showsCitationStyles) {
             if let paper = model.selectedPaper {
@@ -626,6 +656,9 @@ struct LibraryWindow: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .paperTimeAddPapers)) { _ in
             chooseDocumentsToAdd()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .paperTimeAddByAddress)) { _ in
+            showsAddByAddress = true
         }
         .onReceive(NotificationCenter.default.publisher(for: .paperTimeExportBibTeX)) { _ in
             showsExport = true
@@ -1082,6 +1115,7 @@ struct LibraryWindow: View {
     private func perform(_ action: SearchResult.Action) {
         switch action {
         case .addPDFs: isImportingPDFs = true
+        case .addByAddress: showsAddByAddress = true
         case .exportBibTeX: showsExport = true
         case .resolveMetadata: Task { await model.resolveAllPending() }
         case .refresh: syncNow()
@@ -1441,16 +1475,15 @@ struct PaperDetailColumn: View {
             // ⌘W closes the pane in focus while there are several; the last
             // one left hands the key back to the window.
             .background(ClosePaneShortcut {
-                guard let split = app.split, split.papers.count > 1,
-                      let id = model.selectedPaperID, split.contains(id) else { return false }
-                app.undock(id, model: model)
-                model.closeOpenPaper(id)
+                guard let split = app.split, split.panes.count > 1,
+                      let pane = app.focusedPane(in: split, model: model) else { return false }
+                app.closePane(pane, model: model)
                 return true
             }.frame(width: 0, height: 0))
             .onDrop(of: [.paperTimePaper], delegate: DockDropDelegate(
                 size: { pageSize },
                 zone: $dockZone,
-                drop: { id, zone in app.dock(id, at: zone, in: model) }
+                drop: { transfer, zone in app.dock(transfer.id, at: zone, in: model, movingPane: transfer.pane) }
             ))
             // The zone stays lit only while a drag is really going on. A
             // drag let go outside the window, or cancelled with Escape, never

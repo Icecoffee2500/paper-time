@@ -55,6 +55,8 @@ public enum NoteText {
         (#"\[\[([^\]|\n]+)\|([^\]\n]*)\]\]"#, "$2"),
         (#"\[\[([^\]|\n]+)\]\]"#, "$1"),
         (#"\[([^\]\n]*)\]\([^)\s]*\)"#, "$1"),
+        // A highlight's marks, with the colour's name when it has one.
+        (#"(?<![\p{L}\p{N}=])==(?:\{[a-z]+\})?(?![\s=])((?:[^=\n]|=(?!=))+?)(?<!\s)==(?!=)"#, "$1"),
         // Emphasis marks, when they stand in pairs around something.
         (#"\*\*([^*\n]+)\*\*"#, "$1"),
         (#"__([^_\n]+)__"#, "$1"),

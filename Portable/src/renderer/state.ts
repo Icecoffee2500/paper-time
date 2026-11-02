@@ -19,7 +19,7 @@ import { paperHaystack, prepare, type ActionName, type Prepared, type Searchable
 import { zettelDisplayTitle, zettelIsEmpty, zettelPreview } from '../shared/zettel.js'
 import { PaperMeta, PaperState, type Collection, type Tag } from '../shared/model.js'
 import { SketchColor, SketchStyle } from '../shared/sketch.js'
-import { splitContains, splitDock, splitPapers, splitRemove, type DockZone, type SplitArrangement } from '../shared/split.js'
+import { freshPaneKey, paperOfPane, splitContains, splitContainsPaper, splitDock, splitPanesOf, splitPapers, splitRemove, splitRemovePaper, type DockZone, type SplitArrangement } from '../shared/split.js'
 import { DEFAULT_TINT_COLOR, type PageTint } from '../shared/pageTint.js'
 import { inCollection } from '../shared/smartRule.js'
 import type { PaneState } from '../shared/paneModel.js'
@@ -59,6 +59,9 @@ export interface Paper {
   meta: PaperMeta
   state: PaperState
   exists: boolean
+  /** The address it came from, for a paper added by address: one without
+   *  its file still opens, from there. */
+  source?: string
   /** The folder it came from, when the library reads more than one. */
   root?: string
 }
@@ -71,7 +74,7 @@ export interface Paper {
  */
 export const WINDOW_SETTINGS = [
   'libraryRoot', 'panes', 'columns', 'inspectorTab', 'sort', 'appearance', 'language', 'pageTint',
-  'pageTintColor', 'pageLayout', 'selectedPaperID', 'latexShortcuts', 'semanticSearch', 'resolveMetadataOnImport', 'metadataContactEmail', 'listSubtitle',
+  'pageTintColor', 'pageLayout', 'selectedPaperID', 'latexShortcuts', 'semanticSearch', 'resolveMetadataOnImport', 'metadataContactEmail', 'keepPDFsInMemory', 'listSubtitle',
   'bibtexProtectCase', 'bibtexPreprintStyle', 'bibtexIncludeUnverified', 'sketchStyle', 'inkPresets', 'shortcuts', 'seenReleaseNotesVersion', 'checkForUpdates',
 ] as const satisfies readonly (keyof AppSettings)[]
 
@@ -183,6 +186,10 @@ export interface Store {
   pinnedPaperIDs: string[]
   /** Papers side by side, when they are. Null is the one reader as always. */
   split: SplitArrangement | null
+  /** The pane in focus while papers are side by side: its key in `split`
+   *  (`paperOfPane` for the paper, which is `selectedID`). The same paper
+   *  may stand in two panes, so the paper alone does not say which. */
+  focusedPane: string | null
   settings: Settings
   windowState: { maximized: boolean; fullScreen: boolean; focused: boolean }
   /** The papers opened, in order — what the back and forward arrows walk. */
@@ -261,6 +268,7 @@ export const store: Store = {
   openPaperIDs: [],
   pinnedPaperIDs: [],
   split: null,
+  focusedPane: null,
   settings: {
     libraryRoot: null,
     panes: { sidebar: true, paperList: true, reader: true, inspector: true },
@@ -277,6 +285,7 @@ export const store: Store = {
     semanticSearch: true,
     resolveMetadataOnImport: true,
     metadataContactEmail: '',
+    keepPDFsInMemory: false,
     listSubtitle: 'authors,year,venue',
     bibtexProtectCase: true,
     bibtexPreprintStyle: 'eprint',
@@ -529,6 +538,7 @@ function toPaper(row: PaperRowDTO): Paper {
     state: new PaperState(row.state),
     exists: row.exists,
     root: row.root,
+    ...(row.source ? { source: row.source } : {}),
   }
 }
 
@@ -737,38 +747,88 @@ export function extendRun(now: Picking, lead: string, order: string[]): Picking 
  * the paper already showing takes the other half. Put beside another, a
  * paper is in use: every paper in the arrangement stays on the open shelf.
  */
-export function dock(id: string, zone: DockZone) {
+export function dock(id: string, zone: DockZone, pane?: string) {
   const current = store.selectedID
   const base: SplitArrangement = store.split
     ?? (current ? { left: { top: current } } : { left: { top: id } })
-  const arrangement = splitDock(base, id, zone)
+  // A pane dragged by its title moves; a paper dragged from anywhere else
+  // opens one more pane — a second pane of the same paper when it is there
+  // already, so a figure and the text that cites it can stand side by side.
+  const key = pane && splitContains(base, pane) ? pane : freshPaneKey(base, id)
+  const arrangement = splitDock(base, key, zone)
   // Put beside another by hand, a paper is pinned — the Mac's `dock`.
-  for (const entry of splitPapers(arrangement)) keepOpen(entry, true)
+  for (const entry of splitPapers(arrangement)) keepOpen(paperOfPane(entry), true)
   store.split = splitPapers(arrangement).length > 1 ? arrangement : null
   if (current === null) store.selectedID = id
+  settleFocus(store.split && !store.focusedPane && current ? current : store.focusedPane)
 }
 
 /**
- * Takes a paper out of the side-by-side arrangement. One pane left is no
- * arrangement at all; that paper is simply the one showing.
+ * The pane in focus is one of the arrangement's: the one named, else the
+ * first showing the paper showing, else the first of all — and the paper
+ * showing follows it.
+ */
+function settleFocus(wanted: string | null) {
+  const split = store.split
+  if (!split) {
+    store.focusedPane = null
+    return
+  }
+  const keys = splitPapers(split)
+  const key = wanted && keys.includes(wanted) ? wanted
+    : (store.selectedID ? splitPanesOf(split, store.selectedID)[0] : undefined) ?? keys[0]
+  store.focusedPane = key
+  store.selectedID = paperOfPane(key)
+}
+
+/** The key of the pane in focus: `focusedPane` settled against the arrangement, or the one reader's paper. */
+export function focusedPaneKey(): string | null {
+  if (!store.split) return store.selectedID
+  const keys = splitPapers(store.split)
+  if (store.focusedPane && keys.includes(store.focusedPane)) return store.focusedPane
+  return (store.selectedID ? splitPanesOf(store.split, store.selectedID)[0] : undefined) ?? keys[0] ?? null
+}
+
+/** A pane pressed: it is the one in focus, and its paper the one showing. */
+export function focusPane(key: string) {
+  store.selectedID = paperOfPane(key)
+  store.focusedPane = store.split ? key : null
+}
+
+/**
+ * Takes every pane of a paper out of the side-by-side arrangement. One pane
+ * left is no arrangement at all; that paper is simply the one showing.
  */
 export function undock(id: string) {
   const arrangement = store.split
-  if (!arrangement || !splitContains(arrangement, id)) return
-  const remaining = splitRemove(arrangement, id)
-  const papers = splitPapers(remaining)
-  if (papers.length <= 1) {
+  if (!arrangement || !splitContainsPaper(arrangement, id)) return
+  settleAfterRemoving(splitRemovePaper(arrangement, id), id)
+}
+
+/** Takes one pane out. The paper stays showing in its other panes, if it has any. */
+export function undockPane(key: string) {
+  const arrangement = store.split
+  if (!arrangement || !splitContains(arrangement, key)) return
+  settleAfterRemoving(splitRemove(arrangement, key), paperOfPane(key))
+}
+
+function settleAfterRemoving(remaining: SplitArrangement, removed: string) {
+  const keys = splitPapers(remaining)
+  if (keys.length <= 1) {
     store.split = null
-    const last = papers[0]
-    if (last && (store.selectedID === id || store.selectedID === null)) store.selectedID = last
+    store.focusedPane = null
+    const last = keys[0] ? paperOfPane(keys[0]) : null
+    if (last && (store.selectedID === removed || store.selectedID === null)) store.selectedID = last
+    else if (last && !splitContainsPaper(remaining, store.selectedID ?? '')) store.selectedID = last
   } else {
     store.split = remaining
-    if (store.selectedID === id) store.selectedID = papers[0]
+    if (store.selectedID === null || !splitContainsPaper(remaining, store.selectedID)) store.selectedID = paperOfPane(keys[0])
+    settleFocus(store.focusedPane)
   }
 }
 
-/** The papers in panes, left column first — or just the one showing. */
-export function panePapers(): string[] {
+/** The panes' keys, left column first — or just the one showing (its key is its paper). */
+export function paneKeys(): string[] {
   if (store.split) return splitPapers(store.split)
   return store.selectedID ? [store.selectedID] : []
 }
@@ -856,7 +916,7 @@ export function pruneToLibrary() {
   if (store.openPaperIDs.some((id) => !here(id))) store.openPaperIDs = store.openPaperIDs.filter(here)
   if (store.pinnedPaperIDs.some((id) => !here(id))) store.pinnedPaperIDs = store.pinnedPaperIDs.filter(here)
   if (store.selection.some((id) => !here(id))) store.selection = store.selection.filter(here)
-  for (const id of panePapers()) if (!here(id)) undock(id)
+  for (const key of paneKeys()) if (!here(paperOfPane(key))) undock(paperOfPane(key))
   if (store.selectedID && !here(store.selectedID)) store.selectedID = null
   if (store.slipBox.paperID && !here(store.slipBox.paperID)) store.slipBox.paperID = null
   if (store.trail.some((id) => !here(id))) {
