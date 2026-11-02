@@ -17,7 +17,7 @@ import { icon } from '../icons.js'
 import { platform } from '../bridge.js'
 import { L } from '../../shared/lang.js'
 import { withKey } from '../../shared/shortcuts.js'
-import { highlightInk, MARK_COLORS, MARK_COLOR_NAMES, cssColor, nearestColorName, type Mark, type MarkKind } from '../../shared/marks.js'
+import { highlightSwatch, MARK_COLORS, MARK_COLOR_NAMES, cssColor, nearestColorName, type Mark, type MarkKind } from '../../shared/marks.js'
 import type { MenuEntry } from './menu.js'
 import { copyText } from './clipboard.js'
 import type { PageView } from './pageView.js'
@@ -135,7 +135,8 @@ export class MarkBar {
 
   private swatch(name: string, title: string, press: () => void, current = false): HTMLElement {
     const button = this.button('mark-swatch', title, '', press)
-    button.style.background = cssColor(highlightInk(MARK_COLORS[name] as [number, number, number]))
+    // The highlighter's own colour, bright — Apple's — not the deep ink its words become.
+    button.style.background = cssColor(highlightSwatch(name))
     if (current) button.setAttribute('aria-pressed', 'true')
     return button
   }

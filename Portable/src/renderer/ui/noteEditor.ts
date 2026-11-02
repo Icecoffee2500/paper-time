@@ -28,7 +28,7 @@ import { zettelDisplayTitle, zettelPreviewBody, zettelTags } from '../../shared/
 import { noteByID, type Note } from '../state.js'
 import { deleteNote, flushNote, linkedFrom, linksOrTagsChanged, linksOut, updateNote } from '../notesModel.js'
 import { HIGHLIGHT_NAMES, backspaceEdit, codeIndentEdit, codeReturnEdit, deleteForwardEdit, highlightOpening, homeTarget, indentEdit, pairBackspaceEdit, pairEdit, returnEdit, shortcutEdit, toggleEmphasisEdit, toggleHighlightEdit, wrapEdit, type EmphasisMark, type LineEdit } from '../../shared/noteBlocks.js'
-import { MARK_COLORS, cssColor, highlightInk } from '../../shared/marks.js'
+import { MARK_COLORS, cssColor, highlightSwatch } from '../../shared/marks.js'
 import { codeRowAt } from '../../shared/noteCode.js'
 import { keyFor } from '../../shared/shortcuts.js'
 import { EditorSelection, EditorState, Prec, Transaction, type Extension } from '@codemirror/state'
@@ -134,7 +134,7 @@ function selectionToolbar(apply: (view: EditorView, mark: BarMark) => void): { e
           // The dot is the colour the words will be.
           const rgb = MARK_COLORS[button.highlight ?? 'yellow']
           const dot = el('span', { class: 'selection-toolbar-dot' })
-          dot.style.setProperty('--dot-ink', cssColor(highlightInk(rgb)))
+          dot.style.setProperty('--dot-ink', cssColor(highlightSwatch(button.highlight ?? 'yellow')))
           if (button.highlight === null) bar.append(el('span', { class: 'selection-toolbar-divider' }))
           node = el('button', { class: 'selection-toolbar-button', type: 'button', title: button.title, 'data-mark': highlightOpening(button.highlight), 'data-color': button.highlight ?? 'yellow' }, [dot])
         }
