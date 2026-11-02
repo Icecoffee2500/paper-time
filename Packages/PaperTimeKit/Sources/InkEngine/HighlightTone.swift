@@ -56,6 +56,27 @@ public enum HighlightTone {
 
     /// The words' colour on paper for any highlighter colour — another
     /// reader's, say — by the nearest of the five.
+    /// The colour a highlighter is *shown* as — the dot in a bar, an
+    /// underline, a strike: Apple's own five (the system colours, light),
+    /// bright, not the deep ink its words become. The dots were once the
+    /// ink, and next to the system's blue every one of them read as muddy.
+    public static func swatch(_ color: MarkupColor) -> RGB {
+        switch color {
+        case .yellow: RGB(red: 1.00, green: 0.80, blue: 0.00)
+        case .green: RGB(red: 0.20, green: 0.78, blue: 0.35)
+        case .blue: RGB(red: 0.00, green: 0.48, blue: 1.00)
+        case .pink: RGB(red: 1.00, green: 0.18, blue: 0.33)
+        case .purple: RGB(red: 0.69, green: 0.32, blue: 0.87)
+        }
+    }
+
+    /// The same for any highlighter colour, by the nearest of the five — what
+    /// a line (underline, strike) is drawn in. A line is thin and has no area
+    /// to carry a pale tint, so it is the swatch itself.
+    public static func line(_ c: RGB) -> RGB {
+        swatch(MarkupColor.nearest(red: c.red, green: c.green, blue: c.blue))
+    }
+
     public static func ink(_ c: RGB) -> RGB {
         ink(MarkupColor.nearest(red: c.red, green: c.green, blue: c.blue))
     }

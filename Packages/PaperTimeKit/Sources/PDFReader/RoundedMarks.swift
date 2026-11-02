@@ -119,16 +119,18 @@ public enum RoundedMarks {
 
     private enum LinePosition { case bottom, middle }
 
-    /// An underline or a strike, darker than the colour the file names.
+    /// An underline or a strike, in the highlighter's bright colour.
     ///
     /// A line is thin and has no area to carry a colour, so the pale tint that
-    /// suits a band leaves it barely there. Deepened, and thicker under the
-    /// pointer, in the colour itself.
+    /// suits a band leaves it barely there. It was the tint darkened by a
+    /// third, which came out as a dull slate blue; now it is the colour the
+    /// highlighter is shown as (`HighlightTone.line` — Apple's blue, green…),
+    /// and thicker under the pointer.
     private static func drawLine(
         _ annotation: PDFAnnotation, color: Tone, hovered: Bool,
         along position: LinePosition, in context: CGContext
     ) {
-        let ink = hovered ? color : color.blended(toward: 0, by: 0.3)
+        let ink = color.toned(HighlightTone.line(color.rgb)).blended(toward: 0, by: hovered ? 0.12 : 0)
         context.setStrokeColor(ink.cgColor)
         context.setLineCap(.round)
         for rect in lineRects(of: annotation) {

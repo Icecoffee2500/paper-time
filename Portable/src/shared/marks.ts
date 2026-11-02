@@ -116,6 +116,26 @@ export function luminance(c: [number, number, number]): number {
 }
 
 /** The words' colour on paper for any highlighter colour, by the nearest of the five (`HighlightTone.ink`). */
+/** The colour a highlighter is *shown* as — a dot in a bar, an underline, a
+ *  strike: Apple's own five (the system colours, light), bright, not the deep
+ *  ink its words become (`HighlightTone.swatch`). */
+export const HIGHLIGHT_SWATCH: Record<string, [number, number, number]> = {
+  yellow: [1, 0.8, 0],
+  green: [0.2, 0.78, 0.35],
+  blue: [0, 0.48, 1],
+  pink: [1, 0.18, 0.33],
+  purple: [0.69, 0.32, 0.87],
+}
+
+export function highlightSwatch(name: string): [number, number, number] {
+  return HIGHLIGHT_SWATCH[name] ?? HIGHLIGHT_SWATCH.yellow
+}
+
+/** What a line (underline, strike) is drawn in, by the nearest name (`HighlightTone.line`). */
+export function highlightLine(c: [number, number, number]): [number, number, number] {
+  return highlightSwatch(nearestColorName(c))
+}
+
 export function highlightInk(c: [number, number, number]): [number, number, number] {
   return [...HIGHLIGHT_INK[nearestColorName(c)]] as [number, number, number]
 }
@@ -177,7 +197,9 @@ export function markLine(kind: MarkKind, color: [number, number, number], rect: 
     from: { x: rect.x + width / 2, y },
     to: { x: rect.x + rect.width - width / 2, y },
     width,
-    ink: hovered ? color : blended(color, 0, 0.3),
+    // The highlighter's bright colour (the tint darkened by a third was a
+    // dull slate), a shade deeper under the pointer.
+    ink: blended(highlightLine(color), 0, hovered ? 0.12 : 0),
   }
 }
 

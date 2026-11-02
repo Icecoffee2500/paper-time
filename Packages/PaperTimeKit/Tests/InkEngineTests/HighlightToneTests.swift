@@ -20,4 +20,12 @@ struct HighlightToneTests {
         #expect(round(HighlightTone.band(MarkupColor.pink.rgb)) == [0.998, 0.912, 0.932])
         #expect(round(HighlightTone.band(MarkupColor.pink.rgb, hovered: true)) == [0.999, 0.947, 0.959])
     }
+
+    @Test("the swatch is Apple's colour, and a line is the swatch of the nearest name")
+    func swatches() {
+        #expect(HighlightTone.swatch(.blue) == HighlightTone.RGB(red: 0.00, green: 0.48, blue: 1.00))
+        #expect(HighlightTone.swatch(.yellow) == HighlightTone.RGB(red: 1.00, green: 0.80, blue: 0.00))
+        #expect(HighlightTone.line(HighlightTone.RGB(red: 0.4, green: 0.7, blue: 1)) == HighlightTone.swatch(.blue))
+        #expect(HighlightTone.line(MarkupColor.pink.rgb) == HighlightTone.swatch(.pink))
+    }
 }
