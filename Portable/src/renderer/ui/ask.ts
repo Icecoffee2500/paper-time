@@ -19,6 +19,9 @@ export interface NameQuestion {
   confirm: string
   /** What the field starts with. */
   initial?: string
+  /** A row of colours under the field, one of them chosen — a tag's. The
+   *  choice is left in `chosen` when the sheet resolves. */
+  swatches?: { options: readonly string[]; colorOf: (value: string) => string; chosen: string }
 }
 
 /** Resolves with the trimmed name, or null when the sheet was put away. */
@@ -34,12 +37,27 @@ export function askForName(question: NameQuestion): Promise<string | null> {
       'aria-label': question.placeholder,
     }) as HTMLInputElement
     input.value = question.initial ?? ''
+    const swatches = question.swatches
+    const row = swatches ? el('div', { class: 'ask-swatches', role: 'radiogroup' }) : null
+    if (swatches && row) {
+      const dots: HTMLButtonElement[] = []
+      for (const value of swatches.options) {
+        const dot = el('button', { type: 'button', class: 'ask-swatch', role: 'radio', 'aria-label': value, 'aria-checked': String(value === swatches.chosen) }) as HTMLButtonElement
+        dot.style.setProperty('--swatch', swatches.colorOf(value))
+        on(dot, 'click', () => {
+          swatches.chosen = value
+          for (const other of dots) other.setAttribute('aria-checked', String(other === dot))
+        })
+        dots.push(dot)
+        row.append(dot)
+      }
+    }
     const cancel = el('button', { class: 'plain-button', text: L('취소', 'Cancel') })
     const create = el('button', { class: 'filled-button', text: question.confirm }) as HTMLButtonElement
     const foot = el('div', { class: 'set-foot' }, [el('span', { class: 'fb-spacer' }), cancel, create])
     sheet.append(
       el('h2', { class: 'fb-title', text: question.title }),
-      el('div', { class: 'set-body ask-body' }, [input]),
+      el('div', { class: 'set-body ask-body' }, row ? [input, row] : [input]),
       foot,
     )
     backdrop.append(sheet)

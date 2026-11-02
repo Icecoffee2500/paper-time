@@ -30,6 +30,7 @@ import {
   type RawRecord,
 } from '../shared/model.js'
 import * as L from './layout.js'
+import type { PaperSource } from './paperSource.js'
 import { EventEmitter } from 'node:events'
 
 /** Every paper that has just come into a library, whichever way it came
@@ -58,6 +59,9 @@ export interface PaperRow {
   /** Absolute path of the PDF, or null when the record has lost its file. */
   file: string | null
   exists: boolean
+  /** Where the PDF can be had again, for a paper added by address
+   *  (`source.json`); absent for one that arrived as a file. */
+  source?: PaperSource
 }
 
 /** What one pass over a folder's records found, and what it could not. */
@@ -148,6 +152,15 @@ async function readIfPossible(file: string): Promise<{ value: RawRecord | null; 
 }
 
 let writeCounter = 0
+
+/** `source.json`, when the record has one and it reads. */
+async function readSource(root: string, id: string): Promise<PaperSource | undefined> {
+  const file = L.sourcePath(root, id)
+  if (!fs.existsSync(file)) return undefined
+  const raw = await readJSON(file).catch(() => null)
+  if (!raw || typeof raw.address !== 'string' || typeof raw.pdf !== 'string') return undefined
+  return { address: raw.address, pdf: raw.pdf, fetchedAt: typeof raw.fetchedAt === 'string' ? raw.fetchedAt : '' }
+}
 
 export async function writeJSON(file: string, value: unknown): Promise<void> {
   await fsp.mkdir(path.dirname(file), { recursive: true })
@@ -257,13 +270,16 @@ export class Library {
         // `(try? loadState(folder)) ?? PaperState()`.
         const relative = String((meta.value.file as RawRecord | undefined)?.relativePath ?? '')
         const file = relative ? L.fileForRecordPath(this.root, relative) : null
-        return {
+        const row: PaperRow = {
           id,
           meta: meta.value,
           state: state.value ?? {},
           file,
           exists: file ? fs.existsSync(file) : false,
         }
+        const source = await readSource(this.root, id)
+        if (source) row.source = source
+        return row
       })
     const papers = (await Promise.all(found)).filter((row): row is PaperRow => row !== null)
     // Repairing a record writes to the folder, and a pass that came back short
@@ -291,7 +307,12 @@ export class Library {
     const state = (await readIfPossible(L.statePath(this.root, id))).value ?? {}
     const relative = String((meta.file as RawRecord | undefined)?.relativePath ?? '')
     const file = relative ? L.fileForRecordPath(this.root, relative) : null
-    const row = { id, meta, state, file, exists: file ? fs.existsSync(file) : false }
+    const row: PaperRow = { id, meta, state, file, exists: file ? fs.existsSync(file) : false }
+    const source = await readSource(this.root, id)
+    if (source) row.source = source
+    // A paper from an address that has no file is not a paper that has lost
+    // one: it opens from its source, and there is nothing to find.
+    if (!row.exists && row.source) return row
     // A record that has lost its file is found again among the whole folder's
     // — which PDFs are free to be claimed is a question about all the records,
     // so this reads them. Only a paper that is already broken pays for it.
@@ -599,6 +620,50 @@ export class Library {
     await writeJSON(L.statePath(this.root, id), new PaperState({}).encode())
     const row = await this.paper(id)
     if (row && known.papers) known.papers.push(row)
+    importedPapers.emit('imported', id)
+    return { row, outcome: 'imported' }
+  }
+
+  /**
+   * Takes in a PDF that arrived as bytes from an address (the Mac's
+   * `importFetched`). The record is the one `importPDF` writes — name, size,
+   * page count, digest — so the two builds' records stay the same bytes, and
+   * `source.json` beside it says where the PDF came from. With `keepFile`
+   * the bytes land beside the library's other PDFs; without it nothing but
+   * the record is written, and the paper opens from its source every time.
+   * A paper the library already holds — the same bytes, from anywhere — is
+   * not taken in twice.
+   */
+  async importFetched(
+    bytes: Buffer, name: string, source: PaperSource, pageCount: number,
+    options: { keepFile: boolean; identifiers?: Record<string, string>; papers?: PaperRow[] },
+  ): Promise<{ row: PaperRow | null; outcome: ImportOutcome }> {
+    const digest = crypto.createHash('sha256').update(bytes).digest('hex')
+    const existing = options.papers ?? (await this.read()).papers
+    const already = existing.find((row) => String((row.meta.file as RawRecord)?.importDigest ?? '') === digest)
+    if (already) return { row: already, outcome: 'duplicate' }
+    const relative = L.availableFileName(name, this.root)
+    const landing = path.join(this.root, relative)
+    if (options.keepFile) {
+      await fsp.writeFile(landing + '.part', bytes)
+      noteOwnWrite(landing)
+      await fsp.rename(landing + '.part', landing)
+      noteOwnWrite(landing)
+    }
+    const id = makeUUID()
+    const meta = PaperMeta.make(
+      id,
+      { relativePath: relative, byteSize: bytes.length, pageCount, importDigest: digest, originalName: name },
+      deviceIdentity,
+    )
+    // The identifier the address gave, so the lookup asks the registrar
+    // directly rather than reading the first page for it.
+    if (options.identifiers && Object.keys(options.identifiers).length > 0) meta.raw.identifiers = { ...options.identifiers }
+    await writeJSON(L.metaPath(this.root, id), meta.encode())
+    await writeJSON(L.statePath(this.root, id), new PaperState({}).encode())
+    await writeJSON(L.sourcePath(this.root, id), source)
+    const row = await this.paper(id)
+    if (row && options.papers) options.papers.push(row)
     importedPapers.emit('imported', id)
     return { row, outcome: 'imported' }
   }

@@ -5,14 +5,17 @@
 import { dialog, type BrowserWindow } from 'electron'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
-import type { Collection } from '../../shared/model.js'
+import type { Collection, Tag } from '../../shared/model.js'
 import { acceptedPatch } from '../../shared/appSettings.js'
 import { L as say } from '../../shared/lang.js'
 import { settings, update } from '../settings.js'
 import { folderRefusal } from '../libraries.js'
+import { probe } from '../probeMode.js'
 import { samePath } from '../../shared/paths.js'
 import { collectionsByFolder } from '../vocabulary.js'
 import { isFile, pageCount } from './shared.js'
+import { FetchError, fetchByAddress, makeSource } from '../paperSource.js'
+import { addressFileName, addressIdentifiers } from '../../shared/paperAddress.js'
 import { isFolder, recentLibraries, suggestedFolders } from '../suggestions.js'
 import type { Context, Handlers } from './context.js'
 
@@ -162,6 +165,47 @@ export function libraryHandlers(ctx: Context): Partial<Handlers> {
       return 'error' in snapshot ? snapshot : { ...snapshot, imported: report }
     },
 
+    // A paper from what was typed: fetched through Chromium, taken in as the
+    // file would be — or, with «Keep PDFs out of files», as a record alone
+    // that opens from its address. The lookup for its metadata follows as
+    // for any paper that arrives (`importedPapers`).
+    'library:addByAddress': async ({ text, root }, sender) => {
+      const destination = libraries.destination(root)
+      if (!destination) return { error: say('열린 라이브러리가 없어요.', 'No library is open.') }
+      let got: Awaited<ReturnType<typeof fetchByAddress>>
+      try {
+        got = await fetchByAddress(text, ctx.fetch)
+      } catch (error) {
+        if (error instanceof FetchError) return { error: error.message, fetch: error.why }
+        return { error: String(error) }
+      }
+      const { address, fetched } = got
+      const pages = (await ctx.pageCounter.countOrNull(new Uint8Array(fetched.bytes))) ?? 0
+      if (pages === 0) return { error: 'The PDF could not be opened.', fetch: 'noPDF' }
+      // `--papertime-keep-pdfs-in-memory=1`: the probe's way to the setting
+      // without writing the person's settings.
+      const keepFile = !(settings().keepPDFsInMemory || probe.argument('keep-pdfs-in-memory') === '1')
+      let added: string | undefined
+      let already: string | undefined
+      await sync.run(async () => {
+        const papers = (await destination.read()).papers
+        const { row, outcome } = await destination.importFetched(
+          fetched.bytes, addressFileName(address), makeSource(address, fetched.pdf), pages,
+          { keepFile, identifiers: addressIdentifiers(address), papers },
+        )
+        if (outcome === 'imported' && row) {
+          added = row.id
+          // Its bytes are in hand: the reader opens it without a second fetch.
+          ctx.fetched.put(row.id, fetched.bytes)
+        } else if (row) {
+          already = row.id
+        }
+      })
+      const snapshot = await ctx.snapshot()
+      windows.sendExcept(sender, 'library:changed')
+      return 'error' in snapshot ? snapshot : { ...snapshot, added, already }
+    },
+
     'library:adoptLoose': (_args, sender) => {
       // One adoption at a time, whoever asks: a second press, or a second
       // window, gets the answer of the one already running rather than
@@ -236,6 +280,19 @@ export function libraryHandlers(ctx: Context): Partial<Handlers> {
     // folder keeps the collections it already had, and a new one goes into
     // the folder being looked at, or the first — the folder a paper added
     // now would go into.
+    // A new tag goes into the folder being looked at — the one a paper added
+    // now would go into — and travels to the others as papers there wear it.
+    'tags:add': async ({ tag, root }, sender) => {
+      const folders = libraries.all()
+      if (folders.length === 0) return null
+      const destination = libraries.destination(root) ?? folders[0]
+      const manifest = await destination.manifest()
+      const tags = ((manifest.tags ?? []) as Tag[]).filter((one) => one.id !== tag.id)
+      await destination.saveManifest({ ...manifest, tags: [...tags, tag as Tag] })
+      windows.sendExcept(sender, 'library:changed')
+      return null
+    },
+
     'collections:save': async ({ collections, root }, sender) => {
       const all = collections as Collection[]
       const folders = libraries.all()

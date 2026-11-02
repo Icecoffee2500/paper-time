@@ -239,6 +239,10 @@ final class MarkupBarView: NSVisualEffectView {
         wantsLayer = true
         layer?.cornerCurve = .continuous
         layer?.masksToBounds = true
+        // A hairline where the glass ends, as a system popover has: not an
+        // outline, a quarter-tone edge.
+        layer?.borderWidth = 0.5
+        layer?.borderColor = NSColor.black.withAlphaComponent(0.08).cgColor
 
         var views: [NSView] = MarkupColor.allCases.enumerated().map { index, color in
             let button = NSButton(
@@ -271,8 +275,8 @@ final class MarkupBarView: NSVisualEffectView {
         let stack = NSStackView(views: views)
         stack.orientation = .horizontal
         stack.alignment = .centerY
-        stack.spacing = 10
-        stack.edgeInsets = NSEdgeInsets(top: 8, left: 14, bottom: 8, right: 14)
+        stack.spacing = 8
+        stack.edgeInsets = NSEdgeInsets(top: 7, left: 12, bottom: 7, right: 12)
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
         NSLayoutConstraint.activate([
@@ -316,8 +320,10 @@ final class MarkupBarView: NSVisualEffectView {
     ) -> NSImage {
         let size = NSSize(width: 20, height: 20)
         return NSImage(size: size, flipped: false) { rect in
-            let circle = rect.insetBy(dx: 0.5, dy: kind == .highlight ? 0.5 : 2.5)
-            color.platformColor.setFill()
+            let circle = rect.insetBy(dx: 1, dy: kind == .highlight ? 1 : 3)
+            // The colour the words will be, not the highlighter's own.
+            let ink = HighlightTone.ink(color)
+            NSColor(srgbRed: ink.red, green: ink.green, blue: ink.blue, alpha: 1).setFill()
             switch kind {
             case .highlight, .note:
                 NSBezierPath(ovalIn: circle).fill()
@@ -393,6 +399,10 @@ private final class MarkEditorView: NSVisualEffectView {
         wantsLayer = true
         layer?.cornerCurve = .continuous
         layer?.masksToBounds = true
+        // A hairline where the glass ends, as a system popover has: not an
+        // outline, a quarter-tone edge.
+        layer?.borderWidth = 0.5
+        layer?.borderColor = NSColor.black.withAlphaComponent(0.08).cgColor
 
         var views: [NSView] = MarkupColor.allCases.enumerated().map { index, color in
             let button = NSButton(

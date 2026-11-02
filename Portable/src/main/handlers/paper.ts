@@ -8,6 +8,7 @@ import path from 'node:path'
 import { diagnose, headBytes, headLine } from '../../shared/pdfLock.js'
 import { rightsLock, stripOwnedForDisplay } from '../pdfwrite.js'
 import { readWhole } from '../pdfBytes.js'
+import { FetchError, bytesOf } from '../paperSource.js'
 import type { Context, Handlers } from './context.js'
 
 
@@ -30,7 +31,7 @@ export function paperHandlers(ctx: Context): Partial<Handlers> {
         const stamp = `${row.file}|${stat.size}|${stat.mtimeMs}`
         let kept = scanners.get(id)
         if (!kept || kept.stamp !== stamp) {
-          kept = { stamp, scanner: new MathScanner(new Uint8Array(await readWhole(row.file))) }
+          kept = { stamp, scanner: new MathScanner(new Uint8Array(await bytesOf(row, ctx.fetched, readWhole, ctx.fetch))) }
           scanners.set(id, kept)
           // A few papers at a time: a page's glyphs are what a selection asks about.
           while (scanners.size > 4) scanners.delete(scanners.keys().next().value!)
@@ -48,8 +49,15 @@ export function paperHandlers(ctx: Context): Partial<Handlers> {
       // which is where the whole of this began.
       try {
         const row = await (await libraries.ownerOf(id))?.paper(id)
-        if (!row?.file || !row.exists) return { error: 'The PDF for this paper is not in the folder.' }
-        const bytes = await readWhole(row.file)
+        if (!row || (!row.exists && !row.source)) return { error: 'The PDF for this paper is not in the folder.' }
+        // From the file, or from the address the paper came from.
+        let bytes: Buffer
+        try {
+          bytes = await bytesOf(row, ctx.fetched, readWhole, ctx.fetch)
+        } catch (error) {
+          if (error instanceof FetchError) return { error: 'The PDF for this paper could not be fetched.', fetch: error.why }
+          throw error
+        }
         const trouble = diagnose(bytes)
         const lock = await rightsLock(bytes)
         if (lock) return { locked: lock }

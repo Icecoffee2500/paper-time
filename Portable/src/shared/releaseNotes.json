@@ -1,6 +1,144 @@
 {
  "releases": [
   {
+   "version": "0.9.35",
+   "date": {
+    "ko": "2026년 10월",
+    "en": "October 2026"
+   },
+   "note": {
+    "ko": "형광펜이 애플 노트처럼 보여요. 글자는 그 색의 진한 잉크가 되고, 그 아래 연한 띠가 깔려요. 노트에서도 ==글==으로 같은 하이라이트를 써요.",
+    "en": "Highlights now look the way they do in Apple Notes: the words turn a deep shade of the colour over a pale band of it. In notes, ==words== gets the same highlight."
+   },
+   "added": [
+    {
+     "title": {
+      "ko": "애플 노트식 형광펜",
+      "en": "Apple Notes-style highlights"
+     },
+     "detail": {
+      "ko": "논문의 형광펜은 글자 자체를 그 색의 진한 잉크로 바꾸고, 그 아래 연한 띠가 글자보다 조금 아래까지 둥글게 깔려요. 띠 밖의 글자는 건드리지 않아요. 파일에는 전과 같은 표시가 쓰이고, 그리는 법만 달라요. 밤에는 잉크가 밝은 색이 되고요.",
+      "en": "A highlight on the page recolours the words themselves in a deep shade of its colour, and lays a pale, rounded band under them that hangs a little below the letters. Letters outside the band are left alone. The file carries the same mark as before; only the drawing changed. At night the ink turns light."
+     },
+     "demo": "annotations",
+     "featured": true,
+     "devices": [
+      "mac"
+     ]
+    },
+    {
+     "title": {
+      "ko": "노트의 하이라이트",
+      "en": "Highlights in notes"
+     },
+     "detail": {
+      "ko": "==글==이 노트에서 하이라이트가 돼요. 색은 =={pink}글==처럼 이름을 앞에 적어요 — 논문 형광펜의 다섯 색(yellow·green·blue·pink·purple) 그대로예요. 선택한 글 위에 뜨는 막대에 다섯 색의 점이 서고, ⇧⌘H가 기본 색을 둘러요. 파일은 보통 Markdown이라 다른 앱에서도 글이 읽혀요.",
+      "en": "==words== is a highlight in a note. A colour goes in front, as =={pink}words== — the page's five highlighter colours (yellow, green, blue, pink, purple). The bar over a selection shows the five as dots, and ⇧⌘H puts on the default. The file stays ordinary Markdown, so the words read anywhere."
+     },
+     "devices": [
+      "mac"
+     ]
+    },
+    {
+     "title": {
+      "ko": "같은 논문을 여러 칸에",
+      "en": "One paper in several panes"
+     },
+     "detail": {
+      "ko": "한 논문을 두 칸에 띄워요 — 한 칸은 그림, 한 칸은 그 그림을 인용한 글. 목록이나 열린 논문 팝업에서 끌어다 놓으면 이미 떠 있는 논문도 칸이 하나 더 생겨요. 칸의 제목을 끌면 그 칸이 옮겨가요. 칸의 ×는 그 칸만 닫고, 논문은 다른 칸에 없을 때만 닫혀요.",
+      "en": "Put one paper in two panes — the figure in one, the text that cites it in the other. Dragged from the list or the open-papers popup, a paper already showing gets one more pane; dragged by a pane's title, the pane moves. A pane's × closes that pane, and the paper only when no other pane shows it."
+     },
+     "devices": [
+      "mac"
+     ]
+    },
+    {
+     "title": {
+      "ko": "노트의 화살표",
+      "en": "Arrows in notes"
+     },
+     "detail": {
+      "ko": "노트에서 ->는 →로, <-는 ←로 보여요. 파일에는 친 그대로 남고, 커서가 있는 줄에서는 적힌 그대로 보여요.",
+      "en": "In a note, -> shows as → and <- as ←. The file keeps what you typed, and the line under the caret shows it as written."
+     },
+     "devices": [
+      "mac"
+     ]
+    },
+    {
+     "title": {
+      "ko": "주소로 논문 더하기",
+      "en": "Add a paper by address"
+     },
+     "detail": {
+      "ko": "파일 메뉴의 «주소로 논문 더하기…»(⌥⌘O)에 arXiv 번호나 주소, DOI, PDF 주소를 넣으면 논문을 받아 더해요. DOI는 OpenAlex에서 열린 사본을 찾아 받고, 열린 사본이 없는 논문은 그렇다고 말해요. 서지는 그 번호로 바로 찾아요.",
+      "en": "Add Paper by Address… in the File menu (⌥⌘O) takes an arXiv number or address, a DOI, or the address of a PDF, fetches the paper and adds it. A DOI is looked up at OpenAlex for an open copy, and a paper without one says so. The metadata is resolved from that identifier directly."
+     },
+     "action": "addByAddress",
+     "devices": [
+      "mac"
+     ]
+    },
+    {
+     "title": {
+      "ko": "PDF 파일 없이 읽기",
+      "en": "Reading without PDF files"
+     },
+     "detail": {
+      "ko": "설정 → 라이브러리의 «PDF를 파일로 저장하지 않기»를 켜면, 주소로 더한 논문의 PDF를 폴더에 쓰지 않고 열 때마다 다시 받아요. 표시와 필기, 노트는 .papertime 폴더에 그대로 남아요. PDF 파일이 보안 프로그램에 잡히는 회사 컴퓨터를 위한 거예요. 집에서는 같은 폴더가 동기화되면 그 논문도 주소에서 열려요.",
+      "en": "With Keep PDFs Out of Files on (Settings → Library), a paper added by address is not written to the folder; Paper Time fetches it again each time it opens. Marks, ink and notes stay in the .papertime folder as always. For a company computer whose security software takes PDF files — and at home, the same folder synced opens those papers from their addresses too."
+     },
+     "devices": [
+      "mac"
+     ]
+    }
+   ],
+   "removed": [],
+   "fixed": [
+    {
+     "title": {
+      "ko": "형광펜 글자가 번지지 않아요",
+      "en": "Highlighted words no longer smear"
+     },
+     "detail": {
+      "ko": "형광펜 아래의 글자가 번져 보이고, 옆 낱말의 첫 글자까지 물들던 것을 고쳤어요. 잉크는 띠 안에서만, 화면의 픽셀에 맞춰 그려요.",
+      "en": "Words under a highlight looked smeared, and the colour reached the first letter of the next word. The ink now stays inside the band and is drawn to the screen's pixels."
+     },
+     "devices": [
+      "mac"
+     ]
+    }
+   ]
+  },
+  {
+   "version": "0.9.34",
+   "date": {
+    "ko": "2026년 10월",
+    "en": "October 2026"
+   },
+   "note": {
+    "ko": "태그를 이제 만들 수 있어요. 옆 목록에서 만들고, 정보 탭과 줄의 메뉴에서 붙이고 떼요.",
+    "en": "You can now make tags: in the sidebar, and put them on in the Info tab or a row's menu."
+   },
+   "added": [
+    {
+     "title": {
+      "ko": "태그 만들기",
+      "en": "Making Tags"
+     },
+     "detail": {
+      "ko": "태그는 끌어다 놓을 수는 있었는데 만들 길이 없었어요. 옆 목록 «태그» 구역의 «새 태그…»에서 이름과 색을 골라 만들어요. 정보 탭의 «읽기» 절에 태그 칩이 서고, 누르면 붙고 다시 누르면 떨어져요. 목록 줄의 오른쪽 클릭 메뉴에도 «태그»가 있어요.",
+      "en": "Tags could be dropped onto but never made. New Tag… in the sidebar's Tags section takes a name and a colour. The Info tab's Reading section shows every tag as a chip — press one to put it on, again to take it off — and a row's right-click menu has Tags too."
+     },
+     "devices": [
+      "mac"
+     ]
+    }
+   ],
+   "removed": [],
+   "fixed": []
+  },
+  {
    "version": "0.9.33",
    "date": {
     "ko": "2026년 10월",

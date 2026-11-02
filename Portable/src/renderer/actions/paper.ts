@@ -112,6 +112,18 @@ export function kindEntries(entry: Paper): MenuEntry[] {
 }
 
 /** The three reading statuses as menu rows, the paper's own ticked. */
+export function tagEntries(entry: Paper): MenuEntry[] {
+  if (store.tags.length === 0) return [{ label: L('태그가 없어요', 'No Tags'), disabled: true }]
+  return store.tags.map((tag) => {
+    const on = entry.meta.tagIDs.includes(tag.id)
+    return {
+      label: tag.name,
+      checked: on,
+      action: () => void editMeta(entry.id, { tagIDs: on ? entry.meta.tagIDs.filter((id) => id !== tag.id) : [...entry.meta.tagIDs, tag.id] }),
+    }
+  })
+}
+
 export function statusEntries(entry: Paper): MenuEntry[] {
   return ([
     ['unread', L('안 읽음', 'Unread'), 'circle'],
@@ -373,6 +385,9 @@ export function paperMenu(id: string, anchor: Element) {
     // The Mac's row menu has the reading status as a picker of its own. The
     // kind is not here: it is in the status button's menu and the ⋯ menu.
     { label: L('읽기 상태', 'Reading Status'), icon: 'circle.lefthalf.filled', children: statusEntries(entry) },
+    // Every tag, ticked where this paper wears it; a press puts it on or
+    // takes it off. Tags are made in the sidebar.
+    { label: L('태그', 'Tags'), icon: 'tag', children: tagEntries(entry) },
     {
       label: entry.state.isFavorite
         ? L('즐겨찾기에서 빼기', 'Remove from Favorites')

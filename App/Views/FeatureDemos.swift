@@ -1,4 +1,5 @@
 import PaperCore
+import InkEngine
 import SwiftUI
 
 /// How much room a demonstration has.
@@ -607,21 +608,25 @@ private struct AnnotationDemo: View {
         /// Which line of the page it sits on.
         let line: Int
         let text: String
-        let tint: Color
+        let color: MarkupColor
         let underlined: Bool
+        var tint: Color { Color(color.rgb) }
+        /// The words' ink and the band under them, as the page draws them.
+        var ink: Color { Color(HighlightTone.ink(color.rgb)) }
+        var band: Color { Color(HighlightTone.band(color.rgb)) }
     }
 
     private var marks: [Mark] {
         [
             Mark(id: 0, line: 1,
                  text: ReleaseNotes.string("경계층에서 초과 감쇠가 생긴다", "excess damping arises in the boundary layer"),
-                 tint: .yellow, underlined: false),
+                 color: .yellow, underlined: false),
             Mark(id: 1, line: 6,
                  text: ReleaseNotes.string("레이놀즈 수에 무관하다", "independent of the Reynolds number"),
-                 tint: .blue, underlined: true),
+                 color: .blue, underlined: true),
             Mark(id: 2, line: 11,
                  text: ReleaseNotes.string("측정값은 모형보다 40% 크다", "measurements exceed the model by 40%"),
-                 tint: .pink, underlined: false),
+                 color: .pink, underlined: false),
         ]
     }
 
@@ -693,13 +698,16 @@ private struct AnnotationDemo: View {
         return formula(size: size)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 3)
+            // The words in the highlight's ink, as Apple Notes colours them.
+            .foregroundStyle(ours ? Color(HighlightTone.ink(MarkupColor.yellow.rgb)) : Color.primary)
             .background {
                 if ours {
-                    // The words' ink and a hair of margin, as `LineMetrics` measures it.
+                    // The words' ink and a hair of margin, as `LineMetrics` measures it,
+                    // in the band's pale shade, hanging a little under the letters.
                     RoundedRectangle(cornerRadius: 3.5, style: .continuous)
-                        .fill(Color.yellow.opacity(0.32))
-                        .frame(height: size * 1.2)
-                        .offset(y: size * 0.02)
+                        .fill(Color(HighlightTone.band(MarkupColor.yellow.rgb)))
+                        .frame(height: size * 1.28)
+                        .offset(y: size * 0.06)
                 } else {
                     Rectangle().fill(Color.yellow.opacity(0.55))
                 }
@@ -761,12 +769,13 @@ private struct AnnotationDemo: View {
                 .font(scale.body)
                 .lineLimit(scale.isFull ? 2 : 1)
                 .fixedSize(horizontal: false, vertical: true)
+                // A highlight's words in its ink, on its pale band — as the page draws them.
+                .foregroundStyle(mark.underlined ? Color.primary : mark.ink)
                 .padding(.horizontal, 3)
                 .padding(.vertical, 1)
                 .background(
                     RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        // As pale as the marks on the real page now are.
-                        .fill(mark.underlined ? .clear : mark.tint.opacity(0.28))
+                        .fill(mark.underlined ? .clear : mark.band)
                 )
                 .overlay(alignment: .bottom) {
                     if mark.underlined {
@@ -5081,5 +5090,12 @@ private struct NightPageDemo: View {
                 picture
             }
         }
+    }
+}
+
+extension Color {
+    /// A highlight tone as a SwiftUI colour.
+    init(_ tone: HighlightTone.RGB) {
+        self.init(red: tone.red, green: tone.green, blue: tone.blue)
     }
 }

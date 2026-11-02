@@ -32,6 +32,7 @@ export interface Shortcut {
 
 export const SHORTCUTS: Shortcut[] = [
   { command: 'addPapers', group: 'library', title: () => L('논문 더하기', 'Add Papers'), mac: 'CmdOrCtrl+O' },
+  { command: 'addByAddress', group: 'library', title: () => L('주소로 논문 더하기', 'Add Paper by Address'), mac: 'CmdOrCtrl+Alt+O' },
   { command: 'exportBibTeX', group: 'library', title: () => L('BibTeX 내보내기', 'Export BibTeX'), mac: 'CmdOrCtrl+Shift+E' },
   { command: 'copyCitationKey', group: 'library', title: () => L('인용 키 복사', 'Copy Citation Key'), mac: 'CmdOrCtrl+Shift+K' },
   { command: 'resolveMetadata', group: 'library', title: () => L('빠진 서지 채우기', 'Resolve Missing Metadata'), mac: 'CmdOrCtrl+Shift+R' },

@@ -34,6 +34,7 @@ struct LibrarySidebar: View {
     @State private var hoveringDismiss = false
 
     @State private var isPresentingNewCollection = false
+    @State private var isPresentingNewTag = false
     @State private var newCollectionName = ""
 
     var body: some View {
@@ -337,6 +338,17 @@ struct LibrarySidebar: View {
                     .scopeRow(.tag(tag.id), in: model)
                     .dropTarget(in: model) { await model.addTag(tag.id, to: $0) }
                 }
+                // The way a tag comes to be. There was none: tags could be
+                // worn — dropped onto, filtered by — but never made, so a
+                // library that had none stayed that way.
+                Button {
+                    isPresentingNewTag = true
+                } label: {
+                    Label(L("새 태그…", "New Tag…"), systemImage: "plus.circle")
+                        .foregroundStyle(.secondary)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
             }
 
             authorsSection
@@ -366,6 +378,11 @@ struct LibrarySidebar: View {
                     Task { await model.addCollection(named: name) }
                 }
             )
+        }
+        .sheet(isPresented: $isPresentingNewTag) {
+            NewTagSheet { name, color in
+                Task { await model.addTag(named: name, color: color) }
+            }
         }
     }
 
@@ -491,6 +508,69 @@ private struct NewCollectionSheet: View {
         }
         #if os(macOS)
         .frame(minWidth: 320, minHeight: 140)
+        #endif
+    }
+}
+
+/// A name and a colour for a new tag: the field, and the palette as a row of
+/// swatches — a colour is seen, not read, so the swatches carry no names.
+struct NewTagSheet: View {
+    let onCreate: (String, Tag.Color) -> Void
+
+    @State private var name = ""
+    @State private var color: Tag.Color = .blue
+    @Environment(\.dismiss) private var dismiss
+
+    private var trimmed: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField(L("태그 이름", "Tag Name"), text: $name)
+                HStack(spacing: 8) {
+                    Text(L("색", "Color"))
+                    Spacer()
+                    ForEach(Tag.Color.allCases, id: \.self) { candidate in
+                        Button {
+                            color = candidate
+                        } label: {
+                            Circle()
+                                .fill(candidate.swiftUIColor)
+                                .frame(width: 18, height: 18)
+                                .overlay {
+                                    if candidate == color {
+                                        Circle().strokeBorder(.primary.opacity(0.7), lineWidth: 2)
+                                    }
+                                }
+                                .contentShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(candidate.rawValue)
+                        .accessibilityAddTraits(candidate == color ? [.isSelected] : [])
+                    }
+                }
+            }
+            .formStyle(.grouped)
+            .navigationTitle(L("새 태그", "New Tag"))
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L("취소", "Cancel")) { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L("만들기", "Create")) {
+                        guard !trimmed.isEmpty else { return }
+                        onCreate(trimmed, color)
+                        dismiss()
+                    }
+                    .disabled(trimmed.isEmpty)
+                }
+            }
+        }
+        #if os(macOS)
+        .frame(minWidth: 380, minHeight: 170)
         #endif
     }
 }

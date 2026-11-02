@@ -22,6 +22,7 @@ import { tagColor } from './paperList.js'
 export interface SidebarActions {
   select: (shelf: Shelf) => void
   newCollection: () => void
+  newTag: () => void
   /** Another folder, read beside the ones already open. */
   addFolder: () => void
   /** Stops reading a folder. Its files stay where they are. */
@@ -270,6 +271,10 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
         drop: true,
       })
     }
+    rows.push({
+      key: 'add:tag', kind: 'button', icon: 'plus.circle',
+      label: L('새 태그…', 'New Tag…'), press: actions.newTag,
+    })
 
     const authors = authorCounts()
     if (authors.length > 0) {

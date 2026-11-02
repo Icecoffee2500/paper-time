@@ -12,9 +12,48 @@ export type DockZone = 'left' | 'right' | 'topLeft' | 'topRight' | 'bottomLeft' 
 
 export const DOCK_ZONES: DockZone[] = ['left', 'right', 'topLeft', 'topRight', 'bottomLeft', 'bottomRight']
 
+/**
+ * A pane is named by a key, not by its paper: the same paper may stand in
+ * two panes at once (one at the figure, one at the text that cites it). The
+ * first pane of a paper is keyed by the paper's id alone, so everything that
+ * knew a pane by its paper still does; a second pane of the same paper is
+ * `<paper>@2`, a third `<paper>@3` (`freshPaneKey`), and `paperOfPane` gives
+ * the paper back. The Mac's `SplitArrangement.Pane` carries the same two.
+ */
 export interface SplitColumn {
   top: string
   bottom?: string
+}
+
+/** The paper a pane shows. */
+export function paperOfPane(key: string): string {
+  const at = key.indexOf('@')
+  return at < 0 ? key : key.slice(0, at)
+}
+
+/** A key for one more pane of `paper`: the paper's own id while it has no pane, `<paper>@n` after that. */
+export function freshPaneKey(arrangement: SplitArrangement | null, paper: string): string {
+  const taken = new Set(arrangement ? splitPapers(arrangement) : [])
+  if (!taken.has(paper)) return paper
+  let n = 2
+  while (taken.has(`${paper}@${n}`)) n += 1
+  return `${paper}@${n}`
+}
+
+/** The panes showing `paper`, in the arrangement's order. */
+export function splitPanesOf(arrangement: SplitArrangement, paper: string): string[] {
+  return splitPapers(arrangement).filter((key) => paperOfPane(key) === paper)
+}
+
+export function splitContainsPaper(arrangement: SplitArrangement, paper: string): boolean {
+  return splitPanesOf(arrangement, paper).length > 0
+}
+
+/** Every pane of `paper` taken out, closing up the space they leave. */
+export function splitRemovePaper(arrangement: SplitArrangement, paper: string): SplitArrangement {
+  let next = arrangement
+  for (const key of splitPanesOf(arrangement, paper)) next = splitRemove(next, key)
+  return next
 }
 
 export interface SplitArrangement {
@@ -32,7 +71,7 @@ function column(ids: string[]): SplitColumn | undefined {
   return ids.length > 1 ? { top: ids[0], bottom: ids[1] } : { top: ids[0] }
 }
 
-/** Every paper in the arrangement, left column first, top before bottom. */
+/** Every pane's key in the arrangement, left column first, top before bottom (`paperOfPane` for the papers). */
 export function splitPapers(arrangement: SplitArrangement): string[] {
   return [...columnPapers(arrangement.left), ...columnPapers(arrangement.right)]
 }
@@ -52,8 +91,9 @@ export function splitRemove(arrangement: SplitArrangement, id: string): SplitArr
 }
 
 /**
- * Puts a paper into a zone. What was there slides to the other half of its
- * column; what there is no room for leaves the arrangement.
+ * Puts a pane into a zone — a new one, or one already in the arrangement,
+ * which moves. What was there slides to the other half of its column; what
+ * there is no room for leaves the arrangement.
  */
 export function splitDock(arrangement: SplitArrangement, id: string, zone: DockZone): SplitArrangement {
   const leftIDs = columnPapers(arrangement.left).filter((paper) => paper !== id)
@@ -124,6 +164,8 @@ export function zoneRect(zone: DockZone, size: Size): Rect {
 
 /** The MIME type a dragged paper travels under, inside the window. */
 export const PAPER_DRAG_TYPE = 'application/x-papertime-paper'
+/** And the pane a drag started from, when it started on a pane's title: that pane moves rather than a second one opening. */
+export const PANE_DRAG_TYPE = 'application/x-papertime-pane'
 
 /**
  * The papers a drag carries. A drag that starts on one of several chosen

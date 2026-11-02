@@ -125,6 +125,17 @@
   --code-ink: #eb5757;
   --code-fill: rgba(135, 131, 120, 0.15);
 
+  /* Highlighted words in a note, as Apple Notes sets them: the words in a
+     vivid shade of the highlighter's colour on a pale band of it — the page's
+     five colours through `highlightInk`/`highlightBand` (`shared/marks.ts`,
+     the Mac's `HighlightTone`); `src/test/marks.ts` holds these lines to
+     the function. */
+  --hl-yellow-ink: rgba(199, 128, 5, 1); --hl-yellow-band: rgba(255, 247, 217, 1);
+  --hl-green-ink: rgba(33, 153, 89, 1); --hl-green-band: rgba(227, 246, 230, 1);
+  --hl-blue-ink: rgba(31, 112, 217, 1); --hl-blue-band: rgba(225, 240, 254, 1);
+  --hl-pink-ink: rgba(214, 46, 84, 1); --hl-pink-band: rgba(254, 233, 238, 1);
+  --hl-purple-ink: rgba(140, 71, 209, 1); --hl-purple-band: rgba(242, 235, 253, 1);
+
   /* A fenced block of code: a cool wash of the page — the faintest blue,
      and in the dark the slate of Xcode's own editor — its language in the
      accent, the copy pill on it (`NoteCodeStyle.Block`, `CODE_SURFACE` in
@@ -200,6 +211,13 @@
   --tag-gray: #98989d;
 
   --code-ink: #ff7369;
+
+  /* In the dark the ink goes light and the band is the colour let through. */
+  --hl-yellow-ink: rgba(250, 194, 71, 1); --hl-yellow-band: rgba(255, 214, 64, 0.22);
+  --hl-green-ink: rgba(107, 217, 148, 1); --hl-green-band: rgba(115, 212, 130, 0.22);
+  --hl-blue-ink: rgba(122, 179, 255, 1); --hl-blue-band: rgba(107, 181, 250, 0.22);
+  --hl-pink-ink: rgba(255, 128, 158, 1); --hl-pink-band: rgba(252, 143, 168, 0.22);
+  --hl-purple-ink: rgba(194, 153, 250, 1); --hl-purple-band: rgba(191, 153, 245, 0.22);
 
   --codeblock-fill: rgba(140, 170, 255, 0.085);
   --codeblock-pill: rgba(255, 255, 255, 0.08);
@@ -1066,6 +1084,14 @@ body[data-window-focused='false'] .paper-row[aria-selected='true'] {
   z-index: 1;
   pointer-events: none;
   mix-blend-mode: multiply;
+}
+
+/* The words under the highlights in the highlight's ink (`paintMarkInk`),
+   laid over the band plainly: multiplied, black ink stays black. Only as big
+   as the bands together, placed in fractions of the page. */
+.page canvas.mark-ink {
+  z-index: 1;
+  pointer-events: none;
 }
 
 /* The drawing sits above the page and below the words you can select. */
@@ -2925,20 +2951,24 @@ textarea:focus-visible {
   z-index: 35;
   display: none;
   align-items: center;
-  gap: 4px;
-  padding: 5px;
-  border-radius: var(--radius-bar);
-  background: color-mix(in srgb, var(--panel) 96%, transparent);
-  backdrop-filter: blur(20px) saturate(1.5);
-  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.1), 0 5px 18px rgba(0, 0, 0, 0.2);
+  gap: 3px;
+  height: 34px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  backdrop-filter: blur(24px) saturate(1.6);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.16);
 }
 
+/* A swatch is the colour the words will be (`HIGHLIGHT_INK`), not the
+   highlighter's own. */
 .mark-swatch {
   position: relative;
-  width: 19px;
-  height: 19px;
+  width: 18px;
+  height: 18px;
+  margin: 0 1px;
   border-radius: 50%;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+  box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.12);
   transition: transform var(--motion-tap) var(--ease), height var(--motion-tap) var(--ease), margin var(--motion-tap) var(--ease);
 }
 /* What a colour will do, drawn on it (`MarkupBarView.swatch(for:kind:)`):
@@ -4015,6 +4045,16 @@ body[data-solo='true'] .reader-header button {
 .nm-link, .nm-note-link { color: var(--accent-text, var(--accent)); text-decoration: underline; cursor: pointer; }
 .nm-bold { font-weight: 700; }
 .nm-italic { font-style: italic; }
+
+/* Highlighted words (`==words==`, `=={pink}words==`): the ink and the band
+   of the colour named, the band rounded and hanging a little under the
+   letters, each line's piece its own box (`NoteHighlight`). */
+.nm-hl { border-radius: 3.5px; padding: 0.03em 0.125em 0.12em; margin: 0 -0.125em; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.nm-hl-yellow { color: var(--hl-yellow-ink); background: var(--hl-yellow-band); }
+.nm-hl-green { color: var(--hl-green-ink); background: var(--hl-green-band); }
+.nm-hl-blue { color: var(--hl-blue-ink); background: var(--hl-blue-band); }
+.nm-hl-pink { color: var(--hl-pink-ink); background: var(--hl-pink-band); }
+.nm-hl-purple { color: var(--hl-purple-ink); background: var(--hl-purple-band); }
 /* Code as Notion sets it: a size below its line (85%), in a warm red, on a
    rounded warm grey 0.2em above and below its letters and 0.4em either side
    (`NoteCode`). In a heading it is the heading's size, less. */
@@ -4201,36 +4241,50 @@ body[data-solo='true'] .reader-header button {
 .wiki-popover-id { font-size: 11px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .wiki-popover-row[aria-selected="true"] .wiki-popover-id { color: rgba(255, 255, 255, .8); }
 
-/* B, I, <>, $ over a selection in a note (`selectionToolbar`) — Notion's
-   little bar, with only what the keys already do. */
+/* B, I, <>, $ and the five colours over a selection in a note
+   (`selectionToolbar`): one capsule of glass, as the bar over a selection
+   on the page is — a hairline, not an outline; symbols and letters in the
+   text colour; the colours as solid dots, the way Apple Notes offers them. */
 .selection-toolbar {
   position: fixed;
   z-index: 125;
   display: flex;
-  gap: 2px;
-  padding: 3px;
-  border-radius: var(--radius-popover);
-  background: var(--panel);
-  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.1), 0 8px 28px rgba(0, 0, 0, 0.2);
+  align-items: center;
+  gap: 1px;
+  height: 32px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  backdrop-filter: blur(24px) saturate(1.6);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.16);
   animation: menu-in var(--motion-tap) var(--ease);
 }
 .selection-toolbar-button {
-  height: 26px;
-  min-width: 28px;
-  padding: 0 7px;
+  height: 24px;
+  min-width: 26px;
+  padding: 0 5px;
   border: 0;
-  border-radius: calc(var(--radius-popover) - 3px);
+  border-radius: 999px;
   background: transparent;
   color: var(--text);
   font: inherit;
   font-size: 13px;
-  line-height: 26px;
+  line-height: 24px;
   cursor: default;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
-.selection-toolbar-button:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
+.selection-toolbar-button:hover { background: color-mix(in srgb, var(--text) 9%, transparent); }
 .selection-toolbar-button[data-mark="**"] { font-weight: 700; }
-.selection-toolbar-button[data-mark="*"] { font-style: italic; }
-.selection-toolbar-button[data-mark="`"] { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+.selection-toolbar-button[data-mark="*"] { font-style: italic; font-family: Georgia, 'Times New Roman', serif; }
+.selection-toolbar-button svg { width: 15px; height: 15px; }
+.selection-toolbar-divider { width: 1px; height: 16px; margin: 0 4px; background: var(--separator); }
+/* The five highlighter colours as dots: each the colour its words will be. */
+.selection-toolbar-button[data-color] { min-width: 22px; padding: 0 3px; }
+.selection-toolbar-dot { display: block; width: 14px; height: 14px; border-radius: 50%; background: var(--dot-ink); box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.12); transition: transform var(--motion-tap) var(--ease); }
+.selection-toolbar-button[data-color]:hover { background: transparent; }
+.selection-toolbar-button[data-color]:hover .selection-toolbar-dot { transform: scale(1.18); }
 
 /* A note beside the paper a passage in it was followed to. */
 .slipbox-side { display: flex; flex-direction: column; }
@@ -4782,3 +4836,51 @@ textarea.memo {
 .nm-table th { font-weight: 650; background: color-mix(in srgb, var(--text) 5%, transparent); }
 .nm-table th + th, .nm-table td + td { border-left: 1px solid var(--separator-strong); }
 .nm-table tr + tr td, .nm-table tbody tr:first-child td { border-top: 1px solid var(--separator-strong); }
+
+/* A new tag's colours, under the name field: dots, one of them ringed. */
+.ask-swatches {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.ask-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--swatch);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.12);
+}
+.ask-swatch[aria-checked='true'] {
+  box-shadow: 0 0 0 2px var(--panel), 0 0 0 3.5px var(--text);
+}
+
+/* The inspector's tags: every tag as a chip, the worn ones filled. */
+.insp-line-stacked {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.insp-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.insp-tag {
+  cursor: default;
+  padding: 2px 9px;
+  font-size: 12px;
+  border: 1px solid transparent;
+}
+.insp-tag[aria-pressed='false'] {
+  background: var(--hover);
+  color: var(--text-secondary);
+}
+.insp-tag[aria-pressed='true'] {
+  border-color: color-mix(in srgb, var(--tag) 60%, transparent);
+}
+
+/* «Add Paper by Address»: the reason under the field, in the danger colour
+   once the address gave no paper. */
+.ask-address .ask-hint { margin: 6px 0 0; }
+.ask-address .ask-status { margin: 8px 0 0; min-height: 1.3em; }
+.ask-address .ask-status-failed { color: var(--danger); }

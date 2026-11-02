@@ -11,7 +11,7 @@ import { store } from './state.js'
 import { closeOpenPapers } from './ui/openPapers.js'
 import { toast } from './ui/toolbar.js'
 import { L } from '../shared/lang.js'
-import { carriesPapers, draggedPapers, zoneAt, zoneRect, type DockZone } from '../shared/split.js'
+import { PANE_DRAG_TYPE, carriesPapers, draggedPapers, zoneAt, zoneRect, type DockZone } from '../shared/split.js'
 
 /**
  * A paper dragged over the page area — a row of the list, a pane's title, a
@@ -62,11 +62,15 @@ export function installDockDrop() {
     event.stopPropagation()
     // A pane takes one paper: the one the drag started on leads its list.
     const id = draggedPapers(event.dataTransfer)[0]
+    // Begun on a pane's title, the drag moves that pane; begun anywhere else
+    // it opens one more — a second pane of the same paper, when the paper
+    // is in one already.
+    const pane = event.dataTransfer?.getData(PANE_DRAG_TYPE) || undefined
     const zone = zoneUnder(event)
     lightZone(null)
     if (!id || !zone) return
     closeOpenPapers()
-    dockPaper(id, zone)
+    dockPaper(id, zone, pane)
   })
   // A drag cancelled with Escape, or let go outside the page area, ends on
   // the element it started from; the highlight goes with it.

@@ -77,6 +77,71 @@ export function nearestColorName(rgb: [number, number, number]): string {
   return best
 }
 
+/**
+ * How a highlight colours what it covers — the Mac's `HighlightTone`, value
+ * for value: the words a vivid shade of the highlighter's colour, picked by
+ * hand for each of the five the way Apple Notes colours highlighted words
+ * (red-pink on pink, a true blue on blue, a violet on lavender), and a pale
+ * band of the highlighter's colour under them, multiplied onto the paper —
+ * the look of a quotation chip. On a dark ground the ink is a lighter shade
+ * and the band is the colour let through at a fifth.
+ */
+export const HIGHLIGHT_BAND_SHARE = 0.8
+export const HIGHLIGHT_BAND_SHARE_HOVERED = 0.88
+export const HIGHLIGHT_BAND_ALPHA_ON_DARK = 0.22
+/** How far the band reaches below the words, as a share of its height. */
+export const HIGHLIGHT_BAND_DROP = 0.08
+
+/** The five inks on paper (`HighlightTone.ink(_:dark: false)`). */
+export const HIGHLIGHT_INK: Record<string, [number, number, number]> = {
+  yellow: [0.78, 0.5, 0.02],
+  green: [0.13, 0.6, 0.35],
+  blue: [0.12, 0.44, 0.85],
+  pink: [0.84, 0.18, 0.33],
+  purple: [0.55, 0.28, 0.82],
+}
+
+/** And on a dark ground (`dark: true`). */
+export const HIGHLIGHT_INK_DARK: Record<string, [number, number, number]> = {
+  yellow: [0.98, 0.76, 0.28],
+  green: [0.42, 0.85, 0.58],
+  blue: [0.48, 0.7, 1],
+  pink: [1, 0.5, 0.62],
+  purple: [0.76, 0.6, 0.98],
+}
+
+/** Relative luminance, Rec. 709 weights on the gamma-encoded values. */
+export function luminance(c: [number, number, number]): number {
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+}
+
+/** The words' colour on paper for any highlighter colour, by the nearest of the five (`HighlightTone.ink`). */
+export function highlightInk(c: [number, number, number]): [number, number, number] {
+  return [...HIGHLIGHT_INK[nearestColorName(c)]] as [number, number, number]
+}
+
+/** The words' colour on a dark ground (`HighlightTone.inkOnDark`). */
+export function highlightInkOnDark(c: [number, number, number]): [number, number, number] {
+  return [...HIGHLIGHT_INK_DARK[nearestColorName(c)]] as [number, number, number]
+}
+
+/** The band's paint, to be multiplied onto white paper (`HighlightTone.band`). */
+export function highlightBand(c: [number, number, number], hovered = false): [number, number, number] {
+  const share = hovered ? HIGHLIGHT_BAND_SHARE_HOVERED : HIGHLIGHT_BAND_SHARE
+  return c.map((v) => v + (1 - v) * share) as [number, number, number]
+}
+
+/** The CSS custom properties a note's highlights are drawn with, light and dark, one per colour name. */
+export function highlightCSSVariables(): { light: string; dark: string } {
+  const light: string[] = []
+  const dark: string[] = []
+  for (const [name, rgb] of Object.entries(MARK_COLORS)) {
+    light.push(`--hl-${name}-ink: ${cssColor(highlightInk(rgb))}; --hl-${name}-band: ${cssColor(highlightBand(rgb))};`)
+    dark.push(`--hl-${name}-ink: ${cssColor(highlightInkOnDark(rgb))}; --hl-${name}-band: ${cssColor(rgb, HIGHLIGHT_BAND_ALPHA_ON_DARK)};`)
+  }
+  return { light: light.join('\n'), dark: dark.join('\n') }
+}
+
 /** A colour moved toward grey `toward` (1 white, 0 black) — `Tone.blended`. */
 export function blended(rgb: [number, number, number], toward: number, by: number): [number, number, number] {
   return rgb.map((value) => value + (toward - value) * by) as [number, number, number]
@@ -85,8 +150,10 @@ export function blended(rgb: [number, number, number], toward: number, by: numbe
 /**
  * How one line of a mark is drawn, in page units — the Mac's `RoundedMarks`,
  * number for number, so one file looks the same on both desktops: a band
- * blended a third of the way to white (more under the pointer, with a thin
- * edge), its corners at 0.3 of the height to at most 3.5 points; a line
+ * taken most of the way to white (more under the pointer, with a thin
+ * edge) and hanging a little under the letters, its corners at 0.3 of the
+ * height to at most 3.5 points — the words over it are recoloured in the
+ * highlight's ink by `PageView.paintMarkInk`; a line
  * deepened toward black, 0.085 of the height thick (0.13 under the pointer)
  * and never under a point, at the foot of the words or through their middle.
  */
@@ -94,10 +161,12 @@ export function markLine(kind: MarkKind, color: [number, number, number], rect: 
   | { band: Rect; radius: number; fill: [number, number, number]; edge: [number, number, number] | null }
   | { from: { x: number; y: number }; to: { x: number; y: number }; width: number; ink: [number, number, number] } {
   if (kind === 'highlight') {
+    // The band hangs a little under the letters (page space: y grows upward).
+    const drop = rect.height * HIGHLIGHT_BAND_DROP
     return {
-      band: rect,
+      band: { x: rect.x, y: rect.y - drop, width: rect.width, height: rect.height + drop },
       radius: Math.min(rect.height * 0.3, 3.5),
-      fill: blended(color, 1, hovered ? 0.55 : 0.35),
+      fill: highlightBand(color, hovered),
       edge: hovered ? blended(color, 0, 0.15) : null,
     }
   }

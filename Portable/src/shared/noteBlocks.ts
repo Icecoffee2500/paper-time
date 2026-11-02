@@ -187,6 +187,78 @@ export interface SelectionEdit {
 
 export type EmphasisMark = '**' | '*' | '`' | '$'
 
+/** The five names a highlight can be written with (`NoteHighlightEdit.names`). */
+export const HIGHLIGHT_NAMES = ['yellow', 'green', 'blue', 'pink', 'purple']
+
+/** The opening marks of a highlight: `==`, or `=={name}`. */
+export function highlightOpening(color: string | null): string {
+  return color ? `=={${color}}` : '=='
+}
+
+/** A highlight's opening at the start of `text` and the colour it names (null for the default), or null. */
+function highlightOpeningAt(text: string): { length: number; color: string | null } | null {
+  if (!text.startsWith('==')) return null
+  if (text[2] === '{') {
+    const close = text.indexOf('}', 3)
+    if (close > 3) {
+      const name = text.slice(3, close)
+      if (HIGHLIGHT_NAMES.includes(name)) return { length: close + 1, color: name }
+    }
+  }
+  return { length: 2, color: null }
+}
+
+/** `text` is `==…==` or `=={name}…==` with something between. */
+function highlightWrapped(text: string): { color: string | null; inner: string } | null {
+  const open = highlightOpeningAt(text)
+  if (!open || text.length < open.length + 2 || !text.endsWith('==')) return null
+  const inner = text.slice(open.length, text.length - 2)
+  if (!inner || inner.endsWith('=')) return null
+  return { color: open.color, inner }
+}
+
+/**
+ * Ctrl+Shift+H and the colour dots on the selection bar — the Mac's
+ * `NoteHighlightEdit.toggle`, case for case: a highlight put round the
+ * selected words, recoloured, or taken off, as one replacement. Pressing
+ * the colour a highlight already has takes it off; another changes it; the
+ * marks may be inside the selection or just outside it. With nothing
+ * selected an empty pair goes in and the caret between — or comes off, if
+ * the caret is between one already.
+ */
+export function toggleHighlightEdit(text: string, from: number, to: number, color: string | null): SelectionEdit {
+  const [lo, hi] = from <= to ? [from, to] : [to, from]
+  const open = highlightOpening(color)
+  const rewrap = (had: { color: string | null; inner: string }, at: number, end: number): SelectionEdit => {
+    if (had.color === color) return { from: at, to: end, insert: had.inner, selectFrom: at, selectTo: at + had.inner.length }
+    return { from: at, to: end, insert: open + had.inner + '==', selectFrom: at + open.length, selectTo: at + open.length + had.inner.length }
+  }
+  if (lo === hi) {
+    for (const name of [color, ...HIGHLIGHT_NAMES, null]) {
+      const before = highlightOpening(name)
+      if (lo >= before.length && text.slice(lo - before.length, lo) === before && text.slice(lo, lo + 2) === '==') {
+        return { from: lo - before.length, to: lo + 2, insert: '', selectFrom: lo - before.length, selectTo: lo - before.length }
+      }
+    }
+    return { from: lo, to: lo, insert: open + '==', selectFrom: lo + open.length, selectTo: lo + open.length }
+  }
+  const selected = text.slice(lo, hi)
+  // The marks inside the selection: «==word==» selected whole.
+  const whole = highlightWrapped(selected)
+  if (whole) return rewrap(whole, lo, hi)
+  // The marks just outside it: «word» selected inside its marks.
+  let start = lo
+  while (start > 0 && text[start - 1] !== '\n' && lo - start < 12) start -= 1
+  for (let at = lo - 2; at >= start; at -= 1) {
+    const candidate = text.slice(at, Math.min(hi + 2, text.length))
+    const opening = highlightOpeningAt(candidate)
+    if (!opening || at + opening.length !== lo || text.slice(hi, hi + 2) !== '==') continue
+    const had = highlightWrapped(candidate)
+    if (had) return rewrap(had, at, hi + 2)
+  }
+  return { from: lo, to: hi, insert: open + selected + '==', selectFrom: lo + open.length, selectTo: lo + open.length + selected.length }
+}
+
 /**
  * ⌘B, ⌘I, ⌘E, ⌘⇧M: the mark put around the selection, or taken off it when it
  * is already there — whether the selection took the marks in or stopped
@@ -234,7 +306,11 @@ function wrappedBy(wrapped: string, mark: EmphasisMark): boolean {
 /** The closing character each opening one takes (Obsidian's pairs). */
 const PAIRS: Record<string, string> = {
   '(': ')', '[': ']', '{': '}', '"': '"', "'": "'", '`': '`', '*': '*', '_': '_', '$': '$', '~': '~',
+  // One `=` over a selection is a highlight: `==` either side.
+  '=': '==',
 }
+/** What goes in front when a character wraps a selection: the character, or `==` for `=`. */
+const OPENERS_OVER_SELECTION: Record<string, string> = { '=': '==' }
 
 /**
  * An opening character typed over a selection wraps it rather than replacing
@@ -249,7 +325,8 @@ export function wrapEdit(text: string, from: number, to: number, typed: string):
   // In code a star is a star: only brackets and quotes wrap what is selected.
   if (!CODE_WRAPS.has(typed) && codeRowAt(text, lo)) return null
   const selected = text.slice(lo, hi)
-  return { from: lo, to: hi, insert: typed + selected + close, selectFrom: lo + 1, selectTo: lo + 1 + selected.length }
+  const open = OPENERS_OVER_SELECTION[typed] ?? typed
+  return { from: lo, to: hi, insert: open + selected + close, selectFrom: lo + open.length, selectTo: lo + open.length + selected.length }
 }
 
 // MARK: - Auto-pairs

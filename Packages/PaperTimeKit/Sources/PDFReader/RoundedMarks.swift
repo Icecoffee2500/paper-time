@@ -29,8 +29,8 @@ public enum RoundedMarks {
     /// How round a highlight's ends are, as a share of its height, and the
     /// most they get. A short line of small type is nearly a capsule; a tall
     /// line carrying an equation stays a rounded box rather than a pill.
-    static let rounding: CGFloat = 0.3
-    static let maximumRadius: CGFloat = 3.5
+    public static let rounding: CGFloat = 0.3
+    public static let maximumRadius: CGFloat = 3.5
 
     /// The marks on a page, hidden from PDFKit's own drawing.
     ///
@@ -60,17 +60,21 @@ public enum RoundedMarks {
         context.restoreGState()
     }
 
-    /// A rounded band, lighter than the colour the file names.
+    /// A rounded band, much lighter than the colour the file names, hanging
+    /// a little under the letters.
     ///
     /// At full strength the highlighter colours multiplied the black of the
     /// type down with them and a marked line was harder to read than an
-    /// unmarked one, which is backwards. Under the pointer the band gets
-    /// lighter still and a thin edge in the true colour, so what is about to
-    /// be pressed is the most legible line on the page rather than the least.
+    /// unmarked one, which is backwards. Since the words over the band are
+    /// recoloured in the highlight's own ink (`MarkInkView`, the way Apple
+    /// Notes colours a highlighted word), the band can be paler still.
+    /// Under the pointer it gets lighter again and a thin edge in the true
+    /// colour, so what is about to be pressed is the most legible line on
+    /// the page rather than the least.
     private static func drawHighlight(
         _ annotation: PDFAnnotation, color: Tone, hovered: Bool, in context: CGContext
     ) {
-        var fill = color.blended(toward: 1, by: hovered ? 0.55 : 0.35)
+        var fill = color.toned(HighlightTone.band(color.rgb, hovered: hovered))
         if Self.blendsByAlpha {
             fill = color
             fill.alpha = hovered ? 0.3 : 0.42
@@ -78,7 +82,7 @@ public enum RoundedMarks {
         let path = CGMutablePath()
         for rect in lineRects(of: annotation) {
             let radius = min(rect.height * rounding, maximumRadius)
-            path.addRoundedRect(in: rect, cornerWidth: radius, cornerHeight: radius)
+            path.addRoundedRect(in: band(rect), cornerWidth: radius, cornerHeight: radius)
         }
         context.addPath(path)
         context.setFillColor(fill.cgColor)
@@ -89,6 +93,28 @@ public enum RoundedMarks {
             context.setLineWidth(0.9)
             context.strokePath()
         }
+    }
+
+    /// The band a line's rectangle is drawn as: the same, let down by a
+    /// share of its height, so the colour hangs under the letters the way
+    /// a highlighter's does.
+    public static func band(_ rect: CGRect) -> CGRect {
+        let drop = rect.height * HighlightTone.bandDrop
+        return CGRect(x: rect.minX, y: rect.minY - drop, width: rect.width, height: rect.height + drop)
+    }
+
+    /// The colour the words under a highlight are recoloured in, or nil
+    /// for a mark that is not a highlight.
+    public static func ink(of annotation: PDFAnnotation) -> CGColor? {
+        guard annotation.type == "Highlight", let color = Tone(annotation.color) else { return nil }
+        return color.toned(HighlightTone.ink(color.rgb)).cgColor
+    }
+
+    /// The band's colour as it comes out on white paper — what the ink view
+    /// lays under the words, opaque, before colouring them.
+    public static func bandColor(of annotation: PDFAnnotation) -> CGColor? {
+        guard annotation.type == "Highlight", let color = Tone(annotation.color) else { return nil }
+        return color.toned(HighlightTone.band(color.rgb)).cgColor
     }
 
     private enum LinePosition { case bottom, middle }
@@ -130,6 +156,15 @@ public enum RoundedMarks {
             red = parts[0]; green = parts[1]; blue = parts[2]; alpha = parts.count > 3 ? parts[3] : 1
         }
 
+        var rgb: HighlightTone.RGB { HighlightTone.RGB(red: red, green: green, blue: blue) }
+
+        /// The same alpha with another colour.
+        func toned(_ rgb: HighlightTone.RGB) -> Tone {
+            var tone = self
+            tone.red = rgb.red; tone.green = rgb.green; tone.blue = rgb.blue
+            return tone
+        }
+
         func blended(toward grey: CGFloat, by fraction: CGFloat) -> Tone {
             var tone = self
             tone.red += (grey - red) * fraction
@@ -145,7 +180,7 @@ public enum RoundedMarks {
 
     /// The lines a markup covers, put back onto the page from the corners
     /// PDFKit stores relative to the annotation's own box.
-    static func lineRects(of annotation: PDFAnnotation) -> [CGRect] {
+    public static func lineRects(of annotation: PDFAnnotation) -> [CGRect] {
         guard let quads = annotation.quadrilateralPoints, quads.count >= 4 else {
             return [annotation.bounds]
         }

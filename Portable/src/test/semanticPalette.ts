@@ -152,6 +152,8 @@ export async function semanticPaletteSuite(test: Test, suite: (name: string) => 
   })
 
   await test('a formula keeps its letters and loses its dollars; fences and front matter go', () => {
+    assert.equal(plainNoteText('a ==word== and =={pink}two words== b'), 'a word and two words b')
+    assert.equal(plainNoteText('if a==b && c==d then'), 'if a==b && c==d then')
     const plain = plainNoteText('Loss $$\\mathcal{L}_{\\text{rollout}}$$ and $x^2$ inline.')
     assert.ok(!plain.includes('$'))
     assert.ok(plain.includes('\\mathcal{L}_{\\text{rollout}}'))

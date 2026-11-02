@@ -428,6 +428,10 @@ struct SettingsView: View {
             Button(L("라이브러리 폴더 바꾸기…", "Change Library Folder…")) {
                 app.chooseLibraryFolder()
             }
+            // For a computer that keeps no PDF files — a company machine
+            // whose security agent swallows them. The record, marks and
+            // notes are files all the same.
+            Toggle(L("PDF를 파일로 저장하지 않기", "Keep PDFs Out of Files"), isOn: keepPDFsInMemory)
         } header: {
             pageHeader(L("라이브러리", "Library"))
         } footer: {
@@ -442,8 +446,16 @@ struct SettingsView: View {
                     "라이브러리를 옮길 때는 폴더를 통째로 옮겨주세요. 안에 숨어 있는 .papertime 폴더까지요. 서지와 노트, 잉크, 읽던 자리가 거기 있어요. PDF만 복사하면 새 라이브러리가 시작되고, 노트는 따라오지 않아요.",
                     "Move the whole folder, including the hidden .papertime inside it. That folder holds the records, notes, ink and reading progress. Copying only the PDFs starts a fresh library and leaves the notes behind."
                 ))
+                Text(L(
+                    "«PDF를 파일로 저장하지 않기»를 켜면 주소로 더한 논문의 PDF를 폴더에 쓰지 않고, 열 때마다 다시 받아요. 표시와 필기, 노트는 .papertime 폴더에 그대로 남아요. PDF 파일이 보안 프로그램에 잡히는 회사 컴퓨터를 위한 거예요.",
+                    "With Keep PDFs Out of Files on, a paper added by address is not written to the folder; Paper Time fetches it again each time it opens. Marks, ink and notes stay in the .papertime folder as always. For a company computer whose security software takes PDF files."
+                ))
             }
         }
+    }
+
+    private var keepPDFsInMemory: Binding<Bool> {
+        Binding(get: { app.settings.keepsPDFsInMemory }, set: { app.settings.keepsPDFsInMemory = $0 })
     }
 
     #if os(macOS)

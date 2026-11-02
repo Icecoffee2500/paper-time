@@ -80,8 +80,35 @@ final class NoteLayoutFragment: NSTextLayoutFragment {
         drawCodeBlock(in: context)
         drawQuotes(in: context)
         drawChips(in: context)
+        drawHighlights(in: context)
         drawCode(in: context)
         super.draw(at: point, in: context)
+    }
+
+    /// The band under highlighted words, a rounded box per line they run
+    /// over, in the highlight's colour (`NoteHighlight`). Its height is the
+    /// face's, from the baseline — not the line's, which holds the space
+    /// between lines too — a hair above and a little more below.
+    private func drawHighlights(in context: CGContext) {
+        guard let paragraph = textElement as? NSTextParagraph else { return }
+        let text = paragraph.attributedString
+        guard text.length > 0 else { return }
+        context.saveGState()
+        text.enumerateAttribute(
+            NoteHighlight.attribute, in: NSRange(location: 0, length: text.length)
+        ) { value, range, _ in
+            guard let name = value as? String else { return }
+            let face = (text.attribute(.font, at: range.location, effectiveRange: nil) as? NSFont) ?? NoteTypography.body()
+            let above = face.ascender + NoteHighlight.padding.height
+            let below = -face.descender + NoteHighlight.drop
+            NoteHighlight.fill(name).setFill()
+            for (frame, baseline) in segments(for: range, in: paragraph) where frame.width > 0 {
+                let box = CGRect(x: frame.minX - NoteHighlight.padding.width, y: frame.minY + baseline - above,
+                                 width: frame.width + NoteHighlight.padding.width * 2, height: above + below)
+                NSBezierPath(roundedRect: box, xRadius: NoteHighlight.radius, yRadius: NoteHighlight.radius).fill()
+            }
+        }
+        context.restoreGState()
     }
 
     // MARK: Fenced code

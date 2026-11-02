@@ -25,6 +25,9 @@ export interface Texts {
 export interface TextBridgeHooks {
   directory: () => string
   sources: () => TextSource[]
+  /** The bytes of a paper whose file is not there — from memory, or from
+   *  its address (`paperSource.ts`); null when it has neither. */
+  bytes?: (id: string) => Promise<Uint8Array | null>
   roots: () => string[]
   send: (event: string, payload?: unknown) => void
   /** The pages are in hand: search by meaning catches up shortly. */
@@ -155,6 +158,11 @@ export class TextBridge {
           asked.resolve({ papers: message.papers, unread: message.unread, ms: message.ms })
           break
         }
+        case 'bytes':
+          void (this.hooks.bytes ? this.hooks.bytes(message.id) : Promise.resolve(null)).then((data) => {
+            child.postMessage({ type: 'bytes', request: message.request, data: data ?? null })
+          })
+          break
         case 'asset':
           void textAsset(message.kind, message.name).then((data) => {
             child.postMessage({ type: 'asset', request: message.request, data })

@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
-import { displayRuns, emphasisClasses, emphasisPieces, emphasisWidth, inlineTokens, letters, noteLines, planNote, roman, shownMarker, type DisplayRun } from '../shared/noteMarkdown.js'
+import { displayRuns, emphasisClasses, emphasisPieces, emphasisWidth, highlightClasses, highlightLead, holdsMarkup, inlineTokens, letters, noteLines, planNote, roman, shownMarker, type DisplayRun } from '../shared/noteMarkdown.js'
 import { blockOf } from '../shared/noteBlocks.js'
 
 type Test = (name: string, body: () => void | Promise<void>) => Promise<void>
@@ -63,6 +63,28 @@ export async function noteMarkdownSuite(test: Test, suite: (name: string) => voi
       { text: ' ', bold: false, italic: false, mono: false },
       { text: 'bi', bold: true, italic: true, mono: false },
       { text: ' yz', bold: false, italic: false, mono: false },
+    ])
+  })
+
+  await test('==words== is a highlight, named or not; a stray == in prose is not; -> and <- are arrows', () => {
+    const tokens = inlineTokens('a ==one== b =={pink}two words== c x = y')
+    assert.deepEqual(tokens.map((one) => one.kind === 'highlight' ? [one.text, one.color, highlightLead(one.color), highlightClasses(one.color)] : one.kind), [
+      ['one', null, 2, 'nm-hl nm-hl-yellow'],
+      ['two words', 'pink', 8, 'nm-hl nm-hl-pink'],
+    ])
+    // A single = inside is fine; a space against a mark, a letter before the opening, or a third = are not a highlight.
+    assert.equal(inlineTokens('==x = y==')[0]?.kind, 'highlight')
+    assert.equal(inlineTokens('if a==b && c==d then').length, 0)
+    assert.equal(inlineTokens('== spaced ==').length, 0)
+    assert.equal(inlineTokens('===three===').length, 0)
+    // An unknown name is not a colour: the braces are words, in the default colour.
+    assert.deepEqual(inlineTokens('=={teal}words==').map((one) => one.kind === 'highlight' ? [one.text, one.color] : one.kind), [['{teal}words', null]])
+    // A highlight gives way to code and formulas round it, as every piece does.
+    assert.deepEqual(inlineTokens('`a==b` ==c==').map((one) => one.kind), ['emphasis', 'highlight'])
+    assert.deepEqual(inlineTokens('x -> y <- z <-> w --> v').map((one) => one.kind === 'arrow' ? (one.right ? '→' : '←') : one.kind), ['→', '←'])
+    assert.ok(holdsMarkup('a -> b') && holdsMarkup('a <- b') && holdsMarkup('==a==') && !holdsMarkup('a - b < c'))
+    assert.deepEqual(displayRuns('a ==b== =={blue}c== -> d').map((run) => [run.text, run.marks]), [
+      ['a ', '—'], ['b', 'HIGHLIGHT'], [' ', '—'], ['c', 'HIGHLIGHT:blue'], [' → d', '—'],
     ])
   })
 

@@ -48,6 +48,9 @@ public final class DocumentSession {
         case unusual
         /// The update was made, but did not read back as it should have.
         case unconfirmed
+        /// A paper from an address with no file in the folder: nothing to
+        /// write into, until there is one.
+        case noFile
 
         init(_ refusal: IncrementalWriter.Refusal) {
             switch refusal {
@@ -243,9 +246,17 @@ public final class DocumentSession {
         paper: LoadedPaper, store: LibraryStore, password: String? = nil
     ) async throws -> DocumentSession {
         let url = paper.documentURL
+        // A paper from an address with no file opens from its source — on a
+        // machine that keeps no PDF files, or one that has not got it yet.
+        let fetched: Data? = paper.source != nil && !paper.hasFile ? try await PaperFetcher.shared.bytes(for: paper) : nil
         let prepared = try await Task.detached(priority: .userInitiated) {
-            FileOperations.requestDownload(of: url)
-            let data = try FileOperations.read(contentsOf: url)
+            let data: Data
+            if let fetched {
+                data = fetched
+            } else {
+                FileOperations.requestDownload(of: url)
+                data = try FileOperations.read(contentsOf: url)
+            }
             let made = PDFDocument(data: data)
             if let locked = made, locked.isLocked, let password {
                 _ = locked.unlock(withPassword: password)
@@ -758,6 +769,13 @@ public final class DocumentSession {
         flushTask = nil
         guard saveState == .pending || !pagesNeedingInkRewrite.isEmpty || !pagesNeedingSketchRewrite.isEmpty else { return }
         let url = paper.documentURL
+        // No file to write into: the marks are where they always are — the
+        // journal, the sidecars, the screen — and go into the file once
+        // there is one.
+        if paper.source != nil, !paper.hasFile {
+            saveState = .keptInApp(.noFile)
+            return
+        }
         // The same file said no before. Asking again would read and parse it
         // to hear the same answer; the marks are safe where they are.
         if let refused, refused.file == FileFingerprint(url: url) {

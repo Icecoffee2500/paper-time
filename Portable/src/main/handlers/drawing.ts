@@ -5,7 +5,8 @@ import { isoTimestamp } from '../../shared/coding.js'
 import { merged, reconcile, upgradeLegacy } from '../../shared/markJournal.js'
 import { hasForeignInk, readDrawings, readMarks, writeRefusal, type MarkupRecord } from '../pdfwrite.js'
 import { holdsAnything } from '../pdfFlush.js'
-import type { Library } from '../library.js'
+import type { Library, PaperRow } from '../library.js'
+import { bytesOf } from '../paperSource.js'
 import * as L from '../layout.js'
 import type { Context, Handlers } from './context.js'
 
@@ -53,8 +54,9 @@ export function drawingHandlers(ctx: Context): Partial<Handlers> {
     'marks:load': async ({ id }) => {
       const holder = await libraries.ownerOf(id)
       const row = await holder?.paper(id)
-      if (!holder || !row?.file || !row.exists) return {}
-      const bytes = await fsp.readFile(row.file)
+      if (!holder || !row || (!row.exists && !row.source)) return {}
+      const bytes = await bytesOf(row, ctx.fetched, (file) => fsp.readFile(file), ctx.fetch).catch(() => null)
+      if (!bytes) return {}
       const found = await readMarks(bytes)
       // This machine's journal from before 0.9.9 said only when each mark was
       // made, which the Mac reads as "taken away". Brought up to date from
@@ -100,17 +102,19 @@ export function drawingHandlers(ctx: Context): Partial<Handlers> {
     'drawing:pages': async ({ id }) =>
       (await libraries.ownerOf(id))?.annotatedPages(id) ?? { sketch: [], ink: [], appleInk: [] },
 
-    'drawing:adoptFromFile': ({ id }) => adoptFromFile(libraries.ownerOf.bind(libraries), id),
+    'drawing:adoptFromFile': ({ id }) => adoptFromFile(libraries.ownerOf.bind(libraries), id, (row) => bytesOf(row, ctx.fetched, (file) => fsp.readFile(file), ctx.fetch)),
 
     // Every drawn page in one answer: this machine's sidecars first, what
     // the file carries otherwise. The window used to ask twice per page, one
     // after another, and waited for all of it before the paper could show.
     'drawing:loadAll': async ({ id }) => {
-      const adopted = await adoptFromFile(libraries.ownerOf.bind(libraries), id)
+      const adopted = await adoptFromFile(libraries.ownerOf.bind(libraries), id, (row) => bytesOf(row, ctx.fetched, (file) => fsp.readFile(file), ctx.fetch))
       const holder = await libraries.ownerOf(id)
       if (!holder) return { pages: {}, unreadable: [], foreignInk: false }
       const row = await holder.paper(id)
-      const foreignInk = row?.file && row.exists ? hasForeignInk(await fsp.readFile(row.file)) : false
+      const foreignInk = row && (row.exists || row.source)
+        ? await bytesOf(row, ctx.fetched, (file) => fsp.readFile(file), ctx.fetch).then(hasForeignInk).catch(() => false)
+        : false
       const known = await holder.annotatedPages(id)
       const indices = new Set<number>([...known.sketch, ...known.ink, ...Object.keys(adopted.pages).map(Number)])
       const pages: Record<number, { elements: unknown[]; strokes: unknown[] }> = {}
@@ -139,12 +143,14 @@ export function drawingHandlers(ctx: Context): Partial<Handlers> {
  * across; what does not is the pressure in the Mac's `.drawing`, which no
  * format but PencilKit's own can hold.
  */
-export async function adoptFromFile(ownerOf: (id: string) => Promise<Library | null>, id: string) {
+export async function adoptFromFile(ownerOf: (id: string) => Promise<Library | null>, id: string, read?: (row: PaperRow) => Promise<Buffer>) {
   const holder = await ownerOf(id)
   if (!holder) return { pages: {}, unreadable: [] as number[] }
   const row = await holder.paper(id)
-  if (!row?.file || !row.exists) return { pages: {}, unreadable: [] as number[] }
-  const found = await readDrawings(await fsp.readFile(row.file))
+  if (!row || (!row.exists && !(row.source && read))) return { pages: {}, unreadable: [] as number[] }
+  const bytes = row.exists && row.file ? await fsp.readFile(row.file) : await read!(row).catch(() => null)
+  if (!bytes) return { pages: {}, unreadable: [] as number[] }
+  const found = await readDrawings(bytes)
   const pages: Record<number, { elements: unknown[]; strokes: unknown[] }> = {}
   for (const [pageIndex, drawing] of found) {
     // Shapes are lossless in the file — the annotation carries the element's

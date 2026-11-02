@@ -11,11 +11,14 @@ import {
   changed,
   closeOpenPaper,
   dock,
+  undockPane,
+  focusedPaneKey,
+  focusPane,
   folderTrail,
   isOpenPaper,
   isPinned,
   keepOpen,
-  panePapers,
+  paneKeys,
   patchPaper,
   paper as findPaper,
   pruneToLibrary,
@@ -86,19 +89,49 @@ export async function rendererStateSuite(test: Test, suite: (name: string) => vo
     assert.equal(store.selectedID, null)
   })
 
+  await test('the same paper may stand in two panes: a second key, its own focus, closed one at a time', () => {
+    library('A', 'B')
+    store.selectedID = 'A'
+    // Dragged from the list while it is showing already: a second pane of A.
+    dock('A', 'right')
+    assert.deepEqual(paneKeys(), ['A', 'A@2'])
+    assert.equal(store.selectedID, 'A')
+    assert.equal(store.focusedPane, 'A', 'the pane that was showing keeps the focus')
+    focusPane('A@2')
+    assert.equal(store.focusedPane, 'A@2')
+    assert.equal(focusedPaneKey(), 'A@2')
+    // A third of the same, and a different paper beside them.
+    dock('A', 'bottomLeft')
+    dock('B', 'bottomRight')
+    assert.deepEqual(paneKeys(), ['A', 'A@3', 'A@2', 'B'])
+    // Dragged by its title, a pane moves rather than multiplying: what was
+    // in the zone slides down, what there is no room for crosses over.
+    dock('A', 'topRight', 'A@3')
+    assert.deepEqual(paneKeys(), ['A', 'B', 'A@3', 'A@2'])
+    // One pane of A closed: A still shows in the others and stays open.
+    undockPane('A@3')
+    assert.deepEqual(paneKeys(), ['A', 'B', 'A@2'])
+    assert.ok(isOpenPaper('A'))
+    // The paper closed: every pane of it goes.
+    undock('A')
+    assert.equal(store.split, null)
+    assert.equal(store.selectedID, 'B')
+    assert.equal(store.focusedPane, null)
+  })
+
   await test('docking beside the paper showing makes two panes; undocking one leaves one reader', () => {
     library('A', 'B', 'C')
     store.selectedID = 'A'
     dock('B', 'right')
-    assert.deepEqual(panePapers(), ['A', 'B'])
+    assert.deepEqual(paneKeys(), ['A', 'B'])
     assert.ok(isOpenPaper('A') && isOpenPaper('B'), 'every paper in the arrangement is kept')
     assert.ok(isPinned('A') && isPinned('B'), 'and pinned: put beside another by hand')
     dock('C', 'bottomRight')
-    assert.equal(panePapers().length, 3)
+    assert.equal(paneKeys().length, 3)
     undock('C')
     undock('B')
     assert.equal(store.split, null)
-    assert.deepEqual(panePapers(), ['A'])
+    assert.deepEqual(paneKeys(), ['A'])
   })
 
   await test('Back skips the paper already showing and papers that have left', () => {

@@ -20,6 +20,7 @@ import { openEditor as openNoteEditor, renderNotesTab } from './notesTab.js'
 import { quotationInsertion } from '../../shared/noteQuote.js'
 import { cssColor, type Mark } from '../../shared/marks.js'
 import type { MenuEntry } from './toolbar.js'
+import { tagColor } from './paperList.js'
 
 export interface InspectorActions {
   editMeta: (id: string, patch: Record<string, unknown>) => void
@@ -663,10 +664,27 @@ function details(body: HTMLElement, paper: Paper, actions: InspectorActions, red
   })
   on(note, 'blur', () => flushInspector())
   on(note, 'keydown', (event: KeyboardEvent) => event.stopPropagation())
+  // Every tag the library has, as chips; the ones this paper wears are
+  // filled, and a press puts one on or takes it off (the Mac's `tagsRow`).
+  const tagLine = el('div', { class: 'insp-tags' })
+  if (store.tags.length === 0) {
+    tagLine.append(el('span', { class: 'insp-hint', text: L('옆 목록의 «새 태그…»로 태그를 만들어요.', 'Make a tag with New Tag… in the sidebar.') }))
+  } else {
+    for (const tag of store.tags) {
+      const worn = paper.meta.tagIDs.includes(tag.id)
+      const chip = el('button', { type: 'button', class: 'paper-tag insp-tag', text: tag.name, 'aria-pressed': String(worn) })
+      chip.style.setProperty('--tag', tagColor(tag.color))
+      on(chip, 'click', () => actions.editMeta(paper.id, {
+        tagIDs: worn ? paper.meta.tagIDs.filter((id) => id !== tag.id) : [...paper.meta.tagIDs, tag.id],
+      }))
+      tagLine.append(chip)
+    }
+  }
   body.append(section(L('읽기', 'Reading'),
     el('div', { class: 'insp-line' }, [el('span', { text: L('상태', 'Status') }), status]),
     el('label', { class: 'insp-line' }, [el('span', { text: L('즐겨찾기', 'Favorite') }), favourite]),
     el('div', { class: 'insp-line' }, [el('span', { text: L('별점', 'Rating') }), stars]),
+    el('div', { class: 'insp-line insp-line-stacked' }, [el('span', { text: L('태그', 'Tags') }), tagLine]),
     note,
   ))
 

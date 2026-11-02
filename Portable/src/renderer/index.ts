@@ -34,7 +34,7 @@ import { buildSketchRack } from './ui/sketchToolbar.js'
 import { refreshOpenPapers } from './ui/openPapers.js'
 import { flushPositions, focused, reconcileReaders, refreshQuoteLinksSoon, relayoutReadersSoon } from './pageArea.js'
 import {
-  addLibraryFolder, addPapers, adoptLoose, chooseLibrary, newCollection, openLibraryAt, reload, removeLibraryFolder, start,
+  addLibraryFolder, addPapers, adoptLoose, chooseLibrary, newCollection, newTag, openLibraryAt, reload, removeLibraryFolder, start,
 } from './library.js'
 import {
   acceptCandidate, attach, attachmentsMenu, copyKey, detach, editMeta, editState, fileUnder, paperMenu, renamePaper, setKind,
@@ -80,6 +80,7 @@ shell.sidebar = buildSidebar({
   addFolder: () => void addLibraryFolder(),
   removeFolder: (folder) => void removeLibraryFolder(folder),
   newCollection: () => void newCollection(),
+  newTag: () => void newTag(),
   clearSearch: () => clearSearchResults(),
   revealFolder: (folder) => void call('library:revealFolder', { root: folder }),
   file: (paperIDs, shelf) => void fileUnder(paperIDs, shelf),
