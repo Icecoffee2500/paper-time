@@ -1351,6 +1351,7 @@ final class ReaderCoordinator: NSObject {
                 } else {
                     say("ink picture: none")
                 }
+                say("ink standing: scaleFactor \(view.scaleFactor) \(MarkInkView.standing(of: page))")
             }
             // `--papertime-mark-test-keep=<path in the container>`: save the
             // mark into the file before taking it back off, and say what each
