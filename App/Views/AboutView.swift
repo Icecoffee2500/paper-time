@@ -155,6 +155,7 @@ struct FeatureShowcase<Header: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             header
+            areas
             HStack(spacing: 6) {
                 turner(back: true)
                 card
@@ -180,6 +181,38 @@ struct FeatureShowcase<Header: View>: View {
 
     private var current: ReleaseNotes.Highlight? {
         features.indices.contains(page) ? features[page] : features.first
+    }
+
+    /// The five places the pages are grouped by, as a row of capsules: the
+    /// one the page showing belongs to is lit, and pressing another jumps to
+    /// its first page. Sixteen pages in one run read as a list; five groups
+    /// of three or four read as a tour.
+    private var areas: some View {
+        HStack(spacing: 6) {
+            ForEach(ReleaseNotes.Area.allCases) { area in
+                let first = features.firstIndex { $0.area == area }
+                if let first {
+                    let on = current?.area == area
+                    Button {
+                        withAnimation(Motion.surface) { page = first }
+                    } label: {
+                        Label(area.name.value, systemImage: area.symbol)
+                            .font(.caption.weight(on ? .semibold : .medium))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(
+                                Capsule().fill(on ? AnyShapeStyle(.tint.opacity(0.14)) : AnyShapeStyle(.quaternary.opacity(0.5)))
+                            )
+                            .foregroundStyle(on ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .pressable()
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .animation(Motion.tap, value: page)
     }
 
     /// One feature, the way the system shows one: the thing itself, large,
@@ -237,9 +270,9 @@ struct FeatureShowcase<Header: View>: View {
     private func words(for highlight: ReleaseNotes.Highlight) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 7) {
-                Image(systemName: highlight.tier.symbol)
+                Image(systemName: highlight.area.symbol)
                     .font(.caption2)
-                Text(highlight.tier.name.value.uppercased())
+                Text(highlight.area.name.value.uppercased())
                     .font(.caption2.weight(.semibold))
                     .tracking(0.7)
             }

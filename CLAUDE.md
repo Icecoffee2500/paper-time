@@ -203,7 +203,7 @@ Apple 네이티브(macOS/iPadOS/iOS 26) 논문 리더 + 필기 + 서지관리 �
    - 단축키는 `app.shortcut(for:)`로 읽는다. 사용자가 키를 바꾸면 데모도 따라 바뀌어야 한다.
    - 실제 UI와 같은 형태로 만든다 — 같은 카드, 같은 행 높이, 같은 분류 캡션. 그림이 아니라 축소판이어야 한다.
 2. `ReleaseNotes.releases`의 해당 버전 `added`에 항목을 더하고 `demo:`를 건다. 제목은 키워드, 설명은 한 문장.
-3. 헤드라인급이면 `ReleaseNotes.highlights`에도 더한다. 그러면 **About과 환영 화면 양쪽에 자동으로** 실물 크기로 나온다(`FeatureShowcase` 하나를 둘이 같이 쓴다).
+3. 헤드라인급이면 `ReleaseNotes.highlights`에도 더한다 — `area:`(복사·표시·읽기·노트·라이브러리)를 달고 그 영역의 자리에 끼운다. 쇼케이스는 영역 캡슐로 묶어 보이고(1.0부터; 전에는 «다른 데 없는 것·읽는 자리·읽고 난 뒤» 세 층이었다), 열여섯을 넘기지 않는다 — 넘치면 하나를 `groups`로 내린다. 포터블은 `tools/generate-release-notes.mjs`를 다시 돌린다. 그러면 **About과 환영 화면 양쪽에 자동으로** 실물 크기로 나온다(`FeatureShowcase` 하나를 둘이 같이 쓴다).
 4. 필요하면 `ReleaseNotes.groups`(모든 기능 목록)에도 한 줄 더한다.
 5. 한글을 먼저 쓴다. `Text2(ko, en)` / `ReleaseNotes.string(ko, en)`.
 6. 다른 앱과 다른 점이 핵심이면 데모 안에서 **나란히 비교**한다(주석의 "다른 PDF 앱 / Paper Time", 책의 자르기 전·후 토글처럼). 한 문장으로 "더 예쁘다"보다 두 그림이 낫다.

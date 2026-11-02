@@ -45,79 +45,11 @@ enum ReleaseNotes {
 
     static func string(_ ko: String, _ en: String) -> String { Text2(ko, en).value }
 
-    /// Shown on the first run of a version. Kept short on purpose: a list of
-    /// twenty is a list nobody reads.
+    /// Shown on the first run of a version and in About, one at a time,
+    /// grouped by where you are when you want it: copying, marking, reading,
+    /// notes, the library. Sixteen, not everything — the whole catalogue is
+    /// `groups`.
     static let highlights: [Highlight] = [
-        Highlight(
-            symbol: "text.quote",
-            title: Text2("쪽에서 노트로 돌아가요", "From the page back to your note"),
-            detail: Text2(
-                "⌘L로 노트에 넣은 구절을 쪽 위에서도 연한 강조색으로 칠해요. 줄 가운데서 시작한 인용은 그 낱말부터 칠해요. 칠한 곳을 누르면 오른쪽 노트 칸이 그 노트를 열고, 인용으로 가서 잠깐 반짝여요. 노트의 쪽수를 누르면 쪽으로 가고, 쪽의 칠한 구절을 누르면 노트로 와요. 아래에서 눌러 보세요.",
-                "A passage you quote with ⌘L stays tinted on the page, in a pale shade of your accent colour, from the very word it starts with. Click it and the note opens at that quotation, which glows for a moment. The page number in the note takes you to the page, and the tinted passage brings you back. Try it below."
-            ),
-            demo: .quoteLink,
-            tier: .one
-        ),
-        Highlight(
-            symbol: "sparkle.magnifyingglass",
-            title: Text2("낱말이 아니라 뜻으로 찾아요", "Search by meaning, not by the word"),
-            detail: Text2(
-                "«모델이 왜 잊는지»라고 치면, 그 낱말이 하나도 없는 구절도 나와요 — «첫 과제의 정확도가 두 번째 과제를 배우자 급히 떨어진다» 같은 문장이요. 찾기(⌘K)의 정확히 맞는 결과 아래에 «뜻이 비슷한 구절»로 서요. 작은 모델이 이 맥에서만 돌고, 논문은 밖으로 나가지 않아요. 아래에서 질문을 바꿔 보세요.",
-                "Type “why do models forget” and the passages that answer it come up even when none of those words is in them — “accuracy on the first task drops sharply once the second is trained.” They stand under the exact matches in Search Everything (⌘K), as Similar in Meaning. A small model runs on this Mac, and the papers never leave it. Try another question below."
-            ),
-            demo: .meaning,
-            tier: .one
-        ),
-        Highlight(
-            symbol: "textformat.superscript",
-            title: Text2("수식은 짧게 쳐도 돼요 — LaTeX 단축 입력", "Math in shorthand: LaTeX Shortcuts"),
-            detail: Text2(
-                "노트에 수식을 적다 보면 \\frac{}{}를 치는 사이에 생각을 놓쳐요. 이제 //를 치면 분수가, x1을 치면 x_{1}이, sr을 치면 제곱이 되고, Tab을 누르면 다음 칸으로 가요. Obsidian의 Latex Suite를 그대로 따라서, 쓰던 손이 그대로 통해요. 아래에서 눌러 보세요.",
-                "A thought gets lost somewhere inside \\frac{}{}. Now // is a fraction, x1 is x_{1}, sr is a square, and Tab moves on to the next field. These are Latex Suite's own snippets, and they behave as they do in Obsidian. Try it below."
-            ),
-            demo: .latexShortcuts,
-            tier: .one
-        ),
-        Highlight(
-            symbol: "folder",
-            title: Text2("라이브러리가 열려요", "The libraries open"),
-            detail: Text2(
-                "폴더를 여럿 열 수 있게 되자 사이드바가 길어지기만 했어요 — 한 학기를 폴더로 나눠 두면 논문보다 폴더가 먼저 스무 개가 되니까요. 이제 라이브러리를 누르면 나머지는 물러나고 그 안의 폴더들이 들여쓰여 서요. 폴더를 누르면 또 그 안이 열리고, 목록에는 그 아래의 논문이 전부 나와요. 나가는 길은 지금 눌린 그 줄이에요. 아래에서 눌러 보세요.",
-                "Opening several folders only made the sidebar longer — somebody filing a term has twenty folders before they have twenty papers. Press a library now and the others step aside while its own folders appear, indented. Press one of those and it opens in turn, with every paper beneath it in the list. The way back out is the row you are on. Press below and see."
-            ),
-            demo: .folderTree,
-            tier: .one
-        ),
-        Highlight(
-            symbol: "doc.questionmark",
-            title: Text2("논문만이 아니라, 모든 PDF", "Not only papers"),
-            detail: Text2(
-                "PDF를 더하면 먼저 물어봐요 — 논문인가요, 일반 문서인가요. 앱이 짐작한 답을 미리 골라 두니 한 번만 누르면 돼요. 논문이면 예전처럼 서지를 찾아 채우고, 일반 문서면 학술지나 DOI 같은 칸은 아예 사라져요. 계약서에 학술지를 묻지 않아요. 표시도, 필기도, 노트도 그대로 되고요.",
-                "Add a PDF and it asks: a paper, or a document? The app has already guessed, so it is one press. A paper gets its record looked up as before; a document loses the journal and the DOI, which it never had. Nobody asks a contract for its volume number. Marking, writing and notes work the same on both."
-            ),
-            demo: .kindQuestion,
-            tier: .one
-        ),
-        Highlight(
-            symbol: "bubble.and.pencil",
-            title: Text2("이제 같이 만들어요", "Now we build it together"),
-            detail: Text2(
-                "무언가 이상하거나 아쉬우면 ⌥⌘/ 를 눌러주세요. 방금 그 화면이 이미 찍힌 채로 창이 열리니까 어디서 그랬는지 설명하지 않아도 돼요. 논문에 쓰던 그 화살표와 네모로 바로 표시하면 되고, 보이면 안 되는 곳은 가리개로 덮으면 돼요. 보내주신 건 배포 페이지의 목록에 올라가고, 고쳐지면 체크가 붙어요 — 적어주신 이름과 함께요.",
-                "When something is wrong, or missing, press ⌥⌘/. The sheet opens with the screenshot already taken, so you never have to explain where you were. Mark it up with the same arrow and box you use on papers, and cover anything private. What you send lands on the list on the download page and gets a check when it is fixed — with the name you chose beside it."
-            ),
-            demo: .feedback,
-            tier: .one
-        ),
-        Highlight(
-            symbol: "macwindow.on.rectangle",
-            title: Text2("라이브러리가 어느 데스크톱에서나 열린다", "One library, on every desktop"),
-            detail: Text2(
-                "표시는 PDF 파일 안에 쓰이고 라이브러리는 그냥 폴더다. 그래서 같은 폴더를 맥에서도, 윈도우에서도, 리눅스에서도 연다 — 하이라이트도 손글씨도 굽은 화살표도 그대로. 계정도 서버도 내보내기도 없고, 클라우드 폴더든 USB든 파일이 닿는 곳이면 된다. 아래에서 표시 하나가 셋에 닿는 것을 눌러 보라.",
-                "The marks are written into the PDF and the library is only a folder, so the same folder opens on a Mac, on Windows and on Linux — the highlights, the handwriting, the bent arrows, all of it. No account, no server, nothing exported: a cloud folder or a memory stick will do. Press below and watch one mark reach all three."
-            ),
-            demo: .crossPlatform,
-            tier: .one
-        ),
         Highlight(
             symbol: "function",
             title: Text2("Ultracopy — 수식은 LaTeX으로, 글은 글로", "Ultracopy — the words as words, the mathematics as LaTeX"),
@@ -127,51 +59,28 @@ enum ReleaseNotes {
             ),
             action: .ultracopy,
             demo: .ultracopy,
-            tier: .one
+            area: .copying
+        ),
+        Highlight(
+            symbol: "highlighter",
+            title: Text2("표시는 PDF 안에 남고, 여기서는 더 예쁘다", "Your marks go into the PDF — and look better here"),
+            detail: Text2(
+                "형광펜과 밑줄이 옆에 붙은 데이터베이스가 아니라 파일 자체에 기록된다. 미리보기든 아이패드든 십 년 뒤든 표시는 그대로다. 그리고 이 앱 안에서는 형광펜의 끝이 둥글고 글자가 살 만큼 연하며, 밑줄은 눈에 띄게 짙고, 마우스를 올리면 밝아진다. 수식이 든 줄에서 다른 앱은 상자가 줄 높이만큼 자라지만, 여기서는 글자의 잉크를 재서 사람이 그은 것처럼 딱 맞게 덮는다 — 파일은 그대로 두고 그리는 법만 바꾼 것이라 다른 앱에서는 볼 수 없는 생김새다. 노트의 인용구도 같은 모양이다. 아래에서 둘을 나란히 보라.",
+                "Highlights and underlines are written into the file itself, not into a database beside it — Preview, an iPad, ten years from now, the marks are there. And in here a highlight has rounded ends and stays pale enough to read through, an underline is dark enough to see, and either brightens under the pointer. On a line carrying a formula, other apps grow the box to the height of the line; here the ink of the letters is measured and the band fits them the way a hand-drawn stroke does. The file is untouched; only the drawing is ours, which is why no other PDF app looks like this. A quotation in a note wears the same shape. Compare the two side by side below."
+            ),
+            demo: .annotations,
+            area: .marking
         ),
         Highlight(
             symbol: "pencil.and.outline",
-            title: Text2("맥에서도 자유롭게 그린다 — 도형·화살표·카드·손글씨", "Draw freely on the Mac: shapes, arrows, cards, handwriting"),
+            title: Text2("맥에서도 자유롭게 그린다 — 도형·화살표·카드·펜", "Draw freely on the Mac: shapes, arrows, cards, pen"),
             detail: Text2(
                 "PDF 앱의 필기는 딱딱하다 — 네모 하나, 메모 아이콘 하나. 여기서는 펜을 들면(⇧⌘D) 쪽 위에 Figma의 도구 줄이 뜬다: 선택 V, 프레임 F, 도형(네모 R·동그라미 O·선 L·화살표 A), 펜(P·형광펜 H·지우개 E), 글 T — 한 글자로 바꾼다. 화살표는 가운데 손잡이를 끌면 XMind처럼 구부러지고, 상자를 두 번 누르면 그 안에 글을 쓰고, 글은 종이 위에 바로 쓴다. 프레임 안에 넣고(F), 묶고(⌘G), 줄이나 열로 정렬한다(⇧A). 오른쪽 인스펙터에 위치·크기·간격·투명도·모서리·채움·외곽선·글자 크기가 숫자로 있다. 형광펜은 아이패드처럼 글자에 맞춰지고, 지우개는 선·도형·하이라이트를 함께 지운다. 모두 ⌘Z. 그리고 전부 PDF 안에 표준 주석으로도 기록되어 아이패드·아이폰·Preview에서 같은 자리에 보인다. 아래 카드를 끌어 보라 — 화살표가 따라온다.",
                 "Drawing in a PDF app is stiff: one box, one note icon. Here, take the pencil out (⇧⌘D) and Figma's tool rack floats over the page: Select V, Frame F, the shapes (rectangle R, ellipse O, line L, arrow A), the pen (P, highlighter H, eraser E), Text T — one letter each. An arrow bends when its middle handle is pulled, the way XMind's do; double-click a box to write inside it; text is typed straight onto the page. Put things in a frame (F), group them (⌘G), line them up in a row or a column (⇧A). The inspector on the right has position, size, gap, opacity, corners, fill, stroke and text size as numbers. The highlighter fits itself to the words as on the iPad; the eraser takes strokes, shapes and highlights together. All of it undoes with ⌘Z. And all of it is written into the PDF as standard annotations too, so the iPad, the iPhone and Preview show it in the same place. Drag the card below — the arrow follows."
             ),
             action: .draw,
             demo: .sketch,
-            tier: .one
-        ),
-        Highlight(
-            symbol: "book.pages",
-            title: Text2("책에서 절 사이를 오간다", "A book you move through by section"),
-            detail: Text2(
-                "두 쪽이 마주 보고, ←→와 스페이스와 트랙패드로 장을 넘긴다. 다른 앱은 PDF의 쪽을 그대로 나란히 놓아서 논문마다 여백이 달라지고 펼침면이 한쪽으로 몰리지만, 여기서는 쪽을 글에 맞춰 잘라 — 스캔한 교과서까지 — 좌우 여백이 같고 두 쪽 사이는 늘 같은 폭이며, 여백에 세로로 찍힌 arXiv 도장은 지워진다. 아래에는 지금 몇 쪽인지와 얼마나 읽었는지. ⇧⌘L이면 이 논문의 목차가 두 쪽 사이 여백에 떠서 — 글자는 가리지 않고 — 절을 누르는 대로 그리로 간다. 목차는 Esc나 다른 곳을 누르기 전까지 남는다. 아래에서 '다른 PDF 앱'을 눌러 비교해 보라.",
-                "Two pages face each other; ← →, the space bar and a swipe turn them. Other apps set the PDF's pages side by side as they are, so the margins change from paper to paper and the spread sits off to one side; here each page is cropped to its text — a scanned textbook included — so the margins match on both sides, the gutter is always the same width, and the arXiv stamp running up the margin is painted out. Underneath, which pages these are and how far in you are. ⇧⌘L floats this paper's table of contents into the gutter between the pages, covering no words, and each section is one click; it stays until Escape or a click elsewhere. Press \"Other PDF apps\" below and compare."
-            ),
-            action: .floatingList,
-            demo: .bookReading,
-            tier: .two
-        ),
-        Highlight(
-            symbol: "magnifyingglass",
-            title: Text2("한 칸에서 전부 찾는다", "One field finds all of it"),
-            detail: Text2(
-                "⌘K — 또는 논문 목록을 위로 끝까지 당기면 — 한 칸이 뜬다. 치면 논문·노트·지도·초안·저자·컬렉션·태그·명령을 찾고, 같은 제목이면 최근에 연 것이 먼저다. 치지 않으면 빈칸이 아니라 제안이다: '이어 읽기'(어디까지 읽었고 몇 쪽 남았는지 — 끝이 가까울수록 끌리는 법), '읽었으니'(방금 읽은 논문과 드문 낱말을 나누는 아직 안 읽은 논문, 나누는 낱말과 함께 — 아는 것을 새 쪽에서 보게 하는 호기심의 틈), '다시 보기'(몇 주 전 읽고 노트를 남긴 논문 — 잊히기 직전이 다시 볼 때다), '이번 주 새로'. 논문 안의 글자를 찾는 것은 ⌘F 쪽이다.",
-                "⌘K — or pull the paper list down past its top — and one field appears. Type, and it finds papers, notes, maps, drafts, authors, collections, tags and commands, the recently opened first among equals. Type nothing, and it offers rather than waits: Continue (how far you got and how few pages are left — the last stretch pulls hardest), Because you read (unread papers that share their rarer words with the one you just read, the words named — a known thing seen from a new side), Revisit (read weeks ago, with your notes — just before it fades is the time), New this week. ⌘F is the other one: the words inside the open paper."
-            ),
-            action: .searchEverything,
-            demo: .search,
-            tier: .one
-        ),
-        Highlight(
-            symbol: "sidebar.left",
-            title: Text2("창은 내가 접는 대로 있는다", "The window folds to what you are doing"),
-            detail: Text2(
-                "사이드바·목록·논문·인스펙터가 각자 자기 키로 숨는다. 남은 것이 빈자리를 나눠 갖는 대신, 숨은 것 뒤에 있던 것이 드러난다. 패널 사이의 틈을 끌면 크기가 바뀐다.",
-                "The sidebar, the list, the paper and the inspector each hide on their own key — revealing what was behind rather than stretching to fill the gap. Drag the space between two of them to resize."
-            ),
-            action: .sidebar,
-            demo: .panes,
-            tier: .two
+            area: .marking
         ),
         Highlight(
             symbol: "book",
@@ -182,7 +91,18 @@ enum ReleaseNotes {
             ),
             action: .layoutBook,
             demo: .book,
-            tier: .two
+            area: .reading
+        ),
+        Highlight(
+            symbol: "book.pages",
+            title: Text2("책에서 절 사이를 오간다", "A book you move through by section"),
+            detail: Text2(
+                "두 쪽이 마주 보고, ←→와 스페이스와 트랙패드로 장을 넘긴다. 다른 앱은 PDF의 쪽을 그대로 나란히 놓아서 논문마다 여백이 달라지고 펼침면이 한쪽으로 몰리지만, 여기서는 쪽을 글에 맞춰 잘라 — 스캔한 교과서까지 — 좌우 여백이 같고 두 쪽 사이는 늘 같은 폭이며, 여백에 세로로 찍힌 arXiv 도장은 지워진다. 아래에는 지금 몇 쪽인지와 얼마나 읽었는지. ⇧⌘L이면 이 논문의 목차가 두 쪽 사이 여백에 떠서 — 글자는 가리지 않고 — 절을 누르는 대로 그리로 간다. 목차는 Esc나 다른 곳을 누르기 전까지 남는다. 아래에서 '다른 PDF 앱'을 눌러 비교해 보라.",
+                "Two pages face each other; ← →, the space bar and a swipe turn them. Other apps set the PDF's pages side by side as they are, so the margins change from paper to paper and the spread sits off to one side; here each page is cropped to its text — a scanned textbook included — so the margins match on both sides, the gutter is always the same width, and the arXiv stamp running up the margin is painted out. Underneath, which pages these are and how far in you are. ⇧⌘L floats this paper's table of contents into the gutter between the pages, covering no words, and each section is one click; it stays until Escape or a click elsewhere. Press \"Other PDF apps\" below and compare."
+            ),
+            action: .floatingList,
+            demo: .bookReading,
+            area: .reading
         ),
         Highlight(
             symbol: "rectangle.center.inset.filled",
@@ -193,17 +113,18 @@ enum ReleaseNotes {
             ),
             action: .focus,
             demo: .focus,
-            tier: .two
+            area: .reading
         ),
         Highlight(
-            symbol: "highlighter",
-            title: Text2("표시는 PDF 안에 남고, 여기서는 더 예쁘다", "Your marks go into the PDF — and look better here"),
+            symbol: "sidebar.left",
+            title: Text2("창은 내가 접는 대로 있는다", "The window folds to what you are doing"),
             detail: Text2(
-                "형광펜과 밑줄이 옆에 붙은 데이터베이스가 아니라 파일 자체에 기록된다. 미리보기든 아이패드든 십 년 뒤든 표시는 그대로다. 그리고 이 앱 안에서는 형광펜의 끝이 둥글고 글자가 살 만큼 연하며, 밑줄은 눈에 띄게 짙고, 마우스를 올리면 밝아진다. 수식이 든 줄에서 다른 앱은 상자가 줄 높이만큼 자라지만, 여기서는 글자의 잉크를 재서 사람이 그은 것처럼 딱 맞게 덮는다 — 파일은 그대로 두고 그리는 법만 바꾼 것이라 다른 앱에서는 볼 수 없는 생김새다. 노트의 인용구도 같은 모양이다. 아래에서 둘을 나란히 보라.",
-                "Highlights and underlines are written into the file itself, not into a database beside it — Preview, an iPad, ten years from now, the marks are there. And in here a highlight has rounded ends and stays pale enough to read through, an underline is dark enough to see, and either brightens under the pointer. On a line carrying a formula, other apps grow the box to the height of the line; here the ink of the letters is measured and the band fits them the way a hand-drawn stroke does. The file is untouched; only the drawing is ours, which is why no other PDF app looks like this. A quotation in a note wears the same shape. Compare the two side by side below."
+                "사이드바·목록·논문·인스펙터가 각자 자기 키로 숨는다. 남은 것이 빈자리를 나눠 갖는 대신, 숨은 것 뒤에 있던 것이 드러난다. 패널 사이의 틈을 끌면 크기가 바뀐다.",
+                "The sidebar, the list, the paper and the inspector each hide on their own key — revealing what was behind rather than stretching to fill the gap. Drag the space between two of them to resize."
             ),
-            demo: .annotations,
-            tier: .one
+            action: .sidebar,
+            demo: .panes,
+            area: .reading
         ),
         Highlight(
             symbol: "quote.opening",
@@ -214,7 +135,17 @@ enum ReleaseNotes {
             ),
             action: .linkToNote,
             demo: .passageLink,
-            tier: .one
+            area: .notes
+        ),
+        Highlight(
+            symbol: "text.quote",
+            title: Text2("쪽에서 노트로 돌아가요", "From the page back to your note"),
+            detail: Text2(
+                "⌘L로 노트에 넣은 구절을 쪽 위에서도 연한 강조색으로 칠해요. 줄 가운데서 시작한 인용은 그 낱말부터 칠해요. 칠한 곳을 누르면 오른쪽 노트 칸이 그 노트를 열고, 인용으로 가서 잠깐 반짝여요. 노트의 쪽수를 누르면 쪽으로 가고, 쪽의 칠한 구절을 누르면 노트로 와요. 아래에서 눌러 보세요.",
+                "A passage you quote with ⌘L stays tinted on the page, in a pale shade of your accent colour, from the very word it starts with. Click it and the note opens at that quotation, which glows for a moment. The page number in the note takes you to the page, and the tinted passage brings you back. Try it below."
+            ),
+            demo: .quoteLink,
+            area: .notes
         ),
         Highlight(
             symbol: "tray.full",
@@ -225,26 +156,68 @@ enum ReleaseNotes {
             ),
             action: .newNote,
             demo: .slipBox,
-            tier: .three
+            area: .notes
         ),
         Highlight(
-            symbol: "keyboard",
-            title: Text2("어떤 키가 무슨 일을 하는지 되짚을 수 있다", "Ask what a key does, not just what a key is"),
+            symbol: "textformat.superscript",
+            title: Text2("수식은 짧게 쳐도 돼요 — LaTeX 단축 입력", "Math in shorthand: LaTeX Shortcuts"),
             detail: Text2(
-                "설정 → Shortcuts에서 기능 이름으로도, 키로도 찾는다. 뭘 눌렀는지 모르겠으면 \"cmd\"나 ⌘F를 쳐보면 그 키를 가진 명령이 나온다. 그리고 이 앱의 모든 키는 바꿀 수 있다.",
-                "Settings → Shortcuts searches by name and by key. If something happened and you do not know what you pressed, type \"cmd\" or ⌘F and the command that owns it comes back. Every key in this app can be changed."
+                "노트에 수식을 적다 보면 \\frac{}{}를 치는 사이에 생각을 놓쳐요. 이제 //를 치면 분수가, x1을 치면 x_{1}이, sr을 치면 제곱이 되고, Tab을 누르면 다음 칸으로 가요. Obsidian의 Latex Suite를 그대로 따라서, 쓰던 손이 그대로 통해요. 아래에서 눌러 보세요.",
+                "A thought gets lost somewhere inside \\frac{}{}. Now // is a fraction, x1 is x_{1}, sr is a square, and Tab moves on to the next field. These are Latex Suite's own snippets, and they behave as they do in Obsidian. Try it below."
             ),
-            action: .settings,
-            tier: .three
+            demo: .latexShortcuts,
+            area: .notes
         ),
         Highlight(
             symbol: "folder",
-            title: Text2("라이브러리는 내가 고른 폴더다", "The library is a folder you chose"),
+            title: Text2("라이브러리가 열려요", "The libraries open"),
             detail: Text2(
-                "논문은 놓아둔 자리에 평범한 파일로 있다. iCloud Drive나 구글 드라이브 안의 폴더를 가리키면, 동기화는 이 앱이 새로 해야 할 일이 아니라 이미 갖고 있는 것이 된다.",
-                "Papers stay as ordinary files where you put them. Point it at a folder in iCloud Drive or Google Drive and syncing is something you already have rather than something this app has to do."
+                "폴더를 여럿 열 수 있게 되자 사이드바가 길어지기만 했어요 — 한 학기를 폴더로 나눠 두면 논문보다 폴더가 먼저 스무 개가 되니까요. 이제 라이브러리를 누르면 나머지는 물러나고 그 안의 폴더들이 들여쓰여 서요. 폴더를 누르면 또 그 안이 열리고, 목록에는 그 아래의 논문이 전부 나와요. 나가는 길은 지금 눌린 그 줄이에요. 아래에서 눌러 보세요.",
+                "Opening several folders only made the sidebar longer — somebody filing a term has twenty folders before they have twenty papers. Press a library now and the others step aside while its own folders appear, indented. Press one of those and it opens in turn, with every paper beneath it in the list. The way back out is the row you are on. Press below and see."
             ),
-            tier: .two
+            demo: .folderTree,
+            area: .library
+        ),
+        Highlight(
+            symbol: "magnifyingglass",
+            title: Text2("한 칸에서 전부 찾는다", "One field finds all of it"),
+            detail: Text2(
+                "⌘K — 또는 논문 목록을 위로 끝까지 당기면 — 한 칸이 뜬다. 치면 논문·노트·지도·초안·저자·컬렉션·태그·명령을 찾고, 같은 제목이면 최근에 연 것이 먼저다. 치지 않으면 빈칸이 아니라 제안이다: '이어 읽기'(어디까지 읽었고 몇 쪽 남았는지 — 끝이 가까울수록 끌리는 법), '읽었으니'(방금 읽은 논문과 드문 낱말을 나누는 아직 안 읽은 논문, 나누는 낱말과 함께 — 아는 것을 새 쪽에서 보게 하는 호기심의 틈), '다시 보기'(몇 주 전 읽고 노트를 남긴 논문 — 잊히기 직전이 다시 볼 때다), '이번 주 새로'. 논문 안의 글자를 찾는 것은 ⌘F 쪽이다.",
+                "⌘K — or pull the paper list down past its top — and one field appears. Type, and it finds papers, notes, maps, drafts, authors, collections, tags and commands, the recently opened first among equals. Type nothing, and it offers rather than waits: Continue (how far you got and how few pages are left — the last stretch pulls hardest), Because you read (unread papers that share their rarer words with the one you just read, the words named — a known thing seen from a new side), Revisit (read weeks ago, with your notes — just before it fades is the time), New this week. ⌘F is the other one: the words inside the open paper."
+            ),
+            action: .searchEverything,
+            demo: .search,
+            area: .library
+        ),
+        Highlight(
+            symbol: "sparkle.magnifyingglass",
+            title: Text2("낱말이 아니라 뜻으로 찾아요", "Search by meaning, not by the word"),
+            detail: Text2(
+                "«모델이 왜 잊는지»라고 치면, 그 낱말이 하나도 없는 구절도 나와요 — «첫 과제의 정확도가 두 번째 과제를 배우자 급히 떨어진다» 같은 문장이요. 찾기(⌘K)의 정확히 맞는 결과 아래에 «뜻이 비슷한 구절»로 서요. 작은 모델이 이 맥에서만 돌고, 논문은 밖으로 나가지 않아요. 아래에서 질문을 바꿔 보세요.",
+                "Type “why do models forget” and the passages that answer it come up even when none of those words is in them — “accuracy on the first task drops sharply once the second is trained.” They stand under the exact matches in Search Everything (⌘K), as Similar in Meaning. A small model runs on this Mac, and the papers never leave it. Try another question below."
+            ),
+            demo: .meaning,
+            area: .library
+        ),
+        Highlight(
+            symbol: "macwindow.on.rectangle",
+            title: Text2("라이브러리가 어느 데스크톱에서나 열린다", "One library, on every desktop"),
+            detail: Text2(
+                "표시는 PDF 파일 안에 쓰이고 라이브러리는 그냥 폴더다. 그래서 같은 폴더를 맥에서도, 윈도우에서도, 리눅스에서도 연다 — 하이라이트도 손글씨도 굽은 화살표도 그대로. 계정도 서버도 내보내기도 없고, 클라우드 폴더든 USB든 파일이 닿는 곳이면 된다. 아래에서 표시 하나가 셋에 닿는 것을 눌러 보라.",
+                "The marks are written into the PDF and the library is only a folder, so the same folder opens on a Mac, on Windows and on Linux — the highlights, the handwriting, the bent arrows, all of it. No account, no server, nothing exported: a cloud folder or a memory stick will do. Press below and watch one mark reach all three."
+            ),
+            demo: .crossPlatform,
+            area: .library
+        ),
+        Highlight(
+            symbol: "bubble.and.pencil",
+            title: Text2("이제 같이 만들어요", "Now we build it together"),
+            detail: Text2(
+                "무언가 이상하거나 아쉬우면 ⌥⌘/ 를 눌러주세요. 방금 그 화면이 이미 찍힌 채로 창이 열리니까 어디서 그랬는지 설명하지 않아도 돼요. 논문에 쓰던 그 화살표와 네모로 바로 표시하면 되고, 보이면 안 되는 곳은 가리개로 덮으면 돼요. 보내주신 건 배포 페이지의 목록에 올라가고, 고쳐지면 체크가 붙어요 — 적어주신 이름과 함께요.",
+                "When something is wrong, or missing, press ⌥⌘/. The sheet opens with the screenshot already taken, so you never have to explain where you were. Mark it up with the same arrow and box you use on papers, and cover anything private. What you send lands on the list on the download page and gets a check when it is fixed — with the name you chose beside it."
+            ),
+            demo: .feedback,
+            area: .library
         ),
     ]
 
@@ -2924,46 +2897,33 @@ enum ReleaseNotes {
         var id: String { rawValue }
     }
 
-    /// What order to meet the app in.
-    ///
-    /// Fifteen things that are each worth a paragraph is not a list anybody
-    /// reads; it is a wall, and a wall is read by nobody. So they are told in
-    /// three goes. The first answers "why not just use Preview" — the things
-    /// no other reader does at all. The second is what makes the window a
-    /// place to read in rather than a viewer. The third is what becomes of
-    /// the reading afterwards, which is the part that turns into writing.
-    /// Somebody who stops after the first tier has still seen the point.
-    enum Tier: Int, CaseIterable, Identifiable {
-        case one = 1, two, three
+    /// Where a highlight lives, which is how the showcase is grouped. Five
+    /// places, the ones the reader is in when they want the thing: copying,
+    /// marking, reading, notes, the library. Three tiers by importance were
+    /// here before 1.0 (nowhere else · the place you read in · after the
+    /// reading); nineteen pages in that order read as one long list, and the
+    /// person reading it could not say which of them were about notes.
+    enum Area: Int, CaseIterable, Identifiable {
+        case copying = 1, marking, reading, notes, library
         var id: Int { rawValue }
 
         var name: Text2 {
             switch self {
-            case .one: Text2("다른 데 없는 것", "Nowhere else")
-            case .two: Text2("읽는 자리", "The place you read in")
-            case .three: Text2("읽고 난 뒤", "After the reading")
-            }
-        }
-
-        var promise: Text2 {
-            switch self {
-            case .one:
-                Text2("이것들 때문에 만들었다. 다른 PDF 앱에서는 아예 되지 않는 일들.",
-                      "The reasons it was built: things no other PDF reader does at all.")
-            case .two:
-                Text2("논문 말고는 아무것도 신경 쓰지 않게 하는 것들.",
-                      "What makes the window a place to read in, and nothing else.")
-            case .three:
-                Text2("표시가 생각이 되고, 생각이 원고가 되는 길.",
-                      "How marks become thinking, and thinking becomes a manuscript.")
+            case .copying: Text2("복사", "Copy")
+            case .marking: Text2("표시", "Mark")
+            case .reading: Text2("읽기", "Read")
+            case .notes: Text2("노트", "Notes")
+            case .library: Text2("라이브러리", "Library")
             }
         }
 
         var symbol: String {
             switch self {
-            case .one: "sparkles"
-            case .two: "book.pages"
-            case .three: "pencil.and.outline"
+            case .copying: "function"
+            case .marking: "highlighter"
+            case .reading: "book.pages"
+            case .notes: "note.text"
+            case .library: "folder"
             }
         }
     }
@@ -2976,13 +2936,8 @@ enum ReleaseNotes {
         /// Shown full size in About, where the point is to let somebody try
         /// the thing rather than read about it.
         var demo: Demo?
-        /// Which of the three goes this one belongs to.
-        var tier: Tier = .two
-        /// The first tier is what somebody came for, and it is set apart —
-        /// the tint on the title, the ring round the demonstration. This was
-        /// a flag of its own, which meant two ways of saying one thing and a
-        /// chance for them to disagree.
-        var featured: Bool { tier == .one }
+        /// Where it lives; the showcase groups by this.
+        var area: Area = .reading
         var id: String { title.en }
     }
 
