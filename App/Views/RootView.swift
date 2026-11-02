@@ -849,8 +849,6 @@ struct LibraryWindow: View {
                         Divider()
                         Picker(L("종류", "Kind"), selection: kindBinding(for: paper)) {
                             Label(L("논문", "Paper"), systemImage: "text.document").tag(DocumentKind.paper)
-                            Label(L("책", "Book"), systemImage: "book").tag(DocumentKind.book)
-                            Label(L("강의자료", "Course Material"), systemImage: "person.crop.rectangle").tag(DocumentKind.lecture)
                             Label(L("일반 문서", "Document"), systemImage: "doc").tag(DocumentKind.document)
                         }
                         // Only when another program has written the file
@@ -1183,8 +1181,6 @@ struct LibraryWindow: View {
         switch model.scope {
         case .all: L("모두", "All")
         case .papers: L("논문", "Papers")
-        case .books: L("책", "Books")
-        case .lectures: L("강의자료", "Course Material")
         case .documents: L("문서", "Documents")
         case let .folder(root): root.lastPathComponent
         case .open: L("열린 문서", "Open Documents")

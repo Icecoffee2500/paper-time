@@ -44,7 +44,6 @@ for r in rows:
   add('scan', s['openingText']); add('dois', s['openingText']); add('arxivIDs', s['openingText'])
   add('repairingHyphenation', s['openingText'][:4000])
   add('looksLikeAbstract', s['openingText'][:3000])
-  add('namesACourse', r['file'] + ' ' + s['openingText'][:1200])
   if 'firstPage' in r: add('largestFontText', r['firstPage'])
   for line in s['firstPageLines'][:30]: lines.add(line)
   add('referencePageIndices', s['pageCount'])

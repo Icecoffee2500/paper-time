@@ -270,9 +270,9 @@ export async function mainModulesSuite(test: Test, suite: (name: string) => void
       await records.meta(library, row.id, { guessedKind: 'paper' }, { stamp: false })
       assert.equal((await readJSON(L.metaPath(root, row.id)))!.guessedKind, 'document')
       // The reader's answer does stamp it — by this device, now.
-      await records.meta(library, row.id, { kind: 'book' })
+      await records.meta(library, row.id, { kind: 'document' })
       const answered = (await readJSON(L.metaPath(root, row.id)))!
-      assert.equal(answered.kind, 'book')
+      assert.equal(answered.kind, 'document')
       assert.ok(String(answered.updatedAt) >= String(before.updatedAt))
       assert.equal(typeof answered.updatedBy, 'string')
     } finally {
