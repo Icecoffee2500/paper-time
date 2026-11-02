@@ -349,7 +349,7 @@ struct SettingsView: View {
             case .library:
                 librarySection
                 // With no library open there are no notes to point anywhere.
-                if app.library != nil { looseNotesSection }
+                if Legacy.looseNotesFolder, app.library != nil { looseNotesSection }
                 languageSection
             case .metadata: metadataSection(settings: settings)
             case .bibtex: bibTeXSection(settings: settings)

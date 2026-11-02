@@ -5,4 +5,6 @@
 export const LEGACY = {
   /** What the empty search palette offers (continue, revisit, new this week). */
   emptySearchSuggestions: false,
+  /** Settings → Library → «Notes Without a Paper»: choosing their folder. The notes stay; the control waits for 2.0. */
+  looseNotesFolder: false,
 } as const

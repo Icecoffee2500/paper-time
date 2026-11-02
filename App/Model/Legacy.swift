@@ -23,6 +23,11 @@ enum Legacy {
     /// maps and drafts still open and the files are untouched; only making
     /// new ones, filing notes onto them, and the «speaks first» echoes go.
     static let slipBoxStructures = false
+    /// Settings → Library → «Notes Without a Paper»: choosing a folder for
+    /// the notes that belong to no paper. The notes stay (in the app's own
+    /// folder) and a folder chosen in 0.9 is still honoured; only the control
+    /// is away until 2.0 brings maps and drafts back with it.
+    static let looseNotesFolder = false
     /// The paper graph: its sidebar row.
     static let graph = false
     /// What the empty search palette offers (continue, because you read,

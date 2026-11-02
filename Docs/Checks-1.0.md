@@ -99,3 +99,4 @@ APA 7·IEEE·ACM·Chicago·MLA 9·Nature·Vancouver 일곱이 손으로 부호�
 
 - `RISImporter`: `L1`/`L2`의 PDF 경로를 `fileHints`로(가져오기가 RIS에서도 파일을 찾는다).
 - `Tests/ImportersTests/LibraryMigratorTests.swift`: 계획·적용·RIS 세 시험.
+- 논문 없는 노트의 «폴더 고르기» 절을 `Legacy.looseNotesFolder` 뒤로(두 빌드, 사용자 결정 2026-11-02). 노트는 앱 폴더에 그대로, 0.9에서 고른 폴더는 계속 존중한다.

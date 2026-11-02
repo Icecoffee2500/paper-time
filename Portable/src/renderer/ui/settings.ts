@@ -23,6 +23,7 @@
 import { clear, el, on } from '../dom.js'
 import { icon } from '../icons.js'
 import { L } from '../../shared/lang.js'
+import { LEGACY } from '../../shared/legacy.js'
 import { providerIcon, providerName, providerOf } from '../../shared/cloudProvider.js'
 import { store } from '../state.js'
 import { PAGE_TINTS, tintColorFrom, tintLabel } from '../../shared/pageTint.js'
@@ -238,60 +239,63 @@ export function showSettings(actions: SettingsActions, section?: SettingsSection
     // Paper»: a warning when the chosen folder is away, which service carries
     // it, the ways to move them, to reconnect, and to look; the path and what
     // the last move did stay under the rows.
-    const where = store.notesFolder
-    body.append(el('div', { class: 'set-section', text: L('논문 없는 노트', 'Notes Without a Paper') }))
-    const loose = el('div', { class: 'set-row' })
-    loose.append(el('span', { class: 'set-label', text: L('폴더', 'Folder') }))
-    const looseName = where?.chosenPath
-      ? where.chosenPath.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? where.chosenPath
-      : L('앱 폴더', "The app's folder")
-    const loosePath = el('span', { class: 'set-path' })
-    if (where?.away) loosePath.append(el('span', { class: 'set-warning', html: icon('exclamationmark.triangle') }))
-    loosePath.append(document.createTextNode(looseName))
-    loose.append(loosePath)
-    body.append(loose)
-    if (where?.chosenPath) body.append(syncedVia(where.chosenPath))
-    const buttons = el('div', { class: 'set-row set-buttons' })
-    const pickLoose = el('button', { class: 'plain-button', text: L('폴더 고르기…', 'Choose Folder…') })
-    on(pickLoose, 'click', () => actions.chooseNotesFolder())
-    buttons.append(pickLoose)
-    if (where?.chosenPath) {
-      const back = el('button', { class: 'plain-button', text: L('앱 폴더로 되돌리기', 'Move Back to This Computer') })
-      on(back, 'click', () => actions.useAppNotesFolder())
-      buttons.append(back)
+    if (LEGACY.looseNotesFolder) {
+      const where = store.notesFolder
+      body.append(el('div', { class: 'set-section', text: L('논문 없는 노트', 'Notes Without a Paper') }))
+      const loose = el('div', { class: 'set-row' })
+      loose.append(el('span', { class: 'set-label', text: L('폴더', 'Folder') }))
+      const looseName = where?.chosenPath
+        ? where.chosenPath.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? where.chosenPath
+        : L('앱 폴더', "The app's folder")
+      const loosePath = el('span', { class: 'set-path' })
+      if (where?.away) loosePath.append(el('span', { class: 'set-warning', html: icon('exclamationmark.triangle') }))
+      loosePath.append(document.createTextNode(looseName))
+      loose.append(loosePath)
+      body.append(loose)
+      if (where?.chosenPath) body.append(syncedVia(where.chosenPath))
+      const buttons = el('div', { class: 'set-row set-buttons' })
+      const pickLoose = el('button', { class: 'plain-button', text: L('폴더 고르기…', 'Choose Folder…') })
+      on(pickLoose, 'click', () => actions.chooseNotesFolder())
+      buttons.append(pickLoose)
+      if (where?.chosenPath) {
+        const back = el('button', { class: 'plain-button', text: L('앱 폴더로 되돌리기', 'Move Back to This Computer') })
+        on(back, 'click', () => actions.useAppNotesFolder())
+        buttons.append(back)
+      }
+      if (where?.away) {
+        const again = el('button', { class: 'plain-button', text: L('다시 연결', 'Reconnect') })
+        on(again, 'click', () => actions.reconnectNotesFolder())
+        buttons.append(again)
+      }
+      const look = el('button', {
+        class: 'plain-button',
+        text: where?.away ? L('앱 폴더 보기', 'Show Notes on This Computer') : L('폴더에서 보기', 'Show in Folder'),
+      })
+      on(look, 'click', () => actions.revealNotesFolder())
+      buttons.append(look)
+      body.append(buttons)
+      const looseWhere = where?.chosenPath ?? where?.appFolder
+      if (looseWhere) body.append(el('p', { class: 'set-note set-mono', text: looseWhere }))
+      const move = actions.lastNotesMove()
+      const status = where?.away
+        ? L('고른 폴더에 지금은 닿을 수 없어요. 그동안 쓴 노트는 앱 폴더에 두고, 폴더가 돌아오면 옮겨요.',
+            "The chosen folder can't be reached right now. Notes written meanwhile stay in the app's folder and move when it is back.")
+        : move
+          ? (move.kept > 0
+            ? L(`노트 ${move.moved}개를 옮겼어요. ${move.kept}개는 같은 이름이 있어서 있던 자리에 남았어요. 거기서도 계속 읽어요.`,
+                `Moved ${move.moved} note${move.moved === 1 ? '' : 's'}. ${move.kept} stayed where ${move.kept === 1 ? 'it was' : 'they were'}: a note of the same name was already there. ${move.kept === 1 ? 'It is' : 'They are'} still read from there.`)
+            : L(`노트 ${move.moved}개를 옮겼어요.`, `Moved ${move.moved} note${move.moved === 1 ? '' : 's'}.`))
+          : where && where.leftBehind.length > 0
+            ? L('같은 이름의 노트가 있어 옮기지 못한 노트가 앱 폴더에 남아 있어요. 거기서도 계속 읽어요.',
+                "Some notes stayed in the app's folder because a note of the same name was already in the chosen one. They are still read from there.")
+            : null
+      if (status) body.append(note(status))
+      body.append(note(L(
+        '논문에 대한 노트는 그 논문이 있는 폴더에 있어요. 여기에는 어느 논문에도 딸리지 않은 노트만 있어요. 클라우드 폴더를 고르면 다른 컴퓨터에서도 보여요.',
+        "Notes about a paper stay in that paper's folder. This folder holds the rest. Choose one in a cloud drive to see them on your other computers.",
+      )))
+
     }
-    if (where?.away) {
-      const again = el('button', { class: 'plain-button', text: L('다시 연결', 'Reconnect') })
-      on(again, 'click', () => actions.reconnectNotesFolder())
-      buttons.append(again)
-    }
-    const look = el('button', {
-      class: 'plain-button',
-      text: where?.away ? L('앱 폴더 보기', 'Show Notes on This Computer') : L('폴더에서 보기', 'Show in Folder'),
-    })
-    on(look, 'click', () => actions.revealNotesFolder())
-    buttons.append(look)
-    body.append(buttons)
-    const looseWhere = where?.chosenPath ?? where?.appFolder
-    if (looseWhere) body.append(el('p', { class: 'set-note set-mono', text: looseWhere }))
-    const move = actions.lastNotesMove()
-    const status = where?.away
-      ? L('고른 폴더에 지금은 닿을 수 없어요. 그동안 쓴 노트는 앱 폴더에 두고, 폴더가 돌아오면 옮겨요.',
-          "The chosen folder can't be reached right now. Notes written meanwhile stay in the app's folder and move when it is back.")
-      : move
-        ? (move.kept > 0
-          ? L(`노트 ${move.moved}개를 옮겼어요. ${move.kept}개는 같은 이름이 있어서 있던 자리에 남았어요. 거기서도 계속 읽어요.`,
-              `Moved ${move.moved} note${move.moved === 1 ? '' : 's'}. ${move.kept} stayed where ${move.kept === 1 ? 'it was' : 'they were'}: a note of the same name was already there. ${move.kept === 1 ? 'It is' : 'They are'} still read from there.`)
-          : L(`노트 ${move.moved}개를 옮겼어요.`, `Moved ${move.moved} note${move.moved === 1 ? '' : 's'}.`))
-        : where && where.leftBehind.length > 0
-          ? L('같은 이름의 노트가 있어 옮기지 못한 노트가 앱 폴더에 남아 있어요. 거기서도 계속 읽어요.',
-              "Some notes stayed in the app's folder because a note of the same name was already in the chosen one. They are still read from there.")
-          : null
-    if (status) body.append(note(status))
-    body.append(note(L(
-      '논문에 대한 노트는 그 논문이 있는 폴더에 있어요. 여기에는 어느 논문에도 딸리지 않은 노트만 있어요. 클라우드 폴더를 고르면 다른 컴퓨터에서도 보여요.',
-      "Notes about a paper stay in that paper's folder. This folder holds the rest. Choose one in a cloud drive to see them on your other computers.",
-    )))
 
     body.append(el('div', { class: 'set-section', text: L('모양', 'Appearance') }))
     body.append(choices(
