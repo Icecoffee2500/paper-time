@@ -123,12 +123,38 @@ final class MarkInkView: NSView {
             self, selector: #selector(marksChanged),
             name: .paperTimeMarksChanged, object: nil
         )
+        // The zoom does not change this view's bounds: PDFKit zooms with
+        // the scroll view's magnification, a transform on the clip view's
+        // layer above this one. The picture has to be drawn again at the
+        // new magnification, and the view hears of it only through this.
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(scaleChanged),
+            name: .PDFViewScaleChanged, object: nil
+        )
     }
 
     deinit { NotificationCenter.default.removeObserver(self) }
     required init?(coder: NSCoder) { nil }
 
     @objc private func marksChanged() { schedule() }
+
+    @objc private func scaleChanged(_ note: Notification) {
+        guard let pdfView = note.object as? NSView, pdfView.window === window else { return }
+        place()
+        settleSoon()
+    }
+
+    /// A fresh picture once the zoom has settled: a pinch lays out every
+    /// frame, and a page of highlights is a page drawn.
+    private func settleSoon() {
+        settling?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, let picture, let frame = alignedFrame(of: picture.drawn) else { return }
+            if frame.pixels != picture.pixels { schedule() }
+        }
+        settling = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(120), execute: work)
+    }
 
     /// The ink for a page whose marks changed.
     static func refresh(_ page: PDFPage) {
@@ -142,6 +168,28 @@ final class MarkInkView: NSView {
         return (picture.image, picture.drawn)
     }
 
+    /// How this view and its ink layer stand on the screen, for the probe:
+    /// the magnification the layer tree puts on top of the view's own points
+    /// (the window's size of the bounds over the bounds), and the scales the
+    /// layers believe they are drawn at.
+    static func standing(of page: PDFPage) -> String {
+        guard let view = byPage[ObjectIdentifier(page)]?.view else { return "no view" }
+        let onScreen = view.convert(view.bounds, to: nil)
+        let magnification = view.bounds.width > 0 ? onScreen.width / view.bounds.width : 0
+        var chain: [String] = []
+        var layer = view.layer
+        while let current = layer {
+            let t = current.affineTransform()
+            if t.a != 1 || t.d != 1 { chain.append(String(format: "%@ ×%.3f", current.name ?? String(describing: type(of: current)), t.a)) }
+            layer = current.superlayer
+        }
+        return String(format: "bounds %.1f×%.1f window %.1f×%.1f magnification %.3f backing %.1f view.contentsScale %.2f ink.contentsScale %.2f ink.frame %.1f×%.1f pixels %@ transforms [%@]",
+                      view.bounds.width, view.bounds.height, onScreen.width, onScreen.height, magnification,
+                      view.window?.backingScaleFactor ?? 0, view.layer?.contentsScale ?? 0, view.ink.contentsScale,
+                      view.ink.frame.width, view.ink.frame.height,
+                      view.picture.map { "\(Int($0.pixels.width))×\(Int($0.pixels.height))" } ?? "none", chain.joined(separator: ", "))
+    }
+
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
     override var isOpaque: Bool { false }
 
@@ -153,16 +201,23 @@ final class MarkInkView: NSView {
     override func layout() {
         super.layout()
         place()
-        guard let picture else { return schedule() }
-        // The picture is stretched while the zoom is in flight; once it
-        // settles, a fresh one at the new size, pixel for pixel. A page of
-        // highlights is a page drawn, and a pinch lays out every frame.
-        if let frame = alignedFrame(of: picture.drawn), frame.pixels != picture.pixels {
-            settling?.cancel()
-            let work = DispatchWorkItem { [weak self] in self?.schedule() }
-            settling = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(120), execute: work)
-        }
+        guard picture != nil else { return schedule() }
+        settleSoon()
+    }
+
+    /// Device pixels per point of this view: the screen's backing scale
+    /// times the magnification the layer tree puts on top of the view —
+    /// `PDFView.scaleFactor`, which is the scroll view's magnification and
+    /// never touches this view's bounds. Measured: at scale 2.0 the view is
+    /// 610 points wide and 1220 in the window, with a ×2 transform on
+    /// `PDFClipView`. A picture drawn at the backing scale alone was
+    /// stretched by that transform, and every highlighted word was soft.
+    private func pixelsPerPoint() -> CGFloat {
+        let backing = window?.backingScaleFactor ?? 2
+        guard window != nil, bounds.width > 0 else { return backing }
+        let onScreen = convert(bounds, to: nil)
+        let magnification = onScreen.width / bounds.width
+        return backing * (magnification.isFinite && magnification > 0 ? magnification : 1)
     }
 
     /// One drawing per turn of the run loop, however many marks changed.
@@ -188,9 +243,13 @@ final class MarkInkView: NSView {
         let scale = CGSize(width: bounds.width / size.width, height: bounds.height / size.height)
         let raw = CGRect(x: drawn.minX * scale.width, y: drawn.minY * scale.height,
                          width: drawn.width * scale.width, height: drawn.height * scale.height)
-        let frame = backingAlignedRect(raw, options: .alignAllEdgesNearest)
-        let backing = window?.backingScaleFactor ?? 2
-        let pixels = CGSize(width: (frame.width * backing).rounded(), height: (frame.height * backing).rounded())
+        // Aligned to device pixels under the magnification: a pixel is
+        // 1/(backing × magnification) of a point here, and a frame off that
+        // grid is resampled by the GPU however exact the picture is.
+        let pixel = 1 / pixelsPerPoint()
+        let frame = CGRect(x: (raw.minX / pixel).rounded() * pixel, y: (raw.minY / pixel).rounded() * pixel,
+                           width: (raw.width / pixel).rounded() * pixel, height: (raw.height / pixel).rounded() * pixel)
+        let pixels = CGSize(width: (frame.width / pixel).rounded(), height: (frame.height / pixel).rounded())
         let area = CGRect(x: frame.minX / scale.width, y: frame.minY / scale.height,
                           width: frame.width / scale.width, height: frame.height / scale.height)
         guard pixels.width >= 1, pixels.height >= 1 else { return nil }
@@ -291,7 +350,9 @@ final class MarkInkView: NSView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         ink.contents = image
-        ink.contentsScale = window?.backingScaleFactor ?? 2
+        // Pixels per point of the layer: with the transform above, one
+        // image pixel lands on one device pixel.
+        ink.contentsScale = pixelsPerPoint()
         CATransaction.commit()
         place()
     }
