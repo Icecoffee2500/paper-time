@@ -130,17 +130,6 @@ enum ReleaseNotes {
             tier: .one
         ),
         Highlight(
-            symbol: "pencil.and.scribble",
-            title: Text2("손글씨도 LaTeX으로", "Handwriting, copied as LaTeX"),
-            detail: Text2(
-                "손으로 쓴 강의 노트를 다시 칠 필요가 없어요. 수식 올가미(⌥⌘L)로 잡고 ⇧⌘C를 누르면 글은 글로, 수식은 LaTeX으로 복사돼요. 손글씨 모델은 설정 → 읽기에서 한 번 받으면 이 맥에서만 돌아요. 아래에서 두 결과를 눌러 비교해 보세요.",
-                "No more retyping lecture notes. Catch them with the formula lasso (⌥⌘L) and press ⇧⌘C: the words copy as words and the formulas as LaTeX. Download the handwriting model once in Settings → Reading, and it runs on this Mac alone. Press both results below and compare."
-            ),
-            action: .lasso,
-            demo: .handwriting,
-            tier: .one
-        ),
-        Highlight(
             symbol: "pencil.and.outline",
             title: Text2("맥에서도 자유롭게 그린다 — 도형·화살표·카드·손글씨", "Draw freely on the Mac: shapes, arrows, cards, handwriting"),
             detail: Text2(
@@ -161,46 +150,6 @@ enum ReleaseNotes {
             action: .floatingList,
             demo: .bookReading,
             tier: .two
-        ),
-        Highlight(
-            symbol: "arrow.triangle.2.circlepath.icloud",
-            title: Text2("맥에서 긋고, 아이패드에서 본다 — 몇 초 뒤", "Mark it on the Mac, see it on the iPad — seconds later"),
-            detail: Text2(
-                "서버는 없다. 라이브러리는 iCloud Drive 폴더 하나인데, 20 MB PDF가 오가기를 기다리면 열 초다. 그래서 무거운 것은 기다리지 않는다. 표시는 기기마다 자기 이름으로 쓰는 몇 KB짜리 저널 파일에, 잉크는 쪽마다 사이드카에 즉시 쓰고, iCloud Drive가 그것을 옮긴다 — 두 기기가 같은 저널을 쓰는 일이 없으니 충돌도 없다. 받는 쪽은 열린 논문의 기록 폴더를 지켜보고 3초마다 한 번 더 살핀다. PDF는 그 뒤 1.5초에 저널대로 다시 쓰여 어느 앱에서 열어도 같다. 표시마다 가장 최근 말이 이긴다: 여기서 지우고 저기서 색을 바꾸면 나중 것이 남는다. 아래에서 맥 쪽에 하이라이트를 긋고 아이패드를 보라.",
-                "There is no server. The library is one iCloud Drive folder, and waiting for a 20 MB PDF to travel is ten seconds. So nothing waits for the heavy thing. Marks go at once into a journal of a few KB each device writes under its own name, ink into a sidecar per page, and iCloud Drive carries those — no two devices ever write one journal, so nothing conflicts. The receiving side watches the open paper's record and looks again every three seconds. The PDF is rewritten to the journals 1.5 s later, so any app opening it sees the same. On each mark the newest word wins: remove it here, recolour it there, and the later one stands. Make a highlight on the Mac below and watch the iPad."
-            ),
-            demo: .sync,
-            tier: .two
-        ),
-        Highlight(
-            symbol: "waveform",
-            title: Text2("읽는 동안 슬립박스가 말을 건다", "While you read, the slip-box speaks first"),
-            detail: Text2(
-                "할 일은 없다. 논문을 읽으면 된다. 인스펙터의 Notes 탭을 열어 두면, 지금 보이는 쪽과 드문 낱말을 나누는 노트가 — 몇 달 전 다른 논문을 읽다 쓴 것이라도 — 맨 위에 스스로 올라온다. 노트 아래 파란 낱말이 둘이 나누는 말이다: 우연이면 지나치고, 울림이면 노트를 눌러 열어 본다. 쪽에서 문장을 선택하면 노트마다 ❝ 단추가 생기고, 누르면 그 구절이 주소를 갖고 그 노트에 들어간다 — 두 논문이 노트 하나에서 만난다. 노트를 쓰는 동안에는 편집기 아래 'Resonates with'에 아직 잇지 않은 울림이 모이고, 🔗 한 번이면 [[링크]]가 써진다. 다른 앱에서 노트는 폴더에 누워 있다가 검색해야 나온다 — 그런데 잊어버린 노트는 검색하지 않는다. 루만은 자기 상자를 대화 상대라고 불렀다; 상자가 먼저 말을 걸 때만 대화다.\n\n고르는 법은 숨기지 않는다. 네 노트를 전부 외운 읽기 친구가 새 쪽의 낱말과 노트의 낱말을 나란히 놓고 같은 것을 센다고 생각하면 된다 — 다만 기능어와 논문마다 쓰는 말(model, method, results…) 300개쯤은 세지 않고, 낱말 하나의 무게는 ln((N+1)÷(그 말이 나오는 글 수+0.5))+0.3으로 매긴다(N = 노트 수 + 이 논문에서 뽑은 40쪽; 45개 글 중 42개에 나오는 'network'는 0.38, 3개에만 나오는 'consolidation'은 2.88). 두 낱말이 붙어 겹치면 ×1.3, 긴 노트는 (1+ln 길이)로 나눈다. 겹친 말이 둘 이상이고 점수 1.0 이상, 1등의 35% 이상인 노트만 넷까지 올라온다. 아래에서 네 단계를 직접 해 보고, '어떻게 고르나?'를 눌러 보라.",
-                "There is nothing to do but read. Keep the inspector's Notes tab open and the notes that share their rarer words with the pages on screen — written months ago, against another paper — come up by themselves at the top. The blue words under each are what the two share: a coincidence, and you read on; an echo, and you click the note to open it. Select a sentence on the page and every note grows a ❝ button; press it and the passage lands in that note with its address — two papers meet in one note. While you write, 'Resonates with' under the editor gathers the echoes not yet linked, and one 🔗 writes the [[link]]. In other apps a note lies in a folder until you search for it — and nobody searches for a note they have forgotten. Luhmann called his box a conversation partner; it is one only when the box speaks first.\n\nThe rule is not hidden. Think of a reading friend who knows your notes by heart, laying the page's words beside each note's and counting what they share — except that function words and the words every paper uses (model, method, results…), some 300, are not counted, and a word's weight is ln((N+1)÷(texts it appears in+0.5))+0.3, with N the notes plus 40 sampled pages of this paper ('network', in 42 of 45 texts: 0.38; 'consolidation', in 3: 2.88). Two words together count ×1.3; a long note's sum is divided by (1+ln length). Only notes sharing two words, scoring 1.0 or more and at least 35% of the strongest come up, four at most. Do the four steps below, and press 'How are they chosen?'."
-            ),
-            demo: .resonance,
-            tier: .one
-        ),
-        Highlight(
-            symbol: "map",
-            title: Text2("노트에 집이 생긴다 — 지도", "A note gets a home: the map"),
-            detail: Text2(
-                "노트는 폴더가 아니라 지도에 산다. 지도는 그 자체가 노트 하나인데, 본문이 다른 노트로 가는 [[링크]]와 그것들을 배열한 소제목이라 다른 앱에서도 그냥 Markdown이다. 원칙은 미리 만들지 않는다는 것 — 한 주제의 노트가 다섯 개 이상 서로 잇거나 낱말을 나누며 쌓이고 그걸 담은 지도가 없으면, 슬립박스 맨 위에 한 줄이 뜬다: \"이 노트 6개가 한 주제예요 — consolidation · forgetting.\" 누르면 초안이 써진다: 제목은 나누는 낱말에서, 노트는 논문별 소제목 아래 링크로. 지도를 열면 소제목이 열, 노트가 카드인 보드가 되고, 옆에는 지도와 울리지만 아직 안 올린 노트가 ＋ 한 번 거리에 있다. 노트를 쓰는 동안에도 편집기 아래 'Resonates with'에 지도가 뜨면 🗺 한 번으로 그 위에 올라간다. 아래에서 네 단계를 해 보라.",
-                "A note lives on a map, not in a folder. The map is itself a note — its body is [[links]] to other notes under headings, so in any other app it is plain Markdown. The rule is not to make one in advance: when five or more notes on one subject have piled up, linking to each other or sharing their rarer words, and no map holds them, one line appears at the top of the slip-box: \"6 notes are one subject — consolidation · forgetting.\" Press it and a draft is written: a title from the shared words, the notes as links under a heading per paper. Open the map and it is a board — a column per heading, a card per note — with, beside it, the notes that resonate with the map and are not yet on it, one ＋ away. Writing a note, a map that echoes it appears under the editor, and one 🗺 files the note on it. Do the four steps below."
-            ),
-            demo: .atlas,
-            tier: .three
-        ),
-        Highlight(
-            symbol: "doc.text",
-            title: Text2("노트는 글이 되어야 한다 — 초안", "Notes are meant to become writing: the draft"),
-            detail: Text2(
-                "노트는 모으는 게 목적이 아니다. 연구자의 산출물은 원고이고, 슬립박스는 글쓰기로 끝나야 한다 — 그리고 그 길에서 인용이 끊어지지 않아야 한다. 초안은 노트 하나(kind: draft)다: 소제목 아래 글머리표를 쓰고, 논문을 읽다 구절을 선택하면 Notes 탭에 '초안에 넣기'가 떠서 ❝ 한 번으로 그 구절이 논문 주소를 달고 들어오고, 슬립박스의 노트는 우클릭 '초안에 넣기'로 [[링크]]가 된다. ⇧⌘E를 누르면 초안이 원고로 렌더된다: 구절 칩은 그 논문의 \\cite{키}가 되고(기본 LaTeX, pandoc [@키]도), 링크한 노트는 제 문장으로 풀리고, 인용한 논문만 담은 .bib이 함께 나온다. Overleaf에 붙이면 컴파일된다. 첫 목표는 관련연구 절 하나를 끝까지 — 아래에서 해 보라.",
-                "Collecting is not the point. A researcher's output is a manuscript, and the slip-box has to end in writing — with the citations intact along the way. A draft is a note (kind: draft): bullets under headings. Reading a paper, select a passage and the Notes tab offers \"Into a draft\": one ❝ and the passage arrives carrying the paper's address; a note in the slip-box goes in as a [[link]] from its context menu. ⇧⌘E renders the draft for the manuscript: each passage chip becomes that paper's \\cite{key} (LaTeX by default, pandoc [@key] too), each linked note unfolds into its own sentences, and a .bib of exactly the papers cited comes with it. Paste into Overleaf and it compiles. The first goal is one related-work section, end to end — try it below."
-            ),
-            demo: .express,
-            tier: .three
         ),
         Highlight(
             symbol: "magnifyingglass",
@@ -276,16 +225,6 @@ enum ReleaseNotes {
             ),
             action: .newNote,
             demo: .slipBox,
-            tier: .three
-        ),
-        Highlight(
-            symbol: "point.3.filled.connected.trianglepath.dotted",
-            title: Text2("내 읽기가 무엇을 이었는지 본다", "See what your reading has joined"),
-            detail: Text2(
-                "그래프는 인용·공저자·컬렉션으로, 그리고 내 노트가 이은 것으로 라이브러리를 그린다. 나머지 선을 끄면 남는 것이 문헌의 관계가 아니라 내 읽기다.",
-                "The graph draws your library by citation, shared author, collection — and by what your own notes link. Switch the other lines off and what is left is your reading rather than the literature's."
-            ),
-            demo: .graph,
             tier: .three
         ),
         Highlight(
@@ -2663,7 +2602,7 @@ enum ReleaseNotes {
             Feature(Text2("논문 안에서 찾기", "Find in the paper"),
                     Text2("열려 있는 PDF를 검색하고 결과를 하나씩 넘긴다.", "Search the open PDF and step through the matches."), action: .findInDocument),
             Feature(Text2("전체 검색", "Search everything"),
-                    Text2("논문·노트·지도·초안·저자·컬렉션·명령을 한 칸에서. 제목에 없는 낱말은 «논문 안에서»가 본문에서 찾아 문장째로 보여 주고, 고르면 그 줄로 간다. 목록을 끝까지 당겨도 열린다. 빈칸이면 이어 읽기·읽었으니·다시 보기·새로 온 것을 제안한다.", "Papers, notes, maps, drafts, authors, collections, commands, from one field. A word that is in none of the titles is looked for in the text — In the Papers shows the sentence it is in, and choosing it goes to that line. Pull the list down to open it. Empty, it offers: continue, because you read, revisit, new."), action: .searchEverything),
+                    Text2("논문·노트·저자·컬렉션·명령을 한 칸에서. 제목에 없는 낱말은 «논문 안에서»가 본문에서 찾아 문장째로 보여 주고, 고르면 그 줄로 간다. 목록을 끝까지 당겨도 열린다.", "Papers, notes, authors, collections, commands, from one field. A word that is in none of the titles is looked for in the text — In the Papers shows the sentence it is in, and choosing it goes to that line. Pull the list down to open it."), action: .searchEverything),
             Feature(Text2("페이지 배치", "Page layout"),
                     Text2("연속 스크롤, 한 장씩, 또는 두 장 펼침. AA 메뉴에 있고, ⌘1·⌘2·⌘3으로도 바꾼다. 책에서는 ←→로 장을 넘긴다.", "Continuous scrolling, single page, or a two-page spread. In the AA menu, and on ⌘1, ⌘2 and ⌘3. In a book, ← and → turn the page."), action: .layoutBook),
             Feature(Text2("페이지 색", "Page tint"),
@@ -2687,8 +2626,6 @@ enum ReleaseNotes {
                     Text2("선택한 부분을 수식은 LaTeX으로 바꿔 복사한다.", "Copy the selection with its formulas as LaTeX."), action: .ultracopy),
             Feature(Text2("수식 올가미", "Formula lasso"),
                     Text2("사각형을 그리면 그 안의 수식에 딱 맞게 잡혀요. ⇧⌘C로 LaTeX, ⌘L로 노트에.", "Draw a rectangle and it snaps to the formula inside. ⇧⌘C for LaTeX, ⌘L for the note."), action: .lasso),
-            Feature(Text2("손글씨 읽기", "Handwriting"),
-                    Text2("올가미로 잡은 손글씨를 글과 LaTeX으로 읽어요. 모델은 설정 → 읽기에서 받아요.", "Handwriting in the lasso is read as words and LaTeX. Get the model in Settings → Reading."), action: .lasso),
             Feature(Text2("표시 목록", "The marks list"),
                     Text2("논문 안의 모든 표시를 종류별로. 인스펙터의 Marks 탭에 있고, 누르면 그 자리로 간다.", "Every mark in the paper, filtered by kind, in the inspector's Marks tab. Click one to go to it.")),
             Feature(Text2("다른 앱이 남긴 필기", "Ink from other apps"),
@@ -2711,12 +2648,6 @@ enum ReleaseNotes {
                     Text2("[[ 를 치면 다른 노트를 부른다. 나를 가리키는 노트는 읽고 있는 노트 아래에 모인다.", "Type [[ to reach for another note. What links back is listed under the one you are reading.")),
             Feature(Text2("태그", "Tags"),
                     Text2("#이렇게 쓴다. 슬립박스가 모아준다.", "Write #like-this. The slip-box collects them.")),
-            Feature(Text2("지도", "Maps"),
-                    Text2("노트 다섯 개가 한 주제로 쌓이면 지도를 제안한다. 지도는 링크와 소제목으로 된 노트이고, 열면 보드다.", "Five notes on one subject and a map is suggested. A map is a note of links under headings; opened, it is a board.")),
-            Feature(Text2("초안과 내보내기", "Drafts and export"),
-                    Text2("구절과 노트로 초안을 채우고 ⇧⌘E로 \\cite와 .bib이 붙은 LaTeX을 받는다.", "Fill a draft from passages and notes; ⇧⌘E gives LaTeX with \\cite and a .bib.")),
-            Feature(Text2("공명", "Resonance"),
-                    Text2("읽는 쪽과 낱말을 나누는 다른 논문의 노트가 Notes 탭 맨 위에 올라온다. 노트 아래에는 아직 잇지 않은 울림이 모인다.", "Notes from other papers that share the page's words rise to the top of the Notes tab; under a note, the echoes not yet linked are gathered.")),
             Feature(Text2("Markdown과 LaTeX", "Markdown and LaTeX"),
                     Text2("쓰는 대로 조판된다. $x^2$는 수식이 되고, 저장되는 것은 여전히 원문이다.", "Both are set as you write them. $x^2$ becomes mathematics; the source is still what is saved.")),
             Feature(Text2("LaTeX 환경과 식 번호", "LaTeX environments and numbers"),
@@ -2807,16 +2738,6 @@ enum ReleaseNotes {
                     Text2("쓰고 있는 논문에 붙여 넣기 위한 것.", "For pasting into a paper you are writing."), action: .copyCitationKey),
             Feature(Text2("폴더에서 새로 읽기", "Refresh from the folder"),
                     Text2("밖에서 폴더에 넣은 것을 찾아온다.", "Picks up anything added to the folder from outside."), action: .refreshFolder),
-        ]),
-        Group(Text2("그래프", "The graph"), symbol: "point.3.filled.connected.trianglepath.dotted", features: [
-            Feature(Text2("네 가지 연결", "Four kinds of connection"),
-                    Text2("한 논문이 다른 논문을 인용했거나, 내 노트가 둘을 이었거나, 저자가 겹치거나, 같은 컬렉션에 있거나.", "One paper citing another, your notes linking them, a shared author, or the same collection.")),
-            Feature(Text2("범례가 곧 필터", "The legend is the filter"),
-                    Text2("한 종류를 끄면 질문이 된다. 인용을 감추면 남는 것이 내 노트가 이은 것이다.", "Switch a kind off to ask a question. Hide citations and what is left is what your own notes have joined.")),
-            Feature(Text2("선택에 집중", "Focus on a selection"),
-                    Text2("논문을 하나 고른 다음 켜면, 관계없는 것이 모두 사라진다.", "Click a paper, then turn it on: everything unrelated drops away.")),
-            Feature(Text2("계속 움직인다", "It keeps moving"),
-                    Text2("논문을 끌면 나머지가 자리를 내주고, 곧 다시 가라앉는다.", "Drag a paper and the rest gives way, then settles.")),
         ]),
         Group(Text2("창", "The window"), symbol: "sidebar.left", features: [
             Feature(Text2("네 개의 패널", "Four panes"),

@@ -353,13 +353,15 @@ struct LibrarySidebar: View {
 
             authorsSection
 
-            Section {
-                Label {
-                    Text(L("그래프", "Graph"))
-                } icon: {
-                    GraphSymbol(colored: model.scope == .graph)
+            if Legacy.graph {
+                Section {
+                    Label {
+                        Text(L("그래프", "Graph"))
+                    } icon: {
+                        GraphSymbol(colored: model.scope == .graph)
+                    }
+                    .scopeRow(.graph, in: model)
                 }
-                .scopeRow(.graph, in: model)
             }
         }
         .hiddenScrollers()

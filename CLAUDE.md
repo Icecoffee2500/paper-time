@@ -25,6 +25,7 @@ Apple 네이티브(macOS/iPadOS/iOS 26) 논문 리더 + 필기 + 서지관리 �
 
 ## 코드 구성
 - Swift 6, SwiftUI, Swift Package로 모듈 분리: PaperCore, LibraryStore, PDFReader, InkEngine, MetadataPipeline, Bibliography, Importers.
+- **1.0에서 내린 기능은 `Legacy` 플래그 뒤에 있다**(`App/Model/Legacy.swift`, 포터블 `shared/legacy.ts`; 결정은 `Docs/Decisions-1.0.md`). 레거시의 뜻: 파일은 계속 읽고 쓰고(옛 지도·초안은 열린다, 다른 기기의 저널은 읽힌다), 만드는 UI — 메뉴·단추·설정 절·선반 줄 — 만 내리고, 코드는 남긴다. 내린 것: 원본 글자 되살리기 단추, 손글씨 읽기(MLX·Tokenizers 패키지는 `project.yml`에서 뺐고 `HandwritingReader`는 `canImport(MLXVLM)` 뒤라 컴파일되지 않는다), 지도·초안·공명(새로 만들기·지도에 올리기·초안 띠·울림), 그래프 줄, 빈 팔레트의 제안, 아이패드·아이폰 대상(`supportedDestinations: [macOS]`, `#if os(iOS)` 코드는 그대로). 앱 안 기능 소개(`ReleaseNotes.highlights`·`groups`)에서도 뺐다 — 릴리스 기록은 그대로. 되살리려면 플래그 하나를 켜고(손글씨는 패키지도 되돌린다) 소개 항목을 git에서 되찾는다.
 - 테스트 코퍼스 PDF는 저장소 밖 `~/Documents/Bookends/Attachments`(58편) + `~/Documents/Bookends/vla`(3편). 정답은 `Tests/Corpus/ground_truth.json`에 둔다. PDF를 저장소에 커밋하지 않는다.
 
 ## 빌드/실행

@@ -448,8 +448,10 @@ private struct PaperInspectorForm: View {
                     Text(L("다른 앱이 파일을 다시 썼어요. 글자가 원본과 다를 수 있어요.", "Another app rewrote this file. Its text may differ from the original."))
                         .font(.caption).foregroundStyle(.secondary)
                     #if os(macOS)
-                    Button(L("원본 글자 되살리기…", "Restore Original Text…")) {
-                        model.chooseOriginal(for: paper.id)
+                    if Legacy.restoreOriginalText {
+                        Button(L("원본 글자 되살리기…", "Restore Original Text…")) {
+                            model.chooseOriginal(for: paper.id)
+                        }
                     }
                     #endif
                 }
