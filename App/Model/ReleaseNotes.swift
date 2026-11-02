@@ -318,6 +318,24 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "0.9.36",
+            date: Text2("2026년 11월", "November 2026"),
+            note: Text2(
+                "확대한 쪽에서 형광펜 글자가 흐리게 보이던 것을 고쳤어요.",
+                "Highlighted words on a zoomed page are no longer blurry."
+            ),
+            added: [],
+            fixed: [
+                Entry(
+                    Text2("확대하면 흐려지던 형광펜 글자", "Blurry highlighted words when zoomed"),
+                    Text2(
+                        "쪽을 확대하면 형광펜 아래의 글자가 사진처럼 흐려졌어요. 확대는 쪽을 늘여 보이는 것이라 글자 그림이 함께 늘어났던 거예요. 이제 확대 배율에 맞춰 다시 그려서 어느 배율에서도 주변 글자만큼 선명해요.",
+                        "Words under a highlight went soft on a zoomed page: the zoom stretches the page, and the picture of the words stretched with it. The words are now drawn again at the zoom, as sharp as the words around them at any scale."
+                    )
+                ),
+            ]
+        ),
+        Release(
             version: "0.9.35",
             date: Text2("2026년 10월", "October 2026"),
             note: Text2(
