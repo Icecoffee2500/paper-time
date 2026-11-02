@@ -166,6 +166,32 @@ struct LibraryWindow: View {
                 // over a selection in a note, drawn light and dark — its
                 // layout; the glass itself needs a window to be glass.
                 if let path = Boot.setting("PAPERTIME_TOOLBAR_SHOT") {
+                    FileHandle.standardError.write(Data("toolbar panel: \(SelectionToolbar.describePanel())\n".utf8))
+                    // Both bars in a window of their own off every screen,
+                    // displayed once: which views AppKit draws with vibrancy
+                    // (the blending that washes a saturated colour toward the
+                    // backdrop), by their `allowsVibrancy` and the compositing
+                    // filter it puts on their layers.
+                    let stage = WindowProbe.ownWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 120), styleMask: .borderless)
+                    stage.isOpaque = false
+                    stage.backgroundColor = .clear
+                    let noteBar = SelectionToolbar.SelectionBarView(rootView: SelectionToolbar.Bar(choose: { _ in }))
+                    noteBar.frame = NSRect(x: 20, y: 70, width: 250, height: 32)
+                    let pageBar = MarkupBarView(onMark: { _, _ in }, onNote: {}, onCopy: {}, onUltraCopy: {})
+                    pageBar.frame = NSRect(x: 20, y: 10, width: 320, height: 44)
+                    stage.contentView?.addSubview(noteBar)
+                    stage.contentView?.addSubview(pageBar)
+                    stage.orderFrontRegardless()
+                    stage.contentView?.layoutSubtreeIfNeeded()
+                    stage.displayIfNeeded()
+                    try? await Task.sleep(for: .milliseconds(300))
+                    func walk(_ view: NSView, _ depth: Int) {
+                        let filter = (view.layer?.compositingFilter as? CIFilter)?.name ?? (view.layer?.compositingFilter).map { String(describing: $0) } ?? "-"
+                        FileHandle.standardError.write(Data("vibrancy: \(String(repeating: "  ", count: depth))\(type(of: view)) allowsVibrancy=\(view.allowsVibrancy) filter=\(filter) layer=\(view.layer.map { String(describing: type(of: $0)) } ?? "none")\n".utf8))
+                        for child in view.subviews { walk(child, depth + 1) }
+                    }
+                    if let root = stage.contentView { walk(root, 0) }
+                    stage.orderOut(nil)
                     for (name, scheme) in [("light", ColorScheme.light), ("dark", ColorScheme.dark)] {
                         let renderer = ImageRenderer(content: SelectionToolbar.Bar(choose: { _ in })
                             .padding(24)

@@ -9,7 +9,7 @@ import { PDFDocument, PDFHexString, type PDFContext, type PDFRef } from 'pdf-lib
 import { derivedMarkID, uuidFromSeed } from '../shared/markIds.js'
 import fs from 'node:fs'
 import path from 'node:path'
-import { HIGHLIGHT_BAND_DROP, MARK_COLORS, highlightBand, highlightCSSVariables, highlightInk, highlightInkOnDark, markLine, nearestColorName, rectToQuad, type Mark } from '../shared/marks.js'
+import { HIGHLIGHT_BAND_DROP, MARK_COLORS, highlightBand, highlightCSSVariables, highlightInk, highlightInkOnDark, highlightLine, highlightSwatch, markLine, nearestColorName, rectToQuad, type Mark } from '../shared/marks.js'
 import { reconcile, recordChanges, type Journal } from '../shared/markJournal.js'
 import { readMarks, writeDrawings } from '../main/pdfwrite.js'
 
@@ -138,7 +138,7 @@ export async function marksSuite(test: Test, suite: (name: string) => void) {
     if ('width' in under) {
       assert.ok(Math.abs(under.width - 1.7) < 1e-9)
       assert.ok(Math.abs(under.from.y - 0.85) < 1e-9, 'at the foot of the words')
-      assert.deepEqual(under.ink.map((v) => +v.toFixed(3)), [0.7, 0.35, 0])
+      assert.deepEqual(under.ink.map((v) => +v.toFixed(3)), [1, 0.8, 0])
     }
     const strike = markLine('strikethrough', [1, 0.5, 0], rect)
     if ('width' in strike) assert.equal(strike.from.y, 10, 'through the middle')
@@ -153,6 +153,11 @@ export async function marksSuite(test: Test, suite: (name: string) => void) {
     assert.deepEqual(round(highlightInk(MARK_COLORS.pink)), [0.84, 0.18, 0.33])
     assert.deepEqual(round(highlightInk([0.4, 0.7, 1])), [0.12, 0.44, 0.85])
     assert.deepEqual(round(highlightInkOnDark(MARK_COLORS.pink)), [1, 0.5, 0.62])
+    // The swatch is Apple's colour, and a line is the swatch of the nearest name (`HighlightToneTests`).
+    assert.deepEqual(highlightSwatch('blue'), [0, 0.48, 1])
+    assert.deepEqual(highlightSwatch('yellow'), [1, 0.8, 0])
+    assert.deepEqual(highlightLine([0.4, 0.7, 1]), highlightSwatch('blue'))
+    assert.deepEqual(highlightLine(MARK_COLORS.pink), highlightSwatch('pink'))
     assert.deepEqual(round(highlightInkOnDark(MARK_COLORS.yellow)), [0.98, 0.76, 0.28])
     assert.deepEqual(round(highlightBand(MARK_COLORS.pink)), [0.998, 0.912, 0.932])
     assert.deepEqual(round(highlightBand(MARK_COLORS.pink, true)), [0.999, 0.947, 0.959])

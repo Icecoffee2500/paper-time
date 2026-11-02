@@ -321,8 +321,9 @@ final class MarkupBarView: NSVisualEffectView {
         let size = NSSize(width: 20, height: 20)
         return NSImage(size: size, flipped: false) { rect in
             let circle = rect.insetBy(dx: 1, dy: kind == .highlight ? 1 : 3)
-            // The colour the words will be, not the highlighter's own.
-            let ink = HighlightTone.ink(color)
+            // The highlighter's own colour, bright — Apple's — not the deep
+            // ink its words become: a dot in the ink read as muddy.
+            let ink = HighlightTone.swatch(color)
             NSColor(srgbRed: ink.red, green: ink.green, blue: ink.blue, alpha: 1).setFill()
             switch kind {
             case .highlight, .note:

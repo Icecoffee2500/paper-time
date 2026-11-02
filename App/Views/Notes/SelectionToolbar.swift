@@ -52,6 +52,7 @@ final class SelectionToolbar {
         (panel.contentView as? NSHostingView<Bar>)?.rootView = bar
         let size = NSSize(width: Self.barWidth, height: 32)
         panel.setContentSize(size)
+        (panel.contentView as? SelectionBarView)?.hosting.rootView = bar
         var origin = NSPoint(x: selection.midX - size.width / 2, y: selection.maxY + 6)
         if let screen = window.screen {
             let visible = screen.visibleFrame
@@ -81,13 +82,38 @@ final class SelectionToolbar {
         )
         panel.isFloatingPanel = true
         panel.level = .popUpMenu
-        // The glass casts its own shadow; the panel's would double it.
-        panel.hasShadow = false
         panel.isOpaque = false
         panel.backgroundColor = .clear
+        // The window's own shadow, which follows the capsule: the panel is
+        // exactly the bar's size, so a shadow drawn inside it was cut off.
+        panel.hasShadow = true
         panel.hidesOnDeactivate = true
-        panel.contentView = NSHostingView(rootView: bar)
+        // The glass is AppKit's, not SwiftUI's. A SwiftUI material in a
+        // hosting view inside a borderless panel is an `NSVisualEffectView`
+        // the hosting view puts behind the content, rectangular, and the
+        // capsule the body was filled in never clipped it — grey square
+        // corners stood out behind the rounded bar. The page's bar
+        // (`MarkupBarView`) is a visual effect view with its own corner, and
+        // this is the same construction: one capsule of glass, buttons in it.
+        panel.contentView = SelectionBarView(rootView: bar)
         return panel
+    }
+
+    /// For the probe: the content view's class, the corner it keeps, and the
+    /// visual effect views inside — there must be exactly the one.
+    static func describePanel() -> String {
+        let bar = SelectionBarView(rootView: Bar(choose: { _ in }))
+        bar.frame = NSRect(x: 0, y: 0, width: barWidth, height: 32)
+        bar.layoutSubtreeIfNeeded()
+        var effects = 0
+        func walk(_ view: NSView) {
+            if view is NSVisualEffectView { effects += 1 }
+            view.subviews.forEach(walk)
+        }
+        walk(bar)
+        return String(format: "content %@ corner %.1f masks %@ effect views %d width %.0f",
+                      String(describing: type(of: bar)), bar.layer?.cornerRadius ?? -1,
+                      bar.layer?.masksToBounds == true ? "yes" : "no", effects, barWidth)
     }
 
     struct Bar: View {
@@ -104,13 +130,8 @@ final class SelectionToolbar {
             }
             .padding(.horizontal, 5)
             .frame(height: 32)
-            // One capsule of glass, as the bar over a selection on the page
-            // is: a hairline where it ends, not an outline.
-            .liquidGlass(.floating)
-            .overlay {
-                Capsule(style: .continuous)
-                    .strokeBorder(Color.black.opacity(0.08), lineWidth: 0.5)
-            }
+            // The glass is the panel's (`SelectionBarView`): the buttons
+            // here sit on it with nothing of their own behind them.
         }
 
         private var divider: some View {
@@ -125,7 +146,9 @@ final class SelectionToolbar {
         @ViewBuilder
         private func face(of mark: Mark) -> some View {
             if let color = mark.color {
-                let ink = HighlightTone.ink(color)
+                // The highlighter's own colour, bright — Apple's — not the
+                // deep ink its words become.
+                let ink = HighlightTone.swatch(color)
                 Circle()
                     .fill(Color(red: ink.red, green: ink.green, blue: ink.blue))
                     .overlay(Circle().strokeBorder(Color.black.opacity(0.12), lineWidth: 0.5))
@@ -138,6 +161,43 @@ final class SelectionToolbar {
                 default: Image(systemName: "function").font(.system(size: 12, weight: .medium))
                 }
             }
+        }
+    }
+
+    /// The capsule of glass the bar is — the page's `MarkupBarView`, with
+    /// SwiftUI buttons inside instead of AppKit ones: popover material
+    /// blurring what is behind the window, a corner of half the height,
+    /// and a hairline where the glass ends. The hosting view draws no
+    /// background of its own.
+    final class SelectionBarView: NSVisualEffectView {
+        let hosting: NSHostingView<Bar>
+
+        init(rootView: Bar) {
+            hosting = NSHostingView(rootView: rootView)
+            super.init(frame: .zero)
+            material = .popover
+            blendingMode = .behindWindow
+            state = .active
+            wantsLayer = true
+            layer?.cornerCurve = .continuous
+            layer?.masksToBounds = true
+            layer?.borderWidth = 0.5
+            layer?.borderColor = NSColor.black.withAlphaComponent(0.08).cgColor
+            hosting.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(hosting)
+            NSLayoutConstraint.activate([
+                hosting.leadingAnchor.constraint(equalTo: leadingAnchor),
+                hosting.trailingAnchor.constraint(equalTo: trailingAnchor),
+                hosting.topAnchor.constraint(equalTo: topAnchor),
+                hosting.bottomAnchor.constraint(equalTo: bottomAnchor),
+            ])
+        }
+
+        required init?(coder: NSCoder) { nil }
+
+        override func layout() {
+            super.layout()
+            layer?.cornerRadius = Corner.capsule(height: bounds.height)
         }
     }
 
