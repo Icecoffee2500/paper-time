@@ -46,6 +46,7 @@ import { MetadataQueue } from './metadata/queue.js'
 import { lookupNetwork } from './metadata/wiring.js'
 import { importedPapers } from './library.js'
 import { readWhole } from './pdfBytes.js'
+import { FetchedPapers, bytesOf, chromiumFetch, type Fetch } from './paperSource.js'
 import { PaperMeta } from '../shared/model.js'
 import { Updates } from './updates.js'
 
@@ -96,9 +97,29 @@ let textSources = new Map<string, TextSource>()
 /** The slip-box's notes, for search by meaning, by note. */
 const noteSources = new Map<string, NoteSource>()
 
+// The bytes of papers that have no file, and the one way out to the web
+// for them. `--papertime-fetch-base=<http://127.0.0.1:port>` sends every
+// address a probe would fetch to a server of its own, under the host's name:
+// `https://arxiv.org/pdf/x` becomes `<base>/arxiv.org/pdf/x`.
+const fetched = new FetchedPapers()
+const fetchBase = probe.argument('fetch-base')
+const paperFetch: Fetch = fetchBase
+  ? (url, accept) => {
+      const at = new URL(url)
+      // An address already at the base — one the probe stored — goes as it is.
+      if (at.host === new URL(fetchBase).host) return chromiumFetch(url, accept)
+      return chromiumFetch(`${fetchBase.replace(/\/$/, '')}/${at.host}${at.pathname}${at.search}`, accept)
+    }
+  : chromiumFetch
+
 const text = new TextBridge({
   directory: () => probe.textCacheDirectory(),
   sources: () => [...textSources.values()],
+  bytes: async (id) => {
+    const row = await (await libraries.ownerOf(id))?.paper(id)
+    if (!row) return null
+    return bytesOf(row, fetched, readWhole, paperFetch).catch(() => null)
+  },
   roots: () => libraries.roots,
   send,
   onWarmed: () => semantic().schedule(2000),
@@ -201,9 +222,9 @@ const sync = new FolderSync({
 const metadata = new MetadataQueue({
   libraries,
   records,
-  signals: async (file) => {
+  signals: async (row) => {
     try {
-      return await pageCounter.signals(await readWhole(file))
+      return await pageCounter.signals(await bytesOf(row, fetched, readWhole, paperFetch))
     } catch {
       return null
     }
@@ -237,6 +258,7 @@ async function openLibrary(root: string): Promise<LibrarySnapshot | { error: str
 
 const context: Context = {
   libraries, sync, flush, journals, records, text, semantic, ocr, notes, windows, pageCounter, metadata, updates,
+  fetched, fetch: paperFetch,
   isProbe: probe.hasLibrary,
   probeLibrary: probe.argument('library') ?? null,
   snapshot: (refused) => libraries.snapshot(refused),

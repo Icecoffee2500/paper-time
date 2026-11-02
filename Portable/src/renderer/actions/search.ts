@@ -4,11 +4,11 @@
  */
 import { changed, paper as findPaper, setShelf, store } from '../state.js'
 import { togglePane } from '../layout.js'
-import { findBar, focused, readers } from '../pageArea.js'
+import { findBar, focused, readerOf } from '../pageArea.js'
 import { showPaper } from './openPapers.js'
 import { openNoteFromSearch } from './notes.js'
 import { showSearchResults } from '../listSearch.js'
-import { addPapers, reload } from '../library.js'
+import { addByAddress, addPapers, reload } from '../library.js'
 import { openSettings } from '../settingsController.js'
 import { runCommand } from '../commands.js'
 import { openPalette } from '../ui/search.js'
@@ -32,6 +32,7 @@ export function openSearch(initial = '') {
     perform: (action) => {
       switch (action) {
         case 'addPDFs': void addPapers(); break
+        case 'addByAddress': void addByAddress(); break
         case 'exportBibTeX': runCommand('exportBibTeX'); break
         case 'resolveMetadata': runCommand('resolveMetadata'); break
         case 'refresh': void reload(); break
@@ -51,7 +52,7 @@ export async function openPassage(hit: TextHit, query: string) {
   const id = hit.passage.paperID
   if (!findPaper(id)) return
   await showPaper(id)
-  const reader = readers.get(id)
+  const reader = readerOf(id)
   if (!reader) return
   if (findBar.isOpen) findBar.close()
   await reader.revealPassage(hit.passage, query)

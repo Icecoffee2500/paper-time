@@ -12,7 +12,7 @@ import { copyText } from './ui/clipboard.js'
 import { call, onEvent } from './bridge.js'
 import { changed, shelfPapers, store } from './state.js'
 import { solo } from './shell.js'
-import { focused, readers } from './pageArea.js'
+import { focused, readersOf } from './pageArea.js'
 import {
   closeWindowOrPane,
   goBack,
@@ -25,7 +25,7 @@ import {
 import { copyKey, resolveMissingMetadata } from './actions/paper.js'
 import { linkSelectionToNote, ultracopySelection, newNote } from './actions/notes.js'
 import { openFind, openSearch } from './actions/search.js'
-import { addLibraryFolder, addPapers, libraryOpened, reload } from './library.js'
+import { addByAddress, addLibraryFolder, addPapers, libraryOpened, reload } from './library.js'
 import { adoptSettings, applyAccent, applyTheme, openSettings, setLayout } from './settingsController.js'
 import { toggleFocus, togglePane } from './layout.js'
 import { couldNot } from './notices.js'
@@ -43,6 +43,7 @@ export const COMMANDS = {
   settings: () => openSettings(),
   about: () => openSettings('about'),
   addPapers: () => void addPapers(),
+  addByAddress: () => void addByAddress(),
   resolveMetadata: () => void resolveMissingMetadata(),
   refreshFolder: () => void reload(),
   addFolder: () => void addLibraryFolder(),
@@ -163,7 +164,7 @@ export function installMainEvents() {
         if (layers.includes('record')) void reload()
         // Another device's marks arrived — its journal, or the PDF it wrote —
         // and the open paper takes them without being opened again.
-        if (layers.includes('marks') || layers.includes('pdf')) void readers.get(id)?.reloadMarks()
+        if (layers.includes('marks') || layers.includes('pdf')) for (const reader of readersOf(id)) void reader.reloadMarks()
         break
       }
       case 'window:state':
@@ -181,12 +182,12 @@ export function installMainEvents() {
         break
       case 'paper:saveState': {
         const { id, state } = payload as { id: string; state: 'pending' | 'saving' | 'idle' }
-        readers.get(id)?.noteSaveState(state)
+        for (const reader of readersOf(id)) reader.noteSaveState(state)
         break
       }
       case 'paper:saved': {
         const { id } = payload as { id: string }
-        readers.get(id)?.noteKept(null)
+        for (const reader of readersOf(id)) reader.noteKept(null)
         break
       }
       case 'paper:kept': {
@@ -194,7 +195,7 @@ export function installMainEvents() {
         // for that paper says so, once, where it says the page and the zoom;
         // no reason means there is nothing left to say it about.
         const { id, reason } = payload as { id: string; reason: never }
-        readers.get(id)?.noteKept(reason)
+        for (const reader of readersOf(id)) reader.noteKept(reason)
         break
       }
       case 'menu':

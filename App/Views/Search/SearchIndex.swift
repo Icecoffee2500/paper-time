@@ -46,11 +46,12 @@ struct SearchResult: Identifiable, Hashable {
 
     /// Commands the palette can surface without any query context.
     enum Action: String, CaseIterable, Hashable {
-        case addPDFs, exportBibTeX, resolveMetadata, refresh, importLibrary, settings
+        case addPDFs, addByAddress, exportBibTeX, resolveMetadata, refresh, importLibrary, settings
 
         var title: String {
             switch self {
             case .addPDFs: L("PDF 더하기…", "Add PDFs…")
+            case .addByAddress: L("주소로 논문 더하기…", "Add Paper by Address…")
             case .exportBibTeX: L("BibTeX 내보내기…", "Export BibTeX…")
             case .resolveMetadata: L("빠진 서지 채우기", "Resolve Missing Metadata")
             case .refresh: L("라이브러리 다시 읽기", "Refresh Library")
@@ -62,6 +63,7 @@ struct SearchResult: Identifiable, Hashable {
         var symbolName: String {
             switch self {
             case .addPDFs: "doc.badge.plus"
+            case .addByAddress: "link.badge.plus"
             case .exportBibTeX: "square.and.arrow.up"
             case .resolveMetadata: "arrow.triangle.2.circlepath"
             case .refresh: "arrow.clockwise"

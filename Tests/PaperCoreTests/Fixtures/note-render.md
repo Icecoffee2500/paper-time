@@ -1,5 +1,6 @@
 # Entropy and forgetting
 Plain words with **bold**, *italic* and `code` in them.
+Highlighted ==words== and =={pink}two words== here, a==b stays, x -> y <- z.
 한글 **굵게**와 *기울여 쓴 말*, ***둘 다***, `코드 x` 끝.
 ## A heading two with **bold**, *italic* and `code`
 ### Third level

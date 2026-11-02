@@ -1,3 +1,4 @@
+import InkEngine
 import SwiftUI
 
 #if os(macOS)
@@ -266,6 +267,72 @@ enum NoteTypography {
 /// It had been the monospaced face on the system's faintest grey, a
 /// rectangle cut tight to the letters — which read as a selection somebody
 /// forgot, not as code.
+/// Highlighted words in a note (`==words==`, `=={pink}words==`), as Apple
+/// Notes sets them: the words in a deep shade of the highlighter's colour,
+/// on a pale band of it, rounded. The five colours are the page's five
+/// (`MarkupColor`), and the two shades come from the same `HighlightTone`
+/// the page's highlights use — a word highlighted in a note and the passage
+/// highlighted on the page are the same yellow.
+enum NoteHighlight {
+    #if os(macOS)
+    /// Marks a run as highlighted; the value is the colour's name. Painted
+    /// by `NoteLayoutFragment`.
+    static let attribute = NSAttributedString.Key("PaperTimeHighlight")
+    #endif
+
+    /// What `==words==` with no name is.
+    static let defaultName = MarkupColor.yellow.rawValue
+
+    static func color(_ name: String?) -> MarkupColor {
+        name.flatMap(MarkupColor.named) ?? .yellow
+    }
+
+    /// The words' colour: deep on a light page, light on a dark one.
+    static func ink(_ name: String?) -> NoteColor {
+        let rgb = color(name).rgb
+        let light = HighlightTone.ink(rgb), dark = HighlightTone.inkOnDark(rgb)
+        #if os(macOS)
+        return NSColor(name: nil) { appearance in
+            let tone = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
+            return NSColor(srgbRed: tone.red, green: tone.green, blue: tone.blue, alpha: 1)
+        }
+        #else
+        return UIColor { traits in
+            let tone = traits.userInterfaceStyle == .dark ? dark : light
+            return UIColor(red: tone.red, green: tone.green, blue: tone.blue, alpha: 1)
+        }
+        #endif
+    }
+
+    /// The band: the colour most of the way to white on a light page (what
+    /// multiplying it onto white paper gives), the colour let through at a
+    /// quarter on a dark one.
+    static func fill(_ name: String?) -> NoteColor {
+        let rgb = color(name).rgb
+        let light = HighlightTone.band(rgb)
+        #if os(macOS)
+        return NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+                ? NSColor(srgbRed: rgb.red, green: rgb.green, blue: rgb.blue, alpha: HighlightTone.bandAlphaOnDark)
+                : NSColor(srgbRed: light.red, green: light.green, blue: light.blue, alpha: 1)
+        }
+        #else
+        return UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(red: rgb.red, green: rgb.green, blue: rgb.blue, alpha: HighlightTone.bandAlphaOnDark)
+                : UIColor(red: light.red, green: light.green, blue: light.blue, alpha: 1)
+        }
+        #endif
+    }
+
+    /// How far the band reaches past the letters, and how round it is: a
+    /// little room either side, a hair above, and more below — a
+    /// highlighter's band hangs under the words.
+    static let padding = CGSize(width: 2, height: 0.5)
+    static let drop: CGFloat = 2
+    static let radius: CGFloat = 3.5
+}
+
 enum NoteCodeStyle {
     #if os(macOS)
     /// Marks a run as code; the value is the code face's point size, which

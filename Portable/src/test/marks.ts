@@ -7,7 +7,9 @@
 import assert from 'node:assert/strict'
 import { PDFDocument, PDFHexString, type PDFContext, type PDFRef } from 'pdf-lib'
 import { derivedMarkID, uuidFromSeed } from '../shared/markIds.js'
-import { MARK_COLORS, markLine, nearestColorName, rectToQuad, type Mark } from '../shared/marks.js'
+import fs from 'node:fs'
+import path from 'node:path'
+import { HIGHLIGHT_BAND_DROP, MARK_COLORS, highlightBand, highlightCSSVariables, highlightInk, highlightInkOnDark, markLine, nearestColorName, rectToQuad, type Mark } from '../shared/marks.js'
 import { reconcile, recordChanges, type Journal } from '../shared/markJournal.js'
 import { readMarks, writeDrawings } from '../main/pdfwrite.js'
 
@@ -121,14 +123,14 @@ export async function marksSuite(test: Test, suite: (name: string) => void) {
     assert.ok('band' in band)
     if ('band' in band) {
       assert.equal(band.radius, 3.5, 'at most three and a half points')
-      assert.deepEqual(band.fill.map((v) => +v.toFixed(3)), [1, 0.675, 0.35], 'a third of the way to white')
+      assert.deepEqual(band.fill.map((v) => +v.toFixed(3)), [1, 0.9, 0.8], 'most of the way to white')
       assert.equal(band.edge, null)
     }
     const small = markLine('highlight', [1, 1, 1], { x: 0, y: 0, width: 10, height: 5 })
     if ('band' in small) assert.equal(small.radius, 1.5)
     const hovered = markLine('highlight', [1, 0.5, 0], rect, true)
     if ('band' in hovered) {
-      assert.deepEqual(hovered.fill.map((v) => +v.toFixed(3)), [1, 0.775, 0.55])
+      assert.deepEqual(hovered.fill.map((v) => +v.toFixed(3)), [1, 0.94, 0.88])
       assert.ok(hovered.edge)
     }
     const under = markLine('underline', [1, 0.5, 0], rect)
@@ -142,6 +144,30 @@ export async function marksSuite(test: Test, suite: (name: string) => void) {
     if ('width' in strike) assert.equal(strike.from.y, 10, 'through the middle')
     const thin = markLine('underline', [0, 0, 0], { x: 0, y: 0, width: 10, height: 4 })
     if ('width' in thin) assert.equal(thin.width, 1, 'never under a point')
+  })
+
+  await test("a highlight's ink and band come from one formula, the Mac's `HighlightTone`, and the stylesheet carries its values", () => {
+    const round = (rgb: number[]) => rgb.map((v) => +v.toFixed(3))
+    // The five inks are picked by hand; another reader's colour goes by the nearest of them.
+    assert.deepEqual(round(highlightInk(MARK_COLORS.yellow)), [0.78, 0.5, 0.02])
+    assert.deepEqual(round(highlightInk(MARK_COLORS.pink)), [0.84, 0.18, 0.33])
+    assert.deepEqual(round(highlightInk([0.4, 0.7, 1])), [0.12, 0.44, 0.85])
+    assert.deepEqual(round(highlightInkOnDark(MARK_COLORS.pink)), [1, 0.5, 0.62])
+    assert.deepEqual(round(highlightInkOnDark(MARK_COLORS.yellow)), [0.98, 0.76, 0.28])
+    assert.deepEqual(round(highlightBand(MARK_COLORS.pink)), [0.998, 0.912, 0.932])
+    assert.deepEqual(round(highlightBand(MARK_COLORS.pink, true)), [0.999, 0.947, 0.959])
+    const rect = { x: 0, y: 100, width: 50, height: 10 }
+    const band = markLine('highlight', MARK_COLORS.pink, rect)
+    assert.ok('band' in band)
+    if ('band' in band) {
+      assert.deepEqual(band.band, { x: 0, y: 100 - 10 * HIGHLIGHT_BAND_DROP, width: 50, height: 10 + 10 * HIGHLIGHT_BAND_DROP }, 'hangs under the letters')
+      assert.deepEqual(round(band.fill), [0.998, 0.912, 0.932])
+    }
+    const css = fs.readFileSync(path.resolve(process.cwd(), 'src', 'renderer', 'style.css'), 'utf-8')
+    const variables = highlightCSSVariables()
+    for (const line of [...variables.light.split('\n'), ...variables.dark.split('\n')]) {
+      assert.ok(css.includes(line), `style.css carries ${line}`)
+    }
   })
 
   await test('one nearest colour: a grey is called yellow everywhere', () => {

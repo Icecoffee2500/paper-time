@@ -220,6 +220,20 @@ export function showSettings(actions: SettingsActions, section?: SettingsSection
     )))
     body.append(note(L('폴더를 더 여는 것은 옆 목록의 «라이브러리 더하기…»에 있어요.', 'Opening another folder beside it is Add Library… in the sidebar.')))
 
+    // For a computer that keeps no PDF files — a company machine whose
+    // security agent swallows them. The record, marks and notes are files
+    // all the same (the Mac's «PDF Files» section).
+    body.append(el('div', { class: 'set-section', text: L('PDF 파일', 'PDF Files') }))
+    body.append(toggle(
+      L('PDF를 파일로 저장하지 않기', 'Keep PDFs Out of Files'),
+      store.settings.keepPDFsInMemory === true,
+      (value) => actions.set({ keepPDFsInMemory: value }),
+    ))
+    body.append(note(L(
+      '주소로 더한 논문의 PDF를 폴더에 쓰지 않고, 열 때마다 다시 받아요. 표시와 필기, 노트는 .papertime 폴더에 그대로 남아요. PDF 파일이 보안 프로그램에 잡히는 회사 컴퓨터를 위한 거예요.',
+      'A paper added by address is not written to the folder; Paper Time fetches it again each time it opens. Marks, ink and notes stay in the .papertime folder as always. For a company computer whose security software takes PDF files.',
+    )))
+
     // Where the notes about no paper live — the Mac's «Notes Without a
     // Paper»: a warning when the chosen folder is away, which service carries
     // it, the ways to move them, to reconnect, and to look; the path and what

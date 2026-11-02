@@ -10,14 +10,24 @@ public struct LoadedPaper: Hashable, Sendable, Identifiable {
     /// Resolved when the paper is loaded, because the PDF lives beside the
     /// library's other PDFs rather than inside the record folder.
     public var documentURL: URL
+    /// Where the PDF can be had again, for a paper added by address
+    /// (`source.json`); nil for one that arrived as a file.
+    public var source: PaperSource?
 
     public var id: UUID { meta.id }
 
-    public init(folder: PaperFolder, meta: PaperMeta, state: PaperState, documentURL: URL) {
+    /// Whether the PDF is in the folder. One that is not, but has a source,
+    /// is opened from the address.
+    public var hasFile: Bool {
+        FileManager.default.fileExists(atPath: documentURL.path(percentEncoded: false))
+    }
+
+    public init(folder: PaperFolder, meta: PaperMeta, state: PaperState, documentURL: URL, source: PaperSource? = nil) {
         self.folder = folder
         self.meta = meta
         self.state = state
         self.documentURL = documentURL
+        self.source = source
     }
 }
 
@@ -247,7 +257,15 @@ public actor LibraryStore {
                 try? FileOperations.encodeAndWrite(meta, to: folder.metadataURL)
             }
         }
-        return LoadedPaper(folder: folder, meta: meta, state: state, documentURL: url)
+        // A `stat` per record, only for records without their file: the
+        // source is the one thing that opens those.
+        var source: PaperSource?
+        if !FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) {
+            source = try? FileOperations.decode(PaperSource.self, at: folder.sourceURL)
+        } else if FileManager.default.fileExists(atPath: folder.sourceURL.path(percentEncoded: false)) {
+            source = try? FileOperations.decode(PaperSource.self, at: folder.sourceURL)
+        }
+        return LoadedPaper(folder: folder, meta: meta, state: state, documentURL: url, source: source)
     }
 
     public func loadMeta(_ folder: PaperFolder) throws -> PaperMeta {
@@ -688,6 +706,51 @@ public actor LibraryStore {
         return .imported(
             LoadedPaper(folder: record, meta: meta, state: state, documentURL: destination)
         )
+    }
+
+    /// Takes in a PDF that arrived as bytes from an address.
+    ///
+    /// The record is the one `importDocument` writes — name, size, page
+    /// count, digest — so the two builds' records stay the same bytes, and
+    /// `source.json` beside it says where the PDF came from. With `keepFile`
+    /// the bytes are written beside the library's other PDFs; without it
+    /// nothing but the record is written, and the paper opens from its
+    /// source every time (`DocumentSession.open`). A paper the library
+    /// already holds — the same bytes, from anywhere — is not taken in twice.
+    public func importFetched(
+        _ data: Data, named name: String, from source: PaperSource, identifiers: Identifiers = Identifiers(),
+        keepFile: Bool, knownDigests: [String: PaperFolder] = [:]
+    ) throws -> ImportOutcome {
+        let digest = FileOperations.sha256(of: data)
+        if let existingFolder = knownDigests[digest], let existing = try? load(existingFolder) {
+            return .duplicate(existing: existing)
+        }
+        let fileName = LibraryLayout.availableFileName(for: name, inLibrary: root)
+        let destination = root.appending(path: fileName)
+        if keepFile { try FileOperations.write(data, to: destination) }
+
+        let id = UUID()
+        let record = PaperFolder(url: LibraryLayout.recordURL(forPaper: id, inLibrary: root))
+        try FileOperations.ensureDirectory(at: record.url)
+        let pageCount = PDFDocument(data: data)?.pageCount ?? 0
+        var meta = PaperMeta(
+            id: id,
+            confidence: .unparsed,
+            provenance: Provenance(source: .heuristic, detail: "awaiting resolution"),
+            file: PaperMeta.FileInfo(
+                relativePath: relativePath(of: destination),
+                byteSize: Int64(data.count),
+                pageCount: pageCount,
+                importDigest: digest,
+                originalName: name
+            )
+        )
+        meta.csl.id = ""
+        meta.identifiers = identifiers
+        try FileOperations.encodeAndWrite(meta, to: record.metadataURL)
+        try FileOperations.encodeAndWrite(PaperState(), to: record.stateURL)
+        try FileOperations.encodeAndWrite(source, to: record.sourceURL)
+        return .imported(LoadedPaper(folder: record, meta: meta, state: PaperState(), documentURL: destination, source: source))
     }
 
     // MARK: - Removal

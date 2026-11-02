@@ -680,6 +680,7 @@ final class ReaderCoordinator: NSObject {
             _ = RoundedMarks.takeOver(page)
             view.annotationsChanged(on: page)
             MarkOverlayView.refresh(page)
+            MarkInkView.refresh(page)
         }
         view.layoutDocumentView()
         #else
@@ -1246,6 +1247,38 @@ final class ReaderCoordinator: NSObject {
     /// that is the shape of mark that has to stay quick — there is no way to
     /// drag a mouse from a script, and PDFKit's own drag runs an event loop of
     /// its own that a synthesised event cannot get through.
+
+    /// A view's layers — bands, ink, banners, everything a window shot
+    /// misses — rendered as they stand, at 2×, on a pale ground.
+    @MainActor
+    static func layerShot(of view: NSView, cropping crop: CGRect? = nil, scale: CGFloat = 2, to shot: String, say: (String) -> Void) {
+        guard let layer = view.layer else { return say("view shot: no layer") }
+        view.displayIfNeeded()
+        // The part of the view wanted, in the view's coordinates; the whole
+        // view when nothing is said.
+        let area = crop?.intersection(view.bounds) ?? view.bounds
+        guard area.width > 0, area.height > 0 else { return say("view shot: nothing in the crop") }
+        guard let context = CGContext(data: nil, width: Int(area.width * scale), height: Int(area.height * scale), bitsPerComponent: 8,
+                                      bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        else { return say("view shot: no context") }
+        context.setFillColor(CGColor(red: 0.93, green: 0.93, blue: 0.94, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: area.width * scale, height: area.height * scale))
+        context.scaleBy(x: scale, y: scale)
+        if view.isFlipped {
+            // The layer renders in its own (flipped) coordinates: the bitmap's
+            // bottom is the area's bottom.
+            context.translateBy(x: -area.minX, y: area.maxY)
+            context.scaleBy(x: 1, y: -1)
+        } else {
+            context.translateBy(x: -area.minX, y: -area.minY)
+        }
+        layer.render(in: context)
+        if let image = context.makeImage() {
+            try? NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: shot))
+            say("view shot: \(shot) \(Int(area.width))×\(Int(area.height)) of \(Int(view.bounds.width))×\(Int(view.bounds.height)) at \(scale)×")
+        }
+    }
+
     private func markWithoutAMouse(_ plan: String, in view: PDFView) {
         Task { @MainActor [weak self, weak view] in
             func say(_ text: String) {
@@ -1295,6 +1328,30 @@ final class ReaderCoordinator: NSObject {
             say(String(format: "%d lines, %d rects, %.1f ms",
                        selection.selectionsByLine().count,
                        made.first?.rects.count ?? 0, took))
+            // `--papertime-mark-test-shot=<png in the container>`: the PDF
+            // view's layers as they stand with the mark on — the band
+            // multiplied on and the words in the highlight's ink
+            // (`MarkInkView` paints on the next turn of the loop, so a beat
+            // first). The window shot cannot show either: both are layers.
+            if let shot = Boot.setting("PAPERTIME_MARK_TEST_SHOT") {
+                try? await Task.sleep(for: .milliseconds(700))
+                // Around the mark, at 4×: the words have to be readable.
+                let around = view.convert(selection.bounds(for: page), from: page).insetBy(dx: -24, dy: -24)
+                Self.layerShot(of: view, cropping: around, scale: 4, to: shot, say: say)
+            }
+            // `--papertime-mark-test-ink=<png in the container>`: the ink
+            // picture itself, pixel for pixel as the screen shows it — the
+            // layer shot above resamples it.
+            if let shot = Boot.setting("PAPERTIME_MARK_TEST_INK") {
+                try? await Task.sleep(for: .milliseconds(700))
+                if let painting = MarkInkView.painting(of: page) {
+                    try? NSBitmapImageRep(cgImage: painting.image).representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: shot))
+                    say(String(format: "ink picture: %@ %d×%d px over %.1f,%.1f %.1f×%.1f pt", shot, painting.image.width, painting.image.height,
+                               painting.drawn.minX, painting.drawn.minY, painting.drawn.width, painting.drawn.height))
+                } else {
+                    say("ink picture: none")
+                }
+            }
             // `--papertime-mark-test-keep=<path in the container>`: save the
             // mark into the file before taking it back off, and say what each
             // save wrote — the mark, the same again, the removal, the same
@@ -1731,25 +1788,9 @@ final class ReaderCoordinator: NSObject {
             }
             // `--papertime-lasso-view-shot=<png>`: the PDF view's own layers,
             // the lasso's banner and ink among them, rendered as they stand.
-            if let shot = Boot.setting("PAPERTIME_LASSO_VIEW_SHOT"), let layer = view.layer {
-                view.displayIfNeeded()
-                let size = view.bounds.size
-                let scale: CGFloat = 2
-                if let context = CGContext(data: nil, width: Int(size.width * scale), height: Int(size.height * scale), bitsPerComponent: 8,
-                                           bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) {
-                    context.setFillColor(CGColor(red: 0.93, green: 0.93, blue: 0.94, alpha: 1))
-                    context.fill(CGRect(x: 0, y: 0, width: size.width * scale, height: size.height * scale))
-                    context.scaleBy(x: scale, y: scale)
-                    if view.isFlipped {
-                        context.translateBy(x: 0, y: size.height)
-                        context.scaleBy(x: 1, y: -1)
-                    }
-                    layer.render(in: context)
-                    if let image = context.makeImage() {
-                        try? NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: shot))
-                        say("view shot: \(shot) \(Int(size.width))×\(Int(size.height)) banner \(lasso.subviews.first.map { "\($0.frame)" } ?? "none")")
-                    }
-                }
+            if let shot = Boot.setting("PAPERTIME_LASSO_VIEW_SHOT") {
+                Self.layerShot(of: view, to: shot, say: say)
+                say("banner \(lasso.subviews.first.map { "\($0.frame)" } ?? "none")")
             }
             let read = lasso.caught?.rect ?? rect
             say("latex: \(MathReader.latex(on: page, rect: read))")

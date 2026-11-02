@@ -1490,6 +1490,56 @@ public final class LibraryModel {
         return (added.count, duplicates)
     }
 
+    /// What came of an address.
+    public enum AddressOutcome: Sendable {
+        case added(LoadedPaper)
+        /// The same bytes are already in the library.
+        case already(LoadedPaper)
+        case failed(PaperFetcher.Failure)
+    }
+
+    /// «Add Paper by Address…»: what was typed, fetched and taken in. With
+    /// `keepFile` the PDF lands beside the others; without it the record
+    /// alone is written and the paper opens from its address every time
+    /// («Keep PDFs out of files» — a company computer whose security agent
+    /// swallows PDF files). The lookup for its metadata follows as for any
+    /// paper that arrives.
+    public func addPaper(byAddress text: String, keepFile: Bool) async -> AddressOutcome {
+        guard let address = PaperAddress.read(text) else { return .failed(.notAnAddress) }
+        let fetched: PaperFetcher.Fetched
+        do {
+            fetched = try await PaperFetcher.shared.fetch(address)
+        } catch let failure as PaperFetcher.Failure {
+            return .failed(failure)
+        } catch {
+            return .failed(.failed)
+        }
+        var digests: [String: PaperFolder] = [:]
+        for paper in papers where !paper.meta.file.importDigest.isEmpty {
+            digests[paper.meta.file.importDigest] = paper.folder
+        }
+        let source = PaperSource(address: address.text, pdf: fetched.pdf)
+        let outcome: LibraryStore.ImportOutcome
+        do {
+            outcome = try await importDestination.importFetched(
+                fetched.data, named: address.fileName, from: source, identifiers: address.identifiers,
+                keepFile: keepFile, knownDigests: digests
+            )
+        } catch {
+            return .failed(.failed)
+        }
+        switch outcome {
+        case let .imported(paper):
+            // Its bytes are in hand: the reader opens it without a second fetch.
+            await PaperFetcher.shared.put(fetched.data, for: paper.id)
+            papers.append(paper)
+            resolveInBackground([paper.id])
+            return .added(paper)
+        case let .duplicate(existing):
+            return .already(existing)
+        }
+    }
+
     // MARK: - Metadata
 
     /// Looks papers up one after another, off the back of the current action.

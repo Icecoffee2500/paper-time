@@ -27,7 +27,10 @@ export interface WindowBounds {
  * (`structure`). The writer never rewrites a file to get around any of them.
  */
 /** Why marks are not in the file: the file refuses them, or (`io`) it could not be written just now. */
-export type KeptReason = 'encrypted' | 'permissions' | 'structure' | 'unconfirmed' | 'io'
+/** Why an address gave no paper (`paperSource.ts`). */
+export type FetchFailure = 'notAnAddress' | 'noPDF' | 'notFound' | 'offline' | 'tooLarge' | 'failed'
+
+export type KeptReason = 'encrypted' | 'permissions' | 'structure' | 'unconfirmed' | 'io' | 'noFile'
 
 /** What the menu bar reflects of the window in front. */
 export interface MenuState {
@@ -65,6 +68,14 @@ export interface Requests {
   'library:suggestions': { args: void; result: { suggested: { path: string; provider: string }[]; recent: string[] } }
   /** No paths: the desktop's picker. `root`: the library to add them to. */
   'library:import': { args: { paths?: string[]; root?: string }; result: LibrarySnapshot | { error: string } }
+  /** A paper from what was typed — an arXiv identifier or address, a DOI or
+   *  an address holding one, a PDF's address. `fetch` says why there was no
+   *  paper (`paperSource.ts`); `added` is the new row's id, `already` the
+   *  row that holds the same bytes. */
+  'library:addByAddress': {
+    args: { text: string; root?: string }
+    result: (LibrarySnapshot & { added?: string; already?: string }) | { error: string; fetch?: FetchFailure }
+  }
   /** No root: the desktop's picker. */
   'library:addFolder': { args: { root?: string }; result: LibrarySnapshot | { error: string; refused?: true } }
   'library:removeFolder': { args: { root: string }; result: LibrarySnapshot | { error: string } }
@@ -327,6 +338,8 @@ export interface PaperRowDTO {
   id: string
   meta: Record<string, unknown>
   state: Record<string, unknown>
+  /** The address a paper came from (`source.json`): one without its file still opens. */
+  source?: string
   exists: boolean
   /** The folder it came from. */
   root?: string

@@ -29,16 +29,19 @@ struct SplitReaderView: View {
 
     private func column(_ column: SplitArrangement.Column) -> some View {
         VStack(spacing: Self.gap) {
-            pane(column.top)
-            if let bottom = column.bottom { pane(bottom) }
+            // Keyed by the pane, not the paper: two panes of one paper are
+            // two readers, each with its own place in the document.
+            pane(column.top).id(column.top.id)
+            if let bottom = column.bottom { pane(bottom).id(bottom.id) }
         }
     }
 
     @ViewBuilder
-    private func pane(_ id: UUID) -> some View {
-        if let paper = model.paper(id) {
-            let focused = model.selectedPaperID == id
-            let handle = focused ? link : app.paneLink(for: id)
+    private func pane(_ pane: SplitArrangement.Pane) -> some View {
+        if let paper = model.paper(pane.paper) {
+            let id = pane.paper
+            let focused = app.focusedPane(in: arrangement, model: model)?.id == pane.id
+            let handle = focused ? link : app.paneLink(for: pane.id)
             VStack(spacing: 0) {
                 HStack(spacing: 6) {
                     Text(paper.meta.displayTitle)
@@ -48,8 +51,9 @@ struct SplitReaderView: View {
                         .truncationMode(.tail)
                     Spacer(minLength: 0)
                     Button {
-                        app.undock(id, model: model)
-                        model.closeOpenPaper(id)
+                        // The paper closes with its last pane; a paper in
+                        // two panes stays open in the other.
+                        app.closePane(pane, model: model)
                     } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 9, weight: .semibold))
@@ -61,17 +65,18 @@ struct SplitReaderView: View {
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
                 .contentShape(.rect)
-                .onTapGesture { model.selectedPaperID = id }
+                .onTapGesture { app.focus(pane, model: model) }
                 // The title is the handle: drag it to another zone to move
-                // the pane there.
-                .draggable(PaperTransfer(id: id, title: paper.meta.displayTitle))
+                // the pane there (the pane's id says it is a move, not a
+                // second pane of the paper).
+                .draggable(PaperTransfer(id: id, title: paper.meta.displayTitle, pane: pane.id))
 
                 ReaderScreen(library: model, paper: paper, configuration: configuration, link: handle)
                     .onAppear {
-                        handle.activated = { model.selectedPaperID = id; model.keepOpen(id) }
+                        handle.activated = { app.focus(pane, model: model); model.keepOpen(id) }
                     }
                     .onChange(of: ObjectIdentifier(handle)) { _, _ in
-                        handle.activated = { model.selectedPaperID = id; model.keepOpen(id) }
+                        handle.activated = { app.focus(pane, model: model); model.keepOpen(id) }
                     }
             }
             .clipShape(RoundedRectangle(cornerRadius: Corner.popover, style: .continuous))
@@ -178,7 +183,9 @@ struct DockZoneOverlay: View {
 struct DockDropDelegate: DropDelegate {
     let size: () -> CGSize
     @Binding var zone: DockZone?
-    let drop: (UUID, DockZone) -> Void
+    /// The paper dropped (and the pane it was dragged by, if a pane's title
+    /// was the handle) and where.
+    let drop: (PaperTransfer, DockZone) -> Void
 
     func validateDrop(info: DropInfo) -> Bool {
         info.hasItemsConforming(to: [.paperTimePaper])
@@ -203,7 +210,7 @@ struct DockDropDelegate: DropDelegate {
         guard let target, let provider = info.itemProviders(for: [.paperTimePaper]).first else { return false }
         provider.loadDataRepresentation(forTypeIdentifier: UTType.paperTimePaper.identifier) { data, _ in
             guard let data, let transfer = try? JSONDecoder().decode(PaperTransfer.self, from: data) else { return }
-            Task { @MainActor in drop(transfer.id, target) }
+            Task { @MainActor in drop(transfer, target) }
         }
         return true
     }

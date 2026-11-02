@@ -40,6 +40,8 @@ struct PaperTimeCommands: Commands {
         CommandGroup(replacing: .newItem) {
             command(L("논문 더하기…", "Add Papers…"), .addPapers, post: .paperTimeAddPapers)
                 .disabled(model.library == nil)
+            command(L("주소로 논문 더하기…", "Add Paper by Address…"), .addByAddress, post: .paperTimeAddByAddress)
+                .disabled(model.library == nil)
         }
 
         CommandGroup(after: .newItem) {
@@ -186,6 +188,7 @@ struct PaperTimeCommands: Commands {
 /// command builder is outside the view hierarchy that owns the PDF view.
 extension Notification.Name {
     static let paperTimeAddPapers = Notification.Name("PaperTime.addPapers")
+    static let paperTimeAddByAddress = Notification.Name("PaperTime.addByAddress")
     static let paperTimeExportBibTeX = Notification.Name("PaperTime.exportBibTeX")
     static let paperTimeCopyCitationKey = Notification.Name("PaperTime.copyCitationKey")
     static let paperTimeSyncNow = Notification.Name("PaperTime.syncNow")

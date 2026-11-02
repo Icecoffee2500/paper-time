@@ -201,10 +201,12 @@ export class LibrarySet {
         unreadable.push(...folder.trouble)
         for (const row of folder.papers) {
           owners.set(row.id, folder.library)
-          if (row.file && row.exists) {
+          // A paper from an address reads from its bytes in memory
+          // (`setTextBytesProvider`), file or no file.
+          if (row.file && (row.exists || row.source)) {
             readable.set(row.id, { id: row.id, file: row.file, title: new PaperMeta(row.meta).displayTitle })
           }
-          rows.push({ id: row.id, meta: row.meta, state: row.state, exists: row.exists, root: folder.library.root })
+          rows.push({ id: row.id, meta: row.meta, state: row.state, exists: row.exists, root: folder.library.root, ...(row.source ? { source: row.source.address } : {}) })
         }
         loose += folder.loose
         treeFolders.push(...folder.folders)

@@ -72,51 +72,124 @@ public final class AppModel {
     /// windows when one is dragged to an edge of the screen.
     public var split: SplitArrangement?
 
-    /// A reader handle for each pane. The pane showing the current paper
-    /// borrows the window's own, so the toolbar and the inspector act on it;
-    /// the others each keep one of these.
+    /// The pane in focus while papers are side by side: its id in `split`.
+    /// The same paper may stand in two panes — one at a figure, one at the
+    /// text that cites it — so the paper alone (`selectedPaperID`, which is
+    /// the focused pane's paper) does not say which.
+    public var focusedPaneID: UUID?
+
+    /// A reader handle for each pane. The pane in focus borrows the window's
+    /// own, so the toolbar and the inspector act on it; the others each keep
+    /// one of these.
     private var paneLinks: [UUID: ReaderLink] = [:]
 
-    func paneLink(for paperID: UUID) -> ReaderLink {
-        if let link = paneLinks[paperID] { return link }
+    func paneLink(for paneID: UUID) -> ReaderLink {
+        if let link = paneLinks[paneID] { return link }
         let link = ReaderLink()
-        paneLinks[paperID] = link
+        paneLinks[paneID] = link
         return link
     }
 
+    /// The pane in focus, settled against the arrangement: the one named,
+    /// else the first showing the paper showing, else none.
+    func focusedPane(in arrangement: SplitArrangement, model: LibraryModel) -> SplitArrangement.Pane? {
+        if let focusedPaneID, let pane = arrangement.pane(focusedPaneID) { return pane }
+        return arrangement.panes.first { $0.paper == model.selectedPaperID }
+    }
+
+    /// A pane pressed: it is the one in focus, and its paper the one showing.
+    func focus(_ pane: SplitArrangement.Pane, model: LibraryModel) {
+        focusedPaneID = pane.id
+        model.selectedPaperID = pane.paper
+    }
+
     /// Puts a paper into a zone of the page area. With nothing side by side
-    /// yet, the paper already showing takes the other half.
-    func dock(_ id: UUID, at zone: DockZone, in model: LibraryModel) {
+    /// yet, the paper already showing takes the other half. Dragged by its
+    /// title (`movingPane`), a pane moves; dragged from anywhere else, a
+    /// paper opens one more pane — a second pane of the same paper when it
+    /// is there already.
+    func dock(_ id: UUID, at zone: DockZone, in model: LibraryModel, movingPane: UUID? = nil) {
         let current = model.selectedPaperID
-        var arrangement = split ?? current.map { SplitArrangement(left: .init(top: $0)) }
-            ?? SplitArrangement(left: .init(top: id))
-        arrangement.dock(id, at: zone)
+        var arrangement: SplitArrangement
+        if let split {
+            arrangement = split
+        } else if let current {
+            // The one reader becomes the first pane; it keeps the focus.
+            let pane = SplitArrangement.Pane(id: focusedPaneID ?? UUID(), paper: current)
+            arrangement = SplitArrangement(left: .init(top: pane))
+            focusedPaneID = pane.id
+        } else {
+            arrangement = SplitArrangement(left: .init(top: .init(paper: id)))
+        }
+        let pane = movingPane.flatMap { arrangement.pane($0) }.map { SplitArrangement.Pane(id: $0.id, paper: id) }
+            ?? SplitArrangement.Pane(paper: id)
+        arrangement.dock(pane, at: zone)
         // Put beside another by hand: that is a pin, and it stays until it
         // is closed.
         for paper in arrangement.papers { model.keepOpen(paper, byHand: true) }
         withAnimation(AppModel.paneMotion) {
-            split = arrangement.papers.count > 1 ? arrangement : nil
+            split = arrangement.panes.count > 1 ? arrangement : nil
             showsReader = true
             if current == nil { model.selectedPaperID = id }
+            settleFocus(model: model)
         }
     }
 
-    /// Takes a paper out of the side-by-side arrangement. One pane left is
-    /// no arrangement at all; that paper is simply the one showing.
+    /// Takes every pane of a paper out of the side-by-side arrangement. One
+    /// pane left is no arrangement at all; that paper is simply the one
+    /// showing.
     func undock(_ id: UUID, model: LibraryModel) {
-        guard var arrangement = split else { return }
-        arrangement.remove(id)
+        guard var arrangement = split, arrangement.contains(id) else { return }
+        arrangement.remove(paper: id)
+        settle(after: arrangement, removed: id, model: model)
+    }
+
+    /// Takes one pane out. The paper stays showing in its other panes, if it
+    /// has any.
+    func undock(pane: SplitArrangement.Pane, model: LibraryModel) {
+        guard var arrangement = split, arrangement.pane(pane.id) != nil else { return }
+        arrangement.remove(pane: pane.id)
+        settle(after: arrangement, removed: pane.paper, model: model)
+    }
+
+    /// Closes one pane — the × on its strip, or ⌘W over it. The paper closes
+    /// with it unless another pane still shows it.
+    func closePane(_ pane: SplitArrangement.Pane, model: LibraryModel) {
+        let others = (split?.panes ?? []).filter { $0.paper == pane.paper && $0.id != pane.id }
+        undock(pane: pane, model: model)
+        if others.isEmpty { model.closeOpenPaper(pane.paper) }
+    }
+
+    private func settle(after arrangement: SplitArrangement, removed: UUID, model: LibraryModel) {
         withAnimation(AppModel.paneMotion) {
-            if arrangement.papers.count <= 1 {
+            if arrangement.panes.count <= 1 {
                 split = nil
-                if let last = arrangement.papers.first, model.selectedPaperID == id || model.selectedPaperID == nil {
+                focusedPaneID = nil
+                if let last = arrangement.papers.first,
+                   model.selectedPaperID == removed || model.selectedPaperID == nil || !arrangement.contains(model.selectedPaperID!) {
                     model.selectedPaperID = last
                 }
             } else {
                 split = arrangement
-                if model.selectedPaperID == id, let first = arrangement.papers.first { model.selectedPaperID = first }
+                if let selected = model.selectedPaperID, !arrangement.contains(selected) {
+                    model.selectedPaperID = arrangement.papers.first
+                } else if model.selectedPaperID == nil {
+                    model.selectedPaperID = arrangement.papers.first
+                }
+                settleFocus(model: model)
             }
         }
+    }
+
+    /// The focus kept on a pane of the arrangement: the one it was on, else
+    /// the first showing the paper showing, else the first of all — and the
+    /// paper showing follows it.
+    private func settleFocus(model: LibraryModel) {
+        guard let split else { focusedPaneID = nil; return }
+        if let focusedPaneID, split.pane(focusedPaneID) != nil { return }
+        let pane = split.panes.first { $0.paper == model.selectedPaperID } ?? split.panes[0]
+        focusedPaneID = pane.id
+        model.selectedPaperID = pane.paper
     }
 
     /// How wide the two columns are.
@@ -900,6 +973,20 @@ public final class AppModel {
                     Data("import: added=\(added) duplicates=\(duplicates)\n".utf8)
                 )
             }
+            // `--papertime-add-address=<text>`: the paper an address names,
+            // taken in the way the sheet takes one; `--papertime-fetch-base=`
+            // sends the fetch to a server of the probe's own.
+            if let base = Boot.setting("PAPERTIME_FETCH_BASE") { PaperFetcher.rewriteBase = URL(string: base) }
+            if let address = Boot.setting("PAPERTIME_ADD_ADDRESS") {
+                let keep = !settings.keepsPDFsInMemory && !Boot.isSet("PAPERTIME_KEEP_PDFS_IN_MEMORY")
+                let outcome = await model.addPaper(byAddress: address, keepFile: keep)
+                let line: String = switch outcome {
+                case let .added(paper): "added \(paper.id) file=\(paper.meta.file.relativePath) exists=\(paper.hasFile) source=\(paper.source?.address ?? "-")"
+                case let .already(paper): "already \(paper.id)"
+                case let .failed(why): "failed (\(why))"
+                }
+                FileHandle.standardError.write(Data("add address: \(line)\n".utf8))
+            }
             // Driving a simulator: take in the folder's loose PDFs and open
             // the first paper, since nothing there can be tapped from here.
             if Boot.isSet("PAPERTIME_ADOPT_LOOSE") {
@@ -1271,6 +1358,12 @@ public final class AppSettings {
     /// disclosing who is using it.
     @ObservationIgnored
     @AppStorage("metadataContactEmail") public var metadataContactEmail = ""
+    /// «Keep PDFs out of files»: a paper added by address is not written to
+    /// the folder, and is fetched again each time it opens — for a company
+    /// computer whose security agent swallows PDF files. The marks, ink and
+    /// notes are files in `.papertime` all the same.
+    @ObservationIgnored
+    @AppStorage("keepPDFsInMemory") public var keepsPDFsInMemory = false
     @ObservationIgnored
     @AppStorage("preferredPreprintStyle") public var preferredPreprintStyle = "eprint"
     @ObservationIgnored
@@ -1314,17 +1407,29 @@ public enum DockZone: Equatable, Sendable {
     case left, right, topLeft, topRight, bottomLeft, bottomRight
 }
 
-/// Up to four papers in the page area: a left column and, when there is
-/// one, a right column, each of one or two panes.
+/// Up to four panes in the page area: a left column and, when there is
+/// one, a right column, each of one or two panes. A pane has an id of its
+/// own and the paper it shows: the same paper may stand in two panes
+/// (Portable's pane keys, `<paper>` and `<paper>@2`, are the same two).
 public struct SplitArrangement: Equatable, Sendable {
+    public struct Pane: Equatable, Sendable, Identifiable {
+        public var id: UUID
+        public var paper: UUID
+        public init(id: UUID = UUID(), paper: UUID) {
+            self.id = id
+            self.paper = paper
+        }
+    }
+
     public struct Column: Equatable, Sendable {
-        public var top: UUID
-        public var bottom: UUID?
-        public init(top: UUID, bottom: UUID? = nil) {
+        public var top: Pane
+        public var bottom: Pane?
+        public init(top: Pane, bottom: Pane? = nil) {
             self.top = top
             self.bottom = bottom
         }
-        var papers: [UUID] { [top] + (bottom.map { [$0] } ?? []) }
+        var panes: [Pane] { [top] + (bottom.map { [$0] } ?? []) }
+        var papers: [UUID] { panes.map(\.paper) }
     }
 
     public var left: Column
@@ -1335,15 +1440,32 @@ public struct SplitArrangement: Equatable, Sendable {
         self.right = right
     }
 
-    /// Every paper in the arrangement, left column first, top before bottom.
-    public var papers: [UUID] { left.papers + (right?.papers ?? []) }
+    /// Every pane in the arrangement, left column first, top before bottom.
+    public var panes: [Pane] { left.panes + (right?.panes ?? []) }
+    /// Every pane's paper, in the same order — a paper in two panes twice.
+    public var papers: [UUID] { panes.map(\.paper) }
 
-    public func contains(_ id: UUID) -> Bool { papers.contains(id) }
+    /// Whether a paper shows in any pane.
+    public func contains(_ paper: UUID) -> Bool { papers.contains(paper) }
 
-    /// Takes a paper out, closing up the space it leaves.
-    public mutating func remove(_ id: UUID) {
+    public func pane(_ id: UUID) -> Pane? { panes.first { $0.id == id } }
+
+    /// The panes showing a paper, in the arrangement's order.
+    public func panes(of paper: UUID) -> [Pane] { panes.filter { $0.paper == paper } }
+
+    /// Takes one pane out, closing up the space it leaves.
+    public mutating func remove(pane id: UUID) {
+        removeAll { $0.id == id }
+    }
+
+    /// Takes every pane of a paper out.
+    public mutating func remove(paper: UUID) {
+        removeAll { $0.paper == paper }
+    }
+
+    private mutating func removeAll(where gone: (Pane) -> Bool) {
         var columns = [left, right].compactMap { $0 }.compactMap { column -> Column? in
-            let kept = column.papers.filter { $0 != id }
+            let kept = column.panes.filter { !gone($0) }
             guard let first = kept.first else { return nil }
             return Column(top: first, bottom: kept.count > 1 ? kept[1] : nil)
         }
@@ -1352,14 +1474,15 @@ public struct SplitArrangement: Equatable, Sendable {
         right = columns.first
     }
 
-    /// Puts a paper into a zone. What was there slides to the other half of
-    /// its column; what there is no room for leaves the arrangement (and
-    /// stays open in the list).
-    public mutating func dock(_ id: UUID, at zone: DockZone) {
-        let leftIDs = left.papers.filter { $0 != id }
-        let rightIDs = right?.papers.filter { $0 != id } ?? []
+    /// Puts a pane into a zone — a new one, or one already here, which
+    /// moves. What was there slides to the other half of its column; what
+    /// there is no room for leaves the arrangement (and stays open in the
+    /// list).
+    public mutating func dock(_ id: Pane, at zone: DockZone) {
+        let leftIDs = left.panes.filter { $0.id != id.id }
+        let rightIDs = right?.panes.filter { $0.id != id.id } ?? []
         let others = leftIDs + rightIDs
-        func column(_ ids: [UUID]) -> Column? {
+        func column(_ ids: [Pane]) -> Column? {
             guard let first = ids.first else { return nil }
             return Column(top: first, bottom: ids.count > 1 ? ids[1] : nil)
         }

@@ -10,9 +10,12 @@ import { acceptedPatch } from '../../shared/appSettings.js'
 import { L as say } from '../../shared/lang.js'
 import { settings, update } from '../settings.js'
 import { folderRefusal } from '../libraries.js'
+import { probe } from '../probeMode.js'
 import { samePath } from '../../shared/paths.js'
 import { collectionsByFolder } from '../vocabulary.js'
 import { isFile, pageCount } from './shared.js'
+import { FetchError, fetchByAddress, makeSource } from '../paperSource.js'
+import { addressFileName, addressIdentifiers } from '../../shared/paperAddress.js'
 import { isFolder, recentLibraries, suggestedFolders } from '../suggestions.js'
 import type { Context, Handlers } from './context.js'
 
@@ -160,6 +163,47 @@ export function libraryHandlers(ctx: Context): Partial<Handlers> {
       const snapshot = await ctx.snapshot()
       windows.sendExcept(sender, 'library:changed')
       return 'error' in snapshot ? snapshot : { ...snapshot, imported: report }
+    },
+
+    // A paper from what was typed: fetched through Chromium, taken in as the
+    // file would be — or, with «Keep PDFs out of files», as a record alone
+    // that opens from its address. The lookup for its metadata follows as
+    // for any paper that arrives (`importedPapers`).
+    'library:addByAddress': async ({ text, root }, sender) => {
+      const destination = libraries.destination(root)
+      if (!destination) return { error: say('열린 라이브러리가 없어요.', 'No library is open.') }
+      let got: Awaited<ReturnType<typeof fetchByAddress>>
+      try {
+        got = await fetchByAddress(text, ctx.fetch)
+      } catch (error) {
+        if (error instanceof FetchError) return { error: error.message, fetch: error.why }
+        return { error: String(error) }
+      }
+      const { address, fetched } = got
+      const pages = (await ctx.pageCounter.countOrNull(new Uint8Array(fetched.bytes))) ?? 0
+      if (pages === 0) return { error: 'The PDF could not be opened.', fetch: 'noPDF' }
+      // `--papertime-keep-pdfs-in-memory=1`: the probe's way to the setting
+      // without writing the person's settings.
+      const keepFile = !(settings().keepPDFsInMemory || probe.argument('keep-pdfs-in-memory') === '1')
+      let added: string | undefined
+      let already: string | undefined
+      await sync.run(async () => {
+        const papers = (await destination.read()).papers
+        const { row, outcome } = await destination.importFetched(
+          fetched.bytes, addressFileName(address), makeSource(address, fetched.pdf), pages,
+          { keepFile, identifiers: addressIdentifiers(address), papers },
+        )
+        if (outcome === 'imported' && row) {
+          added = row.id
+          // Its bytes are in hand: the reader opens it without a second fetch.
+          ctx.fetched.put(row.id, fetched.bytes)
+        } else if (row) {
+          already = row.id
+        }
+      })
+      const snapshot = await ctx.snapshot()
+      windows.sendExcept(sender, 'library:changed')
+      return 'error' in snapshot ? snapshot : { ...snapshot, added, already }
     },
 
     'library:adoptLoose': (_args, sender) => {

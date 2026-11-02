@@ -90,6 +90,7 @@ export function buildMenu({ send, chooseLibrary }: MenuActions, state: MenuState
       label: L('파일(&F)', '&File'),
       submenu: [
         item('addPapers', L('논문 더하기…', 'Add Papers…')),
+        item('addByAddress', L('주소로 논문 더하기…', 'Add Paper by Address…')),
         separator,
         item('exportBibTeX', L('BibTeX 내보내기…', 'Export BibTeX…')),
         item('copyCitationKey'),

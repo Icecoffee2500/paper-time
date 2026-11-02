@@ -6,16 +6,17 @@
  * Put up only in a probe run — a window somebody reads in has no use for a
  * handle on its store.
  */
+import type { DockZone } from '../shared/split.js'
 import { latex as mathLatex, structured as mathStructured } from '../shared/mathReader/reader.js'
 import { layoutPanes } from './layout.js'
 import { call, flags } from './bridge.js'
 import { store, subfolders } from './state.js'
 import { findBar, focused } from './pageArea.js'
-import { showPaper } from './actions/openPapers.js'
+import { dockPaper, showPaper } from './actions/openPapers.js'
 import { openNote, openNoteFromSearch } from './actions/notes.js'
 import { openFind, openPassage } from './actions/search.js'
 import { showSearchResults } from './listSearch.js'
-import { readings } from './library.js'
+import { readings, addPaperByAddress } from './library.js'
 import { setSettings } from './settingsController.js'
 import { createNote } from './notesModel.js'
 import { backToNotes, openNoteInSlipBox, slipBoxEditor } from './ui/slipBox.js'
@@ -82,10 +83,15 @@ export function installProbeSurface() {
       open: () => [...store.openPaperIDs],
       pinned: () => [...store.pinnedPaperIDs],
       split: () => store.split,
+      focusedPane: () => store.focusedPane,
+      /** A paper into a zone — or, with the pane's key, that pane moved. */
+      dock: (id: string, zone: DockZone, pane?: string) => dockPaper(id, zone, pane),
       trail: () => ({ trail: [...store.trail], index: store.trailIndex }),
       readings: () => readings,
       /** The disk's folders as the last read found them, and the tree under a folder. */
       folders: () => [...store.folders],
+      /** A paper from an address, the way the sheet adds one; the outcome, not a toast. */
+      addByAddress: (text: string) => addPaperByAddress(text),
       subfolders: (folder: string) => subfolders(folder).map((one) => `${one.name}(${one.count})`),
     },
     // What Ultracopy and ⌘L would make of the selection — read, not copied:

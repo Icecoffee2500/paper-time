@@ -12,7 +12,8 @@ import { platform } from '../bridge.js'
 import { keyFor } from '../../shared/shortcuts.js'
 import { icon } from '../icons.js'
 import { L } from '../../shared/lang.js'
-import { changed, notesForPaper, noteByID, panePapers, store, type Paper } from '../state.js'
+import { changed, notesForPaper, noteByID, paneKeys, store, type Paper } from '../state.js'
+import { paperOfPane } from '../../shared/split.js'
 import { createNote, deleteNote } from '../notesModel.js'
 import { editorHost, noteRow, type NoteEditorActions } from './noteEditor.js'
 import { showMenu } from './toolbar.js'
@@ -48,7 +49,7 @@ export const openEditor = () => (store.selectedID ? hosts.get(store.selectedID)?
 
 export function renderNotesTab(body: HTMLElement, paper: Paper, actions: NoteEditorActions) {
   // The editors of papers no longer on screen are let go of — written out.
-  const showing = new Set([...panePapers(), paper.id])
+  const showing = new Set([...paneKeys().map(paperOfPane), paper.id])
   for (const [id, host] of hosts) {
     if (showing.has(id)) continue
     host.drop()

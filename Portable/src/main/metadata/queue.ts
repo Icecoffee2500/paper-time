@@ -26,6 +26,7 @@ import { isLookedUp } from '../../shared/documentKind.js'
 import { makeKey } from '../../shared/citationKey.js'
 import { PaperMeta } from '../../shared/model.js'
 import { resolve, type Network, type ResolutionResult } from '../../shared/metadata/resolver.js'
+import type { PaperRow } from '../library.js'
 import { guessFromSignals, type DocumentSignals } from '../../shared/metadata/signals.js'
 import type { Library } from '../library.js'
 import type { LibrarySet } from '../libraries.js'
@@ -34,8 +35,9 @@ import type { Records } from '../records.js'
 export interface MetadataHooks {
   libraries: LibrarySet
   records: Records
-  /** The paper's signals, read off its bytes (`PageCounter.signals`). */
-  signals: (file: string) => Promise<DocumentSignals | null>
+  /** The paper's signals, read off its bytes (`PageCounter.signals`) —
+   *  from its file, or from the address it came from. */
+  signals: (row: PaperRow) => Promise<DocumentSignals | null>
   /** The way out, or null when lookups may not leave this machine. */
   network: () => Network | null
   contactEmail: () => string | undefined
@@ -138,7 +140,7 @@ export class MetadataQueue {
     if (!owner || !row?.file) return
     const meta = new PaperMeta(row.meta)
     if (meta.confidence === 'manual') return
-    const signals = await this.hooks.signals(row.file)
+    const signals = await this.hooks.signals(row)
     if (!signals) return
     const guess = guessFromSignals(signals)
     const guessed = meta.guessedKind === undefined

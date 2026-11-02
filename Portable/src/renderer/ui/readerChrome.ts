@@ -84,6 +84,11 @@ export function keptWhy(kept: KeptReason): string {
       '표시를 넣고 다시 읽어 보니 맞지 않았어요. 파일은 그대로 두고, 표시는 Paper Time에 두었어요.',
       "The marks didn't read back as written. They stay in Paper Time, and the file is unchanged.",
     ),
+    // A paper from an address, on a computer that keeps no PDF files.
+    noFile: L(
+      '이 논문은 주소에서 열었고 PDF 파일이 없어요. 표시는 Paper Time에 있고, 파일이 생기면 거기에 써요.',
+      "This paper opens from its address and has no PDF file. The marks stay in Paper Time, and go into the file once there is one.",
+    ),
     // Windows only, where another program can hold a file open.
     io: L(
       '다른 프로그램이 이 PDF를 쥐고 있어서 쓰지 못했어요. 다음에 표시를 고치면 다시 써요.',

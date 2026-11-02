@@ -12,6 +12,8 @@ import {
   closeOtherOpenPapers,
   dock,
   extendRun,
+  focusPane,
+  focusedPaneKey,
   keepOpen,
   patchPaper,
   paper as findPaper,
@@ -21,16 +23,17 @@ import {
   store,
   travelBy,
   undock,
+  undockPane,
   type Picking,
   type PickMode,
 } from '../state.js'
 import { solo } from '../shell.js'
-import { focused, pageArea, readers, reconcileReaders } from '../pageArea.js'
+import { focused, pageArea, readerOf, reconcileReaders } from '../pageArea.js'
 import { saveSettings } from '../settingsController.js'
 import { toggleOpenPapers } from '../ui/openPapers.js'
 import { togglePages } from '../ui/pages.js'
 import { thumbnails } from '../ui/pageThumbnails.js'
-import { splitContains, splitPapers, type DockZone, type SplitArrangement } from '../../shared/split.js'
+import { freshPaneKey, paperOfPane, splitContainsPaper, splitPanesOf, type DockZone, type SplitArrangement } from '../../shared/split.js'
 
 /**
  * Shows a paper. With papers side by side, the paper takes the place of the
@@ -48,9 +51,16 @@ export async function showPaper(id: string, keepSelection = false) {
   }
   if (store.selectedID === id) return
   const previous = store.selectedID
-  if (store.split && !splitContains(store.split, id)) {
-    const target = previous && splitContains(store.split, previous) ? previous : splitPapers(store.split)[0]
-    store.split = replaceInSplit(store.split, target, id)
+  if (store.split && !splitContainsPaper(store.split, id)) {
+    // The paper takes the place of the pane in focus.
+    const target = focusedPaneKey() ?? splitPanesOf(store.split, previous ?? '')[0]
+    const key = freshPaneKey(store.split, id)
+    if (target) store.split = replaceInSplit(store.split, target, key)
+    focusPane(key)
+  } else if (store.split) {
+    // Shown already: the pane in focus is one of its own.
+    const current = focusedPaneKey()
+    focusPane(current && paperOfPane(current) === id ? current : splitPanesOf(store.split, id)[0])
   }
   store.selectedID = id
   if (!store.travelling) remember(id)
@@ -141,6 +151,22 @@ export function keepPaper(id: string, byHand = false) {
 }
 
 /** Closes a paper: out of its pane, off the shelf; its neighbour comes forward. */
+/**
+ * Closes one pane — the × on its strip, or ⌘W over it. The paper closes with
+ * it unless another pane still shows it.
+ */
+export function closePane(key: string) {
+  const id = paperOfPane(key)
+  if (store.split && splitPanesOf(store.split, id).length > 1) {
+    undockPane(key)
+    saveSettings({ selectedPaperID: store.selectedID })
+    reconcileReaders()
+    changed('papers', 'selection')
+    return
+  }
+  closePaper(id)
+}
+
 export function closePaper(id: string) {
   const wasSelected = store.selectedID === id
   undock(id)
@@ -159,10 +185,10 @@ export function closeOthers(keeping: string) {
   changed('papers', 'selection')
 }
 
-/** Puts a paper into a zone of the page area, beside what is showing. */
-export function dockPaper(id: string, zone: DockZone) {
+/** Puts a paper into a zone of the page area, beside what is showing — or moves the pane the drag began on (`pane`). */
+export function dockPaper(id: string, zone: DockZone, pane?: string) {
   if (!findPaper(id)) return
-  dock(id, zone)
+  dock(id, zone, pane)
   reconcileReaders()
   changed('papers', 'selection')
 }
@@ -230,8 +256,9 @@ function walk(by: 1 | -1) {
  * window standing. With one pane the window closes, as it always did.
  */
 export function closeWindowOrPane() {
-  if (store.split && store.selectedID && splitContains(store.split, store.selectedID)) {
-    closePaper(store.selectedID)
+  const key = focusedPaneKey()
+  if (store.split && key) {
+    closePane(key)
     return
   }
   void call('window:close')
@@ -247,7 +274,7 @@ export async function openAnchor(place: { pageIndex: number; rect: { x: number; 
   const id = known?.id ?? store.selectedID
   if (!id) return
   if (id !== store.selectedID) await showPaper(id)
-  const reader = readers.get(id)
+  const reader = readerOf(id)
   if (!reader || !(await reader.whenOpen())) return
   await reader.jumpToPassage(place.pageIndex, place.rect)
 }

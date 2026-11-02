@@ -1,0 +1,338 @@
+{
+  "addresses" : [
+    {
+      "address" : "arXiv:2512.11732",
+      "file" : "2512.11732.pdf",
+      "kind" : "arxiv",
+      "pdf" : "https://arxiv.org/pdf/2512.11732",
+      "text" : "2512.11732",
+      "value" : "2512.11732"
+    },
+    {
+      "address" : "arXiv:2512.11732",
+      "file" : "2512.11732.pdf",
+      "kind" : "arxiv",
+      "pdf" : "https://arxiv.org/pdf/2512.11732",
+      "text" : "2512.11732v2",
+      "value" : "2512.11732"
+    },
+    {
+      "address" : "arXiv:2512.11732",
+      "file" : "2512.11732.pdf",
+      "kind" : "arxiv",
+      "pdf" : "https://arxiv.org/pdf/2512.11732",
+      "text" : " arXiv:2512.11732 ",
+      "value" : "2512.11732"
+    },
+    {
+      "address" : "arXiv:2512.11732",
+      "file" : "2512.11732.pdf",
+      "kind" : "arxiv",
+      "pdf" : "https://arxiv.org/pdf/2512.11732",
+      "text" : "arxiv:2512.11732v1",
+      "value" : "2512.11732"
+    },
+    {
+      "address" : "arXiv:cs/0101001",
+      "file" : "cs_0101001.pdf",
+      "kind" : "arxiv",
+      "pdf" : "https://arxiv.org/pdf/cs/0101001",
+      "text" : "cs/0101001",
+      "value" : "cs/0101001"
+    },
+    {
+      "address" : "arXiv:hep-th/9901001",
+      "file" : "hep-th_9901001.pdf",
+      "kind" : "arxiv",
+      "pdf" : "https://arxiv.org/pdf/hep-th/9901001",
+      "text" : "hep-th/9901001v3",
+      "value" : "hep-th/9901001"
+    },
+    {
+      "address" : "arXiv:2512.11732",
+      "file" : "2512.11732.pdf",
+      "kind" : "arxiv",
+      "pdf" : "https://arxiv.org/pdf/2512.11732",
+      "text" : "https://arxiv.org/abs/2512.11732",
+      "value" : "2512.11732"
+    },
+    {
+      "address" : "arXiv:2512.11732",
+      "file" : "2512.11732.pdf",
+      "kind" : "arxiv",
+      "pdf" : "https://arxiv.org/pdf/2512.11732",
+      "text" : "https://arxiv.org/abs/2512.11732v2",
+      "value" : "2512.11732"
+    },
+    {
+      "address" : "arXiv:2512.11732",
+      "file" : "2512.11732.pdf",
+      "kind" : "arxiv",
+      "pdf" : "https://arxiv.org/pdf/2512.11732",
+      "text" : "http://arxiv.org/pdf/2512.11732",
+      "value" : "2512.11732"
+    },
+    {
+      "address" : "arXiv:2512.11732",
+      "file" : "2512.11732.pdf",
+      "kind" : "arxiv",
+      "pdf" : "https://arxiv.org/pdf/2512.11732",
+      "text" : "https://arxiv.org/pdf/2512.11732v2.pdf",
+      "value" : "2512.11732"
+    },
+    {
+      "address" : "arXiv:2512.11732",
+      "file" : "2512.11732.pdf",
+      "kind" : "arxiv",
+      "pdf" : "https://arxiv.org/pdf/2512.11732",
+      "text" : "https://www.arxiv.org/html/2512.11732v1",
+      "value" : "2512.11732"
+    },
+    {
+      "address" : "arXiv:cs/0101001",
+      "file" : "cs_0101001.pdf",
+      "kind" : "arxiv",
+      "pdf" : "https://arxiv.org/pdf/cs/0101001",
+      "text" : "https://export.arxiv.org/abs/cs/0101001",
+      "value" : "cs/0101001"
+    },
+    {
+      "address" : "arXiv:math.AG/0601001",
+      "file" : "math.AG_0601001.pdf",
+      "kind" : "arxiv",
+      "pdf" : "https://arxiv.org/pdf/math.AG/0601001",
+      "text" : "https://arxiv.org/abs/math.AG/0601001",
+      "value" : "math.AG/0601001"
+    },
+    {
+      "address" : "arXiv:2512.11732",
+      "file" : "2512.11732.pdf",
+      "kind" : "arxiv",
+      "pdf" : "https://arxiv.org/pdf/2512.11732",
+      "text" : "<https://arxiv.org/abs/2512.11732>",
+      "value" : "2512.11732"
+    },
+    {
+      "address" : "arXiv:2512.11732",
+      "file" : "2512.11732.pdf",
+      "kind" : "arxiv",
+      "pdf" : "https://arxiv.org/pdf/2512.11732",
+      "text" : "10.48550/arXiv.2512.11732",
+      "value" : "2512.11732"
+    },
+    {
+      "address" : "arXiv:2512.11732",
+      "file" : "2512.11732.pdf",
+      "kind" : "arxiv",
+      "pdf" : "https://arxiv.org/pdf/2512.11732",
+      "text" : "https://doi.org/10.48550/arXiv.2512.11732",
+      "value" : "2512.11732"
+    },
+    {
+      "address" : "doi:10.1145/3292500.3330701",
+      "file" : "10.1145_3292500.3330701.pdf",
+      "kind" : "doi",
+      "lookup" : "https://api.openalex.org/works/https://doi.org/10.1145/3292500.3330701?select=id,open_access,best_oa_location,primary_location,locations",
+      "text" : "10.1145/3292500.3330701",
+      "value" : "10.1145/3292500.3330701"
+    },
+    {
+      "address" : "doi:10.1145/3292500.3330701",
+      "file" : "10.1145_3292500.3330701.pdf",
+      "kind" : "doi",
+      "lookup" : "https://api.openalex.org/works/https://doi.org/10.1145/3292500.3330701?select=id,open_access,best_oa_location,primary_location,locations",
+      "text" : "doi:10.1145/3292500.3330701",
+      "value" : "10.1145/3292500.3330701"
+    },
+    {
+      "address" : "doi:10.1145/3292500.3330701",
+      "file" : "10.1145_3292500.3330701.pdf",
+      "kind" : "doi",
+      "lookup" : "https://api.openalex.org/works/https://doi.org/10.1145/3292500.3330701?select=id,open_access,best_oa_location,primary_location,locations",
+      "text" : "DOI: 10.1145/3292500.3330701",
+      "value" : "10.1145/3292500.3330701"
+    },
+    {
+      "address" : "doi:10.1109/cvpr52688.2022.01553",
+      "file" : "10.1109_cvpr52688.2022.01553.pdf",
+      "kind" : "doi",
+      "lookup" : "https://api.openalex.org/works/https://doi.org/10.1109/cvpr52688.2022.01553?select=id,open_access,best_oa_location,primary_location,locations",
+      "text" : "https://doi.org/10.1109/CVPR52688.2022.01553",
+      "value" : "10.1109/cvpr52688.2022.01553"
+    },
+    {
+      "address" : "doi:10.1038/s41586-020-2649-2",
+      "file" : "10.1038_s41586-020-2649-2.pdf",
+      "kind" : "doi",
+      "lookup" : "https://api.openalex.org/works/https://doi.org/10.1038/s41586-020-2649-2?select=id,open_access,best_oa_location,primary_location,locations",
+      "text" : "http://dx.doi.org/10.1038/s41586-020-2649-2.",
+      "value" : "10.1038/s41586-020-2649-2"
+    },
+    {
+      "address" : "doi:10.1002/(sici)1097-0258(19980430)17:8<857::aid-sim777>3.0.co;2-e",
+      "file" : "10.1002_(sici)1097-0258(19980430)17_8_857__aid-sim777_3.0.co;2-e.pdf",
+      "kind" : "doi",
+      "lookup" : "https://api.openalex.org/works/https://doi.org/10.1002/(sici)1097-0258(19980430)17:8%3C857::aid-sim777%3E3.0.co;2-e?select=id,open_access,best_oa_location,primary_location,locations",
+      "text" : "https://doi.org/10.1002/(SICI)1097-0258(19980430)17:8<857::AID-SIM777>3.0.CO;2-E",
+      "value" : "10.1002/(sici)1097-0258(19980430)17:8<857::aid-sim777>3.0.co;2-e"
+    },
+    {
+      "address" : "doi:10.1016/j.neunet.2021.01.001",
+      "file" : "10.1016_j.neunet.2021.01.001.pdf",
+      "kind" : "doi",
+      "lookup" : "https://api.openalex.org/works/https://doi.org/10.1016/j.neunet.2021.01.001?select=id,open_access,best_oa_location,primary_location,locations",
+      "text" : "https://www.scopus.com/record/display.uri?eid=2-s2.0-85123456789&doi=10.1016%2fj.neunet.2021.01.001&origin=inward",
+      "value" : "10.1016/j.neunet.2021.01.001"
+    },
+    {
+      "address" : "https://www.scopus.com/record/display.uri?eid=2-s2.0-85123456789&origin=inward",
+      "file" : "display.uri.pdf",
+      "kind" : "web",
+      "pdf" : "https://www.scopus.com/record/display.uri?eid=2-s2.0-85123456789&origin=inward",
+      "text" : "https://www.scopus.com/record/display.uri?eid=2-s2.0-85123456789&origin=inward",
+      "value" : "https://www.scopus.com/record/display.uri?eid=2-s2.0-85123456789&origin=inward"
+    },
+    {
+      "address" : "doi:10.1007/s10462-023-10562-9",
+      "file" : "10.1007_s10462-023-10562-9.pdf",
+      "kind" : "doi",
+      "lookup" : "https://api.openalex.org/works/https://doi.org/10.1007/s10462-023-10562-9?select=id,open_access,best_oa_location,primary_location,locations",
+      "text" : "https://link.springer.com/article/10.1007/s10462-023-10562-9",
+      "value" : "10.1007/s10462-023-10562-9"
+    },
+    {
+      "address" : "doi:10.1002/advs.202300001",
+      "file" : "10.1002_advs.202300001.pdf",
+      "kind" : "doi",
+      "lookup" : "https://api.openalex.org/works/https://doi.org/10.1002/advs.202300001?select=id,open_access,best_oa_location,primary_location,locations",
+      "text" : "https://onlinelibrary.wiley.com/doi/full/10.1002/advs.202300001",
+      "value" : "10.1002/advs.202300001"
+    },
+    {
+      "address" : "doi:10.1002/advs.202300001",
+      "file" : "10.1002_advs.202300001.pdf",
+      "kind" : "doi",
+      "lookup" : "https://api.openalex.org/works/https://doi.org/10.1002/advs.202300001?select=id,open_access,best_oa_location,primary_location,locations",
+      "text" : "https://onlinelibrary.wiley.com/doi/abs/10.1002/advs.202300001",
+      "value" : "10.1002/advs.202300001"
+    },
+    {
+      "address" : "https://ieeexplore.ieee.org/document/9879595",
+      "file" : "9879595.pdf",
+      "kind" : "web",
+      "pdf" : "https://ieeexplore.ieee.org/document/9879595",
+      "text" : "https://ieeexplore.ieee.org/document/9879595",
+      "value" : "https://ieeexplore.ieee.org/document/9879595"
+    },
+    {
+      "address" : "https://www.sciencedirect.com/science/article/pii/S0893608021000010",
+      "file" : "S0893608021000010.pdf",
+      "kind" : "web",
+      "pdf" : "https://www.sciencedirect.com/science/article/pii/S0893608021000010",
+      "text" : "https://www.sciencedirect.com/science/article/pii/S0893608021000010",
+      "value" : "https://www.sciencedirect.com/science/article/pii/S0893608021000010"
+    },
+    {
+      "address" : "https://openreview.net/pdf?id=abc123",
+      "file" : "abc123.pdf",
+      "kind" : "web",
+      "pdf" : "https://openreview.net/pdf?id=abc123",
+      "text" : "https://openreview.net/pdf?id=abc123",
+      "value" : "https://openreview.net/pdf?id=abc123"
+    },
+    {
+      "address" : "https://example.org/papers/lejepa.pdf",
+      "file" : "lejepa.pdf",
+      "kind" : "web",
+      "pdf" : "https://example.org/papers/lejepa.pdf",
+      "text" : "https://example.org/papers/lejepa.pdf",
+      "value" : "https://example.org/papers/lejepa.pdf"
+    },
+    {
+      "address" : "https://example.org/papers/lejepa.pdf",
+      "file" : "lejepa.pdf",
+      "kind" : "web",
+      "pdf" : "https://example.org/papers/lejepa.pdf",
+      "text" : "example.org/papers/lejepa.pdf",
+      "value" : "https://example.org/papers/lejepa.pdf"
+    },
+    {
+      "address" : "https://proceedings.neurips.cc/paper_files/paper/2023/file/abcd-Paper-Conference.pdf",
+      "file" : "abcd-Paper-Conference.pdf",
+      "kind" : "web",
+      "pdf" : "https://proceedings.neurips.cc/paper_files/paper/2023/file/abcd-Paper-Conference.pdf",
+      "text" : "https://proceedings.neurips.cc/paper_files/paper/2023/file/abcd-Paper-Conference.pdf",
+      "value" : "https://proceedings.neurips.cc/paper_files/paper/2023/file/abcd-Paper-Conference.pdf"
+    },
+    {
+      "address" : "https://example.org/",
+      "file" : "paper.pdf",
+      "kind" : "web",
+      "pdf" : "https://example.org/",
+      "text" : "https://example.org/",
+      "value" : "https://example.org/"
+    },
+    {
+      "text" : "not an address"
+    },
+    {
+      "text" : "two words here"
+    },
+    {
+      "text" : ""
+    },
+    {
+      "text" : "ftp://example.org/x.pdf"
+    },
+    {
+      "text" : "10.12/short"
+    },
+    {
+      "address" : "https://arxiv.org/abs/",
+      "file" : "abs.pdf",
+      "kind" : "web",
+      "pdf" : "https://arxiv.org/abs/",
+      "text" : "https://arxiv.org/abs/",
+      "value" : "https://arxiv.org/abs/"
+    },
+    {
+      "text" : "arXiv:"
+    },
+    {
+      "address" : "https://doi.org/",
+      "file" : "paper.pdf",
+      "kind" : "web",
+      "pdf" : "https://doi.org/",
+      "text" : "https://doi.org/",
+      "value" : "https://doi.org/"
+    }
+  ],
+  "openAlex" : [
+    {
+      "json" : "{\"id\":\"https://openalex.org/W1\",\"open_access\":{\"oa_url\":\"https://arxiv.org/pdf/2512.11732\"},\"best_oa_location\":{\"pdf_url\":\"https://arxiv.org/pdf/2512.11732v2\",\"landing_page_url\":\"https://arxiv.org/abs/2512.11732\"},\"primary_location\":{\"pdf_url\":null,\"landing_page_url\":\"https://doi.org/10.1/x\"},\"locations\":[{\"pdf_url\":\"https://arxiv.org/pdf/2512.11732v2\"},{\"pdf_url\":\"https://publisher.example/x.pdf\"},{\"pdf_url\":null}]}",
+      "pdfs" : [
+        "https://arxiv.org/pdf/2512.11732v2",
+        "https://publisher.example/x.pdf",
+        "https://arxiv.org/pdf/2512.11732"
+      ]
+    },
+    {
+      "json" : "{\"id\":\"https://openalex.org/W2\",\"open_access\":{\"oa_url\":null},\"best_oa_location\":null,\"primary_location\":{\"pdf_url\":null},\"locations\":[]}",
+      "pdfs" : [
+
+      ]
+    },
+    {
+      "json" : "{\"id\":\"https://openalex.org/W3\",\"open_access\":{\"oa_url\":\"https://europepmc.org/articles/PMC1/pdf\"},\"best_oa_location\":null,\"locations\":[{\"pdf_url\":\"ftp://nope/x.pdf\"}]}",
+      "pdfs" : [
+        "https://europepmc.org/articles/PMC1/pdf"
+      ]
+    },
+    {
+      "json" : "not json",
+      "pdfs" : [
+
+      ]
+    }
+  ]
+}

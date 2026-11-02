@@ -27,8 +27,9 @@ import { SketchElement } from '../../shared/sketch.js'
 import { InkStroke } from '../../shared/ink.js'
 import { drawElements, drawInk, drawMarks } from '../../shared/sketchRender.js'
 import { linesFromRuns } from '../../shared/textLines.js'
-import type { Mark } from '../../shared/marks.js'
+import { HIGHLIGHT_BAND_DROP, cssColor, highlightBand, highlightInk, quadToRect, type Mark } from '../../shared/marks.js'
 import type { PageRendering } from '../../shared/pageTint.js'
+import { pixelRect } from '../../shared/pageImages.js'
 import {
   applyInverseTransform, applyTransform, devicePixels, pageViewport, type PageShape, type Viewport,
 } from '../../shared/readerMath.js'
@@ -79,6 +80,10 @@ export class PageView {
   canvas: HTMLCanvasElement
   /** Highlights and underlines, on a surface of their own. See `redraw`. */
   markCanvas: HTMLCanvasElement
+  /** The words under the highlights, in each highlight's ink (`paintMarkInk`). */
+  markInkCanvas: HTMLCanvasElement
+  /** What the ink canvas was last painted for: the page's pixels and every band. */
+  private markInkKey = ''
   /** What a search found on this page — boxes over the words, multiplied
    *  onto the page like a highlight, but never written anywhere. */
   findLayer: HTMLElement
@@ -180,6 +185,7 @@ export class PageView {
     this.shape = shape
     this.canvas = el('canvas', { class: 'page-canvas' })
     this.markCanvas = el('canvas', { class: 'mark-canvas' })
+    this.markInkCanvas = el('canvas', { class: 'mark-ink' })
     this.findLayer = el('div', { class: 'find-layer' })
     this.drawCanvas = el('canvas', { class: 'draw-canvas' })
     this.overlayCanvas = el('canvas', { class: 'draw-canvas draw-overlay' })
@@ -187,6 +193,7 @@ export class PageView {
     this.print = el('div', { class: 'page-print' }, [
       this.canvas,
       this.markCanvas,
+      this.markInkCanvas,
       this.quoteLayer,
       this.findLayer,
       this.drawCanvas,
@@ -433,10 +440,11 @@ export class PageView {
     this.stop()
     if (this.composeFrame) cancelAnimationFrame(this.composeFrame)
     this.composeFrame = 0
-    for (const canvas of [this.canvas, this.markCanvas, this.drawCanvas, this.overlayCanvas]) {
+    for (const canvas of [this.canvas, this.markCanvas, this.markInkCanvas, this.drawCanvas, this.overlayCanvas]) {
       canvas.width = 0
       canvas.height = 0
     }
+    this.markInkKey = ''
     this.images.clear()
     clear(this.textLayer)
     clear(this.findLayer)
@@ -819,6 +827,7 @@ export class PageView {
       this.markCanvas.width = 0
       this.markCanvas.height = 0
     }
+    this.paintMarkInk()
     if (this.strokes.length > 0 || this.elements.length > 0) {
       const context = this.surface(this.drawCanvas)
       if (context) {
@@ -833,6 +842,119 @@ export class PageView {
     // The pictures carry a copy of what is drawn over them — once a frame,
     // however many strokes a frame brings.
     if (this.rendering === 'night') this.composeSoon()
+  }
+
+  /**
+   * The words under the page's highlights, recoloured in each highlight's
+   * ink — the Mac's `MarkInkView`, and the way Apple Notes colours a
+   * highlighted word: a deep shade of the highlighter over a pale band of
+   * it. The band is multiplied onto the page and can make black ink nothing
+   * but black, so the page's own pixels under each band are copied out
+   * (the page canvas holds the page as printed; nothing is rendered again),
+   * their darkness taken as the alpha of the ink, and laid over the page
+   * plainly on a canvas the size of the bands together. Inside
+   * `.page-print`, so night turns the deep ink over into a light shade of
+   * the same colour. Painted again only when the page's pixels or the bands
+   * change — a hover changes the band, not the ink.
+   */
+  private paintMarkInk() {
+    const target = this.markInkCanvas
+    const page = this.canvas
+    const highlights = this.marks.filter((mark) => mark.kind === 'highlight')
+    const nothing = () => {
+      if (target.width !== 0) {
+        target.width = 0
+        target.height = 0
+      }
+      this.markInkKey = ''
+    }
+    if (!this.painted || !this.viewport || page.width === 0 || highlights.length === 0) return nothing()
+    const dpr = devicePixels(window.devicePixelRatio)
+    type Px = { x: number; y: number; width: number; height: number }
+    const boxes: { box: Px; ink: [number, number, number]; band: [number, number, number]; radius: number; reach: Px }[] = []
+    let key = `${page.width}x${page.height};`
+    for (const mark of highlights) {
+      const ink = highlightInk(mark.color)
+      const band = highlightBand(mark.color)
+      for (const quad of mark.quads) {
+        const rect = quadToRect(quad)
+        if (rect.width <= 0 || rect.height <= 0) continue
+        const drop = rect.height * HIGHLIGHT_BAND_DROP
+        const bandRect = { x: rect.x, y: rect.y - drop, width: rect.width, height: rect.height + drop }
+        const box = pixelRect(bandRect, this.viewport.transform, dpr, page)
+        if (!box) continue
+        // The band's corners, in pixels (`markLine`'s radius).
+        const radius = Math.min(rect.height * 0.3, 3.5) * (box.height / bandRect.height)
+        // The ink stays inside the band (the Mac's `MarkInkView`). It once
+        // reached 2pt past it for an italic's first stroke — and reached the
+        // first letter of the next word, which came up half-coloured.
+        const reach = box
+        boxes.push({ box, ink, band, radius, reach })
+        key += `${box.x},${box.y},${box.width},${box.height}:${ink.map((v) => v.toFixed(3)).join(',')};`
+      }
+    }
+    if (boxes.length === 0) return nothing()
+    if (key === this.markInkKey && target.width !== 0) return
+    const left = Math.min(...boxes.map(({ reach }) => reach.x))
+    const top = Math.min(...boxes.map(({ reach }) => reach.y))
+    const right = Math.max(...boxes.map(({ reach }) => reach.x + reach.width))
+    const bottom = Math.max(...boxes.map(({ reach }) => reach.y + reach.height))
+    if (target.width !== right - left || target.height !== bottom - top) {
+      target.width = right - left
+      target.height = bottom - top
+    }
+    Object.assign(target.style, {
+      left: `${(100 * left) / page.width}%`,
+      top: `${(100 * top) / page.height}%`,
+      width: `${(100 * (right - left)) / page.width}%`,
+      height: `${(100 * (bottom - top)) / page.height}%`,
+      right: 'auto',
+      bottom: 'auto',
+    })
+    const context = target.getContext('2d', { willReadFrequently: true })
+    if (!context) return nothing()
+    context.setTransform(1, 0, 0, 1, 0, 0)
+    context.globalCompositeOperation = 'source-over'
+    context.clearRect(0, 0, target.width, target.height)
+    // The ink, one box at a time, through a scratch: the page's pixels
+    // turned into the ink colour with their darkness as alpha.
+    const scratch = document.createElement('canvas')
+    for (const { box, ink, band, radius, reach } of boxes) {
+      const [dx, dy] = [box.x - left, box.y - top]
+      scratch.width = reach.width
+      scratch.height = reach.height
+      const inkContext = scratch.getContext('2d', { willReadFrequently: true })
+      if (!inkContext) continue
+      inkContext.drawImage(page, reach.x, reach.y, reach.width, reach.height, 0, 0, reach.width, reach.height)
+      const image = inkContext.getImageData(0, 0, reach.width, reach.height)
+      const data = image.data
+      const [red, green, blue] = ink.map((v) => Math.round(v * 255))
+      for (let at = 0; at < data.length; at += 4) {
+        const luma = 0.299 * data[at] + 0.587 * data[at + 1] + 0.114 * data[at + 2]
+        data[at] = red
+        data[at + 1] = green
+        data[at + 2] = blue
+        // The page's own darkness, as is: boosted, every letter's edge
+        // thickened and the words looked smeared.
+        data[at + 3] = Math.min(255, Math.max(0, 255 - luma))
+      }
+      inkContext.putImageData(image, 0, 0)
+      // The band first, opaque, inside its rounded shape: the words' own
+      // black has to be gone before the ink goes on, or the ink's soft edges
+      // mix with black and the words look painted over rather than printed
+      // in the colour.
+      context.save()
+      context.beginPath()
+      context.roundRect(dx, dy, box.width, box.height, radius)
+      context.clip()
+      context.fillStyle = cssColor(band)
+      context.fillRect(dx, dy, box.width, box.height)
+      // The ink inside the same rounded shape: nothing on top of the words
+      // as printed.
+      context.drawImage(scratch, reach.x - left, reach.y - top)
+      context.restore()
+    }
+    this.markInkKey = key
   }
 
   /** Only the gesture's layer: handles, a marquee, what is in the hand. */

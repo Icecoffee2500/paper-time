@@ -35,6 +35,10 @@ export interface Settings {
   resolveMetadataOnImport: boolean
   /** Sent to Crossref and OpenAlex, which answer faster when a request names a contact. Empty is none. */
   metadataContactEmail: string
+  /** «Keep PDFs out of files»: a paper added by address is not written to
+   *  the folder, and is fetched again each time it opens — for a company
+   *  computer whose security agent swallows PDF files. Off unless turned on. */
+  keepPDFsInMemory: boolean
   /** What stands under a title in the list — the Mac's `listSubtitleFields`. */
   listSubtitle: string
   /** «Protect Case in Titles» for the `.bib`. On unless turned off. */
@@ -79,6 +83,7 @@ export const DEFAULTS: Settings = {
   semanticSearch: true,
   resolveMetadataOnImport: true,
   metadataContactEmail: '',
+  keepPDFsInMemory: false,
   listSubtitle: 'authors,year,venue',
   bibtexProtectCase: true,
   bibtexPreprintStyle: 'eprint',

@@ -10,7 +10,7 @@ import { isCommand, platform } from './bridge.js'
 import { eventIs } from '../shared/shortcuts.js'
 import { on } from './dom.js'
 import { changed, readerState, setSketchTool, store, type SketchTool } from './state.js'
-import { findBar, focused, readers } from './pageArea.js'
+import { findBar, focused, readerOf } from './pageArea.js'
 import { closeWindowOrPane, showOpenPapersPopup } from './actions/openPapers.js'
 import { closeOpenPapers, isOpenPapersShowing } from './ui/openPapers.js'
 import { closePalette, isPaletteOpen } from './ui/search.js'
@@ -36,7 +36,7 @@ export function applyUndo(redo: boolean) {
   // Into the paper the step was taken in, or nowhere. Put into whichever
   // paper happened to be in front, an undo wrote one paper's page over
   // another's.
-  const target = snapshot.paperID ? readers.get(snapshot.paperID) ?? null : focused()
+  const target = snapshot.paperID ? readerOf(snapshot.paperID) : focused()
   if (!target) return
   // A step may cover two pages — a selection carried from one to the other.
   target.restore(snapshot)

@@ -9,7 +9,8 @@
  * Pure apart from the typesetter it is handed, so a test can run it with a
  * stub and no window (`src/test/noteHTML.ts`).
  */
-import { blankingCode, emphasisClasses, emphasisPieces, markerClass, planNote, type InlineToken, type PlannedLine } from '../../../shared/noteMarkdown.js'
+import { blankingCode, emphasisClasses, emphasisPieces, highlightClasses, markerClass, planNote, type InlineToken, type PlannedLine } from '../../../shared/noteMarkdown.js'
+import { highlightCSSVariables } from '../../../shared/marks.js'
 import { numberFormulas, type MathSetter, type Numbered } from '../../../shared/mathJax.js'
 import { parseTable, tableBlocks, type Table } from '../../../shared/noteTable.js'
 import { codeBlocks, codeLanguageName, codeOf, type CodeBlock } from '../../../shared/noteCode.js'
@@ -157,6 +158,10 @@ function tokenHTML(token: InlineToken, source: string, line: PlannedLine, counte
       const tag = token.mono ? 'code' : token.bold ? 'strong' : 'em'
       return `<${tag} class="${emphasisClasses(token)}">${escapeHTML(token.text)}</${tag}>`
     }
+    case 'highlight':
+      return `<mark class="${highlightClasses(token.color)}">${escapeHTML(token.text)}</mark>`
+    case 'arrow':
+      return token.right ? '→' : '←'
     case 'math': {
       const text = source.slice(token.from, token.to)
       const block = text.includes('\n')
@@ -288,6 +293,13 @@ h4.nm-h, h5.nm-h, h6.nm-h { font-size: 16px; }
 .nm-link, .nm-note-link { color: var(--accent); text-decoration: underline; }
 .nm-bold { font-weight: 700; }
 .nm-italic { font-style: italic; }
+:root { ${highlightCSSVariables().light.replaceAll('\n', ' ')} }
+.nm-hl { border-radius: 3.5px; padding: 0.03em 0.125em 0.12em; margin: 0 -0.125em; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.nm-hl-yellow { color: var(--hl-yellow-ink); background: var(--hl-yellow-band); }
+.nm-hl-green { color: var(--hl-green-ink); background: var(--hl-green-band); }
+.nm-hl-blue { color: var(--hl-blue-ink); background: var(--hl-blue-band); }
+.nm-hl-pink { color: var(--hl-pink-ink); background: var(--hl-pink-band); }
+.nm-hl-purple { color: var(--hl-purple-ink); background: var(--hl-purple-band); }
 .nm-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.85em; color: #eb5757; background: rgba(135, 131, 120, 0.15); border-radius: 4px; padding: 0.2em 0.4em; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .nm-math svg { vertical-align: middle; }
 .nm-math-display, .nm-math-block { max-width: 100%; }
