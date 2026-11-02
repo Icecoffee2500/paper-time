@@ -230,6 +230,55 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "1.0.0",
+            date: Text2("2026년 11월", "November 2026"),
+            note: Text2(
+                "베타를 뗐어요. 1.0은 논문을 읽고, 표시하고, 수식째 복사하는 앱이에요 — 그 둘레에 붙었던 것 몇 가지는 2.0으로 미뤄 뒀어요.",
+                "The beta is over. 1.0 is an app for reading a paper, marking it and copying it formulas and all — a few things that had grown around that wait for 2.0."
+            ),
+            added: [
+                Entry(
+                    Text2("논문인지 문서인지, 둘 중 하나", "A paper, or a document"),
+                    Text2(
+                        "종류가 넷에서 둘로 줄었어요. 책은 논문 쪽이에요 — 종류를 «책»으로 두면 BibTeX에 @book으로 나가요. 강의 슬라이드는 문서예요. 옛 기록은 그대로 읽혀요.",
+                        "Four kinds became two. A book is a paper — set its type to Book and it exports as @book. Lecture slides are documents. Old records read as they are."
+                    )
+                ),
+                Entry(
+                    Text2("영역으로 묶인 소개", "A showcase in five areas"),
+                    Text2(
+                        "환영 시트와 정보의 소개가 복사·표시·읽기·노트·라이브러리 다섯 영역으로 묶였어요. 위의 캡슐을 누르면 그 영역으로 건너뛰어요.",
+                        "The welcome sheet and About group their pages into five areas — copy, mark, read, notes, library. Press a capsule above the card to jump to one."
+                    )
+                ),
+                Entry(
+                    Text2("Zotero·Bookends에서 옮겨 오기 안내", "Moving in from Zotero and Bookends"),
+                    Text2(
+                        "설명서에 두 앱에서 내보내는 순서를 적었어요. Zotero는 «파일 내보내기»를 켜야 PDF가 짝이 맞아요. RIS 내보내기의 파일 경로도 이제 읽어요.",
+                        "The manual walks through exporting from both apps. In Zotero, turn on Export Files so the PDFs pair up. RIS exports’ file paths are read now too."
+                    )
+                ),
+            ],
+            removed: [
+                Entry(
+                    Text2("2.0으로 미룬 것", "Set aside for 2.0"),
+                    Text2(
+                        "손글씨 읽기, 지도·초안·공명, 논문 그래프, 빈 찾기 칸의 제안, 원본 글자 되살리기, 논문 없는 노트의 폴더 고르기, 그리고 아이패드·아이폰 앱이에요. 파일은 그대로 읽히고 — 0.9에서 만든 지도도 열려요 — 만드는 단추만 내렸어요. 1.0은 데스크톱 앱이에요.",
+                        "Handwriting, maps, drafts and resonance, the paper graph, the empty search field’s offers, Restore Original Text, choosing a folder for notes without a paper, and the iPad and iPhone apps. The files still read — a map made in 0.9 still opens — only the controls that make them are gone. 1.0 is a desktop app."
+                    )
+                ),
+            ],
+            fixed: [
+                Entry(
+                    Text2("RIS로 가져올 때 PDF가 짝이 안 맞던 것", "RIS imports never found their PDFs"),
+                    Text2(
+                        "Zotero와 EndNote가 RIS에 PDF 경로를 적는 L1 줄을 읽지 않아서, RIS로 가져온 기록은 전부 PDF 없이 들어왔어요.",
+                        "The L1 line where Zotero and EndNote put the PDF’s path was not read, so every record imported from RIS came in without its document."
+                    )
+                ),
+            ]
+        ),
+        Release(
             version: "0.9.37",
             date: Text2("2026년 11월", "November 2026"),
             note: Text2(

@@ -532,11 +532,11 @@ export function showSettings(actions: SettingsActions, section?: SettingsSection
   // the version, the people who told us something, and the way to the rest.
   const aboutPage = () => {
     aboutShowcase = showcase()
-    const versionLine = el('p', { class: 'set-note rn-about-version', text: version ? L(`버전 ${version} · 베타`, `Version ${version} · Beta`) : '' })
+    const versionLine = el('p', { class: 'set-note rn-about-version', text: version ? L(`버전 ${version}`, `Version ${version}`) : '' })
     if (!version) {
       void call('app:about').then((answer) => {
         version = answer.version
-        versionLine.textContent = L(`버전 ${version} · 베타`, `Version ${version} · Beta`)
+        versionLine.textContent = L(`버전 ${version}`, `Version ${version}`)
       }).catch(() => undefined)
     }
     body.append(el('div', { class: 'rn-about-head' }, [el('h3', { class: 'rn-about-name', text: 'Paper Time' }), versionLine]))

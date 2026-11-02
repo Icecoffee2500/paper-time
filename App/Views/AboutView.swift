@@ -389,8 +389,8 @@ private struct AboutHeader: View {
                     Text("Paper Time")
                         .font(.system(size: 24, weight: .bold))
                     Text(ReleaseNotes.string(
-                        "버전 \(ReleaseNotes.version) · 베타",
-                        "Version \(ReleaseNotes.version) · Beta"
+                        "버전 \(ReleaseNotes.version)",
+                        "Version \(ReleaseNotes.version)"
                     ))
                     .font(.callout)
                     .foregroundStyle(.secondary)
