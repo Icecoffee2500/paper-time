@@ -276,6 +276,13 @@ enum ReleaseNotes {
                         "The L1 line where Zotero and EndNote put the PDF’s path was not read, so every record imported from RIS came in without its document."
                     )
                 ),
+                Entry(
+                    Text2("DOI를 넣었는데 아무 일도 없던 것", "A DOI that did nothing"),
+                    Text2(
+                        "열린 사본이 없는 논문은 출판사의 파일도 짚어 봐요 — 구독 중인 네트워크면 받아져요. 회사 네트워크가 OpenAlex를 막으면 그렇다고 말하고, 못 받으면 PDF를 끌어다 놓으라고 해요.",
+                        "A paper without an open copy is also tried at its publisher — on a subscribed network it comes through. When a network blocks OpenAlex the sheet says so, and when nothing comes it asks for the PDF itself."
+                    )
+                ),
             ]
         ),
         Release(
