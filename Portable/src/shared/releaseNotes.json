@@ -1,6 +1,101 @@
 {
  "releases": [
   {
+   "version": "1.0.0",
+   "date": {
+    "ko": "2026년 11월",
+    "en": "November 2026"
+   },
+   "note": {
+    "ko": "베타를 뗐어요. 1.0은 논문을 읽고, 표시하고, 수식째 복사하는 앱이에요 — 그 둘레에 붙었던 것 몇 가지는 2.0으로 미뤄 뒀어요.",
+    "en": "The beta is over. 1.0 is an app for reading a paper, marking it and copying it formulas and all — a few things that had grown around that wait for 2.0."
+   },
+   "added": [
+    {
+     "title": {
+      "ko": "논문인지 문서인지, 둘 중 하나",
+      "en": "A paper, or a document"
+     },
+     "detail": {
+      "ko": "종류가 넷에서 둘로 줄었어요. 책은 논문 쪽이에요 — 종류를 «책»으로 두면 BibTeX에 @book으로 나가요. 강의 슬라이드는 문서예요. 옛 기록은 그대로 읽혀요.",
+      "en": "Four kinds became two. A book is a paper — set its type to Book and it exports as @book. Lecture slides are documents. Old records read as they are."
+     },
+     "devices": [
+      "mac"
+     ]
+    },
+    {
+     "title": {
+      "ko": "영역으로 묶인 소개",
+      "en": "A showcase in five areas"
+     },
+     "detail": {
+      "ko": "환영 시트와 정보의 소개가 복사·표시·읽기·노트·라이브러리 다섯 영역으로 묶였어요. 위의 캡슐을 누르면 그 영역으로 건너뛰어요.",
+      "en": "The welcome sheet and About group their pages into five areas — copy, mark, read, notes, library. Press a capsule above the card to jump to one."
+     },
+     "devices": [
+      "mac"
+     ]
+    },
+    {
+     "title": {
+      "ko": "Zotero·Bookends에서 옮겨 오기 안내",
+      "en": "Moving in from Zotero and Bookends"
+     },
+     "detail": {
+      "ko": "설명서에 두 앱에서 내보내는 순서를 적었어요. Zotero는 «파일 내보내기»를 켜야 PDF가 짝이 맞아요. RIS 내보내기의 파일 경로도 이제 읽어요.",
+      "en": "The manual walks through exporting from both apps. In Zotero, turn on Export Files so the PDFs pair up. RIS exports’ file paths are read now too."
+     },
+     "devices": [
+      "mac"
+     ]
+    }
+   ],
+   "removed": [
+    {
+     "title": {
+      "ko": "2.0으로 미룬 것",
+      "en": "Set aside for 2.0"
+     },
+     "detail": {
+      "ko": "손글씨 읽기, 지도·초안·공명, 논문 그래프, 빈 찾기 칸의 제안, 원본 글자 되살리기, 논문 없는 노트의 폴더 고르기, 그리고 아이패드·아이폰 앱이에요. 파일은 그대로 읽히고 — 0.9에서 만든 지도도 열려요 — 만드는 단추만 내렸어요. 1.0은 데스크톱 앱이에요.",
+      "en": "Handwriting, maps, drafts and resonance, the paper graph, the empty search field’s offers, Restore Original Text, choosing a folder for notes without a paper, and the iPad and iPhone apps. The files still read — a map made in 0.9 still opens — only the controls that make them are gone. 1.0 is a desktop app."
+     },
+     "devices": [
+      "mac"
+     ]
+    }
+   ],
+   "fixed": [
+    {
+     "title": {
+      "ko": "RIS로 가져올 때 PDF가 짝이 안 맞던 것",
+      "en": "RIS imports never found their PDFs"
+     },
+     "detail": {
+      "ko": "Zotero와 EndNote가 RIS에 PDF 경로를 적는 L1 줄을 읽지 않아서, RIS로 가져온 기록은 전부 PDF 없이 들어왔어요.",
+      "en": "The L1 line where Zotero and EndNote put the PDF’s path was not read, so every record imported from RIS came in without its document."
+     },
+     "devices": [
+      "mac"
+     ]
+    },
+    {
+     "title": {
+      "ko": "DOI를 넣었는데 아무 일도 없던 것",
+      "en": "A DOI that did nothing"
+     },
+     "detail": {
+      "ko": "열린 사본이 없는 논문은 출판사의 파일도 짚어 봐요 — 구독 중인 네트워크면 받아져요. 회사 네트워크가 OpenAlex를 막으면 그렇다고 말하고, 못 받으면 PDF를 끌어다 놓으라고 해요.",
+      "en": "A paper without an open copy is also tried at its publisher — on a subscribed network it comes through. When a network blocks OpenAlex the sheet says so, and when nothing comes it asks for the PDF itself."
+     },
+     "devices": [
+      "mac"
+     ]
+    }
+   ]
+  },
+  {
    "version": "0.9.37",
    "date": {
     "ko": "2026년 11월",
@@ -4259,6 +4354,117 @@
  ],
  "highlights": [
   {
+   "symbol": "function",
+   "title": {
+    "ko": "Ultracopy — 수식은 LaTeX으로, 글은 글로",
+    "en": "Ultracopy — the words as words, the mathematics as LaTeX"
+   },
+   "detail": {
+    "ko": "PDF에서 수식이 든 문단을 ⌘C로 복사하면 수식이 글자 부스러기로 깨져 나온다. Ultracopy(⇧⌘C)는 같은 선택에서 글은 그대로, 수식은 그대로 쓸 수 있는 LaTeX으로 돌려준다. 아래에서 둘을 직접 눌러 비교해 보라.",
+    "en": "⌘C on a passage with an equation in it gives you the formula as a spill of characters. Ultracopy (⇧⌘C) gives the same selection back with the words as words and the mathematics as LaTeX you can paste as it is. Press both below and compare."
+   },
+   "area": "copying",
+   "action": "ultracopy",
+   "demo": "ultracopy"
+  },
+  {
+   "symbol": "highlighter",
+   "title": {
+    "ko": "표시는 PDF 안에 남고, 여기서는 더 예쁘다",
+    "en": "Your marks go into the PDF — and look better here"
+   },
+   "detail": {
+    "ko": "형광펜과 밑줄이 옆에 붙은 데이터베이스가 아니라 파일 자체에 기록된다. 미리보기든 아이패드든 십 년 뒤든 표시는 그대로다. 그리고 이 앱 안에서는 형광펜의 끝이 둥글고 글자가 살 만큼 연하며, 밑줄은 눈에 띄게 짙고, 마우스를 올리면 밝아진다. 수식이 든 줄에서 다른 앱은 상자가 줄 높이만큼 자라지만, 여기서는 글자의 잉크를 재서 사람이 그은 것처럼 딱 맞게 덮는다 — 파일은 그대로 두고 그리는 법만 바꾼 것이라 다른 앱에서는 볼 수 없는 생김새다. 노트의 인용구도 같은 모양이다. 아래에서 둘을 나란히 보라.",
+    "en": "Highlights and underlines are written into the file itself, not into a database beside it — Preview, an iPad, ten years from now, the marks are there. And in here a highlight has rounded ends and stays pale enough to read through, an underline is dark enough to see, and either brightens under the pointer. On a line carrying a formula, other apps grow the box to the height of the line; here the ink of the letters is measured and the band fits them the way a hand-drawn stroke does. The file is untouched; only the drawing is ours, which is why no other PDF app looks like this. A quotation in a note wears the same shape. Compare the two side by side below."
+   },
+   "area": "marking",
+   "demo": "annotations"
+  },
+  {
+   "symbol": "pencil.and.outline",
+   "title": {
+    "ko": "맥에서도 자유롭게 그린다 — 도형·화살표·카드·펜",
+    "en": "Draw freely on the Mac: shapes, arrows, cards, pen"
+   },
+   "detail": {
+    "ko": "PDF 앱의 필기는 딱딱하다 — 네모 하나, 메모 아이콘 하나. 여기서는 펜을 들면(⇧⌘D) 쪽 위에 Figma의 도구 줄이 뜬다: 선택 V, 프레임 F, 도형(네모 R·동그라미 O·선 L·화살표 A), 펜(P·형광펜 H·지우개 E), 글 T — 한 글자로 바꾼다. 화살표는 가운데 손잡이를 끌면 XMind처럼 구부러지고, 상자를 두 번 누르면 그 안에 글을 쓰고, 글은 종이 위에 바로 쓴다. 프레임 안에 넣고(F), 묶고(⌘G), 줄이나 열로 정렬한다(⇧A). 오른쪽 인스펙터에 위치·크기·간격·투명도·모서리·채움·외곽선·글자 크기가 숫자로 있다. 형광펜은 아이패드처럼 글자에 맞춰지고, 지우개는 선·도형·하이라이트를 함께 지운다. 모두 ⌘Z. 그리고 전부 PDF 안에 표준 주석으로도 기록되어 아이패드·아이폰·Preview에서 같은 자리에 보인다. 아래 카드를 끌어 보라 — 화살표가 따라온다.",
+    "en": "Drawing in a PDF app is stiff: one box, one note icon. Here, take the pencil out (⇧⌘D) and Figma's tool rack floats over the page: Select V, Frame F, the shapes (rectangle R, ellipse O, line L, arrow A), the pen (P, highlighter H, eraser E), Text T — one letter each. An arrow bends when its middle handle is pulled, the way XMind's do; double-click a box to write inside it; text is typed straight onto the page. Put things in a frame (F), group them (⌘G), line them up in a row or a column (⇧A). The inspector on the right has position, size, gap, opacity, corners, fill, stroke and text size as numbers. The highlighter fits itself to the words as on the iPad; the eraser takes strokes, shapes and highlights together. All of it undoes with ⌘Z. And all of it is written into the PDF as standard annotations too, so the iPad, the iPhone and Preview show it in the same place. Drag the card below — the arrow follows."
+   },
+   "area": "marking",
+   "action": "draw",
+   "demo": "sketch"
+  },
+  {
+   "symbol": "book",
+   "title": {
+    "ko": "책처럼 펼쳐서 읽는다",
+    "en": "Read it like a book"
+   },
+   "detail": {
+    "ko": "⌘3이면 1·2쪽이 마주 보며 창을 가득 채운다. ←→나 스페이스로 장을 넘기고, 트랙패드로 넘겨도 된다. 아래에는 지금 몇 쪽인지와 얼마나 읽었는지가 있고, ⇧⌘L이면 두 쪽 사이 여백에 이 논문의 목차가 떠서 절로 바로 간다. ⌘1은 연속 스크롤, ⌘2는 한 장씩 — 배치를 바꿔도 보던 쪽은 그대로다.",
+    "en": "⌘3 and pages 1 and 2 face each other across the window. ← → or the space bar turn the page, and so does a swipe. Underneath, which pages these are and how far in you are; ⇧⌘L drops the paper's own table of contents into the gutter between the pages, and a section is one click away. ⌘1 scrolls, ⌘2 shows one page — and changing layout keeps the page you were on."
+   },
+   "area": "reading",
+   "action": "layoutBook",
+   "demo": "book"
+  },
+  {
+   "symbol": "book.pages",
+   "title": {
+    "ko": "책에서 절 사이를 오간다",
+    "en": "A book you move through by section"
+   },
+   "detail": {
+    "ko": "두 쪽이 마주 보고, ←→와 스페이스와 트랙패드로 장을 넘긴다. 다른 앱은 PDF의 쪽을 그대로 나란히 놓아서 논문마다 여백이 달라지고 펼침면이 한쪽으로 몰리지만, 여기서는 쪽을 글에 맞춰 잘라 — 스캔한 교과서까지 — 좌우 여백이 같고 두 쪽 사이는 늘 같은 폭이며, 여백에 세로로 찍힌 arXiv 도장은 지워진다. 아래에는 지금 몇 쪽인지와 얼마나 읽었는지. ⇧⌘L이면 이 논문의 목차가 두 쪽 사이 여백에 떠서 — 글자는 가리지 않고 — 절을 누르는 대로 그리로 간다. 목차는 Esc나 다른 곳을 누르기 전까지 남는다. 아래에서 '다른 PDF 앱'을 눌러 비교해 보라.",
+    "en": "Two pages face each other; ← →, the space bar and a swipe turn them. Other apps set the PDF's pages side by side as they are, so the margins change from paper to paper and the spread sits off to one side; here each page is cropped to its text — a scanned textbook included — so the margins match on both sides, the gutter is always the same width, and the arXiv stamp running up the margin is painted out. Underneath, which pages these are and how far in you are. ⇧⌘L floats this paper's table of contents into the gutter between the pages, covering no words, and each section is one click; it stays until Escape or a click elsewhere. Press \"Other PDF apps\" below and compare."
+   },
+   "area": "reading",
+   "action": "floatingList",
+   "demo": "bookReading"
+  },
+  {
+   "symbol": "rectangle.center.inset.filled",
+   "title": {
+    "ko": "논문만 남긴다",
+    "en": "Only the paper"
+   },
+   "detail": {
+    "ko": "⇧⌘F 한 번에 사이드바·목록·인스펙터가 비켜서고 논문만 남는다. 열려 있던 것은 기억해 두고, 나올 때 그대로 돌려준다. 그 안에서도 ⇧⌘L로 목차를 불러 절을 옮겨 다닐 수 있다.",
+    "en": "One ⇧⌘F and the sidebar, the list and the inspector step aside, leaving the paper. What was open is remembered and given back on the way out. ⇧⌘L still brings the table of contents, so you can move between sections without leaving."
+   },
+   "area": "reading",
+   "action": "focus",
+   "demo": "focus"
+  },
+  {
+   "symbol": "sidebar.left",
+   "title": {
+    "ko": "창은 내가 접는 대로 있는다",
+    "en": "The window folds to what you are doing"
+   },
+   "detail": {
+    "ko": "사이드바·목록·논문·인스펙터가 각자 자기 키로 숨는다. 남은 것이 빈자리를 나눠 갖는 대신, 숨은 것 뒤에 있던 것이 드러난다. 패널 사이의 틈을 끌면 크기가 바뀐다.",
+    "en": "The sidebar, the list, the paper and the inspector each hide on their own key — revealing what was behind rather than stretching to fill the gap. Drag the space between two of them to resize."
+   },
+   "area": "reading",
+   "action": "sidebar",
+   "demo": "panes"
+  },
+  {
+   "symbol": "quote.opening",
+   "title": {
+    "ko": "인용한 구절은 주소를 갖는다",
+    "en": "A passage keeps its address"
+   },
+   "detail": {
+    "ko": "선택한 글을 노트로 보내면 인용구로 앉는다. 누르면 그 글이 있던 페이지의 정확한 자리로 돌아간다.",
+    "en": "Send the selected text to a note and it arrives as a quotation you can click to go back to the exact place on the page it came from."
+   },
+   "area": "notes",
+   "action": "linkToNote",
+   "demo": "passageLink"
+  },
+  {
    "symbol": "text.quote",
    "title": {
     "ko": "쪽에서 노트로 돌아가요",
@@ -4268,21 +4474,22 @@
     "ko": "⌘L로 노트에 넣은 구절을 쪽 위에서도 연한 강조색으로 칠해요. 줄 가운데서 시작한 인용은 그 낱말부터 칠해요. 칠한 곳을 누르면 오른쪽 노트 칸이 그 노트를 열고, 인용으로 가서 잠깐 반짝여요. 노트의 쪽수를 누르면 쪽으로 가고, 쪽의 칠한 구절을 누르면 노트로 와요. 아래에서 눌러 보세요.",
     "en": "A passage you quote with ⌘L stays tinted on the page, in a pale shade of your accent colour, from the very word it starts with. Click it and the note opens at that quotation, which glows for a moment. The page number in the note takes you to the page, and the tinted passage brings you back. Try it below."
    },
-   "tier": "one",
+   "area": "notes",
    "demo": "quoteLink"
   },
   {
-   "symbol": "sparkle.magnifyingglass",
+   "symbol": "tray.full",
    "title": {
-    "ko": "낱말이 아니라 뜻으로 찾아요",
-    "en": "Search by meaning, not by the word"
+    "ko": "PDF 더미가 아니라 슬립박스",
+    "en": "A slip-box, not a pile of PDFs"
    },
    "detail": {
-    "ko": "«모델이 왜 잊는지»라고 치면, 그 낱말이 하나도 없는 구절도 나와요 — «첫 과제의 정확도가 두 번째 과제를 배우자 급히 떨어진다» 같은 문장이요. 찾기(⌘K)의 정확히 맞는 결과 아래에 «뜻이 비슷한 구절»로 서요. 작은 모델이 이 맥에서만 돌고, 논문은 밖으로 나가지 않아요. 아래에서 질문을 바꿔 보세요.",
-    "en": "Type “why do models forget” and the passages that answer it come up even when none of those words is in them — “accuracy on the first task drops sharply once the second is trained.” They stand under the exact matches in Search Everything (⌘K), as Similar in Meaning. A small model runs on this Mac, and the papers never leave it. Try another question below."
+    "ko": "노트는 그것을 쓰게 만든 논문 아래가 아니라 한곳에 모여 산다. [[…]]로 서로 잇고, 이 앱 없이도 읽히는 평범한 Markdown 파일이다.",
+    "en": "Notes live together rather than under the paper that caused them, link to each other with [[…]], and are plain Markdown files you can read without this app."
    },
-   "tier": "one",
-   "demo": "meaning"
+   "area": "notes",
+   "action": "newNote",
+   "demo": "slipBox"
   },
   {
    "symbol": "textformat.superscript",
@@ -4294,7 +4501,7 @@
     "ko": "노트에 수식을 적다 보면 \\frac{}{}를 치는 사이에 생각을 놓쳐요. 이제 //를 치면 분수가, x1을 치면 x_{1}이, sr을 치면 제곱이 되고, Tab을 누르면 다음 칸으로 가요. Obsidian의 Latex Suite를 그대로 따라서, 쓰던 손이 그대로 통해요. 아래에서 눌러 보세요.",
     "en": "A thought gets lost somewhere inside \\frac{}{}. Now // is a fraction, x1 is x_{1}, sr is a square, and Tab moves on to the next field. These are Latex Suite's own snippets, and they behave as they do in Obsidian. Try it below."
    },
-   "tier": "one",
+   "area": "notes",
    "demo": "latexShortcuts"
   },
   {
@@ -4307,155 +4514,8 @@
     "ko": "폴더를 여럿 열 수 있게 되자 사이드바가 길어지기만 했어요 — 한 학기를 폴더로 나눠 두면 논문보다 폴더가 먼저 스무 개가 되니까요. 이제 라이브러리를 누르면 나머지는 물러나고 그 안의 폴더들이 들여쓰여 서요. 폴더를 누르면 또 그 안이 열리고, 목록에는 그 아래의 논문이 전부 나와요. 나가는 길은 지금 눌린 그 줄이에요. 아래에서 눌러 보세요.",
     "en": "Opening several folders only made the sidebar longer — somebody filing a term has twenty folders before they have twenty papers. Press a library now and the others step aside while its own folders appear, indented. Press one of those and it opens in turn, with every paper beneath it in the list. The way back out is the row you are on. Press below and see."
    },
-   "tier": "one",
+   "area": "library",
    "demo": "folderTree"
-  },
-  {
-   "symbol": "doc.questionmark",
-   "title": {
-    "ko": "논문만이 아니라, 모든 PDF",
-    "en": "Not only papers"
-   },
-   "detail": {
-    "ko": "PDF를 더하면 먼저 물어봐요 — 논문인가요, 일반 문서인가요. 앱이 짐작한 답을 미리 골라 두니 한 번만 누르면 돼요. 논문이면 예전처럼 서지를 찾아 채우고, 일반 문서면 학술지나 DOI 같은 칸은 아예 사라져요. 계약서에 학술지를 묻지 않아요. 표시도, 필기도, 노트도 그대로 되고요.",
-    "en": "Add a PDF and it asks: a paper, or a document? The app has already guessed, so it is one press. A paper gets its record looked up as before; a document loses the journal and the DOI, which it never had. Nobody asks a contract for its volume number. Marking, writing and notes work the same on both."
-   },
-   "tier": "one",
-   "demo": "kindQuestion"
-  },
-  {
-   "symbol": "bubble.and.pencil",
-   "title": {
-    "ko": "이제 같이 만들어요",
-    "en": "Now we build it together"
-   },
-   "detail": {
-    "ko": "무언가 이상하거나 아쉬우면 ⌥⌘/ 를 눌러주세요. 방금 그 화면이 이미 찍힌 채로 창이 열리니까 어디서 그랬는지 설명하지 않아도 돼요. 논문에 쓰던 그 화살표와 네모로 바로 표시하면 되고, 보이면 안 되는 곳은 가리개로 덮으면 돼요. 보내주신 건 배포 페이지의 목록에 올라가고, 고쳐지면 체크가 붙어요 — 적어주신 이름과 함께요.",
-    "en": "When something is wrong, or missing, press ⌥⌘/. The sheet opens with the screenshot already taken, so you never have to explain where you were. Mark it up with the same arrow and box you use on papers, and cover anything private. What you send lands on the list on the download page and gets a check when it is fixed — with the name you chose beside it."
-   },
-   "tier": "one",
-   "demo": "feedback"
-  },
-  {
-   "symbol": "macwindow.on.rectangle",
-   "title": {
-    "ko": "라이브러리가 어느 데스크톱에서나 열린다",
-    "en": "One library, on every desktop"
-   },
-   "detail": {
-    "ko": "표시는 PDF 파일 안에 쓰이고 라이브러리는 그냥 폴더다. 그래서 같은 폴더를 맥에서도, 윈도우에서도, 리눅스에서도 연다 — 하이라이트도 손글씨도 굽은 화살표도 그대로. 계정도 서버도 내보내기도 없고, 클라우드 폴더든 USB든 파일이 닿는 곳이면 된다. 아래에서 표시 하나가 셋에 닿는 것을 눌러 보라.",
-    "en": "The marks are written into the PDF and the library is only a folder, so the same folder opens on a Mac, on Windows and on Linux — the highlights, the handwriting, the bent arrows, all of it. No account, no server, nothing exported: a cloud folder or a memory stick will do. Press below and watch one mark reach all three."
-   },
-   "tier": "one",
-   "demo": "crossPlatform"
-  },
-  {
-   "symbol": "function",
-   "title": {
-    "ko": "Ultracopy — 수식은 LaTeX으로, 글은 글로",
-    "en": "Ultracopy — the words as words, the mathematics as LaTeX"
-   },
-   "detail": {
-    "ko": "PDF에서 수식이 든 문단을 ⌘C로 복사하면 수식이 글자 부스러기로 깨져 나온다. Ultracopy(⇧⌘C)는 같은 선택에서 글은 그대로, 수식은 그대로 쓸 수 있는 LaTeX으로 돌려준다. 아래에서 둘을 직접 눌러 비교해 보라.",
-    "en": "⌘C on a passage with an equation in it gives you the formula as a spill of characters. Ultracopy (⇧⌘C) gives the same selection back with the words as words and the mathematics as LaTeX you can paste as it is. Press both below and compare."
-   },
-   "tier": "one",
-   "action": "ultracopy",
-   "demo": "ultracopy"
-  },
-  {
-   "symbol": "pencil.and.scribble",
-   "title": {
-    "ko": "손글씨도 LaTeX으로",
-    "en": "Handwriting, copied as LaTeX"
-   },
-   "detail": {
-    "ko": "손으로 쓴 강의 노트를 다시 칠 필요가 없어요. 수식 올가미(⌥⌘L)로 잡고 ⇧⌘C를 누르면 글은 글로, 수식은 LaTeX으로 복사돼요. 손글씨 모델은 설정 → 읽기에서 한 번 받으면 이 맥에서만 돌아요. 아래에서 두 결과를 눌러 비교해 보세요.",
-    "en": "No more retyping lecture notes. Catch them with the formula lasso (⌥⌘L) and press ⇧⌘C: the words copy as words and the formulas as LaTeX. Download the handwriting model once in Settings → Reading, and it runs on this Mac alone. Press both results below and compare."
-   },
-   "tier": "one",
-   "action": "lasso",
-   "demo": "handwriting"
-  },
-  {
-   "symbol": "pencil.and.outline",
-   "title": {
-    "ko": "맥에서도 자유롭게 그린다 — 도형·화살표·카드·손글씨",
-    "en": "Draw freely on the Mac: shapes, arrows, cards, handwriting"
-   },
-   "detail": {
-    "ko": "PDF 앱의 필기는 딱딱하다 — 네모 하나, 메모 아이콘 하나. 여기서는 펜을 들면(⇧⌘D) 쪽 위에 Figma의 도구 줄이 뜬다: 선택 V, 프레임 F, 도형(네모 R·동그라미 O·선 L·화살표 A), 펜(P·형광펜 H·지우개 E), 글 T — 한 글자로 바꾼다. 화살표는 가운데 손잡이를 끌면 XMind처럼 구부러지고, 상자를 두 번 누르면 그 안에 글을 쓰고, 글은 종이 위에 바로 쓴다. 프레임 안에 넣고(F), 묶고(⌘G), 줄이나 열로 정렬한다(⇧A). 오른쪽 인스펙터에 위치·크기·간격·투명도·모서리·채움·외곽선·글자 크기가 숫자로 있다. 형광펜은 아이패드처럼 글자에 맞춰지고, 지우개는 선·도형·하이라이트를 함께 지운다. 모두 ⌘Z. 그리고 전부 PDF 안에 표준 주석으로도 기록되어 아이패드·아이폰·Preview에서 같은 자리에 보인다. 아래 카드를 끌어 보라 — 화살표가 따라온다.",
-    "en": "Drawing in a PDF app is stiff: one box, one note icon. Here, take the pencil out (⇧⌘D) and Figma's tool rack floats over the page: Select V, Frame F, the shapes (rectangle R, ellipse O, line L, arrow A), the pen (P, highlighter H, eraser E), Text T — one letter each. An arrow bends when its middle handle is pulled, the way XMind's do; double-click a box to write inside it; text is typed straight onto the page. Put things in a frame (F), group them (⌘G), line them up in a row or a column (⇧A). The inspector on the right has position, size, gap, opacity, corners, fill, stroke and text size as numbers. The highlighter fits itself to the words as on the iPad; the eraser takes strokes, shapes and highlights together. All of it undoes with ⌘Z. And all of it is written into the PDF as standard annotations too, so the iPad, the iPhone and Preview show it in the same place. Drag the card below — the arrow follows."
-   },
-   "tier": "one",
-   "action": "draw",
-   "demo": "sketch"
-  },
-  {
-   "symbol": "book.pages",
-   "title": {
-    "ko": "책에서 절 사이를 오간다",
-    "en": "A book you move through by section"
-   },
-   "detail": {
-    "ko": "두 쪽이 마주 보고, ←→와 스페이스와 트랙패드로 장을 넘긴다. 다른 앱은 PDF의 쪽을 그대로 나란히 놓아서 논문마다 여백이 달라지고 펼침면이 한쪽으로 몰리지만, 여기서는 쪽을 글에 맞춰 잘라 — 스캔한 교과서까지 — 좌우 여백이 같고 두 쪽 사이는 늘 같은 폭이며, 여백에 세로로 찍힌 arXiv 도장은 지워진다. 아래에는 지금 몇 쪽인지와 얼마나 읽었는지. ⇧⌘L이면 이 논문의 목차가 두 쪽 사이 여백에 떠서 — 글자는 가리지 않고 — 절을 누르는 대로 그리로 간다. 목차는 Esc나 다른 곳을 누르기 전까지 남는다. 아래에서 '다른 PDF 앱'을 눌러 비교해 보라.",
-    "en": "Two pages face each other; ← →, the space bar and a swipe turn them. Other apps set the PDF's pages side by side as they are, so the margins change from paper to paper and the spread sits off to one side; here each page is cropped to its text — a scanned textbook included — so the margins match on both sides, the gutter is always the same width, and the arXiv stamp running up the margin is painted out. Underneath, which pages these are and how far in you are. ⇧⌘L floats this paper's table of contents into the gutter between the pages, covering no words, and each section is one click; it stays until Escape or a click elsewhere. Press \"Other PDF apps\" below and compare."
-   },
-   "tier": "two",
-   "action": "floatingList",
-   "demo": "bookReading"
-  },
-  {
-   "symbol": "arrow.triangle.2.circlepath.icloud",
-   "title": {
-    "ko": "맥에서 긋고, 아이패드에서 본다 — 몇 초 뒤",
-    "en": "Mark it on the Mac, see it on the iPad — seconds later"
-   },
-   "detail": {
-    "ko": "서버는 없다. 라이브러리는 iCloud Drive 폴더 하나인데, 20 MB PDF가 오가기를 기다리면 열 초다. 그래서 무거운 것은 기다리지 않는다. 표시는 기기마다 자기 이름으로 쓰는 몇 KB짜리 저널 파일에, 잉크는 쪽마다 사이드카에 즉시 쓰고, iCloud Drive가 그것을 옮긴다 — 두 기기가 같은 저널을 쓰는 일이 없으니 충돌도 없다. 받는 쪽은 열린 논문의 기록 폴더를 지켜보고 3초마다 한 번 더 살핀다. PDF는 그 뒤 1.5초에 저널대로 다시 쓰여 어느 앱에서 열어도 같다. 표시마다 가장 최근 말이 이긴다: 여기서 지우고 저기서 색을 바꾸면 나중 것이 남는다. 아래에서 맥 쪽에 하이라이트를 긋고 아이패드를 보라.",
-    "en": "There is no server. The library is one iCloud Drive folder, and waiting for a 20 MB PDF to travel is ten seconds. So nothing waits for the heavy thing. Marks go at once into a journal of a few KB each device writes under its own name, ink into a sidecar per page, and iCloud Drive carries those — no two devices ever write one journal, so nothing conflicts. The receiving side watches the open paper's record and looks again every three seconds. The PDF is rewritten to the journals 1.5 s later, so any app opening it sees the same. On each mark the newest word wins: remove it here, recolour it there, and the later one stands. Make a highlight on the Mac below and watch the iPad."
-   },
-   "tier": "two",
-   "demo": "sync"
-  },
-  {
-   "symbol": "waveform",
-   "title": {
-    "ko": "읽는 동안 슬립박스가 말을 건다",
-    "en": "While you read, the slip-box speaks first"
-   },
-   "detail": {
-    "ko": "할 일은 없다. 논문을 읽으면 된다. 인스펙터의 Notes 탭을 열어 두면, 지금 보이는 쪽과 드문 낱말을 나누는 노트가 — 몇 달 전 다른 논문을 읽다 쓴 것이라도 — 맨 위에 스스로 올라온다. 노트 아래 파란 낱말이 둘이 나누는 말이다: 우연이면 지나치고, 울림이면 노트를 눌러 열어 본다. 쪽에서 문장을 선택하면 노트마다 ❝ 단추가 생기고, 누르면 그 구절이 주소를 갖고 그 노트에 들어간다 — 두 논문이 노트 하나에서 만난다. 노트를 쓰는 동안에는 편집기 아래 'Resonates with'에 아직 잇지 않은 울림이 모이고, 🔗 한 번이면 [[링크]]가 써진다. 다른 앱에서 노트는 폴더에 누워 있다가 검색해야 나온다 — 그런데 잊어버린 노트는 검색하지 않는다. 루만은 자기 상자를 대화 상대라고 불렀다; 상자가 먼저 말을 걸 때만 대화다.\n\n고르는 법은 숨기지 않는다. 네 노트를 전부 외운 읽기 친구가 새 쪽의 낱말과 노트의 낱말을 나란히 놓고 같은 것을 센다고 생각하면 된다 — 다만 기능어와 논문마다 쓰는 말(model, method, results…) 300개쯤은 세지 않고, 낱말 하나의 무게는 ln((N+1)÷(그 말이 나오는 글 수+0.5))+0.3으로 매긴다(N = 노트 수 + 이 논문에서 뽑은 40쪽; 45개 글 중 42개에 나오는 'network'는 0.38, 3개에만 나오는 'consolidation'은 2.88). 두 낱말이 붙어 겹치면 ×1.3, 긴 노트는 (1+ln 길이)로 나눈다. 겹친 말이 둘 이상이고 점수 1.0 이상, 1등의 35% 이상인 노트만 넷까지 올라온다. 아래에서 네 단계를 직접 해 보고, '어떻게 고르나?'를 눌러 보라.",
-    "en": "There is nothing to do but read. Keep the inspector's Notes tab open and the notes that share their rarer words with the pages on screen — written months ago, against another paper — come up by themselves at the top. The blue words under each are what the two share: a coincidence, and you read on; an echo, and you click the note to open it. Select a sentence on the page and every note grows a ❝ button; press it and the passage lands in that note with its address — two papers meet in one note. While you write, 'Resonates with' under the editor gathers the echoes not yet linked, and one 🔗 writes the [[link]]. In other apps a note lies in a folder until you search for it — and nobody searches for a note they have forgotten. Luhmann called his box a conversation partner; it is one only when the box speaks first.\n\nThe rule is not hidden. Think of a reading friend who knows your notes by heart, laying the page's words beside each note's and counting what they share — except that function words and the words every paper uses (model, method, results…), some 300, are not counted, and a word's weight is ln((N+1)÷(texts it appears in+0.5))+0.3, with N the notes plus 40 sampled pages of this paper ('network', in 42 of 45 texts: 0.38; 'consolidation', in 3: 2.88). Two words together count ×1.3; a long note's sum is divided by (1+ln length). Only notes sharing two words, scoring 1.0 or more and at least 35% of the strongest come up, four at most. Do the four steps below, and press 'How are they chosen?'."
-   },
-   "tier": "one",
-   "demo": "resonance"
-  },
-  {
-   "symbol": "map",
-   "title": {
-    "ko": "노트에 집이 생긴다 — 지도",
-    "en": "A note gets a home: the map"
-   },
-   "detail": {
-    "ko": "노트는 폴더가 아니라 지도에 산다. 지도는 그 자체가 노트 하나인데, 본문이 다른 노트로 가는 [[링크]]와 그것들을 배열한 소제목이라 다른 앱에서도 그냥 Markdown이다. 원칙은 미리 만들지 않는다는 것 — 한 주제의 노트가 다섯 개 이상 서로 잇거나 낱말을 나누며 쌓이고 그걸 담은 지도가 없으면, 슬립박스 맨 위에 한 줄이 뜬다: \"이 노트 6개가 한 주제예요 — consolidation · forgetting.\" 누르면 초안이 써진다: 제목은 나누는 낱말에서, 노트는 논문별 소제목 아래 링크로. 지도를 열면 소제목이 열, 노트가 카드인 보드가 되고, 옆에는 지도와 울리지만 아직 안 올린 노트가 ＋ 한 번 거리에 있다. 노트를 쓰는 동안에도 편집기 아래 'Resonates with'에 지도가 뜨면 🗺 한 번으로 그 위에 올라간다. 아래에서 네 단계를 해 보라.",
-    "en": "A note lives on a map, not in a folder. The map is itself a note — its body is [[links]] to other notes under headings, so in any other app it is plain Markdown. The rule is not to make one in advance: when five or more notes on one subject have piled up, linking to each other or sharing their rarer words, and no map holds them, one line appears at the top of the slip-box: \"6 notes are one subject — consolidation · forgetting.\" Press it and a draft is written: a title from the shared words, the notes as links under a heading per paper. Open the map and it is a board — a column per heading, a card per note — with, beside it, the notes that resonate with the map and are not yet on it, one ＋ away. Writing a note, a map that echoes it appears under the editor, and one 🗺 files the note on it. Do the four steps below."
-   },
-   "tier": "three",
-   "demo": "atlas"
-  },
-  {
-   "symbol": "doc.text",
-   "title": {
-    "ko": "노트는 글이 되어야 한다 — 초안",
-    "en": "Notes are meant to become writing: the draft"
-   },
-   "detail": {
-    "ko": "노트는 모으는 게 목적이 아니다. 연구자의 산출물은 원고이고, 슬립박스는 글쓰기로 끝나야 한다 — 그리고 그 길에서 인용이 끊어지지 않아야 한다. 초안은 노트 하나(kind: draft)다: 소제목 아래 글머리표를 쓰고, 논문을 읽다 구절을 선택하면 Notes 탭에 '초안에 넣기'가 떠서 ❝ 한 번으로 그 구절이 논문 주소를 달고 들어오고, 슬립박스의 노트는 우클릭 '초안에 넣기'로 [[링크]]가 된다. ⇧⌘E를 누르면 초안이 원고로 렌더된다: 구절 칩은 그 논문의 \\cite{키}가 되고(기본 LaTeX, pandoc [@키]도), 링크한 노트는 제 문장으로 풀리고, 인용한 논문만 담은 .bib이 함께 나온다. Overleaf에 붙이면 컴파일된다. 첫 목표는 관련연구 절 하나를 끝까지 — 아래에서 해 보라.",
-    "en": "Collecting is not the point. A researcher's output is a manuscript, and the slip-box has to end in writing — with the citations intact along the way. A draft is a note (kind: draft): bullets under headings. Reading a paper, select a passage and the Notes tab offers \"Into a draft\": one ❝ and the passage arrives carrying the paper's address; a note in the slip-box goes in as a [[link]] from its context menu. ⇧⌘E renders the draft for the manuscript: each passage chip becomes that paper's \\cite{key} (LaTeX by default, pandoc [@key] too), each linked note unfolds into its own sentences, and a .bib of exactly the papers cited comes with it. Paste into Overleaf and it compiles. The first goal is one related-work section, end to end — try it below."
-   },
-   "tier": "three",
-   "demo": "express"
   },
   {
    "symbol": "magnifyingglass",
@@ -4467,130 +4527,48 @@
     "ko": "⌘K — 또는 논문 목록을 위로 끝까지 당기면 — 한 칸이 뜬다. 치면 논문·노트·지도·초안·저자·컬렉션·태그·명령을 찾고, 같은 제목이면 최근에 연 것이 먼저다. 치지 않으면 빈칸이 아니라 제안이다: '이어 읽기'(어디까지 읽었고 몇 쪽 남았는지 — 끝이 가까울수록 끌리는 법), '읽었으니'(방금 읽은 논문과 드문 낱말을 나누는 아직 안 읽은 논문, 나누는 낱말과 함께 — 아는 것을 새 쪽에서 보게 하는 호기심의 틈), '다시 보기'(몇 주 전 읽고 노트를 남긴 논문 — 잊히기 직전이 다시 볼 때다), '이번 주 새로'. 논문 안의 글자를 찾는 것은 ⌘F 쪽이다.",
     "en": "⌘K — or pull the paper list down past its top — and one field appears. Type, and it finds papers, notes, maps, drafts, authors, collections, tags and commands, the recently opened first among equals. Type nothing, and it offers rather than waits: Continue (how far you got and how few pages are left — the last stretch pulls hardest), Because you read (unread papers that share their rarer words with the one you just read, the words named — a known thing seen from a new side), Revisit (read weeks ago, with your notes — just before it fades is the time), New this week. ⌘F is the other one: the words inside the open paper."
    },
-   "tier": "one",
+   "area": "library",
    "action": "searchEverything",
    "demo": "search"
   },
   {
-   "symbol": "sidebar.left",
+   "symbol": "sparkle.magnifyingglass",
    "title": {
-    "ko": "창은 내가 접는 대로 있는다",
-    "en": "The window folds to what you are doing"
+    "ko": "낱말이 아니라 뜻으로 찾아요",
+    "en": "Search by meaning, not by the word"
    },
    "detail": {
-    "ko": "사이드바·목록·논문·인스펙터가 각자 자기 키로 숨는다. 남은 것이 빈자리를 나눠 갖는 대신, 숨은 것 뒤에 있던 것이 드러난다. 패널 사이의 틈을 끌면 크기가 바뀐다.",
-    "en": "The sidebar, the list, the paper and the inspector each hide on their own key — revealing what was behind rather than stretching to fill the gap. Drag the space between two of them to resize."
+    "ko": "«모델이 왜 잊는지»라고 치면, 그 낱말이 하나도 없는 구절도 나와요 — «첫 과제의 정확도가 두 번째 과제를 배우자 급히 떨어진다» 같은 문장이요. 찾기(⌘K)의 정확히 맞는 결과 아래에 «뜻이 비슷한 구절»로 서요. 작은 모델이 이 맥에서만 돌고, 논문은 밖으로 나가지 않아요. 아래에서 질문을 바꿔 보세요.",
+    "en": "Type “why do models forget” and the passages that answer it come up even when none of those words is in them — “accuracy on the first task drops sharply once the second is trained.” They stand under the exact matches in Search Everything (⌘K), as Similar in Meaning. A small model runs on this Mac, and the papers never leave it. Try another question below."
    },
-   "tier": "two",
-   "action": "sidebar",
-   "demo": "panes"
+   "area": "library",
+   "demo": "meaning"
   },
   {
-   "symbol": "book",
+   "symbol": "macwindow.on.rectangle",
    "title": {
-    "ko": "책처럼 펼쳐서 읽는다",
-    "en": "Read it like a book"
+    "ko": "라이브러리가 어느 데스크톱에서나 열린다",
+    "en": "One library, on every desktop"
    },
    "detail": {
-    "ko": "⌘3이면 1·2쪽이 마주 보며 창을 가득 채운다. ←→나 스페이스로 장을 넘기고, 트랙패드로 넘겨도 된다. 아래에는 지금 몇 쪽인지와 얼마나 읽었는지가 있고, ⇧⌘L이면 두 쪽 사이 여백에 이 논문의 목차가 떠서 절로 바로 간다. ⌘1은 연속 스크롤, ⌘2는 한 장씩 — 배치를 바꿔도 보던 쪽은 그대로다.",
-    "en": "⌘3 and pages 1 and 2 face each other across the window. ← → or the space bar turn the page, and so does a swipe. Underneath, which pages these are and how far in you are; ⇧⌘L drops the paper's own table of contents into the gutter between the pages, and a section is one click away. ⌘1 scrolls, ⌘2 shows one page — and changing layout keeps the page you were on."
+    "ko": "표시는 PDF 파일 안에 쓰이고 라이브러리는 그냥 폴더다. 그래서 같은 폴더를 맥에서도, 윈도우에서도, 리눅스에서도 연다 — 하이라이트도 손글씨도 굽은 화살표도 그대로. 계정도 서버도 내보내기도 없고, 클라우드 폴더든 USB든 파일이 닿는 곳이면 된다. 아래에서 표시 하나가 셋에 닿는 것을 눌러 보라.",
+    "en": "The marks are written into the PDF and the library is only a folder, so the same folder opens on a Mac, on Windows and on Linux — the highlights, the handwriting, the bent arrows, all of it. No account, no server, nothing exported: a cloud folder or a memory stick will do. Press below and watch one mark reach all three."
    },
-   "tier": "two",
-   "action": "layoutBook",
-   "demo": "book"
+   "area": "library",
+   "demo": "crossPlatform"
   },
   {
-   "symbol": "rectangle.center.inset.filled",
+   "symbol": "bubble.and.pencil",
    "title": {
-    "ko": "논문만 남긴다",
-    "en": "Only the paper"
+    "ko": "이제 같이 만들어요",
+    "en": "Now we build it together"
    },
    "detail": {
-    "ko": "⇧⌘F 한 번에 사이드바·목록·인스펙터가 비켜서고 논문만 남는다. 열려 있던 것은 기억해 두고, 나올 때 그대로 돌려준다. 그 안에서도 ⇧⌘L로 목차를 불러 절을 옮겨 다닐 수 있다.",
-    "en": "One ⇧⌘F and the sidebar, the list and the inspector step aside, leaving the paper. What was open is remembered and given back on the way out. ⇧⌘L still brings the table of contents, so you can move between sections without leaving."
+    "ko": "무언가 이상하거나 아쉬우면 ⌥⌘/ 를 눌러주세요. 방금 그 화면이 이미 찍힌 채로 창이 열리니까 어디서 그랬는지 설명하지 않아도 돼요. 논문에 쓰던 그 화살표와 네모로 바로 표시하면 되고, 보이면 안 되는 곳은 가리개로 덮으면 돼요. 보내주신 건 배포 페이지의 목록에 올라가고, 고쳐지면 체크가 붙어요 — 적어주신 이름과 함께요.",
+    "en": "When something is wrong, or missing, press ⌥⌘/. The sheet opens with the screenshot already taken, so you never have to explain where you were. Mark it up with the same arrow and box you use on papers, and cover anything private. What you send lands on the list on the download page and gets a check when it is fixed — with the name you chose beside it."
    },
-   "tier": "two",
-   "action": "focus",
-   "demo": "focus"
-  },
-  {
-   "symbol": "highlighter",
-   "title": {
-    "ko": "표시는 PDF 안에 남고, 여기서는 더 예쁘다",
-    "en": "Your marks go into the PDF — and look better here"
-   },
-   "detail": {
-    "ko": "형광펜과 밑줄이 옆에 붙은 데이터베이스가 아니라 파일 자체에 기록된다. 미리보기든 아이패드든 십 년 뒤든 표시는 그대로다. 그리고 이 앱 안에서는 형광펜의 끝이 둥글고 글자가 살 만큼 연하며, 밑줄은 눈에 띄게 짙고, 마우스를 올리면 밝아진다. 수식이 든 줄에서 다른 앱은 상자가 줄 높이만큼 자라지만, 여기서는 글자의 잉크를 재서 사람이 그은 것처럼 딱 맞게 덮는다 — 파일은 그대로 두고 그리는 법만 바꾼 것이라 다른 앱에서는 볼 수 없는 생김새다. 노트의 인용구도 같은 모양이다. 아래에서 둘을 나란히 보라.",
-    "en": "Highlights and underlines are written into the file itself, not into a database beside it — Preview, an iPad, ten years from now, the marks are there. And in here a highlight has rounded ends and stays pale enough to read through, an underline is dark enough to see, and either brightens under the pointer. On a line carrying a formula, other apps grow the box to the height of the line; here the ink of the letters is measured and the band fits them the way a hand-drawn stroke does. The file is untouched; only the drawing is ours, which is why no other PDF app looks like this. A quotation in a note wears the same shape. Compare the two side by side below."
-   },
-   "tier": "one",
-   "demo": "annotations"
-  },
-  {
-   "symbol": "quote.opening",
-   "title": {
-    "ko": "인용한 구절은 주소를 갖는다",
-    "en": "A passage keeps its address"
-   },
-   "detail": {
-    "ko": "선택한 글을 노트로 보내면 인용구로 앉는다. 누르면 그 글이 있던 페이지의 정확한 자리로 돌아간다.",
-    "en": "Send the selected text to a note and it arrives as a quotation you can click to go back to the exact place on the page it came from."
-   },
-   "tier": "one",
-   "action": "linkToNote",
-   "demo": "passageLink"
-  },
-  {
-   "symbol": "tray.full",
-   "title": {
-    "ko": "PDF 더미가 아니라 슬립박스",
-    "en": "A slip-box, not a pile of PDFs"
-   },
-   "detail": {
-    "ko": "노트는 그것을 쓰게 만든 논문 아래가 아니라 한곳에 모여 산다. [[…]]로 서로 잇고, 이 앱 없이도 읽히는 평범한 Markdown 파일이다.",
-    "en": "Notes live together rather than under the paper that caused them, link to each other with [[…]], and are plain Markdown files you can read without this app."
-   },
-   "tier": "three",
-   "action": "newNote",
-   "demo": "slipBox"
-  },
-  {
-   "symbol": "point.3.filled.connected.trianglepath.dotted",
-   "title": {
-    "ko": "내 읽기가 무엇을 이었는지 본다",
-    "en": "See what your reading has joined"
-   },
-   "detail": {
-    "ko": "그래프는 인용·공저자·컬렉션으로, 그리고 내 노트가 이은 것으로 라이브러리를 그린다. 나머지 선을 끄면 남는 것이 문헌의 관계가 아니라 내 읽기다.",
-    "en": "The graph draws your library by citation, shared author, collection — and by what your own notes link. Switch the other lines off and what is left is your reading rather than the literature's."
-   },
-   "tier": "three",
-   "demo": "graph"
-  },
-  {
-   "symbol": "keyboard",
-   "title": {
-    "ko": "어떤 키가 무슨 일을 하는지 되짚을 수 있다",
-    "en": "Ask what a key does, not just what a key is"
-   },
-   "detail": {
-    "ko": "설정 → Shortcuts에서 기능 이름으로도, 키로도 찾는다. 뭘 눌렀는지 모르겠으면 \"cmd\"나 ⌘F를 쳐보면 그 키를 가진 명령이 나온다. 그리고 이 앱의 모든 키는 바꿀 수 있다.",
-    "en": "Settings → Shortcuts searches by name and by key. If something happened and you do not know what you pressed, type \"cmd\" or ⌘F and the command that owns it comes back. Every key in this app can be changed."
-   },
-   "tier": "three",
-   "action": "settings"
-  },
-  {
-   "symbol": "folder",
-   "title": {
-    "ko": "라이브러리는 내가 고른 폴더다",
-    "en": "The library is a folder you chose"
-   },
-   "detail": {
-    "ko": "논문은 놓아둔 자리에 평범한 파일로 있다. iCloud Drive나 구글 드라이브 안의 폴더를 가리키면, 동기화는 이 앱이 새로 해야 할 일이 아니라 이미 갖고 있는 것이 된다.",
-    "en": "Papers stay as ordinary files where you put them. Point it at a folder in iCloud Drive or Google Drive and syncing is something you already have rather than something this app has to do."
-   },
-   "tier": "two"
+   "area": "library",
+   "demo": "feedback"
   }
  ],
  "groups": [
@@ -4618,8 +4596,8 @@
       "en": "Search everything"
      },
      "detail": {
-      "ko": "논문·노트·지도·초안·저자·컬렉션·명령을 한 칸에서. 제목에 없는 낱말은 «논문 안에서»가 본문에서 찾아 문장째로 보여 주고, 고르면 그 줄로 간다. 목록을 끝까지 당겨도 열린다. 빈칸이면 이어 읽기·읽었으니·다시 보기·새로 온 것을 제안한다.",
-      "en": "Papers, notes, maps, drafts, authors, collections, commands, from one field. A word that is in none of the titles is looked for in the text — In the Papers shows the sentence it is in, and choosing it goes to that line. Pull the list down to open it. Empty, it offers: continue, because you read, revisit, new."
+      "ko": "논문·노트·저자·컬렉션·명령을 한 칸에서. 제목에 없는 낱말은 «논문 안에서»가 본문에서 찾아 문장째로 보여 주고, 고르면 그 줄로 간다. 목록을 끝까지 당겨도 열린다.",
+      "en": "Papers, notes, authors, collections, commands, from one field. A word that is in none of the titles is looked for in the text — In the Papers shows the sentence it is in, and choosing it goes to that line. Pull the list down to open it."
      },
      "action": "searchEverything"
     },
@@ -4743,17 +4721,6 @@
     },
     {
      "title": {
-      "ko": "손글씨 읽기",
-      "en": "Handwriting"
-     },
-     "detail": {
-      "ko": "올가미로 잡은 손글씨를 글과 LaTeX으로 읽어요. 모델은 설정 → 읽기에서 받아요.",
-      "en": "Handwriting in the lasso is read as words and LaTeX. Get the model in Settings → Reading."
-     },
-     "action": "lasso"
-    },
-    {
-     "title": {
       "ko": "표시 목록",
       "en": "The marks list"
      },
@@ -4863,36 +4830,6 @@
      "detail": {
       "ko": "#이렇게 쓴다. 슬립박스가 모아준다.",
       "en": "Write #like-this. The slip-box collects them."
-     }
-    },
-    {
-     "title": {
-      "ko": "지도",
-      "en": "Maps"
-     },
-     "detail": {
-      "ko": "노트 다섯 개가 한 주제로 쌓이면 지도를 제안한다. 지도는 링크와 소제목으로 된 노트이고, 열면 보드다.",
-      "en": "Five notes on one subject and a map is suggested. A map is a note of links under headings; opened, it is a board."
-     }
-    },
-    {
-     "title": {
-      "ko": "초안과 내보내기",
-      "en": "Drafts and export"
-     },
-     "detail": {
-      "ko": "구절과 노트로 초안을 채우고 ⇧⌘E로 \\cite와 .bib이 붙은 LaTeX을 받는다.",
-      "en": "Fill a draft from passages and notes; ⇧⌘E gives LaTeX with \\cite and a .bib."
-     }
-    },
-    {
-     "title": {
-      "ko": "공명",
-      "en": "Resonance"
-     },
-     "detail": {
-      "ko": "읽는 쪽과 낱말을 나누는 다른 논문의 노트가 Notes 탭 맨 위에 올라온다. 노트 아래에는 아직 잇지 않은 울림이 모인다.",
-      "en": "Notes from other papers that share the page's words rise to the top of the Notes tab; under a note, the echoes not yet linked are gathered."
      }
     },
     {
@@ -5098,55 +5035,6 @@
       "en": "Picks up anything added to the folder from outside."
      },
      "action": "refreshFolder"
-    }
-   ]
-  },
-  {
-   "title": {
-    "ko": "그래프",
-    "en": "The graph"
-   },
-   "symbol": "point.3.filled.connected.trianglepath.dotted",
-   "features": [
-    {
-     "title": {
-      "ko": "네 가지 연결",
-      "en": "Four kinds of connection"
-     },
-     "detail": {
-      "ko": "한 논문이 다른 논문을 인용했거나, 내 노트가 둘을 이었거나, 저자가 겹치거나, 같은 컬렉션에 있거나.",
-      "en": "One paper citing another, your notes linking them, a shared author, or the same collection."
-     }
-    },
-    {
-     "title": {
-      "ko": "범례가 곧 필터",
-      "en": "The legend is the filter"
-     },
-     "detail": {
-      "ko": "한 종류를 끄면 질문이 된다. 인용을 감추면 남는 것이 내 노트가 이은 것이다.",
-      "en": "Switch a kind off to ask a question. Hide citations and what is left is what your own notes have joined."
-     }
-    },
-    {
-     "title": {
-      "ko": "선택에 집중",
-      "en": "Focus on a selection"
-     },
-     "detail": {
-      "ko": "논문을 하나 고른 다음 켜면, 관계없는 것이 모두 사라진다.",
-      "en": "Click a paper, then turn it on: everything unrelated drops away."
-     }
-    },
-    {
-     "title": {
-      "ko": "계속 움직인다",
-      "en": "It keeps moving"
-     },
-     "detail": {
-      "ko": "논문을 끌면 나머지가 자리를 내주고, 곧 다시 가라앉는다.",
-      "en": "Drag a paper and the rest gives way, then settles."
-     }
     }
    ]
   },

@@ -16,7 +16,8 @@ import Testing
         var file: String?
     }
     struct Answer: Decodable { var json: String; var pdfs: [String] }
-    struct File: Decodable { var addresses: [Case]; var openAlex: [Answer] }
+    struct Guess: Decodable { var doi: String; var json: String; var pdfs: [String] }
+    struct File: Decodable { var addresses: [Case]; var openAlex: [Answer]; var publishers: [Guess] }
 
     func fixture() throws -> File {
         let url = try #require(Bundle.module.url(forResource: "paper-addresses", withExtension: "json", subdirectory: "Fixtures"))
@@ -46,6 +47,12 @@ import Testing
     @Test func openAlexAnswersReadAsTheFileSays() throws {
         for answer in try fixture().openAlex {
             #expect(PaperAddress.openAccessPDFs(inOpenAlex: Data(answer.json.utf8)).map(\.absoluteString) == answer.pdfs)
+        }
+    }
+
+    @Test func publishersFilesAreGuessedAsTheFileSays() throws {
+        for guess in try fixture().publishers {
+            #expect(PaperAddress.publisherPDFs(for: guess.doi, inOpenAlex: Data(guess.json.utf8)).map(\.absoluteString) == guess.pdfs, Comment(rawValue: guess.doi))
         }
     }
 

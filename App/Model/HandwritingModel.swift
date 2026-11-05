@@ -294,7 +294,9 @@ final class HandwritingModels {
         guard !Self.isProbe, downloading != model else { return }
         try? FileManager.default.removeItem(at: directory(for: model))
         states[model] = .absent
+        #if canImport(MLXVLM)
         Task { await HandwritingReader.shared.unload() }
+        #endif
     }
 
     /// A file's SHA-256, read a megabyte at a time off the main thread.

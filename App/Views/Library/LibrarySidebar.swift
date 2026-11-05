@@ -241,12 +241,6 @@ struct LibrarySidebar: View {
                     Label(L("논문", "Papers"), systemImage: "text.document")
                         .count(model.counts.papers, current: model.scope == .papers)
                         .scopeRow(.papers, in: model)
-                    Label(L("책", "Books"), systemImage: "book")
-                        .count(model.counts.books, current: model.scope == .books)
-                        .scopeRow(.books, in: model)
-                    Label(L("강의자료", "Course"), systemImage: "person.crop.rectangle")
-                        .count(model.counts.lectures, current: model.scope == .lectures)
-                        .scopeRow(.lectures, in: model)
                     Label(L("문서", "Documents"), systemImage: "doc")
                         .count(model.counts.documents, current: model.scope == .documents)
                         .scopeRow(.documents, in: model)
@@ -353,13 +347,15 @@ struct LibrarySidebar: View {
 
             authorsSection
 
-            Section {
-                Label {
-                    Text(L("그래프", "Graph"))
-                } icon: {
-                    GraphSymbol(colored: model.scope == .graph)
+            if Legacy.graph {
+                Section {
+                    Label {
+                        Text(L("그래프", "Graph"))
+                    } icon: {
+                        GraphSymbol(colored: model.scope == .graph)
+                    }
+                    .scopeRow(.graph, in: model)
                 }
-                .scopeRow(.graph, in: model)
             }
         }
         .hiddenScrollers()
@@ -465,7 +461,7 @@ struct LibrarySidebar: View {
     /// so is a row that filters nothing. Past that line all three are listed,
     /// including the empty ones — see the strip itself.
     private var showsKinds: Bool {
-        [model.counts.papers, model.counts.books, model.counts.lectures, model.counts.documents]
+        [model.counts.papers, model.counts.documents]
             .count { $0 > 0 } > 1
     }
 

@@ -18,7 +18,16 @@ import notes from '../../shared/releaseNotes.json'
 interface Text2 { ko: string; en: string }
 interface Entry { title: Text2; detail: Text2; action?: string; demo?: string; featured?: boolean; devices: string[] }
 interface Release { version: string; date: Text2; note: Text2; added: Entry[]; removed: Entry[]; fixed: Entry[] }
-interface Highlight { symbol: string; title: Text2; detail: Text2; tier: string; action?: string; demo?: string }
+interface Highlight { symbol: string; title: Text2; detail: Text2; area: string; action?: string; demo?: string }
+
+/** The five places the showcase groups by, in the Mac's order (`ReleaseNotes.Area`). */
+const AREAS: [string, string, Text2][] = [
+  ['copying', 'function', { ko: '복사', en: 'Copy' }],
+  ['marking', 'highlighter', { ko: '표시', en: 'Mark' }],
+  ['reading', 'book.pages', { ko: '읽기', en: 'Read' }],
+  ['notes', 'note', { ko: '노트', en: 'Notes' }],
+  ['library', 'folder', { ko: '라이브러리', en: 'Library' }],
+]
 interface Feature { title: Text2; detail: Text2; action?: string }
 interface Group { title: Text2; symbol: string; features: Feature[] }
 
@@ -149,10 +158,15 @@ export function showcase(): { node: HTMLElement; turn: (by: number) => void } {
   const stage = el('div', { class: 'rn-stage' })
   const words = el('div', { class: 'rn-words' })
   const dots = el('div', { class: 'rn-dots' })
+  // The places, as capsules above the card: the one the page showing belongs
+  // to is lit, and pressing another jumps to its first page.
+  const areas = el('div', { class: 'rn-areas' })
   card.append(stage, words)
-  node.append(el('div', { class: 'rn-row' }, [back, card, next]), dots)
+  node.append(areas, el('div', { class: 'rn-row' }, [back, card, next]), dots)
   for (const page of pages) {
-    const block = el('div', { class: `rn-page${page.tier === 'one' ? ' tier-one' : ''}` }, [
+    const area = AREAS.find(([key]) => key === page.area)
+    const block = el('div', { class: 'rn-page' }, [
+      el('div', { class: 'rn-page-area', html: `${area ? icon(area[1]) : ''}<span>${area ? say(area[2]).toUpperCase() : ''}</span>` }),
       el('h3', { class: 'rn-page-title', text: say(page.title) }),
       el('p', { class: 'rn-page-detail', text: say(page.detail) }),
     ])
@@ -163,6 +177,14 @@ export function showcase(): { node: HTMLElement; turn: (by: number) => void } {
     const frame = demoFrame(pages[at].demo)
     if (frame) stage.append(frame)
     ;[...words.children].forEach((child, index) => child.classList.toggle('shown', index === at))
+    clear(areas)
+    for (const [key, glyph, name] of AREAS) {
+      const first = pages.findIndex((page) => page.area === key)
+      if (first < 0) continue
+      const chip = el('button', { type: 'button', class: 'rn-area', 'aria-pressed': String(pages[at].area === key), html: `${icon(glyph)}<span>${say(name)}</span>` })
+      on(chip, 'click', () => turnTo(first))
+      areas.append(chip)
+    }
     clear(dots)
     pages.forEach((_, index) => {
       const dot = el('button', { type: 'button', class: 'rn-dot', 'aria-current': String(index === at), title: `${index + 1}/${pages.length}` })

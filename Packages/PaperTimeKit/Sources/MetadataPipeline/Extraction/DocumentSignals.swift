@@ -70,25 +70,13 @@ public struct DocumentSignals: Hashable, Sendable {
     ///
     /// The identifier is near proof: nobody prints a DOI on a car manual.
     /// Without one, an abstract and a reference list together are what make a
-    /// paper look like a paper — and a reference list on its own, in a file
-    /// hundreds of pages long, is a book. Everything else is a document, and
-    /// being wrong costs one tap in the inspector.
-    public var guess: DocumentGuess { guess(fileName: nil) }
-
-    /// The same, with the file's name to read as well.
-    ///
-    /// A course names itself twice, and the name on disk is the more reliable
-    /// of the two: `lecture06.pdf`, `STA512-syllabus.pdf`. The first page of a
-    /// deck often says only the week's title.
-    public func guess(fileName: String?) -> DocumentGuess {
-        let named = [fileName ?? "", String(openingText.prefix(1200))].joined(separator: " ")
-        return DocumentGuess.of(
+    /// paper look like a paper. Everything else is a document, and being
+    /// wrong costs one tap in the inspector.
+    public var guess: DocumentGuess {
+        DocumentGuess.of(
             hasIdentifier: !IdentifierScanner.scan(openingText).isEmpty,
             hasAbstract: hasAbstract,
-            hasReferences: hasReferences,
-            pageCount: pageCount,
-            isLandscape: isLandscape,
-            hasCourseWords: DocumentGuess.namesACourse(named)
+            hasReferences: hasReferences
         )
     }
 }

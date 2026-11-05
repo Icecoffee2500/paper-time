@@ -43,8 +43,6 @@ public final class LibraryModel {
         /// more than one of them: a shelf of papers that has never seen a
         /// manual should look exactly as it did.
         case papers
-        case books
-        case lectures
         case documents
         /// One of the folders the library is reading.
         case folder(URL)
@@ -185,7 +183,7 @@ public final class LibraryModel {
 
     public var visibleByFolder: [(folder: URL, papers: [LoadedPaper])]? {
         switch scope {
-        case .papers, .books, .lectures, .documents: break
+        case .papers, .documents: break
         default: return nil
         }
         var groups: [URL: [LoadedPaper]] = [:]
@@ -364,8 +362,6 @@ public final class LibraryModel {
     public struct ScopeCounts: Equatable, Sendable {
         public var all = 0
         public var papers = 0
-        public var books = 0
-        public var lectures = 0
         public var documents = 0
         /// How many papers each folder holds, by its root.
         public var folders: [URL: Int] = [:]
@@ -1060,8 +1056,6 @@ public final class LibraryModel {
             counts.all += 1
             switch paper.meta.effectiveKind {
             case .paper: counts.papers += 1
-            case .book: counts.books += 1
-            case .lecture: counts.lectures += 1
             case .document: counts.documents += 1
             }
             counts.folders[rootURL(of: paper), default: 0] += 1
@@ -1380,8 +1374,6 @@ public final class LibraryModel {
         // These two are places of their own, not filters over papers.
         case .notes, .graph: false
         case .papers: paper.meta.effectiveKind == .paper
-        case .books: paper.meta.effectiveKind == .book
-        case .lectures: paper.meta.effectiveKind == .lecture
         case .documents: paper.meta.effectiveKind == .document
         case let .folder(root): isUnder(paper, root)
         case .unread: paper.state.readingStatus == .unread
@@ -1495,7 +1487,8 @@ public final class LibraryModel {
         case added(LoadedPaper)
         /// The same bytes are already in the library.
         case already(LoadedPaper)
-        case failed(PaperFetcher.Failure)
+        /// `detail` is what the network said, when it said anything.
+        case failed(PaperFetcher.Failure, detail: String? = nil)
     }
 
     /// «Add Paper by Address…»: what was typed, fetched and taken in. With
@@ -1509,10 +1502,10 @@ public final class LibraryModel {
         let fetched: PaperFetcher.Fetched
         do {
             fetched = try await PaperFetcher.shared.fetch(address)
-        } catch let failure as PaperFetcher.Failure {
-            return .failed(failure)
+        } catch let refusal as PaperFetcher.Refusal {
+            return .failed(refusal.why, detail: refusal.detail)
         } catch {
-            return .failed(.failed)
+            return .failed(.failed, detail: error.localizedDescription)
         }
         var digests: [String: PaperFolder] = [:]
         for paper in papers where !paper.meta.file.importDigest.isEmpty {
@@ -1526,7 +1519,7 @@ public final class LibraryModel {
                 keepFile: keepFile, knownDigests: digests
             )
         } catch {
-            return .failed(.failed)
+            return .failed(.failed, detail: error.localizedDescription)
         }
         switch outcome {
         case let .imported(paper):
@@ -1638,23 +1631,6 @@ public final class LibraryModel {
             // go.
             meta.candidates = []
             if meta.confidence == .needsReview { meta.confidence = .unparsed }
-        }
-        if kind == .book {
-            // Called a book, it is written down as one — so the export says
-            // `@book` and the citation prints a publisher rather than a
-            // journal. Only when it is not already some kind of book: a
-            // chapter somebody typed in themselves is their answer, not ours.
-            if meta.csl.type != .book, meta.csl.type != .chapter { meta.csl.type = .book }
-            // The journal's fields belong to a journal. Left on, they print
-            // in the export and read as a book with a volume and an issue —
-            // which is how a textbook ends up cited as pages 1054–1054 of an
-            // IEEE transaction.
-            meta.csl.containerTitle = nil
-            meta.csl.containerTitleShort = nil
-            meta.csl.volume = nil
-            meta.csl.issue = nil
-            meta.csl.page = nil
-            meta.csl.issn = nil
         }
         if let saved = try? await store(for: paper).save(meta: meta, in: paper.folder, baseline: paper.meta) {
             applyLocally(meta: saved, to: paperID)

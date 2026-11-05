@@ -48,10 +48,12 @@ enum PictureReading {
                      partial: (@Sendable (String) -> Void)? = nil) async throws -> Result {
         let picture = try picture(of: page, rect: rect, overlay: overlay)
         guard !FormulaOCR.isBlank(picture) else { throw FormulaOCR.Failure.nothingRead }
-        if HandwritingReader.canRun, let directory = HandwritingModels.shared.readyDirectory {
+        #if canImport(MLXVLM)
+        if Legacy.handwriting, HandwritingReader.canRun, let directory = HandwritingModels.shared.readyDirectory {
             let reading = try await HandwritingReader.shared.read(picture, from: directory, partial: partial)
             return Result(text: reading.text, engine: .handwriting, seconds: reading.seconds)
         }
+        #endif
         let read = try await FormulaOCR.read(picture: picture)
         return Result(text: read.latex, engine: .formula, seconds: read.seconds)
     }
@@ -100,10 +102,14 @@ enum PictureReading {
             let said = copied
                 ? L("그림에서 읽어 복사했어요. 틀린 데가 있는지 봐주세요.", "Read off the picture and copied — check it over.")
                 : L("그림에서 수식을 읽었어요. 틀린 데가 있는지 봐주세요.", "Read the formula off the picture — check it over.")
-            guard HandwritingReader.canRun, !offered else { return said }
+            #if canImport(MLXVLM)
+            guard Legacy.handwriting, HandwritingReader.canRun, !offered else { return said }
             offered = true
             return said + " " + L("손글씨는 설정 → 읽기에서 손글씨 모델을 받으면 더 잘 읽어요.",
                                   "For handwriting, get the handwriting model in Settings → Reading.")
+            #else
+            return said
+            #endif
         }
     }
 }

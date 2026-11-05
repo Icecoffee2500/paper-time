@@ -349,7 +349,7 @@ struct SettingsView: View {
             case .library:
                 librarySection
                 // With no library open there are no notes to point anywhere.
-                if app.library != nil { looseNotesSection }
+                if Legacy.looseNotesFolder, app.library != nil { looseNotesSection }
                 languageSection
             case .metadata: metadataSection(settings: settings)
             case .bibtex: bibTeXSection(settings: settings)
@@ -357,7 +357,9 @@ struct SettingsView: View {
                 listSection(settings: settings)
                 readingSection(settings: settings)
                 writingSection(settings: settings)
-                handwritingSection
+                #if canImport(MLXVLM)
+                if Legacy.handwriting { handwritingSection }
+                #endif
                 searchSection(settings: settings)
             case .shortcuts: shortcutsSection
             case .log: logSection
@@ -1031,6 +1033,7 @@ struct SettingsView: View {
     /// pressed, the bytes counted while it runs, and a way to stop it and a
     /// way to take it off again. The 9B wants 16 GB of memory; on a smaller
     /// Mac the 4B is the one offered first.
+    #if canImport(MLXVLM)
     @ViewBuilder
     private var handwritingSection: some View {
         let models = HandwritingModels.shared
@@ -1129,6 +1132,7 @@ struct SettingsView: View {
             }
         }
     }
+    #endif
 
     /// Search by meaning: one switch, because it is a 45 MB model running
     /// in the background and not everybody wants one. Off, the passages'

@@ -146,7 +146,7 @@ export function readReleaseNotes(releaseSwift, contributorsSwift) {
     fixed: (arg(call, 'fixed') ?? []).map(entry),
   }))
   const highlights = staticLet(releaseSwift, 'highlights').map((call) => {
-    const out = { symbol: arg(call, 'symbol'), title: text2(arg(call, 'title')), detail: text2(arg(call, 'detail')), tier: arg(call, 'tier')?.enum ?? 'two' }
+    const out = { symbol: arg(call, 'symbol'), title: text2(arg(call, 'title')), detail: text2(arg(call, 'detail')), area: arg(call, 'area')?.enum ?? 'reading' }
     const action = arg(call, 'action')
     if (action) out.action = action.enum
     const demo = arg(call, 'demo')

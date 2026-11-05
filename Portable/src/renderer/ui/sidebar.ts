@@ -203,12 +203,9 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
     // has never seen anything but papers looks exactly as it did.
     //
     // Once they appear, all of them do, empty ones included. The kinds are
-    // not a list that grows — they are the answers to one question, and a run
-    // that shows two of four says the app knows two.
+    // not a list that grows — they are the two answers to one question.
     const kinds = ([
       ['paper', 'text.document', L('논문', 'Papers'), counts.papers],
-      ['book', 'book', L('책', 'Books'), counts.books],
-      ['lecture', 'lecture', L('강의자료', 'Course'), counts.lectures],
       ['document', 'doc', L('문서', 'Documents'), counts.documents],
     ] as const)
     if (kinds.filter(([, , , count]) => count > 0).length > 1) {

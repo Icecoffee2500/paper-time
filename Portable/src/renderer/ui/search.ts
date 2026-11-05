@@ -24,6 +24,7 @@ import {
 import { notesForPaper, preparedSearch, store, textSources } from '../state.js'
 import { call } from '../bridge.js'
 import { suggestionGroups } from '../../shared/searchSuggestions.js'
+import { LEGACY } from '../../shared/legacy.js'
 import { passageSubtitle, searchText, warmText, type TextHit } from '../textSearch.js'
 import { asTextHit, meaningFooter, meaningStatus, noteSubtitle, onMeaningStatus, searchMeaning, type MeaningHit } from '../meaningSearch.js'
 import { placeKey } from '../../shared/semantic/results.js'
@@ -151,7 +152,7 @@ export function openPalette(actions: PaletteActions, initial = '') {
   }) as HTMLInputElement
   // With nothing typed the palette offers where to go next, and says so in
   // its placeholder.
-  const offered = suggestionGroups(store.papers.map((entry) => ({
+  const offered = !LEGACY.emptySearchSuggestions ? [] : suggestionGroups(store.papers.map((entry) => ({
     id: entry.id,
     title: entry.meta.displayTitle,
     authors: entry.meta.displayAuthors,

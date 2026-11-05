@@ -76,32 +76,16 @@ export async function setKind(id: string, kind: DocumentKind) {
     patch.candidates = []
     if (findPaper(id)?.meta.confidence === 'needsReview') patch.confidence = 'unparsed'
   }
-  // Nothing is cleared for course material or a document. A book clears the
-  // journal's fields below because a book is exported and would print a
-  // volume it never had; these two are not exported at all, so throwing away
-  // what somebody typed would cost them something and buy nothing.
-  if (kind === 'book') {
-    // Called a book, it is written down as one — so the export says `@book`
-    // and the citation prints a publisher rather than a journal. The
-    // journal's own fields go, or a textbook prints as a volume and an issue
-    // of a journal it was never in.
-    const entry = findPaper(id)
-    const csl = { ...(entry?.meta.csl ?? {}) } as Record<string, unknown>
-    if (csl.type !== 'book' && csl.type !== 'chapter') csl.type = 'book'
-    for (const key of ['container-title', 'container-title-short', 'volume', 'issue', 'page', 'ISSN']) {
-      delete csl[key]
-    }
-    patch.csl = csl
-  }
+  // Nothing is cleared for a document: it is not exported at all, so
+  // throwing away what somebody typed would cost them something and buy
+  // nothing.
   await editMeta(id, patch)
 }
 
-/** The four kinds as menu rows, the paper's own ticked — the Mac's Kind picker. */
+/** The two kinds as menu rows, the paper's own ticked — the Mac's Kind picker. */
 export function kindEntries(entry: Paper): MenuEntry[] {
   return ([
     ['paper', L('논문', 'Paper'), 'text.document'],
-    ['book', L('책', 'Book'), 'book'],
-    ['lecture', L('강의자료', 'Course Material'), 'lecture'],
     ['document', L('일반 문서', 'Document'), 'doc'],
   ] as const).map(([value, label, glyph]) => ({
     label,

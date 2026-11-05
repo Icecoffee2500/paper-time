@@ -104,12 +104,19 @@ public enum RISImporter {
         // Order follows the file, not the tag, since a record can interleave them.
         var authors: [CSLName] = []
         var editors: [CSLName] = []
+        // L1 is where Zotero and EndNote put the attached PDF's path (L2 a
+        // link to the full text); the migrator matches the file by it before
+        // it tries the title. A `file://` prefix is the exporter's, not ours.
+        var fileHints: [String] = []
         for pair in pairs {
             let value = pair.value.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !value.isEmpty else { continue }
             switch pair.tag {
             case "AU", "A1", "A3": authors.append(CSLName.parse(value))
             case "A2": editors.append(CSLName.parse(value))
+            case "L1", "L2":
+                let path = value.hasPrefix("file://") ? String(value.dropFirst("file://".count)) : value
+                if path.lowercased().hasSuffix(".pdf") { fileHints.append(path.removingPercentEncoding ?? path) }
             default: break
             }
         }
@@ -159,7 +166,7 @@ public enum RISImporter {
         )
         csl.id = bibKey
 
-        let record = BibTeXImporter.ImportedRecord(csl: csl, identifiers: identifiers, bibKey: bibKey, fileHints: [])
+        let record = BibTeXImporter.ImportedRecord(csl: csl, identifiers: identifiers, bibKey: bibKey, fileHints: fileHints)
         return (record, usedFallback)
     }
 

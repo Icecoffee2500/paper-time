@@ -8,6 +8,7 @@
  * first time they opened a paper on Windows. Known fields are typed; unknown
  * ones are carried.
  */
+import { readKind } from './documentKind.js'
 import { dateFromISO, isoTimestamp, makeUUID } from './coding.js'
 
 export type RawRecord = Record<string, unknown>
@@ -150,7 +151,8 @@ export interface FileInfo {
  *  Declared here as well as in `documentKind.ts` because the record type came
  *  first; the two are one type, and `documentKind.ts` re-exports this one so
  *  they cannot drift apart. */
-export type DocumentKind = 'paper' | 'book' | 'lecture' | 'document'
+/** 0.9 also wrote 'book' and 'lecture'; `readKind` folds them into these two. */
+export type DocumentKind = 'paper' | 'document'
 
 export class PaperMeta {
   raw: RawRecord
@@ -176,8 +178,8 @@ export class PaperMeta {
     this.csl = (raw.csl as CSLItem) ?? {}
     this.bibKey = String(raw.bibKey ?? '')
     this.confidence = (raw.confidence as Confidence) ?? 'unparsed'
-    this.kind = raw.kind ? (String(raw.kind) as DocumentKind) : undefined
-    this.guessedKind = raw.guessedKind ? (String(raw.guessedKind) as DocumentKind) : undefined
+    this.kind = readKind(raw.kind)
+    this.guessedKind = readKind(raw.guessedKind)
     const file = (raw.file as RawRecord) ?? {}
     this.file = {
       // A library written before the flat layout stored the file name under
