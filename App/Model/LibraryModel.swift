@@ -1487,7 +1487,8 @@ public final class LibraryModel {
         case added(LoadedPaper)
         /// The same bytes are already in the library.
         case already(LoadedPaper)
-        case failed(PaperFetcher.Failure)
+        /// `detail` is what the network said, when it said anything.
+        case failed(PaperFetcher.Failure, detail: String? = nil)
     }
 
     /// «Add Paper by Address…»: what was typed, fetched and taken in. With
@@ -1501,10 +1502,10 @@ public final class LibraryModel {
         let fetched: PaperFetcher.Fetched
         do {
             fetched = try await PaperFetcher.shared.fetch(address)
-        } catch let failure as PaperFetcher.Failure {
-            return .failed(failure)
+        } catch let refusal as PaperFetcher.Refusal {
+            return .failed(refusal.why, detail: refusal.detail)
         } catch {
-            return .failed(.failed)
+            return .failed(.failed, detail: error.localizedDescription)
         }
         var digests: [String: PaperFolder] = [:]
         for paper in papers where !paper.meta.file.importDigest.isEmpty {
@@ -1518,7 +1519,7 @@ public final class LibraryModel {
                 keepFile: keepFile, knownDigests: digests
             )
         } catch {
-            return .failed(.failed)
+            return .failed(.failed, detail: error.localizedDescription)
         }
         switch outcome {
         case let .imported(paper):

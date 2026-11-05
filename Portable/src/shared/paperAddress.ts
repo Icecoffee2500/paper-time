@@ -136,6 +136,89 @@ export function openAccessPDFs(openAlexJSON: string): string[] {
   return found
 }
 
+/**
+ * Where a publisher keeps the PDF of a DOI, guessed from the prefix — tried
+ * after every open copy, for the reader whose network has a subscription (a
+ * university's, a research company's) and for the publisher that lets the
+ * file through anyway. ACM, Springer, Wiley, Nature, ACS, Science, PNAS,
+ * Taylor & Francis, SIAM and bioRxiv name the file by the DOI; Elsevier and
+ * IEEE by an identifier of their own that OpenAlex's landing page carries.
+ * Empty for a prefix not known here. The guesses are cheap to be wrong
+ * about: a 403 is the same answer as none. The Mac's `publisherPDFs`.
+ */
+export function publisherPDFs(doi: string, openAlexJSON: string): string[] {
+  const lower = doi.toLowerCase()
+  const slash = lower.indexOf('/')
+  if (slash < 0) return []
+  const prefix = lower.slice(0, slash)
+  const suffix = lower.slice(slash + 1)
+  if (suffix.length === 0) return []
+  const guesses: string[] = []
+  switch (prefix) {
+    case '10.1145': case '10.5555': guesses.push(`https://dl.acm.org/doi/pdf/${lower}`); break
+    case '10.1007': guesses.push(`https://link.springer.com/content/pdf/${lower}.pdf`); break
+    case '10.1002': guesses.push(`https://onlinelibrary.wiley.com/doi/pdfdirect/${lower}`); break
+    case '10.1038': guesses.push(`https://www.nature.com/articles/${suffix}.pdf`); break
+    case '10.1021': guesses.push(`https://pubs.acs.org/doi/pdf/${lower}`); break
+    case '10.1126': guesses.push(`https://www.science.org/doi/pdf/${lower}`); break
+    case '10.1073': guesses.push(`https://www.pnas.org/doi/pdf/${lower}`); break
+    case '10.1080': guesses.push(`https://www.tandfonline.com/doi/pdf/${lower}`); break
+    case '10.1137': guesses.push(`https://epubs.siam.org/doi/pdf/${lower}`); break
+    case '10.1101': guesses.push(`https://www.biorxiv.org/content/${lower}.full.pdf`); break
+    case '10.1016':
+      // ScienceDirect names the file by its PII, which OpenAlex's landing
+      // page (`…/science/article/pii/S0893608021000010`) carries.
+      for (const page of landingPages(openAlexJSON)) {
+        const match = /\/pii\/([A-Za-z0-9]{17})/.exec(page)
+        if (match) guesses.push(`https://www.sciencedirect.com/science/article/pii/${match[1]}/pdfft?isDTMRedir=true&download=true`)
+      }
+      break
+    case '10.1109':
+      // IEEE Xplore names the file by its article number (`…/document/9879595`).
+      for (const page of landingPages(openAlexJSON)) {
+        const match = /ieeexplore\.ieee\.org\/document\/(\d+)/.exec(page)
+        if (match) guesses.push(`https://ieeexplore.ieee.org/stampPDF/getPDF.jsp?tp=&arnumber=${match[1]}`)
+      }
+      break
+    default: break
+  }
+  const found: string[] = []
+  for (const guess of guesses) {
+    let url: URL
+    try {
+      url = new URL(guess)
+    } catch {
+      continue
+    }
+    // Foundation's `URL(string:)` writes the address as it was given; so
+    // does this, since `URL.href` would re-encode what Swift leaves alone.
+    void url
+    if (!found.includes(guess)) found.push(guess)
+  }
+  return found
+}
+
+/** The landing pages OpenAlex's answer names, the primary one first. */
+function landingPages(openAlexJSON: string): string[] {
+  let object: unknown
+  try {
+    object = JSON.parse(openAlexJSON)
+  } catch {
+    return []
+  }
+  if (!object || typeof object !== 'object' || Array.isArray(object)) return []
+  const record = object as Record<string, unknown>
+  const pages: string[] = []
+  const take = (holder: unknown) => {
+    const value = holder && typeof holder === 'object' ? (holder as Record<string, unknown>).landing_page_url : undefined
+    if (typeof value === 'string' && value.length > 0 && !pages.includes(value)) pages.push(value)
+  }
+  take(record.primary_location)
+  take(record.best_oa_location)
+  if (Array.isArray(record.locations)) for (const location of record.locations) take(location)
+  return pages
+}
+
 function arxivIdentifier(line: string): string | null {
   const lower = line.toLowerCase()
   if (lower.startsWith('arxiv:') || lower.startsWith('arxiv.') || lower.startsWith('10.48550/arxiv.')) {
