@@ -983,7 +983,7 @@ public final class AppModel {
                 let line: String = switch outcome {
                 case let .added(paper): "added \(paper.id) file=\(paper.meta.file.relativePath) exists=\(paper.hasFile) source=\(paper.source?.address ?? "-")"
                 case let .already(paper): "already \(paper.id)"
-                case let .failed(why): "failed (\(why))"
+                case let .failed(why, detail): "failed (\(why)) \(detail ?? "")"
                 }
                 FileHandle.standardError.write(Data("add address: \(line)\n".utf8))
             }

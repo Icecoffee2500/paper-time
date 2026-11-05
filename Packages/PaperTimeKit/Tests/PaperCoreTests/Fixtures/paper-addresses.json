@@ -334,5 +334,133 @@
 
       ]
     }
+  ],
+  "publishers" : [
+    {
+      "doi" : "10.1145/3292500.3330701",
+      "json" : "{\"id\":\"https://openalex.org/W2\",\"open_access\":{\"oa_url\":null},\"best_oa_location\":null,\"primary_location\":{\"pdf_url\":null},\"locations\":[]}",
+      "pdfs" : [
+        "https://dl.acm.org/doi/pdf/10.1145/3292500.3330701"
+      ]
+    },
+    {
+      "doi" : "10.5555/3295222.3295349",
+      "json" : "{\"id\":\"https://openalex.org/W2\",\"open_access\":{\"oa_url\":null},\"best_oa_location\":null,\"primary_location\":{\"pdf_url\":null},\"locations\":[]}",
+      "pdfs" : [
+        "https://dl.acm.org/doi/pdf/10.5555/3295222.3295349"
+      ]
+    },
+    {
+      "doi" : "10.1007/s10462-023-10562-9",
+      "json" : "{\"id\":\"https://openalex.org/W2\",\"open_access\":{\"oa_url\":null},\"best_oa_location\":null,\"primary_location\":{\"pdf_url\":null},\"locations\":[]}",
+      "pdfs" : [
+        "https://link.springer.com/content/pdf/10.1007/s10462-023-10562-9.pdf"
+      ]
+    },
+    {
+      "doi" : "10.1002/advs.202300001",
+      "json" : "{\"id\":\"https://openalex.org/W2\",\"open_access\":{\"oa_url\":null},\"best_oa_location\":null,\"primary_location\":{\"pdf_url\":null},\"locations\":[]}",
+      "pdfs" : [
+        "https://onlinelibrary.wiley.com/doi/pdfdirect/10.1002/advs.202300001"
+      ]
+    },
+    {
+      "doi" : "10.1038/s41586-020-2649-2",
+      "json" : "{\"id\":\"https://openalex.org/W2\",\"open_access\":{\"oa_url\":null},\"best_oa_location\":null,\"primary_location\":{\"pdf_url\":null},\"locations\":[]}",
+      "pdfs" : [
+        "https://www.nature.com/articles/s41586-020-2649-2.pdf"
+      ]
+    },
+    {
+      "doi" : "10.1021/acs.jpcc.0c00001",
+      "json" : "{\"id\":\"https://openalex.org/W2\",\"open_access\":{\"oa_url\":null},\"best_oa_location\":null,\"primary_location\":{\"pdf_url\":null},\"locations\":[]}",
+      "pdfs" : [
+        "https://pubs.acs.org/doi/pdf/10.1021/acs.jpcc.0c00001"
+      ]
+    },
+    {
+      "doi" : "10.1126/science.abc1234",
+      "json" : "{\"id\":\"https://openalex.org/W2\",\"open_access\":{\"oa_url\":null},\"best_oa_location\":null,\"primary_location\":{\"pdf_url\":null},\"locations\":[]}",
+      "pdfs" : [
+        "https://www.science.org/doi/pdf/10.1126/science.abc1234"
+      ]
+    },
+    {
+      "doi" : "10.1073/pnas.2000000117",
+      "json" : "{\"id\":\"https://openalex.org/W2\",\"open_access\":{\"oa_url\":null},\"best_oa_location\":null,\"primary_location\":{\"pdf_url\":null},\"locations\":[]}",
+      "pdfs" : [
+        "https://www.pnas.org/doi/pdf/10.1073/pnas.2000000117"
+      ]
+    },
+    {
+      "doi" : "10.1080/01621459.2020.1000000",
+      "json" : "{\"id\":\"https://openalex.org/W2\",\"open_access\":{\"oa_url\":null},\"best_oa_location\":null,\"primary_location\":{\"pdf_url\":null},\"locations\":[]}",
+      "pdfs" : [
+        "https://www.tandfonline.com/doi/pdf/10.1080/01621459.2020.1000000"
+      ]
+    },
+    {
+      "doi" : "10.1137/19m1234567",
+      "json" : "{\"id\":\"https://openalex.org/W2\",\"open_access\":{\"oa_url\":null},\"best_oa_location\":null,\"primary_location\":{\"pdf_url\":null},\"locations\":[]}",
+      "pdfs" : [
+        "https://epubs.siam.org/doi/pdf/10.1137/19m1234567"
+      ]
+    },
+    {
+      "doi" : "10.1101/2020.01.01.000001",
+      "json" : "{\"id\":\"https://openalex.org/W2\",\"open_access\":{\"oa_url\":null},\"best_oa_location\":null,\"primary_location\":{\"pdf_url\":null},\"locations\":[]}",
+      "pdfs" : [
+        "https://www.biorxiv.org/content/10.1101/2020.01.01.000001.full.pdf"
+      ]
+    },
+    {
+      "doi" : "10.1016/j.neunet.2021.01.001",
+      "json" : "{\"id\":\"https://openalex.org/W4\",\"primary_location\":{\"pdf_url\":null,\"landing_page_url\":\"https://www.sciencedirect.com/science/article/pii/S0893608021000010\"},\"locations\":[{\"landing_page_url\":\"https://linkinghub.elsevier.com/retrieve/pii/S0893608021000010\"}]}",
+      "pdfs" : [
+        "https://www.sciencedirect.com/science/article/pii/S0893608021000010/pdfft?isDTMRedir=true&download=true"
+      ]
+    },
+    {
+      "doi" : "10.1016/j.neunet.2021.01.001",
+      "json" : "{\"id\":\"https://openalex.org/W2\",\"open_access\":{\"oa_url\":null},\"best_oa_location\":null,\"primary_location\":{\"pdf_url\":null},\"locations\":[]}",
+      "pdfs" : [
+
+      ]
+    },
+    {
+      "doi" : "10.1109/CVPR52688.2022.01553",
+      "json" : "{\"id\":\"https://openalex.org/W5\",\"primary_location\":{\"landing_page_url\":\"https://ieeexplore.ieee.org/document/9879595/\"},\"best_oa_location\":null,\"locations\":[{\"landing_page_url\":\"https://doi.org/10.1109/cvpr52688.2022.01553\"}]}",
+      "pdfs" : [
+        "https://ieeexplore.ieee.org/stampPDF/getPDF.jsp?tp=&arnumber=9879595"
+      ]
+    },
+    {
+      "doi" : "10.1109/CVPR52688.2022.01553",
+      "json" : "not json",
+      "pdfs" : [
+
+      ]
+    },
+    {
+      "doi" : "10.1371/journal.pone.0000001",
+      "json" : "{\"id\":\"https://openalex.org/W2\",\"open_access\":{\"oa_url\":null},\"best_oa_location\":null,\"primary_location\":{\"pdf_url\":null},\"locations\":[]}",
+      "pdfs" : [
+
+      ]
+    },
+    {
+      "doi" : "10.1145/",
+      "json" : "{\"id\":\"https://openalex.org/W2\",\"open_access\":{\"oa_url\":null},\"best_oa_location\":null,\"primary_location\":{\"pdf_url\":null},\"locations\":[]}",
+      "pdfs" : [
+
+      ]
+    },
+    {
+      "doi" : "10.1145",
+      "json" : "{\"id\":\"https://openalex.org/W2\",\"open_access\":{\"oa_url\":null},\"best_oa_location\":null,\"primary_location\":{\"pdf_url\":null},\"locations\":[]}",
+      "pdfs" : [
+
+      ]
+    }
   ]
 }

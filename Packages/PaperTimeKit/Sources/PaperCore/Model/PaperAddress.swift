@@ -112,6 +112,73 @@ public enum PaperAddress: Equatable, Sendable {
         return found
     }
 
+    /// Where a publisher keeps the PDF of a DOI, guessed from the prefix —
+    /// tried after every open copy, for the reader whose network has a
+    /// subscription (a university's, a research company's) and for the
+    /// publisher that lets the file through anyway. ACM, Springer, Wiley,
+    /// Nature, ACS, Science, PNAS, Taylor & Francis, SIAM and bioRxiv name
+    /// the file by the DOI; Elsevier and IEEE by an identifier of their own
+    /// that OpenAlex's landing page carries. Empty for a prefix not known
+    /// here. The guesses are cheap to be wrong about: a 403 is the same
+    /// answer as none.
+    public static func publisherPDFs(for doi: String, inOpenAlex data: Data) -> [URL] {
+        let lower = doi.lowercased()
+        guard let slash = lower.firstIndex(of: "/") else { return [] }
+        let prefix = String(lower[..<slash])
+        let suffix = String(lower[lower.index(after: slash)...])
+        guard !suffix.isEmpty else { return [] }
+        var guesses: [String] = []
+        switch prefix {
+        case "10.1145", "10.5555": guesses.append("https://dl.acm.org/doi/pdf/\(lower)")
+        case "10.1007": guesses.append("https://link.springer.com/content/pdf/\(lower).pdf")
+        case "10.1002": guesses.append("https://onlinelibrary.wiley.com/doi/pdfdirect/\(lower)")
+        case "10.1038": guesses.append("https://www.nature.com/articles/\(suffix).pdf")
+        case "10.1021": guesses.append("https://pubs.acs.org/doi/pdf/\(lower)")
+        case "10.1126": guesses.append("https://www.science.org/doi/pdf/\(lower)")
+        case "10.1073": guesses.append("https://www.pnas.org/doi/pdf/\(lower)")
+        case "10.1080": guesses.append("https://www.tandfonline.com/doi/pdf/\(lower)")
+        case "10.1137": guesses.append("https://epubs.siam.org/doi/pdf/\(lower)")
+        case "10.1101": guesses.append("https://www.biorxiv.org/content/\(lower).full.pdf")
+        case "10.1016":
+            // ScienceDirect names the file by its PII, which OpenAlex's
+            // landing page (`…/science/article/pii/S0893608021000010`) carries.
+            for page in landingPages(inOpenAlex: data) {
+                if let match = page.firstMatch(of: /\/pii\/([A-Za-z0-9]{17})/) {
+                    guesses.append("https://www.sciencedirect.com/science/article/pii/\(match.1)/pdfft?isDTMRedir=true&download=true")
+                }
+            }
+        case "10.1109":
+            // IEEE Xplore names the file by its article number
+            // (`…/document/9879595`).
+            for page in landingPages(inOpenAlex: data) {
+                if let match = page.firstMatch(of: /ieeexplore\.ieee\.org\/document\/(\d+)/) {
+                    guesses.append("https://ieeexplore.ieee.org/stampPDF/getPDF.jsp?tp=&arnumber=\(match.1)")
+                }
+            }
+        default: break
+        }
+        var found: [URL] = []
+        for guess in guesses {
+            guard let url = URL(string: guess), !found.contains(url) else { continue }
+            found.append(url)
+        }
+        return found
+    }
+
+    /// The landing pages OpenAlex's answer names, the primary one first.
+    static func landingPages(inOpenAlex data: Data) -> [String] {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [] }
+        var pages: [String] = []
+        func take(_ value: Any?) {
+            guard let text = value as? String, !text.isEmpty, !pages.contains(text) else { return }
+            pages.append(text)
+        }
+        take((object["primary_location"] as? [String: Any])?["landing_page_url"])
+        take((object["best_oa_location"] as? [String: Any])?["landing_page_url"])
+        for location in object["locations"] as? [[String: Any]] ?? [] { take(location["landing_page_url"]) }
+        return pages
+    }
+
     // MARK: - Reading
 
     // Lookbehinds are not in Swift's regex yet: the path these are run

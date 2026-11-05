@@ -70,13 +70,31 @@ struct Fixture {
         struct Answer: Encodable { var json: String; var pdfs: [String] }
         let read = answers.map { Answer(json: $0, pdfs: PaperAddress.openAccessPDFs(inOpenAlex: Data($0.utf8)).map(\.absoluteString)) }
 
-        struct Written: Encodable { var addresses: [Case]; var openAlex: [Answer] }
+        // Publishers' files, guessed from the DOI's prefix (and OpenAlex's
+        // landing page where the publisher names files its own way).
+        let elsevier = #"{"id":"https://openalex.org/W4","primary_location":{"pdf_url":null,"landing_page_url":"https://www.sciencedirect.com/science/article/pii/S0893608021000010"},"locations":[{"landing_page_url":"https://linkinghub.elsevier.com/retrieve/pii/S0893608021000010"}]}"#
+        let ieee = #"{"id":"https://openalex.org/W5","primary_location":{"landing_page_url":"https://ieeexplore.ieee.org/document/9879595/"},"best_oa_location":null,"locations":[{"landing_page_url":"https://doi.org/10.1109/cvpr52688.2022.01553"}]}"#
+        let dois: [(String, String)] = [
+            ("10.1145/3292500.3330701", answers[1]), ("10.5555/3295222.3295349", answers[1]),
+            ("10.1007/s10462-023-10562-9", answers[1]), ("10.1002/advs.202300001", answers[1]),
+            ("10.1038/s41586-020-2649-2", answers[1]), ("10.1021/acs.jpcc.0c00001", answers[1]),
+            ("10.1126/science.abc1234", answers[1]), ("10.1073/pnas.2000000117", answers[1]),
+            ("10.1080/01621459.2020.1000000", answers[1]), ("10.1137/19m1234567", answers[1]),
+            ("10.1101/2020.01.01.000001", answers[1]),
+            ("10.1016/j.neunet.2021.01.001", elsevier), ("10.1016/j.neunet.2021.01.001", answers[1]),
+            ("10.1109/CVPR52688.2022.01553", ieee), ("10.1109/CVPR52688.2022.01553", answers[3]),
+            ("10.1371/journal.pone.0000001", answers[1]), ("10.1145/", answers[1]), ("10.1145", answers[1]),
+        ]
+        struct Guess: Encodable { var doi: String; var json: String; var pdfs: [String] }
+        let guesses = dois.map { Guess(doi: $0.0, json: $0.1, pdfs: PaperAddress.publisherPDFs(for: $0.0, inOpenAlex: Data($0.1.utf8)).map(\.absoluteString)) }
+
+        struct Written: Encodable { var addresses: [Case]; var openAlex: [Answer]; var publishers: [Guess] }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-        let data = try encoder.encode(Written(addresses: cases, openAlex: read))
+        let data = try encoder.encode(Written(addresses: cases, openAlex: read, publishers: guesses))
         let out = URL(fileURLWithPath: "Packages/PaperTimeKit/Tests/PaperCoreTests/Fixtures/paper-addresses.json")
         try data.write(to: out)
-        print("wrote \(cases.count) addresses, \(read.count) answers to \(out.path)")
+        print("wrote \(cases.count) addresses, \(read.count) answers, \(guesses.count) publisher guesses to \(out.path)")
 
     }
 }
