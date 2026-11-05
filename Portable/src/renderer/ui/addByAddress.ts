@@ -19,20 +19,30 @@ export type AddressOutcome =
   | { already: string }
   | { failed: FetchFailure | null; message?: string }
 
-export function whyNoPaper(why: FetchFailure | null): string {
+/**
+ * Why there is no paper, in the app's words — with what the network said
+ * (`detail`) when that is the whole story: a reader whose company proxy
+ * turns the lookup away sees «OpenAlex HTTP 403», not «try again in a
+ * moment». The Mac's `whyNoPaper` says the same.
+ */
+export function whyNoPaper(why: FetchFailure | null, detail?: string): string {
+  const said = detail ? `(${[...detail].slice(0, 120).join('')})` : null
   switch (why) {
     case 'notAnAddress':
       return L('논문 주소가 아니에요. arXiv 번호나 주소, DOI, PDF 주소를 넣어주세요.', 'That is not a paper address. Enter an arXiv number or address, a DOI, or the address of a PDF.')
     case 'noPDF':
-      return L('이 주소에서 열린 PDF를 찾지 못했어요. 출판사 페이지만 있는 논문은 받을 수 없어요.', "Paper Time couldn't find an open PDF at this address. A paper that only has a publisher's page can't be fetched.")
+      return L('열린 PDF가 없는 논문이에요. 브라우저에서 받은 PDF를 Paper Time에 끌어다 놓거나, 그 PDF의 주소를 넣어주세요.', "This paper has no open PDF. Drop the PDF from your browser onto Paper Time, or enter the PDF's address.")
     case 'notFound':
       return L('이 주소에는 아무것도 없어요.', 'There is nothing at this address.')
     case 'offline':
-      return L('인터넷에 닿지 않아요.', "Paper Time can't reach the internet.")
+      return [L('인터넷에 닿지 않아요.', "Paper Time can't reach the internet."), said].filter((s) => s).join(' ')
     case 'tooLarge':
       return L('파일이 너무 커요.', 'The file is too large.')
     default:
-      return L('받지 못했어요. 잠시 뒤에 다시 해보세요.', "Paper Time couldn't fetch it. Try again in a moment.")
+      return [
+        L('받지 못했어요.', "Paper Time couldn't fetch it."), said,
+        L('네트워크가 막고 있다면 PDF 주소를 직접 넣어주세요.', "If the network is in the way, enter the PDF's address instead."),
+      ].filter((s) => s).join(' ')
   }
 }
 
@@ -55,8 +65,8 @@ export function askForAddress(add: (text: string) => Promise<AddressOutcome>, in
     }) as HTMLInputElement
     input.value = initial
     const hint = el('p', { class: 'set-note ask-hint', text: L(
-      '예: 2512.11732, https://arxiv.org/abs/2512.11732, 10.1145/3292500.3330701, 논문 PDF의 주소. DOI는 열린 사본이 있을 때만 받아져요.',
-      'For example 2512.11732, https://arxiv.org/abs/2512.11732, 10.1145/3292500.3330701, or the address of a PDF. A DOI is fetched when an open copy exists.',
+      '예: 2512.11732, https://arxiv.org/abs/2512.11732, 10.1145/3292500.3330701, 논문 PDF의 주소. DOI는 열린 사본이 있거나 이 네트워크가 구독 중일 때 받아져요.',
+      'For example 2512.11732, https://arxiv.org/abs/2512.11732, 10.1145/3292500.3330701, or the address of a PDF. A DOI is fetched when an open copy exists or this network has a subscription.',
     ) })
     const status = el('p', { class: 'set-note ask-status', role: 'status', 'aria-live': 'polite' })
     const cancel = el('button', { class: 'plain-button', text: L('취소', 'Cancel') })
@@ -109,7 +119,11 @@ export function askForAddress(add: (text: string) => Promise<AddressOutcome>, in
       busy = false
       input.toggleAttribute('disabled', false)
       if ('failed' in outcome) {
-        status.textContent = whyNoPaper(outcome.failed)
+        // The reason that is ours to say, and what the network said when
+        // that is the reason — not the message of a `noPDF`, which is only
+        // which address was not a PDF.
+        const telling = outcome.failed === null || outcome.failed === 'failed' || outcome.failed === 'offline'
+        status.textContent = whyNoPaper(outcome.failed, telling ? outcome.message : undefined)
         status.classList.add('ask-status-failed')
         refresh()
         input.focus()

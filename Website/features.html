@@ -1,0 +1,541 @@
+<!doctype html>
+<!--
+  Paper Time — 기능 정리.
+
+  정식 배포 전에 무엇을 남기고 무엇을 레거시로 돌릴지 정하기 위한 쪽이다.
+  읽는 사람은 만드는 사람 하나라서 한국어만 있고, 어디에서도 링크하지 않는다.
+  설명서(docs.html)는 «어떻게 쓰나»에 답하고, 이 쪽은 «왜 있나, 얼마나 무겁나,
+  정말 필요한가»에 답한다. 기능 목록은 아래 FEATURES 하나이고, 카드는 거기서
+  그려진다 — 고른 결정은 이 브라우저에만 남고(localStorage), «결정 복사»가
+  Markdown으로 꺼내 준다.
+-->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Paper Time — 기능 정리</title>
+<link rel="icon" type="image/png" sizes="32x32" href="img/icon-32.png">
+<link rel="stylesheet" href="style.css?v=0.9.37">
+<style>
+/* 이 쪽만의 것. 토큰·막대·레일·절은 style.css의 것을 그대로 쓴다. */
+.audit-hero .say { max-width: 720px; }
+.premise {
+  margin: 26px 0 0; max-width: 860px; display: grid; gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.premise div {
+  padding: 16px 18px; border-radius: var(--popover); background: var(--panel-2);
+  font-size: 14.5px; line-height: 1.5; color: var(--ink-2);
+}
+.premise b { display: block; color: var(--ink); font-weight: 600; font-size: 15.5px; margin-bottom: 4px; }
+@media (max-width: 760px) { .premise { grid-template-columns: minmax(0, 1fr); } }
+/* 좁은 화면에서는 레일이 막대 밑에 눕고, 요약 막대는 그 레일 아래에 붙는다. */
+@media (max-width: 900px) { .tally-bar { top: calc(var(--nav-h) + 58px); } }
+
+/* 판단 배지 — 넷. 색은 앱의 선반 색과 같은 뜻으로 쓴다. */
+.v { display: inline-block; font-size: 11.5px; font-weight: 600; letter-spacing: .02em;
+     padding: 3px 8px; border-radius: 999px; line-height: 1.2; white-space: nowrap; }
+.v-core   { color: #fff; background: var(--accent); }
+.v-base   { color: var(--accent); background: var(--accent-soft); }
+.v-nice   { color: var(--green); background: color-mix(in srgb, var(--green) 14%, transparent); }
+.v-review { color: #c2410c; background: color-mix(in srgb, #ff9500 16%, transparent); }
+@media (prefers-color-scheme: dark) { .v-review { color: #ffb366; } }
+
+/* 요약 막대: 수와 필터, 결정 꺼내기. 레일처럼 붙어 있는다. */
+.tally-bar {
+  position: sticky; top: var(--nav-h); z-index: 20;
+  margin: 0 0 22px; padding: 10px 0;
+  background: color-mix(in srgb, var(--page) 90%, transparent);
+  backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 1px solid var(--rule);
+  display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center;
+  font-size: 13px; color: var(--ink-2);
+}
+.tally-bar .group { display: inline-flex; gap: 4px; align-items: center; }
+.tally-bar .label { color: var(--ink-3); margin-right: 2px; }
+.tally-bar button.f {
+  border: none; cursor: pointer; background: color-mix(in srgb, var(--ink) 6%, transparent);
+  color: var(--ink-2); padding: 5px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 500;
+}
+.tally-bar button.f.on { background: var(--ink); color: var(--page); }
+.tally-bar .spacer { margin-left: auto; }
+.tally-bar .btn { padding: 7px 14px; font-size: 13px; }
+
+/* 한 기능 — 카드. */
+.feature {
+  margin: 0 0 14px; padding: 18px 20px; border-radius: var(--popover);
+  background: var(--panel-2); max-width: 860px;
+  scroll-margin-top: calc(var(--nav-h) + 70px);
+}
+.feature.hide { display: none; }
+.feature header { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; margin: 0 0 8px; }
+.feature h4 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -.012em; }
+.feature .where { font-size: 13px; color: var(--ink-3); }
+.feature .where .key { font-size: 11px; }
+.feature dl { margin: 0; display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 6px 14px; }
+.feature dt { font-size: 12.5px; color: var(--ink-3); font-weight: 600; padding-top: 2px; }
+.feature dd { margin: 0; font-size: 14.5px; line-height: 1.55; color: var(--ink-2); }
+.feature dd b { color: var(--ink); font-weight: 600; }
+.feature dd.reason { color: var(--ink); }
+.feature .cost { font-size: 13px; color: var(--ink-3); }
+.feature .cost span + span::before { content: " · "; }
+.feature .decision { margin: 12px 0 0; padding-top: 10px; border-top: 1px solid var(--rule);
+                  display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.feature .decision .ask { margin: 0 6px 0 0; font-size: 12.5px; color: var(--ink-3); text-align: left; max-width: none; }
+.decide { display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px;
+          background: color-mix(in srgb, var(--ink) 7%, transparent); }
+.decide button {
+  border: none; background: none; cursor: pointer; padding: 5px 12px; border-radius: 999px;
+  font-size: 12.5px; font-weight: 500; color: var(--ink-2);
+}
+.decide button.on { background: var(--panel); color: var(--ink); box-shadow: var(--shadow-1); }
+.decide button.on[data-d="keep"] { color: var(--accent); }
+.decide button.on[data-d="legacy"] { color: #c2410c; }
+.decide button.on[data-d="drop"] { color: #d62e54; }
+.decide button.on[data-d="check"] { color: #7c3aed; }
+.feature.d-check { background: color-mix(in srgb, #7c3aed 6%, var(--panel-2)); }
+/* 별점 — 강조하고 싶은 만큼. 같은 별을 다시 누르면 지워져요. */
+.stars { display: inline-flex; gap: 1px; margin-left: auto; align-items: center; }
+.stars .label { font-size: 12.5px; color: var(--ink-3); margin-right: 6px; }
+.stars button {
+  border: none; background: none; cursor: pointer; padding: 2px 1px; line-height: 1;
+  font-size: 18px; color: color-mix(in srgb, var(--ink) 18%, transparent);
+}
+.stars button.on { color: #f5a623; }
+.stars:hover button { color: color-mix(in srgb, var(--ink) 18%, transparent); }
+.stars button:hover, .stars button:has(~ button:hover) { color: #f5a623; }
+.feature .star-badge { font-size: 13px; color: #f5a623; letter-spacing: .05em; }
+/* 메모 — 한 줄로 시작해 쓰는 만큼 자라요. */
+.memo {
+  flex-basis: 100%; margin: 8px 0 0; width: 100%; min-height: 34px; resize: none; overflow: hidden;
+  font: 14px/1.5 var(--sans); color: var(--ink); background: var(--panel);
+  border: 1px solid var(--rule); border-radius: 10px; padding: 7px 10px;
+}
+.memo:focus { outline: none; border-color: var(--accent-line); }
+.memo::placeholder { color: var(--ink-3); }
+.feature.d-drop { opacity: .62; }
+.feature.d-legacy { background: color-mix(in srgb, #ff9500 7%, var(--panel-2)); }
+.feature.d-keep  { background: color-mix(in srgb, var(--accent) 5%, var(--panel-2)); }
+
+/* 영역 머리의 한 줄 판단. */
+.area-verdict { margin: 0 0 18px; max-width: var(--measure); font-size: 15px; line-height: 1.55; color: var(--ink-2); }
+.area-verdict b { color: var(--ink); font-weight: 600; }
+
+/* 꺼낸 Markdown. */
+#out { width: 100%; max-width: 860px; min-height: 160px; font: 12.5px/1.5 var(--mono);
+       border: 1px solid var(--rule); border-radius: var(--popover); padding: 12px; background: var(--panel);
+       color: var(--ink); resize: vertical; }
+</style>
+</head>
+<body data-page="docs">
+
+<div class="topbar">
+  <a class="name" href="index.html">Paper Time</a>
+  <nav>
+    <a href="#top-decisions">먼저 정할 것</a>
+    <a href="#reading">읽기</a>
+    <a href="#copy">복사</a>
+    <a href="#notes">노트</a>
+    <a href="#library">라이브러리</a>
+    <a href="#export">결정 꺼내기</a>
+  </nav>
+  <span class="spacer"></span>
+  <a class="pill" href="docs.html">설명서</a>
+</div>
+
+<header class="docs-hero audit-hero">
+  <div class="inner">
+    <p class="eyebrow">기능 정리 · 0.9.37 기준</p>
+    <h1 class="display">정식 배포 전에,<br>무엇을 남길까</h1>
+    <p class="say">처음 취지는 둘이었어요. <b>논문을 편하게 읽는 것</b>, 그리고 <b>Ultracopy</b>. 그 뒤로 기능이 쉰세 번의 릴리스를 지나며 늘었고, 지금 맥 코드가 약 9만 6천 줄, 윈도우·리눅스 쪽이 약 7만 8천 줄이에요. 아래는 지금 있는 기능 전부를 영역별로 늘어놓고, 하나하나에 <b>쓰는 법 · 생긴 이유 · 비용 · 빼면 같이 빠지는 것 · 내 판단</b>을 붙인 것이에요. 카드마다 «남기기 · 레거시 · 빼기»를 고르면 맨 아래에서 Markdown으로 꺼낼 수 있어요.</p>
+    <div class="premise">
+      <div><b>핵심 <span class="v v-core">핵심</span></b>앱이 존재하는 이유예요. 읽기와 Ultracopy. 여기서는 더하면 더했지 빼지 않아요.</div>
+      <div><b>받침 <span class="v v-base">받침</span></b>핵심이 서려면 있어야 하는 것이에요. 폴더 라이브러리, PDF에 덧붙여 쓰기 같은 것. 눈에 안 띄지만 빼면 핵심이 무너져요.</div>
+      <div><b>있으면 좋음 <span class="v v-nice">좋음</span> · 검토 <span class="v v-review">검토</span></b>앞엣것은 값싸고 읽기에 보탬이 되는 것, 뒤엣것은 크거나 취지에서 멀어서 레거시나 빼기를 생각해 볼 것이에요.</div>
+    </div>
+  </div>
+</header>
+
+<div class="docs">
+  <nav class="rail" id="rail" aria-label="차례">
+    <h2>차례</h2>
+    <a href="#top-decisions">먼저 정할 것</a>
+    <a href="#reading">읽기</a>
+    <a href="#marks">표시</a>
+    <a href="#copy">복사 · Ultracopy</a>
+    <a href="#draw">그리기</a>
+    <a href="#notes">노트</a>
+    <a href="#find">찾기</a>
+    <a href="#library">라이브러리</a>
+    <a href="#biblio">서지</a>
+    <a href="#graph">그래프</a>
+    <a href="#app">창과 앱</a>
+    <a href="#export">결정 꺼내기</a>
+  </nav>
+  <main>
+
+<section class="doc" id="top-decisions">
+  <h2>먼저 정할 것 셋</h2>
+  <p class="lede">기능 하나하나보다 먼저 정해야 비용이 바뀌는 것이 셋 있어요. 이 셋이 정해지면 아래 카드 절반의 답이 따라와요.</p>
+
+  <article class="task">
+    <h3>1. 윈도우·리눅스 빌드를 계속 가져갈까</h3>
+    <p><code>Portable/</code>는 코드를 나누지 않고 <b>파일 형식만 공유하는 두 번째 구현</b>이에요(Electron + TypeScript, 약 7만 8천 줄). 그래서 맥에 기능 하나를 더하면 같은 커밋에서 저쪽에도 더해야 하고, 지금까지 그렇게 해 왔어요. 이 규칙이 있는 한 <b>모든 기능의 비용은 두 배</b>예요. 윈도우 기계가 없어서 실제 설치는 사람 손으로만 확인돼요.</p>
+    <ul class="points">
+      <li><b>그대로 간다</b> — 기능을 줄일수록 두 배 비용도 같이 줄어요. 남기는 기능을 적게 고르면 유지할 만해요.</li>
+      <li><b>읽기·표시·Ultracopy만 포터블에 남긴다</b> — 노트·그리기·서지는 맥 전용으로 두고, 포터블은 «같은 폴더를 여는 리더»로 좁혀요. 파일 형식은 그대로라 호환은 깨지지 않아요.</li>
+      <li><b>레거시로 얼린다</b> — 0.9.37을 마지막 포터블 릴리스로 두고 고치지 않아요. 페이지의 «받기»에서 버전만 다르게 보여요.</li>
+    </ul>
+  </article>
+
+  <article class="task">
+    <h3>2. 아이패드·아이폰은 어떻게 할까</h3>
+    <p>iOS 타깃은 0.6.0부터 빌드가 깨진 채예요(«정식 릴리스 때만 고친다»고 미뤄 둔 것). 정식 배포라면 지금이 그때이거나, 아니면 <b>맥·윈도우·리눅스의 앱</b>으로 선을 긋고 iOS는 페이지에서 내려야 해요. 무료 개발자 계정이라 앱스토어에 올릴 수도 없어서, 고쳐도 쓰는 사람은 직접 Xcode로 넣는 사람뿐이에요.</p>
+  </article>
+
+  <article class="task">
+    <h3>3. 큰 모델을 품은 기능을 둘까</h3>
+    <p>기능 셋이 모델을 들고 있어요. <b>수식 OCR</b>(pix2text, 앱 안에 30 MB), <b>뜻으로 찾기</b>(MiniLM, 앱 안에 45 MB·포터블 43 MB), <b>손글씨 읽기</b>(Qwen3.5, 사용자가 3–6 GB를 받음, 맥 전용, 빌드에 Metal 툴체인이 필요). 셋 다 취지에서 한 걸음씩 떨어져 있고, 셋을 빼면 앱 크기가 75 MB 줄고 빌드 조건이 가벼워져요. 아래 카드에서 하나씩 판단했어요.</p>
+  </article>
+
+  <div class="note">참고로 <b>dev/v0.10.0</b> 가지에 «미래 모드»(대시보드 옷)가 빌드만 되고 배포되지 않은 채 있어요. 정식 배포 범위에 넣을지도 여기서 정해요 — 이 쪽의 카드에는 넣지 않았어요(배포된 적이 없어서).</div>
+</section>
+
+<div class="tally-bar" id="tally">
+  <span class="group"><span class="label">내 판단</span>
+    <button class="f on" data-filter="all">전부 <span id="n-all"></span></button>
+    <button class="f" data-filter="core">핵심 <span id="n-core"></span></button>
+    <button class="f" data-filter="base">받침 <span id="n-base"></span></button>
+    <button class="f" data-filter="nice">좋음 <span id="n-nice"></span></button>
+    <button class="f" data-filter="review">검토 <span id="n-review"></span></button>
+  </span>
+  <span class="group"><span class="label">내 결정</span>
+    <button class="f" data-filter="d-keep">남기기 <span id="n-keep"></span></button>
+    <button class="f" data-filter="d-legacy">레거시 <span id="n-legacy"></span></button>
+    <button class="f" data-filter="d-drop">빼기 <span id="n-drop"></span></button>
+    <button class="f" data-filter="d-check">점검필요 <span id="n-check"></span></button>
+    <button class="f" data-filter="memo">메모 있음 <span id="n-memo"></span></button>
+    <button class="f" data-filter="starred">별점 있음 <span id="n-starred"></span></button>
+    <button class="f" data-filter="d-none">미정 <span id="n-none"></span></button>
+  </span>
+  <span class="spacer"></span>
+  <button class="btn" id="prefill">추천대로 채우기</button>
+  <button class="btn" id="clear">비우기</button>
+  <a class="btn btn-primary" href="#export">결정 꺼내기</a>
+</div>
+
+<div id="areas"></div>
+
+<section class="doc" id="export">
+  <h2>결정 꺼내기</h2>
+  <p class="lede">고른 것을 Markdown으로 모아요. 복사해서 저한테 그대로 붙여 주면, 그 목록대로 코드와 설명서를 정리할게요.</p>
+  <p><button class="btn btn-primary" id="copy">결정 복사</button> <span class="hint" id="copied" style="display:inline"></span></p>
+  <textarea id="out" readonly></textarea>
+  <div class="note">고른 것은 이 브라우저에만 남아요(localStorage). 다른 기계에서 보면 비어 있어요.</div>
+</section>
+
+  </main>
+</div>
+
+<footer class="docs-foot">
+  <div class="inner">
+    <p>이 쪽은 어디에서도 링크하지 않고, 검색에도 안 잡혀요(noindex). 결정이 끝나면 지우거나 설명서로 옮겨요.</p>
+    <span class="spacer"></span>
+    <a class="btn" href="docs.html">설명서</a>
+  </div>
+</footer>
+
+<script>
+/* ───────────────────────────── 기능 목록 ─────────────────────────────
+   verdict: core | base | nice | review
+   cost: 줄 수는 맥(App+Packages)과 포터블(Portable/src)의 대략값. «외부»는 모델·프레임워크.
+   platforms: mac · win/linux · ipad
+   depends: 빼면 같이 빠지거나 손봐야 하는 것 */
+const AREAS = [
+  { id: "reading", name: "읽기", verdict: "취지 그 자체예요. 여기서 뺄 것은 <b>읽기 그 자체가 아니라 읽기 둘레에 붙은 장식</b>이에요 — 색조의 변종, 네 칸 나란히, 책 여백 자르기.", features: [
+    { id: "pdf-read", name: "PDF 읽기 · 쪽 넘기기 · 확대", keys: "⌘↑ ⌘↓ · ⌘+ ⌘− ⌘0", how: "논문을 고르면 가운데 칸에 열려요. 스크롤·핀치·키로 넘기고 확대해요. 읽던 자리를 기억했다가 다음에 그 쪽에서 열어요.", why: "앱의 출발점.", cost: "PDFKit 위의 리더(맥 리더 뷰 전체 약 21,500줄 중 일부) · 포터블 pdf.js 리더 약 5,800줄", platforms: "맥 · 윈도우/리눅스 · 아이패드", depends: "전부.", verdict: "core", reason: "이것이 앱이에요." },
+    { id: "layout", name: "페이지 배치 — 이어서 · 한 쪽씩 · 책처럼", keys: "⌘1 ⌘2 ⌘3 · AA 메뉴", how: "이어서 보기가 기본이고, 한 쪽씩은 쪽 단위로, 책처럼은 두 쪽을 펼쳐요. 책에서는 ←→로 장을 넘기고 집중 모드가 따라와요.", why: "두 단 논문은 이어서, 책은 펼쳐서 읽고 싶어서.", cost: "맥 배치 로직 + 책 여백 자르기(BookTrim 354줄) · 포터블 같은 셋", platforms: "맥 · 윈도우/리눅스 · 아이패드", depends: "«책처럼»을 빼면 BookTrim·집중 모드 연동·책 진행 막대가 같이 빠져요.", verdict: "nice", reason: "이어서·한 쪽씩은 핵심에 가깝고, <b>책처럼 + 여백 자르기</b>는 책을 라이브러리에 넣는 사람에게만 뜻이 있어요. 책 종류(아래)를 빼면 이것도 같이 빼는 게 자연스러워요." },
+    { id: "tint", name: "페이지 색조 — 흰 종이 · 세피아 · 어둡게 · 유리 · 직접 고른 색", keys: "AA 메뉴", how: "바탕을 고르면 그리는 법이 따라와요. 밝은 바탕은 곱하기, 어두운 바탕은 밤(밝기만 뒤집고 사진은 인쇄된 그대로). 직접 고른 색은 시스템 색상 패널로.", why: "어두운 방에서 읽을 때 종이가 눈부셔서. 그 뒤로 유리·직접 색·사진 보존까지 자랐어요.", cost: "맥 약 500줄 + 레이어 필터 + 쪽 그림 찾기(PageImages, 폼 안 이미지까지) · 포터블 같은 모델 + 그림 자리 걷기", platforms: "맥 · 윈도우/리눅스", depends: "밤 모드를 빼면 «사진은 인쇄된 그대로» 규칙(PageImages·PageTone·isInkOnWhite)이 통째로 필요 없어요.", verdict: "nice", reason: "흰 종이·세피아·어둡게 셋은 읽기 경험이에요. <b>유리와 직접 고른 색은 검토</b> — 설명할 것이 늘고 사진으로 확인도 안 되는 합성이라 고치기 어려워요." },
+    { id: "focus", name: "논문에 집중 · 창의 칸 접기", keys: "⇧⌘F · ⌘[ ⌘P ⌘\\ ⌘]", how: "집중은 논문 칸만 남기고 나머지를 비켜 세워요. 네 칸(옆 목록·목록·논문·정보)은 각자 키로 접히고 틈을 끌면 크기가 바뀌어요.", why: "읽을 때는 논문만 보이면 되니까.", cost: "맥 AppModel의 칸 모델 · 포터블 shared/paneModel.ts", platforms: "맥 · 윈도우/리눅스", depends: "없음.", verdict: "base", reason: "읽기의 받침이고 값싸요." },
+    { id: "toc", name: "차례와 쪽 그림", keys: "⇧⌘L", how: "팝업에 «차례»(PDF의 목차, 없으면 쪽의 제목을 읽어서)와 «쪽»(썸네일 격자) 두 칸. 고르면 그 쪽으로 가요.", why: "긴 논문과 책에서 절 사이를 오가려고.", cost: "맥 ContentsPopup + 제목 읽기(PaperContents) + 썸네일 · 포터블 pages.ts(PDF 목차만)", platforms: "맥 · 윈도우/리눅스", depends: "없음.", verdict: "nice", reason: "읽기에 보탬이 돼요. 맥의 «쪽 글에서 제목 읽기»는 꽤 무거운데 없으면 «쪽» 칸으로 떨어지니 그 부분만 레거시로 둘 수도 있어요." },
+    { id: "find-doc", name: "이 논문에서 찾기", keys: "⌘F", how: "열린 PDF를 찾고 결과를 하나씩 넘겨요.", why: "당연히.", cost: "작음(FindBar)", platforms: "맥 · 윈도우/리눅스", depends: "없음.", verdict: "core", reason: "" },
+    { id: "panes", name: "논문 나란히 보기 · 같은 논문을 여러 칸에 · 새 창 · 열린 문서 팝업", keys: "끌어다 놓기 · ⇧⌘O · 우클릭 «나란히 열기»", how: "목록의 논문을 쪽 영역의 가장자리에 끌어다 놓으면 둘로 갈라져요(최대 넷, 열마다 위·아래). 같은 논문을 두 칸에 둘 수도 있고(그림 한 칸, 글 한 칸), 창 밖으로 끌면 새 창이 열려요.", why: "본문과 그림을, 또는 두 논문을 같이 보려고.", cost: "맥 SplitReader+OpenPapers 약 600줄 + 칸 id 모델 + 포커스 규칙 · 포터블 split.ts·openPapers.ts·칸 키 모델", platforms: "맥 · 윈도우/리눅스", depends: "«열린 논문» 선반, 핀, 칸 제목 끌기, 새 창(PaperWindow).", verdict: "review", reason: "둘로 나누는 것은 읽기에 쓸모가 있어요. <b>넷까지, 같은 논문을 여러 칸, 새 창</b>은 복잡도를 많이 올렸고(포커스된 칸만 링크를 빌리는 규칙, 칸 id, 드롭 영역 여섯) 쓰는 빈도는 낮아 보여요. 좌우 둘로만 줄이는 것을 권해요." },
+    { id: "history", name: "이동 — 뒤로·앞으로 · 다음/이전 논문 · 논문 속 링크", keys: "⌥⌘[ ⌥⌘] · ⌥⌘↑ ⌥⌘↓", how: "참고문헌 링크를 누르면 가고, ⌥⌘[로 돌아와요. 자취는 논문 안을 먼저, 그다음 논문 사이를 걸어요.", why: "링크 따라갔다가 돌아올 길.", cost: "작음", platforms: "맥 · 윈도우/리눅스", depends: "없음.", verdict: "base", reason: "" },
+    { id: "status", name: "읽기 상태 · 즐겨찾기 · 별점 · 메모", keys: "목록 줄의 단추 · 정보 패널", how: "안 읽음→읽는 중→읽음, 별, 다섯 별점, 한 칸짜리 메모. 선반(안 읽음·읽는 중·읽음·즐겨찾기)이 이걸로 걸러요.", why: "서지 관리 앱이 다 가진 것.", cost: "작음(PaperState) · 포터블 같음", platforms: "맥 · 윈도우/리눅스 · 아이패드", depends: "읽기 상태 선반.", verdict: "nice", reason: "값싸고 쓸모 있어요. <b>별점과 메모</b>는 노트가 있으니 겹치는 느낌이 있어요 — 메모 칸은 빼도 노트가 그 자리를 대신해요." },
+  ]},
+  { id: "marks", name: "표시", verdict: "우선순위 둘째인 «필기가 PDF 파일에 기록된다»가 여기예요. 형광펜·밑줄과 그것을 <b>파일에 덧붙여 쓰는 저장기</b>는 받침이고, 둘레의 목록·댓글·남의 표시 다루기는 가벼워요.", features: [
+    { id: "highlight", name: "형광펜 · 밑줄 — 글자에 맞춘 표시, 다섯 색, 애플 노트식 잉크 색칠", keys: "⇧⌘H ⇧⌘U · 고르면 뜨는 막대", how: "글자를 고르면 막대가 떠요. 색을 누르면 그 줄들에 맞춰 칠해지고, 글자는 그 색의 잉크로 물들어요(0.9.35). 표시를 누르면 색 바꾸기·노트·지우기.", why: "읽기 경험의 일부이고, 표준 주석이라 어느 리더에서도 보여요.", cost: "맥 표시 뷰 약 1,750줄(잉크 색칠 포함) · 포터블 readerMarks·markBar", platforms: "맥 · 윈도우/리눅스 · 아이패드", depends: "표시 목록, 표시 노트, 동기화, 접기 비교(AnnotationMeaning).", verdict: "core", reason: "읽기의 일부예요. 애플 노트식 잉크 색칠은 최근에 공들였고 결과가 좋아요." },
+    { id: "append", name: "표시가 PDF에 남는다 — 증분 저장 · 기준선 · 접기 · 파일 지문", keys: "자동(1.5초 뒤)", how: "저장은 원본 바이트 뒤에 리비전을 덧붙여요(글꼴을 다시 쓰지 않아서 TeX의 «ff»가 «!»가 되지 않아요). 꼬리가 커지면 닫을 때 접고, 파일이 원본인지·덧붙여졌는지·남이 다시 썼는지 지문으로 알아요.", why: "PDFKit의 저장이 글꼴을 망가뜨리는 것을 발견하고(코퍼스 63편 중 27편) 다시 쓴 것.", cost: "맥 PDFUpdate 약 3,200줄 · 포터블 pdfupdate 약 2,400줄 — 암호화·객체 스트림·xref 사슬까지 직접 파싱", platforms: "맥 · 윈도우/리눅스 · 아이패드", depends: "표시·잉크·도형의 PDF 사본 전부가 이 길로 써져요.", verdict: "base", reason: "눈에 안 보이지만 «표시가 파일에 남고 파일은 안 망가진다»는 약속이 이거예요. <b>접기(Compaction)</b>만은 검토 — 100회 저장 뒤에나 뜻이 있고, 거절 조건이 많아 고치기 까다로워요. 꼬리가 몇 MB 커지는 것을 그냥 두는 선택도 있어요." },
+    { id: "restore", name: "원본 글자 되살리기", keys: "정보 패널 → 파일 → «다시 쓰임»일 때만 단추", how: "다른 앱이 다시 써서 글자가 망가진 PDF에, 사용자가 고른 원본 파일(지문이 정확히 같을 때만)을 바탕으로 표시를 다시 써 넣어요.", why: "증분 저장 이전(P1 전)에 PDFKit이 망가뜨린 파일을 고치려고.", cost: "맥 PaperRestore(수백 줄) · 포터블 없음", platforms: "맥", depends: "파일 지문(FileProvenance).", verdict: "review", reason: "1.0.0부터는 앱이 파일을 다시 쓰지 않으니 <b>이 앱이 만든 문제는 더 이상 안 생겨요</b>. 옛 사용자의 복구용으로 한 버전 두고 레거시로 돌리는 게 맞아요." },
+    { id: "marks-list", name: "표시 목록(Marks 탭) · 표시에 노트 달기 · 표시한 곳으로 가기", keys: "정보 패널 Marks 탭", how: "그 논문의 표시가 색·쪽 순으로 서고, 누르면 그 자리로 가요. 표시마다 한 줄 노트를 달 수 있고 PDF 주석의 /Contents로도 들어가요.", why: "표시한 것을 다시 찾으려고.", cost: "맥 MarkupListView · 포터블 inspector의 Marks", platforms: "맥 · 윈도우/리눅스", depends: "없음.", verdict: "nice", reason: "값싸고 읽기에 붙어 있어요." },
+    { id: "sync", name: "기기 사이 동기화 — 저널 · 감시자 · 3초 폴링", keys: "자동 · ⌘R", how: "표시는 기기별 저널에 즉시, PDF에는 1.5초 뒤 써요. 다른 기기의 저널이 클라우드로 도착하면 감시자가 알아채 다시 읽고 파일에도 써요.", why: "맥에서 긋고 아이패드에서 보려고. CloudKit은 무료 계정이라 못 쓰고 iCloud Drive 파일로만.", cost: "맥 DocumentWatcher·reconcile·FSEvents 감시자 · 포터블 folderSync·journal", platforms: "맥 · 윈도우/리눅스 · 아이패드", depends: "여러 폴더·여러 기기 전부.", verdict: "base", reason: "기기가 둘 이상이면 받침이에요. iOS를 내리고 데스크톱 하나만 쓴다면 저널은 «작업 중 저장»으로만 남고 감시의 절반은 쉬어도 돼요." },
+    { id: "foreign", name: "다른 앱이 남긴 표시·필기 읽기와 고치기", keys: "자동", how: "Preview나 아이패드 앱이 남긴 형광펜·잉크를 같은 이름으로 불러 보여주고, 고치면 그때 우리 것으로 들여요(adopt). 포터블은 «다른 앱의 잉크가 있어요»로 알려요.", why: "라이브러리가 평범한 PDF 폴더라서 남의 표시가 섞여 들어와요.", cost: "맥 InkConverter·markIds · 포터블 markIds.ts·foreign", platforms: "맥 · 윈도우/리눅스", depends: "없음.", verdict: "nice", reason: "«파일을 조용히 망치지 않는다»의 일부라 두는 쪽을 권해요. 고치기 기능 없이 «보여주기만»으로 줄여도 돼요." },
+  ]},
+  { id: "copy", name: "복사 · Ultracopy", verdict: "두 번째 취지예요. <b>Ultracopy와 올가미는 핵심</b>이고, 그 뒤에 붙은 두 모델(수식 OCR·손글씨)은 «글리프가 없는 자리»를 메우려고 들어온 것이라 따로 판단해요.", features: [
+    { id: "ultracopy", name: "Ultracopy — 글은 글로, 수식은 LaTeX으로", keys: "⇧⌘C · 막대의 ƒ · 우클릭", how: "고른 곳을 복사하면 산문은 글로, 수식은 쪽의 글리프에서 구조를 읽어 LaTeX으로 와요(첨자·분수·행렬·경우 나눔·식 번호·\\substack·조각 화살표·괄호 크기까지). ⌘L의 인용도 같은 엔진이에요.", why: "취지.", cost: "맥 MathReader·Transcriber·스캐너·글리프 표 약 9,500줄 · 포터블 그대로 포팅 약 7,600줄 · 벤치 27 설정 8,200 수식, 코퍼스 61편 쪽 비교", platforms: "맥 · 윈도우/리눅스", depends: "⌘L 구절 인용의 구조, 올가미, 노트의 수식 조판이 그 출력을 받아요.", verdict: "core", reason: "앱에서 가장 큰 덩어리이지만 이게 Paper Time이에요. 여기에 쓰는 시간은 줄이지 말아요." },
+    { id: "lasso", name: "수식 올가미", keys: "⌥⌘L", how: "켜면 십자 커서와 띠가 뜨고, 사각형을 끌면 리더가 실제로 읽을 글리프로 상자가 스냅해 잉크가 강조색으로 물들어요. 그 상태에서 ⇧⌘C·⌘L.", why: "PDFKit의 드래그 선택이 표와 Word PDF에서 손이 그린 것과 다르게 잡혀서.", cost: "맥 LassoInputView(위 수치에 포함) · 포터블 lasso-input", platforms: "맥 · 윈도우/리눅스", depends: "OCR·손글씨는 올가미로만 들어가요.", verdict: "core", reason: "Ultracopy를 믿고 쓰게 하는 손잡이예요." },
+    { id: "ocr", name: "수식 OCR — 글리프가 없는 자리를 그림에서", keys: "올가미로 잡으면 자동", how: "스캔본·그림으로 넣은 수식·뜻 없는 글꼴의 Word 수식은 글리프가 없어 사각형이 점선으로 남고, ⇧⌘C가 그 자리를 3배로 그려 pix2text 모델에 넣어요. 수식 하나에 1–2초.", why: "올가미가 «읽을 글리프 없음»으로 끝나는 자리가 있어서.", cost: "맥 약 1,350줄(손글씨 포함) + ONNX Runtime 정적 링크 20 MB + 모델 30 MB · 포터블 onnxruntime-web", platforms: "맥 · 윈도우/리눅스", depends: "없음(올가미는 그대로 남아요).", verdict: "nice", reason: "값은 모델 30 MB와 런타임이에요. 여러 줄 수식은 첫 줄만 읽는 한계가 있고요. <b>Ultracopy가 글리프 PDF에서 충분히 좋다면 빼도 핵심이 흔들리지 않아요.</b> 나는 남기는 쪽이에요 — 스캔 교과서가 실제로 라이브러리에 있어서요." },
+    { id: "handwriting", name: "손글씨 읽기 — Qwen3.5 비전 모델", keys: "설정 → 읽기 → 손글씨에서 모델 받기 · 올가미", how: "모델(표준 4B 약 3 GB / 정밀 9B 약 6 GB)을 받아 두면 글리프 없는 올가미가 이쪽으로 가요. 손글씨 노트와 스캔한 쪽을 LaTeX으로.", why: "사용자의 요청(0.9.23).", cost: "맥 전용 · mlx-swift-lm + swift-transformers 의존 · 빌드에 Xcode Metal 툴체인 필요 · 애플 실리콘만 · 다운로드·이어받기·검증 UI", platforms: "맥", depends: "없음. 빼면 설정의 «손글씨» 절과 두 패키지 의존이 사라져요.", verdict: "review", reason: "<b>가장 멀리 간 기능</b>이에요. MLX는 마이너 버전마다 API를 깨고, 빌드 조건이 하나 더 붙고, 포터블에는 애초에 없어요. 취지가 «논문 읽기»라면 손글씨 노트는 그 밖이에요. 본인이 자주 쓴다면 남기고, 아니면 레거시(코드는 두고 설정에서 숨김)를 권해요." },
+  ]},
+  { id: "draw", name: "그리기", verdict: "펜·형광펜·지우개는 아이패드와 같은 잉크라 받침이에요. 그 위에 올린 <b>Figma식 도형 편집기</b>(도형·화살표·글 카드·프레임·묶음·오토 레이아웃·정렬 스냅·인스펙터)는 앱에서 둘째로 큰 덩어리이고, 취지에서 가장 멀어요.", features: [
+    { id: "ink", name: "펜 · 형광펜 · 지우개 (맥·아이패드 공통 잉크)", keys: "⇧⌘D · P H E", how: "펜을 들면 쪽 위에 입력 층이 얹혀요. 마우스·태블릿 점이 PKStroke가 되어 사이드카에 들고, 저장 때 PDF에 /Ink 사본을 써요. 형광펜을 글자 위에 그으면 표시가 돼요.", why: "«필기가 PDF에 기록된다»가 우선순위 둘째라서.", cost: "InkEngine 잉크 부분 + StrokeSnapper · 포터블 inkPresets·strokeSnap", platforms: "맥 · 윈도우/리눅스 · 아이패드", depends: "동기화, PDF 사본.", verdict: "base", reason: "" },
+    { id: "sketch", name: "도형 · 화살표 · 글 카드 · 프레임 · 묶음 · 오토 레이아웃 · 인스펙터", keys: "V F R O L A T · ⌘G · ⇧A · Tools 탭", how: "Figma의 도구 줄이 쪽 위에 떠요. 네모·동그라미·선·굽은 화살표·글 카드(수식 조판)·프레임(자르기·레이아웃)·묶음. 오른쪽 Tools 탭에 위치·크기·간격·투명도·모서리·채우기·외곽선·글꼴. 옮기면 붙고(정렬선), ⌥로 복제하며 끌어요. 전부 PDF에 표준 주석 사본 + /PTSketch 페이로드로 써져요.", why: "«PDF 앱의 그리기는 뻣뻣하다, 맥에서도 자유롭게 그리고 싶다».", cost: "맥 Sketch 뷰 약 3,800줄 + InkEngine 나무·스냅 약 2,500줄 + 글 카드 조판 · 포터블 약 5,650줄 · 직접 그린 아이콘 세트", platforms: "맥 · 윈도우/리눅스 (아이패드는 보기만)", depends: "글 카드의 수식 조판(MathJax 공유), Tools 탭, SketchUndo, PDF 사본 규칙 여섯 가지.", verdict: "review", reason: "<b>이게 «쓸데없이 커진» 느낌의 절반</b>이라고 봐요. 논문을 읽다가 네모 하나, 화살표 하나는 쓰지만 프레임·묶음·오토 레이아웃·hug 크기·동심 모서리는 논문 리더의 일이 아니에요. 권하는 것: 도형(네모·동그라미·선·화살표)과 글 카드까지만 남기고 <b>프레임·묶음·오토 레이아웃·정렬 스냅·복제 끌기·인스펙터의 레이아웃 절</b>은 레거시(파일은 계속 읽히게, 만드는 UI만 숨김)." },
+  ]},
+  { id: "notes", name: "노트", verdict: "노트는 읽기에서 자연스럽게 이어져요(⌘L). 다만 노트 <b>편집기</b>가 Obsidian·Notion을 따라가며 자란 것이 1만 5천 줄이 넘고, 그 위의 <b>슬립박스 철학</b>(지도·초안·공명)은 쓰는 사람이 몇인지 모르겠어요.", features: [
+    { id: "note-basic", name: "노트 만들기 · 논문별 노트 · Notes 탭 · 슬립박스 목록", keys: "⌘N · 정보 패널 Notes 탭 · 옆 목록 «노트»", how: "노트 하나에 생각 하나. 논문을 읽는 중이면 그 논문의 노트가 되고, 파일은 폴더 안 .papertime/notes/<id>.md예요. 옆 목록의 «노트»가 전부를 모아 보여줘요.", why: "읽은 것을 적을 자리.", cost: "맥 NotesModel + 노트 뷰(전체 약 8,500줄 중 일부) · 포터블 slipBox·notesTab·notesModel", platforms: "맥 · 윈도우/리눅스", depends: "⌘L, 링크, 검색의 노트 절, 뜻으로 찾기의 노트.", verdict: "nice", reason: "읽기에 붙은 메모 자리로서 남겨요. 아래의 편집기 기능 중 무엇을 남기느냐가 진짜 질문이에요." },
+    { id: "quote", name: "고른 곳을 노트로(⌘L) · 쪽 링크 · 인용한 구절 색칠", keys: "⌘L", how: "고른 구절(수식은 구조째)이 인용구로 노트에 들어가고 쪽 링크가 붙어요. 그 구절은 쪽 위에 연하게 칠해지고, 누르면 그 노트의 그 자리로 가요.", why: "읽는 곳과 쓰는 곳 사이를 잇는 한 키.", cost: "맥 QuoteLinks + QuotedPassages 매칭(노트 글로 쪽 글자 찾기) · 포터블 quoteWash", platforms: "맥 · 윈도우/리눅스", depends: "노트, Ultracopy의 structured.", verdict: "nice", reason: "최근에 직접 요청하고 다듬은 것이고 읽기와 가장 가까운 노트 기능이라 남겨요." },
+    { id: "md-basic", name: "Markdown 조판 — 제목 · 목록 · 번호 목록 · 강조 · 링크", keys: "쓰는 대로", how: "캐럿이 떠나면 조판되고, 캐럿이 있는 줄은 적힌 그대로(기호는 강조색). 목록은 Notion처럼 표시가 고정이고, 번호는 서 있는 차례예요. Return·Tab·Backspace가 목록을 알아요.", why: "노트가 글처럼 보이게.", cost: "맥 NoteMarkdown·NoteTextView·NoteList(TextKit 2) · 포터블 CodeMirror 6 + markdownView", platforms: "맥 · 윈도우/리눅스", depends: "아래 편집기 기능 전부가 이 위에.", verdict: "nice", reason: "노트를 남긴다면 이건 같이 남아요. 다만 0.9.30–0.9.31에서 목록 키 하나에 버그가 여섯 나올 만큼 TextKit 2 위의 편집기는 손이 가요." },
+    { id: "md-extra", name: "편집기의 더 — 토글 · 표 · 코드 블록 · ==하이라이트== · 화살표 → · 자동 짝 · 선택 툴바", keys: "-- · | | · ``` · ⌘⇧H · ⌘B ⌘I ⌘E", how: "Notion의 토글(접힘), Markdown 표(격자로 그림, 붙여 넣은 HTML 표 변환), 코드 블록(언어 칩·복사·줄 번호·Xcode 색, highlight.js 묶음), 색 하이라이트, ->가 →, 괄호 자동 짝, 고르면 뜨는 B·I·</>·$ 막대.", why: "한 번에 하나씩, «Notion처럼» «Obsidian처럼».", cost: "맥 NoteCode·NoteTable·NoteHighlight·SelectionToolbar + CodeHighlight.js 번들 · 포터블 같은 모듈들 · 픽스처 셋", platforms: "맥 · 윈도우/리눅스", depends: "없음(각자 독립).", verdict: "review", reason: "<b>논문 노트에 코드 블록과 토글이 필요한가</b>가 질문이에요. 표와 코드 블록은 각각 수백 줄 + 번들이고 두 빌드에 있어요. 본인이 쓰는 것만 남기고 나머지는 «적힌 그대로 보이는 Markdown»으로 떨어뜨리는 것(파일은 그대로)을 권해요." },
+    { id: "note-math", name: "노트의 수식 — MathJax 조판 · 식 번호 · 수식 미리보기 카드", keys: "$…$ · $$ · \\begin{align}", how: "쓰는 대로 조판되고 align·cases·행렬·\\eqref이 논문 원고처럼 돼요. 캐럿이 수식 안에 있으면 그 아래 유리 카드가 조판된 모양을 보여줘요.", why: "⌘L이 수식을 LaTeX으로 넣으니 노트가 그걸 그려야 해서.", cost: "맥 MathJax 번들 1.8 MB + JSContext + MathSVG 렌더러 약 2,500줄 + 미리보기 카드의 <b>GlassSlab</b>(광학 계산 유리, 680줄) · 포터블 MathJax", platforms: "맥 · 윈도우/리눅스", depends: "⌘L의 수식 인용, 글 카드의 수식.", verdict: "nice", reason: "수식 조판은 Ultracopy의 짝이라 남겨요. <b>GlassSlab 미리보기 카드는 검토</b> — 스넬 법칙까지 계산하는 680줄이 캐럿 밑의 작은 카드 하나를 위한 것이고, 조판이 즉시 보이니 카드가 없어도 돼요." },
+    { id: "latex-suite", name: "LaTeX 단축 입력(Latex Suite)", keys: "수식 안에서 // x1 sr Tab", how: "Obsidian Latex Suite 1.13.1과 같은 스니펫과 탭 이동. 노트와 글 카드에서.", why: "Obsidian에서 쓰던 손버릇.", cost: "맥 PaperCore/LatexSuite 약 5,200줄 · 포터블 약 5,100줄 · 플러그인을 jsdom에서 돌려 받은 픽스처 790건", platforms: "맥 · 윈도우/리눅스", depends: "없음(없어도 LaTeX은 손으로 쳐요).", verdict: "review", reason: "<b>한 가지 손버릇을 위해 1만 줄</b>이에요. 본인이 매일 쓴다면 남길 가치가 있고, 아니면 가장 먼저 레거시로 돌릴 후보예요. 포터블 쪽만 빼는 절충도 있어요." },
+    { id: "links-tags", name: "노트끼리 잇기 · 역링크 · 태그", keys: "[[ · #태그", how: "[[를 치면 노트 목록이 뜨고 [[id|제목]]으로 들어가요. 나를 가리키는 노트가 아래에 모이고, #태그는 슬립박스가 모아요.", why: "슬립박스의 기본.", cost: "맥 WikiLinkPopover·backlinks 색인 · 포터블 같음", platforms: "맥 · 윈도우/리눅스", depends: "지도·공명이 이 위에.", verdict: "nice", reason: "값싸요. 남겨요." },
+    { id: "zettel", name: "지도(Map) · 초안(Draft, ⇧⌘E로 LaTeX+.bib) · 공명(Resonance)", keys: "슬립박스 · ⇧⌘E", how: "노트 다섯이 한 주제로 모이면 지도를 제안하고, 지도는 보드로 열려요. 초안은 구절·노트로 채워 \\cite가 붙은 LaTeX과 .bib으로 내보내요. 공명은 읽는 쪽과 낱말을 나누는 다른 논문의 노트를 Notes 탭 맨 위에 올려요.", why: "«PDF 더미가 아니라 슬립박스», 노트는 글이 되어야 한다는 생각.", cost: "맥 Atlas·DraftRenderer·Resonance 약 480줄 + MapView·DraftView · 포터블 없음(일부러)", platforms: "맥", depends: "없음.", verdict: "review", reason: "코드는 작지만 <b>개념이 커요</b> — 설명서에서 한 절을 차지하고, 포터블에는 없어서 두 빌드가 이미 달라요. 논문 리더의 취지와는 다른 제품(Zettelkasten 앱)의 조각이에요. 레거시를 권해요." },
+    { id: "note-pdf", name: "노트를 PDF로 내보내기", keys: "노트 ⋯ 메뉴", how: "노트를 A4로 조판해 PDF로. 포터블은 보이지 않는 창에서 printToPDF.", why: "노트를 남에게 건네려고.", cost: "맥 NotePDFExport · 포터블 noteHTML", platforms: "맥 · 윈도우/리눅스", depends: "없음.", verdict: "review", reason: "Markdown 파일이 있으니 다른 도구로도 돼요. 쓴 적이 있는지 돌아보세요." },
+    { id: "loose-notes", name: "논문 없는 노트 · 노트 폴더 고르기", keys: "설정 → 라이브러리 → 논문 없는 노트", how: "논문에 안 붙은 노트는 앱 폴더나 사람이 고른 폴더에 살아요. 폴더를 바꾸면 옮기고, 닿지 못하면 기다렸다가 옮겨요.", why: "라이브러리 폴더를 뽑아도 떠오른 생각이 사라지면 안 돼서.", cost: "맥 LooseNotes·SlipBox 상자 규칙 · 포터블 NotesStore의 같은 규칙", platforms: "맥 · 윈도우/리눅스", depends: "없음.", verdict: "review", reason: "상자가 여럿이라 settle·comeBack·relocate 규칙이 길어요. «노트는 늘 논문에 붙는다»로 단순화하면 이 절이 통째로 사라져요." },
+  ]},
+  { id: "find", name: "찾기", verdict: "논문을 찾는 것은 읽기의 시작이라 <b>전부 찾기와 본문 색인은 받침</b>이에요. 뜻으로 찾기는 모델이 들어온 기능이라 따로.", features: [
+    { id: "search", name: "전부 찾기 — 제목·저자·노트·명령 + 본문 검색", keys: "⌘K · 목록을 아래로 당기기", how: "한 칸에서 논문·노트·컬렉션·명령을 찾고, 제목에 없는 낱말은 «논문 안에서»가 본문에서 문장째 보여줘요. Enter면 «찾은 것» 선반이 돼요.", why: "당연히.", cost: "맥 SearchPalette + PaperTextIndex(접은 글·memmem·캐시) 약 2,300줄 · 포터블 textIndex", platforms: "맥 · 윈도우/리눅스", depends: "뜻으로 찾기, 빈칸 제안, 검색 선반.", verdict: "base", reason: "" },
+    { id: "suggestions", name: "빈칸의 제안 — 이어 읽기 · 다시 보기 · 이번 주 새 논문", keys: "⌘K를 빈 채로", how: "열었고 끝내지 않은 것, 7–90일 전에 읽고 노트가 있는 것, 열어 본 적 없는 새 논문을 제안해요.", why: "빈 팔레트가 비어 있지 않게.", cost: "작음(SearchSuggestions)", platforms: "맥 · 윈도우/리눅스", depends: "없음.", verdict: "nice", reason: "값싸요. 안 보인다 싶으면 빼도 아무도 모를 기능이기도 해요." },
+    { id: "semantic", name: "뜻으로 찾기 — MiniLM 임베딩", keys: "⌘K의 «뜻이 비슷한 구절» 절 · 설정 → 읽기", how: "라이브러리가 뜨고 5초 뒤 논문과 노트를 100단어 구절로 잘라 배경에서 임베딩해요. 팔레트에 «뜻이 비슷한 구절» 절이 서요.", why: "낱말이 아니라 뜻으로 찾고 싶어서.", cost: "맥 Semantic 패키지 + Core ML 모델 45 MB + 직접 쓴 WordPiece 토크나이저(코드 포인트 52만 개 검증) 약 1,900줄 · 포터블 onnxruntime-web 유틸리티 프로세스 약 2,800줄(60편에 10분 CPU)", platforms: "맥 · 윈도우/리눅스", depends: "없음.", verdict: "review", reason: "<b>앱 크기 45 MB와 배경 CPU</b>가 값이에요. 라이브러리가 수백 편이 아니면 낱말 검색으로 충분해요. 레거시(기본 꺼짐, 설정에 스위치만)를 권해요." },
+  ]},
+  { id: "library", name: "라이브러리", verdict: "«라이브러리는 내가 고른 폴더»가 받침이고, 그 위에 폴더 여럿·트리·종류 넷·선반 세 묶음이 쌓였어요. 종류를 넷으로 나눈 것과 회사 PC용 두 기능은 검토예요.", features: [
+    { id: "folder", name: "폴더가 라이브러리 — 여러 폴더 · 폴더 트리 · 감시 · 남은 PDF 들이기", keys: "첫 화면 · Finder에서 끌어놓기 · 옆 목록 «라이브러리»", how: "폴더를 고르면 그 안의 PDF를 읽고 기록·노트·태그를 같은 폴더에 둬요. 폴더를 더 열 수 있고, 하위 폴더는 트리로, 밖에서 넣은 PDF는 «n개 더하기»로.", why: "무료 계정이라 CloudKit이 없어서 — 그리고 그게 더 나은 약속이었어요(앱을 지워도 파일은 남는다).", cost: "맥 LibraryStore 약 2,500줄 + LibraryModel·뷰 약 5,500줄 · 포터블 libraries·folderSync·library.ts", platforms: "맥 · 윈도우/리눅스 · 아이패드", depends: "전부.", verdict: "base", reason: "" },
+    { id: "kinds", name: "종류 넷 — 논문 · 책 · 강의자료 · 문서 (짐작 + 질문)", keys: "정보 패널 맨 위의 질문 · 우클릭", how: "들여올 때 DOI·초록·참고문헌·길이·가로 쪽·파일 이름으로 짐작하고, 정보 패널이 한 번 물어요. 종류에 따라 칸이 갈리고(책은 ISBN·판, 강의자료는 인용 안 함) 선반이 생겨요.", why: "라이브러리에 교과서와 슬라이드가 섞여 들어와서.", cost: "맥 DocumentGuess·setKind·칸 분기 · 포터블 documentKind.ts", platforms: "맥 · 윈도우/리눅스", depends: "책처럼 보기+여백 자르기, 종류 선반, BibTeX의 @book.", verdict: "review", reason: "«논문인지 아닌지» 하나는 뜻이 있어요(문서는 등록기관에 안 묻고 BibTeX에 안 나가요). <b>책과 강의자료를 따로 둔 것</b>은 라이브러리 관리 앱의 길이에요. 논문/문서 둘로 줄이는 것을 권해요." },
+    { id: "shelves", name: "선반 세 묶음 · 컬렉션 · 태그 · 저자", keys: "옆 목록", how: "무엇인지(모두·논문·문서), 얼마나 읽었는지, 내가 뭘 했는지(즐겨찾기·살펴볼 것·열린 논문). 컬렉션은 끌어다 넣고, 태그는 붙이고, 저자는 사람으로 묶여요.", why: "서지 앱의 기본.", cost: "맥 LibrarySidebar·vocabulary 복제 규칙 · 포터블 sidebar.ts·vocabulary.ts", platforms: "맥 · 윈도우/리눅스", depends: "종류 선반은 위 카드에.", verdict: "nice", reason: "값싸고 익숙해요. 태그·컬렉션을 폴더마다 복제하는 규칙만 복잡한데, 폴더가 하나면 저절로 단순해요." },
+    { id: "file-ops", name: "파일 이름 바꾸기 · 보충 자료 붙이기 · 휴지통 · Finder에서 보기", keys: "정보 패널 · 우클릭", how: "파일 이름은 정보 패널에서 고치면 Finder의 이름도 바뀌어요. 보충 자료는 찾기 시트로 부모 논문에 붙여요. 휴지통은 폴더 안 Trash/로.", why: "라이브러리가 폴더라서 파일 일이 곧 앱의 일.", cost: "작음–중간(AttachSheet·AttachmentSearch·rename 규칙 넷)", platforms: "맥 · 윈도우/리눅스", depends: "없음.", verdict: "nice", reason: "" },
+    { id: "address", name: "주소로 논문 더하기 · PDF 파일 없이 읽기(메모리)", keys: "⌥⌘O · 설정 → 라이브러리", how: "arXiv·DOI·주소 한 줄로 PDF를 받아 들여요. «PDF를 파일로 저장하지 않기»를 켜면 기록만 두고 주소에서 다시 받아 메모리로 열어요.", why: "회사 PC의 보안 에이전트가 PDF 파일을 쪽지로 바꿔 놓아서(0.9.35).", cost: "맥 PaperFetcher·source.json·메모리 세션 · 포터블 net.fetch + bytesOf 왕복(모든 읽기 경로가 지나요)", platforms: "맥 · 윈도우/리눅스", depends: "없음.", verdict: "review", reason: "«주소로 더하기»는 가볍고 좋아요. <b>파일 없이 읽기</b>는 한 사람의 회사 환경을 위한 것이고 읽기 경로마다 분기를 넣었어요. 그 환경에서 실제로 쓰인다면 남기고, 아니면 레거시." },
+    { id: "migrate", name: "기존 라이브러리 가져오기(Zotero · Bookends의 .bib/.ris + PDF 폴더)", keys: "파일 메뉴", how: ".bib이나 .ris와 PDF 폴더를 고르면 무엇이 어디에 붙을지 보여 주고 옮겨요.", why: "Zotero·Bookends에서 넘어오려고(본인의 이사).", cost: "맥 약 400줄 · 포터블 없음", platforms: "맥", depends: "BibTeX·RIS 파서.", verdict: "review", reason: "한 번 쓰는 기능이고 포터블에는 없어요. 정식 배포에는 «폴더에 PDF를 넣으세요»면 충분해 보여요. 레거시." },
+    { id: "locked", name: "잠긴 PDF 진단 — 암호 · 인증서 · 회사 권한 · 깨진 파일", keys: "자동", how: "열리지 않는 PDF가 왜 안 열리는지(암호면 묻고, 인증서·권한 서비스면 열쇠가 없다고, 쪽지면 그 첫 줄을 그대로) 말해요.", why: "«Invalid PDF structure» 한 마디로는 아무도 못 고쳐서.", cost: "맥 PDFLock · 포터블 pdfLock.ts·diagnose", platforms: "맥 · 윈도우/리눅스", depends: "없음.", verdict: "nice", reason: "읽기의 일부예요. 작고 남겨요." },
+  ]},
+  { id: "biblio", name: "서지", verdict: "우선순위 셋째·넷째예요. <b>자동 채우기와 BibTeX 내보내기</b>는 «서지 정확도 > BibTeX»라는 처음 순위 그대로 있으면 좋음이고, 인용 양식 일곱 가지는 검토예요.", features: [
+    { id: "metadata", name: "서지 자동 채우기 — arXiv · Crossref · OpenAlex, 확신 넷, 후보, 살펴볼 것", keys: "들여올 때 자동 · ⇧⌘R · 우클릭 «서지 다시 찾기»", how: "첫 쪽에서 제목·DOI·arXiv를 읽고 등록기관에 물어요. 확신 없으면 저장하지 않고 «살펴볼 것»에, 후보가 여럿이면 «이 논문이 맞나요?»로 골라요. 직접 고친 값은 덮지 않아요.", why: "취지 셋째 — 틀린 값을 조용히 저장하지 않는 서지.", cost: "맥 MetadataPipeline + 정보 패널 약 3,500줄 · 포터블 포팅 약 2,400줄 + 등록기관 응답 녹음 픽스처 · 온디바이스 FoundationModels 제목 읽기(26만)", platforms: "맥 · 윈도우/리눅스", depends: "BibTeX, 인용 키, 그래프의 인용 연결.", verdict: "nice", reason: "처음 순위에 있던 것이라 남겨요. Crossref 이메일 설정, 후보 UI 같은 둘레는 그대로 두되 더 키우지는 말아요." },
+    { id: "bibtex", name: "BibTeX 내보내기 · 인용 키 복사 · Overleaf 안내", keys: "⇧⌘E · ⇧⌘K", how: "고른 것이나 전체를 .bib으로. 프리프린트 양식·대소문자 보호·확인 안 된 것 빼기 옵션. 키는 저자해제목 규칙으로 만들고 겹치면 a·b.", why: "취지 넷째.", cost: "맥 Bibliography 패키지 약 2,800줄 · 포터블 bibtex.ts(맥과 바이트 같은 출력)", platforms: "맥 · 윈도우/리눅스", depends: "서지.", verdict: "nice", reason: "" },
+    { id: "cite-styles", name: "인용 양식 — APA 7 · IEEE · ACM · Chicago · MLA · Nature · Vancouver 복사", keys: "정보 패널 → 인용 양식", how: "한 논문의 참고문헌 줄과 본문 인용을 일곱 양식으로 보여 주고 복사해요.", why: "LaTeX을 안 쓰는 글(이메일·워드)에 붙이려고.", cost: "맥 CitationFormatter(양식을 손으로 부호화) · 포터블 없음", platforms: "맥", depends: "없음.", verdict: "review", reason: "CSL 파일이 아니라 손으로 적은 일곱 양식이라 어긋남이 생기면 고칠 길이 좁고, 포터블에는 없어요. BibTeX이 있으면 레거시로 둬도 돼요." },
+  ]},
+  { id: "graph", name: "그래프", verdict: "", features: [
+    { id: "graph", name: "논문 그래프 — 인용 · 노트 · 저자 · 컬렉션의 네 연결", keys: "옆 목록 «그래프»", how: "점이 논문, 선이 네 종류의 연결. 범례가 필터이고, 점을 누르면 이웃이 밝아지며 «고른 것에 집중»이 나머지를 물려요. 계속 움직여요.", why: "«내 읽기가 무엇을 이었는지 본다».", cost: "맥 약 1,200줄(힘 그래프 직접 구현) · 포터블 없음", platforms: "맥", depends: "없음.", verdict: "review", reason: "<b>가장 빼기 쉬운 후보</b>예요. 보기 좋지만 읽기에도 복사에도 닿지 않고, 포터블에는 없고, 인용 연결은 서지가 다 맞아야만 의미가 있어요. 빼기를 권해요." },
+  ]},
+  { id: "app", name: "창과 앱", verdict: "배포에 필요한 받침(업데이트·피드백·두 언어)과, 앱 안에 들어 있는 <b>기능 소개 시스템</b>(릴리스 노트·실물 데모·새로운 기능 시트)을 가르세요. 후자는 코드가 8,800줄이에요.", features: [
+    { id: "shortcuts", name: "단축키 전부 바꾸기 · 이름으로도 키로도 찾기", keys: "설정 → 단축키", how: "모든 명령의 키를 바꿀 수 있고(⌘,만 고정), 찾기 칸에 키를 누르면 «그 키에 무엇이 있나»를 답해요. 데모와 메뉴가 바뀐 키를 따라가요.", why: "«어떤 키가 무슨 일을 하는지 되짚을 수 있다».", cost: "맥 ShortcutRecorder·Shortcuts 약 1,900줄(설정 포함) · 포터블 shortcuts.ts·acceleratorFromEvent", platforms: "맥 · 윈도우/리눅스", depends: "데모의 키 표시.", verdict: "nice", reason: "맥 앱의 예의예요. 남겨요." },
+    { id: "settings", name: "설정 — 라이브러리 · 서지 · BibTeX · 읽기 · 단축키 · 기록 · 정보", keys: "⌘,", how: "왼쪽에서 쪽을 골라요.", why: "", cost: "맥 SettingsView · 포터블 settings.ts 시트", platforms: "맥 · 윈도우/리눅스", depends: "각 기능이 빠지면 그 절이 빠져요.", verdict: "base", reason: "" },
+    { id: "showcase", name: "앱 안의 기능 소개 — 릴리스 노트 53개 버전 · 실물 SwiftUI 데모 · 새로운 기능 시트 · 모든 기능과 키", keys: "설정 → 기록 · 정보 · 켤 때 한 번", how: "버전마다 더한 것·고친 것과 키 칩, 하이라이트는 환영 시트와 About에 동작하는 데모로. 포터블은 Swift 파일을 파서로 읽어 같은 JSON을 쓰고 웹 데모를 iframe으로 띄워요.", why: "«스무 가지를 한 줄로 세워 두면 아무도 안 읽는다 — 보여주는 것».", cost: "맥 ReleaseNotes+FeatureDemos+About+WhatsNew 약 8,800줄 · 포터블 파서·demoHost · 규칙: «중요한 기능은 같은 커밋에 데모를 만든다»", platforms: "맥 · 윈도우/리눅스", depends: "배포 페이지의 데모는 따로(demos.js)라 안 빠져요.", verdict: "review", reason: "<b>기능을 줄이는 김에 이 규칙도 줄이세요.</b> 기능마다 SwiftUI 데모를 짓는 것이 «하나 더하면 비용 두 배»의 또 하나의 두 배였어요. 릴리스 노트(글)는 남기고, 앱 안 데모는 정식 배포의 하이라이트 서너 개만 남기는 것을 권해요. 기록(Log) 쪽은 베타 기간의 것이라 정식에서는 접어도 돼요." },
+    { id: "updates", name: "업데이트 알림 · 맥 Sparkle 자동 설치 · 윈도우 NSIS 자동 설치", keys: "자동 · 앱 메뉴 «업데이트 확인…»", how: "배포 페이지의 releases.json을 하루에 한 번 봐요. 켤 때 찾으면 시트, 쓰는 중이면 아래 한 줄. 맥은 Sparkle이 받아 두고 «지금 설치»나 끌 때 설치, 윈도우는 NSIS 설치 창.", why: "정식 배포의 받침.", cost: "맥 약 1,200줄 + Sparkle 프레임워크 + EdDSA 키(키체인) · 포터블 electron-updater + installer.nsh", platforms: "맥 · 윈도우(리눅스는 알림만)", depends: "없음.", verdict: "base", reason: "정식 배포라면 꼭 있어야 해요. 키를 잃으면 설치된 맥들이 다음 버전을 못 받으니 키 백업을 확인해 두세요." },
+    { id: "feedback", name: "한마디 보내기 — 화면과 함께 GitHub로, 닉네임은 «함께 만드는 중»에", keys: "⌥⌘/", how: "보내기 창이 화면을 찍은 채 열리고, 한 줄 적어 보내면 워커가 GitHub 이슈로 만들어요. 닉네임은 페이지와 About에 남아요.", why: "베타 기간의 피드백 루프.", cost: "맥 약 1,800줄 · 포터블 feedback.ts · Cloudflare 워커", platforms: "맥 · 윈도우/리눅스", depends: "페이지의 «함께 만드는 중».", verdict: "base", reason: "정식에서도 버그 보고 길은 있어야 해요. 남겨요." },
+    { id: "lang", name: "두 언어(한국어 · 영어) · 시스템 언어 따라가기", keys: "설정", how: "모든 문자열이 L(ko, en)으로 나란히 있고, 시스템 언어가 고르고 사용자가 뒤집어요.", why: "", cost: "규칙 하나 + voice 시험", platforms: "전부", depends: "없음.", verdict: "base", reason: "" },
+    { id: "ipad", name: "아이패드 · 아이폰 앱", keys: "—", how: "같은 폴더를 iCloud Drive로 열고 PKCanvasView로 필기해요. 0.6.0부터 빌드가 깨진 채예요.", why: "펜슬로 필기하려고(처음 계획의 일부).", cost: "iOS 분기 전반(PageOverlay_iOS, MarkingToolbar 등) · 앱스토어 불가(무료 계정)", platforms: "아이패드 · 아이폰", depends: "동기화의 절반.", verdict: "review", reason: "위 «먼저 정할 것 2»예요. 고쳐서 넣거나, 페이지에서 내리거나 — 깨진 채 «세 기기»라고 적어 두는 것만 아니면 돼요." },
+    { id: "portable", name: "윈도우 · 리눅스 빌드(Portable)", keys: "—", how: "Electron + TypeScript로 다시 쓴 두 번째 구현. 파일 형식이 같아 같은 폴더가 열려요. 검사 547개가 대부분 «맥과 같은가»를 물어요.", why: "«라이브러리가 어느 데스크톱에서나 열린다».", cost: "약 7만 8천 줄 · 모든 기능 ×2 · 윈도우 기계 없음", platforms: "윈도우 · 리눅스", depends: "위 «먼저 정할 것 1».", verdict: "review", reason: "기능을 줄이면 이 비용도 같이 줄어요. 읽기·표시·Ultracopy까지만 포터블에 남기는 절충을 권해요." },
+  ]},
+];
+
+/* ───────────────────────────── 그리기 ───────────────────────────── */
+const VLABEL = { core: "핵심", base: "받침", nice: "좋음", review: "검토" };
+const DLABEL = { keep: "남기기", legacy: "레거시", drop: "빼기", check: "점검필요" };
+const MEMO_KEY = "papertime.features.memos";
+const STAR_KEY = "papertime.features.stars";
+let stars = {};
+try { stars = JSON.parse(localStorage.getItem(STAR_KEY) || "{}") || {}; } catch (e) {}
+function starText(id) { const n = stars[id] || 0; return n ? "★".repeat(n) + "☆".repeat(5 - n) : ""; }
+let memos = {};
+try { memos = JSON.parse(localStorage.getItem(MEMO_KEY) || "{}") || {}; } catch (e) {}
+const RECOMMEND = { core: "keep", base: "keep", nice: "keep", review: "legacy" };
+const KEY = "papertime.features.decisions";
+let decisions = {};
+try { decisions = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) {}
+
+function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
+function keys(s) {
+  if (!s || s === "—") return "";
+  // 키 모양의 토큰만 캡슐로.
+  return s.split(" · ").map(part => {
+    const tokens = part.split(" ");
+    const looksLikeKeys = tokens.every(t => /^[⌘⇧⌥⌃]*[A-Z0-9\[\]\\+\-/,↑↓←→]{1,3}$/.test(t) || /^[A-Z]$/.test(t));
+    return looksLikeKeys ? tokens.map(t => `<span class="key">${esc(t)}</span>`).join(" ") : esc(part);
+  }).join(" · ");
+}
+
+const host = document.getElementById("areas");
+const rail = document.getElementById("rail");
+for (const area of AREAS) {
+  const section = document.createElement("section");
+  section.className = "doc";
+  section.id = area.id;
+  section.innerHTML = `<h2>${esc(area.name)}</h2>` +
+    (area.verdict ? `<p class="area-verdict">${area.verdict}</p>` : "") +
+    area.features.map(f => `
+      <article class="feature" id="f-${f.id}" data-verdict="${f.verdict}">
+        <header>
+          <h4>${esc(f.name)}</h4>
+          <span class="v v-${f.verdict}">${VLABEL[f.verdict]}</span>
+          ${f.keys ? `<span class="where">${keys(f.keys)}</span>` : ""}
+          <span class="star-badge" data-id="${f.id}"></span>
+        </header>
+        <dl>
+          <dt>쓰는 법</dt><dd>${esc(f.how)}</dd>
+          ${f.why ? `<dt>생긴 이유</dt><dd>${esc(f.why)}</dd>` : ""}
+          <dt>비용</dt><dd class="cost">${esc(f.cost)}<br>${esc(f.platforms)}</dd>
+          <dt>빼면</dt><dd>${esc(f.depends)}</dd>
+          ${f.reason ? `<dt>내 판단</dt><dd class="reason">${f.reason}</dd>` : ""}
+        </dl>
+        <div class="decision">
+          <span class="ask">내 결정</span>
+          <span class="decide" data-id="${f.id}">
+            <button data-d="keep">남기기</button>
+            <button data-d="legacy">레거시</button>
+            <button data-d="drop">빼기</button>
+            <button data-d="check">점검필요</button>
+          </span>
+          <span class="stars" data-id="${f.id}" title="강조하고 싶은 만큼 별을 주세요">
+            <span class="label">별점</span>
+            ${[1,2,3,4,5].map(n => `<button data-n="${n}" aria-label="별 ${n}개">★</button>`).join("")}
+          </span>
+          <textarea class="memo" data-id="${f.id}" rows="1" placeholder="메모 — 무엇을 점검하거나 고칠지"></textarea>
+        </div>
+      </article>`).join("");
+  host.appendChild(section);
+}
+
+function paint() {
+  const counts = { all: 0, core: 0, base: 0, nice: 0, review: 0, keep: 0, legacy: 0, drop: 0, check: 0, none: 0, memo: 0, starred: 0 };
+  for (const card of document.querySelectorAll(".feature")) {
+    const id = card.id.slice(2);
+    const d = decisions[id];
+    card.classList.remove("d-keep", "d-legacy", "d-drop", "d-check");
+    if (d) card.classList.add("d-" + d);
+    for (const b of card.querySelectorAll(".decide button")) b.classList.toggle("on", b.dataset.d === d);
+    const memo = card.querySelector(".memo");
+    if (memo.value !== (memos[id] || "")) memo.value = memos[id] || "";
+    counts.all++; counts[card.dataset.verdict]++; counts[d || "none"]++;
+    if ((memos[id] || "").trim()) counts.memo++;
+    const n = stars[id] || 0;
+    if (n) counts.starred++;
+    for (const b of card.querySelectorAll(".stars button")) b.classList.toggle("on", +b.dataset.n <= n);
+    card.querySelector(".star-badge").textContent = starText(id);
+  }
+  for (const k in counts) { const el = document.getElementById("n-" + k); if (el) el.textContent = counts[k]; }
+  /* 줄 수로 맞추니 레이아웃을 기다릴 필요가 없다(rAF는 뒤에 숨은 탭에서 안 돈다). 글꼴이 붙은 뒤 한 번 더. */
+  const growAll = () => { for (const m of document.querySelectorAll(".memo")) grow(m); };
+  growAll();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(growAll);
+  applyFilter();
+  renderOut();
+}
+
+let filter = "all";
+function applyFilter() {
+  for (const card of document.querySelectorAll(".feature")) {
+    const d = decisions[card.id.slice(2)];
+    let show = true;
+    if (filter === "all") show = true;
+    else if (filter === "memo") show = !!(memos[card.id.slice(2)] || "").trim();
+    else if (filter === "starred") show = !!stars[card.id.slice(2)];
+    else if (filter.startsWith("d-")) show = (d || "none") === filter.slice(2);
+    else show = card.dataset.verdict === filter;
+    card.classList.toggle("hide", !show);
+  }
+  for (const b of document.querySelectorAll(".tally-bar button.f")) b.classList.toggle("on", b.dataset.filter === filter);
+}
+
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(decisions)); localStorage.setItem(MEMO_KEY, JSON.stringify(memos)); localStorage.setItem(STAR_KEY, JSON.stringify(stars)); } catch (e) {}
+}
+function grow(area) {
+  /* 줄 수가 바탕이다 — scrollHeight는 첫 그리기 안에서 믿을 수 없는 값을 돌려줬다(686px, 또 한 줄). 
+     줄 바꿈으로 넘친 만큼만 측정으로 더한다. */
+  const lines = Math.max(1, area.value.split("\n").length);
+  area.rows = lines;
+  area.style.height = "";
+  const extra = area.scrollHeight - area.clientHeight;
+  if (extra > 2 && extra < 21 * 8) area.style.height = area.scrollHeight + 2 + "px";
+}
+function memoLines(id) {
+  const m = (memos[id] || "").trim();
+  return m ? m.split("\n").map(l => "  - " + l) : [];
+}
+
+function renderOut() {
+  const lines = ["## 기능 결정 (" + new Date().toISOString().slice(0, 10) + ", 0.9.37 기준)", ""];
+  const starred = [];
+  for (const area of AREAS) for (const f of area.features) if (stars[f.id]) starred.push({ area, f, n: stars[f.id] });
+  if (starred.length) {
+    starred.sort((a, b) => b.n - a.n);
+    lines.push(`### 강조할 기능 (별 순, ${starred.length})`);
+    for (const { area, f, n } of starred) lines.push(`- ${starText(f.id)} ${area.name} · ${f.name}` + (decisions[f.id] ? `  [${DLABEL[decisions[f.id]]}]` : ""));
+    lines.push("");
+  }
+  const star = (id) => stars[id] ? `  ${starText(id)}` : "";
+  for (const d of ["check", "keep", "legacy", "drop"]) {
+    const picked = [];
+    for (const area of AREAS) for (const f of area.features) if (decisions[f.id] === d) {
+      picked.push(`- ${area.name} · ${f.name}${star(f.id)}` + (d !== "check" && decisions[f.id] !== RECOMMEND[f.verdict] ? `  (내 판단: ${VLABEL[f.verdict]})` : ""), ...memoLines(f.id));
+    }
+    lines.push(`### ${DLABEL[d]} (${picked.filter(l => !l.startsWith("  ")).length})`, ...(picked.length ? picked : ["- (없음)"]), "");
+  }
+  const undecided = [];
+  for (const area of AREAS) for (const f of area.features) if (!decisions[f.id]) undecided.push(`- ${area.name} · ${f.name}${star(f.id)}`, ...memoLines(f.id));
+  if (undecided.length) lines.push(`### 미정 (${undecided.filter(l => !l.startsWith("  ")).length})`, ...undecided, "");
+  document.getElementById("out").value = lines.join("\n");
+}
+
+document.getElementById("areas").addEventListener("click", (e) => {
+  const sb = e.target.closest(".stars button");
+  if (sb) {
+    const id = sb.parentElement.dataset.id, n = +sb.dataset.n;
+    if (stars[id] === n) delete stars[id]; else stars[id] = n;
+    save(); paint(); return;
+  }
+  const b = e.target.closest(".decide button"); if (!b) return;
+  const id = b.parentElement.dataset.id;
+  decisions[id] = decisions[id] === b.dataset.d ? undefined : b.dataset.d;
+  if (!decisions[id]) delete decisions[id];
+  save(); paint();
+});
+document.getElementById("areas").addEventListener("input", (e) => {
+  const area = e.target.closest(".memo"); if (!area) return;
+  const id = area.dataset.id;
+  if (area.value.trim()) memos[id] = area.value; else delete memos[id];
+  grow(area); save(); renderOut();
+  document.getElementById("n-memo").textContent = Object.keys(memos).length;
+});
+document.getElementById("tally").addEventListener("click", (e) => {
+  const b = e.target.closest("button.f"); if (!b) return;
+  filter = b.dataset.filter; applyFilter();
+});
+document.getElementById("prefill").addEventListener("click", () => {
+  for (const area of AREAS) for (const f of area.features) if (!decisions[f.id]) decisions[f.id] = RECOMMEND[f.verdict];
+  save(); paint();
+});
+document.getElementById("clear").addEventListener("click", () => {
+  if (!confirm("결정·메모·별점을 모두 비울까요?")) return;
+  decisions = {}; memos = {}; stars = {}; save(); paint();
+});
+document.getElementById("copy").addEventListener("click", async () => {
+  const out = document.getElementById("out");
+  try { await navigator.clipboard.writeText(out.value); } catch (e) { out.select(); document.execCommand("copy"); }
+  const note = document.getElementById("copied"); note.textContent = "복사했어요."; setTimeout(() => { note.textContent = ""; }, 1600);
+});
+
+/* 레일 — 설명서와 같은 규칙. */
+(function mountRail() {
+  const links = [...rail.querySelectorAll("a")];
+  const sections = links.map(a => document.querySelector(a.getAttribute("href"))).filter(Boolean);
+  let current = null;
+  const mark = () => {
+    const top = (document.querySelector(".topbar")?.getBoundingClientRect().height || 48) + 24;
+    let found = sections[0];
+    for (const s of sections) if (s.getBoundingClientRect().top - top <= 0) found = s;
+    if (innerHeight + scrollY >= document.body.scrollHeight - 2) found = sections[sections.length - 1];
+    if (found === current) return;
+    current = found;
+    for (const a of links) a.classList.toggle("on", a.getAttribute("href") === "#" + found.id);
+  };
+  let frame = 0;
+  addEventListener("scroll", () => { if (frame) return; frame = requestAnimationFrame(() => { frame = 0; mark(); }); }, { passive: true });
+  addEventListener("resize", mark, { passive: true });
+  mark();
+})();
+
+paint();
+</script>
+</body>
+</html>

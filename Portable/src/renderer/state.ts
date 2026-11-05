@@ -1035,8 +1035,6 @@ export function sameShelf(a: Shelf, b: Shelf): boolean {
 export interface ShelfCounts {
   all: number
   papers: number
-  books: number
-  lectures: number
   documents: number
   folders: Map<string, number>
   unread: number
@@ -1053,8 +1051,6 @@ export function shelfCounts(papers: Paper[]): ShelfCounts {
   const counts: ShelfCounts = {
     all: papers.length,
     papers: 0,
-    books: 0,
-    lectures: 0,
     documents: 0,
     folders: new Map(),
     unread: 0,
@@ -1069,8 +1065,6 @@ export function shelfCounts(papers: Paper[]): ShelfCounts {
   const bump = (map: Map<string, number>, key: string) => map.set(key, (map.get(key) ?? 0) + 1)
   for (const entry of papers) {
     if (entry.meta.effectiveKind === 'paper') counts.papers += 1
-    else if (entry.meta.effectiveKind === 'book') counts.books += 1
-    else if (entry.meta.effectiveKind === 'lecture') counts.lectures += 1
     else counts.documents += 1
     if (entry.root) bump(counts.folders, entry.root)
     if (entry.state.readingStatus === 'unread') counts.unread += 1

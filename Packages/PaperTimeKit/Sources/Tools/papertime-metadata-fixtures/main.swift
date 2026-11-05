@@ -196,7 +196,6 @@ func call(_ fn: String, _ args: [Any]) -> Any {
     case "firstMeaningfulLine": return optional(HeaderExtractor.firstMeaningfulLine(args[0] as? [String] ?? []))
     case "authorsFollowingTitle": return json(HeaderExtractor.authorsFollowingTitle(s(0), in: args[1] as? [String] ?? []))
     case "splitAuthorLine": return json(HeaderExtractor.splitAuthorLine(s(0)))
-    case "namesACourse": return DocumentGuess.namesACourse(s(0))
     case "referencePageIndices": return DocumentSignalsExtractor.referencePageIndices(count: args[0] as? Int ?? 0)
     case "largestFontText":
         let page = args[0] as? [String: Any] ?? [:]

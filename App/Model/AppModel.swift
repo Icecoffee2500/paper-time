@@ -983,7 +983,7 @@ public final class AppModel {
                 let line: String = switch outcome {
                 case let .added(paper): "added \(paper.id) file=\(paper.meta.file.relativePath) exists=\(paper.hasFile) source=\(paper.source?.address ?? "-")"
                 case let .already(paper): "already \(paper.id)"
-                case let .failed(why): "failed (\(why))"
+                case let .failed(why, detail): "failed (\(why)) \(detail ?? "")"
                 }
                 FileHandle.standardError.write(Data("add address: \(line)\n".utf8))
             }
@@ -1224,15 +1224,13 @@ public final class AppModel {
                 let now = model.paper(paper.id)?.meta
                 let counts = model.counts
                 FileHandle.standardError.write(Data("""
-                kind: \(now?.effectiveKind.rawValue ?? "?")                 csl=\(now?.csl.type.rawValue ?? "?")                 venue=\(now?.csl.containerTitle ?? "—")                 volume=\(now?.csl.volume ?? "—")                 shelves: papers=\(counts.papers) books=\(counts.books) documents=\(counts.documents)                 review=\(counts.needsReview)
+                kind: \(now?.effectiveKind.rawValue ?? "?")                 csl=\(now?.csl.type.rawValue ?? "?")                 venue=\(now?.csl.containerTitle ?? "—")                 volume=\(now?.csl.volume ?? "—")                 shelves: papers=\(counts.papers) documents=\(counts.documents)                 review=\(counts.needsReview)
 
                 """.utf8))
             }
             switch Boot.setting("PAPERTIME_SCOPE") {
             case "notes": model.scope = .notes
             case "papers": model.scope = .papers
-            case "books": model.scope = .books
-            case "lectures": model.scope = .lectures
             case "documents": model.scope = .documents
             default: break
             }

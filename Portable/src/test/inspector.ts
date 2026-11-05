@@ -9,7 +9,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { guessKind, isCitable, isLookedUp, namesACourse } from '../shared/documentKind.js'
+import { guessKind, isCitable, isLookedUp, readKind } from '../shared/documentKind.js'
 import { looksLikeSupplement, suggestedParent } from '../shared/attachmentSearch.js'
 import { parseName, parseNames, PaperMeta } from '../shared/model.js'
 import { assignKeys, firstSignificantWord, makeKey, sanitise, uniqued } from '../shared/citationKey.js'
@@ -21,22 +21,19 @@ type Test = (name: string, body: () => void | Promise<void>) => Promise<void>
 export async function inspectorSuite(test: Test, suite: (name: string) => void) {
   suite('The Info tab')
 
-  await test('what a PDF is, guessed the Mac’s six ways', () => {
+  await test('what a PDF is, guessed the Mac’s three ways', () => {
     assert.deepEqual(guessKind({ identifier: true, abstract: false, references: false }), { kind: 'paper', reason: 'identifier' })
     assert.equal(guessKind({ identifier: false, abstract: true, references: true }).kind, 'paper')
     assert.equal(guessKind({ identifier: false, abstract: true, references: false }).kind, 'document')
     assert.equal(guessKind({ identifier: false, abstract: false, references: true }).kind, 'document')
-    assert.deepEqual(guessKind({ identifier: false, abstract: false, references: true, pageCount: 548 }), { kind: 'book', reason: 'length' })
-    assert.equal(guessKind({ identifier: false, abstract: false, references: false, pageCount: 548 }).kind, 'document')
-    assert.equal(guessKind({ identifier: false, abstract: false, references: true, pageCount: 12 }).kind, 'document')
-    assert.equal(guessKind({ identifier: true, abstract: true, references: true, pageCount: 548 }).kind, 'paper')
     assert.deepEqual(guessKind({ identifier: false, abstract: false, references: false }), { kind: 'document', reason: 'nothingFound' })
-    assert.ok(isCitable('paper') && isCitable('book') && !isCitable('document') && !isCitable('lecture'))
-    assert.ok(isLookedUp('paper') && !isLookedUp('book') && !isLookedUp('document'))
-    assert.ok(namesACourse('STA 512 lecture notes'))
-    assert.ok(namesACourse('lecture06.pdf'))
-    assert.ok(namesACourse('3주차 강의자료'))
-    assert.equal(namesACourse('Attention Is All You Need'), false)
+    assert.ok(isCitable('paper') && !isCitable('document'))
+    assert.ok(isLookedUp('paper') && !isLookedUp('document'))
+    // The kinds 0.9 wrote are read as the two 1.0 keeps, as on the Mac.
+    assert.equal(readKind('book'), 'paper')
+    assert.equal(readKind('lecture'), 'document')
+    assert.equal(readKind('paper'), 'paper')
+    assert.equal(readKind('spaceship'), undefined)
   })
 
   await test('a supplement is offered its paper only when it says it is one', () => {

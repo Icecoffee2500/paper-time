@@ -226,7 +226,7 @@ struct ZettelEditorView: View {
         // Notes this one shares its rarer words with and is not yet linked
         // to either way: the links the box would make if it could.
         let linked = Set(inbound.map(\.id) + outbound.map(\.id) + [noteID])
-        let echoes = notes.resonance(with: title + "\n" + body_, excluding: linked, limit: 4)
+        let echoes = Legacy.slipBoxStructures ? notes.resonance(with: title + "\n" + body_, excluding: linked, limit: 4) : []
         if !inbound.isEmpty || !outbound.isEmpty || !echoes.isEmpty {
             // No rule across the note. What separates the writing from what it
             // is connected to is the change of scale and a little air, the

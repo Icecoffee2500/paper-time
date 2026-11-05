@@ -86,7 +86,7 @@ export async function libraryListSuite(test: Test, suite: (name: string) => void
     setPathPlatform('win32')
     const shelves: Shelf[] = [
       { kind: 'all' }, { kind: 'open' }, { kind: 'favorites' }, { kind: 'review' }, { kind: 'notes' }, { kind: 'search' },
-      { kind: 'kind', of: 'paper' }, { kind: 'kind', of: 'book' },
+      { kind: 'kind', of: 'paper' }, { kind: 'kind', of: 'document' },
       { kind: 'status', status: 'unread' }, { kind: 'status', status: 'read' },
       { kind: 'collection', id: 'C1' }, { kind: 'collection', id: 'C2' },
       { kind: 'tag', id: 'T1' }, { kind: 'tag', id: 'T2' },
@@ -189,13 +189,13 @@ export async function libraryListSuite(test: Test, suite: (name: string) => void
   await test('one walk counts every shelf; review is a looked-up paper that came back unsure', () => {
     library([
       made({ id: 'a', confidence: 'needsReview' }),
-      made({ id: 'b', confidence: 'unparsed', kind: 'book' }),
+      made({ id: 'b', confidence: 'unparsed', kind: 'document' }),
       made({ id: 'c', confidence: 'verified' }),
     ])
     const counts = shelfCounts(store.papers)
     assert.equal(counts.all, 3)
-    assert.equal(counts.review, 1, 'a book has no registrar to disagree with')
-    assert.equal(counts.books, 1)
+    assert.equal(counts.review, 1, 'a document has no registrar to disagree with')
+    assert.equal(counts.documents, 1)
     assert.ok(needsReview(store.papers[0].meta))
     assert.equal(needsReview(store.papers[1].meta), false)
   })

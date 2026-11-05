@@ -50,18 +50,20 @@ struct SlipBoxList: View {
                     Button {
                         notes.openNoteID = notes.create(paperID: nil).id
                     } label: { Label(L("새 노트", "New Note"), systemImage: "note.text") }
-                    Button {
-                        notes.openNoteID = notes.create(paperID: nil, kind: .map).id
-                    } label: { Label(L("새 지도", "New Map"), systemImage: "map") }
-                    Button {
-                        notes.openNoteID = notes.create(paperID: nil, kind: .draft).id
-                    } label: { Label(L("새 초안", "New Draft"), systemImage: "doc.text") }
+                    if Legacy.slipBoxStructures {
+                        Button {
+                            notes.openNoteID = notes.create(paperID: nil, kind: .map).id
+                        } label: { Label(L("새 지도", "New Map"), systemImage: "map") }
+                        Button {
+                            notes.openNoteID = notes.create(paperID: nil, kind: .draft).id
+                        } label: { Label(L("새 초안", "New Draft"), systemImage: "doc.text") }
+                    }
                 } label: {
                     Image(systemName: "square.and.pencil")
                 }
                 .menuStyle(.borderlessButton)
                 .fixedSize()
-                .help(L("노트·지도·초안 쓰기", "Write a note, a map, or a draft"))
+                .help(Legacy.slipBoxStructures ? L("노트·지도·초안 쓰기", "Write a note, a map, or a draft") : L("새 노트", "New Note"))
             }
             .padding(.horizontal, 16)
             .padding(.top, 10)
@@ -82,7 +84,7 @@ struct SlipBoxList: View {
 
             // The squeeze: notes with no home that hang together. One line,
             // and a map is one press — Milo's moment, noticed for you.
-            if notes.query.isEmpty, notes.selectedTag == nil, let squeeze = notes.suggestions.first {
+            if Legacy.slipBoxStructures, notes.query.isEmpty, notes.selectedTag == nil, let squeeze = notes.suggestions.first {
                 squeezeBanner(squeeze)
             }
 
@@ -305,7 +307,7 @@ private struct NoteMenu: View {
     let model: LibraryModel
 
     var body: some View {
-        if note.kind == .note {
+        if Legacy.slipBoxStructures, note.kind == .note {
             let maps = model.notes.maps
             let drafts = model.notes.drafts
             if !maps.isEmpty {

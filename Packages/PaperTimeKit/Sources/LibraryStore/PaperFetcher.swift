@@ -16,6 +16,19 @@ public actor PaperFetcher {
         case notAnAddress, noPDF, notFound, offline, tooLarge, failed
     }
 
+    /// A failure with what the network said — «HTTP 403», «OpenAlex HTTP
+    /// 503», a connection's error — so the sheet can show it. A reader on a
+    /// company network whose proxy turns a lookup away was told «try again
+    /// in a moment», which is not what was wrong.
+    public struct Refusal: Error, Sendable {
+        public var why: Failure
+        public var detail: String?
+        public init(_ why: Failure, detail: String? = nil) {
+            self.why = why
+            self.detail = detail
+        }
+    }
+
     public struct Fetched: Sendable {
         public var data: Data
         /// The address the bytes came from, after redirects.
@@ -60,50 +73,83 @@ public actor PaperFetcher {
         request.setValue(accept, forHTTPHeaderField: "Accept")
         do {
             let (data, response) = try await session.data(for: request)
-            guard let http = response as? HTTPURLResponse else { throw Failure.failed }
+            guard let http = response as? HTTPURLResponse else { throw Refusal(.failed, detail: "no HTTP response") }
             return (data, http)
         } catch let error as URLError {
             switch error.code {
             case .notConnectedToInternet, .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed,
                  .networkConnectionLost, .internationalRoamingOff, .timedOut:
-                throw Failure.offline
+                throw Refusal(.offline, detail: error.localizedDescription)
             default:
-                throw Failure.failed
+                throw Refusal(.failed, detail: error.localizedDescription)
             }
         }
+    }
+
+    /// What a reply that is not a PDF is called, for the sheet.
+    private static func said(_ http: HTTPURLResponse, from host: String? = nil) -> String {
+        let where_ = host.map { "\($0) " } ?? ""
+        return "\(where_)HTTP \(http.statusCode)"
     }
 
     /// The PDF at an address, or why not. HTML in its place is `noPDF`: a
     /// publisher's page, a login wall, a company's stub.
     public func fetchPDF(at url: URL) async throws -> Fetched {
         let (data, http) = try await request(url, accept: "application/pdf,*/*;q=0.8")
-        if http.statusCode == 404 || http.statusCode == 410 { throw Failure.notFound }
-        guard (200...299).contains(http.statusCode) else { throw Failure.failed }
-        guard data.count <= Self.mostBytes else { throw Failure.tooLarge }
-        guard Self.looksLikePDF(data) else { throw Failure.noPDF }
+        if http.statusCode == 404 || http.statusCode == 410 { throw Refusal(.notFound, detail: Self.said(http)) }
+        guard (200...299).contains(http.statusCode) else { throw Refusal(.failed, detail: Self.said(http)) }
+        guard data.count <= Self.mostBytes else { throw Refusal(.tooLarge) }
+        guard Self.looksLikePDF(data) else { throw Refusal(.noPDF, detail: "not a PDF (\(http.mimeType ?? "no type"))") }
         return Fetched(data: data, pdf: http.url ?? url)
     }
 
     /// The paper an address names. An arXiv address and a plain one are
     /// fetched as they are; a DOI is asked about at OpenAlex, and each
     /// open-access copy it knows of is tried in turn until one answers with
-    /// a PDF.
+    /// a PDF — then the publisher's own file, guessed from the DOI's
+    /// prefix, which a subscribed network gets. When OpenAlex itself cannot
+    /// be asked (a company proxy turns it away) the guesses are still
+    /// tried, and the lookup's failure is what is reported if none answers.
     public func fetch(_ address: PaperAddress) async throws -> Fetched {
         if let direct = address.pdfURL { return try await fetchPDF(at: direct) }
-        guard let lookup = address.lookupURL else { throw Failure.noPDF }
-        let (data, http) = try await request(lookup, accept: "application/json")
-        if http.statusCode == 404 { throw Failure.notFound }
-        guard (200...299).contains(http.statusCode) else { throw Failure.failed }
-        var last: Failure = .noPDF
-        for candidate in PaperAddress.openAccessPDFs(inOpenAlex: data) {
+        guard let lookup = address.lookupURL, case let .doi(doi) = address else { throw Refusal(.noPDF) }
+        var answer = Data()
+        var lookupFailure: Refusal?
+        do {
+            let (data, http) = try await request(lookup, accept: "application/json")
+            if http.statusCode == 404 {
+                lookupFailure = Refusal(.notFound, detail: Self.said(http, from: "OpenAlex"))
+            } else if (200...299).contains(http.statusCode) {
+                answer = data
+            } else {
+                lookupFailure = Refusal(.failed, detail: Self.said(http, from: "OpenAlex"))
+            }
+        } catch let refusal as Refusal {
+            if refusal.why == .offline { throw refusal }
+            lookupFailure = Refusal(refusal.why, detail: "OpenAlex: \(refusal.detail ?? refusal.why.rawValue)")
+        }
+        // An open copy that answered with an error is worth reporting; a
+        // publisher's guess that did is not — most of them are 403s.
+        var last: Refusal = lookupFailure ?? Refusal(.noPDF)
+        for candidate in PaperAddress.openAccessPDFs(inOpenAlex: answer) {
             do {
                 return try await fetchPDF(at: candidate)
-            } catch let failure as Failure {
-                if failure == .offline { throw failure }
-                last = failure
+            } catch let refusal as Refusal {
+                if refusal.why == .offline { throw refusal }
+                last = refusal
             }
         }
-        throw last == .notFound ? .noPDF : last
+        for guess in PaperAddress.publisherPDFs(for: doi, inOpenAlex: answer) {
+            do {
+                return try await fetchPDF(at: guess)
+            } catch let refusal as Refusal {
+                if refusal.why == .offline { throw refusal }
+            }
+        }
+        // A DOI OpenAlex does not know, or whose copies have gone, is a paper
+        // without an open PDF — not an address with nothing at it.
+        if last.why == .notFound { throw Refusal(.noPDF, detail: last.detail) }
+        throw last
     }
 
     // MARK: - Holding

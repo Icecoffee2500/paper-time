@@ -82,7 +82,7 @@ struct PaperNotesView: View {
                 resonance
                 Divider()
             }
-            if link.hasSelection, !notes.drafts.isEmpty {
+            if Legacy.slipBoxStructures, link.hasSelection, !notes.drafts.isEmpty {
                 draftsStrip
                 Divider()
             }
@@ -256,7 +256,7 @@ extension PaperNotesView {
     }
 
     private func refreshEchoesNow() {
-        guard let document = link.session?.document else { echoes = []; return }
+        guard Legacy.slipBoxStructures, let document = link.session?.document else { echoes = []; return }
         let index = link.currentPageIndex
         // In a book both pages of the spread are under the eyes.
         var pages = [index]

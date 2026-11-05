@@ -79,7 +79,9 @@ export class Records {
   }
 }
 
-const KINDS = ['paper', 'book', 'lecture', 'document']
+// The two 1.0 keeps, and the two 0.9 wrote: a window on an old record may
+// still send them back, and the model reads them as the first two.
+const KINDS = ['paper', 'document', 'book', 'lecture']
 const CONFIDENCES = ['unparsed', 'needsReview', 'verified', 'manual']
 
 /**

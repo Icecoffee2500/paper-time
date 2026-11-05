@@ -218,7 +218,7 @@ final class LassoInputView: NSView {
             caught = Catch(page: page, rect: rect, ink: [], needsOCR: true)
             #if canImport(MLXVLM)
             // The handwriting model, if there is one, starts loading now.
-            if HandwritingReader.canRun, let directory = HandwritingModels.shared.readyDirectory {
+            if Legacy.handwriting, HandwritingReader.canRun, let directory = HandwritingModels.shared.readyDirectory {
                 Task { await HandwritingReader.shared.prewarm(directory) }
             }
             #endif

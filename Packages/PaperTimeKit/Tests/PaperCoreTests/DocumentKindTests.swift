@@ -20,35 +20,11 @@ struct DocumentKindTests {
         #expect(DocumentGuess.of(hasIdentifier: false, hasAbstract: false, hasReferences: true).kind == .document)
     }
 
-    @Test("Long, with references at the back, is a book")
-    func book() {
-        let guess = DocumentGuess.of(
-            hasIdentifier: false, hasAbstract: false, hasReferences: true, pageCount: 548
-        )
-        #expect(guess.kind == .book)
-        #expect(guess.reason == .length)
-        // The length alone is not enough — a scanned manual is long too.
-        #expect(DocumentGuess.of(
-            hasIdentifier: false, hasAbstract: false, hasReferences: false, pageCount: 548
-        ).kind == .document)
-        // Nor are the references alone: a short paper without an abstract has
-        // them, and it is not a book.
-        #expect(DocumentGuess.of(
-            hasIdentifier: false, hasAbstract: false, hasReferences: true, pageCount: 12
-        ).kind == .document)
-        // A paper is still a paper however long it is, if it says so.
-        #expect(DocumentGuess.of(
-            hasIdentifier: true, hasAbstract: true, hasReferences: true, pageCount: 548
-        ).kind == .paper)
-    }
-
-    @Test("A book is cited; a document is not; only a paper is looked up")
+    @Test("A paper is cited and looked up; a document is neither")
     func whatEachKindIsFor() {
         #expect(DocumentKind.paper.isCitable)
-        #expect(DocumentKind.book.isCitable)
         #expect(!DocumentKind.document.isCitable)
         #expect(DocumentKind.paper.isLookedUp)
-        #expect(!DocumentKind.book.isLookedUp)
         #expect(!DocumentKind.document.isLookedUp)
     }
 
@@ -57,6 +33,18 @@ struct DocumentKindTests {
         let guess = DocumentGuess.of(hasIdentifier: false, hasAbstract: false, hasReferences: false)
         #expect(guess.kind == .document)
         #expect(guess.reason == .nothingFound)
+    }
+
+    @Test("The kinds 0.9 had are read as the two 1.0 keeps, and written back as those")
+    func legacyKinds() throws {
+        let decoder = JSONDecoder()
+        #expect(try decoder.decode(DocumentKind.self, from: Data("\"book\"".utf8)) == .paper)
+        #expect(try decoder.decode(DocumentKind.self, from: Data("\"lecture\"".utf8)) == .document)
+        #expect(try decoder.decode(DocumentKind.self, from: Data("\"paper\"".utf8)) == .paper)
+        #expect(try decoder.decode(DocumentKind.self, from: Data("\"document\"".utf8)) == .document)
+        #expect(throws: DecodingError.self) { try decoder.decode(DocumentKind.self, from: Data("\"spaceship\"".utf8)) }
+        let written = String(decoding: try JSONEncoder().encode(DocumentKind.paper), as: UTF8.self)
+        #expect(written == "\"paper\"")
     }
 
     @Test("A record without an answer is read as a paper, and written without the key")

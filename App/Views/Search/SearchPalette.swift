@@ -226,7 +226,7 @@ struct SearchPalette: View {
     private func gather() {
         Trace.mark("palette: open")
         Trace.time("palette: get ready") {
-            offered = SearchSuggestions.groups(in: model)
+            offered = Legacy.emptySearchSuggestions ? SearchSuggestions.groups(in: model) : []
             match()
         }
     }

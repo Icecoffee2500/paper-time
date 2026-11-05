@@ -11,7 +11,7 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
-    MARKETING_VERSION: "0.9.37"
+    MARKETING_VERSION: "1.0.0"
     # The same as the version people see. Sparkle compares CFBundleVersion,
     # and a build number that was "1" in every release would never be newer.
     CURRENT_PROJECT_VERSION: $(MARKETING_VERSION)
@@ -43,24 +43,24 @@ packages:
   onnxruntime-swift-package-manager:
     url: https://github.com/microsoft/onnxruntime-swift-package-manager
     from: 1.24.2
-  # Handwriting (App/Model/Handwriting*.swift): a vision-language model —
-  # Qwen3.5, Apache-2.0 — run on this Mac by MLX. The weights are not in the
-  # app; they are downloaded on request into Application Support. MLX breaks
-  # its API between minor versions, hence the pin to the minor. Building it
-  # needs Xcode's Metal toolchain (`xcodebuild -downloadComponent
-  # MetalToolchain`), and it runs on Apple silicon only, which is all the app
-  # is built for.
-  mlx-swift-lm:
-    url: https://github.com/ml-explore/mlx-swift-lm
-    minorVersion: 3.32.3
-  swift-transformers:
-    url: https://github.com/huggingface/swift-transformers
-    from: 1.3.0
+  # Handwriting (App/Model/Handwriting*.swift) is legacy in 1.0
+  # (`Legacy.handwriting`, Docs/Decisions-1.0.md). Its reader is behind
+  # `canImport(MLXVLM)`, so with the packages gone it is simply not compiled.
+  # To bring it back, add these two packages and the three dependencies below:
+  #   mlx-swift-lm (https://github.com/ml-explore/mlx-swift-lm, minorVersion
+  #   3.32.3 — MLX breaks its API between minors; building it needs Xcode's
+  #   Metal toolchain) with products MLXVLM and MLXLMCommon, and
+  #   swift-transformers (https://github.com/huggingface/swift-transformers,
+  #   from 1.3.0) with product Tokenizers.
 
 targets:
   PaperTime:
     type: application
-    supportedDestinations: [iOS, macOS]
+    # iPad and iPhone are legacy in 1.0 (Docs/Decisions-1.0.md): the `#if
+    # os(iOS)` code stays, the destination does not — the iOS build has been
+    # broken since 0.6.0 and 1.0 is a desktop release. Put iOS back here to
+    # build it again.
+    supportedDestinations: [macOS]
     sources:
       - path: App
     dependencies:
@@ -87,15 +87,6 @@ targets:
         destinationFilters: [macOS]
       - package: onnxruntime-swift-package-manager
         product: onnxruntime
-        destinationFilters: [macOS]
-      - package: mlx-swift-lm
-        product: MLXVLM
-        destinationFilters: [macOS]
-      - package: mlx-swift-lm
-        product: MLXLMCommon
-        destinationFilters: [macOS]
-      - package: swift-transformers
-        product: Tokenizers
         destinationFilters: [macOS]
     info:
       path: App/Resources/Info.plist

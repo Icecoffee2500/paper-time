@@ -19,7 +19,6 @@ import fs from 'node:fs'
 import path from 'node:path'
 import zlib from 'node:zlib'
 import { parseName } from '../shared/model.js'
-import { namesACourse } from '../shared/documentKind.js'
 import { arxivCSL, parseArxivFeed } from '../shared/metadata/arxiv.js'
 import { crossrefList, crossrefSingle, decodeCSL, openAlexList, parseJSON } from '../shared/metadata/csl.js'
 import {
@@ -103,7 +102,6 @@ function call(fn: string, args: unknown[]): unknown {
     case 'firstMeaningfulLine': return orNull(firstMeaningfulLine(args[0] as string[]))
     case 'authorsFollowingTitle': return authorsFollowingTitle(s(0), args[1] as string[])
     case 'splitAuthorLine': return splitAuthorLine(s(0))
-    case 'namesACourse': return namesACourse(s(0))
     case 'referencePageIndices': return referencePageIndices(args[0] as number)
     case 'largestFontText': {
       const page = args[0] as { runs: number[][]; sizes: number[]; text: string }

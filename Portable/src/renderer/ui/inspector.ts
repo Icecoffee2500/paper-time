@@ -372,24 +372,14 @@ function kindQuestion(paper: Paper, actions: InspectorActions): HTMLElement {
   const hint = guess === 'paper'
     ? L('논문 같아요 — 안에 DOI나 참고문헌이 보여요. 맞으면 그대로 눌러주세요.',
         'It looks like a paper — there is a DOI or a reference list in it. Press it again to agree.')
-    : guess === 'book'
-      ? L('책 같아요 — 쪽이 아주 많고 뒤에 참고문헌이 있어요. 책이면 출판사와 판, ISBN을 물어볼게요.',
-          'It looks like a book — hundreds of pages, with a reference list at the back. '
-          + 'As a book it is asked for a publisher, an edition and an ISBN.')
-      : guess === 'lecture'
-        ? L('강의자료 같아요 — 쪽이 가로로 넓거나, 이름이 강의를 가리켜요. 강의자료는 인용하지 않아요.',
-            'It looks like course material — the pages are landscape, or the name names a course. '
-            + 'Course material is read, not cited.')
-        : guess === 'document'
-          ? L('논문은 아닌 것 같아요. 일반 문서면 학술지 같은 칸은 숨길게요.',
-              "It doesn't look like a paper. As a document, the journal fields go away.")
-          : L('고르면 이 칸들이 그에 맞게 바뀌어요.', 'The fields below follow your answer.')
+    : guess === 'document'
+      ? L('논문은 아닌 것 같아요. 일반 문서면 학술지 같은 칸은 숨길게요.',
+          "It doesn't look like a paper. As a document, the journal fields go away.")
+      : L('고르면 이 칸들이 그에 맞게 바뀌어요.', 'The fields below follow your answer.')
 
   const choices = el('div', { class: 'choices kind-choices' })
   for (const [value, label] of [
     ['paper', L('논문', 'A paper')],
-    ['book', L('책', 'A book')],
-    ['lecture', L('강의자료', 'Course material')],
     ['document', L('일반 문서', 'A document')],
   ] as const) {
     // The chosen one is marked, and the other one is the way back: an answer
@@ -523,7 +513,6 @@ function details(body: HTMLElement, paper: Paper, actions: InspectorActions, red
   const meta = paper.meta
   const kind = meta.effectiveKind
   const isPaper = kind === 'paper'
-  const isBook = kind === 'book'
   const csl = draftFor(paper)
 
   // Save and Revert light up as soon as the draft differs from the record.
@@ -578,24 +567,8 @@ function details(body: HTMLElement, paper: Paper, actions: InspectorActions, red
       text('URL', 'URL'),
       draftType(paper, L('종류', 'Type'), PAPER_TYPES, dirtied),
     ))
-  } else if (isBook) {
-    // A book has a publisher, a place, an edition, an ISBN — and none of
-    // the journal's furniture. A chapter wants the book it came out of.
-    const nodes: Node[] = [
-      title,
-      text(L('부제', 'Subtitle'), 'subtitle'),
-      text(L('출판사', 'Publisher'), 'publisher'),
-      text(L('펴낸 곳', 'Place'), 'publisher-place'),
-      text(L('판', 'Edition'), 'edition'),
-      draftYear(paper, dirtied),
-      text('ISBN', 'ISBN'),
-      text('URL', 'URL'),
-      draftType(paper, L('종류', 'Kind'), ['book', 'chapter'], dirtied),
-    ]
-    if (csl.type === 'chapter') nodes.push(text(L('실린 책', 'In the book'), 'container-title'), text(L('쪽', 'Pages'), 'page'))
-    body.append(section(L('책 정보', 'The book'), ...nodes))
   } else {
-    // A deck has a course and a year and nothing a journal would recognise.
+    // A document has a source and a year and nothing a journal would recognise.
     body.append(section(L('문서 정보', 'Details'),
       title,
       text(L('부제', 'Subtitle'), 'subtitle'),
@@ -606,8 +579,7 @@ function details(body: HTMLElement, paper: Paper, actions: InspectorActions, red
     ))
   }
 
-  const authorTitle = isPaper ? L('저자', 'Authors') : isBook ? L('지은이', 'Written by')
-    : kind === 'lecture' ? L('만든 사람', 'Made by') : L('쓴 사람', 'Written by')
+  const authorTitle = isPaper ? L('저자', 'Authors') : L('쓴 사람', 'Written by')
   body.append(buildAuthorEditor({
     title: authorTitle,
     authors: (csl.author ?? []) as CSLName[],

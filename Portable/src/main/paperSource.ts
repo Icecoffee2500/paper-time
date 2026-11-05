@@ -16,7 +16,7 @@
 import { net } from 'electron'
 import { isoTimestamp } from '../shared/coding.js'
 import {
-  addressLookup, addressPDF, addressText, openAccessPDFs, readPaperAddress, type PaperAddress,
+  addressLookup, addressPDF, addressText, openAccessPDFs, publisherPDFs, readPaperAddress, type PaperAddress,
 } from '../shared/paperAddress.js'
 import { looksLikePDF } from '../shared/pdfLock.js'
 
@@ -79,17 +79,21 @@ export async function fetchPDF(url: string, fetch: Fetch = chromiumFetch): Promi
   } catch (error) {
     throw new FetchError(offline(error) ? 'offline' : 'failed', String(error))
   }
-  if (reply.status === 404 || reply.status === 410) throw new FetchError('notFound')
+  if (reply.status === 404 || reply.status === 410) throw new FetchError('notFound', `HTTP ${reply.status}`)
   if (reply.status < 200 || reply.status > 299) throw new FetchError('failed', `HTTP ${reply.status}`)
   if (reply.body.length > MOST_BYTES) throw new FetchError('tooLarge')
-  if (!looksLikePDF(new Uint8Array(reply.body))) throw new FetchError('noPDF')
+  if (!looksLikePDF(new Uint8Array(reply.body))) throw new FetchError('noPDF', `not a PDF (${reply.type || 'no type'})`)
   return { bytes: reply.body, pdf: reply.url }
 }
 
 /**
  * The paper an address names. An arXiv address and a plain one are fetched
  * as they are; a DOI is asked about at OpenAlex, and each open-access copy
- * it knows of is tried in turn until one answers with a PDF.
+ * it knows of is tried in turn until one answers with a PDF — then the
+ * publisher's own file, guessed from the DOI's prefix, which a subscribed
+ * network gets. When OpenAlex itself cannot be asked (a company proxy turns
+ * it away) the guesses are still tried, and the lookup's failure is what is
+ * reported if none answers. The Mac's `PaperFetcher.fetch`.
  */
 export async function fetchByAddress(text: string, fetch: Fetch = chromiumFetch): Promise<{ address: PaperAddress; fetched: Fetched }> {
   const address = readPaperAddress(text)
@@ -97,28 +101,42 @@ export async function fetchByAddress(text: string, fetch: Fetch = chromiumFetch)
   const direct = addressPDF(address)
   if (direct) return { address, fetched: await fetchPDF(direct, fetch) }
   const lookup = addressLookup(address)
-  if (!lookup) throw new FetchError('noPDF')
-  let reply: Awaited<ReturnType<Fetch>>
+  if (!lookup || address.kind !== 'doi') throw new FetchError('noPDF')
+  let answer = ''
+  let lookupFailure: FetchError | null = null
   try {
-    reply = await fetch(lookup, 'application/json')
+    const reply = await fetch(lookup, 'application/json')
+    if (reply.status === 404) lookupFailure = new FetchError('notFound', `OpenAlex HTTP ${reply.status}`)
+    else if (reply.status >= 200 && reply.status <= 299) answer = reply.body.toString('utf8')
+    else lookupFailure = new FetchError('failed', `OpenAlex HTTP ${reply.status}`)
   } catch (error) {
-    throw new FetchError(offline(error) ? 'offline' : 'failed', String(error))
+    if (offline(error)) throw new FetchError('offline', String(error))
+    lookupFailure = new FetchError('failed', `OpenAlex: ${String(error)}`)
   }
-  if (reply.status === 404) throw new FetchError('notFound')
-  if (reply.status < 200 || reply.status > 299) throw new FetchError('failed', `OpenAlex HTTP ${reply.status}`)
-  const candidates = openAccessPDFs(reply.body.toString('utf8'))
-  let last: FetchError = new FetchError('noPDF')
-  for (const candidate of candidates) {
+  // An open copy that answered with an error is worth reporting; a
+  // publisher's guess that did is not — most of them are 403s.
+  let last: FetchError = lookupFailure ?? new FetchError('noPDF')
+  for (const candidate of openAccessPDFs(answer)) {
     try {
       return { address, fetched: await fetchPDF(candidate, fetch) }
     } catch (error) {
-      if (error instanceof FetchError) {
-        if (error.why === 'offline') throw error
-        last = error
-      }
+      if (!(error instanceof FetchError)) throw error
+      if (error.why === 'offline') throw error
+      last = error
     }
   }
-  throw last.why === 'notFound' ? new FetchError('noPDF') : last
+  for (const guess of publisherPDFs(address.doi, answer)) {
+    try {
+      return { address, fetched: await fetchPDF(guess, fetch) }
+    } catch (error) {
+      if (!(error instanceof FetchError)) throw error
+      if (error.why === 'offline') throw error
+    }
+  }
+  // A DOI OpenAlex does not know, or whose copies have gone, is a paper
+  // without an open PDF — not an address with nothing at it.
+  if (last.why === 'notFound') throw new FetchError('noPDF', last.message)
+  throw last
 }
 
 /**

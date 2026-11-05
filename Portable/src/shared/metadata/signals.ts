@@ -10,7 +10,7 @@
  * here, and is held to the Mac's answers on the same inputs.
  */
 
-import { guessKind, namesACourse, type DocumentGuess } from '../documentKind.js'
+import { guessKind, type DocumentGuess } from '../documentKind.js'
 import { trimWhitespace, trimWhitespaceAndNewlines } from '../zettel.js'
 import { graphemes, isLetter, isNumber, isUppercase } from './chars.js'
 import { identifiersAreEmpty, scanIdentifiers } from './identifiers.js'
@@ -38,17 +38,12 @@ export function emptySignals(pageCount = 0): DocumentSignals {
   }
 }
 
-/** `DocumentSignals.guess` — without the file's name, as the Mac asks it
- *  when a paper is resolved. */
-export function guessFromSignals(signals: DocumentSignals, fileName?: string): DocumentGuess {
-  const named = [fileName ?? '', graphemes(signals.openingText).slice(0, 1200).join('')].join(' ')
+/** `DocumentSignals.guess`. */
+export function guessFromSignals(signals: DocumentSignals): DocumentGuess {
   return guessKind({
     identifier: !identifiersAreEmpty(scanIdentifiers(signals.openingText)),
     abstract: signals.hasAbstract,
     references: signals.hasReferences,
-    pageCount: signals.pageCount,
-    landscape: signals.isLandscape,
-    courseWords: namesACourse(named),
   })
 }
 

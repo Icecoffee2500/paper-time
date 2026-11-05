@@ -5,27 +5,21 @@
  * venue, a year, authors in citation order, a DOI, a key to cite it by.
  * Everything else somebody reads — a manual, a contract, a deck of slides —
  * has none of that, and a form asking a car manual for its journal makes the
- * app look silly and the reader wrong. So the library holds four kinds and
- * asks which one it has, with a guess offered.
+ * app look silly and the reader wrong. So the library asks one question — is
+ * it a paper? — with a guess offered.
  *
- * A book is its own kind rather than a document, because a book is cited.
- * Sent through the paper's form it comes back wrong in a way that is hard to
- * notice — a textbook matched to a journal article of the same name, with a
- * volume, an issue and a page range of `1054-1054` — and sent through the
- * document's form it cannot be cited at all.
- *
- * Course material is the fourth, and for the opposite reason: not because it
- * is cited but because there is so much of it. A term is thirty files that
- * are not papers, and as documents they sit among the contracts. It is a
- * shelf before it is a citation.
+ * 0.9.2 to 0.9.37 had two more kinds, `book` and `lecture`; 1.0 folded them
+ * back (Docs/Decisions-1.0.md). `PaperMeta` reads a record that still says
+ * `book` as a paper — a book is cited, and its CSL type stays `book` — and
+ * one that says `lecture` as a document.
  */
 export type { DocumentKind } from './model.js'
 import { identifiersAreEmpty, scanIdentifiers } from './metadata/identifiers.js'
 import type { DocumentKind } from './model.js'
 
-/** A paper and a book are cited; a document and a term's slides are not. */
+/** A paper is cited; a document is not. */
 export function isCitable(kind: DocumentKind): boolean {
-  return kind === 'paper' || kind === 'book'
+  return kind === 'paper'
 }
 
 /** Only a paper can be asked about: the lookup is by DOI or arXiv id. */
@@ -33,14 +27,20 @@ export function isLookedUp(kind: DocumentKind): boolean {
   return kind === 'paper'
 }
 
-/** Where a PDF stops being long and starts being a book. */
-export const BOOK_LENGTH = 100
-
-export type GuessReason = 'identifier' | 'structure' | 'length' | 'slides' | 'course' | 'nothingFound'
+export type GuessReason = 'identifier' | 'structure' | 'nothingFound'
 
 export interface DocumentGuess {
   kind: DocumentKind
   reason: GuessReason
+}
+
+/** The kinds a record may still say on disk, and what each is read as. */
+export function readKind(raw: unknown): DocumentKind | undefined {
+  switch (raw) {
+    case 'paper': case 'book': return 'paper'
+    case 'document': case 'lecture': return 'document'
+    default: return undefined
+  }
 }
 
 /** A DOI, an arXiv identifier or a PubMed ID printed in the text — the
@@ -65,53 +65,16 @@ export function hasReferences(endText: string): boolean {
     .some((word) => text.includes(word))
 }
 
-/**
- * What a course calls its own reading, in both languages. Looked for in the
- * file's name and the front of the first page, and only once the paper tests
- * have failed — "lecture" appears in the prose of plenty of papers.
- */
-export const COURSE_WORDS = [
-  'lecture', 'syllabus', 'problem set', 'homework', 'midterm', 'final exam',
-  'course notes', 'class notes', 'tutorial',
-  '강의', '강의자료', '강의노트', '수업', '주차', '차시', '과제', '중간고사', '기말고사', '실습',
-]
-
-/** Whether a course names itself here: its words, or a course code. */
-export function namesACourse(text: string): boolean {
-  const lower = text.toLowerCase()
-  if (COURSE_WORDS.some((word) => lower.includes(word))) return true
-  return /\b[a-z]{2,4}\s?-?\s?\d{3}\b/.test(lower)
-}
-
-export function guessKind(parts: {
-  identifier: boolean
-  abstract: boolean
-  references: boolean
-  pageCount?: number
-  landscape?: boolean
-  courseWords?: boolean
-}): DocumentGuess {
+export function guessKind(parts: { identifier: boolean; abstract: boolean; references: boolean }): DocumentGuess {
   if (parts.identifier) return { kind: 'paper', reason: 'identifier' }
   if (parts.abstract && parts.references) return { kind: 'paper', reason: 'structure' }
-  // Slides first, then the words. A landscape page is the one thing no paper
-  // and no book has — but only after the paper tests, because a conference
-  // paper printed two-up is landscape and has an abstract.
-  if (parts.landscape) return { kind: 'lecture', reason: 'slides' }
-  if (parts.courseWords) return { kind: 'lecture', reason: 'course' }
-  // Long, and with a reference list at the back. The length alone is not
-  // enough — a scanned manual is long too — and the references alone are not
-  // either, since a short paper without an abstract has them. Both together,
-  // at this length, is a book.
-  if (parts.references && (parts.pageCount ?? 0) >= BOOK_LENGTH) {
-    return { kind: 'book', reason: 'length' }
-  }
   return { kind: 'document', reason: 'nothingFound' }
 }
 
 /**
  * Whether a record wants a look: a paper whose lookup came back unsure. A
- * book or a document has no registrar to disagree with, so neither is ever
- * one (`PaperRow.needsReview`, the «Needs Review» shelf).
+ * document has no registrar to disagree with, so it never is one
+ * (`PaperRow.needsReview`, the «Needs Review» shelf).
  */
 export function needsReview(meta: { effectiveKind: DocumentKind; confidence?: string }): boolean {
   return isLookedUp(meta.effectiveKind) && (meta.confidence === 'needsReview' || meta.confidence === 'unparsed')

@@ -73,7 +73,7 @@ export async function librarySuite(test: Test, suite: (name: string) => void) {
 
   await test('the window may patch the fields a reader edits, and nothing else', () => {
     const patch = acceptedMetaPatch({
-      csl: { title: 't' }, bibKey: 'k', confidence: 'manual', kind: 'book', tagIDs: ['a'], parentID: null,
+      csl: { title: 't' }, bibKey: 'k', confidence: 'manual', kind: 'document', tagIDs: ['a'], parentID: null,
       file: { relativePath: '../../etc' }, id: 'other', addedAt: 'x', confidence2: 1, collectionIDs: [3],
     })
     assert.deepEqual(Object.keys(patch).sort(), ['bibKey', 'confidence', 'csl', 'kind', 'parentID', 'tagIDs'])
