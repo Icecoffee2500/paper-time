@@ -1316,6 +1316,7 @@ function lockedPDF() {
    when the page loads, so seventeen of them do not all animate at once into
    an empty screen. */
 const BANDS = [
+  ["demo-ultracopy", ultracopy],
   ["demo-handwriting", handwriting],
   ["demo-kind", paperOrDocument],
   ["demo-pages", pageGrid],
@@ -1605,13 +1606,81 @@ function mountHowPicker() {
 }
 
 
-/* ═══════════════════ the proof, above everything else ═══════════════════
-   The same demonstration that used to be the carousel's first slide, moved
-   to where somebody meets the page. A claim underneath a working thing reads
-   as a caption; a claim above one reads as a promise. */
-function mountHero() {
-  const node = document.getElementById("hero-demo");
-  if (node) node.replaceChildren(ultracopy());
+/* ═══════════════════════ the film, above everything else ═══════════════════
+   What somebody meets: ninety seconds of the Mac app, playing without sound
+   as soon as it is on screen. A claim underneath a working thing reads as a
+   caption; a claim above one reads as a promise.
+
+   Three rules, all about not taking what was not offered.
+   · Nothing is fetched and nothing moves for a visitor who asked for less
+     motion or less data: they get the still and a button, and the button
+     plays it with sound, because pressing it is asking for the film.
+   · It only plays while it is on screen. Scrolled away it stops; scrolled
+     back it carries on — unless the visitor was the one who stopped it.
+   · Without sound it goes round; with sound it plays once and rests on its
+     last card, which is the name and where to get the app. */
+function mountFilm() {
+  const video = document.getElementById("film-video");
+  if (!video) return;
+  const frame = document.getElementById("film");
+  const play = document.getElementById("film-play");
+  const sound = document.getElementById("film-sound");
+  const pick = (name) => video.dataset[name + (KO ? "Ko" : "En")];
+  video.poster = pick("poster");
+  video.setAttribute("aria-label", pick("label"));
+
+  const calm =
+    (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) ||
+    Boolean(navigator.connection && navigator.connection.saveData);
+
+  let asked = false;     // the file has been asked for
+  let offered = calm;    // the large button is up: the film waits to be asked for
+  let ours = false;      // the page stopped it, so the page may start it again
+  let stopping = false;  // …and this stop is the page's
+
+  const paint = () => {
+    play.hidden = !offered;
+    sound.hidden = offered || !asked || !video.muted;
+  };
+  const start = (withSound) => {
+    if (!asked) { video.src = video.dataset[KO ? "ko" : "en"]; asked = true; }
+    if (withSound !== undefined) video.muted = !withSound;
+    const going = video.play();
+    // A browser may still say no — an iPhone in Low Power Mode does. Then the
+    // film is the still and the button, the same as for a calm visitor.
+    if (going && going.catch) going.catch(() => { if (video.paused) { offered = true; paint(); } });
+  };
+  // The browser's own controls arrive with the first sign of a hand; until
+  // then the picture is only the picture.
+  const hand = () => { video.controls = true; };
+  video.addEventListener("pointerenter", hand, { once: true });
+  video.addEventListener("focus", hand, { once: true });
+
+  play.addEventListener("click", () => { hand(); start(true); });
+  sound.addEventListener("click", () => { hand(); start(true); });
+  video.addEventListener("volumechange", paint);
+  video.addEventListener("playing", () => { offered = false; paint(); });
+  video.addEventListener("pause", () => { ours = stopping; stopping = false; });
+  video.addEventListener("ended", () => {
+    if (video.muted) { video.currentTime = 0; start(); }
+  });
+  paint();
+
+  if (!("IntersectionObserver" in window)) {
+    if (!calm) start(false);
+    return;
+  }
+  let begun = false;
+  new IntersectionObserver((entries) => {
+    const showing = entries[entries.length - 1].intersectionRatio >= 0.4;
+    if (showing) {
+      if (!begun && !calm) { begun = true; start(false); }
+      else if (ours) { ours = false; start(); }
+    } else if (asked && !video.paused) {
+      stopping = true;
+      video.pause();
+    }
+  }, { threshold: [0, 0.4, 1] }).observe(frame);
 }
 
 /* ══════════════════════════ built together ═══════════════════════════════
@@ -1875,7 +1944,7 @@ window.PaperTime = {
 if (document.body.dataset.page !== "docs") {
   mountLanguage();
   mountMetadata();
-  mountHero();
+  mountFilm();
   mountBands();
   mountReveals();
   mountDownloads();
