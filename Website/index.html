@@ -33,7 +33,7 @@
   document.documentElement.lang = lang;
 })();
 </script>
-<link rel="stylesheet" href="style.css?v=0.9.23">
+<link rel="stylesheet" href="style.css?v=1.0.0-film">
 </head>
 <body>
 
@@ -66,10 +66,27 @@
     <p class="lede" data-l="en">Read a paper, mark it, and take it into your notes, <b class="mark">formulas and all</b>.</p>
   </div>
 
-  <!-- The demonstration, before any claim about it. Somebody who has ever
-       copied a formula out of a PDF understands this in five seconds, and no
-       sentence does that. -->
-  <div class="hero-demo" id="hero-demo"></div>
+  <!-- The film, before any claim. Ninety seconds of the Mac app doing what the
+       page goes on to describe, and it is what a visitor meets: it plays
+       without sound as soon as it is on screen, and one press turns the sound
+       on. Somebody who asked for less motion, or to save data, gets the still
+       and a button instead, and nothing is fetched until they press it.
+       Both languages are named here; demos.js picks the one the page is in.
+       Marketing/film-mac/web.swift makes these files from the masters. -->
+  <figure class="hero-film" id="film">
+    <video id="film-video" playsinline muted preload="none" width="1920" height="1080"
+           data-ko="media/paper-time-ko.mp4" data-en="media/paper-time-en.mp4"
+           data-poster-ko="media/paper-time-ko.jpg" data-poster-en="media/paper-time-en.jpg"
+           data-label-ko="Paper Time 소개 영상, 90초" data-label-en="The Paper Time film, 90 seconds"></video>
+    <button class="film-play" id="film-play" type="button" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13a.6.6 0 0 0 .92.5l10.2-6.5a.6.6 0 0 0 0-1L8.92 5a.6.6 0 0 0-.92.5z"/></svg>
+      <span data-l="ko">영상 보기</span><span data-l="en">Watch the film</span>
+    </button>
+    <button class="film-sound" id="film-sound" type="button" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.6v4.8c0 .33.27.6.6.6H8l4.5 3.7a.6.6 0 0 0 1-.46V5.76a.6.6 0 0 0-1-.46L8 9H4.6a.6.6 0 0 0-.6.6z"/><path class="wave" d="M16.5 8.8a4.6 4.6 0 0 1 0 6.4M18.9 6.4a8 8 0 0 1 0 11.2"/></svg>
+      <span data-l="ko">소리 켜기</span><span data-l="en">Sound on</span>
+    </button>
+  </figure>
 
   <div class="actions">
     <a class="btn btn-primary" id="get" href="https://github.com/Icecoffee2500/paper-time/releases">
@@ -88,6 +105,24 @@
     <p class="hint tally" id="tally"></p>
   </div>
 </header>
+
+<!-- ─────────────────────────── ultracopy ───────────────────────────────── -->
+<!-- The working thing that used to stand in the hero. The film shows it; this
+     is where a visitor presses it. -->
+<section class="band tone-grey" id="ultracopy">
+  <div class="band-inner rise">
+    <div class="band-head">
+      <p class="eyebrow">Ultracopy</p>
+      <h2 class="display" data-l="ko">수식을,<br>수식 그대로.</h2>
+      <h2 class="display" data-l="en">The formula,<br>as the formula.</h2>
+      <p class="say" data-l="ko">PDF에서 수식을 복사하면 위첨자와 분수가 무너져요. Ultracopy(<span class="key">⇧⌘C</span>)는 쪽의 글자 자리를 읽어 LaTeX으로 옮겨요.
+        수식만 잡으려면 올가미(<span class="key">⌥⌘L</span>)로 둘러요. 아래에서 두 가지 복사를 견줘보세요.</p>
+      <p class="say" data-l="en">Copy a formula out of a PDF and the superscripts and fractions fall apart. Ultracopy (<span class="key">⇧⌘C</span>) reads where each glyph sits on the page and writes LaTeX.
+        To take only the formula, draw the lasso (<span class="key">⌥⌘L</span>) around it. Try both kinds of copy below.</p>
+    </div>
+    <div class="band-demo" id="demo-ultracopy"></div>
+  </div>
+</section>
 
 <!-- ──────────────────────────── reading ────────────────────────────────── -->
 <section class="band" id="read">
@@ -593,6 +628,6 @@
   </div>
 </dialog>
 
-<script src="demos.js?v=0.9.23"></script>
+<script src="demos.js?v=1.0.0-film"></script>
 </body>
 </html>

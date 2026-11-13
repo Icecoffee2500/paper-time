@@ -328,14 +328,16 @@ button { font: inherit; color: inherit; }
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: clamp(22px, 3vh, 38px);
-  padding: clamp(40px, 7vh, 88px) var(--gutter) clamp(48px, 8vh, 96px);
+  gap: clamp(18px, 3vh, 32px);
+  /* Less air above the name than a hero of words would take: the film is the
+     hero, and every pixel the name gives up goes to it. */
+  padding: clamp(28px, 5vh, 64px) var(--gutter) clamp(48px, 8vh, 96px);
   text-align: center;
 }
 .hero-top { max-width: 900px; margin: 0 auto; }
 .wordmark {
   margin: 0;
-  font-size: clamp(44px, 8.4vw, 96px);
+  font-size: clamp(44px, 7.2vw, 84px);
   line-height: 1;
   font-weight: 600;
   letter-spacing: -.035em;
@@ -361,7 +363,10 @@ button { font: inherit; color: inherit; }
 }
 .hero .lede {
   margin: 18px auto 0;
-  max-width: 680px;
+  /* Wide enough for the English sentence to stay on one line on a desktop:
+     a second line is a line the film does not get. */
+  max-width: 820px;
+  text-wrap: balance;
   font-size: clamp(19px, 2.2vw, 28px);
   line-height: 1.32;
   font-weight: 500;
@@ -370,15 +375,73 @@ button { font: inherit; color: inherit; }
 }
 .hero .lede b { color: var(--ink); font-weight: 600; }
 
-.hero-demo {
-  width: min(980px, 100%);
+/* The film. As wide as the column lets it be, but never taller than the
+   first screen has room for: the name above it and the button below it are
+   on that screen with it. `--hero-rest` is what everything else on the first
+   screen takes — the bar, the name, the sentence, the buttons and the air
+   between them. A short window stops shrinking it at 420px and scrolls. */
+.hero-film {
+  --hero-rest: 350px;
+  position: relative;
+  width: min(1080px, 100%, max(420px, calc((100svh - var(--hero-rest)) * 16 / 9)));
+  aspect-ratio: 16 / 9;
   margin: 0 auto;
-  display: flex;
-  min-height: 300px;
-  background: var(--panel-2);
   border-radius: var(--panel-r);
-  padding: clamp(16px, 2vw, 26px);
+  overflow: hidden;
+  background: #000;
+  box-shadow: var(--shadow-2);
 }
+.hero-film video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #000;
+}
+/* Two buttons on the picture, both dark glass so they read on a white page
+   of a paper and on a black card alike. The large one stands in the middle
+   when the film is waiting to be asked for; the small one sits in a corner
+   while it plays without sound. */
+.film-play, .film-sound {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  cursor: pointer;
+  border-radius: 980px;
+  color: #fff;
+  font-family: var(--sans);
+  line-height: 1;
+  background: rgba(28, 28, 30, .64);
+  -webkit-backdrop-filter: blur(18px) saturate(1.6);
+  backdrop-filter: blur(18px) saturate(1.6);
+  transition: background .14s;
+}
+.film-play[hidden], .film-sound[hidden] { display: none; }
+.film-play:hover, .film-sound:hover { background: rgba(28, 28, 30, .82); }
+.film-play:focus-visible, .film-sound:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.film-play svg, .film-sound svg { flex: none; fill: currentColor; }
+.film-play {
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 15px 26px 15px 19px;
+  font-size: 17px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.film-play svg { width: 22px; height: 22px; }
+.film-sound {
+  top: 14px;
+  right: 14px;
+  padding: 9px 14px 9px 11px;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.film-sound svg { width: 17px; height: 17px; }
+.film-sound .wave { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
 
 .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center; }
 
@@ -770,7 +833,8 @@ dialog::backdrop { background: rgba(0, 0, 0, .45); backdrop-filter: blur(4px); }
 @media (max-width: 640px) {
   body { font-size: 16px; }
   .demo-slot { min-height: 190px; padding: 12px; }
-  .hero-demo { min-height: 260px; }
+  .hero-film { border-radius: 16px; }
+  .film-sound { top: 10px; right: 10px; }
   .band-demo { min-height: 260px; }
 }
 
