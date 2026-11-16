@@ -188,6 +188,12 @@ struct PlanBoard: View {
                     drop: drop,
                     open: open
                 )
+                // The scroller floats over the rows rather than taking a lane
+                // of its own, as the list's did: with «Show scroll bars:
+                // Always» the lane narrowed the rows and not the column
+                // titles over them, and every title stood 15 points right of
+                // its column.
+                .hiddenScrollers()
                 }
             }
         }
@@ -1053,7 +1059,14 @@ struct BoardRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .help(paper.meta.displayTitle)
             ForEach(columns) { column in
-                cell(column).frame(width: column.width, alignment: .leading)
+                // Held open even when the cell has nothing to draw: a cell
+                // that drew nothing (no materials) took its frame with it, and
+                // every column after it slid over (2026-11-16).
+                HStack(spacing: 0) {
+                    cell(column)
+                    Spacer(minLength: 0)
+                }
+                .frame(width: column.width, alignment: .leading)
             }
         }
         .padding(.horizontal, 12)
