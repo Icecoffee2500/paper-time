@@ -106,9 +106,15 @@ struct PlanInspectorSections: View {
         .dropDestination(for: URL.self) { urls, _ in
             let files = urls.filter(\.isFileURL)
             guard !files.isEmpty else { return false }
+            if LibraryModel.holdsPDF(files) {
+                message = L("PDF는 자료 대신 보충 자료로 붙여요. 목록에서 이 논문 위로 끌어다 놓아요.",
+                            "A PDF goes under the paper as a supplement. Drag it onto the paper in the list.")
+                return false
+            }
             Task {
                 let count = await model.attachFiles(files, to: paper.id)
-                message = count > 0 ? L("파일 \(count)개를 붙였어요.", count == 1 ? "Added 1 file." : "Added \(count) files.") : nil
+                message = count > 0 ? L("파일 \(count)개를 붙였어요.", count == 1 ? "Added 1 file." : "Added \(count) files.")
+                    : L("파일을 붙이지 못했어요.", "Paper Time couldn't add the file.")
             }
             return true
         }

@@ -231,7 +231,7 @@ extension LibraryModel {
     }
 
     public func deletePlan(_ id: UUID) async {
-        try? await planStore(id).deletePlan(id)
+        try? await planStore(id).deletePlan(id, toTrash: Boot.setting("PAPERTIME_LIBRARY") == nil)
         plans.removeAll { $0.id == id }
         planRoots[id] = nil
         if scope == .plan(id) { scope = .thisWeek }
@@ -305,10 +305,19 @@ extension LibraryModel {
         return await changeLinks(of: paper) { $0.append(link) } ? .added(link.kind) : .failed
     }
 
+    /// Whether any of the files is a PDF — which is not taken as a material:
+    /// copied into the library folder it would be taken in as a paper of its
+    /// own. A PDF belongs under the paper as a supplement.
+    public static func holdsPDF(_ urls: [URL]) -> Bool {
+        urls.contains { $0.pathExtension.lowercased() == "pdf" }
+    }
+
     /// Copies the files beside the paper's PDF and keeps them as materials.
+    /// PDFs are left out (`holdsPDF`).
     @discardableResult
     public func attachFiles(_ urls: [URL], to paperID: UUID) async -> Int {
         guard let paper = paper(paperID) else { return 0 }
+        let urls = urls.filter { $0.pathExtension.lowercased() != "pdf" }
         var added: [PaperMaterial] = []
         for url in urls {
             guard let relative = try? await store(for: paper).copyMaterial(from: url, beside: paper) else { continue }

@@ -283,7 +283,7 @@ struct PlanBoard: View {
             }
             ShelfViewSwitch(
                 view: Binding(get: { view }, set: { model.setShelfView($0, for: model.scope) }),
-                choices: { if case .plan = kind { [.list, .table, .calendar] } else { [.list, .table] } }()
+                choices: { if case .plan = kind { [.table, .calendar] } else { [.list, .table] } }()
             )
         }
         .labelStyle(.titleAndIcon)

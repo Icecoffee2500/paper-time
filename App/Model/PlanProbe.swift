@@ -106,7 +106,10 @@ enum PlanProbe {
         let papers = model.papers.filter { $0.meta.parentID == nil }.prefix(6).map(\.id)
         guard papers.count == 6 else { return say("plan check: need six papers") }
         for plan in model.plans { await model.deletePlan(plan.id) }
-        for paper in papers { await model.setReadingStatus(.unread, for: paper) }
+        for paper in papers {
+            await model.setReadingStatus(.unread, for: paper)
+            for link in model.paper(paper)?.links ?? [] { await model.removeLink(link.id, from: paper) }
+        }
         guard let id = await model.createPlan(named: "검사 계획", papers: Array(papers.prefix(4))) else {
             return expect(false, "create")
         }
@@ -145,6 +148,7 @@ enum PlanProbe {
         expect(await model.addLink("not a link", to: papers[1]) == .notAnAddress, "words are not an address")
         let scratch = FileManager.default.temporaryDirectory.appending(path: "검사 발표자료.pptx")
         try? Data("slides".utf8).write(to: scratch)
+        expect(LibraryModel.holdsPDF([URL(fileURLWithPath: "/tmp/x.PDF")]) && !LibraryModel.holdsPDF([scratch]), "a PDF is told apart")
         let copied = await model.attachFiles([scratch], to: papers[1])
         expect(copied == 1, "a file copied beside the PDF")
         let links = model.paper(papers[1])?.links ?? []

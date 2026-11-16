@@ -16,6 +16,7 @@ import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 import { shell } from 'electron'
+import { probe } from './probeMode.js'
 import { isInside, samePath } from '../shared/paths.js'
 import { isoTimestamp, makeUUID } from '../shared/coding.js'
 import {
@@ -129,10 +130,16 @@ export class PlanFiles {
       const file = L.planPath(root, id)
       noteOwnWrite(file)
       noteOwnWrite(path.dirname(file))
-      try {
-        await shell.trashItem(file)
-      } catch {
+      // A probe's plans are its own scratch: gone outright, never into the
+      // Trash of the person whose machine it runs on.
+      if (probe.isRun) {
         await fsp.rm(file, { force: true })
+      } else {
+        try {
+          await shell.trashItem(file)
+        } catch {
+          await fsp.rm(file, { force: true })
+        }
       }
       this.rootOf.delete(id)
       return true

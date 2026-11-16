@@ -871,15 +871,14 @@ public actor LibraryStore {
         return plan
     }
 
-    /// Puts a plan's file in the Trash. The papers are not touched.
-    public func deletePlan(_ id: UUID) throws {
+    /// Puts a plan's file in the Trash — or, `toTrash` false, removes it,
+    /// which is for a probe's scratch plans: they are no business of the
+    /// Trash of the person whose Mac it runs on. The papers are not touched.
+    public func deletePlan(_ id: UUID, toTrash: Bool = true) throws {
         let url = LibraryLayout.planURL(id: id, inLibrary: root)
         guard FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) else { return }
-        do {
-            try FileManager.default.trashItem(at: url, resultingItemURL: nil)
-        } catch {
-            try FileManager.default.removeItem(at: url)
-        }
+        if toTrash, (try? FileManager.default.trashItem(at: url, resultingItemURL: nil)) != nil { return }
+        try FileManager.default.removeItem(at: url)
     }
 
     // MARK: - Renaming the file
