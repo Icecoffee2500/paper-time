@@ -289,3 +289,101 @@ export function calendarLabel(day: string, first: boolean): string {
   const [, , date] = dayParts(day)
   return first || date === 1 ? longDay(day) : String(date)
 }
+
+// MARK: - What the plan asks for next
+
+/**
+ * What a plan's board says it needs, so nobody has to read a manual to know
+ * the next step: an empty plan asks for papers, a plan of papers with no day
+ * at all asks when they will be read. Anything else asks for nothing.
+ */
+export type Guidance = 'empty' | 'noDays' | null
+
+export function planGuidance(papers: BoardPaper[]): Guidance {
+  if (papers.length === 0) return 'empty'
+  if (papers.every((paper) => !paper.date)) return 'noDays'
+  return null
+}
+
+// MARK: - The columns
+
+export type ColumnID = 'authors' | 'year' | 'venue' | 'date' | 'plan' | 'progress' | 'materials' | 'tags' | 'rating' | 'notes' | 'added' | 'opened'
+export type BoardContext = 'plan' | 'week' | 'other'
+
+/** Every column, in the order the column menu lists them. */
+export const ALL_COLUMNS: ColumnID[] = ['authors', 'year', 'venue', 'date', 'plan', 'progress', 'materials', 'tags', 'rating', 'notes', 'added', 'opened']
+
+export const DEFAULT_COLUMNS: Record<BoardContext, ColumnID[]> = {
+  plan: ['authors', 'year', 'venue', 'date', 'progress', 'materials'],
+  week: ['plan', 'date', 'materials'],
+  other: ['authors', 'year', 'venue', 'date', 'plan', 'materials'],
+}
+
+/**
+ * A remembered list of columns, read: the old «저자 · 해» (`who`) is the two
+ * columns it became, anything this build does not know is dropped, and a
+ * column is listed once.
+ */
+export function readColumns(list: unknown): ColumnID[] | null {
+  if (!Array.isArray(list)) return null
+  const out: ColumnID[] = []
+  for (const one of list) {
+    const ids: ColumnID[] = one === 'who' ? ['authors', 'year'] : ALL_COLUMNS.includes(one as ColumnID) ? [one as ColumnID] : []
+    for (const id of ids) if (!out.includes(id)) out.push(id)
+  }
+  return out
+}
+
+/** «Kumar 외» / "Kumar et al.": the first author's family name, and whether there are more. */
+export function authorsText(authors: { family?: string; literal?: string; given?: string }[] | undefined): string {
+  const list = authors ?? []
+  const first = list[0]
+  const name = first ? (first.family || first.literal || first.given || '') : ''
+  if (!name) return ''
+  return list.length > 1 ? L(`${name} 외`, `${name} et al.`) : name
+}
+
+// MARK: - Choosing papers
+
+/** A paper as the picker lists it. */
+export interface PickerPaper {
+  id: string
+  title: string
+  /** What the search reads: the title and the authors' names. */
+  search: string
+}
+
+/** Lower-cased, accents taken off, spaces made one: what a search compares. */
+export function pickerFold(text: string): string {
+  return text.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * The order the picker lists papers in, fixed when it opens: the ones chosen
+ * then, in the order they were given; then the rest by title. It does not
+ * change as boxes are ticked — a row that jumps away under the pointer is a
+ * row ticked twice. `last` (a plan's own papers, in the add sheet) go at the
+ * end, where they are shown and cannot be ticked.
+ */
+export function pickerOrder(papers: PickerPaper[], chosen: string[], last: Iterable<string> = []): string[] {
+  const known = new Set(papers.map((paper) => paper.id))
+  const first = chosen.filter((id, at) => known.has(id) && chosen.indexOf(id) === at)
+  const firstSet = new Set(first)
+  const lastSet = new Set(last)
+  const byTitle = (a: PickerPaper, b: PickerPaper) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' })
+  const rest = papers.filter((paper) => !firstSet.has(paper.id) && !lastSet.has(paper.id)).sort(byTitle).map((paper) => paper.id)
+  const tail = papers.filter((paper) => lastSet.has(paper.id) && !firstSet.has(paper.id)).sort(byTitle).map((paper) => paper.id)
+  return [...first, ...rest, ...tail]
+}
+
+/** The rows the picker shows: those whose title or authors hold every word typed, and only the chosen when asked. */
+export function pickerShown(order: string[], papers: PickerPaper[], query: string, chosenOnly: boolean, chosen: Iterable<string>): string[] {
+  const known = new Map(papers.map((paper) => [paper.id, pickerFold(paper.search)]))
+  const words = pickerFold(query).split(' ').filter(Boolean)
+  const picked = new Set(chosen)
+  return order.filter((id) => {
+    if (chosenOnly && !picked.has(id)) return false
+    const text = known.get(id)
+    return text !== undefined && words.every((word) => text.includes(word))
+  })
+}

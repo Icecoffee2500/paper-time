@@ -5172,3 +5172,81 @@ textarea.memo {
   background: color-mix(in srgb, var(--text) 10%, transparent); color: var(--text);
 }
 .toast-button:hover { background: color-mix(in srgb, var(--text) 16%, transparent); }
+
+/* Reading plans, made obvious: the New Plan and Add Papers sheets, the empty
+   plan, the «When will you read them?» strip and the sidebar's first line. */
+.plan-sheet { width: 520px; }
+.plan-sheet .fb-title { padding-bottom: 4px; }
+.ps-sub { margin: 0 20px 6px; text-align: center; font-size: 12.5px; color: var(--text-secondary); }
+.ps-body { display: flex; flex-direction: column; gap: 14px; padding-top: 10px; }
+.ps-part { display: flex; flex-direction: column; gap: 8px; }
+.ps-part-head { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
+.ps-num {
+  display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; flex: none;
+  background: var(--accent-soft); color: var(--accent-text); font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.ps-count { font-size: 12px; font-weight: 500; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.ps-optional { font-size: 11.5px; font-weight: 500; color: var(--text-tertiary); }
+.ps-search-row { display: flex; gap: 8px; align-items: center; }
+.ps-search { flex: 1; min-width: 0; }
+.ps-chip {
+  height: 28px; padding: 0 11px; border-radius: 14px; font-size: 12px; white-space: nowrap;
+  background: var(--hover); color: var(--text-secondary);
+}
+.ps-chip[aria-pressed='true'] { background: var(--accent-soft); color: var(--accent-text); font-weight: 600; }
+.ps-list {
+  height: 260px; overflow-y: auto; border-radius: var(--radius-control);
+  background: var(--panel-soft); padding: 4px;
+}
+.ps-row {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 8px; border-radius: var(--radius-row);
+  text-align: left; transition: background-color var(--motion-tap) var(--ease);
+}
+.ps-row:hover { background: var(--hover); }
+.ps-row.on { background: var(--accent-soft); }
+.ps-row.locked { cursor: default; opacity: 0.6; }
+.ps-row.locked:hover { background: none; }
+.ps-check {
+  display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; flex: none;
+  box-shadow: inset 0 0 0 1.5px var(--ring-empty);
+}
+.ps-row.on .ps-check { background: var(--accent); box-shadow: none; color: #fff; }
+.ps-check svg { width: 12px; height: 12px; stroke-width: 2.2; }
+.ps-text { display: flex; flex-direction: column; min-width: 0; }
+.ps-title { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ps-who { font-size: 11.5px; color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ps-none { padding: 40px 0; text-align: center; font-size: 12.5px; color: var(--text-tertiary); }
+.ps-toggle { padding: 0; }
+.ps-days { padding: 4px 0 0; }
+
+.pb-empty-plan {
+  max-width: 460px; margin: 40px auto 24px; padding: 28px 28px 22px; border-radius: var(--radius-popover);
+  background: var(--panel-soft); display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px;
+}
+.pb-empty-plan.over { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent); }
+.pb-empty-icon {
+  display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px;
+  background: var(--accent-soft); color: var(--accent-text);
+}
+.pb-empty-icon svg { width: 22px; height: 22px; }
+.pb-empty-plan h3 { margin: 4px 0 0; font-size: 16px; font-weight: 650; }
+.pb-empty-plan p { margin: 0 0 6px; font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; }
+.pb-empty-plan .pb-cap.strong { height: 32px; padding: 0 16px; font-size: 13px; }
+.pb-empty-add { width: 100%; margin: 6px 0 0; }
+
+.pb-guide {
+  display: flex; align-items: center; gap: 10px; margin: 6px 20px 0; padding: 10px 10px 10px 14px; flex: 0 0 auto;
+  border-radius: 12px; background: var(--wash);
+}
+.pb-guide-icon { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9px; background: var(--accent-soft); color: var(--accent-text); flex: none; }
+.pb-guide-icon svg { width: 15px; height: 15px; }
+.pb-guide-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.pb-guide-text strong { font-size: 13px; font-weight: 600; }
+.pb-guide-text span { font-size: 12px; color: var(--text-secondary); }
+.pb-guide .pb-cap { height: 28px; background: var(--raised); box-shadow: var(--lift); }
+.pb-guide-x { width: 24px; height: 24px; }
+
+.pb-stat-button { cursor: pointer; }
+.pb-stat-button:hover { background: color-mix(in srgb, var(--k) 22%, transparent); }
+
+.sidebar-hint { padding: 0 10px 6px 34px; font-size: 11.5px; line-height: 1.4; color: var(--text-tertiary); }

@@ -248,6 +248,28 @@ export function installProbeSurface() {
       addAddresses: (id: string, text: string) => plans.addFromAddresses(id, text),
       remove: (id: string) => plans.deletePlan(id),
       select: (id: string) => plans.selectInBoard(id),
+      /** The New Plan sheet, with a name and papers already chosen — what «Make a Plan» opens. */
+      openNew: (name = '', papers: string[] = []) => plans.newPlan(papers, name),
+      /** The Add Papers sheet for a plan. */
+      openAdd: (id: string) => plans.addPapersTo(id),
+      /** What the open plan sheet shows: its rows, which are chosen, which are already in. */
+      sheet: () => {
+        const sheet = document.querySelector<HTMLElement>('.plan-sheet')
+        if (!sheet) return null
+        return {
+          title: sheet.querySelector('.fb-title')?.textContent,
+          count: sheet.querySelector('.ps-count')?.textContent,
+          button: [...sheet.querySelectorAll<HTMLButtonElement>('.set-foot button')].map((one) => ({ text: one.textContent, disabled: one.disabled })),
+          rows: [...sheet.querySelectorAll<HTMLElement>('.ps-row')].map((row) => ({
+            id: row.dataset.id,
+            on: row.classList.contains('on'),
+            locked: row.classList.contains('locked'),
+            title: row.querySelector('.ps-title')?.textContent,
+            who: row.querySelector('.ps-who')?.textContent,
+          })),
+          days: sheet.querySelector('.pp-spread-preview')?.textContent ?? null,
+        }
+      },
       setToday: (day: string) => {
         store.today = day
         changed('papers')
