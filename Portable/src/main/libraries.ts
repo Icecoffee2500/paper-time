@@ -17,6 +17,7 @@ import { Library, claimedBy } from './library.js'
 import type { TextSource } from './textIndex.js'
 import { mergeVocabulary, missingVocabulary, type FolderVocabulary } from './vocabulary.js'
 import { settings, update } from './settings.js'
+import { readAllPlans } from './plans.js'
 
 export interface FolderRead {
   library: Library
@@ -206,7 +207,12 @@ export class LibrarySet {
           if (row.file && (row.exists || row.source)) {
             readable.set(row.id, { id: row.id, file: row.file, title: new PaperMeta(row.meta).displayTitle })
           }
-          rows.push({ id: row.id, meta: row.meta, state: row.state, exists: row.exists, root: folder.library.root, ...(row.source ? { source: row.source.address } : {}) })
+          rows.push({
+            id: row.id, meta: row.meta, state: row.state, exists: row.exists, root: folder.library.root,
+            ...(row.source ? { source: row.source.address } : {}),
+            ...(row.schedule ? { schedule: row.schedule } : {}),
+            ...(row.links ? { links: row.links } : {}),
+          })
         }
         loose += folder.loose
         treeFolders.push(...folder.folders)
@@ -216,6 +222,7 @@ export class LibrarySet {
       this.hooks.onRead(readable)
       const extras = await this.hooks.notes(folders.map((one) => one.library.root), (id) => owners.get(id)?.root ?? null)
       const vocabulary = await this.settleVocabulary(rows, folders)
+      const plans = await readAllPlans(folders.map((one) => one.library))
       const first = folders[0]
       return {
         root: this.first.root,
@@ -227,6 +234,7 @@ export class LibrarySet {
         folders: treeFolders,
         unreadable,
         refused,
+        plans,
         notes: extras.notes,
         notesFolder: extras.notesFolder,
       }

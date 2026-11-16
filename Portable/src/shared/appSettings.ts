@@ -13,7 +13,10 @@ export interface Settings {
   recentLibraries: string[]
   window: { width: number; height: number; x?: number; y?: number; maximized?: boolean }
   panes: { sidebar: boolean; paperList: boolean; reader: boolean; inspector: boolean }
-  columns: { sidebar: number; paperList: number; inspector: number }
+  /** `table`: the list column's width while it holds the table, which wants
+   *  more room than a list of titles — kept apart so the notes keep theirs
+   *  (the Mac's `tableColumnWidth`). */
+  columns: { sidebar: number; paperList: number; inspector: number; table: number }
   inspectorTab: 'details' | 'marks' | 'note' | 'tools'
   sort: { field: 'title' | 'author' | 'year' | 'added' | 'opened'; ascending: boolean }
   /** 'system' follows the desktop; the other two are the reader's choice. */
@@ -62,6 +65,10 @@ export interface Settings {
   checkForUpdates: boolean
   /** «Skip This Version»: not announced again until a newer one. */
   skippedUpdateVersion: string | null
+  /** The reading plan's board, as JSON: each shelf's view (list, table,
+   *  calendar), the table's columns and sort, the plan's grouping, and the
+   *  last «Spread Evenly» (`renderer/plans.ts`). */
+  planBoard: string | null
 }
 
 export const DEFAULTS: Settings = {
@@ -70,7 +77,7 @@ export const DEFAULTS: Settings = {
   recentLibraries: [],
   window: { width: 1440, height: 900 },
   panes: { sidebar: true, paperList: true, reader: true, inspector: true },
-  columns: { sidebar: 232, paperList: 320, inspector: 360 },
+  columns: { sidebar: 232, paperList: 320, inspector: 360, table: 620 },
   inspectorTab: 'details',
   sort: { field: 'added', ascending: false },
   appearance: 'system',
@@ -95,6 +102,7 @@ export const DEFAULTS: Settings = {
   seenReleaseNotesVersion: null,
   checkForUpdates: true,
   skippedUpdateVersion: null,
+  planBoard: null,
 }
 
 /** What the file says, over the defaults, each group merged key by key. */

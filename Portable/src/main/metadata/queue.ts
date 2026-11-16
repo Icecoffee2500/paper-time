@@ -25,7 +25,8 @@ import { isoTimestamp, makeUUID } from '../../shared/coding.js'
 import { isLookedUp } from '../../shared/documentKind.js'
 import { makeKey } from '../../shared/citationKey.js'
 import { PaperMeta } from '../../shared/model.js'
-import { resolve, type Network, type ResolutionResult } from '../../shared/metadata/resolver.js'
+import { publishedRecord, resolve, type Network, type ResolutionResult } from '../../shared/metadata/resolver.js'
+import type { Identifiers } from '../../shared/metadata/identifiers.js'
 import type { PaperRow } from '../library.js'
 import { guessFromSignals, type DocumentSignals } from '../../shared/metadata/signals.js'
 import type { Library } from '../library.js'
@@ -49,7 +50,26 @@ export interface MetadataHooks {
   changed: (id: string) => void
   /** A line for the probe's log. */
   log?: (line: string) => void
+  /** Everything queued is done — the supplements among what came in go to their papers. */
+  idle?: () => void
+  /** When each preprint was last asked about its published version — on
+   *  this machine, in the app's own folder, not in the library (a probe's in
+   *  memory only). Milliseconds since 1970, by paper id. */
+  publishedChecks?: { load: () => Record<string, number>; save: (dates: Record<string, number>) => void }
 }
+
+/** Whether a record may be a preprint: arXiv's DOI, a manuscript, or no venue
+ *  or arXiv's (`LibraryModel.mayBePreprint`). */
+export function mayBePreprint(meta: PaperMeta): boolean {
+  const ids = (meta.raw.identifiers ?? {}) as Identifiers
+  const doi = ids.doi ?? (typeof meta.csl.DOI === 'string' ? meta.csl.DOI : undefined)
+  if (doi !== undefined && doi.toLowerCase().startsWith('10.48550/arxiv.')) return true
+  if (meta.csl.type === 'manuscript') return true
+  const container = typeof meta.csl['container-title'] === 'string' ? meta.csl['container-title'].trim() : ''
+  return container === '' || container.toLowerCase().includes('arxiv')
+}
+
+const FORTNIGHT = 14 * 86_400_000
 
 export class MetadataQueue {
   private readonly waiting: string[] = []
@@ -70,9 +90,105 @@ export class MetadataQueue {
   }
 
   /** «Re-run Metadata» on these papers, or the lookup a document owes now
-   *  that somebody said it is a paper. */
+   *  that somebody said it is a paper. A confirmed record keeps its citation
+   *  key and gives way only to another confirmed one; a guess is simply
+   *  looked up again (the Mac's `refreshing: confidence == .verified`). */
   rerun(ids: string[]) {
+    for (const id of ids) if (this.refreshing.get(id) !== 'always') this.refreshing.set(id, 'ifVerified')
     this.push(ids, true)
+  }
+
+  /** «Refresh All Metadata»: every record the app found, found again with
+   *  the engine as it is now — all but the ones a person wrote or chose and
+   *  the supplements. Keys stay (a `.tex` file cites them); a confirmed
+   *  record gives way only to another confirmed one. */
+  async refreshAll(): Promise<number> {
+    const ids: string[] = []
+    for (const library of this.hooks.libraries.all()) {
+      for (const row of (await library.read()).papers) {
+        const meta = new PaperMeta(row.meta)
+        if (isLookedUp(meta.effectiveKind) && meta.confidence !== 'manual' && !meta.parentID) ids.push(row.id)
+      }
+    }
+    for (const id of ids) this.refreshing.set(id, 'always')
+    this.push(ids, true)
+    return ids.length
+  }
+
+  private readonly refreshing = new Map<string, 'ifVerified' | 'always'>()
+  private publishedTimer: ReturnType<typeof setTimeout> | null = null
+  private publishedRun: Promise<void> | null = null
+
+  /**
+   * The library's preprints, looked at again for where they were published
+   * (`LibraryModel.checkPublishedVersions`): a paper is posted months before
+   * it is accepted, so the record taken when it was added says «arXiv» long
+   * after the paper has a venue. Each — a confirmed record of arXiv's, or
+   * one with no venue — at most once a fortnight, a few seconds after the
+   * library opens, one at a time. Nothing a person chose is touched, the
+   * citation key stays, and a paper still unpublished is left as it was.
+   */
+  checkPublishedSoon(delay = 8000) {
+    if (this.publishedTimer || this.publishedRun) return
+    this.publishedTimer = setTimeout(() => {
+      this.publishedTimer = null
+      this.publishedRun = this.checkPublished().catch((error) => {
+        this.hooks.log?.(`metadata: published check failed: ${(error as Error)?.message ?? error}`)
+      }).finally(() => { this.publishedRun = null })
+    }, delay)
+  }
+
+  /** The check that `checkPublishedSoon` starts, run now — a probe waits on it. */
+  async checkPublished(): Promise<void> {
+    if (!this.hooks.onImport()) return
+    const network = this.hooks.network()
+    if (!network) return
+    const asked = this.hooks.publishedChecks?.load() ?? {}
+    const now = Date.now()
+    const due: { owner: Library; row: PaperRow }[] = []
+    for (const library of this.hooks.libraries.all()) {
+      for (const row of (await library.read()).papers) {
+        const meta = new PaperMeta(row.meta)
+        const last = asked[row.id]
+        if (isLookedUp(meta.effectiveKind) && meta.confidence === 'verified' && !meta.parentID && mayBePreprint(meta)
+          && (last === undefined || now - last > FORTNIGHT)) due.push({ owner: library, row })
+      }
+    }
+    for (const { owner, row } of due) {
+      await this.upgrade(network, owner, row)
+      asked[row.id] = Date.now()
+      this.hooks.publishedChecks?.save(asked)
+    }
+  }
+
+  private async upgrade(network: Network, owner: Library, row: PaperRow) {
+    const meta = new PaperMeta(row.meta)
+    if (meta.confidence === 'manual') return
+    // The first page, for the venue printed on it; a paper with no file
+    // here is still asked by its identifier.
+    const signals = row.file ? await this.hooks.signals(row) : null
+    const firstPage = signals ? signals.firstPageLines.join('\n') : ''
+    const ids = (meta.raw.identifiers ?? {}) as Identifiers
+    const found = await publishedRecord(network, meta.csl, ids, firstPage)
+    if (!found) return
+    await this.hooks.records.queue(row.id, async () => {
+      const current = await owner.paper(row.id)
+      if (!current) return
+      const latest = new PaperMeta(current.meta)
+      if (latest.confidence === 'manual') return
+      const fetchedAt = isoTimestamp(new Date())
+      latest.csl = { ...found.csl, id: latest.bibKey }
+      latest.raw = {
+        ...latest.raw,
+        identifiers: found.identifiers,
+        provenance: found.provenance.detail === undefined
+          ? { fetchedAt, source: found.provenance.source }
+          : { detail: found.provenance.detail, fetchedAt, source: found.provenance.source },
+      }
+      await owner.saveMeta(latest, { baseline: current.meta })
+    })
+    this.hooks.changed(row.id)
+    this.hooks.log?.(`metadata: ${meta.file.originalName} → published: ${found.csl['container-title'] ?? '—'} (${found.provenance.detail ?? found.provenance.source})`)
   }
 
   /** «Resolve Missing Metadata»: every paper not yet confirmed. */
@@ -104,7 +220,11 @@ export class MetadataQueue {
       this.lookup.set(id, (this.lookup.get(id) ?? false) || lookUp)
       if (!this.waiting.includes(id) && !this.now.has(id)) this.waiting.push(id)
     }
-    this.running ??= this.work().finally(() => { this.running = null })
+    this.running ??= this.work().finally(() => {
+      this.running = null
+      // With their titles read, the supplements among them go to their papers.
+      this.hooks.idle?.()
+    })
   }
 
   private async work() {
@@ -135,6 +255,8 @@ export class MetadataQueue {
   }
 
   private async one(id: string, lookUp: boolean) {
+    const asked = this.refreshing.get(id)
+    this.refreshing.delete(id)
     const owner = await this.hooks.libraries.ownerOf(id)
     const row = owner ? await owner.paper(id) : null
     if (!owner || !row?.file) return
@@ -152,7 +274,19 @@ export class MetadataQueue {
       return
     }
     const result = await resolve(network, signals, meta.file.originalName, { contactEmail: this.hooks.contactEmail() })
+    const refreshing = asked === 'always' || (asked === 'ifVerified' && meta.confidence === 'verified')
+    // A lookup that failed — offline, rate-limited — must not turn a good
+    // record into a guess.
+    if (refreshing && meta.confidence === 'verified' && result.confidence !== 'verified') {
+      this.hooks.log?.(`metadata: ${meta.file.originalName} → kept (the lookup said ${result.confidence})`)
+      return
+    }
+    const key = meta.bibKey
     apply(meta, result)
+    if (refreshing && key) {
+      meta.bibKey = key
+      meta.csl = { ...meta.csl, id: key }
+    }
     await this.write(owner, id, meta, {})
     this.hooks.log?.(`metadata: ${meta.file.originalName} → ${result.confidence} (${result.provenance.source}${result.provenance.detail ? `, ${result.provenance.detail}` : ''})`)
   }

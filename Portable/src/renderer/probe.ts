@@ -10,7 +10,9 @@ import type { DockZone } from '../shared/split.js'
 import { latex as mathLatex, structured as mathStructured } from '../shared/mathReader/reader.js'
 import { layoutPanes } from './layout.js'
 import { call, flags } from './bridge.js'
-import { store, subfolders } from './state.js'
+import { changed, patchPaper, setShelf, store, subfolders } from './state.js'
+import * as plans from './plans.js'
+import { planOrder } from '../shared/readingPlan.js'
 import { findBar, focused } from './pageArea.js'
 import { dockPaper, showPaper } from './actions/openPapers.js'
 import { openNote, openNoteFromSearch } from './actions/notes.js'
@@ -211,6 +213,90 @@ export function installProbeSurface() {
         if (!note) return null
         return call('notes:exportPDF', { title: zettelDisplayTitle(note), html: exportNoteHTML(note), to })
       },
+    },
+    // The reading plans: made, filled, given days, spread and pushed, and
+    // what the board says — from inside the page.
+    __papertimePlans: {
+      list: () => store.plans.map((one) => ({ id: one.plan.id, name: one.plan.name, root: one.root, order: planOrder(one.plan), sections: one.plan.sections })),
+      create: (name: string, papers: string[] = []) => plans.createPlan(name, papers),
+      add: (id: string, papers: string[], section: string | null = null) => plans.addToPlan(id, papers, section),
+      edit: (id: string, edit: unknown) => plans.editPlan(id, edit as never, 'probe'),
+      show: (id: string) => {
+        setShelf({ kind: 'plan', id })
+        changed('shelf')
+      },
+      showWeek: () => {
+        setShelf({ kind: 'week' })
+        changed('shelf')
+      },
+      showShelf: (shelf: unknown) => {
+        setShelf(shelf as never)
+        changed('shelf')
+      },
+      view: () => ({ shelf: store.shelf, view: plans.viewOf(), board: plans.boardShowing(), place: plans.boardPlaceNow() }),
+      setView: (view: 'list' | 'table' | 'calendar') => plans.setView(view),
+      setDay: (id: string, date: string | null) => plans.setDay(id, date),
+      status: (id: string, value: 'unread' | 'reading' | 'read', lastPageIndex?: number) =>
+        call('paper:state', { id, patch: { readingStatus: value, ...(lastPageIndex === undefined ? {} : { lastPageIndex }) } })
+          .then((state) => { if (state) { patchPaper(id, { state }); changed('papers') } return state?.readingStatus }),
+      spread: (id: string, days: number[] = [0, 2, 4], per = 1, from: 'today' | 'next' = 'today') => plans.spread(id, { days, per, from }),
+      push: (id: string) => plans.pushWeek(id),
+      pull: () => plans.pullBehind(),
+      undo: (redo = false) => plans.undoPlan(redo),
+      addLink: (id: string, url: string) => plans.addMaterial(id, url),
+      addFiles: (id: string, files: string[]) => plans.addMaterialFiles(id, files),
+      addAddresses: (id: string, text: string) => plans.addFromAddresses(id, text),
+      remove: (id: string) => plans.deletePlan(id),
+      select: (id: string) => plans.selectInBoard(id),
+      /** The New Plan sheet, with a name and papers already chosen — what «Make a Plan» opens. */
+      openNew: (name = '', papers: string[] = []) => plans.newPlan(papers, name),
+      /** The Add Papers sheet for a plan. */
+      openAdd: (id: string) => plans.addPapersTo(id),
+      /** What the open plan sheet shows: its rows, which are chosen, which are already in. */
+      sheet: () => {
+        const sheet = document.querySelector<HTMLElement>('.plan-sheet')
+        if (!sheet) return null
+        return {
+          title: sheet.querySelector('.fb-title')?.textContent,
+          count: sheet.querySelector('.ps-count')?.textContent,
+          button: [...sheet.querySelectorAll<HTMLButtonElement>('.set-foot button')].map((one) => ({ text: one.textContent, disabled: one.disabled })),
+          rows: [...sheet.querySelectorAll<HTMLElement>('.ps-row')].map((row) => ({
+            id: row.dataset.id,
+            on: row.classList.contains('on'),
+            locked: row.classList.contains('locked'),
+            title: row.querySelector('.ps-title')?.textContent,
+            who: row.querySelector('.ps-who')?.textContent,
+          })),
+          days: sheet.querySelector('.pp-spread-preview')?.textContent ?? null,
+        }
+      },
+      setToday: (day: string) => {
+        store.today = day
+        changed('papers')
+      },
+      /** What the board and the sidebar show now. */
+      report: () => ({
+        today: store.today,
+        shelf: store.shelf,
+        view: plans.viewOf(),
+        board: plans.boardShowing(),
+        place: plans.boardPlaceNow(),
+        columns: [...document.querySelectorAll<HTMLElement>('.plan-board .pb-thead > *')].map((one) => one.textContent),
+        head: [...document.querySelectorAll<HTMLElement>('.shelf-head h2')].map((one) => one.textContent),
+        rows: [...document.querySelectorAll<HTMLElement>('.plan-board .pb-row')].map((row) => ({
+          id: row.dataset.id,
+          title: row.querySelector('.pb-title')?.textContent,
+          date: row.querySelector('.pb-date')?.textContent ?? null,
+        })),
+        groups: [...document.querySelectorAll('.plan-board .pb-grp')].map((one) => one.textContent),
+        days: [...document.querySelectorAll<HTMLElement>('.plan-board .pb-day')].filter((day) => day.querySelector('.pb-pill')).map((day) => ({
+          day: day.dataset.dropDay,
+          pills: [...day.querySelectorAll('.pb-pill')].map((pill) => pill.textContent),
+        })),
+        stats: [...document.querySelectorAll('.plan-board .pb-stat')].map((one) => one.textContent),
+        sidebar: [...document.querySelectorAll('.sidebar-column .row')].map((one) => one.textContent).filter((text) => text),
+        papers: store.papers.filter((entry) => entry.schedule || entry.links).map((entry) => ({ id: entry.id, schedule: entry.schedule, links: entry.links?.length ?? 0 })),
+      }),
     },
   }
   Object.assign(window, surfaces)

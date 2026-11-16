@@ -15,8 +15,10 @@ import {
   changed,
   closeOpenPaper,
   isOpenPaper,
+  isSelected,
   patchPaper,
   paper as findPaper,
+  selectedPapers,
   store,
   undock,
   type Paper,
@@ -36,6 +38,7 @@ import { makeKey } from '../../shared/citationKey.js'
 import { suggestedParent } from '../../shared/attachmentSearch.js'
 import { cslFullTitle, type CSLItem } from '../../shared/model.js'
 import { DOCK_ZONES, type DockZone } from '../../shared/split.js'
+import { addToPlan, newPlan, reloadPlans } from '../plans.js'
 
 type ReadingStatus = 'unread' | 'reading' | 'read'
 
@@ -131,6 +134,7 @@ export async function attach(children: string | string[], parent: string) {
   const target = findPaper(parent)
   if (!target || target.meta.parentID) return
   let attached = 0
+  const attachedIDs: string[] = []
   let refused = false
   for (const child of Array.isArray(children) ? children : [children]) {
     const entry = findPaper(child)
@@ -141,6 +145,7 @@ export async function attach(children: string | string[], parent: string) {
     }
     await editMeta(child, { parentID: parent })
     attached += 1
+    attachedIDs.push(child)
     // Off the shelves now; if it was the one showing, its paper comes
     // forward (`LibraryModel.attach`).
     if (store.selectedID === child) await showPaper(parent)
@@ -148,11 +153,22 @@ export async function attach(children: string | string[], parent: string) {
   if (refused) {
     toast(L('보충 자료가 붙은 논문은 다른 논문에 붙일 수 없어요.', "A paper with supplements of its own can't become one."))
   }
-  if (attached > 0) toast(L(`“${target.meta.displayTitle}”에 붙였어요`, `Attached to “${target.meta.displayTitle}”`))
+  if (attached > 0) {
+    // A supplement is one of its paper's materials, not a paper to read in
+    // a plan's order; and one put back under its paper is no longer one a
+    // person took off (`LibraryModel.attach`).
+    await call('supplements:attached', { ids: attachedIDs })
+    await reloadPlans()
+    toast(L(`“${target.meta.displayTitle}”에 붙였어요`, `Attached to “${target.meta.displayTitle}”`))
+  }
 }
 
-/** Takes a supplement off its paper: a paper of its own again. */
-export const detach = (child: string) => editMeta(child, { parentID: null })
+/** Takes a supplement off its paper: a paper of its own again — and it
+ *  stays so, rather than being attached again on its own. */
+export async function detach(child: string) {
+  await editMeta(child, { parentID: null })
+  await call('supplements:detached', { id: child })
+}
 
 /** Every paper another could go under: standing on its own, and not itself. */
 export function attachTargets(id: string): { id: string; title: string; fileName: string }[] {
@@ -167,6 +183,11 @@ export function attachTargets(id: string): { id: string; title: string; fileName
  * a drop, and a paper already there is left as it is.
  */
 export async function fileUnder(paperIDs: string | string[], shelf: Shelf) {
+  // Into a plan, all of them as one step, at its end.
+  if (shelf.kind === 'plan') {
+    await addToPlan(shelf.id, Array.isArray(paperIDs) ? paperIDs : [paperIDs])
+    return
+  }
   // Every paper the drag carried — the whole selection when it started on
   // one of the chosen rows, as on the Mac.
   let filed = 0
@@ -244,6 +265,16 @@ export async function resolveMissingMetadata() {
   toast(count === 0
     ? L('채울 서지가 없어요.', 'Every record is already confirmed.')
     : L(`논문 ${count}편의 서지를 찾고 있어요.`, `Looking up ${count} paper${count === 1 ? '' : 's'}.`))
+}
+
+/** «Refresh All Metadata»: every record the app found, looked up again with
+ *  the engine as it is now — what a person wrote or chose stays, and so do
+ *  the citation keys. Said once, like «Resolve Missing Metadata». */
+export async function refreshAllMetadata() {
+  const count = await call('metadata:refreshAll')
+  toast(count === 0
+    ? L('다시 가져올 서지가 없어요.', 'There is nothing to look up again.')
+    : L(`논문 ${count}편의 서지를 다시 가져오고 있어요.`, `Looking up ${count} paper${count === 1 ? '' : 's'} again.`))
 }
 
 export async function copyKey(id: string) {
@@ -340,11 +371,21 @@ export function attachmentsMenu(id: string, anchor: Element) {
 
 /** A row's own menu, in the Mac's order (`PaperMenu`). */
 export function paperMenu(id: string, anchor: Element) {
+  const entries = paperMenuEntries(id)
+  if (entries.length) showMenu(anchor, entries)
+}
+
+/**
+ * What a right-click on a paper offers — the list's rows and the table's
+ * alike (the Mac's `PaperMenu`, which the board's rows wear too). `open` is
+ * what «Open» does: the table's rows keep the paper open as well.
+ */
+export function paperMenuEntries(id: string, options: { open?: () => void } = {}): MenuEntry[] {
   const entry = findPaper(id)
-  if (!entry) return
+  if (!entry) return []
   const labels = ZONE_LABELS()
-  showMenu(anchor, [
-    { label: L('열기', 'Open'), icon: 'book', action: () => void showPaper(id) },
+  return [
+    { label: L('열기', 'Open'), icon: 'book', action: options.open ?? (() => void showPaper(id)) },
     // Beside the paper already open: a half, or a quarter, of the page.
     {
       label: L('나란히 열기', 'Open Side by Side'),
@@ -372,6 +413,23 @@ export function paperMenu(id: string, anchor: Element) {
     // Every tag, ticked where this paper wears it; a press puts it on or
     // takes it off. Tags are made in the sidebar.
     { label: L('태그', 'Tags'), icon: 'tag', children: tagEntries(entry) },
+    // Into a plan — every row chosen when this one is among them.
+    {
+      label: L('계획에 넣기', 'Add to Plan'),
+      icon: 'point.topleft.down.to.point.bottomright.curvepath',
+      children: (() => {
+        const ids = isSelected(id) ? selectedPapers() : [id]
+        return [
+          ...store.plans.map((one) => ({
+            label: one.plan.name,
+            checked: ids.every((paperID) => one.plan.entries.some((planEntry) => planEntry.paper === paperID)),
+            action: () => void addToPlan(one.plan.id, ids),
+          })),
+          ...(store.plans.length ? [{ separator: true }] : []),
+          { label: L('새 계획…', 'New Plan…'), icon: 'plus.circle', action: () => void newPlan(ids) },
+        ]
+      })(),
+    },
     {
       label: entry.state.isFavorite
         ? L('즐겨찾기에서 빼기', 'Remove from Favorites')
@@ -404,7 +462,7 @@ export function paperMenu(id: string, anchor: Element) {
     { label: L('서지 다시 찾기', 'Re-run Metadata'), icon: 'arrow.triangle.2.circlepath', action: () => void rerunMetadata([id]) },
     { separator: true },
     { label: L('휴지통에 넣기', 'Move to Trash'), icon: 'trash', danger: true, action: () => void trashPaper(id) },
-  ])
+  ]
 }
 
 /**

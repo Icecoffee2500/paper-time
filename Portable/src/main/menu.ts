@@ -166,6 +166,9 @@ export function buildMenu({ send, chooseLibrary }: MenuActions, state: MenuState
       label: L('라이브러리(&L)', '&Library'),
       submenu: [
         item('resolveMetadata'),
+        // Every record the app found, found again — what a better engine is
+        // for. What a person wrote stays.
+        { label: L('서지 모두 다시 가져오기', 'Refresh All Metadata'), click: command('refreshMetadata') },
         item('refreshFolder'),
         separator,
         // Both halves: another folder to read beside this one, and a

@@ -28,6 +28,12 @@ export const META_FILE = 'meta.json'
 export const STATE_FILE = 'state.json'
 /** Where a paper added by address came from (`paperSource.ts`). */
 export const SOURCE_FILE = 'source.json'
+/** The day a paper is to be read (`readingPlan.ts`'s `PaperSchedule`). */
+export const SCHEDULE_FILE = 'plan.json'
+/** What is kept beside a paper (`PaperLinks`). */
+export const LINKS_FILE = 'links.json'
+/** The reading plans, one file each (`ReadingPlan`). */
+export const PLANS_DIR = 'plans'
 export const NOTES_DIR = 'notes'
 export const INK_DIR = 'ink'
 export const SKETCH_DIR = 'sketch'
@@ -45,6 +51,10 @@ export const paperDir = (root: string, id: string) => path.join(papersDir(root),
 export const metaPath = (root: string, id: string) => path.join(paperDir(root, id), META_FILE)
 export const statePath = (root: string, id: string) => path.join(paperDir(root, id), STATE_FILE)
 export const sourcePath = (root: string, id: string) => path.join(paperDir(root, id), SOURCE_FILE)
+export const schedulePath = (root: string, id: string) => path.join(paperDir(root, id), SCHEDULE_FILE)
+export const linksPath = (root: string, id: string) => path.join(paperDir(root, id), LINKS_FILE)
+export const plansDir = (root: string) => path.join(supportDir(root), PLANS_DIR)
+export const planPath = (root: string, id: string) => path.join(plansDir(root), `${id}.json`)
 export const inkDir = (root: string, id: string) => path.join(paperDir(root, id), INK_DIR)
 export const sketchDir = (root: string, id: string) => path.join(paperDir(root, id), SKETCH_DIR)
 export const marksDir = (root: string, id: string) => path.join(paperDir(root, id), MARKS_DIR)

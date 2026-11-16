@@ -31,6 +31,7 @@ import {
 } from '../shared/model.js'
 import * as L from './layout.js'
 import type { PaperSource } from './paperSource.js'
+import { readLinks, readSchedule, type PaperLink } from '../shared/readingPlan.js'
 import { EventEmitter } from 'node:events'
 
 /** Every paper that has just come into a library, whichever way it came
@@ -62,6 +63,9 @@ export interface PaperRow {
   /** Where the PDF can be had again, for a paper added by address
    *  (`source.json`); absent for one that arrived as a file. */
   source?: PaperSource
+  /** The day it is to be read (`plan.json`), and what is kept beside it (`links.json`). */
+  schedule?: string
+  links?: PaperLink[]
 }
 
 /** What one pass over a folder's records found, and what it could not. */
@@ -152,6 +156,21 @@ async function readIfPossible(file: string): Promise<{ value: RawRecord | null; 
 }
 
 let writeCounter = 0
+
+/** `plan.json` and `links.json`, when the record has them and they read. A
+ *  `stat` each, as `source.json` costs: most papers have neither. */
+async function readPlanSidecars(root: string, id: string, row: PaperRow): Promise<void> {
+  const schedule = L.schedulePath(root, id)
+  if (fs.existsSync(schedule)) {
+    const day = readSchedule(await readJSON(schedule).catch(() => null))
+    if (day) row.schedule = day.date
+  }
+  const links = L.linksPath(root, id)
+  if (fs.existsSync(links)) {
+    const list = readLinks(await readJSON(links).catch(() => null))
+    if (list && list.links.length > 0) row.links = list.links
+  }
+}
 
 /** `source.json`, when the record has one and it reads. */
 async function readSource(root: string, id: string): Promise<PaperSource | undefined> {
@@ -279,6 +298,7 @@ export class Library {
         }
         const source = await readSource(this.root, id)
         if (source) row.source = source
+        await readPlanSidecars(this.root, id, row)
         return row
       })
     const papers = (await Promise.all(found)).filter((row): row is PaperRow => row !== null)
@@ -310,6 +330,7 @@ export class Library {
     const row: PaperRow = { id, meta, state, file, exists: file ? fs.existsSync(file) : false }
     const source = await readSource(this.root, id)
     if (source) row.source = source
+    await readPlanSidecars(this.root, id, row)
     // A paper from an address that has no file is not a paper that has lost
     // one: it opens from its source, and there is nothing to find.
     if (!row.exists && row.source) return row

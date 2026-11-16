@@ -9,7 +9,9 @@
 import { defaultInkPresets, type InkPresets } from '../shared/inkPresets.js'
 import type { Settings as AppSettings } from '../shared/appSettings.js'
 import { findPath, isInside, isUnder, pathKey, samePath, slashed } from '../shared/paths.js'
-import type { LibrarySnapshot, NoteDTO, NotesFolderDTO, PaperRowDTO } from '../shared/api.js'
+import type { LibrarySnapshot, NoteDTO, NotesFolderDTO, PaperRowDTO, PlanDTO } from '../shared/api.js'
+import { planOrder, todayDay, type PaperLink } from '../shared/readingPlan.js'
+import { weekShelf } from '../shared/planBoard.js'
 import type { Zettel } from '../shared/zettel.js'
 import type { TextHit } from '../main/textIndex.js'
 import { needsReview, type DocumentKind } from '../shared/documentKind.js'
@@ -47,6 +49,10 @@ export type Shelf =
   | { kind: 'tag'; id: string }
   /** What the palette's «Show All Results» found: `store.searchQuery`. */
   | { kind: 'search' }
+  /** One reading plan (`store.plans`). */
+  | { kind: 'plan'; id: string }
+  /** Every plan's papers for this week, and what is behind. */
+  | { kind: 'week' }
 
 /** One note of the slip-box, and the box it was read from. */
 export interface Note extends Zettel {
@@ -64,6 +70,10 @@ export interface Paper {
   source?: string
   /** The folder it came from, when the library reads more than one. */
   root?: string
+  /** The day it is to be read (`plan.json`), `YYYY-MM-DD`. */
+  schedule?: string
+  /** What is kept beside it (`links.json`). */
+  links?: PaperLink[]
 }
 
 /**
@@ -76,6 +86,7 @@ export const WINDOW_SETTINGS = [
   'libraryRoot', 'panes', 'columns', 'inspectorTab', 'sort', 'appearance', 'language', 'pageTint',
   'pageTintColor', 'pageLayout', 'selectedPaperID', 'latexShortcuts', 'semanticSearch', 'resolveMetadataOnImport', 'metadataContactEmail', 'keepPDFsInMemory', 'listSubtitle',
   'bibtexProtectCase', 'bibtexPreprintStyle', 'bibtexIncludeUnverified', 'sketchStyle', 'inkPresets', 'shortcuts', 'seenReleaseNotesVersion', 'checkForUpdates',
+  'planBoard',
 ] as const satisfies readonly (keyof AppSettings)[]
 
 export type Settings = Pick<AppSettings, (typeof WINDOW_SETTINGS)[number]>
@@ -133,6 +144,10 @@ export interface Store {
    *  the ones holding nothing included. */
   folders: string[]
   papers: Paper[]
+  /** Every reading plan, and the folder its file is in. */
+  plans: PlanDTO[]
+  /** Today where the reader is, `YYYY-MM-DD` — kept, and moved on at midnight. */
+  today: string
   collections: Collection[]
   tags: Tag[]
   looseCount: number
@@ -250,6 +265,8 @@ export const store: Store = {
   roots: [],
   folders: [],
   papers: [],
+  plans: [],
+  today: todayDay(),
   collections: [],
   tags: [],
   looseCount: 0,
@@ -272,7 +289,7 @@ export const store: Store = {
   settings: {
     libraryRoot: null,
     panes: { sidebar: true, paperList: true, reader: true, inspector: true },
-    columns: { sidebar: 232, paperList: 320, inspector: 360 },
+    columns: { sidebar: 232, paperList: 320, inspector: 360, table: 620 },
     inspectorTab: 'details',
     sort: { field: 'added', ascending: false },
     appearance: 'system',
@@ -295,6 +312,7 @@ export const store: Store = {
     shortcuts: null,
     seenReleaseNotesVersion: null,
     checkForUpdates: true,
+    planBoard: null,
   },
   windowState: { maximized: false, fullScreen: false, focused: true },
   trail: [],
@@ -522,6 +540,7 @@ export function adopt(snapshot: LibrarySnapshot) {
   store.roots = snapshot.roots ?? (snapshot.root ? [snapshot.root] : [])
   store.folders = snapshot.folders ?? []
   store.papers = snapshot.papers.map(toPaper)
+  if (snapshot.plans) store.plans = snapshot.plans
   store.collections = ((snapshot.collections?.collections as Collection[]) ?? []).slice()
   store.tags = ((snapshot.manifest?.tags as Tag[]) ?? []).slice()
   store.looseCount = snapshot.looseCount
@@ -539,7 +558,49 @@ function toPaper(row: PaperRowDTO): Paper {
     exists: row.exists,
     root: row.root,
     ...(row.source ? { source: row.source } : {}),
+    ...(row.schedule ? { schedule: row.schedule } : {}),
+    ...(row.links ? { links: row.links } : {}),
   }
+}
+
+/** A plan by its id. */
+export function planByID(id: string): PlanDTO | undefined {
+  return store.plans.find((one) => one.plan.id === id)
+}
+
+/** A plan's papers in its reading order — the ones the library has. */
+export function planPapers(id: string): Paper[] {
+  const found = planByID(id)
+  if (!found) return []
+  return planOrder(found.plan).map((one) => paper(one)).filter((entry): entry is Paper => entry !== null)
+}
+
+/** Every plan a paper is in. */
+export function plansOf(paperID: string): PlanDTO[] {
+  return store.plans.filter((one) => one.plan.entries.some((entry) => entry.paper === paperID))
+}
+
+/** «This Week»: behind first, then each day — the papers of every plan, and any paper given a day. */
+export function weekPapers(): Paper[] {
+  const all = store.papers.filter((entry) => !entry.meta.parentID && entry.schedule)
+  const shelf = weekShelf(all.map((entry) => ({ id: entry.id, date: entry.schedule ?? null, status: entry.state.readingStatus })), store.today)
+  return [...shelf.behind, ...shelf.days.flatMap((day) => day.ids)].map((id) => paper(id)).filter((entry): entry is Paper => entry !== null)
+}
+
+/** One paper's day or materials, as the main process wrote them. */
+export function patchPlanSidecars(id: string, written: { schedule?: string | null; links?: PaperLink[] }) {
+  const at = store.papers.findIndex((entry) => entry.id === id)
+  if (at < 0) return
+  const next: Paper = { ...store.papers[at] }
+  if ('schedule' in written) {
+    if (written.schedule) next.schedule = written.schedule
+    else delete next.schedule
+  }
+  if ('links' in written) {
+    if (written.links && written.links.length) next.links = written.links
+    else delete next.links
+  }
+  store.papers = [...store.papers.slice(0, at), next, ...store.papers.slice(at + 1)]
 }
 
 /**
@@ -1001,6 +1062,9 @@ export function shelfPapers(): Paper[] {
         filtered = folded ? all.filter((entry) => haystackOf(entry).includes(folded)) : []
       }
       break
+    // In the plan's own order, not the list's sort: the order is the plan.
+    case 'plan': return planPapers((store.shelf as { id: string }).id).filter((entry) => !entry.meta.parentID)
+    case 'week': return weekPapers()
   }
   return sorted(filtered)
 }
@@ -1019,6 +1083,7 @@ export function sameShelf(a: Shelf, b: Shelf): boolean {
     case 'status': return a.status === (b as typeof a).status
     case 'folder': return samePath(a.root, (b as typeof a).root)
     case 'kind': return a.of === (b as typeof a).of
+    case 'plan': return a.id === (b as typeof a).id
     default: return true
   }
 }

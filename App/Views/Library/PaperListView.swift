@@ -75,8 +75,10 @@ struct PaperListView: View {
     /// What an empty shelf says. Each one is empty for its own reason, and
     /// the reason is what tells you whether anything is wrong — nothing is,
     /// in every case here.
-    private var emptyShelf: (title: String, symbol: String, note: String) {
-        switch model.scope {
+    private var emptyShelf: (title: String, symbol: String, note: String) { Self.emptyShelf(for: model.scope) }
+
+    static func emptyShelf(for scope: LibraryModel.Scope) -> (title: String, symbol: String, note: String) {
+        switch scope {
         case .unread:
             (L("안 읽은 논문이 없어요", "Nothing Unread"), "circle",
              L("여기 있는 논문은 모두 열어봤어요.", "Every paper here has been opened."))
@@ -101,6 +103,12 @@ struct PaperListView: View {
         case .author:
             (L("이 저자의 논문이 없어요", "Nothing by This Author"), "person",
              L("이 이름이 실린 논문이 라이브러리에 없어요.", "No paper here carries this name."))
+        case .plan:
+            (L("이 계획은 비어 있어요", "This Plan Is Empty"), "point.topleft.down.to.point.bottomright.curvepath",
+             L("옆 목록의 계획 위로 논문을 끌어다 놓아보세요.", "Drag papers onto it in the sidebar."))
+        case .thisWeek:
+            (L("이번 주에 읽을 논문이 없어요", "Nothing to Read This Week"), "calendar",
+             L("논문에 읽을 날을 정하면 그 주에 여기 모여요.", "Give a paper a day to read it, and it gathers here that week."))
         default:
             (L("아직 아무것도 없어요", "Nothing Here"), "tray",
              L("이 선반은 비어 있어요.", "This shelf is empty."))
@@ -1069,7 +1077,7 @@ struct PaperRow: View, Equatable {
 /// What a right-click on a paper offers.
 ///
 /// Its own view, and that is the point: see `PaperRow`.
-private struct PaperMenu: View {
+struct PaperMenu: View {
     let paper: LoadedPaper
     let model: LibraryModel
     @Environment(AppModel.self) private var app
@@ -1155,6 +1163,23 @@ private struct PaperMenu: View {
             Label(L("태그", "Tags"), systemImage: "tag")
         }
 
+        #if os(macOS)
+        // Into a plan — the picked rows, or this one — or a new plan made of
+        // them. The way into planning from where the papers are.
+        Menu {
+            let ids = model.selection.contains(paper.id) ? Array(model.selection) : [paper.id]
+            ForEach(model.plans) { plan in
+                Button(plan.name) { Task { await model.addToPlan(plan.id, papers: ids) } }
+            }
+            if !model.plans.isEmpty { Divider() }
+            Button(L("새 계획…", "New Plan…")) {
+                app.planning.sheet = .new(name: "", papers: ids)
+            }
+        } label: {
+            Label(L("계획에 넣기", "Add to Plan"), systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+        }
+        #endif
+
         // A picker, not a submenu. The submenu listed the first thirty papers
         // in title order, and the one being looked for is a supplement's
         // parent — as likely to be at Z as at A. On a shelf of two hundred it
@@ -1206,7 +1231,9 @@ private struct PaperMenu: View {
         #endif
 
         Button {
-            Task { await model.resolveMetadata(for: paper.id) }
+            // A confirmed record keeps its key and gives way only to another
+            // confirmed one; a guess is simply looked up again.
+            Task { await model.resolveMetadata(for: paper.id, refreshing: paper.meta.confidence == .verified) }
         } label: {
             Label(L("서지 다시 찾기", "Re-run Metadata"), systemImage: "arrow.triangle.2.circlepath")
         }

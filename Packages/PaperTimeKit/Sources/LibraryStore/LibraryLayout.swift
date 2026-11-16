@@ -32,6 +32,12 @@ public enum LibraryLayout {
     public static let stateFileName = "state.json"
     /// Where a paper added by address came from (`PaperSource`).
     public static let sourceFileName = "source.json"
+    /// The day a paper is to be read (`PaperSchedule`).
+    public static let scheduleFileName = "plan.json"
+    /// What the reader keeps beside a paper (`PaperLinks`).
+    public static let linksFileName = "links.json"
+    /// The reading plans, one file each (`ReadingPlan`).
+    public static let plansDirectoryName = "plans"
     /// The single note a paper used to have, kept only so an old library can
     /// be read and moved into the notes folder.
     public static let noteFileName = "note.md"
@@ -57,6 +63,15 @@ public enum LibraryLayout {
 
     public static func manifestURL(inLibrary root: URL) -> URL {
         supportDirectoryURL(inLibrary: root).appending(path: manifestFileName)
+    }
+
+    public static func plansDirectoryURL(inLibrary root: URL) -> URL {
+        supportDirectoryURL(inLibrary: root)
+            .appending(path: plansDirectoryName, directoryHint: .isDirectory)
+    }
+
+    public static func planURL(id: UUID, inLibrary root: URL) -> URL {
+        plansDirectoryURL(inLibrary: root).appending(path: "\(id.uuidString).json")
     }
 
     public static func collectionsURL(inLibrary root: URL) -> URL {
@@ -134,6 +149,8 @@ public struct PaperFolder: Hashable, Sendable {
     public var metadataURL: URL { url.appending(path: LibraryLayout.metadataFileName) }
     public var stateURL: URL { url.appending(path: LibraryLayout.stateFileName) }
     public var sourceURL: URL { url.appending(path: LibraryLayout.sourceFileName) }
+    public var scheduleURL: URL { url.appending(path: LibraryLayout.scheduleFileName) }
+    public var linksURL: URL { url.appending(path: LibraryLayout.linksFileName) }
     /// What the reader wrote about this paper: one Markdown file per note.
     public var notesDirectoryURL: URL {
         url.appending(path: LibraryLayout.notesDirectoryName, directoryHint: .isDirectory)

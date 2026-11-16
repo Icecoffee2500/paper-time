@@ -1,0 +1,203 @@
+<!doctype html>
+<!--
+  Paper Time — reading plans.
+
+  The page for one feature, before it ships: a line of papers gathered into a
+  plan, given an order and days to read them, with the slides and the code
+  kept beside each paper. Most of it is the feature itself — the window in the
+  middle is a working one, out of `plans-demo.js`, the same demonstration the
+  app shows in Settings → About. The steps under it come out of the same file,
+  so the page and the app cannot describe it two ways.
+
+  Both languages sit next to each other in the markup, as on the other pages —
+  Korean in 해요체, English in Apple's voice.
+-->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Paper Time — 읽기 계획</title>
+<meta name="description" content="한 계열의 논문을 모아 차례와 날짜를 정하고, 발표 자료와 코드를 논문 옆에 붙여 둬요. Paper Time의 다음 버전에 들어가는 읽기 계획이에요.">
+<meta property="og:title" content="Paper Time — 읽기 계획">
+<meta property="og:description" content="한 계열의 논문을 모아 차례와 날짜를 정하고, 자료를 논문 옆에 붙여 둬요.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://icecoffee2500.github.io/paper-time/plans.html">
+<meta property="og:site_name" content="Paper Time">
+<meta property="og:image" content="https://icecoffee2500.github.io/paper-time/img/preview.jpg">
+<meta property="og:image:width" content="2400">
+<meta property="og:image:height" content="1260">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://icecoffee2500.github.io/paper-time/img/preview.jpg">
+<link rel="icon" type="image/png" sizes="32x32" href="img/icon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="img/icon-180.png">
+<!-- The language, decided before anything paints, as on the other pages. -->
+<script>
+(function () {
+  var stored = null;
+  try { stored = localStorage.getItem("papertime.lang"); } catch (e) {}
+  var lang = stored || ((navigator.language || "en").toLowerCase().indexOf("ko") === 0 ? "ko" : "en");
+  document.documentElement.lang = lang;
+})();
+</script>
+<link rel="stylesheet" href="style.css?v=1.1-plans">
+</head>
+<body data-page="plans">
+
+<div class="topbar">
+  <a class="name" href="index.html">Paper Time</a>
+  <nav>
+    <a href="#try"><span data-l="ko">따라 해 보기</span><span data-l="en">Try It</span></a>
+    <a href="#howto"><span data-l="ko">쓰는 법</span><span data-l="en">How It Works</span></a>
+    <a href="#columns"><span data-l="ko">표의 열</span><span data-l="en">The Table</span></a>
+    <a href="#storage"><span data-l="ko">저장</span><span data-l="en">Storage</span></a>
+  </nav>
+  <span class="spacer"></span>
+  <div class="lang" id="lang" role="group" aria-label="Language"></div>
+  <a class="pill" href="index.html#top"><span data-l="ko">받기</span><span data-l="en">Download</span></a>
+</div>
+
+<!-- ───────────────────────────── the window ─────────────────────────────── -->
+<section class="band tone-grey plans-first" id="try">
+  <div class="plans-wide">
+    <div class="band-head">
+      <p class="eyebrow" data-l="ko">읽기 계획</p>
+      <p class="eyebrow" data-l="en">Reading Plans</p>
+      <h1 class="display" data-l="ko">한 계열의 논문을,<br>한눈에 차례대로.</h1>
+      <h1 class="display" data-l="en">One line of research.<br>In order, at a glance.</h1>
+      <p class="say" data-l="ko">논문을 모아 차례와 날짜를 정하고, 발표 자료와 코드를 논문 옆에 붙여 둬요. 아래 창을 직접 누르고 끌어 봐도 돼요.</p>
+      <p class="say" data-l="en">Gather the papers, give them an order and days to read them, and keep the slides and the code beside each one. The window below works — click it, drag in it.</p>
+      <p class="plans-next"><span data-l="ko">다음 버전에 들어가요</span><span data-l="en">Coming in the next version</span></p>
+    </div>
+    <div class="plans-demo" id="plans-demo"></div>
+  </div>
+</section>
+
+<!-- ──────────────────────────── how it works ────────────────────────────── -->
+<section class="band" id="howto">
+  <div class="band-inner rise">
+    <div class="band-head">
+      <p class="eyebrow" data-l="ko">쓰는 법</p>
+      <p class="eyebrow" data-l="en">How it works</p>
+      <h2 class="display" data-l="ko">모으고, 정하고,<br>읽어요.</h2>
+      <h2 class="display" data-l="en">Gather. Plan.<br>Read.</h2>
+    </div>
+    <!-- Filled from `plans-demo.js`, the same six steps the app shows. -->
+    <div class="plans-steps" id="plans-steps"></div>
+  </div>
+</section>
+
+<!-- ───────────────────────────── the table ──────────────────────────────── -->
+<section class="band tone-grey" id="columns">
+  <div class="band-inner rise">
+    <div class="band-head">
+      <p class="eyebrow" data-l="ko">표의 열</p>
+      <p class="eyebrow" data-l="en">The table</p>
+      <h2 class="display" data-l="ko">줄마다 진짜 논문.<br>칸은 대부분 차 있어요.</h2>
+      <h2 class="display" data-l="en">Every row is a paper.<br>Most cells fill themselves.</h2>
+      <p class="say" data-l="ko">Notion의 표와 다른 점은 줄이 진짜 논문이라는 거예요. 제목도, 진행도, 링크도 적지 않아도 차 있어요.</p>
+      <p class="say" data-l="en">Unlike a blank table, each row here is a paper you already have. The title, the progress and the links are there before you type a thing.</p>
+    </div>
+    <div class="plans-cols">
+      <article class="cell">
+        <h3 data-l="ko">저절로 채워지는 열</h3>
+        <h3 data-l="en">Filled in for you</h3>
+        <ul data-l="ko">
+          <li><b>제목 · 저자 · 해 · 학회</b> — 서지에서</li>
+          <li><b>진행</b> — 마지막으로 읽은 쪽에서</li>
+          <li><b>논문 링크</b> — arXiv 번호와 DOI에서</li>
+          <li><b>노트 · 표시 수, 더한 날, 마지막으로 읽은 날</b></li>
+        </ul>
+        <ul data-l="en">
+          <li><b>Title, authors, year, venue</b> — from the bibliography</li>
+          <li><b>Progress</b> — from the last page you read</li>
+          <li><b>Paper link</b> — from the arXiv number or the DOI</li>
+          <li><b>Notes and marks, date added, last read</b></li>
+        </ul>
+      </article>
+      <article class="cell">
+        <h3 data-l="ko">내가 정하는 열</h3>
+        <h3 data-l="en">Yours to set</h3>
+        <ul data-l="ko">
+          <li><b>읽을 날</b> — 적거나, 끌거나, 한 번에 나누거나</li>
+          <li><b>자료</b> — 주소 붙여넣기, 파일 끌어다 놓기</li>
+          <li><b>섹션과 차례</b> — 계획마다</li>
+          <li><b>상태 · 태그 · 별점</b> — 지금 있는 그대로</li>
+        </ul>
+        <ul data-l="en">
+          <li><b>Read on</b> — type it, drag it, or spread a whole plan at once</li>
+          <li><b>Materials</b> — paste a link, drop a file</li>
+          <li><b>Sections and order</b> — per plan</li>
+          <li><b>Status, tags, rating</b> — as they are today</li>
+        </ul>
+      </article>
+      <article class="cell">
+        <h3 data-l="ko">보기</h3>
+        <h3 data-l="en">Views</h3>
+        <ul data-l="ko">
+          <li><b>표</b> — 모든 선반에서 [목록 | 표]로 바꿔요</li>
+          <li><b>달력</b> — 계획에서만. 다른 계획의 논문은 흐리게 겹쳐 보여요</li>
+          <li><b>묶기</b> — 섹션 · 주 · 상태</li>
+          <li><b>열 고르기</b> — 열 머리를 오른쪽 클릭, 눌러서 정렬</li>
+        </ul>
+        <ul data-l="en">
+          <li><b>Table</b> — every shelf switches between List and Table</li>
+          <li><b>Calendar</b> — in a plan. Other plans’ papers show faintly</li>
+          <li><b>Group by</b> — section, week or status</li>
+          <li><b>Columns</b> — right-click a heading to choose; click to sort</li>
+        </ul>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ──────────────────────────── where it lives ──────────────────────────── -->
+<section class="band" id="storage">
+  <div class="band-inner rise">
+    <div class="band-head">
+      <p class="eyebrow" data-l="ko">저장</p>
+      <p class="eyebrow" data-l="en">Storage</p>
+      <h2 class="display" data-l="ko">라이브러리 폴더 안의<br>작은 파일.</h2>
+      <h2 class="display" data-l="en">Small files,<br>in your library folder.</h2>
+      <p class="say" data-l="ko">서버가 없어요. 폴더가 클라우드로 맞춰지면 맥과 윈도우·리눅스가 같은 계획을 봐요. 옛 버전은 이 파일들을 모른 채 지나가서 기록이 깨지지 않아요.</p>
+      <p class="say" data-l="en">No server. When the folder syncs, Mac, Windows and Linux see the same plans. Older versions pass these files by, so the records they keep stay as they are.</p>
+    </div>
+    <div class="duo one-up">
+      <!-- Two columns rather than one preformatted block: a Hangul character
+           is two monospace cells wide, so the notes drifted out of line. -->
+      <article class="cell">
+        <div class="plans-tree" data-l="ko">
+          <code>라이브러리 폴더/</code><i></i>
+          <code>├─ Conservative Q-Learning.pdf</code><i></i>
+          <code>├─ CQL 발표자료.pptx</code><i>← 끌어다 놓은 자료는 PDF 옆에 사본으로 둬요</i>
+          <code>└─ .papertime/</code><i></i>
+          <code>   ├─ plans/&lt;계획&gt;.json</code><i>← 이름 · 섹션 · 차례</i>
+          <code>   └─ papers/&lt;논문&gt;/</code><i></i>
+          <code>      ├─ plan.json</code><i>← 읽을 날</i>
+          <code>      └─ links.json</code><i>← 자료(주소와 파일)</i>
+        </div>
+        <div class="plans-tree" data-l="en">
+          <code>Library folder/</code><i></i>
+          <code>├─ Conservative Q-Learning.pdf</code><i></i>
+          <code>├─ CQL talk.pptx</code><i>← a dropped file is copied beside the PDF</i>
+          <code>└─ .papertime/</code><i></i>
+          <code>   ├─ plans/&lt;plan&gt;.json</code><i>← name, sections, order</i>
+          <code>   └─ papers/&lt;paper&gt;/</code><i></i>
+          <code>      ├─ plan.json</code><i>← the day to read it</i>
+          <code>      └─ links.json</code><i>← materials: links and files</i>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <span data-l="ko">Paper Time. 고장 나면 고쳐요 — 앱에서 ⌥⌘/ 로 알려 주세요.</span>
+  <span data-l="en">Paper Time. When something breaks, it gets fixed — press ⌥⌘/ in the app and say so.</span>
+  <span><a href="index.html"><span data-l="ko">처음으로</span><span data-l="en">Home</span></a> · <a href="docs.html"><span data-l="ko">설명서</span><span data-l="en">Manual</span></a> · <span data-l="ko">소스</span><span data-l="en">Source</span>: <a href="https://github.com/Icecoffee2500/paper-time">Icecoffee2500/paper-time</a></span>
+</footer>
+
+<script src="demos.js?v=1.1-plans"></script>
+<script src="plans-demo.js?v=1.1-plans"></script>
+<script src="plans.js?v=1.1-plans"></script>
+</body>
+</html>

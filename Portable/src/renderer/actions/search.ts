@@ -35,6 +35,7 @@ export function openSearch(initial = '') {
         case 'addByAddress': void addByAddress(); break
         case 'exportBibTeX': runCommand('exportBibTeX'); break
         case 'resolveMetadata': runCommand('resolveMetadata'); break
+        case 'refreshMetadata': runCommand('refreshMetadata'); break
         case 'refresh': void reload(); break
         case 'settings': openSettings(); break
       }

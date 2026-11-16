@@ -56,6 +56,13 @@ struct PaperTimeCommands: Commands {
                 guard let library = model.library else { return }
                 Task { await library.resolveAllPending() }
             }
+            // Every record the app found, found again — what a better
+            // engine is for. What a person wrote stays.
+            Button(L("서지 모두 다시 가져오기", "Refresh All Metadata")) {
+                guard let library = model.library else { return }
+                Task { await library.refreshAllMetadata() }
+            }
+            .disabled(model.library == nil)
             // The same errand as the toolbar's button: ask the cloud for what
             // it has not brought, read the folder again, and tell the open
             // paper to look at its own files. Posted rather than done here,

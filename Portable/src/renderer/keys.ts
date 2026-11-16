@@ -21,6 +21,8 @@ import { sketchEditor } from './ui/sketchEditing.js'
 import { backToNotes } from './ui/slipBox.js'
 import { toast } from './ui/toolbar.js'
 import { L } from '../shared/lang.js'
+import { boardInListColumn, boardShowing, undoPlan } from './plans.js'
+import { shell } from './shell.js'
 
 export function pickTool(tool: SketchTool) {
   setSketchTool(tool)
@@ -30,6 +32,14 @@ export function pickTool(tool: SketchTool) {
 /** Undo or redo one step, into the paper the step was taken in. A card being
  *  typed into is finished first: its words are the step on top. */
 export function applyUndo(redo: boolean) {
+  // On the board, the step taken there: a day moved, a plan reordered —
+  // the wide calendar, or the table in the list's column while it has the
+  // keyboard (the page beside it has its own steps).
+  const inTable = boardInListColumn() && shell.board.node.contains(document.activeElement)
+  if (boardShowing() || inTable) {
+    void undoPlan(redo)
+    return
+  }
   resetSketchInput()
   const snapshot = redo ? undoStack.redo() : undoStack.undo()
   if (!snapshot) return

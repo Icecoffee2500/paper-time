@@ -204,6 +204,12 @@ public final class AppModel {
     public var paperListWidth: Double = AppModel.storedWidth("paperListWidth", default: 320) {
         didSet { UserDefaults.standard.set(paperListWidth, forKey: "paperListWidth") }
     }
+    /// The list column's width while it holds the table, which wants more
+    /// room than a list of titles did — kept apart so the notes column keeps
+    /// its own.
+    public var tableWidth: Double = AppModel.storedWidth("tableColumnWidth", default: 620) {
+        didSet { UserDefaults.standard.set(tableWidth, forKey: "tableColumnWidth") }
+    }
     /// The inspector's, for the same reason the other two are here: it is a
     /// column of ours now rather than SwiftUI's. `.inspector` brought its own
     /// background with a square corner on it, which no amount of clipping from
@@ -276,6 +282,9 @@ public final class AppModel {
     /// invalidates only whoever reads the object's own property — the same
     /// reason `PullProgress` is an object.
     public let attaching = AttachRequest()
+    /// What a menu or a button has asked of the reading plans — a sheet, a
+    /// name, a delete — held here for the same reason `attaching` is.
+    public let planning = PlanRequest()
 
     // MARK: - What's new
 
@@ -959,6 +968,8 @@ public final class AppModel {
                 SemanticIndex.shared.schedule(model.semanticSources)
             }
             #endif
+            // Preprints that have since been published, a few seconds later.
+            model.checkPublishedVersions()
             // `--papertime-import=<경로>`가 드롭·«PDF 더하기» 패널이 지나는 그
             // 길로 파일을 하나 들여온다. 라이브러리 폴더 안에 이미 있는 파일을
             // 이 길로 들이면 «남은 PDF» 목록이 낡은 채로 남고, 그 다음 줄을
@@ -1242,6 +1253,9 @@ public final class AppModel {
             if let inside = Boot.setting("PAPERTIME_SCOPE")?.stripPrefix("folder:") {
                 model.scope = .folder(model.location.url.appending(path: inside, directoryHint: .isDirectory))
             }
+            #if os(macOS)
+            await PlanProbe.run(model: model)
+            #endif
             // The results of a search, without anybody having to type one.
             if let query = Boot.setting("PAPERTIME_SEARCH_RESULTS") {
                 model.showSearchResults(for: query)

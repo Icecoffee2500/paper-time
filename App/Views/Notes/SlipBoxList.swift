@@ -14,60 +14,31 @@ struct SlipBoxList: View {
         @Bindable var notes = model.notes
 
         VStack(spacing: 0) {
-            // One row: the name, the search, the pen. Two rows put the field
-            // under the title and pushed the first note down a line for no
-            // reason a reader could see.
+            // The same head every left column wears (`ShelfHeader`): the
+            // tile, the name, how many, and the pen; the search under it,
+            // full width, the way a table's columns sit under a shelf's head.
+            #if os(macOS)
+            ShelfHeader(symbol: "note.text", title: L("노트", "Notes"),
+                        subtitle: L("노트 \(notes.notes.count)개", notes.notes.count == 1 ? "1 note" : "\(notes.notes.count) notes")) {
+                newNoteMenu
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 18)
+            .padding(.bottom, 10)
+            searchField
+                .padding(.horizontal, 16)
+                .padding(.bottom, 10)
+            #else
             HStack(spacing: 10) {
                 Text(L("노트", "Notes"))
                     .font(.headline)
-
-                // A capsule with a glass in it, not a bordered box. The
-                // bevelled field is the one control on this surface that
-                // still looked like a dialog, and a search field is a search
-                // field everywhere else on the machine.
-                HStack(spacing: 6) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.callout)
-                        .foregroundStyle(.tertiary)
-                    TextField(L("노트 찾기", "Search notes"), text: $notes.query)
-                        .textFieldStyle(.plain)
-                    if !notes.query.isEmpty {
-                        Button {
-                            model.notes.query = ""
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.tertiary)
-                        }
-                        .buttonStyle(.plain)
-                        .help(L("찾을 말 지우기", "Clear the search"))
-                    }
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(Capsule().fill(.quaternary.opacity(0.5)))
-
-                Menu {
-                    Button {
-                        notes.openNoteID = notes.create(paperID: nil).id
-                    } label: { Label(L("새 노트", "New Note"), systemImage: "note.text") }
-                    if Legacy.slipBoxStructures {
-                        Button {
-                            notes.openNoteID = notes.create(paperID: nil, kind: .map).id
-                        } label: { Label(L("새 지도", "New Map"), systemImage: "map") }
-                        Button {
-                            notes.openNoteID = notes.create(paperID: nil, kind: .draft).id
-                        } label: { Label(L("새 초안", "New Draft"), systemImage: "doc.text") }
-                    }
-                } label: {
-                    Image(systemName: "square.and.pencil")
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-                .help(Legacy.slipBoxStructures ? L("노트·지도·초안 쓰기", "Write a note, a map, or a draft") : L("새 노트", "New Note"))
+                searchField
+                newNoteMenu
             }
             .padding(.horizontal, 16)
             .padding(.top, 10)
             .padding(.bottom, 8)
+            #endif
 
             if !notes.tags.isEmpty {
                 ScrollView(.horizontal) {
@@ -148,6 +119,54 @@ struct SlipBoxList: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    private var searchField: some View {
+        @Bindable var notes = model.notes
+        // A capsule with a glass in it, not a bordered box. The bevelled
+        // field was the one control on this surface that still looked like a
+        // dialog, and a search field is a search field everywhere else.
+        return HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.callout)
+                .foregroundStyle(.tertiary)
+            TextField(L("노트 찾기", "Search notes"), text: $notes.query)
+                .textFieldStyle(.plain)
+            if !notes.query.isEmpty {
+                Button {
+                    model.notes.query = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.tertiary)
+                }
+                .buttonStyle(.plain)
+                .help(L("찾을 말 지우기", "Clear the search"))
+            }
+        }
+        .padding(.horizontal, 10)
+        .frame(height: 28)
+        .background(Capsule().fill(Color.primary.opacity(0.05)))
+    }
+
+    private var newNoteMenu: some View {
+        Menu {
+            Button {
+                model.notes.openNoteID = model.notes.create(paperID: nil).id
+            } label: { Label(L("새 노트", "New Note"), systemImage: "note.text") }
+            if Legacy.slipBoxStructures {
+                Button {
+                    model.notes.openNoteID = model.notes.create(paperID: nil, kind: .map).id
+                } label: { Label(L("새 지도", "New Map"), systemImage: "map") }
+                Button {
+                    model.notes.openNoteID = model.notes.create(paperID: nil, kind: .draft).id
+                } label: { Label(L("새 초안", "New Draft"), systemImage: "doc.text") }
+            }
+        } label: {
+            Image(systemName: "square.and.pencil")
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help(Legacy.slipBoxStructures ? L("노트·지도·초안 쓰기", "Write a note, a map, or a draft") : L("새 노트", "New Note"))
     }
 
     private func tagChip(_ tag: String, count: Int) -> some View {

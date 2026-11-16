@@ -203,9 +203,11 @@ struct SettingsView: View {
         // 760×540 is generous for a form; 정보 is a demonstration at full size
         // with its words underneath, and 540 cut the top off it — the card
         // began above the window. macOS's own Settings takes the size of the
-        // pane it is showing, and so does this one.
+        // pane it is showing, and so does this one. A hundred points wider
+        // since the reading-plans window came in: it is drawn at 900 and shown
+        // smaller in a narrower pane, and at 900 it was a fifth smaller.
         .frame(
-            width: pane == .about ? 900 : 760,
+            width: pane == .about ? 1000 : 760,
             height: pane == .about ? 780 : 540
         )
         .animation(Motion.surface, value: pane == .about)

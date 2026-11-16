@@ -188,6 +188,11 @@ struct LibrarySidebar: View {
                         } label: {
                             Label(L("Finder에서 보기", "Show in Finder"), systemImage: "folder")
                         }
+                        Button {
+                            Task { await newPlan(from: .folder(source.url), named: source.url.lastPathComponent) }
+                        } label: {
+                            Label(L("계획으로 만들기", "Make a Plan"), systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+                        }
                         if source.url != model.location.url {
                             Divider()
                             Button(role: .destructive) {
@@ -290,6 +295,53 @@ struct LibrarySidebar: View {
                 Color.clear.frame(height: 8)
             }
 
+            // What to read next, and when: the week across every plan, then
+            // each plan with how far through it is.
+            Section(L("계획", "Plans")) {
+                Label(L("이번 주", "This Week"), systemImage: "calendar")
+                    .count(model.thisWeekCount, current: model.scope == .thisWeek)
+                    .scopeRow(.thisWeek, in: model)
+                ForEach(model.plans) { plan in
+                    let papers = plan.readingOrder.compactMap(model.paper)
+                    let read = papers.filter { $0.state.readingStatus == .read }.count
+                    Label {
+                        HStack(spacing: 6) {
+                            Text(plan.name).lineLimit(1)
+                            Spacer(minLength: 2)
+                            PlanDonut(fraction: papers.isEmpty ? 0 : Double(read) / Double(papers.count))
+                        }
+                    } icon: {
+                        Image(systemName: "point.topleft.down.to.point.bottomright.curvepath")
+                    }
+                    .badge(Text("\(read)/\(papers.count)").monospacedDigit()
+                        .foregroundStyle(model.scope == .plan(plan.id) ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary)))
+                    .scopeRow(.plan(plan.id), in: model)
+                    .dropTarget(in: model) { await model.addToPlan(plan.id, papers: [$0]) }
+                    .contextMenu {
+                        Button(L("이름 바꾸기…", "Rename…")) { Task { await renamePlan(plan) } }
+                        Divider()
+                        Button(L("지우기…", "Delete…"), role: .destructive) { Task { await deletePlan(plan) } }
+                    }
+                }
+                Button {
+                    Task { await newPlan(from: nil, named: nil) }
+                } label: {
+                    Label(L("새 계획…", "New Plan…"), systemImage: "plus.circle")
+                        .foregroundStyle(.secondary)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                // What a plan is, said once, where the button is — until the
+                // first one exists.
+                if model.plans.isEmpty {
+                    Text(L("한 계열의 논문을 모아 읽을 날을 정해요", "Gather a line of papers and give them days."))
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.leading, 2)
+                }
+            }
+
             Section(L("슬립박스", "Slip-Box")) {
                 Label(L("노트", "Notes"), systemImage: "tray.full")
                     .count(model.notes.notes.count, current: model.scope == .notes)
@@ -303,6 +355,11 @@ struct LibrarySidebar: View {
                         .scopeRow(.collection(collection.id), in: model)
                         .dropTarget(in: model, isEnabled: !collection.isSmart) { paperID in
                             await model.addToCollection(collection.id, paperID: paperID)
+                        }
+                        .contextMenu {
+                            Button(L("계획으로 만들기", "Make a Plan")) {
+                                Task { await newPlan(from: .collection(collection.id), named: collection.name) }
+                            }
                         }
                 }
                 Button {
@@ -331,6 +388,11 @@ struct LibrarySidebar: View {
                     .count(model.counts.tags[tag.id] ?? 0, current: model.scope == .tag(tag.id))
                     .scopeRow(.tag(tag.id), in: model)
                     .dropTarget(in: model) { await model.addTag(tag.id, to: $0) }
+                    .contextMenu {
+                        Button(L("계획으로 만들기", "Make a Plan")) {
+                            Task { await newPlan(from: .tag(tag.id), named: tag.name) }
+                        }
+                    }
                 }
                 // The way a tag comes to be. There was none: tags could be
                 // worn — dropped onto, filtered by — but never made, so a
@@ -380,6 +442,23 @@ struct LibrarySidebar: View {
                 Task { await model.addTag(named: name, color: color) }
             }
         }
+    }
+
+    // MARK: Plans
+
+    /// The New Plan sheet — named after a shelf and holding its papers when
+    /// it is made from one, else holding whatever is picked in the list.
+    private func newPlan(from shelf: LibraryModel.Scope?, named name: String?) async {
+        let papers = shelf.map { model.paperIDs(in: $0) } ?? Array(model.selection)
+        app.planning.sheet = .new(name: name ?? "", papers: papers)
+    }
+
+    private func renamePlan(_ plan: ReadingPlan) async {
+        app.planning.prompt = .renamePlan(plan.id)
+    }
+
+    private func deletePlan(_ plan: ReadingPlan) async {
+        app.planning.deleting = plan.id
     }
 
     /// Who is on the most papers here.
