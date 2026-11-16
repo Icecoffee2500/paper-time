@@ -85,7 +85,7 @@ import Testing
         let encoded = try fixture().encoded
         let schedule = try JSONCoding.decode(PaperSchedule.self, from: Data(encoded.schedule.utf8))
         #expect(String(decoding: try JSONCoding.encode(schedule), as: UTF8.self) == encoded.schedule)
-        let links = try JSONCoding.decode(PaperLinks.self, from: Data(encoded.links.utf8))
+        let links = try JSONCoding.decode(PaperMaterials.self, from: Data(encoded.links.utf8))
         #expect(String(decoding: try JSONCoding.encode(links), as: UTF8.self) == encoded.links)
         #expect(links.links[2].displayTitle == "저자 발표 영상")
         #expect(links.links[0].displayTitle == "sfujim/TD3_BC")

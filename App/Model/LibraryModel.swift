@@ -58,6 +58,10 @@ public final class LibraryModel {
         case author(String)
         /// The library drawn as what is connected to what.
         case graph
+        /// A reading plan: its papers, in its order.
+        case plan(UUID)
+        /// Every plan's papers due this week, and the ones running behind.
+        case thisWeek
     }
 
     public let store: LibraryStore
@@ -80,7 +84,7 @@ public final class LibraryModel {
 
     /// Every folder the library is reading, the first one first.
     public var sources: [LibraryLocation] { [location] + extraSources }
-    private var allStores: [LibraryStore] { [store] + extraStores }
+    var allStores: [LibraryStore] { [store] + extraStores }
 
     /// Which folder a paper came from, and so which store writes it.
     /// Every open folder as (its path, its url), longest path first, so the
@@ -308,10 +312,27 @@ public final class LibraryModel {
     /// What is connected to what.
     public let graph = GraphModel()
 
-    public private(set) var papers: [LoadedPaper] = [] {
+    public internal(set) var papers: [LoadedPaper] = [] {
         didSet {
             rebuildDerivedIndexes()
             searchRevision &+= 1
+        }
+    }
+
+    /// The reading plans every open folder holds, oldest first.
+    public internal(set) var plans: [ReadingPlan] = [] { didSet { invalidateVisibleCache() } }
+    /// The folder each plan was read from, and is written back to.
+    @ObservationIgnored var planRoots: [UUID: URL] = [:]
+    /// Today, where the reader is. Kept, not asked for, so the boards redraw
+    /// when the day turns rather than whenever they happen to be asked.
+    public var today: PlanDay = .today() { didSet { invalidateVisibleCache() } }
+    /// How each shelf is looked at — a list beside the page, a table, a
+    /// calendar — by the shelf's key. Kept for the next launch, except by a
+    /// probe, which remembers nothing.
+    public var shelfViews: [String: String] = LibraryModel.storedShelfViews() {
+        didSet {
+            guard Boot.setting("PAPERTIME_LIBRARY") == nil else { return }
+            UserDefaults.standard.set(shelfViews, forKey: "shelfViews")
         }
     }
 
@@ -730,6 +751,7 @@ public final class LibraryModel {
         // against the old vocabulary and once again against the new one.
         await Trace.time("library: read the vocabulary") { await loadVocabulary() }
         papers = gathered.flatMap(\.papers)
+        await Trace.time("library: read the plans") { await loadPlans() }
         notes.read(folders: stores, of: { [weak self] id in self?.folder(ofPaper: id) })
         await Trace.time("library: read the notes") { await notes.load() }
         await settleVocabulary()
@@ -785,6 +807,13 @@ public final class LibraryModel {
     /// different matter and still wait to be offered, because the user has not
     /// yet said that folder full of PDFs is their library.
     public func folderDidChange(paths: [String] = []) async {
+        // Plans and the days and materials beside papers are read again on
+        // their own, without walking the folder: they are small files, and
+        // another device editing a plan is not a reason to look for PDFs.
+        let planning = Self.planningChanges(of: paths, under: sources.map(\.url))
+        if planning.plans || !planning.papers.isEmpty {
+            await reloadPlanning(plans: planning.plans, papers: planning.papers)
+        }
         folderCheck?.cancel()
         let meaning = Self.meaning(of: paths, under: sources.map(\.url), knowing: Set(papers.map(\.id)))
         // `--papertime-folders=1` says what each change was taken for.
@@ -1151,6 +1180,11 @@ public final class LibraryModel {
     }
 
     private func computeVisiblePapers() -> [LoadedPaper] {
+        if case let .plan(id) = scope, let plan = plan(id) {
+            // In the plan's own order: a plan is a reading order.
+            return plan.readingOrder.compactMap { paper($0) }
+        }
+        if scope == .thisWeek { return weekPapers() }
         var result = papers.filter { $0.meta.parentID == nil && matchesScope($0) }
         if scope == .open {
             // In the order they were kept, not the list's sort: this shelf
@@ -1367,8 +1401,16 @@ public final class LibraryModel {
 
     public func tag(for id: UUID) -> Tag? { tagByID[id] }
 
-    private func matchesScope(_ paper: LoadedPaper) -> Bool {
-        switch scope {
+    private func matchesScope(_ paper: LoadedPaper) -> Bool { matches(scope, paper) }
+
+    /// The papers a shelf holds, in the list's order — for making a plan of
+    /// a collection, a tag or a folder.
+    public func paperIDs(in shelf: Scope) -> [UUID] {
+        papers.filter { $0.meta.parentID == nil && matches(shelf, $0) }.sorted(by: comparator).map(\.id)
+    }
+
+    private func matches(_ shelf: Scope, _ paper: LoadedPaper) -> Bool {
+        switch shelf {
         case .all, .searchResults: true
         case .open: openPaperIDs.contains(paper.id) || openPaperID == paper.id
         // These two are places of their own, not filters over papers.
@@ -1386,6 +1428,8 @@ public final class LibraryModel {
         case let .collection(id): matchesCollection(id, paper: paper)
         case let .tag(id): paper.meta.tagIDs.contains(id)
         case let .author(key): Self.authorKeys(of: paper).contains(key)
+        case let .plan(id): plan(id)?.contains(paper.id) ?? false
+        case .thisWeek: isThisWeek(paper)
         }
     }
 

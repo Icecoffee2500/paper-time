@@ -144,10 +144,10 @@ struct Main {
         let files = names.map { FileCase(name: $0, kind: MaterialKind.kind(ofFile: $0)) }
 
         let schedule = String(decoding: try JSONCoding.encode(PaperSchedule(date: PlanDay("2026-11-20")!)), as: UTF8.self)
-        let links = String(decoding: try JSONCoding.encode(PaperLinks(links: [
-            PaperLink(id: uuid(301), kind: .code, url: "https://github.com/sfujim/TD3_BC", addedAt: Date(timeIntervalSince1970: 1_794_787_200)),
-            PaperLink(id: uuid(302), kind: .slides, file: "Offline RL/CQL 발표자료.pptx", addedAt: Date(timeIntervalSince1970: 1_794_790_800)),
-            PaperLink(id: uuid(303), kind: .video, url: "https://youtu.be/abc", title: "저자 발표 영상", addedAt: Date(timeIntervalSince1970: 1_794_794_400)),
+        let links = String(decoding: try JSONCoding.encode(PaperMaterials(links: [
+            PaperMaterial(id: uuid(301), kind: .code, url: "https://github.com/sfujim/TD3_BC", addedAt: Date(timeIntervalSince1970: 1_794_787_200)),
+            PaperMaterial(id: uuid(302), kind: .slides, file: "Offline RL/CQL 발표자료.pptx", addedAt: Date(timeIntervalSince1970: 1_794_790_800)),
+            PaperMaterial(id: uuid(303), kind: .video, url: "https://youtu.be/abc", title: "저자 발표 영상", addedAt: Date(timeIntervalSince1970: 1_794_794_400)),
         ])), as: UTF8.self)
 
         let fixture = Fixture(days: days, parse: parse, spread: spread, plan: steps, addresses: addresses, files: files,

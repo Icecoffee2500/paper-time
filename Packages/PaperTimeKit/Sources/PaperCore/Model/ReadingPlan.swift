@@ -5,7 +5,7 @@ import Foundation
 //
 //   .papertime/plans/<plan>.json          ReadingPlan — name, sections, order
 //   .papertime/papers/<paper>/plan.json   PaperSchedule — the day to read it
-//   .papertime/papers/<paper>/links.json  PaperLinks — slides, code, videos
+//   .papertime/papers/<paper>/links.json  PaperMaterials — slides, code, videos
 //
 // The day belongs to the paper, not to a plan, so «this week» can gather
 // every plan at once and a paper needs no plan to be given a day. Every rule
@@ -455,16 +455,16 @@ public enum MaterialKind: String, Codable, Hashable, Sendable, CaseIterable {
 }
 
 /// `papers/<id>/links.json`: what the reader keeps beside a paper.
-public struct PaperLinks: Codable, Hashable, Sendable {
-    public var links: [PaperLink]
+public struct PaperMaterials: Codable, Hashable, Sendable {
+    public var links: [PaperMaterial]
 
-    public init(links: [PaperLink] = []) {
+    public init(links: [PaperMaterial] = []) {
         self.links = links
     }
 }
 
 /// One thing kept beside a paper: an address, or a file in the library folder.
-public struct PaperLink: Codable, Hashable, Sendable, Identifiable {
+public struct PaperMaterial: Codable, Hashable, Sendable, Identifiable {
     public var id: UUID
     public var kind: MaterialKind
     /// The address, as `MaterialLink.address` wrote it.

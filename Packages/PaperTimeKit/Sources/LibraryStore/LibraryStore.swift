@@ -13,6 +13,10 @@ public struct LoadedPaper: Hashable, Sendable, Identifiable {
     /// Where the PDF can be had again, for a paper added by address
     /// (`source.json`); nil for one that arrived as a file.
     public var source: PaperSource?
+    /// The day the reader means to read it (`plan.json`); nil for no day.
+    public var schedule: PlanDay?
+    /// What the reader keeps beside it (`links.json`).
+    public var links: [PaperMaterial] = []
 
     public var id: UUID { meta.id }
 
@@ -265,7 +269,10 @@ public actor LibraryStore {
         } else if FileManager.default.fileExists(atPath: folder.sourceURL.path(percentEncoded: false)) {
             source = try? FileOperations.decode(PaperSource.self, at: folder.sourceURL)
         }
-        return LoadedPaper(folder: folder, meta: meta, state: state, documentURL: url, source: source)
+        var paper = LoadedPaper(folder: folder, meta: meta, state: state, documentURL: url, source: source)
+        paper.schedule = loadSchedule(folder)
+        paper.links = loadLinks(folder)
+        return paper
     }
 
     public func loadMeta(_ folder: PaperFolder) throws -> PaperMeta {
@@ -776,6 +783,103 @@ public actor LibraryStore {
         }
         try? FileManager.default.removeItem(at: paper.folder.url)
         return destination
+    }
+
+    // MARK: - Reading plans
+
+    /// The day the reader means to read a paper, if one was given.
+    public func loadSchedule(_ folder: PaperFolder) -> PlanDay? {
+        (try? FileOperations.decode(PaperSchedule.self, at: folder.scheduleURL))?.date
+    }
+
+    /// Gives a paper a day, or takes it away (nil removes the file).
+    public func saveSchedule(_ day: PlanDay?, in folder: PaperFolder) throws {
+        if let day {
+            try FileOperations.encodeAndWrite(PaperSchedule(date: day), to: folder.scheduleURL)
+        } else if FileManager.default.fileExists(atPath: folder.scheduleURL.path(percentEncoded: false)) {
+            try FileManager.default.removeItem(at: folder.scheduleURL)
+        }
+    }
+
+    public func loadLinks(_ folder: PaperFolder) -> [PaperMaterial] {
+        (try? FileOperations.decode(PaperMaterials.self, at: folder.linksURL))?.links ?? []
+    }
+
+    /// Changes what is kept beside a paper, against what is on disk now — a
+    /// link another device added since this one last read is kept. No links
+    /// left removes the file.
+    @discardableResult
+    public func updateLinks(in folder: PaperFolder, _ change: (inout [PaperMaterial]) -> Void) throws -> [PaperMaterial] {
+        var links = loadLinks(folder)
+        change(&links)
+        if links.isEmpty {
+            if FileManager.default.fileExists(atPath: folder.linksURL.path(percentEncoded: false)) {
+                try FileManager.default.removeItem(at: folder.linksURL)
+            }
+        } else {
+            try FileOperations.encodeAndWrite(PaperMaterials(links: links), to: folder.linksURL)
+        }
+        return links
+    }
+
+    /// Copies a file beside a paper's PDF — in the folder the PDF is in, under
+    /// its own name or the next free one — and answers where it went,
+    /// relative to the library root with `/` between the parts.
+    public func copyMaterial(from source: URL, beside paper: LoadedPaper) throws -> String {
+        let directory = paper.hasFile ? paper.documentURL.deletingLastPathComponent() : root
+        let name = LibraryLayout.availableFileName(for: source.lastPathComponent, inLibrary: directory)
+        let destination = directory.appending(path: name)
+        let accessing = source.startAccessingSecurityScopedResource()
+        defer { if accessing { source.stopAccessingSecurityScopedResource() } }
+        try FileManager.default.copyItem(at: source, to: destination)
+        return relativePath(of: destination)
+    }
+
+    /// The URL of a file a material names.
+    public func materialURL(_ relative: String) -> URL {
+        root.appending(path: relative)
+    }
+
+    /// Every plan this folder holds. One that does not read is skipped and
+    /// left as it is.
+    public func loadPlans() -> [ReadingPlan] {
+        let directory = LibraryLayout.plansDirectoryURL(inLibrary: root)
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: directory, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]
+        ) else { return [] }
+        return files
+            .filter { $0.pathExtension == "json" }
+            .compactMap { try? FileOperations.decode(ReadingPlan.self, at: $0) }
+            .sorted { $0.createdAt < $1.createdAt }
+    }
+
+    public func savePlan(_ plan: ReadingPlan) throws {
+        try FileOperations.ensureDirectory(at: LibraryLayout.plansDirectoryURL(inLibrary: root))
+        try FileOperations.encodeAndWrite(plan, to: LibraryLayout.planURL(id: plan.id, inLibrary: root))
+    }
+
+    /// Edits a plan against the file as it is now, so an edit made on another
+    /// device since this one last read the plan is kept. Nil when the plan is
+    /// gone.
+    @discardableResult
+    public func updatePlan(_ id: UUID, _ change: (inout ReadingPlan) -> Void) throws -> ReadingPlan? {
+        let url = LibraryLayout.planURL(id: id, inLibrary: root)
+        guard var plan = try? FileOperations.decode(ReadingPlan.self, at: url) else { return nil }
+        let before = plan
+        change(&plan)
+        if plan != before { try FileOperations.encodeAndWrite(plan, to: url) }
+        return plan
+    }
+
+    /// Puts a plan's file in the Trash. The papers are not touched.
+    public func deletePlan(_ id: UUID) throws {
+        let url = LibraryLayout.planURL(id: id, inLibrary: root)
+        guard FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) else { return }
+        do {
+            try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+        } catch {
+            try FileManager.default.removeItem(at: url)
+        }
     }
 
     // MARK: - Renaming the file

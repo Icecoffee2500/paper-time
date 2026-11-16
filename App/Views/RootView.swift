@@ -462,11 +462,18 @@ struct LibraryWindow: View {
                 ColumnDivider(width: $app.sidebarWidth, range: 200...widest(200))
             }
 
+            // A shelf shown as a board — a table, a calendar — puts the
+            // board where the list and the page were: the list steps aside
+            // and the page's column holds the board, with the inspector
+            // still beside it.
+            let board = model.showsBoard
+            let showsList = app.showsPaperList && !board
+            let showsDetail = app.showsReader || board
             // With the paper closed the list is the only thing left to look
             // at, so it takes the room rather than leaving the window half
             // empty. Its own width comes back when the paper does.
-            let listFills = app.showsPaperList && !app.showsReader
-            let listWidth: CGFloat? = if !app.showsPaperList {
+            let listFills = showsList && !showsDetail
+            let listWidth: CGFloat? = if !showsList {
                 0
             } else if listFills {
                 nil
@@ -480,11 +487,11 @@ struct LibraryWindow: View {
                 .frame(width: listWidth, alignment: .leading)
                 .frame(maxWidth: listFills ? .infinity : nil)
                 .columnPanel()
-                .opacity(app.showsPaperList ? 1 : 0)
+                .opacity(showsList ? 1 : 0)
                 .clipped()
 
             // Nothing to drag against when there is no paper beside it.
-            if app.showsPaperList, app.showsReader {
+            if showsList, showsDetail {
                 ColumnDivider(width: $app.paperListWidth, range: 240...widest(240))
             }
 
@@ -511,17 +518,17 @@ struct LibraryWindow: View {
             // a width of zero, and a `PDFView` with no width draws nothing —
             // so for a frame the panel was there with nothing in it, which is
             // a pane of glass the colour of paper. That was the white flash.
-            .frame(width: app.showsReader ? nil : readerWidth, alignment: .leading)
+            .frame(width: showsDetail ? nil : readerWidth, alignment: .leading)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
                 // Only while it is open: reading it back while it is being
                 // held would be reading our own answer.
-                if app.showsReader, width > 0 { readerWidth = width }
+                if showsDetail, width > 0 { readerWidth = width }
             }
             // Closed by width rather than by taking it out of the tree: the
             // reader is expensive to build, and tearing the PDF view down and
             // back up is what made the other column toggles crawl.
-            .frame(maxWidth: app.showsReader ? .infinity : 0, alignment: .leading)
-            .opacity(app.showsReader ? 1 : 0)
+            .frame(maxWidth: showsDetail ? .infinity : 0, alignment: .leading)
+            .opacity(showsDetail ? 1 : 0)
             .clipped()
         }
         // Rounded, and that is the point: a drag on the window's edge reports
@@ -777,7 +784,21 @@ struct LibraryWindow: View {
             HStack {
                 Text(scopeTitle)
                     .font(.headline)
+                    .lineLimit(1)
                 Spacer()
+                #if os(macOS)
+                // The way back to the table a paper was opened from, and the
+                // way into one from any shelf.
+                if LibraryModel.shelfKey(model.scope) != nil {
+                    ShelfViewSwitch(
+                        view: Binding(get: { model.shelfView(for: model.scope) },
+                                      set: { model.setShelfView($0, for: model.scope) }),
+                        choices: { if case .plan = model.scope { [.list, .table, .calendar] } else { [.list, .table] } }()
+                    )
+                    .labelStyle(.iconOnly)
+                    .help(L("목록 · 표로 보기", "Show as a list or a table"))
+                }
+                #endif
             }
             .padding(.horizontal, 16)
             .padding(.top, 10)
@@ -1198,6 +1219,8 @@ struct LibraryWindow: View {
             model.manifest.tags.first { $0.id == id }?.name ?? L("태그", "Tag")
         case let .author(key):
             model.authorRanking.first { $0.key == key }?.name ?? L("저자", "Author")
+        case let .plan(id): model.plan(id)?.name ?? L("계획", "Plan")
+        case .thisWeek: L("이번 주", "This Week")
         }
     }
 }
@@ -1387,7 +1410,18 @@ struct PaperDetailColumn: View {
 
         #if os(macOS)
         return HStack(spacing: 0) {
-            page.columnPanel()
+            // The board stands where the page was; the page stays in the
+            // tree underneath, unseen, so going back to it is instant.
+            ZStack {
+                page
+                    .opacity(model.showsBoard ? 0 : 1)
+                    .allowsHitTesting(!model.showsBoard)
+                if model.showsBoard {
+                    PlanBoard(model: model)
+                        .transition(.opacity)
+                }
+            }
+            .columnPanel()
 
             // Nothing to drag against when the inspector is closed.
             if app.showsInspector {

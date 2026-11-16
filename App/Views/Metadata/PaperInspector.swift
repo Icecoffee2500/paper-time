@@ -75,6 +75,10 @@ private struct PaperInspectorForm: View {
                 // in the row's own menu.
                 if paper.meta.kindIsUnanswered { kindQuestion(for: paper) }
 
+                // Where it stands in the plans, and what is kept beside it:
+                // the two things a reader planning a week asks of a paper.
+                PlanInspectorSections(model: model, paper: paper)
+
                 let kind = paper.meta.effectiveKind
                 if kind == .paper, paper.meta.confidence == .needsReview, !paper.meta.candidates.isEmpty {
                     candidatesSection(for: paper)

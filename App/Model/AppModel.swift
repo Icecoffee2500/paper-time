@@ -1242,6 +1242,9 @@ public final class AppModel {
             if let inside = Boot.setting("PAPERTIME_SCOPE")?.stripPrefix("folder:") {
                 model.scope = .folder(model.location.url.appending(path: inside, directoryHint: .isDirectory))
             }
+            #if os(macOS)
+            await PlanProbe.run(model: model)
+            #endif
             // The results of a search, without anybody having to type one.
             if let query = Boot.setting("PAPERTIME_SEARCH_RESULTS") {
                 model.showSearchResults(for: query)
