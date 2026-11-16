@@ -63,6 +63,13 @@ targets:
     supportedDestinations: [macOS]
     sources:
       - path: App
+      # The reading-plans demonstration About shows (`PlansDemoView`),
+      # straight from the page: one file for the page, the Mac and the
+      # Portable build, so none of them can show it differently.
+      - path: Website/plans-demo.js
+        buildPhase: resources
+      - path: Website/plans-demo.css
+        buildPhase: resources
     dependencies:
       - package: PaperTimeKit
         product: PaperCore

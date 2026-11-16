@@ -4632,6 +4632,10 @@ textarea.memo {
    The Mac's pages beside a rail: the page you are on is lifted off the
    ground rather than painted blue (`SettingsView`). */
 .set-sheet.set-paged { width: 820px; height: min(640px, calc(100vh - 48px)); flex-direction: row; }
+/* About is a working window with words under it, not a form: it gets the
+   room the Mac's About gets (`SettingsView`), so the reading-plans window is
+   shown nearly at size. */
+.set-sheet.set-paged.set-about { width: min(1000px, calc(100vw - 48px)); height: min(780px, calc(100vh - 48px)); }
 .set-rail { flex: 0 0 176px; display: flex; flex-direction: column; gap: 2px; padding: 14px 10px; background: var(--ground, color-mix(in srgb, var(--text) 4%, var(--panel))); }
 .set-rail-title { padding: 0 10px 8px; margin: 0; }
 .set-rail-row { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; text-align: left; color: var(--text); font-size: 13px; }
@@ -4678,6 +4682,7 @@ textarea.memo {
 .rn-card { flex: 1 1 auto; min-width: 0; border-radius: 16px; padding: 14px; background: color-mix(in srgb, var(--text) 5%, transparent); }
 .rn-stage { min-height: 240px; display: flex; }
 .rn-demo { width: 100%; height: 340px; border: none; border-radius: 12px; background: transparent; }
+.rn-plans-demo { display: block; height: 640px; margin-top: 10px; border-radius: 0; }
 .rn-stage-empty { flex: 1; display: grid; place-items: center; color: var(--text-tertiary); }
 .rn-stage-empty svg { width: 44px; height: 44px; }
 .rn-words { display: grid; margin-top: 12px; }

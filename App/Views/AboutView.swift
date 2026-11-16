@@ -22,6 +22,9 @@ struct AboutView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 30) {
                 FeatureShowcase(header: { AboutHeader() })
+                #if os(macOS)
+                if PlansDemo.isBundled { PlansDemoSection() }
+                #endif
                 together
                 footer
             }
