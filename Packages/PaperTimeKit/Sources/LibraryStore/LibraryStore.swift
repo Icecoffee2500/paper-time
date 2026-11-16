@@ -851,13 +851,19 @@ public actor LibraryStore {
 
     /// Every plan this folder holds. One that does not read is skipped and
     /// left as it is.
+    ///
+    /// Not `.skipsHiddenFiles`: iCloud Drive flags the files inside a folder
+    /// whose name starts with a dot as hidden, so on an iCloud library that
+    /// listing came back empty — every plan was written and then, at the next
+    /// read, gone from the sidebar (2026-11-16, twice). Names that start with
+    /// a dot are left out by name instead.
     public func loadPlans() -> [ReadingPlan] {
         let directory = LibraryLayout.plansDirectoryURL(inLibrary: root)
         guard let files = try? FileManager.default.contentsOfDirectory(
-            at: directory, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]
+            at: directory, includingPropertiesForKeys: nil
         ) else { return [] }
         return files
-            .filter { $0.pathExtension == "json" }
+            .filter { $0.pathExtension == "json" && !$0.lastPathComponent.hasPrefix(".") }
             .compactMap { try? FileOperations.decode(ReadingPlan.self, at: $0) }
             .sorted { $0.createdAt < $1.createdAt }
     }
