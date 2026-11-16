@@ -48,7 +48,10 @@ import { openAnchorFromSlipBox, openNote, openNoteFromSearch } from './actions/n
 import { openPassage, openSearch } from './actions/search.js'
 import { clearSearchResults, installListSearch, scanListText } from './listSearch.js'
 import { installTheme, openSettings, saveSettings, setInspectorTab } from './settingsController.js'
-import { layoutPanes, revealPane, syncListSlot, togglePane } from './layout.js'
+import { layoutPanes, revealPane, syncBoard, syncListSlot, togglePane } from './layout.js'
+import { buildPlanBoard } from './ui/planBoard.js'
+import { closePlanPop } from './ui/planPopovers.js'
+import { boardShowing, watchTheDay } from './plans.js'
 import { applyUndo, installKeys, pickTool } from './keys.js'
 import { installMainEvents } from './commands.js'
 import { installDockDrop, installFileDrop } from './dockDrop.js'
@@ -178,6 +181,8 @@ shell.setup = buildSetup({
   suggestions: () => call('library:suggestions'),
 })
 
+shell.board = buildPlanBoard()
+
 shell.rack = buildSketchRack({
   setTool: (tool: SketchTool) => pickTool(tool),
   undo: () => applyUndo(false),
@@ -254,8 +259,15 @@ function drawingSoon() {
 subscribe((keys) => {
   const onNotesShelf = store.shelf.kind === 'notes' && !solo
   if (keys.has('shelf')) {
+    closePlanPop()
     syncListSlot()
+    // The board comes or goes with the shelf's view; it draws itself as it comes.
+    syncBoard()
     reconcileReaders()
+  }
+  if (boardShowing()) {
+    if (keys.has('papers') || keys.has('shelf') || keys.has('notes')) shell.board.update()
+    else if (keys.has('selection')) shell.board.mark()
   }
   if (keys.has('notes') || keys.has('slipBox') || keys.has('papers')) {
     if (onNotesShelf) {
@@ -319,6 +331,7 @@ window.addEventListener('focus', () => {
 
 installRejectionNotice()
 installUpdateNotice()
+watchTheDay()
 watchSketchClipboard()
 // A note the disk would not take stays in hand and is written with the next
 // change; said once, in the app's voice (`NotesModel.write`).

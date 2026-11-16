@@ -41,6 +41,8 @@ import { drawingHandlers } from './handlers/drawing.js'
 import { notesHandlers } from './handlers/notes.js'
 import { windowHandlers } from './handlers/window.js'
 import { textHandlers } from './handlers/text.js'
+import { planHandlers } from './handlers/plans.js'
+import { PlanFiles } from './plans.js'
 import { pageCount } from './handlers/shared.js'
 import { MetadataQueue } from './metadata/queue.js'
 import { lookupNetwork } from './metadata/wiring.js'
@@ -298,6 +300,7 @@ const handlers: Handlers = {
   ...notesHandlers(context),
   ...windowHandlers(context),
   ...textHandlers(context),
+  ...planHandlers(context, new PlanFiles(() => libraries.all())),
 } as Handlers
 
 registerIPC(handlers)

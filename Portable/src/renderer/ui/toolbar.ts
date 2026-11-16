@@ -188,25 +188,36 @@ let toastShowing: { node: HTMLElement; text: string; timer: number } | null = nu
  * Each used to bring its own timer, so the third of three quick toasts was
  * taken down by the first one's.
  */
-export function toast(message: string) {
-  if (toastShowing && toastShowing.text !== message) {
+export function toast(message: string, action?: { label: string; press: () => void }) {
+  if (toastShowing && (toastShowing.text !== message || action)) {
     toastShowing.node.remove()
     toastShowing = null
   }
   if (!toastShowing) {
-    const node = el('div', { class: 'toast', text: message })
+    const node = el('div', { class: action ? 'toast toast-action' : 'toast' }, [el('span', { text: message })])
+    if (action) {
+      // A change with the way back beside it: pressable, and up long enough to reach.
+      const button = el('button', { class: 'toast-button', text: action.label })
+      on(button, 'click', () => {
+        node.remove()
+        if (toastShowing?.node === node) toastShowing = null
+        action.press()
+      })
+      node.append(button)
+    }
     document.body.append(node)
     toastShowing = { node, text: message, timer: 0 }
   }
   const showing = toastShowing
   clearTimeout(showing.timer)
   delete showing.node.dataset.leaving
-  // The Mac's moment: a second and a half to read, then it fades.
+  // The Mac's moment: a second and a half to read, then it fades — seven
+  // seconds when there is a button on it to reach.
   showing.timer = window.setTimeout(() => {
     showing.node.dataset.leaving = 'true'
     if (toastShowing === showing) toastShowing = null
     setTimeout(() => showing.node.remove(), 260)
-  }, 1600)
+  }, action ? 7000 : 1600)
 }
 
 export { clear }

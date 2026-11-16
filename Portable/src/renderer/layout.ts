@@ -8,8 +8,9 @@ import { clear, el, on } from './dom.js'
 import { changed, store, type Pane } from './state.js'
 import { enterFocus, leaveFocus, restingPanes, showPane, togglePaneState, type PaneState } from '../shared/paneModel.js'
 import { shell, solo } from './shell.js'
-import { keepingPlaces, pageArea, relayoutReaders } from './pageArea.js'
+import { holdReaderPlaces, keepingPlaces, pageArea, relayoutReaders, returnReaderPlaces } from './pageArea.js'
 import { saveSettings } from './settingsController.js'
+import { boardShowing } from './plans.js'
 
 type Column = 'sidebar' | 'paperList' | 'inspector'
 
@@ -54,13 +55,24 @@ export function layoutPanes() {
   const visible = store.settings.panes
   const pieces: { pane: Pane; node: HTMLElement; width?: number; resizes?: 'leading' | 'trailing' }[] = []
   if (visible.sidebar) pieces.push({ pane: 'sidebar', node: shell.sidebar.node, width: store.settings.columns.sidebar })
-  // With the paper hidden the list is what is being read: it fills the
-  // window, as the Mac's does, rather than standing at its width beside
-  // nothing.
-  if (visible.paperList) {
-    pieces.push({ pane: 'paperList', node: shell.listSlot, width: visible.reader ? store.settings.columns.paperList : undefined })
+  // A shelf showing its table or a plan its calendar: the board takes the
+  // list's place and the page's, and the readers wait out of sight where
+  // they were left.
+  const board = boardShowing()
+  boardWas = board
+  if (board) {
+    holdReaderPlaces()
+    pieces.push({ pane: 'reader', node: shell.board.node })
+    shell.board.update()
+  } else {
+    // With the paper hidden the list is what is being read: it fills the
+    // window, as the Mac's does, rather than standing at its width beside
+    // nothing.
+    if (visible.paperList) {
+      pieces.push({ pane: 'paperList', node: shell.listSlot, width: visible.reader ? store.settings.columns.paperList : undefined })
+    }
+    if (visible.reader) pieces.push({ pane: 'reader', node: pageArea })
   }
-  if (visible.reader) pieces.push({ pane: 'reader', node: pageArea })
   if (visible.inspector) {
     pieces.push({ pane: 'inspector', node: shell.inspector.node, width: store.settings.columns.inspector, resizes: 'trailing' })
   }
@@ -92,6 +104,21 @@ export function layoutPanes() {
     if (!target.width) return
     panes.append(divider(target.pane as Column, resizesNext))
   })
+  // Back from the board: the papers where they were being read.
+  if (!board) returnReaderPlaces()
+}
+
+/** Whether the board was showing at the last layout. */
+let boardWas = false
+
+/** The shelf changed: the board comes or goes when its view says so. */
+export function syncBoard() {
+  if (solo || boardShowing() === boardWas) return
+  keepingPlaces(() => {
+    layoutPanes()
+    relayoutReaders()
+  })
+  shell.toolbar.update()
 }
 
 /** The panel a column's name stands for. */

@@ -338,12 +338,30 @@ function showSlipBoxDetail() {
  * that a column which has just changed width is measured at its new size.
  */
 export function keepingPlaces(rebuild: () => void) {
-  const places = new Map([...readers].map(([id, reader]) => [id, reader.place()]))
+  // Only the readers in the window: one waiting behind the board has no
+  // place to measure, and «the top» would be put back over where it was.
+  const places = new Map([...readers].filter(([, reader]) => reader.node.isConnected).map(([id, reader]) => [id, reader.place()]))
   rebuild()
   for (const [id, reader] of readers) {
     const place = places.get(id)
     if (place) reader.returnTo(place)
   }
+}
+
+/** Where each paper was when the board came, to put it back when the board goes. */
+let placesBeforeBoard: Map<string, ReaderPlace> | null = null
+
+export function holdReaderPlaces() {
+  if (placesBeforeBoard) return
+  placesBeforeBoard = new Map([...readers].filter(([, reader]) => reader.node.isConnected).map(([id, reader]) => [id, reader.place()]))
+}
+
+export function returnReaderPlaces() {
+  if (!placesBeforeBoard) return
+  const places = placesBeforeBoard
+  placesBeforeBoard = null
+  relayoutReaders()
+  for (const [id, place] of places) readers.get(id)?.returnTo(place)
 }
 
 export function relayoutReaders() {

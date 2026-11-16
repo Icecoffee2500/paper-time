@@ -15,8 +15,10 @@ import {
   changed,
   closeOpenPaper,
   isOpenPaper,
+  isSelected,
   patchPaper,
   paper as findPaper,
+  selectedPapers,
   store,
   undock,
   type Paper,
@@ -36,6 +38,7 @@ import { makeKey } from '../../shared/citationKey.js'
 import { suggestedParent } from '../../shared/attachmentSearch.js'
 import { cslFullTitle, type CSLItem } from '../../shared/model.js'
 import { DOCK_ZONES, type DockZone } from '../../shared/split.js'
+import { addToPlan, newPlan } from '../plans.js'
 
 type ReadingStatus = 'unread' | 'reading' | 'read'
 
@@ -167,6 +170,11 @@ export function attachTargets(id: string): { id: string; title: string; fileName
  * a drop, and a paper already there is left as it is.
  */
 export async function fileUnder(paperIDs: string | string[], shelf: Shelf) {
+  // Into a plan, all of them as one step, at its end.
+  if (shelf.kind === 'plan') {
+    await addToPlan(shelf.id, Array.isArray(paperIDs) ? paperIDs : [paperIDs])
+    return
+  }
   // Every paper the drag carried — the whole selection when it started on
   // one of the chosen rows, as on the Mac.
   let filed = 0
@@ -372,6 +380,23 @@ export function paperMenu(id: string, anchor: Element) {
     // Every tag, ticked where this paper wears it; a press puts it on or
     // takes it off. Tags are made in the sidebar.
     { label: L('태그', 'Tags'), icon: 'tag', children: tagEntries(entry) },
+    // Into a plan — every row chosen when this one is among them.
+    {
+      label: L('계획에 넣기', 'Add to Plan'),
+      icon: 'point.topleft.down.to.point.bottomright.curvepath',
+      children: (() => {
+        const ids = isSelected(id) ? selectedPapers() : [id]
+        return [
+          ...store.plans.map((one) => ({
+            label: one.plan.name,
+            checked: ids.every((paperID) => one.plan.entries.some((planEntry) => planEntry.paper === paperID)),
+            action: () => void addToPlan(one.plan.id, ids),
+          })),
+          ...(store.plans.length ? [{ separator: true }] : []),
+          { label: L('새 계획…', 'New Plan…'), icon: 'plus.circle', action: () => void newPlan(ids) },
+        ]
+      })(),
+    },
     {
       label: entry.state.isFavorite
         ? L('즐겨찾기에서 빼기', 'Remove from Favorites')

@@ -21,6 +21,7 @@ import { quotationInsertion } from '../../shared/noteQuote.js'
 import { cssColor, type Mark } from '../../shared/marks.js'
 import type { MenuEntry } from './toolbar.js'
 import { tagColor } from './paperList.js'
+import { planSections } from './planInspector.js'
 
 export interface InspectorActions {
   editMeta: (id: string, patch: Record<string, unknown>) => void
@@ -544,6 +545,9 @@ function details(body: HTMLElement, paper: Paper, actions: InspectorActions, red
     ...(meta.displayAuthors ? [el('div', { class: 'insp-authors', text: meta.displayAuthors })] : []),
     confidenceBadge(meta.confidence),
   ))
+  // When it is to be read and in which plan, and what is kept beside it —
+  // under the title, where the board's reader looks first.
+  if (!meta.parentID) body.append(...planSections(paper))
 
   // Before anything else: what is this? Asked once, when nobody has
   // answered; changing it later is in the ⋯ menu and the row's menu.
