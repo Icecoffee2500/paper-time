@@ -49,6 +49,7 @@ import { noteCodeSuite } from './noteCode.js'
 import { paperAddressSuite } from './paperAddress.js'
 import { quotedPassagesSuite } from './quotedPassages.js'
 import { readingPlanSuite } from './readingPlan.js'
+import { planBoardSuite } from './planBoard.js'
 import { noteListSuite } from './noteList.js'
 import { codeHighlightSuite } from './codeHighlight.js'
 import { feedbackNameSuite } from './feedbackName.js'
@@ -445,6 +446,7 @@ async function main() {
   await paperAddressSuite(test, suite)
   await quotedPassagesSuite(test, suite)
   await readingPlanSuite(test, suite)
+  await planBoardSuite(test, suite)
   await noteListSuite(test, suite)
   await codeHighlightSuite(test, suite)
   await feedbackNameSuite(test, suite)

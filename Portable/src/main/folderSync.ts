@@ -31,7 +31,9 @@ import { watchLibrary, type ChangedFile } from './watcher.js'
 
 export type Change =
   | { kind: 'ignore' }
-  | { kind: 'sidecar'; id: string; layer: 'marks' | 'ink' | 'sketch' | 'pdf' | 'other' }
+  | { kind: 'sidecar'; id: string; layer: 'marks' | 'ink' | 'sketch' | 'pdf' | 'plan' | 'links' | 'other' }
+  /** A reading plan's file (`plans/<id>.json`). */
+  | { kind: 'plans' }
   | { kind: 'record'; id: string }
   | { kind: 'notes' }
   | { kind: 'vocabulary' }
@@ -53,10 +55,12 @@ export function classifyChange(root: string, file: ChangedFile): Change {
       const leaf = parts[3]
       if (!leaf) return { kind: 'record', id }
       if (leaf === L.META_FILE || leaf === L.STATE_FILE) return { kind: 'record', id }
-      const layer = leaf === L.MARKS_DIR ? 'marks' : leaf === L.INK_DIR ? 'ink' : leaf === L.SKETCH_DIR ? 'sketch' : leaf === 'pdf' ? 'pdf' : 'other'
+      const layer = leaf === L.MARKS_DIR ? 'marks' : leaf === L.INK_DIR ? 'ink' : leaf === L.SKETCH_DIR ? 'sketch' : leaf === 'pdf' ? 'pdf'
+        : leaf === L.SCHEDULE_FILE ? 'plan' : leaf === L.LINKS_FILE ? 'links' : 'other'
       return { kind: 'sidecar', id, layer }
     }
     if (parts[1] === L.NOTES_DIR) return { kind: 'notes' }
+    if (parts[1] === L.PLANS_DIR) return { kind: 'plans' }
     if (parts[1] === L.MANIFEST_FILE || parts[1] === L.COLLECTIONS_FILE) return { kind: 'vocabulary' }
     return { kind: 'ignore' }
   }
@@ -110,11 +114,15 @@ export class FolderSync {
   private changed(root: string, changed: ChangedFile[], notesOnly = false) {
     const papers = new Map<string, Set<string>>()
     let whole = false
+    let plans = false
     for (const file of changed) {
       if (file !== null && isOwnWrite(file)) continue
       const change = notesOnly ? ({ kind: 'notes' } as Change) : classifyChange(root, file)
       switch (change.kind) {
         case 'ignore':
+          break
+        case 'plans':
+          plans = true
           break
         case 'sidecar': {
           const layers = papers.get(change.id) ?? new Set<string>()
@@ -126,6 +134,7 @@ export class FolderSync {
           whole = true
       }
     }
+    if (plans) this.hooks.send('plans:changed')
     if (whole) {
       void this.settle()
       return

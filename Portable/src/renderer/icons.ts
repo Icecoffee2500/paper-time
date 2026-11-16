@@ -92,6 +92,36 @@ const SHAPES = {
   tray: `
     <path d="M2 9.6h2.8l1 1.7h4.4l1-1.7H14"/>
     <path d="M2 9.6V12a1.6 1.6 0 0 0 1.6 1.6h8.8A1.6 1.6 0 0 0 14 12V9.6l-1.9-5.3a1.4 1.4 0 0 0-1.3-.9H5.2a1.4 1.4 0 0 0-1.3.9Z"/>`,
+  // ------------------------------------------------------- reading plans
+  // A month with its two rings and the line under the days' names.
+  calendar: `
+    <rect x="2.5" y="3.6" width="11" height="10" rx="2"/>
+    <path d="M2.5 6.8h11M5.5 2.4v2.4M10.5 2.4v2.4"/>`,
+  // A table: a header row and a narrow first column.
+  tablecells: `
+    <rect x="2.5" y="3.2" width="11" height="9.6" rx="1.8"/>
+    <path d="M2.5 6.4h11M2.5 9.6h11M6.5 3.2v9.6"/>`,
+  // A path from one point to another — a plan is a way through papers.
+  'point.topleft.down.to.point.bottomright.curvepath': `
+    <circle cx="4" cy="4.4" r="1.3"/>
+    <circle cx="12" cy="11.6" r="1.3"/>
+    <path d="M5.3 4.4H10a1.8 1.8 0 0 1 0 3.6H6a1.8 1.8 0 0 0 0 3.6h4.7"/>`,
+  // A screen on a stand: slides.
+  display: `
+    <rect x="2.2" y="3.2" width="11.6" height="7.4" rx="1.4"/>
+    <path d="M8 10.6v2.6M5.6 13.4h4.8"/>`,
+  // A frame with a play triangle: a video.
+  'play.rectangle': `
+    <rect x="2.2" y="3.6" width="11.6" height="8.8" rx="2"/>
+    <path d="M7 6.3v3.4l2.9-1.7Z"/>`,
+  // A stack of discs: data.
+  cylinder: `
+    <ellipse cx="8" cy="4.4" rx="5" ry="1.9"/>
+    <path d="M3 4.4v7.2c0 1 2.2 1.9 5 1.9s5-.9 5-1.9V4.4M3 8c0 1 2.2 1.9 5 1.9s5-.9 5-1.9"/>`,
+  // A closed notebook with a play mark: a notebook to run.
+  'book.closed': `
+    <path d="M4 2.6h7.6a1.2 1.2 0 0 1 1.2 1.2v8.4a1.2 1.2 0 0 1-1.2 1.2H4Z"/>
+    <path d="M4 2.6v10.8M6.9 6l3 2-3 2Z"/>`,
   // The ⋯ inside a ring: «more», on something that is already a button.
   'ellipsis.circle': `
     <circle cx="8" cy="8" r="5.9"/>

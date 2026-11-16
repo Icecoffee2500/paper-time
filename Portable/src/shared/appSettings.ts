@@ -62,6 +62,10 @@ export interface Settings {
   checkForUpdates: boolean
   /** «Skip This Version»: not announced again until a newer one. */
   skippedUpdateVersion: string | null
+  /** The reading plan's board, as JSON: each shelf's view (list, table,
+   *  calendar), the table's columns and sort, the plan's grouping, and the
+   *  last «Spread Evenly» (`renderer/plans.ts`). */
+  planBoard: string | null
 }
 
 export const DEFAULTS: Settings = {
@@ -95,6 +99,7 @@ export const DEFAULTS: Settings = {
   seenReleaseNotesVersion: null,
   checkForUpdates: true,
   skippedUpdateVersion: null,
+  planBoard: null,
 }
 
 /** What the file says, over the defaults, each group merged key by key. */

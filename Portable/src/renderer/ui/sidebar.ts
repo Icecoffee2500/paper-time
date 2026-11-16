@@ -18,6 +18,19 @@ import { providerIcon, providerOf } from '../../shared/cloudProvider.js'
 import { samePath } from '../../shared/paths.js'
 import { carriesPapers, draggedPapers } from '../../shared/split.js'
 import { tagColor } from './paperList.js'
+import { planPapers } from '../state.js'
+import { weekCount } from '../../shared/planBoard.js'
+import { boardPaper, deletePlan, makePlanFrom, newPlan, renamePlan } from '../plans.js'
+import { donut } from './planBoard.js'
+
+/** «Make a Plan» on a collection, a tag or a folder: its papers, in the list's order. */
+function makePlanEntry(shelf: Shelf, name: string): MenuEntry {
+  return {
+    label: L('계획으로 만들기', 'Make a Plan'),
+    icon: 'point.topleft.down.to.point.bottomright.curvepath',
+    action: () => void makePlanFrom(shelf, name),
+  }
+}
 
 export interface SidebarActions {
   select: (shelf: Shelf) => void
@@ -44,6 +57,9 @@ interface RowSpec {
   icon?: IconName
   label: string
   count?: number
+  /** A count that is not a number — a plan's `3/11` — and the small ring beside it. */
+  countText?: string
+  donut?: number
   chip?: boolean
   shelf?: Shelf
   /** For the rows that are not shelves: add a folder, a collection, the graph. */
@@ -150,6 +166,7 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
         // disconnected (the first is where the library began).
         menu: [
           { label: L('폴더에서 보기', 'Show in Folder'), icon: 'folder', action: () => actions.revealFolder(root) },
+          makePlanEntry({ kind: 'folder', root }, basename(root)),
           // Apart, and in red: this one takes a library out of the list.
           ...(root === store.root
             ? []
@@ -183,6 +200,7 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
           count: node.count,
           indent: trail.length,
           title: node.path,
+          menu: [makePlanEntry({ kind: 'folder', root: node.path }, node.name)],
         })
       }
     } else {
@@ -230,6 +248,37 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
     rows.push({ key: 'review', kind: 'row', shelf: { kind: 'review' }, icon: 'exclamationmark.triangle', label: L('살펴볼 것', 'Needs Review'), count: counts.review, hue: 'review' })
     rows.push({ key: 'open', kind: 'row', shelf: { kind: 'open' }, icon: 'rectangle.on.rectangle', label: L('열린 문서', 'Open Documents'), count: store.openPaperIDs.length })
 
+    // What to read and when: this week across every plan, then each plan,
+    // with how far through it is.
+    rows.push({ key: 'sec:plans', kind: 'section', label: L('계획', 'Plans') })
+    rows.push({
+      key: 'week', kind: 'row', shelf: { kind: 'week' }, icon: 'calendar', label: L('이번 주', 'This Week'),
+      count: weekCount(papers.map(boardPaper), store.today),
+    })
+    for (const one of store.plans) {
+      const members = planPapers(one.plan.id)
+      const read = members.filter((entry) => entry.state.readingStatus === 'read').length
+      rows.push({
+        key: `plan:${one.plan.id}`,
+        kind: 'row',
+        shelf: { kind: 'plan', id: one.plan.id },
+        icon: 'point.topleft.down.to.point.bottomright.curvepath',
+        label: one.plan.name,
+        countText: members.length ? `${read}/${members.length}` : '',
+        donut: members.length ? read / members.length : undefined,
+        drop: true,
+        menu: [
+          { label: L('이름 바꾸기…', 'Rename…'), icon: 'square.and.pencil', action: () => void renamePlan(one.plan.id) },
+          { separator: true },
+          { label: L('지우기…', 'Delete…'), icon: 'trash', danger: true, action: () => void deletePlan(one.plan.id) },
+        ],
+      })
+    }
+    rows.push({
+      key: 'add:plan', kind: 'button', icon: 'plus.circle',
+      label: L('새 계획…', 'New Plan…'), press: () => void newPlan(),
+    })
+
     rows.push({ key: 'sec:slipbox', kind: 'section', label: L('슬립박스', 'Slip-Box') })
     rows.push({ key: 'notes', kind: 'row', shelf: { kind: 'notes' }, icon: 'tray.full', label: L('노트', 'Notes'), count: counts.notes })
 
@@ -248,6 +297,7 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
         count: counts.collections.get(collection.id) ?? 0,
         // A smart collection is filled by its rule, not by hand.
         drop: !collection.rule,
+        menu: [makePlanEntry({ kind: 'collection', id: collection.id }, collection.name)],
       })
     }
     rows.push({
@@ -266,6 +316,7 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
         count: counts.tags.get(tag.id) ?? 0,
         tint: tagColor(tag.color),
         drop: true,
+        menu: [makePlanEntry({ kind: 'tag', id: tag.id }, tag.name)],
       })
     }
     rows.push({
@@ -371,6 +422,12 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
         : label,
     )
     if (spec.count !== undefined) row.append(el('span', { class: 'row-count', text: String(spec.count) }))
+    if (spec.countText !== undefined) {
+      row.append(el('span', { class: 'row-count row-progress' }, [
+        el('span', { class: 'row-progress-text', text: spec.countText }),
+        el('span', { class: 'row-donut', html: spec.donut === undefined ? '' : donut(spec.donut) }),
+      ]))
+    }
     if (spec.dismiss) {
       // The count steps aside for the × rather than sharing the corner with
       // it: a number with a cross on top of it is two things in one place,
@@ -456,7 +513,7 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
 
   /** What has to be redrawn rather than merely re-labelled. */
   function shape(spec: RowSpec): string {
-    return `${spec.kind}|${spec.key}|${spec.icon ?? ''}|${spec.label}|${spec.detail ?? ''}|${spec.chip ? 1 : 0}|${spec.menu ? spec.menu.length : 0}|${spec.indent ?? 0}|${spec.fold ? (spec.fold.open ? 'v' : '>') : ''}|${spec.drop ? 1 : 0}|${spec.tint ?? ''}`
+    return `${spec.kind}|${spec.key}|${spec.icon ?? ''}|${spec.label}|${spec.detail ?? ''}|${spec.chip ? 1 : 0}|${spec.menu ? spec.menu.length : 0}|${spec.indent ?? 0}|${spec.fold ? (spec.fold.open ? 'v' : '>') : ''}|${spec.drop ? 1 : 0}|${spec.tint ?? ''}|${spec.countText !== undefined ? 'p' : ''}`
   }
 
   let drawnSpecs: RowSpec[] = []
@@ -486,6 +543,13 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
         const cell = node.querySelector('.row-count')
         const text = String(spec.count)
         if (cell && cell.textContent !== text) cell.textContent = text
+      }
+      if (spec.countText !== undefined) {
+        const cell = node.querySelector('.row-progress-text')
+        if (cell && cell.textContent !== spec.countText) cell.textContent = spec.countText
+        const ring = node.querySelector('.row-donut')
+        const drawn = spec.donut === undefined ? '' : donut(spec.donut)
+        if (ring && ring.innerHTML !== drawn) ring.innerHTML = drawn
       }
       if (spec.shelf) {
         const selected = String(same(store.shelf, spec.shelf))

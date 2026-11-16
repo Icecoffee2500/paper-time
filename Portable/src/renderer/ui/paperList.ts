@@ -12,9 +12,10 @@ import { iconNode } from '../icons.js'
 import { clear, el, on } from '../dom.js'
 import { isCommand } from '../bridge.js'
 import {
-  attachmentsOf, draggedFrom, isOpenPaper, isPinned, isSelected, papersByFolder, shelfPapers, store, tagByID,
+  attachmentsOf, draggedFrom, isOpenPaper, isPinned, isSelected, papersByFolder, planByID, shelfPapers, store, tagByID,
   type Paper, type PickMode,
 } from '../state.js'
+import { setView, shelfKey } from '../plans.js'
 import { parseSubtitle, subtitleLine, type SubtitleField } from '../../shared/subtitle.js'
 import type { TagColor } from '../../shared/model.js'
 import { needsReview } from '../../shared/documentKind.js'
@@ -199,10 +200,23 @@ export function buildPaperList(actions: PaperListActions): { node: HTMLElement; 
     // to say — records late, PDFs left, files refused — stands as rows at
     // the top of the list, where it never fights the name for room.
     const title = shelfTitle()
-    if (title !== shownHeader) {
-      shownHeader = title
+    const headerKey = `${title}|${store.shelf.kind}`
+    if (headerKey !== shownHeader) {
+      shownHeader = headerKey
       clear(header)
       header.append(el('span', { class: 'panel-title', text: title }))
+      // The way to the shelf's table — and, from a plan's list, back to its table or calendar.
+      if (shelfKey(store.shelf) !== null) {
+        const views: ['list' | 'table' | 'calendar', string][] = [['list', L('목록', 'List')], ['table', L('표', 'Table')]]
+        if (store.shelf.kind === 'plan') views.push(['calendar', L('달력', 'Calendar')])
+        const seg = el('span', { class: 'pb-seg list-views', role: 'group', 'aria-label': L('보기', 'View') })
+        for (const [view, label] of views) {
+          const button = el('button', { 'aria-pressed': String(view === 'list'), text: label })
+          on(button, 'click', () => { if (view !== 'list') setView(view) })
+          seg.append(button)
+        }
+        header.append(el('span', { class: 'pb-spacer' }), seg)
+      }
     }
     // Parsed once for the list, not once per row: the setting is a string
     // taken apart, and sixty rows took it apart sixty times.
@@ -683,6 +697,8 @@ function shelfTitle(): string {
     case 'tag':
       return store.tags.find((t) => t.id === (store.shelf as { id: string }).id)?.name ?? L('태그', 'Tag')
     case 'author': return (store.shelf as { name: string }).name
+    case 'plan': return planByID((store.shelf as { id: string }).id)?.plan.name ?? L('계획', 'Plan')
+    case 'week': return L('이번 주', 'This Week')
   }
 }
 

@@ -3,6 +3,8 @@ import type { Mark } from './marks.js'
 import type { Glyph, Rule } from './mathReader/glyph.js'
 import type { PDFLock, ByteTrouble } from './pdfLock.js'
 import type { Settings } from './appSettings.js'
+import type { PaperLink, ReadingPlan } from './readingPlan.js'
+import type { PlanEdit } from './planEdit.js'
 
 export type { Settings } from './appSettings.js'
 
@@ -231,6 +233,31 @@ export interface Requests {
   'notes:comeBack': { args: void; result: { moved: number; kept: number; notesFolder: NotesFolderDTO } | null }
   /** For a probe: builds now and waits. */
   'semantic:build': { args: void; result: { status: SemanticStatusDTO; stats: unknown; unread: string[] } }
+  /** Every reading plan in every open folder (`main/plans.ts`). */
+  'plans:load': { args: void; result: PlanDTO[] }
+  /** A new plan, in the folder being looked at (`root`) or the first, holding these papers in this order. */
+  'plans:create': { args: { name: string; root?: string; papers?: string[] }; result: PlanDTO | { error: string } }
+  /** One change, made to the plan's file as it is on disk now. */
+  'plans:edit': { args: { id: string; edit: PlanEdit }; result: PlanDTO | { error: string } }
+  /** The plan's file to the trash. The papers stay. */
+  'plans:delete': { args: { id: string }; result: boolean }
+  /** Days set (`YYYY-MM-DD`) or cleared (null): each paper's `plan.json`. Answers with what was written. */
+  'schedule:set': { args: { changes: { id: string; date: string | null }[] }; result: { id: string; date: string | null }[] }
+  /** An address, or files copied in beside the PDF, kept beside a paper. */
+  'links:add': {
+    args: { id: string; url?: string; files?: string[] }
+    result: { links: PaperLink[] } | { error: 'notAnAddress' | 'pdf' | 'missing' | 'failed' }
+  }
+  /** A material renamed (`title` null: its own name again) or taken off (`remove`). */
+  'links:edit': { args: { id: string; linkID: string; title?: string | null; remove?: boolean }; result: PaperLink[] }
+  /** An address in the browser, a file with the desktop's app for it. */
+  'links:open': { args: { id: string; linkID: string }; result: boolean }
+}
+
+/** One reading plan and the library folder its file is in. */
+export interface PlanDTO {
+  root: string
+  plan: ReadingPlan
 }
 
 export interface MeaningHitDTO {
@@ -298,6 +325,8 @@ export type RequestResult<K extends RequestName> = Requests[K]['result']
  */
 export interface Events {
   'library:changed': void
+  /** A plan's file changed somewhere else — another window, another machine. */
+  'plans:changed': void
   /** «Add n PDFs» under way: how many are left, every twenty-five. */
   'library:adopting': { remaining: number }
   'library:opened': LibrarySnapshot | { error: string }
@@ -343,6 +372,10 @@ export interface PaperRowDTO {
   exists: boolean
   /** The folder it came from. */
   root?: string
+  /** The day it is to be read (`plan.json`). */
+  schedule?: string
+  /** What is kept beside it (`links.json`). */
+  links?: PaperLink[]
 }
 
 export interface LibrarySnapshot {
@@ -379,6 +412,8 @@ export interface LibrarySnapshot {
    * its own and a record that is broken has to be found.
    */
   unreadable?: string[]
+  /** Every reading plan in every folder. */
+  plans?: PlanDTO[]
   /** The slip-box, read with the folders: every note, and where the loose ones live. */
   notes?: NoteDTO[]
   notesFolder?: NotesFolderDTO
