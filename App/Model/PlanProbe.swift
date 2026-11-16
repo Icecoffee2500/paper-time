@@ -26,6 +26,7 @@ enum PlanProbe {
         guard Boot.isSet("PAPERTIME_LIBRARY") else { return }
         func say(_ text: String) { FileHandle.standardError.write(Data((text + "\n").utf8)) }
 
+        if Boot.isSet("PAPERTIME_PLAN_CHECK") { await check(model, say: say) }
         if Boot.isSet("PAPERTIME_PLAN_SAMPLE") { await sample(model, say: say) }
         switch Boot.setting("PAPERTIME_SCOPE") {
         case "plan": if let id = model.plans.first?.id { model.scope = .plan(id) }
@@ -92,6 +93,90 @@ enum PlanProbe {
             say("plan sample: second plan \(second) with \(rest.count) papers")
         }
         say("plan sample: \(model.plans.count) plans, first with \(main.count) papers, today \(today.text)")
+    }
+
+    /// Every edit, and then the files read back: what the board did is what
+    /// the folder holds.
+    private static func check(_ model: LibraryModel, say: (String) -> Void) async {
+        var failures = 0
+        func expect(_ ok: Bool, _ what: String) {
+            if !ok { failures += 1 }
+            say("plan check: \(ok ? "ok  " : "FAIL") \(what)")
+        }
+        let papers = model.papers.filter { $0.meta.parentID == nil }.prefix(6).map(\.id)
+        guard papers.count == 6 else { return say("plan check: need six papers") }
+        for plan in model.plans { await model.deletePlan(plan.id) }
+        for paper in papers { await model.setReadingStatus(.unread, for: paper) }
+        guard let id = await model.createPlan(named: "검사 계획", papers: Array(papers.prefix(4))) else {
+            return expect(false, "create")
+        }
+        expect(model.plan(id)?.entries.count == 4, "created with four papers")
+        await model.addToPlan(id, papers: [papers[3], papers[4], papers[5]])
+        expect(model.plan(id)?.entries.count == 6, "adding skips the one it has")
+        await model.editPlan(id) { plan in
+            let a = plan.addSection(named: "바탕")
+            plan.move([papers[2], papers[0]], toEndOf: a)
+        }
+        let groups = model.plan(id)?.groups ?? []
+        expect(groups.count == 2 && groups[1].papers == [papers[2], papers[0]], "a section with two papers, in the order moved")
+        await model.editPlan(id) { $0.move([papers[5]], before: papers[2]) }
+        expect(model.plan(id)?.groups.last?.papers == [papers[5], papers[2], papers[0]], "moved before a paper takes its section")
+
+        let today = model.today
+        await model.setDays([papers[0]: today.adding(days: -2), papers[1]: today, papers[2]: nil])
+        expect(model.paper(papers[0])?.schedule == today.adding(days: -2), "a day given")
+        expect(model.isBehind(model.paper(papers[0])!), "two days ago and unread is behind")
+        await model.setReadingStatus(.read, for: papers[0])
+        expect(!model.isBehind(model.paper(papers[0])!), "read is never behind")
+        await model.setReadingStatus(.unread, for: papers[0])
+        let spread = model.spread(id, weekdays: [0, 2, 4], perDay: 2, from: today)
+        expect(spread.count == 6 && spread.allSatisfy { [0, 2, 4].contains($0.1.weekday) }, "spread: six papers on Mon/Wed/Fri, two a day")
+        await model.setDays(Dictionary(spread.map { ($0.0, Optional($0.1)) }, uniquingKeysWith: { a, _ in a }))
+        let pushed = model.pushedAWeek(id)
+        await model.setDays(pushed)
+        expect(spread.allSatisfy { model.paper($0.0)?.schedule == $0.1.adding(days: 7) }, "pushed a week")
+        let undo = await model.setDays([papers[3]: nil])
+        expect(model.paper(papers[3])?.schedule == nil, "a day cleared")
+        await model.setDays(undo)
+        expect(model.paper(papers[3])?.schedule != nil, "the clear undone")
+
+        let added = await model.addLink("github.com/sfujim/TD3_BC", to: papers[1])
+        expect(added == .added(.code), "a GitHub address is code")
+        expect(await model.addLink("not a link", to: papers[1]) == .notAnAddress, "words are not an address")
+        let scratch = FileManager.default.temporaryDirectory.appending(path: "검사 발표자료.pptx")
+        try? Data("slides".utf8).write(to: scratch)
+        let copied = await model.attachFiles([scratch], to: papers[1])
+        expect(copied == 1, "a file copied beside the PDF")
+        let links = model.paper(papers[1])?.links ?? []
+        expect(links.count == 2 && links[1].kind == .slides && links[1].file != nil, "the file is slides, kept by its path")
+        if let link = links.last, let paper = model.paper(papers[1]), let url = model.materialURL(link, of: paper) {
+            expect(FileManager.default.fileExists(atPath: url.path(percentEncoded: false)), "the copy is in the folder: \(link.file ?? "")")
+        }
+        await model.renameLink(links[0].id, of: papers[1], to: "TD3+BC 코드")
+        expect(model.paper(papers[1])?.links.first?.displayTitle == "TD3+BC 코드", "renamed")
+        await model.removeLink(links[0].id, from: papers[1])
+        expect(model.paper(papers[1])?.links.count == 1, "removed")
+
+        // Read it all back from disk, as another launch would.
+        let memory = (model.plan(id), papers.map { model.paper($0)?.schedule }, model.paper(papers[1])?.links)
+        await model.refresh()
+        expect(model.plan(id) == memory.0, "the plan reads back the same")
+        expect(papers.map { model.paper($0)?.schedule } == memory.1, "the days read back the same")
+        expect(model.paper(papers[1])?.links == memory.2, "the materials read back the same")
+
+        // Another device edits the plan file: heard, and read.
+        if let root = model.planRoots[id] {
+            let url = LibraryLayout.planURL(id: id, inLibrary: root)
+            if var plan = try? FileOperations.decode(ReadingPlan.self, at: url) {
+                plan.name = "다른 기기에서 바꾼 이름"
+                try? FileOperations.encodeAndWrite(plan, to: url)
+                await model.folderDidChange(paths: [url.path(percentEncoded: false)])
+                expect(model.plan(id)?.name == "다른 기기에서 바꾼 이름", "a plan changed elsewhere is read again")
+            }
+        }
+        await model.deletePlan(id)
+        expect(model.plan(id) == nil, "deleted")
+        say("plan check: \(failures == 0 ? "all passed" : "\(failures) failed")")
     }
 
     private static func report(_ model: LibraryModel, say: (String) -> Void) {
