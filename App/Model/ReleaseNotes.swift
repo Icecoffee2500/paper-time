@@ -266,14 +266,50 @@ enum ReleaseNotes {
                     )
                 ),
                 Entry(
-                    Text2("모든 선반을 표로", "Every shelf as a table"),
+                    Text2("모든 선반이 표예요", "Every shelf is a table"),
                     Text2(
-                        "목록 위의 [목록 | 표]로 바꿔요. 열 머리를 누르면 정렬되고, 오른쪽 클릭으로 보일 열을 골라요.",
-                        "Switch with List | Table above the list. Click a column to sort; right-click to choose the columns."
+                        "저자·해·학회가 열로 줄 맞춰 서고, 열 머리를 누르면 정렬돼요. 계획은 섹션 안에서 정렬되고, 한 번 더 누르면 계획 순서로 돌아와요. 표가 좁으면 제목은 그대로 두고 나머지 열을 옆으로 넘겨 봐요.",
+                        "Authors, year and venue stand in their own columns; click a column to sort. A plan sorts within its sections, and a third click brings back its order. In a narrow table the title stays put and the other columns slide sideways."
+                    )
+                ),
+                Entry(
+                    Text2("실린 곳으로 서지를", "Filed where it was published"),
+                    Text2(
+                        "arXiv에 올라온 논문이 학회나 저널에 실렸으면 그 기록으로 가져와요. NeurIPS·ICLR·ICML처럼 DOI가 없는 학회는 PDF 첫 쪽의 게재 문구로 알아봐요.",
+                        "A paper on arXiv that has since appeared at a conference or in a journal is filed under that venue. Venues with no DOI, like NeurIPS, ICLR and ICML, are read from the camera-ready line on the first page."
+                    )
+                ),
+                Entry(
+                    Text2("서지 모두 다시 가져오기", "Refresh All Metadata"),
+                    Text2(
+                        "라이브러리 메뉴에서 이미 있는 서지를 새로 가져와요. 직접 고친 기록과 인용 키는 그대로예요. arXiv로 남은 논문은 앱이 가끔 저절로 다시 확인해요.",
+                        "Look every record up again from the Library menu. What you edited, and every citation key, stays as it is. Papers still filed as arXiv are checked again on their own from time to time."
+                    )
+                ),
+                Entry(
+                    Text2("보충 자료는 자료로", "Supplements in materials"),
+                    Text2(
+                        "보충 자료 PDF는 어느 논문 것인지 확실하면 목록 대신 그 논문의 자료로 들어가요. 자료에 PDF를 끌어다 놓아도 돼요.",
+                        "A supplementary PDF goes into its paper’s materials, not the list, when it’s clear which paper it belongs to. You can also drop a PDF on the materials."
                     )
                 ),
             ],
-            fixed: []
+            fixed: [
+                Entry(
+                    Text2("창이 화면을 넘던 것", "A window wider than the screen"),
+                    Text2(
+                        "표 옆에서 인스펙터를 열면 창이 화면보다 넓어지고, 화면에 맞추다 앱이 끝날 수 있었어요. 이제 인스펙터 자리는 표에서 나오고 논문은 읽을 폭을 지켜요.",
+                        "Opening the inspector beside the table could widen the window past the screen, and fitting it back could quit the app. Now the inspector takes its room from the table, and the paper keeps a width you can read."
+                    )
+                ),
+                Entry(
+                    Text2("ECCV와 AAAI의 서지", "ECCV and AAAI records"),
+                    Text2(
+                        "ECCV 논문이 «Lecture Notes in Computer Science»로 나오던 것을 학회 이름으로, AAAI 논문을 학회 논문으로 바로잡았어요.",
+                        "ECCV papers now name their proceedings instead of Lecture Notes in Computer Science, and AAAI papers are filed as conference papers."
+                    )
+                ),
+            ]
         ),
         Release(
             version: "1.0.0",
