@@ -149,7 +149,7 @@ async function copyStatic() {
   await cp(path.join(root, 'src/renderer/demos.html'), path.join(out, 'renderer/demos.html'))
   await cp(path.join(root, 'src/renderer/demoHost.css'), path.join(out, 'renderer/demoHost.css'))
   await mkdir(path.join(out, 'renderer/demos'), { recursive: true })
-  for (const file of ['demos.js', 'style.css']) await cp(path.join(root, '../Website', file), path.join(out, 'renderer/demos', file))
+  for (const file of ['demos.js', 'style.css', 'plans-demo.js', 'plans-demo.css']) await cp(path.join(root, '../Website', file), path.join(out, 'renderer/demos', file))
   const fonts = path.join(root, 'assets/fonts')
   if (existsSync(fonts)) await cp(fonts, path.join(out, 'renderer/fonts'), { recursive: true })
   // Latex Suite's snippets are inside the renderer bundle (esbuild's JSON

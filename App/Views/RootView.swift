@@ -70,6 +70,7 @@ struct RootView: View {
                 #endif
             }
             FeedbackProbe.runIfAsked(app: app)
+            PlansDemoProbe.runIfAsked()
             WindowProbe.runIfAsked(app: app)
             #endif
         }

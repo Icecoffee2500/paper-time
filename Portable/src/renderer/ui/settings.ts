@@ -30,7 +30,7 @@ import { PAGE_TINTS, tintColorFrom, tintLabel } from '../../shared/pageTint.js'
 import { call, platform } from '../bridge.js'
 import { acceleratorFor, acceleratorFromEvent, assignShortcut, displayAccelerator, groupTitle, keyFor, matchingShortcuts, shortcutOverrides, type ShortcutGroup } from '../../shared/shortcuts.js'
 import { meaningStatus, onMeaningStatus } from '../meaningSearch.js'
-import { contributors, drawLog, showAllFeatures, showWhatsNew, showcase, unnamedReports } from './releaseNotes.js'
+import { contributors, drawLog, plansDemoFrame, showAllFeatures, showWhatsNew, showcase, unnamedReports } from './releaseNotes.js'
 import { TOGETHER_URL } from '../../shared/feedbackName.js'
 import { updateState, watchUpdates } from './updateNotice.js'
 import { SUBTITLE_FIELDS, encodeSubtitle, parseSubtitle, subtitleName, toggledSubtitle } from '../../shared/subtitle.js'
@@ -541,6 +541,14 @@ export function showSettings(actions: SettingsActions, section?: SettingsSection
     }
     body.append(el('div', { class: 'rn-about-head' }, [el('h3', { class: 'rn-about-name', text: 'Paper Time' }), versionLine]))
     body.append(aboutShowcase.node)
+    // The reading plans, as the page and the Mac's About show them: the
+    // working window out of `Website/plans-demo.js`, in its own frame.
+    body.append(el('div', { class: 'set-section', text: L('읽기 계획', 'Reading Plans') }))
+    body.append(note(L(
+      '한 계열의 논문을 모아 차례와 날짜를 정하고, 발표 자료와 코드를 논문 옆에 붙여 둬요. 아래 창을 직접 누르고 끌어 봐도 돼요.',
+      'Gather a line of papers, give them an order and days to read them, and keep the slides and the code beside each one. The window below works — click it, drag in it.',
+    )))
+    body.append(plansDemoFrame())
     // Drawn the way the page's acknowledgments draw them: each name in the
     // highlighter, first sender first, the blank for whoever is next at the end.
     body.append(el('div', { class: 'set-section', text: L('함께 만드는 중', 'Built Together') }))
@@ -645,6 +653,9 @@ export function showSettings(actions: SettingsActions, section?: SettingsSection
     top.style.display = page === 'shortcuts' ? '' : 'none'
     if (page === 'shortcuts') top.append(keySearch)
     clear(body)
+    // About is a working window with words under it, not a form, and gets
+    // the room the Mac's About gets.
+    sheet.classList.toggle('set-about', page === 'about')
     PAGES.find((one) => one.id === page)?.draw()
   }
 
