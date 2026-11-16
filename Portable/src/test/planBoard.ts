@@ -34,8 +34,8 @@ export async function planBoardSuite(test: Test, suite: (name: string) => void) 
     } finally {
       setKorean(false)
     }
-    assert.equal(dateLabel('2026-11-12', 'reading', TODAY).text, '11/12 · Overdue')
-    assert.equal(dateLabel('2026-11-20', 'unread', TODAY).text, 'Fri 11/20')
+    assert.equal(dateLabel('2026-11-12', 'reading', TODAY).text, 'Nov 12 · Overdue')
+    assert.equal(dateLabel('2026-11-20', 'unread', TODAY).text, 'Fri Nov 20')
   })
 
   await test('weeks and days are named as the demo names them', () => {
@@ -55,9 +55,9 @@ export async function planBoardSuite(test: Test, suite: (name: string) => void) 
     }
     assert.equal(dayHeading('2026-11-18', TODAY), 'Wednesday · Nov 18')
     // The English the shared demo and the Mac use.
-    assert.equal(weekName('2026-11-16', TODAY), 'This week · 11/16–11/22')
+    assert.equal(weekName('2026-11-16', TODAY), 'This week · Nov 16–Nov 22')
     assert.equal(spanText([]), 'No dates yet')
-    assert.equal(dayHeading('2026-11-16', TODAY), 'Today · Monday, November 16')
+    assert.equal(dayHeading('2026-11-16', TODAY), 'Today · Monday, Nov 16')
   })
 
   await test('grouped by week: weeks in order, the undated last, days in order inside', () => {

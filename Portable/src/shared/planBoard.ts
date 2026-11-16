@@ -15,15 +15,14 @@ const KO_WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일']
 const EN_WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const EN_WEEKDAYS_LONG = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 const EN_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-const EN_MONTHS_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
 /** A weekday's short name; 0 is Monday. */
 export const weekdayName = (weekday: number): string => (prefersKorean() ? KO_WEEKDAYS : EN_WEEKDAYS)[weekday] ?? ''
 
-/** `11.20` / `11/20`. */
+/** `11.20` / `Nov 20` — as the Mac and the demo write it. */
 export function monthDay(day: string): string {
   const [, month, date] = dayParts(day)
-  return prefersKorean() ? `${month}.${date}` : `${month}/${date}`
+  return prefersKorean() ? `${month}.${date}` : `${EN_MONTHS[month - 1]} ${date}`
 }
 
 /** `11월 20일` / `Nov 20`. */
@@ -32,13 +31,13 @@ export function longDay(day: string): string {
   return prefersKorean() ? `${month}월 ${date}일` : `${EN_MONTHS[month - 1]} ${date}`
 }
 
-/** `11월 20일 금요일` / `Friday, November 20`. */
+/** `11월 20일 금요일` / `Friday, Nov 20`. */
 export function fullDay(day: string): string {
   const [, month, date] = dayParts(day)
   const weekday = weekdayOf(day)
   return prefersKorean()
     ? `${month}월 ${date}일 ${KO_WEEKDAYS[weekday]}요일`
-    : `${EN_WEEKDAYS_LONG[weekday]}, ${EN_MONTHS_LONG[month - 1]} ${date}`
+    : `${EN_WEEKDAYS_LONG[weekday]}, ${EN_MONTHS[month - 1]} ${date}`
 }
 
 /** A day that has gone by while the paper stayed unread: behind, never «overdue» in red. */
