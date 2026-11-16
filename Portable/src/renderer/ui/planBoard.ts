@@ -16,20 +16,23 @@ import {
   notesForPaper, paper, planByID, planPapers, plansOf, shelfPapers, store, tagByID, type Paper,
 } from '../state.js'
 import { L, prefersKorean } from '../../shared/lang.js'
-import { addDays, materialHost, materialTitle as materialTitleOf, mondayOf, planGroups, type PaperLink } from '../../shared/readingPlan.js'
+import { addDays, materialHost, materialTitle as materialTitleOf, mondayOf, planGroups, venueName, type PaperLink } from '../../shared/readingPlan.js'
 import {
-  calendarDays, calendarHome, calendarLabel, dateLabel, dayHeading, groupByStatus, groupByWeek, isBehind, kindName,
-  kindTone, longDay, planStats, progress, spanText, weekShelf, type Status,
+  authorsText, calendarDays, calendarHome, calendarLabel, dateLabel, dayHeading, groupByStatus, groupByWeek, isBehind, kindName,
+  kindTone, longDay, planGuidance, planStats, progress, spanText, weekShelf, type Status,
 } from '../../shared/planBoard.js'
 import { carriesPapers, draggedPapers, writeDraggedPapers } from '../../shared/split.js'
 import { showMenu, showMenuAt, type MenuEntry } from './menu.js'
 import { tagColor } from './paperList.js'
 import { basename } from './sidebar.js'
 import {
-  ALL_COLUMNS, addFromAddresses, addSectionTo, addToPlan, boardContext, boardPaper, cycleStatus, editPlan, openFromBoard,
+  ALL_COLUMNS, addFromAddresses, addPapersTo, addSectionTo, addToPlan, boardContext, boardPaper, cycleStatus, editPlan, openFromBoard,
   ownAddress, prefs, pullBehind, pushWeek, removeFromPlan, renameSectionOf, savePrefs, selectInBoard, setDay, setView,
   viewOf, type ColumnID, type SortKey,
 } from '../plans.js'
+
+/** The plans whose «When will you read them?» strip was put away, this session. */
+const quietGuides = new Set<string>()
 import { closePlanPop, openDatePop, openSpreadPop } from './planPopovers.js'
 
 /** The kind of row a drag on the board carries: plan rows being put in order, or a pill going to another day. */
@@ -107,14 +110,12 @@ interface Column {
   cell: (entry: Paper) => Node
 }
 
-function who(entry: Paper): string {
-  const authors = entry.meta.csl.author ?? []
-  const first = authors[0]
-  const name = first ? (first.family || first.literal || first.given || '') : ''
-  const year = entry.meta.year
-  const people = name ? (authors.length > 1 ? L(`${name} 외`, `${name} et al.`) : name) : ''
-  return [people, year ? String(year) : ''].filter(Boolean).join(' · ')
-}
+/** «Kumar 외», for the authors column. */
+const authorsOf = (entry: Paper): string => authorsText(entry.meta.csl.author)
+
+/** «NeurIPS», for the venue column — the record's short name, a known one, or the title. */
+const venueOf = (entry: Paper): string =>
+  venueName(entry.meta.csl['container-title'], entry.meta.csl['container-title-short'] as string | undefined) ?? ''
 
 function dateChip(entry: Paper): HTMLElement {
   const label = dateLabel(entry.schedule, statusOf(entry), store.today)
@@ -157,8 +158,9 @@ function planCell(entry: Paper): HTMLElement {
 const text = (value: string, extra = '') => el('div', { class: `pb-text ${extra}`.trim(), text: value || '—', title: value })
 
 const COLUMNS: Record<ColumnID, Column> = {
-  who: { id: 'who', label: () => L('저자 · 해', 'Author · Year'), width: 132, sort: 'who', cell: (entry) => text(who(entry), 'secondary') },
-  venue: { id: 'venue', label: () => L('학회', 'Venue'), width: 100, sort: 'venue', cell: (entry) => text(entry.meta.venue ?? '', 'secondary') },
+  authors: { id: 'authors', label: () => L('저자', 'Authors'), width: 116, sort: 'authors', cell: (entry) => text(authorsOf(entry), 'secondary') },
+  year: { id: 'year', label: () => L('해', 'Year'), width: 44, sort: 'year', cell: (entry) => text(entry.meta.year ? String(entry.meta.year) : '', 'secondary') },
+  venue: { id: 'venue', label: () => L('학회', 'Venue'), width: 92, sort: 'venue', cell: (entry) => text(venueOf(entry), 'secondary') },
   date: { id: 'date', label: () => L('읽을 날', 'Read On'), width: 100, sort: 'date', cell: dateChip },
   plan: { id: 'plan', label: () => L('계획', 'Plan'), width: 132, cell: planCell },
   progress: { id: 'progress', label: () => L('진행', 'Progress'), width: 88, sort: 'progress', cell: progressCell },
@@ -179,8 +181,18 @@ function columnsNow(): Column[] {
   return prefs().columns[boardContext()].map((id) => COLUMNS[id]).filter(Boolean)
 }
 
+/** The title never narrower than this: past it, the table scrolls sideways rather than squeezing the title to nothing. */
+const TITLE_FLOOR = 200
+
 function template(columns: Column[]): string {
-  return `22px minmax(0, 1fr) ${columns.map((one) => `${one.width}px`).join(' ')}`.trim()
+  return `22px minmax(${TITLE_FLOOR}px, 1fr) ${columns.map((one) => `${one.width}px`).join(' ')}`.trim()
+}
+
+/** A table as wide as its columns need, so the rows' backgrounds reach the end when it scrolls. */
+function tableNode(columns: Column[], sortable: boolean, head: (columns: Column[], sortable: boolean) => HTMLElement): HTMLElement {
+  const gaps = 10 * (columns.length + 1)
+  const width = 16 + 24 + 22 + TITLE_FLOOR + columns.reduce((sum, one) => sum + one.width, 0) + gaps
+  return el('div', { class: 'pb-table', style: `min-width:${width}px` }, [head(columns, sortable)])
 }
 
 function sortedForTable(papers: Paper[]): Paper[] {
@@ -189,9 +201,10 @@ function sortedForTable(papers: Paper[]): Paper[] {
   const value = (entry: Paper): string | number => {
     switch (key) {
       case 'title': return entry.meta.displayTitle.toLowerCase()
-      case 'who': return `${who(entry).toLowerCase()}`
+      case 'authors': return (entry.meta.csl.author?.[0]?.family ?? entry.meta.csl.author?.[0]?.literal ?? '￿').toLowerCase()
+      case 'year': return entry.meta.year ?? 0
       case 'date': return entry.schedule ?? '9999'
-      case 'venue': return (entry.meta.venue ?? '￿').toLowerCase()
+      case 'venue': return (venueOf(entry) || '￿').toLowerCase()
       case 'added': return entry.meta.addedAt.getTime()
       case 'opened': return entry.state.lastOpenedAt?.getTime() ?? 0
       case 'rating': return entry.state.rating ?? 0
@@ -336,19 +349,85 @@ export function buildPlanBoard(): PlanBoard {
     const stats = planStats(board, store.today)
     const sub = `${spanText(papers.map((entry) => entry.schedule ?? '').filter(Boolean))} · ${L(`${papers.length}편 중 ${stats.read}편 읽음`, `${stats.read} of ${papers.length} read`)}`
     const header = el('div', { class: 'pb-head' }, [
-      head('point.topleft.down.to.point.bottomright.curvepath', found.plan.name, sub, [
+      head('point.topleft.down.to.point.bottomright.curvepath', found.plan.name, papers.length ? sub : L('아직 논문이 없어요', 'No papers yet'), [
+        cap(L('논문 더하기…', 'Add Papers…'), 'add-papers', 'plus', 'pb-add-papers'),
         cap(L('고르게 나누기…', 'Spread Out…'), 'spread', 'calendar', 'pb-spread'),
         cap(L('한 주 미루기', 'Push a Week'), 'push', 'arrow.right', 'pb-push'),
         viewSwitch([['table', L('표', 'Table'), 'tablecells'], ['calendar', L('달력', 'Calendar'), 'calendar']]),
       ]),
     ])
+    const guidance = planGuidance(board)
+    if (guidance === 'empty') {
+      node.append(header, emptyPlan(id))
+      return
+    }
     const chips = el('div', { class: 'pb-stats' }, [el('span', { class: 'pb-stat', 'data-tone': 'blue', text: L(`이번 주 ${stats.thisWeek}편`, `This week ${stats.thisWeek}`) })])
     if (stats.behind) chips.append(el('span', { class: 'pb-stat', 'data-tone': 'orange', text: L(`밀린 것 ${stats.behind}편`, `Overdue ${stats.behind}`) }))
-    if (stats.undated) chips.append(el('span', { class: 'pb-stat', text: L(`날짜 없음 ${stats.undated}편`, `No date ${stats.undated}`) }))
+    // The papers with no day are a place to go: the calendar, where they wait in «No Date».
+    if (stats.undated) {
+      chips.append(el('button', {
+        class: 'pb-stat pb-stat-button', 'data-act': 'view', 'data-v': 'calendar',
+        title: L('달력에서 날짜 정하기', 'Give them days on the calendar'),
+        text: L(`날짜 없음 ${stats.undated}편`, `No date ${stats.undated}`),
+      }))
+    }
     header.append(chips, path(found.plan))
     node.append(header)
-    if (viewOf() === 'calendar') drawCalendar(id, papers)
-    else drawPlanTable(id, papers)
+    if (viewOf() === 'calendar') {
+      drawCalendar(id, papers)
+      return
+    }
+    if (guidance === 'noDays' && !quietGuides.has(id)) node.append(noDaysStrip())
+    drawPlanTable(id, papers)
+  }
+
+  /**
+   * A plan with nothing in it says what goes in and how — and does it, right
+   * there: the picker, an address, or a drag from the list.
+   */
+  function emptyPlan(id: string): HTMLElement {
+    const field = el('input', {
+      class: 'pb-add-input',
+      type: 'text',
+      placeholder: L('arXiv 주소나 DOI를 붙여넣어 논문을 더해요', 'Paste an arXiv link or a DOI to add a paper'),
+      autocomplete: 'off',
+      spellcheck: 'false',
+    }) as HTMLInputElement
+    on(field, 'keydown', (event: KeyboardEvent) => {
+      if (event.key !== 'Enter' || !field.value.trim()) return
+      event.preventDefault()
+      const value = field.value
+      field.disabled = true
+      void addFromAddresses(id, value).then((added) => {
+        field.disabled = false
+        if (added) field.value = ''
+      })
+    })
+    const choose = el('button', { class: 'pb-cap strong', 'data-act': 'add-papers' }, [glyph('plus'), L('논문 고르기…', 'Choose Papers…')])
+    return el('div', { class: 'pb-scroll' }, [
+      el('div', { class: 'pb-empty-plan', 'data-drop-plan': id }, [
+        el('span', { class: 'pb-empty-icon' }, [glyph('tray.and.arrow.down')]),
+        el('h3', { text: L('이 계획에 읽을 논문을 모아요', 'Gather the papers for this plan') }),
+        el('p', { text: L('라이브러리에서 고르거나, arXiv 주소·DOI를 붙여넣거나, 목록에서 끌어와요.', 'Pick them from your library, paste an arXiv link or a DOI, or drag them in from the list.') }),
+        choose,
+        el('label', { class: 'pb-addrow pb-empty-add' }, [glyph('link'), field]),
+      ]),
+    ])
+  }
+
+  /** A plan of papers with no day at all asks when they will be read. */
+  function noDaysStrip(): HTMLElement {
+    const dismiss = el('button', { class: 'pb-icon pb-guide-x', 'data-act': 'guide-dismiss', 'aria-label': L('닫기', 'Close'), title: L('닫기', 'Close') }, [glyph('xmark')])
+    return el('div', { class: 'pb-guide', role: 'note' }, [
+      el('span', { class: 'pb-guide-icon' }, [glyph('calendar')]),
+      el('div', { class: 'pb-guide-text' }, [
+        el('strong', { text: L('언제 읽을지 정해 볼까요?', 'When will you read them?') }),
+        el('span', { text: L('요일만 고르면 차례대로 날짜를 정해요.', 'Pick the weekdays and each paper gets a day, in order.') }),
+      ]),
+      cap(L('고르게 나누기…', 'Spread Out…'), 'spread', 'calendar'),
+      cap(L('달력에서 정하기', 'Use the Calendar'), 'view-calendar'),
+      dismiss,
+    ])
   }
 
   function path(plan: NonNullable<ReturnType<typeof planByID>>['plan']): HTMLElement {
@@ -383,7 +462,7 @@ export function buildPlanBoard(): PlanBoard {
     }
     viewbar.append(chips, el('span', { class: 'pb-spacer' }), cap(L('섹션', 'Section'), 'add-section', 'plus'))
     node.append(viewbar)
-    const table = el('div', { class: 'pb-table' }, [thead(columns, false)])
+    const table = tableNode(columns, false, thead)
     const byID = new Map(papers.map((entry) => [entry.id, entry]))
     if (group === 'section') {
       for (const one of planGroups(found.plan)) {
@@ -425,7 +504,6 @@ export function buildPlanBoard(): PlanBoard {
     table.append(el('label', { class: 'pb-addrow', 'data-drop-plan': id }, [
       glyph('plus'), field, el('span', { class: 'pb-hint', text: L('목록에서 끌어와도 돼요', 'Or drag one in from the list') }),
     ]))
-    if (papers.length === 0) table.append(el('p', { class: 'pb-note', text: L('논문을 끌어다 놓거나 주소를 붙여넣어 계획을 채워요.', 'Drag papers here, or paste addresses, to fill the plan.') }))
     node.append(el('div', { class: 'pb-scroll' }, [table]))
   }
 
@@ -491,7 +569,7 @@ export function buildPlanBoard(): PlanBoard {
     const sub = `${longDay(monday)} – ${longDay(addDays(monday, 6))} · ${L(`계획 ${planCount}개에서 ${all.length}편`, `${all.length} paper${all.length === 1 ? '' : 's'} from ${planCount} plan${planCount === 1 ? '' : 's'}`)}`
     node.append(el('div', { class: 'pb-head' }, [head('calendar', L('이번 주', 'This Week'), sub)]))
     const columns = columnsNow()
-    const table = el('div', { class: 'pb-table' }, [thead(columns, false)])
+    const table = tableNode(columns, false, thead)
     const byID = new Map(papers.map((entry) => [entry.id, entry]))
     if (shelf.behind.length) {
       const items = shelf.behind.map((one) => byID.get(one)!)
@@ -519,7 +597,7 @@ export function buildPlanBoard(): PlanBoard {
       head(shelfIcon(), shelfName(), sub, [viewSwitch([['list', L('목록', 'List'), null], ['table', L('표', 'Table'), 'tablecells']])]),
     ]))
     const columns = columnsNow()
-    const table = el('div', { class: 'pb-table' }, [thead(columns, true)])
+    const table = tableNode(columns, true, thead)
     for (const entry of papers) table.append(row(entry, columns))
     if (papers.length === 0) table.append(el('div', { class: 'pb-empty', text: L('이 선반은 비어 있어요', 'This shelf is empty') }))
     node.append(el('div', { class: 'pb-scroll' }, [table]))
@@ -570,6 +648,19 @@ export function buildPlanBoard(): PlanBoard {
       }
       case 'spread':
         if (shelf.kind === 'plan') openSpreadPop(target, shelf.id)
+        break
+      case 'add-papers':
+        if (shelf.kind === 'plan') addPapersTo(shelf.id)
+        break
+      case 'view-calendar':
+        closePlanPop()
+        setView('calendar')
+        break
+      case 'guide-dismiss':
+        if (shelf.kind === 'plan') {
+          quietGuides.add(shelf.id)
+          update()
+        }
         break
       case 'push':
         if (shelf.kind === 'plan') void pushWeek(shelf.id)
@@ -691,7 +782,7 @@ export function buildPlanBoard(): PlanBoard {
       return null
     }
     if (!types.includes(ROWS_TYPE) && carriesPapers(event.dataTransfer)) {
-      const spot = target.closest<HTMLElement>('.pb-table, .pb-addrow')
+      const spot = target.closest<HTMLElement>('.pb-table, .pb-addrow, .pb-empty-plan')
       return spot ? { kind: 'plan', node: spot as HTMLElement } : null
     }
     return null

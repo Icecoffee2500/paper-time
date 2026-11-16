@@ -27,18 +27,20 @@ import { addDays, spreadDays, todayDay, type PaperLink, type PlanEntry, type Pla
 import type { PlanEdit } from '../shared/planEdit.js'
 import type { PlanDTO } from '../shared/api.js'
 import {
-  fullDay, holdsAddress, isBehind, kindName, nextStatus, readAddRow, spreadOrder, spreadStart, withRo, type BoardPaper, type Status,
+  DEFAULT_COLUMNS, fullDay, holdsAddress, isBehind, kindName, nextStatus, readAddRow, readColumns, spreadOrder, spreadStart, withRo,
+  type BoardContext, type BoardPaper, type ColumnID, type Status,
 } from '../shared/planBoard.js'
 import { addressText } from '../shared/paperAddress.js'
+import { openAddPapersSheet, openPlanSheet } from './ui/planSheets.js'
 import { materialAddress, materialKindOfAddress } from '../shared/readingPlan.js'
 
 // MARK: - What the board remembers
 
 export type View = 'list' | 'table' | 'calendar'
-export type ColumnID = 'date' | 'progress' | 'materials' | 'tags' | 'plan' | 'who' | 'venue' | 'rating' | 'notes' | 'added' | 'opened'
-export type BoardContext = 'plan' | 'week' | 'other'
+export type { BoardContext, ColumnID } from '../shared/planBoard.js'
+export { ALL_COLUMNS, DEFAULT_COLUMNS } from '../shared/planBoard.js'
 export type Grouping = 'section' | 'week' | 'status'
-export type SortKey = 'title' | 'who' | 'date' | 'venue' | 'added' | 'opened' | 'rating' | 'progress'
+export type SortKey = 'title' | 'authors' | 'year' | 'date' | 'venue' | 'added' | 'opened' | 'rating' | 'progress'
 
 export interface BoardPrefs {
   views: Record<string, View>
@@ -46,14 +48,6 @@ export interface BoardPrefs {
   sort: { key: SortKey | null; ascending: boolean }
   group: Grouping
   spread: { days: number[]; per: number; from: 'today' | 'next' }
-}
-
-export const ALL_COLUMNS: ColumnID[] = ['who', 'venue', 'date', 'plan', 'progress', 'materials', 'tags', 'rating', 'notes', 'added', 'opened']
-
-export const DEFAULT_COLUMNS: Record<BoardContext, ColumnID[]> = {
-  plan: ['date', 'progress', 'materials', 'tags'],
-  week: ['plan', 'date', 'materials'],
-  other: ['who', 'date', 'plan', 'materials'],
 }
 
 function defaults(): BoardPrefs {
@@ -80,12 +74,13 @@ export function prefs(): BoardPrefs {
     }
     if (read.columns && typeof read.columns === 'object') {
       for (const context of ['plan', 'week', 'other'] as BoardContext[]) {
-        const list = (read.columns as Record<string, unknown>)[context]
-        if (Array.isArray(list)) made.columns[context] = list.filter((one): one is ColumnID => ALL_COLUMNS.includes(one as ColumnID))
+        const list = readColumns((read.columns as Record<string, unknown>)[context])
+        if (list) made.columns[context] = list
       }
     }
     if (read.sort && typeof read.sort === 'object') {
-      made.sort = { key: (read.sort.key ?? null) as SortKey | null, ascending: read.sort.ascending !== false }
+      const key = (read.sort.key ?? null) as string | null
+      made.sort = { key: key === 'who' ? 'authors' : (key as SortKey | null), ascending: read.sort.ascending !== false }
     }
     if (read.group === 'section' || read.group === 'week' || read.group === 'status') made.group = read.group
     if (read.spread && typeof read.spread === 'object') {
@@ -330,22 +325,46 @@ export async function createPlan(name: string, papers: string[] = []) {
   return made
 }
 
-/** «새 계획…»: a name asked for, the plan made. */
-export async function newPlan(papers: string[] = []) {
-  const name = await askForName({ title: L('새 계획', 'New Plan'), placeholder: L('계획 이름', 'Plan Name'), confirm: L('만들기', 'Create') })
-  if (!name) return
-  await createPlan(name, papers)
-  if (papers.length) toast(L(`논문 ${papers.length}편으로 계획을 만들었어요.`, `Made a plan of ${papers.length} paper${papers.length === 1 ? '' : 's'}.`))
+/**
+ * «새 계획…»: the New Plan sheet — a name, the papers, and the days if they
+ * are wanted now — with `papers` already chosen.
+ */
+export function newPlan(papers: string[] = [], name = '') {
+  openPlanSheet({ name, preselected: papers })
 }
 
-/** A shelf — a collection, a tag, a folder — made a plan, in the list's order. */
-export async function makePlanFrom(shelf: Shelf, name: string) {
+/** A shelf — a collection, a tag, a folder — made a plan: the sheet, with its name and its papers, in the list's order. */
+export function makePlanFrom(shelf: Shelf, name: string) {
   const showing = store.shelf
   store.shelf = shelf
   const ids = shelfPapers().map((entry) => entry.id)
   store.shelf = showing
-  await createPlan(name, ids)
-  toast(L(`논문 ${ids.length}편으로 계획을 만들었어요.`, `Made a plan of ${ids.length} paper${ids.length === 1 ? '' : 's'}.`))
+  openPlanSheet({ name, preselected: ids })
+}
+
+/**
+ * What the New Plan sheet does when its button is pressed: the plan made of
+ * the chosen papers, in the order chosen, and — when asked — their days,
+ * spread as «Spread Out» spreads them (one undo step for the days).
+ */
+export async function createPlanFromSheet(name: string, papers: string[], days: BoardPrefs['spread'] | null) {
+  const made = await createPlan(name, papers)
+  if (!made) return
+  if (days && papers.length) {
+    const order = spreadOrder(papers.map((id) => paper(id)).filter((entry): entry is Paper => entry !== null).map(boardPaper))
+    const dates = spreadDays(order.length, days.days, days.per, spreadStart(days.from, store.today))
+    if (dates.length) {
+      const changes = order.map((id, at) => ({ id, date: dates[at] }))
+      await setDays(changes, L(`${changes.length}편에 날짜를 정했어요.`, `Gave ${changes.length} paper${changes.length === 1 ? '' : 's'} a day.`), L('고르게 나누기', 'Spread Out'))
+      return
+    }
+  }
+  if (papers.length) toast(L(`논문 ${papers.length}편으로 계획을 만들었어요.`, `Made a plan of ${papers.length} paper${papers.length === 1 ? '' : 's'}.`))
+}
+
+/** «논문 더하기…»: the picker, for papers not in the plan yet. */
+export function addPapersTo(planID: string) {
+  if (planByID(planID)) openAddPapersSheet(planID)
 }
 
 export async function renamePlan(id: string) {

@@ -5,9 +5,10 @@
 import assert from 'node:assert/strict'
 import { setKorean } from '../shared/lang.js'
 import {
-  calendarDays, calendarHome, calendarLabel, dateLabel, dayHeading, detectionLine, groupByStatus, groupByWeek, holdsAddress,
-  isBehind, nextStatus, planStats, progress, readAddRow, spanText, spreadOrder, spreadPreview, spreadStart, weekCount,
-  weekName, weekShelf, withRo, type BoardPaper,
+  ALL_COLUMNS, DEFAULT_COLUMNS, authorsText, calendarDays, calendarHome, calendarLabel, dateLabel, dayHeading, detectionLine,
+  groupByStatus, groupByWeek, holdsAddress, isBehind, nextStatus, pickerFold, pickerOrder, pickerShown, planGuidance, planStats,
+  progress, readAddRow, readColumns, spanText, spreadOrder, spreadPreview, spreadStart, weekCount, weekName, weekShelf, withRo,
+  type BoardPaper,
 } from '../shared/planBoard.js'
 import { acceptedEdit, applyPlanEdit } from '../shared/planEdit.js'
 import { newPlan, planOrder } from '../shared/readingPlan.js'
@@ -152,5 +153,54 @@ export async function planBoardSuite(test: Test, suite: (name: string) => void) 
     assert.deepEqual(planOrder(plan), ['C', 'B'])
     applyPlanEdit(plan, acceptedEdit(JSON.parse(JSON.stringify(before)))!)
     assert.deepEqual(planOrder(plan), ['C', 'A', 'B'])
+  })
+
+  await test('a plan says what it needs next: papers, then days, then nothing', () => {
+    assert.equal(planGuidance([]), 'empty')
+    assert.equal(planGuidance([p('A', null), p('B', null, 'read')]), 'noDays')
+    assert.equal(planGuidance([p('A', null), p('B', '2026-11-20')]), null)
+    assert.equal(planGuidance([p('A', '2026-11-20')]), null)
+  })
+
+  await test('authors and year are columns of their own, and the venue is one too', () => {
+    assert.deepEqual(DEFAULT_COLUMNS.plan, ['authors', 'year', 'venue', 'date', 'progress', 'materials'])
+    assert.deepEqual(DEFAULT_COLUMNS.other, ['authors', 'year', 'venue', 'date', 'plan', 'materials'])
+    assert.deepEqual(DEFAULT_COLUMNS.week, ['plan', 'date', 'materials'])
+    // A list remembered before the split: «저자 · 해» is the two columns now.
+    assert.deepEqual(readColumns(['who', 'date', 'plan', 'materials']), ['authors', 'year', 'date', 'plan', 'materials'])
+    assert.deepEqual(readColumns(['venue', 'who', 'year', 'hologram']), ['venue', 'authors', 'year'])
+    assert.equal(readColumns('who'), null)
+    for (const list of Object.values(DEFAULT_COLUMNS)) for (const id of list) assert.ok(ALL_COLUMNS.includes(id), id)
+    setKorean(true)
+    try {
+      assert.equal(authorsText([{ family: 'Kumar' }, { family: 'Zhou' }]), 'Kumar 외')
+      assert.equal(authorsText([{ family: 'Kumar' }]), 'Kumar')
+    } finally {
+      setKorean(false)
+    }
+    assert.equal(authorsText([{ literal: 'DeepMind' }, { family: 'Mnih' }]), 'DeepMind et al.')
+    assert.equal(authorsText([]), '')
+    assert.equal(authorsText(undefined), '')
+  })
+
+  await test('the paper picker keeps its order while boxes are ticked, and finds by title or author', () => {
+    const papers = [
+      { id: 'cql', title: 'Conservative Q-Learning', search: 'Conservative Q-Learning Aviral Kumar' },
+      { id: 'bcq', title: 'Off-Policy Deep RL without Exploration', search: 'Off-Policy Deep RL without Exploration Scott Fujimoto' },
+      { id: 'iql', title: 'Implicit Q-Learning', search: 'Implicit Q-Learning Ilya Kostrikov' },
+      { id: 'dt', title: 'Decision Transformer', search: 'Decision Transformer Lili Chen' },
+      { id: 'mopo', title: 'MOPO', search: 'MOPO Tianhe Yu' },
+    ]
+    // Chosen first, in the order given; then the rest by title; a plan's own papers last.
+    assert.deepEqual(pickerOrder(papers, ['iql', 'cql', 'iql', 'gone']), ['iql', 'cql', 'dt', 'mopo', 'bcq'])
+    assert.deepEqual(pickerOrder(papers, [], ['cql']), ['dt', 'iql', 'mopo', 'bcq', 'cql'])
+    const order = pickerOrder(papers, ['iql'])
+    // Words in any order, accents and case ignored, authors read as well as titles.
+    assert.deepEqual(pickerShown(order, papers, 'q-learning', false, []), ['iql', 'cql'])
+    assert.deepEqual(pickerShown(order, papers, 'KUMAR conservative', false, []), ['cql'])
+    assert.deepEqual(pickerShown(order, papers, '  ', false, []), order)
+    assert.deepEqual(pickerShown(order, papers, '', true, ['mopo', 'iql']), ['iql', 'mopo'])
+    assert.deepEqual(pickerShown(order, papers, 'fujimoto', true, ['mopo']), [])
+    assert.equal(pickerFold('  Almudévar   ÉCOLE '), 'almudevar ecole')
   })
 }

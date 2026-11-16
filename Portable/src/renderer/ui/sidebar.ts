@@ -53,7 +53,8 @@ export interface SidebarActions {
 interface RowSpec {
   /** Identity across updates: the same row keeps the same node. */
   key: string
-  kind: 'row' | 'section' | 'button'
+  /** `hint` is a quiet line that says what a section is for, before it holds anything. */
+  kind: 'row' | 'section' | 'button' | 'hint'
   icon?: IconName
   label: string
   count?: number
@@ -278,6 +279,11 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
       key: 'add:plan', kind: 'button', icon: 'plus.circle',
       label: L('새 계획…', 'New Plan…'), press: () => void newPlan(),
     })
+    // Before there is any plan, what one is for — said once, quietly, where
+    // the first one will go.
+    if (store.plans.length === 0) {
+      rows.push({ key: 'hint:plans', kind: 'hint', label: L('한 계열의 논문을 모아 읽을 날을 정해요', 'Gather a line of papers and give them days.') })
+    }
 
     rows.push({ key: 'sec:slipbox', kind: 'section', label: L('슬립박스', 'Slip-Box') })
     rows.push({ key: 'notes', kind: 'row', shelf: { kind: 'notes' }, icon: 'tray.full', label: L('노트', 'Notes'), count: counts.notes })
@@ -380,6 +386,7 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
   }
 
   function build(spec: RowSpec): HTMLElement {
+    if (spec.kind === 'hint') return el('div', { class: 'sidebar-hint', text: spec.label })
     if (spec.kind === 'section') {
       if (!spec.fold) return el('div', { class: 'sidebar-section', text: spec.label })
       const fold = spec.fold
@@ -538,7 +545,7 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
     }
     for (const [at, spec] of wanted.entries()) {
       const node = drawnNodes[at]
-      if (spec.kind === 'section') continue
+      if (spec.kind === 'section' || spec.kind === 'hint') continue
       if (spec.count !== undefined) {
         const cell = node.querySelector('.row-count')
         const text = String(spec.count)
