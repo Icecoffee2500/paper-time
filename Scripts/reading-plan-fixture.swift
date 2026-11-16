@@ -15,6 +15,7 @@ struct PlanStep: Encodable { var op: String; var args: [String]; var json: Strin
 struct AddressCase: Encodable { var text: String; var address: String?; var kind: String?; var title: String?; var host: String? }
 struct FileCase: Encodable { var name: String; var kind: String }
 struct Encoded: Encodable { var schedule: String; var links: String }
+struct VenueCase: Encodable { var full: String?; var short: String?; var name: String? }
 struct Fixture: Encodable {
     var days: [DayCase]
     var parse: [ParseCase]
@@ -23,6 +24,7 @@ struct Fixture: Encodable {
     var addresses: [AddressCase]
     var files: [FileCase]
     var encoded: Encoded
+    var venues: [VenueCase]
 }
 
 func uuid(_ n: Int) -> UUID { UUID(uuidString: String(format: "00000000-0000-4000-8000-%012d", n))! }
@@ -150,8 +152,19 @@ struct Main {
             PaperMaterial(id: uuid(303), kind: .video, url: "https://youtu.be/abc", title: "저자 발표 영상", addedAt: Date(timeIntervalSince1970: 1_794_794_400)),
         ])), as: UTF8.self)
 
+        let venueInputs: [(String?, String?)] = [
+            ("Advances in Neural Information Processing Systems", nil), ("Advances in Neural Information Processing Systems 33", "NeurIPS 2020"),
+            ("Proceedings of the 38th International Conference on Machine Learning", nil), ("International Conference on Learning Representations", nil),
+            ("2022 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)", nil), ("Proceedings of the IEEE/CVF International Conference on Computer Vision", nil),
+            ("Computer Vision – ECCV 2018", nil), ("European Conference on Computer Vision", nil), ("Proceedings of the AAAI Conference on Artificial Intelligence", nil),
+            ("IEEE Transactions on Pattern Analysis and Machine Intelligence", nil), ("Journal of Machine Learning Research", "J. Mach. Learn. Res."),
+            ("arXiv", nil), ("arXiv preprint arXiv:2106.06860", nil), ("Nature", nil), ("Neural Networks", nil), ("  Workshop on Offline RL  ", nil),
+            (nil, nil), ("", "  "), (nil, "ICML"), ("Findings of the Association for Computational Linguistics: EMNLP 2023", nil),
+            ("Conference on Robot Learning", nil), ("Robotics: Science and Systems", nil), ("Transactions on Machine Learning Research", nil),
+        ]
+        let venues = venueInputs.map { VenueCase(full: $0.0, short: $0.1, name: VenueName.short(full: $0.0, short: $0.1)) }
         let fixture = Fixture(days: days, parse: parse, spread: spread, plan: steps, addresses: addresses, files: files,
-                              encoded: Encoded(schedule: schedule, links: links))
+                              encoded: Encoded(schedule: schedule, links: links), venues: venues)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         let out = URL(fileURLWithPath: "Packages/PaperTimeKit/Tests/PaperCoreTests/Fixtures/reading-plans.json")

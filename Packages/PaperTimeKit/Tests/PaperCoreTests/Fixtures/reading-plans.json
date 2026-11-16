@@ -10767,5 +10767,100 @@
         9
       ]
     }
+  ],
+  "venues" : [
+    {
+      "full" : "Advances in Neural Information Processing Systems",
+      "name" : "NeurIPS"
+    },
+    {
+      "full" : "Advances in Neural Information Processing Systems 33",
+      "name" : "NeurIPS 2020",
+      "short" : "NeurIPS 2020"
+    },
+    {
+      "full" : "Proceedings of the 38th International Conference on Machine Learning",
+      "name" : "ICML"
+    },
+    {
+      "full" : "International Conference on Learning Representations",
+      "name" : "ICLR"
+    },
+    {
+      "full" : "2022 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)",
+      "name" : "CVPR"
+    },
+    {
+      "full" : "Proceedings of the IEEE/CVF International Conference on Computer Vision",
+      "name" : "ICCV"
+    },
+    {
+      "full" : "Computer Vision – ECCV 2018",
+      "name" : "Computer Vision – ECCV 2018"
+    },
+    {
+      "full" : "European Conference on Computer Vision",
+      "name" : "ECCV"
+    },
+    {
+      "full" : "Proceedings of the AAAI Conference on Artificial Intelligence",
+      "name" : "AAAI"
+    },
+    {
+      "full" : "IEEE Transactions on Pattern Analysis and Machine Intelligence",
+      "name" : "TPAMI"
+    },
+    {
+      "full" : "Journal of Machine Learning Research",
+      "name" : "J. Mach. Learn. Res.",
+      "short" : "J. Mach. Learn. Res."
+    },
+    {
+      "full" : "arXiv",
+      "name" : "arXiv"
+    },
+    {
+      "full" : "arXiv preprint arXiv:2106.06860",
+      "name" : "arXiv"
+    },
+    {
+      "full" : "Nature",
+      "name" : "Nature"
+    },
+    {
+      "full" : "Neural Networks",
+      "name" : "Neural Networks"
+    },
+    {
+      "full" : "  Workshop on Offline RL  ",
+      "name" : "Workshop on Offline RL"
+    },
+    {
+
+    },
+    {
+      "full" : "",
+      "short" : "  "
+    },
+    {
+      "name" : "ICML",
+      "short" : "ICML"
+    },
+    {
+      "full" : "Findings of the Association for Computational Linguistics: EMNLP 2023",
+      "name" : "ACL"
+    },
+    {
+      "full" : "Conference on Robot Learning",
+      "name" : "CoRL"
+    },
+    {
+      "full" : "Robotics: Science and Systems",
+      "name" : "RSS"
+    },
+    {
+      "full" : "Transactions on Machine Learning Research",
+      "name" : "TMLR"
+    }
   ]
 }

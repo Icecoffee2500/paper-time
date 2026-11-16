@@ -788,8 +788,16 @@ public actor LibraryStore {
     // MARK: - Reading plans
 
     /// The day the reader means to read a paper, if one was given.
+    ///
+    /// A `stat` first, and a coordinated read only for a file that is there.
+    /// Most papers have no day, and a coordinated read of a file that does
+    /// not exist is still a round trip to the file coordinator — on an iCloud
+    /// or Google Drive folder, to the cloud daemon. Two of those per paper,
+    /// read for every paper at launch, were what made opening the library
+    /// slow (2026-11-16).
     public func loadSchedule(_ folder: PaperFolder) -> PlanDay? {
-        (try? FileOperations.decode(PaperSchedule.self, at: folder.scheduleURL))?.date
+        guard FileManager.default.fileExists(atPath: folder.scheduleURL.path(percentEncoded: false)) else { return nil }
+        return (try? FileOperations.decode(PaperSchedule.self, at: folder.scheduleURL))?.date
     }
 
     /// Gives a paper a day, or takes it away (nil removes the file).
@@ -802,7 +810,8 @@ public actor LibraryStore {
     }
 
     public func loadLinks(_ folder: PaperFolder) -> [PaperMaterial] {
-        (try? FileOperations.decode(PaperMaterials.self, at: folder.linksURL))?.links ?? []
+        guard FileManager.default.fileExists(atPath: folder.linksURL.path(percentEncoded: false)) else { return [] }
+        return (try? FileOperations.decode(PaperMaterials.self, at: folder.linksURL))?.links ?? []
     }
 
     /// Changes what is kept beside a paper, against what is on disk now — a

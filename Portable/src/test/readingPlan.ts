@@ -10,7 +10,7 @@ import { encodeSwiftJSON } from '../shared/coding.js'
 import {
   addSection, addToPlan, dayFromOrdinal, dayOrdinal, materialAddress, materialHost, materialKindOfAddress,
   materialKindOfFile, materialTitle, mondayOf, moveBefore, moveSection, moveToEnd, planGroups, planOrder, readDay,
-  readLinks, readPlan, readSchedule, removeFromPlan, removeSection, renameSection, spreadDays, weekdayOf, type ReadingPlan,
+  readLinks, readPlan, readSchedule, removeFromPlan, removeSection, renameSection, spreadDays, venueName, weekdayOf, type ReadingPlan,
 } from '../shared/readingPlan.js'
 
 type Test = (name: string, body: () => void | Promise<void>) => Promise<void>
@@ -23,6 +23,7 @@ interface Fixture {
   addresses: { text: string; address?: string; kind?: string; title?: string; host?: string }[]
   files: { name: string; kind: string }[]
   encoded: { schedule: string; links: string }
+  venues: { full?: string; short?: string; name?: string }[]
 }
 
 export async function readingPlanSuite(test: Test, suite: (name: string) => void) {
@@ -83,6 +84,10 @@ export async function readingPlanSuite(test: Test, suite: (name: string) => void
       assert.equal(materialHost(address), c.host, address)
     }
     for (const c of fixture.files) assert.equal(materialKindOfFile(c.name), c.kind, c.name)
+  })
+
+  await test(`${fixture.venues.length} venues are named the way the Mac names them`, () => {
+    for (const c of fixture.venues) assert.equal(venueName(c.full, c.short), c.name ?? null, JSON.stringify(c))
   })
 
   await test('a day and a list of materials the Mac wrote come back byte for byte', () => {

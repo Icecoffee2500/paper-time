@@ -650,3 +650,53 @@ extension PlanDayParser {
         return out
     }
 }
+
+// MARK: - A venue, short
+
+/// What a table's venue column says: the record's own short name when it has
+/// one, the name a field calls its big conferences and journals by, or the
+/// title as it is. «Advances in Neural Information Processing Systems» is
+/// «NeurIPS» to everybody who reads it.
+public enum VenueName {
+    /// Lower-cased phrases, in the order they are tried — the longer and
+    /// more particular first, so a workshop name does not stop at «ICML».
+    static let known: [(phrase: String, name: String)] = [
+        ("neural information processing systems", "NeurIPS"),
+        ("international conference on machine learning", "ICML"),
+        ("international conference on learning representations", "ICLR"),
+        ("computer vision and pattern recognition", "CVPR"),
+        ("international conference on computer vision", "ICCV"),
+        ("european conference on computer vision", "ECCV"),
+        ("winter conference on applications of computer vision", "WACV"),
+        ("british machine vision conference", "BMVC"),
+        ("aaai conference on artificial intelligence", "AAAI"),
+        ("international joint conference on artificial intelligence", "IJCAI"),
+        ("artificial intelligence and statistics", "AISTATS"),
+        ("uncertainty in artificial intelligence", "UAI"),
+        ("conference on robot learning", "CoRL"),
+        ("robotics: science and systems", "RSS"),
+        ("empirical methods in natural language processing", "EMNLP"),
+        ("association for computational linguistics", "ACL"),
+        ("knowledge discovery and data mining", "KDD"),
+        ("transactions on pattern analysis and machine intelligence", "TPAMI"),
+        ("journal of machine learning research", "JMLR"),
+        ("transactions on machine learning research", "TMLR"),
+        ("international journal of computer vision", "IJCV"),
+        ("transactions on neural networks and learning systems", "TNNLS"),
+        ("arxiv", "arXiv"),
+    ]
+
+    public static func short(full: String?, short: String?) -> String? {
+        if let short = trimmed(short) { return short }
+        guard let full = trimmed(full) else { return nil }
+        let lower = full.lowercased()
+        for (phrase, name) in known where lower.contains(phrase) { return name }
+        return full
+    }
+
+    private static func trimmed(_ text: String?) -> String? {
+        guard let text else { return nil }
+        let made = PlanDayParser.normalizedKeepingCase(text)
+        return made.isEmpty ? nil : made
+    }
+}

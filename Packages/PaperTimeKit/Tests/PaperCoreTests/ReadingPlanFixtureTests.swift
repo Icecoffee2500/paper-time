@@ -13,9 +13,10 @@ import Testing
     struct AddressCase: Decodable { var text: String; var address: String?; var kind: String?; var title: String?; var host: String? }
     struct FileCase: Decodable { var name: String; var kind: String }
     struct Encoded: Decodable { var schedule: String; var links: String }
+    struct VenueCase: Decodable { var full: String?; var short: String?; var name: String? }
     struct File: Decodable {
         var days: [DayCase]; var parse: [ParseCase]; var spread: [SpreadCase]; var plan: [Step]
-        var addresses: [AddressCase]; var files: [FileCase]; var encoded: Encoded
+        var addresses: [AddressCase]; var files: [FileCase]; var encoded: Encoded; var venues: [VenueCase]
     }
 
     func fixture() throws -> File {
@@ -79,6 +80,12 @@ import Testing
             #expect(MaterialLink.host(of: address) == c.host)
         }
         for c in file.files { #expect(MaterialLink.kind(ofFileName: c.name).rawValue == c.kind, Comment(rawValue: c.name)) }
+    }
+
+    @Test func venuesAreNamedAsTheFileSays() throws {
+        for c in try fixture().venues {
+            #expect(VenueName.short(full: c.full, short: c.short) == c.name, Comment(rawValue: "\(c.full ?? "nil") / \(c.short ?? "nil")"))
+        }
     }
 
     @Test func filesComeBackByteForByte() throws {

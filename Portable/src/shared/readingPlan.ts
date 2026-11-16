@@ -565,3 +565,43 @@ export function paperAddressOf(arxiv?: string | null, doi?: string | null): stri
   if (doi) return 'https://doi.org/' + doi
   return null
 }
+
+// MARK: - A venue, short
+
+/** Lower-cased phrases, tried in order — `VenueName.known` in `ReadingPlan.swift`. */
+const KNOWN_VENUES: [string, string][] = [
+  ['neural information processing systems', 'NeurIPS'],
+  ['international conference on machine learning', 'ICML'],
+  ['international conference on learning representations', 'ICLR'],
+  ['computer vision and pattern recognition', 'CVPR'],
+  ['international conference on computer vision', 'ICCV'],
+  ['european conference on computer vision', 'ECCV'],
+  ['winter conference on applications of computer vision', 'WACV'],
+  ['british machine vision conference', 'BMVC'],
+  ['aaai conference on artificial intelligence', 'AAAI'],
+  ['international joint conference on artificial intelligence', 'IJCAI'],
+  ['artificial intelligence and statistics', 'AISTATS'],
+  ['uncertainty in artificial intelligence', 'UAI'],
+  ['conference on robot learning', 'CoRL'],
+  ['robotics: science and systems', 'RSS'],
+  ['empirical methods in natural language processing', 'EMNLP'],
+  ['association for computational linguistics', 'ACL'],
+  ['knowledge discovery and data mining', 'KDD'],
+  ['transactions on pattern analysis and machine intelligence', 'TPAMI'],
+  ['journal of machine learning research', 'JMLR'],
+  ['transactions on machine learning research', 'TMLR'],
+  ['international journal of computer vision', 'IJCV'],
+  ['transactions on neural networks and learning systems', 'TNNLS'],
+  ['arxiv', 'arXiv'],
+]
+
+/** What a table's venue column says: the short name, a known one, or the title. */
+export function venueName(full?: string | null, short?: string | null): string | null {
+  const shortText = short ? normalizedKeepingCase(short) : ''
+  if (shortText) return shortText
+  const fullText = full ? normalizedKeepingCase(full) : ''
+  if (!fullText) return null
+  const lower = fullText.toLowerCase()
+  for (const [phrase, name] of KNOWN_VENUES) if (lower.includes(phrase)) return name
+  return fullText
+}
