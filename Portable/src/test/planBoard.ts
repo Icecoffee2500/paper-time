@@ -5,10 +5,10 @@
 import assert from 'node:assert/strict'
 import { setKorean } from '../shared/lang.js'
 import {
-  ALL_COLUMNS, DEFAULT_COLUMNS, authorsText, calendarDays, calendarHome, calendarLabel, dateLabel, dayHeading, detectionLine,
+  ALL_COLUMNS, COLUMN_PRIORITY, DEFAULT_COLUMNS, TITLE_FLOOR, authorsText, boardPlace, calendarDays, calendarHome, calendarLabel, dateLabel, dayHeading, detectionLine,
   groupByStatus, groupByWeek, holdsAddress, isBehind, nextStatus, pickerFold, pickerOrder, pickerShown, planGuidance, planStats,
-  progress, readAddRow, readColumns, spanText, spreadOrder, spreadPreview, spreadStart, weekCount, weekName, weekShelf, withRo,
-  type BoardPaper,
+  fitColumns, progress, readAddRow, readColumns, spanText, spreadOrder, spreadPreview, spreadStart, viewFor, weekCount, weekName, weekShelf,
+  withPlanColumns, withRo, type BoardPaper, type ColumnID,
 } from '../shared/planBoard.js'
 import { acceptedEdit, applyPlanEdit } from '../shared/planEdit.js'
 import { newPlan, planOrder } from '../shared/readingPlan.js'
@@ -202,5 +202,67 @@ export async function planBoardSuite(test: Test, suite: (name: string) => void) 
     assert.deepEqual(pickerShown(order, papers, '', true, ['mopo', 'iql']), ['iql', 'mopo'])
     assert.deepEqual(pickerShown(order, papers, 'fujimoto', true, ['mopo']), [])
     assert.equal(pickerFold('  Almudévar   ÉCOLE '), 'almudevar ecole')
+  })
+
+  await test('the columns that fit a narrow column are kept by priority, shown in their own order', () => {
+    // The Mac's widths: authors 116, year 44, venue 92, date 100, plan 132,
+    // progress 88, materials 34 (one tile wide).
+    const widths: Partial<Record<ColumnID, number>> = { authors: 116, year: 44, venue: 92, date: 100, plan: 132, progress: 88, materials: 34, tags: 110, rating: 72, notes: 56, added: 88, opened: 120 }
+    const widthOf = (id: ColumnID) => widths[id] ?? 0
+    const plan = DEFAULT_COLUMNS.plan
+    // Wide enough for all of them.
+    assert.deepEqual(fitColumns(plan, 1200, widthOf), plan)
+    // The room is the width less the row's 40 and 32 and the title's floor;
+    // each column wants its width and 10. At 620 that is 368: the day (110),
+    // the progress (98), the materials (44), the year (54) — 306 — and the
+    // authors (126) no longer fit; the venue (102) does not either.
+    assert.equal(TITLE_FLOOR, 180)
+    assert.deepEqual(fitColumns(plan, 620, widthOf), ['year', 'date', 'progress', 'materials'])
+    // The table's floor, 400: 148 of room — the day, and 38 left over,
+    // which no other column fits in.
+    assert.deepEqual(fitColumns(plan, 400, widthOf), ['date'])
+    // Narrower than the title alone: nothing beside it.
+    assert.deepEqual(fitColumns(plan, 240, widthOf), [])
+    // Order is the wanted order, not the priority's.
+    assert.deepEqual(fitColumns(['materials', 'date'], 1000, widthOf), ['materials', 'date'])
+    // A column nobody asked for is never added.
+    assert.deepEqual(fitColumns(['authors'], 1000, widthOf), ['authors'])
+    // Every column has a place in the priority.
+    assert.deepEqual([...COLUMN_PRIORITY].sort(), [...ALL_COLUMNS].sort())
+  })
+
+  await test('a shelf’s table shows Read On and Plan only when asked; plans and the week always', () => {
+    assert.deepEqual(withPlanColumns(DEFAULT_COLUMNS.other, 'other', false), ['authors', 'year', 'venue', 'materials'])
+    assert.deepEqual(withPlanColumns(DEFAULT_COLUMNS.other, 'other', true), DEFAULT_COLUMNS.other)
+    assert.deepEqual(withPlanColumns(DEFAULT_COLUMNS.plan, 'plan', false), DEFAULT_COLUMNS.plan)
+    assert.deepEqual(withPlanColumns(DEFAULT_COLUMNS.week, 'week', false), DEFAULT_COLUMNS.week)
+  })
+
+  await test('which column holds the table: every shelf beside the page, a plan’s calendar wide', () => {
+    // The old list set aside: every shelf is its table, a plan its table or calendar.
+    assert.equal(viewFor('all', undefined, false), 'table')
+    assert.equal(viewFor('all', 'list', false), 'table')
+    assert.equal(viewFor('week', 'list', false), 'table')
+    assert.equal(viewFor('plan', 'list', false), 'table')
+    assert.equal(viewFor('plan', 'calendar', false), 'calendar')
+    assert.equal(viewFor('notes', 'table', false), 'list')
+    // In the list's column, with the page beside it.
+    assert.equal(boardPlace('all', 'table', true, false), 'list')
+    assert.equal(boardPlace('collection', 'table', true, false), 'list')
+    assert.equal(boardPlace('week', 'table', true, false), 'list')
+    assert.equal(boardPlace('plan', 'table', true, false), 'list')
+    // A plan's calendar takes the list's room and the page's.
+    assert.equal(boardPlace('plan', 'calendar', true, false), 'wide')
+    assert.equal(boardPlace('plan', 'calendar', false, false), 'wide')
+    // Search results keep their passages, an empty library its setup, the slip-box its notes.
+    assert.equal(boardPlace('search', 'table', true, false), 'none')
+    assert.equal(boardPlace('all', 'table', false, false), 'none')
+    assert.equal(boardPlace('notes', 'list', true, false), 'none')
+    // The old list back (`LEGACY.paperList`): the switch's choices, every board wide.
+    assert.equal(viewFor('all', undefined, true), 'list')
+    assert.equal(viewFor('all', 'table', true), 'table')
+    assert.equal(viewFor('week', undefined, true), 'table')
+    assert.equal(boardPlace('all', 'list', true, true), 'none')
+    assert.equal(boardPlace('all', 'table', true, true), 'wide')
   })
 }

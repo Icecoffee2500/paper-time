@@ -17,9 +17,10 @@ import { solo } from './shell.js'
 import { toast } from './ui/toolbar.js'
 import { askForName, askToConfirm } from './ui/ask.js'
 import { saveSettings } from './settingsController.js'
-import { layoutPanes } from './layout.js'
+import { layoutPanes, revealPane } from './layout.js'
 import { reconcileReaders } from './pageArea.js'
-import { showPaper } from './actions/openPapers.js'
+import { keepPaper, showPaper } from './actions/openPapers.js'
+import { LEGACY } from '../shared/legacy.js'
 import { setStatus } from './actions/paper.js'
 import { addPaperByAddress, importDestination } from './library.js'
 import { L } from '../shared/lang.js'
@@ -27,7 +28,7 @@ import { addDays, spreadDays, todayDay, type PaperLink, type PlanEntry, type Pla
 import type { PlanEdit } from '../shared/planEdit.js'
 import type { PlanDTO } from '../shared/api.js'
 import {
-  DEFAULT_COLUMNS, fullDay, holdsAddress, isBehind, kindName, nextStatus, readAddRow, readColumns, spreadOrder, spreadStart, withRo,
+  DEFAULT_COLUMNS, boardPlace, fullDay, holdsAddress, isBehind, kindName, nextStatus, readAddRow, readColumns, spreadOrder, spreadStart, viewFor, withRo,
   type BoardContext, type BoardPaper, type ColumnID, type Status,
 } from '../shared/planBoard.js'
 import { addressText } from '../shared/paperAddress.js'
@@ -48,6 +49,9 @@ export interface BoardPrefs {
   sort: { key: SortKey | null; ascending: boolean }
   group: Grouping
   spread: { days: number[]; per: number; from: 'today' | 'next' }
+  /** Whether a shelf's table shows «Read On» and «Plan» — off until asked
+   *  for (the Mac's `boardShowsPlanColumns`). */
+  planColumns: boolean
 }
 
 function defaults(): BoardPrefs {
@@ -57,6 +61,7 @@ function defaults(): BoardPrefs {
     sort: { key: null, ascending: true },
     group: 'section',
     spread: { days: [0, 2, 4], per: 1, from: 'today' },
+    planColumns: false,
   }
 }
 
@@ -83,6 +88,7 @@ export function prefs(): BoardPrefs {
       made.sort = { key: key === 'who' ? 'authors' : (key as SortKey | null), ascending: read.sort.ascending !== false }
     }
     if (read.group === 'section' || read.group === 'week' || read.group === 'status') made.group = read.group
+    if (read.planColumns === true) made.planColumns = true
     if (read.spread && typeof read.spread === 'object') {
       const days = Array.isArray(read.spread.days) ? read.spread.days.filter((one) => Number.isInteger(one) && one >= 0 && one <= 6) : made.spread.days
       made.spread = {
@@ -122,23 +128,46 @@ export function shelfKey(shelf: Shelf): string | null {
   }
 }
 
-/** What a shelf shows: the list and the page, or the board. A plan opens on its table, «This Week» is a table. */
+/**
+ * What a shelf shows. Every shelf is its table — a plan its table or its
+ * calendar; with the old list back (`LEGACY.paperList`), the list and the
+ * page or the board, as the List | Table switch chose.
+ */
 export function viewOf(shelf: Shelf = store.shelf): View {
   const key = shelfKey(shelf)
   if (key === null) return 'list'
   const kept = prefs().views[shelf.kind === 'plan' ? `plan:${shelf.id}` : key]
-  if (shelf.kind === 'week') return kept === 'list' ? 'list' : 'table'
-  if (shelf.kind === 'plan') return kept ?? 'table'
-  return kept === 'table' ? 'table' : 'list'
+  return viewFor(shelf.kind, kept, LEGACY.paperList)
 }
 
 export function boardContext(shelf: Shelf = store.shelf): BoardContext {
   return shelf.kind === 'plan' ? 'plan' : shelf.kind === 'week' ? 'week' : 'other'
 }
 
+/**
+ * Where the board stands now: `wide`, where the list and the page were (a
+ * plan's calendar); `list`, in the list's column with the page beside it
+ * (every other shelf's table); `none`, the old list (search results, a
+ * library with no papers yet, the slip-box).
+ */
+export function boardPlaceNow(): 'wide' | 'list' | 'none' {
+  if (solo || !store.root || store.unavailable) return 'none'
+  return boardPlace(store.shelf.kind, viewOf(), store.papers.length > 0, LEGACY.paperList)
+}
+
 /** Whether the board stands where the list and the page were. */
 export function boardShowing(): boolean {
-  return !solo && Boolean(store.root) && !store.unavailable && viewOf() !== 'list'
+  return boardPlaceNow() === 'wide'
+}
+
+/** Whether the list column holds the board's table, with the page beside it. */
+export function boardInListColumn(): boolean {
+  return boardPlaceNow() === 'list'
+}
+
+/** Whether the board stands anywhere — wide or in the list column. */
+export function boardVisible(): boolean {
+  return boardPlaceNow() !== 'none'
 }
 
 /** Another view for the shelf showing. */
@@ -150,7 +179,7 @@ export function setView(view: View) {
     prefs.views[shelf.kind === 'plan' ? `plan:${shelf.id}` : key] = view
   })
   layoutPanes()
-  if (view === 'list') reconcileReaders()
+  if (view !== 'calendar') reconcileReaders()
   changed('shelf')
 }
 
@@ -459,9 +488,17 @@ export async function addFromAddresses(id: string, text: string): Promise<boolea
 
 // MARK: - The board's selection
 
-/** A row chosen on the board: the inspector shows it. Not opened — that is a double-click. */
+/**
+ * A row chosen on the board. In the list's column the page beside it shows
+ * the paper, as the list's rows did; on the wide calendar the inspector
+ * shows it, and opening it is a double-click.
+ */
 export function selectInBoard(id: string) {
   if (!paper(id)) return
+  if (boardInListColumn()) {
+    void showPaper(id)
+    return
+  }
   store.selection = [id]
   store.selectionAnchor = id
   store.selectionLead = id
@@ -472,12 +509,24 @@ export function selectInBoard(id: string) {
   changed('selection')
 }
 
-/** A row opened: the shelf goes to its list, and the paper to the page. */
+/**
+ * A row opened (a double-click, Return): picked, on the page, kept on the
+ * open shelf. From the calendar the plan turns back into its table, so the
+ * page has room beside it; with the old list back, the shelf goes to its list.
+ */
 export async function openFromBoard(id: string) {
   if (!paper(id)) return
-  setView('list')
+  if (LEGACY.paperList) setView('list')
+  else if (boardShowing()) setView('table')
   await showPaper(id)
+  keepPaper(id)
+  revealPane('reader')
   reconcileReaders()
+}
+
+/** «읽을 날·계획»: a shelf's table shows its Read On and Plan columns, or not. */
+export function togglePlanColumns() {
+  savePrefs((prefs) => { prefs.planColumns = !prefs.planColumns })
 }
 
 /** Whether the shelf showing is this plan. */

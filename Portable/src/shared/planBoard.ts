@@ -318,6 +318,74 @@ export const DEFAULT_COLUMNS: Record<BoardContext, ColumnID[]> = {
   other: ['authors', 'year', 'venue', 'date', 'plan', 'materials'],
 }
 
+/** Which columns stay when the column is narrow, most wanted first (the Mac's `BoardKind.priority`). */
+export const COLUMN_PRIORITY: ColumnID[] = ['date', 'progress', 'plan', 'materials', 'year', 'authors', 'venue', 'tags', 'rating', 'notes', 'added', 'opened']
+
+/** The title is never narrower than this; the other columns step aside first. */
+export const TITLE_FLOOR = 180
+
+/**
+ * The columns that fit beside a title of at least `TITLE_FLOOR`, kept by
+ * priority and shown in their own order — in a column the width of a list,
+ * the table loses its venue before it loses its days. The row's own room
+ * (the margins, the ring) is the Mac's: 40 and 32; each column wants its
+ * width and a gap of 10.
+ */
+export function fitColumns(wanted: ColumnID[], width: number, widthOf: (id: ColumnID) => number): ColumnID[] {
+  let room = width - 40 - 32 - TITLE_FLOOR
+  const kept = new Set<ColumnID>()
+  for (const id of COLUMN_PRIORITY) {
+    if (!wanted.includes(id)) continue
+    const need = widthOf(id) + 10
+    if (need <= room) {
+      kept.add(id)
+      room -= need
+    }
+  }
+  return wanted.filter((id) => kept.has(id))
+}
+
+/**
+ * A shelf's table — not a plan's, not This Week's — shows «Read On» and
+ * «Plan» only when asked: on a shelf that is not a plan they are two columns
+ * of «Set Date» and «—» (2026-11-16, the user's ask).
+ */
+export function withPlanColumns(columns: ColumnID[], context: BoardContext, shown: boolean): ColumnID[] {
+  if (context !== 'other' || shown) return columns
+  return columns.filter((id) => id !== 'date' && id !== 'plan')
+}
+
+/**
+ * How a shelf is seen. With the old list set aside (`LEGACY.paperList` off)
+ * a plan is its table or its calendar and every other shelf is its table;
+ * with it back, the choices are the ones the List | Table switch made.
+ */
+export function viewFor(kind: string, kept: 'list' | 'table' | 'calendar' | undefined, legacyList: boolean): 'list' | 'table' | 'calendar' {
+  if (kind === 'notes') return 'list'
+  if (!legacyList) {
+    if (kind === 'plan') return kept === 'calendar' ? 'calendar' : 'table'
+    return 'table'
+  }
+  if (kind === 'week') return kept === 'list' ? 'list' : 'table'
+  if (kind === 'plan') return kept ?? 'table'
+  return kept === 'table' ? 'table' : 'list'
+}
+
+/**
+ * Where a shelf's board stands. `wide` takes the room of the list and the
+ * page (a plan's calendar; with the old list back, every board); `list`
+ * holds the table in the list's column with the page beside it — every
+ * shelf of papers except search results (their passages are rows) and a
+ * library with nothing in it yet (its setup); `none` is the old list.
+ */
+export function boardPlace(kind: string, view: 'list' | 'table' | 'calendar', hasPapers: boolean, legacyList: boolean): 'wide' | 'list' | 'none' {
+  if (kind === 'notes') return 'none'
+  if (legacyList) return view === 'list' ? 'none' : 'wide'
+  if (kind === 'plan' && view === 'calendar') return 'wide'
+  if (kind === 'search' || !hasPapers) return 'none'
+  return 'list'
+}
+
 /**
  * A remembered list of columns, read: the old «저자 · 해» (`who`) is the two
  * columns it became, anything this build does not know is dropped, and a

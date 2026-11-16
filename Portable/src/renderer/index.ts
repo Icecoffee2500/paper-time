@@ -51,7 +51,7 @@ import { installTheme, openSettings, saveSettings, setInspectorTab } from './set
 import { layoutPanes, revealPane, syncBoard, syncListSlot, togglePane } from './layout.js'
 import { buildPlanBoard } from './ui/planBoard.js'
 import { closePlanPop } from './ui/planPopovers.js'
-import { boardShowing, watchTheDay } from './plans.js'
+import { boardVisible, watchTheDay } from './plans.js'
 import { applyUndo, installKeys, pickTool } from './keys.js'
 import { installMainEvents } from './commands.js'
 import { installDockDrop, installFileDrop } from './dockDrop.js'
@@ -181,7 +181,10 @@ shell.setup = buildSetup({
   suggestions: () => call('library:suggestions'),
 })
 
-shell.board = buildPlanBoard()
+shell.board = buildPlanBoard({
+  refresh: () => void reload(),
+  adoptLoose: () => void adoptLoose(),
+})
 
 shell.rack = buildSketchRack({
   setTool: (tool: SketchTool) => pickTool(tool),
@@ -261,11 +264,14 @@ subscribe((keys) => {
   if (keys.has('shelf')) {
     closePlanPop()
     syncListSlot()
-    // The board comes or goes with the shelf's view; it draws itself as it comes.
+    // The board comes, goes or moves with the shelf's view; it draws itself as it comes.
     syncBoard()
     reconcileReaders()
+  } else if (keys.has('papers')) {
+    // The first papers arriving put the table where the list's setup was.
+    syncBoard()
   }
-  if (boardShowing()) {
+  if (boardVisible()) {
     if (keys.has('papers') || keys.has('shelf') || keys.has('notes')) shell.board.update()
     else if (keys.has('selection')) shell.board.mark()
   }

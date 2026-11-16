@@ -695,7 +695,13 @@ export class Reader implements PageOwner {
         for (const entry of entries) {
           if (entry.isIntersecting) continue
           const page = this.pages[Number((entry.target as HTMLElement).dataset.page)]
-          if (page && (page.rendered || page.canvas.width > 0)) page.release()
+          // Never a page the draw observer holds near: its margin is the
+          // smaller, so a page near is never really far. One batch can carry
+          // a page's leaving and its coming back (the list column changing
+          // width under it — the table's column and the list's are not one
+          // width); the draw observer runs first and drew it again, and the
+          // stale «far» here used to empty it straight after — a black page.
+          if (page && !this.near.has(page) && (page.rendered || page.canvas.width > 0)) page.release()
         }
       },
       // Farther than it is drawn from, so a page scrolled back and forth
