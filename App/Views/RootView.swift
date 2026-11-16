@@ -505,7 +505,11 @@ struct LibraryWindow: View {
 
             // Nothing to drag against when there is no paper beside it.
             if showsList, showsDetail {
-                ColumnDivider(width: listWidthBinding, range: (model.boardInListColumn ? 400 : 240)...widest(240))
+                // The table's floor is higher than the list's, and a narrow
+                // window can leave less room than that: the top of the range
+                // is held at or above its floor, or `400...300` traps.
+                let floor: Double = model.boardInListColumn ? 400 : 240
+                ColumnDivider(width: listWidthBinding, range: floor...max(floor, widest(240)))
             }
 
             Group {
