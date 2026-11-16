@@ -1133,3 +1133,52 @@ ul.points li b { color: var(--ink); font-weight: 600; }
 /* A caption under a demonstration, then more of the task: room between them. */
 .task .caption + ul.points,
 .task .caption + p { margin-top: 16px; }
+
+/* ═════════════════════════ the reading-plans page ═════════════════════════
+   One feature, before it ships. The window is the demonstration itself
+   (`plans-demo.js`, drawn in a shadow root with its own sheet), so it gets
+   the widest column on the site: the plan beside its inspector is the point,
+   and at the bands' usual 1,120 the inspector would fold under the table. */
+.plans-first { padding-top: clamp(44px, 8vh, 96px); }
+.plans-wide { max-width: 1340px; margin: 0 auto; }
+.plans-first .band-head { margin-bottom: clamp(26px, 4vh, 42px); }
+/* Not yet in a version you can download, and said as plainly as the name. */
+.plans-next {
+  display: inline-block;
+  margin: 18px 0 0;
+  padding: 6px 13px;
+  border-radius: 980px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 600;
+}
+.plans-steps, .plans-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(14px, 2vw, 22px); }
+@media (max-width: 980px) { .plans-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 900px) { .plans-cols { grid-template-columns: 1fr; } }
+@media (max-width: 620px) { .plans-steps { grid-template-columns: 1fr; } }
+.plans-steps .cell { gap: 10px; }
+.plans-steps .cell h3, .plans-cols .cell h3 { font-size: 20px; display: flex; align-items: center; gap: 10px; }
+.plans-no {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 13.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.plans-steps .key { font-size: 11px; padding: 3px 6px; }
+.plans-cols ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 8px; font-size: 15.5px; line-height: 1.5; color: var(--ink-2); }
+.plans-cols li b { color: var(--ink); font-weight: 600; }
+.plans-tree { display: grid; grid-template-columns: max-content minmax(200px, 1fr); column-gap: 28px; overflow-x: auto; }
+.plans-tree code { font: 13.5px/1.8 var(--mono); color: var(--ink); white-space: pre; }
+.plans-tree i { font-style: normal; font-size: 14px; line-height: 1.75; color: var(--ink-3); white-space: nowrap; }
+
+/* A way to the next page, under a band — Apple's «Learn more ›». */
+.band-more { margin: clamp(26px, 4vh, 40px) 0 0; text-align: center; font-size: 17px; }
+.band-more a { font-weight: 500; }

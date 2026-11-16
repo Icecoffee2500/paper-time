@@ -1939,9 +1939,9 @@ window.PaperTime = {
   mountLanguage, mountReveals, mountDownloads, mountDialogs, mountHowPicker,
 };
 
-/* The landing page boots itself; the manual is another page and takes what
-   it wants from the object above. */
-if (document.body.dataset.page !== "docs") {
+/* The landing page boots itself; the manual and the reading-plans page are
+   other pages, and take what they want from the object above. */
+if (!document.body.dataset.page) {
   mountLanguage();
   mountMetadata();
   mountFilm();
