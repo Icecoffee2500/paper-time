@@ -35,7 +35,7 @@ enum BoardColumn: String, CaseIterable, Identifiable, Hashable {
         case .plan: 124
         case .day: 100
         case .progress: 86
-        case .materials: 124
+        case .materials: 34
         case .tags: 110
         case .rating: 70
         case .notes: 46
@@ -56,6 +56,10 @@ enum BoardKind: Equatable {
         case .shelf: "shelf"
         }
     }
+
+    /// Which columns stay when the column is narrow, most wanted first.
+    static let priority: [BoardColumn] = [.day, .progress, .plan, .materials, .year, .authors, .venue,
+                                          .tags, .rating, .notes, .added, .opened]
 
     /// The columns the demo shows, in its order.
     var defaults: [BoardColumn] {
@@ -111,6 +115,12 @@ struct PlanBoard: View {
     @State private var adding = false
     /// Plans whose «when will you read them?» strip was put away this session.
     @State private var quietStrips: Set<UUID> = []
+    /// How wide the board is — it decides which columns fit.
+    @State private var width: CGFloat = 900
+    /// Whether a shelf's table shows «Read On» and «Plan» — off until asked
+    /// for: on a shelf that is not a plan they are two columns of «Set Date»
+    /// and «—» (2026-11-16, the user's ask).
+    @State private var showsPlanColumns = PlanBoard.storedPlanColumns()
 
     private var kind: BoardKind {
         switch model.scope {
@@ -143,8 +153,13 @@ struct PlanBoard: View {
                     if needsDays(id), !quietStrips.contains(id) { daysStrip(id) }
                     viewbar
                 }
+                if kind == .shelf { notices }
                 columnHeader
-                if kind == .week, data.entries.isEmpty {
+                if kind == .shelf, data.entries.isEmpty {
+                    let empty = PaperListView.emptyShelf(for: model.scope)
+                    ContentUnavailableView(empty.title, systemImage: empty.symbol, description: Text(empty.note))
+                        .frame(maxHeight: .infinity)
+                } else if kind == .week, data.entries.isEmpty {
                     Text(L("이번 주에 읽을 논문이 없어요", "Nothing to read this week."))
                         .font(.system(size: 13))
                         .foregroundStyle(.tertiary)
@@ -177,6 +192,7 @@ struct PlanBoard: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .onGeometryChange(for: CGFloat.self) { ($0.size.width / 8).rounded() * 8 } action: { width = $0 }
         .overlay(alignment: .bottom) { toastView }
         // What the New Plan sheet did, said here once the plan is showing.
         .onChange(of: app.planning.notice, initial: true) { _, notice in
@@ -202,19 +218,29 @@ struct PlanBoard: View {
     @ViewBuilder
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .center, spacing: 12) {
-                tile
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.system(size: 19, weight: .semibold)).lineLimit(1)
-                    Text(subtitle).font(.system(size: 12.5)).foregroundStyle(.secondary).lineLimit(1)
-                }
-                .layoutPriority(1)
-                Spacer(minLength: 8)
-                actions
+            ShelfHeader(symbol: ShelfTitle.symbol(of: model.scope), tint: ShelfTitle.tint(of: model.scope),
+                        title: title, subtitle: subtitle) {
+                topControls
             }
-            if case let .plan(id) = kind, let plan = model.plan(id), !plan.entries.isEmpty {
-                stats(plan)
-                PlanPath(model: model, plan: plan, scrolls: !staticRows)
+            if case let .plan(id) = kind, let plan = model.plan(id) {
+                // The plan's own buttons on a row of their own, so a column
+                // the width of a list still has room for them; words when
+                // they fit, the symbols alone when they do not.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) { planActions(id, words: true); Spacer(minLength: 12); if !plan.entries.isEmpty { stats(plan) } }
+                    VStack(alignment: .leading, spacing: 8) { planActions(id, words: true); if !plan.entries.isEmpty { stats(plan) } }
+                    VStack(alignment: .leading, spacing: 8) { planActions(id, words: false); if !plan.entries.isEmpty { stats(plan) } }
+                }
+                .popover(isPresented: $showsSpread, arrowEdge: .bottom) {
+                    SpreadPicker(model: model, planID: id) { assignments in
+                        showsSpread = false
+                        let days = Dictionary(assignments.map { ($0.0, Optional($0.1)) }, uniquingKeysWith: { a, _ in a })
+                        changeDays(days, say: L("\(days.count)편에 날짜를 정했어요.", "Gave \(PlanText.papers(days.count)) a day."))
+                    }
+                }
+                if !plan.entries.isEmpty {
+                    PlanPath(model: model, plan: plan, scrolls: !staticRows)
+                }
             }
         }
         .padding(.horizontal, 20)
@@ -222,19 +248,94 @@ struct PlanBoard: View {
         .padding(.bottom, 6)
     }
 
-    private var tile: some View {
-        Image(systemName: tileSymbol)
-            .font(.system(size: 16, weight: .medium))
-            .foregroundStyle(Color.accentColor)
-            .frame(width: 36, height: 36)
-            .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Color.accentColor.opacity(0.13)))
+    /// What sits at the end of the head: a plan's table and calendar; a
+    /// shelf's «Read On · Plan» columns, shown on asking.
+    @ViewBuilder
+    private var topControls: some View {
+        switch kind {
+        case .plan:
+            ShelfViewSwitch(view: Binding(get: { view }, set: { model.setShelfView($0, for: model.scope) }),
+                            choices: [.table, .calendar])
+        case .week:
+            if Legacy.paperList {
+                ShelfViewSwitch(view: Binding(get: { view }, set: { model.setShelfView($0, for: model.scope) }),
+                                choices: [.list, .table])
+            }
+        case .shelf:
+            HStack(spacing: 8) {
+                Button {
+                    withAnimation(Motion.move) { showsPlanColumns.toggle() }
+                    PlanBoard.storePlanColumns(showsPlanColumns)
+                } label: {
+                    Label(L("읽을 날·계획", "Read On · Plan"), systemImage: "calendar")
+                        .labelStyle(.titleAndIcon)
+                        .font(.system(size: 12, weight: showsPlanColumns ? .semibold : .regular))
+                        .foregroundStyle(showsPlanColumns ? Color.accentColor : .secondary)
+                        .padding(.horizontal, 10)
+                        .frame(height: 26)
+                        .background(Capsule().fill(showsPlanColumns ? Color.accentColor.opacity(0.13) : Color.primary.opacity(0.05)))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .help(L("읽을 날과 계획 열을 보이거나 숨겨요", "Show or hide the Read On and Plan columns"))
+                if Legacy.paperList {
+                    ShelfViewSwitch(view: Binding(get: { view }, set: { model.setShelfView($0, for: model.scope) }),
+                                    choices: [.list, .table])
+                }
+            }
+        }
     }
 
-    private var tileSymbol: String {
-        switch kind {
-        case .plan: "point.topleft.down.to.point.bottomright.curvepath"
-        case .week: "calendar"
-        case .shelf: "tray.full"
+    static func storedPlanColumns() -> Bool {
+        guard Boot.setting("PAPERTIME_LIBRARY") == nil else { return Boot.isSet("PAPERTIME_PLAN_COLUMNS") }
+        return UserDefaults.standard.bool(forKey: "boardShowsPlanColumns")
+    }
+
+    static func storePlanColumns(_ on: Bool) {
+        guard Boot.setting("PAPERTIME_LIBRARY") == nil else { return }
+        UserDefaults.standard.set(on, forKey: "boardShowsPlanColumns")
+    }
+
+    /// What the old list said about the folder, said over the table: records
+    /// that have not arrived, PDFs still to add, and the ones that would not.
+    @ViewBuilder
+    private var notices: some View {
+        let failures = model.loadFailures.count
+        if failures > 0 || model.isAdopting || !model.looseDocuments.isEmpty || !model.adoptFailures.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                if failures > 0 {
+                    Button { Task { await model.pullFromCloud() } } label: {
+                        Label(L("기록 \(failures)개가 아직 안 왔어요", "\(failures) record\(failures == 1 ? "" : "s") \(failures == 1 ? "hasn't" : "haven't") arrived"),
+                              systemImage: "icloud.slash")
+                    }
+                    .buttonStyle(.plain)
+                }
+                if model.isAdopting {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text(L("PDF \(model.adoptingCount)개 더하는 중…", "Adding \(model.adoptingCount) PDFs…")).foregroundStyle(.secondary)
+                    }
+                } else if !model.looseDocuments.isEmpty {
+                    Button { Task { await model.adoptLooseDocuments() } } label: {
+                        Label(L("이 폴더에 남은 PDF \(model.looseDocuments.count)개 더하기", "Add \(model.looseDocuments.count) more PDFs from this folder"),
+                              systemImage: "tray.and.arrow.down")
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.accentColor)
+                }
+                if !model.adoptFailures.isEmpty {
+                    Label(L("PDF \(model.adoptFailures.count)개는 더하지 못했어요", "\(model.adoptFailures.count) PDF\(model.adoptFailures.count == 1 ? "" : "s") couldn't be added"),
+                          systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .font(.system(size: 12.5))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: Corner.popover, style: .continuous).fill(Color.accentColor.opacity(0.06)))
+            .padding(.horizontal, 16)
+            .padding(.top, 4)
         }
     }
 
@@ -268,53 +369,41 @@ struct PlanBoard: View {
         }
     }
 
+    /// A plan's three buttons — with their words, or as symbols when the
+    /// column is too narrow for the words.
     @ViewBuilder
-    private var actions: some View {
+    private func planActions(_ id: UUID, words: Bool) -> some View {
+        let papers = (model.plan(id)?.readingOrder ?? []).compactMap(model.paper)
+        let pushable = !model.pushedAWeek(id).isEmpty
         HStack(spacing: 8) {
-            if case let .plan(id) = kind {
-                Button {
-                    app.planning.sheet = .add(id)
-                } label: {
-                    Label(L("논문 더하기…", "Add Papers…"), systemImage: "plus")
-                }
-                .buttonStyle(SoftButtonStyle())
-                let papers = (model.plan(id)?.readingOrder ?? []).compactMap(model.paper)
+            Button {
+                app.planning.sheet = .add(id)
+            } label: {
+                Label(L("논문 더하기…", "Add Papers…"), systemImage: "plus")
+            }
+            .help(L("논문 더하기", "Add Papers"))
+            if !papers.isEmpty {
                 Button {
                     showsSpread.toggle()
                 } label: {
                     Label(L("고르게 나누기…", "Spread Out…"), systemImage: "calendar.badge.plus")
                 }
-                .opacity(papers.isEmpty ? 0 : 1)
-                .disabled(papers.isEmpty)
-                .buttonStyle(SoftButtonStyle())
-                .popover(isPresented: $showsSpread, arrowEdge: .bottom) {
-                    SpreadPicker(model: model, planID: id) { assignments in
-                        showsSpread = false
-                        let days = Dictionary(assignments.map { ($0.0, Optional($0.1)) }, uniquingKeysWith: { a, _ in a })
-                        changeDays(days, say: L("\(days.count)편에 날짜를 정했어요.", "Gave \(PlanText.papers(days.count)) a day."))
-                    }
-                }
+                .help(L("고르게 나누기", "Spread Out"))
+            }
+            // Only once there is a day to push.
+            if pushable {
                 Button {
                     let pushed = model.pushedAWeek(id)
-                    guard !pushed.isEmpty else {
-                        show(L("날짜를 정한 논문이 없어요.", "No paper here has a day yet."))
-                        return
-                    }
                     changeDays(pushed, say: L("남은 \(pushed.count)편을 한 주 뒤로 옮겼어요.", "Moved \(PlanText.papers(pushed.count)) a week later."))
                 } label: {
                     Label(L("한 주 미루기", "Push a Week"), systemImage: "arrow.right")
                 }
-                .buttonStyle(SoftButtonStyle())
-                // Only once there is a day to push.
-                .opacity(model.pushedAWeek(id).isEmpty ? 0 : 1)
-                .disabled(model.pushedAWeek(id).isEmpty)
+                .help(L("한 주 미루기", "Push a Week"))
             }
-            ShelfViewSwitch(
-                view: Binding(get: { view }, set: { model.setShelfView($0, for: model.scope) }),
-                choices: { if case .plan = kind { [.table, .calendar] } else { [.list, .table] } }()
-            )
         }
-        .labelStyle(.titleAndIcon)
+        .buttonStyle(SoftButtonStyle())
+        .labelStyle(PlanActionLabel(words: words))
+        .fixedSize()
     }
 
     private func stats(_ plan: ReadingPlan) -> some View {
@@ -450,14 +539,34 @@ struct PlanBoard: View {
 
     // MARK: Columns
 
-    private var columns: [BoardColumn] {
+    /// The columns asked for, in their order.
+    private var wantedColumns: [BoardColumn] {
         let off = Set(hidden[kind.key] ?? [])
-        let shown = kind.defaults.filter { !off.contains($0.rawValue) }
+        var base = kind.defaults
+        if kind == .shelf, !showsPlanColumns { base.removeAll { $0 == .day || $0 == .plan } }
+        let shown = base.filter { !off.contains($0.rawValue) }
         let extra = BoardColumn.allCases.filter { !kind.defaults.contains($0) && off.contains("+" + $0.rawValue) }
         return shown + extra
     }
 
-    private func isShown(_ column: BoardColumn) -> Bool { columns.contains(column) }
+    /// The ones that fit beside a title of at least 180 points, the most
+    /// wanted kept first — in a column the width of a list, the table loses
+    /// its venue before it loses its days.
+    private var columns: [BoardColumn] {
+        let wanted = wantedColumns
+        var room = width - 40 - 32 - 180
+        var kept: Set<BoardColumn> = []
+        for column in BoardKind.priority where wanted.contains(column) {
+            let need = column.width + 10
+            if need <= room {
+                kept.insert(column)
+                room -= need
+            }
+        }
+        return wanted.filter(kept.contains)
+    }
+
+    private func isShown(_ column: BoardColumn) -> Bool { wantedColumns.contains(column) }
 
     private func toggle(_ column: BoardColumn) {
         var list = hidden[kind.key] ?? []
@@ -697,8 +806,11 @@ struct PlanBoard: View {
 
     @ViewBuilder
     private func rowMenu(_ paper: LoadedPaper) -> some View {
-        Button(L("열기", "Open")) { open(paper.id) }
+        // Everything the list's rows offered: open beside, keep open, reading
+        // state, star, tags, attach, the key, Finder, the Trash.
+        PaperMenu(paper: paper, model: model)
         if case let .plan(planID) = kind, let plan = model.plan(planID) {
+            Divider()
             if !plan.sections.isEmpty {
                 Menu(L("섹션", "Section")) {
                     Button(L("섹션 없음", "No Section")) {
@@ -715,15 +827,6 @@ struct PlanBoard: View {
             Button(L("계획에서 빼기", "Remove from Plan")) {
                 let ids = model.selection.contains(paper.id) ? model.selection : [paper.id]
                 editPlan(planID, name: L("계획에서 빼기", "Remove from Plan")) { $0.remove(ids) }
-            }
-        } else if !model.plans.isEmpty {
-            Menu(L("계획에 넣기", "Add to Plan")) {
-                ForEach(model.plans) { plan in
-                    Button(plan.name) {
-                        let ids = Array(model.selection.contains(paper.id) ? model.selection : [paper.id])
-                        Task { await model.addToPlan(plan.id, papers: ids) }
-                    }
-                }
             }
         }
         if paper.schedule != nil {
@@ -910,6 +1013,18 @@ struct PlanBoard: View {
     }
 }
 
+/// A plan button's label: icon and words, or the icon alone.
+struct PlanActionLabel: LabelStyle {
+    let words: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 6) {
+            configuration.icon
+            if words { configuration.title }
+        }
+    }
+}
+
 /// One paper on a board, drawn like the demo's grid row.
 struct BoardRow: View {
     let paper: LoadedPaper
@@ -1022,16 +1137,23 @@ struct MaterialChips: View {
 
     var body: some View {
         let kinds = (model.paperLink(of: paper) != nil ? [MaterialKind.paper] : []) + paper.links.map(\.kind)
-        // Four fit; past four, three and a count of the rest.
-        let shown = kinds.count > 4 ? 3 : kinds.count
-        HStack(spacing: 4) {
-            ForEach(Array(kinds.prefix(shown).enumerated()), id: \.offset) { _, kind in
-                KindTile(kind: kind).help(kind.name)
-            }
-            if kinds.count > shown {
-                Text("+\(kinds.count - shown)").font(.system(size: 11)).monospacedDigit()
-                    .foregroundStyle(.tertiary).fixedSize()
-            }
+        // One tile, the width of the column; more than one, and a count in
+        // its corner (2026-11-16: the column only as wide as the button).
+        if let first = kinds.first {
+            KindTile(kind: first)
+                .overlay(alignment: .topTrailing) {
+                    if kinds.count > 1 {
+                        Text("\(kinds.count)")
+                            .font(.system(size: 9, weight: .bold))
+                            .monospacedDigit()
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 3.5)
+                            .frame(minWidth: 14, minHeight: 14)
+                            .background(Capsule().fill(Color.accentColor))
+                            .offset(x: 5, y: -5)
+                    }
+                }
+                .help(kinds.map(\.name).joined(separator: " · "))
         }
     }
 }
@@ -1088,6 +1210,41 @@ struct PlanPath: View {
 
 /// What a shelf is called, for a board's header.
 enum ShelfTitle {
+    /// The symbol the sidebar gives the shelf.
+    @MainActor static func symbol(of scope: LibraryModel.Scope) -> String {
+        switch scope {
+        case .all: "tray.full"
+        case .papers: "text.document"
+        case .documents: "doc"
+        case .folder: "folder"
+        case .open: "rectangle.on.rectangle"
+        case .notes: "note.text"
+        case .graph: "point.3.connected.trianglepath.dotted"
+        case .searchResults: "magnifyingglass"
+        case .unread: "circle"
+        case .reading: "circle.lefthalf.filled"
+        case .read: "checkmark.circle"
+        case .favorites: "star"
+        case .needsReview: "exclamationmark.triangle"
+        case .collection: "folder"
+        case .tag: "tag"
+        case .author: "person"
+        case .plan: "point.topleft.down.to.point.bottomright.curvepath"
+        case .thisWeek: "calendar"
+        }
+    }
+
+    /// The colour the sidebar lights the shelf in.
+    static func tint(of scope: LibraryModel.Scope) -> Color {
+        switch scope {
+        case .reading: .orange
+        case .read: .green
+        case .favorites: .yellow
+        case .needsReview: .red
+        default: .accentColor
+        }
+    }
+
     @MainActor static func of(_ scope: LibraryModel.Scope, in model: LibraryModel) -> String {
         switch scope {
         case .all: L("모두", "All")

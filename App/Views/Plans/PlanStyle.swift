@@ -365,3 +365,34 @@ struct ShelfViewSwitch: View {
         .accessibilityLabel(L("보기", "View"))
     }
 }
+
+/// The head every left column wears — the table of any shelf, a plan, the
+/// week, the slip-box: a tinted tile, the name, one line about it, and the
+/// column's own controls at the end. One shape, so moving between shelves
+/// reads as moving within one place (2026-11-16, the user's ask).
+struct ShelfHeader<Trailing: View>: View {
+    let symbol: String
+    var tint: Color = .accentColor
+    let title: String
+    var subtitle: String?
+    @ViewBuilder var trailing: () -> Trailing
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: symbol)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(tint)
+                .frame(width: 36, height: 36)
+                .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(tint.opacity(0.13)))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 19, weight: .semibold)).lineLimit(1)
+                if let subtitle {
+                    Text(subtitle).font(.system(size: 12.5)).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
+            .layoutPriority(1)
+            Spacer(minLength: 8)
+            trailing()
+        }
+    }
+}

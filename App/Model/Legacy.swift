@@ -33,4 +33,11 @@ enum Legacy {
     /// What the empty search palette offers (continue, because you read,
     /// revisit, new this week).
     static let emptySearchSuggestions = false
+    /// The list beside the page as it was before 1.1 (`PaperListView`), and the
+    /// List | Table switch that chose between it and the table. The user tried
+    /// both on 2026-11-16 and kept the table; the list stays in the code so it
+    /// comes back with this one line. Search results still use it (their
+    /// passages are rows a table has no columns for), and so does a library
+    /// with no papers yet (its setup screens).
+    static let paperList = false
 }

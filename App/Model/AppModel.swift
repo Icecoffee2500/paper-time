@@ -204,6 +204,12 @@ public final class AppModel {
     public var paperListWidth: Double = AppModel.storedWidth("paperListWidth", default: 320) {
         didSet { UserDefaults.standard.set(paperListWidth, forKey: "paperListWidth") }
     }
+    /// The list column's width while it holds the table, which wants more
+    /// room than a list of titles did — kept apart so the notes column keeps
+    /// its own.
+    public var tableWidth: Double = AppModel.storedWidth("tableColumnWidth", default: 620) {
+        didSet { UserDefaults.standard.set(tableWidth, forKey: "tableColumnWidth") }
+    }
     /// The inspector's, for the same reason the other two are here: it is a
     /// column of ours now rather than SwiftUI's. `.inspector` brought its own
     /// background with a square corner on it, which no amount of clipping from

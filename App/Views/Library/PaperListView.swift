@@ -75,8 +75,10 @@ struct PaperListView: View {
     /// What an empty shelf says. Each one is empty for its own reason, and
     /// the reason is what tells you whether anything is wrong — nothing is,
     /// in every case here.
-    private var emptyShelf: (title: String, symbol: String, note: String) {
-        switch model.scope {
+    private var emptyShelf: (title: String, symbol: String, note: String) { Self.emptyShelf(for: model.scope) }
+
+    static func emptyShelf(for scope: LibraryModel.Scope) -> (title: String, symbol: String, note: String) {
+        switch scope {
         case .unread:
             (L("안 읽은 논문이 없어요", "Nothing Unread"), "circle",
              L("여기 있는 논문은 모두 열어봤어요.", "Every paper here has been opened."))
@@ -1075,7 +1077,7 @@ struct PaperRow: View, Equatable {
 /// What a right-click on a paper offers.
 ///
 /// Its own view, and that is the point: see `PaperRow`.
-private struct PaperMenu: View {
+struct PaperMenu: View {
     let paper: LoadedPaper
     let model: LibraryModel
     @Environment(AppModel.self) private var app

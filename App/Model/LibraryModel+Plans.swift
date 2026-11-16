@@ -65,7 +65,13 @@ extension LibraryModel {
     /// What the shelf is seen as now. Plans and the week open as tables.
     public func shelfView(for scope: Scope) -> ShelfView {
         guard let key = Self.shelfKey(scope) else { return .list }
-        if let stored = shelfViews[key].flatMap(ShelfView.init(rawValue:)) {
+        let stored = shelfViews[key].flatMap(ShelfView.init(rawValue:))
+        guard Legacy.paperList else {
+            // The table is the list now; only a plan has a second way to be seen.
+            if case .plan = scope { return stored == .calendar ? .calendar : .table }
+            return .table
+        }
+        if let stored {
             if case .plan = scope { return stored }
             return stored == .calendar ? .table : stored
         }
@@ -80,14 +86,32 @@ extension LibraryModel {
         shelfViews[key] = view.rawValue
     }
 
-    /// Whether the shelf in front is a board — a table or a calendar —
-    /// rather than a list beside the page.
-    public var showsBoard: Bool { shelfView(for: scope) != .list }
+    /// Whether the shelf in front takes the room of the list and the page —
+    /// a plan's calendar, which needs the width. (With the old list back,
+    /// `Legacy.paperList`, every table did.)
+    public var showsBoard: Bool {
+        if Legacy.paperList { return shelfView(for: scope) != .list }
+        if case .plan = scope { return shelfView(for: scope) == .calendar }
+        return false
+    }
 
-    /// Opens a paper from a board: the shelf turns into its list, with the
-    /// paper picked and on the page beside it.
+    /// Whether the list column holds the board's table, with the page beside
+    /// it. Search results keep their list of passages, and a library with no
+    /// papers keeps its setup screens.
+    public var boardInListColumn: Bool {
+        guard !Legacy.paperList, Self.shelfKey(scope) != nil, scope != .searchResults else { return false }
+        return !papers.isEmpty
+    }
+
+    /// Opens a paper from a board: picked, on the page, kept on the open
+    /// shelf. From the calendar, the plan turns back into its table so the
+    /// page has room beside it.
     public func openFromBoard(_ id: UUID) {
-        setShelfView(.list, for: scope)
+        if Legacy.paperList {
+            setShelfView(.list, for: scope)
+        } else if showsBoard {
+            setShelfView(.table, for: scope)
+        }
         selection = [id]
         keepOpen(id)
     }

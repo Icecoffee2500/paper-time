@@ -424,7 +424,7 @@ struct LibraryWindow: View {
     private func widest(_ floor: CGFloat) -> CGFloat {
         var taken: CGFloat = Pane.pageFloor
         if app.isSidebarVisible { taken += app.sidebarWidth }
-        if app.showsPaperList { taken += app.paperListWidth }
+        if app.showsPaperList { taken += listWidth }
         if app.showsInspector { taken += app.inspectorWidth }
         return max(floor, windowWidth - taken + currentWidth(floor))
     }
@@ -434,9 +434,19 @@ struct LibraryWindow: View {
     private func currentWidth(_ floor: CGFloat) -> CGFloat {
         switch floor {
         case 200: app.isSidebarVisible ? app.sidebarWidth : 0
-        case 240: app.showsPaperList ? app.paperListWidth : 0
+        case 240: app.showsPaperList ? listWidth : 0
         default: app.showsInspector ? app.inspectorWidth : 0
         }
+    }
+
+    /// The list column's width: the table's own while it holds the table,
+    /// the list's otherwise.
+    private var listWidth: Double { model.boardInListColumn ? app.tableWidth : app.paperListWidth }
+
+    private var listWidthBinding: Binding<Double> {
+        model.boardInListColumn
+            ? Binding(get: { app.tableWidth }, set: { app.tableWidth = $0 })
+            : Binding(get: { app.paperListWidth }, set: { app.paperListWidth = $0 })
     }
 
     private var macColumns: some View {
@@ -476,18 +486,18 @@ struct LibraryWindow: View {
             // at, so it takes the room rather than leaving the window half
             // empty. Its own width comes back when the paper does.
             let listFills = showsList && !showsDetail
-            let listWidth: CGFloat? = if !showsList {
+            let columnWidth: CGFloat? = if !showsList {
                 0
             } else if listFills {
                 nil
             } else {
-                app.paperListWidth
+                listWidth
             }
             // The same, except when the list is the only thing left, where it
             // is meant to take the room and so has to be laid out for it.
             listColumn
-                .frame(width: listFills ? nil : app.paperListWidth)
-                .frame(width: listWidth, alignment: .leading)
+                .frame(width: listFills ? nil : listWidth)
+                .frame(width: columnWidth, alignment: .leading)
                 .frame(maxWidth: listFills ? .infinity : nil)
                 .columnPanel()
                 .opacity(showsList ? 1 : 0)
@@ -495,7 +505,7 @@ struct LibraryWindow: View {
 
             // Nothing to drag against when there is no paper beside it.
             if showsList, showsDetail {
-                ColumnDivider(width: $app.paperListWidth, range: 240...widest(240))
+                ColumnDivider(width: listWidthBinding, range: (model.boardInListColumn ? 400 : 240)...widest(240))
             }
 
             Group {
@@ -774,7 +784,16 @@ struct LibraryWindow: View {
                 SlipBoxList(model: model)
             }
         case .graph: GraphSidePanel(model: model, graph: model.graph)
-        default: paperListColumn
+        default:
+            #if os(macOS)
+            if model.boardInListColumn {
+                PlanBoard(model: model)
+            } else {
+                paperListColumn
+            }
+            #else
+            paperListColumn
+            #endif
         }
     }
 
@@ -784,28 +803,33 @@ struct LibraryWindow: View {
         // buttons and the system's toggle until one clipped letter of it was
         // left standing in the corner.
         VStack(spacing: 0) {
-            HStack {
-                Text(scopeTitle)
-                    .font(.headline)
-                    .lineLimit(1)
-                Spacer()
-                #if os(macOS)
-                // The way back to the table a paper was opened from, and the
-                // way into one from any shelf.
-                if LibraryModel.shelfKey(model.scope) != nil {
+            #if os(macOS)
+            // The same head every left column wears: a tile, a name, a line.
+            ShelfHeader(symbol: ShelfTitle.symbol(of: model.scope), title: scopeTitle,
+                        subtitle: L("논문 \(model.visiblePapers.count)편", PlanText.papers(model.visiblePapers.count))) {
+                if Legacy.paperList, LibraryModel.shelfKey(model.scope) != nil {
                     ShelfViewSwitch(
                         view: Binding(get: { model.shelfView(for: model.scope) },
                                       set: { model.setShelfView($0, for: model.scope) }),
                         choices: { if case .plan = model.scope { [.list, .table, .calendar] } else { [.list, .table] } }(),
                         compact: true
                     )
-                    .help(L("목록 · 표로 보기", "Show as a list or a table"))
                 }
-                #endif
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 18)
+            .padding(.bottom, 6)
+            #else
+            HStack {
+                Text(scopeTitle)
+                    .font(.headline)
+                    .lineLimit(1)
+                Spacer()
             }
             .padding(.horizontal, 16)
             .padding(.top, 10)
             .padding(.bottom, 6)
+            #endif
             PaperListView(model: model, link: link)
         }
     }

@@ -273,14 +273,16 @@ enum PlanProbe {
             draw("calendar", PlanBoard(model: model, staticRows: true), width: width, dark: true)
             model.setShelfView(.table, for: model.scope)
         }
+        // The rest stand in the list column now, beside the page.
+        let column = Double(Boot.setting("PAPERTIME_PLAN_COLUMN_WIDTH") ?? "") ?? 620
         model.scope = .thisWeek
-        draw("week", PlanBoard(model: model, staticRows: true), width: width, dark: false)
+        draw("week", PlanBoard(model: model, staticRows: true), width: column, dark: false)
         model.scope = .all
         model.setShelfView(.table, for: .all)
-        draw("all", PlanBoard(model: model, staticRows: true), width: width, dark: false)
+        draw("all", PlanBoard(model: model, staticRows: true), width: column, dark: false)
         model.scope = scope
         for dark in [false, true] {
-            draw("board", PlanBoard(model: model, staticRows: true), width: width, dark: dark)
+            draw("board", PlanBoard(model: model, staticRows: true), width: column, dark: dark)
             if let paper = model.selectedPaper {
                 draw("materials", MaterialsPreview(model: model, paper: paper).padding(16), width: 300, dark: dark)
             }
