@@ -331,6 +331,15 @@ struct LibrarySidebar: View {
                         .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
+                // What a plan is, said once, where the button is — until the
+                // first one exists.
+                if model.plans.isEmpty {
+                    Text(L("한 계열의 논문을 모아 읽을 날을 정해요", "Gather a line of papers and give them days."))
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.leading, 2)
+                }
             }
 
             Section(L("슬립박스", "Slip-Box")) {
@@ -437,40 +446,19 @@ struct LibrarySidebar: View {
 
     // MARK: Plans
 
-    /// Asks a plan's name, makes it — of a shelf's papers, when it is made
-    /// from one — and goes to it.
+    /// The New Plan sheet — named after a shelf and holding its papers when
+    /// it is made from one, else holding whatever is picked in the list.
     private func newPlan(from shelf: LibraryModel.Scope?, named name: String?) async {
-        #if os(macOS)
-        guard let chosen = await Ask.text(
-            title: L("새 계획", "New Plan"),
-            message: L("한 계열의 논문을 모아 차례와 날짜를 정해요.", "Gather a line of papers and give them an order and days."),
-            placeholder: L("예: Offline RL 정주행", "e.g. Offline RL, in Order"),
-            initial: name ?? "",
-            confirm: L("만들기", "Create")
-        ) else { return }
-        let papers = shelf.map { model.paperIDs(in: $0) } ?? []
-        if let id = await model.createPlan(named: chosen, papers: papers) {
-            withAnimation(Motion.surface) { model.scope = .plan(id) }
-        }
-        #endif
+        let papers = shelf.map { model.paperIDs(in: $0) } ?? Array(model.selection)
+        app.planning.sheet = .new(name: name ?? "", papers: papers)
     }
 
     private func renamePlan(_ plan: ReadingPlan) async {
-        #if os(macOS)
-        guard let name = await Ask.text(title: L("계획 이름 바꾸기", "Rename Plan"), message: nil, placeholder: plan.name, initial: plan.name) else { return }
-        await model.renamePlan(plan.id, to: name)
-        #endif
+        app.planning.prompt = .renamePlan(plan.id)
     }
 
     private func deletePlan(_ plan: ReadingPlan) async {
-        #if os(macOS)
-        guard await Ask.confirm(
-            title: L("‘\(plan.name)’ 계획을 지울까요?", "Delete the plan “\(plan.name)”?"),
-            message: L("논문은 그대로 있어요. 계획 파일은 휴지통으로 가요.", "The papers stay. The plan's file goes to the Trash."),
-            action: L("지우기", "Delete")
-        ) else { return }
-        await model.deletePlan(plan.id)
-        #endif
+        app.planning.deleting = plan.id
     }
 
     /// Who is on the most papers here.

@@ -1161,6 +1161,23 @@ private struct PaperMenu: View {
             Label(L("태그", "Tags"), systemImage: "tag")
         }
 
+        #if os(macOS)
+        // Into a plan — the picked rows, or this one — or a new plan made of
+        // them. The way into planning from where the papers are.
+        Menu {
+            let ids = model.selection.contains(paper.id) ? Array(model.selection) : [paper.id]
+            ForEach(model.plans) { plan in
+                Button(plan.name) { Task { await model.addToPlan(plan.id, papers: ids) } }
+            }
+            if !model.plans.isEmpty { Divider() }
+            Button(L("새 계획…", "New Plan…")) {
+                app.planning.sheet = .new(name: "", papers: ids)
+            }
+        } label: {
+            Label(L("계획에 넣기", "Add to Plan"), systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+        }
+        #endif
+
         // A picker, not a submenu. The submenu listed the first thirty papers
         // in title order, and the one being looked for is a supplement's
         // parent — as likely to be at Z as at A. On a shelf of two hundred it

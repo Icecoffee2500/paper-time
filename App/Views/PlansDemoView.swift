@@ -128,7 +128,7 @@ enum PlansDemo {
     static func makeWebView(theme: String, lang: String? = nil, receiver: Receiver) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.userContentController.add(receiver, name: channel)
-        let view = WKWebView(frame: NSRect(x: 0, y: 0, width: 760, height: 640), configuration: configuration)
+        let view = WheelPassingWebView(frame: NSRect(x: 0, y: 0, width: 760, height: 640), configuration: configuration)
         view.navigationDelegate = receiver
         // Over the pane's own panel, not on a white page of its own.
         if view.responds(to: NSSelectorFromString("_setDrawsBackground:")) {
@@ -137,6 +137,20 @@ enum PlansDemo {
         view.allowsMagnification = false
         view.loadHTMLString(page(theme: theme, lang: lang), baseURL: nil)
         return view
+    }
+
+    /// A web view that does not take the scroll wheel.
+    ///
+    /// The page is exactly as tall as the view and never scrolls, but WebKit
+    /// does not know that until it has asked its own process: every wheel
+    /// event over it went to the web content process first and only came back
+    /// to the settings pane after, which is what made scrolling About stutter
+    /// whenever the pointer crossed the demo (2026-11-16). Handed straight on
+    /// to whatever holds the view, the pane scrolls as it does everywhere else.
+    final class WheelPassingWebView: WKWebView {
+        override func scrollWheel(with event: NSEvent) {
+            if let next = nextResponder { next.scrollWheel(with: event) } else { super.scrollWheel(with: event) }
+        }
     }
 
     /// Hears the height and keeps the web view on its one page.

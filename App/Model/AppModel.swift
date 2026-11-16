@@ -276,6 +276,9 @@ public final class AppModel {
     /// invalidates only whoever reads the object's own property — the same
     /// reason `PullProgress` is an object.
     public let attaching = AttachRequest()
+    /// What a menu or a button has asked of the reading plans — a sheet, a
+    /// name, a delete — held here for the same reason `attaching` is.
+    public let planning = PlanRequest()
 
     // MARK: - What's new
 

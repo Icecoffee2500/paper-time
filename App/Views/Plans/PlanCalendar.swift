@@ -401,76 +401,28 @@ struct SpreadPicker: View {
                 Text(L("아직 안 읽은 논문에 차례대로 날짜를 정해요.", "Gives each unread paper a day, in order."))
                     .font(.system(size: 11.5)).foregroundStyle(.secondary)
             }
-            row(L("요일", "Days")) {
-                HStack(spacing: 3) {
-                    ForEach([0, 1, 2, 3, 4, 5, 6], id: \.self) { day in
-                        let on = weekdays.contains(day)
-                        Button {
-                            if on { weekdays.remove(day) } else { weekdays.insert(day) }
-                            remember()
-                        } label: {
-                            Text(L(PlanText.koWeekdays[day], String(PlanText.enWeekdays[day].prefix(2))))
-                                .font(.system(size: 11.5, weight: on ? .semibold : .regular))
-                                .foregroundStyle(on ? Color.white : .secondary)
-                                .frame(width: 25, height: 25)
-                                .background(Circle().fill(on ? Color.accentColor : Color.primary.opacity(0.06)))
-                                .contentShape(Circle())
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-            row(L("하루에", "Per day")) {
-                Stepper(value: Binding(get: { perDay }, set: { perDay = $0; remember() }), in: 1...3) {
-                    Text(PlanText.papers(perDay)).font(.system(size: 12, weight: .semibold)).monospacedDigit()
-                }
-            }
-            row(L("시작", "Start")) {
-                Picker("", selection: Binding(get: { nextWeek }, set: { nextWeek = $0; remember() })) {
-                    Text(L("오늘부터", "Today")).tag(false)
-                    Text(L("다음 주부터", "Next Week")).tag(true)
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .controlSize(.small)
-                .fixedSize()
-            }
-            Text(preview(made))
-                .font(.system(size: 12))
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.accentColor.opacity(0.07)))
+            SpreadControls(
+                weekdays: $weekdays, perDay: $perDay, nextWeek: $nextWeek,
+                preview: SpreadControls.preview(count: model.unreadInPlan(planID).count, days: made.map(\.1), weekdays: weekdays)
+            )
             HStack {
                 Spacer()
-                Button(L("날짜 정하기", "Set Days")) { apply(made) }
-                    .buttonStyle(SoftButtonStyle(prominent: true))
-                    .disabled(made.isEmpty)
-                    .keyboardShortcut(.defaultAction)
+                Button(L("날짜 정하기", "Set Days")) {
+                    SpreadPicker.remember(weekdays: weekdays, perDay: perDay, nextWeek: nextWeek)
+                    apply(made)
+                }
+                .buttonStyle(SoftButtonStyle(prominent: true))
+                .disabled(made.isEmpty)
+                .keyboardShortcut(.defaultAction)
             }
         }
         .padding(12)
-        .frame(width: 268)
+        .frame(width: 284)
     }
 
-    private func row(_ name: String, @ViewBuilder _ content: () -> some View) -> some View {
-        HStack(spacing: 8) {
-            Text(name).font(.system(size: 12)).foregroundStyle(.secondary).frame(width: 52, alignment: .leading)
-            content()
-        }
-    }
+    struct Choice { var weekdays: Set<Int>; var perDay: Int; var nextWeek: Bool }
 
-    private func preview(_ made: [(UUID, PlanDay)]) -> String {
-        if weekdays.isEmpty { return L("요일을 하나 이상 골라주세요.", "Choose at least one day.") }
-        guard let first = made.first?.1, let last = made.last?.1 else {
-            return L("안 읽은 논문이 없어요.", "Every paper here is read.")
-        }
-        return L("\(made.count)편 · \(PlanText.span(first, last))", "\(PlanText.papers(made.count)) · \(PlanText.span(first, last))")
-    }
-
-    private struct Choice { var weekdays: Set<Int>; var perDay: Int; var nextWeek: Bool }
-
-    private static func stored() -> Choice {
+    static func stored() -> Choice {
         let defaults = UserDefaults.standard
         guard Boot.setting("PAPERTIME_LIBRARY") == nil, let days = defaults.array(forKey: "spreadWeekdays") as? [Int] else {
             return Choice(weekdays: [0, 2, 4], perDay: 1, nextWeek: false)
@@ -479,7 +431,7 @@ struct SpreadPicker: View {
                       nextWeek: defaults.bool(forKey: "spreadNextWeek"))
     }
 
-    private func remember() {
+    static func remember(weekdays: Set<Int>, perDay: Int, nextWeek: Bool) {
         guard Boot.setting("PAPERTIME_LIBRARY") == nil else { return }
         let defaults = UserDefaults.standard
         defaults.set(weekdays.sorted(), forKey: "spreadWeekdays")

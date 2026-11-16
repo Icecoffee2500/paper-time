@@ -347,20 +347,21 @@ struct SoftButtonStyle: ButtonStyle {
     }
 }
 
-/// The segmented switch between list, table and calendar.
+/// The switch between list, table and calendar — in words, so the calendar
+/// is something you can see is there. The system's segmented picker drew only
+/// the icons, and the calendar went unfound (2026-11-16).
 struct ShelfViewSwitch: View {
     @Binding var view: LibraryModel.ShelfView
     let choices: [LibraryModel.ShelfView]
+    var compact = false
 
     var body: some View {
-        Picker(L("보기", "View"), selection: $view) {
-            ForEach(choices, id: \.self) { choice in
-                Label(choice.label, systemImage: choice.symbol).tag(choice)
-            }
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .fixedSize()
-        .controlSize(.small)
+        ShelfSwitchButtons(
+            choices: choices.map { ($0, $0.label) },
+            selection: $view,
+            symbols: choices.map(\.symbol),
+            compact: compact
+        )
+        .accessibilityLabel(L("보기", "View"))
     }
 }

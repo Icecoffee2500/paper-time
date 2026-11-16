@@ -45,6 +45,7 @@ enum PlanProbe {
         if let directory = Boot.setting("PAPERTIME_PLAN_RENDER"), let app = WindowProbe.model {
             try? await Task.sleep(for: .seconds(Double(Boot.setting("PAPERTIME_PLAN_RENDER_AFTER") ?? "") ?? 2))
             render(to: directory, model: model, app: app, say: say)
+            await renderGuidance(to: directory, model: model, app: app, say: say)
             NSApp.terminate(nil)
         }
     }
@@ -199,6 +200,40 @@ enum PlanProbe {
             say("spread \(first.name) MWF 1/day from today: \(spread.map { $0.1.text })")
         }
         say("shelf \(model.scope) as \(model.shelfView(for: model.scope).rawValue): \(model.visiblePapers.count) papers, selected \(model.selectedPaper?.meta.displayTitle.prefix(30) ?? "—")")
+    }
+
+    /// The pieces that tell a newcomer what to do: the New Plan sheet, an
+    /// empty plan, and a plan with no days yet.
+    private static func renderGuidance(to directory: String, model: LibraryModel, app: AppModel, say: (String) -> Void) async {
+        let folder = URL(fileURLWithPath: directory, isDirectory: true)
+        func draw(_ name: String, _ view: some View, width: Double) {
+            let renderer = ImageRenderer(content: view.frame(width: width)
+                .background(Color(nsColor: .windowBackgroundColor)).environment(app))
+            renderer.scale = 2
+            guard let image = renderer.cgImage,
+                  let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) else {
+                return say("plan render: \(name) drew nothing")
+            }
+            let url = folder.appending(path: name + ".png")
+            try? png.write(to: url)
+            say("plan render: wrote \(url.path) \(image.width)×\(image.height)")
+        }
+        let papers = model.papers.filter { $0.meta.parentID == nil }
+        draw("new-plan", NewPlanSheet(model: model, name: "Offline RL 정주행", chosen: papers.prefix(4).map(\.id),
+                                      givesDays: true, rendering: true) {}, width: 540)
+        let scope = model.scope
+        if let empty = await model.createPlan(named: "빈 계획") {
+            model.scope = .plan(empty)
+            draw("empty-plan", PlanBoard(model: model, staticRows: true).frame(height: 620), width: 1000)
+            await model.deletePlan(empty)
+        }
+        let undated = papers.filter { $0.schedule == nil }.prefix(3).map(\.id)
+        if !undated.isEmpty, let fresh = await model.createPlan(named: "날짜 없는 계획", papers: Array(undated)) {
+            model.scope = .plan(fresh)
+            draw("days-strip", PlanBoard(model: model, staticRows: true), width: 1000)
+            await model.deletePlan(fresh)
+        }
+        model.scope = scope
     }
 
     /// The board drawn by `ImageRenderer` into PNGs, light and dark — no

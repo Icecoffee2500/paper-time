@@ -6,13 +6,14 @@ import SwiftUI
 
 /// A column a board can show beside the title.
 enum BoardColumn: String, CaseIterable, Identifiable, Hashable {
-    case authors, venue, plan, day, progress, materials, tags, rating, notes, added, opened
+    case authors, year, venue, plan, day, progress, materials, tags, rating, notes, added, opened
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .authors: L("저자 · 해", "Author · Year")
+        case .authors: L("저자", "Authors")
+        case .year: L("해", "Year")
         case .venue: L("학회", "Venue")
         case .plan: L("계획", "Plan")
         case .day: L("읽을 날", "Read On")
@@ -28,8 +29,9 @@ enum BoardColumn: String, CaseIterable, Identifiable, Hashable {
 
     var width: CGFloat {
         switch self {
-        case .authors: 116
-        case .venue: 90
+        case .authors: 110
+        case .year: 44
+        case .venue: 84
         case .plan: 124
         case .day: 100
         case .progress: 86
@@ -58,9 +60,9 @@ enum BoardKind: Equatable {
     /// The columns the demo shows, in its order.
     var defaults: [BoardColumn] {
         switch self {
-        case .plan: [.day, .progress, .materials, .tags]
+        case .plan: [.authors, .year, .venue, .day, .progress, .materials]
         case .week: [.plan, .day, .materials]
-        case .shelf: [.authors, .day, .plan, .materials]
+        case .shelf: [.authors, .year, .venue, .day, .plan, .materials]
         }
     }
 }
@@ -107,6 +109,8 @@ struct PlanBoard: View {
     @State private var calendarStart: PlanDay?
     @State private var addText = ""
     @State private var adding = false
+    /// Plans whose «when will you read them?» strip was put away this session.
+    @State private var quietStrips: Set<UUID> = []
 
     private var kind: BoardKind {
         switch model.scope {
@@ -132,8 +136,13 @@ struct PlanBoard: View {
                         changeDays([id: day], say: text)
                     }
                 )
+            } else if case let .plan(id) = kind, model.plan(id)?.entries.isEmpty == true {
+                emptyPlan(id)
             } else {
-                if case .plan = kind { viewbar }
+                if case let .plan(id) = kind {
+                    if needsDays(id), !quietStrips.contains(id) { daysStrip(id) }
+                    viewbar
+                }
                 columnHeader
                 if kind == .week, data.entries.isEmpty {
                     Text(L("이번 주에 읽을 논문이 없어요", "Nothing to read this week."))
@@ -169,6 +178,12 @@ struct PlanBoard: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .overlay(alignment: .bottom) { toastView }
+        // What the New Plan sheet did, said here once the plan is showing.
+        .onChange(of: app.planning.notice, initial: true) { _, notice in
+            guard let notice else { return }
+            app.planning.notice = nil
+            show(notice)
+        }
         .animation(Motion.move, value: toast)
         // Midnight, or a Mac woken the next morning: the board's «today»
         // moves with the clock.
@@ -197,7 +212,7 @@ struct PlanBoard: View {
                 Spacer(minLength: 8)
                 actions
             }
-            if case let .plan(id) = kind, let plan = model.plan(id) {
+            if case let .plan(id) = kind, let plan = model.plan(id), !plan.entries.isEmpty {
                 stats(plan)
                 PlanPath(model: model, plan: plan, scrolls: !staticRows)
             }
@@ -237,6 +252,7 @@ struct PlanBoard: View {
             guard let plan = model.plan(id) else { return "" }
             let papers = plan.readingOrder.compactMap(model.paper)
             let read = papers.filter { $0.state.readingStatus == .read }.count
+            if papers.isEmpty { return L("아직 논문이 없어요", "No papers yet") }
             let days = papers.compactMap(\.schedule).sorted()
             let span = days.first.map { PlanText.span($0, days.last!) } ?? L("날짜를 아직 안 정했어요", "No dates yet")
             return L("\(span) · \(papers.count)편 중 \(read)편 읽음", "\(span) · \(read) of \(papers.count) read")
@@ -257,10 +273,19 @@ struct PlanBoard: View {
         HStack(spacing: 8) {
             if case let .plan(id) = kind {
                 Button {
+                    app.planning.sheet = .add(id)
+                } label: {
+                    Label(L("논문 더하기…", "Add Papers…"), systemImage: "plus")
+                }
+                .buttonStyle(SoftButtonStyle())
+                let papers = (model.plan(id)?.readingOrder ?? []).compactMap(model.paper)
+                Button {
                     showsSpread.toggle()
                 } label: {
                     Label(L("고르게 나누기…", "Spread Out…"), systemImage: "calendar.badge.plus")
                 }
+                .opacity(papers.isEmpty ? 0 : 1)
+                .disabled(papers.isEmpty)
                 .buttonStyle(SoftButtonStyle())
                 .popover(isPresented: $showsSpread, arrowEdge: .bottom) {
                     SpreadPicker(model: model, planID: id) { assignments in
@@ -280,6 +305,9 @@ struct PlanBoard: View {
                     Label(L("한 주 미루기", "Push a Week"), systemImage: "arrow.right")
                 }
                 .buttonStyle(SoftButtonStyle())
+                // Only once there is a day to push.
+                .opacity(model.pushedAWeek(id).isEmpty ? 0 : 1)
+                .disabled(model.pushedAWeek(id).isEmpty)
             }
             ShelfViewSwitch(
                 view: Binding(get: { view }, set: { model.setShelfView($0, for: model.scope) }),
@@ -297,8 +325,86 @@ struct PlanBoard: View {
         return HStack(spacing: 6) {
             StatCapsule(text: L("이번 주 \(week)편", "This week \(week)"), color: .blue)
             if behind > 0 { StatCapsule(text: L("밀린 것 \(behind)편", "Overdue \(behind)"), color: .orange) }
-            if none > 0 { StatCapsule(text: L("날짜 없음 \(none)편", "No date \(none)"), color: .gray) }
+            if none > 0 {
+                // Where the undated ones wait: the calendar's tray.
+                Button {
+                    model.setShelfView(.calendar, for: model.scope)
+                } label: {
+                    StatCapsule(text: L("날짜 없음 \(none)편", "No date \(none)"), color: .gray)
+                }
+                .buttonStyle(.plain)
+                .help(L("달력에서 날짜를 정해요", "Give them days on the calendar"))
+            }
         }
+    }
+
+    // MARK: What to do next
+
+    /// A plan's papers, none with a day yet.
+    private func needsDays(_ id: UUID) -> Bool {
+        let papers = (model.plan(id)?.readingOrder ?? []).compactMap(model.paper)
+        return !papers.isEmpty && papers.allSatisfy { $0.schedule == nil }
+    }
+
+    /// The next step, said where the work is: until a plan has a day, the
+    /// board asks when, and offers the two ways to answer.
+    private func daysStrip(_ id: UUID) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "calendar.badge.clock")
+                .font(.system(size: 18))
+                .foregroundStyle(Color.accentColor)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L("언제 읽을지 정해 볼까요?", "When will you read them?"))
+                    .font(.system(size: 13, weight: .semibold))
+                Text(L("요일만 고르면 차례대로 날짜를 정해요.", "Pick the weekdays and each paper gets a day, in order."))
+                    .font(.system(size: 12)).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+            Button(L("고르게 나누기…", "Spread Out…")) { showsSpread = true }
+                .buttonStyle(SoftButtonStyle(prominent: true))
+            Button(L("달력에서 정하기", "Use the Calendar")) { model.setShelfView(.calendar, for: model.scope) }
+                .buttonStyle(SoftButtonStyle())
+            Button {
+                withAnimation(Motion.move) { _ = quietStrips.insert(id) }
+            } label: {
+                Image(systemName: "xmark").font(.system(size: 9, weight: .bold)).foregroundStyle(.secondary)
+                    .frame(width: 20, height: 20)
+                    .background(Circle().fill(Color.primary.opacity(0.06)))
+            }
+            .buttonStyle(.plain)
+            .help(L("닫기", "Close"))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(RoundedRectangle(cornerRadius: Corner.popover, style: .continuous).fill(Color.accentColor.opacity(0.07)))
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .transition(.opacity)
+    }
+
+    /// A plan with nothing in it says what goes in, and how.
+    private func emptyPlan(_ id: UUID) -> some View {
+        VStack(spacing: 12) {
+            Spacer(minLength: 20)
+            Image(systemName: "tray.and.arrow.down")
+                .font(.system(size: 30, weight: .light))
+                .foregroundStyle(.tertiary)
+            Text(L("이 계획에 읽을 논문을 모아요", "Gather the papers for this plan"))
+                .font(.system(size: 15, weight: .semibold))
+            Text(L("라이브러리에서 고르거나, arXiv 주소·DOI를 붙여넣거나, 목록에서 끌어와요.",
+                   "Pick them from your library, paste an arXiv link or a DOI, or drag them in from the list."))
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 380)
+            Button(L("논문 고르기…", "Choose Papers…")) { app.planning.sheet = .add(id) }
+                .buttonStyle(SoftButtonStyle(prominent: true))
+                .padding(.top, 4)
+            addRow.frame(maxWidth: 520)
+            Spacer(minLength: 40)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 20)
     }
 
     // MARK: The bar over a plan's table
@@ -314,7 +420,7 @@ struct PlanBoard: View {
             Spacer()
             if case let .plan(id) = kind {
                 Button {
-                    Task { await addSection(to: id) }
+                    app.planning.prompt = .newSection(id)
                 } label: {
                     Label(L("섹션 더하기", "Add Section"), systemImage: "plus")
                         .font(.system(size: 11.5, weight: .medium))
@@ -514,9 +620,9 @@ struct PlanBoard: View {
             switch sortColumn {
             case .authors:
                 let x = a.meta.csl.author.first?.sortingSurname ?? "zzz", y = b.meta.csl.author.first?.sortingSurname ?? "zzz"
-                if x != y { return x.localizedCaseInsensitiveCompare(y) == .orderedAscending }
-                return (a.meta.csl.year ?? 0) < (b.meta.csl.year ?? 0)
-            case .venue: return (a.meta.csl.containerTitle ?? "~").localizedCaseInsensitiveCompare(b.meta.csl.containerTitle ?? "~") == .orderedAscending
+                return x.localizedCaseInsensitiveCompare(y) == .orderedAscending
+            case .year: return (a.meta.csl.year ?? 0) < (b.meta.csl.year ?? 0)
+            case .venue: return (BoardRow.venue(a) ?? "~").localizedCaseInsensitiveCompare(BoardRow.venue(b) ?? "~") == .orderedAscending
             case .plan: return (model.plans(containing: a.id).first?.name ?? "~") < (model.plans(containing: b.id).first?.name ?? "~")
             case .day: return (a.schedule?.ordinal ?? Int.max) < (b.schedule?.ordinal ?? Int.max)
             case .progress: return model.progress(of: a) < model.progress(of: b)
@@ -578,7 +684,7 @@ struct PlanBoard: View {
         .contentShape(Rectangle())
         .contextMenu {
             if group.isSection, let section = group.section, case let .plan(planID) = kind {
-                Button(L("섹션 이름 바꾸기…", "Rename Section…")) { Task { await renameSection(section, in: planID) } }
+                Button(L("섹션 이름 바꾸기…", "Rename Section…")) { app.planning.prompt = .renameSection(plan: planID, section: section) }
                 Button(L("위로", "Move Up")) { editPlan(planID, name: L("섹션 옮기기", "Move Section")) { $0.moveSection(section, by: -1) } }
                 Button(L("아래로", "Move Down")) { editPlan(planID, name: L("섹션 옮기기", "Move Section")) { $0.moveSection(section, by: 1) } }
                 Divider()
@@ -760,21 +866,6 @@ struct PlanBoard: View {
         return true
     }
 
-    private func addSection(to planID: UUID) async {
-        guard let name = await Ask.text(
-            title: L("새 섹션", "New Section"),
-            message: L("계열이나 주제의 이름을 적어요.", "Name a line of work or a topic."),
-            placeholder: L("예: 값을 낮춰 잡기", "e.g. Conservative Estimates")
-        ) else { return }
-        editPlan(planID, name: L("섹션 더하기", "Add Section")) { $0.addSection(named: name) }
-    }
-
-    private func renameSection(_ section: UUID, in planID: UUID) async {
-        let current = model.plan(planID)?.sections.first { $0.id == section }?.name ?? ""
-        guard let name = await Ask.text(title: L("섹션 이름 바꾸기", "Rename Section"), message: nil, placeholder: "", initial: current) else { return }
-        editPlan(planID, name: L("섹션 이름 바꾸기", "Rename Section")) { $0.renameSection(section, to: name) }
-    }
-
     /// The foot of a plan: addresses, one per line. A paper the library has
     /// joins the plan; one it does not is fetched first, the way «Add Paper by
     /// Address…» fetches it.
@@ -868,9 +959,13 @@ struct BoardRow: View {
         switch column {
         case .authors:
             Text(authors).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
+        case .year:
+            Text(paper.meta.csl.year.map(String.init) ?? "—").font(.system(size: 12)).monospacedDigit()
+                .foregroundStyle(.secondary).lineLimit(1)
         case .venue:
-            Text(paper.meta.csl.containerTitleShort ?? paper.meta.csl.containerTitle ?? "—")
+            Text(BoardRow.venue(paper) ?? "—")
                 .font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
+                .help(paper.meta.csl.containerTitle ?? "")
         case .plan:
             if let plan = model.plans(containing: paper.id).first {
                 TagCapsule(name: plan.name, color: .indigo)
@@ -911,8 +1006,12 @@ struct BoardRow: View {
     private var authors: String {
         let first = paper.meta.csl.author.first?.family ?? paper.meta.csl.author.first?.displayName ?? ""
         let more = paper.meta.csl.author.count > 1 ? L(" 외", " et al.") : ""
-        let year = paper.meta.csl.year.map { " · \($0)" } ?? ""
-        return first.isEmpty ? (paper.meta.csl.year.map(String.init) ?? "—") : first + more + year
+        return first.isEmpty ? "—" : first + more
+    }
+
+    /// The venue as a table says it: NeurIPS, not the proceedings' title.
+    static func venue(_ paper: LoadedPaper) -> String? {
+        VenueName.short(full: paper.meta.csl.containerTitle, short: paper.meta.csl.containerTitleShort)
     }
 }
 
@@ -1013,44 +1112,4 @@ enum ShelfTitle {
     }
 }
 
-/// A name asked for in a small window of its own — an alert with a field,
-/// the way Finder asks for a folder's name.
-@MainActor
-enum Ask {
-    static func text(title: String, message: String?, placeholder: String, initial: String = "",
-                     confirm: String = L("확인", "OK")) async -> String? {
-        let alert = NSAlert()
-        alert.messageText = title
-        if let message { alert.informativeText = message }
-        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
-        field.placeholderString = placeholder
-        field.stringValue = initial
-        alert.accessoryView = field
-        alert.addButton(withTitle: confirm)
-        alert.addButton(withTitle: L("취소", "Cancel"))
-        alert.window.initialFirstResponder = field
-        let answer: NSApplication.ModalResponse
-        if let window = NSApp.keyWindow ?? NSApp.mainWindow {
-            answer = await alert.beginSheetModal(for: window)
-        } else {
-            answer = alert.runModal()
-        }
-        guard answer == .alertFirstButtonReturn else { return nil }
-        let text = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        return text.isEmpty ? nil : text
-    }
-
-    static func confirm(title: String, message: String, action: String) async -> Bool {
-        let alert = NSAlert()
-        alert.messageText = title
-        alert.informativeText = message
-        alert.addButton(withTitle: action)
-        alert.addButton(withTitle: L("취소", "Cancel"))
-        alert.buttons.first?.hasDestructiveAction = true
-        if let window = NSApp.keyWindow ?? NSApp.mainWindow {
-            return await alert.beginSheetModal(for: window) == .alertFirstButtonReturn
-        }
-        return alert.runModal() == .alertFirstButtonReturn
-    }
-}
 #endif

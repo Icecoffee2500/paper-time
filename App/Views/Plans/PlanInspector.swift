@@ -11,6 +11,7 @@ struct PlanInspectorSections: View {
     let model: LibraryModel
     let paper: LoadedPaper
     @Environment(\.undoManager) private var undoManager
+    @Environment(AppModel.self) private var app
     @State private var showsDay = false
     @State private var linkText = ""
     @State private var message: String?
@@ -48,16 +49,16 @@ struct PlanInspectorSections: View {
                         .help(L("이 계획 보기", "Show this plan"))
                     }
                     let others = model.plans.filter { !$0.contains(paper.id) }
-                    if !others.isEmpty {
-                        Menu(L("계획에 넣기", "Add to Plan")) {
-                            ForEach(others) { plan in
-                                Button(plan.name) { Task { await model.addToPlan(plan.id, papers: [paper.id]) } }
-                            }
+                    Menu(L("계획에 넣기", "Add to Plan")) {
+                        ForEach(others) { plan in
+                            Button(plan.name) { Task { await model.addToPlan(plan.id, papers: [paper.id]) } }
                         }
-                        .menuStyle(.borderlessButton)
-                        .fixedSize()
-                        .font(.caption)
+                        if !others.isEmpty { Divider() }
+                        Button(L("새 계획…", "New Plan…")) { app.planning.sheet = .new(name: "", papers: [paper.id]) }
                     }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                    .font(.caption)
                 }
             }
             LabeledContent(L("진행", "Progress")) {
@@ -180,9 +181,7 @@ struct PlanInspectorSections: View {
 
     private func rename(_ link: PaperMaterial) async {
         #if os(macOS)
-        guard let name = await Ask.text(title: L("자료 이름 바꾸기", "Rename Material"), message: nil,
-                                        placeholder: link.displayTitle, initial: link.title ?? "") else { return }
-        await model.renameLink(link.id, of: paper.id, to: name)
+        app.planning.prompt = .renameMaterial(paper: paper.id, link: link.id)
         #endif
     }
 }

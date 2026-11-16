@@ -327,7 +327,9 @@ struct LibraryWindow: View {
         // both shortcuts work, both animate, both give the width back, and the
         // reader never moves.
         #if os(macOS)
-        return AnyView(macColumns)
+        // The plans' sheets hang here, on something that outlives the menus
+        // and buttons that ask for them (`PlanRequest`).
+        return AnyView(macColumns.modifier(PlanPresentations(model: model)))
         #else
         // iPhone and iPad keep the system split view: it is what gives them
         // the sliding sidebar, the back button and the compact layout.
@@ -794,9 +796,9 @@ struct LibraryWindow: View {
                     ShelfViewSwitch(
                         view: Binding(get: { model.shelfView(for: model.scope) },
                                       set: { model.setShelfView($0, for: model.scope) }),
-                        choices: { if case .plan = model.scope { [.list, .table, .calendar] } else { [.list, .table] } }()
+                        choices: { if case .plan = model.scope { [.list, .table, .calendar] } else { [.list, .table] } }(),
+                        compact: true
                     )
-                    .labelStyle(.iconOnly)
                     .help(L("목록 · 표로 보기", "Show as a list or a table"))
                 }
                 #endif
