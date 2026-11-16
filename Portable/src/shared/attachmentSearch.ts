@@ -8,7 +8,8 @@
  * downloaded `Karmanov_Efficient_Test-Time_Adaptation_CVPR_2024.pdf` types
  * «karmanov», which is in no title).
  */
-import { foldTitle } from './textFold.js'
+import { foldTitle, graphemes } from './textFold.js'
+import { isNumber } from './metadata/chars.js'
 import { jaroWinkler } from './searchRank.js'
 
 export interface AttachCandidate {
@@ -117,12 +118,7 @@ export function looksLikeSupplement(fileName: string, title: string | undefined)
  * («supplement» out of «supplementary» left «ary» behind).
  */
 export function bestParent(fileName: string, title: string | undefined, candidates: { id: string; title: string }[]): string | null {
-  const stem = fileName.replace(/\.[^./\\]*$/, '')
-  let needle = foldTitle([stem, title ?? ''].join(' '))
-  for (const marker of [...MARKERS].sort((a, b) => b.length - a.length)) {
-    needle = needle.split(foldTitle(marker)).join(' ')
-  }
-  needle = needle.split(' ').filter(Boolean).join(' ')
+  const needle = strippedNeedle(fileName, title)
   if ([...needle].length < 10) return null
   let best: { id: string; score: number } | null = null
   let runnerUp = 0
@@ -151,4 +147,90 @@ export function suggestedParent(
 ): string | null {
   if (!looksLikeSupplement(child.fileName, child.title)) return null
   return bestParent(child.fileName, child.title, candidates.filter((one) => one.id !== child.id))
+}
+
+/** A file name without its extension (`deletingPathExtension`). */
+const stemOf = (fileName: string) => fileName.replace(/\.[^./\\]*$/, '')
+
+/** The file stem and title, folded, with the supplementary words taken out (longest first). */
+function strippedNeedle(fileName: string, title: string | undefined): string {
+  let needle = foldTitle([stemOf(fileName), title ?? ''].join(' '))
+  for (const marker of [...MARKERS].sort((a, b) => b.length - a.length)) {
+    needle = needle.split(foldTitle(marker)).join(' ')
+  }
+  return needle.split(' ').filter(Boolean).join(' ')
+}
+
+const ROLES = new Set(['paper', 'main', 'supplement', 'supplementary', 'supplemental', 'supp', 'appendix',
+  'appendices', 'material', 'materials', 'supmat', 'sm'])
+
+/** A file name with its role taken off: `…_CVPR_2024_supplemental` and
+ *  `…_CVPR_2024_paper` are the same stem. Numbers at the end go too — the
+ *  year, and the « 14.54.16» a second download of the same name is given. */
+export function twinStem(fileName: string): string {
+  const words = foldTitle(stemOf(fileName).replaceAll('_', ' ')).split(' ').filter(Boolean)
+  while (words.length > 0) {
+    const last = words[words.length - 1]
+    if (!ROLES.has(last) && !graphemes(last).every(isNumber)) break
+    words.pop()
+  }
+  return words.join(' ')
+}
+
+/** Whether one stem is the other with words left out of its middle: the same
+ *  first word and last word, four words or more, the rest in order. */
+export function isShortening(short: string, long: string): boolean {
+  const few = short.split(' ').filter(Boolean)
+  const many = long.split(' ').filter(Boolean)
+  if (few.length < 4 || few.length >= many.length || few[0] !== many[0] || few[few.length - 1] !== many[many.length - 1]) return false
+  let index = 0
+  for (const word of few) {
+    const found = many.indexOf(word, index)
+    if (found < 0) return false
+    index = found + 1
+  }
+  return true
+}
+
+/**
+ * The paper a supplement belongs to, when that is certain enough to attach it
+ * without asking (`SupplementDetector.confidentParent`; 2026-11-16:
+ * «supplemental은 논문 목록에서 보이는게 아니라 본 논문의 "자료"에 등록되어야지»).
+ *
+ * Three witnesses, strongest first, each of which must point at exactly one
+ * paper: the two files are twins — the same name but for `_supplemental` and
+ * `_paper` (or the supplement's name a shortening of the paper's, the way the
+ * Computer Vision Foundation names them); the paper's whole title (three words
+ * or more) is inside the supplement's title or file name; or the titles are
+ * all but equal. Anything less is left to the inspector's question.
+ */
+export function confidentParent(
+  fileName: string,
+  title: string | undefined,
+  candidates: { id: string; title: string; fileName: string }[],
+): string | null {
+  if (!looksLikeSupplement(fileName, title)) return null
+
+  const own = twinStem(fileName)
+  if (graphemes(own).length >= 12) {
+    const twins = candidates.filter((one) => twinStem(one.fileName) === own)
+    if (twins.length === 1) return twins[0].id
+    const shortened = candidates.filter((one) => isShortening(own, twinStem(one.fileName)))
+    if (twins.length === 0 && shortened.length === 1) return shortened[0].id
+  }
+
+  const haystack = foldTitle([stemOf(fileName), title ?? ''].join(' ').replaceAll('_', ' '))
+  const containing = candidates.filter((one) => {
+    const folded = foldTitle(one.title)
+    return folded.split(' ').filter(Boolean).length >= 3 && graphemes(folded).length >= 20 && haystack.includes(folded)
+  })
+  if (containing.length === 1) return containing[0].id
+
+  const best = bestParent(fileName, title, candidates.map((one) => ({ id: one.id, title: one.title })))
+  if (best === null) return null
+  const needle = strippedNeedle(fileName, title)
+  const scores = candidates.map((one) => jaroWinkler(needle, foldTitle(one.title))).sort((a, b) => b - a)
+  const top = scores[0]
+  if (top === undefined || top < 0.93 || top - (scores[1] ?? 0) < 0.08) return null
+  return best
 }

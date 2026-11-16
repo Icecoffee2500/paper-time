@@ -1231,7 +1231,9 @@ struct PaperMenu: View {
         #endif
 
         Button {
-            Task { await model.resolveMetadata(for: paper.id) }
+            // A confirmed record keeps its key and gives way only to another
+            // confirmed one; a guess is simply looked up again.
+            Task { await model.resolveMetadata(for: paper.id, refreshing: paper.meta.confidence == .verified) }
         } label: {
             Label(L("서지 다시 찾기", "Re-run Metadata"), systemImage: "arrow.triangle.2.circlepath")
         }

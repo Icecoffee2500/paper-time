@@ -45,6 +45,165 @@ enum BoardColumn: String, CaseIterable, Identifiable, Hashable {
     }
 }
 
+/// What a board is sorted by: the titles (`column == nil`) or a column, and
+/// which way.
+struct BoardSort: Equatable {
+    var column: BoardColumn?
+    var ascending: Bool
+
+    /// One paper's value for the sort.
+    enum Value {
+        case text(String), number(Double)
+
+        /// Text the way Finder orders it: case aside, numbers by value.
+        func compare(_ other: Value) -> ComparisonResult {
+            switch (self, other) {
+            case let (.text(a), .text(b)): a.localizedStandardCompare(b)
+            case let (.number(a), .number(b)): a < b ? .orderedAscending : a > b ? .orderedDescending : .orderedSame
+            default: .orderedSame
+            }
+        }
+    }
+}
+
+/// A column's name over the table, which sorts by it. It answers the
+/// pointer — a shade behind it, the hand — because a header that sorts and a
+/// header that only names look the same at rest; the one being sorted by is
+/// in the accent colour with its arrow.
+struct BoardHeaderButton: View {
+    let text: String
+    let arrow: String?
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 3) {
+                Text(text).lineLimit(1)
+                if let arrow { Text(arrow) }
+            }
+            .foregroundStyle(arrow != nil ? AnyShapeStyle(Color.accentColor)
+                             : hovering ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tertiary))
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(
+                RoundedRectangle(cornerRadius: Corner.control, style: .continuous)
+                    .fill(Color.primary.opacity(hovering ? 0.055 : 0))
+            )
+            // The shade reaches past the name; the name stays where the
+            // column's cells start.
+            .padding(.horizontal, -5)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .animation(Motion.tap, value: hovering)
+        .onHover { inside in
+            hovering = inside
+            (inside ? NSCursor.pointingHand : NSCursor.arrow).set()
+        }
+        .help(arrow == nil
+              ? L("누르면 이 열로 정렬해요", "Click to sort by this column")
+              : L("한 번 더 누르면 반대로, 또 누르면 원래 순서로 돌아가요", "Click again to reverse, once more for the original order"))
+    }
+}
+
+/// How a table's row is laid across the board: a ring, the title, then the
+/// columns. When they do not all fit beside a title worth reading, the
+/// title is pinned at a fixed width and the columns slide sideways under a
+/// window of their own — every column at its own width, lined up, sortable
+/// (2026-11-16: folding the authors, year and venue under the title read as
+/// clutter — «열로 정렬이 되어있는게 아니다보니까 조금 번잡스럽네»; the user
+/// chose this over dropping columns).
+struct BoardGeometry: Equatable {
+    /// The title's width when pinned; nil when it takes what is left.
+    var title: CGFloat?
+    /// The room the columns have.
+    var viewport: CGFloat
+    /// The room they would like.
+    var content: CGFloat
+
+    var slides: Bool { title != nil }
+    /// How far the columns slide.
+    var limit: CGFloat { max(0, content - viewport) }
+
+    /// A title shorter than this is pinned and the columns slide instead.
+    static let titleLeast: CGFloat = 150
+    static let titleMost: CGFloat = 220
+
+    /// The row is 20 points of padding a side, the ring (22) and its gap, the
+    /// title, a gap, and the columns with 10 between them.
+    static func of(width: CGFloat, columns: [BoardColumn]) -> BoardGeometry {
+        let content = columns.reduce(0) { $0 + $1.width } + 10 * CGFloat(max(0, columns.count - 1))
+        let room = width - 82
+        if columns.isEmpty || room - content >= titleLeast {
+            return BoardGeometry(title: nil, viewport: content, content: content)
+        }
+        let title = min(max(room * 0.45, titleLeast), titleMost)
+        return BoardGeometry(title: title, viewport: max(0, room - title), content: content)
+    }
+}
+
+/// How far a board's columns have slid — one number for the header and
+/// every row, so they move together. Observed, so a slide redraws only the
+/// views that read it.
+@Observable
+final class BoardSlide {
+    var x: CGFloat = 0
+
+    init(probeX: CGFloat = 0) { x = probeX }
+
+    /// Moved by a page of the window, the way the header's chevrons move it.
+    func page(_ direction: CGFloat, in geometry: BoardGeometry) {
+        let to = min(max(x + direction * geometry.viewport * 0.8, 0), geometry.limit)
+        withAnimation(Motion.move) { x = to }
+    }
+}
+
+/// The columns of a row, or of the header, in their window: offset by the
+/// slide, faded at an edge with more beyond it, and deaf to the pointer where
+/// they cannot be seen.
+struct SlidingColumns<Cell: View>: View {
+    let columns: [BoardColumn]
+    let geometry: BoardGeometry
+    let slide: BoardSlide
+    @ViewBuilder let cell: (BoardColumn) -> Cell
+
+    var body: some View {
+        if geometry.slides {
+            let x = min(slide.x, geometry.limit)
+            track(x: x)
+                .frame(width: geometry.content, alignment: .leading)
+                .offset(x: -x)
+                .frame(width: geometry.viewport, alignment: .leading)
+                .mask {
+                    HStack(spacing: 0) {
+                        LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing)
+                            .frame(width: x > 0.5 ? 16 : 0)
+                        Rectangle()
+                        LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                            .frame(width: x < geometry.limit - 0.5 ? 16 : 0)
+                    }
+                    // Taller than the row: a count's badge stands proud of its tile.
+                    .padding(.vertical, -10)
+                }
+        } else {
+            track(x: 0).frame(width: geometry.content, alignment: .leading)
+        }
+    }
+
+    private func track(x: CGFloat) -> some View {
+        HStack(spacing: 10) {
+            ForEach(Array(columns.enumerated()), id: \.element) { index, column in
+                let start = columns.prefix(index).reduce(0) { $0 + $1.width + 10 } - x
+                let seen = start + column.width > 0 && start < geometry.viewport
+                cell(column)
+                    .frame(width: column.width, alignment: .leading)
+                    .allowsHitTesting(!geometry.slides || seen)
+            }
+        }
+    }
+}
+
 /// Which board is in front.
 enum BoardKind: Equatable {
     case plan(UUID), week, shelf
@@ -58,7 +217,9 @@ enum BoardKind: Equatable {
     }
 
     /// Which columns stay when the column is narrow, most wanted first.
-    static let priority: [BoardColumn] = [.day, .progress, .plan, .materials, .year, .authors, .venue,
+    /// Progress gives way before the materials: the ring at the head of
+    /// every row already fills with it.
+    static let priority: [BoardColumn] = [.day, .plan, .materials, .progress, .year, .authors, .venue,
                                           .tags, .rating, .notes, .added, .opened]
 
     /// The columns the demo shows, in its order.
@@ -104,9 +265,12 @@ struct PlanBoard: View {
     enum Grouping: String { case section, week, status }
 
     @State private var grouping: Grouping = Grouping(rawValue: Boot.setting("PAPERTIME_PLAN_GROUP") ?? "") ?? .section
-    @State private var sortColumn: BoardColumn?
-    @State private var sortByTitle = false
-    @State private var ascending = true
+    /// How each board is sorted, if it is: the shelves share one, each plan
+    /// and the week have their own — a plan sorted by year is not every
+    /// shelf sorted by year.
+    @State private var sorts: [String: BoardSort] = [:]
+    /// How far the columns have slid, when the table is too narrow for them.
+    @State private var slide = BoardSlide(probeX: PlanBoard.probeSlide)
     @State private var hidden: [String: [String]] = PlanBoard.storedColumns()
     @State private var toast: BoardToast?
     @State private var showsSpread = false
@@ -182,6 +346,8 @@ struct PlanBoard: View {
                 BoardTable(
                     entries: data.entries,
                     revision: model.searchRevision,
+                    slide: slide,
+                    slideLimit: geometry.limit,
                     selection: $model.selection,
                     row: { entry, selected in row(entry, selected: selected) },
                     reorders: reorders,
@@ -197,8 +363,17 @@ struct PlanBoard: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .onGeometryChange(for: CGFloat.self) { ($0.size.width / 8).rounded() * 8 } action: { width = $0 }
+        // Measured against the width it is given, not the width it would
+        // like: the columns are laid out from this number, and a board
+        // measured at its own wish kept itself at 512 points in a 300-point
+        // column — the wide layout asked for the width that made it wide
+        // (2026-11-16, `--papertime-plan-window` caught it).
+        .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .onGeometryChange(for: CGFloat.self) { ($0.size.width / 8).rounded(.down) * 8 } action: { width = $0 }
+        // Another shelf, or other columns: the slide starts again at the
+        // first column.
+        .onChange(of: model.scope) { slide.x = 0 }
+        .onChange(of: columns) { slide.x = 0 }
         .overlay(alignment: .bottom) { toastView }
         // What the New Plan sheet did, said here once the plan is showing.
         .onChange(of: app.planning.notice, initial: true) { _, notice in
@@ -505,23 +680,57 @@ struct PlanBoard: View {
     // MARK: The bar over a plan's table
 
     private var viewbar: some View {
-        HStack(spacing: 8) {
-            Text(L("묶기", "Group By")).font(.system(size: 11.5)).foregroundStyle(.tertiary)
+        // A narrow table keeps the chips and the sort on one line: the
+        // «Group By» word goes, and «Add Section» keeps only its plus.
+        let narrow = width < 420
+        return HStack(spacing: 8) {
+            if !narrow {
+                Text(L("묶기", "Group By")).font(.system(size: 11.5)).foregroundStyle(.tertiary)
+            }
             HStack(spacing: 4) {
                 chip(L("섹션", "Section"), .section)
                 chip(L("주", "Week"), .week)
                 chip(L("상태", "Status"), .status)
+            }
+            // A sorted plan says so where its order is chosen, with the way
+            // back to the reading order: the arrow in a header is easy to
+            // miss, and the plan's order is the plan.
+            if let sort {
+                Button {
+                    withAnimation(Motion.move) { sorts[sortKey] = nil }
+                } label: {
+                    HStack(spacing: 5) {
+                        Text(L("\(sort.column?.title ?? "제목") 순 \(sort.ascending ? "↑" : "↓")",
+                               "By \(sort.column?.title ?? "Title") \(sort.ascending ? "↑" : "↓")"))
+                        Image(systemName: "xmark").font(.system(size: 8, weight: .bold))
+                    }
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(Color.accentColor)
+                    .padding(.horizontal, 9)
+                    .frame(height: 22)
+                    .background(Capsule().fill(Color.accentColor.opacity(0.13)))
+                    .contentShape(Capsule())
+                    .fixedSize()
+                }
+                .buttonStyle(.plain)
+                .help(L("계획 순서로 돌아가요", "Back to the plan's order"))
+                .transition(.opacity)
             }
             Spacer()
             if case let .plan(id) = kind {
                 Button {
                     app.planning.prompt = .newSection(id)
                 } label: {
-                    Label(L("섹션 더하기", "Add Section"), systemImage: "plus")
-                        .font(.system(size: 11.5, weight: .medium))
+                    if narrow {
+                        Image(systemName: "plus").font(.system(size: 11.5, weight: .medium))
+                    } else {
+                        Label(L("섹션 더하기", "Add Section"), systemImage: "plus")
+                            .font(.system(size: 11.5, weight: .medium))
+                    }
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
+                .help(L("섹션 더하기", "Add Section"))
             }
         }
         .padding(.horizontal, 20)
@@ -543,6 +752,86 @@ struct PlanBoard: View {
         .buttonStyle(.plain)
     }
 
+    // MARK: Sorting
+
+    private var sortKey: String {
+        switch kind {
+        case let .plan(id): "plan:" + id.uuidString
+        case .week: "week"
+        case .shelf: "shelf"
+        }
+    }
+
+    /// What this board is sorted by, if anything.
+    private var sort: BoardSort? { sorts[sortKey] ?? PlanBoard.probeSort }
+
+    /// A header pressed: by it, then the other way, then the board's own
+    /// order again — a plan's reading order, which a sort must not lose.
+    private func cycleSort(_ column: BoardColumn?) {
+        let next: BoardSort?
+        if let sort, sort.column == column {
+            next = sort.ascending ? BoardSort(column: column, ascending: false) : nil
+        } else {
+            next = BoardSort(column: column, ascending: true)
+        }
+        withAnimation(Motion.move) { sorts[sortKey] = next }
+    }
+
+    private static func sortable(_ column: BoardColumn?) -> Bool { column != .materials && column != .tags }
+
+    /// `--papertime-plan-sort=year` (a leading `-` for descending, `title`
+    /// for the titles): a probe's board drawn sorted.
+    /// `--papertime-plan-slide=<points>`: a probe's board drawn with its
+    /// columns slid that far.
+    static let probeSlide: CGFloat = {
+        guard Boot.setting("PAPERTIME_LIBRARY") != nil else { return 0 }
+        return CGFloat(Double(Boot.setting("PAPERTIME_PLAN_SLIDE") ?? "") ?? 0)
+    }()
+
+    static let probeSort: BoardSort? = {
+        guard Boot.setting("PAPERTIME_LIBRARY") != nil, var raw = Boot.setting("PAPERTIME_PLAN_SORT") else { return nil }
+        let ascending = !raw.hasPrefix("-")
+        if !ascending { raw.removeFirst() }
+        if raw == "title" { return BoardSort(column: nil, ascending: ascending) }
+        return BoardColumn(rawValue: raw).map { BoardSort(column: $0, ascending: ascending) }
+    }()
+
+    /// The papers in the order the board is sorted by, those with nothing
+    /// to sort by last whichever way it goes — a paper with no year is not
+    /// the oldest one — and ties in the order they came.
+    private func sorted(_ papers: [LoadedPaper]) -> [LoadedPaper] {
+        guard let sort else { return papers }
+        let keyed = papers.enumerated().map { (index: $0.offset, paper: $0.element, value: sortValue($0.element, sort.column)) }
+        return keyed.sorted { x, y in
+            switch (x.value, y.value) {
+            case let (a?, b?):
+                let order = a.compare(b)
+                if order == .orderedSame { return x.index < y.index }
+                return sort.ascending ? order == .orderedAscending : order == .orderedDescending
+            case (.some, nil): return true
+            case (nil, .some): return false
+            case (nil, nil): return x.index < y.index
+            }
+        }.map(\.paper)
+    }
+
+    private func sortValue(_ paper: LoadedPaper, _ column: BoardColumn?) -> BoardSort.Value? {
+        switch column {
+        case nil: .text(paper.meta.displayTitle)
+        case .authors: paper.meta.csl.author.first?.sortingSurname.map { .text($0) }
+        case .year: paper.meta.csl.year.map { .number(Double($0)) }
+        case .venue: BoardRow.venue(paper).map { .text($0) }
+        case .plan: model.plans(containing: paper.id).first.map { .text($0.name) }
+        case .day: paper.schedule.map { .number(Double($0.ordinal)) }
+        case .progress: .number(Double(model.progress(of: paper)))
+        case .rating: paper.state.rating.map { .number(Double($0)) }
+        case .notes: .number(Double(model.notes.notes(forPaper: paper.id).count))
+        case .added: .number(paper.meta.addedAt.timeIntervalSinceReferenceDate)
+        case .opened: paper.state.lastOpenedAt.map { .number($0.timeIntervalSinceReferenceDate) }
+        default: nil
+        }
+    }
+
     // MARK: Columns
 
     /// The columns asked for, in their order.
@@ -558,19 +847,10 @@ struct PlanBoard: View {
     /// The ones that fit beside a title of at least 180 points, the most
     /// wanted kept first — in a column the width of a list, the table loses
     /// its venue before it loses its days.
-    private var columns: [BoardColumn] {
-        let wanted = wantedColumns
-        var room = width - 40 - 32 - 180
-        var kept: Set<BoardColumn> = []
-        for column in BoardKind.priority where wanted.contains(column) {
-            let need = column.width + 10
-            if need <= room {
-                kept.insert(column)
-                room -= need
-            }
-        }
-        return wanted.filter(kept.contains)
-    }
+    private var columns: [BoardColumn] { wantedColumns }
+
+    /// Where the title ends and the columns' window begins.
+    private var geometry: BoardGeometry { BoardGeometry.of(width: width, columns: columns) }
 
     private func isShown(_ column: BoardColumn) -> Bool { wantedColumns.contains(column) }
 
@@ -594,12 +874,28 @@ struct PlanBoard: View {
 
     private var columnHeader: some View {
         HStack(spacing: 10) {
+            let geometry = geometry
             Color.clear.frame(width: 22, height: 1)
             headerLabel(L("제목", "Title"), column: nil)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            ForEach(columns) { column in
+                .frame(width: geometry.title, alignment: .leading)
+                .frame(maxWidth: geometry.title == nil ? .infinity : nil, alignment: .leading)
+                .zIndex(1)
+            SlidingColumns(columns: columns, geometry: geometry, slide: slide) { column in
                 headerLabel(column.title, column: column)
-                    .frame(width: column.width, alignment: .leading)
+            }
+            .overlay(alignment: .leading) {
+                if geometry.slides, min(slide.x, geometry.limit) > 0.5 {
+                    // In the empty end of the title's header, not over a name.
+                    slideButton("chevron.left") { slide.page(-1, in: geometry) }
+                        .offset(x: -16)
+                }
+            }
+            .overlay(alignment: .trailing) {
+                if geometry.slides, min(slide.x, geometry.limit) < geometry.limit - 0.5 {
+                    // In the row's margin, past the last column it shows.
+                    slideButton("chevron.right") { slide.page(1, in: geometry) }
+                        .offset(x: 14)
+                }
             }
         }
         .font(.system(size: 11, weight: .medium))
@@ -622,26 +918,31 @@ struct PlanBoard: View {
         .help(L("열 머리를 오른쪽 클릭하면 보일 열을 고를 수 있어요", "Right-click a column to choose what shows"))
     }
 
+    /// A chevron at an edge of the columns' window that has more beyond it —
+    /// the way to the other columns for a mouse with no sideways wheel. A
+    /// trackpad swipe or ⇧ and the wheel slide them as well.
+    private func slideButton(_ symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(.secondary)
+                .frame(width: 18, height: 18)
+                .background(Circle().fill(.background))
+                .background(Circle().fill(Color.primary.opacity(0.07)).padding(-0.5))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .pressable(cornerRadius: 9)
+        .help(L("다른 열 보기 — 트랙패드로 옆으로 밀어도 돼요", "More columns — or swipe sideways on the trackpad"))
+    }
+
     @ViewBuilder
     private func headerLabel(_ text: String, column: BoardColumn?) -> some View {
-        if kind == .shelf, column != .materials, column != .tags {
-            let current = column == nil ? sortByTitle : (sortColumn == column && !sortByTitle)
-            Button {
-                if current {
-                    ascending.toggle()
-                } else {
-                    ascending = true
-                    sortByTitle = column == nil
-                    sortColumn = column
-                }
-            } label: {
-                HStack(spacing: 3) {
-                    Text(text).lineLimit(1)
-                    if current { Text(ascending ? "↑" : "↓") }
-                }
-                .contentShape(Rectangle())
+        if PlanBoard.sortable(column) {
+            let current = sort?.column == column && sort != nil
+            BoardHeaderButton(text: text, arrow: current ? (sort?.ascending == true ? "↑" : "↓") : nil) {
+                cycleSort(column)
             }
-            .buttonStyle(.plain)
         } else {
             Text(text).lineLimit(1)
         }
@@ -650,7 +951,9 @@ struct PlanBoard: View {
     // MARK: Rows
 
     private var reorders: Bool {
-        if case .plan = kind { return grouping == .section }
+        // Dragging into an order means nothing while the rows stand in
+        // another one.
+        if case .plan = kind { return grouping == .section && sort == nil }
         return false
     }
 
@@ -679,7 +982,7 @@ struct PlanBoard: View {
         switch grouping {
         case .section:
             for group in plan.groups {
-                let papers = group.papers.compactMap(model.paper)
+                let papers = sorted(group.papers.compactMap(model.paper))
                 if group.section == nil, plan.sections.isEmpty {
                     entries += papers.map { .paper($0.id) }
                     continue
@@ -691,15 +994,15 @@ struct PlanBoard: View {
         case .week:
             let weeks = Dictionary(grouping: all) { $0.schedule?.monday }
             for monday in weeks.keys.compactMap({ $0 }).sorted() {
-                let papers = weeks[monday]!.sorted { ($0.schedule ?? monday) < ($1.schedule ?? monday) }
+                let papers = sorted(weeks[monday]!.sorted { ($0.schedule ?? monday) < ($1.schedule ?? monday) })
                 add("week:" + monday.text, BoardGroup(title: PlanText.week(monday, today: model.today), detail: readCount(papers)), papers)
             }
             if let none = weeks[nil], !none.isEmpty {
-                add("week:none", BoardGroup(title: L("날짜 없음", "No Date"), detail: readCount(none)), none)
+                add("week:none", BoardGroup(title: L("날짜 없음", "No Date"), detail: readCount(none)), sorted(none))
             }
         case .status:
             for status in [PaperState.ReadingStatus.reading, .unread, .read] {
-                let papers = all.filter { $0.state.readingStatus == status }
+                let papers = sorted(all.filter { $0.state.readingStatus == status })
                 if !papers.isEmpty { add("status:" + status.rawValue, BoardGroup(title: status.label, detail: readCount(papers)), papers) }
             }
         }
@@ -715,42 +1018,19 @@ struct PlanBoard: View {
         if !behind.isEmpty {
             groups["behind"] = BoardGroup(title: L("밀린 것", "Overdue"), detail: PlanText.papers(behind.count), behind: true)
             entries.append(.group("behind"))
-            entries += behind.map { .paper($0.id) }
+            entries += sorted(behind).map { .paper($0.id) }
         }
         let rest = papers.filter { !model.isBehind($0) }
         let days = Dictionary(grouping: rest) { $0.schedule ?? model.today }
         for day in days.keys.sorted() {
             groups["day:" + day.text] = BoardGroup(title: PlanText.heading(day, today: model.today))
             entries.append(.group("day:" + day.text))
-            entries += days[day]!.map { .paper($0.id) }
+            entries += sorted(days[day]!).map { .paper($0.id) }
         }
         return (entries, groups)
     }
 
-    private func sortedShelf() -> [LoadedPaper] {
-        let papers = model.visiblePapers
-        guard sortByTitle || sortColumn != nil else { return papers }
-        func less(_ a: LoadedPaper, _ b: LoadedPaper) -> Bool {
-            if sortByTitle { return a.meta.displayTitle.localizedCaseInsensitiveCompare(b.meta.displayTitle) == .orderedAscending }
-            switch sortColumn {
-            case .authors:
-                let x = a.meta.csl.author.first?.sortingSurname ?? "zzz", y = b.meta.csl.author.first?.sortingSurname ?? "zzz"
-                return x.localizedCaseInsensitiveCompare(y) == .orderedAscending
-            case .year: return (a.meta.csl.year ?? 0) < (b.meta.csl.year ?? 0)
-            case .venue: return (BoardRow.venue(a) ?? "~").localizedCaseInsensitiveCompare(BoardRow.venue(b) ?? "~") == .orderedAscending
-            case .plan: return (model.plans(containing: a.id).first?.name ?? "~") < (model.plans(containing: b.id).first?.name ?? "~")
-            case .day: return (a.schedule?.ordinal ?? Int.max) < (b.schedule?.ordinal ?? Int.max)
-            case .progress: return model.progress(of: a) < model.progress(of: b)
-            case .rating: return (a.state.rating ?? 0) < (b.state.rating ?? 0)
-            case .notes: return model.notes.notes(forPaper: a.id).count < model.notes.notes(forPaper: b.id).count
-            case .added: return a.meta.addedAt < b.meta.addedAt
-            case .opened: return (a.state.lastOpenedAt ?? .distantPast) < (b.state.lastOpenedAt ?? .distantPast)
-            default: return false
-            }
-        }
-        let sorted = papers.sorted(by: less)
-        return ascending ? sorted : sorted.reversed()
-    }
+    private func sortedShelf() -> [LoadedPaper] { sorted(model.visiblePapers) }
 
     private func row(_ entry: BoardEntry, selected: Bool) -> AnyView {
         switch entry {
@@ -758,7 +1038,7 @@ struct PlanBoard: View {
             guard let paper = model.paper(id) else { return AnyView(EmptyView()) }
             return AnyView(
                 BoardRow(
-                    paper: paper, model: model, columns: columns, selected: selected,
+                    paper: paper, model: model, columns: columns, geometry: geometry, slide: slide, selected: selected,
                     cycle: {
                         model.selection = [id]
                         Task { await model.setReadingStatus(paper.state.readingStatus.next, for: id) }
@@ -1036,6 +1316,8 @@ struct BoardRow: View {
     let paper: LoadedPaper
     let model: LibraryModel
     let columns: [BoardColumn]
+    var geometry = BoardGeometry(title: nil, viewport: 0, content: 0)
+    var slide = BoardSlide()
     let selected: Bool
     let cycle: () -> Void
     let pickDay: () -> Void
@@ -1044,21 +1326,29 @@ struct BoardRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Button(action: cycle) {
-                StatusRing(status: paper.state.readingStatus, progress: model.progress(of: paper))
-                    .frame(width: 22, height: 22)
-                    .contentShape(Circle())
+            // The ring and the title stay where they are while the columns
+            // slide; above them, so a column slid under the title is not
+            // what a click on the title finds.
+            HStack(spacing: 10) {
+                Button(action: cycle) {
+                    StatusRing(status: paper.state.readingStatus, progress: model.progress(of: paper))
+                        .frame(width: 22, height: 22)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .help(L("누르면 읽기 상태가 바뀌어요", "Click to change the reading state"))
+                Text(paper.meta.displayTitle)
+                    .font(.system(size: 13, weight: paper.state.readingStatus == .read ? .regular : .medium))
+                    .foregroundStyle(paper.state.readingStatus == .read ? .secondary : .primary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(width: geometry.title, alignment: .leading)
+                    .frame(maxWidth: geometry.title == nil ? .infinity : nil, alignment: .leading)
+                    .help(paper.meta.displayTitle)
             }
-            .buttonStyle(.plain)
-            .help(L("누르면 읽기 상태가 바뀌어요", "Click to change the reading state"))
-            Text(paper.meta.displayTitle)
-                .font(.system(size: 13, weight: paper.state.readingStatus == .read ? .regular : .medium))
-                .foregroundStyle(paper.state.readingStatus == .read ? .secondary : .primary)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .help(paper.meta.displayTitle)
-            ForEach(columns) { column in
+            .contentShape(Rectangle())
+            .zIndex(1)
+            SlidingColumns(columns: columns, geometry: geometry, slide: slide) { column in
                 // Held open even when the cell has nothing to draw: a cell
                 // that drew nothing (no materials) took its frame with it, and
                 // every column after it slid over (2026-11-16).
@@ -1066,7 +1356,6 @@ struct BoardRow: View {
                     cell(column)
                     Spacer(minLength: 0)
                 }
-                .frame(width: column.width, alignment: .leading)
             }
         }
         .padding(.horizontal, 12)
@@ -1149,7 +1438,9 @@ struct MaterialChips: View {
     let model: LibraryModel
 
     var body: some View {
-        let kinds = (model.paperLink(of: paper) != nil ? [MaterialKind.paper] : []) + paper.links.map(\.kind)
+        let kinds = (model.paperLink(of: paper) != nil ? [MaterialKind.paper] : [])
+            + Array(repeating: MaterialKind.supplement, count: model.attachmentCount(of: paper.id))
+            + paper.links.map(\.kind)
         // One tile, the width of the column; more than one, and a count in
         // its corner (2026-11-16: the column only as wide as the button).
         if let first = kinds.first {

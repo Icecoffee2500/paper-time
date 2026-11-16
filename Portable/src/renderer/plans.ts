@@ -21,15 +21,15 @@ import { layoutPanes, revealPane } from './layout.js'
 import { reconcileReaders } from './pageArea.js'
 import { keepPaper, showPaper } from './actions/openPapers.js'
 import { LEGACY } from '../shared/legacy.js'
-import { setStatus } from './actions/paper.js'
-import { addPaperByAddress, importDestination } from './library.js'
+import { detach, setStatus } from './actions/paper.js'
+import { addPaperByAddress, importDestination, reload } from './library.js'
 import { L } from '../shared/lang.js'
 import { addDays, spreadDays, todayDay, type PaperLink, type PlanEntry, type PlanSection } from '../shared/readingPlan.js'
 import type { PlanEdit } from '../shared/planEdit.js'
 import type { PlanDTO } from '../shared/api.js'
 import {
-  DEFAULT_COLUMNS, boardPlace, fullDay, holdsAddress, isBehind, kindName, nextStatus, readAddRow, readColumns, spreadOrder, spreadStart, viewFor, withRo,
-  type BoardContext, type BoardPaper, type ColumnID, type Status,
+  BOARD_SORT_KEYS, DEFAULT_COLUMNS, boardPlace, fullDay, holdsAddress, isBehind, kindName, nextStatus, readAddRow, readColumns, spreadOrder, spreadStart, viewFor, withRo,
+  type BoardContext, type BoardPaper, type BoardSortKey, type ColumnID, type Status,
 } from '../shared/planBoard.js'
 import { addressText } from '../shared/paperAddress.js'
 import { openAddPapersSheet, openPlanSheet } from './ui/planSheets.js'
@@ -41,7 +41,7 @@ export type View = 'list' | 'table' | 'calendar'
 export type { BoardContext, ColumnID } from '../shared/planBoard.js'
 export { ALL_COLUMNS, DEFAULT_COLUMNS } from '../shared/planBoard.js'
 export type Grouping = 'section' | 'week' | 'status'
-export type SortKey = 'title' | 'authors' | 'year' | 'date' | 'venue' | 'added' | 'opened' | 'rating' | 'progress'
+export type SortKey = BoardSortKey
 
 export interface BoardPrefs {
   views: Record<string, View>
@@ -84,8 +84,10 @@ export function prefs(): BoardPrefs {
       }
     }
     if (read.sort && typeof read.sort === 'object') {
-      const key = (read.sort.key ?? null) as string | null
-      made.sort = { key: key === 'who' ? 'authors' : (key as SortKey | null), ascending: read.sort.ascending !== false }
+      const raw = (read.sort.key ?? null) as string | null
+      const key = raw === 'who' ? 'authors' : raw
+      // A key this build does not sort by reads as no sort, not as a sort by nothing.
+      made.sort = { key: BOARD_SORT_KEYS.includes(key as SortKey) ? (key as SortKey) : null, ascending: read.sort.ascending !== false }
     }
     if (read.group === 'section' || read.group === 'week' || read.group === 'status') made.group = read.group
     if (read.planColumns === true) made.planColumns = true
@@ -570,6 +572,22 @@ export async function addMaterialFiles(id: string, files: string[]) {
   putLinks(id, answer.links)
   toast(L(`파일 ${files.length}개를 PDF 옆에 두었어요.`, `Put ${files.length} file${files.length === 1 ? '' : 's'} beside the PDF.`))
 }
+
+/** PDFs dropped on a paper's materials: into the library and under the paper, as its supplements. */
+export async function addSupplementFiles(id: string, paths: string[]) {
+  if (paths.length === 0) return
+  const { added } = await call('supplements:import', { id, paths })
+  await reload()
+  toast(added > 0
+    ? L(`보충 자료 ${added}개를 붙였어요.`, added === 1 ? 'Added 1 supplement.' : `Added ${added} supplements.`)
+    : L('이미 라이브러리에 있는 PDF예요.', 'That PDF is already in the library.'))
+}
+
+/** A supplement in the materials, opened: it shows as the paper does. */
+export const openSupplement = (id: string) => showPaper(id)
+
+/** A supplement taken off its paper from the materials: a paper of its own again. */
+export const detachSupplement = (id: string) => detach(id)
 
 export async function removeMaterial(id: string, link: PaperLink) {
   putLinks(id, await call('links:edit', { id, linkID: link.id, remove: true }))

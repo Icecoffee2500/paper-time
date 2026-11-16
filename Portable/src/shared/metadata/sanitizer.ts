@@ -18,6 +18,10 @@ export function sanitized(item: CSLItem): CSLItem {
     const value = out[key]
     if (typeof value === 'string') out[key] = clean(value)
   }
+  // OpenAlex and DataCite call arXiv «arXiv (Cornell University)», which
+  // reads as a journal wherever it is shown.
+  if (typeof out['container-title'] === 'string' && out['container-title'].toLowerCase().includes('arxiv')) out['container-title'] = 'arXiv'
+  if (typeof out.publisher === 'string' && out.publisher.toLowerCase().includes('arxiv')) out.publisher = 'arXiv'
   return out
 }
 

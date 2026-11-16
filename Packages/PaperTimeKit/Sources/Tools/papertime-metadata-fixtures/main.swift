@@ -189,6 +189,7 @@ func call(_ fn: String, _ args: [Any]) -> Any {
     case "splitAuthorField": return DocumentSignalsExtractor.splitAuthorField(s(0))
     case "keywordList": return DocumentSignalsExtractor.keywordList(s(0))
     case "isStamp": return DocumentSignalsExtractor.isStamp(s(0))
+    case "venueStamp": return VenueStamp.find(in: s(0)).map { json($0) } ?? NSNull()
     case "isLikelyAuthorOrAffiliationLine": return DocumentSignalsExtractor.isLikelyAuthorOrAffiliationLine(s(0))
     case "looksLikeAbstract": return DocumentSignalsExtractor.looksLikeAbstract(s(0))
     case "looksLikeBoilerplate": return HeaderExtractor.looksLikeBoilerplate(s(0))

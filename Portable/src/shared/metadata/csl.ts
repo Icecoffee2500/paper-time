@@ -295,6 +295,20 @@ export function crossrefWork(value: JSONValue): CSLItem {
   set('subtitle', subtitle?.[0])
   set('container-title', container?.[0])
   set('container-title-short', shortContainer?.[0])
+  // A paper in a series of proceedings lists the series first and the book
+  // after it — «Lecture Notes in Computer Science», «Computer Vision – ECCV
+  // 2024» — and the book is where the paper appeared.
+  const titles = (container ?? []).filter((one) => trimWhitespace(one) !== '')
+  if (['book-chapter', 'proceedings-article', 'book-part'].includes(type ?? '') && titles.length >= 2) {
+    item['container-title'] = titles[titles.length - 1]
+    item['collection-title'] = titles[0]
+  }
+  // Springer files a conference paper as a book chapter, AAAI files its
+  // proceedings as a journal: both are papers at a conference.
+  const venue = (typeof item['container-title'] === 'string' ? item['container-title'] : '').toLowerCase()
+  const reads = ['conference', 'proceedings', 'workshop', 'symposium', 'eccv', 'iccv', 'cvpr', 'miccai']
+  if (type === 'book-chapter' && (event !== undefined || reads.some((word) => venue.includes(word)))) item.type = 'paper-conference'
+  if (type === 'journal-article' && venue.startsWith('proceedings of') && venue.includes('conference')) item.type = 'paper-conference'
   item.author = (author ?? []).map(crossrefName)
   item.editor = (editor ?? []).map(crossrefName)
   const parts = dates.find((one) => one !== undefined && one.length > 0)

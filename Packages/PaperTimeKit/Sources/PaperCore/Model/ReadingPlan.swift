@@ -447,6 +447,9 @@ public struct PaperSchedule: Codable, Hashable, Sendable {
 /// What a thing beside a paper is: slides, code, a video, a notebook.
 public enum MaterialKind: String, Codable, Hashable, Sendable, CaseIterable {
     case paper, slides, code, notebook, video, data, post, file
+    /// A supplement PDF in the library, attached to the paper (`parentID`):
+    /// shown with the materials, never written to `links.json`.
+    case supplement
 
     public init(from decoder: any Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)

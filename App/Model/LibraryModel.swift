@@ -1319,6 +1319,47 @@ public final class LibraryModel {
             applyLocally(meta: saved, to: childID)
         }
         if selectedPaperID == childID { selectedPaperID = parentID }
+        // A supplement is one of its paper's materials, not a paper to read
+        // in a plan's order.
+        for plan in plans(containing: childID) {
+            await editPlan(plan.id) { $0.remove([childID]) }
+        }
+        SupplementChoices.forget(childID)
+    }
+
+    /// PDFs dropped on a paper's materials: into the library, and under the
+    /// paper. Says how many were attached — a PDF already in the library is
+    /// not taken in twice, and is not moved from wherever it is.
+    public func importSupplements(_ urls: [URL], to paperID: UUID) async -> Int {
+        let before = Set(papers.map(\.id))
+        _ = await importDocuments(at: urls)
+        let added = papers.filter { !before.contains($0.id) }.map(\.id)
+        for id in added { await attach(id, to: paperID) }
+        return added.count
+    }
+
+    /// Attaches every supplement whose paper is certain (`SupplementDetector
+    /// .confidentParent`), and says how many — after a batch comes in, and a
+    /// few seconds after the library opens, for the ones already there. A
+    /// supplement a person took off its paper stays off.
+    @discardableResult
+    public func attachSupplements() async -> Int {
+        let standing = papers.filter { $0.meta.parentID == nil }
+        let candidates = standing
+            .filter { !SupplementDetector.looksLikeSupplement(fileName: $0.meta.file.originalName, title: $0.meta.csl.fullTitle) }
+            .map { (id: $0.id, title: $0.meta.displayTitle, fileName: $0.meta.file.originalName) }
+        let leftAlone = SupplementChoices.detached()
+        var attached = 0
+        for paper in standing where !leftAlone.contains(paper.id) && attachments(of: paper.id).isEmpty {
+            guard let parentID = SupplementDetector.confidentParent(
+                forFileName: paper.meta.file.originalName,
+                title: paper.meta.csl.fullTitle,
+                among: candidates.filter { $0.id != paper.id }
+            ) else { continue }
+            await attach(paper.id, to: parentID)
+            attached += 1
+        }
+        return attached
     }
 
     public func detach(_ childID: UUID) async {
@@ -1330,6 +1371,8 @@ public final class LibraryModel {
         if let saved = try? await store(for: child).save(meta: meta, in: child.folder, baseline: child.meta) {
             applyLocally(meta: saved, to: childID)
         }
+        // Taken off by hand: not attached again on its own.
+        SupplementChoices.remember(childID)
     }
 
     /// The paper a document looks like a supplement to, if any.
@@ -1594,11 +1637,20 @@ public final class LibraryModel {
             // Whatever the last batch gathered goes in now rather than
             // waiting out a delay nobody is filling any more.
             self?.flushResolved()
+            // With their titles read, the supplements among them go to their
+            // papers.
+            await self?.attachSupplements()
         }
     }
 
     /// Runs the resolution pipeline for one paper and stores the outcome.
-    public func resolveMetadata(for paperID: UUID) async {
+    ///
+    /// `refreshing` is a paper that already has a record being looked at
+    /// again: it keeps its citation key (a `.tex` file cites it), and a
+    /// confirmed record is replaced only by another confirmed one — a lookup
+    /// that fails, offline or rate-limited, must not turn a good record into
+    /// a guess.
+    public func resolveMetadata(for paperID: UUID, refreshing: Bool = false) async {
         guard let index = papers.firstIndex(where: { $0.id == paperID }) else { return }
         let paper = papers[index]
         guard paper.meta.confidence != .manual else { return }
@@ -1644,12 +1696,15 @@ public final class LibraryModel {
             originalFileName: paper.meta.file.originalName
         )
 
+        if refreshing, paper.meta.confidence == .verified, result.confidence != .verified { return }
         meta.csl = result.csl
         meta.identifiers = result.identifiers
         meta.confidence = result.confidence
         meta.provenance = result.provenance
         meta.candidates = result.candidates
-        meta.bibKey = CitationKey.make(for: result.csl, fallback: meta.file.originalName)
+        if !(refreshing && !paper.meta.bibKey.isEmpty) {
+            meta.bibKey = CitationKey.make(for: result.csl, fallback: meta.file.originalName)
+        }
         meta.csl.id = meta.bibKey
 
         if let saved = try? await store(for: paper).save(
@@ -1680,6 +1735,88 @@ public final class LibraryModel {
             applyLocally(meta: saved, to: paperID)
         }
         if kind == .paper, wasUnlookedUp { await resolveMetadata(for: paperID) }
+    }
+
+    /// Looks again at the library's preprints for where they were published.
+    ///
+    /// A paper is posted to arXiv months before it is accepted, so the
+    /// record taken when it was added says «arXiv» long after the paper has
+    /// a venue (2026-11-16, the user's ask). Each preprint — a record of
+    /// arXiv's, or one with no venue — is asked about at most once a
+    /// fortnight, a few seconds after the library opens, one at a time.
+    /// Nothing a person chose is touched (`manual`), the citation key stays
+    /// what it was (a `.tex` file cites it), and a paper that turns out to be
+    /// unpublished is left exactly as it was — nothing is written.
+    public func checkPublishedVersions() {
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(4))
+            await self?.attachSupplements()
+        }
+        guard resolvesOnImport, publishedCheck == nil else { return }
+        publishedCheck = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(8))
+            guard let self else { return }
+            let now = Date()
+            var asked = PublishedChecks.load()
+            let due = papers.filter { paper in
+                paper.meta.effectiveKind.isLookedUp
+                    && paper.meta.confidence == .verified
+                    && paper.meta.parentID == nil
+                    && Self.mayBePreprint(paper.meta)
+                    && (asked[paper.id].map { now.timeIntervalSince($0) > 14 * 86_400 } ?? true)
+            }
+            for paper in due {
+                guard !Task.isCancelled else { break }
+                await upgradeToPublished(paper)
+                asked[paper.id] = Date()
+                PublishedChecks.save(asked)
+            }
+            flushResolved()
+            publishedCheck = nil
+        }
+    }
+
+    @ObservationIgnored private var publishedCheck: Task<Void, Never>?
+
+    static func mayBePreprint(_ meta: PaperMeta) -> Bool {
+        if let doi = meta.identifiers.doi ?? meta.csl.doi, doi.lowercased().hasPrefix("10.48550/arxiv.") { return true }
+        if meta.csl.type == .manuscript { return true }
+        let container = (meta.csl.containerTitle ?? "").trimmingCharacters(in: .whitespaces)
+        return container.isEmpty || container.localizedCaseInsensitiveContains("arxiv")
+    }
+
+    private func upgradeToPublished(_ paper: LoadedPaper) async {
+        guard let current = papers.first(where: { $0.id == paper.id }), current.meta.confidence != .manual else { return }
+        // The first page, for the venue printed on it; a paper with no file
+        // here is still asked by its identifier.
+        let url = current.documentURL
+        let firstPage = await Task.detached(priority: .utility) {
+            DocumentSignalsExtractor.extract(fromFileAt: url)?.firstPageLines.joined(separator: "\n") ?? ""
+        }.value
+        guard let found = await resolver.published(current.meta.csl, identifiers: current.meta.identifiers, firstPage: firstPage)
+        else { return }
+        var meta = current.meta
+        meta.csl = found.csl
+        meta.csl.id = meta.bibKey
+        meta.identifiers = found.identifiers
+        meta.provenance = found.provenance
+        if let saved = try? await store(for: current).save(meta: meta, in: current.folder, baseline: current.meta) {
+            stageResolved(meta: saved, to: current.id)
+        }
+    }
+
+    /// Looks every paper up again with the engine as it is now — all but
+    /// the records a person wrote or chose (2026-11-16, «이미 서지정보가 된
+    /// 것도 바뀐 엔진으로 다시 새로 가져와볼 수 있겠지?»). Keys stay; a
+    /// confirmed record gives way only to another confirmed one.
+    public func refreshAllMetadata() async {
+        let all = papers
+            .filter { $0.meta.effectiveKind.isLookedUp && $0.meta.confidence != .manual && $0.meta.parentID == nil }
+            .map(\.id)
+        for id in all {
+            await resolveMetadata(for: id, refreshing: true)
+        }
+        flushResolved()
     }
 
     /// Re-runs resolution for everything that is not yet confirmed.
@@ -2250,5 +2387,56 @@ enum SmartRuleEvaluator {
 enum ISO8601DateFormat {
     static func string(from date: Date) -> String {
         date.formatted(.iso8601.year().month().day())
+    }
+}
+
+
+/// When each preprint was last asked about its published version — on this
+/// machine, in the app's own defaults, not in the library: a note that this
+/// Mac asked last week is nobody else's business and would be a change to
+/// sync. A probe keeps it in memory (`--papertime-library` runs share the
+/// reader's defaults).
+enum PublishedChecks {
+    nonisolated(unsafe) private static var memory: [UUID: Date] = [:]
+    private static let key = "publishedVersionChecks"
+
+    static func load() -> [UUID: Date] {
+        guard Boot.setting("PAPERTIME_LIBRARY") == nil else { return memory }
+        let raw = UserDefaults.standard.dictionary(forKey: key) as? [String: Double] ?? [:]
+        return Dictionary(uniqueKeysWithValues: raw.compactMap { key, value in
+            UUID(uuidString: key).map { ($0, Date(timeIntervalSinceReferenceDate: value)) }
+        })
+    }
+
+    static func save(_ dates: [UUID: Date]) {
+        guard Boot.setting("PAPERTIME_LIBRARY") == nil else { memory = dates; return }
+        UserDefaults.standard.set(
+            Dictionary(uniqueKeysWithValues: dates.map { ($0.key.uuidString, $0.value.timeIntervalSinceReferenceDate) }),
+            forKey: key
+        )
+    }
+}
+
+
+/// The supplements a person took off their paper, so that attaching on
+/// their own does not put them back — on this machine, by the paper's id.
+enum SupplementChoices {
+    nonisolated(unsafe) private static var memory: Set<UUID> = []
+    private static let key = "supplementsLeftAlone"
+
+    static func detached() -> Set<UUID> {
+        guard Boot.setting("PAPERTIME_LIBRARY") == nil else { return memory }
+        return Set((UserDefaults.standard.stringArray(forKey: key) ?? []).compactMap(UUID.init(uuidString:)))
+    }
+
+    static func remember(_ id: UUID) { store(detached().union([id])) }
+    static func forget(_ id: UUID) {
+        let now = detached()
+        if now.contains(id) { store(now.subtracting([id])) }
+    }
+
+    private static func store(_ ids: Set<UUID>) {
+        guard Boot.setting("PAPERTIME_LIBRARY") == nil else { memory = ids; return }
+        UserDefaults.standard.set(ids.map(\.uuidString).sorted(), forKey: key)
     }
 }

@@ -13,7 +13,7 @@ import { materialAddress, materialKindOfAddress } from '../../shared/readingPlan
 import { dateLong, detectionLine, kindName, kindTone, progress, type Status } from '../../shared/planBoard.js'
 import { showMenuAt } from './menu.js'
 import { layoutPanes } from '../layout.js'
-import { addMaterial, addMaterialFiles, openMaterial, removeMaterial, renameMaterial } from '../plans.js'
+import { addMaterial, addMaterialFiles, addSupplementFiles, detachSupplement, openMaterial, openSupplement, removeMaterial, renameMaterial } from '../plans.js'
 import { openDatePop } from './planPopovers.js'
 import { KIND_ICON, materialsOf } from './planBoard.js'
 
@@ -66,14 +66,36 @@ export function planSections(entry: Paper): HTMLElement[] {
       tile,
       el('div', { class: 'pi-mat-text' }, [el('div', { class: 'pi-mat-title', text: one.title }), el('div', { class: 'pi-mat-detail', text: one.detail })]),
     ])
+    const supplement = one.supplement
     const open = () => {
-      if (one.link) void openMaterial(entry.id, one.link)
+      if (supplement) void openSupplement(supplement)
+      else if (one.link) void openMaterial(entry.id, one.link)
       else if (one.url) void call('shell:openExternal', { url: one.url })
     }
     on(row, 'click', open)
     on(row, 'keydown', (event: KeyboardEvent) => {
       if (event.key === 'Enter') open()
     })
+    if (supplement) {
+      // Taken off by hand, it is a paper of its own again — and stays so.
+      const cross = el('button', { class: 'pi-x', 'aria-label': L('자료 빼기', 'Remove Material'), title: L('빼기', 'Remove') })
+      const x = iconNode('xmark')
+      if (x) cross.append(x)
+      on(cross, 'click', (event: MouseEvent) => {
+        event.stopPropagation()
+        void detachSupplement(supplement)
+      })
+      row.append(cross)
+      on(row, 'contextmenu', (event: MouseEvent) => {
+        event.preventDefault()
+        showMenuAt({ x: event.clientX, y: event.clientY }, [
+          { label: L('열기', 'Open'), icon: 'link', action: open },
+          { label: L('폴더에서 보기', 'Show in Folder'), icon: 'folder', action: () => void call('paper:reveal', { id: supplement }) },
+          { separator: true },
+          { label: L('빼기', 'Remove'), icon: 'xmark.circle', danger: true, action: () => void detachSupplement(supplement) },
+        ])
+      })
+    }
     if (one.link) {
       const link = one.link
       const cross = el('button', { class: 'pi-x', 'aria-label': L('자료 빼기', 'Remove'), title: L('빼기', 'Remove') })
@@ -136,7 +158,12 @@ export function planSections(entry: Paper): HTMLElement[] {
     })
   })
   const linkField = el('label', { class: 'pi-linkfield' }, [iconNode('link') ?? '', field])
-  const materials = sectionNode(L('자료', 'Materials'), list, linkField, detect)
+  const footer = el('p', {
+    class: 'pi-foot',
+    text: L('파일을 여기로 끌어다 놓으면 PDF 옆에 복사해서 붙여요. PDF는 보충 자료가 돼요.',
+      'Drop files here to copy them beside the PDF. A PDF becomes a supplement.'),
+  })
+  const materials = sectionNode(L('자료', 'Materials'), list, linkField, detect, footer)
   materials.classList.add('pi-materials')
 
   // Files dropped here are copied in beside the PDF — not taken in as papers.
@@ -162,7 +189,13 @@ export function planSections(entry: Paper): HTMLElement[] {
     if (!event.dataTransfer?.types.includes('Files')) return
     event.preventDefault()
     event.stopPropagation()
-    void addMaterialFiles(entry.id, droppedPaths(event.dataTransfer.files))
+    // A PDF is a supplement: into the library, under this paper — not into
+    // the list beside it. Anything else is copied in beside the PDF.
+    const paths = droppedPaths(event.dataTransfer.files)
+    const pdfs = paths.filter((one) => /\.pdf$/i.test(one))
+    const rest = paths.filter((one) => !/\.pdf$/i.test(one))
+    if (pdfs.length > 0) void addSupplementFiles(entry.id, pdfs)
+    if (rest.length > 0) void addMaterialFiles(entry.id, rest)
   })
 
   return [planSection, materials]

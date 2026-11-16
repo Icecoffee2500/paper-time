@@ -4977,13 +4977,59 @@ textarea.memo {
 .pb-gchips button:hover { background: var(--hover); }
 .pb-gchips button[aria-pressed='true'] { background: var(--accent-soft); color: var(--accent-text); font-weight: 600; }
 .pb-viewbar .pb-cap { height: 24px; font-size: 11.5px; padding: 0 10px; }
-.pb-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; padding-bottom: 12px; }
-.pb-table { min-width: 620px; padding: 0 8px; }
-.pb-thead, .pb-row { display: grid; align-items: center; column-gap: 10px; padding: 0 12px; }
+.pb-unsort { white-space: nowrap; flex: none; display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px; border-radius: 11px; font-size: 11.5px; font-weight: 500; color: var(--accent-text); background: var(--accent-soft); cursor: pointer; }
+.pb-unsort svg { width: 9px; height: 9px; stroke-width: 2.2; }
+
+.pb-scroll { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; padding-bottom: 12px; }
+.pb-table { padding: 0 8px; }
+/* The ring, the title, and the columns' viewport. Where the title ends is
+   the board's (`--pb-title-col`, `--pb-cols-col`, from `boardGeometry`):
+   every column at its own width; when they do not all fit, the title is
+   pinned and they slide by `--pb-x` (2026-11-16, the user's choice). */
+.pb-thead, .pb-row { display: grid; grid-template-columns: 22px var(--pb-title-col, minmax(0, 1fr)) var(--pb-cols-col, auto); align-items: center; column-gap: 10px; padding: 0 12px; }
+.pb-cols {
+  min-width: 0; align-self: stretch; display: flex; align-items: center; overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 var(--pb-fade-l, 0px), #000 calc(100% - var(--pb-fade-r, 0px)), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 var(--pb-fade-l, 0px), #000 calc(100% - var(--pb-fade-r, 0px)), transparent 100%);
+}
+.plan-board.pb-can-left { --pb-fade-l: 16px; }
+.plan-board.pb-can-right { --pb-fade-r: 16px; }
+.pb-track { flex: none; display: grid; column-gap: 10px; align-items: center; transform: translateX(calc(-1 * var(--pb-x, 0px))); }
+.plan-board.pb-sliding .pb-track { transition: transform var(--motion-move) var(--ease); }
+.pb-hcols { position: relative; min-width: 0; align-self: stretch; display: flex; }
+.pb-hcols .pb-cols { flex: 1 1 auto; }
+.pb-thead .pb-track > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* At the viewport's edges, a chevron says there is more and goes there. */
+.pb-slide {
+  position: absolute; top: 50%; transform: translateY(-50%); z-index: 1;
+  width: 18px; height: 18px; border-radius: 50%; display: none; align-items: center; justify-content: center;
+  color: var(--text-secondary); background: linear-gradient(var(--hover), var(--hover)), var(--panel); cursor: pointer;
+  transition: color var(--motion-tap) var(--ease);
+}
+.pb-slide:hover { color: var(--text); }
+.pb-slide svg { width: 10px; height: 10px; }
+/* Off the names, as on the Mac: «‹» in the empty end of the title's header,
+   «›» in the row's margin past the last column it shows. */
+.pb-thead > .pb-hcols { overflow: visible; }
+.pb-slide.left { left: -16px; }
+.pb-slide.right { right: -14px; }
+.plan-board.pb-can-left .pb-slide.left, .plan-board.pb-can-right .pb-slide.right { display: flex; }
 .pb-thead { height: 28px; font-size: 11px; color: var(--text-tertiary); font-weight: 500; margin-top: 6px; position: sticky; top: 0; background: var(--panel); z-index: 1; }
 .pb-thead button { color: inherit; font-size: inherit; text-align: left; }
-.pb-thead button:hover { color: var(--text); }
 .pb-thead > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Every title that sorts answers the pointer the way a row does: a shade
+   darker and a soft wash, the wash spilling past the words so they stay on
+   their column's line. The one sorted by wears the accent and its arrow. */
+.pb-thead .pb-sort {
+  padding: 2px 6px; margin: 0 -6px; border-radius: 6px; cursor: pointer; max-width: calc(100% + 12px);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  transition: background-color var(--motion-tap) var(--ease), color var(--motion-tap) var(--ease);
+}
+.pb-thead .pb-sort:hover { color: var(--text-secondary); background: var(--hover); }
+.pb-thead .pb-sort.current { color: var(--accent); }
+.pb-thead .pb-sort.current:hover { color: var(--accent); }
+/* «Title · Authors · Year · Venue»: the title cell's words, one button each,
+   when the table folds the facts under its titles. */
 .pb-row { height: 36px; border-radius: var(--radius-row); font-size: 13px; cursor: default; transition: background-color var(--motion-tap) var(--ease); }
 .pb-row:hover { background: var(--hover); }
 .pb-row.on, .pb-row.on:hover { background: var(--accent-soft); }
@@ -5027,6 +5073,7 @@ textarea.memo {
 .pb-kchip[data-tone='teal'], .pi-tile[data-tone='teal'] { --k: var(--tag-teal); }
 .pb-kchip[data-tone='green'], .pi-tile[data-tone='green'] { --k: var(--tag-green); }
 .pb-kchip[data-tone='indigo'], .pi-tile[data-tone='indigo'] { --k: var(--tag-indigo); }
+.pb-kchip[data-tone='purple'], .pi-tile[data-tone='purple'] { --k: var(--tag-purple); }
 .pb-more { font-size: 11px; color: var(--text-tertiary); }
 .pb-tags { display: flex; gap: 4px; min-width: 0; overflow: hidden; }
 .pb-tag {
@@ -5051,6 +5098,13 @@ textarea.memo {
 .pb-addrow .pb-hint { font-size: 11.5px; color: var(--text-tertiary); white-space: nowrap; }
 /* In a column the width of a list the field keeps the room, the hint steps aside. */
 @container (max-width: 560px) { .pb-addrow .pb-hint { display: none; } }
+/* A narrow table keeps the group chips and the sort on one line: «Add
+   Section» gives up its word first, the way the Mac's does. */
+@container (max-width: 420px) {
+  .pb-viewbar .pb-cap { width: 26px; padding: 0; justify-content: center; }
+  .pb-viewbar .pb-cap-label { display: none; }
+  .pb-viewbar > span:first-child { display: none; }
+}
 .pb-addrow:focus-within, .pb-table.over .pb-addrow, .pb-addrow.over { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent); }
 .pb-note { font-size: 12px; color: var(--text-tertiary); margin: 10px 12px; }
 .pb-empty { color: var(--text-tertiary); font-size: 13px; text-align: center; padding: 60px 0; }
@@ -5152,6 +5206,7 @@ textarea.memo {
 .pi-mat:hover .pi-x, .pi-x:focus-visible { opacity: 1; }
 .pi-x:hover { background: var(--hover); color: var(--text); }
 .pi-none { margin: 2px 12px 0; font-size: 12px; color: var(--text-tertiary); }
+.pi-foot { margin: 8px 12px 0; font-size: 11px; line-height: 1.4; color: var(--text-tertiary); }
 .pi-linkfield {
   display: flex; align-items: center; gap: 7px; height: 32px; padding: 0 11px; border-radius: 16px; margin: 8px 12px 0;
   background: var(--hover); color: var(--text-tertiary); transition: box-shadow var(--motion-move) var(--ease);

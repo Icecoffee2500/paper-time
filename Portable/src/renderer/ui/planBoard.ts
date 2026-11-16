@@ -14,14 +14,16 @@
 import { clear, el, on } from '../dom.js'
 import { iconNode, type IconName } from '../icons.js'
 import {
-  notesForPaper, paper, planByID, planPapers, plansOf, shelfPapers, store, tagByID, type Paper,
+  attachmentsOf, notesForPaper, paper, planByID, planPapers, plansOf, shelfPapers, store, tagByID, type Paper,
 } from '../state.js'
 import { L, prefersKorean } from '../../shared/lang.js'
 import { addDays, materialHost, materialTitle as materialTitleOf, mondayOf, planGroups, venueName, type PaperLink } from '../../shared/readingPlan.js'
 import {
-  TITLE_FLOOR, authorsText, calendarDays, calendarHome, calendarLabel, dateLabel, dayHeading, fitColumns, groupByStatus, groupByWeek, isBehind, kindName,
-  kindTone, longDay, planGuidance, planStats, progress, spanText, weekShelf, withPlanColumns, type Status,
+  authorsText, boardGeometry, calendarDays, calendarHome, calendarLabel, clampSlide, dateLabel, dayHeading, groupByStatus, groupByWeek, isBehind, kindName,
+  kindTone, longDay, nextSort, planGuidance, planStats, progress, slideStep, sortKeyOf, sortRows, spanText, weekShelf, wheelSlide, withPlanColumns,
+  type BoardGeometry, type BoardSort, type BoardSortKey, type Status,
 } from '../../shared/planBoard.js'
+import { sortingSurname } from '../../shared/authorKey.js'
 import { carriesPapers, draggedPapers, writeDraggedPapers } from '../../shared/split.js'
 import { showMenu, showMenuAt, type MenuEntry } from './menu.js'
 import { emptyShelf, folderNoticeRows, papersText, shelfTitle, tagColor, type PaperListActions } from './paperList.js'
@@ -31,7 +33,7 @@ import { LEGACY } from '../../shared/legacy.js'
 import {
   ALL_COLUMNS, addFromAddresses, addPapersTo, addSectionTo, addToPlan, boardContext, boardPaper, cycleStatus, editPlan, openFromBoard,
   ownAddress, prefs, pullBehind, pushWeek, removeFromPlan, renameSectionOf, savePrefs, selectInBoard, setDay, setDays, setView,
-  togglePlanColumns, viewOf, type ColumnID, type SortKey,
+  togglePlanColumns, viewOf, type ColumnID,
 } from '../plans.js'
 
 /** The plans whose «When will you read them?» strip was put away, this session. */
@@ -66,7 +68,7 @@ export function donut(fraction: number): string {
 
 export const KIND_ICON: Record<string, IconName> = {
   paper: 'text.document', slides: 'display', code: 'chevron.left.forwardslash.chevron.right', notebook: 'book.closed',
-  video: 'play.rectangle', data: 'cylinder', post: 'text.alignleft', file: 'doc',
+  video: 'play.rectangle', data: 'cylinder', post: 'text.alignleft', file: 'doc', supplement: 'paperclip',
 }
 
 function glyph(name: IconName): Node {
@@ -79,9 +81,13 @@ function progressOf(entry: Paper) {
   return progress(entry.meta.file.pageCount, entry.state.lastPageIndex, statusOf(entry))
 }
 
-/** What is kept beside a paper, its own address first. */
-export function materialsOf(entry: Paper): { kind: PaperLink['kind']; title: string; detail: string; link: PaperLink | null; url: string | null }[] {
-  const out: { kind: PaperLink['kind']; title: string; detail: string; link: PaperLink | null; url: string | null }[] = []
+/** One thing kept beside a paper, as the materials list shows it. `supplement` is the id of a
+ *  supplement PDF under the paper. */
+export interface Material { kind: PaperLink['kind']; title: string; detail: string; link: PaperLink | null; url: string | null; supplement?: string }
+
+/** What is kept beside a paper, its own address first, then its supplements, then the rest. */
+export function materialsOf(entry: Paper): Material[] {
+  const out: Material[] = []
   const own = ownAddress(entry)
   if (own) {
     const ids = (entry.meta.raw.identifiers ?? {}) as { arxiv?: string; doi?: string }
@@ -91,6 +97,15 @@ export function materialsOf(entry: Paper): { kind: PaperLink['kind']; title: str
       detail: L('논문 · 서지에서 저절로', 'Paper · From the record'),
       link: null,
       url: own,
+    })
+  }
+  // The paper's supplements are its materials too: the PDFs a conference
+  // hands out beside the paper, kept in the library under it rather than in
+  // the list beside it.
+  for (const supplement of attachmentsOf(entry.id)) {
+    out.push({
+      kind: 'supplement', title: supplement.meta.file.originalName, detail: L('보충 자료 · PDF', 'Supplement · PDF'),
+      link: null, url: null, supplement: supplement.id,
     })
   }
   for (const link of entry.links ?? []) {
@@ -109,7 +124,6 @@ interface Column {
   id: ColumnID
   label: () => string
   width: number
-  sort?: SortKey
   cell: (entry: Paper) => Node
 }
 
@@ -171,18 +185,18 @@ function planCell(entry: Paper): HTMLElement {
 const text = (value: string, extra = '') => el('div', { class: `pb-text ${extra}`.trim(), text: value || '—', title: value })
 
 const COLUMNS: Record<ColumnID, Column> = {
-  authors: { id: 'authors', label: () => L('저자', 'Authors'), width: 116, sort: 'authors', cell: (entry) => text(authorsOf(entry), 'secondary') },
-  year: { id: 'year', label: () => L('해', 'Year'), width: 44, sort: 'year', cell: (entry) => text(entry.meta.year ? String(entry.meta.year) : '', 'secondary') },
-  venue: { id: 'venue', label: () => L('학회', 'Venue'), width: 92, sort: 'venue', cell: (entry) => text(venueOf(entry), 'secondary') },
-  date: { id: 'date', label: () => L('읽을 날', 'Read On'), width: 100, sort: 'date', cell: dateChip },
+  authors: { id: 'authors', label: () => L('저자', 'Authors'), width: 116, cell: (entry) => text(authorsOf(entry), 'secondary') },
+  year: { id: 'year', label: () => L('해', 'Year'), width: 44, cell: (entry) => text(entry.meta.year ? String(entry.meta.year) : '', 'secondary') },
+  venue: { id: 'venue', label: () => L('학회', 'Venue'), width: 92, cell: (entry) => text(venueOf(entry), 'secondary') },
+  date: { id: 'date', label: () => L('읽을 날', 'Read On'), width: 100, cell: dateChip },
   plan: { id: 'plan', label: () => L('계획', 'Plan'), width: 132, cell: planCell },
-  progress: { id: 'progress', label: () => L('진행', 'Progress'), width: 88, sort: 'progress', cell: progressCell },
+  progress: { id: 'progress', label: () => L('진행', 'Progress'), width: 88, cell: progressCell },
   materials: { id: 'materials', label: () => L('자료', 'Materials'), width: 34, cell: materialsCell },
   tags: { id: 'tags', label: () => L('태그', 'Tags'), width: 110, cell: tagsCell },
-  rating: { id: 'rating', label: () => L('별점', 'Rating'), width: 72, sort: 'rating', cell: (entry) => text(entry.state.rating ? '★'.repeat(Math.round(entry.state.rating)) : '', 'stars') },
+  rating: { id: 'rating', label: () => L('별점', 'Rating'), width: 72, cell: (entry) => text(entry.state.rating ? '★'.repeat(Math.round(entry.state.rating)) : '', 'stars') },
   notes: { id: 'notes', label: () => L('노트', 'Notes'), width: 56, cell: (entry) => text(String(notesForPaper(entry.id).length || ''), 'secondary') },
-  added: { id: 'added', label: () => L('더한 날', 'Added'), width: 88, sort: 'added', cell: (entry) => text(longDay(isoDay(entry.meta.addedAt)), 'secondary') },
-  opened: { id: 'opened', label: () => L('마지막으로 읽은 날', 'Last Read'), width: 120, sort: 'opened', cell: (entry) => text(entry.state.lastOpenedAt ? longDay(isoDay(entry.state.lastOpenedAt)) : '', 'secondary') },
+  added: { id: 'added', label: () => L('더한 날', 'Added'), width: 88, cell: (entry) => text(longDay(isoDay(entry.meta.addedAt)), 'secondary') },
+  opened: { id: 'opened', label: () => L('마지막으로 읽은 날', 'Last Read'), width: 120, cell: (entry) => text(entry.state.lastOpenedAt ? longDay(isoDay(entry.state.lastOpenedAt)) : '', 'secondary') },
 }
 
 /** A moment as the reader's own day. */
@@ -197,48 +211,88 @@ function wantedColumns(): ColumnID[] {
 }
 
 /**
- * The ones that fit beside a title of at least `TITLE_FLOOR`, the most
- * wanted kept first — in a column the width of a list, the table loses its
- * venue before it loses its days. A board not laid out yet shows them all.
+ * Every column asked for stands, at its own width: when they do not all fit
+ * beside the title, the title is pinned and they slide (`boardGeometry`).
  */
-function columnsFor(width: number): Column[] {
-  const wanted = wantedColumns()
-  const fitted = width > 0 ? fitColumns(wanted, width, (id) => COLUMNS[id].width) : wanted
-  return fitted.map((id) => COLUMNS[id]).filter(Boolean)
+function columnsFor(): Column[] {
+  return wantedColumns().map((id) => COLUMNS[id]).filter(Boolean)
 }
 
-function template(columns: Column[]): string {
-  return `22px minmax(${TITLE_FLOOR}px, 1fr) ${columns.map((one) => `${one.width}px`).join(' ')}`.trim()
+/**
+ * The columns' part of a row or of the header: a viewport that clips, and in
+ * it a track at the columns' own width that slides by the board's offset
+ * (`--pb-x`). Only the track's grid is the columns'; where the title ends and
+ * the viewport begins is the board's (`--pb-title-col`, `--pb-cols-col`), so
+ * a resize moves no row's markup.
+ */
+function columnsCell(columns: Column[], cells: Node[]): HTMLElement {
+  const widths = columns.map((one) => one.width)
+  const content = widths.reduce((sum, one) => sum + one, 0) + 10 * Math.max(0, widths.length - 1)
+  const track = el('div', {
+    class: 'pb-track',
+    style: `grid-template-columns:${widths.map((one) => `${one}px`).join(' ')};width:${content}px`,
+  }, cells)
+  return el('div', { class: 'pb-cols' }, [track])
 }
 
-/** A table as wide as its columns need, so the rows' backgrounds reach the end when it scrolls. */
-function tableNode(columns: Column[], sortable: boolean, head: (columns: Column[], sortable: boolean) => HTMLElement): HTMLElement {
-  const gaps = 10 * (columns.length + 1)
-  const width = 16 + 24 + 22 + TITLE_FLOOR + columns.reduce((sum, one) => sum + one.width, 0) + gaps
-  return el('div', { class: 'pb-table', style: `min-width:${width}px` }, [head(columns, sortable)])
+/** The table that holds the header and the rows; no wider than the board — the columns slide inside it. */
+function tableNode(columns: Column[], head: (columns: Column[]) => HTMLElement): HTMLElement {
+  return el('div', { class: 'pb-table' }, [head(columns)])
 }
 
-function sortedForTable(papers: Paper[]): Paper[] {
-  const { key, ascending } = prefs().sort
-  if (!key) return papers
-  const value = (entry: Paper): string | number => {
-    switch (key) {
-      case 'title': return entry.meta.displayTitle.toLowerCase()
-      case 'authors': return (entry.meta.csl.author?.[0]?.family ?? entry.meta.csl.author?.[0]?.literal ?? '￿').toLowerCase()
-      case 'year': return entry.meta.year ?? 0
-      case 'date': return entry.schedule ?? '9999'
-      case 'venue': return (venueOf(entry) || '￿').toLowerCase()
-      case 'added': return entry.meta.addedAt.getTime()
-      case 'opened': return entry.state.lastOpenedAt?.getTime() ?? 0
-      case 'rating': return entry.state.rating ?? 0
-      case 'progress': return progressOf(entry).fraction
+/**
+ * A paper's value for a key, or null when it has none — no year, no
+ * authors, never opened — which sorts last whichever way the rest face (the
+ * Mac's comparator). Text compares the way Finder does (`compareText`).
+ */
+function sortValue(entry: Paper, key: BoardSortKey): string | number | null {
+  switch (key) {
+    case 'title': return entry.meta.displayTitle
+    case 'authors': {
+      const first = entry.meta.csl.author?.[0]
+      return first ? sortingSurname(first) : null
     }
+    case 'year': return entry.meta.year ?? null
+    case 'venue': return venueOf(entry) || null
+    case 'plan': return plansOf(entry.id)[0]?.plan.name ?? null
+    case 'date': return entry.schedule ?? null
+    case 'progress': return progressOf(entry).fraction
+    case 'rating': return entry.state.rating ?? null
+    case 'notes': return notesForPaper(entry.id).length
+    case 'added': return entry.meta.addedAt.getTime()
+    case 'opened': return entry.state.lastOpenedAt?.getTime() ?? null
   }
-  const sign = ascending ? 1 : -1
-  return papers.map((entry, at) => ({ entry, at, v: value(entry) }))
-    .sort((a, b) => (a.v < b.v ? -1 : a.v > b.v ? 1 : a.at - b.at) * (a.v === b.v ? 1 : sign))
-    .map(({ entry }) => entry)
 }
+
+/** Each plan's sort and the week's, this session; the shelves share the one remembered in the settings. */
+const sessionSorts = new Map<string, BoardSort>()
+
+/** Which sort the board in front stands in. */
+function sortSlot(): string {
+  const shelf = store.shelf
+  return shelf.kind === 'plan' ? `plan:${shelf.id}` : shelf.kind === 'week' ? 'week' : 'shelf'
+}
+
+/** The board's sort, or null for its own order — the shelf's, the plan's reading order, the week's. */
+export function boardSortNow(): BoardSort | null {
+  const slot = sortSlot()
+  if (slot !== 'shelf') return sessionSorts.get(slot) ?? null
+  const remembered = prefs().sort
+  return remembered.key ? { key: remembered.key, ascending: remembered.ascending } : null
+}
+
+function setBoardSort(next: BoardSort | null) {
+  const slot = sortSlot()
+  if (slot !== 'shelf') {
+    if (next) sessionSorts.set(slot, next)
+    else sessionSorts.delete(slot)
+    return
+  }
+  savePrefs((prefs) => { prefs.sort = next ? { key: next.key, ascending: next.ascending } : { key: null, ascending: true } })
+}
+
+/** Papers in the board's sort; a board's own order when it has none. */
+const sortedForTable = (papers: Paper[]): Paper[] => sortRows(papers, boardSortNow(), sortValue)
 
 // MARK: - The board
 
@@ -255,14 +309,67 @@ export type PlanBoardActions = Pick<PaperListActions, 'refresh' | 'adoptLoose'>
 
 export function buildPlanBoard(actions: PlanBoardActions): PlanBoard {
   const node = el('div', { class: 'panel plan-board' })
-  /** The columns drawn last, so a resize redraws only when another set fits. */
-  let fittedKey = ''
-  const columnsNow = (): Column[] => columnsFor(node.clientWidth)
+  /** The columns drawn last, which is what the geometry is worked out for. */
+  let drawnColumns: Column[] = []
+  const columnsNow = (): Column[] => {
+    drawnColumns = columnsFor()
+    return drawnColumns
+  }
+  /**
+   * How far the columns have slid behind the pinned title, one offset for
+   * the header and every row. Back to the start when the board shows another
+   * shelf or another set of columns; held inside the limit when the board
+   * narrows or widens.
+   */
+  let slideX = 0
+  let slideFor = ''
+  let geometry: BoardGeometry | null = null
+  /** The scroll area the rows are measured in: its width leaves out a classic scrollbar. */
+  let measured: HTMLElement | null = null
+
+  /** The board's geometry for its width now, said as variables the rows read. */
+  function applyGeometry() {
+    const width = measured?.isConnected ? measured.clientWidth : node.clientWidth
+    if (width <= 0) return
+    const next = boardGeometry(width, drawnColumns.map((one) => one.width))
+    geometry = next
+    slideX = clampSlide(slideX, next.limit)
+    node.style.setProperty('--pb-title-col', next.slides ? `${next.title}px` : 'minmax(0, 1fr)')
+    node.style.setProperty('--pb-cols-col', next.slides ? 'minmax(0, 1fr)' : `${next.content}px`)
+    showSlide()
+  }
+
+  /** Where the columns stand now, and which chevrons and fades go with it. */
+  function showSlide() {
+    const slides = geometry?.slides ?? false
+    const limit = geometry?.limit ?? 0
+    node.style.setProperty('--pb-x', `${slideX}px`)
+    node.classList.toggle('pb-slides', slides)
+    node.classList.toggle('pb-can-left', slides && slideX > 0.5)
+    node.classList.toggle('pb-can-right', slides && slideX < limit - 0.5)
+  }
+
+  /** Moves the columns, with the motion ladder when a chevron asked for it. */
+  function slideTo(x: number, animated: boolean) {
+    const next = clampSlide(x, geometry?.limit ?? 0)
+    if (Math.abs(next - slideX) < 0.5) return false
+    slideX = next
+    if (animated) {
+      node.classList.add('pb-sliding')
+      window.setTimeout(() => node.classList.remove('pb-sliding'), 400)
+    } else {
+      node.classList.remove('pb-sliding')
+    }
+    showSlide()
+    return true
+  }
   /** Where the calendar starts; back to last week whenever another plan is shown. */
   let calendarStart = calendarHome(store.today)
   let calendarFor = ''
   /** Which row a drag started on, and which rows it carries. */
   let dragging: string[] = []
+  /** The board's sort as of this drawing. */
+  let sortNow: BoardSort | null = null
   let shownKey = ''
 
   function update() {
@@ -278,6 +385,7 @@ export function buildPlanBoard(actions: PlanBoardActions): PlanBoard {
     }
     const typedValue = typingIn?.value
     const typedClass = typingIn?.className
+    sortNow = boardSortNow()
     clear(node)
     switch (store.shelf.kind) {
       case 'plan': drawPlan(store.shelf.id); break
@@ -290,7 +398,16 @@ export function buildPlanBoard(actions: PlanBoardActions): PlanBoard {
       after.scrollLeft = kept.left
     }
     shownKey = key
-    fittedKey = columnsNow().map((one) => one.id).join(',')
+    // Another shelf or another set of columns starts at its first column.
+    const slideKey = `${key}|${drawnColumns.map((one) => one.id).join(',')}`
+    if (slideKey !== slideFor) {
+      slideFor = slideKey
+      slideX = 0
+    }
+    if (measured && measured !== after) resizes?.unobserve(measured)
+    measured = after
+    if (after) resizes?.observe(after)
+    applyGeometry()
     fitActions()
     if (typingIn && typedClass) {
       const again = node.querySelector<HTMLInputElement>(`input.${typedClass.split(' ').join('.')}`)
@@ -305,13 +422,25 @@ export function buildPlanBoard(actions: PlanBoardActions): PlanBoard {
   // words before they wrap: both follow the board's width as it changes.
   // Answered before the frame is painted, so a column that no longer fits is
   // never drawn for a frame first.
-  if (typeof ResizeObserver !== 'undefined') {
-    new ResizeObserver(() => {
+  // The columns themselves never change with the width — only where the
+  // title ends and how far they can slide, which are variables on the board.
+  const resizes = typeof ResizeObserver !== 'undefined'
+    ? new ResizeObserver(() => {
       if (!node.isConnected || node.clientWidth === 0) return
       fitActions()
-      if (columnsNow().map((one) => one.id).join(',') !== fittedKey) update()
-    }).observe(node)
-  }
+      applyGeometry()
+    })
+    : null
+  resizes?.observe(node)
+
+  // A sideways swipe over the header or the rows slides the columns, and so
+  // does the wheel with Shift held; anything else scrolls the rows as ever.
+  on(node, 'wheel', (event: WheelEvent) => {
+    if (!geometry?.slides) return
+    if (!(event.target as Element).closest('.pb-thead, .pb-row')) return
+    const step = wheelSlide(event, geometry.viewport)
+    if (step !== 0 && slideTo(slideX + step, false)) event.preventDefault()
+  }, { passive: false })
 
   /** A plan's buttons with their words when they fit, the symbols alone when they do not. */
   function fitActions() {
@@ -343,16 +472,37 @@ export function buildPlanBoard(actions: PlanBoardActions): PlanBoard {
       [...(icon ? [glyph(icon)] : []), el('span', { class: 'pb-cap-label', text: label })])
   }
 
-  function thead(columns: Column[], sortable: boolean): HTMLElement {
-    const row = el('div', { class: 'pb-thead', style: `grid-template-columns:${template(columns)}` }, [el('span')])
-    const sort = prefs().sort
-    const cell = (label: string, key: SortKey | undefined) => {
-      if (!sortable || !key) return el('span', { text: label })
-      const arrow = sort.key === key ? (sort.ascending ? ' ↑' : ' ↓') : ''
-      return el('button', { 'data-act': 'sort', 'data-k': key, title: L('눌러서 정렬', 'Sort') }, [label + arrow])
+  /**
+   * The column titles, each a sort: once ascending, twice descending, a
+   * third time the board's own order. They slide with their columns; the
+   * title's stays pinned with the titles, and at the viewport's edges a
+   * chevron says there is more and goes there.
+   */
+  function thead(columns: Column[]): HTMLElement {
+    const row = el('div', { class: 'pb-thead' }, [el('span')])
+    const button = (label: string, key: BoardSortKey): HTMLElement => {
+      const current = sortNow?.key === key
+      const arrow = current ? (sortNow!.ascending ? ' ↑' : ' ↓') : ''
+      return el('button', {
+        class: current ? 'pb-sort current' : 'pb-sort',
+        'data-act': 'sort',
+        'data-k': key,
+        title: current
+          ? L('한 번 더 누르면 반대로, 또 누르면 원래 순서로 돌아가요', 'Click again to reverse, once more for the original order')
+          : L('누르면 이 열로 정렬해요', 'Click to sort by this column'),
+      }, [label + arrow])
     }
-    row.append(cell(L('제목', 'Title'), 'title'))
-    for (const one of columns) row.append(cell(one.label(), one.sort))
+    row.append(button(L('제목', 'Title'), 'title'))
+    const labels = columns.map((one) => {
+      const key = sortKeyOf(one.id)
+      return key ? button(one.label(), key) : el('span', { class: 'pb-label', text: one.label() })
+    })
+    const more = L('다른 열 보기 — 트랙패드로 옆으로 밀어도 돼요', 'More columns — or swipe sideways on the trackpad')
+    row.append(el('div', { class: 'pb-hcols' }, [
+      columnsCell(columns, labels),
+      el('button', { class: 'pb-slide left', 'data-act': 'slide', 'data-dir': '-1', title: more, 'aria-label': more }, [glyph('chevron.left')]),
+      el('button', { class: 'pb-slide right', 'data-act': 'slide', 'data-dir': '1', title: more, 'aria-label': more }, [glyph('chevron.right')]),
+    ]))
     row.dataset.menu = 'columns'
     return row
   }
@@ -361,7 +511,6 @@ export function buildPlanBoard(actions: PlanBoardActions): PlanBoard {
     const status = statusOf(entry)
     const made = el('div', {
       class: `pb-row s-${status}${entry.id === store.selectedID ? ' on' : ''}`,
-      style: `grid-template-columns:${template(columns)}`,
       'data-act': 'select',
       'data-id': entry.id,
       tabindex: '0',
@@ -369,8 +518,8 @@ export function buildPlanBoard(actions: PlanBoardActions): PlanBoard {
       ...(options.draggable ? { 'data-drop-row': entry.id } : {}),
     })
     const ringButton = el('button', { class: 'pb-st', 'data-act': 'status', 'data-id': entry.id, 'aria-label': L('읽기 상태 바꾸기', 'Change Reading Status'), title: L('누르면 상태가 바뀌어요', 'Press to change the status'), html: ring(status, progressOf(entry).fraction) })
-    made.append(ringButton, el('div', { class: 'pb-title', title: entry.meta.displayTitle, text: entry.meta.displayTitle }))
-    for (const one of columns) made.append(one.cell(entry))
+    const title = el('div', { class: 'pb-title', title: entry.meta.displayTitle, text: entry.meta.displayTitle })
+    made.append(ringButton, title, columnsCell(columns, columns.map((one) => one.cell(entry))))
     return made
   }
 
@@ -520,26 +669,42 @@ export function buildPlanBoard(actions: PlanBoardActions): PlanBoard {
     for (const [value, label] of [['section', L('섹션', 'Section')], ['week', L('주', 'Week')], ['status', L('상태', 'Status')]] as const) {
       chips.append(el('button', { 'data-act': 'group', 'data-v': value, 'aria-pressed': String(group === value), text: label }))
     }
-    viewbar.append(chips, el('span', { class: 'pb-spacer' }), cap(L('섹션', 'Section'), 'add-section', 'plus'))
+    viewbar.append(chips)
+    // A sorted plan says so where its order is chosen, with the way back to
+    // the reading order: the arrow in a header is easy to miss, and the
+    // plan's order is the plan (the Mac's chip beside «Group By»).
+    const sorting = boardSortNow()
+    if (sorting) {
+      const name = sorting.key === 'title' ? L('제목', 'Title') : COLUMNS[sorting.key].label()
+      const arrow = sorting.ascending ? '↑' : '↓'
+      viewbar.append(el('button', {
+        class: 'pb-unsort', 'data-act': 'unsort', title: L('계획 순서로 돌아가요', "Back to the plan's order"),
+      }, [el('span', { text: L(`${name} 순 ${arrow}`, `By ${name} ${arrow}`) }), glyph('xmark')]))
+    }
+    viewbar.append(el('span', { class: 'pb-spacer' }), cap(L('섹션', 'Section'), 'add-section', 'plus', undefined, L('섹션 더하기', 'Add Section')))
     node.append(viewbar)
-    const table = tableNode(columns, false, thead)
+    const table = tableNode(columns, thead)
     const byID = new Map(papers.map((entry) => [entry.id, entry]))
+    // Sorted, a plan is sorted within each group, and the rows stop being
+    // dragged into another order — the order a drag would make is not the
+    // one shown (the Mac's `reorders`).
+    const sorted = sortNow !== null
     if (group === 'section') {
       for (const one of planGroups(found.plan)) {
-        const items = one.papers.map((paperID) => byID.get(paperID)).filter((entry): entry is Paper => Boolean(entry))
+        const items = sortedForTable(one.papers.map((paperID) => byID.get(paperID)).filter((entry): entry is Paper => Boolean(entry)))
         // The papers in no section stand without a heading when there are no sections at all.
         if (one.section || found.plan.sections.length > 0) {
           const head = groupHead(one.section?.name ?? L('섹션 없음', 'No Section'), items, { section: one.section?.id ?? null })
           if (one.section) head.dataset.sectionMenu = one.section.id
           table.append(head)
         }
-        for (const entry of items) table.append(row(entry, columns, { draggable: true }))
-        if (items.length === 0 && one.section) table.append(el('div', { class: 'pb-drop-hint', 'data-drop-section': one.section.id, text: L('여기로 끌어다 놓아요', 'Drag papers here') }))
+        for (const entry of items) table.append(row(entry, columns, { draggable: !sorted }))
+        if (items.length === 0 && one.section && !sorted) table.append(el('div', { class: 'pb-drop-hint', 'data-drop-section': one.section.id, text: L('여기로 끌어다 놓아요', 'Drag papers here') }))
       }
     } else {
       const groups = group === 'week' ? groupByWeek(papers.map(boardPaper), store.today) : groupByStatus(papers.map(boardPaper))
       for (const one of groups) {
-        const items = one.ids.map((paperID) => byID.get(paperID)!).filter(Boolean)
+        const items = sortedForTable(one.ids.map((paperID) => byID.get(paperID)!).filter(Boolean))
         table.append(groupHead(one.name, items))
         for (const entry of items) table.append(row(entry, columns))
       }
@@ -630,10 +795,11 @@ export function buildPlanBoard(actions: PlanBoardActions): PlanBoard {
     const trailing = LEGACY.paperList ? [viewSwitch([['list', L('목록', 'List'), null], ['table', L('표', 'Table'), 'tablecells']])] : []
     node.append(el('div', { class: 'pb-head' }, [head('calendar', L('이번 주', 'This Week'), sub, trailing, 'accent')]))
     const columns = columnsNow()
-    const table = tableNode(columns, false, thead)
+    const table = tableNode(columns, thead)
     const byID = new Map(papers.map((entry) => [entry.id, entry]))
+    // Sorted within what is behind and within each day.
     if (shelf.behind.length) {
-      const items = shelf.behind.map((one) => byID.get(one)!)
+      const items = sortedForTable(shelf.behind.map((one) => byID.get(one)!))
       const head = el('div', { class: 'pb-grp', id: 'pb-behind' }, [
         el('span', { text: L('밀린 것', 'Overdue') }),
         el('small', { text: L(`${items.length}편`, `${items.length}`) }),
@@ -643,7 +809,7 @@ export function buildPlanBoard(actions: PlanBoardActions): PlanBoard {
     }
     for (const day of shelf.days) {
       table.append(el('div', { class: 'pb-grp' }, [el('span', { text: dayHeading(day.day, store.today) })]))
-      for (const one of day.ids) table.append(row(byID.get(one)!, columns))
+      for (const entry of sortedForTable(day.ids.map((one) => byID.get(one)!))) table.append(row(entry, columns))
     }
     if (all.length === 0) table.append(el('div', { class: 'pb-empty', text: L('이번 주에 읽을 논문이 없어요', 'Nothing to read this week.') }))
     node.append(el('div', { class: 'pb-scroll' }, [table]))
@@ -680,7 +846,7 @@ export function buildPlanBoard(actions: PlanBoardActions): PlanBoard {
       return
     }
     const columns = columnsNow()
-    const table = tableNode(columns, true, thead)
+    const table = tableNode(columns, thead)
     for (const entry of papers) table.append(row(entry, columns))
     node.append(el('div', { class: 'pb-scroll' }, [table]))
   }
@@ -725,13 +891,17 @@ export function buildPlanBoard(actions: PlanBoardActions): PlanBoard {
         update()
         break
       case 'sort': {
-        const key = target.dataset.k as SortKey
-        savePrefs((prefs) => {
-          prefs.sort = prefs.sort.key === key ? { key, ascending: !prefs.sort.ascending } : { key, ascending: true }
-        })
+        setBoardSort(nextSort(boardSortNow(), target.dataset.k as BoardSortKey))
         update()
         break
       }
+      case 'slide':
+        if (geometry) slideTo(slideStep(slideX, geometry, target.dataset.dir === '-1' ? -1 : 1), true)
+        break
+      case 'unsort':
+        setBoardSort(null)
+        update()
+        break
       case 'spread':
         if (shelf.kind === 'plan') openSpreadPop(target, shelf.id)
         break
@@ -860,6 +1030,9 @@ export function buildPlanBoard(actions: PlanBoardActions): PlanBoard {
       return cell ? { kind: 'day', day: cell.dataset.dropDay || null, node: cell } : null
     }
     if (store.shelf.kind !== 'plan') return null
+    // A sorted plan takes no drops: a row put «before» another lands in an
+    // order that is not the one shown.
+    if (boardSortNow() !== null) return null
     if (types.includes(ROWS_TYPE) && prefs().group === 'section') {
       const rowNode = target.closest<HTMLElement>('[data-drop-row]')
       if (rowNode) return { kind: 'row', target: rowNode.dataset.dropRow!, node: rowNode }

@@ -102,6 +102,14 @@ export interface Requests {
   'metadata:guess': { args: { ids: string[] }; result: void }
   /** «Resolve Missing Metadata»: every paper not yet confirmed; how many were queued. */
   'metadata:resolvePending': { args: void; result: number }
+  /** A paper put under another by hand, in the window: out of every plan, no longer «taken off by hand». */
+  'supplements:attached': { args: { ids: string[] }; result: void }
+  /** A supplement taken off its paper by hand: not attached again on its own. */
+  'supplements:detached': { args: { id: string }; result: void }
+  /** PDFs dropped on a paper's materials: into the library, under the paper; how many were added, how many were there already. */
+  'supplements:import': { args: { id: string; paths: string[] }; result: { added: number; already: number } }
+  /** «Refresh All Metadata»: every record the app found, looked up again — keys kept, a confirmed record replaced only by another; how many were queued. */
+  'metadata:refreshAll': { args: void; result: number }
   /** The papers being looked up now, for a window that just opened. */
   'metadata:resolving': { args: void; result: string[] }
   'paper:rename': {

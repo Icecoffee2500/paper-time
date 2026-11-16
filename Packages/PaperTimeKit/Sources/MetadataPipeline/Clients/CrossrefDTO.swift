@@ -141,6 +141,24 @@ public struct CrossrefWork: Decodable, Sendable {
         item.title = title?.first
         item.subtitle = subtitle?.first
         item.containerTitle = containerTitle?.first
+        // A paper in a series of proceedings lists the series first and the
+        // book after it — «Lecture Notes in Computer Science», «Computer
+        // Vision – ECCV 2024» — and the book is where the paper appeared.
+        let titles = (containerTitle ?? []).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        if ["book-chapter", "proceedings-article", "book-part"].contains(type ?? ""), titles.count >= 2 {
+            item.containerTitle = titles.last
+            item.collectionTitle = titles.first
+        }
+        // Springer files a conference paper as a book chapter, AAAI files
+        // its proceedings as a journal: both are papers at a conference.
+        let container = (item.containerTitle ?? "").lowercased()
+        let reads = ["conference", "proceedings", "workshop", "symposium", "eccv", "iccv", "cvpr", "miccai"]
+        if type == "book-chapter", event != nil || reads.contains(where: container.contains) {
+            item.type = .paperConference
+        }
+        if type == "journal-article", container.hasPrefix("proceedings of"), container.contains("conference") {
+            item.type = .paperConference
+        }
         item.containerTitleShort = shortContainerTitle?.first
         item.author = (author ?? []).map { $0.asCSLName() }
         item.editor = (editor ?? []).map { $0.asCSLName() }

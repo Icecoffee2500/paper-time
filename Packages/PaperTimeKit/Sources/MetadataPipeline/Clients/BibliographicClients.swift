@@ -131,11 +131,16 @@ public struct OpenAlexClient: Sendable {
     }
 
     public func work(doi: String) async throws -> CSLItem {
+        try await rawWork(doi: doi).asCSLItem()
+    }
+
+    /// The work behind a DOI as OpenAlex holds it — for a preprint, often the
+    /// published paper it became, with that paper's DOI.
+    public func rawWork(doi: String) async throws -> OpenAlexWork {
         guard let normalised = Identifiers.normalizeDOI(doi),
               let url = URL(string: "https://api.openalex.org/works/https://doi.org/\(normalised)")
         else { throw NetworkService.Failure.notFound }
-        let work = try await network.getJSON(OpenAlexWork.self, from: url)
-        return work.asCSLItem()
+        return try await network.getJSON(OpenAlexWork.self, from: url)
     }
 
     /// OpenAlex filters treat commas and pipes as separators.

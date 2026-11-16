@@ -73,6 +73,19 @@ struct PlanInspectorSections: View {
                             detail: L("논문 · 서지에서 저절로", "Paper · From the record"),
                             open: { open(address: address) }, remove: nil, rename: nil, reveal: nil)
             }
+            // The paper's supplements are its materials too: the PDFs a
+            // conference hands out beside the paper, kept in the library
+            // under it rather than in the list beside it.
+            ForEach(model.attachments(of: paper.id)) { supplement in
+                MaterialRow(
+                    kind: .supplement, title: supplement.meta.file.originalName,
+                    detail: L("보충 자료 · PDF", "Supplement · PDF"),
+                    open: { model.selectedPaperID = supplement.id },
+                    remove: { Task { await model.detach(supplement.id) } },
+                    rename: nil,
+                    reveal: { revealFile(supplement) }
+                )
+            }
             ForEach(paper.links) { link in
                 MaterialRow(
                     kind: link.kind, title: link.displayTitle, detail: detail(of: link),
@@ -100,17 +113,25 @@ struct PlanInspectorSections: View {
         } header: {
             Text(L("자료", "Materials"))
         } footer: {
-            Text(L("파일을 여기로 끌어다 놓으면 PDF 옆에 복사해서 붙여요.", "Drop files here to copy them beside the PDF."))
+            Text(L("파일을 여기로 끌어다 놓으면 PDF 옆에 복사해서 붙여요. PDF는 보충 자료가 돼요.",
+                   "Drop files here to copy them beside the PDF. A PDF becomes a supplement."))
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }
         .dropDestination(for: URL.self) { urls, _ in
             let files = urls.filter(\.isFileURL)
             guard !files.isEmpty else { return false }
-            if LibraryModel.holdsPDF(files) {
-                message = L("PDF는 자료 대신 보충 자료로 붙여요. 목록에서 이 논문 위로 끌어다 놓아요.",
-                            "A PDF goes under the paper as a supplement. Drag it onto the paper in the list.")
-                return false
+            // A PDF is a supplement: it comes into the library and goes
+            // under this paper, not into the list beside it.
+            let pdfs = files.filter { $0.pathExtension.lowercased() == "pdf" }
+            if !pdfs.isEmpty {
+                Task {
+                    let count = await model.importSupplements(pdfs, to: paper.id)
+                    message = count > 0
+                        ? L("보충 자료 \(count)개를 붙였어요.", count == 1 ? "Added 1 supplement." : "Added \(count) supplements.")
+                        : L("이미 라이브러리에 있는 PDF예요.", "That PDF is already in the library.")
+                }
+                return true
             }
             Task {
                 let count = await model.attachFiles(files, to: paper.id)
@@ -170,6 +191,12 @@ struct PlanInspectorSections: View {
     private func open(address: String) {
         #if os(macOS)
         model.openAddress(address)
+        #endif
+    }
+
+    private func revealFile(_ supplement: LoadedPaper) {
+        #if os(macOS)
+        NSWorkspace.shared.activateFileViewerSelecting([supplement.documentURL])
         #endif
     }
 
@@ -246,6 +273,11 @@ struct MaterialsPreview: View {
                 MaterialRow(kind: .paper, title: MaterialLink.title(ofAddress: address),
                             detail: L("논문 · 서지에서 저절로", "Paper · From the record"),
                             open: {}, remove: nil, rename: nil, reveal: nil)
+            }
+            ForEach(model.attachments(of: paper.id)) { supplement in
+                MaterialRow(kind: .supplement, title: supplement.meta.file.originalName,
+                            detail: L("보충 자료 · PDF", "Supplement · PDF"),
+                            open: {}, remove: {}, rename: nil, reveal: nil)
             }
             ForEach(paper.links) { link in
                 MaterialRow(kind: link.kind, title: link.displayTitle,

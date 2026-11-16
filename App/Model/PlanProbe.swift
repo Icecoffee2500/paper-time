@@ -1,5 +1,6 @@
 #if os(macOS)
 import AppKit
+import PDFKit
 import SwiftUI
 import LibraryStore
 import PaperCore
@@ -18,6 +19,12 @@ import PaperCore
 /// - `--papertime-plan-group=section|week|status` groups a plan's table.
 /// - `--papertime-plan-select=<n>` picks the n-th paper of the shelf.
 /// - `--papertime-plan-report=1` says what the plans and the shelf hold.
+/// - `--papertime-plan-sort=year` sorts the boards it draws (`-year` the other
+///   way, `title` by title).
+/// - `--papertime-plan-slide=<points>` draws a narrow table with its columns
+///   slid that far.
+/// - `--papertime-plan-window=1` opens and shuts the inspector in a window
+///   of its own and says whether the window still fits the screen.
 /// - `--papertime-plan-render=<folder>` draws the board, a paper's
 ///   materials and the two pickers into PNGs, light and dark, and quits.
 @MainActor
@@ -41,7 +48,17 @@ enum PlanProbe {
         if let raw = Boot.setting("PAPERTIME_PLAN_SELECT"), let index = Int(raw), model.visiblePapers.indices.contains(index) {
             model.selection = [model.visiblePapers[index].id]
         }
-        if Boot.isSet("PAPERTIME_PLAN_REPORT") { report(model, say: say) }
+        if Boot.isSet("PAPERTIME_PLAN_REPORT") {
+            // `--papertime-plan-report-after=<seconds>`: after the lookups and
+            // the supplements have had their turn.
+            if let wait = Double(Boot.setting("PAPERTIME_PLAN_REPORT_AFTER") ?? "") {
+                try? await Task.sleep(for: .seconds(wait))
+            }
+            report(model, say: say)
+        }
+        if Boot.isSet("PAPERTIME_PLAN_WINDOW"), let app = WindowProbe.model {
+            await windowCheck(app: app, say: say)
+        }
         if let directory = Boot.setting("PAPERTIME_PLAN_RENDER"), let app = WindowProbe.model {
             try? await Task.sleep(for: .seconds(Double(Boot.setting("PAPERTIME_PLAN_RENDER_AFTER") ?? "") ?? 2))
             render(to: directory, model: model, app: app, say: say)
@@ -200,6 +217,129 @@ enum PlanProbe {
             say("spread \(first.name) MWF 1/day from today: \(spread.map { $0.1.text })")
         }
         say("shelf \(model.scope) as \(model.shelfView(for: model.scope).rawValue): \(model.visiblePapers.count) papers, selected \(model.selectedPaper?.meta.displayTitle.prefix(30) ?? "—")")
+        for paper in model.papers where model.attachmentCount(of: paper.id) > 0 {
+            let children = model.attachments(of: paper.id).map(\.meta.file.originalName)
+            say("supplements of \(paper.meta.displayTitle.prefix(40)): \(children)")
+        }
+        for paper in model.papers.filter({ $0.meta.parentID == nil }) {
+            let csl = paper.meta.csl
+            say("venue: \(csl.type.rawValue) | \(csl.containerTitle ?? "—") | \(csl.year.map(String.init) ?? "—") | \(paper.meta.displayTitle.prefix(40))")
+        }
+    }
+
+    /// `--papertime-plan-window=1`: the window that grew past the screen.
+    ///
+    /// On 2026-11-16 opening the inspector beside the table made the window
+    /// wider than the screen, and fitting it back by double-clicking the
+    /// title bar a few times quit the app («update constraints count»). This
+    /// takes the probe's own window — off every display, never unhidden —
+    /// sizes it to the main screen, opens and closes the inspector, sets the
+    /// frame back to the screen's the way a zoom does, and says each time
+    /// whether the window still fits. Not a second window of its own: two
+    /// windows with the library's toolbar are one toolbar family, and the
+    /// family's sync threw in `NSToolbar` and quit the probe.
+    private static func windowCheck(app: AppModel, say: (String) -> Void) async {
+        guard let screen = NSScreen.main else { return say("plan window: no screen") }
+        let size = screen.visibleFrame.size
+        try? await Task.sleep(for: .seconds(1))
+        guard let window = NSApp.windows.first(where: { $0.toolbar != nil && $0.contentView != nil && !WindowProbe.isOnAScreen($0) }) else {
+            return say("plan window: no window of the probe's off every screen — nothing checked")
+        }
+        window.setFrame(NSRect(origin: window.frame.origin, size: size), display: true)
+        guard !WindowProbe.isOnAScreen(window) else {
+            window.orderOut(nil)
+            return say("plan window: the window landed on a screen — put away, nothing checked")
+        }
+        var fits = true
+        /// How wide the first view of a kind is on the window, as laid out.
+        func width(of kind: NSView.Type) -> String {
+            var stack: [NSView] = window.contentView.map { [$0] } ?? []
+            while let view = stack.popLast() {
+                if type(of: view) == kind || view.isKind(of: kind) {
+                    let shown = (view.enclosingScrollView ?? view).frame.width
+                    return String(Int(shown))
+                }
+                stack += view.subviews
+            }
+            return "—"
+        }
+        func measure(_ label: String) {
+            let wide = window.frame.width
+            let ok = wide <= size.width + 1 && window.contentMinSize.width <= size.width + 1
+            fits = fits && ok
+            say("plan window \(label): inspector \(app.showsInspector ? "open" : "shut") frame \(Int(wide))×\(Int(window.frame.height)) "
+                + "min \(Int(window.contentMinSize.width))×\(Int(window.contentMinSize.height)) screen \(Int(size.width)) "
+                + "table \(width(of: BoardTable.Table.self)) page \(width(of: PDFView.self)) "
+                + (ok ? "fits" : "PAST THE SCREEN"))
+        }
+        try? await Task.sleep(for: .seconds(1.5))
+        measure("start")
+        for step in 1...6 {
+            app.toggleInspector()
+            try? await Task.sleep(for: .seconds(0.8))
+            measure("toggle \(step)")
+            // What a zoom does: the frame set to the screen's, here where it
+            // already is.
+            window.setFrame(NSRect(origin: window.frame.origin, size: size), display: true)
+            try? await Task.sleep(for: .seconds(0.4))
+            measure("zoom \(step)")
+        }
+        // Narrower than the columns would like: the table and the inspector
+        // give way, the window stays where it is put.
+        window.setFrame(NSRect(origin: window.frame.origin, size: NSSize(width: 1000, height: size.height)), display: true)
+        try? await Task.sleep(for: .seconds(0.6))
+        let narrow = window.frame.width
+        say("plan window narrow: asked 1000, frame \(Int(narrow)) \(narrow <= 1001 ? "held" : "GREW")")
+        // Where the table and the page stand in the window, for widths that
+        // leave the table at its narrowest: the table must end before the
+        // page begins — a board that asks for more than its column spills
+        // under its neighbours.
+        func span(of kind: NSView.Type) -> (CGFloat, CGFloat)? {
+            var stack: [NSView] = window.contentView.map { [$0] } ?? []
+            while let view = stack.popLast() {
+                if view.isKind(of: kind) {
+                    let shown = view.enclosingScrollView ?? view
+                    let frame = shown.convert(shown.bounds, to: nil)
+                    return (frame.minX, frame.maxX)
+                }
+                stack += view.subviews
+            }
+            return nil
+        }
+        if !app.showsInspector { app.toggleInspector() }
+        for wide in [1600.0, 1440, 1320] {
+            window.setFrame(NSRect(origin: window.frame.origin, size: NSSize(width: wide, height: size.height)), display: true)
+            try? await Task.sleep(for: .seconds(0.8))
+            // A sideways swipe, made here and handed to the table's own
+            // scroll view — never posted to the system.
+            if wide == 1440 {
+                var stack: [NSView] = window.contentView.map { [$0] } ?? []
+                var sliding: BoardTable.Sliding?
+                while let view = stack.popLast() {
+                    if let found = view as? BoardTable.Sliding { sliding = found; break }
+                    stack += view.subviews
+                }
+                if let sliding, let cg = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2, wheel1: 0, wheel2: -60, wheel3: 0),
+                   let event = NSEvent(cgEvent: cg) {
+                    let before = sliding.coordinator?.slide?.x ?? -1
+                    sliding.scrollWheel(with: event)
+                    let after = sliding.coordinator?.slide?.x ?? -1
+                    let limit = sliding.coordinator?.slideLimit ?? 0
+                    say("plan window swipe: slide \(Int(before)) → \(Int(after)) of \(Int(limit)) "
+                        + (after > before ? "moved" : "DID NOT MOVE"))
+                    sliding.coordinator?.slide?.x = 0
+                } else {
+                    say("plan window swipe: no sliding table")
+                }
+            }
+            if let table = span(of: BoardTable.Table.self), let page = span(of: PDFView.self) {
+                say("plan window \(Int(wide)): table \(Int(table.0))–\(Int(table.1)) (\(Int(table.1 - table.0))) page \(Int(page.0))–\(Int(page.1)) (\(Int(page.1 - page.0))) "
+                    + (table.1 <= page.0 ? "apart" : "TABLE SPILLS UNDER THE PAGE"))
+            } else {
+                say("plan window \(Int(wide)): table or page not found")
+            }
+        }
+        say("plan window: \(fits && narrow <= 1001 ? "fits every time" : "DID NOT FIT")")
     }
 
     /// The pieces that tell a newcomer what to do: the New Plan sheet, an

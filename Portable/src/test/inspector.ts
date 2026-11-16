@@ -10,7 +10,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { guessKind, isCitable, isLookedUp, readKind } from '../shared/documentKind.js'
-import { looksLikeSupplement, suggestedParent } from '../shared/attachmentSearch.js'
+import { confidentParent, isShortening, looksLikeSupplement, suggestedParent, twinStem } from '../shared/attachmentSearch.js'
 import { parseName, parseNames, PaperMeta } from '../shared/model.js'
 import { assignKeys, firstSignificantWord, makeKey, sanitise, uniqued } from '../shared/citationKey.js'
 import { Library, classifyFile } from '../main/library.js'
@@ -47,6 +47,23 @@ export async function inspectorSuite(test: Test, suite: (name: string) => void) 
     assert.equal(suggestedParent({
       id: 'Y', title: 'Scene-Graph ViT: End-to-End Open-Vocabulary Visual Relationship Detection', fileName: 'scene_graph_vit.pdf',
     }, shelf), null, 'two titles that begin alike are not a supplement and its paper')
+  })
+
+  await test('a supplement goes under its paper on its own only when that is certain — the Mac\'s answers', () => {
+    // `Tests/PaperCoreTests/Fixtures/supplement-parents.json`: the library and
+    // the cases the Mac's `SupplementDetector.confidentParent` is held to.
+    const fixture = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), '..',
+      'Packages/PaperTimeKit/Tests/PaperCoreTests/Fixtures/supplement-parents.json'), 'utf8')) as {
+      library: { title: string; fileName: string }[]
+      cases: { name: string; fileName: string; title: string | null; parent: number | null }[]
+    }
+    const library = fixture.library.map((one, index) => ({ id: String(index), title: one.title, fileName: one.fileName }))
+    for (const one of fixture.cases) {
+      assert.equal(confidentParent(one.fileName, one.title ?? undefined, library), one.parent === null ? null : String(one.parent), one.name)
+    }
+    assert.equal(twinStem('Suhail_Energy-Based_Learning_for_CVPR_2021_supplemental 14.54.16.pdf'), 'suhail energy based learning for cvpr')
+    assert.ok(isShortening('karmanov efficient test time adaptation cvpr', 'karmanov efficient test time adaptation of vision language models cvpr'))
+    assert.ok(!isShortening('a b c', 'a x b y c'), 'three words are too few to say')
   })
 
   await test('names are read the way the Mac reads them', () => {

@@ -382,7 +382,9 @@ export function readSchedule(value: unknown): PaperSchedule | null {
 
 // MARK: - Materials
 
-export type MaterialKind = 'paper' | 'slides' | 'code' | 'notebook' | 'video' | 'data' | 'post' | 'file'
+/** `supplement` is a supplement PDF in the library under the paper (`parentID`): shown with the
+ *  materials, never written to `links.json` — so it is not one of `MATERIAL_KINDS`. */
+export type MaterialKind = 'paper' | 'slides' | 'code' | 'notebook' | 'video' | 'data' | 'post' | 'file' | 'supplement'
 export const MATERIAL_KINDS: MaterialKind[] = ['paper', 'slides', 'code', 'notebook', 'video', 'data', 'post', 'file']
 
 /** One thing kept beside a paper: an address, or a file in the library folder (relative, `/` between parts). */

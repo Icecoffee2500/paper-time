@@ -6,7 +6,8 @@
  */
 import assert from 'node:assert/strict'
 import {
-  enterFocus, leaveFocus, restingPanes, showPane, togglePaneState, unfocused, type Panes,
+  PAGE_FLOOR, READING_FLOOR, TABLE_LEAST, enterFocus, leaveFocus, restingPanes, showPane, tableAndPageRoom, tableShownWidth, tableWidest,
+  togglePaneState, unfocused, type Panes,
 } from '../shared/paneModel.js'
 
 type Test = (name: string, body: () => void | Promise<void>) => Promise<void>
@@ -57,5 +58,43 @@ export async function focusSuite(test: Test, suite: (name: string) => void) {
     assert.equal(shown.panes.inspector, true)
     assert.equal(shown.focus.on, true)
     assert.equal(showPane(shown, 'inspector'), shown, 'already showing: nothing changes')
+  })
+
+  await test('the table gives way to the page, and the inspector takes its room from the table', () => {
+    // The Mac's numbers (`Pane`): a page you can read is 520, the table
+    // yields down to 300, and the page is never left under 300.
+    assert.deepEqual([READING_FLOOR, TABLE_LEAST, PAGE_FLOOR], [520, 300, 300])
+    // A 1728-point screen: the panes have 1712 inside their margins; the
+    // sidebar is 232 and the inspector 360, and each column has a gap of 10.
+    const shut = tableAndPageRoom({ window: 1712, sidebar: 232, inspector: null, gap: 10 })
+    const open = tableAndPageRoom({ window: 1712, sidebar: 232, inspector: 360, gap: 10 })
+    assert.equal(shut, 1712 - 10 - 242)
+    assert.equal(open, shut - 370)
+    // Shut, the table has the width it was given and the page more than a reading width.
+    assert.equal(tableShownWidth(620, shut), 620)
+    assert.ok(shut - tableShownWidth(620, shut) >= READING_FLOOR)
+    // Open, the table gives way and the page keeps its reading width
+    // (2026-11-16: the table kept its 620 and the paper was left 270).
+    assert.equal(tableShownWidth(620, open), open - READING_FLOOR)
+    assert.equal(open - tableShownWidth(620, open), READING_FLOOR)
+    // Shut again, the width it was given comes back — nothing was written.
+    assert.equal(tableShownWidth(620, shut), 620)
+    // A narrow window: the table holds at a title's room, the page takes
+    // what is left above its floor…
+    const narrow = tableAndPageRoom({ window: 1222, sidebar: 232, inspector: 360, gap: 10 })
+    assert.equal(tableShownWidth(620, narrow), TABLE_LEAST)
+    assert.ok(narrow - TABLE_LEAST >= PAGE_FLOOR)
+    // …and narrower still, the page keeps its floor before the table its own.
+    const tight = tableAndPageRoom({ window: 1000, sidebar: 232, inspector: 360, gap: 10 })
+    assert.equal(tableShownWidth(620, tight), Math.max(tight - PAGE_FLOOR, 200))
+    assert.equal(tableShownWidth(620, 100), 200, 'never under 200, whatever the window')
+    // A table given less than it may have keeps what it was given.
+    assert.equal(tableShownWidth(360, shut), 360)
+    // The divider stops where the page would go under a reading width, and
+    // never under the table's own floor.
+    assert.equal(tableWidest(shut), shut - READING_FLOOR)
+    assert.equal(tableWidest(600), TABLE_LEAST)
+    // The sidebar shut gives its room to the table too.
+    assert.equal(tableAndPageRoom({ window: 1712, sidebar: null, inspector: null, gap: 10 }), 1702)
   })
 }

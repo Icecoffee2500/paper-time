@@ -6,7 +6,10 @@
  */
 import { clear, el, on } from './dom.js'
 import { changed, store, type Pane } from './state.js'
-import { enterFocus, leaveFocus, restingPanes, showPane, togglePaneState, type PaneState } from '../shared/paneModel.js'
+import {
+  PAGE_FLOOR, TABLE_LEAST, enterFocus, leaveFocus, restingPanes, showPane, tableAndPageRoom, tableShownWidth, tableWidest, togglePaneState,
+  type PaneState,
+} from '../shared/paneModel.js'
 import { shell, solo } from './shell.js'
 import { holdReaderPlaces, keepingPlaces, pageArea, relayoutReaders, returnReaderPlaces } from './pageArea.js'
 import { saveSettings } from './settingsController.js'
@@ -17,13 +20,60 @@ import { boardInListColumn, boardPlaceNow } from './plans.js'
 type Column = 'sidebar' | 'paperList' | 'inspector' | 'table'
 
 /** The narrowest each column can be dragged — the Mac's floors (the table's
- *  is 400) — and the room the page keeps. */
-const COLUMN_MIN: Record<Column, number> = { sidebar: 200, paperList: 240, inspector: 280, table: 400 }
-const READER_MIN = 300
+ *  is `TABLE_LEAST`) — and the room the page keeps. */
+const COLUMN_MIN: Record<Column, number> = { sidebar: 200, paperList: 240, inspector: 280, table: TABLE_LEAST }
+const READER_MIN = PAGE_FLOOR
+/** The panes' margin and the gap between two of them — `--margin` and `--gap`. */
+const MARGIN = 8
+const GAP = 10
 
 /** Which width the list column wears now: the table's or the list's. */
 function listColumn(): 'paperList' | 'table' {
   return boardInListColumn() ? 'table' : 'paperList'
+}
+
+/** The panes' own width, inside their margins — the window's, before they are laid out. */
+function panesWidth(): number {
+  const width = shell.panes.clientWidth || window.innerWidth
+  return width - 2 * MARGIN
+}
+
+/** The room the table and the page share, as the panes stand now. */
+function tableRoom(): number {
+  const visible = store.settings.panes
+  return tableAndPageRoom({
+    window: panesWidth(),
+    sidebar: visible.sidebar ? store.settings.columns.sidebar : null,
+    inspector: visible.inspector ? store.settings.columns.inspector : null,
+    gap: GAP,
+  })
+}
+
+/**
+ * The table's width as laid out: what it was given, until the page would
+ * lose its reading width — then the table gives way, and has its width back
+ * when the room does (`tableShownWidth`, the Mac's `tableShown`).
+ */
+function tableShownNow(): number {
+  return tableShownWidth(store.settings.columns.table, tableRoom())
+}
+
+/** A column's width as laid out: the table's as it is shown, the others' as kept. */
+function columnWidthNow(pane: Column): number {
+  return pane === 'table' ? tableShownNow() : store.settings.columns[pane]
+}
+
+/**
+ * The window or a column beside it changed width: the table in the list's
+ * column takes the width it may have now. Nothing else is laid out again.
+ */
+export function fitListColumn() {
+  if (solo || listColumn() !== 'table' || !store.settings.panes.reader || !store.settings.panes.paperList) return
+  if (shell.listSlot.parentElement !== shell.panes) return
+  const width = tableShownNow()
+  if (shell.listSlot.style.width === `${width}px`) return
+  shell.listSlot.style.flex = `0 0 ${width}px`
+  shell.listSlot.style.width = `${width}px`
 }
 
 /** Which panes were on screen last time, so only a new one is seen arriving. */
@@ -81,7 +131,7 @@ export function layoutPanes() {
     // window, as the Mac's does, rather than standing at its width beside
     // nothing.
     if (visible.paperList) {
-      pieces.push({ pane: 'paperList', node: shell.listSlot, width: visible.reader ? store.settings.columns[listColumn()] : undefined })
+      pieces.push({ pane: 'paperList', node: shell.listSlot, width: visible.reader ? columnWidthNow(listColumn()) : undefined })
     }
     if (visible.reader) pieces.push({ pane: 'reader', node: pageArea })
   }
@@ -155,11 +205,14 @@ export function widestColumn(pane: Column, windowWidth: number): number {
   const others = shown
     .map((one): Column => (one === 'paperList' ? list : one))
     .filter((one) => one !== pane)
-    .reduce((sum, one) => sum + store.settings.columns[one], 0)
+    .reduce((sum, one) => sum + columnWidthNow(one), 0)
   const room = windowWidth - others - (visible.reader ? READER_MIN : 0)
+  // The table is dragged no wider than leaves the page a reading width —
+  // the same limit it gives way to.
+  const widest = pane === 'table' ? Math.min(tableWidest(tableRoom()), room) : room
   // Never below the floor: the table's floor is higher than the list's, and
   // a narrow window can leave less room than that (the Mac's 8acd2dc).
-  return Math.max(COLUMN_MIN[pane], room)
+  return Math.max(COLUMN_MIN[pane], widest)
 }
 
 function divider(pane: Column, inverted: boolean): HTMLElement {
@@ -169,7 +222,9 @@ function divider(pane: Column, inverted: boolean): HTMLElement {
     node.setPointerCapture(event.pointerId)
     node.classList.add('dragging')
     const startX = event.clientX
-    const startWidth = store.settings.columns[pane]
+    // From the width it is shown at: the table may be giving way, and a
+    // drag from the width it was given would jump.
+    const startWidth = columnWidthNow(pane)
     const widest = widestColumn(pane, shell.panes.clientWidth)
     // One column gets wider; nothing else about the window changes. Every
     // move used to lay out all four panes again — which took the divider
@@ -179,9 +234,11 @@ function divider(pane: Column, inverted: boolean): HTMLElement {
     const settle = () => {
       frame = 0
       const column = paneNode(pane)
-      const width = store.settings.columns[pane]
+      const width = columnWidthNow(pane)
       column.style.flex = `0 0 ${width}px`
       column.style.width = `${width}px`
+      // The sidebar or the inspector drawn wider: the table gives way.
+      if (pane !== 'table') fitListColumn()
       relayoutReaders()
     }
     const move = (moved: PointerEvent) => {

@@ -5,10 +5,11 @@
 import assert from 'node:assert/strict'
 import { setKorean } from '../shared/lang.js'
 import {
-  ALL_COLUMNS, COLUMN_PRIORITY, DEFAULT_COLUMNS, TITLE_FLOOR, authorsText, boardPlace, calendarDays, calendarHome, calendarLabel, dateLabel, dayHeading, detectionLine,
+  ALL_COLUMNS, BOARD_ROW_CHROME, DEFAULT_COLUMNS, TITLE_KEEP, authorsText, boardGeometry, boardPlace, clampSlide, slideStep, wheelSlide, calendarDays, calendarHome, calendarLabel, dateLabel, dayHeading, detectionLine,
   groupByStatus, groupByWeek, holdsAddress, isBehind, nextStatus, pickerFold, pickerOrder, pickerShown, planGuidance, planStats,
-  fitColumns, progress, readAddRow, readColumns, spanText, spreadOrder, spreadPreview, spreadStart, viewFor, weekCount, weekName, weekShelf,
+  progress, readAddRow, readColumns, spanText, spreadOrder, spreadPreview, spreadStart, viewFor, weekCount, weekName, weekShelf,
   withPlanColumns, withRo, type BoardPaper, type ColumnID,
+  compareText, nextSort, sortKeyOf, sortRows, type BoardSortKey,
 } from '../shared/planBoard.js'
 import { acceptedEdit, applyPlanEdit } from '../shared/planEdit.js'
 import { newPlan, planOrder } from '../shared/readingPlan.js'
@@ -204,31 +205,109 @@ export async function planBoardSuite(test: Test, suite: (name: string) => void) 
     assert.equal(pickerFold('  Almudévar   ÉCOLE '), 'almudevar ecole')
   })
 
-  await test('the columns that fit a narrow column are kept by priority, shown in their own order', () => {
-    // The Mac's widths: authors 116, year 44, venue 92, date 100, plan 132,
-    // progress 88, materials 34 (one tile wide).
-    const widths: Partial<Record<ColumnID, number>> = { authors: 116, year: 44, venue: 92, date: 100, plan: 132, progress: 88, materials: 34, tags: 110, rating: 72, notes: 56, added: 88, opened: 120 }
-    const widthOf = (id: ColumnID) => widths[id] ?? 0
-    const plan = DEFAULT_COLUMNS.plan
-    // Wide enough for all of them.
-    assert.deepEqual(fitColumns(plan, 1200, widthOf), plan)
-    // The room is the width less the row's 40 and 32 and the title's floor;
-    // each column wants its width and 10. At 620 that is 368: the day (110),
-    // the progress (98), the materials (44), the year (54) — 306 — and the
-    // authors (126) no longer fit; the venue (102) does not either.
-    assert.equal(TITLE_FLOOR, 180)
-    assert.deepEqual(fitColumns(plan, 620, widthOf), ['year', 'date', 'progress', 'materials'])
-    // The table's floor, 400: 148 of room — the day, and 38 left over,
-    // which no other column fits in.
-    assert.deepEqual(fitColumns(plan, 400, widthOf), ['date'])
-    // Narrower than the title alone: nothing beside it.
-    assert.deepEqual(fitColumns(plan, 240, widthOf), [])
-    // Order is the wanted order, not the priority's.
-    assert.deepEqual(fitColumns(['materials', 'date'], 1000, widthOf), ['materials', 'date'])
-    // A column nobody asked for is never added.
-    assert.deepEqual(fitColumns(['authors'], 1000, widthOf), ['authors'])
-    // Every column has a place in the priority.
-    assert.deepEqual([...COLUMN_PRIORITY].sort(), [...ALL_COLUMNS].sort())
+  await test('every column stands at its width; past the title’s room they slide behind a pinned title', () => {
+    // The Mac's widths: authors 116, year 44, venue 92, date 100, progress 88, materials 34.
+    const plan = [116, 44, 92, 100, 88, 34]
+    const content = 116 + 44 + 92 + 100 + 88 + 34 + 10 * 5
+    assert.equal(content, 524)
+    assert.equal(BOARD_ROW_CHROME, 82)
+    assert.equal(TITLE_KEEP, 150)
+    // Wide: the title takes what the columns leave, nothing slides.
+    assert.deepEqual(boardGeometry(1000, plan), { slides: false, title: 1000 - 82 - 524, content, viewport: content, limit: 0 })
+    // Exactly a title's room left still stands still.
+    assert.equal(boardGeometry(82 + 524 + 150, plan).slides, false)
+    // One point less and the title is pinned: 45% of the room, 150 to 220.
+    const tight = boardGeometry(82 + 524 + 149, plan)
+    assert.equal(tight.slides, true)
+    assert.equal(tight.title, 220)
+    // The table beside an open inspector (490): 408 of room, a title of
+    // 183.6 and the rest of the columns slide.
+    const beside = boardGeometry(490, plan)
+    assert.equal(beside.slides, true)
+    assert.ok(Math.abs(beside.title - 408 * 0.45) < 1e-9)
+    assert.ok(Math.abs(beside.viewport - (408 - 408 * 0.45)) < 1e-9)
+    assert.ok(Math.abs(beside.limit - (content - beside.viewport)) < 1e-9)
+    // The table's floor, 300: the title never goes under 150.
+    const narrow = boardGeometry(300, plan)
+    assert.equal(narrow.title, 150)
+    assert.equal(narrow.viewport, 300 - 82 - 150)
+    assert.equal(narrow.limit, content - (300 - 82 - 150))
+    // No columns: the title has the row.
+    assert.deepEqual(boardGeometry(400, []), { slides: false, title: 318, content: 0, viewport: 0, limit: 0 })
+    // One column, its own width, no gap.
+    assert.equal(boardGeometry(1000, [34]).content, 34)
+    // Narrower than its chrome: no negative room.
+    assert.equal(boardGeometry(40, plan).viewport, 0)
+  })
+
+  await test('the columns slide within their limit, by chevron or by a sideways wheel', () => {
+    assert.equal(clampSlide(-20, 300), 0)
+    assert.equal(clampSlide(120, 300), 120)
+    assert.equal(clampSlide(400, 300), 300)
+    assert.equal(clampSlide(50, 0), 0)
+    // A chevron goes most of a viewport over, and stops at the ends.
+    const geometry = { viewport: 200, limit: 300 }
+    assert.equal(slideStep(0, geometry, 1), 160)
+    assert.equal(slideStep(160, geometry, 1), 300)
+    assert.equal(slideStep(300, geometry, -1), 140)
+    assert.equal(slideStep(100, geometry, -1), 0)
+    // A swipe more across than down slides; one more down than across
+    // scrolls the rows; the wheel with Shift held slides by its turn.
+    assert.equal(wheelSlide({ deltaX: 12, deltaY: 3, deltaMode: 0, shiftKey: false }), 12)
+    assert.equal(wheelSlide({ deltaX: -8, deltaY: 2, deltaMode: 0, shiftKey: false }), -8)
+    assert.equal(wheelSlide({ deltaX: 2, deltaY: 30, deltaMode: 0, shiftKey: false }), 0)
+    assert.equal(wheelSlide({ deltaX: 0, deltaY: 30, deltaMode: 0, shiftKey: true }), 30)
+    assert.equal(wheelSlide({ deltaX: 0, deltaY: 3, deltaMode: 1, shiftKey: true }), 48)
+    assert.equal(wheelSlide({ deltaX: 0, deltaY: 1, deltaMode: 2, shiftKey: true }, 250), 250)
+    assert.equal(wheelSlide({ deltaX: 0, deltaY: 0, deltaMode: 0, shiftKey: true }), 0)
+  })
+
+  await test('every column sorts but the two with no order', () => {
+    assert.equal(sortKeyOf('materials'), null)
+    assert.equal(sortKeyOf('tags'), null)
+    for (const id of ALL_COLUMNS.filter((one) => one !== 'materials' && one !== 'tags')) assert.equal(sortKeyOf(id), id)
+  })
+
+  await test('a header cycles: ascending, descending, then the board’s own order', () => {
+    const up = nextSort(null, 'year')
+    assert.deepEqual(up, { key: 'year', ascending: true })
+    const down = nextSort(up, 'year')
+    assert.deepEqual(down, { key: 'year', ascending: false })
+    assert.equal(nextSort(down, 'year'), null)
+    // Another key starts over, ascending, whatever the first one was doing.
+    assert.deepEqual(nextSort(down, 'authors'), { key: 'authors', ascending: true })
+    assert.deepEqual(nextSort(up, 'title'), { key: 'title', ascending: true })
+  })
+
+  await test('sorting puts papers without a value last, either way, and keeps ties in order', () => {
+    interface P { id: string; year: number | null; who: string | null }
+    const papers: P[] = [
+      { id: 'a', year: 2019, who: 'Kumar' },
+      { id: 'b', year: null, who: null },
+      { id: 'c', year: 2017, who: 'fujimoto' },
+      { id: 'd', year: 2019, who: 'Kumar' },
+      { id: 'e', year: null, who: 'Agarwal' },
+      { id: 'f', year: 2021, who: 'Kostrikov' },
+    ]
+    const value = (one: P, key: BoardSortKey) => (key === 'year' ? one.year : key === 'authors' ? one.who : one.id)
+    const ids = (list: P[]) => list.map((one) => one.id).join('')
+    // No sort: the board's own order.
+    assert.equal(ids(sortRows(papers, null, value)), 'abcdef')
+    // Ascending: values up, ties (a and d) as they came, no-year last in their order.
+    assert.equal(ids(sortRows(papers, { key: 'year', ascending: true }, value)), 'cadfbe')
+    // Descending: only the papers with values turn round; ties still as they came; no-year still last.
+    assert.equal(ids(sortRows(papers, { key: 'year', ascending: false }, value)), 'fadcbe')
+    // Text the way Finder compares it: case aside.
+    assert.equal(ids(sortRows(papers, { key: 'authors', ascending: true }, value)), 'ecfadb')
+    assert.equal(ids(sortRows(papers, { key: 'authors', ascending: false }, value)), 'adfceb')
+    // Numbers by value, accents and case aside.
+    assert.ok(compareText('Week 2', 'Week 10') < 0)
+    assert.equal(compareText('almudévar', 'Almudevar'), 0)
+    // An empty text is no value.
+    assert.equal(ids(sortRows([{ id: 'x', year: null, who: '' }, { id: 'y', year: null, who: 'Zhang' }], { key: 'authors', ascending: true }, value)), 'yx')
+    // A plan sorts within each group, never across them: each group is sorted on its own.
+    const groups: P[][] = [[papers[0], papers[1], papers[2]], [papers[3], papers[4], papers[5]]]
+    assert.deepEqual(groups.map((group) => ids(sortRows(group, { key: 'year', ascending: true }, value))), ['cab', 'dfe'])
   })
 
   await test('a shelf’s table shows Read On and Plan only when asked; plans and the week always', () => {

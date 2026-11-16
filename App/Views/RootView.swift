@@ -441,11 +441,38 @@ struct LibraryWindow: View {
 
     /// The list column's width: the table's own while it holds the table,
     /// the list's otherwise.
-    private var listWidth: Double { model.boardInListColumn ? app.tableWidth : app.paperListWidth }
+    private var listWidth: Double { model.boardInListColumn ? tableShown : app.paperListWidth }
+
+    /// The room the table and the page share: the window less the sidebar,
+    /// the inspector and the gaps between them.
+    private var tableAndPage: Double {
+        var room = Double(windowWidth) - Column.gap
+        if app.isSidebarVisible { room -= app.sidebarWidth + Column.gap }
+        if app.showsInspector { room -= app.inspectorWidth + Column.gap }
+        return room
+    }
+
+    /// The widest the table may be: up to where the page would go under a
+    /// reading width, unless that leaves the table less than a title's room.
+    private var tableWidest: Double {
+        max(tableAndPage - Pane.readingFloor, Pane.tableLeast)
+    }
+
+    /// The table's width as laid out. What it was given, until the page
+    /// would lose its reading width — then the table gives way, folding its
+    /// authors, year and venue under the titles, and it has its width back
+    /// when the room comes back. Opening the inspector takes its room from
+    /// the table, not from the paper.
+    private var tableShown: Double {
+        let width = min(app.tableWidth, tableWidest)
+        // Never so wide that the page goes under its floor, which is what
+        // made the window grow past the screen.
+        return max(min(width, tableAndPage - Pane.pageFloor), 200)
+    }
 
     private var listWidthBinding: Binding<Double> {
         model.boardInListColumn
-            ? Binding(get: { app.tableWidth }, set: { app.tableWidth = $0 })
+            ? Binding(get: { tableShown }, set: { app.tableWidth = $0 })
             : Binding(get: { app.paperListWidth }, set: { app.paperListWidth = $0 })
     }
 
@@ -508,8 +535,11 @@ struct LibraryWindow: View {
                 // The table's floor is higher than the list's, and a narrow
                 // window can leave less room than that: the top of the range
                 // is held at or above its floor, or `400...300` traps.
-                let floor: Double = model.boardInListColumn ? 400 : 240
-                ColumnDivider(width: listWidthBinding, range: floor...max(floor, widest(240)))
+                // The table is dragged no wider than leaves the page a
+                // reading width — the same limit it gives way to.
+                let floor: Double = model.boardInListColumn ? Pane.tableLeast : 240
+                let top = model.boardInListColumn ? min(tableWidest, widest(240)) : widest(240)
+                ColumnDivider(width: listWidthBinding, range: floor...max(floor, top))
             }
 
             Group {
@@ -544,16 +574,26 @@ struct LibraryWindow: View {
             // Closed by width rather than by taking it out of the tree: the
             // reader is expensive to build, and tearing the PDF view down and
             // back up is what made the other column toggles crawl.
-            .frame(maxWidth: showsDetail ? .infinity : 0, alignment: .leading)
+            //
+            // And never wider than the room it is given: what it would like
+            // to be counted towards the window's minimum, and a minimum past
+            // the screen is what grew the window and then crashed the zoom.
+            .frame(minWidth: 0, maxWidth: showsDetail ? .infinity : 0, alignment: .leading)
             .opacity(showsDetail ? 1 : 0)
             .clipped()
         }
+        // The width the window offers, not the width the columns ask for:
+        // measured on a frame that takes the offer, so a column that asks
+        // for too much cannot feed its own answer back in as room.
+        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
         // Rounded, and that is the point: a drag on the window's edge reports
         // a new width sixty times a second, and every one of them was a
         // change of state that rebuilt the whole column stack. The only thing
         // this number decides is how far a divider may be dragged, which does
-        // not need to know about single points.
-        .onGeometryChange(for: CGFloat.self) { ($0.size.width / 24).rounded() * 24 } action: {
+        // not need to know about single points. Rounded down: the columns
+        // are now laid out against it, and rounding up promised them room
+        // the window does not have.
+        .onGeometryChange(for: CGFloat.self) { ($0.size.width / 24).rounded(.down) * 24 } action: {
             windowWidth = $0
         }
         // The panels float clear of the window's edges and of the toolbar, so
@@ -566,6 +606,9 @@ struct LibraryWindow: View {
         // already keep from each other; the band's own slack is the margin.
         .padding(.top, max(toolbarBand - Column.underToolbar, 0))
         .background { Column.ground }
+        // What the window may shrink to, said once, here — not the sum of
+        // whatever the columns happen to hold (`Pane.windowFloor`).
+        .frame(minWidth: Pane.windowFloor.width, minHeight: Pane.windowFloor.height)
         // No `.animation(value:)` here. The toggles already declare the motion
         // with `withAnimation`, and declaring it a second time with a
         // different duration meant every pane change was interpolated twice —
@@ -1452,6 +1495,10 @@ struct PaperDetailColumn: View {
                         .transition(.opacity)
                 }
             }
+            // The page takes what is left and no more: a reader that would
+            // like more is cut at its own edge, not pushing the inspector off
+            // the window's.
+            .frame(minWidth: 0, maxWidth: .infinity)
             .columnPanel()
 
             // Nothing to drag against when the inspector is closed.
@@ -1469,20 +1516,28 @@ struct PaperDetailColumn: View {
             // column narrowed the form inside it, which re-wrapped every
             // label on every frame: the paper's title went from two lines to
             // three and back on the way past.
+            //
+            // Held to what leaves the page its floor: in a window too narrow
+            // for both, the inspector gives way rather than the window
+            // growing past the screen.
+            let inspectorShown = min(app.inspectorWidth, max(240, Double(columnWidth) - Column.gap - Pane.pageFloor))
             inspector
-                .frame(width: app.inspectorWidth)
+                .frame(width: inspectorShown)
                 .frame(
-                    width: app.showsInspector ? app.inspectorWidth : 0,
+                    width: app.showsInspector ? inspectorShown : 0,
                     alignment: .trailing
                 )
                 .columnPanel()
                 .opacity(app.showsInspector ? 1 : 0)
                 .clipped()
         }
+        // The room offered, not the room asked for — the same reason the
+        // window's width is measured that way.
+        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
         // How much there is to share between the page and the inspector,
         // which is what says how far the inspector may be dragged. Rounded,
         // for the reason the window's own width is.
-        .onGeometryChange(for: CGFloat.self) { ($0.size.width / 24).rounded() * 24 } action: {
+        .onGeometryChange(for: CGFloat.self) { ($0.size.width / 24).rounded(.down) * 24 } action: {
             columnWidth = $0
         }
         // Likewise: `toggleInspector` opens the transaction.
@@ -1929,6 +1984,21 @@ private struct ToolbarHover: ViewModifier {
 /// against the same floor.
 enum Pane {
     static let pageFloor: CGFloat = 300
+    /// The width a page keeps while something beside it can give way: a
+    /// column of a two-column paper at a size you can read. The table yields
+    /// before the page goes under it (2026-11-16: with the inspector open,
+    /// the table took the room and left the paper 270 points).
+    static let readingFloor: CGFloat = 520
+    /// How far the table yields for it — a title with room to be read. Its
+    /// authors, year and venue fold under the title long before this.
+    static let tableLeast: CGFloat = 300
+    /// The window's own floor. The columns are held at widths, and widths
+    /// that add up past the window made SwiftUI widen the window past the
+    /// screen — and a zoom then fought it until AppKit gave up its layout
+    /// pass and the app quit (2026-11-16, «update constraints count»). The
+    /// columns now never ask for more than the window has; this is what the
+    /// window may shrink to.
+    static let windowFloor = CGSize(width: 720, height: 420)
 }
 
 #if os(macOS)

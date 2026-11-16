@@ -63,6 +63,9 @@ public actor MetadataResolver {
     ) async -> ResolutionResult {
         let headers = await headerExtractor.extract(from: signals)
         let bestHeader = headers.first
+        // Where the paper says it was published, if it says so on its first
+        // page — the only witness for the venues that mint no DOI.
+        let stamp = VenueStamp.find(in: signals.firstPageLines.joined(separator: "\n"))
 
         var found = IdentifierScanner.scan(signals.openingText)
         if found.arxiv == nil {
@@ -77,23 +80,124 @@ public actor MetadataResolver {
 
         if let doi = found.doi {
             let result = await resolveByDOI(doi, header: bestHeader, headers: headers)
-            if let result, result.confidence == .verified { return finish(result) }
+            if let result, result.confidence == .verified { return finish(await published(result, stamp: stamp)) }
             fallback = fallback ?? result
         }
         if let arxivID = found.arxiv {
             let result = await resolveByArxiv(arxivID, header: bestHeader, headers: headers)
-            if let result, result.confidence == .verified { return finish(result) }
+            if let result, result.confidence == .verified { return finish(await published(result, stamp: stamp)) }
             fallback = fallback ?? result
         }
 
         let byTitle = await resolveByTitle(headers: headers, signals: signals)
-        if byTitle.confidence == .verified { return finish(byTitle) }
+        if byTitle.confidence == .verified { return finish(await published(byTitle, stamp: stamp)) }
 
         // Prefer whichever attempt produced a record with real fields.
-        guard let fallback else { return finish(byTitle) }
-        return finish(
-            fallback.csl.hasMinimumFields && !byTitle.csl.hasMinimumFields ? fallback : byTitle
+        guard let fallback else { return finish(await published(byTitle, stamp: stamp)) }
+        return finish(await published(
+            fallback.csl.hasMinimumFields && !byTitle.csl.hasMinimumFields ? fallback : byTitle,
+            stamp: stamp
+        ))
+    }
+
+    /// Looks again at a record that is only a preprint — or names no venue —
+    /// for where the paper was published, and on the arXiv identifier of a
+    /// record it already holds. What `MetadataQueue` runs on the library's
+    /// preprints from time to time, since a paper is accepted long after it
+    /// is posted.
+    public func published(
+        _ csl: CSLItem,
+        identifiers: Identifiers,
+        firstPage: String
+    ) async -> (csl: CSLItem, identifiers: Identifiers, provenance: Provenance)? {
+        let before = ResolutionResult(
+            csl: csl, identifiers: identifiers, confidence: .verified,
+            provenance: Provenance(source: .arxiv)
         )
+        let after = await published(before, stamp: VenueStamp.find(in: firstPage))
+        guard after.csl != csl || after.identifiers != identifiers else { return nil }
+        let cleaned = finish(after)
+        return (cleaned.csl, cleaned.identifiers, cleaned.provenance)
+    }
+
+    /// The published version of a preprint, when there is one.
+    ///
+    /// arXiv's record of a paper stays a preprint for ever, and so did ours:
+    /// a paper at CVPR 2024 was filed as «arXiv» because its PDF printed an
+    /// arXiv identifier (2026-11-16, «어딘가에 accept이 되고 publish가 된
+    /// 논문은 그걸로 가져오면 좋겠어»). OpenAlex keeps the preprint and the
+    /// paper as one work, so asking it about the arXiv DOI answers with the
+    /// published DOI, whose record Crossref then gives in full. A venue with
+    /// no DOI — NeurIPS, ICLR, ICML — is known only from the paper's own
+    /// first page (`VenueStamp`). The published record must be the same paper
+    /// — the same title and first author — or it is not taken.
+    func published(_ result: ResolutionResult, stamp: VenueStamp?) async -> ResolutionResult {
+        guard result.confidence != .unparsed else { return result }
+        let preprint = Self.isPreprint(result)
+        let venueless = (result.csl.containerTitle ?? "").trimmingCharacters(in: .whitespaces).isEmpty
+        guard preprint || venueless else { return result }
+
+        if preprint, let base = Self.arxivBase(of: result) {
+            if let work = try? await openAlex.rawWork(doi: "10.48550/arXiv.\(base)"),
+               let raw = work.doi, let doi = Identifiers.normalizeDOI(raw), !Self.isArxivDOI(doi) {
+                var record: CSLItem? = try? await crossref.work(doi: doi)
+                if record == nil { record = try? await doiClient.fetch(doi: doi) }
+                if var record, Self.samePaper(record, result.csl) {
+                    record.doi = doi
+                    var identifiers = result.identifiers
+                    identifiers.doi = doi
+                    if identifiers.arxiv == nil { identifiers.arxiv = base }
+                    var made = result
+                    made.csl = record
+                    made.identifiers = identifiers
+                    made.provenance = Provenance(source: .crossref, detail: "published version of arXiv \(base)")
+                    return made
+                }
+            }
+        }
+        if let stamp {
+            var made = result
+            made.csl = stamp.applied(to: result.csl)
+            made.provenance.detail = [result.provenance.detail, "venue printed on the paper: \(stamp.short)"]
+                .compactMap { $0 }.joined(separator: "; ")
+            return made
+        }
+        return result
+    }
+
+    /// A record of a preprint: arXiv's own, by its DOI, its type or its
+    /// container.
+    static func isPreprint(_ result: ResolutionResult) -> Bool {
+        if let doi = result.identifiers.doi ?? result.csl.doi, isArxivDOI(doi) { return true }
+        if result.csl.type == .manuscript { return true }
+        return result.csl.containerTitle?.localizedCaseInsensitiveContains("arxiv") == true
+    }
+
+    static func isArxivDOI(_ doi: String) -> Bool {
+        doi.lowercased().hasPrefix("10.48550/arxiv.")
+    }
+
+    /// The arXiv number a record stands for, without its version.
+    static func arxivBase(of result: ResolutionResult) -> String? {
+        if let arxiv = result.identifiers.arxiv, let base = Identifiers(arxiv: arxiv).arxivBaseID { return base }
+        for raw in [result.identifiers.doi, result.csl.doi].compactMap({ $0 }) where isArxivDOI(raw) {
+            let tail = String(raw.dropFirst("10.48550/arxiv.".count))
+            if let base = Identifiers(arxiv: tail).arxivBaseID { return base }
+        }
+        return nil
+    }
+
+    /// The same paper twice: titles alike, and the same first author when
+    /// both name one.
+    static func samePaper(_ published: CSLItem, _ preprint: CSLItem) -> Bool {
+        guard let left = published.fullTitle, let right = preprint.fullTitle,
+              StringSimilarity.titleSimilarity(left, right) >= 0.9
+        else { return false }
+        guard let one = published.author.first?.sortingSurname, let two = preprint.author.first?.sortingSurname
+        else { return true }
+        let a = TextNormalization.foldedTitle(one), b = TextNormalization.foldedTitle(two)
+        guard !a.isEmpty, !b.isEmpty else { return true }
+        return a == b || a.contains(b) || b.contains(a) || StringSimilarity.jaroWinkler(a, b) >= 0.92
     }
 
     // MARK: - Identifier paths
@@ -291,6 +395,21 @@ public actor MetadataResolver {
             .sorted { MetadataVerifier.rank($0.assessment) > MetadataVerifier.rank($1.assessment) }
 
         if let best = assessed.first, best.assessment.verdict == .verified {
+            // OpenAlex's own record of a work is thin — a chapter's book is
+            // its series, a conference paper has no pages — and the work's
+            // DOI has a full one at Crossref.
+            if best.found.source == .openAlex, let raw = best.found.identifiers.doi,
+               let doi = Identifiers.normalizeDOI(raw), !Self.isArxivDOI(doi),
+               var full = try? await crossref.work(doi: doi), Self.samePaper(full, best.found.item) {
+                full.doi = doi
+                return ResolutionResult(
+                    csl: full,
+                    identifiers: best.found.identifiers,
+                    confidence: .verified,
+                    provenance: Provenance(source: .crossref, detail: "title match"),
+                    assessment: best.assessment
+                )
+            }
             return ResolutionResult(
                 csl: best.found.item,
                 identifiers: best.found.identifiers,

@@ -968,6 +968,8 @@ public final class AppModel {
                 SemanticIndex.shared.schedule(model.semanticSources)
             }
             #endif
+            // Preprints that have since been published, a few seconds later.
+            model.checkPublishedVersions()
             // `--papertime-import=<경로>`가 드롭·«PDF 더하기» 패널이 지나는 그
             // 길로 파일을 하나 들여온다. 라이브러리 폴더 안에 이미 있는 파일을
             // 이 길로 들이면 «남은 PDF» 목록이 낡은 채로 남고, 그 다음 줄을

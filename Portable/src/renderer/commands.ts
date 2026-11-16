@@ -22,7 +22,7 @@ import {
   showPagesPopup,
   stepPaper,
 } from './actions/openPapers.js'
-import { copyKey, resolveMissingMetadata } from './actions/paper.js'
+import { copyKey, refreshAllMetadata, resolveMissingMetadata } from './actions/paper.js'
 import { linkSelectionToNote, ultracopySelection, newNote } from './actions/notes.js'
 import { openFind, openSearch } from './actions/search.js'
 import { addByAddress, addLibraryFolder, addPapers, libraryOpened, reload } from './library.js'
@@ -46,6 +46,7 @@ export const COMMANDS = {
   addPapers: () => void addPapers(),
   addByAddress: () => void addByAddress(),
   resolveMetadata: () => void resolveMissingMetadata(),
+  refreshMetadata: () => void refreshAllMetadata(),
   refreshFolder: () => void reload(),
   addFolder: () => void addLibraryFolder(),
   searchEverything: () => openSearch(),

@@ -29,7 +29,7 @@ import {
   arxivBaseID, arxivIDFromFileName, arxivIDs, dois, normalizeArxiv, normalizeDOI, pubmedID, scanIdentifiers,
 } from '../shared/metadata/identifiers.js'
 import { unescapeLaTeX } from '../shared/metadata/latexUnescape.js'
-import { resolve, type ResolutionResult } from '../shared/metadata/resolver.js'
+import { publishedRecord, resolve, type ResolutionResult } from '../shared/metadata/resolver.js'
 import { clean, sanitized } from '../shared/metadata/sanitizer.js'
 import {
   cleanEmbeddedTitle, guessFromSignals, isLikelyAuthorOrAffiliationLine, isStamp, keywordList, largestFontText,
@@ -37,6 +37,7 @@ import {
 } from '../shared/metadata/signals.js'
 import { collapsingWhitespace, firstYear, foldedTitle, jaroWinkler, repairingHyphenation, titleSimilarity } from '../shared/metadata/text.js'
 import { assess, score } from '../shared/metadata/verifier.js'
+import { findVenueStamp } from '../shared/metadata/venueStamp.js'
 import { NetworkService, type Clock, type Reply } from '../main/metadata/network.js'
 import { NetworkFailure } from '../shared/metadata/resolver.js'
 
@@ -95,6 +96,7 @@ function call(fn: string, args: unknown[]): unknown {
     case 'splitAuthorField': return splitAuthorField(s(0))
     case 'keywordList': return keywordList(s(0))
     case 'isStamp': return isStamp(s(0))
+    case 'venueStamp': return orNull(findVenueStamp(s(0)))
     case 'isLikelyAuthorOrAffiliationLine': return isLikelyAuthorOrAffiliationLine(s(0))
     case 'looksLikeAbstract': return looksLikeAbstract(s(0))
     case 'looksLikeBoilerplate': return looksLikeBoilerplate(s(0))
@@ -212,6 +214,34 @@ export async function metadataSuite(test: Test, suite: (name: string) => void) {
       })
     }
   }
+
+  await test('A record already held is looked at again for its published version (the queue\'s check)', async () => {
+    const network = new NetworkService(async (url): Promise<Reply> => {
+      const reply = recorded[url]
+      if (!reply || reply.status === 0) throw new NetworkFailure('offline')
+      return reply
+    }, undefined, stillClock)
+    const preprint = (title: string, family: string, base: string) => ({
+      csl: { type: 'manuscript', title, author: [{ family }], DOI: `10.48550/arxiv.${base}`, 'container-title': 'arXiv' },
+      ids: { doi: `10.48550/arxiv.${base}`, arxiv: `${base}v1` },
+    })
+    // OpenAlex holds the CVPR paper and the preprint as one work.
+    const tda = preprint('Efficient Test-Time Adaptation of Vision-Language Models', 'Karmanov', '2403.18293')
+    const cvpr = await publishedRecord(network, tda.csl, tda.ids, '')
+    assert.equal(cvpr?.identifiers.doi, '10.1109/cvpr52733.2024.01343')
+    assert.equal(cvpr?.csl.type, 'paper-conference')
+    assert.match(String(cvpr?.csl['container-title']), /Computer Vision and Pattern Recognition/)
+    assert.deepEqual(cvpr?.provenance, { source: 'crossref', detail: 'published version of arXiv 2403.18293' })
+    // ICLR has no DOI: only the paper's own first page says so.
+    const salun = preprint('SalUn: Empowering Machine Unlearning via Gradient-based Weight Saliency', 'Fan', '2310.12508')
+    const iclr = await publishedRecord(network, salun.csl, salun.ids, 'Published as a conference paper at ICLR 2024')
+    assert.equal(iclr?.csl['container-title'], 'International Conference on Learning Representations')
+    assert.equal(iclr?.csl.DOI, undefined)
+    assert.equal(iclr?.identifiers.doi, '10.48550/arxiv.2310.12508')
+    // Still a preprint, and the page says nothing: nothing to write.
+    const conda = preprint('ConDa: Fast Federated Unlearning with Contribution Dampening', 'Chundawat', '2410.04144')
+    assert.equal(await publishedRecord(network, conda.csl, conda.ids, ''), undefined)
+  })
 
   const corpus = process.env.PAPERTIME_CORPUS
   if (!corpus) return

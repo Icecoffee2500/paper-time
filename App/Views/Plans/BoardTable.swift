@@ -22,6 +22,10 @@ struct BoardTable: NSViewRepresentable {
     let entries: [BoardEntry]
     /// Bumped when what a row says changes without the rows changing.
     let revision: Int
+    /// The board's sideways slide, which a horizontal swipe (or ⇧ and the
+    /// wheel) moves while the columns are too wide for the table.
+    var slide: BoardSlide?
+    var slideLimit: CGFloat = 0
     @Binding var selection: Set<UUID>
     let row: (BoardEntry, Bool) -> AnyView
     /// Whether rows can be dragged into a new order (a plan, by section).
@@ -60,7 +64,8 @@ struct BoardTable: NSViewRepresentable {
         table.onOpen = { [weak coordinator = context.coordinator] in coordinator?.openSelected() }
         context.coordinator.table = table
 
-        let scroll = NSScrollView()
+        let scroll = Sliding()
+        scroll.coordinator = context.coordinator
         scroll.documentView = table
         scroll.hasVerticalScroller = true
         scroll.hasHorizontalScroller = false
@@ -74,6 +79,29 @@ struct BoardTable: NSViewRepresentable {
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         context.coordinator.apply(self)
+    }
+
+    /// The table's scroll view, which hands a sideways swipe to the board's
+    /// slide instead of ignoring it: the table itself only scrolls up and
+    /// down, and the columns slide in SwiftUI, under a pinned title.
+    final class Sliding: NSScrollView {
+        weak var coordinator: Coordinator?
+
+        override func scrollWheel(with event: NSEvent) {
+            guard let coordinator, let slide = coordinator.slide, coordinator.slideLimit > 0 else {
+                return super.scrollWheel(with: event)
+            }
+            var dx = event.scrollingDeltaX
+            let dy = event.scrollingDeltaY
+            // A mouse's wheel with ⇧ held, where the system has not turned it
+            // sideways already.
+            if dx == 0, event.modifierFlags.contains(.shift) { dx = dy }
+            guard dx != 0, abs(dx) >= abs(dy) || event.modifierFlags.contains(.shift) else {
+                return super.scrollWheel(with: event)
+            }
+            let step = event.hasPreciseScrollingDeltas ? dx : dx * 8
+            slide.x = min(max(min(slide.x, coordinator.slideLimit) - step, 0), coordinator.slideLimit)
+        }
     }
 
     final class Table: NSTableView {
@@ -96,6 +124,9 @@ struct BoardTable: NSViewRepresentable {
         private var anchor: UUID?
 
         init(_ owner: BoardTable) { self.owner = owner }
+
+        var slide: BoardSlide? { owner.slide }
+        var slideLimit: CGFloat { owner.slideLimit }
 
         func apply(_ owner: BoardTable) {
             let before = self.owner

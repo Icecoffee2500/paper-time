@@ -233,6 +233,7 @@ export function kindName(kind: MaterialKind): string {
     case 'data': return L('데이터', 'Data')
     case 'post': return L('글', 'Article')
     case 'file': return L('파일', 'File')
+    case 'supplement': return L('보충 자료', 'Supplement')
   }
 }
 
@@ -247,6 +248,7 @@ export function kindTone(kind: MaterialKind): string {
     case 'data': return 'teal'
     case 'post': return 'green'
     case 'file': return 'indigo'
+    case 'supplement': return 'purple'
   }
 }
 
@@ -318,31 +320,134 @@ export const DEFAULT_COLUMNS: Record<BoardContext, ColumnID[]> = {
   other: ['authors', 'year', 'venue', 'date', 'plan', 'materials'],
 }
 
-/** Which columns stay when the column is narrow, most wanted first (the Mac's `BoardKind.priority`). */
-export const COLUMN_PRIORITY: ColumnID[] = ['date', 'progress', 'plan', 'materials', 'year', 'authors', 'venue', 'tags', 'rating', 'notes', 'added', 'opened']
+/**
+ * Where a board's row puts its parts, for a board of a given width (the
+ * Mac's `BoardGeometry`). The row is the ring (22), a gap (10), the title, a
+ * gap (10) and the columns, each at its own width with 10 between them,
+ * inside 20 of padding each side — so `room` (title and columns) is the
+ * width less 82.
+ *
+ * Every column stands, at its own width, aligned down the table. When they
+ * all fit beside a title of at least 150 the title takes the rest. When they
+ * do not, the title is pinned on the left (45% of the room, 150 to 220) and
+ * the columns slide sideways in what is left — the viewport — by up to
+ * `limit` (2026-11-16: the authors, year and venue folded under the title
+ * read as clutter, «열로 정렬이 되어있는게 아니다보니까 조금 번잡스럽네»;
+ * the user chose a pinned title and columns that slide, as Notion and
+ * Numbers do).
+ */
+export interface BoardGeometry {
+  /** Whether the columns slide behind a pinned title. */
+  slides: boolean
+  title: number
+  /** The columns' own width, gaps included. */
+  content: number
+  /** How much of the columns shows at once. */
+  viewport: number
+  /** How far they slide: 0 when they all show. */
+  limit: number
+}
 
-/** The title is never narrower than this; the other columns step aside first. */
-export const TITLE_FLOOR = 180
+/** The ring, the two gaps beside the title and the padding either side. */
+export const BOARD_ROW_CHROME = 82
+/** The title is never narrower than this; past it, the columns slide. */
+export const TITLE_KEEP = 150
+export const PINNED_TITLE = { least: 150, most: 220, share: 0.45 }
+
+export function boardGeometry(width: number, columnWidths: readonly number[]): BoardGeometry {
+  const room = Math.max(0, width - BOARD_ROW_CHROME)
+  const count = columnWidths.length
+  const content = count === 0 ? 0 : columnWidths.reduce((sum, one) => sum + one, 0) + 10 * (count - 1)
+  if (count === 0 || room - content >= TITLE_KEEP) {
+    return { slides: false, title: room - content, content, viewport: content, limit: 0 }
+  }
+  const title = Math.min(PINNED_TITLE.most, Math.max(PINNED_TITLE.least, room * PINNED_TITLE.share))
+  const viewport = Math.max(0, room - title)
+  return { slides: true, title, content, viewport, limit: Math.max(0, content - viewport) }
+}
+
+/** An offset held inside what the columns can slide. */
+export function clampSlide(x: number, limit: number): number {
+  return Math.min(Math.max(x, 0), Math.max(0, limit))
+}
+
+/** Where a chevron takes the columns: most of a viewport over, either way. */
+export function slideStep(x: number, geometry: Pick<BoardGeometry, 'viewport' | 'limit'>, direction: 1 | -1): number {
+  return clampSlide(x + direction * geometry.viewport * 0.8, geometry.limit)
+}
 
 /**
- * The columns that fit beside a title of at least `TITLE_FLOOR`, kept by
- * priority and shown in their own order — in a column the width of a list,
- * the table loses its venue before it loses its days. The row's own room
- * (the margins, the ring) is the Mac's: 40 and 32; each column wants its
- * width and a gap of 10.
+ * How far a wheel event slides the columns, or 0 when it is not a sideways
+ * one: a trackpad swipe that goes more across than down, or the wheel with
+ * Shift held (the vertical turn read as horizontal). Lines and pages are
+ * turned into pixels the way the browser scrolls them.
  */
-export function fitColumns(wanted: ColumnID[], width: number, widthOf: (id: ColumnID) => number): ColumnID[] {
-  let room = width - 40 - 32 - TITLE_FLOOR
-  const kept = new Set<ColumnID>()
-  for (const id of COLUMN_PRIORITY) {
-    if (!wanted.includes(id)) continue
-    const need = widthOf(id) + 10
-    if (need <= room) {
-      kept.add(id)
-      room -= need
-    }
-  }
-  return wanted.filter((id) => kept.has(id))
+export function wheelSlide(event: { deltaX: number; deltaY: number; deltaMode: number; shiftKey: boolean }, page = 400): number {
+  const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? page : 1
+  if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return event.deltaX * unit
+  if (event.shiftKey) return event.deltaY * unit
+  return 0
+}
+
+// MARK: - Sorting
+
+/**
+ * What a table sorts by: the title, and every column with one value a
+ * paper either has or has not. The materials and the tags have no order.
+ */
+export type BoardSortKey = 'title' | 'authors' | 'year' | 'venue' | 'plan' | 'date' | 'progress' | 'rating' | 'notes' | 'added' | 'opened'
+
+export const BOARD_SORT_KEYS: readonly BoardSortKey[] = ['title', 'authors', 'year', 'venue', 'plan', 'date', 'progress', 'rating', 'notes', 'added', 'opened']
+
+export interface BoardSort {
+  key: BoardSortKey
+  ascending: boolean
+}
+
+/** The key a column sorts by, or null for a column with no order. */
+export function sortKeyOf(id: ColumnID): BoardSortKey | null {
+  return id === 'materials' || id === 'tags' ? null : id
+}
+
+/**
+ * The sort after a header is clicked: another key starts ascending, the
+ * current one turns descending, and a third click gives the board its own
+ * order back — the shelf's, the plan's reading order, the week's. A plan
+ * sorted by year and no way back to the order it was planned in would be a
+ * trap (2026-11-16).
+ */
+export function nextSort(current: BoardSort | null, key: BoardSortKey): BoardSort | null {
+  if (!current || current.key !== key) return { key, ascending: true }
+  return current.ascending ? { key, ascending: false } : null
+}
+
+/** Text compared the way Finder does: case aside, numbers by value. */
+export function compareText(a: string, b: string): number {
+  return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
+}
+
+/**
+ * The items in the sort's order (the Mac's comparator). A value of null is
+ * a paper without one — no year, no authors, never opened — and those go
+ * last, in their own order, whichever way the rest face: only the papers
+ * with values turn round between ↑ and ↓. Ties keep the board's own order.
+ * No sort is the items as they came.
+ */
+export function sortRows<T>(items: readonly T[], sort: BoardSort | null, value: (item: T, key: BoardSortKey) => string | number | null): T[] {
+  if (!sort) return [...items]
+  const sign = sort.ascending ? 1 : -1
+  const known: { item: T; at: number; v: string | number }[] = []
+  const missing: T[] = []
+  items.forEach((item, at) => {
+    const v = value(item, sort.key)
+    if (v === null || v === '') missing.push(item)
+    else known.push({ item, at, v })
+  })
+  known.sort((a, b) => {
+    const order = typeof a.v === 'number' && typeof b.v === 'number' ? a.v - b.v : compareText(String(a.v), String(b.v))
+    return order !== 0 ? order * sign : a.at - b.at
+  })
+  return [...known.map((one) => one.item), ...missing]
 }
 
 /**

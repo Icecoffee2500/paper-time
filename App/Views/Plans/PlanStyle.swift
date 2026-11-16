@@ -93,6 +93,7 @@ extension MaterialKind {
         case .data: L("데이터", "Data")
         case .post: L("글", "Article")
         case .file: L("파일", "File")
+        case .supplement: L("보충 자료", "Supplement")
         }
     }
 
@@ -106,6 +107,7 @@ extension MaterialKind {
         case .data: "cylinder"
         case .post: "text.alignleft"
         case .file: "doc"
+        case .supplement: "paperclip"
         }
     }
 
@@ -119,6 +121,7 @@ extension MaterialKind {
         case .data: .teal
         case .post: .green
         case .file: .indigo
+        case .supplement: .purple
         }
     }
 
@@ -133,6 +136,7 @@ extension MaterialKind {
         case .data: L("데이터로 알아챘어요", "Looks like data")
         case .post: L("글로 알아챘어요", "Looks like an article")
         case .file: L("파일로 알아챘어요", "Looks like a file")
+        case .supplement: L("보충 자료로 알아챘어요", "Looks like a supplement")
         }
     }
 
@@ -146,6 +150,7 @@ extension MaterialKind {
         case .data: L("데이터로 붙였어요.", "Added as data.")
         case .post: L("글로 붙였어요.", "Added as an article.")
         case .file: L("파일로 붙였어요.", "Added as a file.")
+        case .supplement: L("보충 자료로 붙였어요.", "Added as a supplement.")
         }
     }
 }

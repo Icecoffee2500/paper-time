@@ -48,7 +48,7 @@ import { openAnchorFromSlipBox, openNote, openNoteFromSearch } from './actions/n
 import { openPassage, openSearch } from './actions/search.js'
 import { clearSearchResults, installListSearch, scanListText } from './listSearch.js'
 import { installTheme, openSettings, saveSettings, setInspectorTab } from './settingsController.js'
-import { layoutPanes, revealPane, syncBoard, syncListSlot, togglePane } from './layout.js'
+import { fitListColumn, layoutPanes, revealPane, syncBoard, syncListSlot, togglePane } from './layout.js'
 import { buildPlanBoard } from './ui/planBoard.js'
 import { closePlanPop } from './ui/planPopovers.js'
 import { boardVisible, watchTheDay } from './plans.js'
@@ -352,7 +352,12 @@ installDockDrop()
 installFileDrop()
 installListSearch()
 installMainEvents()
-window.addEventListener('resize', () => relayoutReadersSoon())
+// The table in the list's column gives way to the page as the window
+// narrows, and has its width back as it widens (`fitListColumn`).
+window.addEventListener('resize', () => {
+  fitListColumn()
+  relayoutReadersSoon()
+})
 // Where each paper was left, written as the window goes.
 window.addEventListener('beforeunload', () => {
   flushInspector()
