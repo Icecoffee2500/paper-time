@@ -5,7 +5,7 @@ import PaperCore
 import SwiftUI
 
 /// A plan on five weeks of days: drag a paper to another day, or out of the
-/// calendar into «No Day». Other plans' papers on the same day are drawn
+/// calendar into «No Date». Other plans' papers on the same day are drawn
 /// faintly, so a crowded day shows before it is a crowded day.
 struct PlanCalendar: View {
     let model: LibraryModel
@@ -217,10 +217,10 @@ struct PlanCalendar: View {
 
     private func tray(_ undated: [LoadedPaper]) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(L("날짜 없음 · \(undated.count)", "No Day · \(undated.count)"))
+            Text(L("날짜 없음 · \(undated.count)", "No Date · \(undated.count)"))
                 .font(.system(size: 12, weight: .semibold))
-            Text(L("달력으로 끌면 날짜가 정해져요. 여기로 끌면 날짜가 지워져요.",
-                   "Drag onto the calendar to give a day. Drag here to clear it."))
+            Text(L("달력으로 끌면 그날로 정해요. 여기로 끌면 날짜를 지워요.",
+                   "Drag to the calendar to give it a day. Drag here to clear the day."))
                 .font(.system(size: 11))
                 .foregroundStyle(.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -315,7 +315,7 @@ struct DayPicker: View {
             }
             if current != nil {
                 Button { pick(nil) } label: {
-                    Text(L("날짜 지우기", "Clear Day"))
+                    Text(L("날짜 지우기", "Clear Date"))
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity)
@@ -379,7 +379,7 @@ enum DayPopover {
     }
 }
 
-/// «Spread Evenly»: the weekdays to read on and how many a day, previewed
+/// «Spread Out»: the weekdays to read on and how many a day, previewed
 /// before anything changes.
 struct SpreadPicker: View {
     let model: LibraryModel
@@ -397,8 +397,8 @@ struct SpreadPicker: View {
         let made = assignments
         VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(L("고르게 나누기", "Spread Evenly")).font(.system(size: 13, weight: .semibold))
-                Text(L("아직 안 읽은 논문에 차례대로 날짜를 정해요.", "Gives each unread paper a day, in the plan's order."))
+                Text(L("고르게 나누기", "Spread Out")).font(.system(size: 13, weight: .semibold))
+                Text(L("아직 안 읽은 논문에 차례대로 날짜를 정해요.", "Gives each unread paper a day, in order."))
                     .font(.system(size: 11.5)).foregroundStyle(.secondary)
             }
             row(L("요일", "Days")) {
@@ -425,7 +425,7 @@ struct SpreadPicker: View {
                     Text(PlanText.papers(perDay)).font(.system(size: 12, weight: .semibold)).monospacedDigit()
                 }
             }
-            row(L("시작", "Starting")) {
+            row(L("시작", "Start")) {
                 Picker("", selection: Binding(get: { nextWeek }, set: { nextWeek = $0; remember() })) {
                     Text(L("오늘부터", "Today")).tag(false)
                     Text(L("다음 주부터", "Next Week")).tag(true)

@@ -50,8 +50,8 @@ enum PlanText {
     /// What a day says in a cell: «정하기», «오늘», «내일», «금 11.20», or
     /// «11.12 · 밀림» for a day gone by with the paper still unread.
     static func chip(_ day: PlanDay?, behind: Bool, today: PlanDay) -> (text: String, style: ChipStyle) {
-        guard let day else { return (L("정하기", "Set Day"), .none) }
-        if behind { return (L("\(short(day)) · 밀림", "\(short(day)) · Behind"), .behind) }
+        guard let day else { return (L("정하기", "Set Date"), .none) }
+        if behind { return (L("\(short(day)) · 밀림", "\(short(day)) · Overdue"), .behind) }
         switch day.days(since: today) {
         case 0: return (L("오늘", "Today"), .today)
         case 1: return (L("내일", "Tomorrow"), .plain)
@@ -63,9 +63,9 @@ enum PlanText {
     static func week(_ monday: PlanDay, today: PlanDay) -> String {
         let range = "\(short(monday))–\(short(monday.adding(days: 6)))"
         switch monday.days(since: today.monday) / 7 {
-        case 0: return L("이번 주 · \(range)", "This Week · \(range)")
-        case 1: return L("다음 주 · \(range)", "Next Week · \(range)")
-        case -1: return L("지난주 · \(range)", "Last Week · \(range)")
+        case 0: return L("이번 주 · \(range)", "This week · \(range)")
+        case 1: return L("다음 주 · \(range)", "Next week · \(range)")
+        case -1: return L("지난주 · \(range)", "Last week · \(range)")
         default: return range
         }
     }
@@ -276,7 +276,7 @@ struct ProgressCell: View {
 
     private var text: String {
         if page > 0, !isRead, pages > 0 { return "\(page)/\(pages)" }
-        return pages > 0 ? L("\(pages)쪽", "\(pages) pp") : "—"
+        return pages > 0 ? L("\(pages)쪽", "\(pages) pp.") : "—"
     }
 }
 

@@ -230,6 +230,52 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "1.1.0",
+            date: Text2("2026년 11월", "November 2026"),
+            note: Text2(
+                "읽기 계획이 생겼어요. 한 계열의 논문을 모아 차례와 날짜를 정하고, 발표 자료와 코드를 논문 옆에 붙여 둬요.",
+                "Reading plans are here. Gather a line of papers, give them an order and days, and keep the slides and code beside each one."
+            ),
+            added: [
+                Entry(
+                    Text2("계획", "Plans"),
+                    Text2(
+                        "옆 목록의 «새 계획…»으로 만들어요. 섹션으로 계열을 나누고, 위의 동그라미 줄이 차례와 읽은 것을 한눈에 보여줘요. 표와 달력 두 가지로 봐요.",
+                        "Make one with New Plan… in the sidebar. Sections split it into lines of work, and the row of circles at the top shows the order and what you’ve read. See it as a table or a calendar."
+                    )
+                ),
+                Entry(
+                    Text2("읽을 날", "A day to read it"),
+                    Text2(
+                        "날짜 칸에 «금요일», «12/3», «+1주»처럼 적거나, 달력에서 끌어요. «고르게 나누기»는 요일과 하루 편수만 물어보고 한 번에 정해요. 밀렸으면 «한 주 미루기».",
+                        "Type Fri, 12/3 or +1w in the date, or drag on the calendar. Spread Out asks only which days and how many a day, then dates them all. Behind? Push a Week."
+                    )
+                ),
+                Entry(
+                    Text2("이번 주", "This Week"),
+                    Text2(
+                        "모든 계획에서 이번 주 논문만 모여요. 밀린 논문은 빨간 경고 없이 맨 위에 올라오고, 한 번에 오늘로 옮길 수 있어요.",
+                        "Every plan’s papers for this week, in one place. Overdue ones rise to the top with no red warnings, and move to today in one click."
+                    )
+                ),
+                Entry(
+                    Text2("자료", "Materials"),
+                    Text2(
+                        "인스펙터에 주소를 붙여넣으면 코드·슬라이드·영상·노트북을 알아채서 붙여요. 파일은 끌어다 놓으면 PDF 옆에 복사돼요.",
+                        "Paste a link in the inspector and it’s kept as code, slides, a video or a notebook. Drop a file and it’s copied beside the PDF."
+                    )
+                ),
+                Entry(
+                    Text2("모든 선반을 표로", "Every shelf as a table"),
+                    Text2(
+                        "목록 위의 [목록 | 표]로 바꿔요. 열 머리를 누르면 정렬되고, 오른쪽 클릭으로 보일 열을 골라요.",
+                        "Switch with List | Table above the list. Click a column to sort; right-click to choose the columns."
+                    )
+                ),
+            ],
+            fixed: []
+        ),
+        Release(
             version: "1.0.0",
             date: Text2("2026년 11월", "November 2026"),
             note: Text2(

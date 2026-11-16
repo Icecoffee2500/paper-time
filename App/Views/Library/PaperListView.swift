@@ -105,7 +105,7 @@ struct PaperListView: View {
             (L("이 계획은 비어 있어요", "This Plan Is Empty"), "point.topleft.down.to.point.bottomright.curvepath",
              L("옆 목록의 계획 위로 논문을 끌어다 놓아보세요.", "Drag papers onto it in the sidebar."))
         case .thisWeek:
-            (L("이번 주에 읽을 논문이 없어요", "Nothing This Week"), "calendar",
+            (L("이번 주에 읽을 논문이 없어요", "Nothing to Read This Week"), "calendar",
              L("논문에 읽을 날을 정하면 그 주에 여기 모여요.", "Give a paper a day to read it, and it gathers here that week."))
         default:
             (L("아직 아무것도 없어요", "Nothing Here"), "tray",

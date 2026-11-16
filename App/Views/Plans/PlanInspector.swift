@@ -20,7 +20,7 @@ struct PlanInspectorSections: View {
         Section(L("계획", "Plan")) {
             LabeledContent(L("읽을 날", "Read On")) {
                 let behind = model.isBehind(paper)
-                let text = paper.schedule.map { PlanText.full($0) + (behind ? L(" · 밀림", " · Behind") : "") } ?? L("정하기", "Set Day")
+                let text = paper.schedule.map { PlanText.full($0) + (behind ? L(" · 밀림", " · Overdue") : "") } ?? L("정하기", "Set Date")
                 let style: PlanText.ChipStyle = paper.schedule == nil ? .none : behind ? .behind : paper.schedule == model.today ? .today : .plain
                 Button { showsDay = true } label: { DayChipLabel(text: text, style: style) }
                     .buttonStyle(.plain)
@@ -83,7 +83,7 @@ struct PlanInspectorSections: View {
             }
             HStack(spacing: 7) {
                 Image(systemName: "link").foregroundStyle(.tertiary)
-                TextField(L("주소를 붙여넣어요", "Paste an address"), text: $linkText)
+                TextField(L("주소를 붙여넣어요", "Paste a link"), text: $linkText)
                     .textFieldStyle(.plain)
                     .onSubmit { Task { await addLink() } }
             }

@@ -12,7 +12,7 @@ enum BoardColumn: String, CaseIterable, Identifiable, Hashable {
 
     var title: String {
         switch self {
-        case .authors: L("저자 · 해", "Authors · Year")
+        case .authors: L("저자 · 해", "Author · Year")
         case .venue: L("학회", "Venue")
         case .plan: L("계획", "Plan")
         case .day: L("읽을 날", "Read On")
@@ -135,7 +135,14 @@ struct PlanBoard: View {
             } else {
                 if case .plan = kind { viewbar }
                 columnHeader
-                if staticRows {
+                if kind == .week, data.entries.isEmpty {
+                    Text(L("이번 주에 읽을 논문이 없어요", "Nothing to read this week."))
+                        .font(.system(size: 13))
+                        .foregroundStyle(.tertiary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 60)
+                    Spacer()
+                } else if staticRows {
                     let rows = data.entries
                     VStack(spacing: 0) {
                         ForEach(Array(rows.enumerated()), id: \.offset) { _, entry in
@@ -231,7 +238,7 @@ struct PlanBoard: View {
             let papers = plan.readingOrder.compactMap(model.paper)
             let read = papers.filter { $0.state.readingStatus == .read }.count
             let days = papers.compactMap(\.schedule).sorted()
-            let span = days.first.map { PlanText.span($0, days.last!) } ?? L("날짜를 아직 안 정했어요", "No days yet")
+            let span = days.first.map { PlanText.span($0, days.last!) } ?? L("날짜를 아직 안 정했어요", "No dates yet")
             return L("\(span) · \(papers.count)편 중 \(read)편 읽음", "\(span) · \(read) of \(papers.count) read")
         case .week:
             let monday = model.today.monday
@@ -252,7 +259,7 @@ struct PlanBoard: View {
                 Button {
                     showsSpread.toggle()
                 } label: {
-                    Label(L("고르게 나누기…", "Spread Evenly…"), systemImage: "calendar.badge.plus")
+                    Label(L("고르게 나누기…", "Spread Out…"), systemImage: "calendar.badge.plus")
                 }
                 .buttonStyle(SoftButtonStyle())
                 .popover(isPresented: $showsSpread, arrowEdge: .bottom) {
@@ -289,8 +296,8 @@ struct PlanBoard: View {
         let none = papers.filter { $0.schedule == nil }.count
         return HStack(spacing: 6) {
             StatCapsule(text: L("이번 주 \(week)편", "This week \(week)"), color: .blue)
-            if behind > 0 { StatCapsule(text: L("밀린 것 \(behind)편", "Behind \(behind)"), color: .orange) }
-            if none > 0 { StatCapsule(text: L("날짜 없음 \(none)편", "No day \(none)"), color: .gray) }
+            if behind > 0 { StatCapsule(text: L("밀린 것 \(behind)편", "Overdue \(behind)"), color: .orange) }
+            if none > 0 { StatCapsule(text: L("날짜 없음 \(none)편", "No date \(none)"), color: .gray) }
         }
     }
 
@@ -467,7 +474,7 @@ struct PlanBoard: View {
                 add("week:" + monday.text, BoardGroup(title: PlanText.week(monday, today: model.today), detail: readCount(papers)), papers)
             }
             if let none = weeks[nil], !none.isEmpty {
-                add("week:none", BoardGroup(title: L("날짜 없음", "No Day"), detail: readCount(none)), none)
+                add("week:none", BoardGroup(title: L("날짜 없음", "No Date"), detail: readCount(none)), none)
             }
         case .status:
             for status in [PaperState.ReadingStatus.reading, .unread, .read] {
@@ -485,7 +492,7 @@ struct PlanBoard: View {
         let papers = model.visiblePapers
         let behind = papers.filter(model.isBehind)
         if !behind.isEmpty {
-            groups["behind"] = BoardGroup(title: L("밀린 것", "Behind"), detail: PlanText.papers(behind.count), behind: true)
+            groups["behind"] = BoardGroup(title: L("밀린 것", "Overdue"), detail: PlanText.papers(behind.count), behind: true)
             entries.append(.group("behind"))
             entries += behind.map { .paper($0.id) }
         }
@@ -614,7 +621,7 @@ struct PlanBoard: View {
             }
         }
         if paper.schedule != nil {
-            Button(L("날짜 지우기", "Clear Day")) { changeDays([paper.id: nil], say: L("날짜를 지웠어요.", "Day cleared.")) }
+            Button(L("날짜 지우기", "Clear Date")) { changeDays([paper.id: nil], say: L("날짜를 지웠어요.", "Day cleared.")) }
         }
     }
 
@@ -622,12 +629,12 @@ struct PlanBoard: View {
         HStack(spacing: 10) {
             Image(systemName: adding ? "hourglass" : "plus")
                 .font(.system(size: 12, weight: .semibold))
-            TextField(L("arXiv 주소나 DOI를 붙여넣어 논문을 더해요", "Paste an arXiv address or a DOI to add a paper"), text: $addText)
+            TextField(L("arXiv 주소나 DOI를 붙여넣어 논문을 더해요", "Paste an arXiv link or a DOI to add a paper"), text: $addText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
                 .onSubmit { Task { await addAddresses() } }
                 .disabled(adding)
-            Text(L("목록에서 끌어와도 돼요", "Or drag papers here"))
+            Text(L("목록에서 끌어와도 돼요", "Or drag one in from the list"))
                 .font(.system(size: 11.5))
                 .foregroundStyle(.tertiary)
                 .lineLimit(1)
