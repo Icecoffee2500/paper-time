@@ -26,6 +26,8 @@ import { carriesPapers, draggedPapers, writeDraggedPapers } from '../../shared/s
 import { passageKey, passageSubtitle, type TextHit } from '../textSearch.js'
 import { noteSubtitle } from '../meaningSearch.js'
 import { placeKey } from '../../shared/semantic/results.js'
+import { LEGACY } from '../../shared/legacy.js'
+import { shelfHeader, shelfSymbol, shelfTone } from './shelfHeader.js'
 
 export interface PaperListActions {
   chooseLibrary: () => void
@@ -81,7 +83,7 @@ function statusName(status: keyof typeof STATUS_ICON): string {
 
 export function buildPaperList(actions: PaperListActions): { node: HTMLElement; update: () => void } {
   const node = el('div', { class: 'panel paper-list' })
-  const header = el('div', { class: 'panel-header' })
+  const header = el('div', { class: 'shelf-head-wrap' })
   // Focusable, so the arrows have somewhere to go once a row is pressed —
   // the Mac's list takes the keyboard the same way. A listbox, with the
   // rows its options.
@@ -196,17 +198,20 @@ export function buildPaperList(actions: PaperListActions): { node: HTMLElement; 
       ? store.searchMeanings.filter((hit) => !passages.some((seen) => placeKey(seen.passage) === placeKey(hit.passage)))
       : []
 
-    // The header is the shelf's name and nothing else: what the folder has
-    // to say — records late, PDFs left, files refused — stands as rows at
-    // the top of the list, where it never fights the name for room.
+    // The head every left column wears (`shelfHeader`): the shelf's tile,
+    // its name and how many. What the folder has to say — records late, PDFs
+    // left, files refused — stands as rows at the top of the list, where it
+    // never fights the name for room.
     const title = shelfTitle()
-    const headerKey = `${title}|${store.shelf.kind}`
+    const subtitle = papersText(papers.length)
+    const headerKey = `${title}|${subtitle}|${JSON.stringify(store.shelf)}`
     if (headerKey !== shownHeader) {
       shownHeader = headerKey
       clear(header)
-      header.append(el('span', { class: 'panel-title', text: title }))
-      // The way to the shelf's table — and, from a plan's list, back to its table or calendar.
-      if (shelfKey(store.shelf) !== null) {
+      const trailing: Node[] = []
+      // The way to the shelf's table — and, from a plan's list, back to its
+      // table or calendar. Only with the old list back: the table is the list now.
+      if (LEGACY.paperList && shelfKey(store.shelf) !== null) {
         const views: ['list' | 'table' | 'calendar', string][] = [['list', L('목록', 'List')], ['table', L('표', 'Table')]]
         if (store.shelf.kind === 'plan') views.push(['calendar', L('달력', 'Calendar')])
         const seg = el('span', { class: 'pb-seg list-views', role: 'group', 'aria-label': L('보기', 'View') })
@@ -215,8 +220,9 @@ export function buildPaperList(actions: PaperListActions): { node: HTMLElement; 
           on(button, 'click', () => { if (view !== 'list') setView(view) })
           seg.append(button)
         }
-        header.append(el('span', { class: 'pb-spacer' }), seg)
+        trailing.push(seg)
       }
+      header.append(shelfHeader({ icon: shelfSymbol(store.shelf), tone: shelfTone(store.shelf), title, subtitle, trailing }))
     }
     // Parsed once for the list, not once per row: the setting is a string
     // taken apart, and sixty rows took it apart sixty times.
@@ -564,6 +570,20 @@ function paperRow(entry: Paper, actions: PaperListActions): BuiltRow {
   return { node: row, apply }
 }
 
+/** «논문 n편» / "n papers" — the line under a shelf's name. */
+export function papersText(count: number): string {
+  return L(`논문 ${count}편`, `${count} paper${count === 1 ? '' : 's'}`)
+}
+
+/**
+ * What the old list said about the folder, as rows for the table's strip
+ * (the Mac's `PlanBoard.notices`): records that have not arrived, PDFs still
+ * to add, and the ones that would not. Empty when the folder has nothing to say.
+ */
+export function folderNoticeRows(actions: Pick<PaperListActions, 'refresh' | 'adoptLoose'>): HTMLElement[] {
+  return folderNotes().map((note) => noteRow(note, actions))
+}
+
 /** A row that speaks for the folder, not for a paper (`Entry.note`). */
 interface FolderNote {
   kind: 'failures' | 'adopting' | 'loose' | 'refused' | 'scanning'
@@ -604,7 +624,7 @@ function refusedDescription(): string {
     + (rest > 0 ? L(`\n…그리고 ${rest}개 더`, `\n…and ${rest} more`) : '')
 }
 
-function noteRow(note: FolderNote, actions: PaperListActions): HTMLElement {
+function noteRow(note: FolderNote, actions: Pick<PaperListActions, 'refresh' | 'adoptLoose'>): HTMLElement {
   const glyph = (name: Parameters<typeof iconNode>[0]) => {
     const drawn = iconNode(name)
     return drawn ? [drawn] : []
@@ -674,7 +694,7 @@ function passageRow(hit: TextHit, actions: PaperListActions, byMeaning = false):
   return row
 }
 
-function shelfTitle(): string {
+export function shelfTitle(): string {
   switch (store.shelf.kind) {
     case 'search': return L('찾은 것', 'Search Results')
     case 'all': return L('모두', 'All')
@@ -713,7 +733,7 @@ function emptyKey(): string {
 /** What an empty shelf says. Each is empty for its own reason, and the
  *  reason tells you whether anything is wrong — nothing is, in every case
  *  here (the Mac's `emptyShelf`). */
-function emptyShelf(): { title: string; icon: Parameters<typeof iconNode>[0]; note: string } {
+export function emptyShelf(): { title: string; icon: Parameters<typeof iconNode>[0]; note: string } {
   const shelf = store.shelf
   switch (shelf.kind) {
     case 'status':

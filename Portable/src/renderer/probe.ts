@@ -233,7 +233,7 @@ export function installProbeSurface() {
         setShelf(shelf as never)
         changed('shelf')
       },
-      view: () => ({ shelf: store.shelf, view: plans.viewOf(), board: plans.boardShowing() }),
+      view: () => ({ shelf: store.shelf, view: plans.viewOf(), board: plans.boardShowing(), place: plans.boardPlaceNow() }),
       setView: (view: 'list' | 'table' | 'calendar') => plans.setView(view),
       setDay: (id: string, date: string | null) => plans.setDay(id, date),
       status: (id: string, value: 'unread' | 'reading' | 'read', lastPageIndex?: number) =>
@@ -280,6 +280,9 @@ export function installProbeSurface() {
         shelf: store.shelf,
         view: plans.viewOf(),
         board: plans.boardShowing(),
+        place: plans.boardPlaceNow(),
+        columns: [...document.querySelectorAll<HTMLElement>('.plan-board .pb-thead > *')].map((one) => one.textContent),
+        head: [...document.querySelectorAll<HTMLElement>('.shelf-head h2')].map((one) => one.textContent),
         rows: [...document.querySelectorAll<HTMLElement>('.plan-board .pb-row')].map((row) => ({
           id: row.dataset.id,
           title: row.querySelector('.pb-title')?.textContent,

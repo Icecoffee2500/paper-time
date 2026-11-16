@@ -18,6 +18,7 @@ import { changed, noteByID, store, type Note, type Paper } from '../state.js'
 import { addToMap, createNote, deleteNote, drafts, maps, noteTagCounts, visibleNotes } from '../notesModel.js'
 import { editorHost, noteRow, type NoteEditorActions } from './noteEditor.js'
 import { showMenu, showMenuAt, type MenuEntry } from './toolbar.js'
+import { shelfHeader } from './shelfHeader.js'
 
 export interface SlipBoxActions extends NoteEditorActions {
   /** The paper a group is named after, or null when the library no longer has it. */
@@ -59,7 +60,10 @@ export const slipBoxEditor = () => host.current()
 export function buildSlipBox(actions: SlipBoxActions): { node: HTMLElement; detail: HTMLElement; side: HTMLElement; update: () => void } {
   // ---- the list column
   const node = el('div', { class: 'panel slipbox' })
-  const header = el('div', { class: 'panel-header slipbox-head' })
+  // The head every left column wears (`shelfHeader`): the tile, the name,
+  // how many, and the pen; the search under it, full width, the way a
+  // table's columns sit under a shelf's head (the Mac's `SlipBoxList`).
+  const header = el('div', { class: 'shelf-head-wrap' })
   const search = el('input', {
     type: 'text', class: 'slipbox-search', placeholder: L('노트 찾기', 'Search notes'),
     'aria-label': L('노트 찾기', 'Search notes'), spellcheck: 'false',
@@ -86,10 +90,23 @@ export function buildSlipBox(actions: SlipBoxActions): { node: HTMLElement; deta
       { label: L('새 초안', 'New Draft'), icon: 'doc.text', action: () => openNoteInSlipBox(createNote(null, 'draft').id) },
     ], 'right')
   })
-  header.append(el('span', { text: L('노트', 'Notes') }), searchBox, add)
+  const searchRow = el('div', { class: 'slipbox-search-row' }, [searchBox])
+  let drawnHead = -1
+  function drawHead() {
+    const count = store.notes.length
+    if (count === drawnHead) return
+    drawnHead = count
+    clear(header)
+    header.append(shelfHeader({
+      icon: 'note',
+      title: L('노트', 'Notes'),
+      subtitle: L(`노트 ${count}개`, count === 1 ? '1 note' : `${count} notes`),
+      trailing: [add],
+    }))
+  }
   const tags = el('div', { class: 'slipbox-tags' })
   const body = el('div', { class: 'panel-body slipbox-body' })
-  node.append(header, tags, body)
+  node.append(header, searchRow, tags, body)
 
   // ---- the page area's half: the note that is open, or an invitation
   const detail = el('div', { class: 'panel slipbox-detail' })
@@ -291,6 +308,7 @@ export function buildSlipBox(actions: SlipBoxActions): { node: HTMLElement; deta
   function update() {
     // Not the list while somebody is typing in the search: rebuilding it
     // under the field is fine, the field itself stays.
+    drawHead()
     drawTags()
     drawList()
     drawDetail()

@@ -348,11 +348,21 @@ export function attachmentsMenu(id: string, anchor: Element) {
 
 /** A row's own menu, in the Mac's order (`PaperMenu`). */
 export function paperMenu(id: string, anchor: Element) {
+  const entries = paperMenuEntries(id)
+  if (entries.length) showMenu(anchor, entries)
+}
+
+/**
+ * What a right-click on a paper offers — the list's rows and the table's
+ * alike (the Mac's `PaperMenu`, which the board's rows wear too). `open` is
+ * what «Open» does: the table's rows keep the paper open as well.
+ */
+export function paperMenuEntries(id: string, options: { open?: () => void } = {}): MenuEntry[] {
   const entry = findPaper(id)
-  if (!entry) return
+  if (!entry) return []
   const labels = ZONE_LABELS()
-  showMenu(anchor, [
-    { label: L('열기', 'Open'), icon: 'book', action: () => void showPaper(id) },
+  return [
+    { label: L('열기', 'Open'), icon: 'book', action: options.open ?? (() => void showPaper(id)) },
     // Beside the paper already open: a half, or a quarter, of the page.
     {
       label: L('나란히 열기', 'Open Side by Side'),
@@ -429,7 +439,7 @@ export function paperMenu(id: string, anchor: Element) {
     { label: L('서지 다시 찾기', 'Re-run Metadata'), icon: 'arrow.triangle.2.circlepath', action: () => void rerunMetadata([id]) },
     { separator: true },
     { label: L('휴지통에 넣기', 'Move to Trash'), icon: 'trash', danger: true, action: () => void trashPaper(id) },
-  ])
+  ]
 }
 
 /**

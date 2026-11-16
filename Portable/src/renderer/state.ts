@@ -289,7 +289,7 @@ export const store: Store = {
   settings: {
     libraryRoot: null,
     panes: { sidebar: true, paperList: true, reader: true, inspector: true },
-    columns: { sidebar: 232, paperList: 320, inspector: 360 },
+    columns: { sidebar: 232, paperList: 320, inspector: 360, table: 620 },
     inspectorTab: 'details',
     sort: { field: 'added', ascending: false },
     appearance: 'system',

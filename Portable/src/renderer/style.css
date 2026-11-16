@@ -4912,7 +4912,7 @@ textarea.memo {
 /* The board (`ui/planBoard.ts`): where the list and the page were while a
    shelf shows its table, or a plan its calendar. The demo's shapes, in the
    window's tokens — chips and pills on soft fills, no ruled lines. */
-.plan-board { flex: 1 1 auto; }
+.plan-board { flex: 1 1 auto; container-type: inline-size; }
 .pb-head { padding: 18px 20px 6px; display: flex; flex-direction: column; gap: 10px; flex: 0 0 auto; }
 .pb-head-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .pb-tile {
@@ -5049,6 +5049,8 @@ textarea.memo {
 .pb-addrow input { flex: 1; min-width: 0; border: 0; background: none; outline: none; font-size: 13px; color: var(--text); }
 .pb-addrow input::placeholder { color: var(--text-tertiary); }
 .pb-addrow .pb-hint { font-size: 11.5px; color: var(--text-tertiary); white-space: nowrap; }
+/* In a column the width of a list the field keeps the room, the hint steps aside. */
+@container (max-width: 560px) { .pb-addrow .pb-hint { display: none; } }
 .pb-addrow:focus-within, .pb-table.over .pb-addrow, .pb-addrow.over { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent); }
 .pb-note { font-size: 12px; color: var(--text-tertiary); margin: 10px 12px; }
 .pb-empty { color: var(--text-tertiary); font-size: 13px; text-align: center; padding: 60px 0; }
@@ -5234,13 +5236,82 @@ textarea.memo {
 .pb-empty-plan .pb-cap.strong { height: 32px; padding: 0 16px; font-size: 13px; }
 .pb-empty-add { width: 100%; margin: 6px 0 0; }
 
+/* The head every left column wears (`ui/shelfHeader.ts`, the Mac's
+   `ShelfHeader`): a 36 tile tinted with the shelf's sidebar colour, the name
+   at 19, one line under it, the column's own controls at the end. The
+   tables, the plans, the week, the search results and the slip-box all
+   wear it, so moving between shelves reads as moving within one place. */
+.shelf-head-wrap { flex: 0 0 auto; padding: 18px 20px 6px; }
+.slipbox .shelf-head-wrap { padding-bottom: 10px; }
+.shelf-head { --tone: var(--accent); display: flex; align-items: center; gap: 12px; min-width: 0; }
+.shelf-head[data-tone='reading'] { --tone: var(--shelf-reading); }
+.shelf-head[data-tone='read'] { --tone: var(--shelf-read); }
+.shelf-head[data-tone='favorites'] { --tone: var(--shelf-favorites); }
+.shelf-head[data-tone='review'] { --tone: var(--shelf-review); }
+.shelf-tile {
+  width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; flex: none;
+  background: color-mix(in srgb, var(--tone) 13%, transparent);
+  /* Inked toward the text, as the sidebar's lit row is: a yellow glyph on a
+     pale yellow tile is not read. */
+  color: color-mix(in srgb, var(--tone) calc(100% - var(--shelf-ink-share)), var(--shelf-ink));
+}
+.shelf-head[data-tone='accent'] .shelf-tile { background: var(--accent-soft); color: var(--accent-text); }
+.shelf-tile svg { width: 18px; height: 18px; }
+.shelf-titles { min-width: 0; flex: 1 1 auto; }
+.shelf-titles h2 {
+  font-size: 19px; font-weight: 650; letter-spacing: -0.01em; margin: 0; line-height: 1.2; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.shelf-sub { font-size: 12.5px; color: var(--text-secondary); margin: 2px 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shelf-trailing { margin-left: auto; display: flex; gap: 8px; align-items: center; flex: none; }
+.shelf-trailing:empty { display: none; }
+.shelf-trailing .icon-button { width: 28px; height: 28px; }
+
+/* The slip-box's search, full width under its head, as a table's columns
+   sit under a shelf's head. */
+.slipbox-search-row { flex: 0 0 auto; display: flex; padding: 0 16px 10px; }
+.slipbox-search-row .slipbox-search-box { height: 28px; padding: 0 10px; }
+
+/* «읽을 날·계획»: a shelf's table shows its Read On and Plan columns on asking. */
+.pb-chip-toggle {
+  display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; border-radius: 13px;
+  font-size: 12px; color: var(--text-secondary); background: var(--hover); white-space: nowrap;
+  transition: background-color var(--motion-tap) var(--ease), color var(--motion-tap) var(--ease);
+}
+.pb-chip-toggle svg { width: 13px; height: 13px; }
+.pb-chip-toggle:hover { background: var(--pressed); }
+.pb-chip-toggle.on { color: var(--accent-text); background: var(--accent-soft); font-weight: 600; }
+
+/* A plan's buttons on a row of their own under its name, the counts beside
+   or under them; the symbols alone when the words do not fit (`fitActions`). */
+.pb-plan-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; }
+.pb-plan-actions { display: flex; gap: 8px; flex: none; }
+.pb-plan-actions.compact .pb-cap { width: 32px; padding: 0; justify-content: center; }
+.pb-plan-actions.compact .pb-cap-label { display: none; }
+
+/* The materials column, one tile wide: more than one, and a count in its corner. */
+.pb-kchip { position: relative; }
+.pb-kcount {
+  position: absolute; top: -5px; right: -6px; min-width: 14px; height: 14px; padding: 0 3.5px; box-sizing: border-box;
+  border-radius: 7px; background: var(--accent); color: #fff; font-size: 9px; font-weight: 700; line-height: 14px;
+  text-align: center; font-variant-numeric: tabular-nums;
+}
+
+/* What the old list said about the folder, said over a shelf's table. */
+.pb-notices {
+  flex: 0 0 auto; display: flex; flex-direction: column; gap: 1px; margin: 4px 16px 0; padding: 4px 0;
+  border-radius: var(--radius-popover); background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+.pb-notices .list-note.quiet { padding: 7px 18px; }
+.pb-empty-shelf { padding-bottom: 60px; }
+
 .pb-guide {
-  display: flex; align-items: center; gap: 10px; margin: 6px 20px 0; padding: 10px 10px 10px 14px; flex: 0 0 auto;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 6px 20px 0; padding: 10px 10px 10px 14px; flex: 0 0 auto;
   border-radius: 12px; background: var(--wash);
 }
 .pb-guide-icon { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9px; background: var(--accent-soft); color: var(--accent-text); flex: none; }
 .pb-guide-icon svg { width: 15px; height: 15px; }
-.pb-guide-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.pb-guide-text { display: flex; flex-direction: column; min-width: 0; flex: 1 1 220px; }
 .pb-guide-text strong { font-size: 13px; font-weight: 600; }
 .pb-guide-text span { font-size: 12px; color: var(--text-secondary); }
 .pb-guide .pb-cap { height: 28px; background: var(--raised); box-shadow: var(--lift); }

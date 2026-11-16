@@ -1,6 +1,7 @@
 /**
- * The board: where the list and the page were, while a shelf shows its
- * table — or a plan its calendar.
+ * The board: every shelf's table, in the list's column with the page beside
+ * it — or a plan's calendar, where the list and the page were (with the old
+ * list back, `LEGACY.paperList`, every board took that room).
  *
  * Three faces. A plan: its name, how far along, the path of papers by
  * section, «Spread Evenly» and «Push a Week», and the table grouped by
@@ -18,17 +19,19 @@ import {
 import { L, prefersKorean } from '../../shared/lang.js'
 import { addDays, materialHost, materialTitle as materialTitleOf, mondayOf, planGroups, venueName, type PaperLink } from '../../shared/readingPlan.js'
 import {
-  authorsText, calendarDays, calendarHome, calendarLabel, dateLabel, dayHeading, groupByStatus, groupByWeek, isBehind, kindName,
-  kindTone, longDay, planGuidance, planStats, progress, spanText, weekShelf, type Status,
+  TITLE_FLOOR, authorsText, calendarDays, calendarHome, calendarLabel, dateLabel, dayHeading, fitColumns, groupByStatus, groupByWeek, isBehind, kindName,
+  kindTone, longDay, planGuidance, planStats, progress, spanText, weekShelf, withPlanColumns, type Status,
 } from '../../shared/planBoard.js'
 import { carriesPapers, draggedPapers, writeDraggedPapers } from '../../shared/split.js'
 import { showMenu, showMenuAt, type MenuEntry } from './menu.js'
-import { tagColor } from './paperList.js'
-import { basename } from './sidebar.js'
+import { emptyShelf, folderNoticeRows, papersText, shelfTitle, tagColor, type PaperListActions } from './paperList.js'
+import { shelfHeader, shelfSymbol, shelfTone } from './shelfHeader.js'
+import { paperMenuEntries } from '../actions/paper.js'
+import { LEGACY } from '../../shared/legacy.js'
 import {
   ALL_COLUMNS, addFromAddresses, addPapersTo, addSectionTo, addToPlan, boardContext, boardPaper, cycleStatus, editPlan, openFromBoard,
-  ownAddress, prefs, pullBehind, pushWeek, removeFromPlan, renameSectionOf, savePrefs, selectInBoard, setDay, setView,
-  viewOf, type ColumnID, type SortKey,
+  ownAddress, prefs, pullBehind, pushWeek, removeFromPlan, renameSectionOf, savePrefs, selectInBoard, setDay, setDays, setView,
+  togglePlanColumns, viewOf, type ColumnID, type SortKey,
 } from '../plans.js'
 
 /** The plans whose «When will you read them?» strip was put away, this session. */
@@ -128,13 +131,23 @@ function progressCell(entry: Paper): HTMLElement {
   return el('div', { class: 'pb-prog' }, [bar, made.text])
 }
 
+/**
+ * One tile, the width of the column; more than one, and a count in its
+ * corner, the kinds in its tooltip (2026-11-16: the column only as wide as
+ * the button — the Mac's `MaterialChips`).
+ */
 function materialsCell(entry: Paper): HTMLElement {
   const list = materialsOf(entry)
   const cell = el('div', { class: 'pb-links' })
-  for (const one of list.slice(0, 4)) {
-    cell.append(el('span', { class: 'pb-kchip', 'data-tone': kindTone(one.kind), title: `${kindName(one.kind)} · ${one.title}` }, [glyph(KIND_ICON[one.kind])]))
-  }
-  if (list.length > 4) cell.append(el('span', { class: 'pb-more', text: `+${list.length - 4}` }))
+  const first = list[0]
+  if (!first) return cell
+  const tile = el('span', {
+    class: 'pb-kchip',
+    'data-tone': kindTone(first.kind),
+    title: list.length > 1 ? list.map((one) => kindName(one.kind)).join(' · ') : `${kindName(first.kind)} · ${first.title}`,
+  }, [glyph(KIND_ICON[first.kind])])
+  if (list.length > 1) tile.append(el('span', { class: 'pb-kcount', text: String(list.length) }))
+  cell.append(tile)
   return cell
 }
 
@@ -164,7 +177,7 @@ const COLUMNS: Record<ColumnID, Column> = {
   date: { id: 'date', label: () => L('읽을 날', 'Read On'), width: 100, sort: 'date', cell: dateChip },
   plan: { id: 'plan', label: () => L('계획', 'Plan'), width: 132, cell: planCell },
   progress: { id: 'progress', label: () => L('진행', 'Progress'), width: 88, sort: 'progress', cell: progressCell },
-  materials: { id: 'materials', label: () => L('자료', 'Materials'), width: 124, cell: materialsCell },
+  materials: { id: 'materials', label: () => L('자료', 'Materials'), width: 34, cell: materialsCell },
   tags: { id: 'tags', label: () => L('태그', 'Tags'), width: 110, cell: tagsCell },
   rating: { id: 'rating', label: () => L('별점', 'Rating'), width: 72, sort: 'rating', cell: (entry) => text(entry.state.rating ? '★'.repeat(Math.round(entry.state.rating)) : '', 'stars') },
   notes: { id: 'notes', label: () => L('노트', 'Notes'), width: 56, cell: (entry) => text(String(notesForPaper(entry.id).length || ''), 'secondary') },
@@ -177,12 +190,22 @@ function isoDay(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
-function columnsNow(): Column[] {
-  return prefs().columns[boardContext()].map((id) => COLUMNS[id]).filter(Boolean)
+/** The columns asked for, in their order: a shelf's Read On and Plan only when turned on. */
+function wantedColumns(): ColumnID[] {
+  const context = boardContext()
+  return withPlanColumns(prefs().columns[context], context, prefs().planColumns)
 }
 
-/** The title never narrower than this: past it, the table scrolls sideways rather than squeezing the title to nothing. */
-const TITLE_FLOOR = 200
+/**
+ * The ones that fit beside a title of at least `TITLE_FLOOR`, the most
+ * wanted kept first — in a column the width of a list, the table loses its
+ * venue before it loses its days. A board not laid out yet shows them all.
+ */
+function columnsFor(width: number): Column[] {
+  const wanted = wantedColumns()
+  const fitted = width > 0 ? fitColumns(wanted, width, (id) => COLUMNS[id].width) : wanted
+  return fitted.map((id) => COLUMNS[id]).filter(Boolean)
+}
 
 function template(columns: Column[]): string {
   return `22px minmax(${TITLE_FLOOR}px, 1fr) ${columns.map((one) => `${one.width}px`).join(' ')}`.trim()
@@ -227,8 +250,14 @@ export interface PlanBoard {
   mark: () => void
 }
 
-export function buildPlanBoard(): PlanBoard {
+/** What the board asks of the library: the folder's notices act through these. */
+export type PlanBoardActions = Pick<PaperListActions, 'refresh' | 'adoptLoose'>
+
+export function buildPlanBoard(actions: PlanBoardActions): PlanBoard {
   const node = el('div', { class: 'panel plan-board' })
+  /** The columns drawn last, so a resize redraws only when another set fits. */
+  let fittedKey = ''
+  const columnsNow = (): Column[] => columnsFor(node.clientWidth)
   /** Where the calendar starts; back to last week whenever another plan is shown. */
   let calendarStart = calendarHome(store.today)
   let calendarFor = ''
@@ -261,6 +290,8 @@ export function buildPlanBoard(): PlanBoard {
       after.scrollLeft = kept.left
     }
     shownKey = key
+    fittedKey = columnsNow().map((one) => one.id).join(',')
+    fitActions()
     if (typingIn && typedClass) {
       const again = node.querySelector<HTMLInputElement>(`input.${typedClass.split(' ').join('.')}`)
       if (again) {
@@ -270,14 +301,31 @@ export function buildPlanBoard(): PlanBoard {
     }
   }
 
+  // A narrower column fits fewer columns, and a plan's buttons lose their
+  // words before they wrap: both follow the board's width as it changes.
+  // Answered before the frame is painted, so a column that no longer fits is
+  // never drawn for a frame first.
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(() => {
+      if (!node.isConnected || node.clientWidth === 0) return
+      fitActions()
+      if (columnsNow().map((one) => one.id).join(',') !== fittedKey) update()
+    }).observe(node)
+  }
+
+  /** A plan's buttons with their words when they fit, the symbols alone when they do not. */
+  function fitActions() {
+    const row = node.querySelector<HTMLElement>('.pb-plan-row')
+    const group = row?.querySelector<HTMLElement>('.pb-plan-actions')
+    if (!row || !group) return
+    group.classList.remove('compact')
+    if (group.scrollWidth > row.clientWidth + 0.5) group.classList.add('compact')
+  }
+
   // ---------------------------------------------------------------- parts
 
-  function head(icon: IconName, title: string, sub: string, actions: Node[] = []): HTMLElement {
-    return el('div', { class: 'pb-head-top' }, [
-      el('span', { class: 'pb-tile' }, [glyph(icon)]),
-      el('div', { class: 'pb-titles' }, [el('h2', { text: title }), el('p', { class: 'pb-sub', text: sub })]),
-      el('div', { class: 'pb-actions' }, actions),
-    ])
+  function head(icon: IconName, title: string, sub: string, trailing: Node[] = [], tone = shelfTone(store.shelf)): HTMLElement {
+    return shelfHeader({ icon, tone, title, subtitle: sub, trailing })
   }
 
   function viewSwitch(views: ['list' | 'table' | 'calendar', string, IconName | null][]): HTMLElement {
@@ -290,8 +338,9 @@ export function buildPlanBoard(): PlanBoard {
     return seg
   }
 
-  function cap(label: string, act: string, icon?: IconName, id?: string): HTMLElement {
-    return el('button', { class: 'pb-cap', 'data-act': act, ...(id ? { id } : {}) }, [...(icon ? [glyph(icon)] : []), label])
+  function cap(label: string, act: string, icon?: IconName, id?: string, tip?: string): HTMLElement {
+    return el('button', { class: 'pb-cap', 'data-act': act, ...(id ? { id } : {}), ...(tip ? { title: tip, 'aria-label': tip } : {}) },
+      [...(icon ? [glyph(icon)] : []), el('span', { class: 'pb-cap-label', text: label })])
   }
 
   function thead(columns: Column[], sortable: boolean): HTMLElement {
@@ -348,13 +397,23 @@ export function buildPlanBoard(): PlanBoard {
     const board = papers.map(boardPaper)
     const stats = planStats(board, store.today)
     const sub = `${spanText(papers.map((entry) => entry.schedule ?? '').filter(Boolean))} · ${L(`${papers.length}편 중 ${stats.read}편 읽음`, `${stats.read} of ${papers.length} read`)}`
+    // The name with Table | Calendar at its end; the plan's own buttons on a
+    // row of their own under it, so a column the width of a list still has
+    // room for them (words when they fit, the symbols alone when not —
+    // `fitActions`), the counts beside or under them, then the path.
+    const pushable = papers.some((entry) => entry.state.readingStatus !== 'read' && entry.schedule)
+    const buttons = el('div', { class: 'pb-plan-actions' }, [
+      cap(L('논문 더하기…', 'Add Papers…'), 'add-papers', 'plus', 'pb-add-papers', L('논문 더하기', 'Add Papers')),
+      ...(papers.length ? [cap(L('고르게 나누기…', 'Spread Out…'), 'spread', 'calendar', 'pb-spread', L('고르게 나누기', 'Spread Out'))] : []),
+      // Only once there is a day to push.
+      ...(pushable ? [cap(L('한 주 미루기', 'Push a Week'), 'push', 'arrow.right', 'pb-push', L('한 주 미루기', 'Push a Week'))] : []),
+    ])
+    const planRow = el('div', { class: 'pb-plan-row' }, [buttons])
     const header = el('div', { class: 'pb-head' }, [
       head('point.topleft.down.to.point.bottomright.curvepath', found.plan.name, papers.length ? sub : L('아직 논문이 없어요', 'No papers yet'), [
-        cap(L('논문 더하기…', 'Add Papers…'), 'add-papers', 'plus', 'pb-add-papers'),
-        cap(L('고르게 나누기…', 'Spread Out…'), 'spread', 'calendar', 'pb-spread'),
-        cap(L('한 주 미루기', 'Push a Week'), 'push', 'arrow.right', 'pb-push'),
         viewSwitch([['table', L('표', 'Table'), 'tablecells'], ['calendar', L('달력', 'Calendar'), 'calendar']]),
-      ]),
+      ], 'accent'),
+      planRow,
     ])
     const guidance = planGuidance(board)
     if (guidance === 'empty') {
@@ -371,7 +430,8 @@ export function buildPlanBoard(): PlanBoard {
         text: L(`날짜 없음 ${stats.undated}편`, `No date ${stats.undated}`),
       }))
     }
-    header.append(chips, path(found.plan))
+    planRow.append(chips)
+    header.append(path(found.plan))
     node.append(header)
     if (viewOf() === 'calendar') {
       drawCalendar(id, papers)
@@ -567,7 +627,8 @@ export function buildPlanBoard(): PlanBoard {
     const all = [...shelf.behind, ...shelf.days.flatMap((day) => day.ids)]
     const planCount = new Set(all.flatMap((one) => plansOf(one).map((found) => found.plan.id))).size
     const sub = `${longDay(monday)} – ${longDay(addDays(monday, 6))} · ${L(`계획 ${planCount}개에서 ${all.length}편`, `${all.length} paper${all.length === 1 ? '' : 's'} from ${planCount} plan${planCount === 1 ? '' : 's'}`)}`
-    node.append(el('div', { class: 'pb-head' }, [head('calendar', L('이번 주', 'This Week'), sub)]))
+    const trailing = LEGACY.paperList ? [viewSwitch([['list', L('목록', 'List'), null], ['table', L('표', 'Table'), 'tablecells']])] : []
+    node.append(el('div', { class: 'pb-head' }, [head('calendar', L('이번 주', 'This Week'), sub, trailing, 'accent')]))
     const columns = columnsNow()
     const table = tableNode(columns, false, thead)
     const byID = new Map(papers.map((entry) => [entry.id, entry]))
@@ -592,14 +653,35 @@ export function buildPlanBoard(): PlanBoard {
 
   function drawShelf() {
     const papers = sortedForTable(shelfPapers())
-    const sub = L(`논문 ${papers.length}편 · 열 머리를 누르면 정렬돼요`, `${papers.length} paper${papers.length === 1 ? '' : 's'} · Click a column to sort`)
-    node.append(el('div', { class: 'pb-head' }, [
-      head(shelfIcon(), shelfName(), sub, [viewSwitch([['list', L('목록', 'List'), null], ['table', L('표', 'Table'), 'tablecells']])]),
-    ]))
+    const sub = `${papersText(papers.length)} · ${L('열 머리를 누르면 정렬돼요', 'Click a column to sort')}`
+    // «읽을 날·계획»: on a shelf that is not a plan the two columns are «Set
+    // Date» and «—» down the page, so they wait until asked for.
+    const on = prefs().planColumns
+    const planColumns = el('button', {
+      class: `pb-chip-toggle${on ? ' on' : ''}`,
+      'data-act': 'plan-columns',
+      'aria-pressed': String(on),
+      title: L('읽을 날과 계획 열을 보이거나 숨겨요', 'Show or hide the Read On and Plan columns'),
+    }, [glyph('calendar'), el('span', { text: L('읽을 날·계획', 'Read On · Plan') })])
+    const trailing: Node[] = [planColumns]
+    if (LEGACY.paperList) trailing.push(viewSwitch([['list', L('목록', 'List'), null], ['table', L('표', 'Table'), 'tablecells']]))
+    node.append(el('div', { class: 'pb-head' }, [head(shelfSymbol(store.shelf), shelfTitle(), sub, trailing)]))
+    // What the old list said about the folder, said over the table.
+    const notices = folderNoticeRows(actions)
+    if (notices.length) node.append(el('div', { class: 'pb-notices' }, notices))
+    if (papers.length === 0) {
+      // Each shelf is empty for its own reason, and says it (the old list's words).
+      const empty = emptyShelf()
+      node.append(el('div', { class: 'empty pb-empty-shelf' }, [
+        el('span', { class: 'empty-icon' }, [glyph(empty.icon)]),
+        el('h2', { text: empty.title }),
+        el('p', { text: empty.note }),
+      ]))
+      return
+    }
     const columns = columnsNow()
     const table = tableNode(columns, true, thead)
     for (const entry of papers) table.append(row(entry, columns))
-    if (papers.length === 0) table.append(el('div', { class: 'pb-empty', text: L('이 선반은 비어 있어요', 'This shelf is empty') }))
     node.append(el('div', { class: 'pb-scroll' }, [table]))
   }
 
@@ -636,6 +718,10 @@ export function buildPlanBoard(): PlanBoard {
         break
       case 'group':
         savePrefs((prefs) => { prefs.group = target.dataset.v as 'section' | 'week' | 'status' })
+        update()
+        break
+      case 'plan-columns':
+        togglePlanColumns()
         update()
         break
       case 'sort': {
@@ -861,14 +947,23 @@ export function buildPlanBoard(): PlanBoard {
     ]
   }
 
+  /**
+   * Everything the list's rows offered — open beside, keep open, reading
+   * status, tags, a plan, the star, attach, the key, the folder, the Trash —
+   * then what a board adds: the day, the section, out of the plan.
+   */
   function rowMenu(id: string): MenuEntry[] {
     const entries: MenuEntry[] = [
-      { label: L('열기', 'Open'), icon: 'book', action: () => void openFromBoard(id) },
+      ...paperMenuEntries(id, { open: () => void openFromBoard(id) }),
+      { separator: true },
       { label: L('읽을 날…', 'Read On…'), icon: 'calendar', action: () => {
         const anchor = node.querySelector(`[data-act="date"][data-id="${id}"]`) ?? node.querySelector(`[data-id="${id}"]`)
         if (anchor) openDatePop(anchor, id)
       } },
     ]
+    if (paper(id)?.schedule) {
+      entries.push({ label: L('날짜 지우기', 'Clear Date'), icon: 'xmark.circle', action: () => void setDays([{ id, date: null }], L('날짜를 지웠어요.', 'Cleared the date.'), L('읽을 날', 'Read Date')) })
+    }
     const shelf = store.shelf
     if (shelf.kind === 'plan') {
       const found = planByID(shelf.id)
@@ -902,40 +997,6 @@ export function buildPlanBoard(): PlanBoard {
 
 function weekdayShort(weekday: number): string {
   return (prefersKorean() ? ['월', '화', '수', '목', '금', '토', '일'] : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'])[weekday]
-}
-
-function shelfIcon(): IconName {
-  switch (store.shelf.kind) {
-    case 'all': return 'tray.full'
-    case 'status': return store.shelf.status === 'read' ? 'checkmark.circle' : store.shelf.status === 'reading' ? 'circle.lefthalf.filled' : 'circle'
-    case 'favorites': return 'star'
-    case 'review': return 'exclamationmark.triangle'
-    case 'collection': return 'folder'
-    case 'tag': return 'tag'
-    case 'author': return 'person'
-    case 'folder': return 'folder'
-    case 'open': return 'rectangle.on.rectangle'
-    case 'search': return 'magnifyingglass'
-    default: return 'text.document'
-  }
-}
-
-function shelfName(): string {
-  const shelf = store.shelf
-  switch (shelf.kind) {
-    case 'all': return L('모두', 'All')
-    case 'kind': return shelf.of === 'paper' ? L('논문', 'Papers') : L('문서', 'Documents')
-    case 'folder': return basename(shelf.root)
-    case 'open': return L('열린 문서', 'Open Documents')
-    case 'status': return shelf.status === 'unread' ? L('안 읽음', 'Unread') : shelf.status === 'reading' ? L('읽는 중', 'Reading') : L('읽음', 'Read')
-    case 'favorites': return L('즐겨찾기', 'Favorites')
-    case 'review': return L('살펴볼 것', 'Needs Review')
-    case 'collection': return store.collections.find((one) => one.id === shelf.id)?.name ?? L('컬렉션', 'Collection')
-    case 'tag': return store.tags.find((one) => one.id === shelf.id)?.name ?? L('태그', 'Tag')
-    case 'author': return shelf.name
-    case 'search': return L('찾은 것', 'Search Results')
-    default: return ''
-  }
 }
 
 /** What a paper's date chip says, for a probe. */
